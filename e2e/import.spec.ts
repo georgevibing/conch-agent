@@ -6,7 +6,7 @@ import { promisify } from 'node:util';
 
 import { expect, test } from '@playwright/test';
 
-import { openConch } from './app';
+import { openConch, toProviders } from './app';
 
 const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
 const run = promisify(execFile);
@@ -26,14 +26,9 @@ test('the first run offers to bring your things, and Not now carries on', async 
 }) => {
   await request.patch('/api/settings', { data: { onboarded: false } });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Get started' }).click();
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
-  await page
-    .getByRole('textbox', { name: 'Your notes or document' })
-    .fill('Maya owns the launch checklist. Deadline Friday.');
-  await page.getByRole('button', { name: 'Make a useful brief', exact: true }).click();
-  await expect(page.getByText('Ready to review', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Make Conch yours' }).click();
+  await toProviders(page);
+  // A provider is ready, so the welcome carries on to the apps by itself.
+  await page.getByRole('button', { name: 'Skip for now' }).click({ timeout: 10_000 });
   await expect(page.getByRole('heading', { name: 'Bring your things from OpenClaw?' })).toBeVisible(
     { timeout: 10_000 },
   );
@@ -41,7 +36,7 @@ test('the first run offers to bring your things, and Not now carries on', async 
     '3 memories',
   );
   await page.getByRole('button', { name: 'Not now' }).click();
-  await expect(page.getByRole('heading', { name: 'Give me a personality' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /You’re all set/ })).toBeVisible();
 });
 
 test('previews, brings things over after a backup, says what’s next, and undoes it', async ({

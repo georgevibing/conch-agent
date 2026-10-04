@@ -305,6 +305,7 @@ describe.runIf(process.platform === 'win32')('started for real on Windows', () =
         url: 'http://localhost:4317',
         ask: 'http://127.0.0.1:4317',
         tokenFile: join(home, 'token'),
+        asksDir: join(home, 'asks'),
         startScript: join(home, 'start.cmd'),
       }),
     );
@@ -346,6 +347,7 @@ describe.runIf(process.platform === 'win32')('started for real on Windows', () =
       url: `http://localhost:${port}`,
       ask: askUrl('127.0.0.1', port),
       tokenFile: join(home, 'token'),
+      asksDir: join(home, 'asks'),
       startScript: join(home, 'start.cmd'),
     })
       .replace('$icon.Visible = $true', '$icon.Visible = $false')
@@ -386,6 +388,7 @@ describe('its source', () => {
   const spec = {
     url: 'http://localhost:4317',
     tokenFile: '/h/it"s\\tok',
+    asksDir: '/h/asks',
     startScript: "/h/o'k/start",
   };
   it('quotes paths for each language', () => {
@@ -399,6 +402,12 @@ describe('its source', () => {
       expect(source).toContain('X-Conch-Tray');
       expect(source).toContain('/?open=background');
       expect(source).not.toMatch(/\/api\/background['"]/);
+      // Pages open as this computer, asked for in a folder only you can write (ADR 0063):
+      // the token goes over the network, so it never opens anything itself.
+      expect(source).toContain('/h/asks');
+      expect(source).toContain('.ask');
+      expect(source).not.toContain('/api/tray/open');
+      expect(source).not.toContain('/api/here/link');
     }
   });
 

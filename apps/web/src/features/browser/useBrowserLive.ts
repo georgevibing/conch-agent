@@ -45,6 +45,15 @@ export function useBrowserLive(conversationId: string | undefined, visible: bool
     if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(command));
   }, []);
 
+  /** Take the wheel or hand it back: shown at once; the next tab update says the same. */
+  const control = useCallback(
+    (to: 'user' | 'agent') => {
+      send({ type: 'control', to });
+      setTab((t) => (t ? { ...t, control: to } : t));
+    },
+    [send],
+  );
+
   useEffect(() => {
     if (!conversationId) return;
     let stopped = false;
@@ -118,5 +127,14 @@ export function useBrowserLive(conversationId: string | undefined, visible: bool
     if (el && latest) el.src = latest;
   }, []);
 
-  return { tab, action, state, error, send, screenRef, clearError: () => setError(undefined) };
+  return {
+    tab,
+    action,
+    state,
+    error,
+    send,
+    control,
+    screenRef,
+    clearError: () => setError(undefined),
+  };
 }

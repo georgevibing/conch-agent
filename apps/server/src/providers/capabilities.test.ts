@@ -80,3 +80,46 @@ describe('the models that answer (ADR 0050)', () => {
     expect(await carryTools(engine(true), listing(['tiny', false]), { choose: true })).toBe(false);
   });
 });
+
+/** A provider with these models, as [id, tools, sees]. */
+const seeing = (...models: [id: string, tools: boolean, images?: boolean][]): Engine => ({
+  ...engine(true),
+  capabilities: async () => ({
+    ...(await engine(true).capabilities()),
+    models: models.map(([id, tools, images]) => ({
+      id,
+      label: id,
+      description: '',
+      efforts: [],
+      supportsFastMode: false,
+      supportsAutoMode: false,
+      tools,
+      ...(images !== undefined && { images }),
+    })),
+  }),
+});
+
+describe('a turn that carries pictures (ADR 0069)', () => {
+  const local = seeing(
+    ['qwen3:4b', true, false],
+    ['gemma3:4b', true, true],
+    ['moondream', false, true],
+  );
+
+  it('chooses a model that sees and keeps the apps, where choosing is allowed', async () => {
+    expect(await carryTools(engine(true), local, { choose: true, sight: true })).toEqual({
+      model: 'gemma3:4b',
+    });
+  });
+
+  it('keeps the model as it was without pictures, or where it isn’t its choice to make', async () => {
+    expect(await carryTools(engine(true), local, { choose: true })).toEqual({});
+    // Your pick at a limit answers with its own model: another would be a spending choice.
+    expect(await carryTools(engine(true), local, { sight: true })).toEqual({});
+  });
+
+  it('never trades the apps for eyes', async () => {
+    const blindOnly = seeing(['qwen3:4b', true, false], ['moondream', false, true]);
+    expect(await carryTools(engine(true), blindOnly, { choose: true, sight: true })).toEqual({});
+  });
+});

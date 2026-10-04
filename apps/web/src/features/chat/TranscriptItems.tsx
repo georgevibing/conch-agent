@@ -21,7 +21,7 @@ import {
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { Brain, Check, ShieldQuestion, Undo2, X } from 'lucide-react';
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { memo, createContext, useContext, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 
 import { api } from '../../api/client';
@@ -48,6 +48,11 @@ export function UserMessage({ item }: { item: Of<'user'> }) {
       timestamp={new Date(item.at)}
       data-pending={item.pending || undefined}
       className={styles.user}
+      actions={
+        item.text && !item.pending ? (
+          <CopyButton value={item.text} label="Copy message" />
+        ) : undefined
+      }
     >
       <span className={styles.userText}>{item.text}</span>
     </Message>
@@ -138,6 +143,7 @@ export function AssistantPlaceholder({ name, wait }: { name: string; wait: Wait 
       author={name}
       status="streaming"
       timestamp={wait.startedAt === undefined ? undefined : new Date(wait.startedAt)}
+      since={wait.startedAt}
     >
       <Waiting wait={wait} />
     </Message>
@@ -204,6 +210,8 @@ export function AssistantMessage({
       timestamp={new Date(item.startedAt)}
       status={streaming ? 'streaming' : 'complete'}
       entrance={entrance}
+      // The turn's clock, shared with the placeholder this takes over from.
+      since={wait?.startedAt ?? item.startedAt}
       attached={attached}
       actions={
         item.done && said ? (
@@ -230,7 +238,8 @@ const toolStatus: Record<Of<'tool'>['status'], ToolCallStatus> = {
   error: 'error',
 };
 
-export function ToolItem({ item }: { item: Of<'tool'> }) {
+/** Memoised: a finished tool's row doesn't redo its label and diff as the reply streams. */
+export const ToolItem = memo(function ToolItem({ item }: { item: Of<'tool'> }) {
   const label = useToolLabel()(item.name, {
     running: item.status === 'running' || item.status === 'pending',
     input: item.input,
@@ -254,7 +263,7 @@ export function ToolItem({ item }: { item: Of<'tool'> }) {
       {diff && <Diff diff={diff} header={false} lineNumbers={false} />}
     </ToolCall>
   );
-}
+});
 
 /** Render `backticked` spans of a summary as inline code. */
 function withCode(text: string) {
@@ -398,13 +407,16 @@ export function TaintItem({ item, first }: { item: Of<'taint'>; first: boolean }
 export function MemoryPill({ item }: { item: Of<'memory'> }) {
   const client = useQueryClient();
   const [answer, setAnswer] = useState<'undone' | 'kept'>();
+  // The pill says what you pressed at once; it goes back if that didn't work.
   const act = async (keep: boolean) => {
+    const before = answer;
+    setAnswer(keep ? 'kept' : 'undone');
     try {
       if (keep) await memoryApi.keep(item.memoryId);
       else await api.deleteMemory(item.memoryId);
-      setAnswer(keep ? 'kept' : 'undone');
       void client.invalidateQueries({ queryKey: keys.memories });
     } catch (e) {
+      setAnswer(before);
       toast.error((e as Error).message);
     }
   };

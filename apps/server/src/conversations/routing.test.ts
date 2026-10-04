@@ -14,7 +14,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Engine, EngineEvent, TurnInput } from '../engines/types';
 import { MemoryStore } from '../memory/store';
 import { SettingsStore } from '../settings/store';
-import { ConversationManager, type TurnRoute } from './manager';
+import { ConversationManager, type TurnRoute, windDown } from './manager';
 import { ConversationStore } from './store';
 
 /** Answers "<label> heard: <prompt>", or fails with `fails` when set. */
@@ -299,5 +299,145 @@ describe('Stop, pressed a moment early', () => {
     }
     await idle(manager, convo.id);
     expect(claude.turns.map((t) => t.prompt).at(-1)).toContain('second');
+  });
+
+  it('a Stop that came a few seconds before the next message was for the turn before', async () => {
+    const { manager, claude } = await setup();
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'first' });
+    await idle(manager, convo.id);
+    await manager.interrupt(convo.id);
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 3_000);
+    try {
+      await manager.send({ conversationId: convo.id, clientMessageId: 'u2', text: 'second' });
+    } finally {
+      clock.mockRestore();
+    }
+    await idle(manager, convo.id);
+    expect(claude.turns.map((t) => t.prompt).at(-1)).toContain('second');
+  });
+});
+
+/** Talks until it's stopped, then takes `windDownMs` to notice (as a real program does). */
+class TalkativeEngine extends FakeEngine {
+  windDownMs = 50;
+  /** Never finishes once stopped: a program that hung. */
+  hangs = false;
+
+  override async *runTurn(input: TurnInput): AsyncIterable<EngineEvent> {
+    this.turns.push(input);
+    yield { type: 'session', resumeId: 's', model: 'm' };
+    for (let i = 0; ; i++) {
+      if (input.signal.aborted) {
+        if (this.hangs) await new Promise(() => undefined);
+        await new Promise((r) => setTimeout(r, this.windDownMs));
+        // Words still in the pipe when it was stopped.
+        yield { type: 'text', messageId: 'm1', delta: ' late' };
+        yield { type: 'done', outcome: 'interrupted' };
+        return;
+      }
+      yield { type: 'text', messageId: 'm1', delta: ` word${i}` };
+      await new Promise((r) => setTimeout(r, 5));
+    }
+  }
+}
+
+async function talkative() {
+  const home = await mkdtemp(join(tmpdir(), 'conch-stop-'));
+  const engine = new TalkativeEngine('claude-code', 'Claude Code');
+  const settings = new SettingsStore(home);
+  await settings.update({ preferences: { engine: 'claude-code', autoTitle: false } });
+  const manager = new ConversationManager({
+    store: new ConversationStore(join(home, 'conversations')),
+    settings,
+    memory: new MemoryStore(join(home, 'memory')),
+    engine: () => engine,
+  });
+  return { manager, engine };
+}
+
+async function running(manager: ConversationManager, id: string) {
+  for (let i = 0; i < 200; i++) {
+    const events = await log(manager, id);
+    if (events.some((e) => e.type === 'assistant.delta')) return;
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  throw new Error('never started');
+}
+
+describe('Stop, at once', () => {
+  it('the reply ends where Stop was pressed, though the provider takes a moment', async () => {
+    const { manager } = await talkative();
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'go on' });
+    await running(manager, convo.id);
+    await manager.interrupt(convo.id);
+    const said = (await log(manager, convo.id)).filter((e) => e.type === 'assistant.delta').length;
+    await idle(manager, convo.id);
+    const events = await log(manager, convo.id);
+    expect(events.filter((e) => e.type === 'assistant.delta')).toHaveLength(said);
+    expect(events.findLast((e) => e.type === 'turn.completed')).toMatchObject({
+      outcome: 'interrupted',
+    });
+  });
+
+  it('a message sent while the stopped reply winds down waits for it, not “still replying”', async () => {
+    const { manager, engine } = await talkative();
+    engine.windDownMs = 150;
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'go on' });
+    await running(manager, convo.id);
+    await manager.interrupt(convo.id);
+    await manager.send({ conversationId: convo.id, clientMessageId: 'u2', text: 'instead, this' });
+    for (let i = 0; i < 200 && engine.turns.length < 2; i++)
+      await new Promise((r) => setTimeout(r, 5));
+    expect(engine.turns.map((t) => t.prompt)).toEqual(['go on', 'instead, this']);
+    await manager.interrupt(convo.id);
+    await idle(manager, convo.id);
+  });
+
+  it('Stop pressed again while the next message waits stops that one too', async () => {
+    const { manager, engine } = await talkative();
+    engine.windDownMs = 150;
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'go on' });
+    await running(manager, convo.id);
+    await manager.interrupt(convo.id);
+    const sent = manager.send({ conversationId: convo.id, clientMessageId: 'u2', text: 'next' });
+    await new Promise((r) => setTimeout(r, 20));
+    await manager.interrupt(convo.id);
+    await sent;
+    await idle(manager, convo.id);
+    expect(engine.turns).toHaveLength(1);
+    const ends = (await log(manager, convo.id)).filter((e) => e.type === 'turn.completed');
+    expect(ends.map((e) => e.type === 'turn.completed' && e.outcome)).toEqual([
+      'interrupted',
+      'interrupted',
+    ]);
+  });
+});
+
+describe('windDown', () => {
+  it('stops waiting for a stopped provider that never finishes', async () => {
+    const abort = new AbortController();
+    async function* hung(): AsyncIterable<number> {
+      yield 1;
+      await new Promise(() => undefined);
+    }
+    const seen: number[] = [];
+    const done = (async () => {
+      for await (const n of windDown(hung(), abort.signal, 30)) seen.push(n);
+    })();
+    await new Promise((r) => setTimeout(r, 10));
+    abort.abort();
+    await done;
+    expect(seen).toEqual([1]);
+  });
+
+  it('passes everything through while nobody stops it', async () => {
+    async function* three(): AsyncIterable<number> {
+      yield 1;
+      yield 2;
+      yield 3;
+    }
+    const seen: number[] = [];
+    for await (const n of windDown(three(), new AbortController().signal, 30)) seen.push(n);
+    expect(seen).toEqual([1, 2, 3]);
   });
 });

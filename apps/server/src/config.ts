@@ -9,6 +9,9 @@ export const Env = z.object({
   CONCH_HOST: z.string().default('127.0.0.1'),
   CONCH_PORT: z.coerce.number().int().min(1).max(65535).default(4317),
   CONCH_DOOR_PORT: z.coerce.number().int().min(1).max(65535).default(4319),
+  CONCH_HTTPS_PORT: z.coerce.number().int().min(1).max(65535).default(443),
+  CONCH_HTTP_PORT: z.coerce.number().int().min(1).max(65535).default(80),
+  CONCH_ACME_DIRECTORY: z.string().url().default('https://acme-v02.api.letsencrypt.org/directory'),
   CONCH_ALLOW_REMOTE: z
     .enum(['0', '1'])
     .default('0')
@@ -40,6 +43,8 @@ export const Env = z.object({
   CONCH_LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
+  CONCH_PUBLIC_IP: z.string().optional(),
+  CONCH_DNS_SERVERS: z.string().optional(),
   CONCH_APP: z.string().optional(),
   CONCH_APP_UPDATES: AppUpdates.optional(),
 });
@@ -75,6 +80,20 @@ export const ENV_ABOUT: Record<keyof Config, EnvAbout> = {
       'The port of the public door, the separate listener on this computer that Teams and WeChat deliver messages to (ADR 0045). It serves only those channels’ signed deliveries; the next free one of the ten after it is used when it’s taken.',
     unset: '4319',
   },
+  CONCH_HTTPS_PORT: {
+    about:
+      'Where your own address answers over HTTPS (ADR 0064). Change it only when something in front of Conch sends 443 to another port.',
+  },
+  CONCH_HTTP_PORT: {
+    about:
+      'Where your own address answers Let’s Encrypt’s check and sends everyone else to HTTPS (ADR 0064). Let’s Encrypt always knocks on port 80, so change it only when something in front of Conch forwards 80 here.',
+  },
+  CONCH_ACME_DIRECTORY: {
+    about:
+      'The certificate authority your own address gets its certificate from, as an ACME directory.',
+    unset: 'Let’s Encrypt',
+    internal: true,
+  },
   CONCH_ALLOW_REMOTE: {
     about:
       'Lets Conch listen beyond this computer. Other devices are refused until sign-in is set up.',
@@ -90,7 +109,7 @@ export const ENV_ABOUT: Record<keyof Config, EnvAbout> = {
   },
   CONCH_HOME: {
     about:
-      'Where Conch keeps everything it writes. Use the same value for Conch and for pnpm conch.',
+      'Where Conch keeps everything it writes. Use the same value for Conch and for the conch command.',
     unset: '~/.conch',
   },
   CONCH_ENGINE: {
@@ -139,6 +158,17 @@ export const ENV_ABOUT: Record<keyof Config, EnvAbout> = {
   },
   CONCH_LOG_LEVEL: {
     about: 'How much Conch logs. Logs never hold query strings, headers or bodies.',
+  },
+  CONCH_PUBLIC_IP: {
+    about:
+      'This server’s public address, for the DNS record conch setup shows (ADR 0064), when Conch can’t see it itself: behind a NAT it can’t look past.',
+    unset: 'its own public address, else what the internet sees',
+  },
+  CONCH_DNS_SERVERS: {
+    about:
+      'Resolvers to look your address up at, comma separated, instead of the public ones: a test network’s (ADR 0064).',
+    unset: '1.1.1.1 and 8.8.8.8, then this computer’s own',
+    internal: true,
   },
   CONCH_APP: {
     about:

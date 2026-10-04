@@ -12,6 +12,7 @@ import type { ConchAppOffer, ConversationEvent } from '@conch/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
+import { onThisComputer } from '../test/here';
 import { tallyFiles } from '../engines/mock/tally';
 import { loadConfig } from '../config';
 import { Services } from '../services';
@@ -40,7 +41,7 @@ async function setup() {
     }),
     { conchAppParts: parts },
   );
-  const app = await buildApp(services);
+  const app = onThisComputer(await buildApp(services), services);
   await app.ready();
   close = async () => {
     services.integrations.stop();

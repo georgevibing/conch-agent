@@ -1,5 +1,5 @@
 import { MessageList, SkillHoldEnded, SummaryDivider } from '@conch/nacre';
-import { useState, type ReactNode, type Ref } from 'react';
+import { memo, useState, type ReactNode, type Ref } from 'react';
 
 import { isTurnStart, type ConversationView, type TranscriptItem } from '../../live/reducer';
 import { verbsFor } from './stream';
@@ -84,10 +84,20 @@ const aside = (block: Block) =>
 function blocks(items: TranscriptItem[]): Block[] {
   const out: Block[] = [];
   let at = 0;
+  let turn = '';
+  let ends = 0;
   for (const item of items) {
     at = timeOf(item) ?? at;
     const last = out.at(-1);
-    if (item.kind === 'tool') {
+    if (isTurnStart(item)) {
+      turn = item.id;
+      ends = 0;
+    }
+    if (item.kind === 'turn-end') {
+      // Keyed by its turn, so "Stopped" drawn the moment Stop is pressed is the
+      // same line the gateway's own end replaces, not a second one arriving.
+      out.push({ key: `turn-end-${turn}-${ends++}`, item, at });
+    } else if (item.kind === 'tool') {
       if (last?.tools) last.tools.push(item);
       else out.push({ key: `tools-${item.id}`, tools: [item], at });
     } else if (item.kind === 'browser') {
@@ -215,7 +225,8 @@ function timeOf(item: TranscriptItem): number | undefined {
   return undefined;
 }
 
-export function Transcript({
+/** Memoised: typing in the composer doesn't draw the whole chat again. */
+export const Transcript = memo(function Transcript({
   view,
   pending,
   name,
@@ -271,6 +282,7 @@ export function Transcript({
   const firstTaint = items.find((i) => i.kind === 'taint')?.id;
   const turns = turnChanges(items);
   const turnStart = items.findLastIndex(isTurnStart);
+  const position = new Map(items.map((item, n) => [item, n]));
   const started = items[turnStart];
   const prompt =
     started?.kind === 'user'
@@ -280,8 +292,15 @@ export function Transcript({
         : '';
   // Waiting on you (a question, a handoff): no "working…" while it's your move.
   const handingOff = last?.kind === 'handoff' && last.handoff.state === 'waiting';
+  // A message just sent here and confirmed, before the gateway says the turn is
+  // running (it picks the model and the apps first): still waiting for the
+  // answer, so the wait stays up instead of leaving and coming back.
+  const starting =
+    view.status === 'idle' && last?.kind === 'user' && last.at >= openedAt - CLOCK_SLACK_MS;
   const busy =
-    (running || pending.length > 0) && view.status !== 'awaiting-permission' && !handingOff;
+    (running || pending.length > 0 || starting) &&
+    view.status !== 'awaiting-permission' &&
+    !handingOff;
   const startedAt = view.turnStartedAt ?? pending[0]?.at;
   const wait: Wait = {
     verbs: verbsFor(prompt, 'starting'),
@@ -367,7 +386,7 @@ export function Transcript({
           item={block.item}
           name={name}
           wait={busy ? wait : undefined}
-          entrance={!(running && items.indexOf(block.item) > turnStart)}
+          entrance={!(running && (position.get(block.item) ?? -1) > turnStart)}
           {...(rest && {
             attached: (
               <>
@@ -520,7 +539,13 @@ export function Transcript({
   );
 
   return (
-    <MessageList className={styles.list} aria-label="Conversation" overlay={overlay}>
+    <MessageList
+      className={styles.list}
+      aria-label="Conversation"
+      overlay={overlay}
+      // What you just sent is what you want to see, wherever you'd scrolled to.
+      follow={pending.at(-1)?.clientMessageId}
+    >
       <div ref={columnRef} className={styles.column}>
         {rows.map((row) =>
           'head' in row ? (
@@ -545,4 +570,4 @@ export function Transcript({
       </div>
     </MessageList>
   );
-}
+});

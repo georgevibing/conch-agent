@@ -17,7 +17,7 @@
 import { severityFor } from '@conch/protocol';
 import { z } from 'zod';
 
-import type { Completion, EngineUsage, TurnImage } from '../types';
+import type { Completion, EngineUsage, Picture } from '../types';
 import {
   ChatCompletion,
   chatToolResults,
@@ -30,6 +30,7 @@ import {
   type ChatError,
 } from './chat';
 import { tooLong, windowIn } from './context';
+import { refusesImages } from './pictures';
 import {
   ApiError,
   TOO_LONG,
@@ -142,6 +143,10 @@ export function mapError(
       return new ApiError('payment', 'This key has reached its spending limit at OpenRouter.');
     }
     return new ApiError('payment', 'Your OpenRouter credits have run out. Top up to keep going.');
+  }
+  // "No endpoints found that support image input" is a 404: the model can't see.
+  if ([0, 400, 404, 422, 500].includes(status) && refusesImages(detail)) {
+    return new ApiError('images', detail);
   }
   if (type === 'rate_limit_exceeded' || status === 429) {
     // Without a hint there is nothing to wait for, so retrying is guesswork.
@@ -340,7 +345,15 @@ export class OpenRouterWire implements Wire {
     return pickSmallModel([...this.#models.keys()]);
   }
 
-  userMessage(content: string, images?: readonly TurnImage[]): WireMessage {
+  /**
+   * What OpenRouter's list says the model takes. A model it doesn't list is
+   * tried with pictures: OpenRouter takes them, and says so if the model can't.
+   */
+  seesFor(model: string): boolean {
+    return this.#models.get(model)?.info.images ?? true;
+  }
+
+  userMessage(content: string, images?: readonly Picture[]): WireMessage {
     return chatUserMessage(content, images);
   }
 
@@ -392,7 +405,7 @@ export class OpenRouterWire implements Wire {
         model: request.model,
         messages: [
           { role: 'system', content: request.system },
-          { role: 'user', content: request.prompt },
+          chatUserMessage(request.prompt, request.images),
         ],
         max_tokens: request.maxTokens,
       },

@@ -186,19 +186,28 @@ export function useSlashCommands(options: {
         return void compactChat(conversationId, args);
       case 'remember':
         if (!args) return setDraft('/remember ');
-        return void api.addMemory(args).then((memory) => {
-          void client.invalidateQueries({ queryKey: keys.memories });
-          toast.success('Remembered', {
-            description: memory.content,
-            action: {
-              label: 'Undo',
-              onClick: () =>
-                void api
-                  .deleteMemory(memory.id)
-                  .then(() => client.invalidateQueries({ queryKey: keys.memories })),
-            },
-          });
-        });
+        // Said at once; the toast with Undo follows once it's kept.
+        toast('Remembering…', { id: 'remember', description: args });
+        return void api.addMemory(args).then(
+          (memory) => {
+            void client.invalidateQueries({ queryKey: keys.memories });
+            toast.success('Remembered', {
+              id: 'remember',
+              description: memory.content,
+              action: {
+                label: 'Undo',
+                onClick: () =>
+                  void api
+                    .deleteMemory(memory.id)
+                    .then(() => client.invalidateQueries({ queryKey: keys.memories })),
+              },
+            });
+          },
+          (error: Error) => {
+            toast.error(error.message || 'That wasn’t remembered. Try again.', { id: 'remember' });
+            setDraft(`/remember ${args}`);
+          },
+        );
       case 'memory':
         return void navigate('/memory');
       case 'routines':

@@ -81,3 +81,74 @@ describe('Message', () => {
     ).toBeTruthy();
   });
 });
+
+describe('Message hand-offs', () => {
+  it('never replays its entrance when it’s allowed one after mounting', () => {
+    const { rerender } = renderNacre(
+      <Message from="assistant" entrance={false} status="streaming">
+        Hello
+      </Message>,
+    );
+    const reply = screen.getByRole('article');
+    expect(reply).toHaveAttribute('data-entrance', 'none');
+    // The turn ends: the transcript would now allow an entrance. It must not play.
+    rerender(
+      <Message from="assistant" entrance status="complete">
+        Hello
+      </Message>,
+    );
+    expect(screen.getByRole('article')).toBe(reply);
+    expect(reply).toHaveAttribute('data-entrance', 'none');
+  });
+
+  it('starts its moving mark as far in as the work is', () => {
+    const since = Date.now() - 2_000;
+    const { container } = renderNacre(
+      <Message from="assistant" status="streaming" since={since}>
+        …
+      </Message>,
+    );
+    const mark = container.querySelector<HTMLElement>('[data-active]');
+    const age = Number.parseInt(mark?.style.getPropertyValue('--nc-mark-age') ?? '', 10);
+    expect(age).toBeGreaterThanOrEqual(2_000);
+    expect(age).toBeLessThan(3_000);
+  });
+});
+
+describe('MessageList', () => {
+  it('goes back to the newest message when `follow` changes, wherever the reader was', () => {
+    const { rerender } = renderNacre(
+      <MessageList follow="a">
+        <Message from="user">Hi</Message>
+      </MessageList>,
+    );
+    const viewport = screen.getByRole('log').parentElement as HTMLElement;
+    let top = 0;
+    Object.defineProperties(viewport, {
+      scrollHeight: { configurable: true, value: 1000 },
+      clientHeight: { configurable: true, value: 100 },
+      scrollTop: {
+        configurable: true,
+        get: () => top,
+        set: (value: number) => {
+          top = value;
+        },
+      },
+    });
+    top = 0;
+    viewport.dispatchEvent(new Event('scroll'));
+    rerender(
+      <MessageList follow="a">
+        <Message from="user">Hi</Message>
+      </MessageList>,
+    );
+    expect(top).toBe(0);
+    rerender(
+      <MessageList follow="b">
+        <Message from="user">Hi</Message>
+        <Message from="user">Again</Message>
+      </MessageList>,
+    );
+    expect(top).toBe(1000);
+  });
+});

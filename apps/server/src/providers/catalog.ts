@@ -73,20 +73,40 @@ const key = (
 ): KeyForm => ({ placeholder: '', help: '', canSignIn: false, ...form });
 
 const PROVIDERS: ProviderCopy[] = [
-  // ── Your subscriptions: a program on this computer, your own sign-in ──────
+  // ── Coding agents: their own tools, your folders, your plan (ADR 0066) ─────
   {
     id: 'claude-code',
     name: 'Claude Code',
-    tagline: 'Claude, on this computer',
+    tagline: 'Your Claude plan, on this computer',
     description:
-      'Anthropic’s coding agent, already signed in on this machine. It reads and writes files, runs commands and brings your own settings, skills and MCP servers with it.',
+      'Anthropic’s coding agent, signed in on this machine with your Claude Pro or Max plan, or an API key. It reads and writes files, runs commands and brings your own settings, skills and MCP servers with it. It’s the way to use your Claude plan in Conch.',
     connect: 'program',
-    group: 'subscription',
-    highlights: ['Works with your files', 'Runs commands', 'Your Claude plan or an API key'],
+    group: 'agent',
+    highlights: ['Its own tools', 'Works in your folders', 'Your Claude plan or an API key'],
     asksFirst: true,
     color: '#D97757',
     homepage: 'https://code.claude.com',
   },
+  {
+    id: 'codex-agent',
+    name: 'Codex CLI',
+    tagline: 'Codex, with its own tools',
+    signInLabel: 'Sign in with your ChatGPT subscription',
+    signInHelp:
+      'One connection serves Codex and Codex CLI. No API key needed, and your other Codex sign-ins stay as they are.',
+    description:
+      'OpenAI’s coding agent as you know it from the terminal: its own shell and file edits, working in your folder. Every command and change it wants asks through Conch first, in a sandbox with no network.',
+    connect: 'program',
+    group: 'agent',
+    highlights: ['Its own shell and edits', 'Asks through Conch', 'Your ChatGPT plan'],
+    asksFirst: true,
+    limits: [
+      'Its commands run in Codex’s sandbox: they write only in your work folder and have no network access. A command Codex knows to be read-only runs without asking.',
+    ],
+    color: '#0D0D0D',
+    homepage: 'https://developers.openai.com/codex/cli',
+  },
+  // ── Your subscriptions: a program on this computer, your own sign-in ──────
   {
     id: 'codex-cli',
     name: 'Codex',
@@ -95,7 +115,7 @@ const PROVIDERS: ProviderCopy[] = [
     signInHelp:
       'No API key needed. Conch keeps a separate, encrypted connection. Existing Codex and other apps stay signed in as they are. Your plan’s models and limits apply.',
     description:
-      'OpenAI’s agent for your machine, signed in with your ChatGPT plan or an OpenAI key. Conch supplies files, safe commands, memory and connected apps, with the same approvals as its other providers.',
+      'OpenAI’s models through Codex, signed in with your ChatGPT plan or an OpenAI key. Conch supplies files, safe commands, memory and connected apps, with the same approvals as its other providers. For Codex with its own tools, choose Codex CLI.',
     connect: 'program',
     group: 'subscription',
     highlights: ['Works with your files', 'Runs commands', 'Your ChatGPT plan or an OpenAI key'],
@@ -246,9 +266,9 @@ const PROVIDERS: ProviderCopy[] = [
   {
     id: 'anthropic-api',
     name: 'Anthropic API',
-    tagline: 'Claude, billed per token',
+    tagline: 'Claude, pay as you go',
     description:
-      'Claude straight from Anthropic with a Console key — no subscription and nothing else installed. Conch runs the conversation and lends it your integrations.',
+      'Claude straight from Anthropic with a Console key, billed per token: no subscription and nothing else installed. Conch runs the conversation and lends it your integrations. To use your Claude Pro or Max plan, connect Claude Code.',
     connect: 'key',
     group: 'key',
     featured: true,
@@ -260,9 +280,11 @@ const PROVIDERS: ProviderCopy[] = [
       placeholder: 'sk-ant-…',
       help: 'Create one in the Anthropic Console. Usage is billed to that account.',
       url: 'https://console.anthropic.com/settings/keys',
-      pattern: '^sk-ant-',
-      patternHint: 'Anthropic keys start with sk-ant-.',
-      recognise: { distinct: '^sk-ant-' },
+      // A Claude sign-in token (`claude setup-token`, sk-ant-oat…) only works in Claude Code.
+      pattern: '^sk-ant-(?!oat)',
+      patternHint:
+        'Anthropic Console keys start with sk-ant-api. A token from claude setup-token only works in Claude Code.',
+      recognise: { distinct: '^sk-ant-(?!oat)' },
     }),
     envKeys: ['ANTHROPIC_API_KEY'],
     color: '#D97757',

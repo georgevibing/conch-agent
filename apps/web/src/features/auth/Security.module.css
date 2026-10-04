@@ -146,3 +146,41 @@
     block-size: 0.875rem;
   }
 }
+
+@layer nacre.components {
+  /* Your address (ADR 0064): the name beside its Check button, and a status line. */
+  .addressRow {
+    display: flex;
+    gap: var(--nc-space-2);
+  }
+
+  .addressRow > :first-child {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .addressProgress {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+  }
+
+  /* Through a tunnel of your own: where to point it, to copy. */
+  .addressTarget {
+    display: grid;
+    gap: var(--nc-space-1-5);
+  }
+
+  .addressTargetRow {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .addressTargetRow > code {
+    overflow-wrap: anywhere;
+  }
+}

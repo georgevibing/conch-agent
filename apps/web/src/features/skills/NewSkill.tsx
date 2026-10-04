@@ -11,12 +11,13 @@ import {
   SkillCard,
   skillModeLabels,
   SkillPermissionList,
+  SkillWriting,
   Stack,
   Text,
   Textarea,
   toast,
 } from '@conch/nacre';
-import { ArrowLeft, Sparkles } from 'lucide-react';
+import { ArrowLeft, Sparkles, Waypoints } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 
@@ -46,6 +47,12 @@ export function slugOf(title: string): string {
       .replace(/-+$/, '') || 'new-skill'
   );
 }
+
+/** Enough to write a skill from: a few words. */
+const WRITE_MIN_CHARS = 8;
+
+const reducedMotion = () =>
+  typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 /** Enough changed since the last draft that its title might be wrong now. */
 function changedEnough(before: string, after: string) {
@@ -79,6 +86,14 @@ export function NewSkill() {
   const [writing, setWriting] = useState(false);
   const drafted = useRef('');
   const inFlight = useRef<AbortController | null>(null);
+  // Write it for me: the whole skill from your idea. `before` is what you'd typed.
+  const [writer, setWriter] = useState<{
+    state: 'idle' | 'writing' | 'written';
+    before?: string;
+    noModel?: boolean;
+  }>({ state: 'idle' });
+  const writeFlight = useRef<AbortController | null>(null);
+  const reveal = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   // Opening New skill is asking to write one: the words go straight in.
   const inputRef = useAutoFocus<HTMLTextAreaElement>();
 
@@ -120,7 +135,79 @@ export function NewSkill() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, needsWords]);
 
-  useEffect(() => () => inFlight.current?.abort(), []);
+  useEffect(
+    () => () => {
+      inFlight.current?.abort();
+      writeFlight.current?.abort();
+      clearInterval(reveal.current);
+    },
+    [],
+  );
+
+  /** The steps come in a few words at a time, as if being written (all at once with less motion). */
+  const show = (steps: string, done: () => void) => {
+    clearInterval(reveal.current);
+    drafted.current = steps.trim();
+    if (reducedMotion()) {
+      setInstructions(steps);
+      done();
+      return;
+    }
+    const words = steps.split(/(?<=\s)/);
+    const per = Math.max(1, Math.ceil(words.length / 45));
+    let at = 0;
+    reveal.current = setInterval(() => {
+      at = Math.min(words.length, at + per);
+      setInstructions(words.slice(0, at).join(''));
+      if (at >= words.length) {
+        clearInterval(reveal.current);
+        done();
+      }
+    }, 18);
+  };
+
+  /** Write the whole skill from `idea`: the steps, a title and a description. */
+  const write = (idea: string) => {
+    if (idea.trim().length < WRITE_MIN_CHARS) return;
+    inFlight.current?.abort();
+    writeFlight.current?.abort();
+    const abort = new AbortController();
+    writeFlight.current = abort;
+    setWriter({ state: 'writing', before: idea });
+    skillsApi.write(idea.trim(), abort.signal).then(
+      (result) => {
+        if (abort.signal.aborted) return;
+        if (!result.generated) {
+          setWriter({ state: 'idle', noModel: result.noModel });
+          if (!result.noModel)
+            toast.error('Couldn’t write the steps just now.', {
+              description: 'Try again in a moment, or write them yourself.',
+            });
+          return;
+        }
+        setName(result.name);
+        setTitle(result.title);
+        setDescription(result.description);
+        setTouched({ title: false, description: false });
+        show(result.instructions, () => setWriter({ state: 'written', before: idea }));
+      },
+      (error: unknown) => {
+        if (abort.signal.aborted) return;
+        setWriter({ state: 'idle' });
+        toast.error(errorText(error, 'Couldn’t write the steps just now.'));
+      },
+    );
+  };
+
+  /** Back to what you had typed before it was written. */
+  const undoWrite = () => {
+    clearInterval(reveal.current);
+    writeFlight.current?.abort();
+    setInstructions(writer.before ?? '');
+    drafted.current = '';
+    setWriter({ state: 'idle' });
+    inputRef.current?.focus();
+  };
 
   const submit = () => {
     if (!text || create.isPending) return;
@@ -178,7 +265,7 @@ export function NewSkill() {
             ? `${assistant} wrote this from how your chat “${start.learned.chat}” went: the steps that worked, made to fit next time. Read it, change anything, and save it only if you want it.`
             : start.suggested
               ? `You’ve asked for this in ${start.suggested} chats, so ${assistant} wrote a first draft from what you said. Read it, change anything, and save it only if you want it.`
-              : `Describe what it should do, in your own words. ${assistant} names it and writes a short description — change either if you like.`}
+              : `Describe what it should do, in your own words — a sentence is enough for ${assistant} to write the steps, or write them yourself. It names it and writes a short description; change anything you like.`}
         </Text>
       </Stack>
 
@@ -199,6 +286,8 @@ export function NewSkill() {
           size="lg"
           className={styles.prompt}
           value={instructions}
+          readOnly={writer.state === 'writing'}
+          aria-busy={writer.state === 'writing'}
           placeholder="Every Friday, look at my calendar and notes from the week and write a short review: what went well, what slipped, and three priorities for next week."
           onChange={(e) => setInstructions(e.target.value)}
           onKeyDown={(e) => {
@@ -213,6 +302,30 @@ export function NewSkill() {
           Claude Code, Codex, OpenClaw and Hermes all read.
         </Field.Description>
       </Field>
+
+      {writer.state !== 'idle' && (
+        <SkillWriting
+          state={writer.state}
+          by={assistant}
+          onAgain={() => write(writer.before ?? text)}
+          onUndo={undoWrite}
+        />
+      )}
+
+      {writer.noModel && (
+        <Callout
+          tone="info"
+          title="Writing the steps needs a provider that can write"
+          action={
+            <Button size="sm" variant="soft" onClick={() => void navigate('/settings/providers')}>
+              Connect one
+            </Button>
+          }
+        >
+          Claude Code, or a key for a model you pay for as you go, can write them. Until then, your
+          words become the skill as they are.
+        </Callout>
+      )}
 
       {!text && (
         <Stack gap={2}>
@@ -309,14 +422,28 @@ export function NewSkill() {
       )}
 
       <div className={styles.actions}>
-        <Button
-          variant="ghost"
-          leadingIcon={<Sparkles />}
-          disabled={text.length < DRAFT_MIN_CHARS || writing}
-          onClick={() => draft(true)}
-        >
-          {title || description ? 'Write them again' : 'Name it for me'}
-        </Button>
+        <Stack direction="row" gap={1} align="center" wrap>
+          {/* Once written, the note under the steps has Write it again. */}
+          {writer.state !== 'written' && (
+            <Button
+              variant="soft"
+              leadingIcon={<Waypoints />}
+              disabled={text.length < WRITE_MIN_CHARS || writer.state === 'writing'}
+              loading={writer.state === 'writing'}
+              onClick={() => write(text)}
+            >
+              Write the steps for me
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            leadingIcon={<Sparkles />}
+            disabled={text.length < DRAFT_MIN_CHARS || writing || writer.state === 'writing'}
+            onClick={() => draft(true)}
+          >
+            {title || description ? 'Name it again' : 'Name it for me'}
+          </Button>
+        </Stack>
         <Stack direction="row" gap={2} align="center">
           <Text as="span" size="xs" tone="subtle">
             <Kbd keys="mod+enter" size="sm" />

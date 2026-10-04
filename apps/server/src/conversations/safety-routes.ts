@@ -33,7 +33,7 @@ export function coverage(
             state: 'no-commands',
             note: 'Commands are unavailable until this computer’s sandbox is set up. Files and connected apps still work.',
           };
-    if (id !== 'claude-code' && id !== 'codex-cli')
+    if (id !== 'claude-code' && id !== 'codex-agent')
       return {
         ...base,
         state: 'no-commands',
@@ -95,18 +95,20 @@ export function registerSafetyRoutes(
   activity: Activity,
   deps: CoverageDeps = { providers: async () => [], sealing: async () => true },
 ): void {
-  app.get<{ Querystring: { before?: string; kind?: string; limit?: string } }>(
+  app.get<{ Querystring: { before?: string; kind?: string; limit?: string; q?: string } }>(
     '/api/activity',
     async (request, reply) => {
       const kind = request.query.kind ? ActivityKind.safeParse(request.query.kind) : undefined;
       if (kind && !kind.success)
         return reply.code(400).send({ error: 'bad-request', message: 'Not a kind of activity.' });
+      const q = request.query.q?.trim().slice(0, 200);
       const before = Number(request.query.before);
       const limit = Number(request.query.limit);
       return activity.page({
         ...(Number.isFinite(before) && before > 0 && { before }),
         ...(kind?.success && { kind: kind.data }),
         ...(Number.isFinite(limit) && limit > 0 && { limit }),
+        ...(q && { q }),
       });
     },
   );

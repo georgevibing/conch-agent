@@ -6,6 +6,7 @@ import { HealLog, SearchPreview, SearchResults } from '@conch/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
+import { onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 
@@ -20,7 +21,7 @@ async function setup(home?: string) {
       CONCH_WEB_DIST: '/nonexistent',
     }),
   );
-  return { services, app: await buildApp(services), home: dir };
+  return { services, app: onThisComputer(await buildApp(services), services), home: dir };
 }
 
 function sendAndWait(services: Services, text: string, conversationId?: string) {

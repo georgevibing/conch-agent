@@ -50,11 +50,13 @@ describe('the documentation’s front page', () => {
       expect(
         screen.getAllByRole('link', { name: new RegExp(`^${section.title}`) }).length,
       ).toBeGreaterThan(0);
+    // ("Codex" and "Codex CLI" both start "Codex": each has its own page.)
     for (const provider of reference.providers)
-      expect(screen.getByRole('link', { name: new RegExp(`^${provider.name}`) })).toHaveAttribute(
-        'href',
-        `/providers/${provider.id}`,
-      );
+      expect(
+        screen
+          .getAllByRole('link', { name: new RegExp(`^${provider.name}`) })
+          .map((link) => link.getAttribute('href')),
+      ).toContain(`/providers/${provider.id}`);
     await accessible(container);
   });
 });
@@ -132,10 +134,21 @@ describe('a page', () => {
   it('moves to the next page from the contents', async () => {
     open('/start/install');
     const contents = screen.getByRole('navigation', { name: 'Documentation' });
-    await userEvent.click(within(contents).getByRole('link', { name: 'Your first useful result' }));
+    await userEvent.click(within(contents).getByRole('link', { name: 'Your first minute' }));
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Your first useful result' }),
+      await screen.findByRole('heading', { level: 1, name: 'Your first minute' }),
     ).toBeInTheDocument();
+  });
+
+  it('about privacy lives at /privacy, out of the sidebar and the front page’s footer links to it', async () => {
+    const { container } = open('/privacy');
+    expect(screen.getByRole('heading', { level: 1, name: 'Privacy policy' })).toBeInTheDocument();
+    expect(screen.getByText(/We set no cookies/)).toBeInTheDocument();
+    // No section, so no crumb: it isn't a decision record.
+    expect(within(screen.getByRole('main')).queryByRole('link', { name: 'Decisions' })).toBeNull();
+    const sidebar = screen.getByRole('navigation', { name: 'Documentation' });
+    expect(within(sidebar).queryByRole('link', { name: 'Privacy policy' })).toBeNull();
+    await accessible(container);
   });
 
   it('that doesn’t exist says so and offers the way back', () => {

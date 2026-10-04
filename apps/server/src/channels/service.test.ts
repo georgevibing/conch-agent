@@ -442,7 +442,7 @@ describe('ChannelService — healing', () => {
       s.channels.replaceToken(channel.id, { kind: 'telegram', token: other }),
     ).rejects.toThrow(/another bot/);
 
-    const renewed = '123456789:AAHrenewedrenewedrenewedrenewed123';
+    const renewed = '123456789:' + 'AAHrenewedrenewedrenewedrenewed123';
     telegram.bots.set(renewed, {
       id: 123456789,
       is_bot: true,

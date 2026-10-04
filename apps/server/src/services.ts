@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { Server as HttpServer } from 'node:http';
 import { join, resolve, sep } from 'node:path';
 
 import type {
@@ -55,6 +56,8 @@ import { BackupService } from './backup/service';
 import { BrowserService } from './browser/service';
 import { adapterFor, type ChannelEndpoints, slackCheckFor } from './channels/adapters';
 import { ChannelDoorService, doorCheck } from './channels/door';
+import { addressCheck } from './address/doctor';
+import { AddressService } from './address/service';
 import { ChatDb, imessageSetup, MESSAGES_DB, openForImessage } from './channels/imessage';
 import { MockMail } from './channels/mock/email';
 import { MockMessages } from './channels/mock/imessage';
@@ -71,6 +74,7 @@ import { CHANNEL_NAMES, ChannelService } from './channels/service';
 import { ChannelStore } from './channels/store';
 import { TerminalService } from './terminal/service';
 import { Gatekeeper } from './security';
+import { linuxBrowserHome, ThisComputer } from './auth/here';
 import type { Config } from './config';
 import { CommandStore } from './commands/store';
 import { ConversationManager, type TurnRoute } from './conversations/manager';
@@ -79,12 +83,14 @@ import type { ApiEngine } from './engines/api';
 import { builtInEngines, serverEngine } from './engines/registry';
 import { appsNeeded } from './providers/apps';
 import { carryTools } from './providers/capabilities';
+import { Describer } from './vision/describer';
 import { MockEngine } from './engines/mock/engine';
 import { MOCK_MEANING_SPEC, mockMeaningFetch, mockMeaningLoad } from './engines/mock/meaning';
 import type { Engine, LoginHandle } from './engines/types';
 import { Emitter } from './lib/emitter';
 import { findExecutable } from './lib/proc';
 import { sandboxFor, sandboxSupport, secretPlaces } from './conversations/sandbox';
+import { heldTaints } from './conversations/taint';
 import { UndoService } from './undo/service';
 import { UndoStore } from './undo/store';
 import { safetyCheck } from './conversations/safety-doctor';
@@ -158,6 +164,7 @@ import { UsageService } from './usage/service';
 import { REPOSITORY, SERVER_VERSION } from './version';
 import { theApp } from './desktop/app';
 import { AppReleases } from './updates/app';
+import { cliName } from './cli/command';
 
 export { SERVER_VERSION };
 
@@ -194,6 +201,7 @@ export class Services {
   /** Who may sign in (`~/.conch/access.json`). */
   readonly access: AccessStore;
   readonly gate: Gatekeeper;
+  readonly here: ThisComputer;
   /** Files in CONCH_HOME whose permissions couldn't be tightened (see `secureHome`). */
   homeProblems: string[] = [];
   readonly memory: MemoryStore;
@@ -227,6 +235,8 @@ export class Services {
   readonly keys: ProviderKeys;
   /** Connecting providers, switching between them, and saying how they are. */
   readonly providers: ProviderService;
+  /** Screenshots in words for models that can't see, by one that can (ADR 0070). */
+  readonly describer: Describer;
   readonly usage: UsageService;
   readonly integrations: IntegrationService;
   /** Skills: Conch's own, and those in other agents' folders (ADR 0013). */
@@ -292,9 +302,15 @@ export class Services {
   readonly mockWeChat?: MockWeChat;
   /** The public door, for the channels that only deliver to a web address (ADR 0045). */
   readonly door: ChannelDoorService;
+  /** Your own address, over HTTPS by Conch itself (ADR 0064). Started by main.ts, never by tests. */
+  readonly address: AddressService;
+  /** The gateway's own server, once it listens: where the address hands its requests. */
+  #gateway?: HttpServer;
   #login?: { handle: LoginHandle; state: LoginState };
   #channelStore?: ChannelStore;
   #sweeper?: NodeJS.Timeout;
+  #hereSweeper?: NodeJS.Timeout;
+  #stopAsks?: () => void;
   #vaultDoctor?: NodeJS.Timeout;
 
   constructor(
@@ -344,7 +360,12 @@ export class Services {
     registerSlackDoctor(this.doctor, this.slack);
     this.settings = new SettingsStore(config.CONCH_HOME, heal);
     this.access = new AccessStore(config.CONCH_HOME, heal);
-    this.gate = new Gatekeeper(config, this.access);
+    // "This computer", proven (ADR 0063): the key only your account can read.
+    this.here = new ThisComputer(config.CONCH_HOME, {
+      heal: (message) => heal('access', message),
+      ...(process.platform === 'linux' && { browserHome: () => linuxBrowserHome() }),
+    });
+    this.gate = new Gatekeeper(config, this.access, this.here);
     this.memory = new MemoryStore(join(config.CONCH_HOME, 'memory'));
     this.commands = new CommandStore(join(config.CONCH_HOME, 'commands'));
     this.attachments = new AttachmentStore(join(config.CONCH_HOME, 'attachments'));
@@ -411,6 +432,7 @@ export class Services {
       // A different provider means different limits and a different model list.
       onSwitch: () => void this.usage.refresh({ force: true }),
     });
+    this.describer = new Describer({ ready: () => this.providers.ready() });
     // With the mock engine, integrations talk to a pretend vendor on this machine too.
     this.mockVendor = config.CONCH_ENGINE === 'mock' ? new MockVendor() : undefined;
     // Apps you make, share and add (ADR 0061): an app like any other on the Apps page.
@@ -651,6 +673,7 @@ export class Services {
       memoryIndex: this.memoryIndex,
       engine: (id) => this.providers.engineFor(id),
       route: (engine, context) => this.route(engine, context),
+      describe: (engine, model) => this.describer.for(engine, model),
       // An engine that can't run Conch's own tools is never offered them.
       tools: (ctx) =>
         ctx.engine.hostTools === false
@@ -947,6 +970,11 @@ export class Services {
           fetch(door.localFor(String(url)), init),
       }),
       onHeal: (message) => void this.healed.note('channels', message),
+      // Read when asked, so the address (made further on) is always the current one.
+      conchAddress: () => {
+        const name = this.address.name();
+        return name && this.address.status().state === 'ready' ? `https://${name}` : undefined;
+      },
     });
     this.door = door;
     if (this.mockTeams) this.mockTeams.resolve = (url) => door.localFor(url);
@@ -998,6 +1026,33 @@ export class Services {
     this.broadcast.on((event) => this.channels.onEvent(event));
     door.onChange((now) => this.broadcast.emit({ type: 'channel.door', door: now }));
     this.doctor.register(doorCheck(door));
+    this.address = new AddressService({
+      home: config.CONCH_HOME,
+      config,
+      gateway: () => {
+        if (!this.#gateway) throw new Error('Conch isn’t listening yet.');
+        return this.#gateway;
+      },
+      // A proxy of the person's own sends requests here: the gateway, on this computer.
+      target: () => {
+        const host = config.CONCH_HOST;
+        const local = /^(0\.0\.0\.0|::)$/.test(host) ? '127.0.0.1' : host;
+        return `http://${local.includes(':') ? `[${local}]` : local}:${config.CONCH_PORT}`;
+      },
+      // Teams and WeChat reach the door at https://<name>/conch/… too, never the gateway.
+      door: () => {
+        const local = door.local;
+        return local ? Number(new URL(local).port) : undefined;
+      },
+      heal,
+    });
+    this.address.onChange((now) => {
+      this.gate.hosts.setOwnAddress(this.address.name());
+      this.broadcast.emit({ type: 'address.changed', address: now });
+      // Teams and WeChat's door can use it now (or can't any more).
+      door.addressChanged();
+    });
+    this.doctor.register(addressCheck(this.address));
     this.background = this.#background(config);
     this.push = this.#push(config);
     this.broadcast.on((event) => void this.push.onEvent(event).catch(() => undefined));
@@ -1293,7 +1348,9 @@ export class Services {
           }),
       handover: () =>
         stopSoon(
-          '🐚  Conch now runs in the background, so you can close this window.\n    It starts by itself when you log in. To stop it: pnpm conch quit',
+          '🐚  Conch now runs in the background, so you can close this window.\n    It starts by itself when you log in. To stop it: ' +
+            cliName() +
+            ' quit',
         ),
       heal: (message) => void this.healed.note('gateway', message),
     });
@@ -1528,7 +1585,7 @@ export class Services {
       title: conversation.title,
       ...(conversation.archivedAt !== undefined && { archivedAt: conversation.archivedAt }),
       ...(conversation.origin && { origin: conversation.origin }),
-      taint: events.flatMap((e) => (e.type === 'taint' ? [e.source] : [])),
+      taint: heldTaints(events),
     };
   }
 
@@ -1730,7 +1787,7 @@ export class Services {
         reveal: () =>
           Promise.reject(
             new Error(
-              'Your signing key never leaves this computer. Share your public key instead: pnpm conch skills key',
+              `Your signing key never leaves this computer. Share your public key instead: ${cliName()} skills key`,
             ),
           ),
       });
@@ -1761,6 +1818,12 @@ export class Services {
 
   /** Read the remembered provider before the first request arrives. */
   async start() {
+    // This computer's key, and no launcher file a crash left behind (ADR 0063).
+    await this.here.start().catch((error: unknown) => console.error('[here]', error));
+    this.#hereSweeper ??= setInterval(() => void this.here.sweep(), 30_000);
+    this.#hereSweeper.unref();
+    // Launchers ask for a link through a folder only you can write, never over the network.
+    this.#stopAsks ??= this.here.watch(() => this.config.CONCH_PORT);
     // The servers you added are providers too: built before the first request needs them.
     await this.providers.loadServers().catch(() => undefined);
     await this.providers.load();
@@ -1782,7 +1845,16 @@ export class Services {
     this.backups.start();
   }
 
+  /** The gateway listens: Conch answers at its own address too, if it has one (ADR 0064). */
+  async serveAddress(gateway: HttpServer): Promise<void> {
+    this.#gateway = gateway;
+    await this.address.start();
+    // conch setup and conch address change it by writing its file (ADR 0063, 0064).
+    this.address.watch();
+  }
+
   async stop() {
+    void this.address.stop();
     this.googleApps.stop();
     void this.conchApps.stop();
     this.slack.stop();
@@ -1804,6 +1876,9 @@ export class Services {
     void this.mockMatrix?.stop();
     void this.mockWeChat?.stop();
     clearInterval(this.#sweeper);
+    clearInterval(this.#hereSweeper);
+    this.#stopAsks?.();
+    this.#stopAsks = undefined;
     this.#sweeper = undefined;
     this.network.stop();
     this.updates.stop();
@@ -1828,7 +1903,7 @@ export class Services {
    */
   async route(
     engine: Engine,
-    context: { failed?: TurnProblem; model?: string },
+    context: { failed?: TurnProblem; model?: string; pictures?: boolean },
   ): Promise<TurnRoute> {
     const { preferences } = await this.settings.get();
     // The model another provider answers with: your default, if it's your default provider.
@@ -1839,6 +1914,7 @@ export class Services {
         ...(context.model && { fromModel: context.model }),
         ...(modelFor(other) && { toModel: modelFor(other) }),
         choose,
+        ...(context.pictures && { sight: true }),
       }).catch(() => false as const);
     if (!engine.local) {
       // A provider that stopped answering is the moment to look again.
@@ -1915,9 +1991,13 @@ export class Services {
     if (id === 'op') await this.keys.vault.onePassword.state({ force: true });
     // Ollama just landed: start it (quietly), so getting a model can follow straight on.
     if (id === 'ollama') await this.local.ensureRunning({ note: false });
-    const engine = { codex: 'codex-cli', 'claude-code': 'claude-code', ollama: 'ollama' }[id] as
-      EngineId | undefined;
-    if (engine) await this.engines.get(engine)?.detect({ force: true });
+    // Codex just landed: Codex and Codex CLI both use it.
+    const engines = ({
+      codex: ['codex-cli', 'codex-agent'],
+      'claude-code': ['claude-code'],
+      ollama: ['ollama'],
+    }[id] ?? []) as EngineId[];
+    for (const engine of engines) await this.engines.get(engine)?.detect({ force: true });
     await this.integrations.recheckNeeding(id);
     await this.channels.recheckNeeding(id);
     // Tailscale just landed: the public door carries on turning itself on.

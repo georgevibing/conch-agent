@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
+import { NOT_HERE, onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 
@@ -26,7 +27,7 @@ beforeAll(async () => {
       CONCH_WEB_DIST: '/nonexistent',
     }),
   );
-  app = await buildApp(services);
+  app = onThisComputer(await buildApp(services), services);
   token = await services.tray.token();
 });
 afterAll(async () => {
@@ -39,6 +40,16 @@ const ask = (url: string, headers: Record<string, string> = {}, method: 'GET' | 
   app.inject({ method, url, headers: { host: 'localhost:4317', ...headers } });
 
 describe('the menu bar helper’s door', () => {
+  it('opens nothing: its token goes over the network, so pages open through here/asks', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/tray/open',
+      headers: { host: '127.0.0.1:4317', 'x-conch-tray': token, [NOT_HERE]: '1' },
+      payload: { page: '/', file: true },
+    });
+    expect(res.statusCode).not.toBe(200);
+  });
+
   it('opens for its token, from this computer, and says only counts', async () => {
     const res = await ask('/api/tray/status', { 'x-conch-tray': token });
     expect(res.statusCode).toBe(200);

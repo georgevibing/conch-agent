@@ -258,6 +258,34 @@ export const SkillDraft = z.object({
 });
 export type SkillDraft = z.infer<typeof SkillDraft>;
 
+/** At most this much of an idea or rough notes goes to the model that writes the skill. */
+export const SKILL_IDEA_MAX = 4_000;
+
+/** Ask Conch to write a whole skill from an idea or rough notes: the steps, a title, a description. */
+export const WriteSkillBody = z
+  .object({
+    idea: z
+      .string()
+      .trim()
+      .min(3, 'Say a little about what it should do.')
+      .max(SKILL_IDEA_MAX, 'That’s already a lot — write the rest yourself, or shorten it.'),
+  })
+  .strict();
+export type WriteSkillBody = z.infer<typeof WriteSkillBody>;
+
+/** A whole skill, written for you to read and change before it's saved. */
+export const SkillWritten = z.object({
+  instructions: z.string(),
+  title: z.string(),
+  name: SkillName,
+  description: z.string(),
+  /** Written by a model (true), or nothing could write it and your words are kept (false). */
+  generated: z.boolean(),
+  /** No connected provider can write, so connecting one is the way to have it written. */
+  noModel: z.boolean(),
+});
+export type SkillWritten = z.infer<typeof SkillWritten>;
+
 export const CreateSkillBody = z.object({
   instructions: Instructions,
   /** Missing parts are written for you, as in `DraftSkillBody`. */

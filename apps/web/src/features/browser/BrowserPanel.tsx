@@ -78,8 +78,8 @@ export function BrowserPanel({
       onNavigate={(url) => live.send({ type: 'navigate', url })}
       onHistory={(history) => live.send({ type: 'history', action: history })}
       onInput={(input) => live.send(input)}
-      onTakeOver={() => live.send({ type: 'control', to: 'user' })}
-      onHandBack={() => live.send({ type: 'control', to: 'agent' })}
+      onTakeOver={() => live.control('user')}
+      onHandBack={() => live.control('agent')}
       onFit={fit}
       onClose={onClose}
     />

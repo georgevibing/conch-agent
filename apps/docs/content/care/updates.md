@@ -13,7 +13,7 @@ Open **Settings → Health** and find **Updates**.
 - **Conch itself.** The card says **Conch is up to date**, or **Conch 0.4 is ready**. **What's new** shows each waiting release in a few plain lines (**New**, **Better**, **Fixed**), the newest open. A **Heads up** line says when you need to do something after updating.
 - **Programs Conch uses.** Each one shows the version you have, and a button when a newer one is out.
 
-**Check now** looks at once. So does <kbd>mod+k</kbd>, then **Check for updates**.
+Opening **Settings → Health → Updates** looks again by itself when the last look is more than a few minutes old. **Check now** looks at once. So does <kbd>mod+k</kbd>, then **Check for updates**.
 
 ## Stable, beta or alpha
 

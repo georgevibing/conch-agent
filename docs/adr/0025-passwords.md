@@ -1,6 +1,6 @@
 # 0025 — Passwords: a vault of your own, and the managers you already use
 
-- Status: accepted
+- Status: accepted (amended by [ADR 0062](./0062-copy-to-another-password-manager.md): Copy to)
 - Date: 2026-10-01
 
 ## Context
@@ -40,7 +40,8 @@ vault and, when you turn them on, other password managers:
 - the macOS Keychain.
 
 Each is read through its own program and its own unlock, read-only. It's copied
-into Conch only when you choose to (§ Moving in). Apple Passwords, Safari's
+into Conch only when you choose to (§ Moving in). Since ADR 0062, one of Conch's
+own items can be copied the other way, as a new item in 1Password or Bitwarden. Apple Passwords, Safari's
 iCloud Keychain, Chrome and the rest don't let other apps read them, so Conch
 imports from them once.
 

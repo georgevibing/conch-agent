@@ -1,8 +1,7 @@
-import type { EffortChoice, PermissionMode } from '@conch/protocol';
+import { fuzzyMatch, type EffortChoice, type PermissionMode } from '@conch/protocol';
 import { ModelPicker, ModePicker } from '@conch/nacre';
 
 import { useUi } from '../../app/ui';
-import { fuzzyMatch } from '../search/fuzzy';
 import { availableModes, effortOptions, pickerProviders } from './catalog';
 import { modelKey, type useTurnOptions } from './useTurnOptions';
 

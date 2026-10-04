@@ -7,6 +7,7 @@
  */
 import { z } from 'zod';
 
+import { AddressStatus } from './address';
 import { AppNeed, AppsModel } from './apps';
 import { Artifact, ArtifactKind } from './artifacts';
 import { ATTACHMENT_LIMITS, Attachment } from './attachments';
@@ -49,6 +50,7 @@ import { UpdatesStatus } from './updates';
 import { UsageSnapshot } from './usage';
 
 export * from './access';
+export * from './address';
 export * from './apps';
 export * from './artifacts';
 export * from './chat-cards';
@@ -78,6 +80,7 @@ export * from './routines';
 export * from './triggers';
 export * from './safety';
 export * from './search';
+export * from './fuzzy';
 export * from './past-chats';
 export * from './setup';
 export * from './skills';
@@ -452,7 +455,13 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     content: z.string(),
   }),
   /** The chat read something from outside: from here on, sending and changing ask first (ADR 0028). */
-  z.object({ ...logged, type: z.literal('taint'), source: TaintSource }),
+  z.object({
+    ...logged,
+    type: z.literal('taint'),
+    source: TaintSource,
+    /** The tool call that brought it in, when one did. */
+    toolUseId: z.string().optional(),
+  }),
   /** The assistant looked through your other chats (ADR 0059): for what, and where it found it. */
   z.object({ ...logged, type: z.literal('chats.looked'), ...PastChatsLooked.shape }),
   /**
@@ -832,6 +841,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
    * approved (`waiting` counts those). Refetch Settings → Security.
    */
   z.object({ type: z.literal('access.changed'), waiting: z.number().int().min(0) }),
+  /** Your own address changed: checking, a certificate, ready, or a problem (ADR 0064). */
+  z.object({ type: z.literal('address.changed'), address: AddressStatus }),
   z.object({ type: z.literal('pong') }),
   z.object({
     type: z.literal('error'),

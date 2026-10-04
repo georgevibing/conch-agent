@@ -14,7 +14,26 @@ afterEach(() => {
   useUi.setState({ picker: null, draftOptions: {} });
   // A message one test sent and never saw acknowledged mustn't still be "sending" in the next.
   useLiveStore.setState({ pending: {} });
+  // Drafts and what was sent lately are kept on the device; each test starts without them.
+  localStorage.clear();
+  sessionStorage.clear();
 });
+
+/** Events of an open chat, in order, as the gateway would send them. */
+function events(conversationId: string, from: number, list: Record<string, unknown>[]) {
+  act(() => {
+    for (const [i, event] of list.entries())
+      FakeSocket.last?.push({
+        type: 'conversation.event',
+        event: { conversationId, seq: from + i, at: 1000 + from + i, ...event },
+      } as never);
+  });
+}
+
+const sends = () =>
+  (FakeSocket.last?.sent ?? []).filter(
+    (m) => (m as { type: string }).type === 'conversation.send',
+  ) as { text: string }[];
 
 describe('ChatView', () => {
   it('doesn’t take focus from a field you’re already typing in', async () => {
@@ -96,6 +115,46 @@ describe('ChatView', () => {
       text: 'Hi Ada!',
     });
     expect(useLiveStore.getState().created[sent.clientMessageId]).toBe('c1');
+  });
+
+  it('never shows the greeting again between the server naming a new chat and its address', async () => {
+    mockFetch({ 'GET /api/state': () => appState(), 'GET /api/conversations': () => [] });
+    renderApp(<ChatView />);
+    await screen.findByRole('heading', { name: /, Ada\.$/ });
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'Message Conch' }),
+      'Hello there{Enter}',
+    );
+    const socket = FakeSocket.last;
+    await waitFor(() =>
+      expect(socket?.sent.some((m) => (m as { type: string }).type === 'conversation.send')).toBe(
+        true,
+      ),
+    );
+    const sent = socket?.sent.find((m) => (m as { type: string }).type === 'conversation.send') as {
+      clientMessageId: string;
+    };
+    const bubble = screen.getByText('Hello there');
+    // Named, before any event of the chat and before the address follows: the
+    // message moves to the chat at that instant, and the splash must not come back.
+    act(() => {
+      socket?.push({
+        type: 'conversation.created',
+        clientMessageId: sent.clientMessageId,
+        conversation: {
+          id: 'c9',
+          title: 'Hello there',
+          preview: '',
+          createdAt: 1,
+          updatedAt: 1,
+          status: 'running',
+          options: {},
+        },
+      });
+    });
+    expect(screen.queryByRole('heading', { name: /, Ada\.$/ })).toBeNull();
+    // The same bubble, not a new one drawn again.
+    expect(screen.getByText('Hello there')).toBe(bubble);
   });
 
   it('shows a fix-it callout and keeps the draft when Claude Code is signed out', async () => {
@@ -340,6 +399,113 @@ describe('ChatView', () => {
       type: 'conversation.interrupt',
       conversationId: 'c-stop',
     });
+  });
+});
+
+describe('The message box', () => {
+  const open = async (id: string) => {
+    mockFetch({ 'GET /api/state': () => appState(), 'GET /api/conversations': () => [] });
+    const view = renderApp(<ChatView conversationId={id} />, { route: `/c/${id}` });
+    const box = await screen.findByRole('textbox', { name: 'Message Conch' });
+    await waitFor(() => expect(FakeSocket.last?.readyState).toBe(1));
+    return { box, ...view };
+  };
+
+  it('brings back what you sent with ↑, and walks forward with ↓', async () => {
+    const { box } = await open('c-up');
+    events('c-up', 0, [
+      { type: 'user.message', messageId: 'u1', text: 'Plan my week' },
+      { type: 'turn.completed', outcome: 'success' },
+      { type: 'user.message', messageId: 'u2', text: 'Make it shorter' },
+      { type: 'turn.completed', outcome: 'success' },
+      { type: 'status', status: 'idle' },
+    ]);
+    await userEvent.click(box);
+    await userEvent.keyboard('{ArrowUp}');
+    expect(box).toHaveValue('Make it shorter');
+    await userEvent.keyboard('{ArrowUp}');
+    expect(box).toHaveValue('Plan my week');
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}');
+    expect(box).toHaveValue('');
+  });
+
+  it('queues what you send while it works, and sends it when the reply is over', async () => {
+    const { box } = await open('c-queue');
+    events('c-queue', 0, [
+      { type: 'user.message', messageId: 'u1', text: 'Fix the bug' },
+      { type: 'status', status: 'running' },
+    ]);
+    await userEvent.type(box, 'Then run the tests');
+    await userEvent.click(screen.getByRole('button', { name: 'Send when Conch is done' }));
+    expect(box).toHaveValue('');
+    expect(screen.getByRole('status', { name: 'Queued message' })).toHaveTextContent(
+      /Then run the tests/,
+    );
+    expect(screen.getByText('Sends when Conch is done')).toBeInTheDocument();
+    // More written meanwhile joins it.
+    await userEvent.type(box, 'and the linter{Enter}');
+    expect(sends()).toEqual([]);
+    // Still writing when it goes: that stays in the box.
+    await userEvent.type(box, 'one more thing');
+    events('c-queue', 2, [
+      { type: 'turn.completed', outcome: 'success' },
+      { type: 'status', status: 'idle' },
+    ]);
+    await waitFor(() =>
+      expect(sends()).toEqual([
+        expect.objectContaining({ text: 'Then run the tests\n\nand the linter' }),
+      ]),
+    );
+    expect(screen.queryByText('Sends when Conch is done')).toBeNull();
+    expect(box).toHaveValue('one more thing');
+  });
+
+  it('puts a queued message back in the box when the reply is stopped', async () => {
+    const { box } = await open('c-stopq');
+    events('c-stopq', 0, [
+      { type: 'user.message', messageId: 'u1', text: 'Write a story' },
+      { type: 'status', status: 'running' },
+    ]);
+    await userEvent.type(box, 'Make it funny{Enter}');
+    expect(box).toHaveValue('');
+    events('c-stopq', 2, [
+      { type: 'turn.completed', outcome: 'interrupted' },
+      { type: 'status', status: 'idle' },
+    ]);
+    await waitFor(() => expect(box).toHaveValue('Make it funny'));
+    expect(sends()).toEqual([]);
+  });
+
+  it('takes a queued message back to change it', async () => {
+    const { box } = await open('c-editq');
+    events('c-editq', 0, [
+      { type: 'user.message', messageId: 'u1', text: 'Write a story' },
+      { type: 'status', status: 'running' },
+    ]);
+    await userEvent.type(box, 'Make it funny{Enter}');
+    await userEvent.click(screen.getByRole('button', { name: 'Edit queued message' }));
+    expect(box).toHaveValue('Make it funny');
+    expect(box).toHaveFocus();
+    expect(screen.queryByText('Sends when Conch is done')).toBeNull();
+  });
+
+  it('keeps what you were writing in a chat when you come back to it', async () => {
+    const { box, unmount } = await open('c-draft');
+    await userEvent.type(box, 'half a thought');
+    unmount();
+    const again = await open('c-draft');
+    expect(again.box).toHaveValue('half a thought');
+    await userEvent.clear(again.box);
+    again.unmount();
+    expect((await open('c-draft')).box).toHaveValue('');
+  });
+
+  it('writes in the box when you start typing anywhere in the chat', async () => {
+    const { box } = await open('c-type');
+    box.blur();
+    expect(box).not.toHaveFocus();
+    await userEvent.keyboard('h');
+    expect(box).toHaveFocus();
   });
 });
 

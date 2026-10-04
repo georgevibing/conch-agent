@@ -6,6 +6,7 @@ import {
   type SkillDescriptionDraft,
   type SkillDetail,
   type SkillDraft,
+  type SkillWritten,
   type SkillMode,
   type SkillPermissions,
   type SkillShelf,
@@ -20,6 +21,7 @@ import type { Engine, HostTool } from '../engines/types';
 import { draftSkill } from './draft';
 import { slugify } from './draft';
 import { withTitle } from './frontmatter';
+import { writeSkill } from './write';
 import { readPermissions } from './permissions';
 import { publicSkill, SkillError, type LoadedSkill, type SkillStore } from './store';
 import type { SkillTrust } from './trust';
@@ -114,6 +116,23 @@ export class SkillService {
     const { draft, usage } = await draftSkill(engine, instructions, signal);
     if (usage) this.deps.onSpend?.(usage);
     return { ...draft, name: await this.deps.store.freeName(slugify(draft.title)) };
+  }
+
+  /**
+   * A whole skill from an idea or rough notes (the steps, a title and a
+   * description), for you to read and change before it's saved. With no
+   * provider that can write, your words come back as they were. Never fails.
+   */
+  async write(idea: string, signal?: AbortSignal): Promise<SkillWritten> {
+    const engines = await this.deps.engines().catch(() => []);
+    const engine = engines.find((e) => e.complete);
+    const { skill, usage } = await writeSkill(engine, idea, signal);
+    if (usage) this.deps.onSpend?.(usage);
+    return {
+      ...skill,
+      name: await this.deps.store.freeName(slugify(skill.title)),
+      noModel: !engine,
+    };
   }
 
   /**

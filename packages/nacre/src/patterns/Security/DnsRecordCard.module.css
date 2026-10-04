@@ -1,0 +1,95 @@
+@layer nacre.components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2-5);
+    padding: var(--nc-space-3) var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .lead,
+  .meta,
+  .found {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text);
+    text-wrap: pretty;
+  }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+  }
+
+  .found {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .tick {
+    display: grid;
+    place-items: center;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    border-radius: var(--nc-radius-full);
+    background: light-dark(
+      oklch(0.93 0.06 var(--nc-success-h)),
+      oklch(0.32 0.07 var(--nc-success-h))
+    );
+    color: light-dark(oklch(0.5 0.13 var(--nc-success-h)), oklch(0.8 0.13 var(--nc-success-h)));
+  }
+
+  .tick > svg {
+    inline-size: 0.8rem;
+    block-size: 0.8rem;
+  }
+
+  .table {
+    inline-size: 100%;
+    border-collapse: collapse;
+    font-size: var(--nc-text-sm);
+  }
+
+  .table th {
+    padding-block-end: var(--nc-space-1);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    text-align: start;
+    color: var(--nc-text-subtle);
+  }
+
+  .table td {
+    padding-block: var(--nc-space-1);
+    vertical-align: middle;
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .type {
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+    inline-size: 4rem;
+  }
+
+  .cell {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-0-5);
+    max-inline-size: 100%;
+  }
+
+  .cell code {
+    overflow-wrap: anywhere;
+    font-family: var(--nc-font-mono);
+    color: var(--nc-text);
+  }
+}

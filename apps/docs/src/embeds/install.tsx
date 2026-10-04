@@ -48,3 +48,8 @@ export function InstallCommand({ typed = false }: { typed?: boolean; args?: stri
     </Tabs>
   );
 }
+
+/** The line for a server: Linux, over SSH, then a few questions (ADR 0064). */
+export function ServerInstallCommand() {
+  return <CommandLine size="lg" command={INSTALL.server} />;
+}

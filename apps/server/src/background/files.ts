@@ -52,6 +52,12 @@ const CARRIED = [
   'CONCH_PORT',
   'CONCH_ALLOW_REMOTE',
   'CONCH_ALLOWED_HOSTS',
+  // Your own address (ADR 0064): its ports, its certificate authority and its network.
+  'CONCH_HTTPS_PORT',
+  'CONCH_HTTP_PORT',
+  'CONCH_ACME_DIRECTORY',
+  'CONCH_PUBLIC_IP',
+  'CONCH_DNS_SERVERS',
   'CONCH_LOG_LEVEL',
   'HTTPS_PROXY',
   'HTTP_PROXY',

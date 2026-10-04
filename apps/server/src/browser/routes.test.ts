@@ -6,6 +6,7 @@ import { BrowserStatus } from '@conch/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
+import { hereInit, onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 
@@ -25,7 +26,7 @@ async function setup() {
       CONCH_WEB_DIST: '/nonexistent',
     }),
   );
-  const app = await buildApp(services);
+  const app = onThisComputer(await buildApp(services), services);
   cleanup = async () => {
     await app.close();
     services.search.close();
@@ -115,6 +116,7 @@ describe('browser routes', () => {
     if (!address || typeof address === 'string') throw new Error('no address');
     const ws = new WebSocket(
       `ws://localhost:${address.port}/api/browser/live?conversationId=nope_123`,
+      hereInit(app),
     );
     const code = await new Promise<number>((resolve) =>
       ws.addEventListener('close', (e) => resolve(e.code)),

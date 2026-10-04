@@ -2,6 +2,10 @@
 
 - Status: accepted
 - Date: 2026-09-29
+- Amended by: [ADR 0064](./0064-your-own-address.md) (Conch can serve an address of
+  its own over HTTPS itself; this proxy is the way for people who already run one),
+  [ADR 0067](./0067-your-address-through-a-tunnel.md) (`conch setup` sets the proxy's name
+  up and checks the way in through it; the hello link replaces the access key for people)
 
 ## Decision
 

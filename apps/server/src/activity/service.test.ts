@@ -158,6 +158,62 @@ describe('the timeline', () => {
     expect(commands.entries).toHaveLength(5);
     expect(commands.next).toBeUndefined();
   });
+
+  it('finds what you type, loosely, in what happened or the chat it was in', async () => {
+    seq = 0;
+    const logs: Record<string, ConversationEvent[]> = {
+      a: [
+        ev({
+          conversationId: 'a',
+          type: 'tool.started',
+          toolUseId: 'a1',
+          name: 'Bash',
+          input: { command: 'git push origin main' },
+        }),
+        ev({ conversationId: 'a', type: 'tool.finished', toolUseId: 'a1', status: 'success' }),
+        ev({
+          conversationId: 'a',
+          type: 'tool.started',
+          toolUseId: 'a2',
+          name: 'Edit',
+          input: { file_path: 'notes.md' },
+        }),
+        ev({ conversationId: 'a', type: 'tool.finished', toolUseId: 'a2', status: 'success' }),
+      ],
+      b: Array.from({ length: 70 }, (_, i) => [
+        ev({
+          conversationId: 'b',
+          type: 'tool.started',
+          toolUseId: `b${i}`,
+          name: 'Edit',
+          input: { file_path: `draft${i}.md` },
+        }),
+        ev({ conversationId: 'b', type: 'tool.finished', toolUseId: `b${i}`, status: 'success' }),
+      ]).flat(),
+    };
+    const activity = new Activity({
+      list: async () => [
+        { id: 'a', title: 'Weather forecast for Berlin', updatedAt: logs.a?.at(-1)?.at ?? 0 },
+        { id: 'b', title: 'Writing', updatedAt: logs.b?.at(-1)?.at ?? 0 },
+      ],
+      events: async (id) => logs[id] ?? [],
+    });
+    const titles = async (q: string) => (await activity.page({ q })).entries.map((e) => e.title);
+    // Far back, past a whole page of newer things, and loosely ("gpush").
+    expect(await titles('gpush')).toEqual(['Ran `git push origin main`']);
+    // By the chat it happened in.
+    expect(await titles('berlin')).toEqual(['Changed notes.md', 'Ran `git push origin main`']);
+    // Both at once, any order, and with the kind.
+    expect(await titles('berlin notes')).toEqual(['Changed notes.md']);
+    expect((await activity.page({ q: 'berlin', kind: 'command' })).entries).toHaveLength(1);
+    expect(await titles('zzz')).toEqual([]);
+    // Pages work the same way while searching.
+    const first = await activity.page({ q: 'draft', limit: 50 });
+    expect(first.entries).toHaveLength(50);
+    const rest = await activity.page({ q: 'draft', limit: 50, before: first.next });
+    expect(rest.entries).toHaveLength(20);
+    expect(rest.next).toBeUndefined();
+  });
 });
 
 describe('what a chat is held to (ADR 0047)', () => {

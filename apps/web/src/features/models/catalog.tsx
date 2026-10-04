@@ -71,6 +71,7 @@ const providerLogos: Record<BuiltInEngineId, ProviderId> = {
   'claude-code': 'claude',
   'anthropic-api': 'claude',
   'codex-cli': 'openai',
+  'codex-agent': 'openai',
   openai: 'openai',
   copilot: 'copilot',
   'gemini-cli': 'gemini',

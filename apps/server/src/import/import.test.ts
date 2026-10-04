@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryStore } from '../memory/store';
 import { SettingsStore } from '../settings/store';
 import { SkillStore } from '../skills/store';
+import { captureUi } from '../cli/ui';
 import { importCommand, type ImportIo } from './cli';
 import { FIXTURE_SLACK_BOT, hermesHome, openClawHome, openClawTeamHome } from './fixtures';
 import { readHermes } from './hermes';
@@ -794,19 +795,15 @@ describe('a Slack bot with one of its keys (ADR 0042)', () => {
   });
 });
 
-describe('pnpm conch import', () => {
+describe('conch import', () => {
   const io = (running = false) => {
-    const lines: string[] = [];
-    const plain = (s: string) => s;
+    const { ui, text } = captureUi();
     const value: ImportIo = {
-      say: (l = '') => lines.push(l),
-      bold: plain,
-      dim: plain,
-      green: plain,
-      yellow: plain,
+      ui,
+      conch: (args) => `conch ${args}`,
       running: async () => running,
     };
-    return { value, lines };
+    return { value, lines: { join: (_separator?: string) => text() } };
   };
 
   it('a dry run lists what would come, and changes nothing', async () => {

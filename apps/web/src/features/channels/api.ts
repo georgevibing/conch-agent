@@ -65,6 +65,9 @@ export const channelsApi = {
   door: () => request(ChannelDoor, '/api/channels/door'),
   doorTailscale: () =>
     request(ChannelDoor, '/api/channels/door/tailscale', { method: 'POST', body: {} }),
+  /** Use Conch's own address for the door (ADR 0064). */
+  doorAddress: () =>
+    request(ChannelDoor, '/api/channels/door/address', { method: 'POST', body: {} }),
   doorOwn: (url: string) =>
     request(ChannelDoor, '/api/channels/door', { method: 'PUT', body: { url } }),
   doorCheck: () => request(ChannelDoor, '/api/channels/door/check', { method: 'POST', body: {} }),

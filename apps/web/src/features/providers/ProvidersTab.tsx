@@ -77,6 +77,16 @@ export function ProvidersTab() {
   const open = providers.find((provider) => provider.id === connecting);
   const pinned = Boolean(data?.pinned);
 
+  // A provider's own address, still loading: its page is on its way, not the list.
+  if (connecting && isPending) {
+    return (
+      <Stack gap={4} aria-busy="true">
+        <Skeleton shape="block" height="4rem" />
+        <Skeleton shape="block" height="9rem" />
+      </Stack>
+    );
+  }
+
   // One provider opens in place of the list — never a dialog over Settings.
   if (connecting === SERVER_TILE.id && data) {
     return (

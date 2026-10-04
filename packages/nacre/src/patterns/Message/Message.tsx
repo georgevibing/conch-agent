@@ -1,5 +1,12 @@
 import { AlertCircle, RotateCcw } from 'lucide-react';
-import { useEffect, useId, useState, type ComponentProps, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useState,
+  type ComponentProps,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 
 import { Button } from '../../components/Button';
 import { cx } from '../../utils/cx';
@@ -29,8 +36,18 @@ export interface MessageProps extends Omit<ComponentProps<'article'>, 'children'
   /** `hover` (default) reveals actions on hover/focus; `always` keeps them visible. */
   actionsVisibility?: 'hover' | 'always';
   status?: MessageStatus;
-  /** Play the "surfacing" entrance on mount (turn off when it replaces a placeholder in place). */
+  /**
+   * Play the "surfacing" entrance on mount (turn off when it replaces a
+   * placeholder in place). Read once, when the message mounts: changing it
+   * later never replays the entrance on a message already on screen.
+   */
   entrance?: boolean;
+  /**
+   * Epoch ms when the work this message shows began. The moving mark keeps
+   * time from it, so a reply that takes a placeholder's place carries the
+   * spiral on where it was instead of starting it again.
+   */
+  since?: number;
   /** Error description shown when `status="error"`. */
   error?: ReactNode;
   onRetry?: () => void;
@@ -55,14 +72,24 @@ function Timestamp({ value }: { value: Date | string }) {
  */
 export function MessageMark({
   active,
+  since,
   className,
+  style,
   ...props
-}: ComponentProps<'span'> & { active?: boolean }) {
+}: ComponentProps<'span'> & {
+  active?: boolean;
+  /** Epoch ms the work began: the spiral keeps time from it across remounts. */
+  since?: number;
+}) {
   const [landed, setLanded] = useState(false);
   const [wasActive, setWasActive] = useState(active);
+  // How far into its loops the mark is, read when it starts moving and then fixed,
+  // so a re-render never shifts a running animation.
+  const [age, setAge] = useState(() => (active ? ageOf(since) : 0));
   if (Boolean(active) !== Boolean(wasActive)) {
     setWasActive(active);
     if (!active) setLanded(true);
+    else setAge(ageOf(since));
   }
   useEffect(() => {
     if (!landed) return;
@@ -75,6 +102,7 @@ export function MessageMark({
       data-active={active || undefined}
       data-landed={landed || undefined}
       className={cx(styles.mark, className)}
+      style={{ '--nc-mark-age': `${age}ms`, ...style } as CSSProperties}
       {...props}
     >
       <svg viewBox="3.5 3.5 17 17" className={styles.markGlyph}>
@@ -87,6 +115,10 @@ export function MessageMark({
       </svg>
     </span>
   );
+}
+
+function ageOf(since: number | undefined): number {
+  return since === undefined ? 0 : Math.max(0, Date.now() - since);
 }
 
 /**
@@ -105,12 +137,15 @@ export function Message({
   actionsVisibility = 'hover',
   status = 'complete',
   entrance = true,
+  since,
   error,
   onRetry,
   className,
   ...props
 }: MessageProps) {
   const headingId = useId();
+  // Decided when it mounts: a message already on screen never surfaces twice.
+  const [entered] = useState(entrance);
   const name = author ?? (from === 'user' ? 'You' : from === 'assistant' ? 'Claude' : 'System');
 
   if (from === 'system') {
@@ -174,7 +209,7 @@ export function Message({
       aria-busy={status === 'streaming' || undefined}
       data-from={from}
       data-status={status}
-      data-entrance={entrance ? undefined : 'none'}
+      data-entrance={entered ? undefined : 'none'}
       className={cx(styles.message, className)}
       {...props}
     >
@@ -184,7 +219,7 @@ export function Message({
       {from === 'assistant' ? (
         <>
           <div className={styles.avatar}>
-            {avatar ?? <MessageMark active={status === 'streaming'} />}
+            {avatar ?? <MessageMark active={status === 'streaming'} since={since} />}
           </div>
           <div className={styles.main}>
             <div className={styles.meta}>

@@ -71,6 +71,12 @@ export type KeyForm = z.infer<typeof KeyForm>;
 
 /** Where a provider sits in the gallery, in the words a person would sort them by. */
 export const ProviderGroup = z.enum([
+  /**
+   * A coding agent on this computer that brings its own tools (shell, file
+   * edits) and works in your folders, on your plan (ADR 0066): Claude Code,
+   * Codex CLI. It asks through Conch.
+   */
+  'agent',
   /** A program on this computer with your own sign-in: a plan you already pay for. */
   'subscription',
   /** A service you pay as you go, with a key. */

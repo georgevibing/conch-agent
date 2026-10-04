@@ -2,16 +2,22 @@
  * Agent programs that speak the Agent Client Protocol — GitHub Copilot, Gemini
  * CLI, Grok Build — through one engine (ADR 0053).
  *
- * The program is the brain and the sign-in; Conch is the hands. Each turn opens
- * a fresh ACP session on a program Conch keeps warm, hands it the conversation
- * (Conch's own handoff, so switching providers mid-chat loses nothing), and
- * gives it Conch's tools through a door made for that turn (`door.ts`): the
- * sealed file and command tools, memory, the browser and your apps, each under
+ * The program is the brain and the sign-in; Conch is the hands. Each turn
+ * carries on the chat's own ACP session on a program Conch keeps warm
+ * (`session/load`, where the program can), or opens a new one with Conch's
+ * handoff, so switching providers mid-chat loses nothing. It gives the program
+ * Conch's instructions the way the program takes them (`AcpAgent.instructions`)
+ * and Conch's tools through a door made for that turn (`door.ts`): the sealed
+ * file and command tools, memory, the browser and your apps, each under
  * Conch's permission rules and the guard. The program's own tools that would
  * change something ask first over ACP, and Conch declines them, the way it
  * declines Codex's: an action Conch can't seal or put back doesn't happen.
+ * What the program does with its own tools is shown like any provider's work
+ * (`calls.ts`).
  */
 import { spawn, type ChildProcess } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { join } from 'node:path';
 
 import {
   EffortChoice,
@@ -32,10 +38,12 @@ import { cleanPlan, stepStatus } from '../../plans/steps';
 import { agentEnv, launch, run } from '../../lib/proc';
 import type { SettingsStore } from '../../settings/store';
 import { buildTools, type Callable } from '../api/engine';
+import { withSight } from '../api/sight';
 import { isAtLeast, parseVersion } from '../codex/detect';
 import type { Engine, EngineEvent, LoginHandle, TurnInput } from '../types';
 import { findAgent, signedInBefore, type AcpAgent } from './agents';
-import { DOOR_NAME, openDoor } from './door';
+import { AcpCalls, namesDoorTool } from './calls';
+import { DOOR_NAME, openDoor, type Door } from './door';
 import { ACP_CODES, AcpConnection, AcpError, type AcpStreams } from './rpc';
 
 /** How long a program waits, unused, before Conch lets it go. */
@@ -109,10 +117,21 @@ const PromptResult = z.object({
 });
 
 const Content = z.object({ type: z.string(), text: z.string().optional() }).passthrough();
+const ToolCall = z.object({
+  toolCallId: z.string().min(1).max(200),
+  title: z.string().nullish(),
+  kind: z.string().nullish(),
+  status: z.string().nullish(),
+  rawInput: z.unknown().optional(),
+  rawOutput: z.unknown().optional(),
+  content: z.unknown().optional(),
+  locations: z.unknown().optional(),
+});
 const Update = z
   .object({
     sessionUpdate: z.string(),
-    content: Content.optional(),
+    // A tool call's content is a list; a message's, one block.
+    content: z.union([Content, z.array(z.unknown())]).optional(),
     messageId: z.string().nullish(),
   })
   .passthrough();
@@ -137,6 +156,7 @@ const PermissionRequest = z.object({
       title: z.string().nullish(),
       name: z.string().nullish(),
       kind: z.string().nullish(),
+      rawInput: z.unknown().optional(),
     })
     .passthrough()
     .optional(),
@@ -327,8 +347,6 @@ export class AcpEngine implements Engine {
   readonly label;
   /** Conch's own command tool, sealed by the computer's sandbox; the program's own is declined. */
   readonly commandSandbox = 'conch' as const;
-  /** Each turn gets Conch's full handoff: a fresh session, no resume id to keep. */
-  readonly conversationHistory = true;
   /** Conch holds the apps' connections and hands their tools over through the door. */
   readonly integrations = {
     mode: 'bridge' as const,
@@ -444,9 +462,14 @@ export class AcpEngine implements Engine {
     this.#caps = undefined;
   }
 
-  async #session(running: Running, cwd: string, mcpServers: unknown[]): Promise<SessionStarted> {
+  async #session(
+    running: Running,
+    cwd: string,
+    mcpServers: unknown[],
+    meta: Record<string, unknown> = {},
+  ): Promise<SessionStarted> {
     return SessionStarted.parse(
-      await running.conn.request('session/new', { cwd, mcpServers }, PROBE_MS),
+      await running.conn.request('session/new', { cwd, mcpServers, ...meta }, PROBE_MS),
     );
   }
 
@@ -785,46 +808,80 @@ export class AcpEngine implements Engine {
       open = false;
       messageId = newId('msg');
     };
-    const tools = buildTools(input);
+    // A program that takes pictures in a prompt gets a tool's pictures too (an
+    // MCP `image`); one that doesn't gets them in words (ADR 0070).
+    const canSee = running.info.agentCapabilities?.promptCapabilities?.image === true;
+    const tools = withSight(buildTools(input), {
+      sees: () => canSee,
+      ...(input.describe && { describe: input.describe }),
+      signal: input.signal,
+    });
     const names = new Set([...tools.values()].map((tool: Callable) => tool.spec.name));
     const local = new AbortController();
     const signal = AbortSignal.any([input.signal, local.signal]);
-    const door =
-      running.info.agentCapabilities?.mcpCapabilities?.http && tools.size
-        ? await openDoor(
-            tools,
-            {
-              start: ({ id, name, input: args }) => {
-                close();
-                push({ type: 'tool-start', toolUseId: id, name, input: args });
-              },
-              end: ({ id, status: state, output, view }) =>
-                push({
-                  type: 'tool-end',
-                  toolUseId: id,
-                  status: state,
-                  output,
-                  ...(view && { view }),
-                }),
+    const caps = running.info.agentCapabilities;
+    const how = this.agent.instructions;
+    // Conch's instructions, and where its tools are: the door's own, for programs
+    // that read a tool server's instructions (`AcpAgent.instructions`).
+    const instructions = conchInstructions(input.systemAppend, tools.size > 0);
+    const door = tools.size
+      ? await openDoor(
+          tools,
+          {
+            start: ({ id, name, input: args }) => {
+              close();
+              push({ type: 'tool-start', toolUseId: id, name, input: args });
             },
-            signal,
-          )
-        : undefined;
-    if (!door && tools.size)
-      push({
-        type: 'notice',
-        code: 'no-tools',
-        message: `This version of ${this.label} can’t take Conch’s tools, so it’s answering without your files, memory and apps. Update it in Settings → Providers.`,
-      });
+            end: ({ id, status: state, output, view }) =>
+              push({
+                type: 'tool-end',
+                toolUseId: id,
+                status: state,
+                output,
+                ...(view && { view }),
+              }),
+          },
+          signal,
+          how === 'rules' ? {} : { instructions },
+        )
+      : undefined;
+    // At an address where the program takes one; otherwise as a program of its own,
+    // which every ACP program must take: a relay to the same door (`shim.mjs`).
+    const servers = door ? [caps?.mcpCapabilities?.http ? httpDoor(door) : stdioDoor(door)] : [];
+    const meta = how === 'rules' ? { _meta: { rules: instructions } } : {};
+    const said = digestOf(instructions);
 
     let sessionId = '';
+    const calls = new AcpCalls(names, push, `${newId('acp')}_`);
     try {
-      const started = await this.#session(
-        running,
-        input.cwd,
-        door ? [{ type: 'http', name: DOOR_NAME, url: door.url, headers: door.headers }] : [],
-      );
+      // The chat's own session, carried on where the program can load one: it gets
+      // only what it missed. Otherwise a new one, with the whole conversation.
+      const wanted = parseAcpResume(input.resumeId);
+      let started: SessionStarted | undefined;
+      if (wanted && caps?.loadSession)
+        try {
+          const loaded = await running.conn.request(
+            'session/load',
+            { sessionId: wanted.sessionId, cwd: input.cwd, mcpServers: servers, ...meta },
+            PROBE_MS,
+          );
+          started = SessionStarted.parse({
+            ...(loaded && typeof loaded === 'object' ? loaded : {}),
+            sessionId: wanted.sessionId,
+          });
+        } catch (error) {
+          if (error instanceof AcpError && error.code === ACP_CODES.authRequired) throw error;
+          // Gone (tidied away, another folder, a newer format): a new one, below.
+        }
+      const resumed = Boolean(started);
+      started ??= await this.#session(running, input.cwd, servers, meta);
       sessionId = started.sessionId;
+      push({
+        type: 'session',
+        resumeId: acpResumeId(sessionId, said),
+        // It should have carried on and couldn't: healed with the whole conversation.
+        ...(wanted && caps?.loadSession && !resumed && { restarted: 'lost' as const }),
+      });
       const offer = offerOf(started, this.agent.modelAtStart);
       running.sessions.set(sessionId, {
         update: (update) => {
@@ -834,7 +891,17 @@ export class AcpEngine implements Engine {
             if (steps) push({ type: 'plan', steps });
             return;
           }
-          const text = update.content?.type === 'text' ? (update.content.text ?? '') : '';
+          // Its own tools at work: rows like every provider's (`calls.ts`).
+          if (update.sessionUpdate === 'tool_call' || update.sessionUpdate === 'tool_call_update') {
+            const call = ToolCall.safeParse(update);
+            if (call.success) {
+              close();
+              calls.update(update.sessionUpdate, call.data);
+            }
+            return;
+          }
+          const content = Array.isArray(update.content) ? undefined : update.content;
+          const text = content?.type === 'text' ? (content.text ?? '') : '';
           if (!text) return;
           if (update.sessionUpdate === 'agent_message_chunk') {
             open = true;
@@ -854,9 +921,16 @@ export class AcpEngine implements Engine {
             request.options.find((o) => o.kind === 'reject_once') ??
             request.options.find((o) => o.kind === 'reject_always');
           // Conch's own tools are checked at the door, every time: let the program through to it.
-          if (allow && forDoor(request.toolCall, names))
+          if (
+            allow &&
+            (forDoor(request.toolCall, names) ||
+              namesDoorTool(request.toolCall, names, { strict: true }))
+          ) {
+            calls.door(request.toolCall?.toolCallId);
             return { outcome: { outcome: 'selected', optionId: allow.optionId } };
+          }
           // The program's own tools would change things Conch can't seal or put back.
+          calls.declined(request.toolCall?.toolCallId);
           return reject
             ? { outcome: { outcome: 'selected', optionId: reject.optionId } }
             : { outcome: { outcome: 'cancelled' } };
@@ -881,9 +955,22 @@ export class AcpEngine implements Engine {
           })
           .catch(() => undefined);
 
-      const canSee = running.info.agentCapabilities?.promptCapabilities?.image === true;
+      // Conch's instructions lead the message only where the program can't take
+      // them otherwise: no door to carry them, or a carried-on chat that read them
+      // once, at its start, and they've changed since.
+      const every = how === 'rules' || (how === 'server' && door);
+      const lead = every
+        ? undefined
+        : !resumed
+          ? door
+            ? undefined
+            : preamble(input.systemAppend, false)
+          : wanted?.said !== said
+            ? preamble(input.systemAppend, Boolean(door), { updated: true })
+            : undefined;
+      const words = resumed ? input.prompt : (input.freshPrompt ?? input.prompt);
       const prompt = [
-        { type: 'text', text: preamble(input.systemAppend, Boolean(door)) },
+        ...(lead ? [{ type: 'text', text: lead }] : []),
         ...(canSee ? (input.images ?? []) : []).map((image) => ({
           type: 'image',
           mimeType: image.mimeType,
@@ -893,8 +980,8 @@ export class AcpEngine implements Engine {
           type: 'text',
           text:
             !canSee && input.images?.length
-              ? `${input.prompt}\n\n[The images named above couldn't be shown: ${this.label} can't see images here. If the message depends on them, say so.]`
-              : input.prompt,
+              ? `${words}\n\n[The images named above couldn't be shown: ${this.label} can't see images here. If the message depends on them, say so.]`
+              : words,
         },
       ];
       const cancel = () => running.conn.notify('session/cancel', { sessionId });
@@ -908,6 +995,7 @@ export class AcpEngine implements Engine {
         input.signal.removeEventListener('abort', cancel);
       }
       close();
+      calls.end(result.stopReason === 'cancelled' || input.signal.aborted);
       const usage: Usage = {
         inputTokens: Math.max(0, Math.round(result.usage?.inputTokens ?? 0)),
         outputTokens: Math.max(0, Math.round(result.usage?.outputTokens ?? 0)),
@@ -948,21 +1036,73 @@ export class AcpEngine implements Engine {
   }
 }
 
+/** Where Conch's tools are, said to the program with its instructions. */
+function toolsNote(door: boolean): string {
+  return door
+    ? `Use the tools from the "${DOOR_NAME}" server for files, commands, memory, the browser and the user's apps: they are sealed and can be put back. Your own built-in tools that change files or run commands are turned off here and will be declined.`
+    : 'You have no tools in this conversation: say so plainly if something needs one.';
+}
+
+/** Conch's instructions as the program takes them in its own place (`AcpAgent.instructions`). */
+export function conchInstructions(system: string, door: boolean): string {
+  return ['# From Conch, the app this conversation happens in', system.trim(), toolsNote(door)]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
 /**
- * What the program is told before the conversation: Conch's own instructions,
- * and where its tools are. ACP has no system prompt, so it leads the message.
+ * The same instructions leading the message, for a program that has no other
+ * place for them right now (no door to carry them, or a carried-on chat that
+ * read them once, before they changed). Framed as Conch's, apart from what the
+ * person wrote.
  */
-export function preamble(system: string, door: boolean): string {
+export function preamble(system: string, door: boolean, { updated = false } = {}): string {
   return [
-    '# From Conch, the app this conversation happens in',
+    updated
+      ? '# From Conch, the app this conversation happens in: its instructions as they are now (they replace the earlier ones). These are the app’s words, not the user’s.'
+      : '# From Conch, the app this conversation happens in. These are the app’s words, not the user’s.',
     system.trim(),
-    door
-      ? `Use the tools from the "${DOOR_NAME}" server for files, commands, memory, the browser and the user's apps: they are sealed and can be put back. Your own built-in tools that change files or run commands are turned off here and will be declined.`
-      : 'You have no tools in this conversation: say so plainly if something needs one.',
-    '# The conversation',
+    toolsNote(door),
+    '# The user’s message',
   ]
     .filter(Boolean)
     .join('\n\n');
+}
+
+/** The door at its address, as ACP's `mcpServers` takes it. */
+function httpDoor(door: Door) {
+  return { type: 'http', name: DOOR_NAME, url: door.url, headers: door.headers };
+}
+
+/** The relay that serves the door to a program that only starts MCP servers itself. */
+export const SHIM_SCRIPT = join(import.meta.dirname, 'shim.mjs');
+function stdioDoor(door: Door) {
+  return {
+    name: DOOR_NAME,
+    command: process.execPath,
+    args: [SHIM_SCRIPT],
+    // Lists, as ACP has them (Gemini CLI reads nothing else).
+    env: [
+      { name: 'CONCH_DOOR_URL', value: door.url },
+      { name: 'CONCH_DOOR_KEY', value: door.key },
+    ],
+  };
+}
+
+function digestOf(text: string): string {
+  return createHash('sha256').update(text).digest('hex').slice(0, 16);
+}
+
+/** `<instructions digest>:<session id>`: what Conch keeps with the chat. */
+export function acpResumeId(sessionId: string, said: string): string {
+  return `${said}:${sessionId}`;
+}
+
+export function parseAcpResume(
+  resumeId: string | undefined,
+): { said: string; sessionId: string } | undefined {
+  const match = /^([0-9a-f]{16}):([\x21-\x7e]{1,200})$/.exec(resumeId ?? '');
+  return match?.[1] && match[2] ? { said: match[1], sessionId: match[2] } : undefined;
 }
 
 /**

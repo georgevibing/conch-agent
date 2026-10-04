@@ -43,6 +43,8 @@ export function AppOfferItem({
   const { guard, dialog } = useVerify(auth.data?.method ?? 'none');
   const openAppPage = useUi((s) => s.openAppPage);
   const [busy, setBusy] = useState(false);
+  /** Pressed here: shown at once, until the chat's log says how it went. */
+  const [sent, setSent] = useState<'added' | 'declined'>();
   // An update keeps the settings the app already has: the card asks only for new ones.
   const { data: installed } = useConchApp(
     offer.action === 'update' ? offer.manifest.id : undefined,
@@ -55,6 +57,8 @@ export function AppOfferItem({
       await guard(async () => {
         const app = await conchAppsApi.acceptOffer(offer.offerId, { conversationId, settings });
         putConchApp(client, app);
+        // Added: the card says so now, not when the log's word arrives.
+        setSent('added');
       });
     } catch (error) {
       toast.error(errorText(error, `${offer.manifest.name} wasn’t added. Try again.`));
@@ -65,14 +69,22 @@ export function AppOfferItem({
 
   const notNow = async () => {
     if (!conversationId) return;
+    setSent('declined');
     try {
       await conchAppsApi.declineOffer(offer.offerId, conversationId);
     } catch (error) {
+      setSent(undefined);
       toast.error(errorText(error, 'That didn’t work. Try again.'));
     }
   };
 
-  const done = offer.state === 'added' || offer.state === 'updated';
+  const state =
+    offer.state === 'ready' && sent
+      ? sent === 'added' && offer.action === 'update'
+        ? 'updated'
+        : sent
+      : offer.state;
+  const done = state === 'added' || state === 'updated';
   const draftPage = offer.from === 'draft' && offer.draftId ? offer.draftId : undefined;
   return (
     <>
@@ -85,7 +97,7 @@ export function AppOfferItem({
         signature={offer.signature}
         {...(offer.changes && { changes: offer.changes })}
         {...(offer.summary && { summary: offer.summary })}
-        state={offer.state}
+        state={state}
         {...(offer.message && { message: offer.message })}
         words={appWords(offer)}
         saved={offer.changes?.otherMaker ? [] : (installed?.saved ?? [])}

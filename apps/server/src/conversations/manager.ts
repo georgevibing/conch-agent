@@ -28,6 +28,7 @@ import { honouredMode, skillHolds, type PermissionMode, type SkillHold } from '@
 import type {
   BridgedTool,
   Compacted,
+  DescribeImages,
   Engine,
   EngineEvent,
   EngineMcpServer,
@@ -48,7 +49,7 @@ import { handoff } from './handoff';
 import type { ConversationRecord, ConversationStore } from './store';
 import { summarizeToolUse, titleFrom } from './summarize';
 import { allows, missing, needs } from '../skills/permissions';
-import { describeTaint, leavesSandbox, sinkReason, taintFrom } from './taint';
+import { describeTaint, heldTaints, leavesSandbox, sinkReason, taintFrom } from './taint';
 import { CONCH_POWER_MESSAGE, runsConchPower } from '../lib/protect';
 import { didWhat } from '../activity/service';
 import { changedFiles, type UndoService } from '../undo/service';
@@ -95,8 +96,22 @@ export async function turnProblem(
 interface PendingPermission {
   resolve: (decision: PermissionDecision) => void;
   toolName: string;
-  /** "Always allow" adds the tool to the conversation's list. Off when the asker keeps its own (the browser: per site). */
+  /**
+   * "Always allow" adds the tool to the conversation's list. Off when the asker
+   * keeps its own (the browser: per site), or asks whatever the mode (ADR 0028):
+   * on, it's asking only because of the mode.
+   */
   remember: boolean;
+}
+
+/**
+ * Would Full trust have let this through without asking? Everything a mode asks
+ * about, except a plan's go-ahead and integration tools Conch bridges (those ask
+ * in every mode).
+ */
+function trustAllows(mode: PermissionMode, toolName: string, nativeTools: boolean): boolean {
+  if (mode !== 'bypassPermissions' || toolName === 'ExitPlanMode') return false;
+  return nativeTools || !toolName.startsWith('mcp__');
 }
 
 /** A question a host tool puts to the user, through the same prompt as any permission. */
@@ -349,10 +364,54 @@ interface Live {
   titling?: AbortController;
   /** When Stop was pressed with no turn running yet: the one about to start stops. */
   stopAt?: number;
+  /** The running turn takes a mode picked mid-turn (Full trust, say) from its next step. */
+  setTurnMode?: (mode: PermissionMode) => void;
+  /** Waiting for the chat to be free (a message sent while a stopped turn winds down). */
+  waiters?: (() => void)[];
 }
 
 /** How long a Stop pressed just before a turn starts still counts. */
 const STOP_GRACE_MS = 10_000;
+/**
+ * A Stop and the message it stops travel together, but may be read a moment
+ * out of order; one from longer before the message was for the turn before.
+ */
+const STOP_ORDER_MS = 1_000;
+/** How long a stopped provider gets to wind down before the chat stops waiting for it. */
+const WIND_DOWN_MS = 4_000;
+/** How long a message sent right after Stop waits for the stopped turn to close. */
+const AFTER_STOP_WAIT_MS = WIND_DOWN_MS + 2_000;
+
+/**
+ * The provider's events, until it's stopped and doesn't finish in `graceMs`:
+ * then the chat stops waiting (the provider is left to finish on its own), so
+ * a hung program can't keep a chat busy after Stop.
+ */
+export async function* windDown<T>(
+  stream: AsyncIterable<T>,
+  signal: AbortSignal,
+  graceMs = WIND_DOWN_MS,
+): AsyncIterable<T> {
+  const iterator = stream[Symbol.asyncIterator]();
+  const late = Symbol('late');
+  const gaveUp = new Promise<typeof late>((resolve) => {
+    const arm = () => setTimeout(() => resolve(late), graceMs).unref?.();
+    if (signal.aborted) arm();
+    else signal.addEventListener('abort', arm, { once: true });
+  });
+  for (;;) {
+    const next = await Promise.race([iterator.next(), gaveUp]);
+    if (next === late) {
+      void Promise.resolve(iterator.return?.()).catch(() => undefined);
+      return;
+    }
+    if (next.done) return;
+    yield next.value;
+  }
+}
+
+/** What a stopped turn no longer shows: more words, more thinking, a newer plan. */
+const quietAfterStop = new Set<EngineEvent['type']>(['text', 'thinking', 'plan', 'notice']);
 
 /** A turn that was stopped before it began: nothing to run. */
 async function* nothing(): AsyncIterable<EngineEvent> {}
@@ -437,7 +496,12 @@ export class ConversationManager {
        */
       route?: (
         engine: Engine,
-        context: { failed?: TurnProblem; model?: string },
+        context: {
+          failed?: TurnProblem;
+          model?: string;
+          /** The message carries pictures: a model that sees them is better (ADR 0069). */
+          pictures?: boolean;
+        },
       ) => Promise<TurnRoute>;
       /**
        * What a message needs that a chat-only model can't use (ADR 0050): the
@@ -456,6 +520,11 @@ export class ConversationManager {
       expand?: MessageExpander;
       /** Money spent outside a turn (naming a chat), for the usage ledger. */
       onSpend?: (usage: Usage) => void;
+      /**
+       * Pictures in words for a turn's model that can't see them (ADR 0070), by
+       * another model the person connected.
+       */
+      describe?: (engine: Engine, model?: string) => DescribeImages;
       integrations?: TurnIntegrationsProvider;
       /** Where uploaded files and long pastes are kept (ADR 0017). */
       attachments?: AttachmentStore;
@@ -565,6 +634,17 @@ export class ConversationManager {
     const attached = events.flatMap((e) =>
       e.type === 'user.message' ? (e.attachments ?? []).map((a) => a.id) : [],
     );
+    // What an engine kept of it between turns goes too (a Codex thread).
+    const record = live?.record ?? (await this.deps.store.get(id).catch(() => undefined));
+    for (const [engineId, session] of Object.entries(record?.sessions ?? {})) {
+      if (!session?.resumeId) continue;
+      try {
+        const engine = this.deps.engine(engineId as EngineId);
+        if (engine.id === engineId) await engine.forgetSession?.(session.resumeId);
+      } catch {
+        /* An engine no longer here keeps nothing to forget. */
+      }
+    }
     await this.deps.store.remove(id);
     if (attached.length) await this.deps.attachments?.forget(id, attached).catch(() => undefined);
     this.events.emit({ type: 'conversation.deleted', conversationId: id });
@@ -588,7 +668,9 @@ export class ConversationManager {
     /** The words are someone else's (a chat app's other people): the chat reads them as untrusted (ADR 0028). */
     untrusted?: TaintSource;
   }) {
+    const began = Date.now();
     const existing = input.conversationId ? await this.#get(input.conversationId) : undefined;
+    if (existing) await this.#afterStop(existing);
     // A question waits (ADR 0060): what's typed answers it, as a message of yours.
     if (existing?.abort && this.deps.questions?.waiting(existing.record.id))
       return this.#answerTyped(existing, input);
@@ -606,8 +688,9 @@ export class ConversationManager {
       clean({ ...existing?.record.options, ...input.options }),
       chosen.id,
     );
+    const pictures = await this.#pictures(input.attachments ?? []);
     const route = (await this.deps
-      .route?.(chosen, { ...(asked && { model: asked }) })
+      .route?.(chosen, { ...(asked && { model: asked }), ...(pictures && { pictures }) })
       .catch(() => undefined)) ?? {
       kind: 'use' as const,
       engine: chosen,
@@ -723,7 +806,7 @@ export class ConversationManager {
     }
     if (route.routed)
       this.#append(live, { type: 'turn.routed', from: chosen.id, to: engine.id, ...route.routed });
-    this.#claim(live);
+    this.#claim(live, began);
     this.#setStatus(live, 'running');
     await this.#persist(live);
     void this.#answer(live, engine, prompt, sending, route.model);
@@ -865,6 +948,7 @@ export class ConversationManager {
   async configure(id: string, options: TurnOptions) {
     const live = await this.#get(id);
     this.#applyOptions(live, options);
+    if (options.permissionMode) live.setTurnMode?.(options.permissionMode);
     await this.deps.store.upsert(live.record);
     this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
   }
@@ -878,21 +962,53 @@ export class ConversationManager {
 
   async interrupt(id: string) {
     const live = await this.#get(id);
-    // Stop pressed right after sending, before the turn began: it stops as it starts.
-    if (live.abort) live.abort.abort();
-    else live.stopAt = Date.now();
+    // Stop pressed right after sending, before the turn began (or while a
+    // stopped one winds down): it stops as it starts.
+    if (live.abort && !live.abort.signal.aborted) live.abort.abort();
+    else if (!live.abort || live.waiters?.length) live.stopAt = Date.now();
   }
 
   /**
    * The chat is busy from here: one turn at a time. Claimed with no wait in
    * between the check and the claim, so two sends (or releases) never both run.
+   * `since`: when the message that starts it arrived — a Stop from well before
+   * then was meant for the turn that just ended, not this one.
    */
-  #claim(live: Live): AbortController {
+  #claim(live: Live, since?: number): AbortController {
     const abort = new AbortController();
-    if (live.stopAt && Date.now() - live.stopAt < STOP_GRACE_MS) abort.abort();
+    if (
+      live.stopAt &&
+      Date.now() - live.stopAt < STOP_GRACE_MS &&
+      (since === undefined || live.stopAt >= since - STOP_ORDER_MS)
+    )
+      abort.abort();
     live.stopAt = undefined;
     live.abort = abort;
     return abort;
+  }
+
+  /** The chat is free: whatever waited for it goes now. */
+  #free(live: Live) {
+    live.abort = undefined;
+    const waiting = live.waiters ?? [];
+    live.waiters = undefined;
+    for (const go of waiting) go();
+  }
+
+  /**
+   * A message sent right after Stop waits for the stopped turn to close,
+   * instead of being turned away as "still replying".
+   */
+  async #afterStop(live: Live): Promise<void> {
+    if (!live.abort?.signal.aborted) return;
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, AFTER_STOP_WAIT_MS);
+      timer.unref?.();
+      (live.waiters ??= []).push(() => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
   }
 
   /**
@@ -910,13 +1026,16 @@ export class ConversationManager {
   }
 
   async respond(id: string, permissionId: string, decision: PermissionDecision) {
-    const live = await this.#get(id);
+    this.#resolvePermission(await this.#get(id), permissionId, decision);
+  }
+
+  #resolvePermission(live: Live, permissionId: string, decision: PermissionDecision) {
     const pending = live.permissions.get(permissionId);
     if (!pending) return;
     live.permissions.delete(permissionId);
     if (decision === 'allow-always' && pending.remember) live.alwaysAllow.add(pending.toolName);
     this.#append(live, { type: 'permission.resolved', permissionId, decision });
-    if (live.permissions.size === 0 && !this.deps.questions?.waiting(id))
+    if (live.permissions.size === 0 && !this.deps.questions?.waiting(live.record.id))
       this.#setStatus(live, 'running');
     pending.resolve(decision);
   }
@@ -978,7 +1097,10 @@ export class ConversationManager {
     const route = engineId
       ? { kind: 'use' as const, engine: chosen, ...(model && { model }) }
       : ((await this.deps
-          .route?.(chosen, { ...(asked && { model: asked }) })
+          .route?.(chosen, {
+            ...(asked && { model: asked }),
+            ...(held.attachments.some((a) => a.kind === 'image') && { pictures: true }),
+          })
           .catch(() => undefined)) ?? {
           kind: 'use' as const,
           engine: chosen,
@@ -1031,7 +1153,13 @@ export class ConversationManager {
       engine,
       prompt,
       attachments,
-      route && ((failed, asked) => route(engine, { failed, ...(asked && { model: asked }) })),
+      route &&
+        ((failed, asked) =>
+          route(engine, {
+            failed,
+            ...(asked && { model: asked }),
+            ...(attachments.some((a) => a.kind === 'image') && { pictures: true }),
+          })),
       model,
     );
     // Held: it waits (set as the turn ended). Handed on: one second chance only —
@@ -1040,6 +1168,14 @@ export class ConversationManager {
     if (next?.kind === 'use')
       return this.#runTurn(live, next.engine, prompt, attachments, undefined, next.model);
     return result;
+  }
+
+  /** Whether uploaded attachments, by id, include a picture. */
+  async #pictures(ids: readonly string[]): Promise<boolean> {
+    const store = this.deps.attachments;
+    if (!store || !ids.length) return false;
+    const found = await Promise.all(ids.map((id) => store.get(id).catch(() => undefined)));
+    return found.some((entry) => entry?.attachment.kind === 'image');
   }
 
   async #runTurn(
@@ -1083,7 +1219,22 @@ export class ConversationManager {
     if (model) resolved.model = model;
     if (extras?.permissionMode) resolved.permissionMode = extras.permissionMode;
     // The mode the chat shows for this provider is the one it runs in.
-    resolved.permissionMode = honouredMode(resolved.permissionMode, await honouredModes(engine));
+    const modes = await honouredModes(engine);
+    resolved.permissionMode = honouredMode(resolved.permissionMode, modes);
+    const nativeTools = engine.integrations.mode === 'native';
+    // A mode picked mid-turn holds from the next step, not the next message
+    // (a routine keeps its own). What's waiting that it would have let through, goes.
+    const modeListeners: ((mode: PermissionMode) => void)[] = [];
+    const setTurnMode = (picked: PermissionMode) => {
+      const mode = honouredMode(picked, modes);
+      if (mode === resolved.permissionMode) return;
+      resolved.permissionMode = mode;
+      for (const listener of modeListeners) listener(mode);
+      for (const [permissionId, pending] of live.permissions)
+        if (pending.remember && trustAllows(mode, pending.toolName, nativeTools))
+          this.#resolvePermission(live, permissionId, 'allow');
+    };
+    if (!extras?.permissionMode) live.setTurnMode = setTurnMode;
 
     /** Puts a question to the user and waits; expires (deny) if the turn stops first. */
     const askUser = (
@@ -1200,12 +1351,13 @@ export class ConversationManager {
     }
     if (extras?.wrapTool) for (const [i, tool] of tools.entries()) tools[i] = extras.wrapTool(tool);
     // This provider's own session, and whatever it missed while others answered.
-    const session =
-      'conversationHistory' in engine && engine.conversationHistory
-        ? undefined
-        : live.record.sessions?.[engine.id];
+    const session = live.record.sessions?.[engine.id];
     const asked = askedSeq(live.events) ?? live.seq;
     const missed = handoff(live.events, { afterSeq: session?.seq ?? -1, beforeSeq: asked });
+    // Everything, for when that session can't be continued and the engine starts a new one.
+    const everything = session?.resumeId
+      ? handoff(live.events, { afterSeq: -1, beforeSeq: asked, restart: true })
+      : undefined;
     let answeredWith: string | undefined;
     const integrations = this.deps.integrations;
     const appendIssue = (issue: IntegrationIssueInput) =>
@@ -1328,6 +1480,8 @@ export class ConversationManager {
       const taint = await mustAsk(request);
       if (!taint) {
         if (policy === 'allow') return 'allow';
+        // Full trust picked mid-turn, for an engine still running the mode it started in.
+        if (trustAllows(resolved.permissionMode, request.toolName, nativeTools)) return 'allow';
         if (live.alwaysAllow.has(request.toolName)) return 'allow';
       }
       const described = await integrations?.describeTool(request.toolName).catch(() => undefined);
@@ -1360,7 +1514,8 @@ export class ConversationManager {
         'guard',
       );
       if (blocked) return { decision: 'deny', message: blocked };
-      // Your key and whose skills you trust are yours to use (ADR 0047), in every mode.
+      // Your keys, whose skills you trust and who may sign in are yours to use (ADR 0047,
+      // ADR 0063), in every mode.
       if (runsConchPower(request.toolName, request.input))
         return { decision: 'deny', message: CONCH_POWER_MESSAGE };
       await keepBefore(request.toolUseId, request.toolName, request.input);
@@ -1442,9 +1597,13 @@ export class ConversationManager {
             conversationId,
             prompt: missed ? `${missed}\n\n${prompt}` : prompt,
             ...(attached?.images.length && { images: attached.images }),
+            ...(this.deps.describe && { describe: this.deps.describe(engine, resolved.model) }),
             ...(readableDirs.length && { readableDirs }),
             ...(this.deps.protectedPaths?.length && { protectedPaths: this.deps.protectedPaths }),
             resumeId: session?.resumeId,
+            ...(session?.resumeId && {
+              freshPrompt: everything ? `${everything}\n\n${prompt}` : prompt,
+            }),
             seq: asked,
             systemAppend: [
               buildSystemAppend({
@@ -1468,6 +1627,7 @@ export class ConversationManager {
             tools,
             wrapTool: extras?.wrapTool,
             options: resolved,
+            onModeChange: (listener) => modeListeners.push(listener),
             mcpServers: engine.integrations.mode === 'native' ? loaded?.servers : undefined,
             disallowedTools: loaded?.disallowedTools,
             bridgedTools,
@@ -1478,10 +1638,16 @@ export class ConversationManager {
             ...(settings.preferences.sealedCommands && { sandbox: this.deps.sandbox?.(workspace) }),
           });
 
-      for await (const event of stream) {
+      for await (const event of windDown(stream, abort.signal)) {
+        // Stopped: the reply ends where Stop was pressed, while the provider winds down.
+        if (abort.signal.aborted && quietAfterStop.has(event.type)) continue;
         switch (event.type) {
           case 'session':
             answeredWith = event.model ?? answeredWith;
+            if (event.restarted === 'lost')
+              this.deps.heal?.(
+                `${engine.label} couldn’t pick up a chat where it left off, so Conch gave it the conversation so far and it carried on.`,
+              );
             live.record = {
               ...live.record,
               engine: engine.id,
@@ -1554,7 +1720,7 @@ export class ConversationManager {
                 ? (await integrations?.describeTool(call.name).catch(() => undefined))?.integration
                 : undefined;
               const source = taintFrom(call.name, call.input, app);
-              if (source) this.#taint(live, source);
+              if (source) this.#taint(live, source, event.toolUseId);
             }
             this.#append(live, {
               type: 'tool.finished',
@@ -1596,6 +1762,7 @@ export class ConversationManager {
       outcome = 'error';
       completed = { error: (error as Error).message || 'Something went wrong.' };
     } finally {
+      if (live.setTurnMode === setTurnMode) live.setTurnMode = undefined;
       // A question still waiting can't be answered now: it's skipped (ADR 0060).
       this.deps.questions?.close(live.record.id);
       // Whatever else the turn changed, kept before the turn closes.
@@ -1683,7 +1850,8 @@ export class ConversationManager {
       await closeBridge?.();
       // Handed on: the chat stays busy while the next provider answers.
       const handedOn = next?.kind === 'use';
-      live.abort = handedOn ? new AbortController() : undefined;
+      if (handedOn) live.abort = new AbortController();
+      else this.#free(live);
       live.permissions.clear();
       const status: ConversationStatus = handedOn
         ? 'running'
@@ -1790,7 +1958,7 @@ export class ConversationManager {
         message: error instanceof Error && error.message ? error.message : 'That didn’t work.',
       };
     } finally {
-      if (live.abort === abort) live.abort = undefined;
+      if (live.abort === abort) this.#free(live);
     }
   }
 
@@ -1965,15 +2133,15 @@ export class ConversationManager {
 
   /** What untrusted things this chat has read, from its own log (so it survives a restart). */
   #tainted(live: Live): TaintSource[] {
-    return live.events.flatMap((e) => (e.type === 'taint' ? [e.source] : []));
+    return heldTaints(live.events);
   }
 
   /** Note once that the chat read something from outside; the transcript says so, quietly. */
-  #taint(live: Live, source: TaintSource) {
+  #taint(live: Live, source: TaintSource, toolUseId?: string) {
     const known = this.#tainted(live);
     if (known.length >= 12 || known.some((t) => t.kind === source.kind && t.label === source.label))
       return;
-    this.#append(live, { type: 'taint', source });
+    this.#append(live, { type: 'taint', source, ...(toolUseId && { toolUseId }) });
   }
 
   /** What untrusted things a chat has read (ADR 0028), for work handed on from it (ADR 0033). */

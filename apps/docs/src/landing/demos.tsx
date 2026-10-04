@@ -5,12 +5,14 @@
  * say is true of the product; the chats and names in them are made up.
  */
 import {
+  AddressStatus,
   AgendaView,
   AppOffer,
   ArtifactChart,
   Badge,
   BrowserApproval,
   BrowserWindow,
+  Button,
   Diff,
   FilesChanged,
   Handset,
@@ -21,6 +23,8 @@ import {
   Message,
   OfferAlsoTry,
   OfferCard,
+  PasskeyButton,
+  RepairPanel,
   RoutedNote,
   RoutineCard,
   Stage,
@@ -34,6 +38,7 @@ import {
   useInView,
   type HandsetMessage,
   type OfferCardState,
+  type RepairItem,
 } from '@conch/nacre';
 import { appAbilities, appSourceLine } from '@conch/protocol';
 import { Mail } from 'lucide-react';
@@ -503,6 +508,7 @@ export function MakerDemo() {
 
 const TURN = 1_800;
 const GROUP_WORDS = [
+  ['agent', 'Coding agents'],
   ['subscription', 'Your plans'],
   ['local', 'On this computer'],
   ['key', 'Pay as you go'],
@@ -931,5 +937,145 @@ export function HealedDemo() {
       notes={HEALED.map((message, i) => ({ at: i, message }))}
       formatTime={(at) => WHEN[at] ?? ''}
     />
+  );
+}
+
+// ── It fixes itself: Repair everything, rows filling in, one step left for you ──
+
+const REPAIR = { done: 3_400, end: 9_000 } as const;
+
+/** What a repair finds, in the doctor's own words (`apps/server/src/doctor/checks.ts`). */
+const REPAIRS: (RepairItem & { at: number })[] = [
+  {
+    id: 'claude',
+    group: 'Providers',
+    title: provider('claude-code')?.name ?? 'Claude Code',
+    state: 'ok',
+    message: 'Ready.',
+    at: 800,
+  },
+  {
+    id: 'codex',
+    group: 'Providers',
+    title: provider('codex-cli')?.name ?? 'Codex',
+    state: 'needs-you',
+    message: 'Signed out.',
+    action: (
+      <Button size="sm" variant="surface">
+        Sign in
+      </Button>
+    ),
+    at: 1_400,
+  },
+  {
+    id: 'calendar',
+    group: 'Apps',
+    title: reference.integrations.find((app) => app.id === 'google-calendar')?.name ?? 'Calendar',
+    state: 'fixed',
+    message: 'Working again.',
+    at: 2_000,
+  },
+  {
+    id: 'browser',
+    group: 'This computer',
+    title: 'Browser',
+    state: 'fixed',
+    message: 'It starts cleanly again.',
+    at: 2_600,
+  },
+  {
+    id: 'search',
+    group: 'This computer',
+    title: 'Search',
+    state: 'fixed',
+    message: 'Built again from your chats.',
+    at: 3_200,
+  },
+];
+
+function Repair({ at }: { at: number }) {
+  return (
+    <RepairPanel
+      items={REPAIRS.map(({ at: answers, ...item }) =>
+        at >= answers
+          ? item
+          : { ...item, state: 'checking', message: 'Checking…', action: undefined },
+      )}
+      running={at < REPAIR.done}
+      repairing
+      checkedAt={1}
+      formatTime={() => 'just now'}
+      onRepair={noop}
+      onCheck={noop}
+    />
+  );
+}
+
+export function RepairDemo() {
+  const [ref, inView] = useInView<HTMLDivElement>({ once: false, margin: '0px' });
+  const at = useClock(REPAIR.end, inView);
+  return (
+    <div ref={ref}>
+      <Stage
+        label="Repair everything: Conch fixes three things on its own, and leaves one sign-in for you, with its button"
+        alive={at < REPAIR.done}
+      >
+        <Steady holds={[<Repair key="running" at={0} />, <Repair key="done" at={REPAIR.end} />]}>
+          <Repair at={at} />
+        </Steady>
+      </Stage>
+    </div>
+  );
+}
+
+// ── Your own address: getting its certificate, then answering with a lock ───
+
+const ADDRESS = { ready: 3_200, end: 7_600 } as const;
+
+export function AddressDemo() {
+  const [ref, inView] = useInView<HTMLDivElement>({ once: false, margin: '0px' });
+  // Standing still, it shows the address answering: that is the point of the picture.
+  const at = useClock(ADDRESS.end, inView, ADDRESS.end);
+  const card = (ready: boolean) => (
+    <AddressStatus
+      state={ready ? 'ready' : 'getting'}
+      address="conch.yourname.com"
+      until="in three months"
+      progress="Getting a certificate from Let’s Encrypt…"
+    />
+  );
+  return (
+    <div ref={ref}>
+      <Stage
+        label="Conch gets its own certificate, then answers at conch.yourname.com"
+        alive={at < ADDRESS.ready}
+      >
+        <Steady holds={[card(false), card(true)]}>{card(at >= ADDRESS.ready)}</Steady>
+      </Stage>
+    </div>
+  );
+}
+
+// ── Sign in with a touch: the button names what the device has ──────────────
+
+const TOUCH = ['mac', 'windows', 'ios'] as const;
+const TOUCH_STEP = 2_000;
+
+export function PasskeyDemo() {
+  const [ref, inView] = useInView<HTMLDivElement>({ once: false, margin: '0px' });
+  const at = useClock(TOUCH_STEP * TOUCH.length, inView, 0);
+  const platform = TOUCH[Math.min(TOUCH.length - 1, Math.floor(at / TOUCH_STEP))] ?? 'mac';
+  return (
+    <div ref={ref}>
+      <Stage label="The sign-in button says Use Touch ID on a Mac, Use Windows Hello on a PC and Use Face ID on an iPhone">
+        <Steady
+          holds={TOUCH.map((p) => (
+            <PasskeyButton key={p} platform={p} action="sign-in" />
+          ))}
+        >
+          <PasskeyButton platform={platform} action="sign-in" />
+        </Steady>
+      </Stage>
+    </div>
   );
 }

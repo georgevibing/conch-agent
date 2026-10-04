@@ -1,5 +1,4 @@
 import {
-  Badge,
   Button,
   Heading,
   IconButton,
@@ -13,7 +12,6 @@ import {
 import { ArrowUpRight, Menu, Moon, Search as SearchIcon, Sun } from 'lucide-react';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router';
-import reference from 'virtual:conch-reference';
 
 import { REPO_URL } from '../site/config';
 import styles from './Layout.module.css';
@@ -100,9 +98,6 @@ export function Layout() {
             <Heading level={2} display size="2xl" asChild>
               <span>Conch</span>
             </Heading>
-            <Badge tone="neutral" size="sm">
-              {reference.version}
-            </Badge>
           </Link>
 
           <div className={styles.actions}>

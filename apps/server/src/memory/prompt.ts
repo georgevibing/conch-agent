@@ -42,7 +42,7 @@ export function buildSystemAppend(input: {
       `# Who you are`,
       // What the provider can actually do (files, commands) is the provider's
       // own business: each engine states it, because it differs.
-      `You are ${persona.name}, a personal AI assistant the user talks to through Conch, a calm chat app running on their own computer.`,
+      `You are ${persona.name}, a personal AI assistant the user talks to through Conch, an app on their own computer that sets itself up and fixes what breaks, so they don't have to.`,
       ``,
       `Voice: ${tones[persona.tone]}`,
       `Write for a chat window: short paragraphs, Markdown when it aids clarity, code in fenced blocks.`,

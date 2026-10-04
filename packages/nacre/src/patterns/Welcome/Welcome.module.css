@@ -1,0 +1,538 @@
+/* Registered so the dawn eases between steps instead of jumping. */
+@property --wb-p {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
+@layer nacre.components {
+  /* ── The stage: one moment, centred, said line by line ─────────────────── */
+  .stage {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--nc-space-6);
+    inline-size: min(40rem, 100%);
+    text-align: center;
+  }
+
+  .rise {
+    inline-size: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    /* Backwards only: once risen, the line's own styles hold. */
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) backwards;
+    animation-delay: calc(var(--wr-i, 0) * 110ms + 40ms);
+  }
+
+  .stage[data-direction='back'] .rise {
+    --nc-enter-y: -8px;
+  }
+
+  /* ── The dawn behind it ────────────────────────────────────────────────── */
+  .backdrop {
+    --wb-p: 0;
+
+    position: fixed;
+    inset: -20%;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(
+        38% 42% at calc(22% + var(--wb-p) * 46%) calc(30% + var(--wb-p) * 8%),
+        color-mix(
+          in oklch,
+          color-mix(in oklch, var(--nc-pearl-1), var(--nc-pearl-4) calc(var(--wb-p) * 100%)) 55%,
+          transparent
+        ),
+        transparent 70%
+      ),
+      radial-gradient(
+        34% 40% at calc(78% - var(--wb-p) * 40%) calc(62% - var(--wb-p) * 14%),
+        color-mix(
+          in oklch,
+          color-mix(in oklch, var(--nc-pearl-3), var(--nc-pearl-5) calc(var(--wb-p) * 100%)) 45%,
+          transparent
+        ),
+        transparent 70%
+      ),
+      radial-gradient(
+        30% 34% at 50% calc(96% - var(--wb-p) * 20%),
+        color-mix(in oklch, var(--nc-pearl-2) 35%, transparent),
+        transparent 70%
+      );
+    opacity: 0.5;
+    transition: --wb-p 1.6s var(--nc-ease-in-out);
+    animation:
+      nc-fade-in 1.4s var(--nc-ease-out),
+      wb-drift 38s var(--nc-ease-in-out) infinite alternate;
+  }
+
+  @keyframes wb-drift {
+    from {
+      transform: translate3d(-1.5%, 0, 0) rotate(0deg) scale(1);
+    }
+    to {
+      transform: translate3d(1.5%, -1%, 0) rotate(4deg) scale(1.04);
+    }
+  }
+
+  /* ── Where you are ─────────────────────────────────────────────────────── */
+  .steps {
+    display: flex;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .steps li {
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-gray-5);
+    transition:
+      background-color var(--nc-duration-slow) var(--nc-ease-out),
+      inline-size var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .steps li[data-state='done'] {
+    background: var(--nc-accent-7);
+  }
+
+  .steps li[data-state='current'] {
+    inline-size: 1.75rem;
+    background: var(--nc-accent-9);
+  }
+
+  /* ── A name, typed large ───────────────────────────────────────────────── */
+  .name {
+    position: relative;
+    display: grid;
+    inline-size: min(26rem, 100%);
+  }
+
+  .nameInput {
+    inline-size: 100%;
+    padding: var(--nc-space-2) 0 var(--nc-space-3);
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--nc-text);
+    caret-color: var(--nc-accent-9);
+    font-family: var(--nc-font-display);
+    font-size: clamp(var(--nc-text-3xl), 7vw, var(--nc-text-5xl));
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: -0.02em;
+    line-height: var(--nc-leading-tight);
+    text-align: center;
+  }
+
+  .nameInput::placeholder {
+    color: var(--nc-text-disabled);
+  }
+
+  /* At rest a faint pearl line; while typing it widens and warms to the accent. */
+  .nameRule {
+    position: relative;
+    block-size: 2px;
+    border-radius: var(--nc-radius-full);
+    background: linear-gradient(90deg, transparent, var(--nc-pearl-spectrum), transparent);
+    opacity: 0.6;
+    transform: scaleX(0.55);
+    transition:
+      opacity var(--nc-duration-slow) var(--nc-ease-out),
+      transform var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .nameRule::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--nc-accent-8) 25%,
+      var(--nc-accent-9) 50%,
+      var(--nc-accent-8) 75%,
+      transparent
+    );
+    opacity: 0;
+    transition: opacity var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .name:focus-within .nameRule {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+
+  .name:focus-within .nameRule::after {
+    opacity: 0.85;
+  }
+
+  /* A keyboard path has a ring, like every other control. */
+  .name:has(.nameInput:focus-visible) {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 6px;
+    border-radius: var(--nc-radius-md);
+  }
+
+  /* ── Choices, tapped ───────────────────────────────────────────────────── */
+  .choices {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--nc-space-2);
+    max-inline-size: 38rem;
+  }
+
+  .choice {
+    --nc-rim-rest: 0;
+    --nc-rim-hover: 0.45;
+    --nc-sheen-size: 72px;
+    --nc-sheen-hover: 0.22;
+
+    appearance: none;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    min-block-size: var(--nc-control-lg);
+    padding: 0 var(--nc-space-4);
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface);
+    box-shadow:
+      var(--nc-glaze-edge),
+      inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text-muted);
+    font-family: inherit;
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-medium);
+    cursor: pointer;
+    user-select: none;
+    touch-action: manipulation;
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) backwards;
+    animation-delay: calc(var(--wc-i, 0) * 45ms + 260ms);
+    transition:
+      background-color var(--nc-duration-base) var(--nc-ease-out),
+      box-shadow var(--nc-duration-base) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .choiceIcon {
+    display: inline-flex;
+    color: var(--nc-text-subtle);
+    transition: color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .choiceIcon svg,
+  .choiceCheck svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .choiceCheck {
+    display: inline-flex;
+    inline-size: 0;
+    overflow: hidden;
+    opacity: 0;
+    transform: scale(0.4);
+    transition:
+      inline-size var(--nc-spring-snappy-duration) var(--nc-spring-snappy),
+      opacity var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  @media (hover: hover) {
+    .choice:hover {
+      background: var(--nc-surface-hi);
+      box-shadow:
+        var(--nc-glaze-edge),
+        inset 0 0 0 1px var(--nc-border),
+        var(--nc-elevation-1);
+      color: var(--nc-text);
+    }
+  }
+
+  .choice:active {
+    transform: scale(0.975);
+  }
+
+  .choice:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .choice[data-state='on'] {
+    background: var(--nc-accent-3);
+    box-shadow:
+      var(--nc-glaze-edge),
+      inset 0 0 0 1px var(--nc-accent-7);
+    color: var(--nc-accent-11);
+  }
+
+  .choice[data-state='on'] .choiceIcon {
+    color: var(--nc-accent-10);
+  }
+
+  .choice[data-state='on'] .choiceCheck {
+    inline-size: 1rem;
+    opacity: 1;
+    transform: none;
+  }
+
+  /* ── A voice, heard ────────────────────────────────────────────────────── */
+  .voice {
+    display: grid;
+    gap: var(--nc-space-2);
+    inline-size: min(30rem, 100%);
+    margin: 0;
+    padding: var(--nc-space-4) var(--nc-space-5);
+    border-radius: var(--nc-radius-2xl);
+    background: var(--nc-surface);
+    box-shadow:
+      var(--nc-glaze-edge),
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-2);
+    text-align: start;
+  }
+
+  .voiceFrom {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .voiceText {
+    /* Holds two lines, so the cards below don't jump while it writes itself out. */
+    min-block-size: calc(2 * var(--nc-leading-relaxed) * 1em);
+    margin: 0;
+    color: var(--nc-text);
+    font-size: var(--nc-text-lg);
+    line-height: var(--nc-leading-relaxed);
+  }
+
+  /* ── Apps, picked ──────────────────────────────────────────────────────── */
+  /* Three across, like a home screen: nine tiles make a square, never a ragged row. */
+  .apps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--nc-space-3);
+    inline-size: min(26rem, 100%);
+    margin: 0 auto;
+    padding: 0;
+    list-style: none;
+  }
+
+  .appItem {
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) backwards;
+    animation-delay: calc(var(--wa-i, 0) * 40ms + 260ms);
+  }
+
+  .app {
+    --nc-rim-rest: 0;
+    --nc-rim-hover: 0.5;
+    --nc-sheen-size: 96px;
+    --nc-sheen-hover: 0.25;
+
+    appearance: none;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--nc-space-2);
+    inline-size: 100%;
+    padding: var(--nc-space-4) var(--nc-space-2) var(--nc-space-3);
+    border: 0;
+    border-radius: var(--nc-radius-xl);
+    background: var(--nc-surface);
+    box-shadow:
+      var(--nc-glaze-edge),
+      inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text);
+    font-family: inherit;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition:
+      box-shadow var(--nc-duration-base) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  @media (hover: hover) {
+    .app:hover {
+      box-shadow:
+        var(--nc-glaze-edge),
+        inset 0 0 0 1px var(--nc-border),
+        var(--nc-elevation-2);
+      transform: translateY(-2px);
+    }
+  }
+
+  .app:active {
+    transform: scale(0.975);
+  }
+
+  .app:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .app[data-connected] {
+    box-shadow:
+      var(--nc-glaze-edge),
+      inset 0 0 0 1.5px var(--nc-accent-8);
+  }
+
+  .appName {
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    line-height: var(--nc-leading-snug);
+  }
+
+  .appCheck {
+    position: absolute;
+    inset-block-start: var(--nc-space-2);
+    inset-inline-end: var(--nc-space-2);
+    display: inline-grid;
+    place-items: center;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-9);
+    color: var(--nc-accent-contrast);
+    animation: wa-pop var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) backwards;
+  }
+
+  .appCheck svg {
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+    stroke-width: 3;
+  }
+
+  @keyframes wa-pop {
+    from {
+      transform: scale(0);
+    }
+  }
+
+  /* ── Somewhere to start ─────────────────────────────────────────────── */
+  .starters {
+    display: grid;
+    gap: var(--nc-space-2);
+    inline-size: min(28rem, 100%);
+    margin: 0 auto;
+    padding: 0;
+    list-style: none;
+  }
+
+  .starterItem {
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) backwards;
+    animation-delay: calc(var(--ws-i, 0) * 80ms + 380ms);
+  }
+
+  .starter {
+    --nc-rim-rest: 0;
+    --nc-rim-hover: 0.5;
+    --nc-sheen-size: 120px;
+    --nc-sheen-hover: 0.22;
+
+    appearance: none;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    inline-size: 100%;
+    min-block-size: var(--nc-control-lg);
+    padding: var(--nc-space-3) var(--nc-space-4);
+    border: 0;
+    border-radius: var(--nc-radius-xl);
+    background: var(--nc-surface);
+    box-shadow:
+      var(--nc-glaze-edge),
+      inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text);
+    font-family: inherit;
+    font-size: var(--nc-text-md);
+    line-height: var(--nc-leading-snug);
+    text-align: start;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition:
+      box-shadow var(--nc-duration-base) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .starterText {
+    flex: 1;
+    min-inline-size: 0;
+    text-wrap: pretty;
+  }
+
+  .starterArrow {
+    display: inline-flex;
+    color: var(--nc-text-subtle);
+    transition:
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .starterArrow svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  @media (hover: hover) {
+    .starter:hover {
+      box-shadow:
+        var(--nc-glaze-edge),
+        inset 0 0 0 1px var(--nc-border),
+        var(--nc-elevation-2);
+    }
+
+    .starter:hover .starterArrow {
+      color: var(--nc-accent-10);
+      transform: translateX(3px);
+    }
+  }
+
+  .starter:active {
+    transform: scale(0.985);
+  }
+
+  .starter:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  /* Still, and finished, without motion. */
+  @media (prefers-reduced-motion: reduce) {
+    .backdrop {
+      animation: none;
+      transition: none;
+    }
+
+    .rise,
+    .choice,
+    .appItem,
+    .appCheck,
+    .starterItem {
+      animation: none;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .backdrop {
+    animation: none;
+    transition: none;
+  }
+
+  [data-nacre-motion='reduced'] :is(.rise, .choice, .appItem, .appCheck, .starterItem) {
+    animation: none;
+  }
+}

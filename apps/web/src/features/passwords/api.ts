@@ -12,6 +12,7 @@ import {
   type VaultFieldKind,
   type VaultFieldRole,
   KeePassDatabase,
+  VaultCopyOutResult,
   VaultSource,
   type VaultSourceId,
   VaultTransferJob,
@@ -84,6 +85,9 @@ export const vaultApi = {
       method: 'POST',
       body: { ...body, commit: true },
     }),
+  /** Copy to (ADR 0062): some of Conch's own items, made as new items in another manager. */
+  copyOut: (id: VaultSourceId, body: { ids: string[]; place?: string; skipDuplicates: boolean }) =>
+    request(VaultCopyOutResult, `/api/vault/sources/${id}/copy`, { method: 'POST', body }),
   transferJob: (jobId: string) =>
     request(VaultTransferJob, `/api/vault/transfers/${encodeURIComponent(jobId)}`),
   cancelTransfer: (jobId: string) =>

@@ -1,5 +1,10 @@
-/** Codex through its supported app-server API, with Conch-owned tools and credentials. */
-import { dirname } from 'node:path';
+/**
+ * Codex through its supported app-server API, with Conch-owned credentials.
+ * Two ways (ADR 0066): `tools` (Codex) with every Codex tool off and Conch's
+ * tools doing the work (ADR 0036), and `agent` (Codex CLI) with Codex's own
+ * shell and file edits on, every approval it asks for going through Conch.
+ */
+import { dirname, join } from 'node:path';
 
 import {
   EffortChoice,
@@ -15,17 +20,27 @@ import {
 import { z } from 'zod';
 
 import { sandboxSupport } from '../../conversations/sandbox';
+import { PROTECTED_MESSAGE, touchesProtected } from '../../lib/protect';
 import { newId } from '../../lib/ids';
 import { cleanPlan, stepStatus } from '../../plans/steps';
 import { run } from '../../lib/proc';
 import type { ProviderKeys } from '../../providers/keys';
 import type { SettingsStore } from '../../settings/store';
 import { buildTools } from '../api/engine';
+import { withSight } from '../api/sight';
 import { hostEnvironment } from '../host';
-import type { Engine, EngineEvent, LoginHandle, TurnInput } from '../types';
+import type {
+  Engine,
+  EngineEvent,
+  LoginHandle,
+  PermissionRequest,
+  ToolImage,
+  TurnInput,
+} from '../types';
 import { DOCS_URL, MIN_VERSION, findCodex, installHints, isAtLeast, parseVersion } from './detect';
 import { CodexHome } from './home';
 import type { RpcMessage } from './rpc';
+import { CodexThreads, digest, parseResumeId, resumeIdFor, toolsDigest } from './threads';
 
 const Account = z.object({
   account: z
@@ -84,14 +99,12 @@ const object = (value: unknown): Record<string, unknown> =>
     ? (value as Record<string, unknown>)
     : {};
 
-// Native tools stay in a read-only sandbox and are declined if they ask. All
-// useful work goes through dynamic tools, which call Conch's guard every time.
-const TOOL_CONFIG = [
+// What neither way of running Codex uses: Conch brings apps, the browser,
+// memory and the web, each asking as Conch does.
+const SHARED_CONFIG = [
   'features.hooks=false',
   'features.skill_mcp_dependency_install=false',
   'project_doc_max_bytes=0',
-  'features.shell_tool=false',
-  'features.unified_exec=false',
   'features.multi_agent=false',
   'features.apps=false',
   'features.browser_use=false',
@@ -100,21 +113,115 @@ const TOOL_CONFIG = [
   'features.image_generation=false',
   'features.memories=false',
   'web_search="disabled"',
-  'approval_policy="untrusted"',
+  // The profile below is the one every thread uses. (How it asks is set per thread:
+  // `approvalPolicy: 'untrusted'` on thread/start; Codex no longer takes it in config.)
+  'default_permissions="conch"',
+];
+
+// Codex: native tools stay in a read-only sandbox and are declined if they ask.
+// All useful work goes through dynamic tools, which call Conch's guard every time.
+const TOOL_CONFIG = [
+  ...SHARED_CONFIG,
+  'features.shell_tool=false',
+  'features.unified_exec=false',
   'sandbox_mode="read-only"',
 ];
 
+// Codex CLI (ADR 0066): its own shell and file edits, in a sandbox that writes
+// only where Conch allows, reads nowhere secrets live, and has no network.
+const AGENT_CONFIG = SHARED_CONFIG;
+
+/**
+ * Why an approval request asks for more than "do this, in the sandbox": the
+ * network, lasting write access somewhere else, or a retry outside the
+ * sandbox after it blocked the command. Conch never grants any of these
+ * (ADR 0066); undefined for an ordinary request.
+ */
+export function escapes(
+  method: string,
+  params: Record<string, unknown>,
+  alreadyAsked: boolean,
+): string | undefined {
+  if (method === 'item/fileChange/requestApproval' && params.grantRoot)
+    return 'Codex asked to write outside your work folder from now on. Conch never allows that.';
+  if (method !== 'item/commandExecution/requestApproval') return undefined;
+  const amendments = params.proposedNetworkPolicyAmendments;
+  if (params.networkApprovalContext || (Array.isArray(amendments) && amendments.length))
+    return 'Codex asked to reach the network. Its commands have no network in Conch.';
+  if (alreadyAsked)
+    return 'Codex asked to run that again outside its sandbox. Conch never allows that.';
+  const reason = typeof params.reason === 'string' ? params.reason : '';
+  if (
+    /sandbox|escalat|outside|unrestricted|network|without (?:the )?(?:sandbox|restrictions)/i.test(
+      reason,
+    )
+  )
+    return 'Codex asked to run a command outside its sandbox. Conch never allows that.';
+  return undefined;
+}
+
+/** What Codex CLI's command or change is, as Conch's guard and approval cards read a tool call. */
+export function nativeRequest(
+  method: string,
+  params: Record<string, unknown>,
+  item: Record<string, unknown> | undefined,
+): PermissionRequest | undefined {
+  const itemId = typeof params.itemId === 'string' ? params.itemId : undefined;
+  if (method === 'item/commandExecution/requestApproval') {
+    const command =
+      typeof params.command === 'string'
+        ? params.command
+        : typeof item?.command === 'string'
+          ? item.command
+          : undefined;
+    if (!command) return undefined;
+    const cwd = typeof params.cwd === 'string' ? params.cwd : item?.cwd;
+    return {
+      toolName: 'Bash',
+      ...(itemId && { toolUseId: itemId }),
+      input: {
+        command,
+        ...(typeof cwd === 'string' && { cwd }),
+        ...(params.kind === 'writeStdin' && { stdin: true }),
+        ...(typeof params.reason === 'string' && { description: params.reason }),
+      },
+    };
+  }
+  if (method === 'item/fileChange/requestApproval') {
+    const changes = Array.isArray(item?.changes) ? item.changes : [];
+    const paths = changes.flatMap((change) => {
+      const c = object(change);
+      const moved = object(c.kind).move_path;
+      return [c.path, moved].filter((p): p is string => typeof p === 'string' && p.length > 0);
+    });
+    const root = typeof params.grantRoot === 'string' ? params.grantRoot : undefined;
+    if (!paths.length && !root) return undefined;
+    return {
+      toolName: 'Edit',
+      ...(itemId && { toolUseId: itemId }),
+      input: {
+        file_path: paths[0] ?? root,
+        ...(paths.length > 1 && { paths }),
+        ...(root && { grant_root: root }),
+      },
+    };
+  }
+  return undefined;
+}
+
 export class CodexEngine implements Engine {
-  readonly id = 'codex-cli' as const;
-  readonly label = 'Codex';
-  readonly commandSandbox = 'conch' as const;
-  readonly conversationHistory = true;
+  readonly id: 'codex-cli' | 'codex-agent';
+  readonly label: string;
+  /** Codex's commands go through Conch's sealed tools; Codex CLI's run in Codex's own sandbox. */
+  readonly commandSandbox?: 'conch';
   readonly integrations = { mode: 'bridge' as const };
   readonly hostTools = true;
   /** Its plan updates (`turn/plan/updated`) are drawn as Conch's checklist. */
   readonly plans = 'native' as const;
   readonly attachments = { images: true, files: true };
   readonly #home: CodexHome;
+  /** Threads carried on from one turn to the next (ADR 0066 § Carrying on). */
+  readonly #threads: CodexThreads;
   #status?: EngineStatus;
   #at = 0;
   #caps?: Capabilities;
@@ -126,8 +233,14 @@ export class CodexEngine implements Engine {
     private readonly keys: ProviderKeys,
     private readonly explicitPath?: string,
     home = dirname(settings.workspaceDefault),
+    /** `agent`: Codex CLI, with Codex's own tools (ADR 0066). */
+    readonly variant: 'tools' | 'agent' = 'tools',
   ) {
     this.#home = new CodexHome(home);
+    this.#threads = new CodexThreads(join(home, 'codex-sessions'));
+    this.id = variant === 'agent' ? 'codex-agent' : 'codex-cli';
+    this.label = variant === 'agent' ? 'Codex CLI' : 'Codex';
+    if (variant === 'tools') this.commandSandbox = 'conch';
   }
 
   async detect({ force = false } = {}): Promise<EngineStatus> {
@@ -170,7 +283,8 @@ export class CodexEngine implements Engine {
         message: `Update Codex to ${MIN_VERSION} or newer for Conch’s tools and sign-in.`,
       };
     try {
-      const key = await this.keys.value(this.id, { peek: true });
+      // One ChatGPT connection serves Codex and Codex CLI: the key is Codex's.
+      const key = await this.keys.value('codex-cli', { peek: true });
       const account = await this.#home.withClient(executablePath, async (rpc) => {
         if (key) await rpc.request('account/login/start', { type: 'apiKey', apiKey: key });
         return Account.parse(await rpc.request('account/read', { refreshToken: true })).account;
@@ -320,6 +434,11 @@ export class CodexEngine implements Engine {
     this.#status = undefined;
     this.#caps = undefined;
   }
+  /** The chat was deleted: Conch's copy of its Codex thread goes with it. */
+  async forgetSession(resumeId: string): Promise<void> {
+    const kept = parseResumeId(resumeId);
+    if (kept) await this.#threads.forget(kept.threadId);
+  }
   async setApiKey(): Promise<void> {
     this.#status = undefined;
     this.#caps = undefined;
@@ -400,18 +519,88 @@ export class CodexEngine implements Engine {
           status.state === 'signed-out' ? 'signed-out' : 'unavailable',
         );
       signal.throwIfAborted();
-      const tools = buildTools({ ...input, signal });
+      const agent = this.variant === 'agent';
+      // A screenshot goes back as a picture to a model that takes them (every
+      // Codex model so far); one that doesn't gets it in words (ADR 0070).
+      const sees =
+        (await this.capabilities().catch(() => undefined))?.models.find(
+          (m) => m.id === input.options.model,
+        )?.images ?? true;
+      const tools = withSight(buildTools({ ...input, signal }, { computer: !agent }), {
+        sees: () => sees,
+        ...(input.describe && { describe: input.describe }),
+        signal,
+      });
+      // The thread this chat had, carried on while its tools are the same (Codex
+      // can't be given new ones: ADR 0036). Otherwise a new one, with the handoff.
+      const toolsKey = toolsDigest(
+        this.variant,
+        [...tools.values()].map((tool) => ({ name: tool.spec.name, schema: tool.spec.schema })),
+      );
+      const wanted = parseResumeId(input.resumeId);
+      const kept =
+        wanted && wanted.tools === toolsKey ? await this.#threads.meta(wanted.threadId) : undefined;
+      const instructions = digest(input.systemAppend);
+      let restored = false;
+      let threadId = '';
       const profile = [
-        ...(input.protectedPaths ?? []),
-        this.#home.home,
-        ...(input.sandbox?.denyRead ?? []),
+        // Codex CLI writes where the chat may (the work folder is the profile's own).
+        ...(agent ? (input.sandbox?.allowWrite ?? []).map((p) => [p, 'write'] as const) : []),
+        ...[
+          ...(input.protectedPaths ?? []),
+          this.#home.home,
+          ...(input.sandbox?.denyRead ?? []),
+        ].map((p) => [p, 'deny'] as const),
       ]
-        .map((p) => `${JSON.stringify(p)}="deny"`)
+        .map(([p, mode]) => `${JSON.stringify(p)}="${mode}"`)
         .join(',');
+      /** Codex CLI's own commands and changes, by item id, as Codex announced them. */
+      const items = new Map<string, Record<string, unknown>>();
+      /** Items already asked about: a second request for one is Codex wanting out of its sandbox. */
+      const asked = new Set<string>();
+      /**
+       * Codex CLI asks before a command or a change (ADR 0066): the protected
+       * places first, then Conch's guard in every mode (ADR 0028), then the
+       * chat's mode, then the person.
+       */
+      const decide = async (
+        method: string,
+        params: Record<string, unknown>,
+      ): Promise<'accept' | 'decline'> => {
+        const itemId = typeof params.itemId === 'string' ? params.itemId : '';
+        const again = Boolean(itemId) && asked.has(itemId);
+        if (itemId) asked.add(itemId);
+        // More than "this, in the sandbox" is never granted, whatever the mode.
+        const escape = escapes(method, params, again);
+        if (escape) {
+          emit({ type: 'notice', code: 'sandbox', message: escape });
+          return 'decline';
+        }
+        const request = nativeRequest(
+          method,
+          params,
+          typeof params.itemId === 'string' ? items.get(params.itemId) : undefined,
+        );
+        if (!request) return 'decline';
+        if (touchesProtected(request.input, input.protectedPaths ?? [])) {
+          emit({ type: 'notice', code: 'protected', message: PROTECTED_MESSAGE });
+          return 'decline';
+        }
+        const verdict = await input.guard?.(request);
+        if (verdict?.decision === 'deny') return 'decline';
+        const change = request.toolName === 'Edit';
+        const mode = input.options.permissionMode;
+        if (verdict?.decision !== 'ask') {
+          if (mode === 'plan') return 'decline';
+          if (mode === 'bypassPermissions') return 'accept';
+          if (mode === 'acceptEdits' && change) return 'accept';
+        }
+        const decision = await input.requestPermission(request, signal);
+        return decision === 'deny' ? 'decline' : 'accept';
+      };
       await this.#home.withClient(
         status.executablePath,
         async (rpc) => {
-          let threadId = '';
           let turnId = '';
           const pendingTools = new Set<Promise<void>>();
           let toolTail = Promise.resolve();
@@ -464,6 +653,7 @@ export class CodexEngine implements Engine {
                   let text = 'This tool is not enabled in this conversation.';
                   let isError = true;
                   let view: ToolView | undefined;
+                  let images: readonly ToolImage[] = [];
                   try {
                     if (tool) {
                       signal.throwIfAborted();
@@ -471,6 +661,7 @@ export class CodexEngine implements Engine {
                       text = result.text;
                       isError = result.isError;
                       view = result.isError ? undefined : result.view;
+                      images = result.images ?? [];
                     }
                   } catch {
                     text = signal.aborted
@@ -487,14 +678,36 @@ export class CodexEngine implements Engine {
                   if (!signal.aborted)
                     rpc.send({
                       id: message.id,
-                      result: { success: !isError, contentItems: [{ type: 'inputText', text }] },
+                      result: {
+                        success: !isError,
+                        // The app server takes pictures back from a tool as `inputImage`.
+                        contentItems: [
+                          { type: 'inputText', text },
+                          ...images.map((image) => ({
+                            type: 'inputImage',
+                            imageUrl: `data:${image.mimeType};base64,${image.data}`,
+                          })),
+                        ],
+                      },
                     });
                 });
                 toolTail = job.catch(() => {});
                 pendingTools.add(job);
                 void job.catch(fail).finally(() => pendingTools.delete(job));
+              } else if (
+                agent &&
+                (message.method === 'item/commandExecution/requestApproval' ||
+                  message.method === 'item/fileChange/requestApproval')
+              ) {
+                // Codex CLI's own command or change: Conch decides, in order.
+                const id = message.id;
+                void decide(message.method, p)
+                  .catch(() => 'decline' as const)
+                  .then((decision) => {
+                    if (!signal.aborted) rpc.send({ id, result: { decision } });
+                  });
               } else if (message.method.endsWith('/requestApproval')) {
-                // Native tools have no Conch before/after contract: never grant a bypass.
+                // Anything else asking for more (permissions, a network rule) gets nothing.
                 rpc.send({
                   id: message.id,
                   result:
@@ -516,6 +729,55 @@ export class CodexEngine implements Engine {
               emit({ type: 'thinking', messageId: String(p.itemId), delta: p.delta });
             if (message.method === 'item/completed' && object(p.item).type === 'agentMessage')
               emit({ type: 'message-done', messageId: String(object(p.item).id) });
+            // Codex CLI's own commands and changes, drawn as tool cards like Claude Code's.
+            if (
+              agent &&
+              (message.method === 'item/started' || message.method === 'item/completed')
+            ) {
+              const item = object(p.item);
+              const id = typeof item.id === 'string' ? item.id : '';
+              const kind = item.type;
+              if (id && (kind === 'commandExecution' || kind === 'fileChange')) {
+                items.set(id, item);
+                const shown = nativeRequest(
+                  kind === 'commandExecution'
+                    ? 'item/commandExecution/requestApproval'
+                    : 'item/fileChange/requestApproval',
+                  { itemId: id },
+                  item,
+                );
+                if (message.method === 'item/started' && shown)
+                  emit({
+                    type: 'tool-start',
+                    toolUseId: id,
+                    name: shown.toolName,
+                    input: shown.input,
+                  });
+                if (message.method === 'item/completed') {
+                  const ok =
+                    item.status === 'completed' &&
+                    (kind !== 'commandExecution' || item.exitCode === 0 || item.exitCode === null);
+                  const output =
+                    kind === 'commandExecution'
+                      ? typeof item.aggregatedOutput === 'string'
+                        ? item.aggregatedOutput.slice(-8_000)
+                        : ''
+                      : item.status === 'declined'
+                        ? 'Not changed: it wasn’t allowed.'
+                        : '';
+                  emit({
+                    type: 'tool-end',
+                    toolUseId: id,
+                    status: ok ? 'success' : 'error',
+                    output:
+                      item.status === 'declined' && kind === 'commandExecution'
+                        ? 'Not run: it wasn’t allowed.'
+                        : output,
+                  });
+                  items.delete(id);
+                }
+              }
+            }
             if (message.method === 'turn/plan/updated') {
               const steps = codexPlan(p.plan);
               if (steps) emit({ type: 'plan', steps });
@@ -549,36 +811,82 @@ export class CodexEngine implements Engine {
             }
           };
           rpc.listen(onMessage);
-          // Fresh thread each turn: dynamic tools are persisted on thread/start
-          // and cannot be replaced on resume in the supported protocol. Reusing
-          // an old schema could expose an app the user has since disconnected.
-          const started = object(
-            await rpc.request('thread/start', {
-              cwd: input.cwd,
-              environments: [],
-              model: input.options.model,
-              approvalPolicy: 'untrusted',
-              permissions: 'conch',
-              config: { [`projects.${JSON.stringify(input.cwd)}.trust_level`]: 'untrusted' },
-              developerInstructions: input.systemAppend,
-              allowProviderModelFallback: false,
-              ephemeral: true,
-              dynamicTools: [...tools.values()].map((tool) => ({
-                type: 'function',
-                name: tool.spec.name,
-                description: tool.spec.description,
-                inputSchema: tool.spec.schema,
-              })),
-            }),
-          );
-          threadId = String(object(started.thread).id ?? '');
-          if (!threadId) throw new Error('Codex did not create a conversation.');
+          const trust = { [`projects.${JSON.stringify(input.cwd)}.trust_level`]: 'untrusted' };
+          // Carry on the chat's thread: the same tools (checked above), asking as
+          // every thread does, in the same sealed profile (set per run, below).
+          let resumed = false;
+          if (restored && wanted)
+            try {
+              const thread = object(
+                object(
+                  await rpc.request('thread/resume', {
+                    threadId: wanted.threadId,
+                    cwd: input.cwd,
+                    ...(input.options.model && { model: input.options.model }),
+                    approvalPolicy: 'untrusted',
+                    permissions: 'conch',
+                    config: trust,
+                    excludeTurns: true,
+                  }),
+                ).thread,
+              );
+              resumed = thread.id === wanted.threadId;
+            } catch {
+              // Codex couldn't read it back (a newer format, a damaged file): a new one, below.
+            }
+          if (resumed && wanted) threadId = wanted.threadId;
+          else {
+            if (wanted) await this.#threads.forget(wanted.threadId);
+            const started = object(
+              await rpc.request('thread/start', {
+                cwd: input.cwd,
+                environments: [],
+                model: input.options.model,
+                approvalPolicy: 'untrusted',
+                permissions: 'conch',
+                config: trust,
+                developerInstructions: input.systemAppend,
+                allowProviderModelFallback: false,
+                // Kept, so the next turn can carry it on (`threads.ts`).
+                ephemeral: false,
+                dynamicTools: [...tools.values()].map((tool) => ({
+                  type: 'function',
+                  name: tool.spec.name,
+                  description: tool.spec.description,
+                  inputSchema: tool.spec.schema,
+                })),
+              }),
+            );
+            threadId = String(object(started.thread).id ?? '');
+            if (!threadId) throw new Error('Codex did not create a conversation.');
+          }
+          emit({
+            type: 'session',
+            resumeId: resumeIdFor(threadId, toolsKey),
+            // It should have carried on and couldn't: healed, with the whole conversation.
+            ...(input.resumeId &&
+              !resumed &&
+              (!wanted || wanted.tools === toolsKey) && { restarted: 'lost' as const }),
+          });
+          // A carried-on thread gets what it missed; a new one, the whole conversation.
+          const text = resumed ? input.prompt : (input.freshPrompt ?? input.prompt);
           const startedTurn = object(
             await rpc.request('turn/start', {
               threadId,
               environments: [],
+              // Codex keeps a thread's instructions from when it started: when Conch's
+              // have changed since (a memory, a setting), the new ones go with the turn.
+              ...(resumed &&
+                kept?.instructions !== instructions && {
+                  additionalContext: {
+                    conch: {
+                      kind: 'application',
+                      value: `Conch's instructions for this conversation, as they are now. They replace the earlier ones.\n\n${input.systemAppend}`,
+                    },
+                  },
+                }),
               input: [
-                { type: 'text', text: input.prompt },
+                { type: 'text', text },
                 ...(input.images ?? []).map((image) => ({
                   type: 'image',
                   url: `data:${image.mimeType};base64,${image.data}`,
@@ -611,9 +919,18 @@ export class CodexEngine implements Engine {
         },
         {
           signal,
+          ...(kept &&
+            wanted && {
+              prepare: async (home: string) => {
+                restored = await this.#threads.restore(wanted.threadId, home);
+              },
+            }),
+          after: async (home: string) => {
+            if (threadId) await this.#threads.keep(threadId, home, instructions);
+          },
           config: [
-            ...TOOL_CONFIG,
-            'permissions.conch.extends=":read-only"',
+            ...(agent ? AGENT_CONFIG : TOOL_CONFIG),
+            `permissions.conch.extends="${agent ? ':workspace' : ':read-only'}"`,
             `permissions.conch.filesystem={${profile}}`,
             'permissions.conch.network={enabled=false}',
           ],

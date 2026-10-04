@@ -16,6 +16,7 @@ export const Id = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/, 'Invalid
 export const BuiltInEngineId = z.enum([
   'claude-code',
   'codex-cli',
+  'codex-agent',
   'copilot',
   'gemini-cli',
   'grok',

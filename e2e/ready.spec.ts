@@ -2,69 +2,59 @@ import { expect, test } from '@playwright/test';
 
 /**
  * The whole happy path a new user walks, against the real gateway + mock engine:
- * onboarding → personalise → first chat with memory and a permission prompt →
- * reload (history persists) → Settings shows what Conch remembered.
+ * the welcome (ADR 0068) → a first chat started from it, with memory and a
+ * permission prompt → reload (history persists) → Settings shows what Conch remembered.
  */
 test('first run to first conversation', async ({ page, request }) => {
   await page.goto('/');
 
-  // Welcome
-  await expect(page.getByRole('heading', { name: 'Hello.' })).toBeVisible();
-  await page.getByRole('button', { name: 'Get started' }).click();
-  await expect(page.getByRole('heading', { name: 'What would you like help with?' })).toBeVisible();
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  // Hello
+  await expect(page.getByRole('heading', { name: 'Hi, I’m Conch.' })).toBeVisible();
+  await page.getByRole('button', { name: 'Let’s begin' }).click();
 
-  // Connect: the provider is already connected, so this advances by itself.
+  // A name, then what you'd like a hand with, tapped.
+  await page.getByRole('textbox', { name: 'Your name' }).fill('Ada');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Nice to meet you, Ada.' })).toBeVisible();
+  await page.getByRole('button', { name: 'Coding' }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+
+  // How it sounds: choosing a voice is hearing it.
+  await page.getByRole('radio', { name: 'Concise' }).click();
+  await expect(page.getByText('Hi Ada. Ready when you are.')).toBeVisible();
+  await page.getByRole('button', { name: 'Sounds good' }).click();
+
+  // A mind to think with: the provider is already connected, so this carries on by itself.
   await expect(page.getByText(/Claude Max/)).toBeVisible();
-  await expect(page.getByRole('textbox', { name: 'Your notes or document' })).toBeVisible({
+  await expect(page.getByRole('heading', { name: 'Bring the apps you live in.' })).toBeVisible({
     timeout: 8000,
   });
-  await page
-    .getByRole('textbox', { name: 'Your notes or document' })
-    .fill('Maya owns the launch checklist. Deadline Friday.');
-  await page.getByRole('button', { name: 'Make a useful brief', exact: true }).click();
-  await expect(page.getByText('Ready to review', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Skip for now' }).click();
+
+  // Ready, with somewhere to start made from what was picked.
+  await expect(page.getByRole('heading', { name: 'You’re all set, Ada.' })).toBeVisible();
   expect((await (await request.get('/api/state')).json()).onboarded).toBe(false);
-  await page.reload();
-  await expect(page.getByText('Ready to review', { exact: true })).toBeVisible();
-  const job = (await (await request.get('/api/first-job')).json()).task;
-  expect(job.verification).toBe('verified');
-  expect(
-    job.operations.filter((op: { tool: string }) => op.tool === 'artifact_create'),
-  ).toHaveLength(1);
-  await page.getByRole('button', { name: 'Make Conch yours' }).click();
+  await page.getByRole('button', { name: 'Walk me through a project folder of mine' }).click();
 
-  // Personality
-  const name = page.getByRole('textbox', { name: 'What should I be called?' });
-  await name.fill('Pearl');
-  await page.getByRole('radio', { name: /Concise/ }).click();
-  await page.getByRole('button', { name: 'Continue' }).click();
-
-  // About you
-  await page.getByRole('textbox', { name: 'What should I call you?' }).fill('Ada');
-  await page.getByRole('textbox', { name: /Anything I should know/ }).fill('I build compilers.');
-  await page.getByRole('button', { name: 'Continue' }).click();
-
-  await expect(page.getByRole('heading', { name: 'Make yourself at home, Ada.' })).toBeVisible();
-  await page.getByRole('button', { name: 'Open Conch', exact: true }).click();
-
-  // Settings were saved on the server.
-  // (The last save is on its way as the button is pressed: wait for it, don't race it.)
+  // Settings were saved on the server, and the chat opens with that first question in it.
   await expect
     .poll(async () => (await request.get('/api/state')).json())
     .toMatchObject({
       onboarded: true,
-      persona: { name: 'Pearl', tone: 'concise' },
-      profile: { name: 'Ada', about: 'I build compilers.' },
+      persona: { tone: 'concise' },
+      profile: { name: 'Ada', about: 'I’d mostly like a hand with coding.' },
     });
+  await expect(page.getByRole('textbox', { name: 'Message Conch' })).toHaveValue(
+    'Walk me through a project folder of mine',
+  );
 
-  // Start an ordinary chat after reviewing the saved first job.
+  // Start an ordinary chat.
   await page.goto('/');
   // Empty chat greets by name.
   await expect(page.getByText(/Ada\./).first()).toBeVisible();
 
   // First message: memory + permission + streamed reply.
-  const composer = page.getByRole('textbox', { name: 'Message Pearl' });
+  const composer = page.getByRole('textbox', { name: 'Message Conch' });
   await composer.fill('Please remember that I love espresso and list files');
   await composer.press('Enter');
 

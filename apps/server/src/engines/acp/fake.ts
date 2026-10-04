@@ -15,6 +15,13 @@ export interface AgentScript {
   session?: (
     params: Record<string, unknown>,
   ) => Record<string, unknown> | { error: { code: number; message: string } };
+  /**
+   * Answer `session/load`: a result, or an error. Before answering, the pretend
+   * program replays the session's history, as ACP has programs do.
+   */
+  load?: (
+    params: Record<string, unknown>,
+  ) => Record<string, unknown> | { error: { code: number; message: string } };
   /** Play out a prompt: send updates, ask permission, then answer. */
   prompt?: (turn: AgentTurn, params: Record<string, unknown>) => Promise<Record<string, unknown>>;
 }
@@ -110,6 +117,21 @@ export function fakeSpawn(script: AgentScript) {
               return 'error' in answer
                 ? send({ id, error: answer.error })
                 : send({ id, result: answer });
+            }
+            case 'session/load': {
+              const answer = script.load?.(params) ?? {};
+              if ('error' in answer) return send({ id, error: answer.error });
+              send({
+                method: 'session/update',
+                params: {
+                  sessionId: params.sessionId,
+                  update: {
+                    sessionUpdate: 'agent_message_chunk',
+                    content: { type: 'text', text: 'An earlier reply, replayed.' },
+                  },
+                },
+              });
+              return send({ id, result: answer });
             }
             case 'session/prompt': {
               const sessionId = String(params.sessionId);

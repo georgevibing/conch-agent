@@ -210,6 +210,10 @@ export const VaultSource = z.object({
   count: z.number().int().nonnegative().optional(),
   /** Conch can add, edit and delete its items. */
   writable: z.boolean(),
+  /** Conch can copy its own items into it (Copy to, ADR 0062): it makes new items, nothing else. */
+  accepts: z.boolean().optional(),
+  /** Where a copy can go in it (1Password's vaults), from what it last listed. */
+  places: z.array(z.object({ id: z.string(), name: z.string() })).optional(),
   /** Set when Conch can get what it needs for this source (ADR 0016). */
   need: z.string().optional(),
   /** What unlocking takes: nothing (it asks itself, e.g. Touch ID) or a password typed here. */
@@ -511,6 +515,31 @@ export const VaultTransferBody = z.object({
   keepSynced: z.boolean().default(false),
 });
 export type VaultTransferBody = z.infer<typeof VaultTransferBody>;
+
+/**
+ * Copy to (ADR 0062): some of Conch's own items, copied into another
+ * password manager as new items there. A few at a time, so the page can
+ * show how far it got and stop.
+ */
+export const VaultCopyOutBody = z.object({
+  /** Conch's own items (`pw_…`). */
+  ids: z.array(z.string().min(1).max(300)).min(1).max(25),
+  /** Where in it: a 1Password vault's id. Its default place when left out. */
+  place: z
+    .string()
+    .regex(/^[a-z0-9]{1,64}$/)
+    .optional(),
+  /** Leave out ones it already has: the same site and account, or copied from it. */
+  skipDuplicates: z.boolean().default(true),
+});
+export type VaultCopyOutBody = z.infer<typeof VaultCopyOutBody>;
+
+export const VaultCopyOutResult = z.object({
+  copied: z.number().int().nonnegative(),
+  skipped: z.number().int().nonnegative(),
+  failed: z.array(z.object({ title: z.string(), message: z.string() })),
+});
+export type VaultCopyOutResult = z.infer<typeof VaultCopyOutResult>;
 
 export const VaultTransferPreview = z.object({
   source: VaultSourceId,

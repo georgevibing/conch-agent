@@ -13,7 +13,7 @@ describe('pages drawn ahead of time', () => {
 
   it('the front page and the documentation home are pages too', async () => {
     expect(PATHS.slice(0, 2)).toEqual(['/', '/docs']);
-    expect(await render('/')).toContain('A calm home for your AI agents.');
+    expect(await render('/')).toContain('The AI agent that just works.');
     expect(headFor('/docs').title).toBe('Conch documentation');
   });
 

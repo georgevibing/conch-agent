@@ -149,6 +149,11 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           break;
         case 'engine.login':
           live.setLogin(event.login);
+          // Signed in: every place showing providers looks again now, not on its next poll.
+          if (event.login.phase === 'done') {
+            void client.invalidateQueries({ queryKey: ['providers'] });
+            void client.invalidateQueries({ queryKey: ['provider'] });
+          }
           break;
         case 'memory.changed':
           void client.invalidateQueries({ queryKey: keys.memories });
@@ -211,6 +216,12 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         }
         case 'backups.changed':
           void client.invalidateQueries({ queryKey: backupKeys.status });
+          break;
+        case 'address.changed':
+          // Your own address (ADR 0064): checking, a certificate, ready, or a problem.
+          client.setQueryData(keys.address, event.address);
+          // The checkup says what it means for your security.
+          void client.invalidateQueries({ queryKey: keys.access });
           break;
         case 'import.progress':
           useImportProgress.setState({
@@ -315,6 +326,8 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         socketRef.current?.send({ type: 'conversation.configure', conversationId, options });
       },
       interrupt(conversationId) {
+        // Drawn stopped this instant; the gateway's word follows (`stoppedView`).
+        useLiveStore.getState().stop(conversationId ?? NEW);
         if (conversationId) {
           socketRef.current?.send({ type: 'conversation.interrupt', conversationId });
           return;
@@ -332,6 +345,7 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         startedNew.current = [];
       },
       respond(conversationId, permissionId, decision) {
+        useLiveStore.getState().decide(conversationId, permissionId, decision);
         socketRef.current?.send({
           type: 'permission.respond',
           conversationId,

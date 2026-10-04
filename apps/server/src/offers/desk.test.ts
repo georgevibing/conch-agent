@@ -351,3 +351,26 @@ describe('the offer desk: taking an offer', () => {
     expect(carryOn).not.toHaveBeenCalled();
   });
 });
+
+describe('the map, for this turn', () => {
+  it('lists what the person just named first, so it’s never cut for length', async () => {
+    const withTodoist: OfferMap = {
+      ...map,
+      apps: [
+        ...map.apps,
+        {
+          id: 'todoist',
+          name: 'Todoist',
+          tagline: 'Tasks and to-do lists',
+          description: 'Your tasks.',
+          featured: false,
+        },
+      ],
+    };
+    const { desk: d } = desk([asked('what about todoist?')]);
+    (d as unknown as { deps: OfferDeskDeps }).deps.map = async () => withTodoist;
+    const text = await d.section(engine, 'c1');
+    const firstApp = text.split('\n').find((l) => l.startsWith('- app'));
+    expect(firstApp).toMatch(/`todoist`/);
+  });
+});

@@ -66,7 +66,7 @@ After a week, what came over is yours.
 This lists the same things with their ticks, and changes nothing:
 
 ```bash
-pnpm conch import --from openclaw --dry-run
+conch import --from openclaw --dry-run
 ```
 
 Use `--from hermes` for Hermes. Without `--dry-run`, it brings the ticked things over, except chat bots and keys, which only come over in the app. It won't do that while Conch is running: use **Settings → Memory**, or quit Conch first. More in [the command line](../reference/cli.md).

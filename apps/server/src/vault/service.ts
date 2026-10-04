@@ -17,6 +17,7 @@ import {
   type ImportPreview,
   isConcealed,
   passwordScore,
+  sameAccountKey,
   SaveVaultItemBody,
   siteMatches,
   siteOf,
@@ -32,6 +33,7 @@ import {
   type VaultStatus,
   type VaultItemType,
   type VaultRequest,
+  type VaultCopyOutResult,
 } from '@conch/protocol';
 import { z } from 'zod';
 
@@ -52,6 +54,7 @@ import {
   KeeperSource,
   KeychainSource,
   OnePasswordSource,
+  type OutgoingItem,
   type PasswordSource,
   ProtonPassSource,
   realExec,
@@ -490,6 +493,8 @@ export class VaultService {
         name: source.name,
         ...state,
         writable: false,
+        ...(source.add && { accepts: true }),
+        ...(source.add && source.places && { places: source.places() }),
         ...(source.need && { need: source.need }),
         unlock: source.unlock,
         ...(source.available === false && { available: false }),
@@ -566,6 +571,7 @@ export class VaultService {
         if (last) {
           items.push(...last.map((item) => this.#external(source, item)));
           state.count = last.length;
+          if (source.add && source.places) state.places = source.places();
         }
         continue;
       }
@@ -575,6 +581,8 @@ export class VaultService {
         items.push(...external.map((item) => this.#external(source, item)));
         state.count = external.length;
         state.syncedAt = Date.now();
+        // Where Copy to can put an item, from the list just read (the status was made before it).
+        if (source.add && source.places) state.places = source.places();
       } catch (error) {
         this.#listed.delete(source.id);
         state.state = 'error';
@@ -1388,6 +1396,79 @@ export class VaultService {
 
   cancelTransfer(jobId: string) {
     this.transfers.cancel(jobId);
+  }
+
+  /**
+   * Copy to (ADR 0062): some of Conch's own items, made as new items in
+   * another password manager through its own program. Their values go on
+   * the program's stdin, one item at a time; nothing is written in between.
+   * Only a person asks for this (a route behind a recent sign-in); the
+   * assistant has no tool for it.
+   */
+  async copyOut(
+    id: VaultSourceId,
+    options: { ids: string[]; place?: string; skipDuplicates: boolean; who?: string },
+  ): Promise<VaultCopyOutResult> {
+    this.#rateLimit(options.who);
+    const records = await this.#records();
+    const source = await this.#readySource(id);
+    if (!source.add)
+      throw new VaultError(
+        'invalid',
+        `Conch can’t add items to ${source.name}. Export them from Conch and import them there.`,
+      );
+    const wanted = new Set(options.ids);
+    const chosen = records.filter((r) => wanted.has(r.id) && !r.deletedAt);
+    if (!chosen.length) throw new VaultError('not-found', 'Those items aren’t in Conch any more.');
+    // What it already holds, by site and account: names only, from its list.
+    const listed = options.skipDuplicates
+      ? await source.list().catch((error: Error) => {
+          throw new VaultError('unavailable', error.message);
+        })
+      : [];
+    const held = new Set(
+      listed.map((i) =>
+        sameAccountKey({ type: i.type, title: i.title, site: i.urls[0], account: i.subtitle }),
+      ),
+    );
+    const result: VaultCopyOutResult = { copied: 0, skipped: 0, failed: [] };
+    for (const r of chosen) {
+      const account =
+        r.fields.find((f) => f.role === 'username' && f.value)?.value ??
+        r.fields.find((f) => (f.role === 'email' || f.kind === 'email') && f.value)?.value;
+      const key = sameAccountKey({ type: r.type, title: r.title, site: r.urls[0], account });
+      if (options.skipDuplicates && (r.origin?.source === id || held.has(key))) {
+        result.skipped++;
+        continue;
+      }
+      const item: OutgoingItem = {
+        type: r.type,
+        title: r.title,
+        fields: r.fields.map((f) => ({
+          label: f.label,
+          kind: f.kind,
+          ...(f.role && { role: f.role }),
+          value: f.value,
+        })),
+        urls: r.urls,
+        tags: r.tags,
+        notes: r.notes,
+      };
+      try {
+        await source.add(item, { ...(options.place && { place: options.place }) });
+        result.copied++;
+      } catch (error) {
+        // The manager's own words may quote what it was given: none of it goes back.
+        let message = (error as Error).message;
+        for (const value of [...r.fields.map((f) => f.value), r.notes])
+          if (value.length >= 3) message = message.split(value).join('•••');
+        result.failed.push({ title: r.title, message: message.slice(0, 200) });
+        // Locked part way: the rest would fail the same way.
+        if (/locked|unlock/i.test(message)) break;
+      }
+    }
+    if (result.copied) this.#changed();
+    return result;
   }
 
   async #saveSync(id: VaultSourceId, state: SyncState) {

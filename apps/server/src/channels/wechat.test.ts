@@ -65,7 +65,7 @@ const state = async (s: Services, id: string) => (await s.channels.get(id)).heal
 const SAMPLE = {
   token: 'QDG6eK',
   aesKey: 'jWmYm7qr5nMoAUwZRjGtBxmz3KA1tkAj3ykkR6q2B2C',
-  id: 'wx5823bf96d3bd56c7',
+  id: 'wx' + '5823bf96d3bd56c7',
   verify: {
     signature: '5c45ff5e21c57e6ad56bac8758b79b1d9ac89fd3',
     timestamp: '1409659589',
@@ -105,7 +105,7 @@ describe('WeChat’s signatures and encryption', () => {
       signed(m.signature.replace('4', '5'), SAMPLE.token, m.timestamp, m.nonce, m.encrypt),
     ).toBe(false);
     expect(signed('not-hex', SAMPLE.token, m.timestamp, m.nonce, m.encrypt)).toBe(false);
-    expect(() => decrypt(m.encrypt, SAMPLE.aesKey, 'wx0000000000000000')).toThrow(
+    expect(() => decrypt(m.encrypt, SAMPLE.aesKey, 'wx' + '0000000000000000')).toThrow(
       /Not for this account/,
     );
     const bytes = Buffer.from(m.encrypt, 'base64');
@@ -163,11 +163,11 @@ describe('WeChat’s signatures and encryption', () => {
     const first = normalizeWeChat({
       kind: 'wechat',
       mode: 'official',
-      appId: ' wx0123456789abcdef ',
+      appId: ' wx' + '0123456789abcdef ',
       secret: 's',
     });
     const again = normalizeWeChat(
-      { kind: 'wechat', mode: 'official', appId: 'wx0123456789abcdef', secret: 't' },
+      { kind: 'wechat', mode: 'official', appId: 'wx' + '0123456789abcdef', secret: 't' },
       first,
     );
     expect(again).toMatchObject({

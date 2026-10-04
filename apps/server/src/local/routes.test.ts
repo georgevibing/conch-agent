@@ -6,6 +6,7 @@ import type { LocalStatus } from '@conch/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
+import { onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 import { LocalError } from './service';
@@ -36,7 +37,7 @@ async function setup() {
   // The routes are under test, not this computer's Ollama.
   vi.spyOn(services.local, 'status').mockResolvedValue(STATUS);
   const pull = vi.spyOn(services.local, 'pull').mockResolvedValue(STATUS);
-  const app = await buildApp(services);
+  const app = onThisComputer(await buildApp(services), services);
   cleanup = async () => {
     await app.close();
     services.search.close();

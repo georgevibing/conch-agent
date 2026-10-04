@@ -50,7 +50,7 @@ const headings: Findable[] = PAGES.flatMap((page) =>
 const named: Findable[] = [
   ...reference.cli.map((command) => ({
     id: `cli ${command.usage}`,
-    title: `pnpm conch ${command.usage}`,
+    title: `conch ${command.usage}`,
     where: 'Command line',
     description: command.summary,
     to: `/reference/cli#${slugify(command.usage)}`,

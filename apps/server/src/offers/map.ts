@@ -42,6 +42,7 @@ const INTRO =
 
 const RULES = [
   'Call `offer` only when one of these would clearly do what was asked, and only then. One offer at most.',
+  'An app here has no tools until it’s connected, so don’t search for them. When they ask about one of these, or for what only one of these can do, call `offer` first: before the browser, making an app, or any other way round. Bring those up only if they say no.',
   'Never offer what the person said they don’t use.',
   'Answer what you can first. Don’t explain how to set anything up: the card does that.',
 ].join('\n');
@@ -64,17 +65,28 @@ const skillLine = (skill: MapSkill) => {
 const byName = (a: { name: string }, b: { name: string }) =>
   a.name.localeCompare(b.name, 'en', { sensitivity: 'base' });
 
+/** Whether the person's words name it, as a whole word or phrase ("Todoist", not "linearly"). */
+function names(said: string, name: string): boolean {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (!said || !words.join('').length) return false;
+  const escaped = words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+');
+  return new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'iu').test(said);
+}
+
 /**
  * The order things are kept in when the budget runs out, most wanted first:
- * featured apps, then skills (the person's own), then the other apps; each
- * alphabetical. What doesn't fit is dropped from the end, so the apps the
- * person is least likely to want go first.
+ * what the person's latest words name, then featured apps, then skills (the
+ * person's own), then the other apps; each alphabetical. What doesn't fit is
+ * dropped from the end, so the apps the person is least likely to want go first.
  */
-export function keepOrder(map: OfferMap): { kind: 'app' | 'skill'; line: string }[] {
-  const featured = map.apps.filter((a) => a.featured).sort(byName);
-  const others = map.apps.filter((a) => !a.featured).sort(byName);
+export function keepOrder(map: OfferMap, said = ''): { kind: 'app' | 'skill'; line: string }[] {
+  const named = map.apps.filter((a) => names(said, a.name) || names(said, a.id)).sort(byName);
+  const rest = map.apps.filter((a) => !named.includes(a));
+  const featured = rest.filter((a) => a.featured).sort(byName);
+  const others = rest.filter((a) => !a.featured).sort(byName);
   const skills = [...map.skills].sort((a, b) => byName({ name: a.title }, { name: b.title }));
   return [
+    ...named.map((a) => ({ kind: 'app' as const, line: appLine(a) })),
     ...featured.map((a) => ({ kind: 'app' as const, line: appLine(a) })),
     ...skills.map((s) => ({ kind: 'skill' as const, line: skillLine(s) })),
     ...others.map((a) => ({ kind: 'app' as const, line: appLine(a) })),
@@ -84,10 +96,11 @@ export function keepOrder(map: OfferMap): { kind: 'app' | 'skill'; line: string 
 /**
  * The section itself, at most `budget` characters, or nothing when there's
  * nothing to offer. Apps are listed before skills; what was left out to keep
- * it short is counted, and can still be offered when the person names it.
+ * it short is counted. `said` is the person's latest message: what it names
+ * is always kept.
  */
-export function mapSection(map: OfferMap, budget = MAP_BUDGET): string {
-  const order = keepOrder(map);
+export function mapSection(map: OfferMap, budget = MAP_BUDGET, said = ''): string {
+  const order = keepOrder(map, said);
   if (!order.length) return '';
   const draw = (kept: typeof order, left: number) => {
     const apps = kept.filter((k) => k.kind === 'app').map((k) => k.line);

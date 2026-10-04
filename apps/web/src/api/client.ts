@@ -1,11 +1,19 @@
 import {
   AccessSettings,
+  AddressStatus,
+  DnsReport,
   AppState,
   AuthStatus,
   type CheckupAction,
   CheckupFixResult,
   CreatedKey,
+  HelloCheck,
+  type HelloFinishBody,
   PairingCode,
+  type PasskeyAssertion,
+  PasskeyOptions,
+  type PasskeyOptionsBody,
+  type PasskeyRegistration,
   type SignInBody,
   Capabilities,
   CompactResult,
@@ -81,9 +89,53 @@ export const api = {
   auth: () => request(AuthStatus, '/api/auth'),
   signIn: (body: SignInBody) => request(AuthStatus, '/api/auth/sign-in', { method: 'POST', body }),
   signOut: () => request(Ok, '/api/auth/sign-out', { method: 'POST' }),
+  /** Hand in a one-time code from `#here=`: this browser becomes this computer (ADR 0063). */
+  here: (code: string) => request(Ok, '/api/here', { method: 'POST', body: { code } }),
   access: () => request(AccessSettings, '/api/access'),
   verify: (secret: string) =>
     request(AccessSettings, '/api/access/verify', { method: 'POST', body: { secret } }),
+  /** Confirm it's you with a passkey: Touch ID, Windows Hello, Face ID (ADR 0065). */
+  verifyWithPasskey: (passkey: PasskeyAssertion) =>
+    request(AccessSettings, '/api/access/verify', { method: 'POST', body: { passkey } }),
+  /** A passkey challenge: signing in and the hello link are public, the rest need a sign-in. */
+  passkeyOptions: (body: PasskeyOptionsBody) =>
+    request(
+      PasskeyOptions,
+      body.purpose === 'sign-in' || body.purpose === 'hello'
+        ? '/api/auth/passkey'
+        : '/api/access/passkeys/options',
+      { method: 'POST', body },
+    ),
+  addPasskey: (response: PasskeyRegistration) =>
+    request(AccessSettings, '/api/access/passkeys', { method: 'POST', body: { response } }),
+  renamePasskey: (id: string, name: string) =>
+    request(AccessSettings, `/api/access/passkeys/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: { name },
+    }),
+  removePasskey: (id: string) =>
+    request(AccessSettings, `/api/access/passkeys/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  /** Your own address (ADR 0064): where Conch answers over HTTPS, and setting it up. */
+  address: () => request(AddressStatus, '/api/address'),
+  addressDns: (name: string) =>
+    request(DnsReport, '/api/address/dns', { method: 'POST', body: { name } }),
+  /** `via: 'proxy'`: a name the person's own tunnel or web server answers at. */
+  setAddress: (name: string, via?: 'conch' | 'proxy') =>
+    request(AddressStatus, '/api/address', {
+      method: 'PUT',
+      body: { name, ...(via === 'proxy' && { via }) },
+    }),
+  removeAddress: () => request(AddressStatus, '/api/address', { method: 'DELETE' }),
+  renewAddress: () => request(AddressStatus, '/api/address/renew', { method: 'POST' }),
+  /** Turn on here an address a backup brought from another computer. */
+  addressHere: () => request(AddressStatus, '/api/address/here', { method: 'POST' }),
+  /** The hello link (ADR 0064): is it still good, and use it. */
+  checkHello: (code: string) =>
+    request(HelloCheck, '/api/auth/hello', { method: 'POST', body: { code } }),
+  finishHello: (body: HelloFinishBody) =>
+    request(AuthStatus, '/api/auth/hello/finish', { method: 'POST', body }),
   setPassword: (username: string, password: string) =>
     request(AccessSettings, '/api/access/password', {
       method: 'PUT',
@@ -106,7 +158,7 @@ export const api = {
   /** Approve new devices: on from any signed-in device, off only on this computer. */
   setApproval: (on: boolean) =>
     request(AccessSettings, '/api/access/approval', { method: 'PUT', body: { on } }),
-  /** Only on the computer running Conch. */
+  /** On the computer running Conch, or an approved device that just confirmed it's you (ADR 0065). */
   approveDevice: (code: string) =>
     request(AccessSettings, `/api/access/requests/${encodeURIComponent(code)}/approve`, {
       method: 'POST',

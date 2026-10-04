@@ -47,7 +47,8 @@ export function HeldItem({
           local && conversationId && !item.sent
             ? {
                 label: local.name,
-                busy: release.isPending,
+                // Until the message is on its way, not just until the gateway heard.
+                busy: release.isPending || release.isSuccess,
                 onAnswer: () => release.mutate(local.id),
               }
             : undefined
@@ -91,7 +92,14 @@ export function ComposerOffline() {
         local && !answers
           ? {
               label: `Answer with ${local.name}`,
-              onClick: () => update.mutate({ preferences: { offlineFallback: true } }),
+              onClick: () =>
+                update.mutate(
+                  { preferences: { offlineFallback: true } },
+                  {
+                    onError: (error) =>
+                      toast.error(error.message || 'That didn’t save. Try again.'),
+                  },
+                ),
             }
           : undefined
       }

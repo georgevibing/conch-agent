@@ -28,7 +28,9 @@ A manager that asks for your OK in its own window, such as 1Password, is only as
 
 Each of these managers is an app in **Apps** too, under **Passwords**. One you turned on has a card there, and its page has the same switch: **Fill sign-ins from** and its name. 1Password has a second switch, **Manage Environments**, for developers. See [Apps](./apps.md#1password). A manager this computer can't run, such as the macOS Keychain on Windows, isn't offered.
 
-**Copy into Conch** makes a manager's items Conch's own, so they are in your vault and your backups. It can keep them up to date, one way, every 30 minutes. No export file is made.
+**Copy into Conch** makes a manager's items Conch's own, so they are in your vault and your backups. Copy them all from **More → Password managers…**, where Conch can keep them up to date, one way, every 30 minutes. Or copy one or a few: right-click an item, or press **Copy into Conch** on its page. No export file is made.
+
+It works the other way too. Right-click one of Conch's own and choose **Copy to 1Password** or **Copy to Bitwarden**: Conch makes a new item there through that manager's own program, in the vault you pick. Nothing already in the manager is changed. The copy is separate from then on, so a change in one place doesn't follow it to the other. One that's already there, with the same site and account, is left out.
 
 Apple Passwords, Chrome and other browsers don't let other apps read them. Import from those instead.
 
@@ -36,13 +38,21 @@ Apple Passwords, Chrome and other browsers don't let other apps read them. Impor
 
 One search box finds an item by anything you'd remember: its name, the account, the site, a tag. Press <kbd>/</kbd> to go to it. The best match comes first, with the part that matched marked. <kbd>↓</kbd> and <kbd>↑</kbd> walk through what was found while you keep typing, and <kbd>Enter</kbd> opens the first one.
 
-The filter below it narrows the list to one kind, one manager, one tag, **Favourites** or **One-time codes**. A long list has a heading over each group: **Favourites**, then each letter, or how long ago when you sort by **Recently edited** or **Recently used**.
+Each item's tile has a small mark on its corner that says where it lives: Conch's pearl, or the mark of the manager it comes from. Its page says it in words. When the same account is in two places, its page says **Also in** and links to the other one.
 
-The list stays quick however many items it holds. An item's name shows the moment you choose it. Its fields follow, which can take a second when they come from another manager.
+The row under the search shows one place at a press: **All**, **Conch**, or one manager, each with how many items it holds. The filter below it narrows the list further, to one kind, one tag, **Favourites** or **One-time codes**. Passwords remembers where you left them. A long list has a heading over each group: **Favourites**, then each letter, or how long ago when you sort by **Recently edited** or **Recently used**.
+
+Drag the line between the list and the item to make the list as wide as you like; Passwords remembers it, and a double-click puts it back. The list stays quick however many items it holds. An item's name shows the moment you choose it. Its fields follow, which can take a second when they come from another manager.
 
 **More → Check for breaches** looks for your passwords among known data breaches. No password leaves your computer for it, only a short piece of a scrambled copy. What needs attention shows at the top of the list, worst first: **In a data breach**, **Reused**, **Weak**, **Expired**, **Not secure**. Press one to see those items.
 
-A deleted item goes to **Recently deleted** for 30 days, and comes back with **Restore**.
+## Do things to one item or many
+
+Right-click an item, or press and hold on a phone, for what you'd do with it: copy its username, password, one-time code or website, open the website, add it to **Favourites**, edit it, copy it to or from another manager, or delete it. With an item chosen or open, <kbd>mod+c</kbd> copies its password, <kbd>mod+shift+c</kbd> its username and <kbd>mod+alt+c</kbd> its one-time code.
+
+To work on several, <kbd>mod</kbd>-click them, or <kbd>shift</kbd>-click to take everything in between. **Select** (the tick beside the sort button) and <kbd>mod+a</kbd> do the same. A bar over the list says how many are chosen and what can be done with them, such as **Copy into Conch**, **Copy to…** and **Delete**. A manager's items are deleted in that manager's own app, so **Delete** says how many of Conch's it will delete. <kbd>esc</kbd> or **Done** ends it.
+
+A deleted item goes to **Recently deleted** for 30 days. **Undo** in the message brings it straight back, and **Restore** does later.
 
 ## What your assistant can do
 

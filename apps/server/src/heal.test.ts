@@ -12,6 +12,7 @@ import type { ConversationEvent, HealArea } from '@conch/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from './app';
+import { onThisComputer } from './test/here';
 import { BrowserStore } from './browser/store';
 import { loadConfig } from './config';
 import { ConversationStore } from './conversations/store';
@@ -342,7 +343,7 @@ describe('the whole gateway', () => {
         CONCH_WEB_DIST: '/nonexistent',
       }),
     );
-    const app = await buildApp(services);
+    const app = onThisComputer(await buildApp(services), services);
     try {
       expect((await app.inject('/api/state')).statusCode).toBe(200);
       await vi.waitFor(async () => {

@@ -12,6 +12,7 @@ import {
   CommandMenu,
   Composer,
   ComposerChip,
+  ComposerQueued,
   DropOverlay,
   Heading,
   IconButton,
@@ -29,6 +30,7 @@ import { useLocation, useNavigate } from 'react-router';
 
 import { useAppState, useConversations, useUpdateSettings } from '../../api/queries';
 import { canPickHere, pickPath } from '../../lib/pick';
+import { useStable } from '../../lib/useStable';
 import { useUi } from '../../app/ui';
 import { greeting } from '../../lib/time';
 import { useLive } from '../../live/LiveProvider';
@@ -36,6 +38,7 @@ import {
   emptyView,
   lastUserMessage,
   pendingQuestion,
+  stoppedView,
   type ConversationView,
 } from '../../live/reducer';
 import { NEW, useLiveStore } from '../../live/store';
@@ -57,6 +60,7 @@ import { useNeed } from '../setup/useNeed';
 import { UsageComposerNotice } from '../usage/UsageComposerNotice';
 import styles from './ChatView.module.css';
 import { attachmentUrl } from './uploads';
+import { composerHistory, loadDraft, rememberSent, saveDraft } from './composer';
 
 const attachmentSrc = (attachment: Attachment) => attachmentUrl(attachment.id);
 import { AttachmentViewer, type Viewable } from './AttachmentViewer';
@@ -281,24 +285,52 @@ function useTurnRecovery(
   };
 }
 
-export function ChatView({ conversationId }: { conversationId?: string }) {
+export function ChatView({ conversationId: routeId }: { conversationId?: string }) {
   const live = useLive();
   const navigate = useNavigate();
   const { data: app } = useAppState();
-  const key = conversationId ?? NEW;
-  const view =
-    useLiveStore((s) => (conversationId ? s.views[conversationId] : undefined)) ?? emptyView;
-  const pending = useLiveStore((s) => s.pending[key]) ?? [];
+  const [sentId, setSentId] = useState<string>();
   const created = useLiveStore((s) => s.created);
+  // A new chat is its conversation from the moment the server names it, before
+  // the address follows: its first message moves there at that instant, and
+  // the splash must not come back for the frame in between.
+  const conversationId = routeId ?? (sentId ? created[sentId] : undefined);
+  const key = conversationId ?? NEW;
+  const heard = useLiveStore((s) => (conversationId ? s.views[conversationId] : undefined));
+  const waiting = useLiveStore((s) => s.pending[key]);
+  // Stop pressed: drawn stopped at once, not when the provider has wound down.
+  // What was sent after Stop is the next turn's, still on its way.
+  const stoppedAt = useLiveStore((s) => s.stopping[key]);
+  const { view, pending } = useMemo(() => {
+    const all = waiting ?? [];
+    if (stoppedAt === undefined) return { view: heard ?? emptyView, pending: all };
+    return {
+      view: stoppedView(
+        heard ?? emptyView,
+        stoppedAt,
+        all.filter((p) => p.at <= stoppedAt),
+      ),
+      pending: all.filter((p) => p.at > stoppedAt),
+    };
+  }, [heard, waiting, stoppedAt]);
   const engineIssue = useLiveStore((s) => s.engineIssue);
   const setEngineIssue = useLiveStore((s) => s.setEngineIssue);
   const openSettings = useUi((s) => s.openSettings);
   // "Try asking…" from an integration arrives as a ready-to-send draft.
   const location = useLocation();
+  // Otherwise, what you were writing here before you went elsewhere.
   const [draft, setDraft] = useState(
-    () => (location.state as { draft?: string } | null)?.draft ?? '',
+    () => (location.state as { draft?: string } | null)?.draft ?? loadDraft(key),
   );
-  const [sentId, setSentId] = useState<string>();
+  useEffect(() => saveDraft(key, draft), [key, draft]);
+  // The words can arrive after the chat is already open (the welcome hands them over as it
+  // finishes): take them once per arrival.
+  const [arrived, setArrived] = useState(location.key);
+  if (arrived !== location.key) {
+    setArrived(location.key);
+    const handed = (location.state as { draft?: string } | null)?.draft;
+    if (handed) setDraft(handed);
+  }
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const columnRef = useRef<HTMLDivElement>(null);
   const attachments = useDraftAttachments();
@@ -341,6 +373,8 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   const canTalk = typeof window !== 'undefined' && window.isSecureContext && canSpeak();
   const engine = app?.engine;
   const running = view.status === 'running' || view.status === 'awaiting-permission';
+  // Stop is there the moment you send, not once the reply begins.
+  const busy = running || pending.length > 0;
   // A question waits (ADR 0060): what's typed here answers it.
   const asking = running && Boolean(pendingQuestion(view));
   const isEmpty = view.items.length === 0 && pending.length === 0;
@@ -350,12 +384,13 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
     return live.watch(conversationId);
   }, [conversationId, live]);
 
-  // A new chat becomes a real conversation once the server confirms it.
+  // A new chat becomes a real conversation once the server confirms it. It's the
+  // same chat (`fromNew`): the view stays as it is, only its address changes.
   useEffect(() => {
-    if (!conversationId && sentId && created[sentId]) {
-      void navigate(`/c/${created[sentId]}`, { replace: true });
+    if (!routeId && sentId && created[sentId]) {
+      void navigate(`/c/${created[sentId]}`, { replace: true, state: { fromNew: true } });
     }
-  }, [conversationId, sentId, created, navigate]);
+  }, [routeId, sentId, created, navigate]);
 
   useEffect(() => {
     // Arriving from search, the find field has focus; don't take it away.
@@ -389,14 +424,23 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
         );
         return;
       }
-      if (continuingTask.current) return;
+      if (continuingTask.current || !conversationId) return;
       continuingTask.current = true;
+      // Shown as sent at once, as any message is; given back if the task can't take it.
+      const requestKey = crypto.randomUUID();
+      const store = useLiveStore.getState();
+      store.addPending(conversationId, {
+        clientMessageId: requestKey,
+        text: trimmed,
+        at: Date.now(),
+        byText: true,
+      });
+      if (!keepDraft) setDraft('');
       void tasksApi
-        .continue(origin.taskId, trimmed, crypto.randomUUID())
-        .then(() => {
-          if (!keepDraft) setDraft('');
-        })
+        .continue(origin.taskId, trimmed, requestKey)
         .catch((error: unknown) => {
+          store.dropPending(conversationId, requestKey);
+          if (!keepDraft) setDraft((d) => d || trimmed);
           toast.error(
             error instanceof Error
               ? error.message
@@ -408,11 +452,85 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
         });
       return;
     }
+    rememberSent(trimmed);
     const id = live.send(trimmed, conversationId, turn.takeDraft(), attached);
     if (!conversationId) setSentId(id);
     if (!keepDraft) setDraft('');
     if (attached === attachments.ready) attachments.clear();
   };
+
+  /**
+   * Written while the reply is still coming: it waits above the box and goes
+   * the moment the reply is over. More written meanwhile joins it.
+   */
+  const [queued, setQueued] = useState<{ text: string; attachments: Attachment[] }>();
+  const queue = (text: string) => {
+    const attached = attachments.ready;
+    setQueued((q) =>
+      q
+        ? {
+            text: [q.text, text].filter(Boolean).join('\n\n'),
+            attachments: [...q.attachments, ...attached],
+          }
+        : { text, attachments: attached },
+    );
+    setDraft('');
+    attachments.clear();
+  };
+  /** Take the queued message back into the box, after whatever is there. */
+  const unqueue = () => {
+    if (!queued) return;
+    setQueued(undefined);
+    setDraft((d) => [d, queued.text].filter((t) => t.trim()).join('\n\n'));
+    if (queued.attachments.length) attachments.restore(queued.attachments);
+    composerRef.current?.focus();
+  };
+  // The reply is over: send what waited. Stopped or failed, it comes back to the box instead.
+  const replyOver = useEffectEvent(() => {
+    if (!queued) return;
+    const end = view.items.findLast((i) => i.kind === 'turn-end');
+    if (end?.kind === 'turn-end' && end.outcome !== 'success') return unqueue();
+    setQueued(undefined);
+    // Whatever you've started writing since stays in the box.
+    send(queued.text, queued.attachments, { keepDraft: true });
+  });
+  const wasBusy = useRef(busy);
+  useEffect(() => {
+    if (wasBusy.current && !busy) replyOver();
+    wasBusy.current = busy;
+  }, [busy]);
+  // Leaving the chat before it went: it stays here as what you were writing.
+  const leaving = useEffectEvent(() => {
+    if (queued) saveDraft(key, [draft, queued.text].filter((t) => t.trim()).join('\n\n'));
+  });
+  useEffect(() => () => leaving(), []);
+
+  // ↑ in the empty box: this chat's messages, newest first, then what you sent lately elsewhere.
+  const ownTexts = [
+    ...view.items.flatMap((i) => (i.kind === 'user' && i.text ? [i.text] : [])),
+    ...pending.map((p) => p.text),
+  ];
+  const ownKey = ownTexts.join('\u0000');
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `ownKey` stands for `ownTexts`
+  const history = useMemo(() => composerHistory(ownTexts), [ownKey]);
+
+  // Typing anywhere in the chat writes in the box, as in other chat apps.
+  const chatRoot = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key.length !== 1 || event.key === ' ') return;
+      const box = composerRef.current;
+      if (!box || box.disabled || document.querySelector('[aria-modal="true"]')) return;
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      const fromPage = !target || target === document.body;
+      if (!fromPage && !(chatRoot.current?.contains(target) && !keepsKeys(target))) return;
+      box.focus();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   /** Send the draft off to be done in the background (ADR 0033); you keep chatting here. */
   const startTask = useStartTask();
@@ -427,11 +545,13 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
       toast('A background task can’t take attachments yet. Send it as a message instead.');
       return;
     }
+    // On its way the moment it's pressed: the words come back only if it couldn't start.
+    setDraft('');
     startTask.mutate(
       { text, ...(conversationId && { conversationId }), options: turn.options },
       {
+        onError: () => setDraft((d) => d || text),
         onSuccess: (task) => {
-          setDraft('');
           toast(`Working on “${task.title}” in the background`, {
             description: conversationId
               ? 'Its result will come back to this chat.'
@@ -486,7 +606,7 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   const noteFor = (d: Draft): string | undefined => {
     if (!provider) return undefined;
     if (d.kind === 'image' && !sees && !can?.files)
-      return `${provider.label} can’t see pictures with this model. It will only get the name.`;
+      return 'This model can’t see pictures, so Conch describes it in words when another of your models can.';
     if (d.kind === 'file' && !can?.files)
       return `${provider.label} can’t open this kind of file. It will only get the name.`;
     return undefined;
@@ -546,8 +666,11 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
     void pickPath('workspace').then(
       async (path) => {
         if (!path) return;
-        await saveSettings.mutateAsync({ preferences: { workspace: path } });
-        toast.success(`Working in ${path.split(/[\\/]/).filter(Boolean).at(-1) ?? path}`);
+        // The chip shows the new folder at once; it goes back if it can't be used.
+        await saveSettings.mutateAsync({ preferences: { workspace: path } }).then(
+          () => toast.success(`Working in ${path.split(/[\\/]/).filter(Boolean).at(-1) ?? path}`),
+          (error: Error) => toast.error(error.message || 'That folder can’t be used.'),
+        );
       },
       () => openSettings('general'),
     );
@@ -556,6 +679,35 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   const workspaceName = useMemo(
     () => app?.workspace.split(/[\\/]/).filter(Boolean).at(-1) ?? 'workspace',
     [app?.workspace],
+  );
+
+  // The transcript draws again only when the chat does, not with every keystroke here.
+  const onRespond = useStable(
+    (permissionId: string, decision: 'allow' | 'allow-always' | 'deny') =>
+      conversationId && live.respond(conversationId, permissionId, decision),
+  );
+  const onRetry = useStable(() => {
+    const last = lastUserMessage(view);
+    if (last) send(last.text, last.attachments);
+  });
+  const onAskAgain = useStable((messageId: string) => {
+    const asked = view.items.find((i) => i.kind === 'user' && i.id === messageId);
+    if (asked?.kind === 'user') send(asked.text, asked.attachments ?? []);
+  });
+  const onSend = useStable((text: string) => send(text, []));
+  const focusComposer = useStable(() => composerRef.current?.focus());
+  const onReply = useStable((text: string) => send(text, [], { keepDraft: true }));
+  const overlay = useMemo(
+    () =>
+      conversationId && (
+        <ChatFind conversationId={conversationId} root={columnRef} onClose={focusComposer} />
+      ),
+    [conversationId, focusComposer],
+  );
+  const footer = useMemo(
+    // Save how I did this (ADR 0058): under the reply that earned it, once it's over.
+    () => <SkillOfferInChat conversationId={conversationId} view={view} running={busy} />,
+    [conversationId, view, busy],
   );
 
   const composer = (
@@ -576,25 +728,39 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
       )}
       {/* What this chat is held to (ADR 0047): quiet, and one press to stop. */}
       {conversationId && (
-        <ChatHolds
-          conversationId={conversationId}
-          holds={view.holds ?? []}
-          running={running || pending.length > 0}
-        />
+        <ChatHolds conversationId={conversationId} holds={view.holds ?? []} running={busy} />
       )}
       <Composer
         ref={composerRef}
         value={draft}
         onValueChange={slash.onDraftChange}
         onSubmit={(text) => {
-          if (!text || !slash.submit(text)) send(text);
+          if (text && slash.submit(text)) return;
+          if (busy && !asking) queue(text);
+          else send(text);
         }}
+        history={history}
+        queued={
+          queued && (
+            <ComposerQueued
+              text={queued.text || `${queued.attachments.length} attached`}
+              meta={`Sends when ${name} is done`}
+              onEdit={unqueue}
+              onRemove={() => {
+                setQueued(undefined);
+                composerRef.current?.focus();
+              }}
+            />
+          )
+        }
         attachments={cards}
         onFiles={(files) => void attachments.addFiles(files)}
         onLongPaste={attachments.addPaste}
         foldPaste={shouldFoldPaste}
         canSubmitEmpty={attachments.ready.length > 0 && !asking}
-        allowSubmitWhileRunning={asking}
+        // While it works, what you send waits its turn (or answers its question).
+        allowSubmitWhileRunning
+        sendLabel={busy && !asking ? `Send when ${name} is done` : undefined}
         sendBlocked={
           asking && attachments.ready.length
             ? 'Answer the question first, then send your files'
@@ -614,14 +780,13 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
         }}
         textareaProps={slash.menu.inputProps}
         overlay={<CommandMenu {...slash.menu.menuProps} />}
-        // Stop is there the moment you send, not once the reply begins.
         onStop={() => live.interrupt(conversationId)}
-        running={running || pending.length > 0}
+        running={busy}
         placeholder={
           asking
             ? 'Answer above, or type it here'
-            : running || pending.length > 0
-              ? `${name} is working…`
+            : busy
+              ? `${name} is working… Write what’s next`
               : `Message ${name}, or type / for commands`
         }
         label={`Message ${name}`}
@@ -704,7 +869,7 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
 
   if (isEmpty && !conversationId) {
     return (
-      <div className={styles.empty} {...drop.props}>
+      <div ref={chatRoot} className={styles.empty} {...drop.props}>
         {dropOverlay}
         <Stack gap={4} align="center" className={styles.hello}>
           <Pearl size="lg" state={running ? 'thinking' : 'idle'} label={null} />
@@ -739,7 +904,7 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
   }
 
   const chat = (
-    <div className={styles.chat} {...drop.props}>
+    <div ref={chatRoot} className={styles.chat} {...drop.props}>
       {dropOverlay}
       <RunBanner conversationId={conversationId} />
       <TaskBanner conversationId={conversationId} />
@@ -751,52 +916,38 @@ export function ChatView({ conversationId }: { conversationId?: string }) {
         columnRef={columnRef}
         routineRun={isRoutineRun}
         taskChat={origin?.kind === 'task'}
-        overlay={
-          conversationId && (
-            <ChatFind
-              conversationId={conversationId}
-              root={columnRef}
-              onClose={() => composerRef.current?.focus()}
-            />
-          )
-        }
+        overlay={overlay}
         pending={pending}
         name={name}
-        onRespond={(permissionId, decision) =>
-          conversationId && live.respond(conversationId, permissionId, decision)
-        }
-        onRetry={() => {
-          const last = lastUserMessage(view);
-          if (last) send(last.text, last.attachments);
-        }}
-        onAskAgain={(messageId) => {
-          const asked = view.items.find((i) => i.kind === 'user' && i.id === messageId);
-          if (asked?.kind === 'user') send(asked.text, asked.attachments ?? []);
-        }}
-        onSend={(text) => send(text, [])}
-        focusComposer={() => composerRef.current?.focus()}
-        onReply={(text) => send(text, [], { keepDraft: true })}
+        onRespond={onRespond}
+        onRetry={onRetry}
+        onAskAgain={onAskAgain}
+        onSend={onSend}
+        focusComposer={focusComposer}
+        onReply={onReply}
         recover={recover}
-        footer={
-          // Save how I did this (ADR 0058): under the reply that earned it, once it's over.
-          <SkillOfferInChat
-            conversationId={conversationId}
-            view={view}
-            running={running || pending.length > 0}
-          />
-        }
+        footer={footer}
       />
       <div className={styles.dock}>{composer}</div>
     </div>
   );
-  return conversationId ? (
+  // Wrapped the same before and after a new chat gets its id, so the transcript
+  // and the composer stay where they are and nothing in them plays twice.
+  return (
     <BrowserDock conversationId={conversationId} view={view}>
       <ArtifactDock conversationId={conversationId} view={view}>
         {chat}
       </ArtifactDock>
     </BrowserDock>
-  ) : (
-    chat
+  );
+}
+
+/** A key pressed here is the control's own: a field, or a widget that walks with keys. */
+function keepsKeys(target: HTMLElement): boolean {
+  return Boolean(
+    target.closest(
+      'input, textarea, select, [contenteditable], [role="dialog"], [role="menu"], [role="listbox"], [role="grid"], [role="radiogroup"], [role="tablist"], [role="slider"], [role="spinbutton"]',
+    ),
   );
 }
 

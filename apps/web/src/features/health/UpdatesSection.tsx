@@ -33,10 +33,16 @@ import { conchAppsApi } from '../conchapps/api';
 import { putConchApp } from '../conchapps/queries';
 import { conchAppPath } from '../conchapps/words';
 import { errorText } from '../integrations/queries';
-import { updateKeys } from '../updates/api';
+import { updateKeys, updatesApi } from '../updates/api';
 import { relativeTime } from '../../lib/time';
 import { Section } from '../settings/Section';
-import { followRestart, updatesWaiting, useUpdateActions, useUpdates } from '../updates/queries';
+import {
+  followRestart,
+  updatesBusy,
+  updatesWaiting,
+  useUpdateActions,
+  useUpdates,
+} from '../updates/queries';
 
 const DAY = 86_400_000;
 /** "What's new" lists a few lines; the rest are "and N more". */
@@ -270,6 +276,9 @@ function programRow(
   return { ...base, state: 'current', status: 'Up to date' };
 }
 
+/** How old a look can be before opening Updates looks again by itself. */
+const LOOK_AGAIN_AFTER_MS = 10 * 60_000;
+
 /**
  * Settings → Health → Updates. As calm as a phone's Software Update: Conch
  * itself, the programs it uses, a quiet "Check now", and one switch for
@@ -289,6 +298,21 @@ export function UpdatesSection() {
   useEffect(() => {
     if (status) followRestart(status);
   }, [status]);
+
+  // Opening Updates is asking "is there anything new?": an answer from hours ago isn't one.
+  // Look again, quietly (a look needs no confirming it's you), when the last one is old.
+  const client = useQueryClient();
+  const looked = useRef(false);
+  useEffect(() => {
+    if (!status || looked.current || updatesBusy(status) || !status.conch.checkable) return;
+    looked.current = true;
+    const at = status.conch.checkedAt;
+    if (at && Date.now() - at < LOOK_AGAIN_AFTER_MS) return;
+    void updatesApi
+      .check()
+      .then((next) => client.setQueryData(updateKeys.status, next))
+      .catch(() => undefined);
+  }, [status, client]);
 
   // ⌘K "Check for updates" / "Update Conch" land here, and do what they say once.
   useEffect(() => {

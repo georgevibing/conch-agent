@@ -475,6 +475,8 @@ export const ChannelDoor = z.object({
   via: z.enum(['tailscale', 'own']).optional(),
   /** The public base address, `https://mac.tail1234.ts.net:8443/conch`. */
   url: z.string().max(2000).optional(),
+  /** Conch's own address (ADR 0064), which the door could use in one press, when it isn't already. */
+  address: z.string().max(300).optional(),
   /** Which channels use it. */
   apps: z.array(ChannelKind).default([]),
   /** When it last answered a check from the outside. */

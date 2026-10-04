@@ -25,10 +25,12 @@ const settings = (patch: Partial<AccessSettings> = {}): AccessSettings => ({
   method: 'none',
   suggestedUsername: 'ada',
   keys: [],
+  passkeys: [],
+  passkeysHere: false,
   sessions: [],
   devices: [],
   requests: [],
-  approval: { on: false, here: true },
+  approval: { on: false, here: true, canApprove: true },
   checkup: [
     {
       id: 'sign-in',

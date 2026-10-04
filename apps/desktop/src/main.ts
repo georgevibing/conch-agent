@@ -19,6 +19,7 @@ import { app, type BrowserWindow, Notification, screen, shell } from 'electron';
 
 import { gatewayEnv, loginShellPath } from './environment';
 import { Gateway } from './gateway';
+import { asThisComputer } from './here';
 import { appMenu, ConchTray } from './menus';
 import { missing, places } from './places';
 import { originOf, STATUS_PAGE } from './policy';
@@ -111,6 +112,11 @@ function main(): void {
     });
   /** Where the window shows Conch: the gateway, or the web app's dev server. */
   const conchPage = () => at.web ?? gatewayUrl;
+  /** Load Conch in `shown` as this computer (ADR 0063): a one-time code from the gateway. */
+  const showConch = async (shown: BrowserWindow, target: string) => {
+    const url = await asThisComputer(target, at.home);
+    if (!shown.isDestroyed()) await shown.loadURL(url).catch(() => undefined);
+  };
 
   // ── The window ────────────────────────────────────────────────────────
   const boundsFile = join(app.getPath('userData'), 'window.json');
@@ -170,7 +176,7 @@ function main(): void {
     });
     const state = gateway.state;
     const target = conchPage();
-    if (state.kind === 'running' && target) void made.loadURL(target).catch(() => undefined);
+    if (state.kind === 'running' && target) void showConch(made, target);
     else if (state.kind === 'stopped')
       showStatus(made, { state: 'stopped', message: state.message });
     else showStatus(made, { state: 'starting' });
@@ -216,7 +222,7 @@ function main(): void {
     checkForUpdates: () => {
       showWindow();
       const target = conchPage();
-      if (target && window) void window.loadURL(new URL('/?open=check-updates', target).href);
+      if (target && window) void showConch(window, new URL('/?open=check-updates', target).href);
     },
     dev,
   };
@@ -241,7 +247,7 @@ function main(): void {
       const current = window && !window.isDestroyed() ? window.webContents.getURL() : '';
       // A restart on the same address: the page brings itself back.
       if (window && target && (moved || !current.startsWith(target)))
-        void window.loadURL(target).catch(() => undefined);
+        void showConch(window, target);
       // Another Conch: if it goes away, this app starts its own.
       if (state.elsewhere) watching = watchElsewhere(state.url);
     } else if (state.kind === 'stopped') {

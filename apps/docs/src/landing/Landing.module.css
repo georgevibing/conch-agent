@@ -26,12 +26,6 @@
   gap: var(--nc-space-2);
 }
 
-.buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--nc-space-2);
-}
-
 /* The numbers sit close under the hero: they finish its sentence. */
 .facts {
   margin-block-start: calc(clamp(4.5rem, 12vw, 9rem) * -0.45);
@@ -70,12 +64,14 @@
   max-inline-size: 38rem;
 }
 
+/* Download and Read the docs, side by side in the middle. */
 .closingActions > :first-child {
-  inline-size: 100%;
+  justify-content: center;
 }
 
-.closingActions .buttons {
-  justify-content: center;
+/* The install line takes the column's width. */
+.closingActions > :last-child {
+  inline-size: 100%;
 }
 
 .footer {

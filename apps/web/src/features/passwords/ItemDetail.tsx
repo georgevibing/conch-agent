@@ -18,6 +18,7 @@ import {
   VaultFieldsSkeleton,
   VaultItemIcon,
   VaultPasskeyRow,
+  VaultSourceBadge,
   toast,
   vaultSourceName,
 } from '@conch/nacre';
@@ -30,6 +31,7 @@ import { useNavigate } from 'react-router';
 import { useUi, type SettingsTab } from '../../app/ui';
 import { errorText } from '../integrations/queries';
 import { vaultApi } from './api';
+import type { CopyTarget, ItemActions } from './actions';
 import { copyPlain, copySecret } from './clipboard';
 import { ago, TYPE_NAMES } from './filter';
 import styles from './Passwords.module.css';
@@ -59,7 +61,18 @@ export function ItemDetail({
   onEdit,
   onBack,
   onDeleted,
+  actions,
+  targets = [],
+  twins = [],
+  onOpenItem,
 }: {
+  /** Copying it into Conch or to another manager (the page's own, so its toasts follow). */
+  actions?: ItemActions;
+  /** Managers Conch can copy its own items to. */
+  targets?: CopyTarget[];
+  /** The same account in another place: Conch's copy of a 1Password item, or the other way. */
+  twins?: VaultItemSummary[];
+  onOpenItem?: (id: string) => void;
   id: string;
   /**
    * What the list already knows about it. Shown at once, so choosing an item
@@ -155,14 +168,29 @@ export function ItemDetail({
           <Heading level={2} size="xl">
             {item.title}
           </Heading>
-          <Text size="sm" tone="subtle">
-            {TYPE_NAMES[item.type].one}
-            {item.container ? ` · ${item.container}` : ''}
-            {item.updatedAt ? ` · edited ${ago(item.updatedAt)}` : ''}
-            {` · ${item.usedAt ? `used ${ago(item.usedAt)}` : 'not used yet'}`}
+          <Text size="sm" tone="subtle" className={styles.detailWhere}>
+            <VaultSourceBadge source={item.source} />
+            <span>
+              {item.source === 'conch'
+                ? 'In Conch'
+                : `${vaultSourceName(item.source)}${item.container ? ` · ${item.container}` : ''}`}
+              {` · ${TYPE_NAMES[item.type].one}`}
+              {item.updatedAt ? ` · edited ${ago(item.updatedAt)}` : ''}
+              {` · ${item.usedAt ? `used ${ago(item.usedAt)}` : 'not used yet'}`}
+            </span>
           </Text>
         </div>
         <div className={styles.detailActions}>
+          {external && item.source !== 'system' && actions && (
+            <Button
+              size="sm"
+              variant="surface"
+              leadingIcon={<VaultSourceBadge source="conch" />}
+              onClick={() => void actions.copyIntoConch([item])}
+            >
+              Copy into Conch
+            </Button>
+          )}
           {full && !external && !deleted && (
             <VaultFavoriteButton
               favorite={item.favorite}
@@ -196,6 +224,21 @@ export function ItemDetail({
                 </IconButton>
               </DropdownMenu.Trigger>
               <DropdownMenu.Content align="end">
+                {!deleted &&
+                  actions &&
+                  targets.flatMap((t) =>
+                    (t.places.length > 1 ? t.places : [undefined]).map((p) => (
+                      <DropdownMenu.Item
+                        key={`${t.id}:${p?.id ?? ''}`}
+                        icon={<VaultSourceBadge source={t.id} />}
+                        onSelect={() => void actions.copyTo([item], t, p ?? t.places[0])}
+                      >
+                        Copy to {t.name}
+                        {p && t.places.length > 1 ? ` · ${p.name}` : ''}
+                      </DropdownMenu.Item>
+                    )),
+                  )}
+                {!deleted && actions && targets.length > 0 && <DropdownMenu.Separator />}
                 {full.history > 0 && (
                   <DropdownMenu.Item
                     icon={<History />}
@@ -242,7 +285,28 @@ export function ItemDetail({
           From {vaultSourceName(item.source)}
           {item.container ? ` · ${item.container}` : ''}. Change it there; Conch shows it here and
           can fill it in for you.
+          {twins.every((t) => t.source !== 'conch') &&
+            ' To keep it in Conch too, even when the app isn’t there, copy it into Conch.'}
         </Callout>
+      )}
+      {twins.length > 0 && onOpenItem && (
+        <div className={styles.detailTwins}>
+          <Text as="span" size="sm" tone="subtle">
+            Also in
+          </Text>
+          {twins.map((t) => (
+            <Button
+              key={t.id}
+              size="sm"
+              variant="ghost"
+              leadingIcon={<VaultSourceBadge source={t.source} />}
+              onClick={() => onOpenItem(t.id)}
+            >
+              {t.source === 'conch' ? 'Conch' : vaultSourceName(t.source)}
+              {t.container ? ` · ${t.container}` : ''}
+            </Button>
+          ))}
+        </div>
       )}
       {full?.origin && (
         <Callout tone="info" className={styles.detailNote}>

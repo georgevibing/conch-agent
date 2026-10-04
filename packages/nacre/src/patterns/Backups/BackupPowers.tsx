@@ -2,6 +2,7 @@ import {
   AppWindow,
   BadgeCheck,
   Blocks,
+  Earth,
   Globe,
   MessageCircle,
   MessagesSquare,
@@ -46,6 +47,7 @@ const ICONS: Record<BackupPowerInfo['kind'], ReactNode> = {
   'conch-apps': <Puzzle />,
   'page-data-sites': <AppWindow />,
   'provider-servers': <Server />,
+  'own-address': <Earth />,
 };
 
 /**

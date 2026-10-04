@@ -168,6 +168,11 @@ export const BackupPower = z.discriminatedUnion('kind', [
     people: z.array(PowerText).max(20),
     more: z.number().int().nonnegative().default(0),
   }),
+  /**
+   * An address of your own (ADR 0064): the internet reaches Conch there. Restored on
+   * another computer it opens nothing by itself, but the preview still names it.
+   */
+  z.object({ kind: z.literal('own-address'), name: PowerText }),
 ]);
 export type BackupPower = z.infer<typeof BackupPower>;
 

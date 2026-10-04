@@ -170,3 +170,37 @@ test('your signing key is locked with this computer’s key, and a changed one f
     timeout: 30_000,
   });
 });
+
+test('a skill described in a sentence is written for you, and same-row cards line up', async ({
+  page,
+}) => {
+  await openConch(page);
+  await page.goto('/skills/new');
+  const box = page.getByRole('textbox', { name: /know how to do/ });
+  await box.fill('review my week from my calendar every friday');
+  await page.getByRole('button', { name: 'Write the steps for me' }).click();
+  // The steps come in, under a note that says who wrote them and offers your words back.
+  await expect(page.getByText(/wrote these from your words/)).toBeVisible({ timeout: 15_000 });
+  await expect(box).toHaveValue(/## Steps\n1\. Ask for anything missing/);
+  await expect(page.getByRole('textbox', { name: 'Title' })).toHaveValue('Review week');
+  await page.getByRole('button', { name: 'Back to my words' }).click();
+  await expect(box).toHaveValue('review my week from my calendar every friday');
+  await page.getByRole('button', { name: 'Write the steps for me' }).click();
+  await expect(box).toHaveValue(/## Steps/, { timeout: 15_000 });
+  await page.getByRole('button', { name: 'Create skill' }).click();
+  await expect(page).toHaveURL(/\/skills\/review-week/);
+
+  // Cards that share a row share its height.
+  await page.goto('/skills');
+  const cards = page.locator('ul li article');
+  await expect(cards.first()).toBeVisible();
+  const boxes = await cards.evaluateAll((all) =>
+    all.map((el) => {
+      const r = el.getBoundingClientRect();
+      return { top: Math.round(r.top), height: Math.round(r.height) };
+    }),
+  );
+  const rows = new Map<number, number[]>();
+  for (const b of boxes) rows.set(b.top, [...(rows.get(b.top) ?? []), b.height]);
+  for (const heights of rows.values()) expect(new Set(heights).size).toBe(1);
+});

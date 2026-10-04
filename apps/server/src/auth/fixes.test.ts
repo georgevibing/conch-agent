@@ -6,6 +6,7 @@ import { CheckupAction, type CheckupItem } from '@conch/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
+import { onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 import {
@@ -34,7 +35,7 @@ async function setup(env: Record<string, string> = {}) {
     ...env,
   });
   const services = new Services(config);
-  const app = await buildApp(services);
+  const app = onThisComputer(await buildApp(services), services);
   close = () => app.close();
   return { app, services, home };
 }
@@ -60,6 +61,8 @@ const access = (patch: Partial<AccessFile> = {}): AccessFile => ({
   version: 1,
   method: 'none',
   keys: [],
+  passkeys: [],
+  hellos: [],
   sessions: [],
   pairings: [],
   approval: false,
@@ -146,6 +149,64 @@ describe('checkup findings', () => {
       homeProblems: [],
     });
     expect(items.every((i) => i.level === 'ok' && !i.fix)).toBe(true);
+  });
+
+  it('know an address a tunnel or web server of yours answers at, and still ask for approval', () => {
+    const items = checkup({
+      config: loadConfig({ CONCH_HOME: join(tmpdir(), 'conch-proxy') }),
+      access: access({ method: 'password' }),
+      permissionMode: 'default',
+      secure: true,
+      homeProblems: [],
+      address: { state: 'ready', name: 'conch.example.com', via: 'proxy', guarded: true },
+    });
+    expect(items.find((i) => i.id === 'address')).toMatchObject({
+      level: 'ok',
+      title: 'Conch answers at conch.example.com, through your tunnel or web server',
+      detail: expect.stringContaining('sign-in of its own'),
+    });
+    // On the internet all the same: new devices should wait for approval.
+    expect(items.find((i) => i.id === 'devices')).toMatchObject({ level: 'warn' });
+  });
+
+  it('know about an address of your own (ADR 0064): approval, its health, and a passkey', () => {
+    const at = (state: 'ready' | 'problem', patch: Partial<AccessFile> = {}) =>
+      checkup({
+        config: loadConfig({ CONCH_HOME: join(tmpdir(), 'conch-own') }),
+        access: access({ method: 'password', ...patch }),
+        permissionMode: 'default',
+        secure: true,
+        homeProblems: [],
+        address:
+          state === 'ready'
+            ? { state, name: 'conch.example.com' }
+            : {
+                state,
+                name: 'conch.example.com',
+                problem: { kind: 'unreachable', message: 'Port 80 can’t be reached.' },
+              },
+      });
+    const open = at('ready');
+    expect(open.find((i) => i.id === 'devices')).toMatchObject({
+      level: 'warn',
+      fix: { place: 'devices' },
+    });
+    expect(open.find((i) => i.id === 'address')).toMatchObject({ level: 'ok' });
+    expect(open.find((i) => i.id === 'passkeys')).toMatchObject({
+      level: 'info',
+      fix: { place: 'passkeys' },
+    });
+    expect(open.find((i) => i.id === 'encryption')).toMatchObject({ level: 'ok' });
+
+    const safe = at('ready', { approval: true });
+    expect(safe.find((i) => i.id === 'devices')?.level).toBe('ok');
+
+    const broken = at('problem', { approval: true });
+    expect(broken.find((i) => i.id === 'address')).toMatchObject({
+      level: 'warn',
+      detail: 'Port 80 can’t be reached.',
+      fix: { place: 'address' },
+    });
   });
 
   it('show the one line that removes CONCH_TOKEN where it is set', async () => {

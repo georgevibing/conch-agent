@@ -71,13 +71,14 @@ function useVerb(verbs: readonly string[] | undefined, interval: number, origin?
   const [state, setState] = useState(() => {
     const now = Date.now();
     const at = verbAt(now - (origin ?? now), count, interval);
-    // Mounted part-way through a verb (e.g. replacing a placeholder): don't replay its entrance.
+    // Mounted part-way through a verb (e.g. replacing a placeholder): its letters
+    // carry on from where they were (`since`), never replaying their entrance.
     return {
       now,
       start: origin ?? now,
       leaving: undefined as string | undefined,
-      settled: at.index,
-      mid: at.since > 400,
+      mountedOn: at.index as number | undefined,
+      since: at.since,
     };
   });
   const at = verbAt(state.now - state.start, count, interval);
@@ -85,7 +86,7 @@ function useVerb(verbs: readonly string[] | undefined, interval: number, origin?
   useEffect(() => {
     if (count < 2) return;
     const id = setTimeout(
-      () => setState((s) => ({ ...s, now: Date.now(), leaving: current, mid: false })),
+      () => setState((s) => ({ ...s, now: Date.now(), leaving: current, mountedOn: undefined })),
       at.next + 16,
     );
     return () => clearTimeout(id);
@@ -98,24 +99,27 @@ function useVerb(verbs: readonly string[] | undefined, interval: number, origin?
   return {
     current,
     leaving: state.leaving === current ? undefined : state.leaving,
-    settled: state.mid && at.index === state.settled,
+    since: at.index === state.mountedOn ? state.since : 0,
   };
 }
 
 function Letters({
   text,
   leaving,
-  settled,
+  since = 0,
 }: {
   text: string;
   leaving?: boolean;
-  settled?: boolean;
+  /** Milliseconds this word has already been showing (mounted part-way through it). */
+  since?: number;
 }) {
+  // Fixed at mount: a re-render never shifts the running animations.
+  const [offset] = useState(since);
   return (
     <span
       className={styles.word}
       data-leaving={leaving || undefined}
-      data-settled={settled || undefined}
+      style={offset ? ({ '--since': `${Math.round(offset)}ms` } as CSSProperties) : undefined}
     >
       {[...text].map((ch, i) => (
         <span key={i} className={styles.ch} style={{ '--i': i } as CSSProperties}>
@@ -168,10 +172,14 @@ export function ThinkingIndicator({
   orb = true,
   srLabel,
   className,
+  style,
   ...props
 }: ThinkingIndicatorProps) {
   const now = useNow(startedAt !== undefined);
-  const { current, leaving, settled } = useVerb(verbs, interval, startedAt);
+  const { current, leaving, since } = useVerb(verbs, interval, startedAt);
+  // How long the wait has gone on when this mounts: the bubbles and the orb keep
+  // that time, so an indicator that replaces another carries on instead of starting over.
+  const [age] = useState(() => (startedAt === undefined ? 0 : Math.max(0, Date.now() - startedAt)));
   const elapsed = startedAt === undefined ? undefined : now - startedAt;
   const cycling = current !== undefined;
 
@@ -181,6 +189,7 @@ export function ThinkingIndicator({
       aria-live="polite"
       data-size={size}
       className={cx(styles.root, className)}
+      style={{ '--age': `${Math.round(age)}ms`, ...style } as CSSProperties}
       {...props}
     >
       {cycling && <span className="nc-visually-hidden">{srLabel ?? 'Thinking'}</span>}
@@ -193,7 +202,7 @@ export function ThinkingIndicator({
         {cycling ? (
           <span className={styles.label} aria-hidden>
             {leaving && <Letters key={`out-${leaving}`} text={leaving} leaving />}
-            <Letters key={current} text={current} settled={settled} />
+            <Letters key={current} text={current} since={since} />
           </span>
         ) : (
           <span className={styles.label}>

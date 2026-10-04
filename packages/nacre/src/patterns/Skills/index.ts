@@ -20,3 +20,5 @@ export { SkillOffer } from './SkillOffer';
 export type { SkillOfferProps } from './SkillOffer';
 export { SkillShelf } from './SkillShelf';
 export type { SkillShelfEntry, SkillShelfProps } from './SkillShelf';
+export { SkillWriting } from './SkillWriting';
+export type { SkillWritingProps } from './SkillWriting';

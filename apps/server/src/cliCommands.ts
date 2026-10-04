@@ -1,12 +1,13 @@
 /**
- * Every `pnpm conch` command, in words: what `pnpm conch help` prints and what
+ * Every `conch` command (`pnpm conch` in a checkout), in words: what `conch help` prints and what
  * the documentation's CLI reference is generated from (`apps/docs/reference`).
  *
  * A command exists once it has a row here: `cli.ts` types its handlers by
  * these names, so a new command without its words doesn't compile.
  */
 
-export type CliGroup = 'Signing in' | 'Devices' | 'Running Conch' | 'Your things';
+export type CliGroup =
+  'Getting started' | 'Signing in' | 'Devices' | 'Running Conch' | 'Your things';
 
 export interface CliSubcommand {
   /** What follows the command, as help shows it: `approve [code] [--yes]`. */
@@ -15,11 +16,11 @@ export interface CliSubcommand {
 }
 
 export interface CliCommand {
-  /** The word after `pnpm conch` that picks the handler. */
+  /** The word after `conch` that picks the handler. */
   name: string;
   /** The command with its arguments, as help shows it. */
   usage: string;
-  /** One line, as `pnpm conch help` says it. */
+  /** One line, as `conch help` says it. */
   summary: string;
   group: CliGroup;
   /** For the documentation: what it does and what to expect, in a sentence or two. */
@@ -49,7 +50,60 @@ export const SKILLS_SUBCOMMANDS = [
   { usage: 'forget <fingerprint>', summary: 'Stop trusting a publisher' },
 ] as const satisfies readonly CliSubcommand[];
 
+export const PASSKEYS_SUBCOMMANDS = [
+  { usage: '(nothing)', summary: 'Your passkeys, and where each one works' },
+  { usage: 'remove <id>', summary: 'Forget one (never the last way in)' },
+] as const satisfies readonly CliSubcommand[];
+
+export const ADDRESS_SUBCOMMANDS = [
+  { usage: '(nothing), status', summary: 'Where Conch answers, and its certificate' },
+  { usage: 'set <name>', summary: 'Answer at this address (the same steps as setup)' },
+  {
+    usage: 'set <name> --proxy',
+    summary: 'Answer at this address through a tunnel or web server you run',
+  },
+  {
+    usage: 'renew',
+    summary: 'Renew the certificate now (behind a proxy: look through it again)',
+  },
+  { usage: 'here', summary: 'Turn on here an address a backup brought from another computer' },
+  { usage: 'off', summary: 'Stop answering at it' },
+] as const satisfies readonly CliSubcommand[];
+
 export const CLI_COMMANDS = [
+  {
+    name: 'setup',
+    usage: 'setup [--domain <name> | --proxy <name> | --tailscale | --local]',
+    summary: 'Choose how you’ll reach Conch, and make it yours',
+    group: 'Getting started',
+    detail:
+      'Asks how you’ll reach Conch: at an address of your own (conch.yourname.com), through a tunnel or web server you already run (Cloudflare Tunnel, nginx, Caddy), privately with Tailscale, or only from this computer. For an address, it shows the DNS record to add and waits for it, gets Conch permission to answer on ports 80 and 443 (asking once for your password on Linux), opens this server’s firewall when you say so, and gets a certificate from Let’s Encrypt. Through your own tunnel, it says where to point it, and checks the way in through it. Either way it ends with the link that makes Conch yours. The installer runs it on a server; run it again any time to change your mind. --yes asks nothing.',
+  },
+  {
+    name: 'address',
+    usage: 'address [set <name>|renew|here|off]',
+    summary: 'Your own address: where Conch answers over HTTPS',
+    group: 'Getting started',
+    detail:
+      'With nothing after it, says where Conch answers, how long its certificate is good for (or which tunnel or web server answers for it) and anything in the way, with the one thing to do about it. Conch renews the certificate by itself. off stops answering there; set changes it, through the same steps as setup, and set <name> --proxy for a name your own tunnel or web server answers at.',
+    subcommands: ADDRESS_SUBCOMMANDS,
+  },
+  {
+    name: 'hello',
+    usage: 'hello',
+    summary: 'A link that makes this Conch yours',
+    group: 'Getting started',
+    detail:
+      'For a Conch nobody has signed in to yet, often one on a server: prints a one-time link and a QR code. Open it on your own computer to choose Touch ID, Windows Hello or a password. Whoever opens it first owns this Conch, and it works once, for an hour. After conch reset, it’s the way back in.',
+  },
+  {
+    name: 'open',
+    usage: 'open [page] [--link]',
+    summary: 'Open Conch in your browser, as this computer',
+    group: 'Getting started',
+    detail:
+      'Opens Conch in your default browser as the computer it runs on, as its app does: that browser can then use Conch with sign-in off, and approve devices. --link prints a one-time link instead, for another browser on this computer or one at the end of an SSH tunnel. It works once, for two minutes, and only on this computer.',
+  },
   {
     name: 'status',
     usage: 'status',
@@ -94,7 +148,16 @@ export const CLI_COMMANDS = [
     summary: 'Sign in your phone with a QR code',
     group: 'Signing in',
     detail:
-      'Prints a QR code and a link that sign one device in. It works once, for ten minutes. Sign-in has to be set up first, and the phone has to be able to reach Conch: pnpm conch phone gives it an address.',
+      'Prints a QR code and a link that sign one device in. It works once, for ten minutes. Sign-in has to be set up first, and the phone has to be able to reach Conch: conch phone gives it a private address, conch setup an address of your own.',
+  },
+  {
+    name: 'passkeys',
+    usage: 'passkeys [remove <id>]',
+    summary: 'Your passkeys: Touch ID, Windows Hello, Face ID',
+    group: 'Signing in',
+    detail:
+      'Lists the passkeys that sign in to Conch, the address each works at, and when each was last used. remove forgets one and signs out what it signed in, but never your last way in. Passkeys are added from Conch itself, on the device that keeps them.',
+    subcommands: PASSKEYS_SUBCOMMANDS,
   },
   {
     name: 'devices',
@@ -102,7 +165,7 @@ export const CLI_COMMANDS = [
     summary: 'What has signed in; approve new devices (devices help)',
     group: 'Devices',
     detail:
-      'Lists every device that has signed in and any that are waiting. With approval on, a new device waits, even with the right password, until you let it in from this computer.',
+      'Lists every device that has signed in and any that are waiting. With approval on, a new device waits, even with the right password, until you let it in: here, or from a device that’s already signed in.',
     subcommands: DEVICES_SUBCOMMANDS,
   },
   {
@@ -115,10 +178,18 @@ export const CLI_COMMANDS = [
   {
     name: 'reset',
     usage: 'reset',
-    summary: 'Forgot your password? Turn sign-in off and start again',
+    summary: 'Forgot your password or lost a passkey? Start again',
     group: 'Signing in',
     detail:
-      'The way back in: having this terminal is the proof that it’s you. Deletes the password and every access key, signs every device out and leaves Conch open to this computer only. Asks you to type “reset” first.',
+      'The way back in: having this terminal is the proof that it’s you. Forgets the password, every access key and every passkey, signs every device out and leaves Conch open to this computer only (on a server, conch hello then makes it yours again). Every browser on this computer opens Conch from your apps once more. Asks you to type “reset” first.',
+  },
+  {
+    name: 'command',
+    usage: 'command [on|off]',
+    summary: 'Put the conch command on your PATH (or take it off)',
+    group: 'Running Conch',
+    detail:
+      'The installer does this for you: conch then works in any terminal, without going to Conch’s folder first. It always runs the version of Conch that’s running. When its folder isn’t on your PATH yet, Conch adds one marked line to your shell’s profile; off takes the command and that line away again.',
   },
   {
     name: 'background',

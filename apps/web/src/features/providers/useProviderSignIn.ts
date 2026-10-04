@@ -1,11 +1,20 @@
 import type { Provider } from '@conch/protocol';
 import { toast } from '@conch/nacre';
 import { useCallback } from 'react';
+import { create } from 'zustand';
 
 import { providersApi } from './api';
 import { errorText } from './queries';
 
 const POPUP = 'conch-provider-sign-in';
+/** The sign-in window says how it went here, the moment it knows (`ProviderDone`). */
+export const SIGN_IN_CHANNEL = 'conch-provider-sign-in';
+
+/**
+ * The provider whose sign-in window is open right now, so its page can wait
+ * with you; `finishing` once the window said it worked, until Conch sees it.
+ */
+export const useSignInWindow = create<{ open?: string; finishing?: boolean }>(() => ({}));
 
 /** A centred window, opened synchronously in the click so popup blockers allow it. */
 function openPopup(): Window | null {
@@ -34,6 +43,17 @@ function isWebUrl(url: string): boolean {
   }
 }
 
+/** Until the window closes: then whatever happened in it has happened. */
+function watchClosed(popup: Window, id: string) {
+  useSignInWindow.setState({ open: id, finishing: false });
+  const timer = setInterval(() => {
+    if (!popup.closed) return;
+    clearInterval(timer);
+    const now = useSignInWindow.getState();
+    if (now.open === id && !now.finishing) useSignInWindow.setState({ open: undefined });
+  }, 500);
+}
+
 /**
  * Let a provider make a key for you. A small window opens straight away on
  * Conch's own "opening…" page, then moves to the provider once the gateway has
@@ -54,6 +74,7 @@ export function useProviderSignIn() {
       if (popup && !popup.closed) {
         popup.location.href = authorizeUrl;
         popup.focus();
+        watchClosed(popup, provider.id);
       } else {
         window.location.assign(authorizeUrl);
       }

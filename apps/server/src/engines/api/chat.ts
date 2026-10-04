@@ -25,7 +25,8 @@
  */
 import { z } from 'zod';
 
-import type { TurnImage } from '../types';
+import type { Picture } from '../types';
+import { toolPicturesLead } from './pictures';
 import { sseEvents } from './sse';
 import type {
   ApiError,
@@ -320,28 +321,56 @@ export async function* readChatStream(
   yield { type: 'end', message, toolCalls, stop, ...(usage && { usage }) };
 }
 
+/** A picture as a chat API takes it: a data URL in an `image_url` part. */
+function imagePart(image: Picture): Record<string, unknown> {
+  return { type: 'image_url', image_url: { url: `data:${image.mimeType};base64,${image.data}` } };
+}
+
 /** The user's words, with any pictures first, as every chat API takes them. */
-export function chatUserMessage(content: string, images?: readonly TurnImage[]): WireMessage {
+export function chatUserMessage(content: string, images?: readonly Picture[]): WireMessage {
   if (!images?.length) return { role: 'user', content };
   return {
     role: 'user',
-    content: [
-      ...images.map((image) => ({
-        type: 'image_url',
-        image_url: { url: `data:${image.mimeType};base64,${image.data}` },
-      })),
-      { type: 'text', text: content },
-    ],
+    content: [...images.map(imagePart), { type: 'text', text: content }],
   };
 }
 
-/** Tool answers, one `tool` message each. */
+/**
+ * Tool answers, one `tool` message each. A `tool` message only carries text
+ * in the chat APIs (OpenAI refuses a picture there), so the pictures the tools
+ * returned follow in one user message that says whose they are (ADR 0070).
+ */
 export function chatToolResults(results: ToolResult[]): WireMessage[] {
-  return results.map((result) => ({
+  const messages: WireMessage[] = results.map((result) => ({
     role: 'tool',
     tool_call_id: result.id,
     content: result.text,
   }));
+  const pictured = results.filter((result) => result.images?.length);
+  if (pictured.length)
+    messages.push({
+      role: 'user',
+      content: [
+        { type: 'text', text: toolPicturesLead(pictured.map((result) => result.name)) },
+        ...pictured.flatMap((result) => (result.images ?? []).map(imagePart)),
+      ],
+    });
+  return messages;
+}
+
+/**
+ * A provider that refuses a user message straight after a tool's (Mistral:
+ * "Unexpected role 'user' after role 'tool'") gets a blank assistant turn
+ * between them, only in the request: the transcript keeps what happened.
+ */
+export function bridgeToolToUser(messages: readonly WireMessage[]): WireMessage[] {
+  const out: WireMessage[] = [];
+  for (const message of messages) {
+    if (message.role === 'user' && out.at(-1)?.role === 'tool')
+      out.push({ role: 'assistant', content: ' ' });
+    out.push(message);
+  }
+  return out;
 }
 
 /** The tool list, as `tools` takes it. Empty means none is sent at all. */

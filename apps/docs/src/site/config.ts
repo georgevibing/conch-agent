@@ -18,6 +18,8 @@ export const DOWNLOADS = `${REPO_URL}/releases/latest`;
 export const INSTALL = {
   unix: `curl -fsSL ${SITE_URL}/install.sh | sh`,
   windows: `irm ${SITE_URL}/install.ps1 | iex`,
+  /** On a server: no screen, so it asks how you'll reach Conch (ADR 0064). */
+  server: `curl -fsSL ${SITE_URL}/install.sh | sh -s -- --server`,
 } as const;
 
 export interface Section {

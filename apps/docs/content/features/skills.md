@@ -10,8 +10,14 @@ A skill is a set of instructions your assistant follows for one kind of job: you
 
 1. Open **Skills** in the sidebar and press **New skill**.
 2. Describe what it should do: the steps, the tone, what to include and what to leave out.
+   A sentence is enough if you'd rather not write the steps: press **Write the steps for me**
+   and Conch writes them, with a title and a description. Read them and change anything.
+   **Back to my words** puts back what you typed.
 3. Pause. Conch writes a title and a one-line description for you. Change either if you like.
 4. Under **Use it**, choose **Automatically** or **When I ask**, then press **Create skill**.
+
+Writing the steps needs a provider that can write, such as Claude Code or a key for a model
+you pay for as you go. Without one, your own words become the skill as they are.
 
 Not sure where to begin? The page offers a few ideas to start from.
 
@@ -51,7 +57,7 @@ A skill is instructions your assistant follows with your powers, so Conch treats
 - **A change turns it off.** If another app's skill changes after you turned it on, it's off again until you look at what it says now.
 - **A signature says who made it.** Open a signed skill and press **Trust this publisher…** once. From then on that publisher's skills say **Verified**, and their signed updates stay on. A skill changed after it was signed can't be turned on.
 
-To sign skills you share, see `pnpm conch skills sign` in the [command line reference](../reference/cli.md). Your signing key is locked with this computer's own key, so it only opens here. A passphrase-locked [backup](../care/backups.md) carries it to a new computer.
+To sign skills you share, see `conch skills sign` in the [command line reference](../reference/cli.md). Your signing key is locked with this computer's own key, so it only opens here. A passphrase-locked [backup](../care/backups.md) carries it to a new computer.
 
 ## Stop holding a chat to a skill
 

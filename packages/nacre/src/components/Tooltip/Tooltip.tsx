@@ -2,6 +2,7 @@ import { Tooltip as TooltipPrimitive } from 'radix-ui';
 import type { ComponentProps, ReactElement, ReactNode } from 'react';
 
 import { cx } from '../../utils/cx';
+import { TOUCH_ONLY, useMediaQuery } from '../../utils/useMediaQuery';
 import { Kbd } from '../Kbd';
 import styles from './Tooltip.module.css';
 
@@ -42,7 +43,11 @@ export function Tooltip({
   className,
   ...props
 }: TooltipProps) {
+  // A touch screen has no hover, so a hint there only ever shows by accident: when
+  // a drawer or dialog moves focus onto its trigger. One the caller opens still shows.
+  const touchOnly = useMediaQuery(TOUCH_ONLY);
   if (disabled || content == null || content === '') return children;
+  if (touchOnly && open === undefined) return children;
   return (
     <TooltipPrimitive.Root
       open={open}

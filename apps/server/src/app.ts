@@ -17,6 +17,7 @@ import {
   CreateSkillBody,
   DescribeSkillBody,
   DraftSkillBody,
+  WriteSkillBody,
   TidyShelfBody,
   Id,
   LoginCodeBody,
@@ -68,6 +69,8 @@ import { slackRoutes } from './slack/routes';
 import { IntegrationError, type SignIn } from './integrations/service';
 import { preview } from './routines/schedule';
 import { RoutineError } from './routines/service';
+import { registerHereRoutes } from './auth/here-routes';
+import { registerAddressRoutes } from './address/routes';
 import { registerAuthRoutes } from './auth/routes';
 import { registerPhoneRoutes } from './phone/routes';
 import { pushOwner, registerPushRoutes } from './push/routes';
@@ -190,6 +193,8 @@ export async function buildApp(services: Services) {
   // 1 MB per message is plenty for a 200k-character prompt; ws defaults to 100 MiB.
   await app.register(fastifyWebsocket, { options: { maxPayload: 1_000_000 } });
   registerAuthRoutes(app, services, gate);
+  registerHereRoutes(app, gate);
+  registerAddressRoutes(app, services.address, gate);
   registerBrowserRoutes(app, services, gate);
   registerTerminalRoutes(app, services, gate);
   registerLocalRoutes(app, services, gate);
@@ -828,6 +833,12 @@ export async function buildApp(services: Services) {
     const body = parse(DraftSkillBody, request.body, reply);
     if (!body) return;
     return services.skills.draft(body.instructions);
+  });
+  // A whole skill from an idea (the steps, a title, a description), to read before it's saved.
+  app.post('/api/skills/write', async (request, reply) => {
+    const body = parse(WriteSkillBody, request.body, reply);
+    if (!body) return;
+    return services.skills.write(body.idea);
   });
   app.post('/api/skills', async (request, reply) => {
     const body = parse(CreateSkillBody, request.body, reply);

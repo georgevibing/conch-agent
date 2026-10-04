@@ -99,9 +99,11 @@
     pointer-events: none;
   }
 
+  /* The loops start as far in as the work is (--nc-mark-age), so a mark that
+     replaces another carries on rather than starting over. */
   .mark[data-active]::after {
     opacity: var(--nc-lustre);
-    animation: mark-orbit 3s linear infinite;
+    animation: mark-orbit 3s linear calc(0ms - var(--nc-mark-age, 0ms)) infinite;
   }
 
   .message[data-entrance='none'] {
@@ -110,11 +112,11 @@
 
   .mark[data-active] .markGlyph path {
     stroke-dasharray: 1 1;
-    animation: glyph-grow 2.8s var(--nc-ease-in-out) infinite;
+    animation: glyph-grow 2.8s var(--nc-ease-in-out) calc(0ms - var(--nc-mark-age, 0ms)) infinite;
   }
 
   .mark[data-active] .markGlyph {
-    animation: glyph-sway 2.8s var(--nc-ease-in-out) infinite;
+    animation: glyph-sway 2.8s var(--nc-ease-in-out) calc(0ms - var(--nc-mark-age, 0ms)) infinite;
   }
 
   /* One ring of light as the answer lands. */

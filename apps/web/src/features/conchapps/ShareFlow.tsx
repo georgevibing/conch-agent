@@ -45,12 +45,18 @@ export function ShareFlow({
   const { data } = usePublishState(appId, mine);
   const [failed, setFailed] = useState<string>();
   const [saving, setSaving] = useState(false);
+  /** Pressed: shown on its way at once, until the gateway says where it is. */
+  const [starting, setStarting] = useState(false);
   const state: PublishState = failed
     ? { state: 'failed', message: failed }
-    : (data ?? { state: 'idle' });
+    : starting
+      ? { state: 'publishing', step: 'Getting ready…' }
+      : (data ?? { state: 'idle' });
 
   const publish = async () => {
+    if (starting) return;
     setFailed(undefined);
+    setStarting(true);
     try {
       await guard(async () => {
         const next = await conchAppsApi.publish(appId);
@@ -58,6 +64,8 @@ export function ShareFlow({
       });
     } catch (error) {
       setFailed(errorText(error, `${name} wasn’t published. Try again in a moment.`));
+    } finally {
+      setStarting(false);
     }
   };
 

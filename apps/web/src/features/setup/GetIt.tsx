@@ -26,11 +26,21 @@ export function GetIt({
   /** Another way to do it by hand (commands to copy), folded under the button. */
   children?: ReactNode;
 }) {
-  const { need, running, starting, error, act, dialog } = useNeed(needId);
+  const { need, running, justDone, starting, error, act, dialog } = useNeed(needId);
   const name = given ?? need?.short ?? 'it';
   const label = kind === 'update' ? `Update ${name}` : `Install ${name}`;
   // Nothing Conch can run here (no winget, Homebrew or npm): the website it is.
   const canRun = kind === 'update' || Boolean(need?.install);
+  // Just finished: say so while the next step arrives, never the button again.
+  if (justDone)
+    return (
+      <Stack gap={3}>
+        <Callout tone="success" live="polite">
+          {kind === 'update' ? `${name} is up to date.` : `${name} is installed.`}
+        </Callout>
+        {dialog}
+      </Stack>
+    );
   return (
     <Stack gap={3}>
       {lead && <Text tone="muted">{lead}</Text>}

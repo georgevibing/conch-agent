@@ -1,4 +1,4 @@
-import type { EffortChoice, PermissionMode } from '@conch/protocol';
+import { fuzzyMatch, type EffortChoice, type PermissionMode } from '@conch/protocol';
 import {
   AlertDialog,
   Button,
@@ -20,7 +20,6 @@ import { useIntegrations } from '../integrations/queries';
 import { useSkills } from '../skills/queries';
 import { availableModes, effortOptions, pickerProviders } from '../models/catalog';
 import { findModel, modelKey, parseModelKey } from '../models/useTurnOptions';
-import { fuzzyMatch } from '../search/fuzzy';
 import { FallbackSection } from './FallbackSection';
 import { Section } from './Section';
 import styles from './Settings.module.css';

@@ -1,10 +1,11 @@
-import type {
-  CreateRoutineBody,
-  Routine,
-  RoutineTrust,
-  Schedule,
-  Trigger,
-  TurnOptions,
+import {
+  fuzzyMatch,
+  type CreateRoutineBody,
+  type Routine,
+  type RoutineTrust,
+  type Schedule,
+  type Trigger,
+  type TurnOptions,
 } from '@conch/protocol';
 import {
   Button,
@@ -34,7 +35,6 @@ import { useAppState, useModels } from '../../api/queries';
 import { canPickHere, pickPath } from '../../lib/pick';
 import { pickerProviders } from '../models/catalog';
 import { findModel, modelKey, parseModelKey } from '../models/useTurnOptions';
-import { fuzzyMatch } from '../search/fuzzy';
 import { browserTimezone, routinesApi } from './api';
 import { WAITING_TEXT } from './icon';
 import { routineKeys, useRoutines } from './queries';

@@ -43,6 +43,20 @@ everything it reads, including screenshots.
 
 Sites you sign in to stay signed in, so you only do it once.
 
+## Every model sees the page
+
+The assistant reads a page as text, and looks at it as a picture when words aren't enough: a
+chart, a map, a photo, a captcha. A model that can see gets the picture itself. A model that
+can't gets a description instead, written by one of your models that can: another model from
+the same provider first, then your other providers. There's nothing to set up.
+
+- A chat with a model on this computer only asks models on this computer, so what's on your
+  screen stays here.
+- Each picture is described once, so looking at the same page again costs nothing more. What
+  describing costs counts with the chat.
+- If none of your models can see, the assistant is told so. It reads the page instead, or hands
+  it to you.
+
 ## What it asks you, and why
 
 Conch keeps the questions few, and makes each one count:

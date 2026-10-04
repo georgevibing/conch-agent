@@ -12,28 +12,33 @@ const MIN_WIDTH = 360;
 /**
  * The chat with what the assistant made beside it (ADR 0034), resizable like
  * the browser. It opens by itself when something new is made or changed
- * (unless you closed it since); on a phone it slides over the chat.
+ * (unless you closed it since); on a phone it slides over the chat. A new
+ * chat without an id yet is wrapped too, with nothing to open (see BrowserDock).
  */
 export function ArtifactDock({
   conversationId,
   view,
   children,
 }: {
-  conversationId: string;
+  conversationId: string | undefined;
   view: ConversationView;
   children: ReactNode;
 }) {
   const open = useUi((s) =>
-    s.artifactOpen?.conversationId === conversationId ? s.artifactOpen : null,
+    conversationId !== undefined && s.artifactOpen?.conversationId === conversationId
+      ? s.artifactOpen
+      : null,
   );
   // A Conch app's page beside the chat (ADR 0061) takes the same place.
-  const appPage = useUi((s) => s.appPageOpen?.conversationId === conversationId);
+  const appPage = useUi(
+    (s) => conversationId !== undefined && s.appPageOpen?.conversationId === conversationId,
+  );
   const closeAppPage = useUi((s) => s.closeAppPage);
   const openArtifact = useUi((s) => s.openArtifact);
   const closeArtifact = useUi((s) => s.closeArtifact);
   const width = useUi((s) => s.artifactWidth);
   const setWidth = useUi((s) => s.setArtifactWidth);
-  const dismissedAt = useUi((s) => s.artifactDismissed[conversationId] ?? 0);
+  const dismissedAt = useUi((s) => (conversationId && s.artifactDismissed[conversationId]) || 0);
   const narrow = useMediaQuery('(max-width: 1100px)');
   const row = useRef<HTMLDivElement>(null);
   const [max, setMax] = useState(960);
@@ -43,7 +48,7 @@ export function ArtifactDock({
   const shown = useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    if (newest?.kind !== 'artifact' || shown.current === newest.id) return;
+    if (!conversationId || newest?.kind !== 'artifact' || shown.current === newest.id) return;
     shown.current = newest.id;
     const fresh = newest.at >= openedAt - 1_500 && newest.at > dismissedAt;
     // Never over the browser while it's in use; the card is there to open it.
@@ -60,18 +65,16 @@ export function ArtifactDock({
     return () => observer.disconnect();
   }, []);
 
-  const panel = appPage ? (
-    <AppPagePanel conversationId={conversationId} />
-  ) : (
-    open && (
-      <ArtifactView
-        key={`${open.artifactId}:${open.version ?? 'latest'}`}
-        artifactId={open.artifactId}
-        version={open.version}
-        onClose={closeArtifact}
-      />
-    )
-  );
+  const panel = appPage
+    ? conversationId && <AppPagePanel conversationId={conversationId} />
+    : open && (
+        <ArtifactView
+          key={`${open.artifactId}:${open.version ?? 'latest'}`}
+          artifactId={open.artifactId}
+          version={open.version}
+          onClose={closeArtifact}
+        />
+      );
   const shownPanel = Boolean(open) || appPage;
 
   if (narrow) {

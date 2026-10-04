@@ -43,19 +43,23 @@ export function HandoffItem({
   name: string;
 }) {
   const openBrowser = useUi((s) => s.openBrowser);
+  // Pressed here: done at once, back to waiting only if it didn't go through.
+  const [done, setDone] = useState(false);
   return (
     <BrowserHandoff
       reason={item.handoff.reason}
-      state={item.handoff.state}
+      state={item.handoff.state === 'waiting' && done ? 'done' : item.handoff.state}
       name={name}
       onShow={() => openBrowser(conversationId)}
-      onDone={() =>
-        void browserApi.control(conversationId, 'agent').catch(() =>
+      onDone={() => {
+        setDone(true);
+        void browserApi.control(conversationId, 'agent').catch(() => {
+          setDone(false);
           toast.error('Couldn’t hand the browser back', {
             description: 'Open the browser and press “I’m done” there.',
-          }),
-        )
-      }
+          });
+        });
+      }}
     />
   );
 }

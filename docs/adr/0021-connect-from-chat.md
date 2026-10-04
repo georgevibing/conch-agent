@@ -61,7 +61,10 @@ ends with Ask again, which resends the question that brought the offer up).
 
 - Precision over recall: some real requests aren't offered (a lowercase "in my
   drive", an app named at the start of a sentence with no other cue). The table
-  test is where to tune it.
+  test is where to tune it. Since ADR 0060, a personal app whose name is no word
+  in any language (Todoist, Airtable, Calendly) also matches in any case and
+  anywhere, with `coined()`. Names people also code against (GitHub, Vercel) or
+  that are words (Dropbox) keep their stricter cues.
 - A cold provider (Claude Code's server list isn't cached yet) delays a matching
   turn by up to 2.5 s once; the look carries on in the background and the next
   message benefits.

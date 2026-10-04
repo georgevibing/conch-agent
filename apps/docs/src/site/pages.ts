@@ -50,6 +50,12 @@ export interface Page {
 
 const CONTENT = 'apps/docs/content/';
 
+/**
+ * `content/legal/<name>.md` is a page at `/<name>` (`/privacy`): not in the
+ * sidebar, linked from the footers instead.
+ */
+export const LEGAL = 'legal';
+
 const authored = import.meta.glob<string>('../../content/**/*.md', {
   query: '?raw',
   import: 'default',
@@ -94,7 +100,8 @@ function build(): { pages: Page[]; byFile: Map<string, Page> } {
   for (const [file, raw] of FILES) {
     if (!file.startsWith(CONTENT)) continue;
     const [section = '', name = ''] = file.slice(CONTENT.length).split('/');
-    if (!sections.has(section) || !name.endsWith('.md')) continue;
+    const legal = section === LEGAL;
+    if ((!sections.has(section) && !legal) || !name.endsWith('.md')) continue;
     const slug = name.replace(/\.md$/, '');
     const { meta, body: own } = frontMatter(raw);
 
@@ -106,7 +113,7 @@ function build(): { pages: Page[]; byFile: Map<string, Page> } {
     const body = rest.trim();
 
     const page: Page = {
-      path: slug === 'index' ? `/${section}` : `/${section}/${slug}`,
+      path: legal ? `/${slug}` : slug === 'index' ? `/${section}` : `/${section}/${slug}`,
       section,
       title,
       nav: meta.nav ?? title,
@@ -120,7 +127,7 @@ function build(): { pages: Page[]; byFile: Map<string, Page> } {
       body,
       headings: pageHeadings(body),
       file: meta.source ?? file,
-      listed: true,
+      listed: !legal,
       ...(provider && { provider: provider.id }),
       ...(channel && { channel: channel.id }),
     };

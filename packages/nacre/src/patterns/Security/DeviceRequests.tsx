@@ -1,5 +1,5 @@
 import { Check, X } from 'lucide-react';
-import type { ComponentProps } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
@@ -23,10 +23,13 @@ export interface DeviceRequestItem {
 export interface DeviceRequestsProps extends Omit<ComponentProps<'ul'>, 'children'> {
   requests: DeviceRequestItem[];
   /**
-   * This is the computer running Conch, so devices can be approved here.
-   * Elsewhere the list shows the command to run there instead.
+   * Devices can be approved from here: this is the computer running Conch, or
+   * (ADR 0065) a device that's approved itself. Otherwise the list shows the
+   * command to run on the computer running Conch instead.
    */
   canApprove: boolean;
+  /** What to say beside the command when this device can't approve. */
+  hint?: ReactNode;
   onApprove?: (request: DeviceRequestItem) => void;
   onReject?: (request: DeviceRequestItem) => void;
   /** The code being approved or turned down right now. */
@@ -37,9 +40,10 @@ export interface DeviceRequestsProps extends Omit<ComponentProps<'ul'>, 'childre
 /**
  * Devices that signed in with the right password or key and are waiting for
  * the person's OK. Each shows the same code its screen does, so the right one
- * gets approved. Turning one down is always possible; approving is only on
- * the computer running Conch (or in its terminal), so a stolen session can't
- * let anyone else in.
+ * gets approved. Turning one down is always possible. Approving happens on the
+ * computer running Conch, in its terminal, or on an approved device that has
+ * just confirmed it's you (the app asks first), so a stolen session alone
+ * can't let anyone else in.
  */
 export function DeviceRequests({
   requests,
@@ -48,6 +52,7 @@ export function DeviceRequests({
   onReject,
   busy,
   commandFor = (code) => `pnpm conch devices approve ${code}`,
+  hint = 'Approve it on the computer running Conch:',
   className,
   ...props
 }: DeviceRequestsProps) {
@@ -110,7 +115,7 @@ export function DeviceRequests({
           </div>
           {!canApprove && !request.rejected && (
             <div className={styles.requestHint}>
-              <span>Approve it on the computer running Conch:</span>
+              <span>{hint}</span>
               <div className={styles.requestCommand}>
                 <code>{commandFor(request.code)}</code>
                 <CopyButton value={commandFor(request.code)} label="Copy command" />

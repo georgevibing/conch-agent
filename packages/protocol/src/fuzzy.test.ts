@@ -17,6 +17,13 @@ describe('fuzzyMatch', () => {
     expect(fuzzyMatch('Plan my week', 'xyz')).toBeNull();
   });
 
+  it('marks the tightest place a loose match fits, not letters strewn across the line', () => {
+    expect(hl('Updated “Visitors this week” (version 2)', 'vstrs')).toEqual(['V', 's', 't', 'rs']);
+    expect(fuzzyMatch('Updated “Visitors this week” (version 2)', 'vstrs')?.ranges.at(-1)).toEqual([
+      15, 17,
+    ]);
+  });
+
   it('ignores case and accents', () => {
     expect(hl('Café in Zürich', 'zurich')).toEqual(['Zürich']);
   });

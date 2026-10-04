@@ -158,6 +158,11 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
       servers: servers.slice(0, MAX_LISTED),
       more: Math.max(0, servers.length - MAX_LISTED),
     });
+  // An address of your own (ADR 0064): the internet reaches Conch there. Restored on
+  // another computer it waits for a person, but the preview still names it.
+  const address = json(read, 'address.json');
+  if (typeof address?.name === 'string' && address.name)
+    powers.push({ kind: 'own-address', name: text(address.name, 'An address') });
 
   for (const path of files.filter((f) => /^routines\/[^/]+(?<!\.runs)\.json$/.test(f)).sort()) {
     const routine = json(read, path);

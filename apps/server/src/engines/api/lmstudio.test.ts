@@ -98,7 +98,7 @@ describe('LM Studio as a provider', () => {
     const models = await variant.wire.models({});
     expect(models.map((m) => [m.info.id, m.info.label, m.tools, m.info.images])).toEqual([
       ['google/gemma-4-26b-a4b', 'Gemma 4 26B A4B', true, true],
-      ['qwen/qwen3-8b', 'Qwen3 8B', true, undefined],
+      ['qwen/qwen3-8b', 'Qwen3 8B', true, false],
     ]);
     // A loaded model reads what it was loaded with, not what it could (ADR 0055).
     expect(models.map((m) => m.info.context)).toEqual([8192, 32768]);

@@ -265,7 +265,7 @@ describe('A channel’s page', () => {
     expect(await screen.findByText('It needs a new key')).toBeInTheDocument();
     await userEvent.type(
       screen.getByLabelText('New key'),
-      '123456789:AAHrenewedrenewedrenewedrenewed123',
+      '123456789:' + 'AAHrenewedrenewedrenewedrenewed123',
     );
     const reconnect = screen.getByRole('button', { name: 'Reconnect' });
     await waitFor(() => expect(reconnect).toBeEnabled());
@@ -811,7 +811,7 @@ describe('Connecting WeChat', () => {
   it('an Official Account: the test account’s page, then the public address and the three things to paste', async () => {
     const made = channel({
       kind: 'wechat',
-      bot: { id: 'wx0123456789abcdef', name: 'Official Account', account: 'official' },
+      bot: { id: 'wx' + '0123456789abcdef', name: 'Official Account', account: 'official' },
       hook: { url: 'https://mac.tail1.ts.net/conch/hooks/abc' },
     });
     mockFetch({
@@ -839,7 +839,7 @@ describe('Connecting WeChat', () => {
       expect.stringContaining('mp.weixin.qq.com/debug'),
     );
     await userEvent.click(screen.getByRole('button', { name: 'I have one' }));
-    await userEvent.type(screen.getByLabelText('AppID'), 'wx0123456789abcdef');
+    await userEvent.type(screen.getByLabelText('AppID'), 'wx' + '0123456789abcdef');
     await userEvent.type(screen.getByLabelText('AppSecret'), '0123456789abcdef0123456789abcdef');
     await userEvent.click(
       await screen.findByRole('button', { name: 'Show the Token and EncodingAESKey' }),

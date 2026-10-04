@@ -318,9 +318,11 @@ describe('Ollama, streamed', () => {
 
   it('sends pictures the way Ollama takes them', () => {
     const wire = new OllamaWire(link(() => lines()).link);
-    expect(
-      wire.userMessage('What is this?', [{ name: 'a.png', mimeType: 'image/png', data: 'iVBOR' }]),
-    ).toEqual({ role: 'user', content: 'What is this?', images: ['iVBOR'] });
+    expect(wire.userMessage('What is this?', [{ mimeType: 'image/png', data: 'iVBOR' }])).toEqual({
+      role: 'user',
+      content: 'What is this?',
+      images: ['iVBOR'],
+    });
   });
 
   it('answers one short prompt without thinking, at the same context size', async () => {

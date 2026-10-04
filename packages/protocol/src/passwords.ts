@@ -339,6 +339,27 @@ export function siteOf(url: string): string | undefined {
 }
 
 /**
+ * The same account in two places (Conch and 1Password, say), by names only:
+ * no password is compared. A login is its site (or title, without one) and
+ * its account; anything else is its kind and title. Copy to leaves out what
+ * the other place already holds by this key, and an item's page links to
+ * its twin by it (ADR 0062).
+ */
+export function sameAccountKey(item: {
+  type: VaultItemType;
+  title: string;
+  /** A website it's for: a URL or a bare hostname. */
+  site?: string;
+  /** The account: a username or an email. */
+  account?: string;
+}): string {
+  const tidy = (text: string) => text.trim().toLowerCase();
+  if (item.type !== 'login') return `${item.type}\0${tidy(item.title)}`;
+  const site = (item.site && siteOf(item.site)) ?? tidy(item.title);
+  return `login\0${site}\0${tidy(item.account ?? '')}`;
+}
+
+/**
  * Whether a page on `host` may use an item saved for `site`: the same host,
  * or a subdomain of it (accounts.google.com for google.com). Never the other
  * way round, and never a lookalike (`google.com.evil.io`).

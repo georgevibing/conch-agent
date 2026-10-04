@@ -1,4 +1,13 @@
-import { ArrowUp, FileText, Image as ImageIcon, Plus, Square, X } from 'lucide-react';
+import {
+  ArrowUp,
+  CornerDownRight,
+  FileText,
+  Image as ImageIcon,
+  Pencil,
+  Plus,
+  Square,
+  X,
+} from 'lucide-react';
 import {
   useCallback,
   useId,
@@ -45,6 +54,8 @@ export interface ComposerProps extends Omit<
   name?: string;
   /** Attachment chips shown above the text field (use `ComposerAttachment`). */
   attachments?: ReactNode;
+  /** A message waiting to go once the agent is done, above everything (use `ComposerQueued`). */
+  queued?: ReactNode;
   /** Controls on the left of the footer (model picker, mode toggles…). */
   toolbar?: ReactNode;
   /** Controls on the right of the footer, before the send button. */
@@ -81,6 +92,15 @@ export interface ComposerProps extends Omit<
   canSubmitEmpty?: boolean;
   /** Hold sending, and say why on the button (e.g. "Waiting for uploads…"). */
   sendBlocked?: string;
+  /** What the send button does, when it isn't plain sending (e.g. "Send when it’s done"). */
+  sendLabel?: string;
+  /**
+   * Messages sent before, oldest first. ↑ in an empty box brings back the
+   * latest, and again the one before; ↓ walks forward, past the newest to an
+   * empty box. A recalled message you change is yours: the arrows move the
+   * caret again.
+   */
+  history?: readonly string[];
 }
 
 /** More than 1 000 characters or 20 lines: Codex CLI's and Open WebUI's threshold (ADR 0017). */
@@ -117,6 +137,7 @@ export function Composer({
   autoFocus,
   name,
   attachments,
+  queued,
   toolbar,
   actions,
   ref,
@@ -129,6 +150,8 @@ export function Composer({
   foldPaste = defaultFoldPaste,
   canSubmitEmpty = false,
   sendBlocked,
+  sendLabel = 'Send message',
+  history,
   className,
   ...props
 }: ComposerProps) {
@@ -140,6 +163,10 @@ export function Composer({
   /** The paste in progress came with Shift (⇧⌘V / Ctrl+Shift+V): keep it inline. */
   const shiftPaste = useRef(false);
   const hintId = useId();
+  /** Which of `history` the box shows, while it shows one unchanged. */
+  const recalled = useRef<number | null>(null);
+  /** A message just came back from history: put the caret at its end once it's in. */
+  const caretToEnd = useRef(false);
 
   const setValue = useCallback(
     (next: string) => {
@@ -164,12 +191,54 @@ export function Composer({
     el.style.overflowY = el.scrollHeight > max ? 'auto' : 'hidden';
   }, [value, minRows, maxRows]);
 
+  useLayoutEffect(() => {
+    const el = textarea.current;
+    if (!caretToEnd.current || !el) return;
+    caretToEnd.current = false;
+    el.setSelectionRange(el.value.length, el.value.length);
+    el.scrollTop = el.scrollHeight;
+  }, [value]);
+
+  /** ↑ / ↓ through what was sent before, the way a terminal does. True if it took the key. */
+  const walkHistory = (event: KeyboardEvent<HTMLTextAreaElement>): boolean => {
+    if (!history?.length) return false;
+    if (event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) return false;
+    const up = event.key === 'ArrowUp';
+    if (!up && event.key !== 'ArrowDown') return false;
+    const el = event.currentTarget;
+    if (el.selectionStart !== el.selectionEnd) return false;
+    const at = recalled.current;
+    const showing = at !== null && history[at] === value;
+    if (!showing) recalled.current = null;
+    // Only from the edge of the text, so the arrows still move through a long message.
+    const edge = up
+      ? !value.slice(0, el.selectionStart).includes('\n')
+      : !value.slice(el.selectionEnd).includes('\n');
+    if (!edge) return false;
+    let next: number | null;
+    if (up) {
+      if (showing) next = at > 0 ? at - 1 : at;
+      else if (!value) next = history.length - 1;
+      else return false;
+    } else {
+      if (!showing) return false;
+      next = at + 1 < history.length ? at + 1 : null;
+    }
+    event.preventDefault();
+    if (next === at) return true;
+    recalled.current = next;
+    caretToEnd.current = true;
+    setValue(next === null ? '' : (history[next] ?? ''));
+    return true;
+  };
+
   const hasContent = value.trim().length > 0 || canSubmitEmpty;
   const canSubmit =
     !disabled && hasContent && !sendBlocked && (!running || allowSubmitWhileRunning);
 
   const submit = () => {
     if (!canSubmit) return;
+    recalled.current = null;
     onSubmit?.(value.trim());
     if (!controlled) setUncontrolled('');
   };
@@ -202,6 +271,7 @@ export function Composer({
     if (event.defaultPrevented) return;
     // Never act while an IME composition is in progress (CJK input etc.).
     if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+    if (walkHistory(event)) return;
     if (event.key === 'Enter' && !event.shiftKey && !event.altKey) {
       event.preventDefault();
       submit();
@@ -234,6 +304,7 @@ export function Composer({
           }
         }}
       >
+        {queued}
         {attachments && (
           <div className={styles.attachments} role="list" aria-label="Attachments">
             {attachments}
@@ -321,7 +392,7 @@ export function Composer({
               tone={showStop ? 'neutral' : 'accent'}
               shape="circle"
               size="sm"
-              label={showStop ? 'Stop' : (sendBlocked ?? 'Send message')}
+              label={showStop ? 'Stop' : (sendBlocked ?? sendLabel)}
               shortcut={showStop ? 'esc' : 'enter'}
               data-mode={showStop ? 'stop' : 'send'}
               className={styles.send}
@@ -414,6 +485,55 @@ export function ComposerAttachment({
           className={styles.attachmentRemove}
           onClick={onRemove}
         >
+          <X />
+        </IconButton>
+      )}
+    </div>
+  );
+}
+
+export interface ComposerQueuedProps extends ComponentProps<'div'> {
+  /** The message that waits. */
+  text: string;
+  /** Who it waits for, e.g. "Sends when Conch is done". */
+  meta?: ReactNode;
+  /** Take it back into the box to change it. */
+  onEdit?: () => void;
+  /** Don't send it. */
+  onRemove?: () => void;
+}
+
+/**
+ * A message you sent while the agent was still working: it waits here, and
+ * goes by itself the moment the reply is over. Edit takes it back into the box.
+ */
+export function ComposerQueued({
+  text,
+  meta,
+  onEdit,
+  onRemove,
+  className,
+  ...props
+}: ComposerQueuedProps) {
+  return (
+    <div
+      role="status"
+      aria-label="Queued message"
+      className={cx(styles.queued, className)}
+      {...props}
+    >
+      <CornerDownRight className={styles.queuedIcon} aria-hidden />
+      <span className={styles.queuedText}>
+        <span className={styles.queuedMessage}>{text}</span>
+        {meta != null && <span className={styles.queuedMeta}>{meta}</span>}
+      </span>
+      {onEdit && (
+        <IconButton size="sm" shape="circle" label="Edit queued message" onClick={onEdit}>
+          <Pencil />
+        </IconButton>
+      )}
+      {onRemove && (
+        <IconButton size="sm" shape="circle" label="Don’t send queued message" onClick={onRemove}>
           <X />
         </IconButton>
       )}

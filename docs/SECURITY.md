@@ -1,21 +1,71 @@
 # Signing in & staying safe
 
-Conch can run commands and change files on your computer — as you. So it's
+Conch can run commands and change files on your computer, as you. So it's
 protected like your computer is. This page is the whole story in plain words.
+
+The commands below are `conch …`, which the installer adds to your terminal. In
+a checkout of the code, type `pnpm conch …` in its folder instead.
 
 ## Out of the box
 
-`pnpm start` opens Conch at http://localhost:4317, reachable **only from this
-computer**. Nothing else on your network can get in, not even to see a sign-in
-page.
+Conch opens at http://localhost:4317, reachable **only from this computer**.
+Nothing else on your network can get in, not even to see a sign-in page.
+
+And only by **you**, on this computer: Conch trusts a browser once it has opened
+that browser itself. See [This computer](#this-computer) below.
+
+## This computer
+
+Conch can run commands on this computer, so the computer it runs on gets more
+than any other device. With sign-in off, it's the only one let in. With sign-in
+on, it's the one place that can turn device approval off.
+
+Conch doesn't decide that from where a request seems to come from. A reverse
+proxy on the same computer (nginx's `proxy_pass` defaults), or another account
+on it, looks exactly like this computer. So Conch asks for proof instead:
+
+- Conch keeps a key in `~/.conch/here/key`, a file only your account can read.
+- When Conch opens itself in your browser, it hands that browser a one-time link
+  through a private file, and the browser gets a cookie that says it's this
+  computer. The cookie lasts 400 days. Conch opens itself from your apps, its
+  icon in the menu bar or tray, the desktop app, `pnpm start`, the installer, or
+  `conch open`.
+- A browser Conch hasn't opened (a new one, a private window, or anything that
+  reaches Conch through a proxy) sees **Open Conch from your apps**. Open Conch
+  from your apps once, and that browser is let in from then on.
+
+For another browser on this computer, or one at the end of an SSH tunnel, ask
+for a one-time link and paste it into the browser's address bar. It works once,
+for two minutes:
+
+```bash
+conch open --link
+```
+
+To take this back from every browser on this computer at once, run
+`conch reset`. It also turns sign-in off, as it always has.
+
+Your assistant can't do any of this for itself. It can't read the key, and it
+can't run `conch open`, or any command that changes who may sign in.
+
+**Your own scripts.** Conch's key never leaves its file, so a script can't
+borrow it. Choose **Access key** as the way to sign in (or run
+`pnpm conch key "My script"`) and have the script send
+`Authorization: Bearer conch_…`. A key is shown once, and you can revoke it on
+its own.
 
 ## Choose how you sign in
 
 Open **Settings → Security** and pick one:
 
-- **Password.** Easiest on your own devices. Press **Suggest a strong one** and
-  let your browser save it, or type a short sentence you'll remember (at least 15
-  characters). No rules about symbols or numbers.
+- **Passkey.** The easiest of all: your device's own fingerprint, face or PIN.
+  Conch names the button after what your device has: **Use Touch ID** on a Mac,
+  **Use Windows Hello** on a PC, **Use Face ID** on an iPhone. Nothing to
+  remember, nothing to type, and nothing a fake page could collect. A device
+  without one can use your phone instead.
+- **Password.** Press **Suggest a strong one** and let your browser save it, or
+  type a short sentence you'll remember (at least 15 characters). No rules about
+  symbols or numbers. Passkeys can sit beside a password: then either works.
 - **Access key.** A long `conch_…` key you paste once per device. Handy for
   scripts (`Authorization: Bearer conch_…`). Give each device its own key so you
   can revoke one without touching the others.
@@ -23,14 +73,40 @@ Open **Settings → Security** and pick one:
 From then on, every device signs in, including this one. You stay signed in for
 up to 30 days (or a week if you don't use it).
 
-Prefer the terminal? In the Conch folder:
+A passkey works at the address it was made at (this computer, your Tailscale
+name, or an address of your own). **Settings → Security → Passkeys** lists them,
+and says where each one is for. Browsers only offer passkeys at an `https://`
+address or on this computer.
+
+Prefer the terminal?
 
 ```bash
-pnpm conch password            # choose one (typing is hidden)
-pnpm conch password --generate # or have a strong one made
-pnpm conch key "My laptop"     # or create an access key
-pnpm conch status              # security checkup
+conch password            # choose one (typing is hidden)
+conch password --generate # or have a strong one made
+conch key "My laptop"     # or create an access key
+conch passkeys            # the passkeys that sign in
+conch status              # security checkup
 ```
+
+## On a server, at your own address
+
+Conch can answer at an address of your own, like `conch.yourname.com`, with its
+own certificate. [On a server](../apps/docs/content/start/server.md) shows how.
+What keeps it safe there:
+
+- **It starts locked.** A new Conch lets nobody in from the internet until it's
+  yours. The installer ends with a **hello link**: open it on your own computer,
+  choose a passkey or a password, and Conch is yours. The link works once, for an
+  hour, and whoever opens it first owns that Conch, so keep it to yourself.
+  `conch hello` makes another while nobody has claimed it.
+- **The connection is Conch's own.** Conch gets and renews its certificate
+  itself (Let's Encrypt), so nothing between your browser and Conch can read or
+  change what you send.
+- **New devices need your OK from the start.** A password someone learns gets
+  them nowhere: their device waits for you (see below).
+- **Passkeys can't be phished.** A fake page can't ask for one.
+- **Wrong guesses slow down**, counted per address, which Conch sees as it really
+  is.
 
 ## Use Conch on your phone
 
@@ -41,7 +117,7 @@ internet.
    and sign in to both.
 2. In **Settings → Security**, press **Add a device**. Conch turns on its secure
    address for you (one press: **Turn on**), then shows a QR code. Point your
-   phone's camera at it. That's it — your phone is signed in.
+   phone's camera at it. That's it: your phone is signed in.
 
    (The terminal way still works: `tailscale serve --bg 4317`.)
 
@@ -50,95 +126,112 @@ internet.
    (Settings → Notifications).
 
 The QR code works **once**, for **10 minutes**. Whoever opens it is signed in, so
-don't share it. You can also run `pnpm conch pair` to show one in the terminal.
+don't share it. You can also run `conch pair` to show one in the terminal.
 
-**Same Wi-Fi only** (not encrypted — only on a network you trust, like home):
+**Same Wi-Fi only** (not encrypted, so only on a network you trust, like home):
 
 ```bash
 pnpm start:network
 ```
 
 Other devices then open `http://<your-computer's-name>.local:4317`. Conch will
-warn you that the connection isn't encrypted — that's accurate: someone on the
+warn you that the connection isn't encrypted. That's accurate: someone on the
 same Wi-Fi could read your traffic.
 
 **SSH tunnel** (for developers): `ssh -N -L 4317:localhost:4317 you@your-computer`,
-then open http://localhost:4317.
+then open http://localhost:4317 and sign in. With sign-in off, run
+`conch open --link` on that computer and open the link it prints instead.
 
-**A computer that stays on.** Install with `--server` (`sh install.sh --server`) and
-Conch keeps running after you log out, asks you for a password in the terminal, turns
-on the Tailscale address and prints a QR code for your phone. Nothing is opened to the
-internet. Keeping Conch running with nobody logged in asks you to confirm it's you.
+**A computer that stays on.** Install with `--server` and Conch keeps running
+after you log out, then asks how you'll reach it: at an address of your own,
+with Tailscale, or only from that computer. Keeping Conch running with nobody
+logged in asks you to confirm it's you.
 
-## Approve new devices (extra protection, if you want it)
+## Approve new devices
 
 A password or key is one thing to keep safe. If someone learns it, they could
 sign in from anywhere. For a second lock, turn on **Settings → Security →
-Devices → Approve new devices** (or run `pnpm conch devices on`).
+Devices → Approve new devices** (or run `conch devices on`). A Conch made yours
+with the hello link has it on from the start.
 
-From then on, a device Conch hasn't seen before still has to be approved
-**on the computer running Conch**, even after the right password or key:
+From then on, a device Conch hasn't seen before waits for your OK, even after
+the right password or key:
 
 1. On the new device, sign in as usual. It shows a short code, like
    **K7M-Q2X**, and waits.
-2. On the computer running Conch, open a terminal in the Conch folder and run:
+2. Approve it from a device you're already signed in on: a notice appears there,
+   and **Settings → Security → Devices** shows who is asking and from where.
+   Check the code matches, then confirm it's you (Touch ID or your password).
+   Or, in a terminal on the computer running Conch:
 
    ```bash
-   pnpm conch devices approve
+   conch devices approve
    ```
-
-   It shows who is asking, from where, and asks you to confirm. You can also
-   approve it in **Settings → Security** on that computer.
 
 3. The new device opens by itself. Next time, it's recognised and doesn't ask.
 
-Some devices never need approving: the computer running Conch itself, a phone
-you add with the **Add a device** QR code, and the devices already signed in
-when you turn this on (you'll see them listed, so remove any you don't know).
+Some devices never need approving: a device that signs in with a **passkey**
+(the passkey proves it's you and your device at once), the computer running
+Conch itself (in a browser Conch opened, see [This computer](#this-computer)), a
+phone you add with the **Add a device** QR code, and the devices already signed
+in when you turn this on (you'll see them listed, so remove any you don't know).
 
-If a device asks and **it isn't yours**, turn it down
-(`pnpm conch devices reject`, or **Turn down** in Settings). Then change your
-password, because someone knows it.
+If a device asks and **it isn't yours**, turn it down (**Turn down** in
+Settings, or `conch devices reject`). Then change your password, because
+someone knows it.
 
 Everything else, from the terminal:
 
 ```bash
-pnpm conch devices                 # what has signed in, and who is waiting
-pnpm conch devices approve K7M-Q2X # let one in
-pnpm conch devices reject          # turn one down (--all for every one)
-pnpm conch devices remove <id>     # forget a device and sign it out
-pnpm conch devices rename <id> Kitchen iPad
-pnpm conch devices off             # back to just the password or key
+conch devices                 # what has signed in, and who is waiting
+conch devices approve K7M-Q2X # let one in
+conch devices reject          # turn one down (--all for every one)
+conch devices remove <id>     # forget a device and sign it out
+conch devices rename <id> Kitchen iPad
+conch devices off             # back to just the password or key
 ```
 
-Only the computer running Conch can approve devices or turn this off, so
-someone who got in elsewhere can't let others in. Scripts that use an access
-key from another device are approved once, as that key.
+Who may do what:
 
-## Forgot your password? Lost a key?
+| Action                      | From                                                                        |
+| --------------------------- | --------------------------------------------------------------------------- |
+| Approve a device            | A device you've already let in, after confirming it's you; or this computer |
+| Turn approval on            | Any signed-in device, after confirming it's you                             |
+| Turn approval off           | Only this computer, or its terminal                                         |
+| Turn down, sign out, remove | Any signed-in device                                                        |
 
-On the computer running Conch, in the Conch folder:
+A device still waiting can never approve anyone, itself included, and a stolen
+session can't approve anything without your passkey or password as well.
+Scripts that use an access key from another device are approved once, as that
+key.
+
+## Locked out?
+
+On the computer running Conch:
 
 ```bash
-pnpm conch reset       # turns sign-in off and signs every device out
-pnpm conch password    # choose a new one
+conch reset       # turns sign-in off and signs every device out
+conch password    # choose a new one (or open Conch and add a passkey)
 ```
 
-Only someone at that computer can do this — that's what keeps it safe.
+On a server, `conch hello` after a reset gives you a new link that makes it
+yours again. Only someone at that computer's terminal can do this. That's what
+keeps it safe.
 
 Lost a phone? **Settings → Security → Devices → Remove** (or
-`pnpm conch devices remove`). It's disconnected instantly and, with approval
-on, can't get back in without your OK.
+`conch devices remove`). It's disconnected instantly and, with approval on,
+can't get back in without your OK. Removing a passkey in **Settings → Security
+→ Passkeys** signs out every device that signed in with it.
 
 ## What Conch warns you about
 
-The security checkup (in Settings, when Conch starts, and in `pnpm conch status`)
+The security checkup (in Settings, when Conch starts, and in `conch status`)
 tells you, in plain words, when something is risky:
 
 | Warning                                        | Why it matters                                                  |
 | ---------------------------------------------- | --------------------------------------------------------------- |
 | Your network can see Conch traffic             | Plain HTTP on Wi-Fi exposes chats and your password.            |
-| No sign-in on this computer                    | Anyone using your computer could use your assistant.            |
+| No sign-in on this computer                    | Anyone using your account could use your assistant.             |
 | New chats never ask before acting              | "Full trust" lets a malicious web page or file steer the agent. |
 | An access key is set in CONCH_TOKEN            | Environment variables leak easily and can't be revoked singly.  |
 | Conch is running as the administrator (root)   | Anything the agent does would control the whole computer.       |
@@ -365,11 +458,11 @@ on. A skill changed after it was signed, or carrying someone else's signature,
 is turned off with the reason. Someone using a name you trust with another key
 is shown as a possible impostor. A name proves nothing; the key does.
 
-Sign your own with `pnpm conch skills sign <folder>`. Share `pnpm conch skills
+Sign your own with `conch skills sign <folder>`. Share `conch skills
 key` so people can check it's you. Your private key stays in
 `skills.signing.json`, locked with this computer's own key (the Keychain, Windows'
 DPAPI or the Secret Service) like Conch's other keys, readable only by you and never
-by the assistant, whose shell also can't run `pnpm conch skills sign` or `trust`. A
+by the assistant, whose shell also can't run `conch skills sign` or `trust`. A
 copy of the file is no use on another computer; a passphrase-locked backup is how it
 moves. If the file was changed, nothing is signed and **Repair everything** says
 what to do.

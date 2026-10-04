@@ -6,6 +6,7 @@ import { TerminalInfo, TerminalStatus, TerminalTicket } from '@conch/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
+import { hereInit, onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 import { findShells, pickShell } from './shells';
@@ -39,7 +40,7 @@ async function setup() {
       CONCH_ALLOWED_HOSTS: 'conch.example',
     }),
   );
-  const app = await buildApp(services);
+  const app = onThisComputer(await buildApp(services), services);
   cleanup = async () => {
     await app.close();
     services.search.close();
@@ -102,7 +103,10 @@ async function attach(app: App, id: string) {
   const { ticket } = TerminalTicket.parse(
     (await app.inject({ method: 'POST', url: `/api/terminal/${id}/ticket` })).json(),
   );
-  const ws = new WebSocket(`ws://localhost:${address.port}/api/terminal/live?ticket=${ticket}`);
+  const ws = new WebSocket(
+    `ws://localhost:${address.port}/api/terminal/live?ticket=${ticket}`,
+    hereInit(app),
+  );
   ws.binaryType = 'arraybuffer';
   let output = '';
   const events: { type: string }[] = [];
@@ -214,7 +218,10 @@ describe('the terminal', () => {
     const address = app.server.address();
     if (!address || typeof address === 'string') throw new Error('not listening');
     const open = (query: string) => {
-      const ws = new WebSocket(`ws://localhost:${address.port}/api/terminal/live${query}`);
+      const ws = new WebSocket(
+        `ws://localhost:${address.port}/api/terminal/live${query}`,
+        hereInit(app),
+      );
       return new Promise<number>((resolve) => ws.addEventListener('close', (e) => resolve(e.code)));
     };
     expect(await open('')).toBe(1008);

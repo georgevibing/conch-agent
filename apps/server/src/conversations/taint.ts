@@ -16,7 +16,7 @@
  */
 import { isAbsolute, relative, resolve } from 'node:path';
 
-import type { TaintSource } from '@conch/protocol';
+import type { ConversationEvent, TaintSource } from '@conch/protocol';
 
 /** Built-in tools that bring the outside in. */
 const WEB_READERS = new Set(['WebFetch', 'WebSearch']);
@@ -25,6 +25,16 @@ const BROWSER =
   /^(?:mcp__conch__)?browser_(?:open|read|screenshot|click|back|scroll|wait|select|press|type)$/;
 const DOWNLOADS =
   /\b(?:curl|wget|http(?:ie)?|aria2c|fetch|Invoke-WebRequest|iwr|irm)\b|https?:\/\//i;
+/**
+ * Subcommands that only share a downloader's name (`git fetch`, `pnpm fetch`),
+ * taken out before `DOWNLOADS` looks. Narrow on purpose, so it fails closed:
+ * only where a command starts, only plain spaces, and for git only `-C` with a
+ * plain path. Anything else (`x=a\ git fetch`, `git -C x&& fetch`, `sudo git
+ * fetch`) still counts, and a mark checked again later (`heldTaints`) only
+ * ever comes free for exactly these.
+ */
+const NOT_DOWNLOADS =
+  /(^|[;&|(\n][ \t]*)(?:git(?:[ \t]+-C[ \t]+[\w./~:@%+,-]+)?|npm|pnpm|yarn)[ \t]+fetch\b/g;
 const INTEGRATION = /^mcp__([a-z0-9_-]+?)__(.+)$/;
 
 const hostOf = (value: unknown): string | undefined => {
@@ -57,12 +67,38 @@ export function taintFrom(toolName: string, input: unknown, app?: string): Taint
     };
   if (BROWSER.test(toolName))
     return { kind: 'web', label: hostOf(args.url) ?? 'pages in the browser' };
-  if (toolName === 'Bash' && typeof args.command === 'string' && DOWNLOADS.test(args.command))
+  if (
+    toolName === 'Bash' &&
+    typeof args.command === 'string' &&
+    DOWNLOADS.test(args.command.replace(NOT_DOWNLOADS, '$1 '))
+  )
     return { kind: 'download', label: hostOf(args.command) ?? 'something downloaded' };
   const integration = INTEGRATION.exec(toolName);
   if (integration && integration[1] !== 'conch')
     return { kind: 'app', label: app ?? integration[1] ?? 'an app' };
   return undefined;
+}
+
+/**
+ * What a chat's log says it read. A mark a command made is looked at again by
+ * today's rule, so one an older rule got wrong (`git fetch` read as a download)
+ * stops holding the chat. Pages, apps, people, and marks carried in from
+ * another chat stay as they are.
+ */
+export function heldTaints(events: readonly ConversationEvent[]): TaintSource[] {
+  return events.flatMap((e, i) => {
+    if (e.type !== 'taint') return [];
+    if (e.source.kind !== 'download') return [e.source];
+    // The command that made it: named on the mark, or (older logs) the call finishing next.
+    const next = events[i + 1];
+    const id = e.toolUseId ?? (next?.type === 'tool.finished' ? next.toolUseId : undefined);
+    // The call started last before the mark: ids can repeat across turns and providers.
+    const call = id
+      ? events.findLast((c, j) => j < i && c.type === 'tool.started' && c.toolUseId === id)
+      : undefined;
+    if (call?.type !== 'tool.started' || call.name !== 'Bash') return [e.source];
+    return taintFrom(call.name, call.input) ? [e.source] : [];
+  });
 }
 
 export interface SinkContext {

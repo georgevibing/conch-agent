@@ -64,6 +64,8 @@ export function OfferItem({
   const [mutedHere, setMutedHere] = useState<boolean>();
   const [reviewing, setReviewing] = useState(false);
   const [busy, setBusy] = useState(false);
+  /** Taken here: drawn taken at once, until the gateway's word (or a failure) says otherwise. */
+  const [taking, setTaking] = useState(false);
   /**
    * Connect was pressed here, or signing in came back here: once it's
    * connected, this device takes the offer. Anywhere else it waits for a press.
@@ -108,8 +110,10 @@ export function OfferItem({
     return true;
   };
   const accept = (how?: AcceptOfferBody['skill']) => {
-    setBusy(true);
-    void take(how).finally(() => setBusy(false));
+    setTaking(true);
+    void take(how).then((took) => {
+      if (!took) setTaking(false);
+    });
   };
 
   // Connected (here, in the dialog, or in the sign-in page this tab came back from): carry on.
@@ -148,7 +152,7 @@ export function OfferItem({
     isApp && integration && ['connecting', 'checking'].includes(integration.health.state);
   const state: OfferCardState = leaving
     ? 'dismissed'
-    : item.resolution === 'accepted'
+    : item.resolution === 'accepted' || (taking && open)
       ? 'accepted'
       : item.resolution === 'expired'
         ? 'expired'

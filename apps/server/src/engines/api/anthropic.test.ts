@@ -113,6 +113,7 @@ describe('Anthropic models', () => {
       efforts: ['low', 'medium', 'high', 'xhigh'],
       supportsFastMode: false,
       supportsAutoMode: false,
+      images: true,
     });
     expect(models[0]?.thinking).toBe(true);
     expect(models[1]?.thinking).toBe(false);
@@ -414,9 +415,7 @@ describe('Anthropic attachments', () => {
   it('sends images as base64 blocks before the words', () => {
     const { wire: api } = wire(() => jsonResponse({}));
     expect(api.userMessage('hi')).toEqual({ role: 'user', content: 'hi' });
-    expect(
-      api.userMessage('what is this?', [{ name: 'a.jpg', mimeType: 'image/jpeg', data: 'QUJD' }]),
-    ).toEqual({
+    expect(api.userMessage('what is this?', [{ mimeType: 'image/jpeg', data: 'QUJD' }])).toEqual({
       role: 'user',
       content: [
         { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'QUJD' } },

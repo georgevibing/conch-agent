@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { expect, it } from 'vitest';
 
 import { buildApp } from '../app';
+import { onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 
@@ -21,7 +22,7 @@ it('keeps independent revocable key auth behind a host-preserving HTTPS proxy', 
       CONCH_ALLOWED_HOSTS: 'conch.example',
     }),
   );
-  const app = await buildApp(services);
+  const app = onThisComputer(await buildApp(services), services);
   const headers = {
     host: 'conch.example',
     origin: 'https://conch.example',
@@ -153,7 +154,7 @@ it('closes rejected upgrade transports so a proxy cannot reuse a detached socket
       CONCH_ALLOWED_HOSTS: 'conch.example',
     }),
   );
-  const app = await buildApp(services);
+  const app = onThisComputer(await buildApp(services), services);
   try {
     await app.listen({ host: '127.0.0.1', port: 0 });
     const address = app.server.address();

@@ -6,6 +6,7 @@ import { expectAccessible, renderNacre } from '../../test/render';
 import { Button } from '../../components/Button';
 import { SkillOffer } from './SkillOffer';
 import { SkillShelf } from './SkillShelf';
+import { SkillWriting } from './SkillWriting';
 
 describe('SkillOffer', () => {
   it('is one line with one button, and Not now', async () => {
@@ -82,5 +83,30 @@ describe('SkillShelf', () => {
     expect(
       screen.getByRole('region', { name: 'You haven’t used this in two months' }),
     ).toHaveTextContent('Turned off, it stays in your list');
+  });
+});
+
+describe('SkillWriting', () => {
+  it('says the steps are on their way, then offers them again or your own words back', async () => {
+    const user = userEvent.setup();
+    const onAgain = vi.fn();
+    const onUndo = vi.fn();
+    const { container, rerender } = renderNacre(
+      <SkillWriting state="writing" by="Conch" onAgain={onAgain} onUndo={onUndo} />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Conch is writing the steps from your words…',
+    );
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    await expectAccessible(container);
+    rerender(<SkillWriting state="written" by="Conch" onAgain={onAgain} onUndo={onUndo} />);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Conch wrote these from your words. Read them, and change anything.',
+    );
+    await user.click(screen.getByRole('button', { name: 'Write it again' }));
+    await user.click(screen.getByRole('button', { name: 'Back to my words' }));
+    expect(onAgain).toHaveBeenCalledOnce();
+    expect(onUndo).toHaveBeenCalledOnce();
+    await expectAccessible(container);
   });
 });

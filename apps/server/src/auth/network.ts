@@ -67,6 +67,8 @@ export class HostPolicy {
   #tailscale?: string;
   /** `tailscale serve` sends that name to Conch (unknown until Conch looked). */
   #serving?: boolean;
+  /** An address of your own that Conch answers on itself (ADR 0064). */
+  #own?: string;
 
   constructor(private readonly config: Config) {
     for (const h of config.CONCH_ALLOWED_HOSTS) this.#allowed.add(h);
@@ -103,6 +105,21 @@ export class HostPolicy {
     this.#serving = serving;
   }
 
+  /**
+   * An address of your own (ADR 0064), once Conch answers on it: allowed, and
+   * the first address offered. `undefined` when it's turned off.
+   */
+  setOwnAddress(name: string | undefined): void {
+    if (this.#own && !this.config.CONCH_ALLOWED_HOSTS.includes(this.#own))
+      this.#allowed.delete(this.#own);
+    this.#own = name;
+    if (name) this.#allowed.add(name);
+  }
+
+  get ownAddress(): string | undefined {
+    return this.#own;
+  }
+
   allows(host: string): boolean {
     return this.#allowed.has(host) || host.endsWith('.localhost');
   }
@@ -111,6 +128,7 @@ export class HostPolicy {
   urls(): string[] {
     const port = this.config.CONCH_PORT;
     const out: string[] = [];
+    if (this.#own) out.push(`https://${this.#own}`);
     if (this.#tailscale && this.#serving !== false) out.push(`https://${this.#tailscale}`);
     for (const h of this.config.CONCH_ALLOWED_HOSTS) out.push(`https://${h}`);
     if (exposure(this.config) === 'network') {

@@ -155,29 +155,30 @@ function announce(title: string, run: RoutineRun, navigate?: (to: string) => voi
   }
 }
 
-function useRoutineMutation<T>(
-  fn: (arg: T) => Promise<Routine | unknown>,
-  success?: (arg: T) => string,
-) {
+/**
+ * Change a routine. Turning it on or off shows at once (the switch, the
+ * card), and goes back if the gateway says no.
+ */
+export function useUpdateRoutine() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: fn,
-    onSuccess: (result, arg) => {
-      if (result && typeof result === 'object' && 'scheduleText' in result)
-        putRoutine(client, result as Routine);
-      const message = success?.(arg);
-      if (message) toast.success(message);
-    },
-    onError: (error) =>
-      toast.error(error instanceof ApiError ? error.message : 'Something went wrong.'),
-  });
-}
-
-export function useUpdateRoutine() {
-  return useRoutineMutation(
-    (arg: { id: string; patch: Parameters<typeof routinesApi.update>[1] }) =>
+    mutationFn: (arg: { id: string; patch: Parameters<typeof routinesApi.update>[1] }) =>
       routinesApi.update(arg.id, arg.patch),
-  );
+    onMutate: ({ id, patch }) => {
+      const before = client.getQueryData<Routine[]>(routineKeys.all);
+      const status = patch.status;
+      if (status)
+        client.setQueryData<Routine[]>(routineKeys.all, (list) =>
+          list?.map((r) => (r.id === id ? { ...r, status } : r)),
+        );
+      return { before };
+    },
+    onSuccess: (routine) => putRoutine(client, routine),
+    onError: (error, _arg, context) => {
+      if (context?.before) client.setQueryData(routineKeys.all, context.before);
+      toast.error(error instanceof ApiError ? error.message : 'Something went wrong.');
+    },
+  });
 }
 
 export function useRunRoutine() {

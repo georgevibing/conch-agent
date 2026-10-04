@@ -1,5 +1,5 @@
 import { useReducedMotionConfig } from 'motion/react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 
 export interface SmoothText {
   /** The part of the text revealed so far — always ends on a word boundary while streaming. */
@@ -11,6 +11,13 @@ export interface SmoothText {
   freshFrom: number | null;
   /** This text has animated (it arrived live rather than from history). */
   live: boolean;
+  /**
+   * When the word at `offset` was revealed (`performance.now()` time), or
+   * undefined for text that was never revealed live. Stable for a word, so
+   * `revealWords` can stamp it on the word's element and `useSettleOnce` can
+   * carry a remounted word's settle on from where it was.
+   */
+  revealedAt: (offset: number) => number | undefined;
 }
 
 export interface SmoothTextOptions {
@@ -64,6 +71,16 @@ export function useSmoothText(
   });
   const pos = useRef(state.shown.length);
   const marks = useRef<{ at: number; length: number }[]>([]);
+  // Every reveal, in order: words from `length` on were revealed at `at`.
+  const history = useRef<{ at: number; length: number }[]>([]);
+  const revealedAt = useCallback((offset: number) => {
+    let at: number | undefined;
+    for (const mark of history.current) {
+      if (mark.length > offset) break;
+      at = mark.at;
+    }
+    return at;
+  }, []);
 
   let current = state;
   if (!target.startsWith(state.shown)) {
@@ -105,6 +122,7 @@ export function useSmoothText(
         length = end;
       }
       if (length > shownLength) {
+        history.current.push({ at: now, length: shownLength });
         marks.current = [...marks.current, { at: now, length: shownLength }].filter(
           (m) => now - m.at < freshMs,
         );
@@ -122,5 +140,35 @@ export function useSmoothText(
     return () => cancelAnimationFrame(frame);
   }, [canAnimate, freshMs, shownLength, streaming, target, wasLive]);
 
-  return { text: current.shown, freshFrom: current.freshFrom, live: current.live };
+  return { text: current.shown, freshFrom: current.freshFrom, live: current.live, revealedAt };
+}
+
+/** How long a word's settle runs: `nc-settle` in motion.css. */
+const SETTLE_MS = 640;
+
+/**
+ * Plays each streamed word's settle once, however often its element is
+ * remounted. Markdown that changes shape as it arrives (an italic closing,
+ * a link completing, a list starting) makes React mount new elements for
+ * words already on screen; without this, those words would blur in again.
+ * Each newly mounted word stamped with `data-nc-at` (by `revealWords`)
+ * has its settle moved on to its real age: still settling, it carries on;
+ * already settled, it simply shows.
+ */
+export function useSettleOnce(ref: RefObject<HTMLElement | null>): void {
+  const seen = useRef(new WeakSet<Element>());
+  useLayoutEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    const now = performance.now();
+    for (const el of root.querySelectorAll<HTMLElement>('[data-nc-at]')) {
+      if (seen.current.has(el)) continue;
+      seen.current.add(el);
+      const age = now - Number(el.dataset.ncAt);
+      if (!(age > 0) || typeof el.getAnimations !== 'function') continue;
+      for (const animation of el.getAnimations())
+        if ((animation as CSSAnimation).animationName === 'nc-settle')
+          animation.currentTime = Math.min(age, SETTLE_MS);
+    }
+  });
 }

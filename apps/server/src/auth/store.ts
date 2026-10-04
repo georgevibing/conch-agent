@@ -16,6 +16,7 @@ import {
   type CreatedKey,
   type DeviceInfo,
   type DeviceRequest,
+  type PasskeyInfo,
   type SessionInfo,
   type WaitingApproval,
 } from '@conch/protocol';
@@ -36,6 +37,7 @@ import {
   safeEqual,
   verifyPassword,
 } from './secrets';
+import { cliName } from '../cli/command';
 
 /** Sessions end 30 days after sign-in (NIST SP 800-63B-4 AAL1) … */
 export const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
@@ -44,6 +46,10 @@ export const SESSION_IDLE_MS = 7 * 24 * 60 * 60 * 1000;
 /** Sensitive changes need a password/key entered this recently ("sudo mode"). */
 export const VERIFY_WINDOW_MS = 10 * 60 * 1000;
 export const PAIRING_TTL_MS = 10 * 60 * 1000;
+/** The hello link that makes a new Conch yours lasts an hour (ADR 0064)… */
+export const HELLO_TTL_MS = 60 * 60 * 1000;
+/** … and at most this many wait at once: the newest are kept. */
+const MAX_HELLOS = 5;
 /** A device waits this long for its approval, then signs in again to ask anew. */
 export const APPROVAL_TTL_MS = 10 * 60 * 1000;
 /** At most this many devices wait at once, so nobody can bury yours in requests. */
@@ -71,6 +77,8 @@ const SessionRecord = z.object({
   hash: z.string(),
   via: SignInVia,
   keyId: z.string().optional(),
+  /** The passkey it signed in with, so removing that passkey signs it out (ADR 0065). */
+  passkeyId: z.string().optional(),
   device: z.string(),
   kind: DeviceKind,
   createdAt: z.number(),
@@ -102,6 +110,8 @@ const DeviceRecord = z.object({
   via: SignInVia.optional(),
   approvedAt: z.number().optional(),
   approvedHow: ApprovedHow.optional(),
+  /** The device that let it in, when another device did (ADR 0065). */
+  approvedBy: z.string().optional(),
   /** Not a browser: scripts on other devices using this access key (`Authorization: Bearer`). */
   keyId: z.string().optional(),
 });
@@ -124,12 +134,43 @@ type RequestRecord = z.infer<typeof RequestRecord>;
 
 const PairingRecord = z.object({ hash: z.string(), createdAt: z.number(), expiresAt: z.number() });
 
+/**
+ * A passkey (ADR 0065): only what checks a signature, never anything secret.
+ * The private key never leaves the person's device or password manager.
+ */
+const PasskeyRecord = z.object({
+  /** The credential id, base64url. */
+  id: z.string(),
+  /** The COSE public key, base64url. */
+  publicKey: z.string(),
+  /** The signature counter; 0 forever for synced passkeys. */
+  counter: z.number().int().nonnegative(),
+  transports: z.array(z.string()).optional(),
+  /** The address it was made at: it works there only. */
+  rpId: z.string(),
+  /** From its AAGUID or the device it was made on: "iCloud Keychain". */
+  name: z.string(),
+  /** The name the person gave it. */
+  label: z.string().optional(),
+  aaguid: z.string().optional(),
+  /** Backed up by its password manager, so it reaches the person's other devices. */
+  synced: z.boolean(),
+  createdAt: z.number(),
+  lastUsedAt: z.number().optional(),
+});
+export type PasskeyRecord = z.infer<typeof PasskeyRecord>;
+
 const AccessFile = z.object({
   version: z.literal(1).default(1),
   method: AccessMethod.default('none'),
   username: z.string().optional(),
   passwordHash: z.string().optional(),
   keys: z.array(KeyRecord).default([]),
+  /** The owner's WebAuthn user handle: 16 random bytes, base64url, made with the first passkey. */
+  ownerId: z.string().optional(),
+  passkeys: z.array(PasskeyRecord).default([]),
+  /** Hello links that make an unclaimed Conch someone's (ADR 0064): hashes only. */
+  hellos: z.array(PairingRecord).default([]),
   sessions: z.array(SessionRecord).default([]),
   pairings: z.array(PairingRecord).default([]),
   /** Approve new devices: a device seen for the first time needs the person's OK. */
@@ -149,8 +190,8 @@ export class AccessError extends Error {
 }
 
 /** Where the way back in is: having this computer's terminal is the proof it's you. */
-export const LOCKED_MESSAGE =
-  'Sign-in is locked because Conch couldn’t read who may sign in. On the computer running Conch, run: pnpm conch reset';
+export const lockedMessage = () =>
+  `Sign-in is locked because Conch couldn’t read who may sign in. On the computer running Conch, run: ${cliName()} reset`;
 
 /**
  * What a damaged `access.json` reads as: password sign-in with no password.
@@ -171,6 +212,8 @@ const LOCKED: AccessFile = {
   version: 1,
   method: 'password',
   keys: [],
+  passkeys: [],
+  hellos: [],
   sessions: [],
   pairings: [],
   approval: false,
@@ -193,6 +236,7 @@ function salvageAccess(raw: unknown): AccessFile | undefined {
   const credentials = AccessFile.omit({
     sessions: true,
     pairings: true,
+    hellos: true,
     devices: true,
     requests: true,
   }).safeParse(fields);
@@ -208,6 +252,7 @@ function salvageAccess(raw: unknown): AccessFile | undefined {
     ...credentials.data,
     sessions: valid(SessionRecord, fields.sessions),
     pairings: valid(PairingRecord, fields.pairings),
+    hellos: valid(PairingRecord, fields.hellos),
     devices: valid(DeviceRecord, fields.devices),
     requests: valid(RequestRecord, fields.requests),
   };
@@ -227,6 +272,8 @@ function newApprovalCode(taken: Set<string>): string {
 function tidy(file: AccessFile, now: number) {
   file.sessions = file.sessions.filter((s) => alive(s, now));
   file.pairings = file.pairings.filter((p) => p.expiresAt > now);
+  // A hello link only means something while nobody has made Conch theirs.
+  file.hellos = file.method === 'none' ? file.hellos.filter((h) => h.expiresAt > now) : [];
   const devices = new Set(file.devices.map((d) => d.id));
   const sessions = new Set(file.sessions.map((s) => s.id));
   file.requests = file.requests.filter(
@@ -372,7 +419,7 @@ export class AccessStore {
     return this.#mutex.run(async () => {
       this.#checkedAt = 0;
       const file = structuredClone(await this.get());
-      if (this.#locked && !resets) throw new AccessError('locked', LOCKED_MESSAGE);
+      if (this.#locked && !resets) throw new AccessError('locked', lockedMessage());
       const result = await fn(file);
       tidy(file, Date.now());
       await writeJson(this.path, file);
@@ -439,7 +486,8 @@ export class AccessStore {
       file.keys = file.keys.filter((k) => k.id !== id);
       const ended = file.sessions.filter((s) => s.keyId === id).map((s) => s.id);
       file.sessions = file.sessions.filter((s) => s.keyId !== id);
-      if (file.keys.length === 0) file.method = 'none';
+      // The last key gone: passkeys still sign in, if there are any.
+      if (file.keys.length === 0) file.method = file.passkeys.length ? 'passkey' : 'none';
       return ended;
     });
   }
@@ -452,7 +500,10 @@ export class AccessStore {
         file.method = 'none';
         delete file.username;
         delete file.passwordHash;
+        delete file.ownerId;
         file.keys = [];
+        file.passkeys = [];
+        file.hellos = [];
         file.sessions = [];
         file.pairings = [];
         file.approval = false;
@@ -533,6 +584,184 @@ export class AccessStore {
     });
   }
 
+  // ── Passkeys (ADR 0065) ──────────────────────────────────────────────────
+
+  /** The owner's WebAuthn user handle, made the first time a passkey is. */
+  async ownerHandle(): Promise<string> {
+    const existing = (await this.get()).ownerId;
+    if (existing) return existing;
+    return this.#update((file) => (file.ownerId ??= randomToken(16)));
+  }
+
+  async passkeyRecords(): Promise<PasskeyRecord[]> {
+    return (await this.get()).passkeys;
+  }
+
+  /** What Settings lists: `rpId` is the address the page is open at. */
+  async passkeys(rpId?: string): Promise<PasskeyInfo[]> {
+    return (await this.get()).passkeys
+      .map((p) => ({
+        id: p.id,
+        name: p.label ?? p.name,
+        rpId: p.rpId,
+        createdAt: p.createdAt,
+        ...(p.lastUsedAt !== undefined && { lastUsedAt: p.lastUsedAt }),
+        synced: p.synced,
+        here: p.rpId === rpId,
+      }))
+      .sort((a, b) => Number(b.here) - Number(a.here) || b.createdAt - a.createdAt);
+  }
+
+  /**
+   * Add a passkey. On a Conch with no sign-in yet, passkeys become the way
+   * in and every other session ends (as choosing a password does).
+   */
+  async addPasskey(record: PasskeyRecord, keepSessionId?: string): Promise<void> {
+    await this.#update(
+      (file) => {
+        if (file.method === 'none') {
+          file.method = 'passkey';
+          file.sessions = file.sessions.filter((s) => s.id === keepSessionId);
+        }
+        file.passkeys = [...file.passkeys.filter((p) => p.id !== record.id), record];
+      },
+      // While locked, the stand-in is "password" with no password: this starts afresh.
+      { resets: true },
+    );
+  }
+
+  /** A passkey signed in: its new counter and when. */
+  async usedPasskey(id: string, counter: number): Promise<void> {
+    await this.#update((file) => {
+      const p = file.passkeys.find((x) => x.id === id);
+      if (!p) return;
+      p.counter = Math.max(p.counter, counter);
+      p.lastUsedAt = Date.now();
+    });
+  }
+
+  async renamePasskey(id: string, name: string): Promise<void> {
+    await this.#update((file) => {
+      const p = file.passkeys.find((x) => x.id === id);
+      if (!p) throw new AccessError('not-found', 'No such passkey.');
+      p.label = name.trim().slice(0, 64);
+    });
+  }
+
+  /**
+   * Remove a passkey, unless it's the last way in. Every device signed in
+   * with it is signed out, as revoking a key does. Returns the ended sessions.
+   */
+  async removePasskey(id: string, here?: string): Promise<string[]> {
+    return this.#update((file) => {
+      const gone = file.passkeys.find((p) => p.id === id);
+      if (!gone) throw new AccessError('not-found', 'No such passkey.');
+      const rest = file.passkeys.filter((p) => p.id !== id);
+      if (file.method === 'passkey' && rest.length === 0)
+        throw new AccessError(
+          'invalid',
+          'This passkey is your only way to sign in. Add another passkey or a password first.',
+        );
+      // Passkeys only, asked from `here`: the last one for this address would lock this page out.
+      if (
+        file.method === 'passkey' &&
+        here !== undefined &&
+        gone.rpId === here &&
+        !rest.some((p) => p.rpId === here)
+      )
+        throw new AccessError(
+          'invalid',
+          `This is your only passkey for ${here}. Add another one here, or a password, first.`,
+        );
+      file.passkeys = rest;
+      const ended = file.sessions.filter((s) => s.passkeyId === id).map((s) => s.id);
+      file.sessions = file.sessions.filter((s) => s.passkeyId !== id);
+      return ended;
+    });
+  }
+
+  // ── The hello link (ADR 0064) ────────────────────────────────────────────
+
+  /**
+   * A one-time link that makes this Conch someone's. Only while nobody has:
+   * once it's claimed, the way in is a sign-in, and the way back is
+   * `conch reset` on this computer.
+   */
+  async createHello(): Promise<{ code: string; expiresAt: number }> {
+    const code = randomToken(32);
+    const now = Date.now();
+    const expiresAt = now + HELLO_TTL_MS;
+    await this.#update((file) => {
+      if (file.method !== 'none')
+        throw new AccessError(
+          'invalid',
+          'This Conch is already someone’s, so it has no hello link. Sign in instead, or run conch reset on this computer to start again.',
+        );
+      // Newest first (a stable sort keeps this one ahead of any made the same moment).
+      file.hellos = [{ hash: hashToken(code), createdAt: now, expiresAt }, ...file.hellos]
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, MAX_HELLOS);
+    });
+    return { code, expiresAt };
+  }
+
+  /** Whether a hello code can still be used, without using it. */
+  async checkHello(
+    code: string,
+  ): Promise<{ ok: true; expiresAt: number } | { ok: false; reason: 'expired' | 'claimed' }> {
+    const file = await this.get();
+    if (file.method !== 'none' || this.#locked) return { ok: false, reason: 'claimed' };
+    const hello = this.#hello(file, code);
+    return hello ? { ok: true, expiresAt: hello.expiresAt } : { ok: false, reason: 'expired' };
+  }
+
+  #hello(file: AccessFile, code: string) {
+    const hash = hashToken(code.trim());
+    const now = Date.now();
+    let match: z.infer<typeof PairingRecord> | undefined;
+    for (const h of file.hellos) if (safeEqual(h.hash, hash) && h.expiresAt > now) match = h;
+    return match;
+  }
+
+  /**
+   * Use a hello code to make Conch the person's: the credential they chose
+   * becomes the way in, new devices need approving, and every hello link is
+   * gone, all in one write. A code that ran out, was used in another tab, or
+   * came after someone else claimed Conch sets nothing.
+   */
+  async claim(
+    code: string,
+    credential:
+      | { kind: 'password'; username: string; password: string }
+      | { kind: 'passkey'; passkey: PasskeyRecord; ownerId: string },
+  ): Promise<void> {
+    let passwordHash: string | undefined;
+    if (credential.kind === 'password') {
+      const check = checkPassword(credential.password, { username: credential.username });
+      if (!check.ok) throw new AccessError('weak-password', check.message);
+      if (!(await this.checkHello(code)).ok) throw new AccessError('not-found', HELLO_GONE);
+      passwordHash = await this.#hashing.run(() => hashPassword(credential.password));
+    }
+    await this.#update((file) => {
+      if (this.#locked || file.method !== 'none' || !this.#hello(file, code))
+        throw new AccessError('not-found', HELLO_GONE);
+      if (credential.kind === 'password') {
+        file.method = 'password';
+        file.username = credential.username.trim();
+        file.passwordHash = passwordHash;
+      } else {
+        file.method = 'passkey';
+        file.ownerId = credential.ownerId;
+        file.passkeys = [credential.passkey];
+      }
+      file.hellos = [];
+      file.sessions = [];
+      file.pairings = [];
+      file.requests = [];
+      file.approval = true;
+    });
+  }
+
   // ── Sessions ──────────────────────────────────────────────────────────
 
   /** A fresh session per sign-in (never reuse one — prevents fixation). */
@@ -540,6 +769,7 @@ export class AccessStore {
     via: SignInVia;
     userAgent?: string;
     keyId?: string;
+    passkeyId?: string;
     deviceId?: string;
   }): Promise<{ token: string; session: SessionRecord }> {
     const token = randomToken(32);
@@ -550,6 +780,7 @@ export class AccessStore {
       hash: hashToken(token),
       via: input.via,
       ...(input.keyId && { keyId: input.keyId }),
+      ...(input.passkeyId && { passkeyId: input.passkeyId }),
       device,
       kind,
       createdAt: now,
@@ -827,7 +1058,7 @@ export class AccessStore {
       if (!keep && waiting.length >= MAX_WAITING)
         throw new AccessError(
           'busy',
-          'Too many devices are waiting to be approved. On the computer running Conch, approve or turn them down first: pnpm conch devices',
+          `Too many devices are waiting to be approved. Approve or turn them down first: in Settings → Security on a device you’ve let in, or ${cliName()} devices on the computer running Conch.`,
         );
       const expiresAt = now + APPROVAL_TTL_MS;
       const session: SessionRecord = {
@@ -980,7 +1211,7 @@ export class AccessStore {
    * waits, without signing in again. A request turned down by mistake can
    * still be approved while it lasts.
    */
-  async approve(code: string, how: ApprovedHow): Promise<DeviceRequest> {
+  async approve(code: string, how: ApprovedHow, by?: string): Promise<DeviceRequest> {
     const wanted = normalizeApprovalCode(code);
     return this.#update((file) => {
       const now = Date.now();
@@ -990,6 +1221,8 @@ export class AccessStore {
       const info = requestInfo(file, request);
       device.approvedAt = now;
       device.approvedHow = how;
+      if (by) device.approvedBy = by;
+      else delete device.approvedBy;
       const session = file.sessions.find((s) => s.id === request.sessionId);
       if (session) {
         session.pending = false;
@@ -1079,6 +1312,7 @@ export class AccessStore {
         approved: d.approvedAt !== undefined,
         ...(d.approvedAt !== undefined && { approvedAt: d.approvedAt }),
         ...(d.approvedHow && { approvedHow: d.approvedHow }),
+        ...(d.approvedBy && { approvedBy: d.approvedBy }),
         signedIn: signedIn.has(d.id),
         ...(d.via && { via: d.via }),
         script: d.keyId !== undefined,
@@ -1102,6 +1336,8 @@ export class AccessStore {
       .map((r) => requestInfo(file, r));
   }
 }
+
+const HELLO_GONE = `This link has been used or has run out. On the computer running Conch, run ${cliName()} hello for a new one.`;
 
 const NO_REQUEST =
   'No device is waiting with that code. It may have run out: sign in again on that device to get a new one.';

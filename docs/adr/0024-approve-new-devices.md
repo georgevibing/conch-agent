@@ -3,6 +3,8 @@
 - Status: accepted
 - Date: 2026-10-01
 - Builds on: [ADR 0008](./0008-access-and-hardening.md) (sign-in, sessions, pairing)
+- Amended by: [ADR 0065](./0065-passkeys-and-approving-from-your-devices.md) (an approved
+  device that just confirmed it's you may approve too, and a passkey approves its own device)
 
 ## Context
 

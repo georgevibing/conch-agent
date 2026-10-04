@@ -27,7 +27,12 @@ function parseAmount(text: string): number | undefined {
   return text.trim() !== '' && Number.isFinite(amount) && amount > 0 ? amount : undefined;
 }
 
-function LimitFields({ spending }: { spending: RoutineSpending }) {
+/**
+ * What routines spend this month, against the limit as it stands on screen:
+ * the gauge follows the switch and the amount the moment they change, not
+ * when the save comes back.
+ */
+function SpendingBody({ spending }: { spending: RoutineSpending }) {
   const client = useQueryClient();
   const initial = spending.limitUsd;
   const [on, setOn] = useState(initial !== null);
@@ -35,47 +40,62 @@ function LimitFields({ spending }: { spending: RoutineSpending }) {
   // The last valid amount; mid-edit typos never save.
   const [amount, setAmount] = useState(initial ?? DEFAULT_LIMIT);
   const valid = parseAmount(text) !== undefined;
-  const status = useAutosave(on ? amount : null, async (next) => {
+  const limitUsd = on ? amount : null;
+  const status = useAutosave(limitUsd, async (next) => {
     client.setQueryData(routineKeys.spending, await routinesApi.setSpendingLimit(next));
     void client.invalidateQueries({ queryKey: routineKeys.all });
   });
   return (
-    <Stack gap={4}>
-      <Switch
-        checked={on}
-        onCheckedChange={setOn}
-        label="Limit what routines spend each month"
-        description={
-          on
-            ? 'At the limit, routines that cost money pause until the 1st, and Conch tells you once.'
-            : 'Routines can spend without a monthly limit. Each run still stops if it uses far more than usual.'
-        }
+    <Stack gap={5}>
+      <RoutineSpendingGauge
+        monthUsd={spending.monthUsd}
+        limitUsd={limitUsd}
+        resetsAt={spending.paused?.until ?? nextMonth()}
+        {...(spending.projectedUsd !== undefined && { projectedUsd: spending.projectedUsd })}
       />
-      {on && (
-        <Field invalid={!valid}>
-          <Field.Label>Limit per month (USD)</Field.Label>
-          <Input
-            inputMode="decimal"
-            leading="$"
-            value={text}
-            onChange={(e) => {
-              setText(e.target.value);
-              const next = parseAmount(e.target.value);
-              if (next !== undefined) setAmount(next);
-            }}
-          />
-          {valid ? (
-            <Field.Description>
-              {spending.isDefault
-                ? `Conch starts at ${formatMoney(DEFAULT_LIMIT)}: enough for a daily briefing on a mid-priced model.`
-                : 'Only you can change this. Your assistant can’t.'}
-            </Field.Description>
-          ) : (
-            <Field.Error>Enter an amount above zero, like 20.</Field.Error>
-          )}
-        </Field>
+      {spending.paused && (
+        <Text size="sm" tone="muted">
+          Routines that cost money are paused until the 1st. Raise the limit above{' '}
+          {formatMoney(spending.monthUsd)} and they go again at their next time.
+        </Text>
       )}
-      <SaveStatus status={status} />
+      <Stack gap={4}>
+        <Switch
+          checked={on}
+          onCheckedChange={setOn}
+          label="Limit what routines spend each month"
+          description={
+            on
+              ? 'At the limit, routines that cost money pause until the 1st, and Conch tells you once.'
+              : 'Routines can spend without a monthly limit. Each run still stops if it uses far more than usual.'
+          }
+        />
+        {on && (
+          <Field invalid={!valid}>
+            <Field.Label>Limit per month (USD)</Field.Label>
+            <Input
+              inputMode="decimal"
+              leading="$"
+              value={text}
+              onChange={(e) => {
+                setText(e.target.value);
+                const next = parseAmount(e.target.value);
+                if (next !== undefined) setAmount(next);
+              }}
+            />
+            {valid ? (
+              <Field.Description>
+                {spending.isDefault
+                  ? `Conch starts at ${formatMoney(DEFAULT_LIMIT)}: enough for a daily briefing on a mid-priced model.`
+                  : 'Only you can change this. Your assistant can’t.'}
+              </Field.Description>
+            ) : (
+              <Field.Error>Enter an amount above zero, like 20.</Field.Error>
+            )}
+          </Field>
+        )}
+        <SaveStatus status={status} />
+      </Stack>
     </Stack>
   );
 }
@@ -103,21 +123,7 @@ export function SpendingSection() {
       title="Routines"
       description="What runs while you’re away may spend with pay-as-you-go providers. Plans and models on this computer don’t count."
     >
-      <Stack gap={5}>
-        <RoutineSpendingGauge
-          monthUsd={spending.monthUsd}
-          limitUsd={spending.limitUsd}
-          resetsAt={spending.paused?.until ?? nextMonth()}
-          {...(spending.projectedUsd !== undefined && { projectedUsd: spending.projectedUsd })}
-        />
-        {spending.paused && (
-          <Text size="sm" tone="muted">
-            Routines that cost money are paused until the 1st. Raise the limit above{' '}
-            {formatMoney(spending.monthUsd)} and they go again at their next time.
-          </Text>
-        )}
-        <LimitFields spending={spending} />
-      </Stack>
+      <SpendingBody spending={spending} />
     </Section>
   );
 }

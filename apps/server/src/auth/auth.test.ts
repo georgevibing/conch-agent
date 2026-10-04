@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
+import { NOT_HERE, onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 import { AccessStore } from './store';
@@ -26,7 +27,7 @@ async function setup(env: Record<string, string> = {}) {
     ...env,
   });
   const services = new Services(config);
-  const app = await buildApp(services);
+  const app = onThisComputer(await buildApp(services), services);
   close = () => app.close();
   return { app, services, home };
 }
@@ -82,6 +83,7 @@ describe('with sign-in off', () => {
       method: 'none',
       signedIn: true,
       setupRequired: false,
+      here: 'proven',
       secure: true,
     });
     const other = await remote(app, '/api/state');
@@ -101,6 +103,231 @@ describe('with sign-in off', () => {
       headers: { host: 'localhost:5173', 'x-forwarded-for': '192.168.1.3' },
     });
     expect(vite.statusCode).toBe(401);
+  });
+});
+
+/**
+ * "This computer", proven (ADR 0063). Looking local isn't enough: nginx's
+ * `proxy_pass http://127.0.0.1:4317;` sends `Host: 127.0.0.1:4317` and no
+ * forwarding header, and another account on this computer connects from
+ * loopback too. Only the key (a program) or the cookie made with it (a
+ * browser opened from Conch) makes a request "this computer".
+ */
+describe('this computer, proven', () => {
+  /** What arrives through nginx's defaults, or from another account here: looks local, no proof. */
+  const hidden = (app: App, url: string, init: { method?: string; cookie?: string } = {}) =>
+    app.inject({
+      method: (init.method ?? 'GET') as 'GET',
+      url,
+      headers: {
+        host: '127.0.0.1:4317',
+        [NOT_HERE]: '1',
+        ...(init.cookie && { cookie: init.cookie }),
+      },
+    });
+
+  /** A launcher with the key asks for a link; the browser redeems its code. */
+  async function openedFromConch(app: App, page = '/') {
+    const link = await app.inject({ method: 'POST', url: '/api/here/link', payload: { page } });
+    expect(link.statusCode).toBe(200);
+    const { code, url } = link.json() as { code: string; url: string };
+    const redeemed = await app.inject({
+      method: 'POST',
+      url: '/api/here',
+      headers: { [NOT_HERE]: '1' },
+      payload: { code },
+    });
+    expect(redeemed.statusCode).toBe(200);
+    return { cookie: cookieOf(redeemed), code, url };
+  }
+
+  it('turns away a proxy that hides itself, and another account on this computer', async () => {
+    const { app } = await setup();
+    const state = await hidden(app, '/api/state');
+    expect(state.statusCode).toBe(401);
+    expect(state.json().error).toBe('here-required');
+    expect(state.json().message).toMatch(/open Conch from your apps/);
+    for (const [method, url] of [
+      ['GET', '/api/conversations'],
+      ['POST', '/api/terminal'],
+      ['GET', '/api/access'],
+      ['GET', '/ws'],
+    ] as const)
+      expect((await hidden(app, url, { method })).statusCode).toBe(401);
+    expect((await hidden(app, '/api/auth')).json()).toMatchObject({
+      signedIn: false,
+      setupRequired: false,
+      hereRequired: true,
+      here: 'unproven',
+    });
+  });
+
+  it('lets in a browser opened from Conch, with a cookie for this port only', async () => {
+    const { app } = await setup();
+    const { cookie, url } = await openedFromConch(app, '/?open=devices');
+    expect(url).toMatch(/^http:\/\/localhost:\d+\/\?open=devices#here=[A-Za-z0-9_-]{43}$/);
+    expect(cookie).toMatch(/^conch_here_\d+=v1\./);
+    expect((await hidden(app, '/api/state', { cookie })).statusCode).toBe(200);
+    expect((await hidden(app, '/api/auth', { cookie })).json()).toMatchObject({
+      signedIn: true,
+      here: 'proven',
+    });
+    // Another Conch's port, or a cookie someone changed, proves nothing.
+    const [, value = ''] = cookie.split('=');
+    expect((await hidden(app, '/api/state', { cookie: `conch_here_1=${value}` })).statusCode).toBe(
+      401,
+    );
+    expect(
+      (await hidden(app, '/api/state', { cookie: `${cookie.slice(0, -2)}AA` })).statusCode,
+    ).toBe(401);
+  });
+
+  it('sets the cookie HttpOnly, SameSite=Strict, for 400 days', async () => {
+    const { app } = await setup();
+    const link = (await app.inject({ method: 'POST', url: '/api/here/link' })).json() as {
+      code: string;
+    };
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/here',
+      headers: { [NOT_HERE]: '1' },
+      payload: { code: link.code },
+    });
+    const line = String(res.headers['set-cookie']);
+    expect(line).toMatch(/HttpOnly/);
+    expect(line).toMatch(/SameSite=Strict/);
+    expect(line).toMatch(/Path=\//);
+    expect(line).toMatch(/Max-Age=34560000/);
+  });
+
+  it('uses a code once, and never through a proxy or from elsewhere', async () => {
+    const { app } = await setup();
+    const make = async () =>
+      ((await app.inject({ method: 'POST', url: '/api/here/link' })).json() as { code: string })
+        .code;
+    const code = await make();
+    const once = await app.inject({ method: 'POST', url: '/api/here', payload: { code } });
+    expect(once.statusCode).toBe(200);
+    const twice = await app.inject({ method: 'POST', url: '/api/here', payload: { code } });
+    expect(twice.statusCode).toBe(401);
+    expect(twice.json().message).toMatch(/expired or was already used/);
+
+    const proxied = await app.inject({
+      method: 'POST',
+      url: '/api/here',
+      headers: { host: 'conch.example', 'x-forwarded-for': '203.0.113.9' },
+      payload: { code: await make() },
+    });
+    expect(proxied.statusCode).toBe(403);
+    const elsewhere = await remote(app, '/api/here', {
+      method: 'POST',
+      payload: { code: await make() },
+    });
+    expect(elsewhere.statusCode).toBe(403);
+    const madeUp = await app.inject({
+      method: 'POST',
+      url: '/api/here',
+      payload: { code: 'A'.repeat(43) },
+    });
+    expect(madeUp.statusCode).toBe(401);
+  });
+
+  it('hands out more links only to this computer, proven, and only to a page of Conch', async () => {
+    const { app } = await setup();
+    const ask = (headers: Record<string, string>, payload: object = {}, remoteAddress?: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/here/link',
+        headers,
+        payload,
+        ...(remoteAddress && { remoteAddress }),
+      });
+    expect((await ask({ [NOT_HERE]: '1' })).statusCode).toBe(401);
+    expect((await ask({ host: 'conch.example' }, {}, REMOTE.remoteAddress)).statusCode).toBe(401);
+    expect((await ask({ 'x-forwarded-for': '203.0.113.9' })).statusCode).toBe(401);
+    for (const page of ['//evil.example', 'https://evil.example', '/\\evil.example'])
+      expect((await ask({}, { page })).statusCode).toBe(400);
+    expect((await ask({}, { page: '/?open=updates' })).statusCode).toBe(200);
+  });
+
+  it('never takes the key itself: nothing sent can be replayed to mint more', async () => {
+    const { app, services } = await setup();
+    const key = services.here.key();
+    for (const headers of [
+      { 'x-conch-here': key },
+      { authorization: `Bearer ${key}` },
+      { cookie: `conch_here_4317=${key}` },
+    ]) {
+      const res = await app.inject({ url: '/api/state', headers: { ...headers, [NOT_HERE]: '1' } });
+      expect(res.statusCode, JSON.stringify(Object.keys(headers))).toBe(401);
+    }
+    const link = await app.inject({
+      method: 'POST',
+      url: '/api/here/link',
+      headers: { 'x-conch-here': key, [NOT_HERE]: '1' },
+    });
+    expect(link.statusCode).toBe(401);
+  });
+
+  it('trusts the cookie only on a request that looks local', async () => {
+    const { app } = await setup();
+    const proxied = await app.inject({
+      url: '/api/state',
+      headers: { host: 'conch.example', 'x-forwarded-for': '203.0.113.9' },
+    });
+    expect(proxied.statusCode).toBe(401);
+    const fromAfar = await app.inject({
+      url: '/api/state',
+      remoteAddress: REMOTE.remoteAddress,
+      headers: { host: REMOTE.host },
+    });
+    expect(fromAfar.statusCode).toBe(401);
+  });
+
+  it('gives a launcher in shell or VBScript just the private file to open', async () => {
+    const { app, home } = await setup();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/here/link',
+      headers: { accept: 'text/plain' },
+      payload: { page: '/?open=background', file: true },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toMatch(/^text\/plain/);
+    const file = res.body;
+    expect(file.startsWith(join(home, 'here', 'open'))).toBe(true);
+    const html = await readFile(file, 'utf8');
+    expect(html).toMatch(/url=http:\/\/localhost:\d+\/\?open=background#here=[A-Za-z0-9_-]{43}/);
+    if (process.platform !== 'win32') expect((await stat(file)).mode & 0o777).toBe(0o600);
+  });
+
+  it('forgets every browser on this computer when the key is made again', async () => {
+    const { app, services } = await setup();
+    const { cookie } = await openedFromConch(app);
+    expect((await hidden(app, '/api/state', { cookie })).statusCode).toBe(200);
+    services.here.rotate();
+    expect((await hidden(app, '/api/state', { cookie })).statusCode).toBe(401);
+  });
+
+  it('with a password, a browser without proof signs in like any other device', async () => {
+    const { app } = await setup();
+    await withPassword(app);
+    // Signed out, it gets the sign-in page, not "open from your apps".
+    const auth = (await hidden(app, '/api/auth')).json();
+    expect(auth).toMatchObject({ signedIn: false, here: 'unproven' });
+    expect(auth).not.toHaveProperty('hereRequired');
+    expect((await hidden(app, '/api/state')).json().error).toBe('unauthorized');
+    const signIn = await app.inject({
+      method: 'POST',
+      url: '/api/auth/sign-in',
+      headers: { host: '127.0.0.1:4317', [NOT_HERE]: '1' },
+      payload: { with: 'password', username: 'ada', password: PASSWORD },
+    });
+    expect(signIn.statusCode).toBe(200);
+    const cookie = cookieOf(signIn);
+    // Signed in, but not this computer (devices.test.ts has what that keeps it from).
+    const access = (await hidden(app, '/api/access', { cookie })).json();
+    expect(access.approval.here).toBe(false);
   });
 });
 

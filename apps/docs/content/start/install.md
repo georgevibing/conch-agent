@@ -44,11 +44,17 @@ On Windows, set `$env:CONCH_UNINSTALL = '1'` and run the line again.
 
 ## A computer that stays on
 
-For a Mac mini or a Raspberry Pi in a cupboard, add `--server`. Conch opens no browser, keeps running after you log out, and prints your phone's secure address with a QR code to sign it in.
+For a server you rent, a Mac mini or a Raspberry Pi in a cupboard, add `--server`. Conch opens no browser and keeps running after you log out. Then it asks how you'll reach it: at an address of your own, privately with Tailscale, or only from that computer. It ends with a link that makes it yours.
 
 ```bash
 curl -fsSL https://conchagent.com/install.sh | sh -s -- --server
 ```
+
+Over SSH, it does this by itself. [On a server](./server.md) walks through it.
+
+## The conch command
+
+The installer adds `conch` to your terminal, so `conch help`, `conch status` and the rest work anywhere. Every command is in [the command line](../reference/cli.md).
 
 ## From a checkout
 
@@ -61,3 +67,5 @@ pnpm start
 ```
 
 Conch builds and opens at `http://localhost:4317`, reachable only from this computer. If another program has that port, it takes the next free one and says so.
+
+Conch trusts a browser it opened itself. To use another browser on this computer, run `pnpm conch open --link` and paste the link it prints. [This computer](../security/signing-in.md#this-computer) says why.

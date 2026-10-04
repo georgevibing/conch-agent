@@ -246,7 +246,3 @@
   align-items: center;
   gap: var(--nc-space-2) var(--nc-space-4);
 }
-
-.downloadOthers {
-  margin: 0;
-}

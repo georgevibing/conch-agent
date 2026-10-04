@@ -183,6 +183,32 @@
     animation: nc-breathe 2.4s var(--nc-ease-in-out) infinite;
   }
 
+  /* ── Or let yourself in ─────────────────────────────────────────────── */
+  .passkey {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--nc-space-3);
+    inline-size: 100%;
+  }
+
+  .or {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    inline-size: 100%;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .or::before,
+  .or::after {
+    content: '';
+    flex: 1;
+    block-size: 1px;
+    background: var(--nc-border-subtle);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .done,
     .dot {

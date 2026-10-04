@@ -4,7 +4,9 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Config } from './config';
 import { Emitter } from './lib/emitter';
 import { SignInLimiter } from './auth/limiter';
+import { HERE_COOKIE_MAX_AGE_S, hereCookieName, ThisComputer } from './auth/here';
 import { HostPolicy, isLoopbackAddress, isLoopbackHost } from './auth/network';
+import { PasskeyCeremonies, passkeyPlace } from './auth/passkeys';
 import { safeEqual } from './auth/secrets';
 import {
   type AccessStore,
@@ -12,6 +14,7 @@ import {
   SESSION_MAX_AGE_MS,
   VERIFY_WINDOW_MS,
 } from './auth/store';
+import { cliName } from './cli/command';
 
 /** How a request was let in. */
 export type Access =
@@ -28,7 +31,8 @@ declare module 'fastify' {
 }
 
 /** Who a request is, or why it isn't let in. */
-export type Resolved = Access | 'unauthorized' | 'setup-required' | 'approval-required';
+export type Resolved =
+  Access | 'unauthorized' | 'setup-required' | 'here-required' | 'approval-required';
 
 /** Endpoints anyone may call: enough to load the app and sign in. */
 const PUBLIC_API = new Set([
@@ -36,10 +40,20 @@ const PUBLIC_API = new Set([
   'GET /api/auth',
   'POST /api/auth/sign-in',
   'POST /api/auth/sign-out',
+  // Handing in a one-time code from `#here=` (ADR 0063); it checks its own.
+  'POST /api/here',
+  // A passkey challenge to sign in, or to make Conch yours from the hello link (ADR 0064, 0065).
+  'POST /api/auth/passkey',
+  // The hello link: is it still good, and use it (ADR 0064). Each checks its own code.
+  'POST /api/auth/hello',
+  'POST /api/auth/hello/finish',
 ]);
 
 /** What the menu bar helper may ask, with its token instead of a sign-in (ADR 0029). */
 const TRAY_API = new Set(['GET /api/tray/status', 'POST /api/tray/quit']);
+
+/** What this computer, proven, may ask even with sign-in on and no session (ADR 0063). */
+const HERE_API = new Set(['POST /api/here/link']);
 
 const COOKIE = 'conch_session';
 /** `__Host-` cookies must be Secure, host-only and Path=/ — browsers enforce it. */
@@ -77,6 +91,8 @@ const FORWARDED = ['forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-real-i
  */
 export class Gatekeeper {
   readonly limiter = new SignInLimiter();
+  /** Making and using passkeys (ADR 0065): the challenges it gave out live here. */
+  readonly passkeys: PasskeyCeremonies;
   readonly hosts: HostPolicy;
   /** Open sockets per session, so signing a device out disconnects it at once. */
   readonly #sockets = new Map<string, Set<{ close(code?: number, reason?: string): void }>>();
@@ -98,14 +114,16 @@ export class Gatekeeper {
 
   /**
    * The menu bar helper asking: from this computer itself (never a proxy),
-   * with its token, compared in constant time.
+   * with its token, compared in constant time. It only reads counts and quits:
+   * the helper sends it to whatever listens on Conch's port, so it never opens
+   * anything (pages open through `here/asks`, ADR 0063).
    */
   trayAllowed(request: FastifyRequest): boolean {
     const given = request.headers['x-conch-tray'];
     return (
       this.#trayToken !== undefined &&
       typeof given === 'string' &&
-      this.isLocal(request) &&
+      this.looksLocal(request) &&
       safeEqual(given, this.#trayToken)
     );
   }
@@ -113,8 +131,10 @@ export class Gatekeeper {
   constructor(
     readonly config: Config,
     readonly store: AccessStore,
+    readonly here: ThisComputer = new ThisComputer(config.CONCH_HOME),
   ) {
     this.hosts = new HostPolicy(config);
+    this.passkeys = new PasskeyCeremonies(store);
   }
 
   /** `CONCH_TOKEN` (legacy) acts as an access key and turns sign-in on. */
@@ -124,11 +144,16 @@ export class Gatekeeper {
   }
 
   /**
-   * A request from this computer, to a loopback name, not relayed by a proxy.
-   * The loopback socket alone isn't enough: `tailscale serve`, `vite --host`
-   * or any reverse proxy on this machine make remote visitors look local.
+   * A request that *looks* like it's from this computer: a loopback socket, a
+   * loopback name, and no proxy saying it relayed it. The loopback socket alone
+   * isn't enough: `tailscale serve`, `vite --host` or any reverse proxy on this
+   * machine make remote visitors look local. And looks aren't enough either: a
+   * proxy that rewrites `Host` and adds no header (nginx's defaults), or another
+   * account on this computer, looks exactly like this. So this decides only
+   * what describes the connection (cookie flags, "secure"); who gets trusted is
+   * `isLocal`.
    */
-  isLocal(request: FastifyRequest): boolean {
+  looksLocal(request: FastifyRequest): boolean {
     const host = hostname(request.headers.host);
     return (
       isLoopbackAddress(request.socket.remoteAddress) &&
@@ -138,10 +163,37 @@ export class Gatekeeper {
     );
   }
 
+  /** The cookie that makes a browser "this computer", for the port this request came in on. */
+  hereCookieName(request: FastifyRequest): string {
+    return hereCookieName(request.socket.localPort ?? this.config.CONCH_PORT);
+  }
+
+  /**
+   * Proof that only your account on this computer can have (ADR 0063): the
+   * cookie a one-time code gave this browser. The key it's made with never
+   * leaves its file, so nothing that is sent can be replayed to mint more.
+   */
+  proves(request: FastifyRequest): boolean {
+    return this.here.checkCookie(readCookie(request.headers.cookie, this.hereCookieName(request)));
+  }
+
+  /**
+   * This computer, proven: it looks local *and* carries proof (ADR 0063).
+   * Everything that trusts "this computer" asks this.
+   */
+  isLocal(request: FastifyRequest): boolean {
+    return this.looksLocal(request) && this.proves(request);
+  }
+
+  /** The cookie for a browser that just proved it's on this computer. */
+  hereCookie(request: FastifyRequest): string {
+    return `${this.hereCookieName(request)}=${this.here.cookie()}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${HERE_COOKIE_MAX_AGE_S}`;
+  }
+
   /** HTTPS end to end (directly, or via a local TLS proxy like `tailscale serve`), or never leaves this computer. */
   isSecure(request: FastifyRequest): boolean {
     if (request.protocol === 'https') return true;
-    if (this.isLocal(request)) return true;
+    if (this.looksLocal(request)) return true;
     return (
       isLoopbackAddress(request.socket.remoteAddress) &&
       request.headers['x-forwarded-proto'] === 'https'
@@ -222,7 +274,11 @@ export class Gatekeeper {
       }
       return { kind: 'bearer', keyId };
     }
-    if (method === 'none') return this.isLocal(request) ? { kind: 'local' } : 'setup-required';
+    if (method === 'none') {
+      if (this.isLocal(request)) return { kind: 'local' };
+      // Looks like this computer, without the proof: open it from Conch (ADR 0063).
+      return this.looksLocal(request) ? 'here-required' : 'setup-required';
+    }
     return 'unauthorized';
   }
 
@@ -238,15 +294,28 @@ export class Gatekeeper {
     const signedIn = typeof resolved === 'object';
     const token = signedIn ? undefined : this.sessionToken(request);
     const approval = token ? await this.store.waitingFor(token) : undefined;
+    const looksLocal = this.looksLocal(request);
     return {
       method: await this.method(),
       signedIn,
       setupRequired: resolved === 'setup-required',
+      ...(resolved === 'here-required' && { hereRequired: true }),
+      ...(looksLocal && {
+        here: this.proves(request) ? ('proven' as const) : ('unproven' as const),
+      }),
       secure: this.isSecure(request),
       // Only those still outside need telling: the way back in is on this computer.
       ...(!signedIn && (await this.store.locked()) && { locked: true }),
       ...(approval && { approval }),
+      ...(!signedIn && (await this.passkeysHere(request)) && { passkeys: true }),
     };
+  }
+
+  /** A passkey made for the address this request came to could sign in (ADR 0065). */
+  async passkeysHere(request: FastifyRequest): Promise<boolean> {
+    const place = passkeyPlace(request);
+    if (!place || (await this.store.method()) === 'none') return false;
+    return (await this.store.passkeyRecords()).some((p) => p.rpId === place.rpId);
   }
 
   /** Sensitive changes need a recent password/key ("sudo mode"). */
@@ -257,14 +326,14 @@ export class Gatekeeper {
   }
 
   sessionCookie(request: FastifyRequest, token: string): string {
-    const secure = this.isSecure(request) && !this.isLocal(request);
+    const secure = this.isSecure(request) && !this.looksLocal(request);
     const name = secure ? SECURE_COOKIE : COOKIE;
     return `${name}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MAX_AGE_MS / 1000}${secure ? '; Secure' : ''}`;
   }
 
   /** Long-lived and HttpOnly: page scripts can't read it, so an injected one can't take it away. */
   deviceCookie(request: FastifyRequest, token: string): string {
-    const secure = this.isSecure(request) && !this.isLocal(request);
+    const secure = this.isSecure(request) && !this.looksLocal(request);
     const name = secure ? SECURE_DEVICE_COOKIE : DEVICE_COOKIE;
     return `${name}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${DEVICE_MAX_AGE_S}${secure ? '; Secure' : ''}`;
   }
@@ -399,7 +468,8 @@ function securityHeaders(request: FastifyRequest, reply: FastifyReply, secure: b
  * 2. **Fetch metadata / Origin** — a page on another site (or another port
  *    of localhost) can't call the API or open the WebSocket.
  * 3. **Sign-in** — everything but loading the app and signing in needs a
- *    session, an access key, or (with sign-in off) a genuinely local request.
+ *    session, an access key, or (with sign-in off) this computer, proven
+ *    (ADR 0063).
  */
 export function registerSecurity(app: FastifyInstance, gate: Gatekeeper): void {
   const reject = (reply: FastifyReply, status: number, error: string, message: string) =>
@@ -428,7 +498,7 @@ export function registerSecurity(app: FastifyInstance, gate: Gatekeeper): void {
         .code(421)
         .type('text/plain')
         .send(
-          `Conch doesn’t answer to “${host ?? '?'}”. To allow it, start Conch with CONCH_ALLOWED_HOSTS=${host ?? 'name'}.`,
+          `Conch doesn’t answer to “${host ?? '?'}”. To open it there, run “conch setup” on the computer running Conch and choose the way you reach it.`,
         );
     }
     securityHeaders(request, reply, gate.isSecure(request));
@@ -469,6 +539,16 @@ export function registerSecurity(app: FastifyInstance, gate: Gatekeeper): void {
       if (gate.trayAllowed(request)) return;
       return reject(reply, 401, 'unauthorized', 'Only Conch’s menu bar helper can ask that.');
     }
+    // Another one-time link, for a browser that is already this computer (ADR 0063).
+    if (HERE_API.has(`${request.method} ${path}`)) {
+      if (gate.isLocal(request)) return;
+      return reject(
+        reply,
+        401,
+        'unauthorized',
+        'Only a browser Conch opened on the computer running it can ask that.',
+      );
+    }
 
     const resolved = await gate.resolve(request);
     if (resolved === 'setup-required') {
@@ -477,6 +557,14 @@ export function registerSecurity(app: FastifyInstance, gate: Gatekeeper): void {
         401,
         'setup-required',
         'Sign-in isn’t set up yet. On the computer running Conch, open Settings → Security.',
+      );
+    }
+    if (resolved === 'here-required') {
+      return reject(
+        reply,
+        401,
+        'here-required',
+        `This browser hasn’t been opened from Conch yet. On the computer running Conch, open Conch from your apps, or run: ${cliName()} open`,
       );
     }
     if (resolved === 'unauthorized') return reject(reply, 401, 'unauthorized', 'Please sign in.');
@@ -488,7 +576,7 @@ export function registerSecurity(app: FastifyInstance, gate: Gatekeeper): void {
         message:
           request.approval?.state === 'rejected'
             ? 'Using this key from this device was turned down.'
-            : `This key needs your approval to be used from this device. On the computer running Conch, run: pnpm conch devices approve ${code}`,
+            : `This key needs your approval to be used from this device. Approve it in Settings → Security on a device you’ve let in, or on the computer running Conch: ${cliName()} devices approve ${code}`,
       });
     }
     request.access = resolved;

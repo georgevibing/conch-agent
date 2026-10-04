@@ -1,4 +1,4 @@
-import type { Skill } from '@conch/protocol';
+import { fuzzyFilter, type Skill } from '@conch/protocol';
 import {
   Button,
   EmptyState,
@@ -17,7 +17,6 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
 import { useAssistantName } from '../integrations/queries';
-import { fuzzyFilter } from '../search/fuzzy';
 import { useSkills } from './queries';
 import { SkillShelfCard } from './SkillShelfCard';
 import { SkillSuggestions } from './SkillSuggestions';

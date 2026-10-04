@@ -227,7 +227,7 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
   const tryTool: HostTool<{
     draft: typeof draftArg;
     tool: z.ZodString;
-    input: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+    input: z.ZodOptional<z.ZodObject<Record<string, never>, z.core.$loose>>;
   }> = {
     name: 'app_try',
     description:
@@ -235,7 +235,9 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
     input: {
       draft: draftArg,
       tool: z.string().min(1).max(20).describe('The tool’s own name, like log_watering'),
-      input: z.record(z.string(), z.unknown()).optional().describe('Its arguments'),
+      // An open object, not `z.record`: the MCP SDK can't list a record, and one
+      // tool that won't list takes every Conch tool away from Claude Code.
+      input: z.looseObject({}).optional().describe('Its arguments'),
     },
     run: safely(async ({ draft, tool, input }) => {
       const info = await draftOf(draft);

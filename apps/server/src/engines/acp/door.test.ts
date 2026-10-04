@@ -1,9 +1,11 @@
+import { spawn } from 'node:child_process';
 import { request } from 'node:http';
 
 import { describe, expect, it } from 'vitest';
 
 import type { Callable } from '../api/engine';
 import { openDoor } from './door';
+import { SHIM_SCRIPT } from './engine';
 
 function tool(name: string): Callable {
   return {
@@ -69,5 +71,109 @@ describe('the door Conch opens for an agent’s turn', () => {
     const key = Object.fromEntries(door.headers.map((h) => [h.name, h.value]));
     await door.close();
     await expect(knock(door.url, key, list)).rejects.toThrow();
+  });
+});
+
+describe('the stdio door (shim.mjs)', () => {
+  const run = (env: Record<string, string>) =>
+    new Promise<number | null>((resolve) => {
+      const child = spawn(process.execPath, [SHIM_SCRIPT], { env, stdio: 'ignore' });
+      child.on('close', resolve);
+    });
+
+  it('relays only to a door on this computer, and only with a key', async () => {
+    expect(await run({ CONCH_DOOR_URL: 'http://evil.example:80/mcp', CONCH_DOOR_KEY: 'k' })).toBe(
+      2,
+    );
+    expect(await run({ CONCH_DOOR_URL: 'http://127.0.0.1:1/other', CONCH_DOOR_KEY: 'k' })).toBe(2);
+    expect(await run({ CONCH_DOOR_URL: 'http://127.0.0.1:4317/mcp', CONCH_DOOR_KEY: '' })).toBe(2);
+  });
+
+  it('gets nothing from the door with the wrong key', async () => {
+    const door = await openDoor(
+      new Map([['x', tool('x')]]),
+      { start() {}, end() {} },
+      new AbortController().signal,
+    );
+    const child = spawn(process.execPath, [SHIM_SCRIPT], {
+      env: { CONCH_DOOR_URL: door.url, CONCH_DOOR_KEY: 'not-the-key' },
+      stdio: ['pipe', 'pipe', 'ignore'],
+    });
+    const answer = new Promise<string>((resolve) =>
+      child.stdout.once('data', (d: Buffer) => resolve(d.toString())),
+    );
+    child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 7, method: 'tools/list' })}\n`);
+    expect(JSON.parse(await answer)).toMatchObject({ id: 7, error: { code: -32603 } });
+    child.kill();
+    await door.close();
+  });
+});
+
+/** A tool call through the door, read back as the agent would. */
+function call(url: string, headers: Record<string, string>, name: string) {
+  return new Promise<unknown>((resolve, reject) => {
+    const target = new URL(url);
+    const req = request(
+      {
+        hostname: target.hostname,
+        port: target.port,
+        path: target.pathname,
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          ...headers,
+        },
+      },
+      (res) => {
+        let body = '';
+        res.on('data', (chunk: Buffer) => (body += chunk.toString()));
+        res.on('end', () => resolve(JSON.parse(body)));
+      },
+    );
+    req.on('error', reject);
+    req.end(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: { name, arguments: {} },
+      }),
+    );
+  });
+}
+
+describe('a tool’s pictures through the door (ADR 0070)', () => {
+  it('go back as MCP images after the words', async () => {
+    const stop = new AbortController();
+    const shot: Callable = {
+      ...tool('browser_screenshot'),
+      run: async () => ({
+        text: 'Screenshot of “Shop”.',
+        isError: false,
+        images: [{ data: '/9j/AAAA', mimeType: 'image/jpeg' }],
+      }),
+    };
+    const ended: { output: string }[] = [];
+    const door = await openDoor(
+      new Map([['browser_screenshot', shot]]),
+      { start() {}, end: (e) => void ended.push(e) },
+      stop.signal,
+    );
+    const key = Object.fromEntries(door.headers.map((h) => [h.name, h.value]));
+    try {
+      const reply = (await call(door.url, key, 'browser_screenshot')) as {
+        result: { content: unknown[] };
+      };
+      expect(reply.result.content).toEqual([
+        { type: 'text', text: 'Screenshot of “Shop”.' },
+        { type: 'image', data: '/9j/AAAA', mimeType: 'image/jpeg' },
+      ]);
+      // The person's row shows the words, never the bytes.
+      expect(ended[0]?.output).toBe('Screenshot of “Shop”.');
+    } finally {
+      stop.abort();
+      await door.close();
+    }
   });
 });

@@ -150,7 +150,13 @@ src/
   last event it saw; when a conversation moves to another provider, that provider
   resumes its own session and is handed the transcript it missed
   (`conversations/handoff.ts`, newest first within 60,000 characters, with the chat's
-  latest summary for what that leaves out). `turn.completed` says which provider and
+  latest summary for what that leaves out): the words, what was done between them
+  (each tool and its result in brief, the browser's steps, files, memories,
+  questions) and where things stand (the browser's page, an open plan). An engine
+  that can't continue its session starts a new one with `TurnInput.freshPrompt`,
+  the whole conversation ([ADR 0069](./docs/adr/0069-carrying-a-chat-on.md)): Codex
+  keeps its threads in `codex-sessions/` and resumes them while the tools are the
+  same; ACP programs `session/load`. `turn.completed` says which provider and
   model answered.
 - **Long chats** ([ADR 0055](./docs/adr/0055-long-chats-on-every-model.md)). An engine
   that keeps the transcript itself declares `Engine.context`: the model APIs fit each
@@ -299,7 +305,9 @@ src/
   five minutes), rebuilds it when its source changes and replaces it when Conch updates.
   It polls `GET /api/tray/status` with `X-Conch-Tray` (the token in `tray/token`, 0600);
   `Gatekeeper.trayAllowed` accepts it from loopback only, for the two `TRAY_API`
-  routes only. `little.ts` has `AfterLogout` (`loginctl enable-linger`, or the one
+  routes only. Its pages open as this computer (ADR 0063): it leaves `<id>.ask` in
+  `~/.conch/here/asks`, and opens the private file the gateway names in `<id>.open`. Its token
+  never opens anything: it goes to whatever listens on the port. `little.ts` has `AfterLogout` (`loginctl enable-linger`, or the one
   `sudo` command) and `KeepAwake` (`caffeinate -s -w <pid>` in the background Conch).
   Both show in `BackgroundStatus` (`tray`, `afterLogout`, `keepAwake`) and in Nacre
   `AlwaysOn`'s `options` (web `RunningOptions`). `install.sh --server` lingers, asks for a
@@ -504,8 +512,11 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   - _Your plans_: Copilot, Gemini CLI and Grok run as the vendor's own program over
     ACP (`engines/acp/`), signed in with its own sign-in. Conch never reads their
     credentials. Conch's tools reach them through a per-turn loopback MCP door
-    (`door.ts`: no `Origin`, loopback `Host`, a random bearer key), and their own
-    changing tools are declined, as Codex's are.
+    (`door.ts`: no `Origin`, loopback `Host`, a random bearer key; over stdio
+    through `shim.mjs` for a program without HTTP), and their own changing tools
+    are declined, as Codex's are. Conch's instructions go where each program takes
+    them (`AcpAgent.instructions`), and their own tool calls show as rows
+    (`calls.ts`, ADR 0069).
   - _Servers of your own_ (`providers/servers.ts`, `engines/api/server.ts`): each
     is a `server-xxxxxxxx` engine. `probeServer` looks at the address as it is typed.
     Plain http is allowed only to private addresses (`local/host.ts`
@@ -600,7 +611,7 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
     scrollback in memory, replayed on attach. A viewer that falls 4 MB behind pauses
     the shell. The OSC title becomes the tab's name. A shell that exits non-zero within
     2.5 s is `endedEarly`, and the app offers to start it without the profile.
-  - **Who may open one** (`service.ts`). Local requests, yes. Other devices only
+  - **Who may open one** (`service.ts`). This computer, proven (ADR 0063), yes. Other devices only
     with `allowRemote` on, and a verification from the last 10 minutes for every
     open and attach. Terminals are owned by the session or key that opened them.
     Signing that out (`Gatekeeper.signedOut`) or revoking the key ends them.
@@ -811,9 +822,11 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   (`state.behind`); `Root` renders the routes at that page, so it stays mounted
   behind, and leaving goes back to it. `useUi.openSettings` keeps its signature for
   every caller and moves the router through `app/navigation.tsx` (`Navigator`, `go`).
-- First run is a short, skippable flow: welcome → connect a provider (install /
-  sign-in / API key, with live re-checks) → a useful first job → personality and
-  "about you" → chat.
+- First run is the welcome (ADR 0068, `features/onboarding`, Nacre `Welcome`): hello →
+  your name → what you'd like a hand with (chips, kept as one sentence in "about you") →
+  a voice, heard → a provider (`ProviderSetup`, carrying on by itself once one works) →
+  apps that connect in a press or two → come home, when there's something to bring →
+  three things to ask first, which open a chat with the words in the composer.
 - **Conch apps** (ADR 0061). **Add your own** opens on **Describe it** (Nacre `AppMaker`),
   which sends "Make me an app: …" as a new chat; **From a link** previews a package
   (`AppPreview`). The transcript draws `conch-app.offer` as `AppOffer` and
@@ -1004,30 +1017,61 @@ Treat it like an SSH server. Full design: [ADR 0008](./docs/adr/0008-access-and-
 user guide: [docs/SECURITY.md](./docs/SECURITY.md).
 
 - **Who gets in** (`apps/server/src/security.ts`, `auth/`). The owner chooses
-  _password_ (scrypt, NIST SP 800-63B-4 rules), _access keys_ (`conch_…`, 256-bit,
-  hashed, revocable) or _no sign-in_. With no sign-in, only genuinely local requests
-  are served: loopback socket **and** loopback `Host` **and** no proxy headers.
-  Everything else gets `401 setup-required`. Credentials, sessions and pairing codes
+  _passkeys_ (WebAuthn: discoverable, user verification required, checked with
+  `@simplewebauthn/server`; ADR 0065), _password_ (scrypt, NIST SP 800-63B-4 rules),
+  _access keys_ (`conch_…`, 256-bit, hashed, revocable) or _no sign-in_. Passkeys can
+  sit beside a password. Their challenges live in the gateway's memory for five
+  minutes, single use, bound to their purpose, session or hello code, and the address. With no sign-in, only this computer, proven, is let in
+  (ADR 0063). The request must look local: a loopback socket **and** a loopback `Host`
+  **and** no proxy headers (`Gatekeeper.looksLocal`). It must also carry the cookie made with the key in
+  `~/.conch/here/key`, `conch_here_<port>` (`Gatekeeper.isLocal`); the key itself never leaves
+  its file and is never accepted. A browser gets that cookie when a launcher opens
+  it through a one-time link in a private file. The launcher asks for that link through
+  `~/.conch/here/asks` (`ThisComputer.answer`), never over the network, where whatever holds
+  the port would hear it. A request that looks local without the proof
+  gets `401 here-required` ("Open Conch from your apps"); everything else gets
+  `401 setup-required`. Everything that trusts "this computer" asks `isLocal`: approving
+  devices, sign-ins that approve themselves, sudo mode for channels, the terminal, and the
+  sign-in limiter. Cookie flags and "secure" describe the connection, so they follow
+  `looksLocal`. Credentials, sessions and pairing codes
   live hashed in `~/.conch/access.json` (0600). A damaged `access.json` never reads
   as "no sign-in": sign-in locks (this computer included) until `pnpm conch reset`,
   keeping a copy. Only unreadable sessions and pairing codes are dropped.
+- **Making a new Conch yours** (ADR 0064): while sign-in is `none`, `conch hello` (with
+  this computer's terminal, never another device) makes a one-time, one-hour link,
+  `/#hello=…`, kept as a SHA-256. Opening it sets a passkey or a password, turns device
+  approval on, approves that browser and uses every hello link up, in one write to
+  `access.json`. The public check of a code says nothing about this computer to a guess.
 - **Sessions:** a fresh random cookie per sign-in (`HttpOnly; SameSite=Strict`,
   `__Host-…; Secure` over HTTPS), expiring after 30 days or 7 idle days, listed and
   revocable per device. Revoking one closes its WebSocket at once. Sensitive changes
-  need a password or key from the last 10 minutes. Failed sign-ins back off per
-  address and globally, and local sign-in is never locked out.
+  need a passkey, password or key from the last 10 minutes (a passkey-only Conch has no
+  secret to type, so only a passkey confirms it). Failed sign-ins back off per address
+  and globally, and local sign-in is never locked out.
 - **Devices:** each browser has a long-lived `HttpOnly` device cookie (hashed),
   so devices are listed across sign-ins. With **Approve new devices** on, a new
   device from elsewhere waits after the right password or key, holding a
-  waiting session that can do nothing, until it's approved on this computer:
-  `pnpm conch devices approve <code>`, or Settings there. Remote devices can
-  turn devices down but never approve one or switch approval off. A key used
-  by a script from elsewhere is approved once, as that key. Open sockets are
+  waiting session that can do nothing, until it's approved: on this computer
+  (`conch devices approve <code>`, or Settings there), or from another device that is
+  itself approved and confirmed it's the person in the last 10 minutes (ADR 0065). A
+  passkey sign-in approves its own device. Only this computer switches approval off,
+  and a waiting device can never approve. A key used by a script from elsewhere is
+  approved once, as that key. Open sockets are
   checked against `access.json` every 2 s, so the terminal's changes apply at
   once ([ADR 0024](./docs/adr/0024-approve-new-devices.md)).
 - **Pairing:** one-time, 10-minute codes, passed in the URL _fragment_
-  (`/#pair=…`) as a QR code. `pnpm conch` covers every operation from the host,
-  including recovery (`pnpm conch reset`).
+  (`/#pair=…`) as a QR code. `conch` covers every operation from the host,
+  including recovery (`conch reset`, then `conch hello` on a server).
+- **Your own address** (`apps/server/src/address/`, ADR 0064): Conch gets and renews a
+  Let's Encrypt certificate itself (RFC 8555 with `jose` and `@peculiar/x509`, renewal by
+  RFC 9773 or at a third of the lifetime), and listens on 443 and 80 beside the loopback
+  gateway. The 443 listener hands every request and upgrade to the gateway's own Fastify
+  server, so every guard here applies unchanged and the socket's address is the client's;
+  80 answers only ACME challenges and Conch's reachability check, and redirects the rest.
+  `/conch/…` goes to the public door's listener, never the gateway. On Linux the capability
+  to bind them goes to Conch's own copy of Node only (`setcap cap_net_bind_service`). Only
+  the owner, on a device that's let in and just confirmed it, or this computer's terminal,
+  changes the address; a restored backup opens nothing on another computer.
 - **Browser guards:**
   - `Host` allowlist (DNS rebinding), with loopback names, `CONCH_ALLOWED_HOSTS`,
     this machine's own addresses when listening on the network, and its Tailscale
@@ -1060,6 +1104,9 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
     never sees secret fields: you type them after a handoff.
   - the agent has no way into your terminals, and a shell's environment has no
     `CONCH_*` variables.
+  - the agent's shell can't run the `conch` commands that change who may sign in or
+    where Conch is reached (`hello`, `setup`, `address`, `phone`, `reset`, `devices approve`…;
+    `lib/protect.ts`), however they're spelled;
   - the agent can't let anyone talk to it from a chat app: connecting a bot,
     letting someone in and making a hello link are routes that need a person
     (and, from another device, a recent password or key). Channels answer
@@ -1084,8 +1131,9 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
 
 Known limits:
 
-- With sign-in off, other OS users on the same machine can reach loopback. The
-  checkup suggests a password.
+- Cookies for `localhost` reach every port on it: a web server that another account runs on
+  this computer, if you visit it, could read your here-cookie (and your session cookie). Both
+  are HttpOnly and SameSite=Strict, and `pnpm conch reset` takes every here-cookie back.
 - The agent can read `ANTHROPIC_API_KEY`, which it needs.
 - Claude Code loads the workspace's own `.claude/` settings; the checkup warns when they add hooks, auto-allowed tools or MCP servers, and can set those files aside.
 - Breached-password checks use a local blocklist only.

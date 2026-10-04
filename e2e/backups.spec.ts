@@ -84,6 +84,8 @@ test('back up, change something, restore it, see it back, and undo', async ({ pa
   const undo = page.getByRole('dialog', { name: 'Undo the restore?' });
   await undo.getByRole('button', { name: 'Undo restore' }).click();
   await expect(page.getByText('Restoring your Conch…')).toBeVisible();
-  await expect(page.getByText('Restore undone')).toBeVisible({ timeout: 60_000 });
+  await expect(
+    page.getByRole('tabpanel', { name: 'Health' }).getByText('Restore undone'),
+  ).toBeVisible({ timeout: 60_000 });
   expect(await memories(request)).toEqual(['Only after the backup.']);
 });

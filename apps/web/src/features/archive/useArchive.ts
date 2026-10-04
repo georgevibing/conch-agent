@@ -89,14 +89,17 @@ export function useArchive() {
 
   /** For good: the confirmation is the caller's to ask. */
   const remove = async (chat: ConversationSummary) => {
+    // Gone the moment it's confirmed; back where it was if the gateway says no.
+    const before = client.getQueryData<ConversationSummary[]>(keys.conversations);
+    client.setQueryData<ConversationSummary[]>(keys.conversations, (list) =>
+      (list ?? []).filter((c) => c.id !== chat.id),
+    );
+    if (conversationId === chat.id) void navigate('/');
     try {
       await api.deleteConversation(chat.id);
-      client.setQueryData<ConversationSummary[]>(keys.conversations, (list) =>
-        (list ?? []).filter((c) => c.id !== chat.id),
-      );
-      if (conversationId === chat.id) void navigate('/');
       return true;
     } catch (e) {
+      if (before) client.setQueryData(keys.conversations, before);
       toast.error((e as Error).message);
       return false;
     }

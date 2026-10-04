@@ -204,6 +204,15 @@ test('pinned as an app: in the sidebar, opens on its own page, refreshes with fr
   await page.goto('/activity');
   await page.getByRole('radio', { name: 'Made' }).click();
   await expect(page.getByText('Made “Visitors this week”').first()).toBeVisible();
+
+  // And finds it as you type, loosely, marking what matched.
+  await page.getByRole('radio', { name: 'Everything' }).click();
+  await page.getByRole('searchbox', { name: 'Find in activity' }).fill('vstrs');
+  const found = page.getByRole('button', { name: /^Made “Visitors this week”/ }).first();
+  await expect(found).toBeVisible();
+  await expect(found.locator('mark').first()).toBeVisible();
+  await page.getByRole('searchbox', { name: 'Find in activity' }).fill('nothing like this zq');
+  await expect(page.getByText('Nothing matches “nothing like this zq”')).toBeVisible();
 });
 
 test('on a phone, it slides over the chat', async ({ browser }) => {

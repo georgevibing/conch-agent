@@ -61,6 +61,7 @@ describe('the map of what Conch can turn on', () => {
         '- skill `claude_pdf`: PDF tools (when asked) — Fill in, merge and split PDFs.',
         '- skill `weekly-review`: Weekly review — Plans the week from your calendar and open work.',
         'Call `offer` only when one of these would clearly do what was asked, and only then. One offer at most.',
+        'An app here has no tools until it’s connected, so don’t search for them. When they ask about one of these, or for what only one of these can do, call `offer` first: before the browser, making an app, or any other way round. Bring those up only if they say no.',
         'Never offer what the person said they don’t use.',
         'Answer what you can first. Don’t explain how to set anything up: the card does that.',
       ].join('\n'),
@@ -141,5 +142,18 @@ describe('the map of what Conch can turn on', () => {
     expect(firstSentence('Uses v2.1 of the API. Then more.')).toBe('Uses v2.1 of the API.');
     expect(firstSentence('No full stop')).toBe('No full stop');
     expect(firstSentence('x'.repeat(200))).toHaveLength(140);
+  });
+
+  // Cut alphabetically, a named app late in the alphabet fell off the end, so
+  // "what about todoist?" had nothing to offer. What the person named comes first.
+  it('always keeps what the person just named, however tight the budget', () => {
+    const tight = mapSection(everything, 900);
+    expect(tight).not.toMatch(/`todoist`/);
+    const named = mapSection(everything, 900, 'what about Todoist? anything due today');
+    expect(named).toMatch(/- app `todoist`: Todoist/);
+    const firstApp = named.split('\n').find((l) => l.startsWith('- app'));
+    expect(firstApp).toMatch(/`todoist`/);
+    // A word inside another isn't a name: "linearly" isn't Linear.
+    expect(mapSection(everything, 900, 'grows linearly')).toBe(tight);
   });
 });

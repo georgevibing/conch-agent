@@ -910,3 +910,246 @@ describe('KeePassXC’s own words', () => {
     expectNoSecretsIn(calls, ['nope']);
   });
 });
+
+describe('Copy to another password manager (ADR 0062)', () => {
+  const opList = [
+    {
+      id: 'aaaa1111',
+      title: 'Mail',
+      category: 'LOGIN',
+      vault: { id: 'vaultprivate', name: 'Private' },
+      additional_information: 'ada',
+      urls: [{ href: 'https://mail.example', primary: true }],
+    },
+  ];
+  const onePassword = (calls: Call[], created: unknown[], locked = false) =>
+    exec(calls, {
+      op: (args) => {
+        const cmd = args.slice(0, 2).join(' ');
+        if (cmd === 'account list') return locked ? '[]' : JSON.stringify([{ id: 'acct' }]);
+        if (cmd === 'item list') return JSON.stringify(opList);
+        if (cmd === 'item create') {
+          const input = calls.at(-1)?.input ?? '';
+          created.push(JSON.parse(input));
+          return JSON.stringify({ id: 'new1' });
+        }
+        return undefined as unknown as string;
+      },
+    });
+
+  async function withItems(service: VaultService) {
+    const bank = await service.create({
+      type: 'login',
+      title: 'Bank',
+      fields: [
+        { label: 'Username', kind: 'text', role: 'username', value: 'ada' },
+        { label: 'Password', kind: 'secret', role: 'password', value: 'bank-secret-123' },
+        { label: 'PIN', kind: 'pin', value: '4242' },
+      ],
+      urls: ['https://bank.example'],
+      notes: 'Branch in town',
+      tags: ['money'],
+    });
+    const mail = await service.create({
+      type: 'login',
+      title: 'Mail',
+      fields: [
+        { label: 'Username', kind: 'text', role: 'username', value: 'ada' },
+        { label: 'Password', kind: 'secret', role: 'password', value: 'mail-secret-456' },
+      ],
+      urls: ['https://mail.example'],
+    });
+    return { bank, mail };
+  }
+
+  it('makes new 1Password items from the JSON template on stdin, never in arguments, and leaves out ones it has', async () => {
+    const calls: Call[] = [];
+    const created: Record<string, unknown>[] = [];
+    const { service } = await vault({ exec: onePassword(calls, created) });
+    const { bank, mail } = await withItems(service);
+    await service.setSource('1password', { enabled: true });
+    // Its vaults come with the very first list, from what that list read.
+    const first = await service.list({ looking: true });
+    expect(first.status.sources.find((s) => s.id === '1password')).toMatchObject({
+      accepts: true,
+      places: [{ id: 'vaultprivate', name: 'Private' }],
+    });
+
+    const status = (await service.sourceStatus()).find((s) => s.id === '1password');
+    expect(status).toMatchObject({
+      accepts: true,
+      places: [{ id: 'vaultprivate', name: 'Private' }],
+    });
+
+    const result = await service.copyOut('1password', {
+      ids: [bank.id, mail.id],
+      place: 'vaultprivate',
+      skipDuplicates: true,
+    });
+    // Mail is already in 1Password (the same site and account).
+    expect(result).toEqual({ copied: 1, skipped: 1, failed: [] });
+    const create = calls.find((c) => c.args[1] === 'create');
+    expect(create?.args).toEqual([
+      'item',
+      'create',
+      '--vault',
+      'vaultprivate',
+      '--format',
+      'json',
+      '-',
+    ]);
+    expect(created[0]).toMatchObject({
+      title: 'Bank',
+      category: 'LOGIN',
+      tags: ['money'],
+      urls: [{ href: 'https://bank.example', primary: true }],
+      fields: expect.arrayContaining([
+        expect.objectContaining({ purpose: 'USERNAME', value: 'ada' }),
+        expect.objectContaining({
+          purpose: 'PASSWORD',
+          type: 'CONCEALED',
+          value: 'bank-secret-123',
+        }),
+        expect.objectContaining({ label: 'PIN', type: 'CONCEALED', value: '4242' }),
+        expect.objectContaining({ purpose: 'NOTES', value: 'Branch in town' }),
+      ]),
+    });
+    expectNoSecretsIn(calls, ['bank-secret-123', 'mail-secret-456', '4242']);
+
+    // Asked to, it copies a duplicate too.
+    expect(
+      await service.copyOut('1password', { ids: [mail.id], skipDuplicates: false }),
+    ).toMatchObject({ copied: 1 });
+  });
+
+  it('refuses a manager that is off, locked, or only read, and a vault id that is not one', async () => {
+    const calls: Call[] = [];
+    const { service } = await vault({ exec: onePassword(calls, [], true) });
+    const { bank } = await withItems(service);
+    const copy = (id: Parameters<VaultService['copyOut']>[0], place?: string) =>
+      service.copyOut(id, { ids: [bank.id], skipDuplicates: false, ...(place && { place }) });
+    await expect(copy('1password')).rejects.toThrow(/Turn on 1Password/);
+    await service.setSource('1password', { enabled: true });
+    await expect(copy('1password')).rejects.toThrow(/Integrate with 1Password CLI/);
+    await service.setSource('keeper', { enabled: true }).catch(() => undefined);
+    await expect(copy('keeper')).rejects.toThrow();
+    expect(calls.some((c) => c.args[1] === 'create')).toBe(false);
+
+    const ok = await vault({ exec: onePassword([], []) });
+    const mine = await withItems(ok.service);
+    await ok.service.setSource('1password', { enabled: true });
+    expect(
+      await ok.service.copyOut('1password', {
+        ids: [mine.bank.id],
+        place: 'not a vault',
+        skipDuplicates: false,
+      }),
+    ).toMatchObject({ copied: 0, failed: [{ title: 'Bank' }] });
+    // Only Conch's own items: another manager's id is nothing to copy.
+    await expect(
+      ok.service.copyOut('1password', { ids: ['op_vaultprivate_aaaa1111'], skipDuplicates: false }),
+    ).rejects.toThrow(/aren’t in Conch/);
+  });
+
+  it('makes a Bitwarden login from the encoded item on stdin', async () => {
+    const calls: Call[] = [];
+    const created: Record<string, unknown>[] = [];
+    const bw = exec(calls, {
+      bw: (args, env) => {
+        if (args[0] === 'status')
+          return JSON.stringify({ status: env?.BW_SESSION ? 'unlocked' : 'locked' });
+        if (args[0] === 'unlock') return 'SESSION';
+        if (args.join(' ') === 'list items') return '[]';
+        if (args.join(' ') === 'create item') {
+          created.push(
+            JSON.parse(Buffer.from(calls.at(-1)?.input ?? '', 'base64').toString('utf8')),
+          );
+          return '{}';
+        }
+        return undefined as unknown as string;
+      },
+    });
+    const { service } = await vault({ exec: bw });
+    const { bank } = await withItems(service);
+    await service.setSource('bitwarden', { enabled: true });
+    await service.unlockSource('bitwarden', 'master');
+    expect(
+      await service.copyOut('bitwarden', { ids: [bank.id], skipDuplicates: true }),
+    ).toMatchObject({ copied: 1 });
+    expect(created[0]).toMatchObject({
+      type: 1,
+      name: 'Bank',
+      notes: 'Branch in town',
+      login: {
+        username: 'ada',
+        password: 'bank-secret-123',
+        uris: [{ uri: 'https://bank.example', match: null }],
+      },
+      fields: [{ name: 'PIN', value: '4242', type: 1 }],
+    });
+    expectNoSecretsIn(calls, ['bank-secret-123', '4242', 'master']);
+  });
+
+  it('keeps a card’s expiry it can’t read as a field, leaves out a note it already has, and never echoes a value in an error', async () => {
+    const calls: Call[] = [];
+    const created: Record<string, unknown>[] = [];
+    let refuse = false;
+    const bw = exec(calls, {
+      bw: (args, env) => {
+        if (args[0] === 'status')
+          return JSON.stringify({ status: env?.BW_SESSION ? 'unlocked' : 'locked' });
+        if (args[0] === 'unlock') return 'SESSION';
+        if (args.join(' ') === 'list items')
+          return JSON.stringify(
+            created.map((c, i) => ({ ...c, id: `0000000${i}-0000-0000-0000-000000000000` })),
+          );
+        if (args.join(' ') === 'create item') {
+          const item = JSON.parse(
+            Buffer.from(calls.at(-1)?.input ?? '', 'base64').toString('utf8'),
+          ) as Record<string, unknown>;
+          if (refuse) return { stderr: `Bad value: ${JSON.stringify(item)}` };
+          created.push(item);
+          return '{}';
+        }
+        return undefined as unknown as string;
+      },
+    });
+    const { service } = await vault({ exec: bw });
+    const card = (expiry: string, title: string) =>
+      service.create({
+        type: 'card',
+        title,
+        fields: [
+          { label: 'Number', kind: 'secret', role: 'cardNumber', value: '4242424242424242' },
+          { label: 'Expiry', kind: 'monthYear', role: 'expiry', value: expiry },
+        ],
+      });
+    const visa = await card('01/27', 'Visa');
+    const odd = await card('2027-01', 'Amex');
+    const note = await service.create({
+      type: 'note',
+      title: 'Safe',
+      fields: [],
+      notes: 'combination 1234',
+    });
+    await service.setSource('bitwarden', { enabled: true });
+    await service.unlockSource('bitwarden', 'master');
+    const copy = (id: string) => service.copyOut('bitwarden', { ids: [id], skipDuplicates: true });
+
+    expect(await copy(visa.id)).toMatchObject({ copied: 1 });
+    expect(created[0]).toMatchObject({ type: 3, card: { expMonth: '1', expYear: '2027' } });
+    expect(await copy(odd.id)).toMatchObject({ copied: 1 });
+    expect(created[1]).toMatchObject({
+      card: { expMonth: null, expYear: null },
+      fields: [{ name: 'Expiry', value: '2027-01', type: 0 }],
+    });
+    expect(await copy(note.id)).toMatchObject({ copied: 1 });
+    // The same note again: it's there already (a note is its kind and its title).
+    expect(await copy(note.id)).toMatchObject({ copied: 0, skipped: 1 });
+
+    refuse = true;
+    const failed = await service.copyOut('bitwarden', { ids: [visa.id], skipDuplicates: false });
+    expect(failed.failed).toHaveLength(1);
+    expect(JSON.stringify(failed)).not.toContain('4242424242424242');
+  });
+});

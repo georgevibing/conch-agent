@@ -26,10 +26,13 @@ import {
   Wifi,
   X,
 } from 'lucide-react';
+import { ToggleGroup } from 'radix-ui';
 import { useEffect, useId, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 
+import { Button } from '../../components/Button';
 import { Highlight, type HighlightRange } from '../../components/Highlight';
 import { IconButton } from '../../components/IconButton';
+import { Pearl } from '../../components/Pearl';
 import { Progress } from '../../components/Progress';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { Skeleton } from '../../components/Skeleton';
@@ -141,6 +144,38 @@ export interface VaultItemIconProps extends Omit<ComponentProps<'span'>, 'childr
   size?: 'sm' | 'md' | 'lg';
 }
 
+/** Labels before the name that say nothing about whose site it is: app.yazio.com is Yazio's. */
+const HOST_WORDS = new Set([
+  'www',
+  'app',
+  'apps',
+  'my',
+  'account',
+  'accounts',
+  'login',
+  'signin',
+  'auth',
+  'secure',
+  'id',
+  'portal',
+  'web',
+  'm',
+]);
+
+/** Second-level labels under a country's domain: bbc.co.uk is the BBC's. */
+const UNDER_COUNTRY = new Set(['co', 'com', 'org', 'net', 'gov', 'ac', 'edu', 'ne', 'or']);
+
+/** The name a site goes by, for its monogram: "app.yazio.com" → "yazio", "bbc.co.uk" → "bbc". */
+export function siteName(domain: string): string {
+  const labels = domain.toLowerCase().split('.').filter(Boolean);
+  if (labels.length < 2 || labels.every((l) => /^\d+$/.test(l))) return domain;
+  let end = labels.length - 1;
+  if (end >= 2 && labels[end]?.length === 2 && UNDER_COUNTRY.has(labels[end - 1] ?? '')) end--;
+  const name = labels[end - 1];
+  if (name && !HOST_WORDS.has(name)) return name;
+  return labels.slice(0, end).find((l) => !HOST_WORDS.has(l)) ?? domain;
+}
+
 /**
  * An item's face: a site's own monogram tile for a login (never a favicon
  * fetched from the web — that would tell the site you have an account), or a
@@ -158,7 +193,7 @@ export function VaultItemIcon({
   if (kind === 'login' && domain) {
     return (
       <IntegrationLogo
-        name={domain}
+        name={siteName(domain)}
         size={size === 'lg' ? 'lg' : size === 'sm' ? 'sm' : 'md'}
         decorative
         className={className}
@@ -205,6 +240,49 @@ export function VaultSourceMark({
       size={size}
       className={styles.sourceMark}
     />
+  );
+}
+
+/**
+ * Where an item lives: Conch's pearl, the password manager's mark, or a lock
+ * for the keys Conch uses. On its own it's the size of the text around it and
+ * sits on its middle, for a button, a menu or a line of words; `corner` puts
+ * it on the corner of a row's tile, cut out by a ring, so every row answers
+ * "whose is this?" without taking a word of its width.
+ */
+export function VaultSourceBadge({
+  source,
+  corner,
+  className,
+}: {
+  source: VaultSourceKind;
+  /** On the corner of an item's tile (a list row). */
+  corner?: boolean;
+  className?: string;
+}) {
+  return (
+    <span
+      aria-hidden
+      data-source={source}
+      data-corner={corner || undefined}
+      className={cx(styles.sourceBadge, className)}
+      title={SOURCE_NAMES[source]}
+    >
+      {source === 'system' ? (
+        <LockKeyhole />
+      ) : source === 'conch' ? (
+        <Pearl size="xs" label={null} className={styles.badgePearl} />
+      ) : (
+        <IntegrationLogo
+          brand={source}
+          name={SOURCE_NAMES[source]}
+          color={SOURCE_COLORS[source]}
+          size="xs"
+          decorative
+          className={styles.sourceBadgeLogo}
+        />
+      )}
+    </span>
   );
 }
 
@@ -261,10 +339,18 @@ export interface VaultRowProps extends Omit<ComponentProps<'button'>, 'children'
   /** The parts of the title a search matched, marked. */
   titleRanges?: readonly HighlightRange[];
   /**
-   * Its password manager's mark at the end. Leave it out when every row in
-   * the list would wear the same one; the row's name still says where it's from.
+   * Where it lives, as a badge on its tile's corner (Conch's pearl or the
+   * manager's mark). A manager's shows unless this is `false`; Conch's own
+   * only when it's `true`, for a list that mixes places. The row's name says
+   * where it's from either way.
    */
   sourceMark?: boolean;
+  /** Where it sits in its own app ("Private" vault), said with where it's from. */
+  container?: string;
+  /** The list is choosing several: the tile turns into a tick box, and a press ticks it. */
+  selecting?: boolean;
+  /** Ticked, while `selecting`. */
+  checked?: boolean;
 }
 
 /** One item in the list: what it is, whose it is, and whether it needs you. */
@@ -282,14 +368,25 @@ export function VaultRow({
   note,
   meta,
   titleRanges,
-  sourceMark = true,
+  sourceMark,
+  container,
+  selecting,
+  checked,
   className,
   ...props
 }: VaultRowProps) {
   const worst = issues.includes('compromised') ? 'compromised' : issues[0];
+  // A manager's mark shows unless left out; Conch's own only when the list mixes places.
+  const badge = sourceMark ?? source !== 'conch';
+  const where =
+    source === 'conch'
+      ? sourceMark
+        ? 'in Conch'
+        : undefined
+      : `from ${SOURCE_NAMES[source]}${container ? `, ${container}` : ''}`;
   const described = [
     subtitle,
-    source !== 'conch' ? `from ${SOURCE_NAMES[source]}` : undefined,
+    where,
     favorite ? 'favourite' : undefined,
     totp ? 'has a one-time code' : undefined,
     passkey ? 'has a passkey' : undefined,
@@ -302,14 +399,25 @@ export function VaultRow({
   return (
     <button
       type="button"
-      data-selected={selected || undefined}
-      aria-current={selected || undefined}
+      data-selected={(selecting ? checked : selected) || undefined}
+      data-selecting={selecting || undefined}
+      aria-current={(!selecting && selected) || undefined}
+      aria-pressed={selecting ? Boolean(checked) : undefined}
       aria-label={described ? `${title}, ${described}` : title}
       data-lustre=""
       className={cx(styles.row, className)}
       {...props}
     >
-      <VaultItemIcon kind={kind} domain={domain} title={title} />
+      <span className={styles.rowTile}>
+        {selecting ? (
+          <span aria-hidden className={styles.rowCheck} data-checked={checked || undefined}>
+            {checked && <Check />}
+          </span>
+        ) : (
+          <VaultItemIcon kind={kind} domain={domain} title={title} />
+        )}
+        {badge && <VaultSourceBadge source={source} corner />}
+      </span>
       <span className={styles.rowText}>
         <span className={styles.rowTitle}>
           {/* Its own box, so a long title ends in "…" and the star stays in view. */}
@@ -338,7 +446,6 @@ export function VaultRow({
         {worst && (
           <span className={styles.issueDot} data-issue={worst} title={ISSUE_WORDS[worst]} />
         )}
-        {sourceMark && <VaultSourceMark source={source} />}
       </span>
     </button>
   );
@@ -368,6 +475,117 @@ export function VaultListHeading({ className, children, ...props }: ComponentPro
   return (
     <div aria-hidden className={cx(styles.listHeading, className)} {...props}>
       {children}
+    </div>
+  );
+}
+
+// ── Where items live, and choosing several ─────────────────────────────────
+
+export interface VaultSourceFilterProps extends Omit<
+  ComponentProps<'div'>,
+  'children' | 'defaultValue' | 'dir'
+> {
+  /** `all`, or one place. */
+  value: VaultSourceKind | 'all';
+  onValueChange: (value: VaultSourceKind | 'all') => void;
+  /** Each place with items, and how many. */
+  sources: { source: VaultSourceKind; count: number }[];
+  /** Items everywhere. */
+  total: number;
+}
+
+/**
+ * Which place's items the list shows: everything, Conch's own, or one
+ * password manager's. One press each, with how many are there and each
+ * place's mark, so it reads at a glance. Arrow keys move between them.
+ */
+export function VaultSourceFilter({
+  value,
+  onValueChange,
+  sources,
+  total,
+  className,
+  ...props
+}: VaultSourceFilterProps) {
+  return (
+    <div className={cx(styles.sourceFilter, className)} {...props}>
+      <ToggleGroup.Root
+        type="single"
+        value={value}
+        onValueChange={(next) => next && onValueChange(next as VaultSourceKind | 'all')}
+        aria-label="Show items from"
+        className={styles.sourceFilterGroup}
+      >
+        <ToggleGroup.Item
+          value="all"
+          className={styles.sourceChip}
+          aria-label={`All, ${total} ${total === 1 ? 'item' : 'items'}`}
+        >
+          All
+          <span className={styles.sourceChipCount}>{total}</span>
+        </ToggleGroup.Item>
+        {sources.map((s) => (
+          <ToggleGroup.Item
+            key={s.source}
+            value={s.source}
+            className={styles.sourceChip}
+            aria-label={`${SOURCE_NAMES[s.source]}, ${s.count} ${s.count === 1 ? 'item' : 'items'}`}
+          >
+            <VaultSourceBadge source={s.source} />
+            {SOURCE_NAMES[s.source]}
+            <span className={styles.sourceChipCount}>{s.count}</span>
+          </ToggleGroup.Item>
+        ))}
+      </ToggleGroup.Root>
+    </div>
+  );
+}
+
+export interface VaultSelectionBarProps extends Omit<ComponentProps<'div'>, 'children'> {
+  /** How many are ticked. */
+  count: number;
+  /** How many the list shows, for "Select all". */
+  total: number;
+  onSelectAll: () => void;
+  onDone: () => void;
+  /** What can be done with them: buttons, each saying how many it applies to. */
+  actions?: ReactNode;
+}
+
+/**
+ * The bar over the list while several are chosen: how many, Select all,
+ * what can be done with them, and Done. Its count is read out as it changes.
+ */
+export function VaultSelectionBar({
+  count,
+  total,
+  onSelectAll,
+  onDone,
+  actions,
+  className,
+  ...props
+}: VaultSelectionBarProps) {
+  return (
+    <div
+      role="group"
+      aria-label="Chosen items"
+      className={cx(styles.selectionBar, className)}
+      {...props}
+    >
+      <div className={styles.selectionTop}>
+        <span className={styles.selectionCount} aria-live="polite">
+          {count === 0 ? 'Choose items' : `${count} chosen`}
+        </span>
+        {count < total && (
+          <Button size="sm" variant="ghost" onClick={onSelectAll}>
+            Select all {total}
+          </Button>
+        )}
+        <Button size="sm" variant="ghost" onClick={onDone}>
+          Done
+        </Button>
+      </div>
+      {actions && <div className={styles.selectionActions}>{actions}</div>}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import type { AccessSettings, AuthStatus } from '@conch/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
+import { NOT_HERE, onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 import { APPROVAL_TTL_MS, AccessStore, MAX_WAITING } from './store';
@@ -36,7 +37,7 @@ async function setup() {
     CONCH_ALLOWED_HOSTS: 'conch.example',
   });
   const services = new Services(config);
-  const app = await buildApp(services);
+  const app = onThisComputer(await buildApp(services), services);
   close = () => app.close();
   return { app, services, home, store: services.access };
 }
@@ -55,7 +56,7 @@ class Browser {
   cookies = new Map<string, string>();
   constructor(
     readonly app: App,
-    readonly where: { remoteAddress: string; host: string; userAgent: string },
+    readonly where: { remoteAddress: string; host: string; userAgent: string; proof?: false },
   ) {}
 
   async fetch(url: string, init: { method?: string; payload?: object; bearer?: string } = {}) {
@@ -66,6 +67,8 @@ class Browser {
       headers: {
         host: this.where.host,
         'user-agent': this.where.userAgent,
+        // A browser here that wasn't opened from Conch, or a proxy that hides itself (ADR 0063).
+        ...(this.where.proof === false && { [NOT_HERE]: '1' }),
         ...(this.cookies.size && {
           cookie: [...this.cookies].map(([k, v]) => `${k}=${v}`).join('; '),
         }),
@@ -105,6 +108,14 @@ const laptop = (app: App) =>
   new Browser(app, { remoteAddress: '100.64.0.9', host: 'conch.example', userAgent: MAC });
 const here = (app: App) =>
   new Browser(app, { remoteAddress: '127.0.0.1', host: 'localhost:4317', userAgent: MAC });
+/** nginx's `proxy_pass http://127.0.0.1:4317;`: loopback, a loopback Host, no header, no proof. */
+const hiddenProxy = (app: App) =>
+  new Browser(app, {
+    remoteAddress: '127.0.0.1',
+    host: '127.0.0.1:4317',
+    userAgent: IPHONE,
+    proof: false,
+  });
 
 /** Password sign-in, set up on this computer, which stays signed in and verified. */
 async function withPassword(app: App) {
@@ -330,13 +341,50 @@ describe('approve new devices', () => {
     expect(device).toMatchObject({ approved: true, approvedHow: 'link' });
   });
 
+  it('makes a proxy that hides itself wait like any new device, and never lets it approve', async () => {
+    const { app } = await setup();
+    const owner = await withPassword(app);
+    await approvalOn(owner);
+
+    // The right password through nginx's defaults: a new device, not this computer.
+    const visitor = hiddenProxy(app);
+    const asked = (await visitor.signIn()).json() as AuthStatus;
+    expect(asked.signedIn).toBe(false);
+    expect(asked.approval?.code).toBeTruthy();
+    expect((await visitor.fetch('/api/state')).statusCode).toBe(401);
+    const code = asked.approval?.code ?? '';
+
+    // Approved by the owner, it's a device like any other: it may let others in once it
+    // has confirmed it's you (ADR 0065), but never turn the protection off.
+    expect(
+      (await owner.fetch(`/api/access/requests/${code}/approve`, { method: 'POST' })).statusCode,
+    ).toBe(200);
+    expect((await visitor.fetch('/api/state')).statusCode).toBe(200);
+    const iphone = phone(app);
+    const waiting = (await iphone.signIn()).json() as AuthStatus;
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 11 * 60 * 1000);
+    const stale = await visitor.fetch(`/api/access/requests/${waiting.approval?.code}/approve`, {
+      method: 'POST',
+    });
+    vi.restoreAllMocks();
+    // Its sign-in was more than ten minutes ago (or the request ran out): not without confirming.
+    expect([403, 404]).toContain(stale.statusCode);
+    expect((await iphone.status()).signedIn).toBe(false);
+    const off = await visitor.fetch('/api/access/approval', {
+      method: 'PUT',
+      payload: { on: false },
+    });
+    expect(off.statusCode).toBe(403);
+    expect(off.json().error).toBe('here-only');
+  });
+
   it('keeps devices signed in when it’s turned on, so nobody is locked out', async () => {
     const { app } = await setup();
     const owner = await withPassword(app);
     const iphone = phone(app);
     await iphone.signIn();
     const access = await approvalOn(owner);
-    expect(access.approval).toEqual({ on: true, here: true });
+    expect(access.approval).toEqual({ on: true, here: true, canApprove: true });
     expect(access.devices.find((d) => d.current)?.approvedHow).toBe('this-computer');
     expect(access.devices.find((d) => d.kind === 'phone')).toMatchObject({
       approved: true,
@@ -345,7 +393,7 @@ describe('approve new devices', () => {
     expect((await iphone.fetch('/api/state')).statusCode).toBe(200);
   });
 
-  it('only lets this computer approve devices or turn approval off', async () => {
+  it('lets approved devices approve, after confirming it’s you, but only this computer turn it off', async () => {
     const { app } = await setup();
     const owner = await withPassword(app);
     const iphone = phone(app);
@@ -354,11 +402,15 @@ describe('approve new devices', () => {
 
     const other = laptop(app);
     const { code } = (await other.signIn()).json().approval;
-    // An approved remote device (or someone with its session) can't let others in…
-    const approve = await iphone.fetch(`/api/access/requests/${code}/approve`, { method: 'POST' });
-    expect(approve.statusCode).toBe(403);
-    expect(approve.json().error).toBe('here-only');
-    // …nor switch the protection off.
+    // A device still waiting can't let anyone in, itself included.
+    expect(
+      (await other.fetch(`/api/access/requests/${code}/approve`, { method: 'POST' })).statusCode,
+    ).toBe(401);
+    // An approved device needs a fresh confirmation (its session alone isn't enough)…
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 9 * 60 * 1000 + 59_000);
+    expect((await iphone.access()).approval.canApprove).toBe(true);
+    vi.restoreAllMocks();
+    // …and can't switch the protection off.
     const off = await iphone.fetch('/api/access/approval', {
       method: 'PUT',
       payload: { on: false },
@@ -366,15 +418,23 @@ describe('approve new devices', () => {
     expect(off.statusCode).toBe(403);
     expect((await other.status()).signedIn).toBe(false);
 
-    // This computer can, once it has confirmed it's you.
+    // The phone signed in a moment ago, which confirmed it's you: it can let the laptop in.
     expect(
-      (await owner.fetch(`/api/access/requests/${code}/approve`, { method: 'POST' })).statusCode,
+      (await iphone.fetch(`/api/access/requests/${code}/approve`, { method: 'POST' })).statusCode,
     ).toBe(200);
     expect((await other.status()).signedIn).toBe(true);
     const device = (await owner.access()).devices.find(
       (d) => d.name === 'Chrome on Mac' && !d.current,
     );
-    expect(device?.approvedHow).toBe('settings');
+    expect(device).toMatchObject({ approvedHow: 'device', approvedBy: 'Safari on iPhone' });
+
+    // This computer can too, and says it was Settings.
+    const third = phone(app, '100.64.0.42');
+    third.cookies.clear();
+    const next = (await third.signIn()).json().approval?.code ?? '';
+    expect(
+      (await owner.fetch(`/api/access/requests/${next}/approve`, { method: 'POST' })).statusCode,
+    ).toBe(200);
   });
 
   it('needs a recent password to approve or to turn approval on', async () => {

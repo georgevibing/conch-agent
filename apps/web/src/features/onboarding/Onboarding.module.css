@@ -1,141 +1,76 @@
 @layer nacre.components {
+  /* The whole screen, the stage in the middle of it, the way back and the steps above. */
   .root {
     position: relative;
     display: grid;
+    grid-template-rows: auto 1fr;
     justify-items: center;
-    align-content: center;
-    gap: var(--nc-space-8);
-    min-block-size: 100dvh;
-    padding: var(--nc-space-12) var(--nc-space-6);
-    overflow-y: auto;
     block-size: 100dvh;
+    padding: var(--nc-space-5) var(--nc-space-6) var(--nc-space-10);
+    overflow-x: hidden;
+    overflow-y: auto;
+    isolation: isolate;
   }
 
-  /* A faint pearl dawn behind the column — colour without glass. */
-  .glow {
-    position: fixed;
-    inset: -30% -10% auto;
-    block-size: 70vh;
-    background:
-      radial-gradient(
-        40% 50% at 30% 40%,
-        color-mix(in oklch, var(--nc-pearl-1) 45%, transparent),
-        transparent 70%
-      ),
-      radial-gradient(
-        35% 45% at 70% 30%,
-        color-mix(in oklch, var(--nc-pearl-3) 35%, transparent),
-        transparent 70%
-      );
-    opacity: 0.42;
-    filter: saturate(1.1);
-    pointer-events: none;
-    animation: nc-fade-in 1.2s var(--nc-ease-out);
+  .top {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    inline-size: min(40rem, 100%);
+    min-block-size: var(--nc-control-md);
+  }
+
+  .top > :last-child {
+    grid-column: 2;
+  }
+
+  .back {
+    grid-column: 1;
+    justify-self: start;
   }
 
   .stage {
-    position: relative;
-    inline-size: min(36rem, 100%);
-    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
+    z-index: 1;
+    align-self: center;
+    padding-block: var(--nc-space-8);
   }
 
-  .stage[data-direction='back'] {
-    --nc-enter-y: -6px;
+  .form {
+    display: contents;
   }
 
-  .progress {
-    position: relative;
-    display: flex;
-    gap: var(--nc-space-1-5);
-    margin: 0;
-    padding: 0;
-    list-style: none;
+  .pearl {
+    margin-block-end: var(--nc-space-2);
   }
 
-  .progress li {
-    inline-size: 1.75rem;
-    block-size: 4px;
-    border-radius: var(--nc-radius-full);
-    background: var(--nc-gray-5);
-    transition:
-      background-color var(--nc-duration-slow) var(--nc-ease-out),
-      inline-size var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  .lead {
+    max-inline-size: 30rem;
+    text-wrap: pretty;
   }
 
-  .progress li[data-state='done'] {
-    background: var(--nc-accent-8);
-  }
-
-  .progress li[data-state='current'] {
-    inline-size: 2.75rem;
-    background: var(--nc-accent-9);
-  }
-
-  .step {
-    display: flex;
-    flex-direction: column;
-    gap: var(--nc-space-8);
-  }
-
-  .footer {
-    display: flex;
-    justify-content: flex-end;
+  .actions {
+    flex-direction: row;
+    justify-content: center;
     gap: var(--nc-space-2);
+    padding-block-start: var(--nc-space-2);
   }
 
-  .welcome {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--nc-space-5);
-    text-align: center;
-  }
-
-  .welcomePearl {
-    margin-block-end: var(--nc-space-4);
-  }
-
-  .welcomeLead {
-    max-inline-size: 26rem;
-    margin-block-end: var(--nc-space-3);
-  }
-
-  .tones {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--nc-space-2);
-  }
-
-  .disclosure {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--nc-space-1);
-    padding: 0;
-    border: 0;
-    background: none;
-    font-size: var(--nc-text-sm);
-    color: var(--nc-text-muted);
-    cursor: pointer;
-  }
-
-  @media (hover: hover) {
-    .disclosure:hover {
-      color: var(--nc-text);
-    }
-  }
-
-  .disclosed {
-    padding-block-start: var(--nc-space-3);
+  /* Lists and cards read from the start edge, inside a stage that's centred. */
+  .wide {
+    align-items: stretch;
+    text-align: start;
   }
 
   @media (max-width: 560px) {
     .root {
-      align-content: start;
-      padding-block-start: var(--nc-space-10);
+      padding-inline: var(--nc-space-4);
     }
 
-    .tones {
-      grid-template-columns: minmax(0, 1fr);
+    .stage {
+      align-self: start;
+      padding-block-start: var(--nc-space-6);
     }
   }
 }

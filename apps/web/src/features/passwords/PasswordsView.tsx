@@ -1,16 +1,19 @@
 import {
   VAULT_TEMPLATES,
   type VaultItemSummary,
-  type VaultItemType,
-  type VaultProblem,
+  VaultItemType,
+  VaultProblem,
+  VaultSourceId,
 } from '@conch/protocol';
 import {
   AlertDialog,
   Button,
   Callout,
+  ContextMenu,
   DropdownMenu,
   EmptyState,
   IconButton,
+  ResizeHandle,
   Input,
   Stack,
   Text,
@@ -22,6 +25,10 @@ import {
   VaultListHeading,
   VaultRow,
   VaultRowSkeleton,
+  VaultSelectionBar,
+  VaultSourceBadge,
+  VaultSourceFilter,
+  vaultSourceName,
   VirtualList,
   type VirtualListHandle,
 } from '@conch/nacre';
@@ -32,6 +39,7 @@ import {
   Download,
   KeyRound,
   Layers,
+  ListChecks,
   LockKeyhole,
   MoreHorizontal,
   Plus,
@@ -41,8 +49,10 @@ import {
   Upload,
 } from 'lucide-react';
 import {
+  createContext,
   memo,
   useCallback,
+  useContext,
   useDeferredValue,
   useEffect,
   useId,
@@ -50,12 +60,16 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
 } from 'react';
 import { useLocation, useNavigate } from 'react-router';
+import { z } from 'zod';
 
 import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
 import { errorText } from '../integrations/queries';
+import { copyTargets, mayHaveCode, useItemActions } from './actions';
 import { vaultApi } from './api';
 import {
   ago,
@@ -63,9 +77,12 @@ import {
   filterName,
   indexItems,
   listRows,
+  range,
   titleRanges,
+  twins,
   TYPE_NAMES,
   type VaultFilter,
+  type VaultFrom,
   type VaultListRow,
   type VaultSort,
   visibleItems,
@@ -76,6 +93,7 @@ import { ItemEditor } from './ItemEditor';
 import { LockDialog, LockScreen } from './Lock';
 import styles from './Passwords.module.css';
 import { useVault, vaultItemQuery, vaultKeys } from './queries';
+import { RowMenu } from './RowMenu';
 import { SourcesDialog } from './SourcesDialog';
 
 type Mode =
@@ -95,64 +113,143 @@ const HOVER_MS = 80;
 const PasswordRow = memo(function PasswordRow({
   item,
   selected,
+  selecting,
+  checked,
   sort,
   query,
   sourceMark,
-  onOpen,
+  onPress,
   onKeyDown,
   onRest,
 }: {
   item: VaultItemSummary;
   selected: boolean;
+  /** The list is choosing several. */
+  selecting: boolean;
+  checked: boolean;
   sort: VaultSort;
   /** What was searched for, to mark it in the title. */
   query: string;
   sourceMark: boolean;
-  onOpen: (id: string) => void;
+  /** A press, with the keys held: ⌘/Ctrl adds it to the chosen, Shift chooses up to it. */
+  onPress: (id: string, how: { toggle: boolean; extend: boolean }) => void;
   onKeyDown: (e: KeyboardEvent<HTMLElement>) => void;
   /** The pointer came to rest on this row (or left it). */
   onRest: (item: VaultItemSummary | undefined) => void;
 }) {
+  const menu = useContext(RowMenuContext);
   const ranges = useMemo(() => titleRanges(item.title, query), [item.title, query]);
+  const [menuOpen, setMenuOpen] = useState(false);
   return (
-    <VaultRow
-      data-id={item.id}
-      kind={item.type}
-      title={item.title}
-      titleRanges={ranges}
-      subtitle={item.subtitle}
-      domain={item.domains[0]}
-      source={item.source}
-      sourceMark={sourceMark}
-      favorite={item.favorite}
-      totp={item.totp}
-      passkey={item.passkey}
-      issues={item.problems}
-      selected={selected}
-      note={item.deletedAt ? `Deleted ${ago(item.deletedAt)}` : undefined}
-      meta={
-        item.deletedAt
-          ? undefined
-          : sort === 'recent'
-            ? item.updatedAt
-              ? `Edited ${ago(item.updatedAt)}`
-              : 'No edit date'
-            : sort === 'used'
-              ? item.usedAt
-                ? `Used ${ago(item.usedAt)}`
-                : 'Not used yet'
-              : undefined
-      }
-      onClick={() => onOpen(item.id)}
-      onKeyDown={onKeyDown}
-      onPointerEnter={(e) => e.pointerType !== 'touch' && onRest(item)}
-      onPointerLeave={() => onRest(undefined)}
-    />
+    <ContextMenu.Root onOpenChange={setMenuOpen}>
+      <ContextMenu.Trigger asChild>
+        <VaultRow
+          data-id={item.id}
+          kind={item.type}
+          title={item.title}
+          titleRanges={ranges}
+          subtitle={item.subtitle}
+          domain={item.domains[0]}
+          source={item.source}
+          sourceMark={sourceMark}
+          container={item.container}
+          selecting={selecting}
+          checked={checked}
+          favorite={item.favorite}
+          totp={item.totp}
+          passkey={item.passkey}
+          issues={item.problems}
+          selected={selected}
+          note={item.deletedAt ? `Deleted ${ago(item.deletedAt)}` : undefined}
+          meta={
+            item.deletedAt
+              ? undefined
+              : sort === 'recent'
+                ? item.updatedAt
+                  ? `Edited ${ago(item.updatedAt)}`
+                  : 'No edit date'
+                : sort === 'used'
+                  ? item.usedAt
+                    ? `Used ${ago(item.usedAt)}`
+                    : 'Not used yet'
+                  : undefined
+          }
+          onClick={(e: ReactMouseEvent) =>
+            onPress(item.id, { toggle: e.metaKey || e.ctrlKey, extend: e.shiftKey })
+          }
+          // Shift-click chooses a run of rows; it shouldn't also select their text.
+          onMouseDown={(e: ReactMouseEvent) => e.shiftKey && e.preventDefault()}
+          onKeyDown={onKeyDown}
+          onPointerEnter={(e) => e.pointerType !== 'touch' && onRest(item)}
+          onPointerLeave={() => onRest(undefined)}
+        />
+      </ContextMenu.Trigger>
+      {menuOpen && menu(item)}
+    </ContextMenu.Root>
   );
 });
 
+/** Each row's right-click menu, drawn only while it's open. */
+const RowMenuContext = createContext<(item: VaultItemSummary) => ReactNode>(() => null);
+
 /** The Security check's issues, in the order they matter. */
 const ISSUES: VaultProblem[] = ['compromised', 'reused', 'weak', 'expired', 'insecure'];
+
+/** How the list was left: kept in this browser, so Passwords opens the way you use it. */
+const VIEW_KEY = 'conch.passwords.view';
+
+/** How wide you made the list, in this browser. Until then it's the usual width. */
+const WIDTH_KEY = 'conch.passwords.listWidth';
+const MIN_LIST = 260;
+function savedWidth(): number | undefined {
+  try {
+    const value = Number(localStorage.getItem(WIDTH_KEY));
+    return Number.isFinite(value) && value >= MIN_LIST ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+interface SavedView {
+  filter: VaultFilter;
+  sort: VaultSort;
+  from: VaultFrom;
+}
+
+/**
+ * What this browser kept, checked against what Passwords knows: an older or
+ * hand-edited value opens the usual way instead of breaking the page.
+ * Recently deleted is somewhere you go, not where Passwords should open.
+ */
+const SavedFilter = z.union([
+  z.object({ kind: z.enum(['all', 'favorites', 'codes']) }),
+  z.object({ kind: z.literal('type'), type: VaultItemType }),
+  z.object({ kind: z.literal('problem'), problem: VaultProblem }),
+  z.object({ kind: z.literal('tag'), tag: z.string().min(1).max(100) }),
+]);
+function savedView(): Partial<SavedView> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(VIEW_KEY) ?? '{}') as Record<string, unknown>;
+    const filter = SavedFilter.safeParse(raw.filter);
+    const sort = z.enum(['name', 'recent', 'used']).safeParse(raw.sort);
+    const from = z.union([z.literal('all'), VaultSourceId]).safeParse(raw.from);
+    return {
+      ...(filter.success && { filter: filter.data }),
+      ...(sort.success && { sort: sort.data }),
+      ...(from.success && { from: from.data }),
+    };
+  } catch {
+    return {};
+  }
+}
+
+/** Typing in a field, or text chosen on the page: the keys are theirs, not the list's. */
+function typing(e: globalThis.KeyboardEvent): boolean {
+  const target = e.target as HTMLElement | null;
+  return Boolean(
+    target?.closest('input, textarea, select, [contenteditable]') ||
+    (window.getSelection()?.toString() ?? ''),
+  );
+}
 
 /**
  * Passwords (ADR 0025): one list of everything — Conch's own vault and the
@@ -166,11 +263,47 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
   const auth = useAuth();
   const { guard: verify, dialog } = useVerify(auth.data?.method ?? 'none');
   const narrow = useMediaQuery('(max-width: 900px)');
+  // The list's width: drag the seam beside it, or focus it and use the arrows.
+  const [listWidth, setListWidth] = useState(savedWidth);
+  const page = useRef<HTMLDivElement>(null);
+  const [pageWidth, setPageWidth] = useState(0);
+  useEffect(() => {
+    const el = page.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setPageWidth(Math.round(entry.contentRect.width));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  // Room for the item beside it, always.
+  const maxList = Math.max(MIN_LIST, Math.round(pageWidth * 0.65) || 720);
+  const resize = (width: number) => {
+    setListWidth(width);
+    try {
+      localStorage.setItem(WIDTH_KEY, String(width));
+    } catch {
+      // A private window: it's the usual width next time.
+    }
+  };
   const [query, setQuery] = useState('');
   // The search box answers each key at once; the list follows when there's a moment.
   const sought = useDeferredValue(query);
-  const [filter, setFilter] = useState<VaultFilter>({ kind: 'all' });
-  const [sort, setSort] = useState<VaultSort>('name');
+  const [saved] = useState(savedView);
+  const [filter, setFilter] = useState<VaultFilter>(saved.filter ?? { kind: 'all' });
+  const [sort, setSort] = useState<VaultSort>(saved.sort ?? 'name');
+  const [from, setFrom] = useState<VaultFrom>(saved.from ?? 'all');
+  useEffect(() => {
+    try {
+      localStorage.setItem(VIEW_KEY, JSON.stringify({ filter, sort, from }));
+    } catch {
+      // A private window: it opens the usual way next time.
+    }
+  }, [filter, sort, from]);
+  // Choosing several: ⌘/Ctrl- or Shift-click, Select, or ⌘A.
+  const [selecting, setSelecting] = useState(false);
+  const [chosen, setChosen] = useState<ReadonlySet<string>>(() => new Set());
+  const anchor = useRef<string>(undefined);
   const [mode, setMode] = useState<Mode>({ kind: 'view' });
   const [importing, setImporting] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
@@ -184,6 +317,8 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
   const list = useRef<VirtualListHandle>(null);
   const listId = useId();
   const listPane = useRef<HTMLElement>(null);
+  // The list's width as drawn, for the seam before it's ever been dragged.
+  const [measuredList, setMeasuredList] = useState(336);
   const resting = useRef<ReturnType<typeof setTimeout>>(undefined);
   const location = useLocation();
 
@@ -218,23 +353,28 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
   const items = useMemo(() => data?.items ?? [], [data]);
   // Read once when the list arrives, so a key press only compares strings.
   const index = useMemo(() => indexItems(items), [items]);
+  // A place that's no longer there (a manager turned off) shows everything again.
+  const place: VaultFrom = from === 'all' || items.some((i) => i.source === from) ? from : 'all';
   const shown = useMemo(
-    () => visibleItems(index, { query: sought, filter, sort }),
-    [index, sought, filter, sort],
+    () => visibleItems(index, { query: sought, filter, sort, from: place }),
+    [index, sought, filter, sort, place],
   );
   const rows = useMemo(
     () => listRows(shown, { query: sought, filter, sort }),
     [shown, sought, filter, sort],
   );
-  const tally = useMemo(() => counts(items), [items]);
-  const chosen = useMemo(() => items.find((i) => i.id === itemId), [items, itemId]);
-  // A manager's mark tells managers apart: with one of them, it'd be the same mark on every row.
-  const sourceMark = useMemo(
-    () =>
-      new Set(items.map((i) => i.source).filter((s) => s !== 'conch' && s !== 'system')).size > 1,
-    [items],
-  );
+  const tally = useMemo(() => counts(items, place), [items, place]);
+  const open1 = useMemo(() => items.find((i) => i.id === itemId), [items, itemId]);
+  const twinsOf = useMemo(() => twins(items), [items]);
+  // Where each item lives, on its tile, once the list holds more than one place's items.
+  const sourceMark = tally.sources.size > 1;
   const status = data?.status;
+  const targets = useMemo(() => copyTargets(status?.sources ?? []), [status?.sources]);
+  const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
+  const chosenItems = useMemo(
+    () => [...chosen].flatMap((id) => byId.get(id) ?? []),
+    [chosen, byId],
+  );
   const open = (id: string | undefined, how: { keys?: boolean } = {}) => {
     setMode({ kind: 'view' });
     setSettle(Boolean(how.keys));
@@ -243,6 +383,174 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
   const reveal = (id: string) =>
     list.current?.scrollToIndex(rows.findIndex((r) => r.kind === 'item' && r.item.id === id));
   const toTop = () => list.current?.scrollToIndex(0);
+
+  const actions = useItemActions({
+    guard,
+    onOpen: open,
+    onShowConch: () => {
+      setFrom('conch');
+      setFilter({ kind: 'all' });
+      toTop();
+    },
+  });
+
+  // ── Choosing several ──
+  const stopChoosing = useCallback(() => {
+    setSelecting(false);
+    setChosen(new Set());
+    anchor.current = undefined;
+  }, []);
+  const choose = useCallback((ids: string[], how: 'toggle' | 'add' | 'only') => {
+    setSelecting(true);
+    setChosen((before) => {
+      const next = new Set(how === 'only' ? [] : before);
+      for (const id of ids)
+        if (how === 'toggle' && next.has(id)) next.delete(id);
+        else next.add(id);
+      return next;
+    });
+  }, []);
+  // A new filter, place or search: what was chosen and is no longer shown stays chosen
+  // only while you can see it, so nothing out of sight is deleted by surprise.
+  const shownIds = useMemo(() => new Set(shown.map((i) => i.id)), [shown]);
+  const visibleChosen = useMemo(
+    () => chosenItems.filter((i) => shownIds.has(i.id)),
+    [chosenItems, shownIds],
+  );
+
+  const onPress = (id: string, how: { toggle: boolean; extend: boolean }) => {
+    if (how.extend) {
+      const start = anchor.current ?? itemId ?? id;
+      choose(range(shown, start, id), 'add');
+      return;
+    }
+    if (how.toggle || selecting) {
+      // ⌘-click from a single open item: it's the first of the chosen.
+      const first = !selecting && itemId && itemId !== id ? [itemId] : [];
+      choose([...first, id], 'toggle');
+      anchor.current = id;
+      return;
+    }
+    anchor.current = id;
+    open(id);
+  };
+  // Stable for the memoised rows: it reads the latest of everything through a ref.
+  const pressRef = useRef(onPress);
+  useEffect(() => {
+    pressRef.current = onPress;
+  });
+  const press = useCallback(
+    (id: string, how: { toggle: boolean; extend: boolean }) => pressRef.current(id, how),
+    [],
+  );
+
+  const menu = (item: VaultItemSummary) => (
+    <RowMenu
+      item={item}
+      chosen={chosen.has(item.id) ? visibleChosen : undefined}
+      actions={actions}
+      targets={targets}
+      onOpen={(id) => {
+        stopChoosing();
+        open(id);
+      }}
+      onEdit={(id) => {
+        stopChoosing();
+        open(id);
+        // The editor starts from the item's fields: have them first.
+        void client.fetchQuery(vaultItemQuery(id)).then(
+          () => setMode({ kind: 'edit' }),
+          () => undefined,
+        );
+      }}
+      onSelect={(id) => {
+        choose([id], 'add');
+        anchor.current = id;
+      }}
+      onClearSelection={stopChoosing}
+    />
+  );
+
+  /** What the keys act on: the chosen, or the row with focus, or the open item. */
+  const focusedRow = () =>
+    (document.activeElement as HTMLElement | null)?.closest<HTMLElement>('button[data-id]')?.dataset
+      .id;
+  /**
+   * What the keys act on: while choosing, the chosen and nothing else; otherwise the
+   * row with focus, or (for copying, `open`) the item that's open.
+   */
+  const subject = (how: { open: boolean }): VaultItemSummary[] => {
+    if (selecting) return visibleChosen;
+    const one = byId.get(focusedRow() ?? (how.open ? (itemId ?? '') : ''));
+    return one ? [one] : [];
+  };
+  const onKeys = (e: globalThis.KeyboardEvent) => {
+    if (e.defaultPrevented || e.repeat || typing(e)) return;
+    if (document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]')) return;
+    const inList = listPane.current?.contains(document.activeElement) ?? false;
+    const mod = e.metaKey || e.ctrlKey;
+    const key = e.key.toLowerCase();
+    if (e.key === 'Escape' && selecting) {
+      e.preventDefault();
+      stopChoosing();
+      return;
+    }
+    if (mod && key === 'a' && inList && filter.kind !== 'deleted' && shown.length) {
+      e.preventDefault();
+      choose(
+        shown.map((i) => i.id),
+        'only',
+      );
+      return;
+    }
+    if (mod && key === 'c') {
+      const [one, ...more] = subject({ open: true });
+      if (!one || more.length || one.deletedAt) return;
+      e.preventDefault();
+      if (e.altKey) void (mayHaveCode(one) && actions.copyCode(one));
+      else if (e.shiftKey) void actions.copyUsername(one);
+      else void actions.copyPassword(one);
+      return;
+    }
+    // Delete only where it's plain what it deletes: the chosen, or the row with focus.
+    if ((e.key === 'Delete' || (e.key === 'Backspace' && mod)) && (inList || selecting)) {
+      const them = subject({ open: false });
+      if (!them.length) return;
+      e.preventDefault();
+      const mine = them.filter((i) => i.source === 'conch' && !i.deletedAt);
+      if (them.every((i) => i.deletedAt)) actions.purge(them);
+      else if (!mine.length)
+        // Another manager's: it's deleted in that manager's own app.
+        toast(
+          `Delete ${them.length === 1 ? 'it' : 'them'} in ${vaultSourceName(them[0]?.source ?? 'conch')}`,
+          {
+            description: 'Conch shows what’s there, and changes nothing in it.',
+          },
+        );
+      else {
+        void actions.trash(mine);
+        if (mine.some((i) => i.id === itemId)) open(undefined);
+        stopChoosing();
+      }
+    }
+  };
+  const keysRef = useRef(onKeys);
+  useEffect(() => {
+    keysRef.current = onKeys;
+  });
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => keysRef.current(e);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const changeFrom = (next: VaultFrom) => {
+    setFrom(next);
+    // A filter that has nothing in the new place would show an empty list.
+    if (filter.kind === 'source') setFilter({ kind: 'all' });
+    open(undefined);
+    toTop();
+  };
 
   // Opened by its address: the list starts where that item is.
   const placed = useRef(false);
@@ -310,12 +618,15 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
   /** The arrow keys: the item before or after the chosen one, brought into view. */
   const move = (by: 1 | -1) => {
     // The list may be a key press behind the search box: go by what's typed now.
-    const found = sought === query ? shown : visibleItems(index, { query, filter, sort });
+    const found =
+      sought === query ? shown : visibleItems(index, { query, filter, sort, from: place });
     const at = found.findIndex((i) => i.id === itemId);
     const next = found[Math.min(found.length - 1, Math.max(0, at + by))];
     if (!next) return undefined;
     open(next.id, { keys: true });
     reveal(next.id);
+    // Shift-click chooses from here.
+    anchor.current = next.id;
     return next;
   };
 
@@ -338,7 +649,8 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
       e.preventDefault();
       move(e.key === 'ArrowDown' ? 1 : -1);
     } else if (e.key === 'Enter') {
-      const found = sought === query ? shown : visibleItems(index, { query, filter, sort });
+      const found =
+        sought === query ? shown : visibleItems(index, { query, filter, sort, from: place });
       const best = found[0];
       if (!best || found.some((i) => i.id === itemId)) return;
       e.preventDefault();
@@ -399,6 +711,15 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
   );
 
   const showList = !narrow || (!itemId && mode.kind === 'view');
+  useEffect(() => {
+    const el = listPane.current;
+    if (!showList || !el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setMeasuredList(Math.round(entry.borderBoxSize[0]?.inlineSize ?? 336));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [showList]);
   const showDetail = !narrow || Boolean(itemId) || mode.kind !== 'view';
   const health = status?.health;
   const issueTotal = health
@@ -438,10 +759,18 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
   const empty =
     !isLoading && tally.all === 0 && tally.deleted === 0 && filter.kind === 'all' && !query;
 
+  const shownWidth =
+    listWidth === undefined ? undefined : Math.min(maxList, Math.max(MIN_LIST, listWidth));
+
   return (
-    <div className={styles.page}>
+    <div className={styles.page} ref={page}>
       {showList && (
-        <section className={styles.listPane} aria-label="Passwords" ref={listPane}>
+        <section
+          className={styles.listPane}
+          aria-label="Passwords"
+          ref={listPane}
+          style={!narrow && shownWidth !== undefined ? { inlineSize: shownWidth } : undefined}
+        >
           <div className={styles.toolbar}>
             <Input
               ref={search}
@@ -503,134 +832,173 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
             </DropdownMenu.Root>
           </div>
 
-          <div className={styles.filters}>
-            <DropdownMenu.Root>
-              <DropdownMenu.Trigger asChild>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  trailingIcon={<ChevronDown />}
-                  className={styles.filterButton}
-                >
-                  {filterName(filter)}
-                  {filter.kind !== 'deleted' && !isLoading && (
-                    <Text as="span" size="xs" tone="subtle" className={styles.count}>
-                      {shown.length}
-                    </Text>
-                  )}
-                </Button>
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Content align="start">
-                <DropdownMenu.RadioGroup
-                  value={JSON.stringify(filter)}
-                  onValueChange={(v) => {
-                    setFilter(JSON.parse(v) as VaultFilter);
-                    open(undefined);
-                    toTop();
+          {tally.sources.size > 1 && !selecting && (
+            <VaultSourceFilter
+              className={styles.sources}
+              value={place}
+              onValueChange={changeFrom}
+              total={tally.everywhere}
+              sources={[...tally.sources]
+                // Conch first, then the managers, then the keys Conch uses.
+                .sort(([a], [b]) => rankSource(a) - rankSource(b))
+                .map(([source, count]) => ({ source, count }))}
+            />
+          )}
+
+          {selecting ? (
+            <VaultSelectionBar
+              className={styles.selection}
+              count={visibleChosen.length}
+              total={shown.length}
+              onSelectAll={() =>
+                choose(
+                  shown.map((i) => i.id),
+                  'only',
+                )
+              }
+              onDone={stopChoosing}
+              actions={
+                <SelectionActions
+                  items={visibleChosen}
+                  targets={targets}
+                  actions={actions}
+                  onDone={(closes) => {
+                    if (closes && visibleChosen.some((i) => i.id === itemId)) open(undefined);
+                    stopChoosing();
                   }}
-                >
-                  <DropdownMenu.RadioItem value={JSON.stringify({ kind: 'all' })}>
-                    All items · {tally.all}
-                  </DropdownMenu.RadioItem>
-                  {tally.favorites > 0 && (
-                    <DropdownMenu.RadioItem value={JSON.stringify({ kind: 'favorites' })}>
-                      Favourites · {tally.favorites}
-                    </DropdownMenu.RadioItem>
-                  )}
-                  {tally.codes > 0 && (
-                    <DropdownMenu.RadioItem value={JSON.stringify({ kind: 'codes' })}>
-                      One-time codes · {tally.codes}
-                    </DropdownMenu.RadioItem>
-                  )}
-                  <DropdownMenu.Separator />
-                  {[...tally.types.entries()].map(([type, n]) => (
-                    <DropdownMenu.RadioItem
-                      key={type}
-                      value={JSON.stringify({ kind: 'type', type })}
-                    >
-                      {TYPE_NAMES[type].many} · {n}
-                    </DropdownMenu.RadioItem>
-                  ))}
-                  {(status?.sources.filter((s) => s.id !== 'conch' && s.state === 'ready').length ??
-                    0) > 0 && (
-                    <>
-                      <DropdownMenu.Separator />
-                      {status?.sources
-                        .filter((s) => s.state === 'ready')
-                        .map((s) => (
-                          <DropdownMenu.RadioItem
-                            key={s.id}
-                            value={JSON.stringify({ kind: 'source', source: s.id })}
-                          >
-                            {s.name} · {s.count ?? 0}
-                          </DropdownMenu.RadioItem>
-                        ))}
-                    </>
-                  )}
-                  {tally.tags.length > 0 && (
-                    <>
-                      <DropdownMenu.Separator />
-                      {tally.tags.map(([tag, n]) => (
-                        <DropdownMenu.RadioItem
-                          key={tag}
-                          value={JSON.stringify({ kind: 'tag', tag })}
-                        >
-                          {tag} · {n}
-                        </DropdownMenu.RadioItem>
-                      ))}
-                    </>
-                  )}
-                  {issueTotal > 0 && (
-                    <>
-                      <DropdownMenu.Separator />
-                      {ISSUES.filter((p) => (health?.[p as keyof typeof health] ?? 0) > 0).map(
-                        (p) => (
-                          <DropdownMenu.RadioItem
-                            key={p}
-                            value={JSON.stringify({ kind: 'problem', problem: p })}
-                          >
-                            {filterName({ kind: 'problem', problem: p })} ·{' '}
-                            {health?.[p as keyof typeof health]}
-                          </DropdownMenu.RadioItem>
-                        ),
-                      )}
-                    </>
-                  )}
-                  <DropdownMenu.Separator />
-                  <DropdownMenu.RadioItem value={JSON.stringify({ kind: 'deleted' })}>
-                    Recently deleted · {tally.deleted}
-                  </DropdownMenu.RadioItem>
-                </DropdownMenu.RadioGroup>
-              </DropdownMenu.Content>
-            </DropdownMenu.Root>
-            {filter.kind !== 'deleted' && (
+                />
+              }
+            />
+          ) : (
+            <div className={styles.filters}>
               <DropdownMenu.Root>
                 <DropdownMenu.Trigger asChild>
-                  <IconButton size="sm" label="Sort">
-                    <ArrowDownUp />
-                  </IconButton>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    trailingIcon={<ChevronDown />}
+                    className={styles.filterButton}
+                  >
+                    {filterName(filter)}
+                    {filter.kind !== 'deleted' && !isLoading && (
+                      <Text as="span" size="xs" tone="subtle" className={styles.count}>
+                        {shown.length}
+                      </Text>
+                    )}
+                  </Button>
                 </DropdownMenu.Trigger>
-                <DropdownMenu.Content align="end">
+                <DropdownMenu.Content align="start">
                   <DropdownMenu.RadioGroup
-                    value={sort}
+                    value={JSON.stringify(filter)}
                     onValueChange={(v) => {
-                      setSort(v as VaultSort);
+                      setFilter(JSON.parse(v) as VaultFilter);
+                      open(undefined);
                       toTop();
                     }}
                   >
-                    <DropdownMenu.RadioItem value="name">By name</DropdownMenu.RadioItem>
-                    <DropdownMenu.RadioItem value="recent">Recently edited</DropdownMenu.RadioItem>
-                    <DropdownMenu.RadioItem value="used">Recently used</DropdownMenu.RadioItem>
+                    <DropdownMenu.RadioItem value={JSON.stringify({ kind: 'all' })}>
+                      All items · {tally.all}
+                    </DropdownMenu.RadioItem>
+                    {tally.favorites > 0 && (
+                      <DropdownMenu.RadioItem value={JSON.stringify({ kind: 'favorites' })}>
+                        Favourites · {tally.favorites}
+                      </DropdownMenu.RadioItem>
+                    )}
+                    {tally.codes > 0 && (
+                      <DropdownMenu.RadioItem value={JSON.stringify({ kind: 'codes' })}>
+                        One-time codes · {tally.codes}
+                      </DropdownMenu.RadioItem>
+                    )}
+                    <DropdownMenu.Separator />
+                    {[...tally.types.entries()].map(([type, n]) => (
+                      <DropdownMenu.RadioItem
+                        key={type}
+                        value={JSON.stringify({ kind: 'type', type })}
+                      >
+                        {TYPE_NAMES[type].many} · {n}
+                      </DropdownMenu.RadioItem>
+                    ))}
+                    {tally.tags.length > 0 && (
+                      <>
+                        <DropdownMenu.Separator />
+                        {tally.tags.map(([tag, n]) => (
+                          <DropdownMenu.RadioItem
+                            key={tag}
+                            value={JSON.stringify({ kind: 'tag', tag })}
+                          >
+                            {tag} · {n}
+                          </DropdownMenu.RadioItem>
+                        ))}
+                      </>
+                    )}
+                    {issueTotal > 0 && (
+                      <>
+                        <DropdownMenu.Separator />
+                        {ISSUES.filter((p) => (health?.[p as keyof typeof health] ?? 0) > 0).map(
+                          (p) => (
+                            <DropdownMenu.RadioItem
+                              key={p}
+                              value={JSON.stringify({ kind: 'problem', problem: p })}
+                            >
+                              {filterName({ kind: 'problem', problem: p })} ·{' '}
+                              {health?.[p as keyof typeof health]}
+                            </DropdownMenu.RadioItem>
+                          ),
+                        )}
+                      </>
+                    )}
+                    <DropdownMenu.Separator />
+                    <DropdownMenu.RadioItem value={JSON.stringify({ kind: 'deleted' })}>
+                      Recently deleted · {tally.deleted}
+                    </DropdownMenu.RadioItem>
                   </DropdownMenu.RadioGroup>
                 </DropdownMenu.Content>
               </DropdownMenu.Root>
-            )}
-            {filter.kind === 'deleted' && tally.deleted > 0 && (
-              <Button size="sm" variant="ghost" tone="danger" onClick={() => setEmptying(true)}>
-                Empty
-              </Button>
-            )}
-          </div>
+              <span className={styles.filterTools}>
+                {shown.length > 0 && (
+                  <IconButton
+                    size="sm"
+                    label="Select"
+                    onClick={() => {
+                      setSelecting(true);
+                      if (itemId && shownIds.has(itemId)) choose([itemId], 'add');
+                    }}
+                  >
+                    <ListChecks />
+                  </IconButton>
+                )}
+                {filter.kind !== 'deleted' && (
+                  <DropdownMenu.Root>
+                    <DropdownMenu.Trigger asChild>
+                      <IconButton size="sm" label="Sort">
+                        <ArrowDownUp />
+                      </IconButton>
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Content align="end">
+                      <DropdownMenu.RadioGroup
+                        value={sort}
+                        onValueChange={(v) => {
+                          setSort(v as VaultSort);
+                          toTop();
+                        }}
+                      >
+                        <DropdownMenu.RadioItem value="name">By name</DropdownMenu.RadioItem>
+                        <DropdownMenu.RadioItem value="recent">
+                          Recently edited
+                        </DropdownMenu.RadioItem>
+                        <DropdownMenu.RadioItem value="used">Recently used</DropdownMenu.RadioItem>
+                      </DropdownMenu.RadioGroup>
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Root>
+                )}
+                {filter.kind === 'deleted' && tally.deleted > 0 && (
+                  <Button size="sm" variant="ghost" tone="danger" onClick={() => setEmptying(true)}>
+                    Empty
+                  </Button>
+                )}
+              </span>
+            </div>
+          )}
 
           {filter.kind === 'all' && !query && health && tally.all > 0 && issueTotal > 0 && (
             <VaultHealth
@@ -686,34 +1054,38 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
               )}
             </div>
           ) : (
-            <VirtualList
-              id={listId}
-              role="list"
-              className={styles.list}
-              handle={list}
-              items={rows}
-              rowHeight={rowHeight}
-              getKey={rowKey}
-              sticky={isHeading}
-              rowProps={rowProps}
-            >
-              {(row) =>
-                row.kind === 'header' ? (
-                  <VaultListHeading>{row.label}</VaultListHeading>
-                ) : (
-                  <PasswordRow
-                    item={row.item}
-                    selected={row.item.id === itemId}
-                    sort={sort}
-                    query={sought}
-                    sourceMark={sourceMark}
-                    onOpen={open}
-                    onKeyDown={onListKey}
-                    onRest={onRest}
-                  />
-                )
-              }
-            </VirtualList>
+            <RowMenuContext.Provider value={menu}>
+              <VirtualList
+                id={listId}
+                role="list"
+                className={styles.list}
+                handle={list}
+                items={rows}
+                rowHeight={rowHeight}
+                getKey={rowKey}
+                sticky={isHeading}
+                rowProps={rowProps}
+              >
+                {(row) =>
+                  row.kind === 'header' ? (
+                    <VaultListHeading>{row.label}</VaultListHeading>
+                  ) : (
+                    <PasswordRow
+                      item={row.item}
+                      selected={row.item.id === itemId}
+                      selecting={selecting}
+                      checked={chosen.has(row.item.id)}
+                      sort={sort}
+                      query={sought}
+                      sourceMark={sourceMark}
+                      onPress={press}
+                      onKeyDown={onListKey}
+                      onRest={onRest}
+                    />
+                  )
+                }
+              </VirtualList>
+            </RowMenuContext.Provider>
           )}
           {status?.protectionNote && (
             <Text size="xs" tone="subtle" className={styles.protection}>
@@ -721,6 +1093,26 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
             </Text>
           )}
         </section>
+      )}
+
+      {showList && showDetail && (
+        <ResizeHandle
+          label="Resize the list"
+          className={styles.seam}
+          value={shownWidth ?? measuredList}
+          min={MIN_LIST}
+          max={maxList}
+          grows="end"
+          onValueChange={resize}
+          onDoubleClick={() => {
+            setListWidth(undefined);
+            try {
+              localStorage.removeItem(WIDTH_KEY);
+            } catch {
+              // Nothing kept, nothing to forget.
+            }
+          }}
+        />
       )}
 
       {showDetail && (
@@ -777,12 +1169,19 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
             <ItemDetail
               key={itemId}
               id={itemId}
-              summary={chosen}
+              summary={open1}
               settle={settle}
               guard={guard}
               onEdit={() => setMode({ kind: 'edit' })}
               onBack={narrow ? () => open(undefined) : undefined}
               onDeleted={() => open(undefined)}
+              actions={actions}
+              targets={targets}
+              twins={twinsOf.get(itemId) ?? []}
+              onOpenItem={(id) => {
+                open(id);
+                reveal(id);
+              }}
             />
           ) : (
             !narrow && (
@@ -855,8 +1254,124 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
           </AlertDialog.Footer>
         </AlertDialog.Content>
       </AlertDialog.Root>
+      {actions.dialogs}
       {dialog}
     </div>
+  );
+}
+
+/** Conch first, then the managers in their usual order, then the keys Conch uses. */
+function rankSource(source: VaultFrom): number {
+  return source === 'conch' ? 0 : source === 'system' ? 2 : 1;
+}
+
+const many = (n: number) => `${n} ${n === 1 ? 'item' : 'items'}`;
+
+/**
+ * What can be done with the chosen items, each button saying how many it
+ * applies to: a manager's items can be copied into Conch but are deleted in
+ * their own app; Conch's own can be copied to a manager that takes them.
+ */
+function SelectionActions({
+  items,
+  targets,
+  actions,
+  onDone,
+}: {
+  items: VaultItemSummary[];
+  targets: ReturnType<typeof copyTargets>;
+  actions: ReturnType<typeof useItemActions>;
+  /** Done with them; `closes` when they left the list (deleted). */
+  onDone: (closes: boolean) => void;
+}) {
+  const mine = items.filter((i) => i.source === 'conch' && !i.deletedAt);
+  const theirs = items.filter((i) => i.readOnly && i.source !== 'conch' && i.source !== 'system');
+  const deleted = items.filter((i) => i.deletedAt);
+  if (!items.length) return null;
+  return (
+    <>
+      {theirs.length > 0 && (
+        <Button
+          size="sm"
+          variant="surface"
+          leadingIcon={<VaultSourceBadge source="conch" />}
+          onClick={() => {
+            void actions.copyIntoConch(theirs);
+            onDone(false);
+          }}
+        >
+          {mine.length ? `Copy ${many(theirs.length)} into Conch` : 'Copy into Conch'}
+        </Button>
+      )}
+      {mine.length > 0 && targets.length > 0 && (
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <Button size="sm" variant="surface" trailingIcon={<ChevronDown />}>
+              {theirs.length ? `Copy ${many(mine.length)} to…` : 'Copy to…'}
+            </Button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Content align="start">
+            {targets.flatMap((t) =>
+              (t.places.length > 1 ? t.places : [undefined]).map((p) => (
+                <DropdownMenu.Item
+                  key={`${t.id}:${p?.id ?? ''}`}
+                  icon={<VaultSourceBadge source={t.id} />}
+                  onSelect={() => {
+                    void actions.copyTo(mine, t, p ?? t.places[0]);
+                    onDone(false);
+                  }}
+                >
+                  {p && t.places.length > 1 ? `${t.name} · ${p.name}` : t.name}
+                </DropdownMenu.Item>
+              )),
+            )}
+          </DropdownMenu.Content>
+        </DropdownMenu.Root>
+      )}
+      {mine.length > 0 && (
+        <Button
+          size="sm"
+          variant="ghost"
+          tone="danger"
+          leadingIcon={<Trash2 />}
+          onClick={() => {
+            void actions.trash(mine);
+            onDone(true);
+          }}
+        >
+          {theirs.length ? `Delete ${many(mine.length)}` : 'Delete'}
+        </Button>
+      )}
+      {deleted.length > 0 && (
+        <>
+          <Button
+            size="sm"
+            variant="surface"
+            onClick={() => {
+              void actions.restore(deleted);
+              onDone(true);
+            }}
+          >
+            Restore
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            tone="danger"
+            leadingIcon={<Trash2 />}
+            onClick={() => actions.purge(deleted)}
+          >
+            Delete for good
+          </Button>
+        </>
+      )}
+      {theirs.length > 0 && mine.length === 0 && deleted.length === 0 && (
+        <Text size="xs" tone="subtle" className={styles.selectionNote}>
+          {theirs.length === 1 ? 'It’s' : 'They’re'} deleted in{' '}
+          {[...new Set(theirs.map((i) => vaultSourceName(i.source)))].join(' or ')}.
+        </Text>
+      )}
+    </>
   );
 }
 

@@ -76,6 +76,26 @@ const ready = {
 };
 
 describe('Settings → Health → Updates', () => {
+  it('looks again by itself when the last look is old, and shows what it found', async () => {
+    const calls = mockFetch({
+      'GET /api/updates': () => status(),
+      'POST /api/updates/check': () => status({}, { ...ready, checkedAt: Date.now() }),
+    });
+    renderApp(<UpdatesSection />);
+    // Two hours old: what it says now is what it found just now, not what it found then.
+    expect(await screen.findByRole('region', { name: 'An update is ready' })).toBeInTheDocument();
+    expect(calls.filter((c) => c.path === '/api/updates/check')).toHaveLength(1);
+  });
+
+  it('leaves a recent look alone', async () => {
+    const calls = mockFetch({
+      'GET /api/updates': () => status({}, { checkedAt: Date.now() - 5 * 60_000 }),
+    });
+    renderApp(<UpdatesSection />);
+    await screen.findByRole('region', { name: 'Conch is up to date' });
+    expect(calls.some((c) => c.path === '/api/updates/check')).toBe(false);
+  });
+
   it('says Conch is up to date, and when it last looked', async () => {
     mockFetch({ 'GET /api/updates': () => status() });
     renderApp(<UpdatesSection />);
@@ -345,10 +365,12 @@ describe('Settings → Health → Updates', () => {
           username: 'ada',
           suggestedUsername: 'ada',
           keys: [],
+          passkeys: [],
+          passkeysHere: false,
           sessions: [],
           devices: [],
           requests: [],
-          approval: { on: false, here: true },
+          approval: { on: false, here: true, canApprove: true },
           checkup: [],
           exposure: 'local',
           port: 4317,

@@ -50,6 +50,11 @@ class FakeEngine implements Engine {
     };
   }
 
+  readonly forgotten: string[] = [];
+  async forgetSession(resumeId: string): Promise<void> {
+    this.forgotten.push(resumeId);
+  }
+
   async *runTurn(input: TurnInput): AsyncIterable<EngineEvent> {
     this.turns.push(input);
     yield {
@@ -140,11 +145,17 @@ describe('every provider at once', () => {
     expect(back?.prompt).toContain('User: second, to openrouter');
     expect(back?.prompt).toContain('OpenRouter heard: second, to openrouter');
     expect(back?.prompt).not.toContain('first, to claude');
+    // Should its session be lost, it has everything to start a new one with.
+    expect(back?.freshPrompt).toContain('couldn’t be continued');
+    expect(back?.freshPrompt).toContain('User: first, to claude');
+    expect(back?.freshPrompt).toContain('User: second, to openrouter');
+    expect(back?.freshPrompt?.endsWith('third, back to claude')).toBe(true);
 
     // And the next Claude turn has nothing to catch up on.
     await manager.send({ conversationId: convo.id, clientMessageId: 'u4', text: 'fourth' });
     await idle(manager, convo.id);
     expect(claude.turns[2]?.prompt).toBe('fourth');
+    expect(claude.turns[2]?.freshPrompt).toContain('User: third, back to claude');
     expect(claude.turns[2]?.resumeId).toBe('claude-code-session-1');
 
     // Each reply says who answered.
@@ -158,6 +169,22 @@ describe('every provider at once', () => {
       'claude-code:sonnet',
       'claude-code:sonnet',
     ]);
+  });
+
+  it('lets each provider forget what it kept of a chat when the chat is deleted', async () => {
+    const { manager, claude, router } = await setup();
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'hello' });
+    await idle(manager, convo.id);
+    await manager.send({
+      conversationId: convo.id,
+      clientMessageId: 'u2',
+      text: 'again',
+      options: { engine: 'openrouter' },
+    });
+    await idle(manager, convo.id);
+    await manager.remove(convo.id);
+    expect(claude.forgotten).toEqual(['claude-code-session-1']);
+    expect(router.forgotten).toEqual(['openrouter-session-1']);
   });
 
   it('gives each provider the mode the chat shows: one it can’t honour becomes its safest', async () => {

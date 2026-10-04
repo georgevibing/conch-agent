@@ -183,7 +183,7 @@
     transform: none;
   }
 
-  @media (max-width: 40rem) {
+  @media (max-width: 40rem), (hover: none) and (pointer: coarse) {
     .hint {
       display: none;
     }
@@ -280,6 +280,47 @@
   /* ── Attachments ──────────────────────────────────────────────────── */
   /* One row that scrolls sideways, so twenty files never push the text off
      screen. The padding leaves room for each card's corner ×. */
+  /* A follow-up waiting for the reply to end: a quiet line above the box. */
+  .queued {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    margin: var(--nc-space-2) var(--nc-space-2) 0;
+    padding: var(--nc-space-1) var(--nc-space-1) var(--nc-space-1) var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    animation: chip-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  .queuedIcon {
+    flex: none;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .queuedText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+    line-height: var(--nc-leading-snug);
+  }
+
+  .queuedMessage {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: var(--nc-text-sm);
+  }
+
+  .queuedMeta {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
   .attachments {
     display: flex;
     gap: var(--nc-space-2);
@@ -371,12 +412,14 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .frame[data-running] {
+    .frame[data-running],
+    .queued {
       animation: none;
     }
   }
 
-  :global([data-nacre-motion='reduced']) .frame[data-running] {
+  :global([data-nacre-motion='reduced']) .frame[data-running],
+  :global([data-nacre-motion='reduced']) .queued {
     animation: none;
   }
 }

@@ -106,6 +106,8 @@ export class ClaudeCodeEngine implements Engine {
   readonly label = 'Claude Code';
   /** Claude Code maps this to Haiku on every provider (or ANTHROPIC_DEFAULT_HAIKU_MODEL). */
   readonly smallModel = 'haiku';
+  /** Every Claude model sees, so it can describe a screenshot for a model that can't (ADR 0070). */
+  readonly completeSees = true;
   /** It loads `~/.claude/skills` by itself, whatever Conch says. */
   readonly skillSources = ['claude'] as const;
   /** It keeps its own plan (its todos or tasks), translated into Conch's checklist. */
@@ -419,8 +421,26 @@ export class ClaudeCodeEngine implements Engine {
     const onAbort = () => abort.abort();
     input.signal.addEventListener('abort', onAbort, { once: true });
     try {
+      // Pictures go in a message of their own: a plain prompt can only be words.
+      const images = input.images ?? [];
+      async function* withPictures(): AsyncGenerator<SDKUserMessage> {
+        yield {
+          type: 'user',
+          message: {
+            role: 'user',
+            content: [
+              ...images.map((image) => ({
+                type: 'image' as const,
+                source: { type: 'base64' as const, media_type: image.mimeType, data: image.data },
+              })),
+              { type: 'text' as const, text: input.prompt },
+            ],
+          },
+          parent_tool_use_id: null,
+        } as SDKUserMessage;
+      }
       const q = query({
-        prompt: input.prompt,
+        prompt: images.length ? withPictures() : input.prompt,
         options: {
           cwd: await this.settings.workspace(),
           pathToClaudeCodeExecutable: programFile(status.executablePath),
@@ -635,6 +655,15 @@ export class ClaudeCodeEngine implements Engine {
             return { behavior: 'allow', updatedInput: toolInput };
           },
         },
+      });
+
+      // A mode picked mid-turn holds from the next tool call, not the next message.
+      // Full trust picked mid-turn runs as Ask here, and Conch answers each ask
+      // itself (the manager), so what must still ask (ADR 0028) still does.
+      const startedTrusted = input.options.permissionMode === 'bypassPermissions';
+      input.onModeChange?.((mode) => {
+        const next = mode === 'bypassPermissions' && !startedTrusted ? 'default' : mode;
+        void q.setPermissionMode(next).catch(() => undefined);
       });
 
       const integrations = Object.entries(input.mcpServers ?? {});

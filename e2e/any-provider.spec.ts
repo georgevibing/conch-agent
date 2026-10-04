@@ -123,7 +123,7 @@ test('what the provider set up comes in by itself; what only it can use is in Se
     ).map((i) => i.name),
   ).not.toContain('Sentry');
   await page.reload();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  // Settings has an address, so a reload lands back in it.
   await page.getByRole('tab', { name: 'Providers' }).click();
   await page.getByRole('button', { name: /4 servers/ }).click();
   await expect(page.getByRole('button', { name: 'Use with every model' })).toBeVisible();

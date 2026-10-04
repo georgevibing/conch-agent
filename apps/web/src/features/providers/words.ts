@@ -2,6 +2,7 @@ import { isServerId, type Provider, type ProviderGroup } from '@conch/protocol';
 
 /** The gallery's kinds, in the words a person sorts providers by. */
 export const GROUP_WORDS: Record<ProviderGroup, string> = {
+  agent: 'Coding agents',
   subscription: 'Your plans',
   key: 'Pay as you go',
   local: 'On this computer',
@@ -9,7 +10,13 @@ export const GROUP_WORDS: Record<ProviderGroup, string> = {
 };
 
 /** How the gallery orders its kinds. */
-export const GROUP_ORDER: readonly ProviderGroup[] = ['subscription', 'local', 'key', 'server'];
+export const GROUP_ORDER: readonly ProviderGroup[] = [
+  'agent',
+  'subscription',
+  'local',
+  'key',
+  'server',
+];
 
 /** The tile that adds a server of your own. */
 export const SERVER_TILE = {

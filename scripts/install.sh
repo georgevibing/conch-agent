@@ -7,7 +7,10 @@
 #
 # It gets what Conch needs (Node.js and Git, when they're missing), puts
 # Conch in its own folder, builds it, keeps it running in the background,
-# adds "Conch" to your apps and opens it. System packages ask for permission;
+# puts the conch command on your PATH, adds "Conch" to your apps and opens it.
+# On a computer with no screen of its own (a server, over SSH) it asks how
+# you'll reach Conch instead, and ends with a link that makes it yours
+# (`conch setup`, ADR 0064). System packages ask for permission;
 # Conch itself always runs as you.
 # It installs the newest stable release (ADR 0051), checked against the
 # signing keys Conch ships; after that Conch updates itself.
@@ -15,7 +18,9 @@
 #
 #   sh install.sh [--no-background] [--no-shortcut] [--no-open] [--dir PATH]
 #   sh install.sh --no-system-packages   skip optional system-package setup
-#   sh install.sh --server     a little computer: headless, keeps running, your phone's address
+#   sh install.sh --server     a little computer: headless, keeps running, then conch setup
+#   sh install.sh --domain conch.example.com   on a server at an address of your own (ADR 0064)
+#   sh install.sh --proxy conch.example.com    on a server, through a tunnel or web server you run
 #   sh install.sh --uninstall [--delete-data]
 #
 # Settings from the environment: CONCH_REPO, CONCH_DIR, CONCH_HOME,
@@ -35,6 +40,8 @@ OPEN=1
 UNINSTALL=
 DELETE_DATA=
 SERVER=
+DOMAIN=
+PROXY=
 SYSTEM_PACKAGES=1
 
 case "$(uname -s)" in
@@ -54,6 +61,10 @@ while [ $# -gt 0 ]; do
     --dir=*) DIR=${1#--dir=} ;;
     --uninstall) UNINSTALL=1 ;;
     --server) SERVER=1; OPEN=; SHORTCUT= ;;
+    --domain) shift; DOMAIN=${1:-}; SERVER=1; OPEN=; SHORTCUT= ;;
+    --domain=*) DOMAIN=${1#--domain=}; SERVER=1; OPEN=; SHORTCUT= ;;
+    --proxy) shift; PROXY=${1:-}; SERVER=1; OPEN=; SHORTCUT= ;;
+    --proxy=*) PROXY=${1#--proxy=}; SERVER=1; OPEN=; SHORTCUT= ;;
     --delete-data) DELETE_DATA=1 ;;
     -h|--help)
       printf '%s\n' 'Conch installer: --no-background --no-shortcut --no-open --dir PATH' \
@@ -61,6 +72,8 @@ while [ $# -gt 0 ]; do
         '  CONCH_BRANCH=main for a developer'"'"'s copy that follows every change.' \
         '  --no-system-packages  Skip optional system packages (Git must already be installed)' \
         '  --server             Headless setup for a computer that stays on' \
+        '  --domain NAME        On a server, at an address of your own (HTTPS by Conch itself)' \
+        '  --proxy NAME         On a server, through a tunnel or web server you run (Cloudflare Tunnel, nginx, Caddy)' \
         '  --uninstall [--delete-data]'; exit 0 ;;
     *) echo "Unknown option: $1 (try --help)" >&2; exit 1 ;;
   esac
@@ -71,6 +84,15 @@ case "$CHANNEL" in
   stable|beta|alpha) ;;
   *) echo "CONCH_CHANNEL can be stable, beta or alpha (not $CHANNEL)." >&2; exit 1 ;;
 esac
+
+# A computer with no screen of its own: a server, or someone here over SSH. Nothing
+# to open a browser on, so the installer asks how you'll reach Conch instead.
+HEADLESS=$SERVER
+if [ -z "$HEADLESS" ]; then
+  if [ "$OS" = linux ] && [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ]; then HEADLESS=1; fi
+  if [ -n "${SSH_CONNECTION:-}" ] && [ -z "${DISPLAY:-}" ]; then HEADLESS=1; fi
+fi
+if [ -n "$HEADLESS" ]; then OPEN=; SHORTCUT=; fi
 
 # ── Saying things ────────────────────────────────────────────────────────
 
@@ -108,7 +130,14 @@ quietly() {
   fi
 }
 
-printf '\n  %s🐚  Conch%s\n\n' "$BOLD" "$RESET"
+# The line under the name says what's about to happen: settling in, or taking Conch away.
+if [ -n "$UNINSTALL" ]; then
+  if [ -n "$DELETE_DATA" ]; then TAGLINE="Taking Conch off this computer, and asking before your chats go too."
+  else TAGLINE="Taking Conch off this computer. Your chats and settings stay."; fi
+else
+  TAGLINE="Your own assistant, on your own computer. Let's get it settled in."
+fi
+printf '\n  %s🐚  Conch%s\n  %s%s%s\n\n' "$BOLD" "$RESET" "$DIM" "$TAGLINE" "$RESET"
 
 if [ "$(id -u)" = 0 ]; then
   fail "Run this as yourself, not with sudo." \
@@ -308,6 +337,7 @@ if [ -n "$UNINSTALL" ]; then
     conch background off >/dev/null 2>&1 || true
     conch tray off >/dev/null 2>&1 || true
     conch shortcut remove >/dev/null 2>&1 || true
+    conch command off >/dev/null 2>&1 || true
     ok "Conch has stopped and won't start at login"
   fi
   rm -rf "$DIR"
@@ -343,7 +373,10 @@ export PATH
 if ! has_git; then get_git; fi
 ok "Git"
 
+# What was here before, so a new version can be started in place of the old one.
+BEFORE=
 if [ -d "$DIR/.git" ]; then
+  BEFORE=$(git -C "$DIR" rev-parse HEAD 2>/dev/null || true)
   # A release swapped in by Conch's own updates is the one that runs (ADR 0051).
   CURRENT=
   [ -f "$HOME_DIR/versions/current" ] && CURRENT=$(head -n 1 "$HOME_DIR/versions/current")
@@ -420,6 +453,12 @@ fi
 
 URL=http://localhost:4317
 if [ -n "$BACKGROUND" ]; then
+  # Running already, on the version that was here: stop it, so the one that starts is the new one.
+  # (The computer only starts Conch when it isn't running, so it would carry on as it was.)
+  AFTER=$(git -C "$DIR" rev-parse HEAD 2>/dev/null || true)
+  if [ "$RUN_DIR" = "$DIR" ] && [ -n "$BEFORE" ] && [ "$BEFORE" != "$AFTER" ]; then
+    conch quit >"$LOG" 2>&1 || true
+  fi
   step "Starting Conch"
   if conch background on >"$LOG" 2>&1; then
     URL=$(sed -n 's/.*\(http:\/\/[^ ]*\).*/\1/p' "$LOG" | head -n 1)
@@ -431,28 +470,56 @@ if [ -n "$BACKGROUND" ]; then
   fi
 fi
 
-# A little computer (ADR 0029): keeps going with nobody logged in, and your phone can reach it.
-if [ -n "$SERVER" ]; then
+# The conch command, in every terminal from now on.
+if conch command on >"$LOG" 2>&1; then ok "The conch command is ready"
+else warn "The conch command couldn't be added; pnpm conch works in $DIR."; fi
+
+# A little computer (ADR 0029): keeps going with nobody logged in.
+if [ -n "$HEADLESS" ] && [ -n "$BACKGROUND" ]; then
   if [ "$OS" = linux ]; then
     if conch background after-logout on >"$LOG" 2>&1; then ok "Conch keeps running after you log out"
     else sed 's/^/  /' "$LOG"; fi
   else
     say "${DIM}A Mac stops Conch when you log out: turn on automatic login in System Settings → Users & Groups.${RESET}"
   fi
-  if [ -r /dev/tty ] && conch status 2>/dev/null | grep -q 'No sign-in'; then
-    say "Your phone signs in with a password. Choose one now:"
-    conch password < /dev/tty || true
-  fi
-  if conch phone >"$LOG" 2>&1; then
-    sed 's/^/  /' "$LOG"
-    conch pair || true
-  else
-    sed 's/^/  /' "$LOG"
-    say "${DIM}When that's done: pnpm conch phone, then pnpm conch pair.${RESET}"
-  fi
 fi
 
-printf '\n  %sConch is ready%s at %s\n' "$BOLD" "$RESET" "$URL"
+# Somebody already made this Conch theirs: an update, not a first install. Say where it
+# is and that it's current, instead of asking again how they'll reach it.
+claimed() {
+  [ -f "$HOME_DIR/access.json" ] &&
+    grep -Eq '"method"[[:space:]]*:[[:space:]]*"(password|key|passkey)"' "$HOME_DIR/access.json"
+}
+if [ -n "$HEADLESS" ] && [ -z "$DOMAIN" ] && [ -z "$PROXY" ] && claimed; then
+  NAME=$(sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$HOME_DIR/address.json" 2>/dev/null | head -n 1)
+  printf '\n  %s✨ Conch is up to date%s' "$BOLD" "$RESET"
+  if [ -n "$NAME" ]; then printf ' at https://%s\n' "$NAME"; else printf '\n'; fi
+  say "${DIM}To change how you reach it: conch setup${RESET}"
+  printf '\n'
+  exit 0
+fi
+
+# No screen here: the conversation (ADR 0064). How will you reach Conch, and the
+# link that makes it yours, opened on your own computer.
+if [ -n "$HEADLESS" ]; then
+  printf '\n'
+  # Through the conch command itself when it's there: it talks to you, with nothing in between.
+  SETUP=conch
+  [ -x "$HOME/.local/bin/conch" ] && SETUP="$HOME/.local/bin/conch"
+  if has_keyboard; then
+    "$SETUP" setup ${DOMAIN:+--domain "$DOMAIN"} ${PROXY:+--proxy "$PROXY"} < /dev/tty || true
+  elif [ -n "$DOMAIN" ]; then
+    "$SETUP" setup --domain "$DOMAIN" --yes < /dev/null || true
+  elif [ -n "$PROXY" ]; then
+    "$SETUP" setup --proxy "$PROXY" --yes < /dev/null || true
+  else
+    say "Conch is installed. When you're at a keyboard, run ${BOLD}conch setup${RESET} to choose how you'll reach it."
+  fi
+  printf '\n'
+  exit 0
+fi
+
+printf '\n  %s✨ Conch is ready%s at %s\n' "$BOLD" "$RESET" "$URL"
 if [ -n "$BACKGROUND" ]; then
   if [ "$OS" = darwin ]; then say "${DIM}Open it any time from Applications or Spotlight: just type Conch.${RESET}"
   else say "${DIM}Open it any time from your apps.${RESET}"; fi
@@ -461,6 +528,9 @@ else
   say "${DIM}Start it with: cd \"$DIR\" && $START${RESET}"
 fi
 printf '\n'
+# It opens as this computer (ADR 0063): `pnpm conch open` hands the browser a one-time link.
 if [ -n "$OPEN" ] && [ -n "$BACKGROUND" ]; then
-  if [ "$OS" = darwin ]; then open "$URL"; elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$URL" >/dev/null 2>&1 || true; fi
+  if ! conch open >/dev/null 2>&1; then
+    if [ "$OS" = darwin ]; then open "$URL"; elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$URL" >/dev/null 2>&1 || true; fi
+  fi
 fi

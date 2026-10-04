@@ -113,7 +113,9 @@ test('a new device waits after the right password until it’s approved', async 
   await signIn(phone.page);
   await expect(phone.page.getByRole('heading', { name: 'Approve this device' })).toBeVisible();
   const phoneCode = await codeOn(phone.page);
-  await expect(phone.page.getByText(`pnpm conch devices approve ${phoneCode}`)).toBeVisible();
+  await expect(
+    phone.page.getByText(`conch devices approve ${phoneCode}`, { exact: true }),
+  ).toBeVisible();
   await shot(phone.page, 'devices-1-phone-waiting.png');
   // Waiting isn't signed in: the API still says no.
   expect((await phone.page.request.get('/api/state')).status()).toBe(401);
@@ -138,11 +140,11 @@ test('a new device waits after the right password until it’s approved', async 
   await signIn(laptop.page);
   const laptopCode = await codeOn(laptop.page);
   const listing = await conch('devices');
-  expect(listing).toContain('Waiting for you (1)');
+  expect(listing).toContain('Knocking at the door (1)');
   expect(listing).toContain(laptopCode.replace(/^(...)(...)$/, '$1-$2'));
   expect(listing).toContain('from 100.64.0.9');
   const approved = await conch('devices', 'approve', laptopCode.toLowerCase());
-  expect(approved).toMatch(/✓ Approved Chrome on \w+/);
+  expect(approved).toMatch(/Chrome on \w+ is in\./);
   await inApp(laptop.page);
 
   // ── On the phone, Settings shows the devices, but approval can only be turned off here.
@@ -150,7 +152,7 @@ test('a new device waits after the right password until it’s approved', async 
   const remoteToggle = phone.page.getByRole('switch', { name: 'Approve new devices' });
   await expect(remoteToggle).toBeChecked();
   await expect(remoteToggle).toBeDisabled();
-  await expect(phone.page.getByText('pnpm conch devices off')).toBeVisible();
+  await expect(phone.page.getByText('conch devices off', { exact: true })).toBeVisible();
   await shot(phone.page, 'devices-3-phone-settings.png');
 
   // ── Someone else with the password: turned down in the terminal, and told so.
@@ -168,7 +170,9 @@ test('a new device waits after the right password until it’s approved', async 
 
   // ── Removing the laptop here sends it back to the start, and it must ask again.
   await page.reload();
-  await openDevices(page);
+  // Settings has an address, so a reload lands back in Security.
+  await expect(page.getByRole('tab', { name: 'Security', selected: true })).toBeVisible();
+  await page.getByRole('heading', { name: 'Devices' }).scrollIntoViewIfNeeded();
   await shot(page, 'devices-5-devices.png');
   const laptopRow = page
     .getByRole('list', { name: 'Devices' })

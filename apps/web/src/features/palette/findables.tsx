@@ -1,4 +1,11 @@
-import { canUseApps, generatePassword, type TaskList, type TextRange } from '@conch/protocol';
+import {
+  fuzzyFilter,
+  type FuzzyMatch,
+  canUseApps,
+  generatePassword,
+  type TaskList,
+  type TextRange,
+} from '@conch/protocol';
 import {
   AppIcon,
   type AppIconLook,
@@ -58,6 +65,8 @@ import {
   Wrench,
   House,
   Zap,
+  FingerprintPattern,
+  GlobeLock,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -69,7 +78,7 @@ import { ARCHIVE_PATH, isChat, useArchive } from '../archive/useArchive';
 import { COME_HOME_FOCUS } from '../import/api';
 import { doctorApi } from '../health/api';
 import { LIVE_DATA_FOCUS } from '../artifacts/LiveDataSection';
-import { DEVICES_FOCUS } from '../auth/focus';
+import { ADDRESS_FOCUS, DEVICES_FOCUS, PASSKEYS_FOCUS } from '../auth/focus';
 import { FALLBACK_FOCUS } from '../settings/FallbackSection';
 import { ROUTINES_SPEND_FOCUS } from '../routines/SpendingSection';
 import { APP_WORDS, APPS } from '../channels/describe';
@@ -86,7 +95,6 @@ import { useConchApps } from '../conchapps/queries';
 import { conchPagePath } from '../conchapps/words';
 import { useRoutines } from '../routines/queries';
 import { taskKeys } from '../tasks/queries';
-import { fuzzyFilter, type FuzzyMatch } from '../search/fuzzy';
 import { useSkills, useWorkSuggestions } from '../skills/queries';
 import { draftFrom } from '../skills/SkillSuggestions';
 import { useLiveStore } from '../../live/store';
@@ -217,6 +225,22 @@ const settingsPlaces: {
     keywords:
       'live data pages apps sites fetch fresh numbers weather prices api allowed allow revoke take back read from network',
     icon: <Globe />,
+  },
+  {
+    tab: 'security',
+    focus: PASSKEYS_FOCUS,
+    label: 'Passkeys',
+    keywords:
+      'passkey passkeys touch id windows hello face id fingerprint biometric sign in without password webauthn',
+    icon: <FingerprintPattern />,
+  },
+  {
+    tab: 'security',
+    focus: ADDRESS_FOCUS,
+    label: 'Your address',
+    keywords:
+      'address domain subdomain own domain https ssl tls certificate lets encrypt let’s encrypt dns record server vps open from anywhere internet',
+    icon: <GlobeLock />,
   },
   {
     tab: 'security',

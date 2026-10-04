@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { captureUi } from '../cli/ui';
 import { skillsCommand, type SkillsIo } from './cli';
 import { checkSignature, fingerprintOf, newSigner, SIG_FILE } from './signing';
 import { deviceSealer } from '../lib/sealed';
@@ -11,12 +12,16 @@ import { SkillTrust } from './trust';
 
 async function setup() {
   const root = await mkdtemp(join(tmpdir(), 'conch-skills-cli-'));
-  const lines: string[] = [];
+  const { ui, text } = captureUi();
+  /** What was said, a line each, without the indent. */
+  const lines = () =>
+    text()
+      .split('\n')
+      .filter((line) => line.trim())
+      .map((line) => line.replace(/^ {2}/, ''));
   const io: SkillsIo = {
-    say: (line = '') => void lines.push(line),
-    bold: (s) => s,
-    dim: (s) => s,
-    green: (s) => s,
+    ui,
+    conch: (args) => `conch ${args}`,
     cwd: root,
     defaultName: 'ada',
   };
@@ -32,13 +37,13 @@ async function setup() {
   return { root, lines, io, trust, folder };
 }
 
-describe('pnpm conch skills', () => {
+describe('conch skills', () => {
   it('signs a folder (relative to where you typed it) with your key, made once', async () => {
     const { lines, io, trust, folder } = await setup();
     expect(await skillsCommand(['sign', 'weekly-review', '--as', 'Ada Lovelace'], trust, io)).toBe(
       0,
     );
-    expect(lines[0]).toBe('✓ Signed “weekly-review” as Ada Lovelace.');
+    expect(lines()[0]).toBe('✓ Signed “weekly-review” as Ada Lovelace. ✨');
     const signed = JSON.parse(await readFile(join(folder, SIG_FILE), 'utf8'));
     expect(signed).toMatchObject({ name: 'weekly-review', publisher: { name: 'Ada Lovelace' } });
     // Trusted here from the start: you made it.
@@ -57,7 +62,7 @@ describe('pnpm conch skills', () => {
   it('says so when there’s no skill there', async () => {
     const { lines, io, trust, root } = await setup();
     expect(await skillsCommand(['sign', root], trust, io)).toBe(1);
-    expect(lines[0]).toMatch(/There's no SKILL.md/);
+    expect(lines()[0]).toMatch(/There's no SKILL.md/);
   });
 
   it('trusts a key by hand, and only a real one; forgets by fingerprint', async () => {
@@ -67,9 +72,9 @@ describe('pnpm conch skills', () => {
     expect(await skillsCommand(['trust', ada.publicKey], trust, io)).toBe(1);
     expect(await skillsCommand(['trust', ada.publicKey, '--as', 'Ada'], trust, io)).toBe(0);
     const fingerprint = fingerprintOf(ada.publicKey);
-    expect(lines.at(-2)).toBe(`✓ You trust Ada (${fingerprint}).`);
+    expect(lines().at(-2)).toBe(`✓ You trust Ada (${fingerprint}).`);
     await skillsCommand(['trusted'], trust, io);
-    expect(lines.at(-1)).toBe(`Ada  ${fingerprint}`);
+    expect(lines().at(-1)).toBe(`Ada  ${fingerprint}`);
     expect(
       await skillsCommand(['forget', ...fingerprint.toLowerCase().split(' ')], trust, io),
     ).toBe(0);
@@ -80,7 +85,7 @@ describe('pnpm conch skills', () => {
     const { lines, io, trust } = await setup();
     await skillsCommand(['key', '--as', 'Ada'], trust, io);
     const signer = await trust.signer('x');
-    expect(lines.join('\n')).toContain(`Public key   ${signer.publicKey}`);
-    expect(lines.join('\n')).not.toContain(signer.privateKey);
+    expect(lines().join('\n')).toContain(`Public key   ${signer.publicKey}`);
+    expect(lines().join('\n')).not.toContain(signer.privateKey);
   });
 });

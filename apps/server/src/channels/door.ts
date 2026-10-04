@@ -139,6 +139,11 @@ export class ChannelDoorService {
       tailscale: DoorTailscale;
       /** How Conch reaches its own public address for the check (tests point it home). */
       fetch?: typeof fetch;
+      /**
+       * Conch's own address (ADR 0064), `https://conch.example.com`, while it answers there:
+       * the door can use it too, at its `/conch` path, with nothing else to run.
+       */
+      conchAddress?: () => string | undefined;
       onHeal?: (message: string) => void;
       log?: (message: string) => void;
     },
@@ -182,7 +187,23 @@ export class ChannelDoorService {
   }
 
   status(): DoorView {
-    return this.#state;
+    const address = this.deps.conchAddress?.();
+    // Offered while the door isn't already using it.
+    return address && this.#state.url !== `${address}${DOOR_PATH}`
+      ? { ...this.#state, address }
+      : this.#state;
+  }
+
+  /** Use Conch's own address (ADR 0064): one press, nothing else to set up. */
+  async useConchAddress(): Promise<DoorView> {
+    const address = this.deps.conchAddress?.();
+    if (!address) throw new DoorError('Conch doesn’t answer at an address of its own yet.');
+    return this.useOwn(`${address}${DOOR_PATH}`);
+  }
+
+  /** Conch's own address came or went: tell whoever shows the door. */
+  addressChanged(): void {
+    for (const listener of this.#listeners) listener(this.status());
   }
 
   onChange(listener: (door: DoorView) => void): () => void {
@@ -194,7 +215,7 @@ export class ChannelDoorService {
     const view: DoorView = { ...next, apps: next.apps ?? this.#state.apps };
     const same = JSON.stringify(view) === JSON.stringify(this.#state);
     this.#state = view;
-    if (!same) for (const listener of this.#listeners) listener(view);
+    if (!same) for (const listener of this.#listeners) listener(this.status());
   }
 
   #apps() {

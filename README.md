@@ -8,12 +8,12 @@
 <h1 align="center">Conch</h1>
 
 <p align="center">
-  <b>A calm home for your AI agents. On your own computer.</b>
+  <b>The AI agent that just works. Let it solve your problems.</b>
 </p>
 
 <p align="center">
-  Every model you use, the apps you live in and the chat apps you already have,<br>
-  in one place that sets itself up, fixes what breaks, and asks only when it matters.
+  Use the AI subscriptions and API keys you already have.<br>
+  Conch sets itself up, fixes what breaks, and asks you only when it has to.
 </p>
 
 <p align="center">
@@ -46,20 +46,23 @@
 
 ## Why Conch
 
-- **One place for every model.** The plans you already pay for, a model on this
-  computer and the keys you have, all at once, from one picker. A chat can move
-  between them without losing its thread.
-- **Yours, and on your computer.** Chats, memories and settings are plain files
-  in `~/.conch`. There's no Conch account and no telemetry.
-- **Made for people who never open a terminal.** It installs what it needs,
-  repairs what breaks, and interrupts only for approvals that matter.
+- **It just works.** Download it and open it. Conch installs what it needs, and
+  there's no account to make. Made for people who never open a terminal.
+- **It fixes itself.** What breaks, it mends on its own. When something needs
+  you, like signing in again, you get one plain sentence and the button that does it.
+- **The AI you already pay for.** Sign in with your subscriptions or paste an API
+  key, and every model is in one picker. A chat can move between them without
+  losing its thread.
+- **Yours, on your computer.** Chats, memories and settings are plain files in
+  `~/.conch`. There's no Conch account and no telemetry.
 
 ## What it does
 
 ### 💬 Talk to any model
 
-- **Every provider at once.** Claude Code, Codex, GitHub Copilot, Gemini CLI and
-  Grok through their own sign-in; Ollama, LM Studio or a server of your own; keys
+- **Every provider at once.** Coding agents with their own tools (Claude Code and
+  Codex CLI, asking through Conch); Codex, GitHub Copilot, Gemini CLI and Grok
+  through their own sign-in; Ollama, LM Studio or a server of your own; keys
   from OpenRouter, Anthropic, OpenAI, Google, Mistral, DeepSeek and more.
 - **Long chats on any model.** When a chat outgrows what a model reads at once,
   its start becomes a summary you can open, and what you said there is learned first.
@@ -92,6 +95,7 @@
   Search finds any line in months of chats, and "like last time" finds the chat it means.
 - **Skills from what worked.** After the assistant works something hard out, one
   press keeps how it did it as a skill. Nothing is saved or turned on until you say so.
+  Or describe one in a sentence, and it writes the steps for you to read and change.
 
 ### 📱 Wherever you are
 
@@ -99,6 +103,11 @@
   Microsoft Teams, Matrix and WeChat.
 - **Your phone.** An installable app over a private Tailscale address, with
   notifications and voice.
+- **Your own address.** On a server, Conch answers at `conch.yourname.com` with
+  its own certificate. One line installs it; a link opened on your laptop makes it
+  yours.
+- **Touch ID, Windows Hello, Face ID.** Sign in with what your device already has.
+  New devices wait for your OK, which you give from one you already use.
 - **Your desktop.** Conch for macOS, Windows and Linux: its own window, the pearl
   in the menu bar, and each new release one press away.
 
@@ -106,8 +115,8 @@
 
 - **Asks before anything risky.** After a chat reads a web page or an email,
   anything risky asks first. Commands run sealed off from your keys.
-- **See it, undo it.** **Activity** shows everything the assistant did, and
-  **Undo** puts back the files it changed.
+- **See it, undo it.** **Activity** shows everything the assistant did, finds any
+  of it as you type, and **Undo** puts back the files it changed.
 - **Repair everything.** One button checks every part of Conch and fixes what it
   can. Daily backups, and signed updates that go back if something fails.
 
@@ -143,9 +152,16 @@ irm https://raw.githubusercontent.com/georgevibing/conch-agent/main/scripts/inst
 
 The installer gets Node.js and Git if they're missing, builds Conch, keeps it
 running in the background and opens it. Conch then helps you connect a provider.
-Run the same line again to update. Add `--uninstall` to remove it, or `--server`
-for a computer that stays on (no browser; it prints a QR code to sign in your
-phone).
+Run the same line again to update. Add `--uninstall` to remove it.
+
+**On a server** (or any computer with no screen), add `--server`. Over SSH it does
+this by itself. It asks how you'll reach Conch: at an address of your own, through a
+tunnel or web server you already run (Cloudflare Tunnel, nginx, Caddy), privately with
+Tailscale, or only from that computer. For an address, it shows the DNS record to add,
+gets the certificate, and ends with a link you open on your own computer to make Conch
+yours. [On a server](./apps/docs/content/start/server.md) walks through it.
+
+The installer also adds `conch` to your terminal: `conch help` lists what it can do.
 
 From a checkout (Node 24 or newer):
 
@@ -157,11 +173,11 @@ pnpm start        # builds and opens http://localhost:4317
 
 > [!IMPORTANT]
 > **Conch runs as you.** It can read your files and run commands, so treat it like
-> an SSH server. Out of the box only this computer can open it. Read
+> an SSH server. Out of the box only this computer can open it, in a browser Conch opened itself. Read
 > [docs/SECURITY.md](./docs/SECURITY.md) before you put it on a network.
 
-**On your phone:** choose a password in **Settings → Security**, press **Add a
-device**, and scan the QR code. Conch sets up the private address for you.
+**On your phone:** in **Settings → Security**, press **Add a device** and scan the
+QR code. Conch sets up the private address for you.
 
 ## Questions
 
@@ -232,7 +248,7 @@ pnpm storybook    # the Nacre design system on :6006
 pnpm check        # format, lint, types and tests: must pass before every commit
 pnpm e2e          # Playwright journeys against the gateway and the mock provider
 pnpm desktop:dev  # the desktop app on the repository, with hot reload
-pnpm conch help   # the command line: status, password, devices, import …
+pnpm conch help   # the command line (conch, once installed): setup, status, devices …
 ```
 
 Configuration comes from the environment;

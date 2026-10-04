@@ -1,28 +1,37 @@
-import {
-  FirstJobKind,
-  type ImportSourceId,
-  type ImportStatus,
-  type Persona,
-  type Profile,
-} from '@conch/protocol';
+import type { ImportSourceId, ImportStatus, Tone } from '@conch/protocol';
 import {
   Button,
-  Collapsible,
-  Field,
   Heading,
   ImportOffer,
-  Input,
   Pearl,
-  RadioGroup,
+  SegmentedControl,
   Stack,
   Text,
-  Textarea,
+  WelcomeApps,
+  WelcomeBackdrop,
+  WelcomeChoices,
+  WelcomeName,
+  WelcomeRise,
+  WelcomeStage,
+  WelcomeStarters,
+  WelcomeSteps,
+  WelcomeVoice,
   toast,
 } from '@conch/nacre';
-import { ArrowRight } from 'lucide-react';
-import { useState, type FormEvent, type ReactNode } from 'react';
+import {
+  ArrowRight,
+  Briefcase,
+  CalendarDays,
+  Code,
+  GraduationCap,
+  House,
+  Lightbulb,
+  Mail,
+  PenLine,
+  Search,
+} from 'lucide-react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
-import { useQueryClient } from '@tanstack/react-query';
 
 import { useAppState, useUpdateSettings } from '../../api/queries';
 import { useAutoFocus } from '../../lib/useAutoFocus';
@@ -30,274 +39,295 @@ import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
 import { useImportStatus } from '../import/api';
 import { ComeHomeDialog } from '../import/ComeHomeDialog';
+import { ConnectDialog } from '../integrations/ConnectDialog';
+import { useIntegrations } from '../integrations/queries';
 import { ProviderSetup } from '../providers/ProviderSetup';
+import { useProviders } from '../providers/queries';
 import styles from './Onboarding.module.css';
-import { toneOptions } from './tones';
-import { ChooseFirstJob, FirstJob, JOBS, newFirstJobDraft } from './FirstJob';
-import { firstJobKey, useFirstJob } from './first-job';
+import {
+  INTERESTS,
+  VOICES,
+  aboutWith,
+  appsFor,
+  hello,
+  interestsIn,
+  startersFor,
+  type Interest,
+} from './welcome';
 
-const allSteps = [
-  'welcome',
-  'goal',
-  'connect',
-  'outcome',
-  'home',
-  'persona',
-  'about',
-  'done',
-] as const;
-type Step = (typeof allSteps)[number];
+/**
+ * The welcome (ADR 0068): the absolute basics, one calm thing at a time. Your
+ * name, what you'd like a hand with (tapped), how the assistant should sound
+ * (heard), a mind to think with, and the apps you live in, each skippable but
+ * the name's. Then three things to ask first, made from what you picked.
+ */
 
-function Progress({ step, steps }: { step: Step; steps: readonly Step[] }) {
-  const index = steps.indexOf(step);
-  return (
-    <ol className={styles.progress} aria-label={`Step ${index} of ${steps.length - 1}`}>
-      {steps.slice(1).map((s, i) => (
-        <li key={s} data-state={i + 1 < index ? 'done' : i + 1 === index ? 'current' : 'todo'} />
-      ))}
-    </ol>
-  );
+const ICONS: Record<Interest, ReactNode> = {
+  writing: <PenLine />,
+  coding: <Code />,
+  research: <Search />,
+  email: <Mail />,
+  planning: <CalendarDays />,
+  work: <Briefcase />,
+  learning: <GraduationCap />,
+  ideas: <Lightbulb />,
+  life: <House />,
+};
+
+type Step = 'hello' | 'name' | 'help' | 'voice' | 'mind' | 'apps' | 'home' | 'ready';
+const STEP_KEY = 'conch:welcome-step';
+
+function remembered(): Step {
+  try {
+    const step = sessionStorage.getItem(STEP_KEY);
+    return step && ['name', 'help', 'voice', 'mind', 'apps'].includes(step)
+      ? (step as Step)
+      : 'hello';
+  } catch {
+    return 'hello';
+  }
 }
 
-function StepFrame({
-  eyebrow,
-  title,
-  lead,
-  children,
-  footer,
-}: {
-  eyebrow?: string;
-  title: ReactNode;
-  lead?: ReactNode;
-  children?: ReactNode;
-  footer?: ReactNode;
-}) {
+/** The line under a stage's buttons: a quiet way past it. */
+function Later({ onClick, children = 'Not now' }: { onClick: () => void; children?: ReactNode }) {
   return (
-    <div className={styles.step}>
-      <Stack gap={2}>
-        {eyebrow && (
-          <Text size="sm" weight="medium" tone="accent">
-            {eyebrow}
-          </Text>
-        )}
-        <Heading level={1} display size="4xl">
-          {title}
-        </Heading>
-        {lead && (
-          <Text size="lg" tone="muted">
-            {lead}
-          </Text>
-        )}
-      </Stack>
+    <Button variant="ghost" onClick={onClick}>
       {children}
-      {footer && <div className={styles.footer}>{footer}</div>}
-    </div>
+    </Button>
   );
 }
 
-function Welcome({ onNext }: { onNext: () => void }) {
+function Hello({ onNext }: { onNext: () => void }) {
   const ref = useAutoFocus<HTMLButtonElement>();
   return (
-    <div className={styles.welcome}>
-      <Pearl size="xl" state="thinking" label={null} className={styles.welcomePearl} />
-      <Heading level={1} display size="5xl" align="center">
-        Hello.
-      </Heading>
-      <Text size="lg" tone="muted" align="center" className={styles.welcomeLead}>
-        I’m Conch, a calm place to think and build, right here on your computer.
-      </Text>
-      <Button ref={ref} size="lg" trailingIcon={<ArrowRight />} onClick={onNext}>
-        Get started
-      </Button>
-      <Text size="xs" tone="subtle" align="center">
-        Your history is saved on this computer. Cloud providers receive the content needed to
-        answer.
-      </Text>
-    </div>
+    <>
+      <WelcomeRise order={0}>
+        <Pearl size="xl" state="thinking" label={null} className={styles.pearl} />
+      </WelcomeRise>
+      <WelcomeRise order={1}>
+        <Heading level={1} display size="5xl" align="center">
+          Hi, I’m Conch.
+        </Heading>
+      </WelcomeRise>
+      <WelcomeRise order={2}>
+        <Text size="lg" tone="muted" align="center" className={styles.lead}>
+          Your own assistant, on your own computer. Let’s get to know each other. It takes a minute.
+        </Text>
+      </WelcomeRise>
+      <WelcomeRise order={3}>
+        <Button ref={ref} size="lg" trailingIcon={<ArrowRight />} onClick={onNext}>
+          Let’s begin
+        </Button>
+      </WelcomeRise>
+      <WelcomeRise order={5}>
+        <Text size="xs" tone="subtle" align="center" className={styles.lead}>
+          Everything stays on this computer. A model you connect sees only what it needs to answer.
+        </Text>
+      </WelcomeRise>
+    </>
   );
 }
 
-function PersonaStep({
-  initial,
-  onNext,
-  onSkip,
-}: {
-  initial: Persona;
-  onNext: (persona: Persona) => void;
-  onSkip: () => void;
-}) {
-  const [persona, setPersona] = useState(initial);
+function NameStep({ initial, onNext }: { initial: string; onNext: (name: string) => void }) {
+  const [name, setName] = useState(initial);
+  const ref = useAutoFocus<HTMLInputElement>();
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    onNext({ ...persona, name: persona.name.trim() || 'Conch' });
+    onNext(name.trim());
   };
   return (
-    <form onSubmit={submit}>
-      <StepFrame
-        eyebrow="Make it yours"
-        title="Give me a personality"
-        lead="You can change all of this later in Settings."
-        footer={
-          <>
-            <Button type="button" variant="ghost" onClick={onSkip}>
-              Skip for now
-            </Button>
-            <Button type="submit" trailingIcon={<ArrowRight />}>
-              Continue
-            </Button>
-          </>
-        }
-      >
-        <Stack gap={5}>
-          <Field>
-            <Field.Label>What should I be called?</Field.Label>
-            <Input
-              value={persona.name}
-              maxLength={40}
-              placeholder="Conch"
-              onChange={(e) => setPersona({ ...persona, name: e.target.value })}
-            />
-          </Field>
-          <Stack gap={2}>
-            <Text as="span" size="sm" weight="medium" id="tone-label">
-              How should I sound?
-            </Text>
-            <RadioGroup
-              variant="card"
-              aria-labelledby="tone-label"
-              value={persona.tone}
-              onValueChange={(tone) => setPersona({ ...persona, tone: tone as Persona['tone'] })}
-              className={styles.tones}
-            >
-              {toneOptions.map((t) => (
-                <RadioGroup.Item
-                  key={t.value}
-                  value={t.value}
-                  label={t.label}
-                  description={t.sample}
-                />
-              ))}
-            </RadioGroup>
-          </Stack>
-          <Collapsible defaultOpen={Boolean(persona.instructions)}>
-            <Collapsible.Trigger className={styles.disclosure}>
-              Add your own instructions
-            </Collapsible.Trigger>
-            <Collapsible.Content>
-              <div className={styles.disclosed}>
-                <Field>
-                  <Field.Label>Instructions</Field.Label>
-                  <Textarea
-                    autosize
-                    minRows={3}
-                    maxRows={8}
-                    value={persona.instructions}
-                    placeholder="Always use British spelling. When I share code, suggest tests."
-                    onChange={(e) => setPersona({ ...persona, instructions: e.target.value })}
-                  />
-                </Field>
-              </div>
-            </Collapsible.Content>
-          </Collapsible>
-        </Stack>
-      </StepFrame>
+    <form onSubmit={submit} className={styles.form}>
+      <WelcomeRise order={0}>
+        <Heading level={1} display size="4xl" align="center">
+          First, what should I call you?
+        </Heading>
+      </WelcomeRise>
+      <WelcomeRise order={1}>
+        <WelcomeName
+          ref={ref}
+          label="Your name"
+          placeholder="Your name"
+          maxLength={80}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </WelcomeRise>
+      <WelcomeRise order={2} className={styles.actions}>
+        <Button type="submit" size="lg" trailingIcon={<ArrowRight />}>
+          {name.trim() ? 'Continue' : 'Skip'}
+        </Button>
+      </WelcomeRise>
     </form>
   );
 }
 
-function AboutStep({
+function HelpStep({
+  name,
   initial,
   onNext,
-  onSkip,
 }: {
-  initial: Profile;
-  onNext: (profile: Profile) => void;
-  onSkip: () => void;
+  name: string;
+  initial: Interest[];
+  onNext: (picked: Interest[]) => void;
 }) {
-  const [profile, setProfile] = useState(initial);
+  const [picked, setPicked] = useState<Interest[]>(initial);
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        onNext(profile);
-      }}
-    >
-      <StepFrame
-        eyebrow="A little about you"
-        title="Tell me about yourself"
-        lead="Optional. It helps me make future work more useful to you."
-        footer={
-          <>
-            <Button type="button" variant="ghost" onClick={onSkip}>
-              Skip for now
-            </Button>
-            <Button type="submit" trailingIcon={<ArrowRight />}>
-              Continue
-            </Button>
-          </>
-        }
-      >
-        <Stack gap={5}>
-          <Field>
-            <Field.Label>What should I call you?</Field.Label>
-            <Input
-              value={profile.name}
-              autoComplete="given-name"
-              placeholder="Your name"
-              onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-            />
-          </Field>
-          <Field>
-            <Field.Label>Anything I should know?</Field.Label>
-            <Textarea
-              autosize
-              minRows={4}
-              maxRows={10}
-              value={profile.about}
-              placeholder="I’m a product designer in Lisbon. I like short answers, and I’m learning Rust."
-              onChange={(e) => setProfile({ ...profile, about: e.target.value })}
-            />
-            <Field.Description>
-              Saved on this computer and shared with your selected provider when it helps answer.
-              Change or delete it in Settings.
-            </Field.Description>
-          </Field>
-        </Stack>
-      </StepFrame>
-    </form>
+    <>
+      <WelcomeRise order={0}>
+        <Heading level={1} display size="4xl" align="center">
+          {name ? `Nice to meet you, ${name}.` : 'Nice to meet you.'}
+        </Heading>
+      </WelcomeRise>
+      <WelcomeRise order={1}>
+        <Text size="lg" tone="muted" align="center">
+          What would you like a hand with? Pick as many as you like.
+        </Text>
+      </WelcomeRise>
+      <WelcomeRise order={2}>
+        <WelcomeChoices
+          label="What you’d like a hand with"
+          choices={INTERESTS.map((i) => ({ value: i.value, label: i.label, icon: ICONS[i.value] }))}
+          value={picked}
+          onChange={(next) => setPicked(next as Interest[])}
+        />
+      </WelcomeRise>
+      <WelcomeRise order={4} className={styles.actions}>
+        <Button size="lg" trailingIcon={<ArrowRight />} onClick={() => onNext(picked)}>
+          {picked.length ? 'Continue' : 'Skip'}
+        </Button>
+      </WelcomeRise>
+    </>
   );
 }
 
-function Done({
+function VoiceStep({
   name,
-  onFinish,
-  finishing,
+  assistant,
+  initial,
+  onNext,
 }: {
   name: string;
-  onFinish: () => void;
-  finishing: boolean;
+  assistant: string;
+  initial: Tone;
+  onNext: (tone: Tone) => void;
 }) {
-  const ref = useAutoFocus<HTMLButtonElement>();
+  const [tone, setTone] = useState<Tone>(initial);
   return (
-    <div className={styles.welcome}>
-      <Pearl size="lg" state="streaming" label={null} />
-      <Heading level={1} display size="5xl" align="center">
-        Make yourself at home{name ? `, ${name}` : ''}.
-      </Heading>
-      <Text size="lg" tone="muted" align="center" className={styles.welcomeLead}>
-        Your work is saved. You can adjust how Conch talks and what it knows about you at any time
-        in Settings.
-      </Text>
-      <Button
-        ref={ref}
-        size="lg"
-        trailingIcon={<ArrowRight />}
-        onClick={onFinish}
-        loading={finishing}
-      >
-        Open Conch
-      </Button>
-    </div>
+    <>
+      <WelcomeRise order={0}>
+        <Heading level={1} display size="4xl" align="center">
+          How should I sound?
+        </Heading>
+      </WelcomeRise>
+      <WelcomeRise order={1}>
+        <WelcomeVoice from={assistant} text={hello(tone, name)} />
+      </WelcomeRise>
+      <WelcomeRise order={2}>
+        <SegmentedControl
+          aria-label="How I should sound"
+          size="md"
+          value={tone}
+          onValueChange={(v) => v && setTone(v as Tone)}
+        >
+          {VOICES.map((v) => (
+            <SegmentedControl.Item key={v.value} value={v.value}>
+              {v.label}
+            </SegmentedControl.Item>
+          ))}
+        </SegmentedControl>
+      </WelcomeRise>
+      <WelcomeRise order={3} className={styles.actions}>
+        <Button size="lg" trailingIcon={<ArrowRight />} onClick={() => onNext(tone)}>
+          Sounds good
+        </Button>
+      </WelcomeRise>
+    </>
+  );
+}
+
+function MindStep({ onNext }: { onNext: () => void }) {
+  const providers = useProviders();
+  // Once one works, ProviderSetup says so and moves on by itself: no way to put it off.
+  const ready = providers.data?.providers.some((p) => p.active && p.status.state === 'ready');
+  return (
+    <>
+      <WelcomeRise order={0}>
+        <Heading level={1} display size="4xl" align="center">
+          Now, a mind to think with.
+        </Heading>
+      </WelcomeRise>
+      <WelcomeRise order={1}>
+        <Text size="lg" tone="muted" align="center" className={styles.lead}>
+          A plan you already pay for, a model on this computer, or a key. You can add more, and
+          switch any time.
+        </Text>
+      </WelcomeRise>
+      <WelcomeRise order={2} className={styles.wide}>
+        <ProviderSetup onReady={onNext} />
+      </WelcomeRise>
+      {!ready && (
+        <WelcomeRise order={3} className={styles.actions}>
+          <Later onClick={onNext}>I’ll do this later</Later>
+        </WelcomeRise>
+      )}
+    </>
+  );
+}
+
+function AppsStep({ picked, onNext }: { picked: Interest[]; onNext: () => void }) {
+  const integrations = useIntegrations();
+  const [open, setOpen] = useState<string>();
+  const catalog = useMemo(() => integrations.data?.catalog ?? [], [integrations.data]);
+  const ids = useMemo(
+    () => appsFor(picked, new Set(catalog.map((entry) => entry.id))),
+    [picked, catalog],
+  );
+  const connected = new Set(
+    (integrations.data?.integrations ?? [])
+      .filter((i) => i.enabled && i.catalogId)
+      .map((i) => i.catalogId),
+  );
+  const apps = ids.flatMap((id) => {
+    const entry = catalog.find((e) => e.id === id);
+    return entry
+      ? [
+          {
+            id,
+            name: entry.name,
+            ...(entry.color && { color: entry.color }),
+            connected: connected.has(id),
+          },
+        ]
+      : [];
+  });
+  const any = apps.some((app) => app.connected);
+  return (
+    <>
+      <WelcomeRise order={0}>
+        <Heading level={1} display size="4xl" align="center">
+          Bring the apps you live in.
+        </Heading>
+      </WelcomeRise>
+      <WelcomeRise order={1}>
+        <Text size="lg" tone="muted" align="center" className={styles.lead}>
+          Tap one to connect it. Or don’t: when one would help, I’ll offer it right in the chat.
+        </Text>
+      </WelcomeRise>
+      <WelcomeRise order={2} className={styles.wide}>
+        {apps.length > 0 && <WelcomeApps label="Apps to connect" apps={apps} onPick={setOpen} />}
+      </WelcomeRise>
+      <WelcomeRise order={4} className={styles.actions}>
+        <Button size="lg" trailingIcon={<ArrowRight />} onClick={onNext}>
+          {any ? 'Continue' : 'Skip for now'}
+        </Button>
+      </WelcomeRise>
+      {open && (
+        <ConnectDialog
+          entry={catalog.find((e) => e.id === open)}
+          onOpenChange={(next) => !next && setOpen(undefined)}
+        />
+      )}
+    </>
   );
 }
 
@@ -305,15 +335,7 @@ function Done({
  * Come home (ADR 0035), offered once: another assistant is on this computer,
  * so its memories, skills and routines can come with you.
  */
-function HomeStep({
-  status,
-  onDone,
-  onSkip,
-}: {
-  status: ImportStatus;
-  onDone: () => void;
-  onSkip: () => void;
-}) {
+function HomeStep({ status, onNext }: { status: ImportStatus; onNext: () => void }) {
   const auth = useAuth();
   const { guard, dialog } = useVerify(auth.data?.method ?? 'none');
   const [open, setOpen] = useState<ImportSourceId>();
@@ -321,190 +343,220 @@ function HomeStep({
   const first = status.sources[0];
   const ref = useAutoFocus<HTMLButtonElement>();
   return (
-    <StepFrame
-      eyebrow="Welcome home"
-      title={
-        status.sources.length === 1 && first
-          ? `Bring your things from ${first.label}?`
-          : 'Bring your things with you?'
-      }
-      lead="Conch found another assistant here. See exactly what would come over first: nothing moves until you say, and you can undo it."
-      footer={
-        brought ? (
-          <Button trailingIcon={<ArrowRight />} onClick={onDone}>
+    <>
+      <WelcomeRise order={0}>
+        <Heading level={1} display size="4xl" align="center">
+          {status.sources.length === 1 && first
+            ? `Bring your things from ${first.label}?`
+            : 'Bring your things with you?'}
+        </Heading>
+      </WelcomeRise>
+      <WelcomeRise order={1}>
+        <Text size="lg" tone="muted" align="center" className={styles.lead}>
+          I found another assistant here. See exactly what would come over first: nothing moves
+          until you say, and you can undo it.
+        </Text>
+      </WelcomeRise>
+      <WelcomeRise order={2} className={styles.wide}>
+        <Stack gap={3}>
+          {status.sources.map((s, i) => (
+            <ImportOffer
+              key={s.id}
+              from={s.label}
+              summary={s.summary}
+              action={
+                <Button ref={i === 0 ? ref : undefined} size="sm" onClick={() => setOpen(s.id)}>
+                  Take a look
+                </Button>
+              }
+            />
+          ))}
+        </Stack>
+      </WelcomeRise>
+      <WelcomeRise order={3} className={styles.actions}>
+        {brought ? (
+          <Button size="lg" trailingIcon={<ArrowRight />} onClick={onNext}>
             Continue
           </Button>
         ) : (
-          <Button type="button" variant="ghost" onClick={onSkip}>
-            Not now
-          </Button>
-        )
-      }
-    >
-      <Stack gap={3}>
-        {status.sources.map((s, i) => (
-          <ImportOffer
-            key={s.id}
-            from={s.label}
-            summary={s.summary}
-            action={
-              <Button ref={i === 0 ? ref : undefined} size="sm" onClick={() => setOpen(s.id)}>
-                Take a look
-              </Button>
-            }
-          />
-        ))}
-      </Stack>
+          <Later onClick={onNext} />
+        )}
+      </WelcomeRise>
       <ComeHomeDialog
         source={open}
         guard={guard}
         onImported={() => setBrought(true)}
         onClose={() => {
           setOpen(undefined);
-          if (brought) onDone();
+          if (brought) onNext();
         }}
       />
       {dialog}
-    </StepFrame>
+    </>
   );
 }
 
-/** Choose a job, connect its needs, inspect its result. Personalisation comes afterwards. */
+function Ready({
+  name,
+  starters,
+  finishing,
+  onFinish,
+}: {
+  name: string;
+  starters: string[];
+  finishing: boolean;
+  onFinish: (draft?: string) => void;
+}) {
+  const ref = useAutoFocus<HTMLButtonElement>();
+  return (
+    <>
+      <WelcomeRise order={0}>
+        <Pearl size="xl" state="streaming" label={null} className={styles.pearl} />
+      </WelcomeRise>
+      <WelcomeRise order={1}>
+        <Heading level={1} display size="5xl" align="center">
+          {name ? `You’re all set, ${name}.` : 'You’re all set.'}
+        </Heading>
+      </WelcomeRise>
+      <WelcomeRise order={2}>
+        <Text size="lg" tone="muted" align="center" className={styles.lead}>
+          Here’s something to start with. Or just say hello.
+        </Text>
+      </WelcomeRise>
+      <WelcomeRise order={3}>
+        <WelcomeStarters
+          label="Something to ask first"
+          starters={starters}
+          onPick={(text) => onFinish(text)}
+        />
+      </WelcomeRise>
+      <WelcomeRise order={5} className={styles.actions}>
+        <Button
+          ref={ref}
+          size="lg"
+          trailingIcon={<ArrowRight />}
+          loading={finishing}
+          onClick={() => onFinish()}
+        >
+          Open Conch
+        </Button>
+      </WelcomeRise>
+    </>
+  );
+}
+
 export function Onboarding() {
   const state = useAppState();
   const update = useUpdateSettings();
   const navigate = useNavigate();
-  const client = useQueryClient();
-  const firstJob = useFirstJob();
-  const [requestedStep, setStep] = useState<Step>('welcome');
-  const [draft, setDraft] = useState(newFirstJobDraft);
-  const [kind, setKind] = useState<FirstJobKind>(() => {
-    try {
-      return FirstJobKind.parse(sessionStorage.getItem('conch:first-job-kind'));
-    } catch {
-      return 'document';
-    }
-  });
-  const step = requestedStep === 'welcome' && firstJob.data?.task ? 'outcome' : requestedStep;
-  const [direction, setDirection] = useState<'forward' | 'back'>('forward');
   const imports = useImportStatus();
+  const [step, setStep] = useState<Step>(remembered);
+  const [direction, setDirection] = useState<'forward' | 'back'>('forward');
+  const about = state.data?.profile.about ?? '';
+  const [picked, setPicked] = useState<Interest[]>(() => interestsIn(about));
+
   // Offered only when there's something to bring.
   const home = imports.data?.sources.length ? imports.data : undefined;
-  const steps = allSteps.filter((s) => s !== 'home' || home);
-  const progressSteps: readonly Step[] = ['goal', 'connect', 'outcome'].includes(step)
-    ? ['welcome', 'goal', 'connect', 'outcome']
-    : ['welcome', ...steps.filter((s) => ['home', 'persona', 'about'].includes(s))];
+  const steps: Step[] = ['hello', 'name', 'help', 'voice', 'mind', 'apps'];
+  if (home) steps.push('home');
+  steps.push('ready');
+  const between = steps.slice(1, -1);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(STEP_KEY, step);
+    } catch {
+      /* A convenience only. */
+    }
+  }, [step]);
 
   if (!state.data) return null;
   const { persona, profile } = state.data;
-  const task = firstJob.data?.task;
-  const jobKind = task?.workflow ?? kind;
-  const finish = async (conversationId?: string) => {
-    try {
-      await update.mutateAsync({ onboarded: true });
-      try {
-        sessionStorage.removeItem('conch:first-job-kind');
-      } catch {
-        /* Not required to finish. */
-      }
-      if (conversationId) await navigate(`/c/${conversationId}`);
-    } catch (error) {
-      toast.error((error as Error).message);
-    }
-  };
 
   const go = (next: Step) => {
     setDirection(steps.indexOf(next) >= steps.indexOf(step) ? 'forward' : 'back');
     setStep(next);
   };
-  const save = async (body: Parameters<typeof update.mutateAsync>[0], next: Step) => {
+  const after = (current: Step) => steps[steps.indexOf(current) + 1] ?? 'ready';
+  /** Save what this step said, and carry on even if saving failed (it says so). */
+  const saveThen = (body: Parameters<typeof update.mutateAsync>[0], current: Step) => {
+    go(after(current));
+    update.mutateAsync(body).catch((e: unknown) => toast.error((e as Error).message));
+  };
+
+  const finish = async (draft?: string) => {
     try {
-      await update.mutateAsync(body);
-      go(next);
-    } catch (e) {
-      toast.error((e as Error).message);
+      // Where to land first, with the words for the composer: marking the welcome done swaps
+      // it for the chat at once, which reads its draft from this entry as it opens.
+      await navigate('/', draft ? { state: { draft } } : undefined);
+      await update.mutateAsync({ onboarded: true });
+      try {
+        sessionStorage.removeItem(STEP_KEY);
+      } catch {
+        /* Not needed to finish. */
+      }
+    } catch (error) {
+      toast.error((error as Error).message);
     }
   };
 
+  const at = between.indexOf(step);
   return (
     <main className={styles.root}>
-      <div className={styles.glow} aria-hidden />
-      {step !== 'welcome' && step !== 'done' && <Progress step={step} steps={progressSteps} />}
-      <div key={step} className={styles.stage} data-direction={direction}>
-        {step === 'welcome' && <Welcome onNext={() => go('goal')} />}
-        {step === 'goal' && (
-          <StepFrame
-            eyebrow="Something useful first"
-            title="What would you like help with?"
-            lead="Pick one job. Connect only what it needs, then see a real result."
-          >
-            <ChooseFirstJob
-              value={kind}
-              onChange={(next) => {
-                setKind(next);
-                try {
-                  sessionStorage.setItem('conch:first-job-kind', next);
-                } catch {
-                  /* Optional convenience only. */
-                }
-              }}
-              onNext={() => go('connect')}
-              onSkip={() => void finish()}
-            />
-          </StepFrame>
-        )}
-        {step === 'connect' && (
-          <StepFrame
-            eyebrow="Connect"
-            title="Connect what powers your assistant"
-            lead="Use a subscription you already have, a model API, or a model on this computer. Your job stays the same."
-          >
-            <ProviderSetup onReady={() => setStep((s) => (s === 'connect' ? 'outcome' : s))} />
-          </StepFrame>
-        )}
-        {step === 'outcome' && (
-          <StepFrame
-            eyebrow={task ? 'Your first result' : 'Just what this job needs'}
-            title={JOBS.find((job) => job.id === jobKind)?.title ?? 'Your first result'}
-          >
-            <FirstJob
-              kind={jobKind}
-              task={task}
-              draft={draft}
-              onDraft={setDraft}
-              onSaved={(task) => client.setQueryData(firstJobKey, { task })}
-              onFinished={(id) => void finish(id)}
-              onPersonalize={() => go(home ? 'home' : 'persona')}
-              onBack={() => go('goal')}
-              onProvider={() => go('connect')}
-            />
-          </StepFrame>
-        )}
-        {step === 'home' && home && (
-          <HomeStep status={home} onDone={() => go('done')} onSkip={() => go('persona')} />
-        )}
-        {step === 'persona' && (
-          <PersonaStep
-            initial={persona}
-            onNext={(p) => void save({ persona: p }, 'about')}
-            onSkip={() => go('about')}
-          />
-        )}
-        {step === 'about' && (
-          <AboutStep
-            initial={profile}
-            onNext={(p) => void save({ profile: p }, 'done')}
-            onSkip={() => go('done')}
-          />
-        )}
-        {step === 'done' && (
-          <Done
-            name={profile.name}
-            finishing={update.isPending}
-            onFinish={() => void finish(task?.conversationId)}
-          />
+      <WelcomeBackdrop progress={Math.max(0, steps.indexOf(step)) / (steps.length - 1)} />
+      <div className={styles.top}>
+        {at >= 0 && (
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={styles.back}
+              onClick={() => go(steps[steps.indexOf(step) - 1] ?? 'hello')}
+            >
+              Back
+            </Button>
+            <WelcomeSteps count={between.length} current={at} />
+          </>
         )}
       </div>
+      <WelcomeStage key={step} direction={direction} className={styles.stage}>
+        {step === 'hello' && <Hello onNext={() => go('name')} />}
+        {step === 'name' && (
+          <NameStep
+            initial={profile.name}
+            onNext={(name) => saveThen({ profile: { ...profile, name } }, 'name')}
+          />
+        )}
+        {step === 'help' && (
+          <HelpStep
+            name={profile.name}
+            initial={picked}
+            onNext={(next) => {
+              setPicked(next);
+              saveThen({ profile: { ...profile, about: aboutWith(profile.about, next) } }, 'help');
+            }}
+          />
+        )}
+        {step === 'voice' && (
+          <VoiceStep
+            name={profile.name}
+            assistant={persona.name}
+            initial={persona.tone}
+            onNext={(tone) => saveThen({ persona: { ...persona, tone } }, 'voice')}
+          />
+        )}
+        {step === 'mind' && <MindStep onNext={() => go(after('mind'))} />}
+        {step === 'apps' && <AppsStep picked={picked} onNext={() => go(after('apps'))} />}
+        {step === 'home' && home && <HomeStep status={home} onNext={() => go('ready')} />}
+        {step === 'ready' && (
+          <Ready
+            name={profile.name}
+            starters={startersFor(picked)}
+            finishing={update.isPending}
+            onFinish={(draft) => void finish(draft)}
+          />
+        )}
+      </WelcomeStage>
     </main>
   );
 }

@@ -5,7 +5,7 @@
  */
 import type { ConversationEvent, TaintSource } from '@conch/protocol';
 
-import { describeTaint } from '../conversations/taint';
+import { describeTaint, heldTaints } from '../conversations/taint';
 import { cheapestModel } from '../conversations/title';
 import type { Engine } from '../engines/types';
 import type { OllamaClient } from '../local/ollama';
@@ -32,7 +32,7 @@ export function chatWords(
   options: { since: number; beforeSeq?: number },
 ): Said[] {
   if (chat.origin?.kind === 'routine') return [];
-  const taint: TaintSource[] = events.flatMap((e) => (e.type === 'taint' ? [e.source] : []));
+  const taint: TaintSource[] = heldTaints(events);
   if (taint.some((t) => t.kind === 'person')) return [];
   const untrusted = taint.length ? describeTaint(taint) : undefined;
   const out: Said[] = [];

@@ -68,7 +68,9 @@ if (name === 'corepack' && args.includes('tsx')) console.log('python');
       const calls = readFileSync(join(root, 'calls'), 'utf8');
       assert.match(output, /no system packages were changed/);
       assert.match(output, /Full terminal ready \(using Python; no native build needed\)/);
-      assert.match(output, /Conch is ready/);
+      // No DISPLAY here, so it's a computer with no screen (ADR 0064): nothing to open, and
+      // with no keyboard either, it says how to choose the way you'll reach Conch later.
+      assert.match(output, /Conch is installed\. When you're at a keyboard, run conch setup/);
       assert.ok(
         calls.indexOf('python3 -c') < calls.indexOf('corepack pnpm install --frozen-lockfile'),
       );

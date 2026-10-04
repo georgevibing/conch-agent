@@ -9,7 +9,11 @@
  * - every few seconds it asks the gateway on this computer how things are
  *   (`GET /api/tray/status`, loopback only, with the token in its own file);
  * - it shows whether Conch is running, and a dot when something needs you;
- * - Open Conch, Start Conch, Quit Conch and Always on….
+ * - Open Conch, Start Conch, Quit Conch and Always on…. A page opens as this
+ *   computer (ADR 0063): the helper asks for a one-time link in a folder only
+ *   your account can write (`here/asks`) and opens the private file Conch
+ *   writes back. Its token goes over the network, so it can do no more than
+ *   read counts and quit.
  *
  * It can't hide itself: whether it shows is a switch in Settings.
  *
@@ -28,6 +32,8 @@ export interface TraySpec {
   ask?: string;
   /** The file holding the helper's token (0600). */
   tokenFile: string;
+  /** Where it asks for a page to open as this computer (`here/asks`, ADR 0063). */
+  asksDir: string;
   /** Starts Conch when it isn't running (the computer's own way, or the launcher). */
   startScript: string;
   /** The pearl, as a PNG (Linux) or ICO (Windows). */
@@ -44,6 +50,7 @@ import AppKit
 
 let base = ${swiftString(spec.url)}
 let tokenFile = ${swiftString(spec.tokenFile)}
+let asks = ${swiftString(spec.asksDir)}
 let startScript = ${swiftString(spec.startScript)}
 
 struct Info { var name = "Conch"; var alwaysOn = false; var approvals = 0; var devices = 0; var update = "" }
@@ -144,8 +151,37 @@ final class Menu: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
   }
 
+  /** A page of Conch, as this computer (ADR 0063): asked for in a folder only you can write. */
   func openPage(_ path: String) {
-    if let url = URL(string: base + path) { NSWorkspace.shared.open(url) }
+    let files = FileManager.default
+    let ask = asks + "/" + (0..<12).map { _ in String(format: "%02x", UInt8.random(in: 0...255)) }.joined()
+    let asked = files.fileExists(atPath: asks)
+      && (try? (path + "\\n").write(toFile: ask + ".tmp", atomically: false, encoding: .utf8)) != nil
+      && (try? files.moveItem(atPath: ask + ".tmp", toPath: ask + ".ask")) != nil
+    DispatchQueue.global().async {
+      var file = ""
+      for _ in 0..<(asked ? 50 : 0) {
+        if let text = try? String(contentsOfFile: ask + ".open", encoding: .utf8) {
+          file = text.trimmingCharacters(in: .whitespacesAndNewlines)
+          break
+        }
+        Thread.sleep(forTimeInterval: 0.1)
+      }
+      try? files.removeItem(atPath: ask + ".ask")
+      // Only a private page Conch wrote: its name, a plain file of yours, not a link.
+      let name = (file as NSString).lastPathComponent
+      let attributes = try? files.attributesOfItem(atPath: file)
+      let mine = name.range(of: "^conch-open-[0-9a-f]{24}[.]html$", options: .regularExpression) != nil
+        && attributes?[.type] as? FileAttributeType == .typeRegular
+        && (attributes?[.ownerAccountID] as? NSNumber)?.uint32Value == getuid()
+      DispatchQueue.main.async {
+        if mine {
+          NSWorkspace.shared.open(URL(fileURLWithPath: file))
+        } else if let page = URL(string: base + path) {
+          NSWorkspace.shared.open(page)
+        }
+      }
+    }
   }
 
   @objc func open() { openPage("/") }
@@ -211,6 +247,7 @@ export function powershellSource(spec: TraySpec): string {
     `$base = ${ps(spec.url)}`,
     `$api = ${ps(spec.ask ?? spec.url)}`,
     `$tokenFile = ${ps(spec.tokenFile)}`,
+    `$asks = ${ps(spec.asksDir)}`,
     `$startScript = ${ps(spec.startScript)}`,
     `$iconFile = ${ps(spec.icon ?? '')}`,
     '$icon = New-Object System.Windows.Forms.NotifyIcon',
@@ -226,7 +263,23 @@ export function powershellSource(spec: TraySpec): string {
     'function Ask($path, $method = "GET") {',
     '  try { Invoke-RestMethod -Uri ($api + $path) -Method $method -Headers @{ "X-Conch-Tray" = (Token) } -TimeoutSec 2 } catch { $null }',
     '}',
-    'function OpenPage($path) { Start-Process ($base + $path) }',
+    '# A page of Conch, as this computer (ADR 0063): through the private file Conch makes.',
+    'function OpenPage($path) {',
+    '  $file = $null',
+    '  try {',
+    '    if (Test-Path -LiteralPath $asks) {',
+    '      $ask = Join-Path $asks (-join (1..24 | ForEach-Object { "{0:x}" -f (Get-Random -Maximum 16) }))',
+    '      [System.IO.File]::WriteAllText("$ask.tmp", "$path`n")',
+    '      Move-Item -LiteralPath "$ask.tmp" -Destination "$ask.ask"',
+    '      for ($i = 0; $i -lt 50 -and -not (Test-Path -LiteralPath "$ask.open"); $i++) { Start-Sleep -Milliseconds 100 }',
+    '      if (Test-Path -LiteralPath "$ask.open") { $file = ([System.IO.File]::ReadAllText("$ask.open")).Trim() }',
+    '      Remove-Item -LiteralPath "$ask.ask" -ErrorAction SilentlyContinue',
+    '    }',
+    '  } catch { $file = $null }',
+    '  # Only a private page Conch wrote: in its folder, its name, a plain file (not a link).',
+    '  $mine = $file -and (Test-Path -LiteralPath $file -PathType Leaf) -and ((Split-Path -Parent $file) -eq (Join-Path (Split-Path -Parent $asks) "open")) -and ((Split-Path -Leaf $file) -match "^conch-open-[0-9a-f]{24}[.]html$") -and -not ((Get-Item -LiteralPath $file).Attributes -band [IO.FileAttributes]::ReparsePoint)',
+    '  if ($mine) { Start-Process -FilePath $file } else { Start-Process ($base + $path) }',
+    '}',
     'function Add($text, $action) {',
     '  $entry = New-Object System.Windows.Forms.MenuItem($text)',
     '  if ($action) { $entry.add_Click($action) } else { $entry.Enabled = $false }',
@@ -289,7 +342,7 @@ const py = (value: string) => JSON.stringify(value);
 export function pythonSource(spec: TraySpec): string {
   return `#!/usr/bin/env python3
 # Conch in the panel (ADR 0029). Written by Conch; changes here don't last.
-import json, os, subprocess, urllib.request, webbrowser
+import json, os, re, stat, subprocess, time, urllib.request, webbrowser
 import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import GLib, Gtk
@@ -302,6 +355,7 @@ except (ValueError, ImportError):
 
 BASE = ${py(spec.url)}
 TOKEN_FILE = ${py(spec.tokenFile)}
+ASKS = ${py(spec.asksDir)}
 START = ${py(spec.startScript)}
 ICON = ${py(spec.icon ?? 'applications-system')}
 
@@ -311,6 +365,36 @@ def token():
             return f.read().strip()
     except OSError:
         return ""
+
+def open_page(path):
+    """A page of Conch, as this computer (ADR 0063): asked for in a folder only you can write."""
+    try:
+        if os.path.isdir(ASKS):
+            ask = os.path.join(ASKS, os.urandom(12).hex())
+            with open(ask + ".tmp", "w") as f:
+                f.write(path + "\\n")
+            os.replace(ask + ".tmp", ask + ".ask")
+            for _ in range(50):
+                if os.path.exists(ask + ".open"):
+                    break
+                time.sleep(0.1)
+            file = ""
+            if os.path.exists(ask + ".open"):
+                with open(ask + ".open") as f:
+                    file = f.read().strip()
+            try:
+                os.remove(ask + ".ask")
+            except OSError:
+                pass
+            # Only a private page Conch wrote: its name, a plain file of yours, not a link.
+            if file and re.fullmatch(r"conch-open-[0-9a-f]{24}[.]html", os.path.basename(file)):
+                info = os.lstat(file)
+                if stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid():
+                    subprocess.Popen(["xdg-open", file], start_new_session=True)
+                    return
+    except Exception:
+        pass
+    webbrowser.open(BASE + path)
 
 def ask(path, method="GET"):
     req = urllib.request.Request(BASE + path, method=method, headers={"X-Conch-Tray": token()})
@@ -337,16 +421,16 @@ def build(info):
         name = info.get("name", "Conch")
         item(menu, f"{name} is running · Always on" if info.get("alwaysOn") else f"{name} is running")
         if info.get("approvals"):
-            item(menu, f"{info['approvals']} waiting for you", lambda: webbrowser.open(BASE + "/"))
+            item(menu, f"{info['approvals']} waiting for you", lambda: open_page("/"))
         if info.get("devices"):
-            item(menu, "A new device wants to sign in", lambda: webbrowser.open(BASE + "/?open=devices"))
+            item(menu, "A new device wants to sign in", lambda: open_page("/?open=devices"))
         if info.get("update"):
-            item(menu, f"{info['update']} · What’s new", lambda: webbrowser.open(BASE + "/?open=updates"))
+            item(menu, f"{info['update']} · What’s new", lambda: open_page("/?open=updates"))
         menu.append(Gtk.SeparatorMenuItem())
-        item(menu, "Open Conch", lambda: webbrowser.open(BASE + "/"))
-        item(menu, "Always on: On…" if info.get("alwaysOn") else "Always on: Off…", lambda: webbrowser.open(BASE + "/?open=background"))
+        item(menu, "Open Conch", lambda: open_page("/"))
+        item(menu, "Always on: On…" if info.get("alwaysOn") else "Always on: Off…", lambda: open_page("/?open=background"))
         menu.append(Gtk.SeparatorMenuItem())
-        item(menu, "Quit Conch", lambda: ask("/api/tray/quit", "POST") or webbrowser.open(BASE + "/?open=background"))
+        item(menu, "Quit Conch", lambda: ask("/api/tray/quit", "POST") or open_page("/?open=background"))
     else:
         item(menu, "Conch isn’t running")
         menu.append(Gtk.SeparatorMenuItem())

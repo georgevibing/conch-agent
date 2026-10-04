@@ -2,7 +2,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { FunnelStatus } from '../network/tailscale';
 import { funnelOf } from '../network/tailscale';
@@ -88,6 +88,38 @@ describe('the public door', () => {
     // Checked from the outside, with a proof only this door can make.
     expect(on.checkedAt).toBeDefined();
     expect(door.hookUrl('abc')).toBe('https://mac.tail1.ts.net:8443/conch/hooks/abc');
+  });
+
+  it('uses Conch’s own address in one press, and stops offering it once it does (ADR 0064)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'conch-door-'));
+    // Conch’s own address, as Services would say it: none yet, then ready.
+    const conch: { address?: string } = {};
+    const service: ChannelDoorService = new ChannelDoorService({
+      home: dir,
+      port: 0,
+      tailscale: tailscale(),
+      // Conch's own listener sends https://<name>/conch/… to the door, prefix and all.
+      fetch: (url, init) => fetch(service.localFor(String(url)), init),
+      conchAddress: () => conch.address,
+    });
+    door = service;
+    expect(service.status().address).toBeUndefined();
+    await expect(service.useConchAddress()).rejects.toThrow('doesn’t answer');
+    const told = vi.fn();
+    service.onChange(told);
+    conch.address = 'https://conch.example.com';
+    service.addressChanged();
+    expect(told).toHaveBeenLastCalledWith(
+      expect.objectContaining({ address: 'https://conch.example.com' }),
+    );
+    const on = await service.useConchAddress();
+    expect(on).toMatchObject({
+      state: 'ready',
+      via: 'own',
+      url: 'https://conch.example.com/conch',
+    });
+    expect(on.address).toBeUndefined();
+    expect(service.hookUrl('abc')).toBe('https://conch.example.com/conch/hooks/abc');
   });
 
   it('won’t claim an address that leads somewhere else', async () => {

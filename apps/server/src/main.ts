@@ -1,5 +1,7 @@
 import { buildApp } from './app';
+import { quietCryptoWarnings } from './lib/quiet';
 import { checkup, secureHome, workspaceRules } from './auth/checkup';
+import { openHere } from './auth/open-here';
 import { applyPendingRestore } from './backup/restore';
 import { exposure } from './auth/network';
 import { loadConfig, portIsExplicit } from './config';
@@ -22,6 +24,7 @@ import { RESTART_CODE } from './supervisor';
 import { prove, readState } from './updates/layout';
 import { sandboxSupport } from './conversations/sandbox';
 
+quietCryptoWarnings();
 const config = loadConfig();
 const addressOf = (port: number) =>
   `http://${config.CONCH_HOST === '127.0.0.1' ? 'localhost' : config.CONCH_HOST}:${port}`;
@@ -66,7 +69,8 @@ if (choice.kind === 'running') {
   console.warn(
     `\n  🐚  Conch is already running at ${running}${config.CONCH_OPEN ? ' — opening it.' : '.'}\n`,
   );
-  if (config.CONCH_OPEN) await openInBrowser(running);
+  // As this computer (ADR 0063): through a one-time link from the Conch that's running.
+  if (config.CONCH_OPEN) await openHere({ home: config.CONCH_HOME, url: running });
   process.exit(0);
 }
 if (choice.kind === 'taken') {
@@ -110,6 +114,7 @@ await recordGateway(config.CONCH_HOME, {
   port: config.CONCH_PORT,
   startedAt: Date.now(),
   ...(background && { background }),
+  ...(config.CONCH_ALLOWED_HOSTS.length && { allowedHosts: config.CONCH_ALLOWED_HOSTS }),
 });
 // A release just swapped in proves itself by answering (ADR 0051); until it
 // does, the supervisor is ready to go back to the version before.
@@ -164,6 +169,17 @@ if (choice.busy !== undefined) {
 }
 console.warn(`\n  🐚  Conch is listening at ${url}\n`);
 
+// Your own address (ADR 0064): the HTTPS listener hands its requests to this one. Getting a
+// certificate can take a while, so nothing here waits for it.
+void services
+  .serveAddress(app.server)
+  .then(() => {
+    const address = services.address.status();
+    if (address.state === 'ready' && address.url) console.warn(`  🐚  And at ${address.url}\n`);
+    else if (address.problem) console.warn(`  ⚠️   ${address.problem.message}\n`);
+  })
+  .catch((error: unknown) => console.error('[address]', error));
+
 // Say out loud anything that makes this setup unsafe.
 const findings = checkup({
   config,
@@ -194,8 +210,12 @@ if (findings.length) console.warn('\n  Settings → Security in Conch has the de
 if (process.env.CONCH_STARTED_BECAUSE === 'crash')
   void services.healed.note('gateway', 'Conch stopped unexpectedly, so it started itself again.');
 // A restart (after an update or a restore) doesn't open another browser tab.
+// It opens as this computer (ADR 0063): a private file carries a one-time link.
 if (config.CONCH_OPEN && !process.env.CONCH_STARTED_BECAUSE?.match(/restart|crash/))
-  void openInBrowser(url);
+  void services.here
+    .link({ port: config.CONCH_PORT, file: true })
+    .then((link) => openInBrowser(link.file ?? url))
+    .catch(() => openInBrowser(url));
 
 // An update or a restore can ask to start again; the supervisor does it.
 setRestartHandler(async () => {

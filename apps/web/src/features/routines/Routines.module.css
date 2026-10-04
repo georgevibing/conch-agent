@@ -23,13 +23,19 @@
     gap: var(--nc-space-3);
   }
 
+  /* Cards in a row share its height: a short one never sits beside a tall one. */
   .cards {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+    align-items: stretch;
     gap: var(--nc-space-3);
     margin: 0;
     padding: 0;
     list-style: none;
+  }
+
+  .cards > li {
+    display: grid;
   }
 
   /* ── New routine ─────────────────────────────────────────────────── */
