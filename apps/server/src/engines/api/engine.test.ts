@@ -5,15 +5,16 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import type { BridgedTool, EngineEvent, HostTool, TurnInput } from '../types';
-import { ApiEngine, buildTools, capModels, parseArgs } from './engine';
+import { ApiEngine, buildTools, capModels, parseArgs, retryDelay } from './engine';
 import { collect, dataFrames, fakeFetch, fakeHome, jsonResponse, sseResponse } from './fake';
-import { OpenRouterWire, openrouterVariant } from './openrouter';
+import { mapError as mapOpenRouterError, OpenRouterWire, openrouterVariant } from './openrouter';
 import { sessionsDir } from './session';
 import {
   ApiError,
   type ApiProviderId,
   type ApiVariant,
   type WireEvent,
+  type WireRequest,
   type WireToolCall,
 } from './types';
 import type { Wire } from './wire';
@@ -562,11 +563,68 @@ describe('the tool loop', () => {
     });
   });
 
-  it('stops after a sane number of steps and says so', async () => {
+  /** The tool results the model was sent, in the request after each round. */
+  const resultsSent = (requests: WireRequest[]) =>
+    requests.flatMap((r) =>
+      r.messages.filter((m) => m.role === 'tool').map((m) => String(m.content)),
+    );
+
+  it('pauses at its step budget instead of a hard 24, and the next turn carries on', async () => {
     let steps = 0;
+    const requests: WireRequest[] = [];
     const { engine } = await engineFor(
       stubWire({
-        stream: () => {
+        stream: (request) => {
+          requests.push(structuredClone({ ...request, signal: undefined }) as never);
+          steps++;
+          // Different arguments every time: real progress, not a loop.
+          return steps > 40
+            ? ended('Carried on.')
+            : toolTurn([
+                {
+                  id: `call_${steps}`,
+                  name: 'mcp__conch__remember',
+                  argumentsJson: JSON.stringify({ content: `fact ${steps}` }),
+                },
+              ]);
+        },
+      }),
+    );
+    const budget = { steps: 30, tokens: 1e9, ms: 1e9 };
+    const events = await collect(engine.runTurn(turn({ tools: [rememberTool([])], budget })));
+    // Well past the old limit of 24, then a pause, not an error.
+    expect(steps).toBe(30);
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      outcome: 'success',
+      paused: { reason: 'steps', message: expect.stringContaining('Paused after 30 steps') },
+    });
+    // Near the end, the model was asked to wrap up so the pause lands well.
+    expect(resultsSent(requests).some((t) => t.includes('close to its limit'))).toBe(true);
+
+    // Carry on: the next turn knows it stopped part-way, and picks the work up.
+    const resumeId = (events.find((e) => e.type === 'session') as { resumeId: string }).resumeId;
+    requests.length = 0;
+    steps = 40;
+    const next = await collect(
+      engine.runTurn(turn({ prompt: 'Carry on', resumeId, tools: [rememberTool([])], budget })),
+    );
+    expect(next.at(-1)).toMatchObject({ type: 'done', outcome: 'success' });
+    expect(next.at(-1)).not.toHaveProperty('paused');
+    const asked = requests[0]?.messages.at(-1);
+    expect(String(asked?.content)).toMatch(/your last turn paused[\s\S]*Carry on$/);
+    // Everything done before the pause is still there to carry on from.
+    expect(requests[0]?.messages.filter((m) => m.role === 'tool')).toHaveLength(30);
+  });
+
+  it('tells the model when it repeats itself, then pauses if it keeps on', async () => {
+    let steps = 0;
+    const saved: string[] = [];
+    const requests: WireRequest[] = [];
+    const { engine } = await engineFor(
+      stubWire({
+        stream: (request) => {
+          requests.push(structuredClone({ ...request, signal: undefined }) as never);
           steps++;
           return toolTurn([
             { id: `call_${steps}`, name: 'mcp__conch__remember', argumentsJson: '{"content":"x"}' },
@@ -574,11 +632,80 @@ describe('the tool loop', () => {
         },
       }),
     );
+    const events = await collect(engine.runTurn(turn({ tools: [rememberTool(saved)] })));
+    // The third identical call carries a nudge; the fifth isn't run, and the turn pauses.
+    const sent = resultsSent(requests);
+    expect(sent.find((t) => t.includes('this exact'))).toContain('3 times');
+    expect(saved).toHaveLength(4);
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      outcome: 'success',
+      paused: { reason: 'loop' },
+    });
+    // The person sees what the tool said, not Conch's note to the model.
+    for (const e of events) if (e.type === 'tool-end') expect(e.output).not.toContain('From Conch');
+  });
 
+  it('nudges after a run of failures, then pauses', async () => {
+    let steps = 0;
+    const requests: WireRequest[] = [];
+    const { engine } = await engineFor(
+      stubWire({
+        stream: (request) => {
+          requests.push(structuredClone({ ...request, signal: undefined }) as never);
+          steps++;
+          return toolTurn([
+            {
+              id: `call_${steps}`,
+              name: 'mcp__conch__remember',
+              // Wrong arguments, a different wrong each time.
+              argumentsJson: JSON.stringify({ nope: steps }),
+            },
+          ]);
+        },
+      }),
+    );
     const events = await collect(engine.runTurn(turn({ tools: [rememberTool([])] })));
-    expect(steps).toBe(24);
-    expect(events.at(-2)).toMatchObject({ type: 'notice', code: 'step-limit' });
-    expect(events.at(-1)).toMatchObject({ type: 'done', outcome: 'success' });
+    expect(resultsSent(requests).some((t) => t.includes('tool calls failed'))).toBe(true);
+    // Told after four, paused by eight at the latest (the same long error back sooner).
+    expect(steps).toBeGreaterThan(4);
+    expect(steps).toBeLessThanOrEqual(8);
+    expect(events.at(-1)).toMatchObject({ outcome: 'success', paused: { reason: 'loop' } });
+  });
+
+  it('pauses when the turn has spent its fresh tokens', async () => {
+    let steps = 0;
+    const { engine } = await engineFor(
+      stubWire({
+        stream: () => {
+          steps++;
+          return (async function* (): AsyncIterable<WireEvent> {
+            yield {
+              type: 'end',
+              message: { role: 'assistant', content: null },
+              toolCalls: [
+                {
+                  id: `call_${steps}`,
+                  name: 'mcp__conch__remember',
+                  argumentsJson: JSON.stringify({ content: `fact ${steps}` }),
+                },
+              ],
+              stop: 'tools',
+              // Mostly read from the cache: only the fresh part counts.
+              usage: { inputTokens: 50_000, cachedInputTokens: 45_000, outputTokens: 1_000 },
+            };
+          })();
+        },
+      }),
+    );
+    const events = await collect(
+      engine.runTurn(
+        turn({ tools: [rememberTool([])], budget: { steps: 100, tokens: 30_000, ms: 1e9 } }),
+      ),
+    );
+    // 6,000 fresh tokens a step: the fifth step reaches 30,000.
+    expect(steps).toBe(5);
+    expect(events.at(-1)).toMatchObject({ paused: { reason: 'tokens' } });
   });
 
   it('never offers a tool the user turned off', () => {
@@ -602,6 +729,204 @@ describe('the tool loop', () => {
 });
 
 // ── Stopping, retrying, failing ─────────────────────────────────────────────
+
+/** A stream that asks for these tool calls. */
+const toolTurnTop = (calls: WireToolCall[], text = '') =>
+  (async function* (): AsyncIterable<WireEvent> {
+    if (text) yield { type: 'text', delta: text };
+    yield {
+      type: 'end',
+      message: { role: 'assistant', content: text || null },
+      toolCalls: calls,
+      stop: 'tools',
+    };
+  })();
+
+describe('a model that reads little at once (ADR 0082)', () => {
+  const small = (context: number) =>
+    stubWire({
+      models: async () => [
+        {
+          info: {
+            id: 'stub/model',
+            label: 'Small model',
+            description: '',
+            context,
+            efforts: [],
+            supportsFastMode: false,
+            supportsAutoMode: false,
+          },
+          tools: true,
+        },
+      ],
+    });
+  const recallTool: HostTool<{ query: z.ZodString }> = {
+    name: 'recall',
+    description: 'Search what you remember about the user.',
+    input: { query: z.string() },
+    run: async () => 'Likes tea.',
+  };
+  const BIG_SYSTEM = `# Who you are\nYou are Pearl.\n\n# Making a Conch app\n${'Guidance. '.repeat(3_000)}`;
+
+  it('goes lean by itself: a short prompt, and tools loaded when asked for', async () => {
+    const saved: string[] = [];
+    const requests: WireRequest[] = [];
+    let step = 0;
+    const wire = small(8_192);
+    wire.stream = (request) => {
+      requests.push(structuredClone({ ...request, signal: undefined }) as never);
+      step++;
+      if (step === 1)
+        return toolTurnTop([
+          { id: 'c1', name: 'find_tools', argumentsJson: '{"query":"save a memory"}' },
+        ]);
+      if (step === 2)
+        return toolTurnTop([
+          { id: 'c2', name: 'mcp__conch__remember', argumentsJson: '{"content":"likes tea"}' },
+        ]);
+      return ended('Noted.');
+    };
+    const { engine } = await engineFor(wire);
+    const tools = [rememberTool(saved), recallTool as HostTool];
+    // Words that name no tool: the model has to look for one.
+    const events = await collect(
+      engine.runTurn(
+        turn({ prompt: 'Note down that I like tea', systemAppend: BIG_SYSTEM, tools }),
+      ),
+    );
+
+    expect(requests[0]?.tools.map((t) => t.name)).toEqual(['find_tools']);
+    expect(requests[0]?.system).toContain('You are Pearl.');
+    expect(requests[0]?.system).not.toContain('Guidance.');
+    expect(String(requests[1]?.messages.at(-1)?.content)).toContain('mcp__conch__remember');
+    expect(requests[1]?.tools.map((t) => t.name)).toContain('mcp__conch__remember');
+    expect(saved).toEqual(['likes tea']);
+    expect(events.at(-1)).toMatchObject({ type: 'done', outcome: 'success' });
+
+    // The next turn still has what this chat loaded.
+    const resumeId = (events.find((e) => e.type === 'session') as { resumeId: string }).resumeId;
+    requests.length = 0;
+    await collect(
+      engine.runTurn(turn({ prompt: 'Thanks', resumeId, systemAppend: BIG_SYSTEM, tools })),
+    );
+    const kept = requests[0]?.tools.map((t) => t.name) ?? [];
+    expect(kept[0]).toBe('find_tools');
+    expect(kept).toContain('mcp__conch__remember');
+    expect(kept).not.toContain('Bash');
+  });
+
+  it('loads the tools the message names before the model is asked', async () => {
+    const requests: WireRequest[] = [];
+    const wire = small(8_192);
+    wire.stream = (request) => {
+      requests.push(structuredClone({ ...request, signal: undefined }) as never);
+      return ended('Saved.');
+    };
+    const { engine } = await engineFor(wire);
+    await collect(
+      engine.runTurn(turn({ prompt: 'Please remember I like tea', tools: [rememberTool([])] })),
+    );
+    expect(requests[0]?.tools.map((t) => t.name)).toEqual(['find_tools', 'mcp__conch__remember']);
+  });
+
+  it('runs a tool called by name without loading it first', async () => {
+    const saved: string[] = [];
+    let step = 0;
+    const wire = small(8_192);
+    wire.stream = () =>
+      ++step === 1
+        ? toolTurnTop([
+            { id: 'c1', name: 'mcp__conch__remember', argumentsJson: '{"content":"x"}' },
+          ])
+        : ended('Done.');
+    const { engine } = await engineFor(wire);
+    await collect(engine.runTurn(turn({ tools: [rememberTool(saved)] })));
+    expect(saved).toEqual(['x']);
+  });
+
+  it('sends everything to a model with room for it', async () => {
+    const requests: WireRequest[] = [];
+    const wire = small(200_000);
+    wire.stream = (request) => {
+      requests.push(request);
+      return ended('Hi.');
+    };
+    const { engine } = await engineFor(wire);
+    await collect(
+      engine.runTurn(
+        turn({ systemAppend: BIG_SYSTEM, tools: [rememberTool([]), recallTool as HostTool] }),
+      ),
+    );
+    expect(requests[0]?.tools.map((t) => t.name)).toEqual(
+      expect.arrayContaining(['mcp__conch__remember', 'mcp__conch__recall']),
+    );
+    expect(requests[0]?.tools.map((t) => t.name)).not.toContain('find_tools');
+    expect(requests[0]?.system).toContain('Guidance.');
+  });
+});
+
+describe('stale pages (ADR 0081)', () => {
+  it('go before anything is summarised, keeping the page the model is on', async () => {
+    const page = (n: number) =>
+      `Page: Result ${n}
+Address: https://shop.example/${n}
+<page-content>
+(warning)
+${`- listitem: mug number ${n}
+`.repeat(300)}</page-content>`;
+    const look: HostTool<{ n: z.ZodNumber }> = {
+      name: 'look',
+      description: 'Look at a page.',
+      input: { n: z.number() },
+      run: async ({ n }) => page(n),
+    };
+    const requests: WireRequest[] = [];
+    let step = 0;
+    const wire = stubWire({
+      models: async () => [
+        {
+          info: {
+            id: 'stub/model',
+            label: 'Stub',
+            description: '',
+            context: 40_000,
+            efforts: [],
+            supportsFastMode: false,
+            supportsAutoMode: false,
+          },
+          tools: true,
+        },
+      ],
+      stream: (request) => {
+        requests.push(structuredClone({ ...request, signal: undefined }) as never);
+        step++;
+        return step <= 12
+          ? toolTurnTop([
+              { id: `c${step}`, name: 'mcp__conch__look', argumentsJson: `{"n":${step}}` },
+            ])
+          : ended('Found it.');
+      },
+    });
+    const { engine } = await engineFor(wire);
+    const events = await collect(engine.runTurn(turn({ tools: [look as HostTool] })));
+    expect(events.at(-1)).toMatchObject({ type: 'done', outcome: 'success' });
+    // Nothing needed summarising: the stale pages went instead.
+    expect(events.some((e) => e.type === 'compacted')).toBe(false);
+    const last =
+      requests
+        .at(-1)
+        ?.messages.filter((m) => m.role === 'tool')
+        .map((m) => String(m.content)) ?? [];
+    expect(last).toHaveLength(12);
+    expect(last[0]).toMatch(/^\[An earlier view of the page “Result 1”/);
+    expect(last.at(-1)).toContain('mug number 12');
+    // Let go together, not one by one: the prefix stays put between.
+    const firstGone = requests.findIndex((r) =>
+      r.messages.some((m) => String(m.content).startsWith('[An earlier view')),
+    );
+    expect(firstGone).toBeGreaterThan(3);
+  });
+});
 
 describe('when a turn is interrupted or retried', () => {
   it('ends as interrupted when the user stops it', async () => {
@@ -688,7 +1013,7 @@ describe('when a turn is interrupted or retried', () => {
     expect(events.at(-1)).toMatchObject({ type: 'done', outcome: 'success' });
   });
 
-  it('gives up after two retries with one plain sentence', async () => {
+  it('gives up after three retries with one plain sentence', async () => {
     let attempts = 0;
     const { engine } = await engineFor(
       stubWire({
@@ -703,12 +1028,46 @@ describe('when a turn is interrupted or retried', () => {
     );
 
     const events = await collect(engine.runTurn(turn()));
-    expect(attempts).toBe(3);
+    expect(attempts).toBe(4);
     expect(events.at(-1)).toMatchObject({
       type: 'done',
       outcome: 'error',
       error: 'Anthropic is overloaded right now.',
     });
+  });
+
+  it('waits out a rate limit that says nothing about how long, with backoff (ADR 0081)', async () => {
+    let attempts = 0;
+    const { engine } = await engineFor(
+      stubWire({
+        stream: () => {
+          // OpenRouter's 429 without retry-after, as its wire now reads it.
+          if (++attempts === 1)
+            throw mapOpenRouterError(429, { message: 'Rate limit exceeded' }, undefined);
+          return ended('Here you go.');
+        },
+      }),
+    );
+    const started = Date.now();
+    const events = await collect(engine.runTurn(turn()));
+    expect(attempts).toBe(2);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(900);
+    expect(events.find((e) => e.type === 'notice')).toMatchObject({ code: 'rate-limit' });
+    expect(events.at(-1)).toMatchObject({ type: 'done', outcome: 'success' });
+  });
+
+  it('backs off with jitter, and keeps to what the provider asked', () => {
+    const low = () => 0;
+    const high = () => 0.999;
+    expect(retryDelay(0, undefined, low)).toBe(1_000);
+    expect(retryDelay(0, undefined, high)).toBeLessThanOrEqual(2_000);
+    expect(retryDelay(2, undefined, low)).toBe(4_000);
+    expect(retryDelay(2, undefined, high)).toBeLessThanOrEqual(8_000);
+    // Never past half a minute of guessing, nor a minute of being told.
+    expect(retryDelay(10, undefined, high)).toBeLessThanOrEqual(30_000);
+    expect(retryDelay(0, 3_000, low)).toBe(3_000);
+    expect(retryDelay(0, 3_000, high)).toBeLessThanOrEqual(3_250);
+    expect(retryDelay(0, 600_000, low)).toBe(60_000);
   });
 
   it('doesn’t retry once the model has already said something', async () => {

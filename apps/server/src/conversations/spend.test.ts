@@ -8,6 +8,7 @@ import type {
   EngineId,
   EngineStatus,
   ModelInfo,
+  TurnPause,
   Usage,
 } from '@conch/protocol';
 import { describe, expect, it } from 'vitest';
@@ -40,6 +41,10 @@ class FakeEngine implements Engine {
   readonly turns: TurnInput[] = [];
   /** Each turn's steps: the running total after each request. */
   steps: Usage[] = [{ inputTokens: 1000, outputTokens: 100, costUsd: 0.01 }];
+  /** The turn ends in a pause to check in (ADR 0081). */
+  pauseAtEnd?: TurnPause;
+  /** Carries on to its end even when stopped, as a pause racing a stop would. */
+  ignoreStop = false;
 
   constructor(
     readonly id: EngineId,
@@ -96,7 +101,7 @@ class FakeEngine implements Engine {
     yield { type: 'session', resumeId: `${this.id}-s`, model: input.options.model ?? 'default' };
     let total: Usage = { inputTokens: 0, outputTokens: 0 };
     for (const [i, step] of this.steps.entries()) {
-      if (input.signal.aborted) {
+      if (input.signal.aborted && !this.ignoreStop) {
         yield { type: 'done', outcome: 'interrupted', usage: total };
         return;
       }
@@ -107,7 +112,12 @@ class FakeEngine implements Engine {
       }
     }
     yield { type: 'text', messageId: `m${Math.random()}`, delta: `heard: ${input.prompt}` };
-    yield { type: 'done', outcome: 'success', usage: total };
+    yield {
+      type: 'done',
+      outcome: 'success',
+      usage: total,
+      ...(this.pauseAtEnd && { paused: this.pauseAtEnd }),
+    };
   }
 }
 
@@ -525,6 +535,61 @@ describe('the arithmetic of limits', () => {
     expect(turnCost(usage, { billing: 'metered' }, 'mystery-model')).toEqual({
       billing: 'metered',
     });
+  });
+
+  it('counts what the cache saved net of what writing to it cost (ADR 0081)', () => {
+    // Sonnet 5: $2 in, $0.20 cached, $2.50 to write. 500K read saves $0.90; 200K written costs $0.10 more.
+    const usage = {
+      inputTokens: 1_000_000,
+      cachedInputTokens: 500_000,
+      cacheWriteTokens: 200_000,
+      outputTokens: 0,
+    };
+    expect(cacheSaving(usage, 'claude-sonnet-5')).toBeCloseTo(0.8, 6);
+    // The price paid includes the write premium too: 300K fresh, 500K cached, 200K written.
+    expect(turnCost(usage, { billing: 'metered' }, 'claude-sonnet-5')).toMatchObject({
+      usd: 0.6 + 0.1 + 0.5,
+      priced: 'list',
+      savedUsd: 0.8,
+    });
+    // A first request that only wrote to the cache saved nothing yet.
+    expect(
+      cacheSaving(
+        { inputTokens: 10_000, cacheWriteTokens: 10_000, outputTokens: 0 },
+        'claude-sonnet-5',
+      ),
+    ).toBeUndefined();
+  });
+});
+
+describe('a spending limit and a pause to check in (ADR 0081)', () => {
+  it('a spending limit stops the turn with its card alone, never a pause beside it', async () => {
+    const { manager, api } = await setup();
+    const id = await say(manager, 'first');
+    await manager.setSpendLimit(id, 1);
+    api.steps = Array.from({ length: 5 }, (_, i) => ({
+      inputTokens: 72_000 * (i + 1),
+      outputTokens: 400 * (i + 1),
+      costUsd: 0.4 * (i + 1),
+    }));
+    // The turn budget runs out at the same moment: the engine pauses as it's stopped.
+    api.pauseAtEnd = { reason: 'steps', message: 'Paused after 100 steps.' };
+    api.ignoreStop = true;
+    await say(manager, 'keep digging', id);
+    const events = await log(manager, id);
+    expect(of(events, 'turn.capped').at(-1)).toMatchObject({ limit: 'chat', during: true });
+    expect(of(events, 'turn.completed').at(-1)).not.toHaveProperty('paused');
+  });
+
+  it('a pause within the limit is a pause, with no limit card', async () => {
+    const { manager, api } = await setup();
+    const id = await say(manager, 'first');
+    await manager.setSpendLimit(id, 5);
+    api.pauseAtEnd = { reason: 'loop', message: 'Paused: it kept trying the same thing.' };
+    await say(manager, 'keep digging', id);
+    const events = await log(manager, id);
+    expect(of(events, 'turn.completed').at(-1)).toMatchObject({ paused: { reason: 'loop' } });
+    expect(of(events, 'turn.capped')).toHaveLength(0);
   });
 });
 

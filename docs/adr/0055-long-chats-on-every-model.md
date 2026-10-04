@@ -155,8 +155,9 @@ each turn sits in the chat's log.
   show it.
 - **Known limits:**
   - Conch's own system prompt and tool list can be most of a very small window (4K
-    to 8K); the floor of 1,000 tokens of transcript then leaves little room, and the
-    `too-long` card points at a bigger model.
+    to 8K). Lean mode ([ADR 0082](./0082-lean-mode-for-small-models.md)) now sends a
+    short prompt and loads tools on demand there, and the summariser's requests are
+    sized to the window.
   - The ACP programs get Conch's handoff each turn, which keeps the newest 60,000
     characters. When it leaves lines out it now carries the chat's latest summary
     if there is one, but Conch doesn't summarise for them on its own.

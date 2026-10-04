@@ -156,9 +156,10 @@ export function mapError(
     return new ApiError('images', detail);
   }
   if (type === 'rate_limit_exceeded' || status === 429) {
-    // Without a hint there is nothing to wait for, so retrying is guesswork.
+    // Usually the model's provider upstream, and it passes: waited out with
+    // backoff and jitter when OpenRouter doesn't say how long (ADR 0081).
     return new ApiError('rate-limit', 'OpenRouter is rate-limiting this key.', {
-      retryable: retryAfter !== undefined,
+      retryable: true,
       ...(retryAfter !== undefined && { retryAfterMs: retryAfter }),
     });
   }
@@ -185,6 +186,23 @@ export function mapError(
     return new ApiError('not-found', 'That model isn’t available on OpenRouter any more.');
   }
   return new ApiError('other', detail || `${LABEL} couldn’t answer that request.`);
+}
+
+// ── Prompt caching ──────────────────────────────────────────────────────────
+
+const EPHEMERAL = { type: 'ephemeral' } as const;
+
+/**
+ * Which models want to be asked to cache (ADR 0081), as OpenRouter documents
+ * it: Claude takes breakpoints — the system prompt, then the conversation by
+ * itself with the request's own `cache_control`; Gemini takes one, so it goes
+ * on the system prompt and the rest is its implicit caching. OpenAI, DeepSeek,
+ * Grok and the others cache a stable prefix by themselves.
+ */
+export function cacheFor(model: string): 'anthropic' | 'gemini' | undefined {
+  if (/^anthropic\//.test(model)) return 'anthropic';
+  if (/^google\/gemini/.test(model)) return 'gemini';
+  return undefined;
 }
 
 // ── Adapter ─────────────────────────────────────────────────────────────────
@@ -433,9 +451,20 @@ export class OpenRouterWire implements Wire {
   #body(request: WireRequest): Record<string, unknown> {
     const model = this.#models.get(request.model);
     const efforts = model?.info.efforts ?? [];
+    const cache = cacheFor(request.model);
     return {
       model: request.model,
-      messages: [{ role: 'system', content: request.system }, ...request.messages],
+      messages: [
+        cache
+          ? {
+              role: 'system',
+              content: [{ type: 'text', text: request.system, cache_control: EPHEMERAL }],
+            }
+          : { role: 'system', content: request.system },
+        ...request.messages,
+      ],
+      // Claude's cache moves along the conversation by itself (OpenRouter's automatic caching).
+      ...(cache === 'anthropic' && { cache_control: EPHEMERAL }),
       ...chatTools(request.tools),
       // Only ask for reasoning where the model said which levels it takes.
       ...(request.effort !== 'auto' &&

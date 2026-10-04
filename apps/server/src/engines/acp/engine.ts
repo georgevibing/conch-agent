@@ -1008,23 +1008,25 @@ export class AcpEngine implements Engine {
           message:
             'The answer was cut short: the model reached the most it can write at once. Ask it to carry on.',
         });
-      if (result.stopReason === 'max_turn_requests')
-        push({
-          type: 'notice',
-          code: 'step-limit',
-          message: `${this.label} stopped after many steps in one turn. Ask it to carry on if it wasn’t finished.`,
-        });
       if (result.stopReason === 'refusal')
         push({
           type: 'notice',
           code: 'refusal',
           message: `${this.label} declined to answer that.`,
         });
+      const interrupted = result.stopReason === 'cancelled' || input.signal.aborted;
       push({
         type: 'done',
-        outcome:
-          result.stopReason === 'cancelled' || input.signal.aborted ? 'interrupted' : 'success',
+        outcome: interrupted ? 'interrupted' : 'success',
         usage,
+        // The program's own step limit: a pause with Carry on, like Conch's own (ADR 0081).
+        ...(!interrupted &&
+          result.stopReason === 'max_turn_requests' && {
+            paused: {
+              reason: 'steps' as const,
+              message: `Paused: ${this.label} took its most steps for one message, so it’s checking in.`,
+            },
+          }),
       });
     } finally {
       local.abort();
