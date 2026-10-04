@@ -420,7 +420,7 @@ streamed answer with reasoning and a tool call, and each error it can give.
 
 ## Security engineering
 
-Conch can answer at an address of its own, over HTTPS it terminates itself ([ADR 0064](./docs/adr/0064-your-own-address.md)): the listeners hand every request to the gateway, so its guards apply unchanged. For an authenticated reverse proxy instead, follow [docs/REVERSE_PROXY.md](./docs/REVERSE_PROXY.md).
+Conch can answer at an address of its own, over HTTPS it terminates itself ([ADR 0064](./docs/adr/0064-your-own-address.md)): the listeners hand every request to the gateway, so its guards apply unchanged. Through a tunnel or web server the person already runs, the same address has `via: 'proxy'` ([ADR 0067](./docs/adr/0067-your-address-through-a-tunnel.md)): no listeners, the name allowed, and the way in checked through it. Follow [docs/REVERSE_PROXY.md](./docs/REVERSE_PROXY.md).
 Keep deployment hostnames in configuration, preserve Host/Origin for HTTP and WS,
 and serve built assets through the gateway so document security headers apply.
 

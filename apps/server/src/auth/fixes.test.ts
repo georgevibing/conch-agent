@@ -151,6 +151,24 @@ describe('checkup findings', () => {
     expect(items.every((i) => i.level === 'ok' && !i.fix)).toBe(true);
   });
 
+  it('know an address a tunnel or web server of yours answers at, and still ask for approval', () => {
+    const items = checkup({
+      config: loadConfig({ CONCH_HOME: join(tmpdir(), 'conch-proxy') }),
+      access: access({ method: 'password' }),
+      permissionMode: 'default',
+      secure: true,
+      homeProblems: [],
+      address: { state: 'ready', name: 'conch.example.com', via: 'proxy', guarded: true },
+    });
+    expect(items.find((i) => i.id === 'address')).toMatchObject({
+      level: 'ok',
+      title: 'Conch answers at conch.example.com, through your tunnel or web server',
+      detail: expect.stringContaining('sign-in of its own'),
+    });
+    // On the internet all the same: new devices should wait for approval.
+    expect(items.find((i) => i.id === 'devices')).toMatchObject({ level: 'warn' });
+  });
+
   it('know about an address of your own (ADR 0064): approval, its health, and a passkey', () => {
     const at = (state: 'ready' | 'problem', patch: Partial<AccessFile> = {}) =>
       checkup({

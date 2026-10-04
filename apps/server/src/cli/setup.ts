@@ -4,13 +4,16 @@
  *
  *   How will you reach Conch?
  *     1  From anywhere, at an address of my own
- *     2  Only from my own devices, privately (Tailscale)
- *     3  Just from this computer for now
+ *     2  Through a tunnel or web server I already run
+ *     3  Only from my own devices, privately (Tailscale)
+ *     4  Just from this computer for now
  *
  * For an address of your own it works out the record to add, waits for it,
  * gets Conch the right to answer on ports 80 and 443 (asking once for
  * `sudo`), opens the server's firewall, gets the certificate and ends with
- * the link that makes Conch yours. Everything it touches comes in as `deps`,
+ * the link that makes Conch yours. Through a tunnel or web server of your
+ * own (Cloudflare Tunnel, nginx, Caddy) it says where to point it, checks the
+ * way in through it, and ends with the same link. Everything it touches comes in as `deps`,
  * so every path is tested without a network, a sudo or a running Conch.
  */
 import type { AccessMethod, AddressStatus, DnsReport } from '@conch/protocol';
@@ -21,7 +24,7 @@ import type { Option, Prompts } from './prompts';
 import type { Ui } from './ui';
 import { greeting, until } from './words';
 
-export type Reach = 'address' | 'tailscale' | 'local';
+export type Reach = 'address' | 'proxy' | 'tailscale' | 'local';
 
 export interface SetupDeps {
   ui: Ui;
@@ -37,6 +40,10 @@ export interface SetupDeps {
   headless: boolean;
   /** Where Conch is on this computer, for the SSH tunnel hint. */
   port: number;
+  /** Where a tunnel or web server should send requests: `http://127.0.0.1:4317`. */
+  target: string;
+  /** Names Conch already answers to (`CONCH_ALLOWED_HOSTS`, as the running Conch has them). */
+  allowedHosts: readonly string[];
   user: string;
 
   gateway: {
@@ -48,7 +55,7 @@ export interface SetupDeps {
     restartOn(node: string): Promise<boolean>;
     address: {
       status(): Promise<AddressStatus>;
-      set(name: string): Promise<AddressStatus>;
+      set(name: string, via?: 'conch' | 'proxy'): Promise<AddressStatus>;
     };
   };
   /** Where a name points, without needing Conch to run. */
@@ -83,12 +90,19 @@ export interface SetupDeps {
 const DNS_PATIENCE_MS = 30 * 60 * 1000;
 /** How long the reach check and the certificate may take. */
 const CERT_PATIENCE_MS = 6 * 60 * 1000;
+/** How long the look through a proxy may take. */
+const PROXY_PATIENCE_MS = 60 * 1000;
 
 const OPTIONS = (headless: boolean): Option<Reach>[] => [
   {
     value: 'address',
     label: 'From anywhere, at an address of my own',
     hint: 'like conch.yourname.com',
+  },
+  {
+    value: 'proxy',
+    label: 'Through a tunnel or web server I already run',
+    hint: 'Cloudflare Tunnel, nginx, Caddy',
   },
   { value: 'tailscale', label: 'Only from my own devices, privately', hint: 'Tailscale' },
   {
@@ -101,6 +115,8 @@ const OPTIONS = (headless: boolean): Option<Reach>[] => [
 interface Args {
   reach?: Reach;
   domain?: string;
+  /** A name the person's own tunnel or web server answers at. */
+  proxy?: string;
   yes: boolean;
 }
 
@@ -110,14 +126,17 @@ function parse(args: string[]): Args {
     const arg = args[i] ?? '';
     if (arg === '--domain') out.domain = args[++i];
     else if (arg.startsWith('--domain=')) out.domain = arg.slice('--domain='.length);
+    else if (arg === '--proxy') out.proxy = args[++i];
+    else if (arg.startsWith('--proxy=')) out.proxy = arg.slice('--proxy='.length);
     else if (arg === '--tailscale') out.reach = 'tailscale';
     else if (arg === '--local') out.reach = 'local';
   }
   if (out.domain) out.reach = 'address';
+  if (out.proxy) out.reach = 'proxy';
   return out;
 }
 
-/** `conch setup [--domain NAME | --tailscale | --local] [--yes]`. Returns the exit code. */
+/** `conch setup [--domain NAME | --proxy NAME | --tailscale | --local] [--yes]`. Returns the exit code. */
 export async function setup(argv: string[], deps: SetupDeps): Promise<number> {
   const { ui, prompts } = deps;
   const args = parse(argv);
@@ -145,7 +164,7 @@ export async function setup(argv: string[], deps: SetupDeps): Promise<number> {
     reach = await prompts.choose(
       'How will you reach Conch?',
       OPTIONS(deps.headless),
-      deps.headless ? 0 : 2,
+      deps.headless ? 0 : 3,
     );
     ui.blank();
   }
@@ -156,6 +175,7 @@ export async function setup(argv: string[], deps: SetupDeps): Promise<number> {
   }
 
   if (reach === 'address') return (await ownAddress(deps, args, asking)) ? finale(deps) : 1;
+  if (reach === 'proxy') return (await behind(deps, args, asking)) ? finale(deps) : 1;
   if (reach === 'tailscale') return (await tailscale(deps)) ? finale(deps) : 1;
   await local(deps);
   return finale(deps);
@@ -205,7 +225,20 @@ async function ownAddress(deps: SetupDeps, args: Args, asking: boolean): Promise
   });
   const mine = report.mine.v4 ?? report.mine.v6;
   if (report.pointing === 'cloudflare') {
+    // A Cloudflare Tunnel looks just like the orange cloud from outside, and can't be
+    // switched to "DNS only": through it, Conch needs no certificate of its own.
+    if (
+      asking &&
+      (await prompts.confirm(
+        `${name} is behind Cloudflare. Does a Cloudflare Tunnel (or another proxy of yours) answer there?`,
+        false,
+      ))
+    ) {
+      ui.blank();
+      return behind(deps, { ...args, proxy: name }, asking);
+    }
     ui.note(report.message);
+    ui.hint(`Through a Cloudflare Tunnel instead? ${deps.conch(`setup --proxy ${name}`)}`);
   } else if (report.pointing !== 'here') {
     ui.say(report.message);
     ui.blank();
@@ -358,6 +391,83 @@ async function connect(deps: SetupDeps, name: string): Promise<AddressStatus> {
   );
 }
 
+// ── Through a tunnel or web server of my own ─────────────────────────────
+
+/**
+ * The person already runs something that answers at the name and hands requests
+ * on: Cloudflare Tunnel, nginx, Caddy. Conch opens no port and gets no certificate.
+ * It says where to point it, takes the name, checks the way in through it, and
+ * ends with the link that makes Conch yours.
+ */
+async function behind(deps: SetupDeps, args: Args, asking: boolean): Promise<boolean> {
+  const { ui, prompts } = deps;
+  const check = (raw: string) => {
+    try {
+      normaliseName(raw, { via: 'proxy' });
+      return undefined;
+    } catch (error) {
+      return (error as Error).message;
+    }
+  };
+  let name: string | undefined;
+  if (args.proxy) {
+    const problem = check(args.proxy);
+    if (problem) {
+      ui.error(problem);
+      return false;
+    }
+    name = normaliseName(args.proxy, { via: 'proxy' });
+  } else if (asking) {
+    ui.hint('The name you’ll open in the browser. Your tunnel or web server answers there.');
+    const raw = await prompts.ask('Your address:', { validate: check });
+    name = raw ? normaliseName(raw, { via: 'proxy' }) : undefined;
+  }
+  if (!name) return false;
+
+  ui.blank();
+  ui.box(
+    [
+      ui.bold(deps.target),
+      ui.dim(`Cloudflare Tunnel: a public hostname ${name}, service ${deps.target}.`),
+      ui.dim(`nginx: proxy_pass ${deps.target}; with proxy_set_header Host $host;`),
+      ui.dim(`Caddy: ${name} { reverse_proxy ${deps.target.replace(/^http:\/\//, '')} }`),
+    ],
+    { title: `Point ${name} here`, tone: 'accent' },
+  );
+  ui.hint('It should answer over HTTPS and pass on the name people typed. Most do by themselves.');
+  ui.blank();
+
+  for (;;) {
+    const status = await working(
+      ui,
+      `Checking the way in through ${name}`,
+      async () => {
+        let now = await deps.gateway.address.set(name, 'proxy');
+        const started = deps.now();
+        while (now.state === 'checking' && deps.now() - started < PROXY_PATIENCE_MS) {
+          await deps.sleep(1000);
+          now = await deps.gateway.address.status();
+        }
+        return now;
+      },
+      { done: (s) => (s.state === 'ready' ? `${name} reaches Conch` : 'Not there yet') },
+    );
+    if (status.state === 'ready') {
+      ui.ok(`Conch answers at ${ui.bold(`https://${name}`)}, through your tunnel or web server`);
+      if (status.guarded)
+        ui.hint('It asks for its own sign-in first. You’ll sign in there, then make Conch yours.');
+      break;
+    }
+    ui.error(status.problem?.message ?? `${name} doesn’t reach Conch yet.`);
+    if (asking && (await prompts.confirm('Try again?', true))) continue;
+    // The name is allowed already: the link works as soon as the proxy is pointed here.
+    ui.hint('Conch keeps checking by itself, and answers there as soon as it’s pointed here.');
+    break;
+  }
+
+  return makeItYours(deps, `https://${name}`);
+}
+
 // ── Only my own devices (Tailscale) ──────────────────────────────────────
 
 async function tailscale(deps: SetupDeps): Promise<boolean> {
@@ -380,6 +490,14 @@ async function tailscale(deps: SetupDeps): Promise<boolean> {
 
 async function local(deps: SetupDeps): Promise<void> {
   const { ui } = deps;
+  // Conch was started with names of its own (CONCH_ALLOWED_HOSTS): a proxy already reaches it there.
+  const named = deps.allowedHosts[0];
+  if (named) {
+    ui.say(`Conch also answers to ${ui.bold(named)}, through your tunnel or web server.`);
+    ui.hint(`Want Conch to check it and keep it? ${deps.conch(`setup --proxy ${named}`)}`);
+    await makeItYours(deps, `https://${named}`);
+    return;
+  }
   if (!deps.headless) {
     if (await deps.open()) ui.ok('Opened Conch in your browser. ✨');
     else ui.say(`Open it with ${ui.code(deps.conch('open'))}`);

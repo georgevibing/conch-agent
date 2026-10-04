@@ -134,6 +134,18 @@ describe('MakeItYours', () => {
 });
 
 describe('AddressStatus', () => {
+  it('through a tunnel, says who keeps it secure, and no certificate', async () => {
+    const { container, rerender } = renderNacre(
+      <AddressStatus state="ready" address="conch.example.com" via="proxy" />,
+    );
+    expect(screen.getByText(/Through your tunnel/)).toBeInTheDocument();
+    expect(screen.getByText(/it keeps the connection secure/)).toBeInTheDocument();
+    expect(screen.queryByText(/renews by itself/)).not.toBeInTheDocument();
+    await expectAccessible(container);
+    rerender(<AddressStatus state="ready" address="conch.example.com" via="proxy" guarded />);
+    expect(screen.getByText(/behind its own sign-in/)).toBeInTheDocument();
+  });
+
   it('is one quiet line when all is well', async () => {
     const onTurnOff = vi.fn();
     const user = userEvent.setup();

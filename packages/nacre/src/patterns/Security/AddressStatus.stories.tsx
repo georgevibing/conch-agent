@@ -10,7 +10,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Settings → Security → Your address (ADR 0064). A healthy address is one quiet line: the URL to copy, “Secure · renews by itself” and when the certificate runs out. Getting a certificate wears the orbiting rim, as anything alive does. A problem is one sentence with the one thing that fixes it: a button when Conch can, a line to copy when only a person can.',
+          'Settings → Security → Your address (ADR 0064). A healthy address is one quiet line: the URL to copy, “Secure · renews by itself” and when the certificate runs out (or, through a tunnel of your own, who keeps it secure). Getting a certificate wears the orbiting rim, as anything alive does. A problem is one sentence with the one thing that fixes it: a button when Conch can, a line to copy when only a person can.',
       },
     },
   },
@@ -22,6 +22,7 @@ const meta = {
   },
   argTypes: {
     state: { control: 'inline-radio', options: ['off', 'ready', 'getting', 'problem'] },
+    via: { control: 'inline-radio', options: ['conch', 'proxy'] },
   },
   decorators: [(Story) => <div style={{ maxInlineSize: 560 }}>{Story()}</div>],
 } satisfies Meta<typeof AddressStatus>;
@@ -34,6 +35,28 @@ export const Playground: Story = {};
 export const Ready: Story = {};
 
 export const Getting: Story = { args: { state: 'getting' } };
+
+/** Through a tunnel or web server the person runs (Cloudflare Tunnel, nginx, Caddy): no certificate of Conch's. */
+export const ThroughATunnel: Story = { args: { via: 'proxy', until: undefined } };
+
+/** Through a tunnel that asks for its own sign-in first (Cloudflare Access, say). */
+export const BehindItsOwnSignIn: Story = {
+  args: { via: 'proxy', guarded: true, until: undefined },
+};
+
+/** The tunnel answers, but it can't reach Conch: where to point it. */
+export const TunnelNotPointedHere: Story = {
+  args: {
+    state: 'problem',
+    via: 'proxy',
+    until: undefined,
+    problem: {
+      message:
+        'conch.example.com reaches your tunnel or web server, but it can’t reach Conch. Point it at http://127.0.0.1:4317.',
+      action: { label: 'Try again', onClick: () => undefined },
+    },
+  },
+};
 
 /** Conch can fix it: one button. */
 export const ProblemWithFix: Story = {

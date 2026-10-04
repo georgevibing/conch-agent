@@ -119,3 +119,98 @@ export async function checkReach(
     deps.checks.delete(nonce);
   }
 }
+
+/** Through a proxy: reached, and whether a sign-in of the proxy's own stands in front. */
+export type ThroughResult =
+  | { ok: true; guarded: boolean }
+  | {
+      ok: false;
+      why: 'dns' | 'unreachable' | 'no-conch' | 'elsewhere' | 'host';
+      problem: AddressProblem;
+    };
+
+/**
+ * Does the name lead to this Conch through the person's own tunnel or web server
+ * (`via: 'proxy'`)? The gateway serves the token itself, on its own port, so a
+ * match means the record, the proxy and where it points all lead here.
+ *
+ * A proxy that asks for its own sign-in first (Cloudflare Access, an nginx
+ * password) answers with a redirect or a 401/403 instead. Conch can't look
+ * through it, and shouldn't: that's a lock in front, said as `guarded`.
+ */
+export async function checkThrough(
+  name: string,
+  deps: {
+    /** Where the gateway looks answers up. */
+    checks: Map<string, string>;
+    /** Where the proxy should send requests: `http://127.0.0.1:4317`. */
+    target: string;
+    fetch?: typeof fetch;
+    timeoutMs?: number;
+  },
+): Promise<ThroughResult> {
+  const nonce = randomBytes(16).toString('base64url');
+  const token = randomBytes(24).toString('base64url');
+  deps.checks.set(nonce, token);
+  const pointAt = `Point it at ${deps.target}.`;
+  try {
+    const response = await (deps.fetch ?? fetch)(
+      `https://${name}/.well-known/conch-check/${nonce}`,
+      { redirect: 'manual', signal: AbortSignal.timeout(deps.timeoutMs ?? 8000) },
+    );
+    const status = response.status;
+    const body = status === 200 ? (await response.text()).trim() : '';
+    if (body === token) return { ok: true, guarded: false };
+    // This Conch answered, but under another name: the proxy didn't pass on the one people typed.
+    if (body === 'wrong-host')
+      return {
+        ok: false,
+        why: 'host',
+        problem: {
+          kind: 'other',
+          message: `${name} reaches Conch, but your web server doesn’t pass on the name people typed, so Conch can’t keep sign-in safe there. Keep the Host header (in nginx: proxy_set_header Host $host;).`,
+        },
+      };
+    if ((status >= 300 && status < 400) || status === 401 || status === 403)
+      return { ok: true, guarded: true };
+    // 502–504, and Cloudflare's 520–530: the proxy answered, but Conch didn't answer it.
+    if (status === 502 || status === 503 || status === 504 || (status >= 520 && status <= 530))
+      return {
+        ok: false,
+        why: 'no-conch',
+        problem: {
+          kind: 'unreachable',
+          message: `${name} reaches your tunnel or web server, but it can’t reach Conch. ${pointAt}`,
+        },
+      };
+    return {
+      ok: false,
+      why: 'elsewhere',
+      problem: {
+        kind: 'dns',
+        message: `${name} leads somewhere else, not to this Conch. Point your tunnel or web server at ${deps.target}.`,
+      },
+    };
+  } catch (error) {
+    const code = CODE(error);
+    if (code === 'ENOTFOUND' || code === 'EAI_AGAIN')
+      return {
+        ok: false,
+        why: 'dns',
+        problem: {
+          kind: 'dns',
+          message: `${name} can’t be found yet. Add it where your tunnel or web server is set up; new names can take a few minutes to arrive.`,
+        },
+      };
+    return {
+      ok: false,
+      why: 'unreachable',
+      problem: {
+        kind: 'unreachable',
+        message: `Nothing answered at https://${name}. Check that your tunnel or web server is running, answers over HTTPS, and points at ${deps.target}.`,
+      },
+    };
+  } finally {
+    deps.checks.delete(nonce);
+  }
+}

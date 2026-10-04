@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AcmeClient } from './acme';
 import { AddressProblemError } from './problems';
-import type { ReachResult } from './reach';
+import type { ReachResult, ThroughResult } from './reach';
 import { AddressService, type AddressServiceDeps, type ListenersLike } from './service';
 import { AddressError, AddressStore } from './store';
 import { fakeAcme, leafFor } from './testing';
@@ -398,6 +398,120 @@ describe('conch setup and conch address, through the files (ADR 0063, 0064)', ()
     service.watch(10);
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(acme.orders()).toBe(1);
+    await service.stop();
+  });
+});
+
+describe('through a tunnel or web server of your own (via: proxy)', () => {
+  /** The look through the proxy, and the retries it schedules (run by hand). */
+  async function behind(results: ThroughResult[]) {
+    const queue = [...results];
+    const through = vi.fn(async () => queue.shift() ?? ({ ok: true, guarded: false } as const));
+    const later: { ms: number; fn: () => void }[] = [];
+    const made = await setup({
+      deps: {
+        through,
+        target: () => 'http://127.0.0.1:4317',
+        schedule: (ms, fn) => {
+          later.push({ ms, fn });
+          return () => undefined;
+        },
+      },
+    });
+    return { ...made, through, later };
+  }
+  const unreachable: ThroughResult = {
+    ok: false,
+    why: 'no-conch',
+    problem: { kind: 'unreachable', message: `${NAME} can’t reach Conch.` },
+  };
+
+  it('allows the name, checks it through the proxy, and opens no port and asks no authority', async () => {
+    const { service, acme, listeners, through, store } = await behind([]);
+    const status = await service.set(NAME, 'proxy');
+    expect(status).toMatchObject({
+      state: 'ready',
+      name: NAME,
+      url: `https://${NAME}`,
+      via: 'proxy',
+    });
+    expect(status.guarded).toBeUndefined();
+    expect(service.name()).toBe(NAME);
+    expect(through).toHaveBeenCalledWith(NAME, service.checks, 'http://127.0.0.1:4317');
+    expect(listeners.startHttp).not.toHaveBeenCalled();
+    expect(listeners.startHttps).not.toHaveBeenCalled();
+    expect(acme.orders()).toBe(0);
+    expect(await store.read()).toMatchObject({ name: NAME, via: 'proxy' });
+    expect(await store.certificate()).toBeUndefined();
+  });
+
+  it('says when the proxy asks for its own sign-in first', async () => {
+    const { service } = await behind([{ ok: true, guarded: true }]);
+    expect(await service.set(NAME, 'proxy')).toMatchObject({ state: 'ready', guarded: true });
+  });
+
+  it('keeps the name allowed while the proxy isn’t pointed here, and looks again with backoff', async () => {
+    const { service, later, heal } = await behind([unreachable, unreachable]);
+    const first = await service.set(NAME, 'proxy');
+    expect(first).toMatchObject({
+      state: 'problem',
+      via: 'proxy',
+      problem: { kind: 'unreachable' },
+    });
+    expect(first.problem?.retryAt).toBeGreaterThan(Date.now());
+    // Still allowed: the moment the proxy is pointed here, it works.
+    expect(service.name()).toBe(NAME);
+    expect(later.at(-1)?.ms).toBe(30_000);
+    later.at(-1)?.fn();
+    await vi.waitFor(() => expect(later.length).toBe(2));
+    expect(later.at(-1)?.ms).toBe(60_000);
+    later.at(-1)?.fn();
+    await vi.waitFor(() => expect(service.status().state).toBe('ready'));
+    expect(heal).toHaveBeenCalledWith('gateway', expect.stringContaining('again'));
+  });
+
+  it('takes a name inside a home network, which the certificate path refuses', async () => {
+    const { service } = await behind([]);
+    await expect(service.set('conch.home.lan')).rejects.toBeInstanceOf(AddressError);
+    expect(await service.set('conch.home.lan', 'proxy')).toMatchObject({ state: 'ready' });
+  });
+
+  it('moving from Conch’s own certificate to a proxy closes the ports and forgets the certificate', async () => {
+    const { service, listeners, store } = await behind([]);
+    await service.set(NAME);
+    expect(await store.certificate()).toBeDefined();
+    expect(await service.set(NAME, 'proxy')).toMatchObject({ state: 'ready', via: 'proxy' });
+    expect(listeners.stop).toHaveBeenCalled();
+    expect(await store.certificate()).toBeUndefined();
+  });
+
+  it('renewing looks through the proxy again, and never asks Let’s Encrypt', async () => {
+    const { service, acme, through } = await behind([]);
+    await service.set(NAME, 'proxy');
+    await service.renew();
+    expect(through).toHaveBeenCalledTimes(2);
+    expect(acme.orders()).toBe(0);
+  });
+
+  it('comes back as it was on start', async () => {
+    const first = await behind([]);
+    await first.service.set(NAME, 'proxy');
+    const again = await behind([]);
+    expect(await again.service.start()).toMatchObject({ state: 'ready', via: 'proxy' });
+    expect(again.listeners.startHttp).not.toHaveBeenCalled();
+  });
+
+  it('takes up a proxy the CLI wrote', async () => {
+    const { service, listeners } = await behind([]);
+    await service.start();
+    service.watch(10);
+    const cli = new AddressStore(home);
+    const since = Date.now();
+    await cli.write({ version: 1, name: NAME, since, setOn: await cli.machine(), via: 'proxy' });
+    await vi.waitFor(async () =>
+      expect((await cli.status())?.status).toMatchObject({ state: 'ready', via: 'proxy' }),
+    );
+    expect(listeners.startHttp).not.toHaveBeenCalled();
     await service.stop();
   });
 });

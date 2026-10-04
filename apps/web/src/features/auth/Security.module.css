@@ -166,4 +166,21 @@
     gap: var(--nc-space-1-5);
     margin: 0;
   }
+
+  /* Through a tunnel of your own: where to point it, to copy. */
+  .addressTarget {
+    display: grid;
+    gap: var(--nc-space-1-5);
+  }
+
+  .addressTargetRow {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .addressTargetRow > code {
+    overflow-wrap: anywhere;
+  }
 }

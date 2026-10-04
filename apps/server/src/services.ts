@@ -1027,6 +1027,12 @@ export class Services {
         if (!this.#gateway) throw new Error('Conch isn’t listening yet.');
         return this.#gateway;
       },
+      // A proxy of the person's own sends requests here: the gateway, on this computer.
+      target: () => {
+        const host = config.CONCH_HOST;
+        const local = /^(0\.0\.0\.0|::)$/.test(host) ? '127.0.0.1' : host;
+        return `http://${local.includes(':') ? `[${local}]` : local}:${config.CONCH_PORT}`;
+      },
       // Teams and WeChat reach the door at https://<name>/conch/… too, never the gateway.
       door: () => {
         const local = door.local;

@@ -153,10 +153,11 @@ running in the background and opens it. Conch then helps you connect a provider.
 Run the same line again to update. Add `--uninstall` to remove it.
 
 **On a server** (or any computer with no screen), add `--server`. Over SSH it does
-this by itself. It asks how you'll reach Conch: at an address of your own, privately
-with Tailscale, or only from that computer. For an address, it shows the DNS record
-to add, gets the certificate, and ends with a link you open on your own computer to
-make Conch yours. [On a server](./apps/docs/content/start/server.md) walks through it.
+this by itself. It asks how you'll reach Conch: at an address of your own, through a
+tunnel or web server you already run (Cloudflare Tunnel, nginx, Caddy), privately with
+Tailscale, or only from that computer. For an address, it shows the DNS record to add,
+gets the certificate, and ends with a link you open on your own computer to make Conch
+yours. [On a server](./apps/docs/content/start/server.md) walks through it.
 
 The installer also adds `conch` to your terminal: `conch help` lists what it can do.
 

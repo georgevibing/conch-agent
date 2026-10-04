@@ -110,9 +110,13 @@ async function addresses(): Promise<string[]> {
 async function ownAddress(): Promise<string | undefined> {
   const said = await addressApi.status().catch(() => undefined);
   if (said?.state === 'ready') return said.name;
-  // Conch isn't running (or hasn't said yet): the address it keeps a certificate for.
-  const name = (await addressFiles.read().catch(() => undefined))?.name;
-  return name && (await addressFiles.certificate()) ? name : undefined;
+  // Through a proxy the name is allowed even while the way in is being checked or fixed.
+  if (said?.via === 'proxy' && said.state !== 'off') return said.name;
+  // Conch isn't running (or hasn't said yet): the address it keeps a certificate for,
+  // or the one a proxy answers at.
+  const file = await addressFiles.read().catch(() => undefined);
+  if (file?.name && file.via === 'proxy') return file.name;
+  return file?.name && (await addressFiles.certificate()) ? file.name : undefined;
 }
 
 /** A one-time link in a card, with a QR code when it fits. */
@@ -642,9 +646,15 @@ const addressApi = {
     const file = await addressFiles.status();
     return file ? AddressStatus.parse(file.status) : { state: 'off' };
   },
-  set: async (name: string) => {
+  set: async (name: string, via: 'conch' | 'proxy' = 'conch') => {
     const since = Date.now();
-    await addressFiles.write({ version: 1, name, since, setOn: await addressFiles.machine() });
+    await addressFiles.write({
+      version: 1,
+      name,
+      since,
+      setOn: await addressFiles.machine(),
+      ...(via === 'proxy' && { via }),
+    });
     return taken((file) => file.since === since);
   },
   remove: async () => {
@@ -720,6 +730,8 @@ async function setup() {
     }),
     headless: headless(),
     port: config.CONCH_PORT,
+    target: `http://127.0.0.1:${config.CONCH_PORT}`,
+    allowedHosts: config.CONCH_ALLOWED_HOSTS,
     user: userInfo().username,
     gateway: {
       running: answering,
@@ -789,7 +801,9 @@ async function setup() {
 
 /** `conch address [status|set <name>|off|renew|here]`: your own address (ADR 0064). */
 async function address() {
-  const [verb = 'status', name] = process.argv.slice(3);
+  const args = process.argv.slice(3);
+  const proxied = args.includes('--proxy');
+  const [verb = 'status', name] = args.filter((arg) => arg !== '--proxy');
   if (verb === 'set') {
     if (!name) {
       say(`Which address? ${conch('address set conch.yourname.com')}`);
@@ -797,7 +811,8 @@ async function address() {
       return;
     }
     // The whole conversation: the record, the ports, the certificate, starting Conch if needed.
-    process.argv.splice(3, process.argv.length, '--domain', name);
+    // Through a proxy of your own: where to point it, and the way in through it.
+    process.argv.splice(3, process.argv.length, proxied ? '--proxy' : '--domain', name);
     return setup();
   }
   if (!(await answering())) {
@@ -813,7 +828,14 @@ async function address() {
       return;
     }
     const where = status.url ?? `https://${status.name ?? ''}`;
-    if (status.state === 'ready') {
+    if (status.state === 'ready' && status.via === 'proxy') {
+      ui.ok(`Conch answers at ${bold(where)}, through your tunnel or web server`);
+      ui.hint(
+        status.guarded
+          ? 'It asks for its own sign-in first, then Conch asks for yours.'
+          : 'It handles the secure connection. Conch still asks everyone to sign in.',
+      );
+    } else if (status.state === 'ready') {
       ui.ok(`Conch answers at ${bold(where)} 🔒`);
       if (status.certificate)
         ui.hint(
@@ -838,12 +860,15 @@ async function address() {
     return ui.ok('The address is off. Conch is reachable the other ways you set up.');
   }
   if (verb === 'renew') {
+    const proxy = (await addressApi.status()).via === 'proxy';
     await addressApi.renew();
-    const status = await working(ui, 'Renewing the certificate', async () => {
-      await waitFor(
-        async () => (await addressApi.status()).state !== 'getting-certificate',
-        120_000,
-      );
+    const label = proxy ? 'Checking the way in again' : 'Renewing the certificate';
+    const status = await working(ui, label, async () => {
+      // Taken up first (it says "checking"), then done with whatever it was doing.
+      await waitFor(async () => {
+        const now = (await addressApi.status()).state;
+        return now !== 'getting-certificate' && now !== 'checking';
+      }, 120_000);
       return addressApi.status();
     });
     return show(status);

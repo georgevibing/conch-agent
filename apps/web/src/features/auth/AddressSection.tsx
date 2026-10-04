@@ -3,6 +3,7 @@ import {
   AddressStatus,
   AlertDialog,
   Button,
+  CopyButton,
   Dialog,
   DnsRecordCard,
   Field,
@@ -37,6 +38,7 @@ const day = (time: number) =>
 
 /** What Conch is doing now, in a few words. */
 function progressOf(status: Address): string {
+  if (status.via === 'proxy') return 'Checking the way in through your tunnel…';
   return status.state === 'getting-certificate'
     ? 'Getting your certificate from Let’s Encrypt…'
     : 'Checking the way in from the internet…';
@@ -55,8 +57,9 @@ export function useAddress() {
 
 /**
  * Settings → Security → Your address (ADR 0064): where Conch answers on the
- * internet over its own certificate, the one fix when something's in the way,
- * and setting one up, the web's twin of `conch setup`.
+ * internet over its own certificate (or through a tunnel or web server the
+ * person runs), the one fix when something's in the way, and setting one up,
+ * the web's twin of `conch setup`.
  */
 export function AddressSection({
   guard,
@@ -130,7 +133,7 @@ export function AddressSection({
             ? {
                 action: {
                   label: 'Try again',
-                  onClick: () => void act(() => api.setAddress(name)),
+                  onClick: () => void act(() => api.setAddress(name, status.via)),
                   loading: busy,
                 },
               }
@@ -159,6 +162,8 @@ export function AddressSection({
           }
           address={status.name}
           progress={progressOf(status)}
+          {...(status.via && { via: status.via })}
+          {...(status.guarded && { guarded: true })}
           {...(status.certificate && { until: day(status.certificate.notAfter) })}
           {...(status.problem && { problem: problem(status) })}
           onTurnOff={() => setConfirmOff(true)}
@@ -203,6 +208,8 @@ export function AddressSection({
 /**
  * The address path of `conch setup`, in the app: the name, the record to add
  * (looked for again by itself), then Conch answering there, followed live.
+ * Or, through a tunnel or web server the person already runs: where to point
+ * it, the name, and the way in through it, with no record and no certificate.
  */
 function AddressSetUp({
   open,
@@ -222,14 +229,21 @@ function AddressSetUp({
   const [report, setReport] = useState<DnsReport>();
   const [checking, setChecking] = useState(false);
   const [started, setStarted] = useState(false);
+  /** The name as Conch took it (lowercase, no scheme), once it's turned on from here. */
+  const [startedName, setStartedName] = useState<string>();
   const [starting, setStarting] = useState(false);
+  /** Through a tunnel or web server of the person's own: no record to add, no certificate. */
+  const [through, setThrough] = useState(false);
   const here = report?.pointing === 'here' || report?.pointing === 'cloudflare';
+  const target = status?.target ?? 'http://127.0.0.1:4317';
 
   const reset = () => {
     setName('');
     setError(undefined);
     setReport(undefined);
     setStarted(false);
+    setStartedName(undefined);
+    setThrough(false);
   };
 
   const look = async (wanted: string, quiet: boolean) => {
@@ -264,15 +278,24 @@ function AddressSetUp({
 
   const onCheck = (e: FormEvent) => {
     e.preventDefault();
-    if (name.trim()) void look(name.trim(), false);
+    if (!name.trim()) return;
+    if (through) void turnOn();
+    else void look(name.trim(), false);
   };
 
+  /** The name that's turned on: the one looked up, or (through a tunnel) the one typed. */
+  const chosen = through ? name.trim() : report?.name;
+
   const turnOn = async () => {
-    if (!report) return;
+    if (!chosen) return;
     setStarting(true);
     setError(undefined);
     try {
-      const done = await guard(async () => onStatus(await api.setAddress(report.name)));
+      const done = await guard(async () => {
+        const next = await api.setAddress(chosen, through ? 'proxy' : 'conch');
+        setStartedName(next.name);
+        onStatus(next);
+      });
       if (done) setStarted(true);
     } catch (e) {
       setError(message(e));
@@ -281,8 +304,8 @@ function AddressSetUp({
     }
   };
 
-  // What the address is doing now, once it's been turned on from here.
-  const mine = started && status?.name === report?.name ? status : undefined;
+  // What the address is doing now, once it's been turned on from here (named as Conch wrote it).
+  const mine = started && startedName && status?.name === startedName ? status : undefined;
   const ready = mine?.state === 'ready';
 
   return (
@@ -297,8 +320,9 @@ function AddressSetUp({
         <Dialog.Header>
           <Dialog.Title>Your own address</Dialog.Title>
           <Dialog.Description>
-            Open Conch from anywhere at a domain you own, like conch.yourname.com. Conch gets the
-            certificate and renews it by itself.
+            {through
+              ? 'Your tunnel or web server answers at the name, and hands everything to Conch on this computer.'
+              : 'Open Conch from anywhere at a domain you own, like conch.yourname.com. Conch gets the certificate and renews it by itself.'}
           </Dialog.Description>
         </Dialog.Header>
         <Dialog.Body>
@@ -331,7 +355,26 @@ function AddressSetUp({
               </form>
             )}
 
-            {report && !started && (
+            {through && !started && (
+              <div className={styles.addressTarget}>
+                <Text size="sm">Point your tunnel or web server at</Text>
+                <div className={styles.addressTargetRow}>
+                  <code>{target}</code>
+                  <CopyButton value={target} label="Copy where to point it" />
+                </div>
+                <Text size="xs" tone="subtle">
+                  Cloudflare Tunnel: a public hostname with this as its service. nginx and Caddy:
+                  reverse proxy to it, keeping the name people typed (the Host header).
+                </Text>
+              </div>
+            )}
+            {!through && !started && !report && (
+              <Button variant="ghost" size="sm" onClick={() => setThrough(true)}>
+                I already run a tunnel or web server for it
+              </Button>
+            )}
+
+            {report && !started && !through && (
               <DnsRecordCard
                 name={report.name}
                 state={here ? 'found' : 'waiting'}
@@ -341,10 +384,17 @@ function AddressSetUp({
                 })}
               />
             )}
-            {report?.pointing === 'cloudflare' && !started && (
-              <Text size="sm" tone="muted">
-                {report.message}
-              </Text>
+            {report?.pointing === 'cloudflare' && !started && !through && (
+              <Stack gap={2}>
+                <Text size="sm" tone="muted">
+                  {report.message}
+                </Text>
+                <div>
+                  <Button variant="surface" size="sm" onClick={() => setThrough(true)}>
+                    It’s a Cloudflare Tunnel
+                  </Button>
+                </div>
+              </Stack>
             )}
 
             {mine && (mine.state === 'checking' || mine.state === 'getting-certificate') && (
@@ -359,8 +409,8 @@ function AddressSetUp({
                   Conch answers at{' '}
                   <a href={`https://${mine.name}`} target="_blank" rel="noreferrer">
                     https://{mine.name}
-                  </a>{' '}
-                  🔒
+                  </a>
+                  {mine.via === 'proxy' ? ', through your tunnel' : ' 🔒'}
                 </span>
               </p>
             )}
@@ -368,6 +418,7 @@ function AddressSetUp({
               <AddressStatus
                 state="problem"
                 address={mine.name ?? report?.name ?? ''}
+                {...(mine.via && { via: mine.via })}
                 problem={{
                   message: problemText(mine.problem),
                   ...(mine.problem.command && { command: mine.problem.command }),
@@ -383,8 +434,9 @@ function AddressSetUp({
 
             {!ready && (
               <Text size="xs" tone="subtle">
-                The certificate comes from Let’s Encrypt, free, and Conch renews it before it runs
-                out.
+                {through
+                  ? 'Conch opens no ports and gets no certificate here: your tunnel or web server keeps the connection secure.'
+                  : 'The certificate comes from Let’s Encrypt, free, and Conch renews it before it runs out.'}
               </Text>
             )}
           </Stack>
@@ -400,7 +452,11 @@ function AddressSetUp({
                 <Button variant="ghost">Cancel</Button>
               </Dialog.Close>
               {!started && (
-                <Button disabled={!here} loading={starting} onClick={() => void turnOn()}>
+                <Button
+                  disabled={through ? !name.trim() : !here}
+                  loading={starting}
+                  onClick={() => void turnOn()}
+                >
                   Turn it on
                 </Button>
               )}

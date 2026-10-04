@@ -26,6 +26,13 @@ export interface AddressStatusProps extends Omit<ComponentProps<'section'>, 'chi
   until?: string;
   /** What it's doing while it gets one: "Asking Let’s Encrypt…". */
   progress?: string;
+  /**
+   * Who answers at the address: Conch with its own certificate (`conch`, the
+   * default), or a tunnel or web server the person runs in front of it (`proxy`).
+   */
+  via?: 'conch' | 'proxy';
+  /** Through a proxy that asks for its own sign-in first. */
+  guarded?: boolean;
   problem?: AddressProblem;
   /** Stop answering at this address. */
   onTurnOff?: () => void;
@@ -39,12 +46,16 @@ export interface AddressStatusProps extends Omit<ComponentProps<'section'>, 'chi
  * whether its certificate is good, and the one thing to do when it isn't. A
  * healthy address is one quiet line; getting a certificate wears the orbiting
  * rim, as anything alive does; a problem is said in a sentence with its fix.
+ * Behind the person's own tunnel or web server there's no certificate of
+ * Conch's to speak of, so the quiet line says who keeps it secure instead.
  */
 export function AddressStatus({
   state,
   address,
   until,
   progress = 'Getting a certificate from Let’s Encrypt…',
+  via = 'conch',
+  guarded,
   problem,
   onTurnOff,
   turningOff,
@@ -68,7 +79,7 @@ export function AddressStatus({
             <p className={styles.title}>Open Conch from anywhere</p>
             <p className={styles.meta}>
               At an address you own, like conch.yourname.com. Conch gets the certificate and renews
-              it by itself.
+              it by itself, or answers through a tunnel you already run.
             </p>
           </div>
           {onSetUp && (
@@ -87,6 +98,7 @@ export function AddressStatus({
       aria-label="Your address"
       className={cx(styles.root, className)}
       data-state={state}
+      data-via={via}
       data-lustre={state === 'getting' ? '' : undefined}
       data-lustre-ambient={state === 'getting' || undefined}
       {...props}
@@ -101,7 +113,16 @@ export function AddressStatus({
             <CopyButton value={url} label="Copy address" />
           </p>
           <p className={styles.status} aria-live="polite">
-            {state === 'ready' && (
+            {state === 'ready' && via === 'proxy' && (
+              <>
+                <span className={styles.dot} aria-hidden />
+                Through your tunnel
+                <span className={styles.until}>
+                  · {guarded ? 'behind its own sign-in' : 'it keeps the connection secure'}
+                </span>
+              </>
+            )}
+            {state === 'ready' && via === 'conch' && (
               <>
                 <span className={styles.dot} aria-hidden />
                 Secure · renews by itself

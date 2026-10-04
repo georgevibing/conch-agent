@@ -498,7 +498,7 @@ export function registerSecurity(app: FastifyInstance, gate: Gatekeeper): void {
         .code(421)
         .type('text/plain')
         .send(
-          `Conch doesn’t answer to “${host ?? '?'}”. To allow it, start Conch with CONCH_ALLOWED_HOSTS=${host ?? 'name'}.`,
+          `Conch doesn’t answer to “${host ?? '?'}”. To open it there, run “conch setup” on the computer running Conch and choose the way you reach it.`,
         );
     }
     securityHeaders(request, reply, gate.isSecure(request));
