@@ -40,4 +40,4 @@ A command Codex knows to be read-only (listing a folder, reading a file) runs wi
 - **Codex** answers with Conch's tools doing the work, like every other provider.
 - **Codex CLI** brings Codex's own tools, and asks through Conch for each step.
 
-Both use your ChatGPT plan, and its models and limits. Codex 0.159 or newer is needed.
+Both use your ChatGPT plan, and its models and limits: one sign-in serves both, and both can answer at once (a chat in one, a background task in the other). The chip at the top of a chat shows what's left of the plan's five-hour and weekly limits. Codex 0.159 or newer is needed.

@@ -1,0 +1,40 @@
+@layer nacre.components {
+  .content {
+    inline-size: 20rem;
+    max-inline-size: calc(100vw - 2 * var(--nc-space-4));
+    overflow: hidden;
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+    padding: var(--nc-space-3) var(--nc-space-3) var(--nc-space-2-5) var(--nc-space-4);
+    border-block-end: 1px solid var(--nc-border-subtle);
+  }
+
+  .who {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .account {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .body {
+    padding: var(--nc-space-3) var(--nc-space-4) var(--nc-space-4);
+  }
+
+  .foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-2) var(--nc-space-2) var(--nc-space-2) var(--nc-space-4);
+    border-block-start: 1px solid var(--nc-border-subtle);
+    background: var(--nc-wash-1);
+  }
+}

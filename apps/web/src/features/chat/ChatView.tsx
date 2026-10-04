@@ -706,7 +706,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
     <div className={styles.composerWrap}>
       {/* Another connected provider can answer while the default one is away. */}
       <EngineIssue status={chosenReady ? undefined : engine} issue={engineIssue} />
-      <UsageComposerNotice />
+      <UsageComposerNotice engine={turn.options.engine} />
       <ComposerOffline />
       {view.notice && running && (
         // Only a retry is "still trying"; anything else is just a note.

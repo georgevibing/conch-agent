@@ -159,7 +159,8 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           void client.invalidateQueries({ queryKey: keys.memories });
           break;
         case 'usage.changed':
-          client.setQueryData(keys.usage, event.usage);
+          if (event.usage.engine)
+            client.setQueryData(keys.usageOf(event.usage.engine), event.usage);
           break;
         case 'error': {
           const key = event.conversationId ?? NEW;

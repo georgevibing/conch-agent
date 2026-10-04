@@ -1,4 +1,4 @@
-import type { AppState, EngineStatus, UpdateSettingsBody } from '@conch/protocol';
+import type { AppState, EngineId, EngineStatus, UpdateSettingsBody } from '@conch/protocol';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from './client';
@@ -13,6 +13,8 @@ export const keys = {
   models: ['capabilities', 'models'] as const,
   commands: ['commands'] as const,
   usage: ['usage'] as const,
+  /** One provider's limits; every key starts with `usage`, so refreshing that refreshes all. */
+  usageOf: (engine: string) => ['usage', engine] as const,
   auth: ['auth'] as const,
   access: ['access'] as const,
   /** Your own address (ADR 0064); kept fresh by the `address.changed` event. */
@@ -116,20 +118,22 @@ export function useCapabilities(enabled = true) {
 }
 
 /**
- * How much usage is left. The gateway pushes every change over the socket
- * (`usage.changed`); refetching on focus re-reads the provider, because you
- * may have used your plan elsewhere (claude.ai, another machine) meanwhile.
+ * How much of a provider's limit is left: the one answering the chat you're
+ * in. The gateway pushes every change over the socket (`usage.changed`, naming
+ * its provider); refetching on focus re-reads the provider, because you may
+ * have used your plan elsewhere (claude.ai, another machine) meanwhile.
  */
-export function useUsage(enabled = true) {
+export function useUsage(engine: EngineId | undefined, enabled = true) {
   const client = useQueryClient();
+  const key = keys.usageOf(engine ?? '');
   return useQuery({
-    queryKey: keys.usage,
+    queryKey: key,
     // The first read takes the gateway's cached answer; later ones ask the provider afresh.
-    queryFn: () => api.usage(client.getQueryData(keys.usage) !== undefined),
+    queryFn: () => api.usage(client.getQueryData(key) !== undefined, engine),
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
     refetchOnWindowFocus: true,
-    enabled,
+    enabled: enabled && Boolean(engine),
   });
 }
 

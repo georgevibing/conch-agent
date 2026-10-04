@@ -33,11 +33,13 @@ Choose **Wait until it resets** to go back to waiting.
 
 ## The usage meter
 
-The small gauge at the top of the window shows what's left of your tightest limit, like a battery: "62% left". Click it to see each of your plan's limits, what's left of it, and when it resets.
+The chip at the top of a chat names the provider answering it and shows what's left of its tightest limit, like a battery: "Codex · 62% left". It follows the chat: pick a model from another provider and it shows that provider's limits at once. Click it to see who you're signed in as, each of the plan's limits, what's left of it, and when it resets. If that provider isn't the one new chats start with, **Use** makes it so.
 
-If you pay as you go, it shows what you've spent today and this month instead. Set a **Monthly budget** in **Settings → Usage**, and the gauge shows what's left of that. Conch warns you when it runs low. It never stops you. Routines are the one exception: what they spend while you're away has [a limit of its own](../features/routines.md#it-wont-run-up-a-bill).
+If the chat's provider needs you (a sign-in that ended), the chip says **Sign in** instead. With no provider connected, it says **Connect a provider**.
 
-A line appears above the message box only when a limit is close or reached. Type `/usage`, or open **Settings → Usage**, to see the same numbers.
+If you pay as you go, the details show what you've spent today and this month. Set a **Monthly budget** in **Settings → Usage**, and the chip shows what's left of that. Conch warns you when it runs low. It never stops you. Routines are the one exception: what they spend while you're away has [a limit of its own](../features/routines.md#it-wont-run-up-a-bill).
+
+A line appears above the message box only when the chat's provider is close to its limit or has reached it. Type `/usage` to open the chip's details, or open **Settings → Usage** to see every connected provider's limits at once.
 
 ## Good to know
 

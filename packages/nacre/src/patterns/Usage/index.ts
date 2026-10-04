@@ -15,6 +15,8 @@ export { useNow } from './useNow';
 export { UsageRing } from './UsageRing';
 export type { UsageRingProps } from './UsageRing';
 export { UsageMeter } from './UsageMeter';
+export { ProviderMeter } from './ProviderMeter';
+export type { ProviderMeterProps } from './ProviderMeter';
 export type { UsageMeterProps } from './UsageMeter';
 export { UsageBar, UsageGauge } from './UsageBar';
 export type { UsageBarProps, UsageGaugeProps } from './UsageBar';

@@ -194,7 +194,13 @@ export const api = {
     request(EngineStatus, '/api/engine/api-key', { method: 'PUT', body: { apiKey } }),
   clearApiKey: () => request(EngineStatus, '/api/engine/api-key', { method: 'DELETE' }),
 
-  usage: (refresh = false) => request(UsageSnapshot, `/api/usage${refresh ? '?refresh=1' : ''}`),
+  usage: (refresh = false, engine?: string) => {
+    const query = new URLSearchParams({
+      ...(refresh && { refresh: '1' }),
+      ...(engine && { engine }),
+    }).toString();
+    return request(UsageSnapshot, `/api/usage${query ? `?${query}` : ''}`);
+  },
   setBudget: (budget: number | null) =>
     request(UsageSnapshot, '/api/usage/budget', { method: 'PUT', body: { budget } }),
 

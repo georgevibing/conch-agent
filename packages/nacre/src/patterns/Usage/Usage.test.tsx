@@ -18,11 +18,60 @@ import {
   usageUnknown,
 } from './fixtures';
 import type { UsageValue } from './types';
+import { ProviderMeter } from './ProviderMeter';
 import { UsageMeter } from './UsageMeter';
 import { UsageNotice } from './UsageNotice';
 import { UsagePanel } from './UsagePanel';
 
 const tz = { locale: 'en-US', timeZone: 'UTC' };
+
+describe('ProviderMeter', () => {
+  it('names the provider and what is left of its tightest limit', async () => {
+    const { container } = renderNacre(
+      <ProviderMeter
+        provider={{ label: 'Codex', logo: 'openai' }}
+        usage={planHealthy}
+        now={usageNow}
+      />,
+    );
+    const meter = screen.getByRole('button', {
+      name: 'Codex. Usage: 39% left of weekly limit, resets in 3 days',
+    });
+    expect(meter).toHaveTextContent('Codex39% left');
+    await expectAccessible(container);
+  });
+
+  it('shows only the name when there is nothing to run out of', () => {
+    renderNacre(
+      <ProviderMeter
+        provider={{ label: 'Ollama', logo: 'local' }}
+        usage={meteredNoBudget}
+        now={usageNow}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Ollama' })).toHaveTextContent(/^Ollama$/);
+  });
+
+  it('asks for the person only when the provider needs them', async () => {
+    const { container } = renderNacre(
+      <ProviderMeter provider={{ label: 'Codex', logo: 'openai' }} attention="Sign in" />,
+    );
+    const meter = screen.getByRole('button', { name: 'Codex: Sign in' });
+    expect(meter).toHaveAttribute('data-severity', 'warning');
+    await expectAccessible(container);
+  });
+
+  it('offers to connect one when there is none, and opens with Enter', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const { container } = renderNacre(<ProviderMeter onClick={onClick} />);
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Connect a provider' })).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(onClick).toHaveBeenCalled();
+    await expectAccessible(container);
+  });
+});
 
 describe('UsageMeter', () => {
   it('shows what is left of the tightest window and says so', async () => {

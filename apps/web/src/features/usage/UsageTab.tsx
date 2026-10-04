@@ -1,9 +1,12 @@
-import { Field, Input, Stack, UsagePanel } from '@conch/nacre';
-import { useQueryClient } from '@tanstack/react-query';
+import type { EngineId } from '@conch/protocol';
+import { Field, Input, ProviderLogo, Stack, Text, UsagePanel } from '@conch/nacre';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { api } from '../../api/client';
 import { keys, useUsage } from '../../api/queries';
+import { providerLogo } from '../models/catalog';
+import { useProviders } from '../providers/queries';
 import { SpendingSection } from '../routines/SpendingSection';
 import { Section, SaveStatus } from '../settings/Section';
 import { useAutosave } from '../settings/useAutosave';
@@ -24,7 +27,10 @@ function BudgetField({ initial }: { initial?: number }) {
   const [budget, setBudget] = useState<number | null>(initial ?? null);
   const valid = parseBudget(text) !== undefined;
   const status = useAutosave(budget, async (next) => {
-    client.setQueryData(keys.usage, await api.setBudget(next));
+    const snapshot = await api.setBudget(next);
+    // Spend is Conch-wide: every provider's numbers say the new budget.
+    if (snapshot.engine) client.setQueryData(keys.usageOf(snapshot.engine), snapshot);
+    void client.invalidateQueries({ queryKey: keys.usage });
   });
   return (
     <Section
@@ -55,27 +61,58 @@ function BudgetField({ initial }: { initial?: number }) {
   );
 }
 
-/** Settings → Usage: the full picture, plus a budget for pay-as-you-go sign-ins. */
-export function UsageTab() {
-  const { data: usage } = useUsage();
-  const { refresh, refreshing } = useUsageRefresh();
+/** One provider's limits, under its name. */
+function ProviderUsage({ engine, name }: { engine: EngineId; name: string }) {
+  const { data: usage } = useUsage(engine);
+  const { refresh, refreshing } = useUsageRefresh(engine);
   if (!usage) return null;
+  return (
+    <Stack gap={2}>
+      <Stack direction="row" gap={2} align="center">
+        <ProviderLogo provider={providerLogo(engine)} size={14} />
+        <Text size="sm" weight="medium">
+          {name}
+        </Text>
+      </Stack>
+      <UsagePanel
+        value={usage}
+        onRefresh={() => void refresh()}
+        refreshing={refreshing}
+        className={styles.inline}
+      />
+    </Stack>
+  );
+}
+
+/**
+ * Settings → Usage: what's left with every provider you've connected (each
+ * chat's header shows its own), plus a budget for pay-as-you-go sign-ins.
+ */
+export function UsageTab() {
+  const { data: list } = useProviders();
+  const ready = (list?.providers ?? []).filter((p) => p.ready);
+  const usages = useQueries({
+    queries: ready.map((p) => ({
+      queryKey: keys.usageOf(p.id),
+      queryFn: () => api.usage(false, p.id),
+      staleTime: 60_000,
+    })),
+  });
+  if (!list) return null;
+  const metered = usages.find((u) => u.data?.kind === 'metered')?.data;
   return (
     <Stack gap={6}>
       <Section
         title="What’s left"
-        description={usage.kind === 'unknown' ? 'Connect a provider to see your usage.' : undefined}
+        description={ready.length ? undefined : 'Connect a provider to see your usage.'}
       >
-        {usage.kind !== 'unknown' && (
-          <UsagePanel
-            value={usage}
-            onRefresh={() => void refresh()}
-            refreshing={refreshing}
-            className={styles.inline}
-          />
-        )}
+        <Stack gap={5}>
+          {ready.map((p) => (
+            <ProviderUsage key={p.id} engine={p.id} name={p.name} />
+          ))}
+        </Stack>
       </Section>
-      {usage.kind === 'metered' && <BudgetField initial={usage.spend.budget} />}
+      {metered && <BudgetField initial={metered.spend.budget} />}
       <SpendingSection />
     </Stack>
   );

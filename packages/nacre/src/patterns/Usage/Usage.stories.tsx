@@ -8,6 +8,7 @@ import { Surface } from '../../components/Surface';
 import { Text } from '../../components/Text';
 import { usageFixtures, usageNow } from './fixtures';
 import type { UsageValue } from './types';
+import { ProviderMeter } from './ProviderMeter';
 import { UsageMeter } from './UsageMeter';
 import { UsageNotice } from './UsageNotice';
 import { UsagePanel } from './UsagePanel';
@@ -242,6 +243,74 @@ function Header({ value, defaultOpen }: { value: UsageValue; defaultOpen?: boole
     </Surface>
   );
 }
+
+const providerRow = (label: string, meter: ReactNode) => (
+  <Stack key={label} direction="row" gap={3} align="center" justify="between">
+    <Text size="xs" tone="subtle" style={{ minInlineSize: '10rem' }}>
+      {label}
+    </Text>
+    {meter}
+  </Stack>
+);
+
+/**
+ * The header chip that follows the chat: who answers this chat and what's left
+ * of their limit. It changes when the chat moves to another provider's model.
+ */
+export const ProviderMeterStates: Story = {
+  name: 'Provider meter states',
+  render: () => (
+    <Surface variant="flat" radius="lg" padding={4} style={{ inlineSize: '26rem' }}>
+      <Stack gap={3}>
+        {providerRow(
+          'Plan · healthy',
+          <ProviderMeter
+            provider={{ label: 'Claude Code', logo: 'claude' }}
+            usage={usageFixtures.planHealthy}
+            now={usageNow}
+          />,
+        )}
+        {providerRow(
+          'Plan · warning',
+          <ProviderMeter
+            provider={{ label: 'Codex', logo: 'openai' }}
+            usage={usageFixtures.planWarning}
+            now={usageNow}
+          />,
+        )}
+        {providerRow(
+          'Plan · limit reached',
+          <ProviderMeter
+            provider={{ label: 'Codex CLI', logo: 'openai' }}
+            usage={usageFixtures.planExhausted}
+            now={usageNow}
+          />,
+        )}
+        {providerRow(
+          'Metered · budget',
+          <ProviderMeter
+            provider={{ label: 'OpenRouter', logo: 'openrouter' }}
+            usage={usageFixtures.meteredBudget}
+            now={usageNow}
+          />,
+        )}
+        {providerRow(
+          'No limits to show',
+          <ProviderMeter
+            provider={{ label: 'Ollama', logo: 'local' }}
+            usage={usageFixtures.meteredNoBudget}
+            now={usageNow}
+          />,
+        )}
+        {providerRow(
+          'Needs a sign-in',
+          <ProviderMeter provider={{ label: 'Codex', logo: 'openai' }} attention="Sign in" />,
+        )}
+        {providerRow('No provider yet', <ProviderMeter />)}
+      </Stack>
+    </Surface>
+  ),
+};
 
 export const InHeader: Story = {
   name: 'In header',

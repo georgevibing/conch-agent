@@ -175,6 +175,61 @@
     animation: usage-pulse 2.4s var(--nc-ease-in-out) infinite;
   }
 
+  /* ── The chat's provider: who answers, and what's left of their limit ── */
+  .provider {
+    gap: var(--nc-space-1-5);
+    padding-inline: var(--nc-space-2) var(--nc-space-2-5);
+    color: var(--nc-text-muted);
+  }
+
+  .providerLogo {
+    flex: none;
+    color: var(--nc-text);
+  }
+
+  .providerName {
+    color: var(--nc-text);
+    letter-spacing: 0.004em;
+  }
+
+  .providerDivider {
+    flex: none;
+    inline-size: 1px;
+    block-size: 10px;
+    background: var(--nc-border);
+  }
+
+  .providerUsage,
+  .providerAttention {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    color: var(--usage-fg);
+  }
+
+  .providerDot {
+    inline-size: 6px;
+    block-size: 6px;
+    border-radius: var(--nc-radius-full);
+    background: var(--usage-fill);
+  }
+
+  .provider[data-kind='connect'] {
+    background: var(--nc-accent-3);
+    box-shadow: inset 0 0 0 1px var(--nc-accent-6);
+  }
+
+  .provider[data-kind='connect'] .meterIcon,
+  .provider[data-kind='connect'] .providerName {
+    color: var(--nc-accent-11);
+  }
+
+  @media (hover: hover) {
+    .provider[data-kind='connect']:hover:not(:disabled) {
+      background: var(--nc-accent-4);
+    }
+  }
+
   @keyframes usage-pulse {
     0%,
     100% {

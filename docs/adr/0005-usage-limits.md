@@ -68,3 +68,23 @@ must not read Claude Code's OAuth credentials.
   your provider bill, and the UI says so. Usage outside Conch isn't counted.
 - A new engine gets usage limits by implementing `usage()`. Metered engines get spend
   tracking for free.
+
+## Update (2026-10-04): limits follow the chat
+
+Several providers answer at once (ADR 0012), so one gauge for the default provider
+showed the wrong numbers in a chat answered by another. Now:
+
+- `UsageService` keeps a meter per provider. Each snapshot names its `engine`;
+  `GET /api/usage?engine=` reads one, and `usage.changed` says whose it is. A turn
+  re-reads the provider that answered it, and every engine's live hints
+  (`onLimits`) reach its own meter. Spend and the budget stay Conch-wide.
+- The header's `ProviderMeter` replaces both the `UsageMeter` chip and the old
+  default-provider status pill: it names the chat's provider and shows that
+  provider's limits, follows the model chosen for the chat (or the new-chat
+  draft), says **Sign in** when that provider needs it, and offers **Connect a
+  provider** when none is connected. Its panel shows the account, the limits,
+  and makes the provider the default for new chats in one press.
+- The composer notice speaks for the chat's provider; Settings → Usage lists every
+  connected provider's limits.
+- Codex reports its ChatGPT plan's five-hour and weekly windows
+  (`account/rateLimits/read`, and `account/rateLimits/updated` during a turn).

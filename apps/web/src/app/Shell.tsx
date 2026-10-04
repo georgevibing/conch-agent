@@ -23,7 +23,7 @@ import { ChannelDetailView } from '../features/channels/ChannelDetailView';
 import { ConnectChannel } from '../features/channels/ConnectChannel';
 import { ChatView } from '../features/chat/ChatView';
 import { PasswordsView } from '../features/passwords/PasswordsView';
-import { EnginePill } from '../features/engine/EnginePill';
+import { ChatProvider } from '../features/engine/ChatProvider';
 import { AppDetailView } from '../features/integrations/AppDetailView';
 import { AppsView } from '../features/integrations/AppsView';
 import { isPinnedId } from '../features/integrations/paths';
@@ -35,7 +35,6 @@ import { NewSkill } from '../features/skills/NewSkill';
 import { SkillDetailView } from '../features/skills/SkillDetailView';
 import { SkillsView } from '../features/skills/SkillsView';
 import { Sidebar } from '../features/sidebar/Sidebar';
-import { UsageIndicator } from '../features/usage/UsageIndicator';
 import { useLiveStore } from '../live/store';
 import styles from './Shell.module.css';
 import { BrowserToggle } from '../features/browser/BrowserToggle';
@@ -148,6 +147,20 @@ export function Shell() {
 
   const showSidebar = !narrow && sidebarOpen;
 
+  // The chat is on screen (not another page): its header names who answers it.
+  const onChat = !(
+    (pinnedArea && artifactId) ||
+    memoryArea ||
+    tasksArea ||
+    archiveArea ||
+    activityArea ||
+    passwordsArea ||
+    channelsArea ||
+    skillsArea ||
+    appsArea ||
+    routinesArea
+  );
+
   return (
     <div className={styles.shell} data-sidebar={showSidebar || undefined}>
       {showSidebar && (
@@ -199,7 +212,7 @@ export function Shell() {
               {title}
             </LiveTitle>
           </Text>
-          <UsageIndicator />
+          {onChat && <ChatProvider conversationId={conversationId} />}
           {conversationId && <BrowserToggle conversationId={conversationId} />}
           <TerminalToggle />
           {conversationId && (
@@ -211,7 +224,6 @@ export function Shell() {
               <TextSearch />
             </IconButton>
           )}
-          <EnginePill />
         </header>
         <Reconnecting />
         <UpdateNotice className={styles.notice} />
