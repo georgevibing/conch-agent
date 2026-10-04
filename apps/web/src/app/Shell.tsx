@@ -1,6 +1,6 @@
 import { IconButton, LiveTitle, Sheet, Spinner, Text, useMediaQuery } from '@conch/nacre';
 import { Menu, PanelLeftOpen, TextSearch } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 
 import { useConversations } from '../api/queries';
@@ -172,12 +172,33 @@ export function Shell() {
   });
 
   const showSidebar = !narrow && sidebarOpen;
+  const asideRef = useRef<HTMLElement>(null);
+  const showRef = useRef<HTMLButtonElement>(null);
+  // Focus follows the sidebar: closed from inside it (which leaves focus nowhere once
+  // it's inert), to the button that opens it again.
+  useEffect(() => {
+    if (narrow || showSidebar) return;
+    const at = document.activeElement;
+    if (!at || at === document.body || asideRef.current?.contains(at)) showRef.current?.focus();
+  }, [showSidebar, narrow]);
 
   return (
-    <div className={styles.shell} data-sidebar={showSidebar || undefined}>
-      {showSidebar && (
-        <aside className={styles.sidebar}>
-          <Sidebar />
+    <div
+      className={styles.shell}
+      data-wide={!narrow || undefined}
+      data-sidebar={showSidebar || undefined}
+    >
+      {/* Kept while closed, so it can glide shut and open again where it was. */}
+      {!narrow && (
+        <aside
+          ref={asideRef}
+          className={styles.sidebar}
+          inert={!showSidebar}
+          aria-hidden={!showSidebar || undefined}
+        >
+          <div className={styles.sidebarInner}>
+            <Sidebar />
+          </div>
         </aside>
       )}
       {narrow && (
@@ -202,7 +223,13 @@ export function Shell() {
             </IconButton>
           ) : (
             !sidebarOpen && (
-              <IconButton label="Show sidebar" shortcut="mod+b" onClick={toggleSidebar}>
+              <IconButton
+                ref={showRef}
+                label="Show sidebar"
+                shortcut="mod+b"
+                onClick={toggleSidebar}
+                className={styles.showSidebar}
+              >
                 <PanelLeftOpen />
               </IconButton>
             )
