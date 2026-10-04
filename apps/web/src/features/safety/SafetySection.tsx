@@ -20,13 +20,18 @@ import { Section } from '../settings/Section';
 import { AdminCommand } from '../setup/AdminCommand';
 import { safetyApi, safetyKeys } from './api';
 
-type Guard = 'checkAfterReading' | 'sealedCommands';
+type Guard = 'checkAfterReading' | 'sealedCommands' | 'checkMemories';
 
 const OFF: Record<Guard, { title: string; detail: string }> = {
   checkAfterReading: {
     title: 'Stop checking after it reads something?',
     detail:
       'A web page, an email or someone else’s message could then tell the assistant to send your things somewhere or change this computer, and nothing would stop to ask you first.',
+  },
+  checkMemories: {
+    title: 'Stop checking what it remembers?',
+    detail:
+      'A web page or an email could then slip in a memory — where your invoices go, who to trust, an order to follow in every chat — and the assistant would act on it in later chats without asking you. Passwords, keys and hidden characters are still held.',
   },
   sealedCommands: {
     title: 'Stop sealing commands?',
@@ -36,9 +41,9 @@ const OFF: Record<Guard, { title: string; detail: string }> = {
 };
 
 /**
- * Settings → Security → Safety (ADR 0028): the two checks that hold in every
- * mode. Both start on; turning one off says what could happen, and asks that
- * it's you.
+ * Settings → Security → Safety (ADR 0028, ADR 0087): the checks that hold in
+ * every mode. All start on; turning one off says what could happen, and asks
+ * that it's you.
  */
 export function SafetySection() {
   const { data: app } = useAppState();
@@ -73,7 +78,7 @@ export function SafetySection() {
   return (
     <Section
       title="Safety"
-      description="Two checks that hold in every mode, Full trust included. Both are on unless you turn them off."
+      description="Checks that hold in every mode, Full trust included. They’re on unless you turn them off."
     >
       <Stack gap={5}>
         <Switch
@@ -82,6 +87,13 @@ export function SafetySection() {
           onCheckedChange={(on) => change('checkAfterReading', on)}
           label="Check before acting on what it read"
           description="Once a chat has read a web page, an email or someone else’s message, anything that could send your things somewhere or change this computer asks you first, with why."
+        />
+        <Switch
+          labelPosition="start"
+          checked={prefs.checkMemories}
+          onCheckedChange={(on) => change('checkMemories', on)}
+          label="Check what it remembers"
+          description="A memory that looks planted — where invoices go, an order to follow, a password — isn’t saved. The chat shows it, says why, and asks you."
         />
         <Stack gap={2}>
           <Switch

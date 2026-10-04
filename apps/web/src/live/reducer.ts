@@ -35,6 +35,7 @@ import type {
   SpendModel,
   TurnCost,
   Usage,
+  MemoryHold,
 } from '@conch/protocol';
 
 import { latestReplies, type LatestReplies } from '../features/replies/latest';
@@ -148,6 +149,8 @@ export type TranscriptItem =
       decided?: 'kept' | 'undone';
       /** One it forgot, whole, so Undo can put it back. */
       memory?: Memory;
+      /** The memory check held it (ADR 0087): why, and where it came from. */
+      held?: MemoryHold;
     }
   | {
       /** It looked through your other chats (ADR 0059): for what, with a link to each place. */
@@ -606,21 +609,24 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
       }));
       return updated ? { ...base, items: updated } : base;
     }
-    case 'memory.saved':
-      return {
-        ...base,
-        items: [
-          ...items,
-          {
-            kind: 'memory',
-            id: `mem-${event.seq}`,
-            memoryId: event.memory.id,
-            content: event.memory.content,
-            action: 'saved',
-            ...(event.memory.pending && { pending: true }),
-          },
-        ],
+    case 'memory.saved': {
+      const item = {
+        kind: 'memory' as const,
+        id: `mem-${event.seq}`,
+        memoryId: event.memory.id,
+        content: event.memory.content,
+        action: 'saved' as const,
+        ...(event.memory.pending && { pending: true }),
+        ...(event.memory.held && { held: event.memory.held }),
       };
+      // Held again after it was remembered (a plant in pieces, ADR 0087): the same line, now asking.
+      const at = items.findIndex(
+        (i) => i.kind === 'memory' && i.memoryId === event.memory.id && i.action === 'saved',
+      );
+      if (at !== -1 && event.memory.held)
+        return { ...base, items: items.map((i, n) => (n === at ? { ...item, id: i.id } : i)) };
+      return { ...base, items: [...items, item] };
+    }
     case 'chats.looked':
       return {
         ...base,

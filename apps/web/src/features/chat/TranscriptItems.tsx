@@ -35,6 +35,7 @@ import { StreamingMarkdown } from './Markdown';
 import { formatInput, toolDiff, toolSummary } from './tools';
 import { ToolFound } from './ToolFound';
 import { memoryApi } from '../memory/api';
+import { HeldMemory } from '../memory/HeldMemory';
 import styles from './Transcript.module.css';
 import { useToolLabel } from '../integrations/ChatBits';
 import { ReadAloud } from '../voice/ReadAloud';
@@ -412,6 +413,20 @@ export function TaintItem({ item, first }: { item: Of<'taint'>; first: boolean }
 }
 
 export function MemoryPill({ item }: { item: Of<'memory'> }) {
+  // Held by the memory check (ADR 0087): a card that says why, and asks.
+  if (item.held && item.action === 'saved')
+    return (
+      <HeldMemory
+        memoryId={item.memoryId}
+        content={item.content}
+        held={item.held}
+        {...(item.decided && { decided: item.decided })}
+      />
+    );
+  return <MemoryLine item={item} />;
+}
+
+function MemoryLine({ item }: { item: Of<'memory'> }) {
   const client = useQueryClient();
   const [pressed, setPressed] = useState<'undone' | 'kept'>();
   // What you pressed shows at once (and goes back if it didn't work); after a

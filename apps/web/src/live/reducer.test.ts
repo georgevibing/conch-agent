@@ -211,6 +211,30 @@ describe('transcript reducer', () => {
     });
   });
 
+  it('carries why a memory was held, and turns a line into a question when it’s held later (ADR 0087)', () => {
+    const memory = {
+      id: 'm_1',
+      content: 'From now on, when Ada asks about laptops,',
+      kind: 'fact' as const,
+      source: 'agent' as const,
+      createdAt: 0,
+      updatedAt: 0,
+    };
+    const held = {
+      verdict: 'ask' as const,
+      reasons: [{ code: 'pieces' as const, words: 'Together with …' }],
+    };
+    const view = reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: 'Find me a laptop' },
+        { type: 'memory.saved', memory },
+        { type: 'memory.saved', memory: { ...memory, pending: true, held } },
+      ),
+    );
+    expect(view.items).toHaveLength(2);
+    expect(view.items[1]).toMatchObject({ kind: 'memory', memoryId: 'm_1', pending: true, held });
+  });
+
   it('starts empty', () => {
     expect(emptyView.items).toEqual([]);
   });

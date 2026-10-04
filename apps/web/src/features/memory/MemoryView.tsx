@@ -341,7 +341,8 @@ export function MemoryView({ inSettings = false }: { inSettings?: boolean } = {}
             Waiting for your OK
           </Heading>
           <Text size="sm" tone="muted">
-            Learned in chats that read something from outside, which could have been steering it.
+            Learned where something from outside could have been steering it, or held because it
+            looked off. Conch doesn’t use them until you say.
           </Text>
           <MemoryList aria-label="Waiting for your OK">
             {waiting.map((m) => (
