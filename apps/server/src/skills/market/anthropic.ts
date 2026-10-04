@@ -1,5 +1,5 @@
 /**
- * Anthropic's own skills (`github.com/anthropics/skills`, ADR 0072): read
+ * Anthropic's own skills (`github.com/anthropics/skills`, ADR 0077): read
  * straight from GitHub at the newest commit, one folder per skill under
  * `skills/`. Only the ones whose licence lets you copy them are listed
  * (most are Apache-2.0; the document skills are "source-available" and stay

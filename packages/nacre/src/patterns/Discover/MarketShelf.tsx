@@ -25,7 +25,7 @@ export interface MarketSkillCardProps extends Omit<ComponentProps<'article'>, 'c
 }
 
 /**
- * A skill someone published, as a card on Discover (ADR 0072): what it does in
+ * A skill someone published, as a card on Discover (ADR 0077): what it does in
  * a line, what the place it's from says about it, where and who it's from,
  * and how many use it. Nothing is added from here: the card opens the skill,
  * read and explained first. One you have says **Added** (or **Update**).
@@ -115,7 +115,7 @@ export interface MarketShelfProps extends Omit<ComponentProps<'section'>, 'child
 }
 
 /**
- * A shelf of skills on Discover (ADR 0072). Calm when a place can't be
+ * A shelf of skills on Discover (ADR 0077). Calm when a place can't be
  * reached or asks Conch to wait: a quiet line says what's shown is from
  * before, never an error.
  */

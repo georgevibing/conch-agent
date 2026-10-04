@@ -1,4 +1,4 @@
-/** Repair everything's look at Discover (ADR 0072). */
+/** Repair everything's look at Discover (ADR 0077). */
 import type { DoctorItem } from '@conch/protocol';
 
 import type { DoctorCheck } from '../../doctor/service';

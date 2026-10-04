@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 /**
- * Discover, end to end (ADR 0072), on the pretend registry the mock engine
+ * Discover, end to end (ADR 0077), on the pretend registry the mock engine
  * brings: the shelf and its trust, a worrying skill that waits for a tick, one
  * whose licence rules it out, adding one in a press and finding it among
  * your skills with where it came from; and from the chat, an offer that's

@@ -1357,7 +1357,7 @@ export class MockEngine implements Engine {
         );
         return;
       }
-      // Skills people share (ADR 0072): tidying meeting notes looks on Discover and
+      // Skills people share (ADR 0077): tidying meeting notes looks on Discover and
       // offers what it finds; added, the chat carries on with it.
       if (usingSkill && /\bmeeting notes\b/i.test(text)) {
         yield* speak(

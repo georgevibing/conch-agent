@@ -364,7 +364,7 @@ describe('Palette search', () => {
     await waitFor(() => expect(where()).toBe('/settings/browser'));
   });
 
-  it('finds Discover and skills people share by name, and opens one to read (ADR 0072)', async () => {
+  it('finds Discover and skills people share by name, and opens one to read (ADR 0077)', async () => {
     const user = userEvent.setup();
     const listing = {
       id: 'clawhub:ada/meeting-notes',

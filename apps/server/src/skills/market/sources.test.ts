@@ -1,5 +1,5 @@
 /**
- * The places Discover asks (ADR 0072), against pretend servers: every byte is
+ * The places Discover asks (ADR 0077), against pretend servers: every byte is
  * checked against the pin, nothing leaves the source's own hosts, and a
  * hostile index — a path out of the folder, a link, a file twice, a
  * different file under the same name — stops the download.

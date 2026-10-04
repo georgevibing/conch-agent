@@ -1,5 +1,5 @@
 /**
- * Discover end to end on disk (ADR 0072), with the pretend registry: what's
+ * Discover end to end on disk (ADR 0077), with the pretend registry: what's
  * added is exactly what was read, a worrying one needs a person's OK for
  * that exact version, a licence or a registry's block stops it, a copy
  * changed after reading is refused, updates show what changed and are read
