@@ -384,7 +384,11 @@ export class BrowserService {
    */
   async #restore(tab: Tab, context: BrowserContext): Promise<void> {
     const saved = await this.saved.get(tab.conversationId);
-    const urls = (saved?.urls ?? []).filter(restorable).slice(0, MAX_TABS);
+    // Asked again, like any address typed in: the file may come from a backup,
+    // or from before local pages were turned off.
+    const urls: string[] = [];
+    for (const url of (saved?.urls ?? []).filter(restorable).slice(0, MAX_TABS))
+      if ((await this.guard.navigation(url)).ok) urls.push(url);
     if (!saved || urls.length === 0) return;
     const active = Math.min(
       urls.length - 1,

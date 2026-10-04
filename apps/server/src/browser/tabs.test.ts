@@ -222,6 +222,26 @@ describe.skipIf(!hasBrowser)('tabs, for real', () => {
     },
   );
 
+  it(
+    'never reopens an address the guard refuses (a backup, local pages turned off since)',
+    { timeout: 60_000 },
+    async () => {
+      const home = await newHome();
+      const saved = new SavedTabs(home);
+      await saved.set('conv_guard', {
+        urls: [`${origin}/fine`, 'http://127.0.0.1:1/favicon.ico', 'http://169.254.169.254/'],
+        active: 1,
+        at: 1,
+      });
+      await saved.flush();
+      // The gateway's own port (1 here) is never reachable, and neither is the cloud's metadata.
+      const service = await serviceAt(home);
+      const tab = await service.tabFor('conv_guard');
+      expect(tab.tabs).toHaveLength(1);
+      expect(tab.page.url()).toBe(`${origin}/fine`);
+    },
+  );
+
   it('forgets a deleted chat’s tabs', { timeout: 60_000 }, async () => {
     const service = await serviceAt(await newHome());
     const tab = await service.tabFor('conv_gone');
