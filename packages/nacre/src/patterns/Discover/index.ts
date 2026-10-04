@@ -9,7 +9,7 @@ export { MarketSkillPreview } from './MarketSkillPreview';
 export type { MarketSkillPreviewProps } from './MarketSkillPreview';
 export { marketTrustAbout, MarketTrustBadge } from './MarketTrustBadge';
 export type { MarketTrustBadgeProps } from './MarketTrustBadge';
-export { pinWords, roughly } from './types';
+export { fromWords, hostWords, pinWords, roughly } from './types';
 export type {
   MarketFileChangeView,
   MarketIdeaView,

@@ -19,7 +19,8 @@ import { join, relative, sep } from 'node:path';
 import type { SkillFinding, SkillReview } from '@conch/protocol';
 
 /** Enough to read any real skill; anything bigger is itself worth a word. */
-const MAX_FILES = 60;
+/** As many as a skill from Discover may have (ADR 0070), so every file in one is read. */
+const MAX_FILES = 200;
 const MAX_FILE = 256 * 1024;
 const TEXT =
   /\.(md|markdown|txt|sh|bash|zsh|ps1|psm1|bat|cmd|py|js|mjs|cjs|ts|rb|pl|php|json|ya?ml|toml|ini|cfg|conf|html?|xml|applescript|scpt)$/i;

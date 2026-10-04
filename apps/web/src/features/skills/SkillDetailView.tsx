@@ -11,6 +11,7 @@ import {
   CopyButton,
   EmptyState,
   Field,
+  fromWords,
   Heading,
   Input,
   Page,
@@ -213,7 +214,7 @@ function SkillPage({ skill }: { skill: SkillDetail }) {
               {skill.editable
                 ? 'Yours'
                 : skill.origin
-                  ? `From ${skill.origin.sourceLabel}, by ${skill.origin.publisher.name}`
+                  ? `From ${fromWords(skill.origin.sourceLabel, skill.origin.publisher.name).replace(' · ', ', by ')}`
                   : `From ${skill.sourceLabel}`}
             </Text>
             <span className={styles.path} title={skill.path}>

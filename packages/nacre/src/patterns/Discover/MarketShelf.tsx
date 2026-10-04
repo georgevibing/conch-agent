@@ -14,7 +14,7 @@ import { cx } from '../../utils/cx';
 import { SkillIcon } from '../Skills/SkillIcon';
 import styles from './Discover.module.css';
 import { MarketTrustBadge } from './MarketTrustBadge';
-import { roughly, type MarketIdeaView, type MarketListingView } from './types';
+import { fromWords, roughly, type MarketIdeaView, type MarketListingView } from './types';
 
 export interface MarketSkillCardProps extends Omit<ComponentProps<'article'>, 'children'> {
   listing: MarketListingView;
@@ -69,7 +69,7 @@ export function MarketSkillCard({
         <p className={styles.meta}>
           <MarketTrustBadge trust={listing.trust} />
           <span className={styles.from}>
-            {listing.sourceLabel} · {listing.publisher.name}
+            {fromWords(listing.sourceLabel, listing.publisher.name)}
           </span>
           {used > 0 && (
             <span className={styles.used}>

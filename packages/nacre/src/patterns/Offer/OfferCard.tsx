@@ -15,7 +15,7 @@ import { IconButton } from '../../components/IconButton';
 import { cx } from '../../utils/cx';
 import { AppIcon, type AppIconLook } from '../ConchApps/AppIcon';
 import { MarketTrustBadge } from '../Discover/MarketTrustBadge';
-import { roughly, type MarketTrustLevel } from '../Discover/types';
+import { fromWords, roughly, type MarketTrustLevel } from '../Discover/types';
 import { IntegrationLogo } from '../Integrations/IntegrationLogo';
 import { SkillIcon } from '../Skills/SkillIcon';
 import { type SkillCapabilityName, SkillPermissionList } from '../Skills/SkillPermissionList';
@@ -426,7 +426,7 @@ export function OfferCard({
                   <p className={styles.from}>
                     <MarketTrustBadge trust={market.trust} />
                     <span>
-                      {market.sourceLabel} · {market.publisher}
+                      {fromWords(market.sourceLabel, market.publisher)}
                       {market.installs ? ` · ${roughly(market.installs)} people use it` : ''}
                     </span>
                   </p>
