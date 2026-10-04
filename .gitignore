@@ -21,3 +21,6 @@ playwright-report/
 
 # Git worktrees for parallel work (e.g. an agent on a feature branch).
 /.worktrees/
+
+# The eval suite's results (pnpm eval, ADR 0071).
+/.evals/
