@@ -25,6 +25,7 @@ import { applyRoutineEvent } from '../features/routines/queries';
 import { applyTaskEvent, taskKeys } from '../features/tasks/queries';
 import { skillKeys } from '../features/skills/queries';
 import { vaultKeys } from '../features/passwords/queries';
+import { setVoicePrefs } from '../features/voice/prefs';
 import { updateKeys } from '../features/updates/api';
 import { followRestart } from '../features/updates/queries';
 import { LiveSocket, socketUrl } from './socket';
@@ -175,6 +176,10 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
             void client.invalidateQueries({ queryKey: ['providers'] });
             void client.invalidateQueries({ queryKey: ['provider'] });
           }
+          break;
+        case 'wake.stop':
+          // "Stop listening" in the tray (ADR 0078).
+          setVoicePrefs({ wake: false });
           break;
         case 'memory.changed':
           void client.invalidateQueries({ queryKey: keys.memories });

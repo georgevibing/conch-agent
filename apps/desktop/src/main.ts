@@ -271,6 +271,11 @@ function main(): void {
   });
   gateway.on('message', (message) => {
     if (message.type === 'tray') tray.show(message.on);
+    else if (message.type === 'wake') {
+      // "Hey Conch" (ADR 0078): the tray says it's listening, and the hidden window keeps running.
+      tray.listening(message.on, () => void gateway.send({ type: 'wake.stop' }));
+      if (window && !window.isDestroyed()) window.webContents.setBackgroundThrottling(!message.on);
+    } else if (message.type === 'show') showWindow();
     else if (message.type === 'update') void updater.get(message.version, message.feed);
   });
 

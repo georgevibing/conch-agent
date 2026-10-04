@@ -6,6 +6,8 @@
 import { app, Menu, nativeImage, Tray, type MenuItemConstructorOptions } from 'electron';
 import { join } from 'node:path';
 
+import { trayMenu } from './listening';
+
 export interface MenuActions {
   open: () => void;
   quit: () => void;
@@ -29,6 +31,10 @@ function trayPicture(resources: string) {
 
 export class ConchTray {
   #tray?: Tray;
+  /** The person wants the icon (`preferences.menuBar`). */
+  #wanted = false;
+  /** The window is listening for "Hey Conch" (ADR 0078): then the icon is always there. */
+  #listening?: { stop: () => void };
 
   constructor(
     private readonly resources: string,
@@ -40,24 +46,35 @@ export class ConchTray {
   }
 
   show(on: boolean): void {
-    if (!on) {
+    this.#wanted = on;
+    this.#render();
+  }
+
+  /**
+   * Listening for "Hey Conch", or not. While it listens the icon is shown
+   * even if it's turned off, and says so: it's how anyone can tell, with the
+   * window closed, that the microphone is in use, and stop it in one click.
+   */
+  listening(on: boolean, stop: () => void): void {
+    this.#listening = on ? { stop } : undefined;
+    this.#render();
+  }
+
+  #render(): void {
+    if (!this.#wanted && !this.#listening) {
       this.#tray?.destroy();
       this.#tray = undefined;
       return;
     }
-    if (this.shown) return;
-    const tray = new Tray(trayPicture(this.resources));
-    tray.setToolTip('Conch');
-    tray.setContextMenu(
-      Menu.buildFromTemplate([
-        { label: 'Open Conch', click: this.actions.open },
-        { type: 'separator' },
-        { label: 'Quit Conch', click: this.actions.quit },
-      ]),
-    );
-    // Windows and Linux open with a click; a Mac shows its menu.
-    if (process.platform !== 'darwin') tray.on('click', this.actions.open);
-    this.#tray = tray;
+    const tray = this.shown && this.#tray ? this.#tray : new Tray(trayPicture(this.resources));
+    const listening = this.#listening;
+    tray.setToolTip(listening ? 'Conch: listening for “Hey Conch”' : 'Conch');
+    tray.setContextMenu(Menu.buildFromTemplate(trayMenu(this.actions, listening?.stop)));
+    if (!this.#tray || this.#tray !== tray) {
+      // Windows and Linux open with a click; a Mac shows its menu.
+      if (process.platform !== 'darwin') tray.on('click', this.actions.open);
+      this.#tray = tray;
+    }
   }
 }
 

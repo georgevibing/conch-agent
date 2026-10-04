@@ -49,9 +49,10 @@ interface UiState {
   /**
    * Talk mode is open (ADR 0027). `from`: where the answer to what was just
    * said starts in the chat, so a new chat (which opens on its own page)
-   * still speaks it.
+   * still speaks it. `first`: what was said right after "Hey Conch" (ADR 0078),
+   * sent as soon as it opens.
    */
-  talking?: { from?: number };
+  talking?: { from?: number; first?: string };
   /** Asking whether to stop holding a chat to a skill's list (ADR 0047), e.g. from ⌘K. */
   stopHolding?: { conversationId: string; skillId: string };
   find: FindState | null;
