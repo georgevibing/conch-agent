@@ -122,6 +122,8 @@ src/
   import/                     Come home: OpenClaw and Hermes read-only, a plan, a ledger for Undo (ADR 0035)
   artifacts/                  things made beside the chat: store, tools, fenced blocks, the sealed frame (ADR 0034); edits, drafts, live data (`live.ts`, ADR 0046)
   tasks/                      background tasks and helpers side by side (`delegate`), queue, worktrees (ADR 0033)
+  mcp/                        other apps using Conch: the MCP door at `/mcp`, the launcher's handshake, scopes,
+                              a call as a turn of the app's own chat, pairing Claude Desktop, Cursor, VS Code (ADR 0073)
   conchapps/                  Conch apps (ADR 0061): the maker's tools, drafts, the sealed runtime (`runtime/host.mjs`),
                               the quality bar, packages, signatures, GitHub, `ConchApps` (a hosted tool family)
   questions/                  `ask`: a question answered with a tap, the one waiting per chat, its answer route (ADR 0060)
@@ -460,8 +462,20 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   starts helpers in the parent turn's mode, with the parent's taint, on the small model by
   default, optionally in a git worktree (`tasks/worktree.ts`, removed when nothing
   changed); their taint comes back to the parent, the turn's abort stops them, and over
-  budget it refuses. A restart marks running tasks `interrupted` (one-press retry); a limit
+  budget it refuses. A part (or a background task) can go to another provider that's ready
+  (`provider`, `model`), still in the parent's mode, taint and holds; `Task.by` names it.
+  A restart marks running tasks `interrupted` (one-press retry); a limit
   carries on once on `limitFallback`. Push topic `tasks`; doctor check `tasks`.
+
+- **Other apps using Conch** ([ADR 0073](./docs/adr/0073-conch-for-your-other-apps.md)).
+  `/mcp` on the gateway's own port speaks stateless streamable HTTP MCP to paired apps only
+  (`mcp/endpoint.ts`): no `Origin` or cross-site `Sec-Fetch-Site`, a request that looks
+  local (or HTTPS through your address, when you allowed it, for a marked app), and either
+  a launcher session (`/mcp/hello` nonce → HMAC of the app's key → `/mcp/session`) or an
+  HTTP app's key (hashed at rest). `McpService` lists only the scopes' tools; memory is
+  read and suggested directly, everything else is one turn of the app's chat (origin
+  `client`) run by `CallEngine`, scoped to that tool. Pairing (`pairing.ts`, `targets.ts`)
+  writes Claude Desktop's, Cursor's or VS Code's settings. Doctor check `mcp`.
 
 - **Questions** ([ADR 0060](./docs/adr/0060-the-chat-knows-conch.md) §4). The host tool `ask`
   (`questions/tools.ts`; not offered when `ToolContext.unattended`: routines, tasks, chats
