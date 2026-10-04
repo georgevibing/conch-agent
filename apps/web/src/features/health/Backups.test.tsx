@@ -81,9 +81,13 @@ function routes(current: BackupStatus, extra: Record<string, (body: unknown) => 
 
 let click: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
+  // Mid-afternoon, so "two hours ago" is today on any clock (only Date: timers stay real).
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(2026, 8, 30, 15, 0));
   click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
 });
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   upload.mockReset();
