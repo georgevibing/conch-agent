@@ -93,7 +93,7 @@ describe('ProviderService', () => {
     const claude = must(list.providers[0], 'provider');
     expect(claude.active).toBe(true);
     expect(claude.name).toBe('Claude Code');
-    expect(claude.tagline).toBe('Claude, on this computer');
+    expect(claude.tagline).toBe('Your Claude plan, on this computer');
     // Nothing is connected for OpenRouter yet, so it asks for a key.
     expect(must(list.providers[1]).status.state).toBe('signed-out');
     expect(must(list.providers[1]).keyForm?.label).toBe('OpenRouter key');

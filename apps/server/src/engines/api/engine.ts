@@ -227,7 +227,12 @@ export function capModels(models: ModelInfo[], chosen?: string): ModelInfo[] {
  * accept. Host tools keep the `mcp__conch__` prefix native engines use, so the
  * UI treats them the same way.
  */
-export function buildTools(input: TurnInput): Map<string, Callable> {
+/**
+ * The tools a model can call through Conch. `computer: false` leaves out
+ * Conch's own computer tools (commands, files) for an agent that brings its
+ * own and asks through Conch for them (Codex CLI, ADR 0066).
+ */
+export function buildTools(input: TurnInput, { computer = true } = {}): Map<string, Callable> {
   const off = new Set(input.disallowedTools ?? []);
   const tools = new Map<string, Callable>();
   const taken = new Set<string>();
@@ -238,7 +243,7 @@ export function buildTools(input: TurnInput): Map<string, Callable> {
     tools.set(name, make(name));
   };
   for (const host of [
-    ...hostComputerTools(input).map((tool) => input.wrapTool?.(tool) ?? tool),
+    ...(computer ? hostComputerTools(input) : []).map((tool) => input.wrapTool?.(tool) ?? tool),
     ...input.tools,
   ]) {
     const display = HOST_NAMES.has(host.name) ? host.name : `mcp__conch__${host.name}`;

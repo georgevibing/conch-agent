@@ -65,8 +65,10 @@ const channels = reference.channels.filter((channel) => channel.available);
 const local = reference.providers.find((provider) => provider.can.offline);
 /** The providers that are agents on this computer: they work with your files. */
 const agents = reference.providers.filter((provider) => provider.can.files).map((p) => p.name);
-/** The plans people already pay for, connected with their own sign-in. */
-const plans = reference.providers.filter((p) => p.group === 'subscription').map((p) => p.name);
+/** The plans people already pay for, connected with their own sign-in (coding agents too). */
+const plans = reference.providers
+  .filter((p) => p.group === 'subscription' || p.group === 'agent')
+  .map((p) => p.name);
 
 /** A list of names as a sentence would say it: "a, b and c". */
 function sentence(names: string[]): string {

@@ -83,6 +83,8 @@ export function builtInEngines(deps: RegistryDeps): Map<BuiltInEngineId, Engine>
       new ClaudeCodeEngine(settings, keys, deps.paths?.claude, (m) => deps.heal?.(m)),
     ],
     ['codex-cli', new CodexEngine(settings, keys, deps.paths?.codex)],
+    // Codex CLI: Codex with its own tools, asking through Conch (ADR 0066).
+    ['codex-agent', new CodexEngine(settings, keys, deps.paths?.codex, undefined, 'agent')],
     ['copilot', new AcpEngine(ACP_AGENTS.copilot, settings)],
     ['gemini-cli', new AcpEngine(ACP_AGENTS['gemini-cli'], settings)],
     ['grok', new AcpEngine(ACP_AGENTS.grok, settings)],

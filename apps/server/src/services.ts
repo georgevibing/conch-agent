@@ -1978,9 +1978,13 @@ export class Services {
     if (id === 'op') await this.keys.vault.onePassword.state({ force: true });
     // Ollama just landed: start it (quietly), so getting a model can follow straight on.
     if (id === 'ollama') await this.local.ensureRunning({ note: false });
-    const engine = { codex: 'codex-cli', 'claude-code': 'claude-code', ollama: 'ollama' }[id] as
-      EngineId | undefined;
-    if (engine) await this.engines.get(engine)?.detect({ force: true });
+    // Codex just landed: Codex and Codex CLI both use it.
+    const engines = ({
+      codex: ['codex-cli', 'codex-agent'],
+      'claude-code': ['claude-code'],
+      ollama: ['ollama'],
+    }[id] ?? []) as EngineId[];
+    for (const engine of engines) await this.engines.get(engine)?.detect({ force: true });
     await this.integrations.recheckNeeding(id);
     await this.channels.recheckNeeding(id);
     // Tailscale just landed: the public door carries on turning itself on.

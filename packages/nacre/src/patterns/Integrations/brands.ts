@@ -39,6 +39,7 @@ export const brandMarks: Record<string, string> = {
   // OpenAI's mark isn't in Simple Icons (OpenAI asked to be removed), so this one
   // is the blossom as OpenAI publishes it; it identifies Codex, OpenAI's agent.
   'codex-cli': OPENAI,
+  'codex-agent': OPENAI,
   // The OpenAI API itself, beside Codex.
   openai: OPENAI,
   'claude-code':

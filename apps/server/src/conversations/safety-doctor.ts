@@ -73,7 +73,7 @@ export function safetyCheck(
             `Sealed commands in ${p.label}`,
             'warning',
             p.note,
-            p.id === 'codex-cli'
+            p.id === 'codex-agent'
               ? { kind: 'need', label: 'Update Codex', need: 'codex', mode: 'update' }
               : undefined,
           );

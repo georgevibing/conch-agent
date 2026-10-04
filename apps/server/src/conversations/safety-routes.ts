@@ -33,7 +33,7 @@ export function coverage(
             state: 'no-commands',
             note: 'Commands are unavailable until this computer’s sandbox is set up. Files and connected apps still work.',
           };
-    if (id !== 'claude-code' && id !== 'codex-cli')
+    if (id !== 'claude-code' && id !== 'codex-agent')
       return {
         ...base,
         state: 'no-commands',

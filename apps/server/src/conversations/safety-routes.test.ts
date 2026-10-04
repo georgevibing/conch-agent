@@ -5,7 +5,7 @@ import { coverage } from './safety-routes';
 describe('what sealing means for each provider (ADR 0031)', () => {
   const providers = [
     { id: 'claude-code', label: 'Claude Code' },
-    { id: 'codex-cli', label: 'Codex', version: '0.159.1' },
+    { id: 'codex-agent', label: 'Codex CLI', version: '0.159.1' },
     { id: 'anthropic-api', label: 'Anthropic API' },
   ];
 
@@ -18,7 +18,7 @@ describe('what sealing means for each provider (ADR 0031)', () => {
   });
 
   it('never claims what isn’t there: an older Codex, sealing off, a computer that can’t', () => {
-    const old = coverage([{ id: 'codex-cli', label: 'Codex', version: '0.120.0' }], {
+    const old = coverage([{ id: 'codex-agent', label: 'Codex CLI', version: '0.120.0' }], {
       available: true,
       on: true,
     });
@@ -28,7 +28,8 @@ describe('what sealing means for each provider (ADR 0031)', () => {
     });
     // A build whose version can't be read isn't assumed to be new enough.
     expect(
-      coverage([{ id: 'codex-cli', label: 'Codex' }], { available: true, on: true })[0]?.state,
+      coverage([{ id: 'codex-agent', label: 'Codex CLI' }], { available: true, on: true })[0]
+        ?.state,
     ).toBe('partly');
     expect(coverage(providers, { available: true, on: false }).map((p) => p.state)).toEqual([
       'not-sealed',
@@ -53,7 +54,7 @@ describe('Repair everything, on trust (ADR 0031)', () => {
     const settings = new SettingsStore(await mkdtemp(join(tmpdir(), 'conch-trust-doctor-')));
     const items = await safetyCheck(settings, () => ({ available: true }), {
       providers: async () =>
-        coverage([{ id: 'codex-cli', label: 'Codex', version: '0.120.0' }], {
+        coverage([{ id: 'codex-agent', label: 'Codex CLI', version: '0.120.0' }], {
           available: true,
           on: true,
         }),
@@ -76,7 +77,7 @@ describe('Repair everything, on trust (ADR 0031)', () => {
     }).run({ repair: false, signal: new AbortController().signal });
     expect(items.slice(2)).toMatchObject([
       {
-        id: 'safety:sealed:codex-cli',
+        id: 'safety:sealed:codex-agent',
         state: 'warning',
         action: { kind: 'need', need: 'codex', mode: 'update' },
       },

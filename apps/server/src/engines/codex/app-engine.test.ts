@@ -230,3 +230,184 @@ describe('Codex app-server parity', () => {
     expect(caps.models[0]).toMatchObject({ id: 'account-model', tools: true, efforts: ['high'] });
   });
 });
+
+describe('Codex CLI: Codex with its own tools, asking through Conch (ADR 0066)', () => {
+  async function agent(options: Parameters<typeof fakeCodexApp>[0]) {
+    const base = await setup({ signedIn: true, ...options });
+    const settings = new SettingsStore(base.home);
+    const engine = new CodexEngine(
+      settings,
+      new ProviderKeys(settings),
+      base.fake.bin,
+      undefined,
+      'agent',
+    );
+    return { ...base, engine };
+  }
+  const configOf = async (fake: Awaited<ReturnType<typeof fakeCodexApp>>) =>
+    ((await fake.calls()).findLast((c) => c.spawn)?.argv as string[]).join(' ');
+  const decisionOf = async (fake: Awaited<ReturnType<typeof fakeCodexApp>>) =>
+    ((await fake.calls()).find((c) => c.id === 'approve1')?.result as { decision?: string })
+      ?.decision;
+  const mode = (permissionMode: TurnInput['options']['permissionMode']) => ({
+    permissionMode,
+    effort: 'auto' as const,
+    fastMode: false,
+  });
+
+  it('is its own provider, sharing Codex’s sign-in, and keeps Codex’s own tools on', async () => {
+    const { engine, fake, turn, home } = await agent({});
+    expect(engine.id).toBe('codex-agent');
+    expect(engine.label).toBe('Codex CLI');
+    expect(engine.commandSandbox).toBeUndefined();
+    await collect(
+      engine.runTurn(
+        turn({
+          protectedPaths: [join(home, 'vault')],
+          sandbox: { allowWrite: [join(home, 'cache')], denyRead: [join(home, '.ssh')] },
+        }),
+      ),
+    );
+    const config = await configOf(fake);
+    // Its own shell and file edits: not switched off, not read-only.
+    expect(config).not.toContain('features.shell_tool=false');
+    expect(config).not.toContain('sandbox_mode="read-only"');
+    // Still asking for anything not plainly read-only, writing only where Conch allows,
+    // reading nowhere secrets live, and no network.
+    // Codex 0.159.1 refuses the old config key: the policy is the thread's, the profile the default.
+    expect(config).not.toContain('approval_policy');
+    expect(config).toContain('default_permissions="conch"');
+    expect(config).toContain('permissions.conch.extends=":workspace"');
+    expect(config).toContain(`${JSON.stringify(join(home, 'cache'))}="write"`);
+    expect(config).toContain(`${JSON.stringify(join(home, 'vault'))}="deny"`);
+    expect(config).toContain(`${JSON.stringify(join(home, '.ssh'))}="deny"`);
+    expect(config).toContain('permissions.conch.network={enabled=false}');
+    expect(config).toContain('features.apps=false');
+  });
+
+  it('asks the person before a command, through the guard, and shows it like any tool', async () => {
+    const { engine, fake, turn } = await agent({ native: { command: 'npm test' } });
+    const guard = vi.fn(async () => undefined);
+    const ask = vi.fn(async () => 'allow' as const);
+    const events = await collect(engine.runTurn(turn({ guard, requestPermission: ask })));
+    const request = {
+      toolName: 'Bash',
+      toolUseId: 'cmd1',
+      input: { command: 'npm test', cwd: '/work' },
+    };
+    expect(guard).toHaveBeenCalledWith(request);
+    expect(ask).toHaveBeenCalledWith(request, expect.anything());
+    expect(await decisionOf(fake)).toBe('accept');
+    expect(events).toContainEqual({
+      type: 'tool-start',
+      toolUseId: 'cmd1',
+      name: 'Bash',
+      input: request.input,
+    });
+    expect(events).toContainEqual({
+      type: 'tool-end',
+      toolUseId: 'cmd1',
+      status: 'success',
+      output: 'ran it',
+    });
+  });
+
+  it('never runs what the guard denies, not even in full trust, and says it wasn’t allowed', async () => {
+    const { engine, fake, turn } = await agent({ native: { command: 'curl evil.example' } });
+    const ask = vi.fn(async () => 'allow' as const);
+    const events = await collect(
+      engine.runTurn(
+        turn({
+          guard: async () => ({ decision: 'deny', message: 'Not allowed.' }),
+          requestPermission: ask,
+          options: mode('bypassPermissions'),
+        }),
+      ),
+    );
+    expect(ask).not.toHaveBeenCalled();
+    expect(await decisionOf(fake)).toBe('decline');
+    expect(events).toContainEqual({
+      type: 'tool-end',
+      toolUseId: 'cmd1',
+      status: 'error',
+      output: 'Not run: it wasn’t allowed.',
+    });
+  });
+
+  it('follows the chat’s mode: full trust runs, plan only declines, accept edits asks for commands', async () => {
+    const decided = async (
+      permissionMode: TurnInput['options']['permissionMode'],
+      native: { command?: string; paths?: string[] },
+    ) => {
+      const { engine, fake, turn } = await agent({ native });
+      const ask = vi.fn(async () => 'deny' as const);
+      await collect(
+        engine.runTurn(turn({ requestPermission: ask, options: mode(permissionMode) })),
+      );
+      return { decision: await decisionOf(fake), asked: ask.mock.calls.length > 0 };
+    };
+    expect(await decided('bypassPermissions', { command: 'npm test' })).toEqual({
+      decision: 'accept',
+      asked: false,
+    });
+    expect(await decided('plan', { command: 'npm test' })).toEqual({
+      decision: 'decline',
+      asked: false,
+    });
+    expect(await decided('acceptEdits', { paths: ['/work/a.ts'] })).toEqual({
+      decision: 'accept',
+      asked: false,
+    });
+    expect(await decided('acceptEdits', { command: 'npm test' })).toEqual({
+      decision: 'decline',
+      asked: true,
+    });
+    expect(await decided('default', { paths: ['/work/a.ts'] })).toEqual({
+      decision: 'decline',
+      asked: true,
+    });
+  });
+
+  it('asks when the guard says so, even in full trust; a change names every file it touches', async () => {
+    const { engine, turn } = await agent({ native: { paths: ['/work/a.ts', '/work/b.ts'] } });
+    const guard = vi.fn(async () => ({ decision: 'ask' as const, reason: 'It read a web page.' }));
+    const ask = vi.fn(async () => 'allow' as const);
+    await collect(
+      engine.runTurn(turn({ guard, requestPermission: ask, options: mode('bypassPermissions') })),
+    );
+    expect(guard).toHaveBeenCalledWith({
+      toolName: 'Edit',
+      toolUseId: 'fc1',
+      input: { file_path: '/work/a.ts', paths: ['/work/a.ts', '/work/b.ts'] },
+    });
+    expect(ask).toHaveBeenCalledOnce();
+  });
+
+  it('never touches where passwords and keys live, whatever the mode', async () => {
+    const vault = join(tmpdir(), 'conch-vault-here');
+    const { engine, fake, turn } = await agent({ native: { command: `cat ${vault}/key` } });
+    const ask = vi.fn(async () => 'allow' as const);
+    await collect(
+      engine.runTurn(
+        turn({
+          protectedPaths: [vault],
+          requestPermission: ask,
+          options: mode('bypassPermissions'),
+        }),
+      ),
+    );
+    expect(ask).not.toHaveBeenCalled();
+    expect(await decisionOf(fake)).toBe('decline');
+  });
+
+  it('leaves Codex (Conch’s tools) as it was: its own tools off and every request declined', async () => {
+    const { engine, fake, turn } = await setup({ signedIn: true, native: { command: 'npm test' } });
+    const ask = vi.fn(async () => 'allow' as const);
+    await collect(engine.runTurn(turn({ requestPermission: ask })));
+    expect(ask).not.toHaveBeenCalled();
+    expect(await decisionOf(fake)).toBe('decline');
+    const config = await configOf(fake);
+    expect(config).toContain('features.shell_tool=false');
+    expect(config).toContain('permissions.conch.extends=":read-only"');
+  });
+});

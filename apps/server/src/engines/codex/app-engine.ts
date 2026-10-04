@@ -1,4 +1,9 @@
-/** Codex through its supported app-server API, with Conch-owned tools and credentials. */
+/**
+ * Codex through its supported app-server API, with Conch-owned credentials.
+ * Two ways (ADR 0066): `tools` (Codex) with every Codex tool off and Conch's
+ * tools doing the work (ADR 0036), and `agent` (Codex CLI) with Codex's own
+ * shell and file edits on, every approval it asks for going through Conch.
+ */
 import { dirname } from 'node:path';
 
 import {
@@ -15,6 +20,7 @@ import {
 import { z } from 'zod';
 
 import { sandboxSupport } from '../../conversations/sandbox';
+import { PROTECTED_MESSAGE, touchesProtected } from '../../lib/protect';
 import { newId } from '../../lib/ids';
 import { cleanPlan, stepStatus } from '../../plans/steps';
 import { run } from '../../lib/proc';
@@ -22,7 +28,7 @@ import type { ProviderKeys } from '../../providers/keys';
 import type { SettingsStore } from '../../settings/store';
 import { buildTools } from '../api/engine';
 import { hostEnvironment } from '../host';
-import type { Engine, EngineEvent, LoginHandle, TurnInput } from '../types';
+import type { Engine, EngineEvent, LoginHandle, PermissionRequest, TurnInput } from '../types';
 import { DOCS_URL, MIN_VERSION, findCodex, installHints, isAtLeast, parseVersion } from './detect';
 import { CodexHome } from './home';
 import type { RpcMessage } from './rpc';
@@ -84,14 +90,12 @@ const object = (value: unknown): Record<string, unknown> =>
     ? (value as Record<string, unknown>)
     : {};
 
-// Native tools stay in a read-only sandbox and are declined if they ask. All
-// useful work goes through dynamic tools, which call Conch's guard every time.
-const TOOL_CONFIG = [
+// What neither way of running Codex uses: Conch brings apps, the browser,
+// memory and the web, each asking as Conch does.
+const SHARED_CONFIG = [
   'features.hooks=false',
   'features.skill_mcp_dependency_install=false',
   'project_doc_max_bytes=0',
-  'features.shell_tool=false',
-  'features.unified_exec=false',
   'features.multi_agent=false',
   'features.apps=false',
   'features.browser_use=false',
@@ -100,14 +104,78 @@ const TOOL_CONFIG = [
   'features.image_generation=false',
   'features.memories=false',
   'web_search="disabled"',
-  'approval_policy="untrusted"',
+  // The profile below is the one every thread uses. (How it asks is set per thread:
+  // `approvalPolicy: 'untrusted'` on thread/start; Codex no longer takes it in config.)
+  'default_permissions="conch"',
+];
+
+// Codex: native tools stay in a read-only sandbox and are declined if they ask.
+// All useful work goes through dynamic tools, which call Conch's guard every time.
+const TOOL_CONFIG = [
+  ...SHARED_CONFIG,
+  'features.shell_tool=false',
+  'features.unified_exec=false',
   'sandbox_mode="read-only"',
 ];
 
+// Codex CLI (ADR 0066): its own shell and file edits, in a sandbox that writes
+// only where Conch allows, reads nowhere secrets live, and has no network.
+const AGENT_CONFIG = SHARED_CONFIG;
+
+/** What Codex CLI's command or change is, as Conch's guard and approval cards read a tool call. */
+export function nativeRequest(
+  method: string,
+  params: Record<string, unknown>,
+  item: Record<string, unknown> | undefined,
+): PermissionRequest | undefined {
+  const itemId = typeof params.itemId === 'string' ? params.itemId : undefined;
+  if (method === 'item/commandExecution/requestApproval') {
+    const command =
+      typeof params.command === 'string'
+        ? params.command
+        : typeof item?.command === 'string'
+          ? item.command
+          : undefined;
+    if (!command) return undefined;
+    const cwd = typeof params.cwd === 'string' ? params.cwd : item?.cwd;
+    return {
+      toolName: 'Bash',
+      ...(itemId && { toolUseId: itemId }),
+      input: {
+        command,
+        ...(typeof cwd === 'string' && { cwd }),
+        ...(params.kind === 'writeStdin' && { stdin: true }),
+        ...(typeof params.reason === 'string' && { description: params.reason }),
+      },
+    };
+  }
+  if (method === 'item/fileChange/requestApproval') {
+    const changes = Array.isArray(item?.changes) ? item.changes : [];
+    const paths = changes.flatMap((change) => {
+      const c = object(change);
+      const moved = object(c.kind).move_path;
+      return [c.path, moved].filter((p): p is string => typeof p === 'string' && p.length > 0);
+    });
+    const root = typeof params.grantRoot === 'string' ? params.grantRoot : undefined;
+    if (!paths.length && !root) return undefined;
+    return {
+      toolName: 'Edit',
+      ...(itemId && { toolUseId: itemId }),
+      input: {
+        file_path: paths[0] ?? root,
+        ...(paths.length > 1 && { paths }),
+        ...(root && { grant_root: root }),
+      },
+    };
+  }
+  return undefined;
+}
+
 export class CodexEngine implements Engine {
-  readonly id = 'codex-cli' as const;
-  readonly label = 'Codex';
-  readonly commandSandbox = 'conch' as const;
+  readonly id: 'codex-cli' | 'codex-agent';
+  readonly label: string;
+  /** Codex's commands go through Conch's sealed tools; Codex CLI's run in Codex's own sandbox. */
+  readonly commandSandbox?: 'conch';
   readonly conversationHistory = true;
   readonly integrations = { mode: 'bridge' as const };
   readonly hostTools = true;
@@ -126,8 +194,13 @@ export class CodexEngine implements Engine {
     private readonly keys: ProviderKeys,
     private readonly explicitPath?: string,
     home = dirname(settings.workspaceDefault),
+    /** `agent`: Codex CLI, with Codex's own tools (ADR 0066). */
+    readonly variant: 'tools' | 'agent' = 'tools',
   ) {
     this.#home = new CodexHome(home);
+    this.id = variant === 'agent' ? 'codex-agent' : 'codex-cli';
+    this.label = variant === 'agent' ? 'Codex CLI' : 'Codex';
+    if (variant === 'tools') this.commandSandbox = 'conch';
   }
 
   async detect({ force = false } = {}): Promise<EngineStatus> {
@@ -170,7 +243,8 @@ export class CodexEngine implements Engine {
         message: `Update Codex to ${MIN_VERSION} or newer for Conch’s tools and sign-in.`,
       };
     try {
-      const key = await this.keys.value(this.id, { peek: true });
+      // One ChatGPT connection serves Codex and Codex CLI: the key is Codex's.
+      const key = await this.keys.value('codex-cli', { peek: true });
       const account = await this.#home.withClient(executablePath, async (rpc) => {
         if (key) await rpc.request('account/login/start', { type: 'apiKey', apiKey: key });
         return Account.parse(await rpc.request('account/read', { refreshToken: true })).account;
@@ -400,14 +474,52 @@ export class CodexEngine implements Engine {
           status.state === 'signed-out' ? 'signed-out' : 'unavailable',
         );
       signal.throwIfAborted();
-      const tools = buildTools({ ...input, signal });
+      const agent = this.variant === 'agent';
+      const tools = buildTools({ ...input, signal }, { computer: !agent });
       const profile = [
-        ...(input.protectedPaths ?? []),
-        this.#home.home,
-        ...(input.sandbox?.denyRead ?? []),
+        // Codex CLI writes where the chat may (the work folder is the profile's own).
+        ...(agent ? (input.sandbox?.allowWrite ?? []).map((p) => [p, 'write'] as const) : []),
+        ...[
+          ...(input.protectedPaths ?? []),
+          this.#home.home,
+          ...(input.sandbox?.denyRead ?? []),
+        ].map((p) => [p, 'deny'] as const),
       ]
-        .map((p) => `${JSON.stringify(p)}="deny"`)
+        .map(([p, mode]) => `${JSON.stringify(p)}="${mode}"`)
         .join(',');
+      /** Codex CLI's own commands and changes, by item id, as Codex announced them. */
+      const items = new Map<string, Record<string, unknown>>();
+      /**
+       * Codex CLI asks before a command or a change (ADR 0066): the protected
+       * places first, then Conch's guard in every mode (ADR 0028), then the
+       * chat's mode, then the person.
+       */
+      const decide = async (
+        method: string,
+        params: Record<string, unknown>,
+      ): Promise<'accept' | 'decline'> => {
+        const request = nativeRequest(
+          method,
+          params,
+          typeof params.itemId === 'string' ? items.get(params.itemId) : undefined,
+        );
+        if (!request) return 'decline';
+        if (touchesProtected(request.input, input.protectedPaths ?? [])) {
+          emit({ type: 'notice', code: 'protected', message: PROTECTED_MESSAGE });
+          return 'decline';
+        }
+        const verdict = await input.guard?.(request);
+        if (verdict?.decision === 'deny') return 'decline';
+        const change = request.toolName === 'Edit';
+        const mode = input.options.permissionMode;
+        if (verdict?.decision !== 'ask') {
+          if (mode === 'plan') return 'decline';
+          if (mode === 'bypassPermissions') return 'accept';
+          if (mode === 'acceptEdits' && change) return 'accept';
+        }
+        const decision = await input.requestPermission(request, signal);
+        return decision === 'deny' ? 'decline' : 'accept';
+      };
       await this.#home.withClient(
         status.executablePath,
         async (rpc) => {
@@ -493,8 +605,20 @@ export class CodexEngine implements Engine {
                 toolTail = job.catch(() => {});
                 pendingTools.add(job);
                 void job.catch(fail).finally(() => pendingTools.delete(job));
+              } else if (
+                agent &&
+                (message.method === 'item/commandExecution/requestApproval' ||
+                  message.method === 'item/fileChange/requestApproval')
+              ) {
+                // Codex CLI's own command or change: Conch decides, in order.
+                const id = message.id;
+                void decide(message.method, p)
+                  .catch(() => 'decline' as const)
+                  .then((decision) => {
+                    if (!signal.aborted) rpc.send({ id, result: { decision } });
+                  });
               } else if (message.method.endsWith('/requestApproval')) {
-                // Native tools have no Conch before/after contract: never grant a bypass.
+                // Anything else asking for more (permissions, a network rule) gets nothing.
                 rpc.send({
                   id: message.id,
                   result:
@@ -516,6 +640,55 @@ export class CodexEngine implements Engine {
               emit({ type: 'thinking', messageId: String(p.itemId), delta: p.delta });
             if (message.method === 'item/completed' && object(p.item).type === 'agentMessage')
               emit({ type: 'message-done', messageId: String(object(p.item).id) });
+            // Codex CLI's own commands and changes, drawn as tool cards like Claude Code's.
+            if (
+              agent &&
+              (message.method === 'item/started' || message.method === 'item/completed')
+            ) {
+              const item = object(p.item);
+              const id = typeof item.id === 'string' ? item.id : '';
+              const kind = item.type;
+              if (id && (kind === 'commandExecution' || kind === 'fileChange')) {
+                items.set(id, item);
+                const shown = nativeRequest(
+                  kind === 'commandExecution'
+                    ? 'item/commandExecution/requestApproval'
+                    : 'item/fileChange/requestApproval',
+                  { itemId: id },
+                  item,
+                );
+                if (message.method === 'item/started' && shown)
+                  emit({
+                    type: 'tool-start',
+                    toolUseId: id,
+                    name: shown.toolName,
+                    input: shown.input,
+                  });
+                if (message.method === 'item/completed') {
+                  const ok =
+                    item.status === 'completed' &&
+                    (kind !== 'commandExecution' || item.exitCode === 0 || item.exitCode === null);
+                  const output =
+                    kind === 'commandExecution'
+                      ? typeof item.aggregatedOutput === 'string'
+                        ? item.aggregatedOutput.slice(-8_000)
+                        : ''
+                      : item.status === 'declined'
+                        ? 'Not changed: it wasn’t allowed.'
+                        : '';
+                  emit({
+                    type: 'tool-end',
+                    toolUseId: id,
+                    status: ok ? 'success' : 'error',
+                    output:
+                      item.status === 'declined' && kind === 'commandExecution'
+                        ? 'Not run: it wasn’t allowed.'
+                        : output,
+                  });
+                  items.delete(id);
+                }
+              }
+            }
             if (message.method === 'turn/plan/updated') {
               const steps = codexPlan(p.plan);
               if (steps) emit({ type: 'plan', steps });
@@ -612,8 +785,8 @@ export class CodexEngine implements Engine {
         {
           signal,
           config: [
-            ...TOOL_CONFIG,
-            'permissions.conch.extends=":read-only"',
+            ...(agent ? AGENT_CONFIG : TOOL_CONFIG),
+            `permissions.conch.extends="${agent ? ':workspace' : ':read-only'}"`,
             `permissions.conch.filesystem={${profile}}`,
             'permissions.conch.network={enabled=false}',
           ],

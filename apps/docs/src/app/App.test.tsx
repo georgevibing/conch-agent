@@ -50,11 +50,13 @@ describe('the documentation’s front page', () => {
       expect(
         screen.getAllByRole('link', { name: new RegExp(`^${section.title}`) }).length,
       ).toBeGreaterThan(0);
+    // ("Codex" and "Codex CLI" both start "Codex": each has its own page.)
     for (const provider of reference.providers)
-      expect(screen.getByRole('link', { name: new RegExp(`^${provider.name}`) })).toHaveAttribute(
-        'href',
-        `/providers/${provider.id}`,
-      );
+      expect(
+        screen
+          .getAllByRole('link', { name: new RegExp(`^${provider.name}`) })
+          .map((link) => link.getAttribute('href')),
+      ).toContain(`/providers/${provider.id}`);
     await accessible(container);
   });
 });

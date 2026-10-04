@@ -14,8 +14,8 @@ export interface ProviderRef {
   description: string;
   /** `program`: something installed on this computer. `key`: a key you paste. */
   connect: 'program' | 'key';
-  /** Where it sits: a plan you have, this computer, or pay as you go. */
-  group: 'subscription' | 'key' | 'local' | 'server';
+  /** Where it sits: a coding agent, a plan you have, this computer, or pay as you go. */
+  group: 'agent' | 'subscription' | 'key' | 'local' | 'server';
   /** A few honest words when it costs nothing to start. */
   free?: string;
   highlights: string[];

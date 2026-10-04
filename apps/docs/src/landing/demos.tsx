@@ -505,6 +505,7 @@ export function MakerDemo() {
 
 const TURN = 1_800;
 const GROUP_WORDS = [
+  ['agent', 'Coding agents'],
   ['subscription', 'Your plans'],
   ['local', 'On this computer'],
   ['key', 'Pay as you go'],

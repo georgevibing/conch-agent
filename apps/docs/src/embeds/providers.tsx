@@ -22,6 +22,11 @@ export function providerLogo(provider: ProviderRef) {
 
 const GROUPS: { id: ProviderRef['group']; title: string; lead: string }[] = [
   {
+    id: 'agent',
+    title: 'Coding agents',
+    lead: 'They bring their own tools and work in your folders, on your plan. They ask through Conch.',
+  },
+  {
     id: 'subscription',
     title: 'Your plans',
     lead: 'A plan you already pay for, signed in with its own program.',

@@ -58,8 +58,9 @@
 
 ### 💬 Talk to any model
 
-- **Every provider at once.** Claude Code, Codex, GitHub Copilot, Gemini CLI and
-  Grok through their own sign-in; Ollama, LM Studio or a server of your own; keys
+- **Every provider at once.** Coding agents with their own tools (Claude Code and
+  Codex CLI, asking through Conch); Codex, GitHub Copilot, Gemini CLI and Grok
+  through their own sign-in; Ollama, LM Studio or a server of your own; keys
   from OpenRouter, Anthropic, OpenAI, Google, Mistral, DeepSeek and more.
 - **Long chats on any model.** When a chat outgrows what a model reads at once,
   its start becomes a summary you can open, and what you said there is learned first.

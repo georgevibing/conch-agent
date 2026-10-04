@@ -16,6 +16,11 @@ export async function fakeCodexApp(
     loginUrl?: string;
     /** Steps of a `turn/plan/updated`, sent before the answer. */
     plan?: unknown[];
+    /**
+     * Codex CLI's own work (ADR 0066): announce a command or a change, ask to
+     * approve it, then run it (or not) as the answer says.
+     */
+    native?: { command?: string; paths?: string[] };
   } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), 'conch-app-server-'));
@@ -30,7 +35,7 @@ if (process.argv.includes('--version')) { console.log('codex 0.159.0'); process.
 const send = (v) => process.stdout.write(JSON.stringify(v)+'\\n');
 const note = (method, params) => send({method,params});
 const auth = path.join(process.env.CODEX_HOME, 'auth.json');
-fs.appendFileSync(LOG, JSON.stringify({spawn:true, home: process.env.CODEX_HOME, secretLeaked: Boolean(process.env.CONCH_TOKEN || process.env.OPENAI_API_KEY || process.env.OP_SERVICE_ACCOUNT_TOKEN)})+'\\n');
+fs.appendFileSync(LOG, JSON.stringify({spawn:true, argv: process.argv.slice(2), home: process.env.CODEX_HOME, secretLeaked: Boolean(process.env.CONCH_TOKEN || process.env.OPENAI_API_KEY || process.env.OP_SERVICE_ACCOUNT_TOKEN)})+'\\n');
 const complete = () => {
  if (OPTIONS.hang) return;
  if (OPTIONS.plan) note('turn/plan/updated',{threadId:'t1',turnId:'turn1',explanation:null,plan:OPTIONS.plan});
@@ -56,9 +61,23 @@ rl.createInterface({input:process.stdin}).on('line', line => {
    reply({turn:{id:'turn1'}});
    if (OPTIONS.malformed) process.stdout.write('not-json\\n');
    else if (OPTIONS.tool) send({id:'call1',method:'item/tool/call',params:{threadId:'t1',turnId:'turn1',callId:'tool1',tool:OPTIONS.tool,arguments:OPTIONS.args || {}}});
+   else if (OPTIONS.native && OPTIONS.native.command) {
+     note('item/started',{threadId:'t1',turnId:'turn1',item:{type:'commandExecution',id:'cmd1',command:OPTIONS.native.command,cwd:'/work',status:'inProgress',aggregatedOutput:null,exitCode:null}});
+     send({id:'approve1',method:'item/commandExecution/requestApproval',params:{kind:'command',threadId:'t1',turnId:'turn1',itemId:'cmd1',startedAtMs:1,environmentId:null,command:OPTIONS.native.command,cwd:'/work'}});
+   }
+   else if (OPTIONS.native && OPTIONS.native.paths) {
+     note('item/started',{threadId:'t1',turnId:'turn1',item:{type:'fileChange',id:'fc1',status:'inProgress',changes:OPTIONS.native.paths.map(p=>({path:p,kind:{type:'update',move_path:null},diff:''}))}});
+     send({id:'approve1',method:'item/fileChange/requestApproval',params:{threadId:'t1',turnId:'turn1',itemId:'fc1',startedAtMs:1}});
+   }
    else complete();
  }
  else if (m.id === 'call1') complete();
+ else if (m.id === 'approve1') {
+   const ok = m.result && m.result.decision === 'accept';
+   if (OPTIONS.native.command) note('item/completed',{threadId:'t1',turnId:'turn1',item:{type:'commandExecution',id:'cmd1',command:OPTIONS.native.command,cwd:'/work',status:ok?'completed':'declined',aggregatedOutput:ok?'ran it':null,exitCode:ok?0:null}});
+   else note('item/completed',{threadId:'t1',turnId:'turn1',item:{type:'fileChange',id:'fc1',status:ok?'completed':'declined',changes:OPTIONS.native.paths.map(p=>({path:p,kind:{type:'update',move_path:null},diff:''}))}});
+   complete();
+ }
  else if (m.method === 'turn/interrupt') { reply({}); note('turn/completed',{threadId:'t1',turn:{id:'turn1',status:'interrupted'}}); }
 });
 `,

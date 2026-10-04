@@ -25,7 +25,11 @@ Providers differ. Conch never pretends otherwise: a feature a provider can't do 
 
 Open **Settings → Providers**. Yours are on top. The rest wait below as tiles, sorted by what connecting takes, and you can find one by name or by what it's good at.
 
-- **Your plans.** Claude Code, Codex, GitHub Copilot, Gemini CLI and Grok use a plan you already pay for, through the provider's own program on this computer. If it's missing, **Install** gets it, with the command shown; then you sign in with the program's own sign-in. Conch never sees its credentials.
+- **Coding agents.** Claude Code and Codex CLI bring their own tools: they run commands and change files in your folders, on a plan you already pay for. Every command and change asks through Conch first, as your chat's mode says.
+- **Your plans.** Codex, GitHub Copilot, Gemini CLI and Grok use a plan you already pay for, through the provider's own program on this computer, with Conch's tools doing the work. If it's missing, **Install** gets it, with the command shown; then you sign in with the program's own sign-in. Conch never sees its credentials.
+
+Your Claude Pro or Max plan works in Conch through Claude Code, Anthropic's own program. Anthropic's terms keep those sign-ins to Claude Code and Claude.ai, so Conch offers no other way to use them. The Anthropic API card is pay as you go, with a Console key.
+
 - **On this computer.** A model on this computer, through Ollama or LM Studio, or a [server you run yourself](servers.md).
 - **Pay as you go.** Paste a key and Conch checks it before keeping it. "Saved" means it works.
 
