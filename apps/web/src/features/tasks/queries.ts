@@ -65,17 +65,41 @@ export function applyTaskEvent(
     });
 }
 
-function useTaskMutation(fn: (id: string) => Promise<Task>, failed: string) {
+/**
+ * Stop or start again: the card shows `status` the moment it's pressed, and
+ * goes back if the gateway says no. Half a revision ahead, so a word sent
+ * before the press can't undo it, and the gateway's next one replaces it.
+ */
+function useTaskMutation(
+  fn: (id: string) => Promise<Task>,
+  status: Task['status'],
+  failed: string,
+) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: fn,
+    onMutate: (id) => {
+      const before = client.getQueryData<TaskList>(taskKeys.all)?.tasks.find((t) => t.id === id);
+      if (before) put(client, { ...before, status, rev: before.rev + 0.5 });
+      return { before };
+    },
     onSuccess: (task) => put(client, task),
-    onError: (error) => toast.error(error instanceof ApiError ? error.message : failed),
+    onError: (error, _id, context) => {
+      const before = context?.before;
+      if (before)
+        client.setQueryData<TaskList>(taskKeys.all, (list) =>
+          list
+            ? { ...list, tasks: list.tasks.map((t) => (t.id === before.id ? before : t)) }
+            : list,
+        );
+      toast.error(error instanceof ApiError ? error.message : failed);
+    },
   });
 }
 
-export const useStopTask = () => useTaskMutation(tasksApi.stop, 'Couldn’t stop it.');
-export const useRetryTask = () => useTaskMutation(tasksApi.retry, 'Couldn’t start it again.');
+export const useStopTask = () => useTaskMutation(tasksApi.stop, 'stopped', 'Couldn’t stop it.');
+export const useRetryTask = () =>
+  useTaskMutation(tasksApi.retry, 'queued', 'Couldn’t start it again.');
 
 export function useRemoveTask() {
   const client = useQueryClient();

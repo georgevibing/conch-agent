@@ -7,6 +7,7 @@ import type {
   TurnOptions,
 } from '@conch/protocol';
 import { EngineId as EngineIdSchema, honouredMode } from '@conch/protocol';
+import { toast } from '@conch/nacre';
 
 import { useAppState, useConversations, useModels, useUpdateSettings } from '../../api/queries';
 import { useUi } from '../../app/ui';
@@ -127,7 +128,10 @@ export function useTurnOptions(conversationId?: string) {
     for (const key of keys) preferences[key] = effective[key];
     // A default model belongs to a default provider.
     if (keys.includes('model') && effective.engine) preferences.engine = effective.engine;
-    update.mutate({ preferences });
+    update.mutate(
+      { preferences },
+      { onError: (error) => toast.error(error.message || 'That didn’t save. Try again.') },
+    );
   };
 
   const isDefault = (keys: (keyof ResolvedTurnOptions)[]) =>

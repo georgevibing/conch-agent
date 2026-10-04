@@ -10,6 +10,11 @@ export interface PendingMessage {
   text: string;
   at: number;
   attachments?: Attachment[];
+  /**
+   * Sent another way than the socket (a task's next instruction): the chat's
+   * log names it afresh (and may wrap it), so it's matched by its words.
+   */
+  byText?: boolean;
 }
 
 /** Key for a conversation that doesn't exist yet (the first message of a new chat). */
@@ -82,7 +87,9 @@ export const useLiveStore = create<LiveState>((set) => ({
       const pending =
         event.type === 'user.message'
           ? (state.pending[event.conversationId] ?? []).filter(
-              (p) => p.clientMessageId !== event.messageId,
+              (p) =>
+                p.clientMessageId !== event.messageId &&
+                !(p.byText && event.text.includes(p.text.trim())),
             )
           : state.pending[event.conversationId];
       return {

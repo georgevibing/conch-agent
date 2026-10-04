@@ -54,12 +54,47 @@ export function useEngine(
   });
 }
 
+/**
+ * Change settings. Shown at once everywhere they're read (the folder chip,
+ * the default model's tick, a switch), put back if the gateway says no;
+ * whoever changes them says why it failed.
+ */
 export function useUpdateSettings() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (body: UpdateSettingsBody) => api.updateSettings(body),
+    onMutate: async (body) => {
+      await client.cancelQueries({ queryKey: keys.state });
+      const before = client.getQueryData<AppState>(keys.state);
+      if (before) client.setQueryData(keys.state, withSettings(before, body));
+      return { before };
+    },
+    onError: (_error, _body, context) => {
+      if (context?.before) client.setQueryData(keys.state, context.before);
+    },
     onSuccess: (state) => client.setQueryData(keys.state, state),
   });
+}
+
+/** The app's state as it will be once `body` is saved (`null` goes back to the default). */
+export function withSettings(state: AppState, body: UpdateSettingsBody): AppState {
+  const merge = <T extends object>(now: T, changes: object | undefined): T => {
+    if (!changes) return now;
+    const given = Object.entries(changes).filter(([, value]) => value !== undefined);
+    const cleared = new Set(given.filter(([, value]) => value === null).map(([key]) => key));
+    return Object.fromEntries([
+      ...Object.entries(now).filter(([key]) => !cleared.has(key)),
+      ...given.filter(([key]) => !cleared.has(key)),
+    ]) as T;
+  };
+  return {
+    ...state,
+    ...(body.onboarded !== undefined && { onboarded: body.onboarded }),
+    persona: merge(state.persona, body.persona),
+    profile: merge(state.profile, body.profile),
+    preferences: merge(state.preferences, body.preferences),
+    ...(body.preferences?.workspace && { workspace: body.preferences.workspace }),
+  };
 }
 
 export function useConversations() {

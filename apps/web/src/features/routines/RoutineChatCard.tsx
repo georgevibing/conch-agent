@@ -63,9 +63,12 @@ export function RoutineChatCard({
             outcome: routine.lastRun.outcome ?? routine.lastRun.error,
           }
         }
-        busy={update.isPending}
+        // Turning it on or off shows at once; only an edit waits for the gateway.
+        busy={update.isPending && !update.variables.patch.status}
         onActivate={() => update.mutate({ id: routine.id, patch: { status: 'active' } })}
-        onTryNow={() => run.mutate(routine.id)}
+        onTryNow={() => {
+          if (!run.isPending) run.mutate(routine.id);
+        }}
         onEdit={() => setEditing(true)}
         onDismiss={() => update.mutate({ id: routine.id, patch: { status: 'paused' } })}
         onOpen={() => void navigate(`/routines/${routine.id}`)}

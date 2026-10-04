@@ -406,13 +406,16 @@ export function TaintItem({ item, first }: { item: Of<'taint'>; first: boolean }
 export function MemoryPill({ item }: { item: Of<'memory'> }) {
   const client = useQueryClient();
   const [answer, setAnswer] = useState<'undone' | 'kept'>();
+  // The pill says what you pressed at once; it goes back if that didn't work.
   const act = async (keep: boolean) => {
+    const before = answer;
+    setAnswer(keep ? 'kept' : 'undone');
     try {
       if (keep) await memoryApi.keep(item.memoryId);
       else await api.deleteMemory(item.memoryId);
-      setAnswer(keep ? 'kept' : 'undone');
       void client.invalidateQueries({ queryKey: keys.memories });
     } catch (e) {
+      setAnswer(before);
       toast.error((e as Error).message);
     }
   };

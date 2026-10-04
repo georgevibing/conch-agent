@@ -139,7 +139,12 @@ export function ArtifactView({
         source={readable(artifact.kind, current.data)}
         previous={previousN ? readable(artifact.kind, previous.data) : undefined}
         downloadHref={downloadUrl(artifact.id, version)}
-        pinned={Boolean(artifact.pinned)}
+        // The pin flips the moment it's pressed; it flips back if that didn't save.
+        pinned={
+          update.isPending && update.variables.pinned !== undefined
+            ? update.variables.pinned
+            : Boolean(artifact.pinned)
+        }
         onPinnedChange={(pinned) => update.mutate({ id: artifact.id, pinned })}
         onRefresh={artifact.refresh ? () => refresh.mutate(artifact.id) : undefined}
         refreshing={Boolean(artifact.refreshing) || refresh.isPending}
@@ -172,9 +177,11 @@ export function ArtifactView({
             <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
             <AlertDialog.Action
               tone="danger"
-              onClick={() =>
-                remove.mutate(artifact.id, { onSuccess: () => (onDeleted ?? onClose)?.() })
-              }
+              onClick={() => {
+                // Gone at once; if it couldn't be deleted, the toast says so.
+                remove.mutate(artifact.id);
+                (onDeleted ?? onClose)?.();
+              }}
             >
               Delete
             </AlertDialog.Action>

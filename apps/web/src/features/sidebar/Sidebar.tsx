@@ -25,11 +25,12 @@ import {
   SquarePen,
   Trash2,
 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { NavLink, useNavigate, useParams } from 'react-router';
 
 import { api } from '../../api/client';
-import { useAppState, useConversations } from '../../api/queries';
+import { keys, useAppState, useConversations } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { useLiveStore } from '../../live/store';
 import { dayGroup, type DayGroup } from '../../lib/time';
@@ -90,6 +91,7 @@ function ConversationRow({
   onNavigate?: () => void;
 }) {
   const { archive, remove } = useArchive();
+  const client = useQueryClient();
   // The draft is taken from the current title when renaming starts — never a copy
   // made at mount, which would be the first-line placeholder, not the generated title.
   const [draft, setDraft] = useState<string>();
@@ -104,9 +106,17 @@ function ConversationRow({
     const next = draft?.trim();
     setDraft(undefined);
     if (!next || next === conversation.title) return;
+    // The new name shows at once; the old one comes back if it didn't save.
+    const rename = (title: string) =>
+      client.setQueryData<ConversationSummary[]>(keys.conversations, (list) =>
+        list?.map((c) => (c.id === conversation.id ? { ...c, title } : c)),
+      );
+    const before = conversation.title;
+    rename(next);
     try {
       await api.renameConversation(conversation.id, next);
     } catch (e) {
+      rename(before);
       toast.error((e as Error).message);
     }
   };

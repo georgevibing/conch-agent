@@ -415,14 +415,23 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
         );
         return;
       }
-      if (continuingTask.current) return;
+      if (continuingTask.current || !conversationId) return;
       continuingTask.current = true;
+      // Shown as sent at once, as any message is; given back if the task can't take it.
+      const requestKey = crypto.randomUUID();
+      const store = useLiveStore.getState();
+      store.addPending(conversationId, {
+        clientMessageId: requestKey,
+        text: trimmed,
+        at: Date.now(),
+        byText: true,
+      });
+      if (!keepDraft) setDraft('');
       void tasksApi
-        .continue(origin.taskId, trimmed, crypto.randomUUID())
-        .then(() => {
-          if (!keepDraft) setDraft('');
-        })
+        .continue(origin.taskId, trimmed, requestKey)
         .catch((error: unknown) => {
+          store.dropPending(conversationId, requestKey);
+          if (!keepDraft) setDraft((d) => d || trimmed);
           toast.error(
             error instanceof Error
               ? error.message
@@ -527,11 +536,13 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
       toast('A background task can’t take attachments yet. Send it as a message instead.');
       return;
     }
+    // On its way the moment it's pressed: the words come back only if it couldn't start.
+    setDraft('');
     startTask.mutate(
       { text, ...(conversationId && { conversationId }), options: turn.options },
       {
+        onError: () => setDraft((d) => d || text),
         onSuccess: (task) => {
-          setDraft('');
           toast(`Working on “${task.title}” in the background`, {
             description: conversationId
               ? 'Its result will come back to this chat.'
@@ -646,8 +657,11 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
     void pickPath('workspace').then(
       async (path) => {
         if (!path) return;
-        await saveSettings.mutateAsync({ preferences: { workspace: path } });
-        toast.success(`Working in ${path.split(/[\\/]/).filter(Boolean).at(-1) ?? path}`);
+        // The chip shows the new folder at once; it goes back if it can't be used.
+        await saveSettings.mutateAsync({ preferences: { workspace: path } }).then(
+          () => toast.success(`Working in ${path.split(/[\\/]/).filter(Boolean).at(-1) ?? path}`),
+          (error: Error) => toast.error(error.message || 'That folder can’t be used.'),
+        );
       },
       () => openSettings('general'),
     );

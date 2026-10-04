@@ -1,6 +1,7 @@
 import type { AppsModel } from '@conch/protocol';
 import { ModelSwitchCard, toast } from '@conch/nacre';
 import { useMutation } from '@tanstack/react-query';
+import { useState } from 'react';
 
 import { api } from '../../api/client';
 import { useUi } from '../../app/ui';
@@ -23,13 +24,20 @@ export function NeedsAppsItem({
 }) {
   const { data } = useIntegrations();
   const openSettings = useUi((s) => s.openSettings);
+  /** Chosen here: the card says so at once, until the chat's log does. */
+  const [chosen, setChosen] = useState<'switched' | 'answered'>();
   const release = useMutation({
     mutationFn: (to: AppsModel | undefined) =>
       api.releaseTurn(conversationId ?? '', to?.engine, to?.model),
-    onError: (error: Error) => toast.error(error.message),
+    onMutate: (to) => setChosen(to ? 'switched' : 'answered'),
+    onError: (error: Error) => {
+      setChosen(undefined);
+      toast.error(error.message);
+    },
   });
   const { switchTo } = item;
-  const waiting = !item.settled && conversationId;
+  const settled = item.settled ?? chosen;
+  const waiting = !settled && conversationId;
   return (
     <div className={styles.aside}>
       <ModelSwitchCard
@@ -42,7 +50,7 @@ export function NeedsAppsItem({
             color: data?.catalog.find((c) => c.id === need.catalogId)?.color,
           }),
         }))}
-        state={item.settled ?? 'offer'}
+        state={settled ?? 'offer'}
         switchTo={
           switchTo && {
             label: switchTo.label,
@@ -50,7 +58,6 @@ export function NeedsAppsItem({
             ...(switchTo.engine !== item.model.engine && { provider: switchTo.provider }),
           }
         }
-        busy={release.isPending}
         onSwitch={waiting && switchTo ? () => release.mutate(switchTo) : undefined}
         onConnect={() => openSettings('providers')}
         onAnswerWithout={waiting ? () => release.mutate(undefined) : undefined}

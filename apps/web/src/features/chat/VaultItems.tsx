@@ -1,5 +1,5 @@
 import { templateFor, type VaultFieldKind, type VaultFieldRole } from '@conch/protocol';
-import { VaultApproval, VaultRequestCard, VaultUnlockCard } from '@conch/nacre';
+import { VaultApproval, VaultRequestCard, VaultUnlockCard, toast } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -20,14 +20,18 @@ export function VaultRequestItem({ item, name }: { item: Of<'vault-request'>; na
   const client = useQueryClient();
   const navigate = useNavigate();
   const { request } = item;
+  // Answered here: the card says so at once, not when the chat's log catches up.
+  const [settled, setSettled] = useState<'done' | 'declined'>();
+  const state = request.state === 'waiting' && settled ? settled : request.state;
   if (request.kind === 'unlock')
     return (
       <VaultUnlockCard
-        state={request.state}
+        state={state}
         name={name}
         onUnlock={async (password) => {
           try {
             await vaultApi.unlock(password);
+            setSettled('done');
             void client.invalidateQueries({ queryKey: vaultKeys.all });
           } catch (e) {
             throw new Error(errorText(e, 'That didn’t unlock it.'));
@@ -43,7 +47,7 @@ export function VaultRequestItem({ item, name }: { item: Of<'vault-request'>; na
   return (
     <VaultRequestCard
       name={name}
-      state={request.state}
+      state={state}
       title={request.title ?? templateFor(type).name}
       itemKind={type}
       site={request.site}
@@ -62,12 +66,19 @@ export function VaultRequestItem({ item, name }: { item: Of<'vault-request'>; na
               }))
               .filter((f) => f.value),
           });
+          setSettled('done');
           void client.invalidateQueries({ queryKey: vaultKeys.all });
         } catch (e) {
           throw new Error(errorText(e, 'Couldn’t save it.'));
         }
       }}
-      onDecline={() => void vaultApi.decline(request.requestId)}
+      onDecline={() => {
+        setSettled('declined');
+        vaultApi.decline(request.requestId).catch((e: unknown) => {
+          setSettled(undefined);
+          toast.error(errorText(e, 'That didn’t go through. Try again.'));
+        });
+      }}
       onOpen={request.itemId ? () => void navigate(`/passwords/${request.itemId}`) : undefined}
     />
   );
