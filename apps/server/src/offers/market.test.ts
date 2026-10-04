@@ -1,5 +1,5 @@
 /**
- * Offering a skill people share from the chat (ADR 0077 on ADR 0060): only
+ * Offering a skill people share from the chat (ADR 0081 on ADR 0060): only
  * one `find_skills` found and the registry doesn't warn about, never after
  * the chat read something from outside, never twice, and the chat carries
  * on only once it's added and on. `find_skills` never hands the model a

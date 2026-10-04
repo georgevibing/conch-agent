@@ -36,7 +36,7 @@ export const SkillSource = z.enum([
   'hermes',
   /** A Conch app's own skills (ADR 0061): `conch-apps/<id>/current/skills`, read-only. */
   'app',
-  /** Added from Discover (ADR 0077): `skills-market/<source>/<name>`, pinned, read-only. */
+  /** Added from Discover (ADR 0081): `skills-market/<source>/<name>`, pinned, read-only. */
   'market',
 ]);
 export type SkillSource = z.infer<typeof SkillSource>;
@@ -145,7 +145,7 @@ export const SkillFinding = z.object({
     'prerequisite',
     'hidden',
     'binary',
-    /** What the registry it came from says about it (ADR 0077). */
+    /** What the registry it came from says about it (ADR 0081). */
     'registry',
   ]),
   severity: z.enum(['danger', 'warning']),
@@ -195,7 +195,7 @@ export const Skill = z.object({
   /** What it may do while it's in use (ADR 0031). */
   permissions: SkillPermissions.optional(),
   signature: SkillSignature.optional(),
-  /** Where it came from, when it was added from Discover (ADR 0077). */
+  /** Where it came from, when it was added from Discover (ADR 0081). */
   origin: SkillOrigin.optional(),
 });
 export type Skill = z.infer<typeof Skill>;

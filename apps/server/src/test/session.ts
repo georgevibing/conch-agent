@@ -194,7 +194,7 @@ export async function useConch(g: Gateway) {
       payload: { mode: 'off' },
     }),
   );
-  // A skill from Discover (ADR 0077): searched (the cache), read (staging), added (its folder and origin).
+  // A skill from Discover (ADR 0081): searched (the cache), read (staging), added (its folder and origin).
   await ok(await app.inject({ method: 'GET', url: '/api/skills/market?q=meeting' }));
   const look = await ok(
     await app.inject({

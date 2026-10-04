@@ -79,7 +79,7 @@ export function OfferItem({
   const accepting = useRef(false);
 
   const isApp = offer.kind === 'app';
-  // A skill people share (ADR 0077): read in a dialog, added, then the chat carries on.
+  // A skill people share (ADR 0081): read in a dialog, added, then the chat carries on.
   const isMarket = offer.kind === 'market';
   const [reading, setReading] = useState(false);
   // A Conch app you have but switched off (ADR 0061): its card is `capp_<id>`, and the fix is its switch.

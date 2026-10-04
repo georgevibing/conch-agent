@@ -1,5 +1,5 @@
 /**
- * `find_skills` (ADR 0077): the assistant looks for a skill people share,
+ * `find_skills` (ADR 0081): the assistant looks for a skill people share,
  * to `offer` it with kind `market`. It never adds anything.
  *
  * What comes back is only what Conch can vouch for the shape of: each

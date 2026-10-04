@@ -1,4 +1,4 @@
-# 0077 — Discover: skills people share, read before they're added
+# 0081 — Discover: skills people share, read before they're added
 
 - Status: accepted
 - Date: 2026-10-04

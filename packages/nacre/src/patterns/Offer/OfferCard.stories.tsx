@@ -175,7 +175,7 @@ const shared = {
   assistant: 'Conch',
 };
 
-/** A skill people share (ADR 0077): where it's from and what that place says; **Look at it** reads it first. */
+/** A skill people share (ADR 0081): where it's from and what that place says; **Look at it** reads it first. */
 export const SharedSkill: Story = { args: { ...shared, state: 'suggested' } };
 
 /** Added from the card: the chat carries on with it. */

@@ -1,5 +1,5 @@
 /**
- * A skill's folder from GitHub at one commit (ADR 0077), file by file, each
+ * A skill's folder from GitHub at one commit (ADR 0081), file by file, each
  * checked against the hash git itself keeps for it.
  *
  * - **Which commit.** A branch or "the default" is turned into a commit

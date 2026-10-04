@@ -1,5 +1,5 @@
 /**
- * Discover (ADR 0077): skills people publish, found by search, a kind or an
+ * Discover (ADR 0081): skills people publish, found by search, a kind or an
  * idea, read in full before they're added, and added in one press.
  */
 import {
@@ -396,7 +396,7 @@ export function MarketOriginSection({ skill }: { skill: SkillDetail }) {
 }
 
 /**
- * A skill the chat offered (ADR 0077 on ADR 0060), read in a dialog over the
+ * A skill the chat offered (ADR 0081 on ADR 0060), read in a dialog over the
  * chat: the same read as Discover's page, and one press adds it. The chat
  * carries on once it's added.
  */

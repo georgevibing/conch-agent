@@ -52,7 +52,7 @@ export function SkillIdeas({ onPick }: { onPick: (instructions: string) => void 
 /**
  * Skills: things the assistant knows how to do. **Yours** (written here,
  * found in other agents' folders, added from Discover) and **Discover**,
- * skills people share (ADR 0077), one tab each, each with its own address.
+ * skills people share (ADR 0081), one tab each, each with its own address.
  */
 export function SkillsView() {
   const navigate = useNavigate();
@@ -123,7 +123,7 @@ function YourSkills() {
   const shown = (s: Skill) => show !== 'off' || s.mode === 'off';
   const mine = skills.filter((s) => s.source === 'conch' && shown(s));
   const found = skills.filter((s) => s.source !== 'conch' && s.source !== 'market' && shown(s));
-  // Added from Discover (ADR 0077): yours, pinned to the version you read.
+  // Added from Discover (ADR 0081): yours, pinned to the version you read.
   const added = skills.filter((s) => s.source === 'market' && shown(s));
   const bothKinds =
     skills.some((s) => s.source === 'conch') && skills.some((s) => s.source !== 'conch');

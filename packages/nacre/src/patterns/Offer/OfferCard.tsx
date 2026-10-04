@@ -43,7 +43,7 @@ export interface OfferPermissions {
 }
 
 export interface OfferCardProps extends Omit<ComponentProps<'div'>, 'children'> {
-  /** An app to connect, a skill of yours to turn on, or one people share to read and add (ADR 0077). */
+  /** An app to connect, a skill of yours to turn on, or one people share to read and add (ADR 0081). */
   kind: 'app' | 'skill' | 'market';
   /** “Google Calendar”, or a skill's title. */
   name: string;

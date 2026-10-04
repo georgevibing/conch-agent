@@ -1,5 +1,5 @@
 /**
- * Discover (ADR 0077): skills people publish, as the Skills page and the chat
+ * Discover (ADR 0081): skills people publish, as the Skills page and the chat
  * ask for them. Reading is free; adding and updating are a press.
  */
 import {

@@ -16,7 +16,7 @@ const meta = {
     docs: {
       description: {
         component:
-          '**Discover** on the Skills page (ADR 0077): skills people publish, from Anthropic’s repository, ClawHub and skills.sh. Each card says what it does in a line, what its place says about it (Official, Verified publisher, Community, Flagged), who published it and how many use it. Nothing is added from a card: it opens the skill, read first. Calm when a place can’t be reached: a quiet line says what’s shown is from before.',
+          '**Discover** on the Skills page (ADR 0081): skills people publish, from Anthropic’s repository, ClawHub and skills.sh. Each card says what it does in a line, what its place says about it (Official, Verified publisher, Community, Flagged), who published it and how many use it. Nothing is added from a card: it opens the skill, read first. Calm when a place can’t be reached: a quiet line says what’s shown is from before.',
       },
     },
   },

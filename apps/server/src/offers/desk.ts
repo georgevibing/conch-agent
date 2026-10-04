@@ -67,7 +67,7 @@ export interface OfferDeskDeps {
     turnOn(id: string): Promise<void>;
     once(id: string, request: string): Promise<CarryOn | undefined>;
   };
-  /** Discover (ADR 0077): skills people publish that the chat may offer, and the one you added. */
+  /** Discover (ADR 0081): skills people publish that the chat may offer, and the one you added. */
   market?: {
     /** Seen in a search, not flagged or blocked by its registry, and not yours already. */
     offerable(listingId: string): MarketListing | undefined;
@@ -294,7 +294,7 @@ export class OfferDesk {
   }
 
   /**
-   * A skill from Discover (ADR 0077): one `find_skills` found in this
+   * A skill from Discover (ADR 0081): one `find_skills` found in this
    * session, that its registry doesn't warn about and you don't have. The
    * card shows the person who published it and what the place says; adding
    * it still goes through the full read on the person's press.

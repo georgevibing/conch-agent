@@ -30,7 +30,7 @@ export interface MapSkill {
 export interface OfferMap {
   apps: MapApp[];
   skills: MapSkill[];
-  /** Skills people publish can be searched with `find_skills` (ADR 0077). */
+  /** Skills people publish can be searched with `find_skills` (ADR 0081). */
   market?: boolean;
 }
 
@@ -64,7 +64,7 @@ const skillLine = (skill: MapSkill) => {
   return `- skill \`${skill.id}\`: ${skill.title}${skill.mode === 'manual' ? ' (when asked)' : ''}${about ? ` — ${about}` : ''}`;
 };
 
-/** How the assistant reaches skills people publish (ADR 0077). */
+/** How the assistant reaches skills people publish (ADR 0081). */
 const MARKET =
   'Skills people share: when nothing here fits and a ready-made skill would clearly help with what was asked (a kind of document, a way of working), call `find_skills` with a few plain words, then `offer` the best one with kind `market` and its id. Never instead of answering.';
 
