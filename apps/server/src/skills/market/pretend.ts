@@ -1,6 +1,6 @@
 /**
  * A pretend registry for the mock engine, `pnpm dev:mock` and the end-to-end
- * journeys (ADR 0081): a few made-up skills that cover each path — a clean
+ * journeys (ADR 0074): a few made-up skills that cover each path — a clean
  * one, one that tries the ClawHavoc trick, one the registry flags, and one
  * whose licence forbids copying it — served from memory, never online.
  */

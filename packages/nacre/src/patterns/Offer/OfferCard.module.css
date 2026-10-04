@@ -112,7 +112,7 @@
     text-wrap: balance;
   }
 
-  /* Where a skill people share is from (ADR 0081). */
+  /* Where a skill people share is from (ADR 0074). */
   .from {
     display: flex;
     flex-wrap: wrap;

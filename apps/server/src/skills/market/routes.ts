@@ -1,5 +1,5 @@
 /**
- * Discover's routes (ADR 0081). Searching and reading are free; adding and
+ * Discover's routes (ADR 0074). Searching and reading are free; adding and
  * updating are a person's press in Conch, never a script's access key.
  */
 import {

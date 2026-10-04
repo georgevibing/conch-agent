@@ -192,7 +192,7 @@ const scenarios = {
   trust: { port: 4374, env: { CONCH_MOCK_STATE: 'ready', CONCH_HOME: trustHome } },
   // Skill scope (ADR 0047): a chat stays held to a skill's list until you stop it; the signing key is locked.
   'skill-scope': { port: 4361, env: { CONCH_MOCK_STATE: 'ready', CONCH_HOME: skillScopeHome } },
-  // Discover (ADR 0081): skills people share, from the mock engine's pretend registry.
+  // Discover (ADR 0074): skills people share, from the mock engine's pretend registry.
   discover: { port: 4342, env: { CONCH_MOCK_STATE: 'ready' } },
   // Conch in your pocket: the app, the offline screen, the phone's address (a pretend Tailscale).
   pocket: { port: 4379, env: { CONCH_MOCK_STATE: 'ready' } },

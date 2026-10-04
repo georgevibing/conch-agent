@@ -371,7 +371,7 @@ describe('offers in the chat (ADR 0060)', () => {
     );
   });
 
-  it('a skill people share is read in a dialog, added in one press, and the chat carries on (ADR 0081)', async () => {
+  it('a skill people share is read in a dialog, added in one press, and the chat carries on (ADR 0074)', async () => {
     const listing = {
       id: 'clawhub:ada/meeting-notes',
       source: 'clawhub',

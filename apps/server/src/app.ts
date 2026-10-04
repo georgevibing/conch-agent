@@ -865,7 +865,7 @@ export async function buildApp(services: Services) {
     if (!body) return;
     return guarded(reply, () => services.skills.create(body));
   });
-  // Discover (ADR 0081): before `/api/skills/:id`, so its own paths win.
+  // Discover (ADR 0074): before `/api/skills/:id`, so its own paths win.
   if (services.market)
     registerMarketRoutes(app, services.market, {
       detail: (id) => services.skills.detail(id),

@@ -1,5 +1,5 @@
 /**
- * How Discover talks to the places skills come from (ADR 0081): https only,
+ * How Discover talks to the places skills come from (ADR 0074): https only,
  * through the SSRF guard (`guardedFetch('public')`), to the hosts a source
  * names and nowhere else (a redirect anywhere else stops there), with a
  * timeout, and every body read only up to a cap. A refusal becomes a

@@ -1315,7 +1315,7 @@ export class MockEngine implements Engine {
         }
       }
 
-      // A skill people share, added from the chat's offer (ADR 0081): the chat carries on
+      // A skill people share, added from the chat's offer (ADR 0074): the chat carries on
       // with it. Before the scripts below, which its own words ("List what was decided") would wake.
       const sharedSkill = /<skill name="[^"]*" title="([^"]*)"[\s\S]*asked you to use the/.exec(
         input.prompt,
@@ -1373,7 +1373,7 @@ export class MockEngine implements Engine {
         );
         return;
       }
-      // Skills people share (ADR 0081): tidying meeting notes looks on Discover and
+      // Skills people share (ADR 0074): tidying meeting notes looks on Discover and
       // offers what it finds (added, the chat carries on with it: above).
       if (
         /\btidy (?:up )?(?:these|my) meeting notes\b/i.test(text) &&

@@ -15,7 +15,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'One skill from Discover, read before it’s added (ADR 0081): what it does, what it will be able to do in plain words, what Conch found reading every file, who published it and where, the exact version it’s pinned to and its licence. One button adds it. A worrying one needs a tick first; one its licence or its registry rules out has no button. An update shows what’s different file by file, and says first when it asks for more.',
+          'One skill from Discover, read before it’s added (ADR 0074): what it does, what it will be able to do in plain words, what Conch found reading every file, who published it and where, the exact version it’s pinned to and its licence. One button adds it. A worrying one needs a tick first; one its licence or its registry rules out has no button. An update shows what’s different file by file, and says first when it asks for more.',
       },
     },
   },

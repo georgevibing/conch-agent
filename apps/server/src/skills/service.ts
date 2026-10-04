@@ -43,7 +43,7 @@ export interface SkillServiceDeps {
   usage?: SkillUsage;
   /** A suggestion was saved as a skill: it's settled (ADR 0058). */
   suggestionSaved?: (id: string) => Promise<void>;
-  /** Skills added from Discover are taken away there (ADR 0081). */
+  /** Skills added from Discover are taken away there (ADR 0074). */
   market?: { owns(id: string): boolean; remove(id: string): Promise<void> };
 }
 

@@ -20,7 +20,7 @@ const WebUrl = z
 // ── Offers ──────────────────────────────────────────────────────────────────
 
 /** What can be offered: an app from the catalog, or a skill that's off or waits to be asked. */
-/** An app to connect, a skill of yours to turn on, or one from Discover to add (ADR 0081). */
+/** An app to connect, a skill of yours to turn on, or one from Discover to add (ADR 0074). */
 export const OfferKind = z.enum(['app', 'skill', 'market']);
 export type OfferKind = z.infer<typeof OfferKind>;
 
@@ -77,7 +77,7 @@ export const DismissOfferBody = z.object({}).strict();
 export type DismissOfferBody = z.infer<typeof DismissOfferBody>;
 
 /**
- * “Don’t suggest” for every skill from Discover (ADR 0081): one key, in the
+ * “Don’t suggest” for every skill from Discover (ADR 0074): one key, in the
  * shape older versions already accept for a skill.
  */
 export const MUTED_MARKET = 'skill:market_discover';
