@@ -116,23 +116,25 @@ describe.skipIf(!hasBrowser)('the browser, for real', () => {
     { timeout: 60_000 },
     async () => {
       const { call, asked } = harness(['allow', 'deny'], 'default', 'conv_shop');
-      let text = await call('browser_open', { url: `${origin}/shop` });
-      text = await call('browser_click', {
-        ref: refOf(text, /Add to cart/),
+      const page = await call('browser_open', { url: `${origin}/shop` });
+      let text = await call('browser_click', {
+        ref: refOf(page, /Add to cart/),
         element: 'Add to cart',
       });
       expect(asked.map((a) => a.browser?.kind)).toEqual(['site']);
       expect(asked[0]?.summary).toBe('use 127.0.0.1');
-      expect(text).toContain('In your cart: 1');
+      // After an action, only what changed comes back (ADR 0077), the new line marked.
+      expect(text).toContain('<page-changes>');
+      expect(text).toMatch(/^\+ .*In your cart: 1/m);
       // The same site again: no question.
       text = await call('browser_click', {
-        ref: refOf(text, /Add to cart/),
+        ref: refOf(page, /Add to cart/),
         element: 'Add to cart',
       });
       expect(asked).toHaveLength(1);
       // Ordering is significant: asked even though the site is allowed, and "no" holds.
       const refused = await call('browser_click', {
-        ref: refOf(text, /Place order/),
+        ref: refOf(page, /Place order/),
         element: 'the blue button',
       });
       expect(asked[1]?.browser).toMatchObject({
@@ -140,7 +142,10 @@ describe.skipIf(!hasBrowser)('the browser, for real', () => {
         action: 'Click “Place order”',
       });
       expect(refused).toMatch(/said no to “Click “Place order””/);
-      expect(await call('browser_read', {})).not.toContain('Ordered!');
+      // Asked for, the whole page comes back.
+      const whole = await call('browser_read', {});
+      expect(whole).toContain('<page-content>');
+      expect(whole).not.toContain('Ordered!');
     },
   );
 
