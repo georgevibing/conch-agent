@@ -234,6 +234,27 @@ describe('Codex and Codex CLI side by side', () => {
   });
 });
 
+describe('disconnecting while a turn runs', () => {
+  it('stays disconnected, whatever that turn renews afterwards', async () => {
+    const { engine, home, bin } = await setup();
+    await login(engine);
+    let release!: () => void;
+    const held = new Promise<void>((done) => (release = done));
+    const turn = new CodexHome(home).withClient(bin, async (rpc) => {
+      await held;
+      await rpc.request('test/renew', {});
+    });
+    await engine.disconnect();
+    release();
+    await turn;
+    const saved = await readStore(
+      join(home, 'codex.secrets.json'),
+      z.object({ auth: z.unknown().optional() }),
+    );
+    expect(saved.value.auth).toBeUndefined();
+  });
+});
+
 describe('a request Codex refuses', () => {
   it('says why, without anything that looks like a credential', async () => {
     const { engine, home, bin } = await setup();

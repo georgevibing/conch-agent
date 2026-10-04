@@ -69,6 +69,8 @@ export async function cleanCodexRuntime(
 interface Run {
   dir: string;
   last: string | undefined;
+  /** You signed out while it ran: nothing it renews is kept. */
+  stale?: boolean;
 }
 
 /**
@@ -96,6 +98,7 @@ const authText = (dir: string) => readFile(join(dir, 'auth.json'), 'utf8').catch
  * none of them goes on with the one that was just replaced.
  */
 async function keep(path: string, all: Shared, run: Run, text: string): Promise<void> {
+  if (run.stale) return;
   let auth: z.infer<typeof Auth>;
   try {
     auth = Auth.parse(JSON.parse(text));
@@ -143,7 +146,11 @@ async function saveCredentials(
 ): Promise<void> {
   const text = await authText(run.dir);
   if (text === undefined) {
-    if (signOut) await writeJson(path, {});
+    if (signOut) {
+      await writeJson(path, {});
+      // A turn still going can't bring the sign-in back by renewing it.
+      for (const other of all.runs) if (other !== run) other.stale = true;
+    }
     return;
   }
   if (text === run.last) return;
