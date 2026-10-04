@@ -212,13 +212,21 @@
     gap: var(--nc-space-2);
     align-self: flex-start;
     max-inline-size: 100%;
-    padding: var(--nc-space-0-5) var(--nc-space-0-5) var(--nc-space-0-5) var(--nc-space-2-5);
+    padding: var(--nc-space-1) var(--nc-space-1) var(--nc-space-1) var(--nc-space-3);
     border-radius: var(--nc-radius-full);
     font-size: var(--nc-text-xs);
     color: var(--nc-text-muted);
     background: var(--nc-wash-1);
     box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
     animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  /* Undo keeps its size and its icon: the words give way (an ellipsis) instead,
+     and a little room separates it from them and from the chip's edge. */
+  .memory > button {
+    flex-shrink: 0;
+    margin-inline-start: var(--nc-space-1);
+    border-radius: var(--nc-radius-full);
   }
 
   .memory[data-action='undone'],
