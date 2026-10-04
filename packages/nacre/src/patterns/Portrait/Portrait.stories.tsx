@@ -17,6 +17,7 @@ function Live({
   const [name, setName] = useState(initialName);
   const [facts, setFacts] = useState(initialFacts);
   const [suggested, setSuggested] = useState(initialSuggested);
+  const [photo, setPhoto] = useState<string>();
   const first = (kind: string) => facts.find((f) => f.kind === kind)?.text;
   const summary = [first('work'), first('home'), first('person')].filter(Boolean).join(' · ');
   return (
@@ -24,6 +25,9 @@ function Live({
       <Portrait
         name={name}
         onNameChange={setName}
+        photo={photo}
+        onPhotoSave={(blob) => setPhoto(URL.createObjectURL(blob))}
+        onPhotoRemove={() => setPhoto(undefined)}
         summary={summary}
         cards={portraitCards}
         facts={facts}
@@ -56,6 +60,7 @@ const meta = {
         component: [
           'About you as a portrait, not a form: your name as a title you type into, a line that sums you up, and a card for each part of your life holding short facts. Every chat starts with them.',
           'A fact is a chip: press it to change or remove it. **Add** opens a field in place, with an example of what belongs there. People carry who they are to you, and a date when it matters.',
+          'Your initial is a button: press it (or drop a picture on it) to frame a photo of you in a circle; once there is one, the same press changes or removes it.',
           'Facts read from your own words arrive outlined, with Keep and Dismiss, until you decide. Nothing is saved that you didn’t keep.',
         ].join('\n\n'),
       },

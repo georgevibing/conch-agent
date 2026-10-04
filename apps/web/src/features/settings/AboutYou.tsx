@@ -2,6 +2,7 @@ import {
   PROFILE_KIND_WORDS,
   ProfileFactKind,
   UnderstoodProfile,
+  avatarUrl,
   describeProfile,
   type Profile,
   type ProfileFact,
@@ -17,10 +18,11 @@ import {
   type PortraitCard,
 } from '@conch/nacre';
 import { Briefcase, ChevronRight, Heart, House, Sparkles, Users, Wand2 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import { request } from '../../api/client';
-import { useMemories, useUpdateSettings } from '../../api/queries';
+import { api, request } from '../../api/client';
+import { keys, useAppState, useMemories, useUpdateSettings } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { MEMORY_ALL } from './paths';
 import { Section, SaveStatus } from './Section';
@@ -80,10 +82,34 @@ export function AboutYou({ initial }: { initial: Profile }) {
   const update = useUpdateSettings();
   const memories = useMemories();
   const openSettings = useUi((s) => s.openSettings);
-  const [profile, setProfile] = useState<Profile>({ ...initial, facts: initial.facts ?? [] });
+  const client = useQueryClient();
+  const { data: app } = useAppState();
+  // The photo has its own route, so it stays out of what's typed here and saved as you go.
+  const [profile, setProfile] = useState<Omit<Profile, 'avatar'>>(() => {
+    const { avatar: _photo, ...rest } = initial;
+    return { ...rest, facts: initial.facts ?? [] };
+  });
   const [suggested, setSuggested] = useState<ProfileFact[]>([]);
   const [reading, setReading] = useState(false);
   const status = useAutosave(profile, (p) => update.mutateAsync({ profile: p }));
+  const photo = avatarUrl(app?.profile ?? initial);
+
+  const savePhoto = async (blob: Blob) => {
+    client.setQueryData(keys.state, await api.savePhoto(blob));
+  };
+  const removePhoto = async () => {
+    // Kept a moment, so Undo can put it back as it was.
+    const was = photo ? await fetch(photo).then((r) => (r.ok ? r.blob() : undefined)) : undefined;
+    client.setQueryData(keys.state, await api.removePhoto());
+    toast('Your photo is gone.', {
+      ...(was && {
+        action: {
+          label: 'Undo',
+          onClick: () => void savePhoto(was).catch(() => toast.error('It couldn’t be put back.')),
+        },
+      }),
+    });
+  };
   const facts = profile.facts;
   const setFacts = (next: ProfileFact[]) => setProfile((p) => ({ ...p, facts: next }));
   const remembered = (memories.data ?? []).filter((m) => !m.pending).length;
@@ -124,6 +150,9 @@ export function AboutYou({ initial }: { initial: Profile }) {
         <Portrait
           name={profile.name}
           onNameChange={(name) => setProfile((p) => ({ ...p, name }))}
+          photo={photo}
+          onPhotoSave={savePhoto}
+          onPhotoRemove={removePhoto}
           summary={summarise(facts)}
           cards={CARDS}
           facts={facts}

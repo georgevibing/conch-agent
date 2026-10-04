@@ -19,6 +19,8 @@ It is told to leave out passwords, keys, and health or money details unless you 
 
 **Settings → About you** is a portrait your assistant reads before every chat. Your name sits at the top, with a line that sums you up. Below are five cards: **Work**, **Home**, **People**, **Interests** and **How you like things**. Each holds short facts. Press **Add** on a card to write one there; press a fact to change it or remove it. A person can carry who they are to you and a date, such as "daughter · born 8 June 2025".
 
+**Your photo.** Press your initial, or drop a picture on it, to use a photo instead. It opens in a frame: drag it to move it, zoom until it looks like you, then press **Use this photo**. It shows in About you and at the foot of the sidebar. Press it again to choose a new one or **Remove photo**; **Undo** puts it back. Conch keeps it on your computer, framed and shrunk, and backs it up with your settings. PNG, JPEG and WebP all work.
+
 **In your own words** holds anything the cards don't, the way you'd say it. Press **Lay it out as cards**, and your assistant reads it into facts for the cards. They arrive outlined: keep the right ones, dismiss the rest, or press **Keep all**. Nothing is saved that you didn't keep.
 
 **What every chat starts with** shows, word for word, what your assistant reads about you.

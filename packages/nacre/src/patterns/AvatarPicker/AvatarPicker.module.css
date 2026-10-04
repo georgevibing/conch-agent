@@ -1,0 +1,268 @@
+@layer nacre.components {
+  /* ── Your initial or your photo, a button: a camera shows what it does ── */
+  .picker {
+    --ap-size: 4.5rem;
+
+    position: relative;
+    display: inline-grid;
+    flex: none;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    cursor: pointer;
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .picker .avatar[data-size] {
+    --avatar-size: var(--ap-size);
+    --avatar-font: 1.625rem;
+
+    grid-area: 1 / 1;
+    box-shadow:
+      0 0 0 3px var(--nc-canvas),
+      0 0 0 4px var(--nc-border-subtle);
+    transition: box-shadow var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .picker:focus-visible {
+    outline: none;
+  }
+
+  .picker:focus-visible .avatar,
+  .picker[data-over] .avatar {
+    box-shadow:
+      0 0 0 3px var(--nc-canvas),
+      0 0 0 5px var(--nc-ring);
+  }
+
+  .picker:active {
+    transform: scale(0.96);
+  }
+
+  /* Over the face, as the pointer comes near or a picture is carried over it. */
+  .lens {
+    grid-area: 1 / 1;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: oklch(1 0 0);
+    background: oklch(0.18 0.01 var(--nc-neutral-h) / 0.45);
+    opacity: 0;
+    transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .lens > svg {
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    transform: scale(0.8);
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  @media (hover: hover) {
+    .picker:hover .lens {
+      opacity: 1;
+    }
+    .picker:hover .lens > svg {
+      transform: none;
+    }
+  }
+
+  .picker[data-over] .lens,
+  .picker:focus-visible .lens,
+  .picker[data-state='open'] .lens {
+    opacity: 1;
+  }
+
+  .picker[data-over] .lens > svg {
+    transform: scale(1.1);
+  }
+
+  /* Always there, so a touch screen knows it can be pressed too. */
+  .badge {
+    position: absolute;
+    inset-block-end: calc(var(--nc-space-0-5) * -1);
+    inset-inline-end: calc(var(--nc-space-0-5) * -1);
+    display: grid;
+    place-items: center;
+    inline-size: 1.625rem;
+    block-size: 1.625rem;
+    border-radius: 50%;
+    color: var(--nc-text-muted);
+    background: var(--nc-surface-hi);
+    box-shadow:
+      0 0 0 2px var(--nc-canvas),
+      var(--nc-elevation-1);
+    transition:
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .badge > svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  @media (hover: hover) {
+    .picker:hover .badge {
+      color: var(--nc-text-accent);
+      transform: scale(1.08);
+    }
+  }
+
+  /* A new photo lands with a little spring and a pearl ring that fades out. */
+  .picker[data-arrived] {
+    animation: ap-arrive var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  .picker[data-arrived]::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    pointer-events: none;
+    background: var(--nc-pearl-spectrum);
+    mask: radial-gradient(closest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+    animation: ap-ring var(--nc-duration-slower) var(--nc-ease-out) forwards;
+  }
+
+  @keyframes ap-arrive {
+    from {
+      transform: scale(0.85);
+    }
+    to {
+      transform: none;
+    }
+  }
+
+  @keyframes ap-ring {
+    from {
+      opacity: 1;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(1.35);
+    }
+  }
+
+  /* ── Framing ─────────────────────────────────────────────────────── */
+  .body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--nc-space-4);
+  }
+
+  .stage {
+    position: relative;
+    container-type: inline-size;
+    inline-size: min(100%, 18rem);
+    aspect-ratio: 1;
+    overflow: hidden;
+    border-radius: var(--nc-radius-lg);
+    background: var(--nc-surface-sunken);
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .stage[data-dragging] {
+    cursor: grabbing;
+  }
+
+  .stage:has(.axis:focus-visible) {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 3px;
+  }
+
+  /* Out of sight, there for the keyboard and screen readers: the stage shows their focus. */
+  .axis {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    opacity: 0;
+  }
+
+  .photo {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
+    inline-size: calc(var(--ap-w) * 100cqi);
+    block-size: calc(var(--ap-h) * 100cqi);
+    max-inline-size: none;
+    transform: translate(-50%, -50%)
+      translate(calc(var(--ap-x) * 100cqi), calc(var(--ap-y) * 100cqi)) scale(var(--ap-zoom));
+    transition: transform var(--nc-duration-fast) var(--nc-ease-out);
+    pointer-events: none;
+  }
+
+  .stage[data-dragging] .photo {
+    transition: none;
+  }
+
+  /* What shows in the circle is your photo; the corners dim away. */
+  .circle {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(
+      closest-side,
+      transparent calc(100% - 0.5px),
+      color-mix(in oklch, var(--nc-canvas) 62%, transparent) 100%
+    );
+  }
+
+  .circle::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    box-shadow:
+      inset 0 0 0 1.5px oklch(1 0 0 / 0.85),
+      0 0 0 1px oklch(0 0 0 / 0.12);
+    transition: box-shadow var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .stage[data-dragging] .circle::after,
+  .stage:has(.axis:focus-visible) .circle::after {
+    box-shadow:
+      inset 0 0 0 2px var(--nc-accent-9),
+      0 0 0 1px oklch(0 0 0 / 0.12);
+  }
+
+  .zoom {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    inline-size: min(100%, 18rem);
+  }
+
+  .slider {
+    flex: 1;
+  }
+
+  .problem {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    color: light-dark(oklch(0.5 0.17 var(--nc-danger-h)), oklch(0.75 0.14 var(--nc-danger-h)));
+    text-align: center;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .picker[data-arrived],
+    .picker[data-arrived]::after {
+      animation-duration: 1ms;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .picker[data-arrived],
+  [data-nacre-motion='reduced'] .picker[data-arrived]::after {
+    animation-duration: 1ms;
+  }
+}

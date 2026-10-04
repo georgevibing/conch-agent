@@ -1,4 +1,5 @@
 import type { ProfileFact } from '@conch/protocol';
+import { Toaster } from '@conch/nacre';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -85,5 +86,66 @@ describe('About you, as a portrait', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Lay it out as cards' }));
     await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
     expect(screen.getAllByRole('button', { name: 'SDM at Amazon' })).toHaveLength(1);
+  });
+});
+
+describe('your photo', () => {
+  const photo = { type: 'image/webp' as const, updatedAt: 7 };
+
+  it('frames a chosen picture and keeps it, then takes it away with an Undo', async () => {
+    const user = userEvent.setup();
+    // jsdom draws nothing: a picture that decodes, and a canvas that hands back a photo.
+    HTMLImageElement.prototype.decode = vi.fn(() => Promise.resolve());
+    vi.spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get').mockReturnValue(640);
+    vi.spyOn(HTMLImageElement.prototype, 'naturalHeight', 'get').mockReturnValue(480);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((done) =>
+      done(new Blob(['webp'], { type: 'image/webp' })),
+    );
+    URL.createObjectURL = vi.fn(() => 'blob:me');
+    URL.revokeObjectURL = vi.fn();
+    let state = appState();
+    const calls = mockFetch({
+      'GET /api/state': () => state,
+      'GET /api/memories': () => [],
+      'PUT /api/profile/avatar': () =>
+        (state = appState({ profile: { ...state.profile, avatar: photo } })),
+      'GET /api/profile/avatar': () => 'webp',
+      'DELETE /api/profile/avatar': () => (state = appState()),
+    });
+    renderApp(
+      <>
+        <AboutYou initial={{ name: 'George', about: '', facts: [] }} />
+        <Toaster />
+      </>,
+    );
+    await user.upload(
+      screen.getByLabelText('Choose a photo'),
+      new File(['x'], 'me.jpg', { type: 'image/jpeg' }),
+    );
+    await user.click(await screen.findByRole('button', { name: 'Use this photo' }));
+    await waitFor(() =>
+      expect(calls).toContainEqual(
+        expect.objectContaining({
+          method: 'PUT',
+          path: '/api/profile/avatar',
+          body: { data: 'd2VicA==' },
+        }),
+      ),
+    );
+    await user.click(await screen.findByRole('button', { name: 'Change your photo' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Remove photo' }));
+    expect(await screen.findByText('Your photo is gone.')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Add a photo' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    await waitFor(() =>
+      expect(
+        calls.filter((c) => c.method === 'PUT' && c.path === '/api/profile/avatar'),
+      ).toHaveLength(2),
+    );
+    expect(await screen.findByRole('button', { name: 'Change your photo' })).toBeInTheDocument();
+    vi.restoreAllMocks();
   });
 });

@@ -1,4 +1,4 @@
-import type { ConversationSummary } from '@conch/protocol';
+import { avatarUrl, type ConversationSummary } from '@conch/protocol';
 import {
   Avatar,
   Button,
@@ -336,7 +336,11 @@ export function Sidebar({
       </ScrollArea>
       <div className={styles.footer}>
         <button type="button" className={styles.me} onClick={() => openSettings('about')}>
-          <Avatar size="sm" name={app?.profile.name || 'You'} />
+          <Avatar
+            size="sm"
+            name={app?.profile.name || 'You'}
+            src={app ? avatarUrl(app.profile) : undefined}
+          />
           <span className={styles.meName}>{app?.profile.name || 'You'}</span>
         </button>
         <IconButton
