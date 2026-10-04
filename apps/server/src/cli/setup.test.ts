@@ -78,6 +78,8 @@ function deps(
     hostname: 'vps-1',
     headless: true,
     port: 4317,
+    target: 'http://127.0.0.1:4317',
+    allowedHosts: [],
     user: 'george',
     gateway: {
       running: vi.fn(async () => true),
@@ -252,6 +254,116 @@ describe('an address of my own', () => {
   });
 });
 
+describe('through a tunnel or web server of my own', () => {
+  const through: AddressStatus = {
+    state: 'ready',
+    name: NAME,
+    url: `https://${NAME}`,
+    via: 'proxy',
+  };
+  const withStatus = (status: SetupDeps['gateway']['address']['status']) => {
+    const base = deps().deps;
+    return { gateway: { ...base.gateway, address: { set: base.gateway.address.set, status } } };
+  };
+
+  it('says where to point it, checks the way in through it and ends with the hello link', async () => {
+    const t = deps(withStatus(vi.fn(async () => through)), { choose: 'proxy', ask: [NAME] });
+    expect(await setup([], t.deps)).toBe(0);
+    expect(t.asked).toEqual(['How will you reach Conch?', 'Your address:']);
+    expect(t.deps.gateway.address.set).toHaveBeenCalledWith(NAME, 'proxy');
+    const out = t.text();
+    expect(out).toContain(`Point ${NAME} here`);
+    expect(out).toContain('http://127.0.0.1:4317');
+    expect(out).toContain('Cloudflare Tunnel');
+    expect(out).toContain('through your tunnel or web server');
+    expect(out).toContain(`https://${NAME}/#hello=HELLO-CODE`);
+    // None of the certificate path: no record, no ports, no firewall, no sudo, no Let's Encrypt.
+    expect(t.deps.dns).not.toHaveBeenCalled();
+    expect(t.deps.ports.allowed).not.toHaveBeenCalled();
+    expect(t.deps.firewall).not.toHaveBeenCalled();
+    expect(t.deps.sudo).not.toHaveBeenCalled();
+    expect(out).not.toContain('Let’s Encrypt');
+  });
+
+  it('says so when the proxy asks for its own sign-in first', async () => {
+    const t = deps(withStatus(vi.fn(async () => ({ ...through, guarded: true }))), {
+      choose: 'proxy',
+      ask: [NAME],
+    });
+    expect(await setup([], t.deps)).toBe(0);
+    expect(t.text()).toContain('It asks for its own sign-in first');
+  });
+
+  it('says what’s in the way and tries again when asked', async () => {
+    const status = vi
+      .fn<SetupDeps['gateway']['address']['status']>()
+      .mockResolvedValueOnce({
+        state: 'problem',
+        name: NAME,
+        via: 'proxy',
+        problem: {
+          kind: 'unreachable',
+          message: `${NAME} reaches your tunnel or web server, but it can’t reach Conch.`,
+        },
+      })
+      .mockResolvedValue(through);
+    const t = deps(withStatus(status), { choose: 'proxy', ask: [NAME], confirm: [true] });
+    expect(await setup([], t.deps)).toBe(0);
+    expect(t.text()).toContain('but it can’t reach Conch');
+    expect(t.deps.gateway.address.set).toHaveBeenCalledTimes(2);
+    expect(t.text()).toContain(`https://${NAME}/#hello=HELLO-CODE`);
+  });
+
+  it('still hands over the link when the proxy isn’t pointed here yet: Conch keeps checking', async () => {
+    const status = vi.fn(async (): Promise<AddressStatus> => ({
+      state: 'problem',
+      name: NAME,
+      via: 'proxy',
+      problem: { kind: 'dns', message: `${NAME} can’t be found yet.` },
+    }));
+    const t = deps(withStatus(status), { choose: 'proxy', ask: [NAME], confirm: [false] });
+    expect(await setup([], t.deps)).toBe(0);
+    expect(t.text()).toContain('Conch keeps checking by itself');
+    expect(t.text()).toContain(`https://${NAME}/#hello=HELLO-CODE`);
+  });
+
+  it('takes --proxy with nobody to ask, and a name inside a home network', async () => {
+    const t = deps(
+      withStatus(vi.fn(async () => ({ ...through, name: 'conch.home.lan' }))),
+      {},
+      false,
+    );
+    expect(await setup(['--proxy', 'https://Conch.Home.LAN/', '--yes'], t.deps)).toBe(0);
+    expect(t.deps.gateway.address.set).toHaveBeenCalledWith('conch.home.lan', 'proxy');
+    expect(t.text()).toContain('https://conch.home.lan/#hello=HELLO-CODE');
+  });
+
+  it('refuses a name that isn’t one, in words', async () => {
+    const t = deps();
+    expect(await setup(['--proxy', 'localhost'], t.deps)).toBe(1);
+    expect(t.deps.gateway.address.set).not.toHaveBeenCalled();
+  });
+
+  it('a name behind Cloudflare: asks whether a tunnel answers there, and goes that way', async () => {
+    const t = deps(
+      { ...withStatus(vi.fn(async () => through)), dns: vi.fn(async () => report('cloudflare')) },
+      { choose: 'address', ask: [NAME], confirm: [true] },
+    );
+    expect(await setup([], t.deps)).toBe(0);
+    expect(t.asked).toContain(
+      `${NAME} is behind Cloudflare. Does a Cloudflare Tunnel (or another proxy of yours) answer there?`,
+    );
+    expect(t.deps.gateway.address.set).toHaveBeenCalledWith(NAME, 'proxy');
+    expect(t.deps.ports.allowed).not.toHaveBeenCalled();
+  });
+
+  it('a name behind Cloudflare with nobody to ask: says how to choose the tunnel', async () => {
+    const t = deps({ dns: vi.fn(async () => report('cloudflare')) }, {}, false);
+    await setup(['--domain', NAME, '--yes'], t.deps);
+    expect(t.text()).toContain(`conch setup --proxy ${NAME}`);
+  });
+});
+
 describe('the other two ways', () => {
   it('Tailscale: turns on the private address and ends with the hello link there', async () => {
     const t = deps({}, { choose: 'tailscale' });
@@ -284,6 +396,16 @@ describe('the other two ways', () => {
     await setup([], tunnel.deps);
     expect(tunnel.text()).toContain('george@198.51.100.7');
     expect(out).toContain('conch open --link');
+  });
+
+  it('just this computer, but Conch already answers to a name: the link there, no SSH tunnel', async () => {
+    const t = deps({ allowedHosts: [NAME] }, { choose: 'local' });
+    expect(await setup([], t.deps)).toBe(0);
+    const out = t.text();
+    expect(out).toContain(`Conch also answers to ${NAME}`);
+    expect(out).toContain(`https://${NAME}/#hello=HELLO-CODE`);
+    expect(out).toContain(`conch setup --proxy ${NAME}`);
+    expect(out).not.toContain('ssh -N -L');
   });
 
   it('with nobody at the keyboard and nothing chosen, says how to come back to it', async () => {

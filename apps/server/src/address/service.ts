@@ -9,6 +9,11 @@
  * failure and never letting go of the certificate that still works. A
  * backup restored on another computer opens nothing until a person says so
  * there (`turnOnHere`).
+ *
+ * Behind a tunnel or web server the person already runs (`via: 'proxy'`), the
+ * proxy answers at the name and hands requests to the gateway on this computer:
+ * Conch opens no port and gets no certificate. It allows the name, checks the
+ * way in through it, and keeps trying while the proxy isn't pointed here yet.
  */
 import type { Server } from 'node:http';
 
@@ -42,17 +47,22 @@ import {
 } from './dns';
 import { AddressListeners, type ListenerOptions } from './listeners';
 import { AddressProblemError, type AddressProblem } from './problems';
-import { checkReach, type ReachResult } from './reach';
+import { checkReach, checkThrough, type ReachResult, type ThroughResult } from './reach';
 import { isPrivateNode, setcapCommand } from './runtime';
 import { AddressStore, normaliseName, type AddressFile, type StoredCertificate } from './store';
 
 export type AddressState = 'off' | 'checking' | 'getting-certificate' | 'ready' | 'problem';
+export type AddressVia = 'conch' | 'proxy';
 
 export interface AddressStatus {
   state: AddressState;
   name?: string;
   /** Where Conch answers: `https://conch.example.com`. */
   url?: string;
+  /** Who answers there: Conch itself, or a proxy of the person's own. `conch` when left out. */
+  via?: AddressVia;
+  /** Through a proxy that asks for its own sign-in first, so Conch couldn't look through it. */
+  guarded?: boolean;
   certificate?: { notAfter: number; issuer: string; renewsAt?: number };
   /** What stands in the way, or (with `ready`) why renewing hasn't worked yet. */
   problem?: AddressProblem;
@@ -93,6 +103,10 @@ export interface AddressServiceDeps {
   acme?: (accountKey: JWK) => AcmeLike;
   listeners?: (gateway: Server, options: ListenerOptions) => ListenersLike;
   reach?: (name: string, checks: Map<string, string>) => Promise<ReachResult>;
+  /** Through a proxy of the person's own: does the name lead to this Conch? */
+  through?: (name: string, checks: Map<string, string>, target: string) => Promise<ThroughResult>;
+  /** Where a proxy should send requests: the gateway on this computer, `http://127.0.0.1:4317`. */
+  target?: () => string;
   lookup?: (name: string) => Promise<Found>;
   mine?: () => Promise<Mine>;
   /** The command that lets Conch answer on ports 80 and 443, when one would (Linux). */
@@ -131,6 +145,9 @@ export async function dnsReport(
 const CHECK_EVERY_MS = 12 * 60 * 60 * 1000;
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
+/** Through a proxy, look again soon at first (it's often being set up right now), then less. */
+const PROXY_RETRY_MS = 30_000;
+const PROXY_RETRY_MAX_MS = 15 * 60_000;
 
 const defaultSchedule = (ms: number, fn: () => void) => {
   const timer = setTimeout(fn, Math.max(0, Math.min(ms, 2 ** 31 - 1)));
@@ -182,6 +199,8 @@ export class AddressService {
   #saving: Promise<void> = Promise.resolve();
   #watchers = new Set<(status: AddressStatus) => void>();
   #acme?: AcmeLike;
+  /** Looks through the proxy that didn't reach Conch, in a row: how long to wait before the next. */
+  #throughFailures = 0;
   readonly #now: () => number;
   readonly #schedule: (ms: number, fn: () => void) => () => void;
 
@@ -234,6 +253,7 @@ export class AddressService {
         },
       });
     if (!file.setOn) await this.#write({ ...file, setOn: machine });
+    if (file.via === 'proxy') return this.#behind(file.name);
     return this.#bring(file.name, force);
   }
 
@@ -260,7 +280,13 @@ export class AddressService {
     const file = await this.store.read();
     const before = this.#applied;
     const key = (f: AddressFile | undefined) =>
-      JSON.stringify([f?.name ?? null, f?.since ?? null, f?.setOn ?? null, f?.ask?.at ?? null]);
+      JSON.stringify([
+        f?.name ?? null,
+        f?.via ?? 'conch',
+        f?.since ?? null,
+        f?.setOn ?? null,
+        f?.ask?.at ?? null,
+      ]);
     if (key(file) === key(before)) return;
     this.#applied = file;
     if (!file.name) {
@@ -278,23 +304,29 @@ export class AddressService {
       return;
     }
     const name = file.name;
-    this.#set({ state: 'checking', name, url: this.#url(name) });
+    const via = file.via ?? 'conch';
+    this.#set({ state: 'checking', name, url: this.#url(name, via), via });
     void this.#single(async () => {
-      if (before?.name !== name) {
+      if (before?.name !== name || (before.via ?? 'conch') !== via) {
         await this.#listeners?.stop();
         this.#listeners = undefined;
+        // Moving to a proxy: the certificate Conch kept for the name has nothing to serve now.
+        if (via === 'proxy') await this.store.clearCertificate();
       } else await this.store.saveState({ failures: 0 });
       return this.#begin(file, true);
     });
   }
 
-  /** Answer at this name from now on: checked, certified, served. */
-  async set(raw: string): Promise<AddressStatus> {
-    const name = normaliseName(raw);
-    this.#set({ state: 'checking', name, url: this.#url(name) });
+  /**
+   * Answer at this name from now on: checked, certified, served. Or, `via: 'proxy'`,
+   * reached through the person's own tunnel or web server: allowed, and checked.
+   */
+  async set(raw: string, via: AddressVia = 'conch'): Promise<AddressStatus> {
+    const name = normaliseName(raw, { via });
+    this.#set({ state: 'checking', name, url: this.#url(name, via), via });
     return this.#single(async () => {
       const before = await this.store.read();
-      if (before.name !== name) {
+      if (before.name !== name || (before.via ?? 'conch') !== via) {
         await this.store.clear();
         await this.#listeners?.stop();
         this.#listeners = undefined;
@@ -304,21 +336,27 @@ export class AddressService {
         name,
         since: this.#now(),
         setOn: await this.store.machine(),
+        ...(via === 'proxy' && { via }),
       });
-      return this.#bring(name, true);
+      return via === 'proxy' ? this.#behind(name) : this.#bring(name, true);
     });
   }
 
   /** A backup from another computer: the person says this is the one now. */
   async turnOnHere(): Promise<AddressStatus> {
     if (this.#status.name)
-      this.#set({ state: 'checking', name: this.#status.name, url: this.#url(this.#status.name) });
+      this.#set({
+        state: 'checking',
+        name: this.#status.name,
+        url: this.#url(this.#status.name, this.#status.via),
+        ...(this.#status.via && { via: this.#status.via }),
+      });
     return this.#single(async () => {
       const file = await this.store.read();
       if (!file.name) return this.#set({ state: 'off' });
       await this.#write({ ...file, setOn: await this.store.machine() });
       await this.store.saveState({ failures: 0 });
-      return this.#bring(file.name, true);
+      return file.via === 'proxy' ? this.#behind(file.name) : this.#bring(file.name, true);
     });
   }
 
@@ -342,6 +380,8 @@ export class AddressService {
     return this.#single(async () => {
       const file = await this.store.read();
       if (!file.name) return this.#set({ state: 'off' });
+      // Through a proxy there's no certificate of Conch's: renewing is looking again.
+      if (file.via === 'proxy') return this.#behind(file.name);
       const state = await this.store.state();
       const waiting =
         state.error?.kind === 'rate-limited' && (state.nextAttempt ?? 0) > this.#now();
@@ -355,7 +395,8 @@ export class AddressService {
       await this.#listeners?.stop();
       this.#listeners = undefined;
       const file = await this.store.read();
-      return file.name ? this.#bring(file.name, false) : this.#set({ state: 'off' });
+      if (!file.name) return this.#set({ state: 'off' });
+      return file.via === 'proxy' ? this.#behind(file.name) : this.#bring(file.name, false);
     });
   }
 
@@ -405,7 +446,7 @@ export class AddressService {
       ...this.#status,
       state: this.#status.certificate ? 'ready' : 'problem',
       name,
-      url: this.#url(name),
+      url: this.#url(name, this.#status.via),
       problem: { kind: 'other', message, retryAt: this.#now() + HOUR },
     });
   }
@@ -415,6 +456,7 @@ export class AddressService {
     void this.#single(async () => {
       const file = await this.store.read();
       if (file.name !== name) return this.status();
+      if (file.via === 'proxy') return this.#behind(name);
       return this.#obtain(name, false);
     });
   }
@@ -434,9 +476,65 @@ export class AddressService {
     return this.status();
   }
 
-  #url(name: string): string {
+  #url(name: string, via: AddressVia = 'conch'): string {
+    // A proxy answers on the web's own port: Conch's HTTPS port is none of its business.
     const port = this.deps.config.CONCH_HTTPS_PORT;
-    return `https://${name}${port === 443 ? '' : `:${port}`}`;
+    return `https://${name}${via === 'proxy' || port === 443 ? '' : `:${port}`}`;
+  }
+
+  /** Where a proxy should send requests: the gateway on this computer. */
+  target(): string {
+    return this.deps.target?.() ?? 'http://127.0.0.1:4317';
+  }
+
+  /**
+   * Through the person's own tunnel or web server: no listeners, no certificate.
+   * The name is allowed as soon as it's set (the status names it), then the way in
+   * is checked through it, and looked at again with backoff until it leads here.
+   */
+  async #behind(name: string): Promise<AddressStatus> {
+    this.#cancel?.();
+    await this.#listeners?.stop();
+    this.#listeners = undefined;
+    const url = this.#url(name, 'proxy');
+    this.#set({ state: 'checking', name, url, via: 'proxy' });
+    const result = await (
+      this.deps.through ?? ((n, checks, target) => checkThrough(n, { checks, target }))
+    )(name, this.checks, this.target());
+    if (result.ok) {
+      if (this.#throughFailures > 0)
+        this.deps.heal?.(
+          'gateway',
+          `${name} reaches Conch through your tunnel or web server again.`,
+        );
+      this.#throughFailures = 0;
+      return this.#set({
+        state: 'ready',
+        name,
+        url,
+        via: 'proxy',
+        ...(result.guarded && { guarded: true }),
+      });
+    }
+    const wait = Math.min(PROXY_RETRY_MS * 2 ** this.#throughFailures, PROXY_RETRY_MAX_MS);
+    this.#throughFailures++;
+    const retryAt = this.#now() + wait;
+    this.#later(
+      wait,
+      () =>
+        void this.#single(async () => {
+          const file = await this.store.read();
+          if (file.name !== name || file.via !== 'proxy') return this.status();
+          return this.#behind(name);
+        }),
+    );
+    return this.#set({
+      state: 'problem',
+      name,
+      url,
+      via: 'proxy',
+      problem: { ...result.problem, retryAt },
+    });
   }
 
   #ensureListeners(): ListenersLike {

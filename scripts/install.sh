@@ -20,6 +20,7 @@
 #   sh install.sh --no-system-packages   skip optional system-package setup
 #   sh install.sh --server     a little computer: headless, keeps running, then conch setup
 #   sh install.sh --domain conch.example.com   on a server at an address of your own (ADR 0064)
+#   sh install.sh --proxy conch.example.com    on a server, through a tunnel or web server you run
 #   sh install.sh --uninstall [--delete-data]
 #
 # Settings from the environment: CONCH_REPO, CONCH_DIR, CONCH_HOME,
@@ -40,6 +41,7 @@ UNINSTALL=
 DELETE_DATA=
 SERVER=
 DOMAIN=
+PROXY=
 SYSTEM_PACKAGES=1
 
 case "$(uname -s)" in
@@ -61,6 +63,8 @@ while [ $# -gt 0 ]; do
     --server) SERVER=1; OPEN=; SHORTCUT= ;;
     --domain) shift; DOMAIN=${1:-}; SERVER=1; OPEN=; SHORTCUT= ;;
     --domain=*) DOMAIN=${1#--domain=}; SERVER=1; OPEN=; SHORTCUT= ;;
+    --proxy) shift; PROXY=${1:-}; SERVER=1; OPEN=; SHORTCUT= ;;
+    --proxy=*) PROXY=${1#--proxy=}; SERVER=1; OPEN=; SHORTCUT= ;;
     --delete-data) DELETE_DATA=1 ;;
     -h|--help)
       printf '%s\n' 'Conch installer: --no-background --no-shortcut --no-open --dir PATH' \
@@ -69,6 +73,7 @@ while [ $# -gt 0 ]; do
         '  --no-system-packages  Skip optional system packages (Git must already be installed)' \
         '  --server             Headless setup for a computer that stays on' \
         '  --domain NAME        On a server, at an address of your own (HTTPS by Conch itself)' \
+        '  --proxy NAME         On a server, through a tunnel or web server you run (Cloudflare Tunnel, nginx, Caddy)' \
         '  --uninstall [--delete-data]'; exit 0 ;;
     *) echo "Unknown option: $1 (try --help)" >&2; exit 1 ;;
   esac
@@ -472,9 +477,11 @@ if [ -n "$HEADLESS" ]; then
   SETUP=conch
   [ -x "$HOME/.local/bin/conch" ] && SETUP="$HOME/.local/bin/conch"
   if has_keyboard; then
-    "$SETUP" setup ${DOMAIN:+--domain "$DOMAIN"} < /dev/tty || true
+    "$SETUP" setup ${DOMAIN:+--domain "$DOMAIN"} ${PROXY:+--proxy "$PROXY"} < /dev/tty || true
   elif [ -n "$DOMAIN" ]; then
     "$SETUP" setup --domain "$DOMAIN" --yes < /dev/null || true
+  elif [ -n "$PROXY" ]; then
+    "$SETUP" setup --proxy "$PROXY" --yes < /dev/null || true
   else
     say "Conch is installed. When you're at a keyboard, run ${BOLD}conch setup${RESET} to choose how you'll reach it."
   fi

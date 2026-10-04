@@ -7,6 +7,8 @@
   [ADR 0029](./0029-menu-bar-and-little-computer.md) (the installer, a computer that stays on)
 - Goes with: [ADR 0065](./0065-passkeys-and-approving-from-your-devices.md) (how the owner signs
   in and lets new devices in)
+- Amended by: [ADR 0067](./0067-your-address-through-a-tunnel.md) (the same address through a
+  tunnel or web server the person already runs)
 
 ## Context
 

@@ -87,7 +87,17 @@ describe('your address, from Settings', () => {
       payload: { name: 'https://Conch.Example.com/' },
     });
     expect(res.statusCode).toBe(200);
-    expect(set).toHaveBeenCalledWith('conch.example.com');
+    expect(set).toHaveBeenCalledWith('conch.example.com', 'conch');
+
+    // Through a tunnel of your own: a name inside your network is fine there.
+    const proxied = await app.inject({
+      method: 'PUT',
+      url: '/api/address',
+      headers: { cookie },
+      payload: { name: 'conch.home.lan', via: 'proxy' },
+    });
+    expect(proxied.statusCode).toBe(200);
+    expect(set).toHaveBeenLastCalledWith('conch.home.lan', 'proxy');
   });
 
   it('never lets a script’s access key change where Conch can be reached', async () => {
@@ -168,5 +178,41 @@ describe('the hello link, checked from outside', () => {
       suggestedUsername: '',
     });
     expect((await ask({ code })).json().suggestedUsername).not.toBe('');
+  });
+});
+
+describe('the way-in check, through a proxy of your own', () => {
+  const ask = (app: App, nonce: string, host = 'conch.example') =>
+    app.inject({ method: 'GET', url: `/.well-known/conch-check/${nonce}`, headers: { host } });
+
+  it('answers a check Conch is making, with no sign-in, and nothing else', async () => {
+    const { app, services } = await setup();
+    // Sign-in is on: the check still answers, because it's not under /api and says nothing.
+    await services.access.setPassword('ada', PASSWORD);
+    services.address.checks.set('n0nce', 'the-token');
+    const res = await ask(app, 'n0nce');
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toBe('the-token');
+    expect((await ask(app, 'another')).statusCode).toBe(404);
+    expect((await ask(app, '..%2F..%2Fapi%2Fstate')).statusCode).toBe(404);
+  });
+
+  it('gives the token only under the name being checked', async () => {
+    const { app, services } = await setup();
+    vi.spyOn(services.address, 'status').mockReturnValue({
+      state: 'checking',
+      name: 'conch.example',
+      via: 'proxy',
+    });
+    services.address.checks.set('n0nce', 'the-token');
+    expect((await ask(app, 'n0nce', 'conch.example:443')).body).toBe('the-token');
+    // nginx's default sends its upstream's address: allowed, but not the name.
+    expect((await ask(app, 'n0nce', '127.0.0.1:4317')).body).toBe('wrong-host');
+  });
+
+  it('still only to a name Conch answers to', async () => {
+    const { app, services } = await setup();
+    services.address.checks.set('n0nce', 'the-token');
+    expect((await ask(app, 'n0nce', 'evil.example')).statusCode).toBe(421);
   });
 });

@@ -93,4 +93,43 @@ describe('addressCheck', () => {
     const [item] = await addressCheck(svc, () => NOW).run({ repair: false, signal });
     expect(item?.state).toBe('warning');
   });
+
+  describe('through a tunnel or web server of your own', () => {
+    const proxy = (extra: Partial<AddressStatus> = {}): AddressStatus => ({
+      state: 'ready',
+      name: 'conch.example.com',
+      url: 'https://conch.example.com',
+      via: 'proxy',
+      ...extra,
+    });
+    const stuck = proxy({
+      state: 'problem',
+      problem: { kind: 'unreachable', message: 'conch.example.com can’t reach Conch.' },
+    });
+
+    it('is ok with no certificate to speak of', async () => {
+      const [item] = await addressCheck(service(proxy()), () => NOW).run({ repair: false, signal });
+      expect(item).toMatchObject({
+        state: 'ok',
+        message: expect.stringContaining('through your tunnel'),
+      });
+    });
+
+    it('a repair looks through it again, and never renews or reopens ports', async () => {
+      const s = service(stuck, proxy());
+      const [item] = await addressCheck(s, () => NOW).run({ repair: true, signal });
+      expect(s.renew).toHaveBeenCalledTimes(1);
+      expect(s.restart).not.toHaveBeenCalled();
+      expect(item).toMatchObject({ state: 'fixed' });
+    });
+
+    it('what only the person can fix comes back as one place to go', async () => {
+      const [item] = await addressCheck(service(stuck), () => NOW).run({ repair: true, signal });
+      expect(item).toMatchObject({
+        state: 'needs-you',
+        message: 'conch.example.com can’t reach Conch.',
+        action: { kind: 'open', place: 'security' },
+      });
+    });
+  });
 });

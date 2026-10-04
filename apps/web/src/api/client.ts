@@ -121,8 +121,12 @@ export const api = {
   address: () => request(AddressStatus, '/api/address'),
   addressDns: (name: string) =>
     request(DnsReport, '/api/address/dns', { method: 'POST', body: { name } }),
-  setAddress: (name: string) =>
-    request(AddressStatus, '/api/address', { method: 'PUT', body: { name } }),
+  /** `via: 'proxy'`: a name the person's own tunnel or web server answers at. */
+  setAddress: (name: string, via?: 'conch' | 'proxy') =>
+    request(AddressStatus, '/api/address', {
+      method: 'PUT',
+      body: { name, ...(via === 'proxy' && { via }) },
+    }),
   removeAddress: () => request(AddressStatus, '/api/address', { method: 'DELETE' }),
   renewAddress: () => request(AddressStatus, '/api/address/renew', { method: 'POST' }),
   /** Turn on here an address a backup brought from another computer. */

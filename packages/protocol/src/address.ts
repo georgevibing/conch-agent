@@ -7,6 +7,14 @@ import { z } from 'zod';
 export const AddressState = z.enum(['off', 'checking', 'getting-certificate', 'ready', 'problem']);
 export type AddressState = z.infer<typeof AddressState>;
 
+/**
+ * Who answers at the address: Conch itself, with its own certificate on ports 80
+ * and 443 (`conch`), or a tunnel or web server the person already runs, which
+ * hands requests to Conch on this computer (`proxy`: Cloudflare Tunnel, nginx, Caddy).
+ */
+export const AddressVia = z.enum(['conch', 'proxy']);
+export type AddressVia = z.infer<typeof AddressVia>;
+
 export const AddressProblemKind = z.enum([
   /** The name doesn't lead to this server (no record, or another server's). */
   'dns',
@@ -46,6 +54,18 @@ export const AddressStatus = z.object({
   name: z.string().optional(),
   /** Where Conch answers: `https://conch.example.com`. */
   url: z.string().optional(),
+  /** Who answers there; `conch` when it's left out. */
+  via: AddressVia.optional(),
+  /**
+   * Through a proxy: it asks for a sign-in of its own (Cloudflare Access, say), so
+   * Conch could reach it but not look through it. That's a lock in front, not a problem.
+   */
+  guarded: z.boolean().optional(),
+  /**
+   * Where a tunnel or web server should send requests, for the person setting
+   * one up: the gateway on this computer, `http://127.0.0.1:4317`.
+   */
+  target: z.string().optional(),
   certificate: z
     .object({ notAfter: z.number(), issuer: z.string(), renewsAt: z.number().optional() })
     .optional(),
@@ -78,5 +98,7 @@ export const DnsReport = z.object({
 export type DnsReport = z.infer<typeof DnsReport>;
 
 /** A name as typed: `conch.example.com`, or `https://Conch.Example.com/`. */
-export const AddressNameBody = z.object({ name: z.string().trim().min(1).max(300) }).strict();
+export const AddressNameBody = z
+  .object({ name: z.string().trim().min(1).max(300), via: AddressVia.optional() })
+  .strict();
 export type AddressNameBody = z.infer<typeof AddressNameBody>;

@@ -58,7 +58,14 @@ export const PASSKEYS_SUBCOMMANDS = [
 export const ADDRESS_SUBCOMMANDS = [
   { usage: '(nothing), status', summary: 'Where Conch answers, and its certificate' },
   { usage: 'set <name>', summary: 'Answer at this address (the same steps as setup)' },
-  { usage: 'renew', summary: 'Renew the certificate now (it renews by itself anyway)' },
+  {
+    usage: 'set <name> --proxy',
+    summary: 'Answer at this address through a tunnel or web server you run',
+  },
+  {
+    usage: 'renew',
+    summary: 'Renew the certificate now (behind a proxy: look through it again)',
+  },
   { usage: 'here', summary: 'Turn on here an address a backup brought from another computer' },
   { usage: 'off', summary: 'Stop answering at it' },
 ] as const satisfies readonly CliSubcommand[];
@@ -66,11 +73,11 @@ export const ADDRESS_SUBCOMMANDS = [
 export const CLI_COMMANDS = [
   {
     name: 'setup',
-    usage: 'setup [--domain <name> | --tailscale | --local]',
+    usage: 'setup [--domain <name> | --proxy <name> | --tailscale | --local]',
     summary: 'Choose how you’ll reach Conch, and make it yours',
     group: 'Getting started',
     detail:
-      'Asks how you’ll reach Conch: at an address of your own (conch.yourname.com), privately with Tailscale, or only from this computer. For an address, it shows the DNS record to add and waits for it, gets Conch permission to answer on ports 80 and 443 (asking once for your password on Linux), opens this server’s firewall when you say so, and gets a certificate from Let’s Encrypt. It ends with the link that makes Conch yours. The installer runs it on a server; run it again any time to change your mind. --yes asks nothing.',
+      'Asks how you’ll reach Conch: at an address of your own (conch.yourname.com), through a tunnel or web server you already run (Cloudflare Tunnel, nginx, Caddy), privately with Tailscale, or only from this computer. For an address, it shows the DNS record to add and waits for it, gets Conch permission to answer on ports 80 and 443 (asking once for your password on Linux), opens this server’s firewall when you say so, and gets a certificate from Let’s Encrypt. Through your own tunnel, it says where to point it, and checks the way in through it. Either way it ends with the link that makes Conch yours. The installer runs it on a server; run it again any time to change your mind. --yes asks nothing.',
   },
   {
     name: 'address',
@@ -78,7 +85,7 @@ export const CLI_COMMANDS = [
     summary: 'Your own address: where Conch answers over HTTPS',
     group: 'Getting started',
     detail:
-      'With nothing after it, says where Conch answers, how long its certificate is good for and anything in the way, with the one thing to do about it. Conch renews the certificate by itself. off stops answering there; set changes it, through the same steps as setup.',
+      'With nothing after it, says where Conch answers, how long its certificate is good for (or which tunnel or web server answers for it) and anything in the way, with the one thing to do about it. Conch renews the certificate by itself. off stops answering there; set changes it, through the same steps as setup, and set <name> --proxy for a name your own tunnel or web server answers at.',
     subcommands: ADDRESS_SUBCOMMANDS,
   },
   {

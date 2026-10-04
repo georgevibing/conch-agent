@@ -105,6 +105,67 @@ describe('your address', () => {
     expect(await screen.findByText(/Secure · renews by itself/)).toBeVisible();
   });
 
+  it('sets one up through a tunnel of your own: where to point it, then Conch answering there', async () => {
+    const user = userEvent.setup();
+    const { calls } = show(
+      { state: 'off', target: 'http://127.0.0.1:4317' },
+      {
+        'PUT /api/address': () => ({ state: 'checking', name: NAME, via: 'proxy' }),
+        'GET /api/access': () => new Response('{}', { status: 404 }),
+      },
+    );
+    await user.click(await screen.findByRole('button', { name: /Set up/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Your own address' });
+    await user.click(
+      within(dialog).getByRole('button', { name: 'I already run a tunnel or web server for it' }),
+    );
+    expect(within(dialog).getByText('http://127.0.0.1:4317')).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: 'Copy where to point it' })).toBeVisible();
+    expect(within(dialog).queryByText(/Let’s Encrypt/)).toBeNull();
+    const turnOn = within(dialog).getByRole('button', { name: 'Turn it on' });
+    expect(turnOn).toBeDisabled();
+    await user.type(within(dialog).getByRole('textbox', { name: 'Address' }), NAME);
+    await user.click(turnOn);
+    await waitFor(() =>
+      expect(calls).toContainEqual({
+        method: 'PUT',
+        path: '/api/address',
+        body: { name: NAME, via: 'proxy' },
+      }),
+    );
+    // No record to add: no DNS lookup at all.
+    expect(calls.some((c) => c.path === '/api/address/dns')).toBe(false);
+    expect(
+      await within(dialog).findByText('Checking the way in through your tunnel…'),
+    ).toBeVisible();
+    await say({ state: 'ready', name: NAME, url: `https://${NAME}`, via: 'proxy', guarded: true });
+    expect(await within(dialog).findByText(/through your tunnel$/)).toBeVisible();
+    await user.click(within(dialog).getByRole('button', { name: 'Done' }));
+    expect(await screen.findByText(/behind its own sign-in/)).toBeVisible();
+  });
+
+  it('a name behind Cloudflare offers the tunnel way', async () => {
+    const user = userEvent.setup();
+    show(
+      { state: 'off' },
+      {
+        'POST /api/address/dns': () => ({
+          ...report('cloudflare'),
+          message: `${NAME} is behind Cloudflare’s proxy (the orange cloud).`,
+        }),
+      },
+    );
+    await user.click(await screen.findByRole('button', { name: /Set up/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Your own address' });
+    await user.type(within(dialog).getByRole('textbox', { name: 'Address' }), NAME);
+    await user.click(within(dialog).getByRole('button', { name: 'Check' }));
+    await user.click(
+      await within(dialog).findByRole('button', { name: 'It’s a Cloudflare Tunnel' }),
+    );
+    expect(within(dialog).getByText('Point your tunnel or web server at')).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: 'Turn it on' })).toBeEnabled();
+  });
+
   it('says what the gateway says about a name that isn’t an address', async () => {
     const user = userEvent.setup();
     show(

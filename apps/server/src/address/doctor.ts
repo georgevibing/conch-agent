@@ -2,7 +2,8 @@
  * Repair everything's look at your own address (ADR 0064): the certificate,
  * where the name points, the ports, and (on Linux) whether Conch may still
  * answer on them. A repair renews or reopens what it can; what only a person
- * can do comes back as one action.
+ * can do comes back as one action. Through a tunnel or web server of the
+ * person's own, it looks through it again: that's all Conch can mend there.
  */
 import type { DoctorItem } from '@conch/protocol';
 
@@ -26,6 +27,26 @@ function describe(status: AddressStatus, now: number, repaired: boolean): Doctor
   const name = status.name ?? 'Your address';
   const problem = status.problem;
   if (status.state === 'off') return [];
+  if (status.via === 'proxy' && problem?.kind !== 'another-computer') {
+    if (status.state === 'ready')
+      return [
+        item(
+          repaired ? 'fixed' : 'ok',
+          repaired
+            ? `${name} reaches Conch through your tunnel or web server again.`
+            : `Conch answers at ${status.url ?? name}, through your tunnel or web server.`,
+        ),
+      ];
+    if (status.state === 'checking')
+      return [item('info', `Conch is checking the way in through ${name}.`)];
+    return [
+      item('needs-you', problem?.message ?? `${name} doesn’t reach Conch yet.`, {
+        kind: 'open',
+        label: 'Open Security',
+        place: 'security',
+      }),
+    ];
+  }
   if (problem?.kind === 'another-computer')
     return [
       item('needs-you', problem.message, {
@@ -89,6 +110,11 @@ export function addressCheck(
       const before = service.status();
       if (!repair || before.state === 'off' || before.problem?.kind === 'another-computer')
         return describe(before, now(), false);
+      // Through a proxy: look through it again (renew does just that), and nothing more.
+      if (before.via === 'proxy') {
+        const after = before.state === 'ready' ? before : await service.renew();
+        return describe(after, now(), before.state !== 'ready' && after.state === 'ready');
+      }
       // Listeners that stopped come back first; then a certificate that's due, or missing.
       let after = before;
       if (

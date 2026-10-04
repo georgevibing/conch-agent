@@ -311,6 +311,15 @@ export function checkup(input: CheckupInput): CheckupItem[] {
         ...(problem.command && { command: problem.command }),
         fix: { kind: 'open', label: 'Open', place: 'address' },
       });
+    else if (state === 'ready' && input.address.via === 'proxy')
+      items.push({
+        id: 'address',
+        level: 'ok',
+        title: `Conch answers at ${own}, through your tunnel or web server`,
+        detail: input.address.guarded
+          ? 'It asks for a sign-in of its own before anyone reaches Conch, and Conch asks for yours after it.'
+          : 'It keeps the connection secure. Conch still asks everyone who opens it there to sign in.',
+      });
     else if (state === 'ready')
       items.push({
         id: 'address',

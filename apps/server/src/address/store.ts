@@ -37,6 +37,13 @@ const AddressFile = z.object({
   /** The id of the computer it was set on (`address/machine`). */
   setOn: z.string().max(64).optional(),
   /**
+   * Who answers at the name: Conch itself (`conch`, also when it's left out), or a
+   * tunnel or web server the person runs in front of it (`proxy`). A version from
+   * before this drops the field and tries for a certificate, which fails safely:
+   * the name stays allowed, so the proxy still reaches Conch.
+   */
+  via: z.enum(['conch', 'proxy']).optional(),
+  /**
    * Something `conch address` asked of the running Conch: it acts on each once. Writing
    * this file is the proof it's the person, as it is for `access.json`.
    */
@@ -75,8 +82,12 @@ export interface StoredCertificate {
 /**
  * The hostname in a person's words, made exact: `https://Conch.Example.com/`
  * becomes `conch.example.com`. Throws `AddressError` with what to do instead.
+ *
+ * Behind a proxy of the person's own (`via: 'proxy'`) no certificate authority
+ * ever sees the name, so a name inside their network (`conch.home.lan`) is fine.
  */
-export function normaliseName(raw: string): string {
+export function normaliseName(raw: string, options: { via?: 'conch' | 'proxy' } = {}): string {
+  const proxied = options.via === 'proxy';
   let text = raw.trim();
   if (!text) throw new AddressError('Type the address, like conch.yourname.com.');
   text = text.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
@@ -97,7 +108,9 @@ export function normaliseName(raw: string): string {
     );
   if (/:\d*$/.test(text))
     throw new AddressError(
-      'Just the name, without a port: Conch answers on the usual ones (443, and 80 for the certificate).',
+      proxied
+        ? 'Just the name, without a port: the one people type in the browser.'
+        : 'Just the name, without a port: Conch answers on the usual ones (443, and 80 for the certificate).',
     );
   const ascii = domainToASCII(text.toLowerCase().replace(/\.$/, ''));
   if (!ascii || ascii.length > 253 || !/^[a-z0-9.-]+$/.test(ascii))
@@ -110,12 +123,13 @@ export function normaliseName(raw: string): string {
     throw new AddressError(
       'That name has no domain. Use the whole thing, like conch.yourname.com.',
     );
+  if (ascii.split('.').some((label) => !label || label.length > 63 || /^-|-$/.test(label)))
+    throw new AddressError('That doesn’t look like an address. It looks like conch.yourname.com.');
+  if (proxied) return ascii;
   if (/\.(local|internal|lan|home|arpa)$/.test(ascii))
     throw new AddressError(
       'That name only works inside a network, so no certificate authority can check it. Use a name you own on the internet.',
     );
-  if (ascii.split('.').some((label) => !label || label.length > 63 || /^-|-$/.test(label)))
-    throw new AddressError('That doesn’t look like an address. It looks like conch.yourname.com.');
   const parsed = parseDomain(ascii, { allowPrivateDomains: true });
   if (!parsed.publicSuffix || !parsed.domain || (!parsed.isIcann && !parsed.isPrivate))
     throw new AddressError(
@@ -145,6 +159,11 @@ export class AddressStore {
   /** Forget the address and everything that went with it on this computer (but the id). */
   async clear(): Promise<void> {
     await rm(this.file, { force: true });
+    await this.clearCertificate();
+  }
+
+  /** Forget the certificate and how getting one went: a proxy answers at the name now. */
+  async clearCertificate(): Promise<void> {
     for (const name of ['cert.pem', 'key.pem', 'state.json'])
       await rm(join(this.dir, name), { force: true });
   }

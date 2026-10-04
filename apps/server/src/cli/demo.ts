@@ -76,6 +76,11 @@ if (prompts.interactive && process.stdin.isTTY) {
       label: 'From anywhere, at an address of my own',
       hint: 'like conch.yourname.com',
     },
+    {
+      value: 'proxy',
+      label: 'Through a tunnel or web server I already run',
+      hint: 'Cloudflare Tunnel, nginx, Caddy',
+    },
     { value: 'tailscale', label: 'Only from my own devices, privately', hint: 'Tailscale' },
     { value: 'local', label: 'Just from this computer for now' },
   ]);

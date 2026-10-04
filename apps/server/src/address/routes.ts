@@ -17,13 +17,15 @@ import { AddressError, normaliseName } from './store';
  *
  * Setting a name answers at once with `checking`; what follows (the reach
  * check, the certificate) arrives as `address.changed` events and in `GET`.
+ * `via: 'proxy'` sets a name the person's own tunnel or web server answers at.
  */
 export function registerAddressRoutes(
   app: FastifyInstance,
   address: AddressService,
   gate: Gatekeeper,
 ): void {
-  const status = () => AddressStatus.parse(address.status());
+  // Where a proxy should send requests travels with it, for setting one up from Settings.
+  const status = () => AddressStatus.parse({ ...address.status(), target: address.target() });
 
   /**
    * Only the owner in a browser: this computer, or a signed-in device that's
@@ -60,7 +62,7 @@ export function registerAddressRoutes(
       return undefined;
     }
     try {
-      return normaliseName(body.data.name);
+      return normaliseName(body.data.name, { via: body.data.via ?? 'conch' });
     } catch (error) {
       if (!(error instanceof AddressError)) throw error;
       void reply.code(400).send({ error: 'bad-name', message: error.message });
@@ -84,15 +86,17 @@ export function registerAddressRoutes(
       const wanted = name(request, reply);
       if (!wanted) return;
       if (!(await guard(request, reply))) return;
+      const via = AddressNameBody.parse(request.body).via ?? 'conch';
       // The reach check and the certificate take a while: say "checking" now, the rest as events.
-      void address.set(wanted).catch(() => undefined);
+      void address.set(wanted, via).catch(() => undefined);
       await new Promise((resolve) => setImmediate(resolve));
       return status();
     });
 
     app.delete(base, async (request, reply) => {
       if (!(await guard(request, reply))) return;
-      return AddressStatus.parse(await address.remove());
+      await address.remove();
+      return status();
     });
 
     // Renewing spends Let's Encrypt's limits, so it's the owner's to ask for too.
@@ -113,4 +117,27 @@ export function registerAddressRoutes(
   };
 
   routes('/api/address', owner);
+
+  /**
+   * Through a proxy of the person's own (`via: 'proxy'`), the reach check arrives
+   * here, on the gateway's own port: the token for a nonce Conch made a moment ago,
+   * and nothing else. It isn't under /api, so it needs no sign-in (as on the port 80
+   * listener), and it still only answers to an allowed Host.
+   *
+   * The token comes back only under the name being checked: a proxy that sends
+   * another name (nginx's default, `127.0.0.1:4317`, is always allowed) hears
+   * `wrong-host`, so the setup can say to pass the name on.
+   */
+  app.get<{ Params: { nonce: string } }>(
+    '/.well-known/conch-check/:nonce',
+    async (request, reply) => {
+      const answer = /^[A-Za-z0-9_-]{1,64}$/.test(request.params.nonce)
+        ? address.checks.get(request.params.nonce)
+        : undefined;
+      if (!answer) return reply.code(404).type('text/plain').send('Not found.');
+      const seen = (request.headers.host ?? '').toLowerCase().replace(/:\d+$/, '');
+      const name = address.status().name;
+      return reply.type('text/plain').send(name && seen !== name ? 'wrong-host' : answer);
+    },
+  );
 }

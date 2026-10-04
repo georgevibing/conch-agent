@@ -32,6 +32,9 @@ export function protectedPaths(home: string): string[] {
     // certificate's private key and the ACME account key (ADR 0064).
     join(home, 'address.json'),
     join(home, 'address'),
+    // Where the running Conch listens and the names it answers to: `conch hello` puts its
+    // one-time link at those names, so a name written here would receive the link's code.
+    join(home, 'gateway.json'),
     join(home, 'access.json'),
     // What proves a browser or a program is on this computer (ADR 0063): this computer's key,
     // the one-time files that open Conch, and the menu bar helper's token. With either, the

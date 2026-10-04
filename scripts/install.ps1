@@ -16,7 +16,8 @@
 # $env:CONCH_CHANNEL (beta or alpha: also take those releases),
 # $env:CONCH_BRANCH (a developer's copy: follow a branch, every change),
 # $env:CONCH_SERVER (a little computer: no browser; then `conch setup` asks how you'll reach it),
-# $env:CONCH_DOMAIN (on a server, at an address of your own, over HTTPS by Conch itself: ADR 0064).
+# $env:CONCH_DOMAIN (on a server, at an address of your own, over HTTPS by Conch itself: ADR 0064),
+# $env:CONCH_PROXY (on a server, through a tunnel or web server you run: Cloudflare Tunnel, nginx, Caddy).
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -30,7 +31,7 @@ if ($Channel -notin @('stable', 'beta', 'alpha')) { throw "CONCH_CHANNEL can be 
 $ConchHome = if ($env:CONCH_HOME) { $env:CONCH_HOME } else { Join-Path $HOME '.conch' }
 $Dir = if ($env:CONCH_DIR) { $env:CONCH_DIR } else { Join-Path $env:LOCALAPPDATA 'Conch\app' }
 $Runtime = Join-Path $ConchHome 'runtime'
-if ($env:CONCH_DOMAIN) { $env:CONCH_SERVER = '1' }
+if ($env:CONCH_DOMAIN -or $env:CONCH_PROXY) { $env:CONCH_SERVER = '1' }
 if ($env:CONCH_SERVER) { $env:CONCH_NO_OPEN = '1'; $env:CONCH_NO_SHORTCUT = '1' }
 
 function Say($text) { Write-Host "  $text" }
@@ -331,6 +332,7 @@ if ($env:CONCH_SERVER) {
   Write-Host ''
   $setupArgs = @('setup')
   if ($env:CONCH_DOMAIN) { $setupArgs += @('--domain', $env:CONCH_DOMAIN) }
+  elseif ($env:CONCH_PROXY) { $setupArgs += @('--proxy', $env:CONCH_PROXY) }
   Push-Location $RunDir
   try {
     $env:COREPACK_ENABLE_DOWNLOAD_PROMPT = '0'
