@@ -42,6 +42,28 @@ If a skill is **Off** or **When I ask** and it fits what you asked, your assista
 
 Either way the chat carries on by itself with what you asked, now using the skill. **Not now** and **Don't suggest** work as they do for [apps](./apps.md#or-connect-from-a-chat). A skill Conch found something worrying in is never offered: open it from **Skills** and look first.
 
+## Add a skill people share
+
+Thousands of people share skills. **Discover**, the second tab on the Skills page, finds them in Anthropic's own collection, ClawHub and skills.sh.
+
+1. Open **Skills** and choose **Discover**. Search for what it should get better at, pick a kind such as **Writing** or **Design**, or start from one of the ideas.
+2. Each card says what the skill does, who published it and where, how many people use it, and what that place says about it: **Official**, **Verified publisher**, **Community** or **Flagged**.
+3. Open one. Conch downloads it and reads every file before you add anything. You see what it will be able to do, what Conch found, the version and the licence.
+4. Choose **When it fits** or **Only when I ask**, and press **Add skill**.
+
+It's yours from then on, under **Added from Discover**, and works with every model. Nothing in it runs when it's added.
+
+- **A worrying skill** shows what Conch found, and **Add anyway** waits until you tick that you've read it.
+- **Some can't be added.** A skill whose place found harmful code in it, or whose licence only allows using it inside its maker's own apps, has no button, only why.
+- **Updates wait for you.** A skill is pinned to the exact version you read. When a newer one is out, its page says **A newer version is there**. **Read the update** shows what changed, file by file, and says first if it now asks to do more. Nothing changes until you press **Update**.
+- **Remove** on its page takes it away. You can add it again from Discover.
+
+Your assistant can find one for you too. When a skill people share would clearly help with what you asked, a card under the reply names it, says where it's from, and opens it to read. **Add and carry on** adds it, and the chat carries on with it. **Don't suggest skills from Discover**, under the card's **More**, stops these offers. In a chat that has read something from outside, your assistant doesn't look for skills or offer them.
+
+<kbd>mod+k</kbd> finds **Discover skills**, and skills people share by name.
+
+If those places can't be reached, Discover shows what it found last time and says so.
+
 ## Skills you already have
 
 Conch saves a skill as a `SKILL.md`, the format Claude Code, Codex, OpenClaw and Hermes all read. Skills it finds in other assistants' folders appear under **From other apps**.
