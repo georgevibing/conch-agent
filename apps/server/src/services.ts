@@ -912,6 +912,11 @@ export class Services {
           .of(engine)
           .then((info) => this.usage.recordTurn(usage, turnCost(usage, info, undefined)))
           .catch(() => undefined),
+      // Over the monthly budget, a turn checks in sooner (ADR 0085); it never blocks (ADR 0005).
+      overBudget: async () => {
+        const { usd, budgetUsd } = await this.usage.month();
+        return budgetUsd !== undefined && usd >= budgetUsd;
+      },
       // Before a long chat's start is summarised, what you said there is learned (ADR 0055).
       learn: async ({ conversationId, origin, events, beforeSeq }) => {
         await this.tidy.learn(

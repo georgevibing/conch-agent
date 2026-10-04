@@ -293,6 +293,8 @@ describe('an Anthropic turn', () => {
         name: 'mcp__conch__remember',
         description: 'Save a fact.',
         input_schema: { type: 'object', properties: { content: { type: 'string' } } },
+        // The tool list is the start of every request: cached (ADR 0085).
+        cache_control: { type: 'ephemeral' },
       },
     ]);
     expect(body['max_tokens']).toBe(16_384);
@@ -398,6 +400,55 @@ describe('an Anthropic turn', () => {
         ],
       },
     ]);
+  });
+});
+
+describe('earlier thinking that no longer matches (ADR 0085)', () => {
+  it('drops the old thinking and asks again, once, by itself', async () => {
+    let calls = 0;
+    const { wire: api, calls: sent } = wire(() => {
+      calls++;
+      return calls === 1
+        ? jsonResponse(
+            {
+              type: 'error',
+              error: {
+                type: 'invalid_request_error',
+                message: 'messages.1.content.0: thinking block prefix binding mismatch',
+              },
+            },
+            400,
+          )
+        : sseResponse(namedFrames(['message_stop', { type: 'message_stop' }]));
+    });
+    const messages = [
+      { role: 'user', content: 'Book it' },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'thinking', thinking: 'hmm', signature: 'sig' },
+          { type: 'tool_use', id: 't1', name: 'mcp__conch__remember', input: {} },
+        ],
+      },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: 'ok' }] },
+    ];
+    await drain(api.stream(request({ messages })));
+    expect(sent).toHaveLength(2);
+    const again = JSON.stringify((sent[1]?.body as { messages: unknown }).messages);
+    expect(again).not.toContain('"thinking"');
+    expect(again).toContain('tool_use');
+  });
+
+  it('says any other refusal as it is, without asking again', async () => {
+    const { wire: api, calls } = wire(() =>
+      jsonResponse(
+        { type: 'error', error: { type: 'invalid_request_error', message: 'bad tools' } },
+        400,
+      ),
+    );
+    const error = await failure(drain(api.stream(request())));
+    expect(error.message).toBe('bad tools');
+    expect(calls).toHaveLength(1);
   });
 });
 

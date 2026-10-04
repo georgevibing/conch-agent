@@ -230,12 +230,23 @@ describe('reading a failure the way each provider means it', () => {
     expect(mapChatError(status, error, undefined, label).kind).toBe(kind);
   });
 
-  it('retries a rate limit only when told how long to wait', () => {
+  it('retries a rate limit: as long as it was told, else with backoff (ADR 0085)', () => {
     expect(mapChatError(429, { message: 'slow down' }, 3000, label)).toMatchObject({
       retryable: true,
       retryAfterMs: 3000,
     });
-    expect(mapChatError(429, { message: 'slow down' }, undefined, label).retryable).toBe(false);
+    const unsaid = mapChatError(429, { message: 'slow down' }, undefined, label);
+    expect(unsaid.retryable).toBe(true);
+    expect(unsaid.retryAfterMs).toBeUndefined();
+    // Spent credit is never waited out.
+    expect(
+      mapChatError(
+        429,
+        { message: 'You exceeded your current quota', type: 'insufficient_quota' },
+        undefined,
+        label,
+      ).retryable,
+    ).toBe(false);
   });
 
   it('never repeats a key back', () => {

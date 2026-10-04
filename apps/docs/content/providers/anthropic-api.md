@@ -18,3 +18,4 @@ Every Claude model, straight from Anthropic. Conch runs the conversation itself:
 
 - **Conch supplies the tools.** Tool-capable models can use memory, connected apps and files in this conversation’s work folder, with the same permission checks and Undo tracking. Commands require the OS sandbox, cannot access the network and have no unrestricted fallback. Chat-only models are labelled before answering and cannot perform actions.
 - **Spend is tracked.** Conch records what each turn cost, and you can set a budget. See [Offline and at a limit](../care/offline.md).
+- **What it already read costs a tenth.** Conch asks Anthropic to keep the instructions, the tools and the chat so far in its cache, so each step of a long job pays full price only for what's new. On a twelve-step job that's about four fifths less.

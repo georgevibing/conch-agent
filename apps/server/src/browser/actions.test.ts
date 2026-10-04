@@ -216,11 +216,13 @@ describe.skipIf(!hasBrowser)('a person’s hands, for real', () => {
     { timeout: 90_000 },
     async () => {
       const { call, asked } = harness('conv_hands', ['allow']);
-      let text = await call('browser_open', { url: `${origin}/hands` });
-      expect(text).not.toContain('Mugs');
+      // Refs come from the whole page: an action answers with only what changed (ADR 0085).
+      const page = await call('browser_open', { url: `${origin}/hands` });
+      expect(page).not.toContain('Mugs');
+      let text: string;
       // Pointing at something asks nothing.
       text = await call('browser_click', {
-        ref: refOf(text, /Products/),
+        ref: refOf(page, /Products/),
         element: 'Products',
         how: 'hover',
       });
@@ -228,7 +230,7 @@ describe.skipIf(!hasBrowser)('a person’s hands, for real', () => {
       expect(asked).toHaveLength(0);
 
       text = await call('browser_click', {
-        ref: refOf(text, /Twice/),
+        ref: refOf(page, /Twice/),
         element: 'Twice',
         how: 'double',
       });
@@ -236,22 +238,22 @@ describe.skipIf(!hasBrowser)('a person’s hands, for real', () => {
       expect(asked.map((a) => a.browser?.action)).toEqual(['Double-click “Twice”']);
 
       text = await call('browser_click', {
-        ref: refOf(text, /Right here/),
+        ref: refOf(page, /Right here/),
         element: 'Right here',
         how: 'right',
       });
       expect(text).toContain('Right!');
 
       text = await call('browser_click', {
-        ref: refOf(text, /Card/),
+        ref: refOf(page, /Card/),
         element: 'Card',
         how: 'drag',
-        to: refOf(text, /region "Bin"/),
+        to: refOf(page, /region "Bin"/),
       });
       expect(text).toContain('Dropped!');
       expect(
         await call('browser_click', {
-          ref: refOf(text, /Twice|Double/),
+          ref: refOf(page, /Twice|Double/),
           element: 'x',
           how: 'drag',
         }),
@@ -259,7 +261,7 @@ describe.skipIf(!hasBrowser)('a person’s hands, for real', () => {
 
       text = await call('browser_press', {
         key: 'Control+Shift+K',
-        ref: refOf(text, /textbox "Notes"/),
+        ref: refOf(page, /textbox "Notes"/),
       });
       expect(text).toMatch(/textbox "Notes".*\[ref=[a-z0-9]+\]: chord!/);
     },
