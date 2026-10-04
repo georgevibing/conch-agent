@@ -11,10 +11,15 @@ class FakeChild extends EventEmitter {
   stderr = new EventEmitter();
   connected = true;
   exitCode: number | null = null;
+  /** Like Node's: set instead of exitCode when a signal ended it. */
+  signalCode: NodeJS.Signals | null = null;
   pid = Math.floor(Math.random() * 10_000) + 1;
   sent: unknown[] = [];
   constructor(readonly env: NodeJS.ProcessEnv) {
     super();
+  }
+  get running() {
+    return this.exitCode === null && this.signalCode === null;
   }
   send(message: unknown) {
     this.sent.push(message);
@@ -22,6 +27,7 @@ class FakeChild extends EventEmitter {
   }
   exit(code: number | null, signal: NodeJS.Signals | null = null) {
     this.exitCode = code;
+    this.signalCode = signal;
     this.connected = false;
     this.emit('exit', code, signal);
   }
@@ -60,7 +66,7 @@ function world() {
     }),
     {
       spawn: ((_command: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
-        if (children.some((earlier) => earlier.exitCode === null)) overlapped = true;
+        if (children.some((earlier) => earlier.running)) overlapped = true;
         const child = new FakeChild(options.env);
         children.push(child);
         return child;
@@ -200,7 +206,7 @@ describe('the gateway, kept running by the app', () => {
     // Still saying goodbye: nobody has been told it stopped.
     expect(stopped).toBe(0);
     await Promise.all([first, second]);
-    expect(latest().exitCode).toBe(0);
+    expect(latest().running).toBe(false);
     expect(logged.join('')).not.toMatch(/IPC channel/);
   });
 
