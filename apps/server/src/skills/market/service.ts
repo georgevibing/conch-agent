@@ -1,5 +1,5 @@
 /**
- * Discover (ADR 0070): skills people publish, searched in a few public
+ * Discover (ADR 0072): skills people publish, searched in a few public
  * places and added as one of yours, held to the same rules as every other
  * skill from elsewhere.
  *
@@ -217,7 +217,7 @@ export class SkillMarket {
 
   // ── What the skill store needs ──────────────────────────────────────────
 
-  /** One folder per source, read-only to the store (ADR 0070). */
+  /** One folder per source, read-only to the store (ADR 0072). */
   roots(): SkillRoot[] {
     return [...this.#sources.values()].map((s) => ({
       source: 'market' as const,
@@ -812,7 +812,7 @@ export class SkillMarket {
   }
 
   /**
-   * Repair everything's look (ADR 0070): added skills whose folder is gone,
+   * Repair everything's look (ADR 0072): added skills whose folder is gone,
    * and leftovers from looks nobody pressed for.
    */
   async health(repair: boolean): Promise<{ missing: string[]; swept: number }> {

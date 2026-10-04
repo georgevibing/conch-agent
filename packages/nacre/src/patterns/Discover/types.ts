@@ -1,5 +1,5 @@
 /**
- * What Discover's patterns draw (ADR 0070). Each mirrors its schema in
+ * What Discover's patterns draw (ADR 0072). Each mirrors its schema in
  * `@conch/protocol` (`skill-market.ts`) structurally: Nacre stays free of the
  * protocol, and the web passes the protocol's values straight in, so its
  * typecheck says when the two drift apart.

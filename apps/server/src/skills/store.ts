@@ -177,10 +177,10 @@ export class SkillStore {
    */
   appRoots: () => SkillRoot[] = () => [];
 
-  /** Skills added from Discover (ADR 0070): one folder per place they came from, never written here. */
+  /** Skills added from Discover (ADR 0072): one folder per place they came from, never written here. */
   marketRoots: () => SkillRoot[] = () => [];
 
-  /** Where each skill added from Discover came from, by id (ADR 0070). */
+  /** Where each skill added from Discover came from, by id (ADR 0072). */
   origins: () => ReadonlyMap<string, SkillOrigin> = () => new Map();
 
   get roots(): SkillRoot[] {

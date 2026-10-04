@@ -52,7 +52,7 @@ export interface MarketSkillPreviewProps extends Omit<
 }
 
 /**
- * One skill from Discover, read before it's added (ADR 0070): what it does,
+ * One skill from Discover, read before it's added (ADR 0072): what it does,
  * what it will be able to do in plain words, what Conch found reading every
  * file, who published it and where, the exact version, and its licence.
  * One button adds it. A worrying one needs a tick that says you read what
