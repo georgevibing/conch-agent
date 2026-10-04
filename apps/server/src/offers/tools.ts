@@ -34,19 +34,19 @@ export function offerTools(
   },
 ): HostTool[] {
   const offer: HostTool<{
-    kind: z.ZodEnum<{ app: 'app'; skill: 'skill' }>;
+    kind: z.ZodEnum<{ app: 'app'; skill: 'skill'; market: 'market' }>;
     target: z.ZodString;
     why: z.ZodOptional<z.ZodString>;
   }> = {
     name: 'offer',
     description: [
       'Offer the person one app to connect or one skill to turn on, from “What Conch can turn on”, when it would clearly do what they asked. They get a card under your reply; nothing is turned on unless they press it. An app that isn’t connected has no tools to search for: call this instead.',
-      '`kind` is `app` or `skill`, `target` its id from that list, `why` one short sentence in your own voice on how it helps with this request.',
+      '`kind` is `app` or `skill`, `target` its id from that list, `why` one short sentence in your own voice on how it helps with this request. For a skill people share, found with `find_skills`, `kind` is `market` and `target` its id from there.',
       'Answer what you can first, and don’t explain how to set it up: the card does that. When it’s on, the chat carries on with the request by itself.',
     ].join(' '),
     input: {
-      kind: z.enum(['app', 'skill']),
-      target: z.string().min(1).max(128),
+      kind: z.enum(['app', 'skill', 'market']),
+      target: z.string().min(1).max(240),
       why: z.string().max(400).optional(),
     },
     // The map tells the model to call `offer`: it must be there, not waiting to be searched for.
@@ -65,8 +65,17 @@ export function offerTools(
       const { offer: shown } = result;
       ctx.append({ type: 'offer', offer: shown });
       const what =
-        shown.kind === 'app' ? `connect ${shown.name}` : `turn on the “${shown.name}” skill`;
-      const when = shown.kind === 'app' ? 'it’s connected' : 'it’s on';
+        shown.kind === 'app'
+          ? `connect ${shown.name}`
+          : shown.kind === 'market'
+            ? `read and add the “${shown.name}” skill`
+            : `turn on the “${shown.name}” skill`;
+      const when =
+        shown.kind === 'app'
+          ? 'it’s connected'
+          : shown.kind === 'market'
+            ? 'it’s added'
+            : 'it’s on';
       return `A card to ${what} is under your reply. Answer what you can now; when ${when}, you’ll be asked to carry on.`;
     },
   };

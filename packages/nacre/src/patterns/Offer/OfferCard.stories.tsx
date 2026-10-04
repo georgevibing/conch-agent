@@ -159,6 +159,31 @@ export const SkillWhenAsked: Story = {
 
 export const SkillAccepted: Story = { args: { ...review, state: 'accepted', taken: 'on' } };
 
+const shared = {
+  kind: 'market' as const,
+  name: 'Meeting notes',
+  brand: 'meeting-notes',
+  description: 'Turns rough meeting notes into decisions, actions and open questions.',
+  why: 'It turns notes like these into a list of who does what by when.',
+  market: {
+    sourceLabel: 'ClawHub',
+    publisher: 'Ada',
+    trust: 'verified' as const,
+    installs: 18_400,
+  },
+  muteLabel: 'Don’t suggest skills from Discover',
+  assistant: 'Conch',
+};
+
+/** A skill people share (ADR 0074): where it's from and what that place says; **Look at it** reads it first. */
+export const SharedSkill: Story = { args: { ...shared, state: 'suggested' } };
+
+/** Added from the card: the chat carries on with it. */
+export const SharedSkillAdded: Story = { args: { ...shared, state: 'accepted' } };
+
+/** Don't suggest: every skill from Discover, with Undo. */
+export const SharedSkillMuted: Story = { args: { ...shared, state: 'muted' } };
+
 export const SkillUsedOnce: Story = {
   args: { ...review, name: 'PDF tools', brand: 'pdf', state: 'accepted', taken: 'once' },
 };

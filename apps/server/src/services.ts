@@ -27,6 +27,10 @@ import { makerTools } from './conchapps/tools';
 import { ArtifactStore } from './artifacts/store';
 import { tasksCheck } from './tasks/doctor';
 import { signingKeyCheck } from './skills/doctor';
+import { marketCheck } from './skills/market/doctor';
+import { marketSources } from './skills/market/sources';
+import { SkillMarket } from './skills/market/service';
+import { marketTools } from './skills/market/tools';
 import { fingerprintOf } from './skills/signing';
 import { TaskService } from './tasks/service';
 import { mcpCheck } from './mcp/doctor';
@@ -266,6 +270,8 @@ export class Services {
   readonly skills: SkillService;
   /** Whose signed skills you trust, and your own signing key (ADR 0031). */
   readonly skillTrust: SkillTrust;
+  /** Discover (ADR 0074); undefined when it's turned off. */
+  readonly market?: SkillMarket;
   /** The pretend SaaS vendor used with the mock engine. */
   readonly mockVendor?: MockVendor;
   /** Full-text search over every conversation; rebuilds its index when it breaks. */
@@ -526,14 +532,36 @@ export class Services {
       config.CONCH_SKILL_SOURCES ?? (config.CONCH_ENGINE === 'mock' ? 'off' : 'auto');
     this.skillTrust = new SkillTrust(config.CONCH_HOME);
     this.skillUsage = new SkillUsage(config.CONCH_HOME, heal);
+    const skillStore = new SkillStore(
+      config.CONCH_HOME,
+      skillSources === 'auto' ? externalRoots() : [],
+      () => this.#nativeSkillSources,
+      heal,
+      this.skillTrust,
+    );
+    // Discover (ADR 0074): skills people publish, pinned, read first, held to their lists.
+    const marketMode =
+      config.CONCH_SKILL_MARKET ?? (config.CONCH_ENGINE === 'mock' ? 'pretend' : 'on');
+    this.market =
+      marketMode === 'off'
+        ? undefined
+        : new SkillMarket({
+            home: config.CONCH_HOME,
+            store: skillStore,
+            sources: marketSources(marketMode, SERVER_VERSION),
+            heal,
+            changed: () => this.broadcast.emit({ type: 'skills.changed' }),
+          });
+    if (this.market) {
+      const market = this.market;
+      skillStore.marketRoots = () => market.roots();
+      skillStore.origins = () => market.origins();
+      void market.load().then(() => skillStore.invalidate());
+      this.doctor.register(marketCheck(market));
+    }
     this.skills = new SkillService({
-      store: new SkillStore(
-        config.CONCH_HOME,
-        skillSources === 'auto' ? externalRoots() : [],
-        () => this.#nativeSkillSources,
-        heal,
-        this.skillTrust,
-      ),
+      store: skillStore,
+      ...(this.market && { market: this.market }),
       engines: () => this.providers.ready(),
       emit: (event) => this.broadcast.emit(event),
       onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
@@ -725,6 +753,8 @@ export class Services {
             ...yours,
           ],
           skills,
+          // Skills people share, found with `find_skills` (ADR 0074).
+          market: Boolean(this.market),
         };
       },
       suggest: (text, engine, skip) => this.integrations.suggest(text, engine, skip),
@@ -742,6 +772,12 @@ export class Services {
         turnOn: (id) => this.skills.turnOn(id),
         once: (id, request) => this.skills.once(id, request),
       },
+      ...(this.market && {
+        market: {
+          offerable: (id: string) => this.market?.offerable(id),
+          installedFor: (id: string) => this.market?.installedFor(id),
+        },
+      }),
     });
     // How each provider charges, asked once a minute at most: chats and routines share it.
     const billings = new Billings();
@@ -792,6 +828,8 @@ export class Services {
               ...questionTools(this.questions, ctx),
               // Offer what this request is missing (ADR 0060): never to nobody.
               ...(ctx.unattended ? [] : offerTools(this.offers, ctx)),
+              // Skills people share, to offer (ADR 0074): never to nobody.
+              ...(ctx.unattended || !this.market ? [] : marketTools(this.market, ctx)),
               // Your earlier chats, never in a chat with someone else in it (ADR 0059).
               ...pastChatTools(
                 {

@@ -31,6 +31,7 @@ export const Env = z.object({
   CONCH_CLAUDE_PATH: z.string().optional(),
   CONCH_CODEX_PATH: z.string().optional(),
   CONCH_SKILL_SOURCES: z.enum(['auto', 'off']).optional(),
+  CONCH_SKILL_MARKET: z.enum(['on', 'off', 'pretend']).optional(),
   CONCH_CHECKOUT: z.string().optional(),
   CONCH_UPDATE_CHECKS: z.enum(['auto', 'off']).optional(),
   CONCH_VAULT_KEYSTORE: z.enum(['auto', 'file']).optional(),
@@ -129,6 +130,11 @@ export const ENV_ABOUT: Record<keyof Config, EnvAbout> = {
     about:
       'auto also lists skills from other agents’ folders (~/.agents/skills, ~/.claude/skills, OpenClaw, Hermes); off lists only Conch’s own.',
     unset: 'auto (off with the mock engine)',
+  },
+  CONCH_SKILL_MARKET: {
+    about:
+      'on lets Skills → Discover search Anthropic’s skills on GitHub, ClawHub and skills.sh; off hides Discover; pretend shows a few made-up skills and never goes online (tests).',
+    unset: 'on (pretend with the mock engine)',
   },
   CONCH_CHECKOUT: {
     about: 'Conch’s own git checkout, which updates move forward.',

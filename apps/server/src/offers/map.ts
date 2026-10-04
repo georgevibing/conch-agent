@@ -30,6 +30,8 @@ export interface MapSkill {
 export interface OfferMap {
   apps: MapApp[];
   skills: MapSkill[];
+  /** Skills people publish can be searched with `find_skills` (ADR 0074). */
+  market?: boolean;
 }
 
 /** What the map may cost a turn, in characters (ADR 0060). */
@@ -61,6 +63,10 @@ const skillLine = (skill: MapSkill) => {
   const about = firstSentence(skill.description);
   return `- skill \`${skill.id}\`: ${skill.title}${skill.mode === 'manual' ? ' (when asked)' : ''}${about ? ` — ${about}` : ''}`;
 };
+
+/** How the assistant reaches skills people publish (ADR 0074). */
+const MARKET =
+  'Skills people share: when nothing here fits and a ready-made skill would clearly help with what was asked (a kind of document, a way of working), call `find_skills` with a few plain words, then `offer` the best one with kind `market` and its id. Never instead of answering.';
 
 const byName = (a: { name: string }, b: { name: string }) =>
   a.name.localeCompare(b.name, 'en', { sensitivity: 'base' });
@@ -101,7 +107,7 @@ export function keepOrder(map: OfferMap, said = ''): { kind: 'app' | 'skill'; li
  */
 export function mapSection(map: OfferMap, budget = MAP_BUDGET, said = ''): string {
   const order = keepOrder(map, said);
-  if (!order.length) return '';
+  if (!order.length && !map.market) return '';
   const draw = (kept: typeof order, left: number) => {
     const apps = kept.filter((k) => k.kind === 'app').map((k) => k.line);
     const skills = kept.filter((k) => k.kind === 'skill').map((k) => k.line);
@@ -115,6 +121,7 @@ export function mapSection(map: OfferMap, budget = MAP_BUDGET, said = ''): strin
             `${left} more ${left === 1 ? 'isn’t' : 'aren’t'} listed, to keep this short. Offer one only if the person names it.`,
           ]
         : []),
+      ...(map.market ? [MARKET] : []),
       RULES,
     ].join('\n');
   };
@@ -124,5 +131,5 @@ export function mapSection(map: OfferMap, budget = MAP_BUDGET, said = ''): strin
     kept = kept.slice(0, -1);
     text = draw(kept, order.length - kept.length);
   }
-  return kept.length ? text : '';
+  return kept.length || map.market ? text : '';
 }

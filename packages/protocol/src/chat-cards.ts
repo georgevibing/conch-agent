@@ -6,6 +6,8 @@
  */
 import { z } from 'zod';
 
+import { MarketTrust } from './market-basics';
+
 const Hex = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 /** An ISO 8601 date or date-time, as a tool read it. */
 const When = z.string().min(4).max(40);
@@ -18,7 +20,8 @@ const WebUrl = z
 // ── Offers ──────────────────────────────────────────────────────────────────
 
 /** What can be offered: an app from the catalog, or a skill that's off or waits to be asked. */
-export const OfferKind = z.enum(['app', 'skill']);
+/** An app to connect, a skill of yours to turn on, or one from Discover to add (ADR 0074). */
+export const OfferKind = z.enum(['app', 'skill', 'market']);
 export type OfferKind = z.infer<typeof OfferKind>;
 
 /**
@@ -29,8 +32,8 @@ export type OfferKind = z.infer<typeof OfferKind>;
 export const Offer = z.object({
   offerId: z.string().min(1).max(64),
   kind: OfferKind,
-  /** The catalog id for an app, the skill's id for a skill. */
-  target: z.string().min(1).max(128),
+  /** The catalog id for an app, the skill's id for a skill, the listing's id on Discover. */
+  target: z.string().min(1).max(240),
   name: z.string().min(1).max(80),
   /** What it lets the assistant do: the catalog's or the skill's own line. */
   description: z.string().max(300),
@@ -42,6 +45,15 @@ export const Offer = z.object({
   by: z.enum(['cue', 'assistant']),
   /** For a skill: `off` needs turning on; `manual` only waits to be asked. */
   skillMode: z.enum(['off', 'manual']).optional(),
+  /** For a skill from Discover: where it's from and what that place says, for the card. */
+  market: z
+    .object({
+      sourceLabel: z.string().max(40),
+      publisher: z.string().max(80),
+      trust: MarketTrust,
+      installs: z.number().int().nonnegative().optional(),
+    })
+    .optional(),
   /** The request to carry on with once it's on; absent when there's nothing to resume. */
   resume: z.object({ request: z.string().min(1).max(4000) }).optional(),
 });
@@ -63,6 +75,12 @@ export type AcceptOfferBody = z.infer<typeof AcceptOfferBody>;
 /** “Not now” on an offer: nothing more to say. */
 export const DismissOfferBody = z.object({}).strict();
 export type DismissOfferBody = z.infer<typeof DismissOfferBody>;
+
+/**
+ * “Don’t suggest” for every skill from Discover (ADR 0074): one key, in the
+ * shape older versions already accept for a skill.
+ */
+export const MUTED_MARKET = 'skill:market_discover';
 
 /** A skill in “Don’t suggest” (`preferences.mutedSuggestions`), beside apps' catalog ids. */
 export const MutedSkill = z

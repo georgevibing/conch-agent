@@ -34,6 +34,7 @@ import { RoutineDetailView } from '../features/routines/RoutineDetailView';
 import { RoutinesView } from '../features/routines/RoutinesView';
 import { TasksView } from '../features/tasks/TasksView';
 import { NewSkill } from '../features/skills/NewSkill';
+import { MarketSkillView } from '../features/skills/Discover';
 import { SkillDetailView } from '../features/skills/SkillDetailView';
 import { SkillsView } from '../features/skills/SkillsView';
 import { Sidebar } from '../features/sidebar/Sidebar';
@@ -60,8 +61,17 @@ function Reconnecting() {
 }
 
 export function Shell() {
-  const { conversationId, routineId, appId, pageId, skillId, channelId, channelKind, itemId } =
-    useParams();
+  const {
+    conversationId,
+    routineId,
+    appId,
+    pageId,
+    skillId,
+    listingId,
+    channelId,
+    channelKind,
+    itemId,
+  } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const path = location.pathname;
@@ -253,6 +263,10 @@ export function Shell() {
           ) : skillsArea ? (
             path === '/skills/new' ? (
               <NewSkill />
+            ) : listingId && path.startsWith('/skills/discover/') ? (
+              <MarketSkillView key={listingId} listingId={listingId} />
+            ) : path === '/skills/discover' ? (
+              <SkillsView />
             ) : skillId ? (
               <SkillDetailView key={skillId} skillId={skillId} />
             ) : (

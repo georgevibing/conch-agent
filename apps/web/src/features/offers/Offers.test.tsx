@@ -371,6 +371,72 @@ describe('offers in the chat (ADR 0060)', () => {
     );
   });
 
+  it('a skill people share is read in a dialog, added in one press, and the chat carries on (ADR 0074)', async () => {
+    const listing = {
+      id: 'clawhub:ada/meeting-notes',
+      source: 'clawhub',
+      sourceLabel: 'ClawHub',
+      name: 'meeting-notes',
+      title: 'Meeting notes',
+      description: 'Turns notes into decisions.',
+      publisher: { name: 'Ada' },
+      trust: 'verified',
+      url: 'https://clawhub.ai/ada/skills/meeting-notes',
+    };
+    const { calls, push } = open({
+      extra: {
+        'GET /api/skills/market/listing': () => listing,
+        'POST /api/skills/market/preview': () => ({
+          previewId: 'mp_abcdefghijkl',
+          listing,
+          pin: { kind: 'version', version: '1.0.0', sha256: 'a'.repeat(64) },
+          review: { verdict: 'clean', findings: [], hash: 'h', checkedAt: 1 },
+          permissions: { declared: true, capabilities: [], words: [] },
+          instructions: 'Read the notes.',
+          files: [],
+          license: { kind: 'open', name: 'MIT-0' },
+        }),
+        'POST /api/skills/market/install': () => ({
+          ...weekly,
+          id: 'market-clawhub_meeting-notes',
+          name: 'meeting-notes',
+          title: 'Meeting notes',
+          source: 'market',
+          sourceLabel: 'ClawHub',
+          editable: false,
+          mode: 'auto',
+          instructions: 'Read the notes.',
+        }),
+      },
+    });
+    await waitFor(() => expect(FakeSocket.last).toBeDefined());
+    push(
+      turn(
+        offer({
+          kind: 'market',
+          target: listing.id,
+          name: 'Meeting notes',
+          description: 'Turns notes into decisions.',
+          why: 'It turns notes like these into actions.',
+          color: undefined,
+          market: { sourceLabel: 'ClawHub', publisher: 'Ada', trust: 'verified', installs: 120 },
+        }),
+      ),
+    );
+    const card = await screen.findByRole('group', { name: 'A skill for this: “Meeting notes”' });
+    expect(within(card).getByText(/ClawHub · Ada · 120 people use it/)).toBeInTheDocument();
+    await userEvent.click(within(card).getByRole('button', { name: 'Look at it Meeting notes' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Read it before you add it' });
+    expect(await within(dialog).findByText(/Pinned to version 1.0.0/)).toBeInTheDocument();
+    expect(accepted(calls)).toHaveLength(0);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add and carry on' }));
+    await waitFor(() => expect(accepted(calls)).toHaveLength(1));
+    expect(calls.find((c) => c.path === '/api/skills/market/install')?.body).toEqual({
+      previewId: 'mp_abcdefghijkl',
+      mode: 'auto',
+    });
+  });
+
   it('“Not now” puts it away for this chat, and it stays away after a reload', async () => {
     const { calls, push } = open();
     await waitFor(() => expect(FakeSocket.last).toBeDefined());

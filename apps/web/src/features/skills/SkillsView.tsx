@@ -10,13 +10,15 @@ import {
   SkillCard,
   SkillIcon,
   Stack,
+  Tabs,
   Text,
 } from '@conch/nacre';
-import { Plus, Search, Sparkles } from 'lucide-react';
+import { Compass, Plus, Search, Sparkles, UserRound } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useLocation, useNavigate, useSearchParams } from 'react-router';
 
 import { useAssistantName } from '../integrations/queries';
+import { DiscoverPanel } from './Discover';
 import { useSkills } from './queries';
 import { SkillShelfCard } from './SkillShelfCard';
 import { SkillSuggestions } from './SkillSuggestions';
@@ -48,10 +50,51 @@ export function SkillIdeas({ onPick }: { onPick: (instructions: string) => void 
 }
 
 /**
- * Skills: things the assistant knows how to do. Yours first, then the ones
- * found in other agents' folders (they start off). One box finds any of them.
+ * Skills: things the assistant knows how to do. **Yours** (written here,
+ * found in other agents' folders, added from Discover) and **Discover**,
+ * skills people share (ADR 0074), one tab each, each with its own address.
  */
 export function SkillsView() {
+  const navigate = useNavigate();
+  const discover = useLocation().pathname.startsWith('/skills/discover');
+  const assistant = useAssistantName();
+  return (
+    <Page gap={6}>
+      <header className={styles.pageHeader}>
+        <Stack gap={1}>
+          <Heading level={1} display size="4xl">
+            Skills
+          </Heading>
+          <Text tone="muted">
+            Things {assistant} knows how to do. Teach one once, or add one people share, then use it
+            with any model — or type / and its name.
+          </Text>
+        </Stack>
+        <Button leadingIcon={<Plus />} onClick={() => void navigate('/skills/new')}>
+          New skill
+        </Button>
+      </header>
+      <Tabs
+        value={discover ? 'discover' : 'mine'}
+        onValueChange={(v) => void navigate(v === 'discover' ? '/skills/discover' : '/skills')}
+      >
+        <Tabs.List aria-label="Skills">
+          <Tabs.Trigger value="mine" icon={<UserRound />}>
+            Your skills
+          </Tabs.Trigger>
+          <Tabs.Trigger value="discover" icon={<Compass />}>
+            Discover
+          </Tabs.Trigger>
+        </Tabs.List>
+        <Tabs.Content value="mine">{!discover && <YourSkills />}</Tabs.Content>
+        <Tabs.Content value="discover">{discover && <DiscoverPanel />}</Tabs.Content>
+      </Tabs>
+    </Page>
+  );
+}
+
+/** Your skills: yours first, then the ones from other apps and Discover. One box finds any of them. */
+function YourSkills() {
   const { data, isPending } = useSkills();
   // The quick switch: on keeps "When I ask"; one from elsewhere says what it can do first.
   const turnOn = useTurnOn();
@@ -79,7 +122,9 @@ export function SkillsView() {
   const offCount = skills.filter((s) => s.mode === 'off').length;
   const shown = (s: Skill) => show !== 'off' || s.mode === 'off';
   const mine = skills.filter((s) => s.source === 'conch' && shown(s));
-  const found = skills.filter((s) => s.source !== 'conch' && shown(s));
+  const found = skills.filter((s) => s.source !== 'conch' && s.source !== 'market' && shown(s));
+  // Added from Discover (ADR 0074): yours, pinned to the version you read.
+  const added = skills.filter((s) => s.source === 'market' && shown(s));
   const bothKinds =
     skills.some((s) => s.source === 'conch') && skills.some((s) => s.source !== 'conch');
   const q = query.trim();
@@ -96,7 +141,9 @@ export function SkillsView() {
         : [],
     [skills, q, show],
   );
-  const sources = (data?.sources ?? []).filter((s) => s.id !== 'conch' && s.count > 0);
+  const sources = (data?.sources ?? []).filter(
+    (s) => s.id !== 'conch' && s.id !== 'market' && s.count > 0,
+  );
 
   const open = (skill: Skill) => void navigate(`/skills/${encodeURIComponent(skill.id)}`);
   const start = (instructions?: string) =>
@@ -127,22 +174,7 @@ export function SkillsView() {
   );
 
   return (
-    <Page gap={6}>
-      <header className={styles.pageHeader}>
-        <Stack gap={1}>
-          <Heading level={1} display size="4xl">
-            Skills
-          </Heading>
-          <Text tone="muted">
-            Things {assistant} knows how to do. Teach one once, then use it with any model — or type
-            / and its name.
-          </Text>
-        </Stack>
-        <Button leadingIcon={<Plus />} onClick={() => start()}>
-          New skill
-        </Button>
-      </header>
-
+    <Stack gap={6}>
       <SkillSuggestions />
       <SkillShelfCard />
 
@@ -249,12 +281,26 @@ export function SkillsView() {
                   <ul className={styles.cards}>{found.map((s) => card(s))}</ul>
                 </section>
               )}
+              {show !== 'mine' && added.length > 0 && (
+                <section aria-labelledby="skills-added" className={styles.section}>
+                  <Stack gap={0.5}>
+                    <Heading level={2} id="skills-added" size="sm" tone="muted">
+                      Added from Discover
+                    </Heading>
+                    <Text size="xs" tone="subtle">
+                      Each is pinned to the version you read. An update waits for you to read what
+                      changed.
+                    </Text>
+                  </Stack>
+                  <ul className={styles.cards}>{added.map((s) => card(s))}</ul>
+                </section>
+              )}
             </>
           )}
           <PublishersSection />
         </>
       )}
       {turnOn.dialog}
-    </Page>
+    </Stack>
   );
 }

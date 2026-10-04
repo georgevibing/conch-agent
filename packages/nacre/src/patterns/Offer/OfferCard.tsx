@@ -14,6 +14,8 @@ import { DropdownMenu } from '../../components/DropdownMenu';
 import { IconButton } from '../../components/IconButton';
 import { cx } from '../../utils/cx';
 import { AppIcon, type AppIconLook } from '../ConchApps/AppIcon';
+import { MarketTrustBadge } from '../Discover/MarketTrustBadge';
+import { fromWords, roughly, type MarketTrustLevel } from '../Discover/types';
 import { IntegrationLogo } from '../Integrations/IntegrationLogo';
 import { SkillIcon } from '../Skills/SkillIcon';
 import { type SkillCapabilityName, SkillPermissionList } from '../Skills/SkillPermissionList';
@@ -41,7 +43,8 @@ export interface OfferPermissions {
 }
 
 export interface OfferCardProps extends Omit<ComponentProps<'div'>, 'children'> {
-  kind: 'app' | 'skill';
+  /** An app to connect, a skill of yours to turn on, or one people share to read and add (ADR 0074). */
+  kind: 'app' | 'skill' | 'market';
   /** “Google Calendar”, or a skill's title. */
   name: string;
   /** An app's catalog id (its logo), or a skill's name (its tile's colour). */
@@ -62,6 +65,10 @@ export interface OfferCardProps extends Omit<ComponentProps<'div'>, 'children'> 
   /** What the assistant is called. */
   assistant?: string;
   state: OfferCardState;
+  /** For a skill people share: where it's from and what that place says about it. */
+  market?: { sourceLabel: string; publisher: string; trust: MarketTrustLevel; installs?: number };
+  /** The words of “Don’t suggest …” when they aren't the name's: “Don’t suggest skills from Discover”. */
+  muteLabel?: string;
   /** A skill's permissions, shown in `review`. */
   permissions?: OfferPermissions;
   /** How it was taken, for the folded line: turned on, or used once. */
@@ -108,6 +115,8 @@ export function OfferCard({
   skillMode = 'off',
   assistant = 'Conch',
   state,
+  market,
+  muteLabel,
   permissions,
   taken,
   busy,
@@ -158,14 +167,15 @@ export function OfferCard({
   }, [state, onGone]);
 
   const skill = kind === 'skill';
+  const shared = kind === 'market';
   const manual = skill && skillMode === 'manual';
   const folded = FOLDED.has(state);
   const leaving = state === 'dismissed';
 
   const mark = (size: 'xs' | 'sm') =>
-    app && !skill ? (
+    app && !skill && !shared ? (
       <AppIcon glyph={app.glyph} color={app.color} size={size} />
-    ) : skill ? (
+    ) : skill || shared ? (
       <SkillIcon
         name={brand ?? name}
         title={name}
@@ -185,24 +195,36 @@ export function OfferCard({
           : app
             ? `${name} is on`
             : `${name} is connected`
-        : skill
-          ? manual
-            ? `“${name}” waits to be asked`
-            : `The “${name}” skill is off`
-          : app
-            ? `${name} is off`
-            : `${name} isn’t connected yet`;
+        : shared
+          ? `A skill for this: “${name}”`
+          : skill
+            ? manual
+              ? `“${name}” waits to be asked`
+              : `The “${name}” skill is off`
+            : app
+              ? `${name} is off`
+              : `${name} isn’t connected yet`;
   const message =
     state === 'connecting'
       ? 'Finish signing in, and the chat carries on by itself.'
       : state === 'ready'
         ? 'Carry on with what you asked?'
         : (why ??
-          (skill || app
-            ? `${manual ? 'Use it' : 'Turn it on'} and ${assistant} can ${lowerFirst(description)}`
-            : `Connect it and ${assistant} can ${lowerFirst(description)}`));
+          (shared
+            ? `Add it and ${assistant} can ${lowerFirst(description)}`
+            : skill || app
+              ? `${manual ? 'Use it' : 'Turn it on'} and ${assistant} can ${lowerFirst(description)}`
+              : `Connect it and ${assistant} can ${lowerFirst(description)}`));
 
-  const takeLabel = skill ? (manual ? 'Use it' : 'Turn on') : app ? 'Turn on' : 'Connect';
+  const takeLabel = shared
+    ? 'Look at it'
+    : skill
+      ? manual
+        ? 'Use it'
+        : 'Turn on'
+      : app
+        ? 'Turn on'
+        : 'Connect';
 
   const more = onMute && (
     <DropdownMenu.Root>
@@ -213,7 +235,7 @@ export function OfferCard({
       </DropdownMenu.Trigger>
       <DropdownMenu.Content align="end">
         <DropdownMenu.Item icon={<BellOff />} onSelect={onMute}>
-          Don’t suggest {name}
+          {muteLabel ?? `Don’t suggest ${name}`}
         </DropdownMenu.Item>
       </DropdownMenu.Content>
     </DropdownMenu.Root>
@@ -323,7 +345,15 @@ export function OfferCard({
           </span>
         </span>
         <span className={styles.lineText}>
-          {skill ? (taken === 'once' ? 'Using ' : 'Turned on ') : app ? 'Turned on ' : 'Connected '}
+          {shared
+            ? 'Added '
+            : skill
+              ? taken === 'once'
+                ? 'Using '
+                : 'Turned on '
+              : app
+                ? 'Turned on '
+                : 'Connected '}
           <strong className={styles.lineName}>{name}</strong>
           <span className={styles.dot} aria-hidden>
             ·
@@ -335,16 +365,18 @@ export function OfferCard({
       <div role="note" className={styles.line} data-state={state}>
         <span className={styles.lineMark}>{mark('xs')}</span>
         <span className={styles.lineText}>
-          {skill ? 'Offered the ' : app ? 'Offered to turn on ' : 'Offered to connect '}
+          {skill || shared ? 'Offered the ' : app ? 'Offered to turn on ' : 'Offered to connect '}
           <strong className={styles.lineName}>{name}</strong>
-          {skill ? ' skill' : ''}
+          {skill || shared ? ' skill' : ''}
         </span>
       </div>
     ) : state === 'muted' ? (
       <div role="status" className={styles.muted}>
         <BellOff aria-hidden className={styles.mutedIcon} />
         <span className={styles.mutedText}>
-          {assistant} won’t suggest {name} again.
+          {shared
+            ? `${assistant} won’t suggest skills from Discover again.`
+            : `${assistant} won’t suggest ${name} again.`}
         </span>
         {onUnmute && (
           <Button size="sm" variant="ghost" leadingIcon={<Undo2 />} onClick={onUnmute} data-primary>
@@ -390,6 +422,15 @@ export function OfferCard({
                 >
                   {message}
                 </p>
+                {shared && market && (
+                  <p className={styles.from}>
+                    <MarketTrustBadge trust={market.trust} />
+                    <span>
+                      {fromWords(market.sourceLabel, market.publisher)}
+                      {market.installs ? ` · ${roughly(market.installs)} people use it` : ''}
+                    </span>
+                  </p>
+                )}
               </div>
             </div>
             {skill && (

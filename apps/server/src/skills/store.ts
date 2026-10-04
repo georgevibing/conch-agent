@@ -11,6 +11,7 @@ import {
   type SkillDetail,
   type SkillProblemKind,
   type SkillReview,
+  type SkillOrigin,
   type SkillSource,
   type SkillSourceInfo,
 } from '@conch/protocol';
@@ -60,6 +61,7 @@ export const SOURCE_LABELS: Record<SkillSource, string> = {
   claude: 'Claude Code',
   openclaw: 'OpenClaw',
   hermes: 'Hermes',
+  market: 'Added from Discover',
 };
 
 /** Where other agents keep their skills (ADR 0013). Conch reads them; it never writes there. */
@@ -175,11 +177,18 @@ export class SkillStore {
    */
   appRoots: () => SkillRoot[] = () => [];
 
+  /** Skills added from Discover (ADR 0074): one folder per place they came from, never written here. */
+  marketRoots: () => SkillRoot[] = () => [];
+
+  /** Where each skill added from Discover came from, by id (ADR 0074). */
+  origins: () => ReadonlyMap<string, SkillOrigin> = () => new Map();
+
   get roots(): SkillRoot[] {
     return [
       { source: 'conch', label: SOURCE_LABELS.conch, dir: this.dir, depth: 1 },
       ...this.external,
       ...this.appRoots(),
+      ...this.marketRoots(),
     ];
   }
 
@@ -195,6 +204,7 @@ export class SkillStore {
     const trusted = new Set(publishers.map((p) => p.fingerprint));
     const trustedNames = new Set(publishers.map((p) => p.name.trim().toLowerCase()));
     const native = this.nativelyLoaded();
+    const origins = this.origins();
     const skills: LoadedSkill[] = [];
     const sources: SkillSourceInfo[] = [];
     const ids = new Set<string>();
@@ -212,12 +222,14 @@ export class SkillStore {
           { fingerprints: trusted, names: trustedNames },
         );
         if (!skill) continue;
+        const origin = origins.get(skill.id);
+        if (origin) skill.origin = origin;
         skills.push(skill);
         ids.add(skill.id);
         count++;
       }
       // An app's skills are one source, listed once there are some.
-      if (root.source === 'app' && !count) continue;
+      if ((root.source === 'app' || root.source === 'market') && !count) continue;
       const same = sources.find((s) => s.id === root.source);
       if (same) {
         same.count += count;
@@ -225,7 +237,10 @@ export class SkillStore {
       } else {
         sources.push({
           id: root.source,
-          label: root.source === 'app' ? SOURCE_LABELS.app : root.label,
+          label:
+            root.source === 'app' || root.source === 'market'
+              ? SOURCE_LABELS[root.source]
+              : root.label,
           path: root.dir,
           found,
           count,
@@ -577,7 +592,8 @@ export class SkillStore {
     if (!problem && parsed.front === undefined) {
       problem = 'Its SKILL.md has no front matter (the --- block with a name and description).';
       problemKind = 'no-front-matter';
-    } else if (!problem && !description) {
+    } else if (!problem && !/[\p{L}\p{N}]/u.test(description)) {
+      // Nothing but punctuation (`description: ">"`) says no more than nothing.
       problem = 'It has no description, so an assistant wouldn’t know when to use it.';
       problemKind = 'no-description';
     }
@@ -632,7 +648,10 @@ export class SkillStore {
       !followsPublisher
     ) {
       mode = 'off';
-      problem ??= `It changed in ${root.label} since you turned it on, so it’s off until you look at it again.`;
+      problem ??=
+        root.source === 'market'
+          ? 'Its files changed since you added it, so it’s off until you look at it again.'
+          : `It changed in ${root.label} since you turned it on, so it’s off until you look at it again.`;
       problemKind ??= 'changed';
     }
     return {

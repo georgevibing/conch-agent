@@ -1,10 +1,12 @@
-import type {
-  ConversationEvent,
-  Offer,
-  OfferKind,
-  SkillMode,
-  SkillPermissions,
-  TaintSource,
+import {
+  MUTED_MARKET,
+  type ConversationEvent,
+  type MarketListing,
+  type Offer,
+  type OfferKind,
+  type SkillMode,
+  type SkillPermissions,
+  type TaintSource,
 } from '@conch/protocol';
 
 import type { IntegrationSuggestionInput } from '../conversations/manager';
@@ -65,11 +67,18 @@ export interface OfferDeskDeps {
     turnOn(id: string): Promise<void>;
     once(id: string, request: string): Promise<CarryOn | undefined>;
   };
+  /** Discover (ADR 0074): skills people publish that the chat may offer, and the one you added. */
+  market?: {
+    /** Seen in a search, not flagged or blocked by its registry, and not yours already. */
+    offerable(listingId: string): MarketListing | undefined;
+    /** The skill you added from this listing. */
+    installedFor(listingId: string): string | undefined;
+  };
 }
 
 /** How a muted offer is written in `mutedSuggestions`. */
 export const mutedKey = (kind: OfferKind, target: string) =>
-  kind === 'skill' ? `skill:${target}` : target;
+  kind === 'skill' ? `skill:${target}` : kind === 'market' ? MUTED_MARKET : target;
 
 /**
  * Where this turn began: the person's last message, or the offer they took
@@ -253,6 +262,7 @@ export class OfferDesk {
       return { dropped: 'unattended' };
     // A page must never be able to ask for an app to be connected (ADR 0028).
     if ((await chat.taint(input.conversationId)).length) return { dropped: 'untrusted' };
+    if (input.kind === 'market') return this.#proposeMarket(chat, input);
     const map = await this.deps.map?.(input.engine).catch(() => undefined);
     const found =
       input.kind === 'app'
@@ -284,6 +294,46 @@ export class OfferDesk {
   }
 
   /**
+   * A skill from Discover (ADR 0074): one `find_skills` found in this
+   * session, that its registry doesn't warn about and you don't have. The
+   * card shows the person who published it and what the place says; adding
+   * it still goes through the full read on the person's press.
+   */
+  async #proposeMarket(
+    chat: NonNullable<OfferDeskDeps['chat']>,
+    input: { conversationId: string; target: string; why?: string },
+  ): Promise<{ offer: Offer } | { dropped: OfferDrop; name?: string }> {
+    const listing = this.deps.market?.offerable(input.target);
+    if (!listing) return { dropped: 'not-in-map' };
+    const name = listing.title;
+    const muted = await this.deps.muted().catch((): readonly string[] => []);
+    if (muted.includes(MUTED_MARKET)) return { dropped: 'muted', name };
+    const events = await chat.events(input.conversationId);
+    if (offeredBefore(events, 'market', listing.id)) return { dropped: 'offered', name };
+    if (offeredThisTurn(events)) return { dropped: 'one-per-turn', name };
+    const why = oneLine(input.why);
+    const request = requestOf(events);
+    return {
+      offer: {
+        offerId: newId('of'),
+        kind: 'market',
+        target: listing.id,
+        name: cap(name, 80),
+        description: cap(listing.description, 300),
+        ...(why && { why }),
+        by: 'assistant',
+        market: {
+          sourceLabel: cap(listing.sourceLabel, 40),
+          publisher: cap(listing.publisher.name, 80),
+          trust: listing.trust,
+          ...(listing.installs !== undefined && { installs: listing.installs }),
+        },
+        ...(request && { resume: { request } }),
+      },
+    };
+  }
+
+  /**
    * The person took an offer (ADR 0060 §3): what was offered must be on now
    * (a skill is turned on here, when that's how it was taken), then the chat
    * carries on with the request once, however many devices press it.
@@ -309,7 +359,11 @@ export class OfferDesk {
       );
     const { offer } = made;
     const turn =
-      offer.kind === 'app' ? await this.#app(offer) : await this.#skill(offer, how.skill);
+      offer.kind === 'app'
+        ? await this.#app(offer)
+        : offer.kind === 'market'
+          ? await this.#market(offer)
+          : await this.#skill(offer, how.skill);
     return chat.carryOn(conversationId, offerId, turn);
   }
 
@@ -340,6 +394,23 @@ export class OfferDesk {
           prompt: `${offer.name} is connected now, so you can use it. Carry on with what I asked:\n\n${request}`,
         }
       : {};
+  }
+
+  /** Added from Discover on the card: it must be yours and on now, then the request runs with it. */
+  async #market(offer: Offer): Promise<CarryOn> {
+    const skillId = this.deps.market?.installedFor(offer.target);
+    if (!skillId)
+      throw new OfferError(
+        'not-ready',
+        `“${offer.name}” isn’t added yet. Add it, and the chat carries on.`,
+      );
+    const turn = await this.#skill({ ...offer, kind: 'skill', target: skillId }, undefined);
+    return turn.prompt
+      ? {
+          ...turn,
+          prompt: `I added the “${offer.name}” skill from ${offer.market?.sourceLabel ?? 'Discover'}, so you can use it now.\n\n${turn.prompt}`,
+        }
+      : turn;
   }
 
   async #skill(offer: Offer, how: 'on' | 'once' | undefined): Promise<CarryOn> {

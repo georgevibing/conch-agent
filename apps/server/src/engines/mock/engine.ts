@@ -1315,6 +1315,22 @@ export class MockEngine implements Engine {
         }
       }
 
+      // A skill people share, added from the chat's offer (ADR 0074): the chat carries on
+      // with it. Before the scripts below, which its own words ("List what was decided") would wake.
+      const sharedSkill = /<skill name="[^"]*" title="([^"]*)"[\s\S]*asked you to use the/.exec(
+        input.prompt,
+      )?.[1];
+      if (
+        sharedSkill &&
+        /\bI added the “[^”]+” skill from\b/.test(input.prompt) &&
+        /\bmeeting notes\b/i.test(text)
+      ) {
+        yield* speak(
+          `Here are your notes, tidied with “${sharedSkill}”. Decided: ship on Friday. Actions: Sam writes the release notes by Thursday. Open: who tells support.`,
+        );
+        return;
+      }
+
       if (!chatOnly && /\b(run|list|files?|test)\b/.test(text)) {
         const toolUseId = newId('tool');
         const command = /test/.test(text) ? 'npm test' : 'ls -la';
@@ -1357,6 +1373,28 @@ export class MockEngine implements Engine {
         );
         return;
       }
+      // Skills people share (ADR 0074): tidying meeting notes looks on Discover and
+      // offers what it finds (added, the chat carries on with it: above).
+      if (
+        /\btidy (?:up )?(?:these|my) meeting notes\b/i.test(text) &&
+        input.tools.some((t) => t.name === 'find_skills') &&
+        input.tools.some((t) => t.name === 'offer')
+      ) {
+        const found = yield* hostTool('find_skills', { words: 'meeting notes' });
+        const id = /`((?:clawhub|anthropic|skills-sh):[^`]+)`/.exec(found)?.[1];
+        if (id) {
+          yield* hostTool('offer', {
+            kind: 'market',
+            target: id,
+            why: 'It turns notes like these into decisions, actions and open questions.',
+          });
+          yield* speak(
+            'I can tidy them roughly now, but there’s a skill people share that does exactly this. Read it, and if you add it I’ll use it.',
+          );
+          return;
+        }
+      }
+
       const canOffer = input.tools.some((t) => t.name === 'offer');
       const plate = /\bon my plate\b/i.test(text)
         ? offerable('app').find((a) => a.id === 'linear')

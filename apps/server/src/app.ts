@@ -80,6 +80,7 @@ import { registerVoiceRoutes } from './voice/routes';
 import { registerSafetyRoutes } from './conversations/safety-routes';
 import { registerUndoRoutes } from './undo/routes';
 import { registerArtifactRoutes } from './artifacts/routes';
+import { registerMarketRoutes } from './skills/market/routes';
 import { registerConchAppRoutes } from './conchapps/routes';
 import { registerTaskRoutes } from './tasks/routes';
 import { registerMcpEndpoint } from './mcp/endpoint';
@@ -874,6 +875,12 @@ export async function buildApp(services: Services) {
     if (!body) return;
     return guarded(reply, () => services.skills.create(body));
   });
+  // Discover (ADR 0074): before `/api/skills/:id`, so its own paths win.
+  if (services.market)
+    registerMarketRoutes(app, services.market, {
+      detail: (id) => services.skills.detail(id),
+      emit: (event) => services.broadcast.emit(event),
+    });
   // A tidy shelf (ADR 0058): what's sat unused, and your answer. Only ever turns skills off.
   app.get('/api/skills/suggestions/shelf', () => services.skills.shelf());
   app.post('/api/skills/suggestions/shelf', async (request, reply) => {

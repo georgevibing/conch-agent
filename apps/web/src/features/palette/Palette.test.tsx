@@ -364,6 +364,50 @@ describe('Palette search', () => {
     await waitFor(() => expect(where()).toBe('/settings/browser'));
   });
 
+  it('finds Discover and skills people share by name, and opens one to read (ADR 0074)', async () => {
+    const user = userEvent.setup();
+    const listing = {
+      id: 'clawhub:ada/meeting-notes',
+      source: 'clawhub',
+      sourceLabel: 'ClawHub',
+      name: 'meeting-notes',
+      title: 'Meeting notes',
+      description: 'Turns rough meeting notes into actions.',
+      publisher: { name: 'Ada' },
+      trust: 'verified',
+      url: 'https://clawhub.ai/ada/skills/meeting-notes',
+    };
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'GET /api/skills': () => ({ skills: [], sources: [] }),
+      'GET /api/skills/market': () => ({ listings: [listing], sources: [] }),
+    });
+    renderApp(
+      <>
+        <Palette />
+        <Where />
+      </>,
+    );
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'meeting');
+    const found = await screen.findByRole('option', { name: /Meeting notes/ });
+    expect(found).toHaveTextContent('Discover · ClawHub');
+    await user.click(found);
+    await waitFor(() =>
+      expect(screen.getByTestId('where')).toHaveTextContent(
+        `/skills/discover/${encodeURIComponent(listing.id)}`,
+      ),
+    );
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'marketplace');
+    await user.click(await screen.findByRole('option', { name: /Discover skills/ }));
+    await waitFor(() =>
+      expect(screen.getByTestId('where')).toHaveTextContent(/^\/skills\/discover$/),
+    );
+  });
+
   it('finds devices and approving them, straight into Settings → Security → Devices', async () => {
     const user = userEvent.setup();
     mockFetch({
