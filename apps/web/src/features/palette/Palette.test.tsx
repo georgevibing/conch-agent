@@ -557,7 +557,7 @@ describe('Palette search', () => {
     act(() => useUi.setState({ stopHolding: undefined }));
   });
 
-  it('opens what the open chat spent, and its limit, by name (ADR 0073)', async () => {
+  it('opens what the open chat spent, and its limit, by name (ADR 0079)', async () => {
     const user = userEvent.setup();
     mockFetch({
       'GET /api/state': () => appState(),

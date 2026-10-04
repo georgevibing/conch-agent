@@ -138,7 +138,7 @@ export class UsageService {
 
   /**
    * Called when a turn finishes: add its money, then look at the provider
-   * again. With `priced` (ADR 0073), only money counts: a turn on a plan or
+   * again. With `priced` (ADR 0079), only money counts: a turn on a plan or
    * on this computer costs nothing here, and list prices fill in for a
    * provider that doesn't say. Returns one sentence, once a month, when this
    * turn took the month past most of its budget (`tell`: someone will read it).

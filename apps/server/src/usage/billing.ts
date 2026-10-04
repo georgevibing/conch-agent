@@ -1,6 +1,6 @@
 /**
  * How a provider charges, and what a turn cost the way it charges (ADR 0057,
- * ADR 0073). Shared by routines and chats, so both say the same thing.
+ * ADR 0079). Shared by routines and chats, so both say the same thing.
  */
 import type { Billing, EngineId, TurnCost, Usage, UsageWindow } from '@conch/protocol';
 

@@ -14,7 +14,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'What a chat costs, shown calmly (ADR 0073). Each reply has its cost among its actions — a quiet “$0.04”, or “Plan” on a subscription — with the detail a tap away: what reading from the cache saved, the tokens, the plan’s window. The chat’s chip beside the model picker adds it up, its tasks included, and holds the one money setting a chat has: a limit of its own. At a limit (the chat’s, or the monthly budget), the message waits for one tap: raise it, carry on with a model that costs less, or stop. A pricier model on a long chat, or a month nearly at its budget, gets one quiet line, once.',
+          'What a chat costs, shown calmly (ADR 0079). Each reply has its cost among its actions — a quiet “$0.04”, or “Plan” on a subscription — with the detail a tap away: what reading from the cache saved, the tokens, the plan’s window. The chat’s chip beside the model picker adds it up, its tasks included, and holds the one money setting a chat has: a limit of its own. At a limit (the chat’s, or the monthly budget), the message waits for one tap: raise it, carry on with a model that costs less, or stop. A pricier model on a long chat, or a month nearly at its budget, gets one quiet line, once.',
       },
     },
   },

@@ -35,7 +35,7 @@ Choose **Wait until it resets** to go back to waiting.
 
 The small gauge at the top of the window shows what's left of your tightest limit, like a battery: "62% left". Click it to see each of your plan's limits, what's left of it, and when it resets.
 
-If you pay as you go, it shows what you've spent today and this month instead. Set a **Monthly budget** in **Settings → Usage**, and the gauge shows what's left of that. Conch warns you when it runs low. It never stops you. Routines are the one exception: what they spend while you're away has [a limit of its own](../features/routines.md#it-wont-run-up-a-bill).
+If you pay as you go, it shows what you've spent today and this month instead. Set a **Monthly budget** in **Settings → Usage**, and the gauge shows what's left of that. Near it, a chat says so once; at it, a chat asks before spending more ([What it costs](./what-it-costs.md)). Routines have [a limit of their own](../features/routines.md#it-wont-run-up-a-bill) for what they spend while you're away.
 
 A line appears above the message box only when a limit is close or reached. Type `/usage`, or open **Settings → Usage**, to see the same numbers.
 

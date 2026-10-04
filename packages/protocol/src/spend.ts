@@ -1,5 +1,5 @@
 /**
- * What a chat costs, and the limits that keep it in hand (ADR 0073).
+ * What a chat costs, and the limits that keep it in hand (ADR 0079).
  *
  * Every turn says what it cost the way its provider charges: money on a key
  * you pay as you go, a share of the plan on a subscription, nothing on this

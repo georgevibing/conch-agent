@@ -70,6 +70,9 @@
   asks with options, days or a number to tap, and the reply carries on.
 - **Offline and at a limit.** A message waits until you're back, or the model on
   this computer answers. At a usage limit, the provider you picked takes over.
+- **What it costs, in plain sight.** Each reply and each chat says what it cost,
+  or how much of your plan it used. Set a limit for a chat or the month, and a
+  chat asks before spending more.
 
 ### 🧩 Get things done
 

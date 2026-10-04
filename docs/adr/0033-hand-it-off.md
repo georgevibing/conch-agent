@@ -113,8 +113,9 @@ works. All of them share a `group`.
   comes back into the parent when it finishes. A helper that read a page
   leaves its parent as wary as if the parent had read it.
 - **Budget.** Over the monthly budget, `delegate` refuses and says why. It
-  never multiplies spending past what you set. A single background task still
-  runs: the budget never blocks (ADR 0005).
+  never multiplies spending past what you set. Every task and helper spends as
+  part of the chat it came from, and stops at that chat's limit or the monthly
+  budget, saying why (ADR 0079).
 - **Stop.** Stopping the parent turn aborts the tool, and that stops every
   helper.
 

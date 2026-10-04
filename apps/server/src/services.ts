@@ -181,7 +181,7 @@ const SIGN_IN_LOOK_MS = 1_500;
 
 /**
  * Every past turn's money, oldest conversations included: what Conch worked
- * out (ADR 0073) where it did, so a plan's turns cost nothing; else what the
+ * out (ADR 0079) where it did, so a plan's turns cost nothing; else what the
  * provider said.
  */
 async function turnCosts(store: ConversationStore) {
@@ -690,7 +690,7 @@ export class Services {
     // How each provider charges, asked once a minute at most: chats and routines share it.
     const billings = new Billings();
     this.conversations = new ConversationManager({
-      // What each turn costs, what a chat has spent, and its limits (ADR 0073).
+      // What each turn costs, what a chat has spent, and its limits (ADR 0079).
       spend: new ChatSpendDesk({
         billings,
         usage: () => this.usage,
@@ -812,7 +812,7 @@ export class Services {
       skillPermissions: (skillId) => this.skills.permissions(skillId),
       questions: this.questions,
       // A spend that can't be saved is lost, not fatal: an unhandled rejection would stop Conch.
-      // Naming a chat on a plan costs no money (ADR 0073).
+      // Naming a chat on a plan costs no money (ADR 0079).
       onSpend: (usage, engine) =>
         void billings
           .of(engine)
@@ -951,7 +951,7 @@ export class Services {
       history: () => turnCosts(conversationStore),
     });
     this.usage.changed.on((usage) => this.broadcast.emit({ type: 'usage.changed', usage }));
-    // Each turn's money is counted by the chat as it ends (ADR 0073), so it can say when the month nears its budget.
+    // Each turn's money is counted by the chat as it ends (ADR 0079), so it can say when the month nears its budget.
     this.usage.start();
     void (this.mockVendor?.start() ?? Promise.resolve()).then(() => this.integrations.start());
     this.googleApps.start();

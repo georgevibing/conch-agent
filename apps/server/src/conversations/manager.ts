@@ -223,13 +223,13 @@ interface Held {
    */
   forApps?: boolean;
   /**
-   * It met a spending limit (ADR 0073): it goes when the person chooses
+   * It met a spending limit (ADR 0079): it goes when the person chooses
    * (raise it, a model that costs less), never by itself.
    */
   forBudget?: boolean;
 }
 
-/** A message at a spending limit, as the chat shows it (ADR 0073). */
+/** A message at a spending limit, as the chat shows it (ADR 0079). */
 type CappedInput = Omit<Extract<ConversationEventInput, { type: 'turn.capped' }>, 'type'>;
 
 /** A second message sent while the first waits joins it, like two texts in a row. */
@@ -607,7 +607,7 @@ export class ConversationManager {
        * another model the person connected.
        */
       describe?: (engine: Engine, model?: string) => DescribeImages;
-      /** What each turn costs, what a chat has spent, and its limits (ADR 0073). */
+      /** What each turn costs, what a chat has spent, and its limits (ADR 0079). */
       spend?: SpendDesk;
       integrations?: TurnIntegrationsProvider;
       /** Where uploaded files and long pastes are kept (ADR 0017). */
@@ -848,7 +848,7 @@ export class ConversationManager {
     }
 
     // Anything still waiting for the internet goes along with this message;
-    // a reply stopped at a limit doesn't carry on once you've moved on (ADR 0073).
+    // a reply stopped at a limit doesn't carry on once you've moved on (ADR 0079).
     const held = this.#held.get(live.record.id) ?? heldFromLog(live.events);
     const waiting = held?.prompt === CARRY_ON ? undefined : held;
     this.#held.delete(live.record.id);
@@ -898,7 +898,7 @@ export class ConversationManager {
       if (autoTitle) void this.#autoTitle(live, engine, titleSource(input.text, attachments));
       return summary(live.record);
     }
-    // At a spending limit (ADR 0073), it waits for your one tap.
+    // At a spending limit (ADR 0079), it waits for your one tap.
     const capped = await this.#capped(live, engine, model);
     if (capped) {
       this.#held.set(live.record.id, {
@@ -1073,7 +1073,7 @@ export class ConversationManager {
     const live = await this.#get(id);
     const before = live.record.options;
     this.#applyOptions(live, options);
-    // A model that costs a lot more on a chat this long says so, once (ADR 0073).
+    // A model that costs a lot more on a chat this long says so, once (ADR 0079).
     if (
       !live.abort &&
       (live.record.options.model !== before.model || live.record.options.engine !== before.engine)
@@ -1247,7 +1247,7 @@ export class ConversationManager {
     // A provider you named must be ready, as for any message you send.
     if (engineId && (await chosen.detect().catch(() => undefined))?.state !== 'ready')
       throw new ConversationError('engine-unavailable', `${chosen.label} isn’t ready.`);
-    // A spending limit holds whatever is waiting, too (ADR 0073): back online,
+    // A spending limit holds whatever is waiting, too (ADR 0079): back online,
     // a message past it waits for your choice instead of going.
     if (!atLimit) {
       const capped = await this.#capped(live, route.engine, route.model ?? asked);
@@ -1286,7 +1286,7 @@ export class ConversationManager {
   }
 
   /**
-   * The chat whose money this is (ADR 0073): a task's is the chat it was sent
+   * The chat whose money this is (ADR 0079): a task's is the chat it was sent
    * from (ADR 0033), so it shares that chat's limit; any other chat is its own.
    */
   async #owner(live: Live): Promise<Live> {
@@ -1297,7 +1297,7 @@ export class ConversationManager {
   }
 
   /**
-   * Whether the chat's limits hold this turn (ADR 0073). Chats you write in,
+   * Whether the chat's limits hold this turn (ADR 0079). Chats you write in,
    * and the tasks they send away, are held; routines keep their own guards
    * (ADR 0057), and a chat app's chats are counted but never left waiting.
    */
@@ -1350,7 +1350,7 @@ export class ConversationManager {
   }
 
   /**
-   * The person's one tap at a spending limit (ADR 0073): raise it (the chat's
+   * The person's one tap at a spending limit (ADR 0079): raise it (the chat's
    * own, or the month's budget), carry on with a model that costs less (a
    * cheaper one gets a little more room), or stop. A person's action in the
    * UI only: no tool reaches it (AGENTS.md security 7).
@@ -1427,7 +1427,7 @@ export class ConversationManager {
 
   /**
    * A model picked for a long chat that makes each reply cost a lot more
-   * (ADR 0073): one quiet line, before the next reply, never more.
+   * (ADR 0079): one quiet line, before the next reply, never more.
    */
   async #estimate(live: Live, options: TurnOptions) {
     const desk = this.deps.spend;
@@ -1534,7 +1534,7 @@ export class ConversationManager {
     const defaults = { ...settings.preferences, engine: this.deps.engine().id };
     const resolved = resolveOptions(live.record.options, defaults, engine.id);
     if (model) resolved.model = model;
-    // How this provider charges, and what may still be spent (ADR 0073): a reply
+    // How this provider charges, and what may still be spent (ADR 0079): a reply
     // that goes past the chat's limit or the month's budget stops cleanly.
     const desk = this.deps.spend;
     const charge: BillingInfo = desk ? await desk.billing(engine).catch(() => ({})) : {};
@@ -2164,7 +2164,7 @@ export class ConversationManager {
         outcome === 'error'
           ? (completed?.problem ?? (await turnProblem(engine, completed?.error)))
           : undefined);
-      // What it cost, the way its provider charges (ADR 0073), joins the chat's.
+      // What it cost, the way its provider charges (ADR 0079), joins the chat's.
       const cost = desk?.cost(completed?.usage, charge, answeredWith ?? resolved.model, engine.id);
       await this.#count(live, cost).catch(() => undefined);
       this.#append(
@@ -2202,7 +2202,7 @@ export class ConversationManager {
         );
         next = after;
       }
-      // The month nearly at its budget says so, once (ADR 0073).
+      // The month nearly at its budget says so, once (ADR 0079).
       const near = await desk
         ?.record(cost, completed?.usage, {
           tell: !extras && !live.record.origin && Boolean(cost),
@@ -2771,7 +2771,7 @@ function heldFromLog(events: readonly ConversationEvent[]): Held | undefined {
   const options = events.findLast((e) => e.type === 'options');
   const engine =
     options?.type === 'options' && options.options.engine ? options.options.engine : undefined;
-  // A reply stopped part way at a limit carries on from where it was (ADR 0073).
+  // A reply stopped part way at a limit carries on from where it was (ADR 0079).
   if (waited?.type === 'turn.capped' && waited.during)
     return { ...(engine && { engine }), prompt: CARRY_ON, attachments: [], forBudget };
   // Every message since the last answer waited; they go together.
@@ -2792,7 +2792,7 @@ function heldFromLog(events: readonly ConversationEvent[]): Held | undefined {
   };
 }
 
-/** The message (or reply) waiting at a spending limit for the person's choice, if any (ADR 0073). */
+/** The message (or reply) waiting at a spending limit for the person's choice, if any (ADR 0079). */
 function openCap(
   events: readonly ConversationEvent[],
 ): Extract<ConversationEvent, { type: 'turn.capped' }> | undefined {

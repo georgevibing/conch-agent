@@ -1087,7 +1087,7 @@ export async function buildApp(services: Services) {
     }
   });
   /**
-   * A message at a spending limit goes on as the person chose (ADR 0073): raise
+   * A message at a spending limit goes on as the person chose (ADR 0079): raise
    * the limit, carry on with a model that costs less, or stop. Only from the UI.
    */
   app.post<{ Params: { id: string } }>('/api/conversations/:id/capped', async (request, reply) => {
@@ -1103,7 +1103,7 @@ export async function buildApp(services: Services) {
       return sendError(reply, error);
     }
   });
-  /** This chat's own spending limit (ADR 0073), or none. Only from the UI. */
+  /** This chat's own spending limit (ADR 0079), or none. Only from the UI. */
   app.put<{ Params: { id: string } }>(
     '/api/conversations/:id/spend-limit',
     async (request, reply) => {

@@ -343,7 +343,7 @@ export const ConversationSummary = z.object({
    * it, or it needing you, puts it back.
    */
   archivedAt: z.number().optional(),
-  /** What it has spent, its tasks included, and its own limit (ADR 0073). */
+  /** What it has spent, its tasks included, and its own limit (ADR 0079). */
   spend: ChatSpend.optional(),
 });
 export type ConversationSummary = z.infer<typeof ConversationSummary>;
@@ -532,12 +532,12 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     /** Which provider answered, and with which model when it said. */
     engine: EngineId.optional(),
     model: z.string().optional(),
-    /** What it cost, the way its provider charges (ADR 0073). */
+    /** What it cost, the way its provider charges (ADR 0079). */
     cost: TurnCost.optional(),
   }),
   z.object({ ...logged, type: z.literal('title'), title: z.string() }),
   /**
-   * A message met a spending limit (ADR 0073): the chat's own, or the monthly
+   * A message met a spending limit (ADR 0079): the chat's own, or the monthly
    * budget. It waits for one tap: raise the limit, carry on with a model that
    * costs less, or stop. `during`: a reply was stopped part way, and carries
    * on from there.
@@ -557,7 +557,7 @@ export const ConversationEvent = z.discriminatedUnion('type', [
   /** The person chose how a message at a limit goes on. */
   z.object({ ...logged, type: z.literal('turn.capped.settled'), outcome: CappedOutcome }),
   /**
-   * A quiet word about money, said once when it matters (ADR 0073):
+   * A quiet word about money, said once when it matters (ADR 0079):
    * `budget-near`, the month is most of the way to its budget; `pricier`, the
    * model just picked costs a lot more a reply on a chat this long; `stopped`,
    * a task stopped at the limit of the chat it came from.

@@ -13,7 +13,7 @@ type Choice = 'raise' | 'switch' | 'stop';
 const settledBy = { raise: 'raised', switch: 'switched', stop: 'stopped' } as const;
 
 /**
- * A message (or a reply part way) at a spending limit (ADR 0073). It waits
+ * A message (or a reply part way) at a spending limit (ADR 0079). It waits
  * here for one tap: raise the limit, carry on with a model that costs less,
  * or stop. The chat carries on by itself once it's chosen.
  */
@@ -65,7 +65,7 @@ export function CappedItem({
   );
 }
 
-/** A quiet word about money in the chat (ADR 0073). */
+/** A quiet word about money in the chat (ADR 0079). */
 export function SpendNoteItem({ item }: { item: Extract<TranscriptItem, { kind: 'spend-note' }> }) {
   return (
     <div className={styles.aside}>
@@ -75,7 +75,7 @@ export function SpendNoteItem({ item }: { item: Extract<TranscriptItem, { kind: 
 }
 
 /**
- * What this chat has spent, beside the model picker (ADR 0073): shown once
+ * What this chat has spent, beside the model picker (ADR 0079): shown once
  * it has spent money or has a limit, or when ⌘K asks for it. Its tasks are in
  * it. The limit is the person's to set, here, and nowhere the assistant reaches.
  */

@@ -1,5 +1,5 @@
 /**
- * What a chat spends, and its two limits (ADR 0073): the chat's own (set by
+ * What a chat spends, and its two limits (ADR 0079): the chat's own (set by
  * a person, off until then) and the monthly budget every chat shares (Settings
  * → Usage). Only money counts: a turn on a plan or on this computer spends
  * nothing here. The manager asks before a turn and watches it as it goes; at

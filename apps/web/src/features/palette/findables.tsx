@@ -919,7 +919,7 @@ export function useFindables(query: string, conversationId: string | undefined):
             icon: <Globe />,
             run: () => openBrowser(conversationId),
           },
-          // What this chat spent, and a limit of its own (ADR 0073).
+          // What this chat spent, and a limit of its own (ADR 0079).
           {
             id: 'chat-spend',
             label: 'What this chat spent',

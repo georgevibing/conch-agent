@@ -205,7 +205,7 @@ const isPart = (block: Block) =>
     (block.item.kind === 'assistant' && !block.item.continuation)
   );
 
-/** How a reply's turn ended (its cost, ADR 0073), once it has. */
+/** How a reply's turn ended (its cost, ADR 0079), once it has. */
 function endOf(reply: Reply) {
   const end = reply.parts.findLast((b) => b.item?.kind === 'turn-end')?.item;
   return end?.kind === 'turn-end' ? end : undefined;

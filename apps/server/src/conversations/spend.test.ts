@@ -197,7 +197,7 @@ async function say(manager: ConversationManager, text: string, conversationId?: 
   return convo.id;
 }
 
-describe('what a turn costs (ADR 0073)', () => {
+describe('what a turn costs (ADR 0079)', () => {
   it('says what each reply cost, adds it to the chat and the month, and what the cache saved', async () => {
     const { manager, api, usage } = await setup();
     api.steps = [{ inputTokens: 100_000, cachedInputTokens: 80_000, outputTokens: 1_000 }];
@@ -245,7 +245,7 @@ describe('what a turn costs (ADR 0073)', () => {
   });
 });
 
-describe('a chat’s own limit (ADR 0073)', () => {
+describe('a chat’s own limit (ADR 0079)', () => {
   it('holds the next message at the limit, and one tap raises it and sends it', async () => {
     const { manager, api } = await setup();
     const id = await say(manager, 'first');
@@ -406,7 +406,7 @@ describe('a chat’s own limit (ADR 0073)', () => {
   });
 });
 
-describe('the monthly budget holds chats too (ADR 0073)', () => {
+describe('the monthly budget holds chats too (ADR 0079)', () => {
   it('says so once near it, and holds a message at it — but not one on a plan', async () => {
     const { manager, api } = await setup({ budget: 1, plan: true });
     api.steps = [{ inputTokens: 1000, outputTokens: 100, costUsd: 0.5 }];
@@ -449,7 +449,7 @@ describe('the monthly budget holds chats too (ADR 0073)', () => {
   });
 });
 
-describe('a pricier model on a long chat (ADR 0073)', () => {
+describe('a pricier model on a long chat (ADR 0079)', () => {
   it('says what a reply will cost, once, when it really matters', async () => {
     const { manager, api } = await setup();
     api.steps = [{ inputTokens: 200_000, outputTokens: 2_000 }];

@@ -122,7 +122,7 @@ describe('automatic titles', () => {
     }
   });
 
-  it('counts no money for titling on a plan (ADR 0073)', async () => {
+  it('counts no money for titling on a plan (ADR 0079)', async () => {
     const { services, events } = await setup();
     const convo = await send(services, 'Hello there');
     await titled(events, services, convo.id);

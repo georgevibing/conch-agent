@@ -27,7 +27,7 @@ const summary = (id: string, spend?: Record<string, unknown>) => ({
   ...(spend && { spend }),
 });
 
-describe('what a chat costs (ADR 0073)', () => {
+describe('what a chat costs (ADR 0079)', () => {
   it('shows each reply’s cost among its actions, with the detail a tap away', async () => {
     mockFetch({
       'GET /api/state': () => appState(),

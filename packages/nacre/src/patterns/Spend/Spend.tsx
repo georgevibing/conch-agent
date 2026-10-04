@@ -243,7 +243,7 @@ export function switchWords(to: SpendSwitch, locale = 'en-US'): string {
 }
 
 /**
- * A message (or a reply part way) met a spending limit (ADR 0073). One plain
+ * A message (or a reply part way) met a spending limit (ADR 0079). One plain
  * sentence and the three choices that matter: raise it, carry on with a
  * model that costs less, or stop. Never a dead end, never an alarm; once
  * chosen, it folds to a quiet line.

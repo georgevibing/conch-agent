@@ -235,10 +235,10 @@ export const api = {
    * A waiting message goes now — with `engine` (the model on this computer), if
    * given; switched to its `model` (one that can use the apps it needs), if given.
    */
-  /** The person's one tap at a spending limit (ADR 0073): raise it, a model that costs less, or stop. */
+  /** The person's one tap at a spending limit (ADR 0079): raise it, a model that costs less, or stop. */
   settleCapped: (id: string, choice: 'raise' | 'switch' | 'stop') =>
     request(Ok, `/api/conversations/${id}/capped`, { method: 'POST', body: { choice } }),
-  /** This chat's own spending limit (ADR 0073); `null` takes it off. */
+  /** This chat's own spending limit (ADR 0079); `null` takes it off. */
   setChatSpendLimit: (id: string, capUsd: number | null) =>
     request(ConversationSummary, `/api/conversations/${id}/spend-limit`, {
       method: 'PUT',

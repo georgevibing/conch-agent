@@ -172,7 +172,7 @@ export function AssistantMessage({
    * Undefined while any of it is still being written (no actions yet).
    */
   said?: string;
-  /** How its turn ended: what it cost sits among its actions (ADR 0073). */
+  /** How its turn ended: what it cost sits among its actions (ADR 0079). */
   ended?: Of<'turn-end'>;
 }) {
   const streaming = !item.done;
@@ -532,7 +532,7 @@ export function TurnEnd({
     return (
       <div className={styles.stopped}>
         Stopped
-        {/* What it had spent by then, quietly (ADR 0073). */}
+        {/* What it had spent by then, quietly (ADR 0079). */}
         {item.cost && <TurnCostTag cost={item.cost} tokens={item.usage} />}
       </div>
     );

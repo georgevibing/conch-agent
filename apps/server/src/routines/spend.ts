@@ -200,7 +200,7 @@ export class RoutineSpend {
       paused?: (spending: RoutineSpending) => void;
       now?: () => number;
       heal?: Heal;
-      /** How providers charge, shared with chats (ADR 0073). */
+      /** How providers charge, shared with chats (ADR 0079). */
       billings?: Billings;
     },
   ) {

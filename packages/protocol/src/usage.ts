@@ -49,7 +49,7 @@ export const UsageSpend = z.object({
   month: z.number().nonnegative(),
   /**
    * Your own monthly budget, if you set one. At it, a chat on a key you pay as
-   * you go asks before spending more (ADR 0073).
+   * you go asks before spending more (ADR 0079).
    */
   budget: z.number().positive().optional(),
 });

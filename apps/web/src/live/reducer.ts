@@ -268,7 +268,7 @@ export type TranscriptItem =
     }
   | {
       /**
-       * A message (or a reply part way) met a spending limit (ADR 0073): it
+       * A message (or a reply part way) met a spending limit (ADR 0079): it
        * waits for one tap. `settled` says how it went on; `moved-on` when a
        * newer message came instead.
        */
@@ -283,7 +283,7 @@ export type TranscriptItem =
       settled?: 'raised' | 'switched' | 'stopped' | 'moved-on';
     }
   | {
-      /** A quiet word about money, said once when it matters (ADR 0073). */
+      /** A quiet word about money, said once when it matters (ADR 0079). */
       kind: 'spend-note';
       id: string;
       note: 'budget-near' | 'pricier' | 'stopped';
@@ -324,7 +324,7 @@ export type TranscriptItem =
       /** Why it failed, when Conch can tell: decides what the chat offers. */
       problem?: TurnProblem;
       usage?: Usage;
-      /** What it cost, the way its provider charges (ADR 0073). */
+      /** What it cost, the way its provider charges (ADR 0079). */
       cost?: TurnCost;
       /** Which provider answered, and with which model. */
       engine?: EngineId;
@@ -447,7 +447,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         ...base,
         turnStartedAt: event.at,
         items: [
-          // A message waiting at a spending limit goes with this one, or is let go (ADR 0073).
+          // A message waiting at a spending limit goes with this one, or is let go (ADR 0079).
           ...settleCapped(withoutPending, 'moved-on'),
           {
             kind: 'user',

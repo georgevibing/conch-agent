@@ -75,7 +75,7 @@ export function UsageTab() {
           />
         )}
       </Section>
-      {/* Every chat on a key you pay as you go counts, whichever provider is the default (ADR 0073). */}
+      {/* Every chat on a key you pay as you go counts, whichever provider is the default (ADR 0079). */}
       <BudgetField initial={usage.spend.budget} />
       <SpendingSection />
     </Stack>
