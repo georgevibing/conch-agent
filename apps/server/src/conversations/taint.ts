@@ -23,10 +23,16 @@ const WEB_READERS = new Set(['WebFetch', 'WebSearch']);
 /** Conch's browser: every look at a page is the outside coming in. */
 const BROWSER =
   /^(?:mcp__conch__)?browser_(?:open|read|screenshot|click|back|scroll|wait|select|press|type)$/;
-/** Programs that bring the outside in, wherever they sit in a command line, and addresses. */
-const DOWNLOADS = /\b(?:curl|wget|aria2c|Invoke-WebRequest|iwr|irm)\b|https?:\/\//i;
-/** Names too common to match anywhere (`git fetch`, `grep http`): only as the program run. */
-const DOWNLOAD_PROGRAMS = /(?:^|[;&|(`\n]|\$\()\s*(?:sudo\s+)?(?:fetch|https?|httpie)\b/i;
+const DOWNLOADS =
+  /\b(?:curl|wget|http(?:ie)?|aria2c|fetch|Invoke-WebRequest|iwr|irm)\b|https?:\/\//i;
+/**
+ * Subcommands that only share a downloader's name (`git fetch`, `pnpm fetch`),
+ * taken out before `DOWNLOADS` looks. A narrow list on purpose: anything else
+ * still counts, so a mark checked again later (`heldTaints`) only ever comes
+ * free for one of these.
+ */
+const NOT_DOWNLOADS =
+  /\bgit(?:\s+(?:-[Cc]\s+\S+|--?[\w-]+(?:=\S+)?))*\s+fetch\b|\b(?:npm|pnpm|yarn)\s+fetch\b/gi;
 const INTEGRATION = /^mcp__([a-z0-9_-]+?)__(.+)$/;
 
 const hostOf = (value: unknown): string | undefined => {
@@ -62,7 +68,7 @@ export function taintFrom(toolName: string, input: unknown, app?: string): Taint
   if (
     toolName === 'Bash' &&
     typeof args.command === 'string' &&
-    (DOWNLOADS.test(args.command) || DOWNLOAD_PROGRAMS.test(args.command))
+    DOWNLOADS.test(args.command.replace(NOT_DOWNLOADS, ' '))
   )
     return { kind: 'download', label: hostOf(args.command) ?? 'something downloaded' };
   const integration = INTEGRATION.exec(toolName);
@@ -78,16 +84,17 @@ export function taintFrom(toolName: string, input: unknown, app?: string): Taint
  * another chat stay as they are.
  */
 export function heldTaints(events: readonly ConversationEvent[]): TaintSource[] {
-  const calls = new Map<string, { name: string; input: unknown }>();
-  for (const e of events) if (e.type === 'tool.started') calls.set(e.toolUseId, e);
   return events.flatMap((e, i) => {
     if (e.type !== 'taint') return [];
     if (e.source.kind !== 'download') return [e.source];
     // The command that made it: named on the mark, or (older logs) the call finishing next.
     const next = events[i + 1];
     const id = e.toolUseId ?? (next?.type === 'tool.finished' ? next.toolUseId : undefined);
-    const call = id ? calls.get(id) : undefined;
-    if (call?.name !== 'Bash') return [e.source];
+    // The call started last before the mark: ids can repeat across turns and providers.
+    const call = id
+      ? events.findLast((c, j) => j < i && c.type === 'tool.started' && c.toolUseId === id)
+      : undefined;
+    if (call?.type !== 'tool.started' || call.name !== 'Bash') return [e.source];
     return taintFrom(call.name, call.input) ? [e.source] : [];
   });
 }

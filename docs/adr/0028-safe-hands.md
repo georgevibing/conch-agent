@@ -184,14 +184,17 @@ stand. The verdict is `clean`, `caution` or `danger`.
 
 ## Later changes
 
-- **2026-10-04: the download rule matches programs, not words.** `git fetch`
-  matched `fetch` and marked coding chats as "downloaded something", so in
-  Full trust every command asked. Common names (`fetch`, `http`, `httpie`) now
-  count only as the program being run. A mark made by a command is checked again
-  by today's rule each time the chat's marks are read (`heldTaints`), so chats an
-  older rule got wrong come free. Marks now name the tool call that made them;
-  in older logs, it's the call that finishes right after. Pages, apps, people, and
-  marks carried in from another chat are never looked at again.
+- **2026-10-04: `git fetch` isn't a download.** It matched `fetch` and marked
+  coding chats as "downloaded something", so in Full trust every command asked.
+  `git fetch` and `npm`/`pnpm`/`yarn fetch` are taken out before the rule looks;
+  the rule is otherwise as broad as before. A mark made by a command is checked
+  again each time the chat's marks are read (`heldTaints`), so chats marked by
+  `git fetch` come free. Because the only change is that short list, nothing
+  else an older rule caught comes free. Marks now name the tool call that made
+  them; in older logs, it's the call that finishes right after. Either way it's
+  the call with that id started last *before* the mark, since ids can repeat.
+  Pages, apps, people, and marks carried in from another chat are never looked
+  at again.
 - **2026-10-04: a mode picked mid-turn holds from the next step.** It used to wait
   for the next message. The running turn's `options.permissionMode` changes in
   place. Asks still waiting that Full trust would have allowed are allowed. Claude
