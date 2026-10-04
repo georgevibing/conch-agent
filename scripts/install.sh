@@ -130,8 +130,14 @@ quietly() {
   fi
 }
 
-printf '\n  %s🐚  Conch%s\n  %s%s%s\n\n' "$BOLD" "$RESET" "$DIM" \
-  "Your own assistant, on your own computer. Let's get it settled in." "$RESET"
+# The line under the name says what's about to happen: settling in, or taking Conch away.
+if [ -n "$UNINSTALL" ]; then
+  if [ -n "$DELETE_DATA" ]; then TAGLINE="Taking Conch off this computer, and asking before your chats go too."
+  else TAGLINE="Taking Conch off this computer. Your chats and settings stay."; fi
+else
+  TAGLINE="Your own assistant, on your own computer. Let's get it settled in."
+fi
+printf '\n  %s🐚  Conch%s\n  %s%s%s\n\n' "$BOLD" "$RESET" "$DIM" "$TAGLINE" "$RESET"
 
 if [ "$(id -u)" = 0 ]; then
   fail "Run this as yourself, not with sudo." \
