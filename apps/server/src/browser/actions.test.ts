@@ -110,7 +110,7 @@ afterAll(async () => {
   site?.closeAllConnections();
   await new Promise((resolve) => site?.close(resolve));
   await rm(home, { recursive: true, force: true, maxRetries: 5 }).catch(() => undefined);
-});
+}, 60_000);
 
 function harness(
   conversationId: string,
