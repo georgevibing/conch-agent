@@ -5,8 +5,9 @@ import { say } from './app';
 const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
 
 /**
- * It learns you, end to end (ADR 0032): a memory learned after reading a page
- * is remembered where you can see it, with Undo; the tidy-up merges repeats and updates what changed, with
+ * It learns you, end to end (ADR 0032): a memory a page planted is held and
+ * asked about (ADR 0087), an ordinary one learned after reading is remembered
+ * where you can see it, with Undo; the tidy-up merges repeats and updates what changed, with
  * Undo; what Conch knows is searchable and exportable; something asked for in
  * three chats is offered as a skill, never saved by itself.
  */
@@ -14,7 +15,7 @@ test.beforeEach(async ({ request }) => {
   await request.patch('/api/settings', { data: { onboarded: true, profile: { name: 'Ada' } } });
 });
 
-test('remembering after reading a page says so in the chat, and Undo forgets it', async ({
+test('a memory a page planted is held and asked about, never used until you say (ADR 0087)', async ({
   page,
   request,
 }) => {
@@ -23,18 +24,56 @@ test('remembering after reading a page says so in the chat, and Undo forgets it'
   await page.goto('/');
   await say(page, 'read https://news.example/today and summarise it', /Ask me to/);
   await expect(page.getByText(/Read news\.example\./)).toBeVisible();
-  // "Sent to", not "go to": the pretend assistant takes "go to" and an address as a page to open.
-  await say(page, 'remember that invoices are sent to billing@news.example', /Got it/);
+  // The page told the assistant where invoices go; it took the bait.
+  await say(page, 'remember what the page says about invoices', /Got it/);
+
+  const card = page.getByRole('region', { name: 'Remember this?' });
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  await expect(card).toContainText('Invoices are sent to billing@news.example');
+  await expect(card).toContainText(
+    'This came from news.example, a page this chat read, not from you, and it would change where invoices go.',
+  );
+  await expect(card).toContainText('From news.example, a page this chat read');
+  await expect(page.getByText('Remembered', { exact: true })).toHaveCount(0);
+  // Held, not saved: recall doesn't find it.
+  expect(await recall()).toBe(0);
+
+  // The same question waits on What Conch knows.
+  await page.goto('/memory');
+  const waiting = page.getByRole('list', { name: 'Waiting for your OK' });
+  await expect(waiting).toContainText('it would change where invoices go');
+  await page.goBack();
+
+  await page
+    .getByRole('region', { name: 'Remember this?' })
+    .getByRole('button', { name: 'Don’t remember' })
+    .click();
+  await expect(page.getByRole('status').filter({ hasText: 'Not remembered' })).toBeVisible();
+  expect(await recall()).toBe(0);
+  // What you chose is written into the chat, so a reload shows it again.
+  await page.reload();
+  await expect(page.getByText(/Not remembered: Invoices are sent/)).toBeVisible();
+});
+
+test('an ordinary memory after reading is remembered at once, and Undo forgets it', async ({
+  page,
+  request,
+}) => {
+  const recall = async () =>
+    (await (await request.get('/api/memories/search?q=summaries')).json()).results.length;
+  await page.goto('/');
+  await say(page, 'read https://news.example/today and summarise it', /Ask me to/);
+  await expect(page.getByText(/Read news\.example\./)).toBeVisible();
+  await say(page, 'remember that I prefer short summaries', /Got it/);
 
   // Someone is watching this chat, so it's remembered at once, where they can see it and undo it.
-  await expect(page.getByText('Remembered', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Keep' })).toHaveCount(0);
+  await expect(page.getByText('Remembered', { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('region', { name: 'Remember this?' })).toHaveCount(0);
   await expect.poll(recall).toBe(1);
 
   await page.getByRole('button', { name: 'Undo' }).click();
   await expect(page.getByText('Forgot', { exact: true })).toBeVisible();
   await expect.poll(recall).toBe(0);
-  // What you pressed is written into the chat, so a reload shows it again.
   await page.reload();
   await expect(page.getByText('Forgot', { exact: true })).toBeVisible();
 });
