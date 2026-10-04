@@ -49,7 +49,7 @@ export function protectedPaths(home: string): string[] {
     // that could write the one would vouch for its own skills.
     join(home, 'skills.trust.json'),
     join(home, 'skills.signing.json'),
-    // Where a skill from Discover came from (ADR 0070): an assistant that wrote it could give
+    // Where a skill from Discover came from (ADR 0072): an assistant that wrote it could give
     // a skill a publisher, a pin or a check it never had.
     join(home, 'skills-market.json'),
     // Conch's own versions and which one runs (ADR 0051): writing there would run the assistant's code as Conch.

@@ -1,5 +1,5 @@
 /**
- * What a skill's licence lets you do (ADR 0070), read from the skill itself:
+ * What a skill's licence lets you do (ADR 0072), read from the skill itself:
  * its `license:` front matter and a LICENSE file next to it. A registry's own
  * label is only a hint — ClawHub stamps everything MIT-0, including copies
  * of skills whose own words say "Proprietary" — so the skill's words win when

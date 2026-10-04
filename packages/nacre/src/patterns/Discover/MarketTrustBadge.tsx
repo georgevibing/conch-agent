@@ -45,7 +45,7 @@ export interface MarketTrustBadgeProps extends Omit<ComponentProps<'span'>, 'chi
   size?: 'sm' | 'md';
 }
 
-/** What the place a skill comes from says about it, in a word (ADR 0070). */
+/** What the place a skill comes from says about it, in a word (ADR 0072). */
 export function MarketTrustBadge({ trust, size = 'sm', title, ...props }: MarketTrustBadgeProps) {
   const look = LOOK[trust];
   const Icon = look.icon;

@@ -355,7 +355,7 @@ export function useFindables(query: string, conversationId: string | undefined):
     ? fromWork?.suggestions.find((s) => s.chat?.conversationId === conversationId)
     : undefined;
   const q = query.trim();
-  // Discover (ADR 0070): the shelf as it was last seen, and, once typing pauses, a search.
+  // Discover (ADR 0072): the shelf as it was last seen, and, once typing pauses, a search.
   const searched = useDebounced(q, 400);
   const { data: shelf } = useMarket('', undefined, Boolean(q));
   const { data: matched } = useMarket(searched, undefined, searched.length >= 3);

@@ -288,13 +288,13 @@ export const RULES: readonly BackupRule[] = [
   {
     match: 'skills-market/.staging/**',
     class: 'derived',
-    why: 'Skills downloaded from Discover for a look before they’re added (ADR 0070). Nothing here is used, and it’s cleared after half an hour.',
+    why: 'Skills downloaded from Discover for a look before they’re added (ADR 0072). Nothing here is used, and it’s cleared after half an hour.',
   },
   {
     match: 'skills-market/**',
     class: 'kept',
     group: 'skills',
-    why: 'Skills you added from Discover, exactly as they were when you read them (ADR 0070).',
+    why: 'Skills you added from Discover, exactly as they were when you read them (ADR 0072).',
   },
   {
     match: 'skills-market.json',

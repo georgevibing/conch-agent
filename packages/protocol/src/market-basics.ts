@@ -1,11 +1,11 @@
 /**
- * The parts of Discover (ADR 0070) a skill of yours carries: where it came
+ * The parts of Discover (ADR 0072) a skill of yours carries: where it came
  * from, who published it, and the version it's pinned to. Kept apart from
  * `skill-market.ts` so `skills.ts` can use them without a cycle.
  */
 import { z } from 'zod';
 
-/** The places Conch looks (ADR 0070 says why these and not others). */
+/** The places Conch looks (ADR 0072 says why these and not others). */
 export const MarketSourceId = z.enum([
   /** Anthropic's own skills on GitHub (`anthropics/skills`), the openly licensed ones. */
   'anthropic',

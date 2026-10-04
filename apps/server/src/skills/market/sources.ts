@@ -1,4 +1,4 @@
-/** Which places Discover asks (ADR 0070), for the way Conch runs. */
+/** Which places Discover asks (ADR 0072), for the way Conch runs. */
 import { AnthropicSource } from './anthropic';
 import { ClawHubSource, SkillsShSource } from './clawhub';
 import { GitHubSkills } from './github';

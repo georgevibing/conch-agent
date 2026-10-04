@@ -270,7 +270,7 @@ export class Services {
   readonly skills: SkillService;
   /** Whose signed skills you trust, and your own signing key (ADR 0031). */
   readonly skillTrust: SkillTrust;
-  /** Discover (ADR 0070); undefined when it's turned off. */
+  /** Discover (ADR 0072); undefined when it's turned off. */
   readonly market?: SkillMarket;
   /** The pretend SaaS vendor used with the mock engine. */
   readonly mockVendor?: MockVendor;
@@ -539,7 +539,7 @@ export class Services {
       heal,
       this.skillTrust,
     );
-    // Discover (ADR 0070): skills people publish, pinned, read first, held to their lists.
+    // Discover (ADR 0072): skills people publish, pinned, read first, held to their lists.
     const marketMode =
       config.CONCH_SKILL_MARKET ?? (config.CONCH_ENGINE === 'mock' ? 'pretend' : 'on');
     this.market =
@@ -753,7 +753,7 @@ export class Services {
             ...yours,
           ],
           skills,
-          // Skills people share, found with `find_skills` (ADR 0070).
+          // Skills people share, found with `find_skills` (ADR 0072).
           market: Boolean(this.market),
         };
       },
@@ -828,7 +828,7 @@ export class Services {
               ...questionTools(this.questions, ctx),
               // Offer what this request is missing (ADR 0060): never to nobody.
               ...(ctx.unattended ? [] : offerTools(this.offers, ctx)),
-              // Skills people share, to offer (ADR 0070): never to nobody.
+              // Skills people share, to offer (ADR 0072): never to nobody.
               ...(ctx.unattended || !this.market ? [] : marketTools(this.market, ctx)),
               // Your earlier chats, never in a chat with someone else in it (ADR 0059).
               ...pastChatTools(
