@@ -1,5 +1,8 @@
 import { useCallback, useSyncExternalStore } from 'react';
 
+/** A screen used only by touch: no hover and no fine pointer, so most likely no keyboard. */
+export const TOUCH_ONLY = '(hover: none) and (pointer: coarse)';
+
 /** Subscribes to a CSS media query. Returns `false` when `matchMedia` is unavailable. */
 export function useMediaQuery(query: string): boolean {
   const subscribe = useCallback(

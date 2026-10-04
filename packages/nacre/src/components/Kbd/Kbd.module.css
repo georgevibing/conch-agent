@@ -39,4 +39,12 @@
     background: color-mix(in oklch, var(--nc-text-inverse) 12%, transparent);
     box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--nc-text-inverse) 10%, transparent);
   }
+
+  /* A decorative hint (aria-hidden) beside a button or menu item means nothing
+     on a touch screen with no keyboard. Inline ones inside a sentence stay. */
+  @media (hover: none) and (pointer: coarse) {
+    .kbd[aria-hidden='true'] {
+      display: none;
+    }
+  }
 }

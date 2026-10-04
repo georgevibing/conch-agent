@@ -183,7 +183,7 @@
     transform: none;
   }
 
-  @media (max-width: 40rem) {
+  @media (max-width: 40rem), (hover: none) and (pointer: coarse) {
     .hint {
       display: none;
     }
