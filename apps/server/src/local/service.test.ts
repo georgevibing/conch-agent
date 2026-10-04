@@ -27,6 +27,8 @@ interface World {
   tags: unknown[];
   version: string;
   pull?: (signal: AbortSignal | undefined) => Response;
+  /** What `/api/show` says of the model's shape, beyond its context length. */
+  info?: Record<string, unknown>;
 }
 
 /** A pretend Ollama, answering on loopback only. */
@@ -48,7 +50,7 @@ function ollama(world: World): { fetch: FetchLike; calls: { url: string; body?: 
           ? { capabilities: ['embedding'] }
           : {
               capabilities: ['completion', 'tools'],
-              model_info: { 'qwen3.context_length': 262_144 },
+              model_info: { 'qwen3.context_length': 262_144, ...world.info },
             },
       );
     }
@@ -386,6 +388,32 @@ describe('finding Ollama', () => {
     });
     await local.models();
     expect(local.contextFor('qwen3:4b-instruct')).toBe(16_384);
+  });
+
+  it('asks for more context where the model’s shape says the computer has room (ADR 0078)', async () => {
+    // Qwen3 4B as Ollama describes it: 36 layers, 8 key-value heads of 128 — 144 KB a token.
+    const info = {
+      'general.architecture': 'qwen3',
+      'qwen3.block_count': 36,
+      'qwen3.attention.head_count': 32,
+      'qwen3.attention.head_count_kv': 8,
+      'qwen3.attention.key_length': 128,
+      'qwen3.attention.value_length': 128,
+      'qwen3.embedding_length': 2560,
+    };
+    const roomy = await service({
+      memory: 32 * GiB,
+      world: { running: true, tags: [QWEN_TAG], info },
+    });
+    await roomy.local.models();
+    expect(roomy.local.contextFor('qwen3:4b-instruct')).toBe(65_536);
+    // 16 GB: the cache for more than 32K wouldn't leave room, so it stays as it was.
+    const usual = await service({
+      memory: 16 * GiB,
+      world: { running: true, tags: [QWEN_TAG], info },
+    });
+    await usual.local.models();
+    expect(usual.local.contextFor('qwen3:4b-instruct')).toBe(32_768);
   });
 });
 
