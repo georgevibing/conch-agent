@@ -149,6 +149,11 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           break;
         case 'engine.login':
           live.setLogin(event.login);
+          // Signed in: every place showing providers looks again now, not on its next poll.
+          if (event.login.phase === 'done') {
+            void client.invalidateQueries({ queryKey: ['providers'] });
+            void client.invalidateQueries({ queryKey: ['provider'] });
+          }
           break;
         case 'memory.changed':
           void client.invalidateQueries({ queryKey: keys.memories });

@@ -13,8 +13,8 @@ const results: Record<string, { tone: 'success' | 'error' | 'info'; text: string
 
 /**
  * A provider sign-in that came back to this tab (popups blocked, or a phone):
- * say how it went, then open Settings where the provider lives, in place of
- * the address that carried the result.
+ * say how it went, then open that provider's own page in Settings, in place
+ * of the address that carried the result.
  */
 export function useProviderSignInResult() {
   const [params] = useSearchParams();
@@ -29,6 +29,6 @@ export function useProviderSignInResult() {
     if (outcome?.tone === 'success') toast.success(outcome.text);
     else if (outcome?.tone === 'error') toast.error(outcome.text);
     else if (outcome) toast(outcome.text);
-    openSettings('providers', undefined, { replace: true, from: pathname });
+    openSettings('providers', provider, { replace: true, from: pathname });
   }, [result, provider, openSettings, pathname]);
 }

@@ -35,6 +35,7 @@ import { providersApi } from './api';
 import styles from './Providers.module.css';
 import {
   errorText,
+  putProvider,
   useCheckProvider,
   useClearProviderKey,
   useRemoveServer,
@@ -43,7 +44,7 @@ import {
   useUseProvider,
   useWatchProvider,
 } from './queries';
-import { useProviderSignIn } from './useProviderSignIn';
+import { SIGN_IN_CHANNEL, useProviderSignIn, useSignInWindow } from './useProviderSignIn';
 import { brandOf } from './words';
 
 function phaseOf(provider: Provider, busy: boolean): HandshakePhase {
@@ -121,7 +122,6 @@ function Install({ provider }: { provider: Provider }) {
   );
 }
 
-/** A program that signs itself in: Conch starts it and watches the phases. */
 /** Look again, after doing what the message said. */
 function TryAgain({ provider }: { provider: Provider }) {
   const check = useCheckProvider();
@@ -139,14 +139,43 @@ function TryAgain({ provider }: { provider: Provider }) {
   );
 }
 
+/** A program that signs itself in: Conch starts it and watches the phases. */
 function SignInProgram({ provider }: { provider: Provider }) {
   const login = useLiveStore((s) => s.login);
   const setLogin = useLiveStore((s) => s.setLogin);
+  const check = useCheckProvider();
   const [starting, setStarting] = useState(false);
+  /** This sign-in was started here, so seeing it through is this screen's job. */
+  const [mine, setMine] = useState(false);
   const [code, setCode] = useState('');
-  const active = login && !['done', 'failed', 'cancelled'].includes(login.phase);
+  // Signed in: stay on "getting it ready" until the provider answers, so the
+  // button you started from never shows again in between.
+  const finishing = mine && login?.phase === 'done';
+  const active =
+    finishing || (login !== undefined && !['done', 'failed', 'cancelled'].includes(login.phase));
+
+  const finish = useEffectEvent(async () => {
+    if (!mine) return;
+    const next = await check.mutateAsync(provider.id).catch(() => undefined);
+    // Ready: the connected view takes this one's place.
+    if (next?.status.state === 'ready') return;
+    setMine(false);
+    setLogin({
+      loginId: 'local',
+      phase: 'failed',
+      message: next?.status.message ?? `You’re signed in, but ${provider.name} didn’t answer yet.`,
+    });
+  });
+  useEffect(
+    () =>
+      useLiveStore.subscribe((now, before) => {
+        if (now.login?.phase === 'done' && before.login?.phase !== 'done') void finish();
+      }),
+    [],
+  );
 
   const start = async () => {
+    setMine(true);
     setStarting(true);
     setLogin({ loginId: 'local', phase: 'starting' });
     try {
@@ -158,7 +187,7 @@ function SignInProgram({ provider }: { provider: Provider }) {
     }
   };
 
-  if (active) {
+  if (login && active) {
     return (
       <Stack gap={4} aria-live="polite">
         {login.phase === 'starting' && (
@@ -207,26 +236,28 @@ function SignInProgram({ provider }: { provider: Provider }) {
             </Field>
           </form>
         )}
-        {login.phase === 'verifying' && (
+        {(login.phase === 'verifying' || finishing) && (
           <div className={styles.waiting}>
             <Spinner size="xs" label={null} />
             <Text as="span" size="sm" tone="muted">
-              Checking your sign-in…
+              {finishing ? `Signed in. Getting ${provider.name} ready…` : 'Checking your sign-in…'}
             </Text>
           </div>
         )}
-        <div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              void api.cancelLogin();
-              setLogin(undefined);
-            }}
-          >
-            Cancel
-          </Button>
-        </div>
+        {!finishing && (
+          <div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                void api.cancelLogin();
+                setLogin(undefined);
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        )}
       </Stack>
     );
   }
@@ -276,6 +307,9 @@ function KeyForm({
   const setKey = useSetProviderKey();
   const clearKey = useClearProviderKey();
   const signIn = useProviderSignIn();
+  const signInWindow = useSignInWindow((s) =>
+    s.open === provider.id ? (s.finishing ? 'finishing' : 'open') : undefined,
+  );
   const [value, setValue] = useState('');
   const [source, setSource] = useState<SecretSource>(provider.key?.source ?? 'conch');
   const [error, setError] = useState<string>();
@@ -376,12 +410,27 @@ function KeyForm({
       )}
       {form.canSignIn && (
         <Stack gap={2}>
-          <Button size="lg" onClick={() => void signIn(provider)}>
+          <Button
+            size="lg"
+            loading={signInWindow === 'finishing'}
+            onClick={() => void signIn(provider)}
+          >
             {provider.signInLabel ?? `Sign in to ${provider.name}`}
           </Button>
-          <Text size="sm" tone="subtle">
-            {provider.name} makes a key for Conch, so there’s nothing to copy.
-          </Text>
+          {signInWindow ? (
+            <div className={styles.waiting} aria-live="polite">
+              <Spinner size="xs" label={null} />
+              <Text as="span" size="sm" tone="muted">
+                {signInWindow === 'finishing'
+                  ? `Signed in. Getting ${provider.name} ready…`
+                  : 'Finish in the window that opened. This page moves on by itself.'}
+              </Text>
+            </div>
+          ) : (
+            <Text size="sm" tone="subtle">
+              {provider.name} makes a key for Conch, so there’s nothing to copy.
+            </Text>
+          )}
         </Stack>
       )}
       <form onSubmit={submit}>
@@ -624,8 +673,36 @@ function useProviderWatch(provider: Provider | undefined) {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [provider, client]);
 
+  // A sign-in window said how it went: look now, not on the next poll, and
+  // keep saying "getting it ready" until Conch has seen it.
+  useEffect(() => {
+    if (!providerId || typeof BroadcastChannel === 'undefined') return;
+    const channel = new BroadcastChannel(SIGN_IN_CHANNEL);
+    channel.onmessage = (event: MessageEvent<{ provider?: string; result?: string }>) => {
+      if (event.data?.provider !== providerId) return;
+      if (event.data.result !== 'connected') {
+        useSignInWindow.setState({ open: undefined, finishing: false });
+        return;
+      }
+      useSignInWindow.setState({ open: providerId, finishing: true });
+      void providersApi
+        .check(providerId)
+        .then((next) => putProvider(client, next))
+        .catch(() => undefined)
+        .finally(() => useSignInWindow.setState({ open: undefined, finishing: false }));
+    };
+    return () => channel.close();
+  }, [providerId, client]);
+
   // While the provider isn't working yet, keep looking.
   useWatchProvider(provider?.id, Boolean(provider) && provider?.status.state !== 'ready');
+}
+
+/** Something is under way in front of you: a program signing in, or a sign-in window. */
+function useSigningIn(provider: Provider | undefined): boolean {
+  const login = useLiveStore((s) => s.login);
+  const windowOpen = useSignInWindow((s) => Boolean(provider) && s.open === provider?.id);
+  return windowOpen || Boolean(login && !['failed', 'cancelled'].includes(login.phase));
 }
 
 /**
@@ -737,6 +814,7 @@ export function ProviderDetail({
   onBack: () => void;
 }) {
   useProviderWatch(provider);
+  const signingIn = useSigningIn(provider);
   const titleId = useId();
   const backRef = useRef<HTMLButtonElement>(null);
   // Arriving here was your own click: focus lands where going back is.
@@ -760,7 +838,7 @@ export function ProviderDetail({
           name={provider.name}
           brand={brandOf(provider)}
           color={provider.color}
-          phase={phaseOf(provider, false)}
+          phase={phaseOf(provider, signingIn)}
         />
         <Heading level={3} size="xl" id={titleId}>
           {titleOf(provider)}
@@ -792,6 +870,7 @@ export function ConnectProviderDialog({
   onOpenChange,
 }: ConnectProviderDialogProps) {
   useProviderWatch(provider);
+  const signingIn = useSigningIn(provider);
   const state = provider?.status.state;
 
   // It just started working: let the handshake land, then close. A dialog
@@ -821,7 +900,7 @@ export function ConnectProviderDialog({
                 name={provider.name}
                 brand={brandOf(provider)}
                 color={provider.color}
-                phase={phaseOf(provider, false)}
+                phase={phaseOf(provider, signingIn)}
               />
               <Dialog.Title>{titleOf(provider)}</Dialog.Title>
               <Dialog.Description>{provider.description}</Dialog.Description>

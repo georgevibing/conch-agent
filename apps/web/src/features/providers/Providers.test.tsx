@@ -118,6 +118,49 @@ describe('Providers settings', () => {
     expect(screen.getByRole('button', { name: 'Or install it yourself' })).toBeInTheDocument();
   });
 
+  it('says it’s installed once it is, never the Install button again in between', async () => {
+    const codex = baseProviders.providers.find((p) => p.id === 'codex-cli');
+    if (!codex) throw new Error('fixture');
+    const installable = {
+      ...codex,
+      status: { ...codex.status, fix: { need: 'codex', kind: 'install' as const } },
+    };
+    let state: 'missing' | 'installing' | 'ready' = 'missing';
+    const need = () => ({
+      ready: state === 'ready',
+      needs: [
+        {
+          id: 'codex',
+          name: 'Codex',
+          short: 'Codex',
+          openable: false,
+          state,
+          install: { label: 'Install Codex', command: 'winget install --id OpenAI.Codex' },
+        },
+      ],
+    });
+    mockFetch(
+      routes({
+        'GET /api/providers': () => ({
+          ...baseProviders,
+          providers: baseProviders.providers.map((p) => (p.id === 'codex-cli' ? installable : p)),
+        }),
+        'GET /api/needs/codex': need,
+        'POST /api/needs/codex/install': () => {
+          state = 'installing';
+          return need();
+        },
+      }),
+    );
+    render();
+    await openTile('Codex');
+    await userEvent.click(await screen.findByRole('button', { name: 'Install Codex' }));
+    expect(await screen.findByRole('progressbar')).toBeInTheDocument();
+    state = 'ready';
+    expect(await screen.findByText('Codex is installed.', {}, { timeout: 3000 })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Install Codex' })).toBeNull();
+  });
+
   it('offers to install the 1Password CLI when you keep a key in 1Password', async () => {
     const calls = mockFetch(
       routes({
@@ -345,6 +388,89 @@ describe('ChatGPT subscription connection', () => {
     expect(await screen.findByText(/Code copied/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
   });
+  it('goes from signed in straight to connected, never back to the sign-in button', async () => {
+    const signedOut = provider({
+      id: 'codex-cli',
+      name: 'Codex',
+      active: false,
+      connect: 'program',
+      signInLabel: 'Sign in with your ChatGPT subscription',
+      ready: false,
+      status: { ...provider().status, engine: 'codex-cli', label: 'Codex', state: 'signed-out' },
+    });
+    const ready = { ...signedOut, status: { ...signedOut.status, state: 'ready' as const } };
+    let signedIn = false;
+    const now = () => (signedIn ? ready : signedOut);
+    mockFetch(
+      routes({
+        'GET /api/providers': () => ({ ...baseProviders, providers: [now()] }),
+        'POST /api/providers/codex-cli/check': () => now(),
+        'POST /api/providers/codex-cli/login': () => ({ ok: true }),
+      }),
+    );
+    render();
+    await openTile('Codex');
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Sign in with your ChatGPT subscription' }),
+    );
+    act(() =>
+      FakeSocket.last?.push({
+        type: 'engine.login',
+        login: {
+          loginId: 'device',
+          phase: 'waiting-for-browser',
+          code: 'TEST-1234',
+          url: 'https://auth.openai.com/codex/device',
+        },
+      }),
+    );
+    await screen.findByRole('group', { name: /Sign-in code/ });
+    signedIn = true;
+    act(() =>
+      FakeSocket.last?.push({ type: 'engine.login', login: { loginId: 'device', phase: 'done' } }),
+    );
+    // Between the two: still moving forward, with no way back to the start on screen.
+    expect(screen.getByText('Signed in. Getting Codex ready…')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Sign in with your ChatGPT subscription' }),
+    ).toBeNull();
+    expect(await screen.findByRole('heading', { name: 'Codex is connected' })).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Sign in with your ChatGPT subscription' }),
+    ).toBeNull();
+  });
+
+  it('says so when signing in worked but the provider still doesn’t answer', async () => {
+    const signedOut = provider({
+      id: 'codex-cli',
+      name: 'Codex',
+      active: false,
+      connect: 'program',
+      signInLabel: 'Sign in with your ChatGPT subscription',
+      ready: false,
+      status: { ...provider().status, engine: 'codex-cli', label: 'Codex', state: 'signed-out' },
+    });
+    mockFetch(
+      routes({
+        'GET /api/providers': () => ({ ...baseProviders, providers: [signedOut] }),
+        'POST /api/providers/codex-cli/check': () => signedOut,
+        'POST /api/providers/codex-cli/login': () => ({ ok: true }),
+      }),
+    );
+    render();
+    await openTile('Codex');
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Sign in with your ChatGPT subscription' }),
+    );
+    act(() =>
+      FakeSocket.last?.push({ type: 'engine.login', login: { loginId: 'device', phase: 'done' } }),
+    );
+    expect(await screen.findByText('Sign-in didn’t finish')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Sign in with your ChatGPT subscription' }),
+    ).toBeInTheDocument();
+  });
+
   it('still offers the sign-in page alone when a provider has no code to enter', async () => {
     const claude = provider({
       connect: 'program',

@@ -181,6 +181,8 @@ export function LocalSetup({ provider }: { provider: Provider }) {
   const [busy, setBusy] = useState(false);
   /** You pressed Get while Ollama wasn't here: this model downloads as soon as it is. */
   const carryOn = useRef<string>(undefined);
+  /** The same, for what shows: no Get button while it carries on by itself. */
+  const [carrying, setCarrying] = useState(false);
   const modelsId = useId();
   /** Where the steps are, so pressing Get brings them into view. */
   const steps = useRef<HTMLOListElement>(null);
@@ -207,13 +209,18 @@ export function LocalSetup({ provider }: { provider: Provider }) {
           const readiness = await needsApi.act('ollama', 'install');
           client.setQueryData(needKeys.one('ollama'), readiness);
           carryOn.current = name;
+          setCarrying(true);
           return;
         }
         await pull(name);
       });
-      if (!ok) carryOn.current = undefined;
+      if (!ok) {
+        carryOn.current = undefined;
+        setCarrying(false);
+      }
     } catch (e) {
       carryOn.current = undefined;
+      setCarrying(false);
       setError(errorText(e, 'Couldn’t start the download.'));
     } finally {
       setBusy(false);
@@ -243,7 +250,7 @@ export function LocalSetup({ provider }: { provider: Provider }) {
     if (!name || needState === 'installing') return;
     if (!ollamaState || ollamaState === 'missing' || ollamaState === 'elsewhere') return;
     carryOn.current = undefined;
-    void get(name);
+    void get(name).finally(() => setCarrying(false));
     // Only the moment Ollama is here, and installed, matters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ollamaState, needState]);
@@ -281,7 +288,9 @@ export function LocalSetup({ provider }: { provider: Provider }) {
   };
 
   const need = ollamaNeed.need;
-  const installing = ollamaNeed.running;
+  // Installed, and Conch hasn't seen it start yet: still this step, not back to the button.
+  const installing =
+    ollamaNeed.running || (ollamaNeed.justDone && local.ollama.state === 'missing');
   // Someone uses it here, Conch tried to start it, and it didn't: that's the step to fix.
   const stuck = local.ollama.state === 'stopped' && provider.status.state === 'error';
   const ollamaHere =
@@ -372,7 +381,10 @@ export function LocalSetup({ provider }: { provider: Provider }) {
     );
   })();
 
-  const canGet = !hasModel && !active && choice?.fits && !installing && ollamaStep !== 'failed';
+  // Carrying on by itself after Ollama installs: the download follows, not the button again.
+  const carryingOn = carrying && needState !== 'failed';
+  const canGet =
+    !hasModel && !active && choice?.fits && !installing && !carryingOn && ollamaStep !== 'failed';
   const byWinget = !ollamaHere && need?.install;
 
   return (

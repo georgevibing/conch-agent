@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 
 import { providersApi } from './api';
 import styles from './Providers.module.css';
+import { SIGN_IN_CHANNEL } from './useProviderSignIn';
 
 const messages: Record<string, string> = {
   connected: 'You can close this window.',
@@ -15,7 +16,7 @@ const messages: Record<string, string> = {
 /**
  * Where a provider's sign-in window lands: first while it's opening ("one
  * moment"), then after the provider sends you back. On success it says so and
- * closes itself — the Conch tab has already updated.
+ * closes itself — the Conch tab has already heard and moved on.
  */
 export function ProviderDone() {
   const params = new URLSearchParams(window.location.search);
@@ -32,6 +33,14 @@ export function ProviderDone() {
   });
   const provider = providers.data?.providers.find((p) => p.id === id);
   const name = provider?.name ?? 'That provider';
+
+  // Tell the Conch tab now, so it moves on while this window is still saying so.
+  useEffect(() => {
+    if (opening || typeof BroadcastChannel === 'undefined') return;
+    const channel = new BroadcastChannel(SIGN_IN_CHANNEL);
+    channel.postMessage({ provider: id, result });
+    channel.close();
+  }, [opening, id, result]);
 
   useEffect(() => {
     if (!ok || opening) return;
