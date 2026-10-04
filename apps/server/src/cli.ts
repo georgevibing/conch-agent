@@ -68,6 +68,11 @@ const config = loadConfig();
 // Conch may have started on another port (the usual one was busy): links point where it really is.
 const running = await runningGateway(config.CONCH_HOME);
 if (running) config.CONCH_PORT = running.port;
+// And the names it answers to: its launcher may have them when this terminal doesn't.
+if (running?.allowedHosts)
+  config.CONCH_ALLOWED_HOSTS = [
+    ...new Set([...config.CONCH_ALLOWED_HOSTS, ...running.allowedHosts]),
+  ];
 // Conch's own keys open here as they do in the gateway: with this computer's
 // device key, found the same way and only when a sealed file is read (ADR 0047).
 registerSealer(

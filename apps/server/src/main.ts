@@ -114,6 +114,7 @@ await recordGateway(config.CONCH_HOME, {
   port: config.CONCH_PORT,
   startedAt: Date.now(),
   ...(background && { background }),
+  ...(config.CONCH_ALLOWED_HOSTS.length && { allowedHosts: config.CONCH_ALLOWED_HOSTS }),
 });
 // A release just swapped in proves itself by answering (ADR 0051); until it
 // does, the supervisor is ready to go back to the version before.

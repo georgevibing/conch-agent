@@ -186,6 +186,12 @@ export const GatewayRecord = z.object({
   startedAt: z.number(),
   /** Started by the computer at login (Always on, ADR 0026), not in a Terminal window. */
   background: z.boolean().optional(),
+  /**
+   * The extra hostnames it answers to (`CONCH_ALLOWED_HOSTS` as it started with them).
+   * The service may have them from its launcher when this terminal doesn't, so
+   * `conch hello` and `conch pair` read them here to point where Conch really answers.
+   */
+  allowedHosts: z.array(z.string().max(253)).max(64).optional(),
 });
 export type GatewayRecord = z.infer<typeof GatewayRecord>;
 

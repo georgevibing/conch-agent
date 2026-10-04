@@ -197,4 +197,21 @@ describe('the gateway record', () => {
     expect(await runningGateway(home)).toBeUndefined();
     expect(await readFile(join(home, 'gateway.json'), 'utf8')).toBe('{ nope');
   });
+
+  it('carries the names it answers to, so the CLI points where the service really answers', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-port-'));
+    const record = {
+      pid: process.pid,
+      host: '127.0.0.1',
+      port: 4317,
+      startedAt: 1,
+      allowedHosts: ['conch.example.com'],
+    };
+    await recordGateway(home, record);
+    expect(await runningGateway(home)).toEqual(record);
+    // A record from before it had them still reads.
+    const { allowedHosts: _, ...older } = record;
+    await recordGateway(home, older);
+    expect(await runningGateway(home)).toEqual(older);
+  });
 });

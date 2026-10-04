@@ -13,6 +13,19 @@ describe('what the assistant’s own tools never touch', () => {
     expect(touchesProtected({ command: `cat ${join(home, 'here', 'key')}` }, paths)).toBe(true);
     expect(touchesProtected({ file_path: join(home, 'tray', 'token') }, paths)).toBe(true);
   });
+
+  it('keeps out where Conch is reached: the address, and the names the hello link goes to', () => {
+    const home = join('/home', 'ada', '.conch');
+    const paths = protectedPaths(home);
+    expect(touchesProtected({ file_path: join(home, 'address.json') }, paths)).toBe(true);
+    // gateway.json names the hosts `conch hello` puts its one-time code at (ADR 0067).
+    expect(
+      touchesProtected(
+        { command: `echo '{"allowedHosts":["evil.example"]}' > ${join(home, 'gateway.json')}` },
+        paths,
+      ),
+    ).toBe(true);
+  });
 });
 
 describe('`pnpm conch` powers that are the person’s to use', () => {
