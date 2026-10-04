@@ -137,23 +137,50 @@ ensure_terminal_prerequisites() {
   terminal_fallback
 }
 
-# Sealed commands on Linux (ADR 0028): bubblewrap, socat and ripgrep. Only an
-# administrator can install them, so it's asked once here, with the exact
-# command; Conch offers the same command again from its Health page later.
+# Sealed commands on Linux (ADR 0028): bubblewrap, socat and ripgrep, and on
+# Ubuntu 23.10+ an AppArmor profile that lets the system's bubblewrap make its
+# sandbox. Only an administrator can do it, so it's asked once here. Fixed
+# arguments only, shown before they run: nothing is read from a file the
+# assistant could change (the checkout is yours to write, so the assistant's too).
 ensure_command_sandbox() {
   [ "$OS" = linux ] || return 0
-  sandbox_script="$RUN_DIR/apps/server/src/setup/seal-commands.sh"
-  [ -f "$sandbox_script" ] || return 0
-  if command -v bwrap >/dev/null 2>&1 && command -v socat >/dev/null 2>&1 &&
-    command -v rg >/dev/null 2>&1 &&
-    bwrap --unshare-user --unshare-pid --unshare-net --ro-bind / / -- /bin/true >/dev/null 2>&1; then
+  sandbox_ready() {
+    command -v bwrap >/dev/null 2>&1 && command -v socat >/dev/null 2>&1 &&
+      command -v rg >/dev/null 2>&1 &&
+      bwrap --unshare-user --unshare-pid --unshare-net --ro-bind / / -- /bin/true >/dev/null 2>&1
+  }
+  if sandbox_ready; then
     ok "Sealed commands ready"
     return 0
   fi
+  sandbox_install=
+  if ! command -v bwrap >/dev/null 2>&1 || ! command -v socat >/dev/null 2>&1 ||
+    ! command -v rg >/dev/null 2>&1; then
+    for sandbox_candidate in apt-get dnf pacman zypper apk; do
+      if command -v "$sandbox_candidate" >/dev/null 2>&1; then
+        sandbox_install=$sandbox_candidate
+        break
+      fi
+    done
+    if [ -z "$sandbox_install" ]; then
+      say "Sealing the assistant's commands needs bubblewrap, socat and ripgrep. Install them with your package manager when you like."
+      return 0
+    fi
+  fi
+  sandbox_restricted=$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || echo 0)
   step "Sealing the assistant's commands"
   say "Conch keeps the assistant's commands to your work folder, with no network or secrets, using bubblewrap."
-  say "It needs your administrator password once. The command is:"
-  say "sudo sh $sandbox_script"
+  say "It needs your administrator password once. It runs:"
+  case "$sandbox_install" in
+    apt-get) say "sudo apt-get update"; say "sudo apt-get install -y bubblewrap socat ripgrep" ;;
+    dnf) say "sudo dnf install -y bubblewrap socat ripgrep" ;;
+    pacman) say "sudo pacman -S --needed --noconfirm bubblewrap socat ripgrep" ;;
+    zypper) say "sudo zypper --non-interactive install bubblewrap socat ripgrep" ;;
+    apk) say "sudo apk add bubblewrap socat ripgrep" ;;
+  esac
+  if [ "$sandbox_restricted" = 1 ]; then
+    say "and lets /usr/bin/bwrap make its sandbox, as Flatpak needs: an AppArmor profile in /etc/apparmor.d/conch-bwrap"
+  fi
   if [ -z "$SYSTEM_PACKAGES" ] || ! command -v sudo >/dev/null 2>&1 || ! has_keyboard; then
     say "Skipped for now. Conch offers it again under Settings → Health; until then each command asks first."
     return 0
@@ -166,7 +193,27 @@ ensure_command_sandbox() {
   else
     return 0
   fi
-  if terminal_command sudo sh "$sandbox_script"; then
+  if ! terminal_command sudo -v; then
+    warn "Administrator access wasn't granted. Conch offers this again under Settings → Health."
+    return 0
+  fi
+  sandbox_ok=1
+  case "$sandbox_install" in
+    apt-get) terminal_command sudo -n apt-get update &&
+      terminal_command sudo -n apt-get install -y bubblewrap socat ripgrep || sandbox_ok= ;;
+    dnf) terminal_command sudo -n dnf install -y bubblewrap socat ripgrep || sandbox_ok= ;;
+    pacman) terminal_command sudo -n pacman -S --needed --noconfirm bubblewrap socat ripgrep || sandbox_ok= ;;
+    zypper) terminal_command sudo -n zypper --non-interactive install bubblewrap socat ripgrep || sandbox_ok= ;;
+    apk) terminal_command sudo -n apk add bubblewrap socat ripgrep || sandbox_ok= ;;
+  esac
+  if [ -n "$sandbox_ok" ] && [ "$sandbox_restricted" = 1 ] && [ -x /usr/bin/bwrap ]; then
+    printf '%s\n' '# Conch: bubblewrap may make the user namespace its sandbox needs.' \
+      'abi <abi/4.0>,' 'include <tunables/global>' \
+      'profile conch-bwrap /usr/bin/bwrap flags=(unconfined) {' '  userns,' '}' |
+      sudo -n tee /etc/apparmor.d/conch-bwrap >/dev/null &&
+      terminal_command sudo -n apparmor_parser -r /etc/apparmor.d/conch-bwrap || sandbox_ok=
+  fi
+  if [ -n "$sandbox_ok" ] && sandbox_ready; then
     ok "Sealed commands ready"
   else
     warn "Commands aren't sealed yet. Conch carries on, asks before each one, and offers this again under Settings → Health."

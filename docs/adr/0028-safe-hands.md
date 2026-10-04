@@ -244,11 +244,16 @@ bubblewrap from making its sandbox until AppArmor allows it. Conch can't do
 either by itself, so it makes the one step a person must take as short as it
 can be:
 
-- `apps/server/src/setup/seal-commands.sh`: installs the three with apt, dnf,
-  pacman, zypper or apk, writes an AppArmor profile for bubblewrap where the
-  kernel restricts it (unless one already allows it), and checks the sandbox
-  as the person who asked. Each step is printed before it runs.
-- The installer offers it on Linux, next to Git and the terminal tools.
+- One typed line (`sealCommand`): the fixed install for apt, dnf, pacman,
+  zypper or apk, and, where the kernel restricts user namespaces, an AppArmor
+  profile for `/usr/bin/bwrap` written with `tee` on the same line. A first
+  version typed `sudo sh` on a script in Conch's folder; the security review
+  caught that the folder is writable by the person, and so by the assistant,
+  which would have turned a prompt injection into root. Nothing that runs as
+  root is read from a file now. The profile loosens Ubuntu's hardening for the
+  system's bubblewrap only (never one found on PATH), the trade sealing needs.
+- The installer offers it on Linux, next to Git and the terminal tools, with
+  the same fixed arguments, shown before they run.
 - In the app, a need may carry `admin: { command, what }`, and a Health
   action of kind `command` a `watch`. `AdminCommand` types the command into
   Conch's terminal (never with Enter), Settings steps aside, and `NeedWatcher`

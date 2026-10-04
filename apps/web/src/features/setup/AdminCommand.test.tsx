@@ -9,7 +9,7 @@ import { appState, mockFetch, renderApp } from '../../test/harness';
 import { AdminCommand } from './AdminCommand';
 import { NeedWatcher } from './NeedWatcher';
 
-const COMMAND = "sudo sh '/opt/conch/apps/server/src/setup/seal-commands.sh'";
+const COMMAND = 'sudo apt-get update && sudo apt-get install -y bubblewrap socat ripgrep';
 
 const terminal = (available: boolean): TerminalStatus => ({
   available,

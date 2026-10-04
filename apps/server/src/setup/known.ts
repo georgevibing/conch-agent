@@ -231,7 +231,7 @@ const list: NeedSpec[] = [
       return !support.available && support.command
         ? {
             command: support.command,
-            what: 'Installs bubblewrap, socat and ripgrep with your system’s packages, lets bubblewrap make its sandbox where the system restricts it, and checks it works.',
+            what: 'Installs bubblewrap, socat and ripgrep with your system’s packages. Where Ubuntu restricts sandboxes, it also lets the system’s bubblewrap make one (an AppArmor profile, as Flatpak needs). Everything that runs is on the line.',
           }
         : undefined;
     },

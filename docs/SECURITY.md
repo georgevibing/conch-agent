@@ -470,13 +470,19 @@ sidebar) shows everything the assistant did, in every chat and routine.
 On Linux, sealing needs **bubblewrap** (a small sandbox program), with socat
 and ripgrep. Server systems don't come with them and only an administrator can
 install them, so the installer asks once, and **Settings → Health** and
-**Safety** offer **Seal commands**: Conch types one command into its own
-terminal (`sudo sh …/seal-commands.sh`), you press Enter and type your
-password there, and Conch says when it's done. The script installs the three
-with the system's package manager, lets bubblewrap make its sandbox where
-Ubuntu restricts it (an AppArmor profile, `/etc/apparmor.d/conch-bwrap`), and
-checks it works as you. Conch never sees the password and never runs it by
-itself.
+**Safety** offer **Seal commands**: Conch types one line into its own
+terminal, you press Enter and type your password there, and Conch says when
+it's done. The line installs the three with the system's package manager.
+Everything that runs as root is on that line, never a script from Conch's
+folder, which you (and so the assistant) can change. Conch never sees the
+password and never runs the line by itself.
+
+On Ubuntu 23.10 and later, the kernel keeps programs from making their own
+sandbox unless AppArmor allows it. Then the line also writes
+`/etc/apparmor.d/conch-bwrap`, which lets the system's `/usr/bin/bwrap` (and
+only it) do so, as Flatpak needs too. That loosens Ubuntu's hardening for that
+one program, which is the trade for sealing commands at all; delete the file
+and reload AppArmor to undo it.
 
 Sealing works with Claude Code on macOS and Linux, and with Codex (fully from
 Codex 0.159; an older Codex keeps to the work folder but can still read where keys

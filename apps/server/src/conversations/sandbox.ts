@@ -13,7 +13,6 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir, platform, tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 const home = homedir();
 const lib = (...parts: string[]) => join(home, 'Library', ...parts);
@@ -131,16 +130,67 @@ export function sandboxRuntimeReady(os: NodeJS.Platform = platform()): boolean {
   return available;
 }
 
-/**
- * Conch's own script that seals commands on Linux (`setup/seal-commands.sh`):
- * installs bubblewrap, socat and ripgrep with the system's package manager,
- * lets bubblewrap make its sandbox where Ubuntu restricts it, and checks.
- */
-export const SEAL_SCRIPT = fileURLToPath(new URL('../setup/seal-commands.sh', import.meta.url));
+/** Each package manager Conch knows, and the fixed line that installs the three with it. */
+const INSTALLS: [manager: string, command: string][] = [
+  ['apt-get', 'sudo apt-get update && sudo apt-get install -y bubblewrap socat ripgrep'],
+  ['dnf', 'sudo dnf install -y bubblewrap socat ripgrep'],
+  ['pacman', 'sudo pacman -S --needed --noconfirm bubblewrap socat ripgrep'],
+  ['zypper', 'sudo zypper --non-interactive install bubblewrap socat ripgrep'],
+  ['apk', 'sudo apk add bubblewrap socat ripgrep'],
+];
 
-/** The one line that runs it: typed into Conch's terminal for you, never run by itself. */
-export function sealCommand(script = SEAL_SCRIPT): string {
-  return `sudo sh '${script.replaceAll("'", "'\\''")}'`;
+/**
+ * The system's own bubblewrap, where every distribution puts it. Never one
+ * found earlier on PATH: a profile for a program you can replace would let
+ * anything you run make a user namespace.
+ */
+export const SYSTEM_BWRAP = '/usr/bin/bwrap';
+export const BWRAP_PROFILE = '/etc/apparmor.d/conch-bwrap';
+
+const quote = (text: string) => `'${text.replaceAll("'", "'\\''")}'`;
+
+/**
+ * Ubuntu 23.10+ lets a program make a user namespace (what bubblewrap's
+ * sandbox is) only when an AppArmor profile says it may. This one says so for
+ * the system's bubblewrap alone, as Flatpak needs too; written with `tee`, in
+ * full on the line, so what runs as root is what's on the screen.
+ */
+function allowBwrap(): string {
+  const profile = [
+    '# Conch: bubblewrap may make the user namespace its sandbox needs.',
+    'abi <abi/4.0>,',
+    'include <tunables/global>',
+    `profile conch-bwrap ${SYSTEM_BWRAP} flags=(unconfined) {`,
+    '  userns,',
+    '}',
+  ];
+  return `printf '%s\\n' ${profile.map(quote).join(' ')} | sudo tee ${BWRAP_PROFILE} >/dev/null && sudo apparmor_parser -r ${BWRAP_PROFILE}`;
+}
+
+/**
+ * The one line that seals commands here, typed into Conch's terminal for the
+ * person, who presses Enter and types their own password. Everything that
+ * runs as root is on that line: nothing is read from a file anyone could
+ * change (Conch's own folder is writable by you, and so by the assistant).
+ * Undefined when no line would help.
+ */
+export function sealCommand({
+  missing,
+  restricted,
+  has,
+}: {
+  missing: boolean;
+  restricted: boolean;
+  has: (program: string) => boolean;
+}): string | undefined {
+  const parts: string[] = [];
+  if (missing) {
+    const install = INSTALLS.find(([manager]) => has(manager));
+    if (!install) return undefined;
+    parts.push(install[1]);
+  }
+  if (restricted) parts.push(allowBwrap());
+  return parts.length ? parts.join(' && ') : undefined;
 }
 
 /** Ubuntu 23.10+ keeps programs from making their own sandbox until AppArmor allows it. */
@@ -171,22 +221,28 @@ export function sandboxSupport(
   };
   if (os === 'darwin') return ready(os) ? { available: true } : blocked;
   if (os === 'linux') {
-    const missing = ['bwrap', 'socat', 'rg'].filter((p) => !has(p));
-    if (missing.length)
+    const missing = ['bwrap', 'socat', 'rg'].some((p) => !has(p));
+    if (missing) {
+      const command = sealCommand({ missing, restricted: restricted(), has });
       return {
         available: false,
-        reason:
-          'Sealing commands needs bubblewrap, a small sandbox program this system doesn’t come with. One command installs it; it needs your password once.',
-        command: sealCommand(),
+        reason: command
+          ? 'Sealing commands needs bubblewrap, a small sandbox program this system doesn’t come with. One command installs it; it needs your password once.'
+          : 'Sealing commands needs bubblewrap, socat and ripgrep. Install them with your system’s package manager.',
+        ...(command && { command }),
       };
+    }
     if (ready(os)) return { available: true };
-    // Installed, but Ubuntu won't let it make its sandbox yet: the same command allows it.
-    return restricted()
+    // Installed, but Ubuntu won't let it make its sandbox yet: one line allows it.
+    const command = restricted()
+      ? sealCommand({ missing: false, restricted: true, has })
+      : undefined;
+    return command
       ? {
           available: false,
           reason:
-            'This system keeps bubblewrap from making its sandbox until it’s allowed. One command allows it; it needs your password once.',
-          command: sealCommand(),
+            'This system keeps bubblewrap from making its sandbox until it’s allowed (as Flatpak needs too). One command allows it; it needs your password once.',
+          command,
         }
       : blocked;
   }

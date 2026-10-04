@@ -565,30 +565,35 @@ test('the Windows installer follows the same releases', () => {
 });
 
 test(
-  'offers to seal commands once on Linux, shows the exact command, and runs it only on a yes',
+  'offers to seal commands once on Linux, shows exactly what runs, and runs it only on a yes',
   { skip: process.platform === 'win32' },
   () => {
+    // bwrap on this machine may be real; only when it isn't is there anything to offer.
+    const real = execFileSync('/bin/sh', ['-c', 'command -v bwrap || true'], { encoding: 'utf8' });
+    if (real.trim()) return;
     const run = (answer, keyboard = 'yes') => {
       const root = mkdtempSync(join(tmpdir(), 'conch-seal-'));
       try {
         const bin = join(root, 'bin');
         mkdirSync(bin);
-        const script = join(root, 'app', 'apps/server/src/setup/seal-commands.sh');
-        mkdirSync(join(root, 'app', 'apps/server/src/setup'), { recursive: true });
-        writeFileSync(script, `echo "sealed by script" >> "${root}/calls"\n`);
-        // Not installed yet; `sudo` only records and hands over (never a real password prompt).
+        const calls = join(root, 'calls');
+        // Stand-ins: `sudo` records and hands over (never a real password prompt);
+        // the package manager records what it was asked.
         writeFileSync(
           join(bin, 'sudo'),
-          `#!/bin/sh\necho "sudo $*" >> "${root}/calls"\nexec "$@"\n`,
+          `#!/bin/sh\necho "sudo $*" >> "${calls}"\n[ "$1" = -v ] && exit 0\n[ "$1" = -n ] && shift\nexec "$@"\n`,
           { mode: 0o755 },
         );
+        writeFileSync(join(bin, 'apt-get'), `#!/bin/sh\necho "apt-get $*" >> "${calls}"\n`, {
+          mode: 0o755,
+        });
         const output = execFileSync(
           '/bin/sh',
           [
             '-c',
             `
         set -eu
-        say() { printf '%s\n' "$*"; }
+        say() { printf '%s\\n' "$*"; }
         ok() { say "OK $*"; }
         warn() { say "WARN $*"; }
         step() { say "$*"; }
@@ -613,23 +618,22 @@ test(
             },
           },
         );
-        let calls = '';
+        let said = '';
         try {
-          calls = readFileSync(join(root, 'calls'), 'utf8');
+          said = readFileSync(calls, 'utf8');
         } catch {
           /* Nothing ran. */
         }
-        return { output, calls, script };
+        return { output, calls: said };
       } finally {
         rmSync(root, { recursive: true, force: true });
       }
     };
-    // bwrap on this machine may be real; only when it isn't is there anything to offer.
-    const probe = execFileSync('/bin/sh', ['-c', 'command -v bwrap || true'], { encoding: 'utf8' });
-    if (probe.trim()) return;
     const yes = run('');
-    assert.match(yes.output, /sudo sh .*seal-commands\.sh/);
-    assert.match(yes.calls, /^sudo sh .*seal-commands\.sh\nsealed by script/);
+    assert.match(yes.output, /sudo apt-get install -y bubblewrap socat ripgrep/);
+    assert.match(yes.calls, /apt-get install -y bubblewrap socat ripgrep/);
+    // Fixed arguments only: no script from the checkout runs as root.
+    assert.doesNotMatch(yes.calls, /sudo (-n )?sh /);
     assert.match(yes.output, /FINISHED/);
     const no = run('n');
     assert.equal(no.calls, '');

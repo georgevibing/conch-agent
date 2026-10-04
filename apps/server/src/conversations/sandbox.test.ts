@@ -1,8 +1,5 @@
-import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
-
 import { describe, expect, it, vi } from 'vitest';
-import { SEAL_SCRIPT, sandboxSupport, sealCommand } from './sandbox';
+import { BWRAP_PROFILE, SYSTEM_BWRAP, sandboxSupport, sealCommand } from './sandbox';
 
 describe('effective command sandbox availability', () => {
   it('does not advertise shell merely because binaries exist', () => {
@@ -44,27 +41,41 @@ describe('effective command sandbox availability', () => {
       ),
     ).toMatchObject({ available: false });
   });
-  it('offers Conch’s one command where it can fix things, and nothing where it can’t', () => {
-    // Missing programs: the script installs them.
+  it('offers one typed line where it can fix things, and nothing where it can’t', () => {
+    const apt = (name: string) => name === 'apt-get' || (name !== 'bwrap' && name !== 'dnf');
+    // Missing programs: the system's package manager installs them.
     expect(
       sandboxSupport(
-        (name) => name !== 'bwrap',
+        apt,
         'linux',
+        () => false,
         () => false,
       ),
     ).toMatchObject({
       available: false,
-      command: sealCommand(),
+      command: 'sudo apt-get update && sudo apt-get install -y bubblewrap socat ripgrep',
     });
-    // Installed, but Ubuntu restricts its sandbox: the script allows it.
+    // Installed, but Ubuntu restricts its sandbox: one line allows the system's bubblewrap.
+    const allow = sandboxSupport(
+      () => true,
+      'linux',
+      () => false,
+      () => true,
+    );
+    expect(allow).toMatchObject({ available: false });
+    const line = 'command' in allow ? (allow.command ?? '') : '';
+    expect(line).toContain(`sudo tee ${BWRAP_PROFILE}`);
+    expect(line).toContain(`profile conch-bwrap ${SYSTEM_BWRAP} flags=(unconfined)`);
+    expect(line).toContain(`sudo apparmor_parser -r ${BWRAP_PROFILE}`);
+    // A package manager Conch doesn't know: words, no command.
     expect(
       sandboxSupport(
-        () => true,
+        (name) => name === 'socat',
         'linux',
         () => false,
-        () => true,
+        () => false,
       ),
-    ).toMatchObject({ available: false, command: sealCommand() });
+    ).not.toHaveProperty('command');
     // Installed and unrestricted, still refused (a container): no command would help.
     expect(
       sandboxSupport(
@@ -75,14 +86,13 @@ describe('effective command sandbox availability', () => {
       ),
     ).not.toHaveProperty('command');
   });
-  it('types the script by its own path, quoted for any folder name', () => {
-    expect(SEAL_SCRIPT).toMatch(/seal-commands\.sh$/);
-    expect(existsSync(SEAL_SCRIPT)).toBe(true);
-    // It's shell a system can read (where there's a shell to ask).
-    const syntax = spawnSync('sh', ['-n', SEAL_SCRIPT]);
-    if (!syntax.error) expect(syntax.status).toBe(0);
-    expect(sealCommand("/home/a b/it's/seal.sh")).toBe(
-      String.raw`sudo sh '/home/a b/it'\''s/seal.sh'`,
-    );
+  it('puts everything that runs as root on the line, never a file anyone could change', () => {
+    const line =
+      sealCommand({ missing: true, restricted: true, has: (name) => name === 'pacman' }) ?? '';
+    expect(line).toMatch(/^sudo pacman -S --needed --noconfirm bubblewrap socat ripgrep && printf/);
+    // No `sh <file>`: a script in Conch's folder is yours to change, and so the assistant's.
+    expect(line).not.toMatch(/\bsh\s+['"/]/);
+    // One line, typed whole into the terminal.
+    expect(line).not.toContain('\n');
   });
 });
