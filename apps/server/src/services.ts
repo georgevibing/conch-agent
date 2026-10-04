@@ -56,6 +56,8 @@ import { pushCheck } from './push/doctor';
 import { PushService } from './push/service';
 import { PushStore } from './push/store';
 import { VoiceService } from './voice/service';
+import { SpeechService } from './voice/speech';
+import { WakeWord } from './voice/wake';
 import { AccessStore } from './auth/store';
 import { backupCheck } from './backup/doctor';
 import { BackupService } from './backup/service';
@@ -95,7 +97,6 @@ import { MockEngine } from './engines/mock/engine';
 import { MOCK_MEANING_SPEC, mockMeaningFetch, mockMeaningLoad } from './engines/mock/meaning';
 import type { Engine, LoginHandle } from './engines/types';
 import { Emitter } from './lib/emitter';
-import { findExecutable } from './lib/proc';
 import { sandboxFor, sandboxSupport, secretPlaces } from './conversations/sandbox';
 import { heldTaints } from './conversations/taint';
 import { UndoService } from './undo/service';
@@ -111,6 +112,7 @@ import type { Heal } from './lib/recover';
 import { LocalService } from './local/service';
 import { KNOWN_NEEDS } from './setup/known';
 import { Setup } from './setup/needs';
+import { setToolsHome } from './setup/release';
 import { ProviderKeys } from './providers/keys';
 import { ProviderService } from './providers/service';
 import { SecretVault } from './secrets/vault';
@@ -286,6 +288,10 @@ export class Services {
   readonly #pushRevocations = new Set<Promise<void>>();
   /** Private dictation: whisper.cpp on this computer (ADR 0027). */
   readonly voice: VoiceService;
+  /** Natural voices: Piper on this computer, or a connected provider's (ADR 0077). */
+  readonly speech: SpeechService;
+  /** "Hey Conch", in the desktop app (ADR 0078). */
+  readonly wake: WakeWord;
   /** Work that runs in the background, and helpers side by side (ADR 0033). */
   readonly tasks: TaskService;
   /** Other apps using Conch through its MCP door (ADR 0073). */
@@ -343,6 +349,7 @@ export class Services {
     this.healed = new Healed(config.CONCH_HOME, (note) =>
       this.broadcast.emit({ type: 'healed', note }),
     );
+    setToolsHome(config.CONCH_HOME);
     this.setup = new Setup(KNOWN_NEEDS);
     this.network = new NetworkWatch({
       emit: (network) => this.broadcast.emit({ type: 'network.status', network }),
@@ -1110,6 +1117,13 @@ export class Services {
         (await this.routines.detail(id).catch(() => undefined))?.routine.title,
       // The pretend Messages works anywhere; the real one only on a Mac.
       platform: messages ? 'darwin' : process.platform,
+      // Voice notes are heard on this computer (ADR 0077); `voice` is made just below.
+      voice: {
+        hearing: (wav) => this.voice.hearing(wav),
+        transcribeNote: (bytes, language) => this.voice.transcribeNote(bytes, language),
+        getModel: () => this.voice.getModel(),
+      },
+      speech: { voiceNote: (markdown, format) => this.speech.voiceNote(markdown, format) },
       imessage: {
         setup: () => imessageSetup(new ChatDb(messages?.db ?? MESSAGES_DB)),
         open: (place) =>
@@ -1173,15 +1187,45 @@ export class Services {
       ...(config.CONCH_ENGINE === 'mock' && pretendTailscale()),
     });
     this.doctor.register(pushCheck(this.push, this.tailscale));
+    const need = (id: string) => {
+      const spec = KNOWN_NEEDS.get(id);
+      return spec ? this.setup.path(spec) : Promise.resolve(undefined);
+    };
+    const desktop = theApp();
     this.voice = new VoiceService({
       home: config.CONCH_HOME,
+      wake: Boolean(desktop),
       // The mock engine never finds (or downloads) a real speech model.
-      whisper: async () =>
-        config.CONCH_ENGINE === 'mock' ? undefined : findExecutable('whisper-cli'),
-      emit: (status) => this.broadcast.emit({ type: 'voice.changed', status }),
+      whisper: async () => (config.CONCH_ENGINE === 'mock' ? undefined : need('whisper')),
+      ffmpeg: async () => (config.CONCH_ENGINE === 'mock' ? undefined : need('ffmpeg')),
+      emit: (status) => {
+        this.broadcast.emit({ type: 'voice.changed', status });
+        // The speech model just arrived: voice notes that waited for it are heard now.
+        if (status.private.state === 'ready') void this.channels.hearAgain().catch(() => undefined);
+      },
     });
     void this.voice.sweep();
     this.doctor.register(this.voice.doctorCheck());
+    this.speech = new SpeechService({
+      home: config.CONCH_HOME,
+      // The mock engine never finds Piper, so tests never download a voice.
+      piper: async () => (config.CONCH_ENGINE === 'mock' ? undefined : need('piper')),
+      ffmpeg: async () => (config.CONCH_ENGINE === 'mock' ? undefined : need('ffmpeg')),
+      // Only a key that's already here: reading aloud never raises a 1Password prompt.
+      openaiKey: () => this.keys.value('openai', { peek: true }),
+      chosen: async () => (await this.settings.get()).preferences.voice,
+    });
+    this.doctor.register(this.speech.doctorCheck());
+    this.wake = new WakeWord({
+      ...(desktop && { app: { send: (message) => desktop.send(message) } }),
+      voice: this.voice,
+    });
+    // "Stop listening" in the tray: the window stops too.
+    desktop?.listen((message) => {
+      if (message.type !== 'wake.stop') return;
+      void this.wake.state(false);
+      this.broadcast.emit({ type: 'wake.stop' });
+    });
     this.doctor.register(this.artifacts.doctorCheck());
     this.doctor.register(this.artifacts.liveDataCheck());
     // A reply from a provider without Conch's tools may carry ```artifact blocks.
@@ -1992,6 +2036,8 @@ export class Services {
     void this.conchApps.stop();
     this.slack.stop();
     this.channels.stop();
+    this.speech.stop();
+    this.wake.stop();
     this.channelLinking.stop();
     this.linked.stop();
     this.door.stop();

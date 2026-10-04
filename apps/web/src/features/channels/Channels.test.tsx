@@ -1,4 +1,5 @@
 import type { Channel, ChannelCatalogEntry } from '@conch/protocol';
+import axe from 'axe-core';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -341,6 +342,141 @@ describe('A channel’s page', () => {
     renderApp(<ChannelDetailView channelId="ch_1" />, { route: '/channels/ch_1' });
     const groups = await screen.findByRole('region', { name: 'Groups' });
     expect(groups).toHaveTextContent('Add @adas_conch_bot to a group in Telegram');
+  });
+});
+
+describe('Voice notes on a channel’s page (ADR 0077)', () => {
+  const need = (id: string, state: 'missing' | 'ready' | 'installing') => ({
+    ready: state === 'ready',
+    needs: [
+      {
+        id,
+        name: id,
+        short: id === 'ffmpeg' ? 'FFmpeg' : 'whisper.cpp',
+        state,
+        openable: false,
+        ...(state === 'missing' && {
+          install: { label: `Install ${id}`, command: `winget install ${id}` },
+        }),
+      },
+    ],
+  });
+
+  it('says how many wait, and gets everything they need with one press', async () => {
+    let whisper: 'missing' | 'installing' | 'ready' = 'missing';
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({
+        channels: [channel({ people: [ada], voiceNotes: { waiting: 2, need: 'whisper' } })],
+        catalog,
+      }),
+      'GET /api/voice': () => ({
+        private:
+          whisper === 'ready'
+            ? { state: 'model-missing', bytes: 147_951_465 }
+            : { state: 'missing' },
+      }),
+      'GET /api/needs/whisper': () => need('whisper', whisper),
+      'GET /api/needs/ffmpeg': () => need('ffmpeg', 'missing'),
+      'POST /api/needs/whisper/install': () => {
+        whisper = 'installing';
+        return need('whisper', 'installing');
+      },
+      'POST /api/needs/ffmpeg/install': () => need('ffmpeg', 'installing'),
+      'POST /api/voice/model': () => ({ private: { state: 'downloading', done: 0, total: 1 } }),
+    });
+    const { container } = renderApp(<ChannelDetailView channelId="ch_1" />, {
+      route: '/channels/ch_1',
+    });
+    const section = await screen.findByRole('region', { name: 'Voice notes' });
+    expect(within(section).getByText(/2 voice notes are waiting/)).toBeInTheDocument();
+    const list = await within(section).findByRole('list', { name: 'What voice notes need' });
+    expect(within(list).getByText('FFmpeg')).toBeInTheDocument();
+    await userEvent.click(within(section).getByRole('button', { name: 'Get it' }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.path === '/api/needs/whisper/install')).toBe(true),
+    );
+    // whisper.cpp lands: FFmpeg and the model follow from the same press.
+    whisper = 'ready';
+    await waitFor(
+      () => {
+        expect(calls.some((c) => c.path === '/api/needs/ffmpeg/install')).toBe(true);
+        expect(calls.some((c) => c.path === '/api/voice/model')).toBe(true);
+      },
+      { timeout: 8_000 },
+    );
+    expect(
+      (await axe.run(container, { rules: { 'color-contrast': { enabled: false } } })).violations,
+    ).toEqual([]);
+  });
+
+  it('says plainly that voice notes stay on this computer once it can hear them', async () => {
+    mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [channel({ people: [ada] })], catalog }),
+      'GET /api/voice': () => ({ private: { state: 'ready' } }),
+      'GET /api/needs/ffmpeg': () => need('ffmpeg', 'ready'),
+    });
+    renderApp(<ChannelDetailView channelId="ch_1" />, { route: '/channels/ch_1' });
+    const section = await screen.findByRole('region', { name: 'Voice notes' });
+    await waitFor(() =>
+      expect(section).toHaveTextContent('turns voice notes into words on this computer'),
+    );
+    expect(within(section).queryByRole('button')).toBeNull();
+  });
+
+  it('answers voice notes with one when you send one, and says when a natural voice is needed first', async () => {
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [channel({ people: [ada] })], catalog }),
+      'GET /api/voice': () => ({ private: { state: 'ready' } }),
+      'GET /api/needs/ffmpeg': () => need('ffmpeg', 'ready'),
+      'GET /api/voice/speech': () => ({ piper: 'missing', voices: [], cloud: [] }),
+      'PATCH /api/channels/ch_1': () =>
+        channel({ people: [ada], settings: { notifyRoutines: true, voiceReplies: 'always' } }),
+    });
+    renderApp(<ChannelDetailView channelId="ch_1" />, { route: '/channels/ch_1' });
+    const section = await screen.findByRole('region', { name: 'Voice notes' });
+    const replies = within(section).getByRole('combobox', { name: 'Answer with a voice note' });
+    expect(replies).toHaveTextContent('When you send one');
+    expect(
+      await within(section).findByRole('link', { name: 'Settings → Voice' }),
+    ).toBeInTheDocument();
+    await userEvent.click(replies);
+    await userEvent.click(await screen.findByRole('option', { name: 'Always' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({
+        settings: { voiceReplies: 'always' },
+      }),
+    );
+  });
+
+  it('offers to turn them on before any arrive, and shows nothing for email', async () => {
+    mockFetch({
+      ...base,
+      'GET /api/channels': () => ({
+        channels: [
+          channel({ people: [ada] }),
+          channel({ id: 'ch_mail', kind: 'email', people: [ada] }),
+        ],
+        catalog,
+      }),
+      'GET /api/voice': () => ({ private: { state: 'missing' } }),
+      'GET /api/needs/whisper': () => need('whisper', 'missing'),
+      'GET /api/needs/ffmpeg': () => need('ffmpeg', 'missing'),
+    });
+    const { unmount } = renderApp(<ChannelDetailView channelId="ch_1" />, {
+      route: '/channels/ch_1',
+    });
+    const section = await screen.findByRole('region', { name: 'Voice notes' });
+    await userEvent.click(within(section).getByRole('button', { name: 'Turn on' }));
+    expect(
+      await within(section).findByRole('list', { name: 'What voice notes need' }),
+    ).toBeInTheDocument();
+    unmount();
+    renderApp(<ChannelDetailView channelId="ch_mail" />, { route: '/channels/ch_mail' });
+    await screen.findByRole('region', { name: /Who can talk/ });
+    expect(screen.queryByRole('region', { name: 'Voice notes' })).toBeNull();
   });
 });
 

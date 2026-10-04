@@ -28,6 +28,8 @@ export interface TalkModeProps {
   onMute?: () => void;
   /** Back to typing, in the same chat. */
   onKeyboard?: () => void;
+  /** Speaking over it interrupts it (barge-in), so it says so while it speaks. */
+  bargeIn?: boolean;
 }
 
 const STATES: Record<TalkState, string> = {
@@ -41,8 +43,8 @@ const STATES: Record<TalkState, string> = {
 
 /**
  * Talking, hands free: the whole screen rests, the pearl listens, thinks and
- * speaks. You talk; it answers aloud and listens again. Tap the pearl to cut
- * it short, Escape (or ×) to end, the keyboard to type instead.
+ * speaks. You talk; it answers aloud and listens again. Talk over it (or tap
+ * the pearl) to cut it short, Escape (or ×) to end, the keyboard to type instead.
  */
 export function TalkMode({
   open,
@@ -56,6 +58,7 @@ export function TalkMode({
   onPearl,
   onMute,
   onKeyboard,
+  bargeIn = false,
 }: TalkModeProps) {
   const pearl =
     state === 'thinking'
@@ -101,7 +104,10 @@ export function TalkMode({
               <Pearl state={pearl} size="xl" label={null} />
             </button>
             <p className={styles.talkState} role="status" aria-live="polite">
-              {problem ?? STATES[state]}
+              {problem ??
+                (state === 'speaking' && bargeIn
+                  ? 'Speaking… just talk to interrupt'
+                  : STATES[state])}
             </p>
             {heard && <p className={styles.heard}>{heard}</p>}
             {reply && <p className={styles.reply}>{reply}</p>}

@@ -14,6 +14,7 @@ import { z } from 'zod';
 
 import { Mutex, writeJson } from '../lib/fs';
 import { readStore, type Heal } from '../lib/recover';
+import { WaitingNote } from './voice-notes';
 
 export const StoredChannel = z.object({
   id: Id,
@@ -39,6 +40,8 @@ export const StoredChannel = z.object({
   lastMessageAt: z.number().optional(),
   /** How far the connection has read (iMessage, email), so a restart carries on from there. */
   cursor: z.string().max(200).optional(),
+  /** Voice notes waiting until Conch can hear them (ADR 0077), oldest first. */
+  voiceWaiting: z.array(WaitingNote).default([]),
 });
 export type StoredChannel = z.infer<typeof StoredChannel>;
 
@@ -88,7 +91,7 @@ export class ChannelStore {
     return this.#mutex.run(async () => (await this.#load()).get(id));
   }
 
-  add(item: StoredChannel, secrets: ChannelSecrets): Promise<StoredChannel> {
+  add(item: z.input<typeof StoredChannel>, secrets: ChannelSecrets): Promise<StoredChannel> {
     return this.#mutex.run(async () => {
       const parsed = StoredChannel.parse(item);
       // Secrets first: a channel that exists must be able to find its key.

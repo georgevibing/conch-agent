@@ -45,6 +45,7 @@ import { GetIt } from '../setup/GetIt';
 import { HelloStep } from './HelloStep';
 import { HookSection } from './HookSection';
 import { SignInAgain } from './SignInAgain';
+import { VoiceNotesSection } from './VoiceNotesSection';
 import { useKeyCheck } from './hooks';
 import {
   channelKeys,
@@ -404,6 +405,12 @@ function Detail({ channel }: { channel: Channel }) {
           </ul>
         </section>
       )}
+
+      <VoiceNotesSection
+        channel={channel}
+        assistant={assistant}
+        onReplies={(voiceReplies) => update.mutate([{ settings: { voiceReplies } }])}
+      />
 
       <section aria-labelledby="ch-settings" className={styles.section}>
         <Heading level={2} id="ch-settings" size="sm" tone="muted">

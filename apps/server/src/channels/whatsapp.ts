@@ -17,6 +17,7 @@ import {
   type SentRef,
   dataUrl,
   pause,
+  capOf,
 } from './types';
 import {
   memorySession,
@@ -77,6 +78,8 @@ export interface WaHandlers {
 export interface WaSocket {
   /** `id`: the message's id, chosen beforehand so its echo is known as Conch's own. */
   send(chat: string, text: string, options?: { edit?: string; id?: string }): Promise<string>;
+  /** A voice note (Opus in Ogg), played in the chat like one you recorded (ADR 0077). */
+  voice(chat: string, audio: Buffer, seconds: number, options: { id: string }): Promise<string>;
   react(chat: string, id: string, fromMe: boolean, emoji: string): Promise<void>;
   presence(chat: string, state: 'composing' | 'paused'): Promise<void>;
   read(chat: string, id: string, participant?: string): Promise<void>;
@@ -337,6 +340,17 @@ export class WhatsAppAdapter implements ChannelAdapter {
 
     return {
       send,
+      voiceNotes: {
+        format: 'ogg',
+        send: async (chatId, note) => {
+          // Known as Conch's own before it goes, so it's never heard back as you.
+          const chosen = messageId();
+          sent.add(chosen);
+          sent.add(
+            await withRetry(() => live().voice(chatId, note.bytes, note.seconds, { id: chosen })),
+          );
+        },
+      },
       edit: async (ref, markdown, options) => {
         choices.forget(ref);
         const first = fit(markdown, PART, (part) => toWhatsApp(part).length)[0] ?? '…';
@@ -355,14 +369,15 @@ export class WhatsAppAdapter implements ChannelAdapter {
         if (working && !mine) await s.read(ref.chatId, ref.messageId).catch(() => undefined);
         await s.react(ref.chatId, ref.messageId, mine, working ? '👀' : '');
       },
-      download: async (file) => {
-        if (file.size && file.size > FILE_LIMIT)
+      download: async (file, options) => {
+        const cap = capOf(FILE_LIMIT, options);
+        if (file.size && file.size > cap)
           throw new ChannelError(
             'refused',
             'That’s bigger than the 25 MB Conch takes from WhatsApp.',
           );
         const got = await live()
-          .download(file.ref, FILE_LIMIT)
+          .download(file.ref, cap)
           .catch((error: unknown) => {
             throw error instanceof ChannelError
               ? error

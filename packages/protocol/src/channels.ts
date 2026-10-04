@@ -41,6 +41,29 @@ export const ChannelKind = z.enum([
 export type ChannelKind = z.infer<typeof ChannelKind>;
 
 /**
+ * The apps whose voice notes Conch hears (ADR 0077): the ones where a person
+ * records one in the chat. Email and Teams have no voice notes of their own.
+ */
+export const VOICE_NOTE_CHANNELS: readonly ChannelKind[] = [
+  'telegram',
+  'whatsapp',
+  'signal',
+  'discord',
+  'slack',
+  'matrix',
+  'imessage',
+  'wechat',
+];
+
+/** The apps Conch can answer with a voice note of its own (ADR 0077). */
+export const VOICE_REPLY_CHANNELS: readonly ChannelKind[] = [
+  'telegram',
+  'whatsapp',
+  'signal',
+  'discord',
+];
+
+/**
  * How the connection is.
  *
  * - `connecting`: starting up, or checking the key;
@@ -191,8 +214,28 @@ export const ChannelSettings = z.object({
    * they get one polite reply and wait for you to let them in).
    */
   others: z.enum(['ignore', 'ask']).optional(),
+  /**
+   * Answering a voice note with one (ADR 0077): `match` (the default) answers
+   * a voice note with a voice note and writing with writing; `always`;
+   * `never`. The answer is written too, either way.
+   */
+  voiceReplies: z.enum(['match', 'always', 'never']).optional(),
 });
 export type ChannelSettings = z.infer<typeof ChannelSettings>;
+
+/**
+ * Voice notes that arrived while Conch couldn't hear them yet (ADR 0077):
+ * they wait, kept, and go to the assistant by themselves once Conch can.
+ */
+export const ChannelVoiceNotes = z.object({
+  /** How many are waiting. */
+  waiting: z.number().int().nonnegative(),
+  /** A program to install first (a need, ADR 0016): whisper.cpp, or FFmpeg. */
+  need: z.enum(['whisper', 'ffmpeg']).optional(),
+  /** The speech model is missing, or on its way. */
+  model: z.enum(['missing', 'downloading']).optional(),
+});
+export type ChannelVoiceNotes = z.infer<typeof ChannelVoiceNotes>;
 
 export const Channel = z.object({
   id: Id,
@@ -218,6 +261,8 @@ export const Channel = z.object({
   pairing: ChannelPairing.optional(),
   /** Teams and WeChat: the web address their servers deliver messages to (ADR 0045). */
   hook: ChannelHook.optional(),
+  /** Voice notes waiting until Conch can hear them (ADR 0077). */
+  voiceNotes: ChannelVoiceNotes.optional(),
   lastMessageAt: z.number().optional(),
 });
 export type Channel = z.infer<typeof Channel>;

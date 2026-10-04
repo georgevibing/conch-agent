@@ -26,6 +26,8 @@ import {
   pause,
   personId,
   redact,
+  capOf,
+  readCapped,
 } from './types';
 import { writeFileAtomic } from '../lib/fs';
 
@@ -305,7 +307,7 @@ export class TeamsAdapter implements ChannelAdapter {
       send: (chatId, markdown, options) => this.#send(chatId, markdown, options),
       edit: (ref, markdown) => this.#edit(ref, markdown),
       typing: (chatId) => this.#activity(chatId, { type: 'typing' }).then(() => undefined),
-      download: (file) => this.#download(file),
+      download: (file, options) => this.#download(file, options),
       directChat: (userId) => this.#directChat(appId(userId)),
       close: () => {
         stop.abort();
@@ -546,7 +548,8 @@ export class TeamsAdapter implements ChannelAdapter {
     }
   }
 
-  async #download(file: ChannelFile) {
+  async #download(file: ChannelFile, options?: { maxBytes?: number }) {
+    const cap = capOf(FILE_LIMIT, options);
     let ref: { url?: string; auth?: boolean };
     try {
       ref = JSON.parse(file.ref) as typeof ref;
@@ -578,12 +581,7 @@ export class TeamsAdapter implements ChannelAdapter {
     });
     if (!response.ok)
       throw new ChannelError('network', `Couldn’t download that file (${response.status}).`);
-    const size = Number(response.headers.get('content-length') ?? 0);
-    if (size > FILE_LIMIT)
-      throw new ChannelError('refused', 'That file is too big to take from Teams.');
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (bytes.length > FILE_LIMIT)
-      throw new ChannelError('refused', 'That file is too big to take from Teams.');
+    const bytes = await readCapped(response, cap, 'That file is too big to take from Teams.');
     const type = response.headers.get('content-type') ?? file.mimeType;
     return { name: file.name, bytes, ...(type && { mimeType: type }) };
   }

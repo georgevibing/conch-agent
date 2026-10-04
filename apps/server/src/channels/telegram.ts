@@ -14,7 +14,10 @@ import {
   type ChannelUser,
   type SendOptions,
   type SentRef,
+  type VoiceNote,
+  capOf,
   dataUrl,
+  readCapped,
   pause,
   redact,
 } from './types';
@@ -251,6 +254,33 @@ export class TelegramAdapter implements ChannelAdapter {
     if (!body?.ok) throw new ChannelError('refused', 'Telegram didn’t take the picture.');
   }
 
+  /** A voice note: Opus in Ogg, which Telegram shows with its waveform. */
+  async #sendVoice(chatId: string, note: VoiceNote) {
+    const form = new FormData();
+    form.set('chat_id', chatId);
+    form.set('duration', String(note.seconds));
+    form.set('voice', new Blob([new Uint8Array(note.bytes)], { type: note.mimeType }), 'voice.ogg');
+    let response: Response;
+    try {
+      response = await fetch(`${this.base}/bot${this.token}/sendVoice`, {
+        method: 'POST',
+        body: form,
+        signal: AbortSignal.timeout(60_000),
+      });
+    } catch (error) {
+      throw new ChannelError(
+        'network',
+        redact(`Couldn’t reach Telegram (${(error as Error).message}).`, this.token),
+      );
+    }
+    const body = (await response.json().catch(() => undefined)) as TgResponse<unknown> | undefined;
+    if (!body?.ok)
+      throw new ChannelError(
+        response.status === 429 ? 'rate-limit' : 'refused',
+        redact(body?.description ?? 'Telegram didn’t take the voice note.', this.token),
+      );
+  }
+
   connect(events: ChannelEvents): ChannelConnection {
     const stop = new AbortController();
     void this.#poll(events, stop.signal);
@@ -259,6 +289,7 @@ export class TelegramAdapter implements ChannelAdapter {
     let drafts = true;
     return {
       send: (chatId, markdown, options) => this.#send(chatId, markdown, options),
+      voiceNotes: { format: 'ogg', send: (chatId, note) => this.#sendVoice(chatId, note) },
       draft: async (chatId, draftId, markdown) => {
         if (!drafts) return false;
         try {
@@ -283,7 +314,7 @@ export class TelegramAdapter implements ChannelAdapter {
       typing: async (chatId) => {
         await this.call('sendChatAction', { chat_id: chatId, action: 'typing' });
       },
-      download: (file) => this.#download(file),
+      download: (file, options) => this.#download(file, options),
       // A private chat's id is the person's id.
       directChat: (userId) => Promise.resolve(userId),
       close: () => stop.abort(),
@@ -476,6 +507,7 @@ export class TelegramAdapter implements ChannelAdapter {
           mimeType: file.mime_type,
           size: file.file_size,
           ref: file.file_id,
+          ...(file === message.voice && { voice: true }),
         });
     }
     const direct = message.chat.type === 'private';
@@ -574,14 +606,19 @@ export class TelegramAdapter implements ChannelAdapter {
     }
   }
 
-  async #download(file: ChannelFile) {
-    if (file.size && file.size > FILE_LIMIT)
-      throw new ChannelError('refused', 'Telegram only lets bots download files up to 20 MB.');
-    const { bytes } = await this.#fetchFile(file.ref, 60_000);
+  async #download(file: ChannelFile, options?: { maxBytes?: number }) {
+    const cap = capOf(FILE_LIMIT, options);
+    if (file.size && file.size > cap)
+      throw new ChannelError('refused', 'That file is too big for Conch to take from Telegram.');
+    const { bytes } = await this.#fetchFile(file.ref, 60_000, cap);
     return { name: file.name, bytes, mimeType: file.mimeType };
   }
 
-  async #fetchFile(fileId: string, timeoutMs: number): Promise<{ bytes: Buffer }> {
+  async #fetchFile(
+    fileId: string,
+    timeoutMs: number,
+    maxBytes = FILE_LIMIT,
+  ): Promise<{ bytes: Buffer }> {
     const info = await this.call<{ file_path?: string }>('getFile', { file_id: fileId });
     if (!info.file_path) throw new ChannelError('refused', 'Telegram didn’t hand over that file.');
     try {
@@ -589,8 +626,9 @@ export class TelegramAdapter implements ChannelAdapter {
         signal: AbortSignal.timeout(timeoutMs),
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return { bytes: Buffer.from(await response.arrayBuffer()) };
+      return { bytes: await readCapped(response, maxBytes) };
     } catch (error) {
+      if (error instanceof ChannelError) throw error;
       throw new ChannelError(
         'network',
         redact(

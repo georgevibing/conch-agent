@@ -106,7 +106,7 @@
 
 - **Your chat apps.** Telegram, Discord, Slack, WhatsApp, Signal, iMessage, email,
   Microsoft Teams, Matrix, WeChat, and plain text messages to a number of its own. In a group you turn on, it answers when
-  mentioned: you as in private, everyone else in words only.
+  mentioned: you as in private, everyone else in words only. Voice notes are heard on your own computer.
 - **Your phone.** An installable app over a private Tailscale address, with
   notifications and voice.
 - **Your own address.** On a server, Conch answers at `conch.yourname.com` with
@@ -115,7 +115,8 @@
 - **Touch ID, Windows Hello, Face ID.** Sign in with what your device already has.
   New devices wait for your OK, which you give from one you already use.
 - **Your desktop.** Conch for macOS, Windows and Linux: its own window, the pearl
-  in the menu bar, and each new release one press away.
+  in the menu bar, and each new release one press away. Say “Hey Conch” to talk, if
+  you turn it on; it listens on your computer only.
 - **Your other apps.** Claude Desktop, Cursor and VS Code can use your memory,
   skills, apps and Conch's browser, connected in one press, each only what you tick.
 

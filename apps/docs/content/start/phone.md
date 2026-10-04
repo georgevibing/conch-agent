@@ -25,7 +25,7 @@ Turn on notifications in **Settings → Notifications**. Conch tells you when it
 
 ## Talk to it
 
-Dictate into any message, have answers read aloud, or talk hands free. Your voice can stay on your own devices: on the phone itself, or on the computer Conch runs on.
+Dictate into any message, have answers read aloud, or talk hands free. Your voice can stay on your own devices: on the phone itself, or on the computer Conch runs on. See [Voice](../features/voice.md).
 
 ## Or skip the browser
 

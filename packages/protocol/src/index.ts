@@ -43,6 +43,7 @@ import { CatalogId, Integration } from './integrations';
 import { Routine, RoutineRun, RoutineSpending } from './routines';
 import { VaultPermission, VaultRequest } from './vault';
 import { VoiceStatus } from './phone';
+import { ConchVoiceId } from './speech';
 import { ChangedFile } from './undo';
 import { SkillPermissions } from './skills';
 import { Task, TaskKind, TaskStatus } from './tasks';
@@ -63,6 +64,7 @@ export * from './background';
 export * from './backups';
 export * from './browser';
 export * from './channels';
+export * from './speech';
 export * from './engine';
 export * from './first-job';
 export * from './healed';
@@ -191,6 +193,11 @@ export const Preferences = z.object({
   keepAwake: z.boolean().default(false),
   /** Tidy memory every night, while nothing's running (ADR 0032). Every change can be undone. */
   tidyMemory: z.boolean().default(false),
+  /**
+   * The voice a voice note from a chat app is answered with (ADR 0077): one of
+   * Conch's, chosen in Settings → Voice. Unset: the first natural voice here.
+   */
+  voice: ConchVoiceId.optional(),
 });
 export type Preferences = z.infer<typeof Preferences>;
 
@@ -289,6 +296,8 @@ export const UpdateSettingsBody = z.object({
       menuBar: z.boolean(),
       keepAwake: z.boolean(),
       tidyMemory: z.boolean(),
+      /** `null` goes back to the first natural voice here. */
+      voice: ConchVoiceId.nullable(),
     })
     .partial()
     .optional(),
@@ -879,6 +888,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('task.deleted'), taskId: z.string() }),
   /** Private dictation changed: its speech model arriving, say (ADR 0027). */
   z.object({ type: z.literal('voice.changed'), status: VoiceStatus }),
+  /** "Stop listening for Hey Conch" was pressed in the tray (ADR 0078): the window stops. */
+  z.object({ type: z.literal('wake.stop') }),
   /**
    * Devices changed: one signed in, was approved or removed, or asked to be
    * approved (`waiting` counts those). Refetch Settings → Security.

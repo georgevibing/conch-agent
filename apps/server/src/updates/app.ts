@@ -174,7 +174,7 @@ export class AppReleases {
         resolve(result);
       };
       const stop = app.listen((message) => {
-        if (message.version !== offer.version) return;
+        if (message.type === 'wake.stop' || message.version !== offer.version) return;
         if (message.type === 'update.progress') progress(message.percent);
         else if (message.type === 'update.ready') done({ kind: 'ready' });
         else done({ kind: 'failed', message: message.message });

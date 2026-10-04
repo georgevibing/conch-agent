@@ -13,7 +13,9 @@ import {
   type ChannelUser,
   type SendOptions,
   type SentRef,
+  capOf,
   dataUrl,
+  readCapped,
   pause,
   redact,
 } from './types';
@@ -133,9 +135,14 @@ export class DiscordAdapter implements ChannelAdapter {
         headers: {
           authorization: `Bot ${this.token}`,
           'user-agent': 'DiscordBot (https://github.com/conch, 1) Conch',
-          ...(body !== undefined && { 'content-type': 'application/json' }),
+          ...(body !== undefined &&
+            !(body instanceof FormData) && {
+              'content-type': 'application/json',
+            }),
         },
-        ...(body !== undefined && { body: JSON.stringify(body) }),
+        ...(body !== undefined && {
+          body: body instanceof FormData ? body : JSON.stringify(body),
+        }),
         signal,
       });
     } catch (error) {
@@ -218,6 +225,28 @@ export class DiscordAdapter implements ChannelAdapter {
     void this.#run(events, stop.signal);
     return {
       send: (chatId, markdown, options) => this.#send(chatId, markdown, options),
+      // A voice note back (ADR 0077): Discord plays an Ogg file in the chat.
+      voiceNotes: {
+        format: 'ogg',
+        send: async (chatId, note) => {
+          const form = new FormData();
+          form.set(
+            'payload_json',
+            JSON.stringify({
+              attachments: [{ id: 0, filename: 'voice-note.ogg' }],
+              allowed_mentions: { parse: [] },
+            }),
+          );
+          form.set(
+            'files[0]',
+            new Blob([new Uint8Array(note.bytes)], { type: note.mimeType }),
+            'voice-note.ogg',
+          );
+          await this.#retry(() =>
+            this.rest('POST', `/channels/${chatId}/messages`, form, { timeoutMs: 60_000 }),
+          );
+        },
+      },
       edit: async (ref, markdown, options) => {
         await this.#retry(() =>
           this.rest('PATCH', `/channels/${ref.chatId}/messages/${ref.messageId}`, {
@@ -231,7 +260,7 @@ export class DiscordAdapter implements ChannelAdapter {
       typing: async (chatId) => {
         await this.rest('POST', `/channels/${chatId}/typing`);
       },
-      download: (file) => this.#download(file),
+      download: (file, options) => this.#download(file, options),
       directChat: (userId) => this.#directChat(userId),
       close: () => stop.abort(),
     };
@@ -275,7 +304,8 @@ export class DiscordAdapter implements ChannelAdapter {
     }
   }
 
-  async #download(file: ChannelFile) {
+  async #download(file: ChannelFile, options?: { maxBytes?: number }) {
+    const cap = capOf(FILE_LIMIT, options);
     let url: URL;
     try {
       url = new URL(file.ref);
@@ -285,7 +315,7 @@ export class DiscordAdapter implements ChannelAdapter {
     // Only Discord's own file servers: a message can't make Conch fetch anything else.
     if (url.protocol !== 'https:' || !FILE_HOSTS.has(url.hostname))
       throw new ChannelError('refused', 'That file isn’t on Discord’s own servers.');
-    if (file.size && file.size > FILE_LIMIT)
+    if (file.size && file.size > cap)
       throw new ChannelError('refused', 'That file is too big to take from Discord.');
     const response = await fetch(url, { signal: AbortSignal.timeout(60_000) }).catch(
       (error: unknown) => {
@@ -299,7 +329,7 @@ export class DiscordAdapter implements ChannelAdapter {
       throw new ChannelError('network', `Couldn’t download that file (${response.status}).`);
     return {
       name: file.name,
-      bytes: Buffer.from(await response.arrayBuffer()),
+      bytes: await readCapped(response, cap, 'That file is too big to take from Discord.'),
       mimeType: file.mimeType,
     };
   }
@@ -560,7 +590,11 @@ export class DiscordAdapter implements ChannelAdapter {
             filename: string;
             content_type?: string;
             size?: number;
+            /** Set on a voice message's recording. */
+            duration_secs?: number;
           }[]) ?? [];
+        // IS_VOICE_MESSAGE: recorded in Discord, not a file someone shared.
+        const voice = ((d.flags as number | undefined) ?? 0) & (1 << 13);
         const direct = !d.guild_id;
         const text = (d.content as string | undefined) ?? '';
         const me = this.#me;
@@ -583,6 +617,7 @@ export class DiscordAdapter implements ChannelAdapter {
           files: attachments.map((a) => ({
             name: a.filename,
             ref: a.url,
+            ...((voice || a.duration_secs !== undefined) && { voice: true }),
             ...(a.content_type && { mimeType: a.content_type }),
             ...(a.size !== undefined && { size: a.size }),
           })),

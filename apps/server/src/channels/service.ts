@@ -32,10 +32,12 @@ import type { PermissionDecision } from '../engines/types';
 import { newId } from '../lib/ids';
 import { pausedWords } from '../routines/spend';
 import type { SettingsStore } from '../settings/store';
+import { VoiceError, type Hearing } from '../voice/service';
 import { CHANNEL_NAMES, catalogFor } from './catalog';
 import { isLinked, ownAccount } from './linked';
 import { normalizeMatrix } from './matrix';
 import type { ChannelStore, StoredChannel } from './store';
+import { MAX_NOTE_BYTES, type NoteFormat } from '../voice/audio';
 import { normalizeTeams } from './teams';
 import {
   type ChannelAdapter,
@@ -47,9 +49,35 @@ import {
   type SentRef,
   type StateDetail,
   personId,
+  type VoiceNote,
 } from './types';
 import { normalizeSms } from './sms';
+import {
+  BUSY,
+  IN_ALL,
+  isVoiceNote,
+  isWav,
+  LONG,
+  MAX_WAITING,
+  PER_PERSON,
+  WAITING_MS,
+  UNCLEAR,
+  waitWords,
+  withWords,
+  type VoiceNotes,
+  type WaitingNote,
+} from './voice-notes';
 import { normalizeWeChat } from './wechat';
+
+/** What hearing one voice note came to: its words, or why not (yet). */
+interface Heard {
+  words?: string;
+  cut?: boolean;
+  unclear?: boolean;
+  /** Conch is still hearing others: try again in a moment. */
+  busy?: boolean;
+  waiting?: Exclude<Hearing, { ready: true }>;
+}
 
 /** A hello link works this long. */
 export const PAIRING_MS = 10 * 60_000;
@@ -133,7 +161,11 @@ interface Relay {
   /** Streaming the answer as a draft (Telegram): which draft, what it says, when it last went. */
   draft?: { id: number; text: string; sentAt: number; timer?: NodeJS.Timeout };
   /** Messages sent while it was busy: they go next, together. */
-  queued: { text: string; attachments: string[]; outside?: string }[];
+  queued: { text: string; attachments: string[]; outside?: string; spoken?: boolean }[];
+  /** It started with a voice note (ADR 0077): the answer may go back as one. */
+  spoken?: boolean;
+  /** Everything the assistant said this turn, for a voice note back. */
+  said: string[];
   /** Said "I'll get to that" already this turn. */
   toldQueued?: boolean;
   /** Sends go one after another, in order. */
@@ -232,6 +264,14 @@ export class ChannelService {
   #slackApps = new Map<string, string>();
   /** Which mail service each email channel signs in to (from its keys, kept in memory). */
   #mail = new Map<string, string>();
+  /** Why voice notes are waiting, as last seen (ADR 0077). */
+  #hearing?: Exclude<Hearing, { ready: true }>;
+  /** Voice notes being heard right now, per person, and in all. */
+  #listening = new Map<string, number>();
+  #listeningTotal = 0;
+  /** Senders already told their voice note is waiting, until it's heard. */
+  #toldWaiting = new Set<string>();
+  #hearingAgain?: Promise<void>;
 
   constructor(
     private readonly deps: {
@@ -253,6 +293,12 @@ export class ChannelService {
       };
       /** The system the catalog is offered for (iMessage is Mac only). */
       platform?: NodeJS.Platform;
+      /** Hearing voice notes on this computer (ADR 0077). */
+      voice?: VoiceNotes;
+      /** Speaking an answer as a voice note (ADR 0077). */
+      speech?: {
+        voiceNote(markdown: string, format: NoteFormat): Promise<VoiceNote | undefined>;
+      };
       now?: () => number;
       log?: (message: string) => void;
     },
@@ -279,6 +325,10 @@ export class ChannelService {
       }
       this.#connect(channel, secrets);
     }
+    // Voice notes left waiting before a restart: heard once the channels are back
+    // (and those that waited too long, let go).
+    if ((await this.deps.store.all()).some((c) => c.voiceWaiting.length))
+      setTimeout(() => void this.hearAgain().catch(() => undefined), 5_000).unref?.();
   }
 
   stop() {
@@ -411,6 +461,15 @@ export class ChannelService {
         live?.adapter.hook && {
           hook: { ...live.adapter.hook(), ...(live.heardAt && { heardAt: live.heardAt }) },
         }),
+      ...(stored.voiceWaiting.length && {
+        voiceNotes: {
+          waiting: stored.voiceWaiting.length,
+          ...(this.#hearing &&
+            ('need' in this.#hearing
+              ? { need: this.#hearing.need }
+              : { model: this.#hearing.model })),
+        },
+      }),
       ...(stored.lastMessageAt && { lastMessageAt: stored.lastMessageAt }),
     };
   }
@@ -822,6 +881,13 @@ export class ChannelService {
         .catch(() => undefined);
     this.#disconnect(id);
     this.#pairings.delete(id);
+    // Voice notes that were still waiting go with it.
+    const stored = await this.deps.store.get(id);
+    for (const note of stored?.voiceWaiting ?? [])
+      for (const attachment of note.attachments)
+        await this.deps.attachments.discard(attachment).catch(() => false);
+    for (const key of this.#toldWaiting)
+      if (key.startsWith(`${id}:`)) this.#toldWaiting.delete(key);
     for (const [key, relay] of this.#relays) {
       if (relay.channelId !== id) continue;
       clearInterval(relay.typing);
@@ -867,6 +933,192 @@ export class ChannelService {
   async recheckNeeding(need: string): Promise<void> {
     for (const [id, live] of this.#live)
       if (live.health.need === need) await this.repair(id).catch(() => undefined);
+    // What voice notes were waiting for (ADR 0077).
+    if (need === 'whisper' || need === 'ffmpeg') await this.hearAgain().catch(() => undefined);
+  }
+
+  // ── Voice notes (ADR 0077) ─────────────────────────────────────────────
+
+  /**
+   * Conch may be able to hear now (whisper.cpp or FFmpeg arrived, the speech
+   * model finished): every voice note that was waiting goes to the assistant,
+   * oldest first, as if it had just arrived. One pass at a time.
+   */
+  hearAgain(): Promise<void> {
+    this.#hearingAgain ??= this.#hearWaiting().finally(() => (this.#hearingAgain = undefined));
+    return this.#hearingAgain;
+  }
+
+  async #hearWaiting(): Promise<void> {
+    const voice = this.deps.voice;
+    if (!voice) return;
+    await this.#dropOld();
+    for (const channel of await this.deps.store.all()) {
+      if (!channel.voiceWaiting.length || !channel.enabled || !this.#live.has(channel.id)) continue;
+      const hearing = await voice.hearing().catch(() => undefined);
+      if (!hearing?.ready) {
+        if (hearing) this.#notReady(hearing);
+        await this.#emit(channel.id);
+        continue;
+      }
+      this.#hearing = undefined;
+      // Taken off the list before they go, so nothing is answered twice.
+      let notes: WaitingNote[] = [];
+      const stored = await this.deps.store.update(channel.id, (c) => {
+        notes = c.voiceWaiting;
+        return { ...c, voiceWaiting: [] };
+      });
+      if (!stored) continue;
+      for (const note of notes) await this.#releaseNote(stored, note);
+      await this.#emit(channel.id);
+    }
+  }
+
+  /**
+   * Voice notes that waited more than a week are let go with their
+   * recordings: nobody wants an answer to last month's question.
+   */
+  async #dropOld(): Promise<void> {
+    const cutoff = this.#now - WAITING_MS;
+    for (const channel of await this.deps.store.all()) {
+      if (!channel.voiceWaiting.some((n) => n.at < cutoff)) continue;
+      let old: WaitingNote[] = [];
+      await this.deps.store.update(channel.id, (c) => {
+        old = c.voiceWaiting.filter((n) => n.at < cutoff);
+        return { ...c, voiceWaiting: c.voiceWaiting.filter((n) => n.at >= cutoff) };
+      });
+      for (const note of old)
+        for (const id of note.attachments)
+          await this.deps.attachments.discard(id).catch(() => false);
+      await this.#emit(channel.id);
+    }
+  }
+
+  /** One waiting voice note, heard now and passed on. */
+  async #releaseNote(stored: StoredChannel, note: WaitingNote) {
+    const live = this.#live.get(stored.id);
+    const seat: Seat = note.seat
+      ? { ...note.seat, userId: note.person }
+      : { key: note.person, userId: note.person, name: '' };
+    // Let go (or the group turned off) while it waited? Then it doesn't go.
+    if (!live || !this.#seated(stored, seat)) return;
+    this.#toldWaiting.delete(`${stored.id}:${seat.key}`);
+    const words: string[] = [];
+    for (const id of note.voice) {
+      const bytes = await this.deps.attachments.bytes(id);
+      const heard = bytes ? await this.#hear(bytes) : { unclear: true };
+      if (heard.words) {
+        words.push(heard.words);
+        await this.deps.attachments.transcribed(id, heard.words);
+      }
+      if (heard.cut) await live.connection.send(note.chatId, LONG).catch(() => undefined);
+    }
+    if (note.voice.length && !words.length && !note.text.trim()) {
+      await live.connection.send(note.chatId, UNCLEAR).catch(() => undefined);
+      return;
+    }
+    const text = withWords(note.text, words);
+    const spoken = words.length > 0;
+    if (
+      this.#queueBehind(
+        stored.id,
+        seat.key,
+        note.chatId,
+        text,
+        note.attachments,
+        live,
+        note.outside,
+        spoken,
+      )
+    )
+      return;
+    await this.#send(
+      stored,
+      note.chatId,
+      seat,
+      text,
+      note.attachments,
+      { chatId: note.chatId, messageId: note.messageId },
+      note.outside,
+      spoken,
+    );
+  }
+
+  /** Hear one voice note: its words, or why Conch can't yet. */
+  async #hear(bytes: Uint8Array): Promise<Heard> {
+    const voice = this.deps.voice;
+    if (!voice) return { unclear: true };
+    const hearing = await voice.hearing(isWav(bytes)).catch(() => undefined);
+    if (hearing && !hearing.ready) return { waiting: hearing };
+    try {
+      const heard = await voice.transcribeNote(bytes);
+      return heard.text ? { words: heard.text, cut: heard.cut } : { unclear: true };
+    } catch (error) {
+      // Something went missing between the look and the listen: it waits.
+      if (error instanceof VoiceError && error.code === 'not-ready') {
+        const again = await voice.hearing(isWav(bytes)).catch(() => undefined);
+        return {
+          waiting:
+            again && !again.ready
+              ? again
+              : { ready: false, ...(error.need ? { need: error.need } : { model: 'missing' }) },
+        };
+      }
+      if (error instanceof VoiceError && error.code === 'busy') return { busy: true };
+      this.#log(`voice note: ${explain(error)}`);
+      return { unclear: true };
+    }
+  }
+
+  /**
+   * Why Conch can't hear, remembered for the page, and healed where it can
+   * be without anyone: a missing speech model is fetched again.
+   */
+  #notReady(hearing: Exclude<Hearing, { ready: true }>) {
+    const before = this.#hearing;
+    this.#hearing = hearing;
+    if ('model' in hearing && hearing.model === 'missing' && !hearing.problem) {
+      void this.deps.voice?.getModel().catch(() => undefined);
+      if (!before || !('model' in before))
+        this.deps.onHeal(
+          'A voice note arrived and the speech model was missing, so Conch is getting it again.',
+        );
+    }
+  }
+
+  /** A message whose voice note can't be heard yet: kept with the channel until it can. */
+  async #wait(
+    stored: StoredChannel,
+    live: LiveChannel,
+    message: ChannelMessage,
+    seat: Seat,
+    note: Omit<WaitingNote, 'person' | 'seat' | 'chatId' | 'messageId' | 'at'>,
+    hearing: Exclude<Hearing, { ready: true }>,
+  ) {
+    const waiting: WaitingNote = {
+      ...note,
+      person: message.user.id,
+      seat: { key: seat.key, name: seat.name, ...(seat.group && { group: seat.group }) },
+      chatId: message.chatId,
+      messageId: message.messageId,
+      at: this.#now,
+    };
+    await this.#dropOld();
+    let dropped: WaitingNote[] = [];
+    await this.deps.store.update(stored.id, (c) => {
+      const all = [...c.voiceWaiting, waiting];
+      dropped = all.slice(0, Math.max(0, all.length - MAX_WAITING));
+      return { ...c, voiceWaiting: all.slice(-MAX_WAITING) };
+    });
+    for (const old of dropped)
+      for (const id of old.attachments) await this.deps.attachments.discard(id).catch(() => false);
+    this.#notReady(hearing);
+    const told = `${stored.id}:${seat.key}`;
+    if (!this.#toldWaiting.has(told)) {
+      this.#toldWaiting.add(told);
+      await live.connection.send(message.chatId, waitWords(hearing)).catch(() => undefined);
+    }
+    await this.#emit(stored.id);
   }
 
   /** A live entry for a channel whose key was refused: nothing runs until a new key comes. */
@@ -1563,26 +1815,118 @@ export class ChannelService {
     message: ChannelMessage,
     seat: Seat,
   ) {
-    const attachments: string[] = [];
+    // At most a few voice notes are heard at once, per person and in all
+    // (ADR 0077): a flood of them can't pin the computer or fill the disk.
+    const voiceCount = this.deps.voice ? message.files.filter(isVoiceNote).length : 0;
+    const sender = `${stored.id}:${seat.key}`;
+    if (voiceCount) {
+      const mine = this.#listening.get(sender) ?? 0;
+      if (mine + voiceCount > PER_PERSON || this.#listeningTotal + voiceCount > IN_ALL) {
+        await live.connection.send(message.chatId, BUSY).catch(() => undefined);
+        return;
+      }
+      this.#listening.set(sender, mine + voiceCount);
+      this.#listeningTotal += voiceCount;
+    }
+    try {
+      await this.#takeMessage(stored, live, message, seat);
+    } finally {
+      if (voiceCount) {
+        const left = (this.#listening.get(sender) ?? voiceCount) - voiceCount;
+        if (left > 0) this.#listening.set(sender, left);
+        else this.#listening.delete(sender);
+        this.#listeningTotal -= voiceCount;
+      }
+    }
+  }
+
+  async #takeMessage(
+    stored: StoredChannel,
+    live: LiveChannel,
+    message: ChannelMessage,
+    seat: Seat,
+  ) {
+    const got: {
+      file: ChannelMessage['files'][number];
+      name: string;
+      bytes: Buffer;
+      mimeType?: string;
+    }[] = [];
     for (const file of message.files) {
       try {
-        const got = await live.connection.download(file);
-        const saved = await this.deps.attachments.save({
-          name: got.name,
-          bytes: got.bytes,
-          ...(got.mimeType && { claimedType: got.mimeType }),
+        got.push({
+          file,
+          // A voice note is capped on the bytes that really arrive, not what the app said.
+          ...(await live.connection.download(
+            file,
+            isVoiceNote(file) ? { maxBytes: MAX_NOTE_BYTES } : undefined,
+          )),
         });
-        attachments.push(saved.id);
       } catch (error) {
         await live.connection
           .send(message.chatId, `I couldn’t take ${file.name}: ${explain(error)}`)
           .catch(() => undefined);
       }
     }
-    const text = message.text.trim();
+    // Voice notes are heard first (ADR 0077): their words become the message.
+    const heard = new Map<(typeof got)[number], Heard>();
+    let waiting: Exclude<Hearing, { ready: true }> | undefined;
+    for (const item of got)
+      if (isVoiceNote(item.file) && this.deps.voice) {
+        const result = await this.#hear(item.bytes);
+        heard.set(item, result);
+        waiting ??= result.waiting;
+      }
+    const attachments: string[] = [];
+    const words: string[] = [];
+    const unheard: string[] = [];
+    let unclear = false;
+    if ([...heard.values()].some((h) => h.busy)) {
+      await live.connection.send(message.chatId, BUSY).catch(() => undefined);
+      return;
+    }
+    for (const item of got) {
+      const voice = heard.get(item);
+      try {
+        const saved = await this.deps.attachments.save({
+          name: item.name,
+          bytes: item.bytes,
+          ...(item.mimeType && { claimedType: item.mimeType }),
+          ...(voice?.words && { transcript: voice.words }),
+          // Kept until it goes, however long that takes.
+          ...(waiting && { held: true }),
+        });
+        attachments.push(saved.id);
+        if (voice?.words) words.push(voice.words);
+        if (voice?.waiting) unheard.push(saved.id);
+        if (voice?.unclear) unclear = true;
+        if (voice?.cut) await live.connection.send(message.chatId, LONG).catch(() => undefined);
+      } catch (error) {
+        await live.connection
+          .send(message.chatId, `I couldn’t take ${item.file.name}: ${explain(error)}`)
+          .catch(() => undefined);
+      }
+    }
+    if (waiting && unheard.length) {
+      await this.#wait(
+        stored,
+        live,
+        message,
+        seat,
+        { text: withWords(message.text, words), attachments, voice: unheard },
+        waiting,
+      );
+      return;
+    }
+    const text = withWords(message.text, words);
+    if (unclear && !text) {
+      await live.connection.send(message.chatId, UNCLEAR).catch(() => undefined);
+      return;
+    }
     if (!text && !attachments.length) return;
 
     // Decided now, after the downloads: a turn that started meanwhile takes this as its next message.
+    const spoken = words.length > 0;
     if (
       this.#queueBehind(
         stored.id,
@@ -1592,6 +1936,7 @@ export class ChannelService {
         attachments,
         live,
         message.outside,
+        spoken,
       )
     )
       return;
@@ -1603,6 +1948,7 @@ export class ChannelService {
       attachments,
       { chatId: message.chatId, messageId: message.messageId },
       message.outside,
+      spoken,
     );
   }
 
@@ -1615,10 +1961,17 @@ export class ChannelService {
     attachments: string[],
     live: LiveChannel,
     outside?: string,
+    /** It came as a voice note. */
+    spoken?: boolean,
   ): boolean {
     const running = this.#inflight.get(`${channelId}:${seatKey}`);
     if (!running) return false;
-    running.queued.push({ text, attachments, ...(outside && { outside }) });
+    running.queued.push({
+      text,
+      attachments,
+      ...(outside && { outside }),
+      ...(spoken && { spoken }),
+    });
     if (!running.toldQueued) {
       running.toldQueued = true;
       void live.connection
@@ -1646,16 +1999,21 @@ export class ChannelService {
     source?: SentRef,
     /** Someone else's words, even from the owner (a forwarded email). */
     outside?: string,
+    /** It came as a voice note (ADR 0077). */
+    spoken?: boolean,
   ) {
     const live = this.#live.get(stored.id);
     if (!live) return;
     // Claimed before the first await, so nothing sent meanwhile can start a second turn.
-    if (this.#queueBehind(stored.id, seat.key, chatId, text, attachments, live, outside)) return;
+    if (this.#queueBehind(stored.id, seat.key, chatId, text, attachments, live, outside, spoken))
+      return;
     const relay: Relay = {
       channelId: stored.id,
       chatId,
       seat,
       ...(source && { source }),
+      ...(spoken && { spoken }),
+      said: [],
       texts: new Map(),
       queued: [],
       chain: Promise.resolve(),
@@ -1698,11 +2056,17 @@ export class ChannelService {
               ),
             },
           }),
+          // A voice note's words aren't typed words (ADR 0077): a recording can carry
+          // anyone's voice (a forwarded note, a video playing), so the chat reads them
+          // like someone else's, even from you.
           ...(fromOwner &&
-            outside && {
+            (outside || spoken) && {
               untrusted: {
                 kind: 'person' as const,
-                label: `${outside} on ${CHANNEL_NAMES[stored.kind]}`.slice(0, 120),
+                label: `${outside ?? 'a voice note'} on ${CHANNEL_NAMES[stored.kind]}`.slice(
+                  0,
+                  120,
+                ),
               },
             }),
           ...(!conversationId && {
@@ -1873,7 +2237,10 @@ export class ChannelService {
           clearTimeout(relay.draft.timer);
           relay.draft = { id: relay.draft.id + 1, text: '', sentAt: relay.draft.sentAt };
         }
-        if (text) void this.#say(relay, text).catch(() => undefined);
+        if (text) {
+          relay.said.push(text);
+          void this.#say(relay, text).catch(() => undefined);
+        }
         break;
       }
       case 'permission.requested':
@@ -1905,8 +2272,13 @@ export class ChannelService {
     // Anything said but not yet marked done (a turn cut short) still goes.
     for (const [id, text] of relay.texts) {
       relay.texts.delete(id);
-      if (text.trim()) void this.#say(relay, text.trim()).catch(() => undefined);
+      if (text.trim()) {
+        relay.said.push(text.trim());
+        void this.#say(relay, text.trim()).catch(() => undefined);
+      }
     }
+    // A voice note back, after the written answer (ADR 0077).
+    if (e.outcome === 'success') void this.#speakBack(relay);
     if (e.outcome === 'error') {
       const assistant = (await this.deps.settings.get()).persona.name;
       void this.#say(
@@ -1938,7 +2310,31 @@ export class ChannelService {
       queued.flatMap((q) => q.attachments),
       undefined,
       queued.find((q) => q.outside)?.outside,
+      queued.some((q) => q.spoken),
     );
+  }
+
+  /**
+   * Answer a voice note with one (ADR 0077), the way the channel's setting
+   * says: `match` (the default) when they spoke, `always`, or `never`. It goes
+   * after the written answer, which goes either way. No voice to speak with
+   * (Piper not here, no voice yet) or an app without voice notes: writing only.
+   */
+  async #speakBack(relay: Relay) {
+    const text = relay.said.join('\n\n').trim();
+    const notes = this.#live.get(relay.channelId)?.connection.voiceNotes;
+    if (!text || !notes || !this.deps.speech) return;
+    const stored = await this.deps.store.get(relay.channelId);
+    const mode = stored?.settings.voiceReplies ?? 'match';
+    if (mode === 'never' || (mode === 'match' && !relay.spoken)) return;
+    try {
+      const note = await this.deps.speech.voiceNote(text, notes.format);
+      if (!note) return;
+      await relay.chain.catch(() => undefined);
+      await notes.send(relay.chatId, note);
+    } catch (error) {
+      this.#log(`voice note back: ${explain(error)}`);
+    }
   }
 
   /** Put a question to the chat, with buttons. */

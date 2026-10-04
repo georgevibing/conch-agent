@@ -1,3 +1,4 @@
+import type { NoteFormat } from '../voice/audio';
 import type {
   ChannelBot,
   ChannelField,
@@ -24,6 +25,18 @@ export interface ChannelFile {
   mimeType?: string;
   size?: number;
   ref: string;
+  /**
+   * It's a voice note the person recorded (the app says so), not an audio
+   * file they shared: Conch turns it into words on this computer (ADR 0077).
+   */
+  voice?: boolean;
+}
+
+/** A spoken answer, made into the voice note an app plays (ADR 0077). */
+export interface VoiceNote {
+  bytes: Buffer;
+  mimeType: string;
+  seconds: number;
 }
 
 /** Where a message Conch sent lives, so it can be changed later (a button pressed). */
@@ -138,11 +151,24 @@ export interface ChannelConnection {
   draft?(chatId: string, draftId: number, markdown: string): Promise<boolean>;
   /** Mark a message as seen and being worked on (Slack, which has no typing indicator for bots). */
   seen?(ref: SentRef, working: boolean): Promise<void>;
-  download(file: ChannelFile): Promise<{ name: string; bytes: Buffer; mimeType?: string }>;
+  /**
+   * The file's bytes. Never more than the app's own limit, or `maxBytes` when
+   * that's smaller (a voice note): counted as they arrive, whatever size the
+   * app declared, and the download stops the moment it's passed.
+   */
+  download(
+    file: ChannelFile,
+    options?: { maxBytes?: number },
+  ): Promise<{ name: string; bytes: Buffer; mimeType?: string }>;
   /** The private chat with someone, opening it if needed (for messages Conch starts). */
   directChat(userId: string): Promise<string>;
   /** Disconnecting for good: take this computer off the account's linked devices (WhatsApp). */
   unlink?(): Promise<void>;
+  /**
+   * Answering with a voice note (ADR 0077), where the app has them: the
+   * format it plays, and sending one. Conch's own notes are never read back.
+   */
+  voiceNotes?: { format: NoteFormat; send(chatId: string, note: VoiceNote): Promise<void> };
   close(): void;
 }
 
@@ -256,6 +282,41 @@ export function redact(text: string, ...secrets: (string | undefined)[]): string
   for (const secret of secrets) if (secret) out = out.replaceAll(secret, '•••');
   return out;
 }
+
+/**
+ * A response's body, at most `maxBytes`: counted as it arrives (never trusting
+ * `Content-Length` or what the app declared), and cancelled the moment it
+ * passes the cap, so a huge file is never held whole.
+ */
+export async function readCapped(
+  response: Response,
+  maxBytes: number,
+  tooBig = 'That file is too big for Conch to take.',
+): Promise<Buffer> {
+  if (Number(response.headers.get('content-length')) > maxBytes) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new ChannelError('refused', tooBig);
+  }
+  const reader = response.body?.getReader();
+  if (!reader) return Buffer.alloc(0);
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      throw new ChannelError('refused', tooBig);
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks);
+}
+
+/** The smaller of an app's own limit and what the caller asked for. */
+export const capOf = (limit: number, options?: { maxBytes?: number }) =>
+  Math.min(limit, options?.maxBytes ?? limit);
 
 /** A small picture as a data: URL, or undefined if it's not a picture or too big. */
 export function dataUrl(bytes: Buffer, mimeType = 'image/jpeg'): string | undefined {

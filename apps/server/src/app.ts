@@ -229,7 +229,7 @@ export async function buildApp(services: Services) {
   });
   registerPhoneRoutes(app, { tailscale: services.tailscale, gate });
   registerPushRoutes(app, { push: services.push, conversations: services.conversations });
-  registerVoiceRoutes(app, services.voice);
+  registerVoiceRoutes(app, services.voice, services.speech, services.wake);
   registerSafetyRoutes(app, services.activity, {
     providers: () => services.providers.ready(),
     sealing: async () => (await services.settings.get()).preferences.sealedCommands,

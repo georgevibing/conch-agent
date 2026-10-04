@@ -108,8 +108,124 @@
     gap: var(--nc-space-3);
   }
 
+  /* ── VoiceLibrary ───────────────────────────────────────────────────── */
+
+  .library {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .libraryRow {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-2-5) var(--nc-space-3-5);
+  }
+
+  .libraryRow + .libraryRow {
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .libraryText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    min-inline-size: 0;
+  }
+
+  .libraryName {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .libraryInUse {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-regular);
+    color: var(--nc-text-accent);
+  }
+
+  .libraryInUse svg {
+    inline-size: 0.875em;
+    block-size: 0.875em;
+  }
+
+  .libraryMeta {
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  .libraryProblem {
+    font-size: var(--nc-text-sm);
+    color: light-dark(oklch(0.5 0.17 var(--nc-danger-h)), oklch(0.78 0.13 var(--nc-danger-h)));
+  }
+
+  .libraryProgress {
+    margin-block-start: var(--nc-space-1);
+  }
+
+  .libraryActions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--nc-space-1);
+  }
+
+  /* ── ListeningIndicator ─────────────────────────────────────────────── */
+
+  .listening {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    padding-inline: var(--nc-space-2-5) var(--nc-space-0-5);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text);
+    white-space: nowrap;
+  }
+
+  .listeningDot {
+    display: grid;
+    place-items: center;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    border-radius: var(--nc-radius-full);
+    color: var(--nc-text-accent);
+    background: color-mix(in oklch, var(--nc-accent-9) 14%, transparent);
+    transition: box-shadow var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .listeningDot svg {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+
+  .listening[data-hearing] .listeningDot {
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--nc-accent-9) 30%, transparent);
+  }
+
+  .listeningText {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .orb,
+    .listeningDot,
     .voiceButton[data-state='listening']::after {
       transition: none;
     }

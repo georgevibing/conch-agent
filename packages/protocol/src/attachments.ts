@@ -36,6 +36,11 @@ export const Attachment = z.object({
   /** Pixel size, for images, so the transcript can lay them out before they load. */
   width: z.number().int().positive().optional(),
   height: z.number().int().positive().optional(),
+  /**
+   * A voice note's words, turned into text on this computer (ADR 0077). The
+   * message carries them too; this says the recording and the words are one.
+   */
+  transcript: z.string().max(20_000).optional(),
   createdAt: z.number(),
 });
 export type Attachment = z.infer<typeof Attachment>;

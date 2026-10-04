@@ -15,6 +15,8 @@ import {
   dataUrl,
   pause,
   redact,
+  capOf,
+  readCapped,
 } from './types';
 
 export const SLACK_API = 'https://slack.com/api';
@@ -309,7 +311,7 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
           name: 'eyes',
         }).catch(() => undefined);
       },
-      download: (file) => this.#download(file),
+      download: (file, options) => this.#download(file, options),
       directChat: (userId) => this.#directChat(userId),
       close: () => stop.abort(),
     };
@@ -382,7 +384,8 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
     return post(build(false));
   }
 
-  async #download(file: ChannelFile) {
+  async #download(file: ChannelFile, options?: { maxBytes?: number }) {
+    const cap = capOf(FILE_LIMIT, options);
     let url: URL;
     try {
       url = new URL(file.ref);
@@ -392,7 +395,7 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
     // Only Slack's own file servers get the key.
     if (url.protocol !== 'https:' || !/(^|\.)slack\.com$/.test(url.hostname))
       throw new ChannelError('refused', 'That file isn’t on Slack’s own servers.');
-    if (file.size && file.size > FILE_LIMIT)
+    if (file.size && file.size > cap)
       throw new ChannelError('refused', 'That file is too big to take from Slack.');
     const response = await fetch(url, {
       headers: { authorization: `Bearer ${this.botToken}` },
@@ -413,7 +416,7 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
       );
     return {
       name: file.name,
-      bytes: Buffer.from(await response.arrayBuffer()),
+      bytes: await readCapped(response, cap, 'That file is too big to take from Slack.'),
       mimeType: file.mimeType,
     };
   }
@@ -577,6 +580,8 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
             url_private_download?: string;
             mimetype?: string;
             size?: number;
+            /** `slack_audio`: a clip recorded in Slack. */
+            subtype?: string;
           }[];
         }
       | undefined;
@@ -610,6 +615,7 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
               {
                 name: file.name ?? 'file',
                 ref: file.url_private_download,
+                ...(file.subtype === 'slack_audio' && { voice: true }),
                 ...(file.mimetype && { mimeType: file.mimetype }),
                 ...(file.size !== undefined && { size: file.size }),
               },

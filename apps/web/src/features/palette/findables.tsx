@@ -195,7 +195,7 @@ const settingsPlaces: {
     tab: 'voice',
     label: 'Voice',
     keywords:
-      'voice dictation dictate speak talk microphone mic speech whisper read aloud language accent tts stt',
+      'voice dictation dictate speak talk microphone mic speech whisper read aloud language accent tts stt natural voices piper hey conch wake word voice notes',
     icon: <Mic />,
   },
   {

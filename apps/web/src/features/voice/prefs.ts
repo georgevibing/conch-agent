@@ -14,6 +14,8 @@ export interface VoicePrefs {
   rate: number;
   /** You said yes to the browser's speech service hearing you. */
   cloudOk: boolean;
+  /** Listen for "Hey Conch" (ADR 0078): the desktop app only, off until you turn it on. */
+  wake?: boolean;
 }
 
 const KEY = 'conch.voice';

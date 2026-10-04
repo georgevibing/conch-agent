@@ -11,7 +11,7 @@ import { loadConfig } from '../config';
 import { Services } from '../services';
 import { forTurn, TEXT_INLINE_MAX } from './prompt';
 import { cleanName, sniff } from './sniff';
-import { AttachmentStore, UNSENT_MAX_AGE_MS } from './store';
+import { AttachmentStore, HELD_MAX_AGE_MS, UNSENT_MAX_AGE_MS } from './store';
 
 /** A 1×1 PNG, 3×2 in its header. */
 const PNG = Buffer.from(
@@ -165,6 +165,29 @@ describe('AttachmentStore', () => {
     expect(left).not.toContain(stale.id);
   });
 
+  it('keeps a waiting voice note past the sweep, and its words once it’s heard', async () => {
+    const store = await tempStore();
+    const note = await store.save({
+      name: 'voice.ogg',
+      bytes: Buffer.from('OggS pretend'),
+      held: true,
+    });
+    const later = Date.now() + UNSENT_MAX_AGE_MS + 1000;
+    expect(await store.sweep(later)).toBe(0);
+    const heard = await store.transcribed(note.id, 'Call Ada back.');
+    expect(heard).toMatchObject({ id: note.id, transcript: 'Call Ada back.' });
+    expect(heard).not.toHaveProperty('held');
+    // Heard, and still not sent a day later: an unsent upload like any other.
+    expect(await store.sweep(later)).toBe(1);
+  });
+
+  it('keeps one held for a waiting voice note a week, not forever', async () => {
+    const store = await tempStore();
+    await store.save({ name: 'voice.ogg', bytes: Buffer.from('OggS pretend'), held: true });
+    expect(await store.sweep(Date.now() + HELD_MAX_AGE_MS - 60_000)).toBe(0);
+    expect(await store.sweep(Date.now() + HELD_MAX_AGE_MS + 60_000)).toBe(1);
+  });
+
   it('refuses ids that could be paths', async () => {
     const store = await tempStore();
     expect(await store.get('../../etc')).toBeUndefined();
@@ -222,6 +245,24 @@ describe('forTurn', () => {
     const turn = await forTurn(store, [big], { images: false, files: true });
     expect(turn.block).toContain('Read the whole file from its path');
     expect((turn.block ?? '').length).toBeLessThan(TEXT_INLINE_MAX);
+  });
+
+  it('tells every engine a voice note’s words are the message, so none tries to hear it', async () => {
+    const store = await tempStore();
+    const note = await store.save({
+      name: 'voice.ogg',
+      bytes: Buffer.from('OggS pretend'),
+      claimedType: 'audio/ogg',
+      transcript: 'Call Ada back.',
+    });
+    for (const can of [
+      { images: false, files: false },
+      { images: true, files: true },
+    ]) {
+      const turn = await forTurn(store, [note], can);
+      expect(turn.block).toContain('A voice note. What it says');
+      expect(turn.block).not.toContain("can't open");
+    }
   });
 
   it('escapes names so they can’t break out of the tag', async () => {

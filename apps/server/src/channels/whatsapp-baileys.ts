@@ -144,6 +144,17 @@ export const baileysConnect: WaConnect = async (session, handlers) => {
       if (!id) throw new Error('WhatsApp didn’t say it took the message.');
       return id;
     },
+    async voice(chat, audio, seconds, options) {
+      const sent = await socket.sendMessage(
+        chat,
+        { audio, mimetype: 'audio/ogg; codecs=opus', ptt: true, seconds },
+        { messageId: options.id },
+      );
+      if (sent) keep(sent);
+      const id = sent?.key.id;
+      if (!id) throw new Error('WhatsApp didn’t say it took the voice note.');
+      return id;
+    },
     async react(chat, id, fromMe, emoji) {
       await socket.sendMessage(chat, {
         react: { text: emoji, key: { remoteJid: chat, id, fromMe } },
@@ -160,9 +171,19 @@ export const baileysConnect: WaConnect = async (session, handlers) => {
       // Its size is said before downloading: a file too big is refused without fetching it.
       const media = mediaOf(message, normalizeMessageContent);
       if ((sizeOf(media?.fileLength) ?? 0) > maxBytes) throw new Error('That file is too big.');
-      const bytes = await downloadMediaMessage(message, 'buffer', {});
-      if (bytes.length > maxBytes) throw new Error('That file is too big.');
-      return { bytes, ...(media?.mimetype && { mimeType: media.mimetype }) };
+      // Counted as it arrives, and stopped the moment it passes the cap.
+      const stream = await downloadMediaMessage(message, 'stream', {});
+      const chunks: Buffer[] = [];
+      let size = 0;
+      for await (const chunk of stream as AsyncIterable<Buffer>) {
+        size += chunk.length;
+        if (size > maxBytes) {
+          (stream as { destroy?: () => void }).destroy?.();
+          throw new Error('That file is too big.');
+        }
+        chunks.push(chunk);
+      }
+      return { bytes: Buffer.concat(chunks), ...(media?.mimetype && { mimeType: media.mimetype }) };
     },
     async picture(jid) {
       const url = await socket.profilePictureUrl(jid, 'preview').catch(() => undefined);
@@ -182,6 +203,8 @@ type Normalize = (content: WAMessage['message']) => WAMessage['message'];
 
 interface Media {
   mimetype?: string | null;
+  /** A voice note recorded in the chat ("push to talk"), not an audio file. */
+  ptt?: boolean | null;
   fileName?: string | null;
   fileLength?: number | { toNumber(): number } | null;
   caption?: string | null;
@@ -226,6 +249,7 @@ function toInbound(message: WAMessage, normalize: Normalize): WaInbound | undefi
     files.push({
       name,
       ref: key.id,
+      ...(media.kind === 'audioMessage' && media.ptt && { voice: true }),
       ...(media.mimetype && { mimeType: media.mimetype }),
       ...(sizeOf(media.fileLength) !== undefined && { size: sizeOf(media.fileLength) }),
     });

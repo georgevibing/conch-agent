@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useEffect, useState } from 'react';
 
 import { Stack } from '../../components/Stack';
+import { ListeningIndicator } from './ListeningIndicator';
 import { TalkMode, type TalkState } from './TalkMode';
 import { VoiceButton } from './VoiceButton';
 
@@ -56,6 +57,15 @@ export const Speaking: Story = {
       'Three things: stand-up at 9, lunch with Ada at 12:30, and the dentist at 4. Want me to move the dentist?',
   },
 };
+/** Talking over it interrupts it: the line says so. */
+export const SpeakingWithBargeIn: Story = {
+  args: {
+    state: 'speaking',
+    level: 0.4,
+    bargeIn: true,
+    reply: 'Three things: stand-up at 9, lunch with Ada at 12:30, and the dentist at 4.',
+  },
+};
 export const Paused: Story = { args: { state: 'paused' as TalkState } };
 export const Problem: Story = {
   args: {
@@ -71,6 +81,16 @@ export const Buttons: StoryObj<typeof VoiceButton> = {
       <VoiceButton />
       <VoiceButton state="listening" level={0.6} />
       <VoiceButton state="working" />
+    </Stack>
+  ),
+};
+
+/** Listening for the wake phrase, wherever you are, with one press to stop. */
+export const ListeningForHeyConch: StoryObj<typeof ListeningIndicator> = {
+  render: () => (
+    <Stack direction="row" gap={4} style={{ padding: 32 }}>
+      <ListeningIndicator phrase="“Hey Conch”" onStop={() => undefined} />
+      <ListeningIndicator phrase="“Hey Conch”" hearing onStop={() => undefined} />
     </Stack>
   ),
 };

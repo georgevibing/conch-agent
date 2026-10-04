@@ -72,6 +72,14 @@ export async function forTurn(
     if (can.files) dirs.push(dirname(found.path));
     const type = attachment.pasted ? 'pasted text' : attr(attachment.mimeType);
 
+    // A voice note (ADR 0077): its words are the message, so no model needs to hear it.
+    if (attachment.transcript !== undefined) {
+      parts.push(
+        `<attachment name="${name}" type="${type}"${path}>(A voice note. What it says, turned into text on this computer, is the message.)</attachment>`,
+      );
+      continue;
+    }
+
     if (attachment.kind === 'text') {
       const text = decodeText((await store.bytes(attachment.id)) ?? Buffer.alloc(0)) ?? '';
       const room = Math.min(TEXT_INLINE_MAX, budget);

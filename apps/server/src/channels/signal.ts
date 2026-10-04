@@ -17,6 +17,7 @@ import {
   type ChannelUser,
   type SendOptions,
   type SentRef,
+  capOf,
 } from './types';
 
 export { CONCH_MARK } from './linked';
@@ -205,6 +206,7 @@ export class SignalAdapter implements ChannelAdapter {
               {
                 name: a.filename || (a.isVoiceNote ? 'voice-note.m4a' : a.id),
                 ref: a.id,
+                ...(a.isVoiceNote && { voice: true }),
                 ...(a.contentType && { mimeType: a.contentType }),
                 ...(a.size !== undefined && { size: a.size }),
               },
@@ -288,6 +290,21 @@ export class SignalAdapter implements ChannelAdapter {
 
     return {
       send,
+      voiceNotes: {
+        format: 'aac',
+        send: async (chatId, note) => {
+          const result = await this.#call<{ timestamp?: number }>('send', {
+            account,
+            ...target(chatId),
+            // Marked like every message Conch sends, so its echo is never heard as you.
+            message: CONCH_MARK,
+            attachments: [
+              `data:${note.mimeType};filename=voice-note.aac;base64,${note.bytes.toString('base64')}`,
+            ],
+          });
+          if (result.timestamp) sent.add(String(result.timestamp));
+        },
+      },
       edit: async (ref, markdown, options) => {
         choices.forget(ref);
         const first = fit(markdown, PART, (part) => toSignal(part).text.length)[0] ?? '…';
@@ -317,7 +334,7 @@ export class SignalAdapter implements ChannelAdapter {
           }).catch(() => undefined);
         await this.#react(ref.chatId, ref.chatId, Number(ref.messageId), '👀', !working);
       },
-      download: async (file) => this.#download(file),
+      download: async (file, options) => this.#download(file, options),
       directChat: (userId) =>
         Promise.resolve(
           userId === owner ? account : userId.startsWith('u') ? uuidOf(userId) : `+${userId}`,
@@ -345,16 +362,18 @@ export class SignalAdapter implements ChannelAdapter {
     }
   }
 
-  async #download(file: ChannelFile) {
-    if (file.size && file.size > FILE_LIMIT)
+  async #download(file: ChannelFile, options?: { maxBytes?: number }) {
+    const cap = capOf(FILE_LIMIT, options);
+    if (file.size && file.size > cap)
       throw new ChannelError('refused', 'That’s bigger than the 25 MB Conch takes from Signal.');
     // Only the attachments folder, and only a plain file name in it.
     const path = safeJoin(this.daemon.attachments, file.ref);
     const info = await stat(path).catch(() => undefined);
     if (!info?.isFile())
       throw new ChannelError('refused', 'Signal didn’t keep that file. Send it again.');
-    if (info.size > FILE_LIMIT)
-      throw new ChannelError('refused', 'That’s bigger than the 25 MB Conch takes from Signal.');
+    // Its real size on disk, not what the message said.
+    if (info.size > cap)
+      throw new ChannelError('refused', 'That’s bigger than Conch takes from Signal.');
     return {
       name: file.name,
       bytes: await readFile(path),
