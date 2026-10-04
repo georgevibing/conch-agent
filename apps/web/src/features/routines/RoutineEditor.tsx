@@ -183,6 +183,7 @@ export function RoutineEditor({
   const [onlyIf, setOnlyIf] = useState(initial.onlyIf ?? '');
   const [trust, setTrust] = useState<RoutineTrust>(initial.trust ?? 'ask');
   const [catchUp, setCatchUp] = useState(initial.catchUp ?? true);
+  const [runOnFullPlan, setRunOnFullPlan] = useState(routine?.runOnFullPlan ?? false);
   const [options, setOptions] = useState<TurnOptions>(initial.options ?? {});
   const [limitText, setLimitText] = useState(
     routine?.runLimitUsd ? String(routine.runLimitUsd) : '',
@@ -214,7 +215,7 @@ export function RoutineEditor({
     setSaving(true);
     setError(undefined);
     try {
-      const common = { title, summary, prompt, timezone, trust, catchUp, options };
+      const common = { title, summary, prompt, timezone, trust, catchUp, options, runOnFullPlan };
       const saved = routine
         ? await routinesApi.update(routine.id, {
             ...common,
@@ -416,6 +417,15 @@ export function RoutineEditor({
               </RadioGroup>
             </Stack>
 
+            {spend?.billing !== 'free' && spend?.billing !== 'metered' && (
+              // Room for your own chats (ADR 0057): a reminder that must go goes anyway.
+              <Switch
+                checked={runOnFullPlan}
+                onCheckedChange={setRunOnFullPlan}
+                label="Run even when the plan is nearly used"
+                description="Usually a routine on a plan waits when the plan is nearly used, so your own chats have room. Turn this on for one that must go on time, like a reminder."
+              />
+            )}
             {starts === 'every' && (
               <Switch
                 checked={catchUp}

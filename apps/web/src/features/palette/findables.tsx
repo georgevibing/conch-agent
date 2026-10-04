@@ -84,7 +84,7 @@ import { doctorApi } from '../health/api';
 import { LIVE_DATA_FOCUS } from '../artifacts/LiveDataSection';
 import { ADDRESS_FOCUS, DEVICES_FOCUS, PASSKEYS_FOCUS } from '../auth/focus';
 import { FALLBACK_FOCUS } from '../settings/FallbackSection';
-import { ROUTINES_SPEND_FOCUS } from '../routines/SpendingSection';
+import { PLAN_ROOM_FOCUS, ROUTINES_SPEND_FOCUS } from '../routines/SpendingSection';
 import { APP_WORDS, APPS } from '../channels/describe';
 import { useChannels } from '../channels/queries';
 import { isManager } from '../integrations/apps';
@@ -175,6 +175,14 @@ const settingsPlaces: {
     keywords:
       'routines routine spending spend limit monthly month cost costs money bill budget cap paused pause raise unattended',
     icon: <Wallet />,
+  },
+  {
+    tab: 'usage',
+    focus: PLAN_ROOM_FOCUS,
+    label: 'When routines wait for your plan',
+    keywords:
+      'room for your own chats routines routine wait waiting plan subscription nearly used full threshold percent always run never wait skip skipped',
+    icon: <Gauge />,
   },
   {
     tab: 'health',

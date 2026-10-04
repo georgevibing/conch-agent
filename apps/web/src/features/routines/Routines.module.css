@@ -278,4 +278,10 @@
       grid-template-columns: 1fr;
     }
   }
+
+  .calloutActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-2);
+  }
 }

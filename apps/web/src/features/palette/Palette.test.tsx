@@ -341,6 +341,13 @@ describe('Palette search', () => {
       await screen.findByRole('option', { name: /What routines may spend/ }),
     ).toBeInTheDocument();
 
+    // When routines wait for a plan (ADR 0057): the same place, by its own words.
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'room for your own chats');
+    expect(
+      await screen.findByRole('option', { name: /When routines wait for your plan/ }),
+    ).toBeInTheDocument();
+
     // Keywords count by whole-word prefix, not scattered letters.
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'forget');

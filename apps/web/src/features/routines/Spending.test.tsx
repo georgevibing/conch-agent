@@ -48,6 +48,49 @@ const spending = (over: Partial<RoutineSpending> = {}): RoutineSpending => ({
 });
 
 describe('what routines spend', () => {
+  it('lets a person choose when routines on a plan wait, or never, and says what that means now', async () => {
+    const onPlan: Routine = {
+      ...routine,
+      spend: { billing: 'plan', text: 'Runs on your Claude Max plan' },
+    };
+    const plans = [{ source: 'Claude Max', usedPercent: 81, waiting: 1 }];
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/routines': () => [onPlan],
+      'GET /api/routines/spending': () => spending({ planRoomPercent: 80, plans }),
+      'PUT /api/routines/spending': (body) => ({
+        ...spending({ plans }),
+        planRoomPercent: (body as { planRoomPercent: number | null }).planRoomPercent,
+      }),
+    });
+    const user = userEvent.setup();
+    renderApp(<RoutinesView />);
+    expect(
+      await screen.findByText('Your Claude Max plan is 81% used, so routines on it wait.'),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: /Never wait/ }));
+    // The line follows the choice at once, before the save comes back.
+    expect(
+      screen.getByText('Your Claude Max plan is 81% used, so the routine waiting for it goes now.'),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(calls.filter((c) => c.method === 'PUT').at(-1)?.body).toEqual({
+        planRoomPercent: null,
+      }),
+    );
+  });
+
+  it('keeps the choice out of sight while no routine runs on a plan', async () => {
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/routines': () => [routine],
+      'GET /api/routines/spending': () => spending(),
+    });
+    renderApp(<RoutinesView />);
+    expect(await screen.findByText('About $14 a month')).toBeInTheDocument();
+    expect(screen.queryByText('Room for your own chats')).not.toBeInTheDocument();
+  });
+
   it('shows what each routine costs, and what they spent this month', async () => {
     mockFetch({
       'GET /api/state': () => appState(),

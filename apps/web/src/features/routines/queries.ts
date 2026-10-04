@@ -57,6 +57,11 @@ export function useSetSpendingLimit() {
   return useSpendingMutation((limitUsd: number | null) => routinesApi.setSpendingLimit(limitUsd));
 }
 
+/** A person chooses when routines leave a plan to them (`null`: never, they always run). */
+export function useSetPlanRoom() {
+  return useSpendingMutation((percent: number | null) => routinesApi.setPlanRoom(percent));
+}
+
 /** “Keep paused”: the card goes away until next month. */
 export function useKeepPaused() {
   return useSpendingMutation(() => routinesApi.keepPaused());
@@ -106,7 +111,11 @@ export function applyRoutineEvent(
     client.setQueryData(routineKeys.spending, event.spending);
     return;
   }
-  if (event.type === 'routine.changed') return putRoutine(client, event.routine);
+  if (event.type === 'routine.changed') {
+    // Which runs wait for a plan (Room for your own chats) follows its routines.
+    void client.invalidateQueries({ queryKey: routineKeys.spending });
+    return putRoutine(client, event.routine);
+  }
   if (event.type === 'routine.deleted') {
     client.setQueryData<Routine[]>(routineKeys.all, (list) =>
       list?.filter((r) => r.id !== event.routineId),

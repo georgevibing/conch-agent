@@ -33,6 +33,12 @@ export const routinesApi = {
   /** A person sets the monthly limit; `null` turns it off. */
   setSpendingLimit: (limitUsd: number | null) =>
     request(RoutineSpending, '/api/routines/spending', { method: 'PUT', body: { limitUsd } }),
+  /** How full a plan gets before routines wait for it (`null`: never). A person's choice. */
+  setPlanRoom: (planRoomPercent: number | null) =>
+    request(RoutineSpending, '/api/routines/spending', {
+      method: 'PUT',
+      body: { planRoomPercent },
+    }),
   keepPaused: () =>
     request(RoutineSpending, '/api/routines/spending/keep-paused', { method: 'POST', body: {} }),
   preview: (schedule: Schedule, timezone: string) =>

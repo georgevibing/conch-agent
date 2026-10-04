@@ -7,10 +7,14 @@ import { useUi } from '../../app/ui';
 import { Section, SaveStatus } from '../settings/Section';
 import { useAutosave } from '../settings/useAutosave';
 import { routinesApi } from './api';
+import { PlanRoomSection } from './PlanRoomSection';
 import { routineKeys, useRoutineSpending } from './queries';
 
 /** `openSettings('usage', ROUTINES_SPEND_FOCUS)` brings this section into view. */
 export const ROUTINES_SPEND_FOCUS = 'routines';
+/** …and `PLAN_ROOM_FOCUS` straight to when routines wait for a plan. */
+export const PLAN_ROOM_FOCUS = 'plan-room';
+const PLAN_ROOM_ID = 'routines-plan-room';
 
 /** The monthly limit until a person sets one (the gateway's `DEFAULT_MONTHLY_USD`). */
 const DEFAULT_LIMIT = 20;
@@ -96,6 +100,7 @@ function SpendingBody({ spending }: { spending: RoutineSpending }) {
         )}
         <SaveStatus status={status} />
       </Stack>
+      <PlanRoomSection headingLevel={3} id={PLAN_ROOM_ID} />
     </Stack>
   );
 }
@@ -111,9 +116,11 @@ export function SpendingSection() {
 
   useEffect(() => {
     const { settingsFocus } = useUi.getState();
-    if (settingsFocus !== ROUTINES_SPEND_FOCUS) return;
+    if (settingsFocus !== ROUTINES_SPEND_FOCUS && settingsFocus !== PLAN_ROOM_FOCUS) return;
     useUi.setState({ settingsFocus: undefined });
-    ref.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    const target =
+      settingsFocus === PLAN_ROOM_FOCUS ? document.getElementById(PLAN_ROOM_ID) : ref.current;
+    target?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }, []);
 
   if (!spending) return null;

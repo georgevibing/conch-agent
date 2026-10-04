@@ -32,7 +32,7 @@ import { useDeleteRoutine, useRoutine, useRunRoutine, useUpdateRoutine } from '.
 import { RoutineEditor } from './RoutineEditor';
 import styles from './Routines.module.css';
 import { moreRoom, runCostText, runLimitText } from './spendWords';
-import { ROUTINES_SPEND_FOCUS } from './SpendingSection';
+import { PLAN_ROOM_FOCUS, ROUTINES_SPEND_FOCUS } from './SpendingSection';
 import { useSchedulePreview } from './useSchedulePreview';
 import { AlwaysOnHint } from '../background/AlwaysOnHint';
 
@@ -318,9 +318,41 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
           {latest.outcome}
         </Callout>
       )}
-      {latest?.guard === 'plan-room' && (
-        // It goes by itself once there's room: nothing to do.
-        <Callout tone="info" title="Leaving room for your own chats">
+      {latest?.guard === 'plan-room' && routine.status === 'active' && (
+        // It goes by itself once there's room; or now, if the person says so.
+        <Callout
+          tone="info"
+          title="Waiting so your own chats have room"
+          action={
+            <div className={styles.calloutActions}>
+              <Button
+                size="sm"
+                loading={update.isPending}
+                onClick={() =>
+                  update.mutate(
+                    { id: routine.id, patch: { runOnFullPlan: true } },
+                    {
+                      onSuccess: () =>
+                        toast.success(`“${routine.title}” runs now`, {
+                          description:
+                            'It won’t wait for room on the plan again. You can change this in Edit.',
+                        }),
+                    },
+                  )
+                }
+              >
+                Always run this one
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => openSettings('usage', PLAN_ROOM_FOCUS)}
+              >
+                Change when routines wait
+              </Button>
+            </div>
+          }
+        >
           {latest.outcome}
         </Callout>
       )}

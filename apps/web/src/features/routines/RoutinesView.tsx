@@ -21,6 +21,7 @@ import { ROUTINES_SPEND_FOCUS } from './SpendingSection';
 
 import { routineIcon, WAITING_TEXT, watchProblem } from './icon';
 import { NewRoutine } from './NewRoutine';
+import { PlanRoomSection } from './PlanRoomSection';
 import { RoutineEditor } from './RoutineEditor';
 import { useKeepPaused, useRoutines, useRoutineSpending, useUpdateRoutine } from './queries';
 import styles from './Routines.module.css';
@@ -80,6 +81,10 @@ export function RoutinesView() {
   const openSettings = useUi((s) => s.openSettings);
   const raiseLimit = () => openSettings('usage', ROUTINES_SPEND_FOCUS);
   // Say what routines spend only once there's something to say.
+  // Room for your own chats (ADR 0057): only once a routine runs on a plan.
+  const onPlan = Boolean(
+    spending?.plans?.length || routines?.some((r) => r.spend?.billing === 'plan'),
+  );
   const spends = Boolean(
     spending && (spending.monthUsd > 0 || routines?.some((r) => r.spend?.billing === 'metered')),
   );
@@ -190,6 +195,8 @@ export function RoutinesView() {
           })}
         </Stack>
       )}
+
+      {onPlan && <PlanRoomSection />}
 
       <footer className={styles.pageFooter}>
         <Text size="xs" tone="subtle">
