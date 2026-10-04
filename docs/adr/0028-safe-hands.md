@@ -194,7 +194,7 @@ stand. The verdict is `clean`, `caution` or `danger`.
   `git fetch` come free. Because the only change is that short list, nothing
   else an older rule caught comes free. Marks now name the tool call that made
   them; in older logs, it's the call that finishes right after. Either way it's
-  the call with that id started last *before* the mark, since ids can repeat.
+  the call with that id started last _before_ the mark, since ids can repeat.
   Pages, apps, people, and marks carried in from another chat are never looked
   at again.
 - **2026-10-04: a mode picked mid-turn holds from the next step.** It used to wait
