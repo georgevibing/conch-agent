@@ -496,7 +496,12 @@ export class ConversationManager {
        */
       route?: (
         engine: Engine,
-        context: { failed?: TurnProblem; model?: string },
+        context: {
+          failed?: TurnProblem;
+          model?: string;
+          /** The message carries pictures: a model that sees them is better (ADR 0069). */
+          pictures?: boolean;
+        },
       ) => Promise<TurnRoute>;
       /**
        * What a message needs that a chat-only model can't use (ADR 0050): the
@@ -683,8 +688,9 @@ export class ConversationManager {
       clean({ ...existing?.record.options, ...input.options }),
       chosen.id,
     );
+    const pictures = await this.#pictures(input.attachments ?? []);
     const route = (await this.deps
-      .route?.(chosen, { ...(asked && { model: asked }) })
+      .route?.(chosen, { ...(asked && { model: asked }), ...(pictures && { pictures }) })
       .catch(() => undefined)) ?? {
       kind: 'use' as const,
       engine: chosen,
@@ -1091,7 +1097,10 @@ export class ConversationManager {
     const route = engineId
       ? { kind: 'use' as const, engine: chosen, ...(model && { model }) }
       : ((await this.deps
-          .route?.(chosen, { ...(asked && { model: asked }) })
+          .route?.(chosen, {
+            ...(asked && { model: asked }),
+            ...(held.attachments.some((a) => a.kind === 'image') && { pictures: true }),
+          })
           .catch(() => undefined)) ?? {
           kind: 'use' as const,
           engine: chosen,
@@ -1144,7 +1153,13 @@ export class ConversationManager {
       engine,
       prompt,
       attachments,
-      route && ((failed, asked) => route(engine, { failed, ...(asked && { model: asked }) })),
+      route &&
+        ((failed, asked) =>
+          route(engine, {
+            failed,
+            ...(asked && { model: asked }),
+            ...(attachments.some((a) => a.kind === 'image') && { pictures: true }),
+          })),
       model,
     );
     // Held: it waits (set as the turn ended). Handed on: one second chance only —
@@ -1153,6 +1168,14 @@ export class ConversationManager {
     if (next?.kind === 'use')
       return this.#runTurn(live, next.engine, prompt, attachments, undefined, next.model);
     return result;
+  }
+
+  /** Whether uploaded attachments, by id, include a picture. */
+  async #pictures(ids: readonly string[]): Promise<boolean> {
+    const store = this.deps.attachments;
+    if (!store || !ids.length) return false;
+    const found = await Promise.all(ids.map((id) => store.get(id).catch(() => undefined)));
+    return found.some((entry) => entry?.attachment.kind === 'image');
   }
 
   async #runTurn(

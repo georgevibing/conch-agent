@@ -29,9 +29,38 @@ function toolsOf(engine: Engine, capabilities: Capabilities): Tools {
 export async function carryTools(
   from: Engine,
   to: Engine,
-  options: { fromModel?: string; toModel?: string; choose?: boolean } = {},
+  options: {
+    fromModel?: string;
+    toModel?: string;
+    choose?: boolean;
+    /**
+     * The turn carries pictures (ADR 0069). Where another model may be chosen,
+     * one that sees them beats one that would get them in words.
+     */
+    sight?: boolean;
+  } = {},
 ): Promise<{ model?: string } | false> {
   const [source, target] = await Promise.all([from.capabilities(), to.capabilities()]);
+  const chosen = await carryApps(from, to, source, target, options);
+  if (chosen === false || !options.sight || !options.choose) return chosen;
+  const offered = toolsOf(to, target);
+  const current = modelOf(target, chosen.model ?? options.toModel);
+  if (current?.images !== false) return chosen;
+  // The same powers, and eyes too: a model that can use what the chosen one could, and sees.
+  const apps = current ? canUseApps({ tools: offered }, current) : false;
+  const seeing = target.models.find(
+    (m) => m.id !== 'default' && m.images === true && (!apps || canUseApps({ tools: offered }, m)),
+  );
+  return seeing ? { model: seeing.id } : chosen;
+}
+
+async function carryApps(
+  from: Engine,
+  to: Engine,
+  source: Capabilities,
+  target: Capabilities,
+  options: { fromModel?: string; toModel?: string; choose?: boolean },
+): Promise<{ model?: string } | false> {
   const keep = options.toModel ? { model: options.toModel } : {};
   const needed = toolsOf(from, source);
   // Only chat was possible here: anyone can carry that.

@@ -1903,7 +1903,7 @@ export class Services {
    */
   async route(
     engine: Engine,
-    context: { failed?: TurnProblem; model?: string },
+    context: { failed?: TurnProblem; model?: string; pictures?: boolean },
   ): Promise<TurnRoute> {
     const { preferences } = await this.settings.get();
     // The model another provider answers with: your default, if it's your default provider.
@@ -1914,6 +1914,7 @@ export class Services {
         ...(context.model && { fromModel: context.model }),
         ...(modelFor(other) && { toModel: modelFor(other) }),
         choose,
+        ...(context.pictures && { sight: true }),
       }).catch(() => false as const);
     if (!engine.local) {
       // A provider that stopped answering is the moment to look again.
