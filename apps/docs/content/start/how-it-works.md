@@ -18,9 +18,9 @@ Conch itself only looks things up: once a day it looks for new versions of itsel
 
 A provider brings a model. Conch brings everything around it: [memory](../features/memory.md), [skills](../features/skills.md), [apps](../features/apps.md), [routines](../features/routines.md), the [browser](../features/browser.md). That is why they work with every provider, and why a chat can move from one to another without losing its thread.
 
-## It asks only when it matters
+## It fixes itself
 
-Conch is for people who don't debug. It sets itself up. When something is missing, stale or broken, it [repairs it](../care/health.md) and carries on, and tells you afterwards, quietly.
+Conch is for people who don't debug. It sets itself up. When something is missing, stale or broken, it [repairs it](../care/health.md) and carries on, and tells you afterwards, quietly. When it can't, you get one plain sentence and the button that fixes it.
 
 It interrupts you for two things only: an approval that matters (spending, sending, deleting, granting trust), and what only a person can do (signing in, typing a password).
 

@@ -12,6 +12,7 @@ import {
   Badge,
   BrowserApproval,
   BrowserWindow,
+  Button,
   Diff,
   FilesChanged,
   Handset,
@@ -23,6 +24,7 @@ import {
   OfferAlsoTry,
   OfferCard,
   PasskeyButton,
+  RepairPanel,
   RoutedNote,
   RoutineCard,
   Stage,
@@ -36,6 +38,7 @@ import {
   useInView,
   type HandsetMessage,
   type OfferCardState,
+  type RepairItem,
 } from '@conch/nacre';
 import { appAbilities, appSourceLine } from '@conch/protocol';
 import { Mail } from 'lucide-react';
@@ -934,6 +937,94 @@ export function HealedDemo() {
       notes={HEALED.map((message, i) => ({ at: i, message }))}
       formatTime={(at) => WHEN[at] ?? ''}
     />
+  );
+}
+
+// ── It fixes itself: Repair everything, rows filling in, one step left for you ──
+
+const REPAIR = { done: 3_400, end: 9_000 } as const;
+
+/** What a repair finds, in the doctor's own words (`apps/server/src/doctor/checks.ts`). */
+const REPAIRS: (RepairItem & { at: number })[] = [
+  {
+    id: 'claude',
+    group: 'Providers',
+    title: provider('claude-code')?.name ?? 'Claude Code',
+    state: 'ok',
+    message: 'Ready.',
+    at: 800,
+  },
+  {
+    id: 'codex',
+    group: 'Providers',
+    title: provider('codex-cli')?.name ?? 'Codex',
+    state: 'needs-you',
+    message: 'Signed out.',
+    action: (
+      <Button size="sm" variant="surface">
+        Sign in
+      </Button>
+    ),
+    at: 1_400,
+  },
+  {
+    id: 'calendar',
+    group: 'Apps',
+    title: reference.integrations.find((app) => app.id === 'google-calendar')?.name ?? 'Calendar',
+    state: 'fixed',
+    message: 'Working again.',
+    at: 2_000,
+  },
+  {
+    id: 'browser',
+    group: 'This computer',
+    title: 'Browser',
+    state: 'fixed',
+    message: 'It starts cleanly again.',
+    at: 2_600,
+  },
+  {
+    id: 'search',
+    group: 'This computer',
+    title: 'Search',
+    state: 'fixed',
+    message: 'Built again from your chats.',
+    at: 3_200,
+  },
+];
+
+function Repair({ at }: { at: number }) {
+  return (
+    <RepairPanel
+      items={REPAIRS.map(({ at: answers, ...item }) =>
+        at >= answers
+          ? item
+          : { ...item, state: 'checking', message: 'Checking…', action: undefined },
+      )}
+      running={at < REPAIR.done}
+      repairing
+      checkedAt={1}
+      formatTime={() => 'just now'}
+      onRepair={noop}
+      onCheck={noop}
+    />
+  );
+}
+
+export function RepairDemo() {
+  const [ref, inView] = useInView<HTMLDivElement>({ once: false, margin: '0px' });
+  const at = useClock(REPAIR.end, inView);
+  return (
+    <div ref={ref}>
+      <Stage
+        label="Repair everything: Conch fixes three things on its own, and leaves one sign-in for you, with its button"
+        alive={at < REPAIR.done}
+      >
+        <Steady holds={[<Repair key="running" at={0} />, <Repair key="done" at={REPAIR.end} />]}>
+          <Repair at={at} />
+        </Steady>
+      </Stage>
+    </div>
   );
 }
 

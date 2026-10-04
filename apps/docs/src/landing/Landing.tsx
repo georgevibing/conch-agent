@@ -16,7 +16,7 @@ import {
   Text,
   TextLink,
 } from '@conch/nacre';
-import { ArrowRight, ArrowUpRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import reference from 'virtual:conch-reference';
@@ -39,6 +39,7 @@ import {
   PasskeyDemo,
   PhoneDemo,
   ProvidersDemo,
+  RepairDemo,
   RoutineDemo,
   TaskDemo,
   UndoDemo,
@@ -48,6 +49,7 @@ import styles from './Landing.module.css';
 /** Where the front page sends people. `content.test.ts` checks each is a real page. */
 export const LANDING_LINKS = {
   start: '/start/install',
+  health: '/care/health',
   docs: '/docs',
   security: '/security/signing-in',
   how: '/start/how-it-works',
@@ -63,8 +65,6 @@ export const LANDING_LINKS = {
 
 const channels = reference.channels.filter((channel) => channel.available);
 const local = reference.providers.find((provider) => provider.can.offline);
-/** The providers that are agents on this computer: they work with your files. */
-const agents = reference.providers.filter((provider) => provider.can.files).map((p) => p.name);
 /** The plans people already pay for, connected with their own sign-in (coding agents too). */
 const plans = reference.providers
   .filter((p) => p.group === 'subscription' || p.group === 'agent')
@@ -75,6 +75,17 @@ function sentence(names: string[]): string {
   return names.length > 1
     ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
     : (names[0] ?? '');
+}
+
+/** Download Conch, and Read the docs beside it. */
+function Download() {
+  return (
+    <DownloadApp>
+      <Button size="lg" variant="surface" tone="neutral" trailingIcon={<ArrowRight />} asChild>
+        <Link to={LANDING_LINKS.docs}>Read the docs</Link>
+      </Button>
+    </DownloadApp>
+  );
 }
 
 function Band({
@@ -117,41 +128,22 @@ export function Landing() {
         <DocsHero
           eyebrow={
             <>
-              <Pearl size="sm" label={null} />
-              <span>Open source</span>
-              <Badge tone="neutral" size="sm">
-                {reference.version}
-              </Badge>
+              <Badge tone="accent">Open source</Badge>
+              <Badge tone="neutral">{reference.version}</Badge>
             </>
           }
           title={
             <>
-              A calm home for your AI agents.
+              The AI agent that just works.
               <br />
-              <em>On your own computer.</em>
+              <em>Let it solve your problems.</em>
             </>
           }
-          lede={`Conch drives ${sentence(agents)}, a model on this machine and the keys you have, all at once, from one place. It sets itself up, fixes what breaks, and asks only when it matters.`}
+          lede="Use the AI subscriptions and API keys you already have. Conch sets itself up, fixes what breaks, and asks you only when it has to."
           actions={
             <>
-              <DownloadApp />
+              <Download />
               <InstallCommand typed />
-              <div className={styles.buttons}>
-                <Button size="lg" variant="surface" trailingIcon={<ArrowRight />} asChild>
-                  <Link to={LANDING_LINKS.start}>Get started</Link>
-                </Button>
-                <Button
-                  size="lg"
-                  variant="ghost"
-                  tone="neutral"
-                  trailingIcon={<ArrowUpRight />}
-                  asChild
-                >
-                  <a href={REPO_URL} target="_blank" rel="noreferrer">
-                    Read the source
-                  </a>
-                </Button>
-              </div>
             </>
           }
           media={<ChatDemo />}
@@ -189,8 +181,8 @@ export function Landing() {
           }
         >
           <p>
-            Connect as many as you like. Each adds its models to the same list, and a chat can move
-            from one to another without losing its thread.
+            Sign in with the plans you already pay for, or paste an API key. Each adds its models to
+            the same list, and a chat can move from one to another without losing its thread.
           </p>
         </Scene>
 
@@ -337,6 +329,32 @@ export function Landing() {
           />
         </Scene>
 
+        <Scene
+          kicker="It fixes itself"
+          title={
+            <>
+              Something broke? <em>It’s already fixed.</em>
+            </>
+          }
+          stage={<RepairDemo />}
+          points={[
+            'Nothing to install first. What it needs, it fetches by itself.',
+            'One Repair everything button, for when you want to be sure.',
+            'Daily backups and signed updates, without you thinking about them.',
+          ]}
+          action={
+            <TextLink arrow="forward" asChild>
+              <Link to={LANDING_LINKS.health}>How it looks after itself</Link>
+            </TextLink>
+          }
+        >
+          <p>
+            Conch keeps an eye on every part of itself and mends what it can on its own. When
+            something needs you, like signing in again, you get one plain sentence and the button
+            that does it.
+          </p>
+        </Scene>
+
         <Band title="And the rest of a day’s work" lede="Each of these is the app itself, playing.">
           <Bento>
             <Bento.Tile
@@ -386,8 +404,8 @@ export function Landing() {
             <Bento.Tile
               span={4}
               index={5}
-              title="It looks after itself"
-              text="One Repair everything button, daily backups you can restore, signed updates. What it fixed on its own is a quiet list, not an alarm."
+              title="It tells you what it fixed"
+              text="What Conch mended while you were away is a quiet list, not an alarm. Nothing for you to do."
               picture="Three things Conch fixed on its own"
             >
               <HealedDemo />
@@ -506,8 +524,8 @@ export function Landing() {
           }
         >
           <p>
-            I built Conch for myself. I wanted the agents I already use in one calm place, on my own
-            computer, with my files and my keys staying there.
+            I built Conch for myself. I wanted an agent that fixes my problems, not one I have to
+            keep fixing.
           </p>
           <p>It’s open source now, so it can be yours too.</p>
         </Statement>
@@ -519,16 +537,8 @@ export function Landing() {
             </p>
           </Statement>
           <Reveal className={styles.closingActions}>
-            <DownloadApp />
+            <Download />
             <InstallCommand />
-            <div className={styles.buttons}>
-              <Button size="lg" variant="surface" trailingIcon={<ArrowRight />} asChild>
-                <Link to={LANDING_LINKS.start}>Get started</Link>
-              </Button>
-              <Button size="lg" variant="ghost" tone="neutral" asChild>
-                <Link to={LANDING_LINKS.docs}>Read the documentation</Link>
-              </Button>
-            </div>
           </Reveal>
         </section>
 
