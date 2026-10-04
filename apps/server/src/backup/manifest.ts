@@ -281,6 +281,28 @@ export const RULES: readonly BackupRule[] = [
   },
   { match: 'skills/**', class: 'kept', group: 'skills', why: 'Your skills, with their files.' },
   {
+    match: 'skills-market/.staging/**',
+    class: 'derived',
+    why: 'Skills downloaded from Discover for a look before they’re added (ADR 0070). Nothing here is used, and it’s cleared after half an hour.',
+  },
+  {
+    match: 'skills-market/**',
+    class: 'kept',
+    group: 'skills',
+    why: 'Skills you added from Discover, exactly as they were when you read them (ADR 0070).',
+  },
+  {
+    match: 'skills-market.json',
+    class: 'kept',
+    group: 'skills',
+    why: 'Where each skill you added from Discover came from: who published it and the version it’s pinned to.',
+  },
+  {
+    match: 'skills-market-cache.json',
+    class: 'derived',
+    why: 'What Discover found last, shown when a place can’t be reached. Fetched again when needed.',
+  },
+  {
     match: 'skill-suggestions.json',
     class: 'kept',
     group: 'skills',

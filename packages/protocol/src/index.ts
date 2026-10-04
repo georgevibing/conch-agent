@@ -85,6 +85,7 @@ export * from './fuzzy';
 export * from './past-chats';
 export * from './setup';
 export * from './skills';
+export * from './skill-market';
 export * from './holds';
 export * from './tasks';
 export * from './terminal';
