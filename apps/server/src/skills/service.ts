@@ -43,6 +43,8 @@ export interface SkillServiceDeps {
   usage?: SkillUsage;
   /** A suggestion was saved as a skill: it's settled (ADR 0058). */
   suggestionSaved?: (id: string) => Promise<void>;
+  /** Skills added from Discover are taken away there (ADR 0070). */
+  market?: { owns(id: string): boolean; remove(id: string): Promise<void> };
 }
 
 /**
@@ -193,7 +195,8 @@ export class SkillService {
   }
 
   async remove(id: string) {
-    await this.deps.store.remove(id);
+    if (this.deps.market?.owns(id)) await this.deps.market.remove(id);
+    else await this.deps.store.remove(id);
     await this.deps.usage?.forget(id).catch(() => undefined);
     this.#changed();
   }

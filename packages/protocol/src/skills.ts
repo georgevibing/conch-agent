@@ -7,6 +7,7 @@
 import { z } from 'zod';
 
 import { Id } from './common';
+import { SkillOrigin } from './market-basics';
 
 /**
  * A skill's name, which is also its folder and its slash command: 1–64
@@ -35,6 +36,8 @@ export const SkillSource = z.enum([
   'hermes',
   /** A Conch app's own skills (ADR 0061): `conch-apps/<id>/current/skills`, read-only. */
   'app',
+  /** Added from Discover (ADR 0070): `skills-market/<source>/<name>`, pinned, read-only. */
+  'market',
 ]);
 export type SkillSource = z.infer<typeof SkillSource>;
 
@@ -142,6 +145,8 @@ export const SkillFinding = z.object({
     'prerequisite',
     'hidden',
     'binary',
+    /** What the registry it came from says about it (ADR 0070). */
+    'registry',
   ]),
   severity: z.enum(['danger', 'warning']),
   message: z.string(),
@@ -190,6 +195,8 @@ export const Skill = z.object({
   /** What it may do while it's in use (ADR 0031). */
   permissions: SkillPermissions.optional(),
   signature: SkillSignature.optional(),
+  /** Where it came from, when it was added from Discover (ADR 0070). */
+  origin: SkillOrigin.optional(),
 });
 export type Skill = z.infer<typeof Skill>;
 
