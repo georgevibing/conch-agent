@@ -116,7 +116,7 @@ src/
   background/                 Always on: login items (launchd, systemd, the Run key), the launcher, the handover, Conch as an app (ADR 0026); the menu bar helper, lingering, keep-awake (ADR 0029)
   network/tailscale.ts        your phone's secure address: `tailscale serve`, looked at and turned on (ADR 0027)
   push/                       notifications: RFC 8291/8292 Web Push on node:crypto, subscriptions, presence (ADR 0027)
-  voice/                      private dictation: whisper.cpp and its speech model (ADR 0027)
+  voice/                      hearing (whisper.cpp, its model; FFmpeg on pipes only for voice notes), natural voices (Piper, kept running), “Hey Conch” (ADR 0027, ADR 0077, ADR 0078)
   activity/                   everything the assistant did, read from the chats' logs (ADR 0028)
   undo/                       what each change was before: blobs, change sets, the preview diff, putting back (ADR 0030)
   import/                     Come home: OpenClaw and Hermes read-only, a plan, a ledger for Undo (ADR 0035)
@@ -335,6 +335,16 @@ src/
   web app is installable (manifest, `sw.js` with an offline screen), dictates
   (on-device, private, or the browser's service with consent), reads aloud, and talks
   hands free (`Talk`).
+- **Voice notes, natural voices, “Hey Conch”** ([ADR 0077](./docs/adr/0077-voice-notes-and-a-natural-voice.md),
+  [ADR 0078](./docs/adr/0078-hey-conch.md)). The channel service hears a voice note before it
+  goes on (`VoiceService.transcribeNote`: `audio.ts` sniffs the container and runs FFmpeg with
+  that demuxer only, on pipes, then whisper.cpp); its words are the message, read as someone
+  else's, and a note Conch can't hear yet waits in `StoredChannel.voiceWaiting` until a need
+  lands. `SpeechService` speaks with pinned Piper voices through one long-lived Piper process
+  (`piper.ts`) or a connected provider's voice, for Read aloud and voice notes back
+  (`ChannelConnection.voiceNotes`). Talk mode's barge-in and the desktop app's wake word run in
+  the page (`vad.ts`, `WakeWord.tsx`); a wake burst is read by whisper.cpp on the same computer
+  (`WakeWord.check`) and the tray shows that it listens (`GatewayToApp` `wake`).
 - **Safe hands** ([ADR 0028](./docs/adr/0028-safe-hands.md)). A chat that takes something
   in from outside (web, downloads, integrations, another person's message) gets a
   `taint` event; from then on `sinkReason` calls (commands, files outside the work
