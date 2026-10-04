@@ -19,6 +19,13 @@ export interface MessageListProps extends ComponentProps<'div'> {
   stickThreshold?: number;
   /** Layered over the scrolling log (e.g. a find bar and its match rail). */
   overlay?: ReactNode;
+  /**
+   * Changes when the reader does something that should bring them to the
+   * newest message wherever they were (e.g. the id of the message they just
+   * sent): the view goes to the bottom and follows again. Going back to
+   * `undefined` leaves it where it is.
+   */
+  follow?: unknown;
 }
 
 /**
@@ -31,6 +38,7 @@ export function MessageList({
   className,
   stickThreshold = 48,
   overlay,
+  follow,
   'aria-label': ariaLabel = 'Conversation',
   ...props
 }: MessageListProps) {
@@ -70,6 +78,17 @@ export function MessageList({
       el.removeEventListener('scroll', onScroll);
     };
   }, [scrollToBottom, stickThreshold]);
+
+  const followed = useRef(follow);
+  useEffect(() => {
+    const changed = !Object.is(followed.current, follow);
+    followed.current = follow;
+    // Back to nothing is no news.
+    if (!changed || follow === undefined) return;
+    pinned.current = true;
+    setShowJump(false);
+    scrollToBottom();
+  }, [follow, scrollToBottom]);
 
   return (
     <div className={cx(styles.root, className)} {...props}>

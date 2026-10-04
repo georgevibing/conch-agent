@@ -114,3 +114,41 @@ describe('Message hand-offs', () => {
     expect(age).toBeLessThan(3_000);
   });
 });
+
+describe('MessageList', () => {
+  it('goes back to the newest message when `follow` changes, wherever the reader was', () => {
+    const { rerender } = renderNacre(
+      <MessageList follow="a">
+        <Message from="user">Hi</Message>
+      </MessageList>,
+    );
+    const viewport = screen.getByRole('log').parentElement as HTMLElement;
+    let top = 0;
+    Object.defineProperties(viewport, {
+      scrollHeight: { configurable: true, value: 1000 },
+      clientHeight: { configurable: true, value: 100 },
+      scrollTop: {
+        configurable: true,
+        get: () => top,
+        set: (value: number) => {
+          top = value;
+        },
+      },
+    });
+    top = 0;
+    viewport.dispatchEvent(new Event('scroll'));
+    rerender(
+      <MessageList follow="a">
+        <Message from="user">Hi</Message>
+      </MessageList>,
+    );
+    expect(top).toBe(0);
+    rerender(
+      <MessageList follow="b">
+        <Message from="user">Hi</Message>
+        <Message from="user">Again</Message>
+      </MessageList>,
+    );
+    expect(top).toBe(1000);
+  });
+});

@@ -1,10 +1,27 @@
 ---
 title: Your chats
-description: Answer its questions with a tap, send what to say next, rename, archive, find or delete a chat, and keep a long one going.
+description: Write and queue messages, answer its questions with a tap, send what to say next, rename, archive, find or delete a chat, and keep a long one going.
 order: 12
 ---
 
 Your chats are in the sidebar, newest first, grouped by day. Point at one and press **⋯** for what you can do with it.
+
+## Writing a message
+
+<kbd>enter</kbd> sends and <kbd>shift+enter</kbd> starts a new line. You can start typing anywhere in the chat: the words go in the message box.
+
+- <kbd>↑</kbd> in the empty box brings back what you sent, newest first: this chat's messages, then what you sent lately in other chats. <kbd>↓</kbd> walks forward again. Change it and send, or keep going.
+- What you were writing stays in each chat when you go to another, and after a restart. Signing out on this device clears it.
+- Point at a message of yours and press **Copy** to take its words.
+
+## While it works
+
+<kbd>esc</kbd> or the stop button stops the reply.
+
+You don't have to wait to say what's next. Write it and press <kbd>enter</kbd>: it waits above the message box, **Sends when Conch is done**, and goes by itself the moment the reply is over. Anything more you send meanwhile joins it.
+
+- The pencil takes it back into the box to change it, and the cross doesn't send it.
+- If you stop the reply, or it fails, the message comes back to the box instead of going.
 
 ## When it asks you something
 

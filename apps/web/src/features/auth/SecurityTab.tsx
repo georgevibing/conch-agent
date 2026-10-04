@@ -73,6 +73,7 @@ import { useVerify } from './useVerify';
 import { PhoneSetup } from '../phone/PhoneSetup';
 import { LIVE_DATA_FOCUS, LiveDataSection } from '../artifacts/LiveDataSection';
 import { SafetySection } from '../safety/SafetySection';
+import { forgetDrafts } from '../chat/composer';
 
 type Guard = ReturnType<typeof useVerify>['guard'];
 
@@ -972,7 +973,10 @@ function DevicesSection({
           onSignOut={(device) =>
             void (
               device.current
-                ? api.signOut().then(async () => applySignedIn(client, await api.auth()))
+                ? api.signOut().then(async () => {
+                    forgetDrafts();
+                    applySignedIn(client, await api.auth());
+                  })
                 : api.signOutDevice(device.id).then((s) => {
                     apply(s);
                     toast.success(`Signed out ${device.name}`);

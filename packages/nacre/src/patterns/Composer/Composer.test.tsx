@@ -1,9 +1,10 @@
 import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { expectAccessible, renderNacre } from '../../test/render';
-import { Composer, ComposerAttachment, ComposerChip } from './Composer';
+import { Composer, ComposerAttachment, ComposerChip, ComposerQueued } from './Composer';
 
 describe('Composer', () => {
   it('is accessible', async () => {
@@ -136,6 +137,85 @@ describe('Composer extensions', () => {
     expect(claim).toHaveBeenCalled();
     expect(onSubmit).not.toHaveBeenCalled();
   });
+
+  describe('history', () => {
+    const sent = ['first', 'second\nline two', 'third'];
+
+    it('brings back what was sent with ↑, newest first, and walks forward with ↓', async () => {
+      const user = userEvent.setup();
+      renderNacre(<Composer history={sent} />);
+      const field = screen.getByRole<HTMLTextAreaElement>('textbox');
+      await user.click(field);
+      await user.keyboard('{ArrowUp}');
+      expect(field).toHaveValue('third');
+      expect(field.selectionStart).toBe('third'.length);
+      await user.keyboard('{ArrowUp}');
+      expect(field).toHaveValue('second\nline two');
+      // The caret is at the end of a two-line message: ↑ there moves it up a line first.
+      expect(field.selectionStart).toBe('second\nline two'.length);
+      field.setSelectionRange(0, 0);
+      await user.keyboard('{ArrowUp}');
+      expect(field).toHaveValue('first');
+      // The oldest stays.
+      await user.keyboard('{ArrowUp}');
+      expect(field).toHaveValue('first');
+      await user.keyboard('{ArrowDown}');
+      expect(field).toHaveValue('second\nline two');
+      await user.keyboard('{ArrowDown}{ArrowDown}');
+      expect(field).toHaveValue('');
+    });
+
+    it('leaves the arrows alone in a message of your own', async () => {
+      const user = userEvent.setup();
+      renderNacre(<Composer history={sent} />);
+      const field = screen.getByRole('textbox');
+      await user.type(field, 'mine{ArrowUp}{ArrowDown}');
+      expect(field).toHaveValue('mine');
+    });
+
+    it('lets a recalled message you changed be yours', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      renderNacre(<Composer history={sent} onSubmit={onSubmit} />);
+      const field = screen.getByRole('textbox');
+      await user.click(field);
+      await user.keyboard('{ArrowUp}!{ArrowUp}{ArrowDown}');
+      expect(field).toHaveValue('third!');
+      await user.keyboard('{Enter}');
+      expect(onSubmit).toHaveBeenCalledWith('third!');
+    });
+
+    it('works when the value is controlled', async () => {
+      const user = userEvent.setup();
+      function Controlled() {
+        const [value, setValue] = useState('');
+        return <Composer history={sent} value={value} onValueChange={setValue} />;
+      }
+      renderNacre(<Controlled />);
+      const field = screen.getByRole('textbox');
+      await user.click(field);
+      await user.keyboard('{ArrowUp}{ArrowUp}');
+      expect(field).toHaveValue('second\nline two');
+    });
+
+    it('gives way to a menu that claims the key, and to selecting with Shift', async () => {
+      const user = userEvent.setup();
+      renderNacre(
+        <Composer
+          history={sent}
+          onTextareaKeyDown={(event) => {
+            if (event.key === 'ArrowDown') event.preventDefault();
+          }}
+        />,
+      );
+      const field = screen.getByRole('textbox');
+      await user.click(field);
+      await user.keyboard('{Shift>}{ArrowUp}{/Shift}');
+      expect(field).toHaveValue('');
+      await user.keyboard('{ArrowUp}{ArrowDown}');
+      expect(field).toHaveValue('third');
+    });
+  });
 });
 
 describe('ComposerChip', () => {
@@ -159,6 +239,36 @@ describe('ComposerChip', () => {
     expect(chip).toHaveAttribute('type', 'button');
     await user.click(chip);
     expect(onClick).toHaveBeenCalledOnce();
+    await expectAccessible(container);
+  });
+});
+
+describe('ComposerQueued', () => {
+  it('shows the waiting message in the composer, with edit and remove', async () => {
+    const user = userEvent.setup();
+    const onEdit = vi.fn();
+    const onRemove = vi.fn();
+    const { container } = renderNacre(
+      <Composer
+        running
+        allowSubmitWhileRunning
+        queued={
+          <ComposerQueued
+            text="Then run the tests"
+            meta="Sends when Conch is done"
+            onEdit={onEdit}
+            onRemove={onRemove}
+          />
+        }
+      />,
+    );
+    expect(screen.getByRole('status', { name: 'Queued message' })).toHaveTextContent(
+      'Then run the testsSends when Conch is done',
+    );
+    await user.click(screen.getByRole('button', { name: 'Edit queued message' }));
+    expect(onEdit).toHaveBeenCalledOnce();
+    await user.click(screen.getByRole('button', { name: 'Don’t send queued message' }));
+    expect(onRemove).toHaveBeenCalledOnce();
     await expectAccessible(container);
   });
 });

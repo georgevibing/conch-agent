@@ -527,7 +527,13 @@ export function Transcript({
   );
 
   return (
-    <MessageList className={styles.list} aria-label="Conversation" overlay={overlay}>
+    <MessageList
+      className={styles.list}
+      aria-label="Conversation"
+      overlay={overlay}
+      // What you just sent is what you want to see, wherever you'd scrolled to.
+      follow={pending.at(-1)?.clientMessageId}
+    >
       <div ref={columnRef} className={styles.column}>
         {rows.map((row) =>
           'head' in row ? (

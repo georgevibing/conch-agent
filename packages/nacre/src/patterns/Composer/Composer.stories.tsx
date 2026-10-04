@@ -5,7 +5,7 @@ import { fn } from 'storybook/test';
 
 import { Tooltip } from '../../components/Tooltip';
 import { DemoToolbar } from '../ModelPicker/fixtures';
-import { Composer, ComposerAttachment, ComposerChip } from './Composer';
+import { Composer, ComposerAttachment, ComposerChip, ComposerQueued } from './Composer';
 
 function FolderChip({ path }: { path: string }) {
   const name = path.split(/[\\/]/).filter(Boolean).at(-1) ?? path;
@@ -54,6 +54,35 @@ export const Playground: Story = {};
 
 export const Running: Story = {
   args: { running: true, placeholder: 'Claude is working… Esc to stop' },
+};
+
+/** Sent while the agent works: it waits above the box and goes by itself when the reply ends. */
+export const Queued: Story = {
+  args: {
+    running: true,
+    allowSubmitWhileRunning: true,
+    placeholder: 'Conch is working… Write what’s next',
+    queued: (
+      <ComposerQueued
+        text="And when you're done, run the tests again and tell me which ones still fail."
+        meta="Sends when Conch is done"
+        onEdit={fn()}
+        onRemove={fn()}
+      />
+    ),
+  },
+};
+
+/** ↑ in the empty box brings back what you sent, newest first; ↓ walks forward again. */
+export const History: Story = {
+  args: {
+    history: [
+      'Plan my week. Ask me a couple of questions first.',
+      'Make it shorter, and move the dentist to Thursday.',
+      'Send it to Ada.',
+    ],
+    placeholder: 'Press ↑ for what you sent before',
+  },
 };
 
 export const WithAttachments: Story = {
@@ -121,6 +150,7 @@ export const Interactive: Story = {
       <div style={{ display: 'grid', gap: 16 }}>
         <Composer
           {...args}
+          history={sent}
           running={running}
           onSubmit={(value) => {
             setSent((s) => [...s, value]);
