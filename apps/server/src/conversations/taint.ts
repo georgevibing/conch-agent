@@ -27,12 +27,14 @@ const DOWNLOADS =
   /\b(?:curl|wget|http(?:ie)?|aria2c|fetch|Invoke-WebRequest|iwr|irm)\b|https?:\/\//i;
 /**
  * Subcommands that only share a downloader's name (`git fetch`, `pnpm fetch`),
- * taken out before `DOWNLOADS` looks. A narrow list on purpose: anything else
- * still counts, so a mark checked again later (`heldTaints`) only ever comes
- * free for one of these.
+ * taken out before `DOWNLOADS` looks. Narrow on purpose, so it fails closed:
+ * only where a command starts, only plain spaces, and for git only `-C` with a
+ * plain path. Anything else (`x=a\ git fetch`, `git -C x&& fetch`, `sudo git
+ * fetch`) still counts, and a mark checked again later (`heldTaints`) only
+ * ever comes free for exactly these.
  */
 const NOT_DOWNLOADS =
-  /\bgit(?:\s+(?:-[Cc]\s+\S+|--?[\w-]+(?:=\S+)?))*\s+fetch\b|\b(?:npm|pnpm|yarn)\s+fetch\b/gi;
+  /(^|[;&|(\n][ \t]*)(?:git(?:[ \t]+-C[ \t]+[\w./~:@%+,-]+)?|npm|pnpm|yarn)[ \t]+fetch\b/g;
 const INTEGRATION = /^mcp__([a-z0-9_-]+?)__(.+)$/;
 
 const hostOf = (value: unknown): string | undefined => {
@@ -68,7 +70,7 @@ export function taintFrom(toolName: string, input: unknown, app?: string): Taint
   if (
     toolName === 'Bash' &&
     typeof args.command === 'string' &&
-    DOWNLOADS.test(args.command.replace(NOT_DOWNLOADS, ' '))
+    DOWNLOADS.test(args.command.replace(NOT_DOWNLOADS, '$1 '))
   )
     return { kind: 'download', label: hostOf(args.command) ?? 'something downloaded' };
   const integration = INTEGRATION.exec(toolName);

@@ -186,8 +186,10 @@ stand. The verdict is `clean`, `caution` or `danger`.
 
 - **2026-10-04: `git fetch` isn't a download.** It matched `fetch` and marked
   coding chats as "downloaded something", so in Full trust every command asked.
-  `git fetch` and `npm`/`pnpm`/`yarn fetch` are taken out before the rule looks;
-  the rule is otherwise as broad as before. A mark made by a command is checked
+  `git fetch` and `npm`/`pnpm`/`yarn fetch` are taken out before the rule looks,
+  only where a command starts, with plain spaces, and for git only `-C` with a
+  plain path: shell that could make `fetch` the program run still counts. The
+  rule is otherwise as broad as before. A mark made by a command is checked
   again each time the chat's marks are read (`heldTaints`), so chats marked by
   `git fetch` come free. Because the only change is that short list, nothing
   else an older rule caught comes free. Marks now name the tool call that made

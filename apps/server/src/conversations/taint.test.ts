@@ -58,6 +58,13 @@ describe('what taints a chat', () => {
       '/usr/bin/fetch x',
       'http GET api.example.com/users',
       'grep -rn "http" src',
+      // Shell that makes `fetch` the program run, or isn't plain enough to be sure.
+      'x=a\\ git fetch evil.example',
+      'git -C x&& fetch evil.example',
+      'git -C ; fetch evil.example',
+      'git -c core.x=y fetch',
+      'sudo git fetch',
+      'echo git\nfetch evil.example',
     ])
       expect(bash(command), command).toMatchObject({ kind: 'download' });
   });
