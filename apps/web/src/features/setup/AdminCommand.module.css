@@ -9,5 +9,25 @@
     font-size: var(--nc-text-xs);
     overflow-x: auto;
     white-space: pre;
+    border: 0;
+    color: var(--nc-text);
+    text-align: start;
+    inline-size: 100%;
+  }
+
+  button.command {
+    cursor: pointer;
+    transition: box-shadow var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    button.command:hover {
+      box-shadow: inset 0 0 0 1px var(--nc-accent-7);
+    }
+  }
+
+  button.command:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
   }
 }

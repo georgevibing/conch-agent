@@ -46,7 +46,14 @@ export function SafetySection() {
   const client = useQueryClient();
   const auth = useAuth();
   const { guard, dialog } = useVerify(auth.data?.method ?? 'none');
-  const { data: safety } = useQuery({ queryKey: safetyKeys.status, queryFn: safetyApi.status });
+  // While commands can't be sealed, look again now and then (and on coming back to the tab):
+  // a command run in a terminal elsewhere shows here by itself, no reload.
+  const { data: safety } = useQuery({
+    queryKey: safetyKeys.status,
+    queryFn: safetyApi.status,
+    refetchOnWindowFocus: 'always',
+    refetchInterval: (q) => (q.state.data && !q.state.data.sandbox.available ? 5_000 : false),
+  });
   const [confirm, setConfirm] = useState<Guard>();
   if (!app) return null;
   const prefs = app.preferences;

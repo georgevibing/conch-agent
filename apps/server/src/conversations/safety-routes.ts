@@ -12,8 +12,9 @@ type Coverage = SafetyStatus['providers'][number];
 /**
  * What "Seal commands" means for each provider you use (ADR 0031). Claude
  * Code seals with the computer's own sandbox; Codex with its own, which reads
- * Conch's lists from 0.159; API providers run no commands at all. Where the
- * computer can't seal (Windows, Linux without bubblewrap), it says so.
+ * Conch's lists from 0.159; Conch's own commands (Codex, API providers) are
+ * sealed where they can be. Where the computer can't seal (Windows, Linux
+ * without bubblewrap), commands run with your access and ask first, and it says so.
  */
 export function coverage(
   providers: { id: string; label: string; version?: string; commandSandbox?: 'conch' }[],
@@ -22,16 +23,18 @@ export function coverage(
   return providers.map(({ id, label, version, commandSandbox }): Coverage => {
     const base = { id, label };
     if (commandSandbox === 'conch')
-      return options.available
+      return options.available && options.on
         ? {
             ...base,
             state: 'sealed',
-            note: 'Conch commands always run sealed: writes stay in the work folder, secrets and network are blocked. There is no unrestricted fallback.',
+            note: 'Commands run sealed: writes stay in the work folder, secrets and the network are blocked. One that needs more, like a clone or an install, asks first.',
           }
         : {
             ...base,
-            state: 'no-commands',
-            note: 'Commands are unavailable until this computer’s sandbox is set up. Files and connected apps still work.',
+            state: 'not-sealed',
+            note: options.available
+              ? 'Sealing is off, so its commands run with your access and ask first.'
+              : 'This computer can’t seal commands yet, so they run with your access and ask first.',
           };
     if (id !== 'claude-code' && id !== 'codex-agent')
       return {
