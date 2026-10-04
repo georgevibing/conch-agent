@@ -50,7 +50,12 @@ test('find a skill people share, read it, and add it in one press', async ({ pag
   await expect(page.getByRole('button', { name: 'Remove' })).toBeVisible();
 });
 
-test('the chat offers a skill people share, and carries on once it’s added', async ({ page }) => {
+test('the chat offers a skill people share, and carries on once it’s added', async ({
+  page,
+  request,
+}) => {
+  // A skill you have is never offered: start without the one the journey above added.
+  await request.delete('/api/skills/market-clawhub_meeting-notes');
   await page.goto('/');
   const box = page.getByRole('textbox', { name: 'Message Conch' });
   await box.fill('Tidy these meeting notes: ship Friday, Sam does release notes, support?');
