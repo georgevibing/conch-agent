@@ -15,6 +15,7 @@ export const CHANNEL_CATALOG: ChannelCatalogEntry[] = [
     color: '#26A5E4',
     minutes: 2,
     available: true,
+    groups: true,
   },
   {
     id: 'discord',
@@ -24,6 +25,7 @@ export const CHANNEL_CATALOG: ChannelCatalogEntry[] = [
     color: '#5865F2',
     minutes: 4,
     available: true,
+    groups: true,
   },
   {
     id: 'slack',
@@ -33,6 +35,7 @@ export const CHANNEL_CATALOG: ChannelCatalogEntry[] = [
     color: '#4A154B',
     minutes: 4,
     available: true,
+    groups: true,
   },
   {
     id: 'whatsapp',

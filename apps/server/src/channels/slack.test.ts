@@ -62,6 +62,27 @@ async function paired() {
 }
 
 describe('Slack', () => {
+  it('answers a mention in a channel only once you turned it on (ADR 0075)', async () => {
+    const { s, slack, channel } = await paired();
+    slack.mention('what’s on today?');
+    const group = await until(
+      async () => (await s.channels.get(channel.id)).groups[0],
+      'channel listed',
+    );
+    expect(group).toMatchObject({ name: '#general', on: false });
+    await until(() => slack.last('C0GENERAL')?.text.match(/don’t answer in this group/), 'hint');
+    expect((await s.conversations.list()).some((c) => c.origin?.kind === 'channel')).toBe(false);
+    await s.channels.setGroup(channel.id, group.id, true);
+    slack.mention('what’s on today?');
+    const chat = await until(
+      async () => (await s.conversations.list()).find((c) => c.origin?.kind === 'channel'),
+      'conversation',
+    );
+    // You, as in a private chat.
+    expect(chat.origin).toMatchObject({ group: '#general' });
+    expect(chat.origin).not.toHaveProperty('guest');
+  });
+
   it('checks each key as it arrives, and says who the app is', async () => {
     const { s } = await setup();
     const bot = await s.channels.check({ kind: 'slack', botToken: MockSlack.BOT_TOKEN });

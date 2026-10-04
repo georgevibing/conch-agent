@@ -6,6 +6,7 @@ import {
   OpenImessageBody,
   ReplaceChannelTokenBody,
   SetChannelDoorBody,
+  SetChannelGroupBody,
   UpdateChannelBody,
 } from '@conch/protocol';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -276,6 +277,36 @@ export function registerChannelRoutes(
       if (!personId) return reply;
       try {
         return await channels.removePerson(request.params.id, personId);
+      } catch (error) {
+        return fail(reply, error);
+      }
+    },
+  );
+
+  // A group the bot is in (ADR 0075): answering there lets everyone in it reach your
+  // assistant, so turning it on is a trust decision. Turning it off or forgetting it never is.
+  app.put<{ Params: { id: string; groupId: string } }>(
+    '/api/channels/:id/groups/:groupId',
+    async (request, reply) => {
+      const groupId = person(request.params.groupId, reply);
+      const body = parse(SetChannelGroupBody, request.body, reply);
+      if (!groupId || !body) return reply;
+      if (body.on && !trusted(request, reply)) return reply;
+      try {
+        return await channels.setGroup(request.params.id, groupId, body.on);
+      } catch (error) {
+        return fail(reply, error);
+      }
+    },
+  );
+
+  app.delete<{ Params: { id: string; groupId: string } }>(
+    '/api/channels/:id/groups/:groupId',
+    async (request, reply) => {
+      const groupId = person(request.params.groupId, reply);
+      if (!groupId) return reply;
+      try {
+        return await channels.forgetGroup(request.params.id, groupId);
       } catch (error) {
         return fail(reply, error);
       }

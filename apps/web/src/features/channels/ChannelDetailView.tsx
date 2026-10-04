@@ -46,7 +46,14 @@ import { HelloStep } from './HelloStep';
 import { HookSection } from './HookSection';
 import { SignInAgain } from './SignInAgain';
 import { useKeyCheck } from './hooks';
-import { channelKeys, errorText, putChannel, useChannel, useChannelAction } from './queries';
+import {
+  channelKeys,
+  errorText,
+  putChannel,
+  useChannel,
+  useChannelAction,
+  useChannels,
+} from './queries';
 import { AlwaysOnHint } from '../background/AlwaysOnHint';
 import { googleApi } from '../integrations/googleApi';
 import { appPath, connectPath, TALK_PATH } from '../integrations/paths';
@@ -85,6 +92,7 @@ function Detail({ channel }: { channel: Channel }) {
   const { guard, dialog } = useVerify(auth.data?.method ?? 'none');
   const assistant = useAppState().data?.persona.name ?? 'Conch';
   const { data: conversations } = useConversations();
+  const { data: catalog } = useChannels();
   const [confirm, setConfirm] = useState(false);
   const [testing, setTesting] = useState(false);
   const update = useChannelAction(
@@ -98,6 +106,16 @@ function Detail({ channel }: { channel: Channel }) {
   const removePerson = useChannelAction((personId: string) =>
     channelsApi.removePerson(channel.id, personId),
   );
+  const setGroup = useChannelAction(
+    (groupId: string, on: boolean) => channelsApi.setGroup(channel.id, groupId, on),
+    'Couldn’t change that.',
+  );
+  const forgetGroup = useChannelAction((groupId: string) =>
+    channelsApi.forgetGroup(channel.id, groupId),
+  );
+  const answersGroups =
+    channel.groups.length > 0 ||
+    (catalog?.catalog.find((entry) => entry.id === channel.kind)?.groups ?? false);
 
   const app = APPS[channel.kind];
   const state = channelState(channel);
@@ -293,6 +311,66 @@ function Detail({ channel }: { channel: Channel }) {
             {channel.blocked > 0 &&
               ` You’ve blocked ${channel.blocked === 1 ? 'one person' : `${channel.blocked} people`}.`}
           </Text>
+        </section>
+      )}
+
+      {owner && answersGroups && (
+        <section aria-labelledby="ch-groups" className={styles.section}>
+          <Heading level={2} id="ch-groups" size="sm" tone="muted">
+            Groups
+          </Heading>
+          {channel.groups.length === 0 ? (
+            <Text size="sm" tone="muted">
+              Add {handle ? `@${handle}` : 'the bot'} to a group in {app.name}, and the group shows
+              up here. {assistant} won’t answer there until you turn it on.
+            </Text>
+          ) : (
+            <>
+              {channel.groups.map((group) => (
+                <div key={group.id} className={styles.setting}>
+                  <Stack gap={0}>
+                    <Text weight="medium" id={`ch-group-${group.id}`}>
+                      {group.name}
+                    </Text>
+                    <Text size="sm" tone="muted">
+                      {group.on
+                        ? `Answers when mentioned${group.since ? ` · on since ${relativeTime(group.since)}` : ''}`
+                        : `Off · last heard from ${relativeTime(group.seenAt)}`}
+                    </Text>
+                  </Stack>
+                  <Stack direction="row" gap={2} align="center">
+                    {!group.on && (
+                      <Button
+                        variant="ghost"
+                        tone="neutral"
+                        size="sm"
+                        onClick={() => forgetGroup.mutate([group.id])}
+                        aria-label={`Forget ${group.name}`}
+                      >
+                        Forget
+                      </Button>
+                    )}
+                    <Switch
+                      aria-labelledby={`ch-group-${group.id}`}
+                      checked={group.on}
+                      onCheckedChange={(on) =>
+                        on
+                          ? void guard(() => setGroup.mutateAsync([group.id, true])).catch(
+                              () => undefined,
+                            )
+                          : setGroup.mutate([group.id, false])
+                      }
+                    />
+                  </Stack>
+                </div>
+              ))}
+              <Text size="sm" tone="subtle">
+                In a group that’s on, {assistant} answers only when someone mentions it or replies
+                to it. You get everything you get here. Anyone else gets an answer in words only, on
+                your provider: only you can ask it to do things, and it asks you privately first.
+              </Text>
+            </>
+          )}
         </section>
       )}
 

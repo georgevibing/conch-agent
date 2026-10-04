@@ -718,7 +718,11 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   - **Who may talk.** Telegram lets the owner in with a one-time
     `t.me/<bot>?start=<code>` (96-bit, 10 minutes, hashed). On Discord and
     Slack the owner sends a message and confirms "That's me" in Conch. Anyone
-    else becomes a request, answered from the page. Private chats only.
+    else becomes a request, answered from the page. Groups only once the owner
+    turns one on (ADR 0075), and only when the bot is mentioned: the owner as
+    in private, anyone else in a words-only conversation of their own
+    (`origin.guest`: no tools, memories or profile, with every provider), and
+    the owner's approvals in their private chat.
   - **Health** (`ChannelHealth`): `connecting`, `online`, `reconnecting` (with
     `retryAt`), `needs-token`, `conflict`, `error`, `off`, and `access` when a
     macOS switch is off (Full Disk Access, Automation). Each adapter
@@ -730,7 +734,8 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
     `POST /api/channels`, `PATCH|DELETE /api/channels/:id`,
     `PUT /api/channels/:id/token`, `POST /api/channels/:id/pair|repair|test`,
     `POST /api/channels/:id/requests/:personId`,
-    `DELETE /api/channels/:id/people/:personId`.
+    `DELETE /api/channels/:id/people/:personId`,
+    `PUT|DELETE /api/channels/:id/groups/:groupId`.
     `POST /api/channels/link`, `GET|DELETE /api/channels/link/:id` (WhatsApp,
     Signal); `GET /api/channels/imessage` (what Messages has, and whether
     Conch may read it), `POST /api/channels/imessage/open` (System Settings,
@@ -1134,7 +1139,9 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
   - the agent can't let anyone talk to it from a chat app: connecting a bot,
     letting someone in and making a hello link are routes that need a person
     (and, from another device, a recent password or key). Channels answer
-    private chats only, and never pass a stranger's message to a model.
+    private chats, and groups only the owner turned on, where anyone but the
+    owner gets words only (ADR 0075); a stranger's private message never
+    reaches a model.
 - **Terminal guards:** other devices need `allowRemote` (itself behind recent
   verification, and flagged by the checkup) plus a fresh verification per open and
   attach; one-time owner-bound socket tickets; sign-out and key revocation end the

@@ -2,6 +2,7 @@ import { join } from 'node:path';
 
 import {
   ChannelBot,
+  ChannelGroup,
   ChannelKind,
   ChannelPerson,
   ChannelRequest,
@@ -24,8 +25,16 @@ export const StoredChannel = z.object({
   requests: z.array(ChannelRequest).default([]),
   /** People turned away for good: they get no answer and no new request. */
   blocked: z.array(Id).default([]),
+  /**
+   * Group chats the bot is in (ADR 0075), with the app's own id for each
+   * (`chatId`), which may not be an `Id`. At most `MAX_GROUPS`.
+   */
+  groups: z.array(ChannelGroup.extend({ chatId: z.string().min(1).max(300) })).default([]),
   settings: ChannelSettings.default({ notifyRoutines: true }),
-  /** Each person's current conversation (`/new` starts another). */
+  /**
+   * Each person's current conversation (`/new` starts another). In a group,
+   * each person has their own, under `group:<group id>:<person id>`.
+   */
   chats: z.record(z.string(), z.string()).default({}),
   lastMessageAt: z.number().optional(),
   /** How far the connection has read (iMessage, email), so a restart carries on from there. */

@@ -559,7 +559,12 @@ export class ClaudeCodeEngine implements Engine {
           env: childEnv({ ANTHROPIC_API_KEY: anthropicApiKey }),
           abortController: abort,
           includePartialMessages: true,
-          systemPrompt: { type: 'preset', preset: 'claude_code', append: input.systemAppend },
+          // Words only (a guest in a group, ADR 0075): no tools of its own, and none of
+          // Claude Code's own prompt, which describes this computer.
+          systemPrompt: input.wordsOnly
+            ? input.systemAppend
+            : { type: 'preset', preset: 'claude_code', append: input.systemAppend },
+          ...(input.wordsOnly && { tools: [] }),
           ...(input.options.model &&
             input.options.model !== 'default' && { model: input.options.model }),
           ...(input.options.effort !== 'auto' && { effort: input.options.effort }),

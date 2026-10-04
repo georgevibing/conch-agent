@@ -224,9 +224,16 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
   for (const raw of Array.isArray(channels) ? channels : []) {
     const channel = record(raw);
     if (!channel || !on(channel.enabled)) continue;
-    const people = (Array.isArray(channel.people) ? channel.people : [])
-      .map(record)
-      .map((person) => text(person?.name ?? person?.username, 'Someone'));
+    const people = [
+      ...(Array.isArray(channel.people) ? channel.people : [])
+        .map(record)
+        .map((person) => text(person?.name ?? person?.username, 'Someone')),
+      // A group it answers in (ADR 0075): everyone there can reach it.
+      ...(Array.isArray(channel.groups) ? channel.groups : [])
+        .map(record)
+        .filter((group) => group?.on === true)
+        .map((group) => `Everyone in ${text(group?.name, 'a group')}`),
+    ];
     if (!people.length) continue;
     const bot = text(record(channel.bot)?.name, 'A bot');
     const app = APP_NAMES[String(channel.kind)] ?? 'a chat app';

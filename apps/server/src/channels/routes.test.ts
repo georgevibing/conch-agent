@@ -129,6 +129,12 @@ describe('channel routes', () => {
         cookie,
         payload: { kind: 'telegram', token: MockTelegram.TOKEN },
       }),
+      // Answering in a group lets everyone there reach it (ADR 0075).
+      remote(app, `/api/channels/${id}/groups/Xgroup1`, {
+        method: 'PUT',
+        cookie,
+        payload: { on: true },
+      }),
     ];
     for (const res of await Promise.all(attempts)) {
       expect(res.statusCode).toBe(403);
@@ -147,6 +153,18 @@ describe('channel routes', () => {
       payload: { answer: 'block' },
     });
     expect(block.statusCode).toBe(200);
+    // Turning a group off never asks either (there's no such group here, so it's not found).
+    const groupOff = await remote(app, `/api/channels/${id}/groups/Xgroup1`, {
+      method: 'PUT',
+      cookie,
+      payload: { on: false },
+    });
+    expect(groupOff.statusCode).toBe(404);
+    const traversal = await remote(app, `/api/channels/${id}/groups/..%2F..%2Fx`, {
+      method: 'DELETE',
+      cookie,
+    });
+    expect(traversal.statusCode).toBe(404);
   });
 
   it('refuse ids that could become paths, and bodies that aren’t keys', async () => {

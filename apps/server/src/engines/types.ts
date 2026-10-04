@@ -271,6 +271,12 @@ export interface TurnInput {
    * can: writes only to these folders, no reading these.
    */
   sandbox?: { allowWrite: string[]; denyRead: string[] };
+  /**
+   * Answer in words only (a guest in a group chat, ADR 0075): engines that
+   * bring tools of their own leave them out, and their own system prompt
+   * (which describes this computer) too. The guard refuses any tool anyway.
+   */
+  wordsOnly?: boolean;
 }
 
 export type GuardDecision =

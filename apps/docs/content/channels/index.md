@@ -31,7 +31,20 @@ WhatsApp and Signal have no bots to make. Instead Conch joins **your own account
 
 - **You** say hello once, and Conch knows the bot is yours.
 - **Anyone else** who writes gets one polite reply that names no one (none at all on iMessage and email), and appears in Conch as a request. Press **Let them in** or **Block**.
-- **Private chats only.** The bot ignores groups and servers, where anyone could speak for you.
+- **Groups only when you turn them on.** A group the bot is in shows on its page in Conch, off. Until you turn it on there, the bot doesn't answer in it.
+
+## In a group
+
+Telegram, Discord and Slack can answer in a group, a server's channel or a Slack channel, once you turn that group on in Conch. Add the bot to the group in the app; the group shows up on the bot's page in Conch under **Groups**, with a switch.
+
+- **Only when it's asked.** In a group that's on, your assistant answers only when someone mentions it (`@yourbot`) or replies to one of its messages. Everything else in the group is never read.
+- **You get everything.** When you mention it, it's the same assistant as in your private chat, in a conversation of its own for that group.
+- **Everyone else gets words only.** Anyone else in the group who mentions it gets an answer, and nothing more: no files, no commands, no apps, nothing it remembers about you. Each person has a conversation of their own, so what one writes never reaches yours. Their questions run on your provider, at most 20 an hour per group.
+- **Only you approve.** When something you asked for needs your OK, the question comes to your private chat with the bot, never to the group, where others could see or press it.
+- **What others write is read as theirs.** If you reply to someone's message and mention your assistant, their words come along, read as someone else's, so anything they say can't make it act without asking you first.
+- **It knows you by your account.** Someone who takes your name, or forwards your words, is still someone else.
+
+Turn a group off, and your assistant goes quiet there at once. **Forget** takes it off the list until the bot hears from it again. WhatsApp, Signal, iMessage and email are your own account, so they never answer in groups. Teams, Matrix and WeChat answer in private chats only.
 
 ## What works from a chat
 

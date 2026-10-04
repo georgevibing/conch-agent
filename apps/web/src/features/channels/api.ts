@@ -35,6 +35,16 @@ export const channelsApi = {
       method: 'POST',
       body: { answer },
     }),
+  /** Answer in a group when mentioned, or stop (ADR 0075). */
+  setGroup: (id: string, groupId: string, on: boolean) =>
+    request(Channel, `/api/channels/${id}/groups/${encodeURIComponent(groupId)}`, {
+      method: 'PUT',
+      body: { on },
+    }),
+  forgetGroup: (id: string, groupId: string) =>
+    request(Channel, `/api/channels/${id}/groups/${encodeURIComponent(groupId)}`, {
+      method: 'DELETE',
+    }),
   removePerson: (id: string, personId: string) =>
     request(Channel, `/api/channels/${id}/people/${encodeURIComponent(personId)}`, {
       method: 'DELETE',

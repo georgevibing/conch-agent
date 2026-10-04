@@ -45,6 +45,7 @@ const channel = (patch: Partial<Channel> = {}): Channel => ({
   people: [],
   requests: [],
   blocked: 0,
+  groups: [],
   settings: { notifyRoutines: true },
   health: { state: 'online' },
   ...patch,
@@ -301,6 +302,46 @@ describe('A channel’s page', () => {
     );
     await waitFor(() => expect(calls.some((c) => c.method === 'DELETE')).toBe(true));
   });
+
+  it('lists the groups the bot is in, off, and turns one on (ADR 0075)', async () => {
+    const family = { id: 'Xfamily', name: 'Family', on: false, seenAt: Date.now() - 60_000 };
+    const grouped = channel({ people: [ada], groups: [family] });
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({
+        channels: [grouped],
+        catalog: catalog.map((c) => (c.id === 'telegram' ? { ...c, groups: true } : c)),
+      }),
+      'PUT /api/channels/ch_1/groups/Xfamily': () => ({
+        ...grouped,
+        groups: [{ ...family, on: true, since: Date.now() }],
+      }),
+    });
+    renderApp(<ChannelDetailView channelId="ch_1" />, { route: '/channels/ch_1' });
+    const groups = await screen.findByRole('region', { name: 'Groups' });
+    expect(groups).toHaveTextContent('Off');
+    expect(groups).toHaveTextContent(/words only/);
+    await userEvent.click(within(groups).getByRole('switch', { name: 'Family' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/api/channels/ch_1/groups/Xfamily')?.body).toEqual({
+        on: true,
+      }),
+    );
+    await waitFor(() => expect(groups).toHaveTextContent('Answers when mentioned'));
+  });
+
+  it('says how to add the bot to a group when it’s in none', async () => {
+    mockFetch({
+      ...base,
+      'GET /api/channels': () => ({
+        channels: [channel({ people: [ada] })],
+        catalog: catalog.map((c) => (c.id === 'telegram' ? { ...c, groups: true } : c)),
+      }),
+    });
+    renderApp(<ChannelDetailView channelId="ch_1" />, { route: '/channels/ch_1' });
+    const groups = await screen.findByRole('region', { name: 'Groups' });
+    expect(groups).toHaveTextContent('Add @adas_conch_bot to a group in Telegram');
+  });
 });
 
 describe('Guides', () => {
@@ -321,7 +362,7 @@ describe('Guides', () => {
     });
     expect(manifest.settings).toMatchObject({
       socket_mode_enabled: true,
-      event_subscriptions: { bot_events: ['message.im'] },
+      event_subscriptions: { bot_events: ['message.im', 'app_mention'] },
     });
     expect(manifest.oauth_config.scopes.bot).toEqual(
       expect.arrayContaining(['chat:write', 'im:history']),

@@ -101,7 +101,8 @@
 ### 📱 Wherever you are
 
 - **Your chat apps.** Telegram, Discord, Slack, WhatsApp, Signal, iMessage, email,
-  Microsoft Teams, Matrix and WeChat.
+  Microsoft Teams, Matrix and WeChat. In a group you turn on, it answers when
+  mentioned: you as in private, everyone else in words only.
 - **Your phone.** An installable app over a private Tailscale address, with
   notifications and voice.
 - **Your own address.** On a server, Conch answers at `conch.yourname.com` with

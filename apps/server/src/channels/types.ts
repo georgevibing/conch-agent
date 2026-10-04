@@ -39,8 +39,22 @@ export interface ChannelMessage {
   user: ChannelUser;
   text: string;
   files: ChannelFile[];
-  /** A private chat with the bot. Only these are answered: groups are ignored. */
+  /**
+   * A private chat with the bot. Anything else is a group: answered only once
+   * the owner turned that group on, and only when the bot is `mentioned`
+   * (ADR 0075).
+   */
   direct: boolean;
+  /** In a group: the bot was @mentioned, or this replies to one of its messages. */
+  mentioned?: boolean;
+  /** In a group: its name, as the app shows it. */
+  group?: string;
+  /**
+   * In a group: the message this one replies to, when it's someone else's
+   * (not the bot's), so the assistant can see what "this" is. It's read as
+   * someone else's words (ADR 0028).
+   */
+  quote?: { name: string; text: string };
   /**
    * What's in it came from someone else, even when the owner sent it (a
    * forwarded email): it's read like a web page (ADR 0028), named like this.
@@ -141,6 +155,11 @@ export interface ChannelProfile {
 /** One kind of chat app. */
 export interface ChannelAdapter {
   readonly kind: ChannelKind;
+  /**
+   * It can tell when it's mentioned in a group (ADR 0075), so groups can be
+   * turned on. Without it, groups only ever hear that it talks privately.
+   */
+  readonly groups?: boolean;
   /** Check the keys and say who the bot is. Throws `ChannelError`. */
   identify(signal?: AbortSignal): Promise<ChannelBot>;
   /** Best effort: set the bot's commands and description so it explains itself. */

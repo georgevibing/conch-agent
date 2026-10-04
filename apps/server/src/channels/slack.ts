@@ -94,8 +94,12 @@ function checkAppToken(token: string) {
  */
 export class SlackAdapter implements ChannelAdapter, SlackCheck {
   readonly kind = 'slack' as const;
+  /** Mentions and replies in groups are told apart (ADR 0075). */
+  readonly groups = true;
   #names = new Map<string, ChannelUser>();
   #dms = new Map<string, string>();
+  /** Channels' names, for the groups on its page (ADR 0075). */
+  #places = new Map<string, string>();
   /** Markdown blocks render tables and headings; an older workspace gets mrkdwn instead. */
   #markdownBlocks = true;
 
@@ -576,6 +580,22 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
           }[];
         }
       | undefined;
+    // Mentioned in a channel (ADR 0075): answered there only once you turned that channel on.
+    if (event?.type === 'app_mention') {
+      if (event.bot_id || !event.user || !event.channel || !event.ts) return;
+      const me = (payload?.authorizations as { user_id?: string }[] | undefined)?.[0]?.user_id;
+      events.message({
+        chatId: event.channel,
+        messageId: event.ts,
+        user: await this.#person(event.user),
+        text: (me ? (event.text ?? '').replaceAll(`<@${me}>`, '') : (event.text ?? '')).trim(),
+        files: [],
+        direct: false,
+        mentioned: true,
+        group: await this.#place(event.channel),
+      });
+      return;
+    }
     if (event?.type !== 'message' || event.bot_id || !event.user || !event.channel || !event.ts)
       return;
     if (event.subtype && event.subtype !== 'file_share') return;
@@ -598,6 +618,21 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
       ),
       direct: event.channel_type === 'im',
     });
+  }
+
+  /** A channel's name ("#general"), for the groups on its page; Slack may not say without a scope. */
+  async #place(channel: string): Promise<string> {
+    const known = this.#places.get(channel);
+    if (known) return known;
+    const info = await this.web<SlackResponse & { channel?: { name?: string } }>(
+      'conversations.info',
+      {
+        channel,
+      },
+    ).catch(() => undefined);
+    const name = info?.channel?.name ? `#${info.channel.name}` : 'A Slack channel';
+    if (info?.channel?.name) this.#places.set(channel, name);
+    return name;
   }
 
   async #interactive(payload: Record<string, unknown> | undefined, events: ChannelEvents) {

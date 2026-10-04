@@ -157,6 +157,29 @@ export const ChannelHook = z.object({
 });
 export type ChannelHook = z.infer<typeof ChannelHook>;
 
+/**
+ * A group chat the bot is in (ADR 0075). It answers there only when you turned
+ * the group on, and only when someone mentions it or replies to it. You (the
+ * owner) get everything you'd get in a private chat; anyone else in the group
+ * gets an answer in words only.
+ */
+export const ChannelGroup = z.object({
+  /** Conch's id for it (the app's own id may not be an `Id`: Telegram's start with a minus). */
+  id: Id,
+  name: z.string().max(200),
+  /** You turned it on: the assistant answers here when it's mentioned. Never on by itself. */
+  on: z.boolean(),
+  /** When the bot last heard from it. */
+  seenAt: z.number(),
+  /** When you turned it on. */
+  since: z.number().optional(),
+});
+export type ChannelGroup = z.infer<typeof ChannelGroup>;
+
+/** `PUT /api/channels/:id/groups/:groupId`: answer in that group when mentioned, or stop. */
+export const SetChannelGroupBody = z.object({ on: z.boolean() });
+export type SetChannelGroupBody = z.infer<typeof SetChannelGroupBody>;
+
 export const ChannelSettings = z.object({
   /** Send routine results (and their questions) to the people here. */
   notifyRoutines: z.boolean().default(true),
@@ -186,6 +209,8 @@ export const Channel = z.object({
   requests: z.array(ChannelRequest).default([]),
   /** How many people you turned away (they get no answer). */
   blocked: z.number().int().nonnegative().default(0),
+  /** Group chats the bot is in, and whether it answers there (ADR 0075). */
+  groups: z.array(ChannelGroup).default([]),
   settings: ChannelSettings.default({ notifyRoutines: true }),
   health: ChannelHealth,
   /** Set while a hello link is waiting to be used. */
@@ -210,6 +235,8 @@ export const ChannelCatalogEntry = z.object({
   minutes: z.number().int().positive().optional(),
   /** False for ones that are coming. */
   available: z.boolean(),
+  /** It can answer in group chats you turn on, when mentioned (ADR 0075). */
+  groups: z.boolean().optional(),
 });
 export type ChannelCatalogEntry = z.infer<typeof ChannelCatalogEntry>;
 
@@ -431,6 +458,13 @@ export const ChannelOrigin = z.object({
   kind: z.literal('channel'),
   channelId: z.string(),
   channel: ChannelKind,
+  /** Asked in a group chat (ADR 0075): the group's name. */
+  group: z.string().max(200).optional(),
+  /**
+   * Someone other than you asked, in a group: it answers in words only. No
+   * tools, no apps, nothing it remembers about you, whoever continues it.
+   */
+  guest: z.boolean().optional(),
 });
 export type ChannelOrigin = z.infer<typeof ChannelOrigin>;
 

@@ -305,13 +305,14 @@ export function buildReference(): Reference {
       limits: [...SERVER_COPY.limits],
       color: SERVER_COPY.color,
     },
-    channels: CHANNEL_CATALOG.map(({ id, name, tagline, color, minutes, available }) => ({
+    channels: CHANNEL_CATALOG.map(({ id, name, tagline, color, minutes, available, groups }) => ({
       id,
       name,
       tagline,
       color,
       minutes,
       available,
+      ...(groups && { groups }),
     })),
     integrations: publicCatalog().map((app) => ({
       id: app.id,

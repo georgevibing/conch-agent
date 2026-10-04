@@ -205,10 +205,38 @@ export class MockDiscord {
     });
   }
 
-  /** The bot is added to a server. */
+  /** The bot is added to a server (with its #general channel). */
   join() {
     this.guilds++;
-    this.#dispatch('GUILD_CREATE', { id: `guild${this.guilds}`, name: 'My server' });
+    this.#dispatch('GUILD_CREATE', {
+      id: `guild${this.guilds}`,
+      name: 'My server',
+      channels: [{ id: `general${this.guilds}`, name: 'general', type: 0 }],
+    });
+  }
+
+  /**
+   * A message in a server's #general (ADR 0075). `mention` puts the bot's
+   * mention in front, as Discord writes it; `replyTo` makes it a reply.
+   */
+  sayInServer(
+    text: string,
+    from: MockUser = MockDiscord.OWNER,
+    options: { mention?: boolean; replyTo?: { author: MockUser; content: string } } = {},
+  ) {
+    this.#dispatch('MESSAGE_CREATE', {
+      id: String(this.#nextId++),
+      channel_id: 'general1',
+      guild_id: 'guild1',
+      author: from,
+      content: options.mention ? `<@${this.bot.id}> ${text}` : text,
+      mentions: options.mention ? [this.bot] : [],
+      attachments: [],
+      ...(options.replyTo && {
+        message_reference: { message_id: '1' },
+        referenced_message: { id: '1', ...options.replyTo },
+      }),
+    });
   }
 
   last(channelId = `dm${MockDiscord.OWNER.id}`) {

@@ -126,6 +126,11 @@ describe('what in a backup can act for you', () => {
               kind: 'telegram',
               bot: { name: 'Ada’s Conch' },
               people: [{ name: 'Ada' }, { name: 'Sam' }],
+              // A group it answers in counts; one that's off doesn't.
+              groups: [
+                { name: 'Family', on: true },
+                { name: 'Work', on: false },
+              ],
             },
             // Turned off, or nobody let in: nothing to say.
             { kind: 'discord', enabled: false, bot: { name: 'Off' }, people: [{ name: 'X' }] },
@@ -135,7 +140,12 @@ describe('what in a backup can act for you', () => {
       }),
     );
     expect(powers).toEqual([
-      { kind: 'channel-people', name: 'Ada’s Conch on Telegram', people: ['Ada', 'Sam'], more: 0 },
+      {
+        kind: 'channel-people',
+        name: 'Ada’s Conch on Telegram',
+        people: ['Ada', 'Sam', 'Everyone in Family'],
+        more: 0,
+      },
     ]);
     for (const power of powers) expect(BackupPower.safeParse(power).success).toBe(true);
   });

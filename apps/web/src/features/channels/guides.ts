@@ -89,6 +89,9 @@ export function slackManifest(assistant: string) {
       scopes: {
         bot: [
           'chat:write',
+          // Mentioned in a channel you turned on (ADR 0075), and that channel's name.
+          'app_mentions:read',
+          'channels:read',
           'im:history',
           'im:read',
           'im:write',
@@ -100,7 +103,7 @@ export function slackManifest(assistant: string) {
       },
     },
     settings: {
-      event_subscriptions: { bot_events: ['message.im'] },
+      event_subscriptions: { bot_events: ['message.im', 'app_mention'] },
       interactivity: { is_enabled: true },
       org_deploy_enabled: false,
       socket_mode_enabled: true,

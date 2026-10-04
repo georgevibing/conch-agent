@@ -183,7 +183,7 @@ export interface CheckupInput {
   /** Defaults to this computer's. */
   platform?: NodeJS.Platform;
   /** Chat apps that reach the assistant, and who besides you may use each. */
-  channels?: { app: string; bot: string; others: string[] }[];
+  channels?: { app: string; bot: string; others: string[]; groups?: string[] }[];
   /** The public door (ADR 0045): where the internet reaches it, and for which apps. */
   door?: { url: string; apps: string[] };
   /** Safe hands (ADR 0028): the guard, and the sealed box for commands. */
@@ -444,6 +444,19 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       level: 'info',
       title: `${people.length === 1 ? people[0] : `${people.length} other people`} can use your assistant from ${shared.map((c) => c.app).join(' and ')}`,
       detail: `They can ask it things. Anything that could send something out or change this computer comes to you to OK first, in Conch. Remove anyone you no longer want there.`,
+      fix: { kind: 'open', label: 'Review', place: 'channels' },
+    });
+  }
+
+  const grouped = channels.filter((c) => c.groups?.length);
+  if (grouped.length) {
+    const groups = [...new Set(grouped.flatMap((c) => c.groups ?? []))];
+    items.push({
+      id: 'channel-groups',
+      level: 'info',
+      title: `Your assistant answers in ${groups.length === 1 ? `“${groups[0]}”` : `${groups.length} group chats`}`,
+      detail:
+        'Anyone there can mention it and get an answer in words, on your provider. Only you can ask it to do things, and it asks you privately first. Turn a group off when you no longer want it there.',
       fix: { kind: 'open', label: 'Review', place: 'channels' },
     });
   }

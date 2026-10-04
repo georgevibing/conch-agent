@@ -79,7 +79,7 @@ export function ChannelFacts({ id }: { id: string }) {
         PERSONAL[channel.id] ?? [
           'A bot of your own',
           'No public address',
-          'Private chats only',
+          channel.groups ? 'Groups only if you turn them on' : 'Private chats only',
           'Nobody gets in unless you let them',
         ]
       ).map((fact) => (

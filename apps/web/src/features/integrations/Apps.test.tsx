@@ -112,6 +112,7 @@ const channel = (patch: Partial<Channel> = {}): Channel => ({
   people: [{ id: '4242', name: 'Ada', since: 1 }],
   requests: [],
   blocked: 0,
+  groups: [],
   settings: { notifyRoutines: true },
   health: { state: 'online' },
   ...patch,

@@ -23,11 +23,13 @@ export const DISCORD_API = 'https://discord.com/api/v10';
 /** Discord allows 2000 characters a message; parts this long stay under it once formatted. */
 const PART = 1900;
 /**
- * Direct messages, reactions in them, and servers (to notice when the bot is
- * added to one). None is privileged: DMs carry their text without the Message
+ * Direct messages, reactions in them, servers (to notice when the bot is
+ * added to one), and messages in servers' channels (ADR 0075: answered only
+ * where you turned it on, when it's mentioned). None is privileged: DMs, and
+ * messages that mention the bot, carry their text without the Message
  * Content switch, so there is nothing to turn on in the Developer Portal.
  */
-export const DISCORD_INTENTS = (1 << 0) | (1 << 12) | (1 << 13);
+export const DISCORD_INTENTS = (1 << 0) | (1 << 9) | (1 << 12) | (1 << 13);
 /** Close codes after which reconnecting can't help (a bad key, a bad request). */
 const FATAL = new Set([4004, 4010, 4011, 4012, 4013, 4014]);
 /** Closes after which the session is gone: identify again rather than resume. */
@@ -94,8 +96,14 @@ function plainError(code: number | undefined, message: string): ChannelError {
  */
 export class DiscordAdapter implements ChannelAdapter {
   readonly kind = 'discord' as const;
+  /** Mentions and replies in groups are told apart (ADR 0075). */
+  readonly groups = true;
   #dms = new Map<string, string>();
   #identifies: number[] = [];
+  /** The bot's own id (from READY), to know when a server channel mentions it. */
+  #me?: string;
+  /** Server channels' names, as "#general (Server)", for the groups on its page. */
+  #places = new Map<string, string>();
 
   constructor(
     private readonly token: string,
@@ -523,6 +531,7 @@ export class DiscordAdapter implements ChannelAdapter {
       case 'READY':
         session.id = d.session_id as string;
         session.resumeUrl = d.resume_gateway_url as string | undefined;
+        this.#me = (d.user as DiscordUser | undefined)?.id ?? this.#me;
         for (const guild of (d.guilds as { id: string }[] | undefined) ?? []) guilds.add(guild.id);
         onReady();
         events.state('online');
@@ -532,6 +541,10 @@ export class DiscordAdapter implements ChannelAdapter {
         events.state('online');
         break;
       case 'GUILD_CREATE':
+        // Each channel's name, so a group on the page reads "#general (Ada's server)".
+        for (const channel of (d.channels as { id: string; name?: string }[] | undefined) ?? [])
+          if (channel.name)
+            this.#places.set(channel.id, `#${channel.name}${d.name ? ` (${String(d.name)})` : ''}`);
         // Servers arrive after READY; a new one means the bot was just added somewhere.
         if (!guilds.has(d.id as string)) {
           guilds.add(d.id as string);
@@ -548,18 +561,42 @@ export class DiscordAdapter implements ChannelAdapter {
             content_type?: string;
             size?: number;
           }[]) ?? [];
+        const direct = !d.guild_id;
+        const text = (d.content as string | undefined) ?? '';
+        const me = this.#me;
+        // In a server: mentioned by name (not @everyone), or a reply to one of its messages.
+        const replied = d.referenced_message as
+          { author?: DiscordUser; content?: string } | null | undefined;
+        const mentioned =
+          !direct &&
+          me !== undefined &&
+          (((d.mentions as DiscordUser[] | undefined) ?? []).some((u) => u.id === me) ||
+            replied?.author?.id === me);
         events.message({
           chatId: d.channel_id as string,
           messageId: d.id as string,
           user: person(author),
-          text: (d.content as string | undefined) ?? '',
+          text:
+            mentioned && me
+              ? text.replaceAll(`<@${me}>`, '').replaceAll(`<@!${me}>`, '').trim()
+              : text,
           files: attachments.map((a) => ({
             name: a.filename,
             ref: a.url,
             ...(a.content_type && { mimeType: a.content_type }),
             ...(a.size !== undefined && { size: a.size }),
           })),
-          direct: !d.guild_id,
+          direct,
+          ...(!direct && {
+            mentioned,
+            group: this.#places.get(d.channel_id as string) ?? 'A Discord channel',
+          }),
+          ...(!direct &&
+            replied?.author &&
+            replied.author.id !== me &&
+            replied.content && {
+              quote: { name: person(replied.author).name, text: replied.content },
+            }),
         });
         break;
       }

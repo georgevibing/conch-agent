@@ -50,6 +50,8 @@ export interface ChannelRef {
   color?: string;
   minutes?: number;
   available: boolean;
+  /** It can answer in group chats you turn on (ADR 0075). */
+  groups?: boolean;
 }
 
 export interface IntegrationRef {

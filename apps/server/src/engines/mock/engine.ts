@@ -514,6 +514,7 @@ export class MockEngine implements Engine {
   async *runTurn(turn: TurnInput): AsyncIterable<EngineEvent> {
     // A chat-only model is never shown any tools, as a model API's isn't (ADR 0050).
     const chatOnly =
+      turn.wordsOnly === true ||
       (await this.capabilities()).models.find((m) => m.id === turn.options.model)?.tools === false;
     const input: TurnInput = chatOnly ? { ...turn, tools: [], bridgedTools: [] } : turn;
     const wait = (ms: number) => sleep(ms * this.#speed, input.signal);

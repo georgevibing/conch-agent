@@ -216,6 +216,20 @@ export class MockSlack {
     });
   }
 
+  /** Someone @mentions the bot in #general (ADR 0075). */
+  mention(text: string, from = MockSlack.OWNER.id, channel = 'C0GENERAL') {
+    this.#envelopeOut('events_api', {
+      authorizations: [{ user_id: 'U0BOT', is_bot: true }],
+      event: {
+        type: 'app_mention',
+        channel,
+        user: from,
+        text: `<@U0BOT> ${text}`,
+        ts: `${Date.now() / 1000}`,
+      },
+    });
+  }
+
   press(value: string, ts: string, from = MockSlack.OWNER.id) {
     this.#envelopeOut('interactive', {
       type: 'block_actions',
@@ -316,6 +330,8 @@ export class MockSlack {
         };
       case 'conversations.open':
         return { ok: true, channel: { id: `D${params.users}` } };
+      case 'conversations.info':
+        return { ok: true, channel: { id: params.channel, name: 'general' } };
       case 'chat.postMessage':
       case 'chat.update': {
         const blocks = JSON.parse(params.blocks ?? '[]') as MockSlackMessage['blocks'];
