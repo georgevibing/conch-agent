@@ -516,7 +516,13 @@ function plainMistakes(schema: JsonSchema, value: unknown, path: string, depth: 
     const lines: string[] = [];
     const required = Array.isArray(schema['required']) ? schema['required'] : [];
     for (const key of required)
-      if (typeof key === 'string' && !Object.hasOwn(value, key)) {
+      // A required field the schema never describes is the schema's own slip
+      // (real servers ship them): the server decides whether it's needed.
+      if (
+        typeof key === 'string' &&
+        Object.hasOwn(schema['properties'], key) &&
+        !Object.hasOwn(value, key)
+      ) {
         const spec = schema['properties'][key];
         const wanted = isRecord(spec) ? typesOf(spec).map((t) => TYPE_WORDS[t] ?? t) : [];
         lines.push(

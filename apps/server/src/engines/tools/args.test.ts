@@ -210,6 +210,16 @@ describe('an integration’s tool', () => {
     // A union isn't judged here.
     expect(checkBridgedArgs('x', schema, { title: 'a', team: 5 }).ok).toBe(true);
   });
+
+  it('leaves a required field the schema never describes to the server', () => {
+    // As the evals' Ledger app ships it (ADR 0071): `ledger_id` is required but not a property.
+    const sloppy = { ...schema, required: ['title', 'ledger_id'] };
+    expect(checkBridgedArgs('ledger_record', sloppy, { title: 'Paid' })).toMatchObject({
+      ok: true,
+    });
+    const missing = checkBridgedArgs('ledger_record', sloppy, {});
+    expect(missing.ok ? '' : missing.message).not.toContain('ledger_id');
+  });
 });
 
 describe('abuse: forgiving input never widens what a call may do', () => {
