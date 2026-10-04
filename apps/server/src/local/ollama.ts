@@ -109,6 +109,32 @@ export function contextLength(show: OllamaShow): number | undefined {
   return undefined;
 }
 
+/**
+ * What one token of context costs in memory for a model, in bytes: its key and
+ * value cache, at the 16 bits Ollama keeps it in, from the shape `model_info`
+ * gives (`<arch>.block_count`, `.attention.head_count_kv`, the key and value
+ * lengths, or the embedding size shared out among the heads). Undefined when
+ * the model doesn't say enough to work it out.
+ */
+export function kvBytesPerToken(show: OllamaShow): number | undefined {
+  const info = show.model_info ?? {};
+  const arch = info['general.architecture'];
+  if (typeof arch !== 'string') return undefined;
+  const num = (key: string) => {
+    const value = info[`${arch}.${key}`];
+    return typeof value === 'number' && value > 0 ? value : undefined;
+  };
+  const layers = num('block_count');
+  const heads = num('attention.head_count');
+  const kvHeads = num('attention.head_count_kv') ?? heads;
+  const headSize =
+    heads && num('embedding_length') ? (num('embedding_length') as number) / heads : undefined;
+  const keys = num('attention.key_length') ?? headSize;
+  const values = num('attention.value_length') ?? headSize;
+  if (!layers || !kvHeads || !keys || !values) return undefined;
+  return Math.round(layers * kvHeads * (keys + values) * 2);
+}
+
 /** Ollama's error message, when its body has one. */
 export async function errorOf(response: Response): Promise<string> {
   const body = await text(response, LABEL).catch(() => '');

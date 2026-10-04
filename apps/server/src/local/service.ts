@@ -45,7 +45,7 @@ import {
   offersFor,
   sortModels,
 } from './models';
-import { OllamaClient, contextLength, isCloudTag } from './ollama';
+import { OllamaClient, contextLength, isCloudTag, kvBytesPerToken } from './ollama';
 import { explainPull, PullMeter } from './pull';
 
 /** How long Ollama gets to answer after Conch starts it (the first start finds the GPU). */
@@ -61,6 +61,9 @@ const LocalFile = z.object({
   bytesPerSecond: z.number().positive().optional(),
 });
 type LocalFile = z.infer<typeof LocalFile>;
+
+/** The most context Conch asks Ollama for: past this, the cache slows an ordinary computer more than it helps. */
+const LOCAL_CONTEXT_CEILING = 65_536;
 
 export class LocalError extends Error {
   constructor(
@@ -126,6 +129,8 @@ export class LocalService implements OllamaLink {
   #starting?: Promise<boolean>;
   #shown = new Map<string, { digest: string; show: Awaited<ReturnType<OllamaClient['show']>> }>();
   #context = new Map<string, number>();
+  /** What a model needs, for the context to ask for: memory per token of context, and its own size. */
+  #needs = new Map<string, { perToken: number; size: number }>();
   #job?: PullJob;
   /** Ollama's version the last time it answered, for the model offers. */
   #version?: string;
@@ -328,6 +333,8 @@ export class LocalService implements OllamaLink {
         if (caps.length && !caps.includes('completion')) return undefined;
         const context = show && contextLength(show);
         if (context) this.#context.set(tag.name, context);
+        const perToken = show && kvBytesPerToken(show);
+        if (perToken) this.#needs.set(tag.name, { perToken, size: Math.max(0, tag.size ?? 0) });
         const parameters = tag.details?.parameter_size ?? undefined;
         return {
           name: tag.name,
@@ -355,12 +362,22 @@ export class LocalService implements OllamaLink {
   }
 
   /**
-   * The context to ask for: 16K tokens on a computer with less than 12 GB of
-   * memory, 32K above, never more than the model can read. The same number
-   * every time for a model, or Ollama would reload it between requests.
+   * The context to ask for (ADR 0078): at least 16K tokens on a computer with
+   * less than 12 GB of memory and 32K above, as before; more when the model's
+   * own shape says this computer has room for it — what its key and value
+   * cache takes per token, within two fifths of the memory once the model
+   * itself is loaded, up to 64K. Never more than the model can read. The same
+   * number every time for a model, or Ollama would reload it between requests.
    */
   contextFor(model: string): number {
-    const budget = this.#memory() < 12 * 1024 ** 3 ? 16_384 : 32_768;
+    const memory = this.#memory();
+    let budget = memory < 12 * 1024 ** 3 ? 16_384 : 32_768;
+    const needs = this.#needs.get(model);
+    if (needs) {
+      const fits = Math.floor((memory * 0.4 - needs.size) / needs.perToken);
+      // In steps of 8K, so a little more memory doesn't mean a different number.
+      budget = Math.max(budget, Math.min(LOCAL_CONTEXT_CEILING, Math.floor(fits / 8_192) * 8_192));
+    }
     const max = this.#context.get(model);
     return max ? Math.min(max, budget) : budget;
   }
