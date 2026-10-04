@@ -17,7 +17,7 @@ import { BrowserProblemError } from './runtime';
 import { plainNavigationError, toUrl, type BrowserService } from './service';
 import { displayHost, siteOf } from './site';
 import { armCreate, armSignIn } from './passkeys';
-import { markSecrets, readPage } from './snapshot';
+import { markSecrets, readChanges, readPage } from './snapshot';
 import { MAX_TABS, type Tab } from './tab';
 import { resolveUploads, UploadRefused, type UploadFile } from './uploads';
 import { watchHandoff } from './handoff';
@@ -517,9 +517,8 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
     await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => undefined);
   };
 
-  /** The page as the agent reads it, with which tab it is when there's more than one. */
-  const pageText = async (tab: Tab, find?: string) => {
-    const text = (await readPage(tab.page, { find })).text;
+  /** Which tab this is, when there's more than one. */
+  const withTabs = async (tab: Tab, text: string) => {
     if (tab.tabs.length < 2) return text;
     const list = await tab.list();
     const tabs = list
@@ -527,6 +526,11 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
       .join(' · ');
     return `Tabs: ${tabs}\n${text}`;
   };
+  /** After an action: only what changed on the page (the whole page when it's a new one). */
+  const pageText = async (tab: Tab) => withTabs(tab, (await readChanges(tab.page)).text);
+  /** The whole page: on opening one, or when the agent asks for it. */
+  const wholePage = async (tab: Tab, find?: string) =>
+    withTabs(tab, (await readPage(tab.page, { find })).text);
 
   const secretOf = async (locator: Locator): Promise<SecretKind | undefined> => {
     const value = await locator.getAttribute(SECRET_ATTR, { timeout: 2_000 }).catch(() => null);
@@ -579,7 +583,7 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
           await settle(tab.page);
           const declined = await service.declined(tab.page);
           return {
-            text: `${declined ? `(Declined ${declined}’s cookie banner for the user.)\n` : ''}${await pageText(tab)}`,
+            text: `${declined ? `(Declined ${declined}’s cookie banner for the user.)\n` : ''}${await wholePage(tab)}`,
           };
         },
       );
@@ -589,7 +593,7 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
   const read: HostTool<{ find: z.ZodOptional<z.ZodString> }> = {
     name: 'browser_read',
     description:
-      'Read the page that’s open now: its text and controls with [ref] handles. Pass `find` to see only the parts that mention something.',
+      'Read the whole page that’s open now: its text and controls with [ref] handles. Other browser actions answer with only what changed, so use this when you need to see everything again. Pass `find` to see only the parts that mention something.',
     input: {
       find: z.string().max(200).optional().describe('Only show lines mentioning this.'),
     },
@@ -597,7 +601,7 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
       step(
         'read',
         { running: 'Reading the page', done: find ? `Looked for “${find}”` : 'Read the page' },
-        async (tab) => ({ text: await pageText(tab, find) }),
+        async (tab) => ({ text: await wholePage(tab, find) }),
       ),
   };
 
