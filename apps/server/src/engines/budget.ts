@@ -13,9 +13,9 @@
  */
 import { createHash } from 'node:crypto';
 
-import type { TurnPause, Usage } from '@conch/protocol';
+import type { TurnLimits, TurnPause, Usage } from '@conch/protocol';
 
-/** What one turn may use before it pauses to check in. */
+/** What one turn may use before it pauses to check in. `Infinity` is no limit. */
 export interface TurnBudget {
   /** Rounds of tool calls (one model request that asked for tools is one step). */
   steps: number;
@@ -30,18 +30,27 @@ const MINUTE = 60_000;
 /**
  * The budget for a turn. Someone watching gets a generous one and a Carry on;
  * a routine or a task (nobody watching) gets more room, since nobody is there
- * to press it. Over the monthly budget the person set (ADR 0005), fresh tokens
- * are halved: it never blocks, but it checks in sooner. A model on this
- * computer costs nothing, so only steps and time count, and it's slower.
+ * to press it. A chat someone is watching has no budget at all until they turn
+ * one on (`limits`, Settings → Usage): then over the monthly budget the person
+ * set (ADR 0005), fresh tokens are halved: it never blocks, but it checks in
+ * sooner. A model on this computer costs nothing, so only steps and time count,
+ * and it's slower.
  */
 export function turnBudget(input: {
   unattended?: boolean;
   overBudget?: boolean;
   local?: boolean;
+  limits?: TurnLimits;
 }): TurnBudget {
+  if (!input.unattended && !input.limits?.on)
+    return { steps: Infinity, tokens: Infinity, ms: Infinity };
   const base = input.unattended
     ? { steps: 200, tokens: 4_000_000, ms: 60 * MINUTE }
-    : { steps: 100, tokens: 2_000_000, ms: 30 * MINUTE };
+    : {
+        steps: input.limits?.steps ?? 100,
+        tokens: input.limits?.tokens ?? 2_000_000,
+        ms: (input.limits?.minutes ?? 30) * MINUTE,
+      };
   return {
     steps: base.steps,
     tokens: input.local

@@ -348,6 +348,11 @@ describe('Palette search', () => {
       await screen.findByRole('option', { name: /When routines wait for your plan/ }),
     ).toBeInTheDocument();
 
+    // Pausing long turns (ADR 0085): off by default, found by the words for it.
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'carry on');
+    expect(await screen.findByRole('option', { name: /Pause long turns/ })).toBeInTheDocument();
+
     // Keywords count by whole-word prefix, not scattered letters.
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'forget');

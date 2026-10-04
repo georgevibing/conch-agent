@@ -15,19 +15,46 @@ import {
 const roomy = { steps: 1_000, tokens: 1e12, ms: 1e12 };
 
 describe('turnBudget', () => {
-  it('gives more room when nobody is watching, less fresh spend over the monthly budget', () => {
-    const watched = turnBudget({});
+  const on = { on: true, steps: 100, tokens: 2_000_000, minutes: 30 };
+
+  it('has no limit for a chat someone is watching, until they turn one on', () => {
+    expect(turnBudget({})).toEqual({ steps: Infinity, tokens: Infinity, ms: Infinity });
+    // Over the monthly budget doesn't pause a turn by itself: it only matters once limits are on.
+    expect(turnBudget({ overBudget: true, limits: { ...on, on: false } }).steps).toBe(Infinity);
+    expect(turnBudget({ local: true }).ms).toBe(Infinity);
+  });
+
+  it('gives a watched chat the limits a person set, halving tokens over the monthly budget', () => {
+    const watched = turnBudget({ limits: { on: true, steps: 40, tokens: 500_000, minutes: 10 } });
+    expect(watched).toEqual({ steps: 40, tokens: 500_000, ms: 10 * 60_000 });
+    expect(turnBudget({ overBudget: true, limits: on }).tokens).toBe(1_000_000);
+  });
+
+  it('gives more room when nobody is watching, whatever the switch says', () => {
+    const watched = turnBudget({ limits: on });
     const unattended = turnBudget({ unattended: true });
-    expect(watched.steps).toBeGreaterThan(24);
     expect(unattended.steps).toBeGreaterThan(watched.steps);
     expect(unattended.ms).toBeGreaterThan(watched.ms);
-    expect(turnBudget({ overBudget: true }).tokens).toBe(watched.tokens / 2);
+    expect(turnBudget({ unattended: true, limits: { ...on, on: false } })).toEqual(unattended);
   });
 
   it('never counts tokens for a model on this computer, and gives it longer', () => {
-    const local = turnBudget({ local: true });
+    const local = turnBudget({ local: true, limits: on });
     expect(local.tokens).toBe(Number.POSITIVE_INFINITY);
-    expect(local.ms).toBeGreaterThan(turnBudget({}).ms);
+    expect(local.ms).toBeGreaterThan(turnBudget({ limits: on }).ms);
+  });
+
+  it('a turn with no limit never pauses on steps, tokens or time, but a loop still does', () => {
+    let now = 0;
+    const watch = new TurnWatch(turnBudget({}), () => now);
+    watch.used({ inputTokens: 50_000_000, outputTokens: 1_000_000 });
+    for (let i = 0; i < 500; i++) watch.round();
+    now = 48 * 60 * 60_000;
+    expect(watch.next().kind).toBe('go');
+    expect(watch.outside().kind).toBe('go');
+    const calls = Array.from({ length: REPEAT_STOP }, () => watch.call('browser_click', { id: 1 }));
+    expect(calls.some((v) => v.kind === 'nudge')).toBe(true);
+    expect(calls.at(-1)).toMatchObject({ kind: 'stop', pause: { reason: 'loop' } });
   });
 });
 

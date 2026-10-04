@@ -10,6 +10,24 @@
   [ADR 0079](./0079-what-a-chat-costs.md) (what a chat costs, its limit),
   [ADR 0060](./0060-the-chat-knows-conch.md) (one thing asking at a time)
 
+## Amendment (2026-10-04): the limits are off until a person turns them on
+
+A pause on steps, tokens or time made a chat someone was watching stop in the middle
+of a legitimate job — and, on Codex, far too early: its `tokenUsage.total` is the whole
+thread's, every earlier turn and every cached re-read included, so a long chat arrived
+over the token limit before it began (the engine now counts this turn's share, less
+what the thread had before its first request, with cached input named). Other
+agents don't stop a watched job on a size limit, and the person is already watching.
+
+So for a chat someone is watching, **`turnBudget` has no limit by default**
+(`Infinity` steps, tokens and time; going over the monthly budget changes nothing).
+Settings → Usage → **Long turns** (`preferences.turnLimits`: `on`, `steps`, `tokens`,
+`minutes`) turns the budget below on, with the numbers a person chooses; it starts at
+100 steps, 2M fresh tokens and 30 minutes. The watch for loops (§1, "The watch") is
+not a size limit and always runs: a model repeating itself is still told, then paused.
+Routines, tasks and guests keep their own budget (200, 4M, an hour) whatever the
+switch says, because nobody is there to press Carry on and ADR 0057 depends on it.
+
 ## Context
 
 On the model APIs, Conch runs the agent loop itself (`engines/api/engine.ts`).

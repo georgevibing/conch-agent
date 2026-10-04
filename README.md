@@ -67,7 +67,8 @@
 - **Long chats on any model.** When a chat outgrows what a model reads at once,
   its start becomes a summary you can open, and what you said there is learned first.
 - **Long jobs that finish, and cost less.** Big tasks run as long as they need,
-  and check in with **Carry on** instead of going round in circles. Conch asks every
+  and pause with **Carry on** instead of going round in circles. Power users can
+  have them check in at limits of their own (Settings → Usage). Conch asks every
   provider that caches to keep what it has already read, so long tasks cost less, and
   a small model on this computer gets a lean setup that fits it.
 - **Questions you answer with a tap.** When the assistant needs your choice, it

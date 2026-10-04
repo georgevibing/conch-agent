@@ -156,6 +156,23 @@ const MutedSuggestions = z
   .max(100)
   .transform((ids) => [...new Set(ids)]);
 
+/**
+ * How much one turn may do while someone is watching before it pauses to check
+ * in (ADR 0085). Off unless a person turns it on: a turn then runs until it's
+ * done, and only a loop (the same thing again and again) pauses it. Routines and
+ * tasks have their own limits and aren't affected.
+ */
+export const TurnLimits = z.object({
+  on: z.boolean().default(false),
+  /** Rounds of tool calls. */
+  steps: z.number().int().min(5).max(10_000).default(100),
+  /** Fresh tokens: input not read from the provider's cache, plus output. */
+  tokens: z.number().int().min(50_000).max(1_000_000_000).default(2_000_000),
+  /** Wall-clock minutes for the whole turn. */
+  minutes: z.number().int().min(1).max(1_440).default(30),
+});
+export type TurnLimits = z.infer<typeof TurnLimits>;
+
 export const Preferences = z.object({
   /** Folder Claude works in. Defaults to the Conch workspace. */
   workspace: z.string().max(4096).optional(),
@@ -204,6 +221,8 @@ export const Preferences = z.object({
    * Conch's, chosen in Settings → Voice. Unset: the first natural voice here.
    */
   voice: ConchVoiceId.optional(),
+  /** Pause a long turn to check in: off by default, a power user's choice (Settings → Usage). */
+  turnLimits: TurnLimits.default(TurnLimits.parse({})),
 });
 export type Preferences = z.infer<typeof Preferences>;
 
@@ -308,6 +327,7 @@ export const UpdateSettingsBody = z.object({
       tidyMemory: z.boolean(),
       /** `null` goes back to the first natural voice here. */
       voice: ConchVoiceId.nullable(),
+      turnLimits: TurnLimits,
     })
     .partial()
     .optional(),

@@ -62,6 +62,7 @@ import {
   SquareSlash,
   User,
   WandSparkles,
+  Timer,
   Wallet,
   WifiOff,
   Wrench,
@@ -85,6 +86,7 @@ import { LIVE_DATA_FOCUS } from '../artifacts/LiveDataSection';
 import { ADDRESS_FOCUS, DEVICES_FOCUS, PASSKEYS_FOCUS } from '../auth/focus';
 import { FALLBACK_FOCUS } from '../settings/FallbackSection';
 import { PLAN_ROOM_FOCUS, ROUTINES_SPEND_FOCUS } from '../routines/SpendingSection';
+import { TURN_LIMITS_FOCUS } from '../usage/TurnLimitsSection';
 import { APP_WORDS, APPS } from '../channels/describe';
 import { useChannels } from '../channels/queries';
 import { isManager } from '../integrations/apps';
@@ -183,6 +185,14 @@ const settingsPlaces: {
     keywords:
       'room for your own chats routines routine wait waiting plan subscription nearly used full threshold percent always run never wait skip skipped',
     icon: <Gauge />,
+  },
+  {
+    tab: 'usage',
+    focus: TURN_LIMITS_FOCUS,
+    label: 'Pause long turns',
+    keywords:
+      'long turns pause paused check in carry on steps tokens minutes limit stop runs on power user',
+    icon: <Timer />,
   },
   {
     tab: 'health',

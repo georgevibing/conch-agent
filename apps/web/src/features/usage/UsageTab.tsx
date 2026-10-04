@@ -10,6 +10,7 @@ import { useProviders } from '../providers/queries';
 import { SpendingSection } from '../routines/SpendingSection';
 import { Section, SaveStatus } from '../settings/Section';
 import { useAutosave } from '../settings/useAutosave';
+import { TurnLimitsSection } from './TurnLimitsSection';
 import styles from './Usage.module.css';
 import { useUsageRefresh } from './useUsageRefresh';
 
@@ -116,6 +117,7 @@ export function UsageTab() {
       {/* Every chat on a key you pay as you go counts, whichever provider answers it (ADR 0079). */}
       {spend && <BudgetField initial={spend.budget} />}
       <SpendingSection />
+      <TurnLimitsSection />
     </Stack>
   );
 }

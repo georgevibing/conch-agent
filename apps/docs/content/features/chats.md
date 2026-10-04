@@ -20,14 +20,13 @@ Your chats are in the sidebar, newest first, grouped by day. Point at one and pr
 
 ### Long jobs
 
-Your assistant can take as many steps as a job needs: booking something across a few websites, tidying a big folder. Every so often it checks in rather than run on without you:
-
-- after a lot of work for one message (about a hundred steps, half an hour, or a lot of reading on a provider you pay for), or
-- when it keeps trying the same thing without getting anywhere. It's told first, and tries another way; only if it carries on does it stop.
+Your assistant can take as many steps as a job needs: booking something across a few websites, tidying a big folder. A message you're watching runs until it's done, with no limit on steps, time or reading. It only stops by itself when it keeps trying the same thing without getting anywhere. It's told first, and tries another way; only if it carries on does it pause.
 
 The reply then ends with one sentence saying why it paused. Press **Carry on** and it picks up exactly where it stopped, with everything it had done. Or say what to do differently.
 
-Routines and background tasks get more room, since nobody is there to press **Carry on**. Over your [monthly budget](../care/offline.md), it checks in sooner, but it never stops you.
+Want it to check in sooner? In **Settings → Usage → Long turns**, turn on **Pause long turns to check in** and set your own limits: steps (starts at 100), minutes (30) and fresh tokens in millions (2), meaning what a message reads and writes that the provider hadn't already cached. A chat then pauses at the first one it reaches, with **Carry on**. Over your [monthly budget](../care/offline.md), it checks in sooner still, but it never stops you.
+
+Routines and background tasks have their own room (200 steps, an hour), since nobody is there to press **Carry on**. That doesn't change with the switch.
 
 You don't have to wait to say what's next. Write it and press <kbd>enter</kbd>: it waits above the message box, **Sends when Conch is done**, and goes by itself the moment the reply is over. Anything more you send meanwhile joins it.
 

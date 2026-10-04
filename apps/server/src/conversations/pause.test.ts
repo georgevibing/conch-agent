@@ -7,7 +7,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { Capabilities, ConversationEvent, EngineStatus } from '@conch/protocol';
+import type { Capabilities, ConversationEvent, EngineStatus, TurnLimits } from '@conch/protocol';
 import { describe, expect, it } from 'vitest';
 
 import { hostToolText, type Engine, type EngineEvent, type TurnInput } from '../engines/types';
@@ -58,10 +58,12 @@ class Scripted implements Engine {
   }
 }
 
-async function setup(engine: Scripted, overBudget = false) {
+async function setup(engine: Scripted, overBudget = false, limits?: TurnLimits) {
   const home = await mkdtemp(join(tmpdir(), 'conch-pause-'));
   const settings = new SettingsStore(home);
-  await settings.update({ preferences: { engine: 'openrouter', autoTitle: false } });
+  await settings.update({
+    preferences: { engine: 'openrouter', autoTitle: false, ...(limits && { turnLimits: limits }) },
+  });
   const memory = new MemoryStore(join(home, 'memory'));
   await memory.add({ content: 'Likes oolong', kind: 'preference', source: 'user' });
   const manager = new ConversationManager({
@@ -85,11 +87,26 @@ async function finished(manager: ConversationManager, id: string): Promise<Conve
 }
 
 describe('pausing to check in (ADR 0085)', () => {
-  it('gives each turn its budget, and puts the memories after what stays the same', async () => {
+  it('gives each turn no limit unless the person turned one on', async () => {
     const engine = new Scripted(async function* () {
       yield { type: 'done', outcome: 'success' };
     }, true);
     const manager = await setup(engine, true);
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'Hello' });
+    await finished(manager, convo.id);
+    expect(engine.turns[0]?.budget).toEqual({ steps: Infinity, tokens: Infinity, ms: Infinity });
+  });
+
+  it('gives each turn the budget the person set, and puts the memories after what stays the same', async () => {
+    const engine = new Scripted(async function* () {
+      yield { type: 'done', outcome: 'success' };
+    }, true);
+    const manager = await setup(engine, true, {
+      on: true,
+      steps: 100,
+      tokens: 2_000_000,
+      minutes: 30,
+    });
     const convo = await manager.send({ clientMessageId: 'u1', text: 'Hello' });
     await finished(manager, convo.id);
     const input = engine.turns[0];

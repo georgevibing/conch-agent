@@ -589,6 +589,9 @@ export class CodexEngine implements Engine {
 
   async *runTurn(input: TurnInput): AsyncIterable<EngineEvent> {
     let usage: Usage | undefined;
+    /** What the thread had used before this turn's first request. */
+    let before:
+      Required<Pick<Usage, 'inputTokens' | 'outputTokens' | 'cachedInputTokens'>> | undefined;
     const queue: { event: EngineEvent; ack?: () => void }[] = [];
     let wake: (() => void) | undefined;
     let finished = false;
@@ -891,14 +894,39 @@ export class CodexEngine implements Engine {
               if (steps) emit({ type: 'plan', steps });
             }
             if (message.method === 'thread/tokenUsage/updated') {
-              const total = z
-                .object({
-                  inputTokens: z.number().nonnegative(),
-                  outputTokens: z.number().nonnegative(),
-                })
-                .safeParse(object(p.tokenUsage).total);
+              // Codex's `total` is the whole thread's, every earlier turn included, and
+              // its input counts what the provider's cache served. This turn's share is
+              // the total less what the thread had before this turn's first request
+              // (that request's total minus its own `last`), with the cached part named,
+              // so a long chat never starts a turn already over its budget.
+              const counts = z.object({
+                inputTokens: z.number().nonnegative(),
+                outputTokens: z.number().nonnegative(),
+                cachedInputTokens: z.number().nonnegative().optional(),
+              });
+              const total = counts.safeParse(object(p.tokenUsage).total);
+              const last = counts.safeParse(object(p.tokenUsage).last);
               if (total.success) {
-                usage = total.data;
+                before ??= {
+                  inputTokens: Math.max(0, total.data.inputTokens - (last.data?.inputTokens ?? 0)),
+                  outputTokens: Math.max(
+                    0,
+                    total.data.outputTokens - (last.data?.outputTokens ?? 0),
+                  ),
+                  cachedInputTokens: Math.max(
+                    0,
+                    (total.data.cachedInputTokens ?? 0) - (last.data?.cachedInputTokens ?? 0),
+                  ),
+                };
+                const cached = Math.max(
+                  0,
+                  (total.data.cachedInputTokens ?? 0) - (before.cachedInputTokens ?? 0),
+                );
+                usage = {
+                  inputTokens: Math.max(0, total.data.inputTokens - before.inputTokens),
+                  outputTokens: Math.max(0, total.data.outputTokens - before.outputTokens),
+                  ...(cached > 0 && { cachedInputTokens: cached }),
+                };
                 // A running total, so an unattended run can stop at its limit (ADR 0057).
                 emit({ type: 'usage', usage });
               }

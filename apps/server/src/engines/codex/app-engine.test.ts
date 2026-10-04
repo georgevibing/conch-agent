@@ -310,6 +310,29 @@ describe('Codex app-server parity', () => {
       ],
     });
   });
+  it('counts only this turn’s tokens, not the whole thread’s, with the cached part named', async () => {
+    // A long chat: 1.9M already used before this turn. Its first request read 200k (150k cached).
+    const { engine, turn } = await setup({
+      signedIn: true,
+      tokenUsage: [
+        {
+          total: { inputTokens: 2_100_000, cachedInputTokens: 1_800_000, outputTokens: 40_000 },
+          last: { inputTokens: 200_000, cachedInputTokens: 150_000, outputTokens: 1_000 },
+        },
+        {
+          total: { inputTokens: 2_300_000, cachedInputTokens: 2_000_000, outputTokens: 42_000 },
+          last: { inputTokens: 200_000, cachedInputTokens: 200_000, outputTokens: 2_000 },
+        },
+      ],
+    });
+    const usage = (await collect(engine.runTurn(turn()))).flatMap((e) =>
+      e.type === 'usage' ? [e.usage] : [],
+    );
+    expect(usage).toEqual([
+      { inputTokens: 200_000, outputTokens: 1_000, cachedInputTokens: 150_000 },
+      { inputTokens: 400_000, outputTokens: 3_000, cachedInputTokens: 350_000 },
+    ]);
+  });
   it('reads only real plan steps', () => {
     expect(codexPlan('nope')).toBeUndefined();
     expect(codexPlan([{ step: 'A', status: 'paused' }, { status: 'pending' }])).toBeUndefined();

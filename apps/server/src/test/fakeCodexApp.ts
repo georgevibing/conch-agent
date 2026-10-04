@@ -16,6 +16,8 @@ export async function fakeCodexApp(
     loginUrl?: string;
     /** Steps of a `turn/plan/updated`, sent before the answer. */
     plan?: unknown[];
+    /** `thread/tokenUsage/updated`s, sent before the answer: the thread's running `total` and the request's own `last`. */
+    tokenUsage?: { total: Record<string, number>; last: Record<string, number> }[];
     /**
      * Codex CLI's own work (ADR 0066): announce a command or a change, ask to
      * approve it, then run it (or not) as the answer says.
@@ -45,6 +47,7 @@ fs.appendFileSync(LOG, JSON.stringify({spawn:true, argv: process.argv.slice(2), 
 const complete = () => {
  if (OPTIONS.hang) return;
  if (OPTIONS.plan) note('turn/plan/updated',{threadId:TID,turnId:'turn1',explanation:null,plan:OPTIONS.plan});
+ for (const u of OPTIONS.tokenUsage || []) note('thread/tokenUsage/updated',{threadId:TID,turnId:'turn1',tokenUsage:u});
  note('item/agentMessage/delta',{threadId:TID,itemId:'m1',delta:'Finished.'});
  note('item/completed',{threadId:TID,item:{type:'agentMessage',id:'m1'}});
  note('turn/completed',{threadId:TID,turn:{id:'turn1',status:OPTIONS.fail?'failed':'completed'}});

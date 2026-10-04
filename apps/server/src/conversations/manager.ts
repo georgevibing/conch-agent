@@ -2035,6 +2035,7 @@ export class ConversationManager {
           unattended: Boolean(extras || live.record.origin),
           overBudget: await this.deps.overBudget?.().catch(() => false),
           local: engine.local,
+          limits: settings.preferences.turnLimits,
         }),
         tools,
         signal: abort.signal,

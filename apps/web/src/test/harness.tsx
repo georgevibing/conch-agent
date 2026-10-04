@@ -167,6 +167,7 @@ export function appState(patch: Partial<AppState> = {}): AppState {
       menuBar: true,
       keepAwake: false,
       tidyMemory: false,
+      turnLimits: { on: false, steps: 100, tokens: 2_000_000, minutes: 30 },
     },
     engine: baseEngine,
     workspace: '/home/ada/.conch/workspace',
