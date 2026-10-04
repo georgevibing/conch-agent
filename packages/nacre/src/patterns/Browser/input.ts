@@ -119,3 +119,42 @@ export function keyInput(
 export function isReleaseKey(event: { key: string; shiftKey: boolean }): boolean {
   return event.key === 'Escape' && event.shiftKey;
 }
+
+/** A browser's own key, not the page's: what it does. */
+export type BrowserShortcut =
+  | { kind: 'address' | 'new' | 'close' | 'reopen' | 'next' | 'previous' | 'back' | 'forward' }
+  | { kind: 'nth'; index: number };
+
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+
+/**
+ * The keys every browser has: ⌘L the address, ⌘T a new tab, ⌘W close it,
+ * ⌘⇧T bring it back, Ctrl+Tab the next, ⌘1–8 a tab, ⌘9 the last, Alt+←/→
+ * (⌘[ / ⌘] on a Mac) back and forward. ⌘ is Ctrl off a Mac.
+ */
+export function browserShortcut(
+  event: Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>,
+  mac = isMac,
+): BrowserShortcut | undefined {
+  const mod = mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+  const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+  if (event.ctrlKey && !event.metaKey && !event.altKey && key === 'Tab')
+    return { kind: event.shiftKey ? 'previous' : 'next' };
+  if (mod && !event.altKey) {
+    if (!event.shiftKey && key === 'l') return { kind: 'address' };
+    if (!event.shiftKey && key === 't') return { kind: 'new' };
+    if (event.shiftKey && key === 't') return { kind: 'reopen' };
+    if (!event.shiftKey && key === 'w') return { kind: 'close' };
+    if (!event.shiftKey && /^Digit[1-9]$/.test(event.code)) {
+      const n = Number(event.code.slice(5));
+      return { kind: 'nth', index: n === 9 ? -1 : n - 1 };
+    }
+    if (mac && !event.shiftKey && key === '[') return { kind: 'back' };
+    if (mac && !event.shiftKey && key === ']') return { kind: 'forward' };
+  }
+  if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+    if (key === 'ArrowLeft') return { kind: 'back' };
+    if (key === 'ArrowRight') return { kind: 'forward' };
+  }
+  return undefined;
+}

@@ -24,6 +24,7 @@
   .chrome {
     position: relative;
     display: flex;
+    background: var(--nc-surface-hi);
     align-items: center;
     gap: var(--nc-space-2);
     padding: var(--nc-space-2) var(--nc-space-2) var(--nc-space-2) var(--nc-space-2);
@@ -191,79 +192,130 @@
   }
 
   /* ── Tabs ──────────────────────────────────────────────────────────── */
+  /* Above the toolbar, as in any browser: the tab in view is cut from the
+     same surface as the toolbar, so the two read as one piece. */
   .tabs {
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     gap: var(--nc-space-1);
-    padding: var(--nc-space-1) var(--nc-space-2);
-    border-block-end: 1px solid var(--nc-border-subtle);
-    background: var(--nc-surface);
+    padding: var(--nc-space-1-5) var(--nc-space-2) 0;
+    background: var(--nc-surface-sunken);
   }
 
   .tabList {
     display: flex;
-    gap: var(--nc-space-1);
+    flex: 1;
+    align-items: flex-end;
+    gap: 2px;
     min-inline-size: 0;
     margin: 0;
     padding: 0;
-    overflow-x: auto;
+    overflow: hidden;
     list-style: none;
-    scrollbar-width: thin;
   }
 
+  /* Tabs share the strip: each as wide as it can be, narrower as more open. */
   .tab {
+    position: relative;
     display: flex;
-    flex-shrink: 0;
+    flex: 0 1 13rem;
     align-items: center;
-    max-inline-size: 13rem;
-    border-radius: var(--nc-radius-md);
+    min-inline-size: 2.75rem;
+    block-size: 2rem;
+    border-radius: var(--nc-radius-md) var(--nc-radius-md) 0 0;
     color: var(--nc-text-muted);
+    transition:
+      background var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out);
   }
 
   .tab[data-active] {
-    background: var(--nc-surface-sunken);
-    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    background: var(--nc-surface-hi);
+    box-shadow:
+      inset 1px 1px 0 0 var(--nc-border-subtle),
+      inset -1px 0 0 0 var(--nc-border-subtle);
     color: var(--nc-text);
+  }
+
+  /* A hairline between two tabs in the background. */
+  .tab:not([data-active]) + .tab:not([data-active])::before {
+    content: '';
+    position: absolute;
+    inset-inline-start: -1px;
+    inset-block: 25%;
+    inline-size: 1px;
+    background: var(--nc-border-subtle);
   }
 
   .tabButton {
     appearance: none;
     display: flex;
+    flex: 1;
     align-items: center;
-    gap: var(--nc-space-1-5);
+    gap: var(--nc-space-2);
     min-inline-size: 0;
-    padding: var(--nc-space-1) var(--nc-space-1) var(--nc-space-1) var(--nc-space-2);
+    block-size: 100%;
+    padding: 0 var(--nc-space-1) 0 var(--nc-space-2-5);
     border: 0;
-    border-radius: var(--nc-radius-md);
+    border-radius: inherit;
     background: transparent;
     color: inherit;
     font: inherit;
     font-size: var(--nc-text-xs);
-    cursor: pointer;
+    text-align: start;
+    cursor: default;
+  }
+
+  .tab[data-alone] .tabButton {
+    padding-inline-end: var(--nc-space-2-5);
   }
 
   .tabButton:focus-visible {
     outline: 2px solid var(--nc-ring);
-    outline-offset: 1px;
+    outline-offset: -2px;
   }
 
   .tabIcon {
     flex-shrink: 0;
-    inline-size: 0.75rem;
-    block-size: 0.75rem;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
     color: var(--nc-text-subtle);
   }
 
+  img.tabIcon {
+    border-radius: 2px;
+    object-fit: contain;
+  }
+
   .tabTitle {
+    min-inline-size: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .tab > .tabClose[data-size] {
+    --btn-h: 1.25rem;
+    --btn-icon: 0.75rem;
+    flex-shrink: 0;
+    margin-inline-end: var(--nc-space-1);
+  }
+
+  .newTab {
+    flex-shrink: 0;
+    align-self: center;
+    margin-block-end: 2px;
   }
 
   @media (hover: hover) {
     .tab:not([data-active]):hover {
       background: var(--nc-wash-2);
       color: var(--nc-text);
+    }
+
+    /* A tab in the background shows its ✕ when you point at it. */
+    .tab:not([data-active]):not(:hover):not(:focus-within) > .tabClose {
+      opacity: 0;
     }
   }
 
@@ -309,7 +361,8 @@
 
   .screen {
     position: relative;
-    inline-size: min(100cqw, calc(100cqh * 1.6));
+    /* As big as the stage allows, in the page's own shape. */
+    inline-size: min(100cqw, calc(100cqh * var(--bw-ratio, 1.6)));
     max-block-size: 100cqh;
     border-radius: var(--bw-screen-radius);
     corner-shape: var(--nc-corner-shape);

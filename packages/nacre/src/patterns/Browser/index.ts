@@ -2,10 +2,12 @@ export { BrowserWindow } from './BrowserWindow';
 export type {
   BrowserBox,
   BrowserControl,
+  BrowserTabAction,
   BrowserWindowAction,
   BrowserWindowPhase,
   BrowserWindowProps,
   BrowserWindowTab,
+  BrowserWindowTabEntry,
 } from './BrowserWindow';
 export { BrowserTrail } from './BrowserTrail';
 export type { BrowserTrailProps, BrowserTrailStep } from './BrowserTrail';

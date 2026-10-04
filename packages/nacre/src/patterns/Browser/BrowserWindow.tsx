@@ -8,6 +8,7 @@ import {
   Lock,
   MousePointerClick,
   Plus,
+  RotateCcw,
   RotateCw,
   TriangleAlert,
   X,
@@ -19,6 +20,7 @@ import {
   useState,
   type ClipboardEvent,
   type ComponentProps,
+  type CSSProperties,
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
@@ -27,12 +29,15 @@ import {
 } from 'react';
 
 import { Button } from '../../components/Button';
+import { ContextMenu } from '../../components/ContextMenu';
 import { IconButton } from '../../components/IconButton';
 import { Pearl } from '../../components/Pearl';
 import { Progress } from '../../components/Progress';
+import { Spinner } from '../../components/Spinner';
 import { cx } from '../../utils/cx';
 import styles from './Browser.module.css';
 import {
+  browserShortcut,
   buttonOf,
   isReleaseKey,
   keyInput,
@@ -60,7 +65,7 @@ export interface BrowserWindowTab {
   control: BrowserControl;
   /** The assistant is waiting for you to do something (sign in, a captcha…). */
   handoff?: { reason: string };
-  /** Every tab in the chat; a strip shows them once there's more than one. */
+  /** Every tab in the chat, shown in the strip above the toolbar. */
   tabs?: BrowserWindowTabEntry[];
   /** Where it runs, when it isn't the assistant's own browser here. */
   backend?: 'chrome' | 'browserbase' | 'steel' | 'cdp';
@@ -71,7 +76,14 @@ export interface BrowserWindowTabEntry {
   title: string;
   url: string;
   active: boolean;
+  /** Its page is loading: a spinner in place of the icon. */
+  loading?: boolean;
+  /** The site's icon, as an image URL (a data URL from the gateway). */
+  icon?: string;
 }
+
+/** What a tab can do: show it, close it, open a new one, close the rest, or bring back the last closed. */
+export type BrowserTabAction = 'switch' | 'close' | 'new' | 'others' | 'reopen';
 
 /** What the assistant is about to do, for its cursor and caption. Change `key` for each new action. */
 export interface BrowserWindowAction {
@@ -84,7 +96,7 @@ export interface BrowserWindowAction {
 }
 
 export type BrowserWindowPhase =
-  'connecting' | 'off' | 'installing' | 'starting' | 'running' | 'problem';
+  'connecting' | 'off' | 'installing' | 'starting' | 'restoring' | 'running' | 'problem';
 
 export interface BrowserWindowProps extends Omit<ComponentProps<'section'>, 'onInput'> {
   tab?: BrowserWindowTab | null;
@@ -102,15 +114,15 @@ export interface BrowserWindowProps extends Omit<ComponentProps<'section'>, 'onI
   /** The assistant's name, for "Conch is browsing". */
   name?: string;
   onNavigate?: (url: string) => void;
-  onHistory?: (action: 'back' | 'forward' | 'reload') => void;
+  onHistory?: (action: 'back' | 'forward' | 'reload' | 'stop') => void;
   /** Your input on the page, while you're driving. */
   onInput?: (input: BrowserInput) => void;
   onTakeOver?: () => void;
   onHandBack?: () => void;
   /** The screen's room changed (CSS px): the page can take its shape. */
   onFit?: (size: { width: number; height: number }) => void;
-  /** Show a tab, close one, or open a new one. */
-  onTab?: (action: 'switch' | 'close' | 'new', id?: string) => void;
+  /** Show a tab, close one, open a new one, close the others, or reopen the last closed. */
+  onTab?: (action: BrowserTabAction, id?: string) => void;
   onClose?: () => void;
   /** Extra controls at the end of the toolbar. */
   actions?: ReactNode;
@@ -185,14 +197,19 @@ export function BrowserWindow({
     const el = stage.current;
     if (!el || !onFit || typeof ResizeObserver === 'undefined') return;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let first = true;
     const observer = new ResizeObserver(([entry]) => {
       if (!entry) return;
       const { width, height } = entry.contentRect;
+      if (width <= 0 || height <= 0) return;
+      const size = { width: Math.round(width), height: Math.round(height) };
       clearTimeout(timer);
-      timer = setTimeout(() => {
-        if (width > 0 && height > 0)
-          onFit({ width: Math.round(width), height: Math.round(height) });
-      }, 180);
+      // The first size goes at once, so the page opens in the panel's shape;
+      // a drag settles before the page is resized.
+      if (first) {
+        first = false;
+        onFit(size);
+      } else timer = setTimeout(() => onFit(size), 180);
     });
     observer.observe(el);
     return () => {
@@ -282,6 +299,74 @@ export function BrowserWindow({
     if (url) onNavigate?.(url);
   };
 
+  const typeAddress = (text: string) => {
+    setDraft(text);
+    setEditing(true);
+  };
+
+  const tabs = tab?.tabs?.length
+    ? tab.tabs
+    : [{ id: '', title: tab?.title ?? '', url: tab?.url ?? '', active: true }];
+  const activeTab = tabs.find((t) => t.active);
+  const newTab = () => {
+    if (!tab?.url && tabs.length <= 1) return typeAddress('');
+    onTab?.('new');
+    // The new tab is for going somewhere: the address is ready to type.
+    typeAddress('');
+  };
+
+  // A browser's keys, wherever focus is in the window (even while you drive:
+  // they're the browser's, not the page's). Some are the system's own in a
+  // web page (⌘T, ⌘W); the desktop app gets them all.
+  const onShortcut = (event: KeyboardEvent<HTMLElement>) => {
+    const shortcut = browserShortcut(event.nativeEvent);
+    if (!shortcut) return;
+    const inField = event.target instanceof HTMLInputElement;
+    const index = activeTab ? tabs.indexOf(activeTab) : 0;
+    const at = (n: number) => tabs[(n + tabs.length) % tabs.length];
+    let handled = true;
+    switch (shortcut.kind) {
+      case 'address':
+        typeAddress(tab?.url ?? '');
+        break;
+      case 'new':
+        if (onTab) newTab();
+        else handled = false;
+        break;
+      case 'close':
+        if (onTab && activeTab?.id && tabs.length > 1) onTab('close', activeTab.id);
+        else handled = false;
+        break;
+      case 'reopen':
+        if (onTab) onTab('reopen');
+        else handled = false;
+        break;
+      case 'next':
+      case 'previous': {
+        const next = at(index + (shortcut.kind === 'next' ? 1 : -1));
+        if (onTab && next?.id && tabs.length > 1) onTab('switch', next.id);
+        else handled = false;
+        break;
+      }
+      case 'nth': {
+        const next = shortcut.index < 0 ? tabs.at(-1) : tabs[shortcut.index];
+        if (onTab && next?.id && !next.active) onTab('switch', next.id);
+        else handled = Boolean(next);
+        break;
+      }
+      case 'back':
+      case 'forward':
+        // In the address field, these keys move the caret.
+        if (inField) handled = false;
+        else if (shortcut.kind === 'back' ? tab?.canGoBack : tab?.canGoForward)
+          onHistory?.(shortcut.kind);
+        break;
+    }
+    if (!handled) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
   const box = !caption?.url || caption.url === tab?.url ? caption?.box : undefined;
   const empty = !tab?.url && !hasFrame;
 
@@ -291,8 +376,15 @@ export function BrowserWindow({
       className={cx(styles.window, className)}
       data-control={control}
       data-handoff={handoff ? '' : undefined}
+      onKeyDownCapture={onShortcut}
       {...props}
     >
+      <TabStrip
+        tabs={tabs}
+        onTab={tab ? onTab : undefined}
+        onNew={onTab ? newTab : undefined}
+        onReload={tab?.url ? () => onHistory?.('reload') : undefined}
+      />
       <header className={styles.chrome}>
         <div className={styles.nav}>
           <IconButton
@@ -313,15 +405,26 @@ export function BrowserWindow({
           >
             <ArrowRight />
           </IconButton>
-          <IconButton
-            size="sm"
-            variant="ghost"
-            label="Reload"
-            disabled={!tab?.url}
-            onClick={() => onHistory?.('reload')}
-          >
-            <RotateCw />
-          </IconButton>
+          {tab?.loading ? (
+            <IconButton
+              size="sm"
+              variant="ghost"
+              label="Stop loading"
+              onClick={() => onHistory?.('stop')}
+            >
+              <X />
+            </IconButton>
+          ) : (
+            <IconButton
+              size="sm"
+              variant="ghost"
+              label="Reload"
+              disabled={!tab?.url}
+              onClick={() => onHistory?.('reload')}
+            >
+              <RotateCw />
+            </IconButton>
+          )}
         </div>
 
         {editing ? (
@@ -344,6 +447,8 @@ export function BrowserWindow({
               spellCheck={false}
               autoComplete="off"
               onChange={(event) => setDraft(event.target.value)}
+              // Like any browser: the whole address is selected, ready to replace.
+              onFocus={(event) => event.currentTarget.select()}
               onBlur={() => setEditing(false)}
               onKeyDown={(event) => {
                 if (event.key === 'Escape') setEditing(false);
@@ -356,10 +461,8 @@ export function BrowserWindow({
             className={styles.address}
             data-lustre=""
             aria-label={tab?.url ? `Address: ${tab.url}. Change it` : 'Type an address'}
-            onClick={() => {
-              setDraft(tab?.url ?? '');
-              setEditing(true);
-            }}
+            title={tab?.title || undefined}
+            onClick={() => typeAddress(tab?.url ?? '')}
           >
             {tab?.url ? (
               secure ? (
@@ -421,8 +524,6 @@ export function BrowserWindow({
         <span className={styles.loading} data-on={tab?.loading ? '' : undefined} aria-hidden />
       </header>
 
-      {tab?.tabs && tab.tabs.length > 1 && <TabStrip tabs={tab.tabs} onTab={onTab} />}
-
       {handoff && (
         <div className={styles.handoffBar} role="status">
           <Pearl size="sm" state="streaming" label={null} />
@@ -437,7 +538,12 @@ export function BrowserWindow({
         <div
           ref={screen}
           className={styles.screen}
-          style={{ aspectRatio: `${viewport.width} / ${viewport.height}` }}
+          style={
+            {
+              aspectRatio: `${viewport.width} / ${viewport.height}`,
+              '--bw-ratio': viewport.width / viewport.height,
+            } as CSSProperties
+          }
           data-driving={driving ? '' : undefined}
         >
           <button
@@ -502,10 +608,7 @@ export function BrowserWindow({
               install={install}
               problem={problem}
               name={name}
-              onType={() => {
-                setDraft('');
-                setEditing(true);
-              }}
+              onType={() => typeAddress('')}
             />
           )}
           {!empty && phase === 'problem' && problem && (
@@ -597,57 +700,151 @@ function titleOf(entry: BrowserWindowTabEntry): string {
   if (entry.title) return entry.title;
   if (!entry.url) return 'New tab';
   try {
-    return new URL(entry.url).host.replace(/^www./, '');
+    return new URL(entry.url).host.replace(/^www\./, '');
   } catch {
     return entry.url;
   }
 }
 
-/** The chat's tabs, when there's more than one: the one in view is marked, any can close. */
+/**
+ * The chat's tabs, above the toolbar as in any browser: each with its site's
+ * icon (a spinner while it loads), the one in view raised. Middle-click or ✕
+ * closes one; a right-click has the rest; double-click the empty strip for a
+ * new tab.
+ */
 function TabStrip({
   tabs,
   onTab,
+  onNew,
+  onReload,
 }: {
   tabs: BrowserWindowTabEntry[];
   onTab?: BrowserWindowProps['onTab'];
+  onNew?: () => void;
+  onReload?: () => void;
 }) {
+  const several = tabs.length > 1;
+  const strip = useRef<HTMLElement | null>(null);
+  const list = useRef<HTMLUListElement | null>(null);
+  // Double-click the empty strip for a new tab: a mouse shortcut for + and ⌘T.
+  useEffect(() => {
+    const nav = strip.current;
+    if (!nav || !onNew) return;
+    const onDoubleClick = (event: MouseEvent) => {
+      if (event.target === nav || event.target === list.current) onNew();
+    };
+    nav.addEventListener('dblclick', onDoubleClick);
+    return () => nav.removeEventListener('dblclick', onDoubleClick);
+  }, [onNew]);
   return (
-    <nav aria-label="Tabs" className={styles.tabs}>
-      <ul className={styles.tabList}>
+    <nav ref={strip} aria-label="Tabs" className={styles.tabs}>
+      <ul ref={list} className={styles.tabList}>
         {tabs.map((entry) => {
           const title = titleOf(entry);
           return (
-            <li key={entry.id} className={styles.tab} data-active={entry.active ? '' : undefined}>
-              <button
-                type="button"
-                className={styles.tabButton}
-                aria-current={entry.active ? 'page' : undefined}
-                title={entry.url || title}
-                onClick={() => onTab?.('switch', entry.id)}
-              >
-                <Globe aria-hidden className={styles.tabIcon} />
-                <span className={styles.tabTitle}>{title}</span>
-              </button>
-              <IconButton
-                size="sm"
-                variant="ghost"
-                label={`Close tab: ${title}`}
-                className={styles.tabClose}
-                onClick={() => onTab?.('close', entry.id)}
-              >
-                <X />
-              </IconButton>
-            </li>
+            <ContextMenu.Root key={entry.id || 'only'}>
+              <ContextMenu.Trigger asChild disabled={!onTab || !entry.id}>
+                <li
+                  className={styles.tab}
+                  data-active={entry.active ? '' : undefined}
+                  data-alone={several ? undefined : ''}
+                >
+                  <button
+                    type="button"
+                    className={styles.tabButton}
+                    aria-current={entry.active ? 'page' : undefined}
+                    title={entry.url ? `${title}\n${entry.url}` : title}
+                    onClick={() => {
+                      if (!entry.active && entry.id) onTab?.('switch', entry.id);
+                    }}
+                    onAuxClick={(event) => {
+                      // The middle button closes a tab, as in every browser.
+                      if (event.button === 1 && several && entry.id) onTab?.('close', entry.id);
+                    }}
+                    onMouseDown={(event) => {
+                      // …and doesn't start scrolling.
+                      if (event.button === 1) event.preventDefault();
+                    }}
+                  >
+                    <TabIcon entry={entry} />
+                    <span className={styles.tabTitle}>{title}</span>
+                  </button>
+                  {several && entry.id && onTab && (
+                    <IconButton
+                      size="sm"
+                      variant="ghost"
+                      label={`Close tab: ${title}`}
+                      className={styles.tabClose}
+                      onClick={() => onTab('close', entry.id)}
+                    >
+                      <X />
+                    </IconButton>
+                  )}
+                </li>
+              </ContextMenu.Trigger>
+              <ContextMenu.Content>
+                {onReload && entry.active && (
+                  <ContextMenu.Item icon={<RotateCw />} onSelect={onReload}>
+                    Reload
+                  </ContextMenu.Item>
+                )}
+                <ContextMenu.Item icon={<Plus />} shortcut="mod+t" onSelect={() => onNew?.()}>
+                  New tab
+                </ContextMenu.Item>
+                <ContextMenu.Item
+                  icon={<RotateCcw />}
+                  shortcut="mod+shift+t"
+                  onSelect={() => onTab?.('reopen')}
+                >
+                  Reopen closed tab
+                </ContextMenu.Item>
+                <ContextMenu.Separator />
+                <ContextMenu.Item
+                  icon={<X />}
+                  shortcut="mod+w"
+                  disabled={!several}
+                  onSelect={() => onTab?.('close', entry.id)}
+                >
+                  Close tab
+                </ContextMenu.Item>
+                <ContextMenu.Item disabled={!several} onSelect={() => onTab?.('others', entry.id)}>
+                  Close other tabs
+                </ContextMenu.Item>
+              </ContextMenu.Content>
+            </ContextMenu.Root>
           );
         })}
       </ul>
-      {onTab && (
-        <IconButton size="sm" variant="ghost" label="New tab" onClick={() => onTab('new')}>
+      {onNew && (
+        <IconButton
+          size="sm"
+          variant="ghost"
+          label="New tab"
+          className={styles.newTab}
+          onClick={onNew}
+        >
           <Plus />
         </IconButton>
       )}
     </nav>
   );
+}
+
+/** A tab's site icon; a spinner while it loads; a globe until the site has one. */
+function TabIcon({ entry }: { entry: BrowserWindowTabEntry }) {
+  const [broken, setBroken] = useState<string>();
+  if (entry.loading) return <Spinner size="xs" label={null} className={styles.tabIcon} />;
+  if (entry.icon && broken !== entry.icon)
+    return (
+      <img
+        src={entry.icon}
+        alt=""
+        className={styles.tabIcon}
+        draggable={false}
+        onError={() => setBroken(entry.icon)}
+      />
+    );
+  return <Globe aria-hidden className={styles.tabIcon} />;
 }
 
 function ScreenMessage({
@@ -677,12 +874,16 @@ function ScreenMessage({
       </div>
     );
   }
-  if (phase === 'starting' || phase === 'connecting') {
+  if (phase === 'starting' || phase === 'connecting' || phase === 'restoring') {
     return (
       <div className={styles.message} aria-busy="true">
         <Pearl size="md" state="thinking" label={null} />
         <p className={styles.messageTitle}>
-          {phase === 'starting' ? 'Starting the browser…' : 'Connecting…'}
+          {phase === 'restoring'
+            ? 'Opening your tabs…'
+            : phase === 'starting'
+              ? 'Starting the browser…'
+              : 'Connecting…'}
         </p>
       </div>
     );

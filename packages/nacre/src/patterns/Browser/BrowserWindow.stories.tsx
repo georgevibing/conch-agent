@@ -118,7 +118,15 @@ export const YourTurn: Story = {
   },
 };
 
-/** Links that open a new tab, and sign-in popups, become tabs you can see and switch. */
+/** The site's icon, as the gateway sends it: a small image inline. */
+const staylightIcon =
+  'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiI+PHJlY3Qgd2lkdGg9IjE2IiBoZWlnaHQ9IjE2IiByeD0iNCIgZmlsbD0iIzBiNmU0ZiIvPjxwYXRoIGQ9Ik00IDExVjVoM2EyIDIgMCAwIDEgMCA0SDUiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxLjYiIGZpbGw9Im5vbmUiLz48L3N2Zz4=';
+
+/**
+ * Tabs sit above the toolbar, as in any browser: each with its site's icon, a
+ * spinner while it loads. Links that open a new tab, and sign-in popups, become
+ * tabs too. Right-click one for the rest.
+ */
 export const Tabs: Story = {
   args: {
     onTab: fn(),
@@ -126,17 +134,35 @@ export const Tabs: Story = {
       ...hotels,
       control: 'idle',
       tabs: [
-        { id: 't1', title: 'Hotels in Lisbon · Staylight', url: hotels.url, active: false },
+        {
+          id: 't1',
+          title: 'Hotels in Lisbon · Staylight',
+          url: hotels.url,
+          active: false,
+          icon: staylightIcon,
+        },
         {
           id: 't2',
           title: 'Casa do Rio · Staylight',
           url: 'https://www.staylight.example/hotel/0',
           active: true,
+          icon: staylightIcon,
         },
-        { id: 't3', title: '', url: 'https://accounts.example.com/signin', active: false },
+        {
+          id: 't3',
+          title: '',
+          url: 'https://accounts.example.com/signin',
+          active: false,
+          loading: true,
+        },
       ],
     },
   },
+};
+
+/** After a restart: the chat's tabs open again where they were. */
+export const Restoring: Story = {
+  args: { tab: null, frame: undefined, phase: 'restoring', onTab: fn() },
 };
 
 /** Working in your own Chrome, where you’re signed in: the window says so. */

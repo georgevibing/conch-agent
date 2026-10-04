@@ -9,7 +9,7 @@ import { BrowserStatusCard } from './BrowserStatusCard';
 import { BrowserTrail } from './BrowserTrail';
 import { BrowserWindow, type BrowserWindowTab } from './BrowserWindow';
 import { hotelsPage, trailSteps } from './fixtures';
-import { keyInput, pointOn, wheelDelta } from './input';
+import { browserShortcut, keyInput, pointOn, wheelDelta } from './input';
 
 const tab: BrowserWindowTab = {
   url: 'https://www.staylight.example/lisbon',
@@ -31,6 +31,32 @@ function stubRect(el: HTMLElement) {
       y: 50,
     }) as DOMRect;
 }
+
+describe('browser keys', () => {
+  it('reads ⌘ as Ctrl off a Mac, and leaves the page its own keys', () => {
+    const key = (init: Partial<KeyboardEvent>) => ({
+      key: '',
+      code: '',
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      ...init,
+    });
+    expect(browserShortcut(key({ key: 't', ctrlKey: true }), false)).toEqual({ kind: 'new' });
+    expect(browserShortcut(key({ key: 't', metaKey: true }), true)).toEqual({ kind: 'new' });
+    // Ctrl+T on a Mac is the page's.
+    expect(browserShortcut(key({ key: 't', ctrlKey: true }), true)).toBeUndefined();
+    expect(browserShortcut(key({ key: '[', metaKey: true }), true)).toEqual({ kind: 'back' });
+    expect(browserShortcut(key({ key: '1', code: 'Digit1', ctrlKey: true }), false)).toEqual({
+      kind: 'nth',
+      index: 0,
+    });
+    // Copy, paste, select all: the page's.
+    for (const k of ['c', 'v', 'a', 'r'])
+      expect(browserShortcut(key({ key: k, ctrlKey: true }), false)).toBeUndefined();
+  });
+});
 
 describe('input mapping', () => {
   it('turns pointer positions into 0–1 of the screen, clamped', () => {
@@ -193,8 +219,10 @@ describe('BrowserWindow', () => {
         onTab={onTab}
       />,
     );
-    // One tab: no strip.
-    expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();
+    // One tab: the strip is there (as in any browser), but one tab can't be closed.
+    expect(screen.getByRole('navigation', { name: 'Tabs' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hotels' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('button', { name: /^Close tab/ })).not.toBeInTheDocument();
     rerender(
       <BrowserWindow
         tab={{
@@ -216,10 +244,82 @@ describe('BrowserWindow', () => {
     expect(onTab).toHaveBeenLastCalledWith('switch', 't1');
     await user.click(screen.getByRole('button', { name: 'Close tab: Hotels' }));
     expect(onTab).toHaveBeenLastCalledWith('close', 't1');
+    // The middle button closes a tab too.
+    fireEvent(
+      screen.getByRole('button', { name: 'Hotels' }),
+      new MouseEvent('auxclick', { bubbles: true, button: 1 }),
+    );
+    expect(onTab).toHaveBeenLastCalledWith('close', 't1');
     await user.click(screen.getByRole('button', { name: 'New tab' }));
     expect(onTab).toHaveBeenLastCalledWith('new');
+    // …and the address is ready to type for it.
+    expect(screen.getByRole('textbox', { name: 'Address' })).toHaveFocus();
     expect(strip).toBeInTheDocument();
     await expectAccessible(container);
+  });
+
+  it('shows each tab’s icon, and a spinner while it loads', () => {
+    const icon = 'data:image/png;base64,iVBORw0KGgo=';
+    const { container } = renderNacre(
+      <BrowserWindow
+        tab={{
+          ...tab,
+          loading: true,
+          tabs: [
+            { id: 't1', title: 'Hotels', url: tab.url, active: false, icon },
+            { id: 't2', title: 'Maps', url: 'https://maps.example', active: true, loading: true },
+          ],
+        }}
+        onTab={() => undefined}
+      />,
+    );
+    expect(container.querySelector(`img[src="${icon}"]`)).toBeInTheDocument();
+    // Loading: Stop in place of Reload.
+    expect(screen.getByRole('button', { name: 'Stop loading' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reload' })).not.toBeInTheDocument();
+  });
+
+  it('has a browser’s keys for tabs, the address and history', () => {
+    const onTab = vi.fn();
+    const onHistory = vi.fn();
+    renderNacre(
+      <BrowserWindow
+        tab={{
+          ...tab,
+          canGoForward: false,
+          tabs: [
+            { id: 't1', title: 'Hotels', url: tab.url, active: true },
+            { id: 't2', title: 'Maps', url: 'https://maps.example', active: false },
+            { id: 't3', title: 'Mail', url: 'https://mail.example', active: false },
+          ],
+        }}
+        onTab={onTab}
+        onHistory={onHistory}
+      />,
+    );
+    const window = screen.getByRole('region', { name: 'Browser' });
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true });
+    expect(onTab).toHaveBeenLastCalledWith('switch', 't2');
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true, shiftKey: true });
+    expect(onTab).toHaveBeenLastCalledWith('switch', 't3');
+    fireEvent.keyDown(window, { key: '9', code: 'Digit9', ctrlKey: true });
+    expect(onTab).toHaveBeenLastCalledWith('switch', 't3');
+    fireEvent.keyDown(window, { key: 'w', ctrlKey: true });
+    expect(onTab).toHaveBeenLastCalledWith('close', 't1');
+    fireEvent.keyDown(window, { key: 'T', ctrlKey: true, shiftKey: true });
+    expect(onTab).toHaveBeenLastCalledWith('reopen');
+    fireEvent.keyDown(window, { key: 'ArrowLeft', altKey: true });
+    expect(onHistory).toHaveBeenLastCalledWith('back');
+    // Nowhere forward to go: nothing happens.
+    fireEvent.keyDown(window, { key: 'ArrowRight', altKey: true });
+    expect(onHistory).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(window, { key: 'l', ctrlKey: true });
+    expect(screen.getByRole('textbox', { name: 'Address' })).toHaveValue(tab.url);
+  });
+
+  it('opens your tabs again', () => {
+    renderNacre(<BrowserWindow tab={null} phase="restoring" />);
+    expect(screen.getByText('Opening your tabs…')).toBeInTheDocument();
   });
 
   it('says when it’s your own Chrome or a browser in the cloud', () => {
