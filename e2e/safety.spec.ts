@@ -6,14 +6,15 @@ const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
 
 /**
  * Safe hands, end to end (ADR 0028): a chat reads a page, then asks before a
- * command, with why and no "always"; Settings → Security → Safety; the
+ * command, with why, and "Always allow" lets that tool through for the rest of
+ * the chat; Settings → Security → Safety; the
  * Activity page; a worrying skill that stays off until you've looked.
  */
 test.beforeEach(async ({ request }) => {
   await request.patch('/api/settings', { data: { onboarded: true, profile: { name: 'Ada' } } });
 });
 
-test('after reading a page, a command asks — saying why — and there’s no “always”', async ({
+test('after reading a page, a command asks — saying why — and “Always allow” is offered', async ({
   page,
 }) => {
   await page.goto('/');
@@ -36,7 +37,8 @@ test('after reading a page, a command asks — saying why — and there’s no �
   await expect(card).toContainText(
     'This chat read news.example, which could be trying to steer me. So I’m checking before I run a command.',
   );
-  await expect(card.getByRole('button', { name: 'Always allow' })).toHaveCount(0);
+  // "Always" is true here: it lets this tool through for the rest of the chat (ADR 0028).
+  await expect(card.getByRole('button', { name: 'Always allow' })).toHaveCount(1);
   await card.getByRole('button', { name: 'Deny' }).click();
   await expect(page.getByText(/Declined · Run/)).toBeVisible();
   // The timeline reads what's been saved: the reply finishes first.
