@@ -277,6 +277,33 @@ describe('gateway HTTP', () => {
     ).toBe(200);
     expect((await app.inject('/api/memories')).json()).toEqual([]);
   });
+  it('writes Keep and Undo into the chat a memory came from, so a reload shows them', async () => {
+    const { app, services } = await setup();
+    close = () => app.close();
+    const convo = await services.conversations.send({ clientMessageId: 'u1', text: 'hello' });
+    const kept = await services.memory.add({
+      content: 'Projects live in ~/projects',
+      source: 'agent',
+      conversationId: convo.id,
+      pending: true,
+    });
+    const undone = await services.memory.add({
+      content: 'Likes tea',
+      source: 'agent',
+      conversationId: convo.id,
+    });
+    expect(
+      (await app.inject({ method: 'POST', url: `/api/memories/${kept.id}/keep` })).statusCode,
+    ).toBe(200);
+    expect(
+      (await app.inject({ method: 'DELETE', url: `/api/memories/${undone.id}` })).statusCode,
+    ).toBe(200);
+    const { events } = await services.conversations.detail(convo.id);
+    expect(events.filter((e) => e.type === 'memory.decided')).toEqual([
+      expect.objectContaining({ memoryId: kept.id, kept: true }),
+      expect.objectContaining({ memoryId: undone.id, kept: false }),
+    ]);
+  });
 });
 
 describe('gateway capabilities and commands', () => {

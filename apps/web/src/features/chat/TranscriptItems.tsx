@@ -413,21 +413,23 @@ export function TaintItem({ item, first }: { item: Of<'taint'>; first: boolean }
 
 export function MemoryPill({ item }: { item: Of<'memory'> }) {
   const client = useQueryClient();
-  const [answer, setAnswer] = useState<'undone' | 'kept'>();
-  // The pill says what you pressed at once; it goes back if that didn't work.
+  const [pressed, setPressed] = useState<'undone' | 'kept'>();
+  // What you pressed shows at once (and goes back if it didn't work); after a
+  // reload, the chat's own log says what you chose.
+  const answer = pressed ?? item.decided;
   const act = async (keep: boolean) => {
-    const before = answer;
-    setAnswer(keep ? 'kept' : 'undone');
+    const before = pressed;
+    setPressed(keep ? 'kept' : 'undone');
     try {
       if (keep) await memoryApi.keep(item.memoryId);
       else await api.deleteMemory(item.memoryId);
       void client.invalidateQueries({ queryKey: keys.memories });
     } catch (e) {
-      setAnswer(before);
+      setPressed(before);
       toast.error((e as Error).message);
     }
   };
-  // Learned in a chat that read something from outside: it waits for an OK (ADR 0032).
+  // Learned where nobody could undo it at once (a routine, a chat app): it waits for an OK.
   const waiting = item.action === 'saved' && item.pending && !answer;
   const label =
     answer === 'undone' || item.action === 'forgotten'
@@ -443,27 +445,27 @@ export function MemoryPill({ item }: { item: Of<'memory'> }) {
     >
       <Brain aria-hidden />
       <span className={styles.memoryText}>
-        {label}: {item.content}
-        {waiting && (
-          <span className={styles.memoryWhy}>
-            {' '}
-            This chat read something from outside, so it waits for your OK.
-          </span>
-        )}
+        <span className={styles.memoryLabel}>{label}</span> {item.content}
       </span>
       {waiting ? (
-        <>
+        <div className={styles.memoryActions}>
           <Button variant="soft" size="sm" onClick={() => void act(true)}>
             Keep
           </Button>
           <Button variant="ghost" tone="neutral" size="sm" onClick={() => void act(false)}>
             Forget
           </Button>
-        </>
+        </div>
       ) : (
         item.action === 'saved' &&
         answer !== 'undone' && (
-          <Button variant="ghost" size="sm" leadingIcon={<Undo2 />} onClick={() => void act(false)}>
+          <Button
+            variant="ghost"
+            tone="neutral"
+            size="sm"
+            leadingIcon={<Undo2 />}
+            onClick={() => void act(false)}
+          >
             Undo
           </Button>
         )

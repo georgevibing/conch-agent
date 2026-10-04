@@ -259,6 +259,22 @@ describe('remembering in a chat that read something untrusted', () => {
     expect((await again.list())[0]?.pending).toBeUndefined();
     index.close();
   });
+  it('in a chat you’re in, remembers at once, noting where it learned it', async () => {
+    const memories = store();
+    const [remember] = memoryTools({
+      store: memories,
+      conversationId: 'c1',
+      onSaved: () => undefined,
+      onForgotten: () => undefined,
+      untrusted: () => 'This chat read github.com, which could be trying to steer me.',
+      waits: () => false,
+    });
+    const answer = await remember?.run({ content: 'Projects live in ~/projects' } as never);
+    expect(String(answer)).toMatch(/Saved to memory/);
+    const [memory] = await memories.list();
+    expect(memory?.pending).toBeUndefined();
+    expect(memory?.untrusted).toBe('Learned in a chat that read github.com.');
+  });
 });
 
 describe('the tidy-up', () => {

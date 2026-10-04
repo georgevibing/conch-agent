@@ -25,6 +25,8 @@ export function registerLearningRoutes(
     /** Get Conch's own model for meaning (ADR 0041), and how far it got. */
     getMeaningModel: (languages: string[]) => Promise<void>;
     meaningState: () => { getting?: number; problem?: string };
+    /** A memory a chat learned was kept: the chat's own log says so. */
+    decided?: (memory: { id: string; conversationId?: string }, kept: boolean) => Promise<void>;
   },
 ): void {
   const { store, index, tidy, suggester } = deps;
@@ -41,6 +43,7 @@ export function registerLearningRoutes(
         .code(404)
         .send({ error: 'not-found', message: 'That memory isn’t there any more.' });
     void index.sync();
+    await deps.decided?.(kept, true).catch(() => undefined);
     return kept;
   });
 

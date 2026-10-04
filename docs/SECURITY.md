@@ -404,9 +404,11 @@ address, so for them Conch can open one ([ADR 0045](./adr/0045-teams-matrix-wech
   throwaway folder.
 - Be careful what you ask the agent to read: web pages, emails and files can
   contain instructions meant for it ("prompt injection"). Conch never lets the agent
-  turn on a scheduled routine or give itself more trust — you do that. And anything
-  it learns about you in a chat that read something from outside waits for your OK
-  in **What Conch knows about you** before it's ever used.
+  turn on a scheduled routine or give itself more trust — you do that. Anything
+  it learns about you in a chat that read something from outside is said in the
+  chat, with **Undo**, and notes where it came from; when nobody is there to see
+  it (a routine, a chat app), it waits for your OK in **What Conch knows about
+  you** before it's ever used.
 - Use a password manager.
 - Sign out devices you don't use.
 
@@ -444,8 +446,7 @@ that kind of step through for the rest of the chat, as it does anywhere else.
 assistant act, and a web page it reads could trick it (the mode picker says so).
 The chat still notes what it read. Some things hold even then: a routine running
 by itself, or a chat where someone else is talking to the assistant (a chat
-app), still asks; so does a command that wants out of the sealed box, or a
-step a skill's list doesn't cover.
+app), still asks, and so does a step a skill's list doesn't cover.
 
 Your assistant can look through your earlier chats. When what it finds comes
 from a chat that read something from outside, or has someone else's words, this
@@ -455,7 +456,12 @@ assistant brings back from them carries a password or a key.
 
 Commands also run **sealed**: they can change your work folder and the caches
 installs use, and can't read your SSH keys, cloud sign-ins, keychains or
-browsers' saved passwords. A command that needs out asks first.
+browsers' saved passwords. A command that needs out (the network for a clone or
+an install) asks first, with **Always allow** for the rest of the chat; in Full
+trust it just runs. Where commands can't be sealed, or you turn sealing off,
+every command runs with your own access and asks the same way. Unsealed, a
+command can reach what you can: Conch refuses one that names its keys or your
+sign-ins, but only a sandbox really keeps them out.
 
 Both are in **Settings → Security → Safety**, on unless you turn them off. Turning
 one off asks that it's you, and the checkup will say so. **Activity** (in the

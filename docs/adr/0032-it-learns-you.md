@@ -159,3 +159,14 @@ Nothing is saved or turned on by Conch.
     meaning across chats (average linkage, at least three chats), and existing
     skills and turned-down suggestions are recognised in other words too. Without
     one, it's still by wording.
+
+## Update (2026-10-04): remembered, and said so
+
+A memory learned in a chat that read something from outside used to wait for
+an OK every time. Research chats read the web constantly, so most memories
+waited, and the cards read as warnings. Now, in a chat someone is in, it's
+remembered at once: the chat says **Remembered** with **Undo**, and the memory
+keeps its `untrusted` note (where it was learned) on the Memory page. It still
+waits for **Keep** when nobody is there to undo it: a routine, a chat started
+from a chat app, or someone else's words in the chat. Keep and Undo are
+written into the chat's log (`memory.decided`), so it shows them after a reload.

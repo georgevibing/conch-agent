@@ -168,6 +168,35 @@ describe('transcript reducer', () => {
     expect(view.turnStartedAt).toBeUndefined();
   });
 
+  it('keeps what you chose about a memory in the chat, so a reload shows it', () => {
+    const memory = {
+      id: 'm_1',
+      content: 'Projects live in ~/projects',
+      kind: 'project' as const,
+      source: 'agent' as const,
+      pending: true,
+      createdAt: 0,
+      updatedAt: 0,
+    };
+    const kept = reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: 'Set up my projects folder' },
+        { type: 'memory.saved', memory },
+        { type: 'memory.decided', memoryId: 'm_1', kept: true },
+      ),
+    );
+    expect(kept.items[1]).toMatchObject({ kind: 'memory', decided: 'kept', pending: false });
+    const undone = reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: 'Set up my projects folder' },
+        { type: 'memory.saved', memory: { ...memory, pending: undefined } },
+        { type: 'memory.decided', memoryId: 'm_1', kept: false },
+      ),
+    );
+    expect(undone.items).toHaveLength(2);
+    expect(undone.items[1]).toMatchObject({ kind: 'memory', decided: 'undone' });
+  });
+
   it('starts empty', () => {
     expect(emptyView.items).toEqual([]);
   });

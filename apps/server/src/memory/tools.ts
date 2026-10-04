@@ -12,8 +12,14 @@ export function memoryTools(options: {
   onForgotten: (memory: Memory) => void;
   /** Hybrid search (ADR 0032); keyword search when absent. */
   search?: (query: string) => Promise<{ memory: Memory }[]>;
-  /** The chat read something untrusted: why. What it remembers then waits for an OK. */
+  /** The chat read something untrusted: why. Kept with what it remembers, as where it came from. */
   untrusted?: () => string | undefined;
+  /**
+   * What it remembers after reading waits for an OK: nobody is there to see it
+   * and undo it (a routine, a chat app). In a chat you're in, it's remembered
+   * at once and the chat says so, with Undo.
+   */
+  waits?: () => boolean;
 }): HostTool[] {
   const { store, conversationId } = options;
   const remember: HostTool<{ content: z.ZodString; kind: z.ZodOptional<typeof MemoryKind> }> = {
@@ -22,15 +28,17 @@ export function memoryTools(options: {
       'Save one durable fact about the user to long-term memory so you know it in future conversations. One concise, self-contained, third-person statement per call.',
     input: { content: z.string().min(1).max(500), kind: MemoryKind.optional() },
     async run({ content, kind }) {
-      // After reading something untrusted, a page could be the one asking: the person decides (ADR 0032).
+      // After reading something untrusted, a page could be the one asking (ADR 0032): it's
+      // remembered with where it came from, and waits for an OK only when nobody can undo it.
       const untrusted = options.untrusted?.();
+      const waits = Boolean(untrusted) && (options.waits?.() ?? true);
       const memory = await store.add({
         content,
         kind,
         source: 'agent',
         conversationId,
         ...(untrusted && {
-          pending: true,
+          ...(waits && { pending: true }),
           untrusted: `Learned in a chat that ${untrusted.replace(/^This chat /, '').replace(/, which could be trying to steer me\.$/, '')}.`,
         }),
       });

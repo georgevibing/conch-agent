@@ -140,8 +140,10 @@ export type TranscriptItem =
       memoryId: string;
       content: string;
       action: 'saved' | 'forgotten';
-      /** Waits for an OK: learned in a chat that read something untrusted (ADR 0032). */
+      /** Waits for an OK: learned where nobody could undo it (ADR 0032). */
       pending?: boolean;
+      /** What you said since: kept it, or undid it. */
+      decided?: 'kept' | 'undone';
     }
   | {
       /** It looked through your other chats (ADR 0059): for what, with a link to each place. */
@@ -629,6 +631,17 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
           },
         ],
       };
+    case 'memory.decided': {
+      const decided = event.kept ? ('kept' as const) : ('undone' as const);
+      let found = false;
+      const updated = items.map((item) => {
+        if (item.kind !== 'memory' || item.memoryId !== event.memoryId || item.action !== 'saved')
+          return item;
+        found = true;
+        return { ...item, decided, pending: false };
+      });
+      return found ? { ...base, items: updated } : base;
+    }
     case 'memory.forgotten':
       return {
         ...base,

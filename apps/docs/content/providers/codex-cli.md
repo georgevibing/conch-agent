@@ -22,7 +22,7 @@ Codex can use Conch’s memory, browser, skills, routines and connected apps. Co
 - **Edit freely:** work-folder file edits need no extra question; commands ask.
 - **Full trust:** ordinary work-folder actions need no extra question. Protected paths, disabled tools and read-then-act checks still apply.
 
-Commands always run in an operating-system sandbox, with no network access and writes limited to this chat’s work folder. There is no unrestricted fallback. On Linux, **Settings → Health** explains any missing bubblewrap, socat or ripgrep dependency. On Windows, command tools are unavailable; file tools and connected apps still work. File tools reject links outside the workspace, hard links and protected credential locations.
+Commands run in an operating-system sandbox where this computer can make one: no network access, and writes limited to this chat’s work folder. A command that needs more, like cloning a repository or installing something, asks to run with your access first (in Full trust it just runs). On Linux, **Settings → Health** explains any missing bubblewrap, socat or ripgrep dependency; until then, and on Windows, every command runs with your access and asks the same way. File tools reject links outside the workspace, hard links and protected credential locations.
 
 ## Conversations and compatibility
 

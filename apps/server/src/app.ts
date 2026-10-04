@@ -217,7 +217,17 @@ export async function buildApp(services: Services) {
     () => services.conversations.busy(),
     () => services.trayInfo(),
   );
+  // Keep and Undo on a memory a chat learned are written into that chat, so it shows them after a reload.
+  const memoryDecided = async (memory: { id: string; conversationId?: string }, kept: boolean) => {
+    if (memory.conversationId)
+      await services.conversations.note(memory.conversationId, {
+        type: 'memory.decided',
+        memoryId: memory.id,
+        kept,
+      });
+  };
   registerLearningRoutes(app, {
+    decided: memoryDecided,
     store: services.memory,
     index: services.memoryIndex,
     tidy: services.tidy,
@@ -1022,6 +1032,7 @@ export async function buildApp(services: Services) {
   });
   app.delete<{ Params: { id: string } }>('/api/memories/:id', async (request, reply) => {
     const removed = await services.memory.remove(request.params.id);
+    if (removed) await memoryDecided(removed, false).catch(() => undefined);
     return removed
       ? { ok: true }
       : reply.code(404).send({ error: 'not-found', message: 'Memory not found.' });

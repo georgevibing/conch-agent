@@ -155,7 +155,7 @@ describe('commands, on every provider that uses Conch’s tools', () => {
     expect(ask).toHaveBeenCalledOnce();
   });
 
-  it('keeps Conch’s keys and your secrets out of reach, sealed or not', async () => {
+  it('refuses a command that names Conch’s keys or your sign-ins', async () => {
     const input = await turn({
       options: { permissionMode: 'bypassPermissions', effort: 'auto', fastMode: false },
     });

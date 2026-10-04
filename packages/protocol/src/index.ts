@@ -478,6 +478,13 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     memoryId: z.string(),
     content: z.string(),
   }),
+  /** You kept a memory this chat learned, or undid it (from the chat or the Memory page). */
+  z.object({
+    ...logged,
+    type: z.literal('memory.decided'),
+    memoryId: z.string(),
+    kept: z.boolean(),
+  }),
   /** The chat read something from outside: from here on, sending and changing ask first (ADR 0028). */
   z.object({
     ...logged,

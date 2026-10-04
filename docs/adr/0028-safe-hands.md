@@ -216,9 +216,22 @@ Now:
   records what it read. The mode's own words already warn that a page it reads
   could trick it.
 - It still asks in Full trust when nobody is there to choose (a routine, a chat
-  started from a chat app), when someone else's words are in the chat, for a
-  command that wants out of the sealed box, and for a step outside a skill's list.
+  started from a chat app), when someone else's words are in the chat, and for a
+  step outside a skill's list.
 - In the other modes the card offers **Always allow** (`afterReading` on
   `permission.requested`), which lets that tool through for the rest of the chat,
   read or not. It isn't offered for the sealed box, a skill's list, or someone
   else's words, where "always" would be untrue.
+
+### And commands everywhere (same day)
+
+Conch's own command tool was offered only where it could be sealed, and sealed
+it had no network: on a VPS without bubblewrap, or on Windows, Codex and the
+API providers had no shell, and nowhere could they clone a repository. Now the
+tool is always offered. It runs sealed where this computer can and sealing is
+on; a command that needs more sets `dangerouslyDisableSandbox` (as with Claude
+Code) and runs with the person's access. Where it can't be sealed, every
+command runs that way. Leaving the box asks with **Always allow** (`box:<tool>`),
+and in Full trust, in a chat someone is in, it just runs. A command naming
+Conch's keys or sign-ins is refused, but unsealed that is a speed bump, not a
+boundary, and the documentation says so.

@@ -112,7 +112,8 @@ export async function runHostCommand(
   // No box for this turn: this computer can't make one, or sealing is off in Settings.
   const unboxed = unsealed || !sealable(input);
   if (unboxed) {
-    // Conch's keys, your passwords and sign-ins stay out of reach, sealed or not.
+    // A command that names Conch's keys or your sign-ins is refused. Only a
+    // speed bump: unsealed, a command runs with your access, which is why it asks first.
     const places = [...(input.protectedPaths ?? []), ...secretPlaces().map((p) => p.path)];
     if (touchesProtected({ command }, places)) throw new Error(PROTECTED_MESSAGE);
   }
@@ -281,7 +282,7 @@ export function hostComputerTools(input: TurnInput): HostTool[] {
       name: 'Bash',
       description: sealable(input)
         ? 'Run a command in the work folder, sealed by the operating system: no network, no secrets, and writes stay in the work folder (not .git). For a command that needs more (the network for git clone or an install, or files elsewhere), set dangerouslyDisableSandbox: true; it then runs with the person’s own access, and they are asked first unless they chose Full trust.'
-        : 'Run a command in the work folder. This computer can’t seal commands, so each one runs with the person’s own access (the network included), and they are asked first unless they chose Full trust. Passwords, sign-ins and Conch’s keys stay out of reach.',
+        : 'Run a command in the work folder. This computer can’t seal commands, so each one runs with the person’s own access (the network included), and they are asked first unless they chose Full trust.',
       input: {
         command: z.string().min(1).max(32_000),
         timeout_ms: z.number().int().min(100).max(600_000).default(30_000),

@@ -1169,7 +1169,7 @@ export class ConversationManager {
    */
   async note(
     id: string,
-    event: Extract<ConversationEventInput, { type: 'artifact' | 'task' }>,
+    event: Extract<ConversationEventInput, { type: 'artifact' | 'task' | 'memory.decided' }>,
   ): Promise<void> {
     const live = await this.#get(id);
     this.#append(live, event);
@@ -1652,11 +1652,13 @@ export class ConversationManager {
       ...(this.deps.memoryIndex && {
         search: (q: string) => this.deps.memoryIndex?.search(q) ?? Promise.resolve([]),
       }),
-      // Learned in a chat that read something untrusted: it waits for the person's OK (ADR 0032).
+      // Learned in a chat that read something untrusted (ADR 0032): noted, and remembered at
+      // once where you can see it and undo it; a routine or a chat app waits for an OK.
       untrusted: () => {
         const tainted = this.#tainted(live);
         return tainted.length ? describeTaint(tainted) : undefined;
       },
+      waits: () => !watched || this.#tainted(live).some((source) => source.kind === 'person'),
       onSaved: (memory) => {
         this.#append(live, { type: 'memory.saved', memory });
       },
