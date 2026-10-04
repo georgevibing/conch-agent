@@ -195,6 +195,20 @@ describe('transcript reducer', () => {
     );
     expect(undone.items).toHaveLength(2);
     expect(undone.items[1]).toMatchObject({ kind: 'memory', decided: 'undone' });
+    // One it forgot, put back: its "Forgot" line says so after a reload.
+    const putBack = reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: 'Forget where my projects are' },
+        { type: 'memory.forgotten', memoryId: 'm_1', content: memory.content, memory },
+        { type: 'memory.decided', memoryId: 'm_1', kept: true },
+      ),
+    );
+    expect(putBack.items[1]).toMatchObject({
+      kind: 'memory',
+      action: 'forgotten',
+      decided: 'kept',
+      memory: expect.objectContaining({ id: 'm_1' }),
+    });
   });
 
   it('starts empty', () => {

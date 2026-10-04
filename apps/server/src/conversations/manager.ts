@@ -1673,6 +1673,7 @@ export class ConversationManager {
           type: 'memory.forgotten',
           memoryId: memory.id,
           content: memory.content,
+          memory,
         });
       },
     });

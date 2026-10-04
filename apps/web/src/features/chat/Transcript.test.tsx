@@ -294,6 +294,27 @@ describe('what Conch remembers', () => {
     expect(calls.some((c) => c.path === '/api/memories/m_1/keep')).toBe(true);
   });
 
+  it('puts back what it forgot with Undo, exactly as it was', async () => {
+    const memory = {
+      id: 'm_1',
+      content: 'Projects live in ~/projects',
+      kind: 'project' as const,
+      source: 'agent' as const,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'POST /api/memories/restore': () => memory,
+    });
+    render(saved({ action: 'forgotten', content: memory.content, memory }));
+    expect(screen.getByText('Forgot')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(await screen.findByText('Put back')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+    expect(calls.find((c) => c.path === '/api/memories/restore')?.body).toEqual({ memory });
+  });
+
   it('shows what you chose after a reload: kept, or undone', () => {
     mockFetch({ 'GET /api/state': () => appState() });
     const { unmount } = render(saved({ pending: false, decided: 'kept' }));

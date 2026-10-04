@@ -1,4 +1,5 @@
-import { DismissSuggestionBody, GetMeaningBody, TidyAnswerBody } from '@conch/protocol';
+import { DismissSuggestionBody, GetMeaningBody, Memory, TidyAnswerBody } from '@conch/protocol';
+import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 
 import type { SkillLearner } from '../skills/learn';
@@ -45,6 +46,17 @@ export function registerLearningRoutes(
     void index.sync();
     await deps.decided?.(kept, true).catch(() => undefined);
     return kept;
+  });
+
+  // Put back a memory the assistant forgot (Undo on "Forgot" in a chat): exactly as it was.
+  app.post('/api/memories/restore', async (request, reply) => {
+    const body = z.object({ memory: Memory }).safeParse(request.body);
+    if (!body.success)
+      return reply.code(400).send({ error: 'bad-request', message: 'That isn’t a memory.' });
+    const restored = await store.restore(body.data.memory);
+    void index.sync();
+    await deps.decided?.(restored, true).catch(() => undefined);
+    return restored;
   });
 
   /** Everything Conch knows, to keep: Markdown (default) or JSON. */

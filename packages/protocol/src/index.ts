@@ -479,8 +479,13 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     type: z.literal('memory.forgotten'),
     memoryId: z.string(),
     content: z.string(),
+    /** The whole memory as it was, so Undo puts it back exactly. */
+    memory: Memory.optional(),
   }),
-  /** You kept a memory this chat learned, or undid it (from the chat or the Memory page). */
+  /**
+   * You kept a memory this chat learned, or undid it (from the chat or the
+   * Memory page); `kept` on one it forgot means you put it back.
+   */
   z.object({
     ...logged,
     type: z.literal('memory.decided'),

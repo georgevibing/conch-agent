@@ -15,6 +15,9 @@ export const memoryApi = {
         signal,
       },
     ),
+  /** Put back a memory the assistant forgot, exactly as it was. */
+  restore: (memory: Memory) =>
+    request(Memory, '/api/memories/restore', { method: 'POST', body: { memory } }),
   /** Keep a memory that waits for your OK. */
   keep: (id: string) =>
     request(Memory, `/api/memories/${encodeURIComponent(id)}/keep`, { method: 'POST', body: {} }),

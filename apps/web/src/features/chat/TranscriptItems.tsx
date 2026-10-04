@@ -421,7 +421,8 @@ export function MemoryPill({ item }: { item: Of<'memory'> }) {
     const before = pressed;
     setPressed(keep ? 'kept' : 'undone');
     try {
-      if (keep) await memoryApi.keep(item.memoryId);
+      if (keep && item.action === 'forgotten' && item.memory) await memoryApi.restore(item.memory);
+      else if (keep) await memoryApi.keep(item.memoryId);
       else await api.deleteMemory(item.memoryId);
       void client.invalidateQueries({ queryKey: keys.memories });
     } catch (e) {
@@ -431,8 +432,11 @@ export function MemoryPill({ item }: { item: Of<'memory'> }) {
   };
   // Learned where nobody could undo it at once (a routine, a chat app): it waits for an OK.
   const waiting = item.action === 'saved' && item.pending && !answer;
-  const label =
-    answer === 'undone' || item.action === 'forgotten'
+  // One it forgot, that you put back: remembered again.
+  const putBack = item.action === 'forgotten' && answer === 'kept';
+  const label = putBack
+    ? 'Put back'
+    : answer === 'undone' || item.action === 'forgotten'
       ? 'Forgot'
       : waiting
         ? 'Wants to remember'
@@ -440,7 +444,7 @@ export function MemoryPill({ item }: { item: Of<'memory'> }) {
   return (
     <div
       className={styles.memory}
-      data-action={answer === 'undone' ? 'undone' : item.action}
+      data-action={answer === 'undone' ? 'undone' : putBack ? 'saved' : item.action}
       data-waiting={waiting || undefined}
     >
       <Brain aria-hidden />
@@ -456,8 +460,21 @@ export function MemoryPill({ item }: { item: Of<'memory'> }) {
             Forget
           </Button>
         </div>
+      ) : item.action === 'forgotten' ? (
+        // It forgot something: Undo puts it back, exactly as it was.
+        item.memory &&
+        !putBack && (
+          <Button
+            variant="ghost"
+            tone="neutral"
+            size="sm"
+            leadingIcon={<Undo2 />}
+            onClick={() => void act(true)}
+          >
+            Undo
+          </Button>
+        )
       ) : (
-        item.action === 'saved' &&
         answer !== 'undone' && (
           <Button
             variant="ghost"

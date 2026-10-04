@@ -1,5 +1,6 @@
 import { foldHolds } from '@conch/protocol';
 import type {
+  Memory,
   AppNeed,
   AppsModel,
   ArtifactKind,
@@ -143,8 +144,10 @@ export type TranscriptItem =
       action: 'saved' | 'forgotten';
       /** Waits for an OK: learned where nobody could undo it (ADR 0032). */
       pending?: boolean;
-      /** What you said since: kept it, or undid it. */
+      /** What you said since: kept it (or put back one it forgot), or undid it. */
       decided?: 'kept' | 'undone';
+      /** One it forgot, whole, so Undo can put it back. */
+      memory?: Memory;
     }
   | {
       /** It looked through your other chats (ADR 0059): for what, with a link to each place. */
@@ -638,8 +641,9 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
       const decided = event.kept ? ('kept' as const) : ('undone' as const);
       let found = false;
       const updated = items.map((item) => {
-        if (item.kind !== 'memory' || item.memoryId !== event.memoryId || item.action !== 'saved')
-          return item;
+        if (item.kind !== 'memory' || item.memoryId !== event.memoryId) return item;
+        // Putting back one it forgot answers its "Forgot" line; it says nothing to an older one.
+        if (item.action === 'forgotten' && !event.kept) return item;
         found = true;
         return { ...item, decided, pending: false };
       });
@@ -656,6 +660,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             memoryId: event.memoryId,
             content: event.content,
             action: 'forgotten',
+            ...(event.memory && { memory: event.memory }),
           },
         ],
       };

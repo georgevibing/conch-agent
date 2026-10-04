@@ -298,11 +298,26 @@ describe('gateway HTTP', () => {
     expect(
       (await app.inject({ method: 'DELETE', url: `/api/memories/${undone.id}` })).statusCode,
     ).toBe(200);
+    // Undo on "Forgot": the memory comes back exactly as it was, and the chat says so.
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/api/memories/restore',
+          payload: { memory: undone },
+        })
+      ).json(),
+    ).toMatchObject({ id: undone.id, content: 'Likes tea' });
+    expect((await services.memory.list()).some((m) => m.id === undone.id)).toBe(true);
     const { events } = await services.conversations.detail(convo.id);
     expect(events.filter((e) => e.type === 'memory.decided')).toEqual([
       expect.objectContaining({ memoryId: kept.id, kept: true }),
       expect.objectContaining({ memoryId: undone.id, kept: false }),
+      expect.objectContaining({ memoryId: undone.id, kept: true }),
     ]);
+    expect(
+      (await app.inject({ method: 'POST', url: '/api/memories/restore', payload: {} })).statusCode,
+    ).toBe(400);
   });
 });
 
