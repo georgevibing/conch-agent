@@ -54,8 +54,15 @@ export type ChatError = z.infer<typeof ChatError>;
 const Usage = z.object({
   prompt_tokens: z.number().nullish(),
   completion_tokens: z.number().nullish(),
-  /** How much of the prompt came from the provider's cache, when it says. */
-  prompt_tokens_details: z.object({ cached_tokens: z.number().nullish() }).nullish(),
+  /** How much of the prompt came from the provider's cache (and, on OpenRouter, went into it). */
+  prompt_tokens_details: z
+    .object({ cached_tokens: z.number().nullish(), cache_write_tokens: z.number().nullish() })
+    .nullish(),
+  /** DeepSeek says it in its own words. */
+  prompt_cache_hit_tokens: z.number().nullish(),
+  prompt_cache_miss_tokens: z.number().nullish(),
+  /** And Kimi in its. */
+  cached_tokens: z.number().nullish(),
   /** OpenRouter's credits, which are USD — the real charge for the request. */
   cost: z.number().nullish(),
 });
@@ -193,12 +200,17 @@ export class ThinkSplitter {
 
 /** Usage numbers, never negative, with the cost only when the provider priced it. */
 export function usageFrom(usage: z.infer<typeof Usage>): WireUsage {
+  const cached =
+    usage.prompt_tokens_details?.cached_tokens ??
+    usage.prompt_cache_hit_tokens ??
+    usage.cached_tokens ??
+    0;
+  const written = usage.prompt_tokens_details?.cache_write_tokens ?? 0;
   return {
     inputTokens: Math.max(0, Math.round(usage.prompt_tokens ?? 0)),
     outputTokens: Math.max(0, Math.round(usage.completion_tokens ?? 0)),
-    ...(usage.prompt_tokens_details?.cached_tokens && {
-      cachedInputTokens: Math.max(0, Math.round(usage.prompt_tokens_details.cached_tokens)),
-    }),
+    ...(cached > 0 && { cachedInputTokens: Math.round(cached) }),
+    ...(written > 0 && { cacheWriteTokens: Math.round(written) }),
     ...(typeof usage.cost === 'number' && { costUsd: Math.max(0, usage.cost) }),
   };
 }

@@ -95,10 +95,27 @@ export const Usage = z.object({
    * bills at a fraction of the price. Absent when it doesn't say.
    */
   cachedInputTokens: z.number().int().nonnegative().optional(),
+  /**
+   * Of `inputTokens`, how many the provider wrote to its cache this time, which
+   * it bills at a little more than the price (Anthropic: a quarter more).
+   */
+  cacheWriteTokens: z.number().int().nonnegative().optional(),
   costUsd: z.number().nonnegative().optional(),
   durationMs: z.number().nonnegative().optional(),
 });
 export type Usage = z.infer<typeof Usage>;
+
+/**
+ * A turn that stopped to check in rather than run on (ADR 0069): it did a lot
+ * for one message, or kept trying the same thing. Not a failure: the chat
+ * offers **Carry on**, which picks up where it stopped.
+ */
+export const TurnPause = z.object({
+  reason: z.enum(['steps', 'tokens', 'time', 'loop']),
+  /** One plain sentence for the person. */
+  message: z.string().max(300),
+});
+export type TurnPause = z.infer<typeof TurnPause>;
 
 /**
  * Why a turn failed, when Conch can tell — so the chat offers the one thing

@@ -19,6 +19,7 @@ import type {
   SkillPermissions,
   TaintSource,
   TurnOptions,
+  TurnPause,
   TurnProblem,
   Usage,
 } from '@conch/protocol';
@@ -41,7 +42,7 @@ import { forTurn as attachmentsForTurn } from '../attachments/prompt';
 import type { AttachmentStore } from '../attachments/store';
 import { Emitter } from '../lib/emitter';
 import { newId } from '../lib/ids';
-import { buildSystemAppend } from '../memory/prompt';
+import { systemParts } from '../memory/prompt';
 import type { MemoryStore } from '../memory/store';
 import { memoryTools } from '../memory/tools';
 import type { SettingsStore } from '../settings/store';
@@ -55,6 +56,8 @@ import { didWhat } from '../activity/service';
 import { changedFiles, type UndoService } from '../undo/service';
 import { shownPath } from '../undo/tracker';
 import { TurnReplies } from '../replies/turn';
+import { turnBudget } from '../engines/budget';
+import { guardTurn } from './turn-guard';
 import { TurnPlan } from '../plans/turn';
 
 type SkillNeed = ReturnType<typeof needs>;
@@ -525,6 +528,8 @@ export class ConversationManager {
        * another model the person connected.
        */
       describe?: (engine: Engine, model?: string) => DescribeImages;
+      /** Past the monthly budget the person set: turns check in sooner (ADR 0069). */
+      overBudget?: () => Promise<boolean>;
       integrations?: TurnIntegrationsProvider;
       /** Where uploaded files and long pastes are kept (ADR 0017). */
       attachments?: AttachmentStore;
@@ -1201,7 +1206,8 @@ export class ConversationManager {
     // Conch's own tools get a row only when they found something to show (ADR 0060).
     const hostRows = new HostToolRows(this.deps.redact);
     let outcome: 'success' | 'interrupted' | 'error' = 'success';
-    let completed: { usage?: Usage; error?: string; problem?: TurnProblem } | undefined;
+    let completed:
+      { usage?: Usage; error?: string; problem?: TurnProblem; paused?: TurnPause } | undefined;
     let heldProblem: TurnProblem | undefined;
     let next: TurnRoute | undefined;
     const extras = live.extras;
@@ -1591,6 +1597,25 @@ export class ConversationManager {
         },
       }));
 
+      // How much this turn may do before it checks in, watched from outside for
+      // agents that run their own loop (ADR 0069).
+      const system = systemParts({
+        persona: settings.persona,
+        profile: settings.profile,
+        memories,
+        total: memoryTotal,
+        autoMemory: settings.preferences.autoMemory,
+        tools: engine.hostTools !== false,
+      });
+      const pace = guardTurn(engine, {
+        budget: turnBudget({
+          unattended: Boolean(extras || live.record.origin),
+          overBudget: await this.deps.overBudget?.().catch(() => false),
+          local: engine.local,
+        }),
+        tools,
+        signal: abort.signal,
+      });
       const stream = abort.signal.aborted
         ? nothing()
         : engine.runTurn({
@@ -1605,16 +1630,12 @@ export class ConversationManager {
               freshPrompt: everything ? `${everything}\n\n${prompt}` : prompt,
             }),
             seq: asked,
+            // What stays the same turn after turn first, the memories this message
+            // brought up after it, so the provider's prompt cache keeps the prefix (ADR 0069).
             systemAppend: [
-              buildSystemAppend({
-                persona: settings.persona,
-                profile: settings.profile,
-                memories,
-                total: memoryTotal,
-                autoMemory: settings.preferences.autoMemory,
-                tools: engine.hostTools !== false,
-              }),
+              system.identity,
               await this.deps.context?.(engine, conversationId),
+              system.memory,
               notConnectedPrompt(
                 apps.unseen,
                 apps.offers.map((o) => o.name),
@@ -1624,21 +1645,22 @@ export class ConversationManager {
               .filter(Boolean)
               .join('\n\n'),
             cwd: workspace,
-            tools,
+            tools: pace.tools,
+            budget: pace.budget,
             wrapTool: extras?.wrapTool,
             options: resolved,
             onModeChange: (listener) => modeListeners.push(listener),
             mcpServers: engine.integrations.mode === 'native' ? loaded?.servers : undefined,
             disallowedTools: loaded?.disallowedTools,
             bridgedTools,
-            signal: abort.signal,
+            signal: pace.signal,
             requestPermission,
             guard,
             tainted: (guardOn && this.#tainted(live).length > 0) || (await skillTightens()),
             ...(settings.preferences.sealedCommands && { sandbox: this.deps.sandbox?.(workspace) }),
           });
 
-      for await (const event of windDown(stream, abort.signal)) {
+      for await (const event of windDown(pace.events(stream), abort.signal)) {
         // Stopped: the reply ends where Stop was pressed, while the provider winds down.
         if (abort.signal.aborted && quietAfterStop.has(event.type)) continue;
         switch (event.type) {
@@ -1753,7 +1775,12 @@ export class ConversationManager {
             break;
           case 'done':
             outcome = event.outcome;
-            completed = { usage: event.usage, error: event.error, problem: event.problem };
+            completed = {
+              usage: event.usage,
+              error: event.error,
+              problem: event.problem,
+              ...(event.outcome === 'success' && event.paused && { paused: event.paused }),
+            };
             break;
         }
       }
@@ -1801,6 +1828,7 @@ export class ConversationManager {
           outcome,
           usage: completed?.usage,
           ...(problem && { problem }),
+          ...(completed?.paused && { paused: completed.paused }),
           error:
             outcome === 'error'
               ? (completed?.error ?? `${engine.label} stopped unexpectedly.`)
@@ -1829,16 +1857,18 @@ export class ConversationManager {
         next = after;
       }
       // A finished reply ends with what you might say next, when that helps (ADR 0060).
-      const picked = next
-        ? undefined
-        : await replies
-            .finish({
-              outcome,
-              turn: live.events.filter((e) => e.seq >= turnSeq),
-              tainted: this.#tainted(live).length > 0,
-              model: answeredWith ?? resolved.model,
-            })
-            .catch(() => undefined);
+      // A pause has its own Carry on: chips would be a second thing asking (ADR 0060).
+      const picked =
+        next || completed?.paused
+          ? undefined
+          : await replies
+              .finish({
+                outcome,
+                turn: live.events.filter((e) => e.seq >= turnSeq),
+                tainted: this.#tainted(live).length > 0,
+                model: answeredWith ?? resolved.model,
+              })
+              .catch(() => undefined);
       if (picked) this.#append(live, { type: 'replies', ...picked }, tail);
       // Everything up to here is part of this provider's session now.
       const own = live.record.sessions?.[engine.id];

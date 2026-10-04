@@ -533,6 +533,11 @@ export const Transcript = memo(function Transcript({
           item={block.item}
           onRetry={block.item.id === lastErrorId && !running ? onRetry : undefined}
           recover={block.item.id === lastErrorId && !running ? recover : undefined}
+          onCarryOn={
+            block.item.id === lastErrorId && !running && !pending.length && (onReply ?? onSend)
+              ? () => (onReply ?? onSend)?.('Carry on')
+              : undefined
+          }
         />
       )}
     </>

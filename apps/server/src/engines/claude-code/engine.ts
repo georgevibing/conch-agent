@@ -113,6 +113,11 @@ export class ClaudeCodeEngine implements Engine {
   /** It keeps its own plan (its todos or tasks), translated into Conch's checklist. */
   readonly plans = 'native' as const;
   /**
+   * Its program runs the loop and paces long work itself (compaction, its own
+   * limits); Conch doesn't second-guess a coding session from outside (ADR 0069).
+   */
+  readonly turnBudget = 'own' as const;
+  /**
    * Claude Code runs MCP servers itself, and loads the connectors from your
    * Claude account by itself. Conch brings the ones it can connect into
    * Conch, so they work with every model (ADR 0049).

@@ -457,9 +457,11 @@ export function mapChatError(
     status === 429 ||
     /rate.?limit|too many requests|slow_down|limit_requests|\b1302\b/.test(words)
   )
+    // Spent credit was caught above, so this passes: waited out with backoff
+    // and jitter when the provider doesn't say how long (ADR 0069).
     return new ApiError('rate-limit', `${label} is rate-limiting this key.`, {
-      retryable: retryAfter !== undefined || /overload/.test(words),
-      retryAfterMs: retryAfter ?? 4_000,
+      retryable: true,
+      ...(retryAfter !== undefined && { retryAfterMs: retryAfter }),
     });
   if ([500, 502, 503, 529].includes(status) || /overload|capacity|unavailable|\b1305\b/.test(words))
     return new ApiError('overloaded', `${label} is overloaded right now.`, {

@@ -369,6 +369,18 @@ export function readable(message: WireMessage): string[] {
   return lines;
 }
 
+/**
+ * How much of the chat one summarising request may carry, in characters, so
+ * the whole request fits the model's window (ADR 0070): the window less the
+ * instructions, the summary so far and the answer — each about `words` words —
+ * at a careful three characters a token, and never more than `CHUNK_CHARS`.
+ */
+export function chunkFor(window: number, words: number): number {
+  const fixed = Math.ceil(words * 1.4) * 2 + 256 + 600;
+  const room = Math.floor((window * 0.85 - fixed) * 3);
+  return Math.max(2_000, Math.min(CHUNK_CHARS, room));
+}
+
 /** Lines in pieces a small model can read, oldest first; past `max`, the oldest are left out. */
 export function chunk(
   lines: readonly string[],

@@ -11,12 +11,15 @@ import type {
   SkillSource,
   ToolStatus,
   ToolView,
+  TurnPause,
   TurnProblem,
   Usage,
   UsageKind,
   UsageWindow,
 } from '@conch/protocol';
 import type { z } from 'zod';
+
+import type { TurnBudget } from './budget';
 
 /**
  * What a host tool returns when text isn't enough: a screenshot, say.
@@ -271,6 +274,12 @@ export interface TurnInput {
    * can: writes only to these folders, no reading these.
    */
   sandbox?: { allowWrite: string[]; denyRead: string[] };
+  /**
+   * How much this turn may do before it pauses to check in (ADR 0069): more
+   * for a routine or a task, less over the monthly budget. Unset: the
+   * engine's own default for someone watching (`turnBudget({})`).
+   */
+  budget?: TurnBudget;
 }
 
 export type GuardDecision =
@@ -335,6 +344,8 @@ export type EngineEvent =
       error?: string;
       /** Why it failed, when the engine knows (a signed-out account, an overloaded service). */
       problem?: TurnProblem;
+      /** It stopped to check in, with room to carry on (ADR 0069). Only with `success`. */
+      paused?: TurnPause;
     };
 
 /** A one-shot, tool-less request for small housekeeping jobs (e.g. naming a chat). */
@@ -476,6 +487,13 @@ export interface Engine {
   forgetSession?(resumeId: string): Promise<void>;
   /** MCP servers the engine loads by itself, and whether they work. */
   mcpStatus?(): Promise<EngineMcpStatus[]>;
+  /**
+   * The engine keeps each turn within `TurnInput.budget` itself and pauses
+   * with `done.paused` (ADR 0069): the model APIs, whose loop Conch runs, and
+   * Claude Code, whose program has its own. Absent: Conch watches the turn's
+   * tool calls from outside and pauses it there (Codex, the ACP programs).
+   */
+  readonly turnBudget?: 'own';
   /** Subscribe to live limit hints emitted while turns run. */
   onLimits?(listener: (signal: LimitSignal) => void): () => void;
 }

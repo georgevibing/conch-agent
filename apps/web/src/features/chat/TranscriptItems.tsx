@@ -518,11 +518,31 @@ export function TurnEnd({
   item,
   onRetry,
   recover,
+  onCarryOn,
 }: {
   item: Of<'turn-end'>;
   onRetry?: () => void;
   recover?: TurnRecovery;
+  /** The latest turn paused to check in (ADR 0069): send “Carry on”. */
+  onCarryOn?: () => void;
 }) {
+  if (item.outcome === 'success' && item.paused) {
+    // Once the chat has moved on, a pause is a quiet note in its history.
+    if (!onCarryOn) return <div className={styles.stopped}>{item.paused.message}</div>;
+    return (
+      <Callout
+        tone="neutral"
+        live="polite"
+        action={
+          <Button size="sm" onClick={onCarryOn}>
+            Carry on
+          </Button>
+        }
+      >
+        {item.paused.message}
+      </Callout>
+    );
+  }
   if (item.outcome === 'interrupted') {
     return <div className={styles.stopped}>Stopped</div>;
   }

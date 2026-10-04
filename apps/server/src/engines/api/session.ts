@@ -57,6 +57,10 @@ const Transcript = z.object({
   seqs: z.array(z.number().int().nullable()).optional(),
   /** The provider's real token count over Conch's estimate, for this chat. */
   factor: z.number().positive().optional(),
+  /** The last turn paused to check in, and why (ADR 0069): the next one is told, so it carries on. */
+  paused: z.enum(['steps', 'tokens', 'time', 'loop']).optional(),
+  /** Tools this chat has loaded in lean mode (ADR 0070), kept so they stay loaded. */
+  revealed: z.array(z.string()).optional(),
 });
 type Transcript = z.infer<typeof Transcript>;
 
@@ -67,6 +71,8 @@ export interface Session {
   /** One per turn start in `messages`: its place in the chat's log, when known. */
   seqs: (number | null)[];
   factor?: number;
+  paused?: Transcript['paused'];
+  revealed?: string[];
 }
 
 /** How many messages start a turn. */
@@ -155,13 +161,15 @@ export class TranscriptStore {
     if (raw === undefined) return { messages: [], seqs: [] };
     const parsed = Transcript.safeParse(raw);
     if (!parsed.success || parsed.data.provider !== provider) return { messages: [], seqs: [] };
-    const { messages, summary, seqs, factor } = parsed.data;
+    const { messages, summary, seqs, factor, paused, revealed } = parsed.data;
     const turns = turnsIn(messages);
     return {
       messages,
       ...(summary && { summary }),
       seqs: seqs?.length === turns ? seqs : Array.from({ length: turns }, () => null),
       ...(factor && { factor }),
+      ...(paused && { paused }),
+      ...(revealed?.length && { revealed: revealed.filter((n) => n.length <= 128).slice(-64) }),
     };
   }
 
@@ -175,6 +183,8 @@ export class TranscriptStore {
       summary?: Session['summary'];
       seqs?: Session['seqs'];
       factor?: number;
+      paused?: Session['paused'];
+      revealed?: string[];
     },
   ): Promise<WireMessage[]> {
     const messages = trim(input.messages);
@@ -195,6 +205,8 @@ export class TranscriptStore {
         ...(input.summary && { summary: input.summary }),
         ...(seqs && { seqs }),
         ...(input.factor && { factor: input.factor }),
+        ...(input.paused && { paused: input.paused }),
+        ...(input.revealed?.length && { revealed: input.revealed.slice(-64) }),
       };
       // `writeJson` is atomic and 0600 — a transcript is as private as a chat.
       await writeJson(path, next);

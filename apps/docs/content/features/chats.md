@@ -18,6 +18,17 @@ Your chats are in the sidebar, newest first, grouped by day. Point at one and pr
 
 <kbd>esc</kbd> or the stop button stops the reply. It ends there at once and says **Stopped**, and you can write your next message straight away: if the provider is still winding down, it waits a moment and then goes.
 
+### Long jobs
+
+Your assistant can take as many steps as a job needs: booking something across a few websites, tidying a big folder. Every so often it checks in rather than run on without you:
+
+- after a lot of work for one message (about a hundred steps, half an hour, or a lot of reading on a provider you pay for), or
+- when it keeps trying the same thing without getting anywhere. It's told first, and tries another way; only if it carries on does it stop.
+
+The reply then ends with one sentence saying why it paused. Press **Carry on** and it picks up exactly where it stopped, with everything it had done. Or say what to do differently.
+
+Routines and background tasks get more room, since nobody is there to press **Carry on**. Over your [monthly budget](../care/offline.md), it checks in sooner, but it never stops you.
+
 You don't have to wait to say what's next. Write it and press <kbd>enter</kbd>: it waits above the message box, **Sends when Conch is done**, and goes by itself the moment the reply is over. Anything more you send meanwhile joins it.
 
 - The pencil takes it back into the box to change it, and the cross doesn't send it.
