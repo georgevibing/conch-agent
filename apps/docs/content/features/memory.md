@@ -15,11 +15,19 @@ Mention something that will still matter next week ("I'm vegetarian", "my sister
 
 It is told to leave out passwords, keys, and health or money details unless you ask.
 
+## About you
+
+**Settings → About you** is a portrait your assistant reads before every chat. Your name sits at the top, with a line that sums you up. Below are five cards: **Work**, **Home**, **People**, **Interests** and **How you like things**. Each holds short facts. Press **Add** on a card to write one there; press a fact to change it or remove it. A person can carry who they are to you and a date, such as "daughter · born 8 June 2025".
+
+**In your own words** holds anything the cards don't, the way you'd say it. Press **Lay it out as cards**, and your assistant reads it into facts for the cards. They arrive outlined: keep the right ones, dismiss the rest, or press **Keep all**. Nothing is saved that you didn't keep.
+
+**What every chat starts with** shows, word for word, what your assistant reads about you.
+
 ## See what it knows
 
 Open **What Conch knows about you** with <kbd>mod+k</kbd>, by typing `/memory`, or from **Settings → Memory → Open**. It opens inside Settings, and **‹ Memory** goes back to the memory settings. The page holds:
 
-- **About you.** Your name and a few lines about you. Your assistant always has these in mind.
+- **About you.** Your name and what you wrote about yourself. Your assistant always has these in mind.
 - **Memories.** Everything it remembers. Each one says whether you added it, it was learned in a chat, or it came from a tidy-up. Show one kind at a time: **Preferences**, **People**, **Projects** or **Facts**.
 - **Export.** Everything in one file, as a document or as data.
 

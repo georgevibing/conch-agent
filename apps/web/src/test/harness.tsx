@@ -152,7 +152,7 @@ export function appState(patch: Partial<AppState> = {}): AppState {
     protocolVersion: 2,
     onboarded: true,
     persona: { name: 'Conch', tone: 'warm', instructions: '' },
-    profile: { name: 'Ada', about: '' },
+    profile: { name: 'Ada', about: '', facts: [] },
     preferences: {
       engine: 'claude-code',
       autoMemory: true,

@@ -14,6 +14,7 @@ export * from './ToolViews';
 export * from './CommandMenu';
 export * from './ModelPicker';
 export * from './ModelSwitch';
+export * from './Portrait';
 export * from './ReplyChips';
 export * from './QuestionCard';
 export * from './Offer';

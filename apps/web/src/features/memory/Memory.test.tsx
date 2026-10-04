@@ -66,7 +66,8 @@ const tidy = (patch: Partial<TidyStatus> = {}): TidyStatus => ({
 });
 
 const routes = (extra: Record<string, (body: unknown) => unknown> = {}) => ({
-  'GET /api/state': () => appState({ profile: { name: 'Ada', about: 'Designer in Lisbon.' } }),
+  'GET /api/state': () =>
+    appState({ profile: { name: 'Ada', about: 'Designer in Lisbon.', facts: [] } }),
   'GET /api/memories': () => [espresso, lisbon, steered],
   'GET /api/memory/index': () => words,
   'GET /api/memory/tidy': () => tidy(),

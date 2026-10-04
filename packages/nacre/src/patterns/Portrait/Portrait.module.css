@@ -1,0 +1,271 @@
+@layer nacre.components {
+  .portrait {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-6);
+  }
+
+  /* ── Who you are: the avatar, your name as a title you type into, one line ── */
+  .hero {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-4);
+  }
+
+  .avatar {
+    flex: none;
+    box-shadow:
+      0 0 0 3px var(--nc-canvas),
+      0 0 0 4px var(--nc-border-subtle);
+  }
+
+  .who {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+    flex: 1;
+  }
+
+  .name {
+    inline-size: 100%;
+    margin: 0;
+    padding: 0 var(--nc-space-1);
+    margin-inline-start: calc(var(--nc-space-1) * -1);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    background: transparent;
+    color: var(--nc-text);
+    font-family: var(--nc-font-display);
+    font-size: var(--nc-text-3xl);
+    line-height: var(--nc-leading-tight);
+    letter-spacing: -0.01em;
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .name::placeholder {
+    color: var(--nc-text-subtle);
+  }
+
+  @media (hover: hover) {
+    .name:hover {
+      background: var(--nc-wash-1);
+    }
+  }
+
+  .name:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+    background: var(--nc-wash-1);
+  }
+
+  .summary {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    overflow-wrap: anywhere;
+  }
+
+  /* ── Read from your words: one quiet line with Keep all ─────────────── */
+  .suggestBar {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-2) var(--nc-space-2) var(--nc-space-2) var(--nc-space-3);
+    border-radius: var(--nc-radius-lg);
+    background: var(--nc-accent-2);
+    box-shadow: inset 0 0 0 1px var(--nc-accent-5);
+    color: var(--nc-accent-12);
+    font-size: var(--nc-text-sm);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .suggestBar > svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    flex: none;
+    color: var(--nc-accent-11);
+  }
+
+  .suggestBar > span {
+    flex: 1;
+  }
+
+  /* ── The cards ─────────────────────────────────────────────────────── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+    gap: var(--nc-space-3);
+  }
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-3) var(--nc-space-3) var(--nc-space-2) var(--nc-space-4);
+    border-radius: var(--nc-radius-xl);
+    background: var(--nc-surface);
+    box-shadow:
+      var(--nc-glaze-edge),
+      inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .card[data-empty] {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .cardHead {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  .cardIcon {
+    display: inline-grid;
+    place-items: center;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-accent-3);
+    color: var(--nc-accent-11);
+  }
+
+  .cardIcon > svg {
+    inline-size: 0.95rem;
+    block-size: 0.95rem;
+  }
+
+  .cardTitle {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .chip {
+    --nc-rim-rest: 0;
+    --nc-rim-hover: 0.4;
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    max-inline-size: 100%;
+    margin: 0;
+    padding: var(--nc-space-1) var(--nc-space-2-5);
+    border: 0;
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-wash-1);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    text-align: start;
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  @media (hover: hover) {
+    .chip:hover {
+      background: var(--nc-wash-2);
+    }
+  }
+
+  .chip:active {
+    transform: scale(0.97);
+  }
+
+  .chip:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .chipText {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .chipDetail {
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+  }
+
+  /* Read from your words, not kept yet: outlined, with its two answers. */
+  .suggested {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-0-5);
+    padding: var(--nc-space-0-5) var(--nc-space-0-5) var(--nc-space-0-5) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-md);
+    border: 1px dashed var(--nc-accent-7);
+    background: var(--nc-accent-1);
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) backwards;
+  }
+
+  .cardFoot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+    margin-inline-start: calc(var(--nc-space-1) * -1);
+    min-block-size: var(--nc-control-sm);
+  }
+
+  .cardFoot > button {
+    margin-inline-start: auto;
+  }
+
+  .example {
+    padding-inline-start: var(--nc-space-1);
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-sm);
+    font-style: italic;
+  }
+
+  .form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+  }
+
+  .formActions {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+  }
+
+  .spacer {
+    flex: 1;
+  }
+
+  .edit {
+    inline-size: min(20rem, calc(100vw - 2 * var(--nc-space-4)));
+  }
+
+  @media (max-width: 640px) {
+    .hero {
+      align-items: flex-start;
+    }
+    .name {
+      font-size: var(--nc-text-2xl);
+    }
+  }
+}

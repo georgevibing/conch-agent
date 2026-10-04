@@ -44,7 +44,7 @@ let landedWith: unknown;
 
 function routes(extra: Record<string, (body: unknown) => unknown> = {}) {
   // What the gateway keeps: each save lands on top of the last, as it would.
-  let saved = appState({ onboarded: false, profile: { name: '', about: '' } });
+  let saved = appState({ onboarded: false, profile: { name: '', about: '', facts: [] } });
   return mockFetch({
     'GET /api/state': () => saved,
     'GET /api/engine': () => baseEngine,
@@ -83,7 +83,9 @@ describe('the welcome', () => {
     expect(name).toHaveFocus();
     expect(screen.getByRole('list', { name: 'Step 1 of 5' })).toBeInTheDocument();
     await user.type(name, 'Ada{Enter}');
-    expect(patched(calls)).toContainEqual({ profile: { name: 'Ada', about: '' } });
+    expect(patched(calls)).toContainEqual({
+      profile: expect.objectContaining({ name: 'Ada', about: '' }),
+    });
 
     // What you'd like a hand with: tapped, then written into About you as one sentence.
     expect(
@@ -96,10 +98,10 @@ describe('the welcome', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await waitFor(() =>
       expect(patched(calls)).toContainEqual({
-        profile: {
+        profile: expect.objectContaining({
           name: 'Ada',
           about: 'I’d mostly like a hand with coding and email and my calendar.',
-        },
+        }),
       }),
     );
 

@@ -1,4 +1,4 @@
-import type { Persona, Profile } from '@conch/protocol';
+import type { Persona } from '@conch/protocol';
 import {
   Button,
   Dialog,
@@ -54,6 +54,7 @@ import { HealthTab } from '../health/HealthTab';
 import { OtherAppsTab } from '../otherapps/OtherAppsTab';
 import { ComeHomeSection } from '../import/ComeHomeSection';
 import { MemoryView } from '../memory/MemoryView';
+import { AboutYou } from './AboutYou';
 import { NotificationsTab } from '../notifications/NotificationsTab';
 import { VoiceTab } from '../voice/VoiceTab';
 import { TerminalSettings } from '../terminal/TerminalSettings';
@@ -121,40 +122,6 @@ function PersonalityTab({ initial }: { initial: Persona }) {
             onChange={(e) => setPersona({ ...persona, instructions: e.target.value })}
           />
           <Field.Description>Anything you’d like followed in every conversation.</Field.Description>
-        </Field>
-      </Stack>
-    </Section>
-  );
-}
-
-function AboutTab({ initial }: { initial: Profile }) {
-  const update = useUpdateSettings();
-  const [profile, setProfile] = useState(initial);
-  const status = useAutosave(profile, (p) => update.mutateAsync({ profile: p }));
-  return (
-    <Section
-      title="About you"
-      description="Always in context, so you never have to repeat yourself."
-      status={<SaveStatus status={status} />}
-    >
-      <Stack gap={5}>
-        <Field>
-          <Field.Label>What should I call you?</Field.Label>
-          <Input
-            value={profile.name}
-            onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-          />
-        </Field>
-        <Field>
-          <Field.Label>About you</Field.Label>
-          <Textarea
-            autosize
-            minRows={5}
-            maxRows={14}
-            value={profile.about}
-            placeholder="What you do, what you care about, how you like to work…"
-            onChange={(e) => setProfile({ ...profile, about: e.target.value })}
-          />
         </Field>
       </Stack>
     </Section>
@@ -508,7 +475,7 @@ export function Settings() {
                   <PersonalityTab initial={app.persona} />
                 </Tabs.Content>
                 <Tabs.Content value="about">
-                  <AboutTab initial={app.profile} />
+                  <AboutYou initial={app.profile} />
                 </Tabs.Content>
                 <Tabs.Content value="memory">
                   <MemoryTab
