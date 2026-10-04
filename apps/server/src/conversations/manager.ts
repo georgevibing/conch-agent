@@ -357,6 +357,8 @@ export interface ToolContext {
   unattended?: boolean;
   /** The chat waits for the person (a question, ADR 0060), or carries on; saved, so a restart knows. */
   waitingForYou?: (waiting: boolean) => Promise<void>;
+  /** This turn's work folder (a task's own, or the chat's). */
+  workspace?: () => Promise<string>;
 }
 
 /** Tools every conversation gets from other parts of Conch (e.g. routines, skills, the browser). */
@@ -1659,6 +1661,8 @@ export class ConversationManager {
             },
             taints: () => this.#tainted(live),
             taint: (source) => this.#taint(live, source),
+            workspace: () =>
+              extras?.cwd ? Promise.resolve(extras.cwd) : this.deps.settings.workspace(),
           }) ?? [])),
       ...(extras?.tools ?? []),
       ...replies.tools,

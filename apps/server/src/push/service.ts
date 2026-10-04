@@ -388,8 +388,10 @@ export class PushService {
         title: `${name} needs you in the browser`,
         body: clip(e.handoff.reason),
         quiet: 'Open Conch to take over.',
-        url,
+        // Straight to the page: the panel opens by itself while it's your turn.
+        url: `${url}?browser=1`,
         tag: `hand-${e.handoff.handoffId}`,
+        actions: [{ action: 'open', title: 'Take over' }],
         requireInteraction: true,
         urgency: 'high',
       });

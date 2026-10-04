@@ -90,6 +90,7 @@ describe('checkup findings', () => {
       trustedIntegrations: ['GitHub'],
       terminalRemote: true,
       browserLocal: true,
+      browserOwnChrome: true,
       pagesLocal: ['localhost:3000'],
       provider: { name: 'Codex', asksFirst: false },
       platform: 'linux',
@@ -118,6 +119,7 @@ describe('checkup findings', () => {
       'trusted-integrations': { kind: 'act', action: 'integrations-ask' },
       'terminal-remote': { kind: 'act', action: 'terminal-remote-off' },
       'browser-local': { kind: 'act', action: 'browser-local-off' },
+      'browser-own-chrome': { kind: 'act', action: 'browser-own-chrome-off' },
       'pages-local': { kind: 'open', place: 'live-data', label: 'Review' },
       'stale-keys': { kind: 'open', place: 'keys', label: 'Review keys' },
       files: { kind: 'act', action: 'secure-files' },
@@ -291,6 +293,16 @@ describe('POST /api/access/fix', () => {
     await services.terminal.updateSettings({ allowRemote: false });
     await fix(app, 'terminal-remote-off');
     expect((await services.terminal.settings()).allowRemote).toBe(false);
+  });
+
+  it('takes the browser out of your own Chrome', async () => {
+    const { app, services } = await setup();
+    await services.browser.store.updateSettings({ backend: 'chrome' });
+    expect(ids(await findings(app))).toContain('browser-own-chrome');
+    const res = await fix(app, 'browser-own-chrome-off');
+    expect(res.json().done).toBe('The browser is Conch’s own again; your Chrome is left alone.');
+    expect(ids(res.json().access.checkup)).not.toContain('browser-own-chrome');
+    expect((await services.browser.store.settings()).backend).toBe('local');
   });
 
   it('keeps the browser off local apps', async () => {

@@ -197,6 +197,7 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
       more: Math.max(0, sites.length - MAX_LISTED),
     });
   if (record(browser?.settings)?.allowLocal === true) powers.push({ kind: 'browser-local' });
+  if (record(browser?.settings)?.backend === 'chrome') powers.push({ kind: 'browser-own-chrome' });
 
   if (record(json(read, 'terminal.json')?.settings)?.allowRemote === true)
     powers.push({ kind: 'terminal-remote' });

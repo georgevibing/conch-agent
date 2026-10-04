@@ -174,6 +174,8 @@ export interface CheckupInput {
   terminalRemote?: boolean;
   /** The agent's browser may open pages on this computer and your network (Settings › Browser). */
   browserLocal?: boolean;
+  /** The agent's browser is your own signed-in Chrome (ADR 0080). */
+  browserOwnChrome?: boolean;
   /** Pages allowed to read live data from this computer (ADR 0046), by host. */
   pagesLocal?: string[];
   /** A connected provider, and whether Conch can ask you before each step with it (the one that can't, if any). */
@@ -547,6 +549,17 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       detail:
         'The assistant’s browser can reach pages on this computer and your network, like a router or a dev server. A web page it visits could try to use them too. Conch itself stays out of reach. If you don’t need it, turn it off.',
       fix: { kind: 'act', label: 'Turn off', action: 'browser-local-off' },
+    });
+  }
+
+  if (input.browserOwnChrome) {
+    items.push({
+      id: 'browser-own-chrome',
+      level: 'warn',
+      title: 'The assistant browses in your own Chrome',
+      detail:
+        'It uses your Chrome, where you’re signed in to your accounts. It only touches the tabs it opens, and asks before acting on each site, but a page it reads there could try to trick it. If you don’t need your sign-ins, go back to Conch’s own browser.',
+      fix: { kind: 'act', label: 'Use Conch’s browser', action: 'browser-own-chrome-off' },
     });
   }
 

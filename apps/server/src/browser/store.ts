@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 
-import { BrowserSettings, BrowserSite, type UpdateBrowserSettingsBody } from '@conch/protocol';
+import { BrowserSettings, BrowserSite } from '@conch/protocol';
 import { z } from 'zod';
 
 import { Mutex, writeJson } from '../lib/fs';
@@ -78,7 +78,7 @@ export class BrowserStore {
     return (await this.#read()).settings;
   }
 
-  updateSettings(patch: UpdateBrowserSettingsBody): Promise<BrowserSettings> {
+  updateSettings(patch: Partial<BrowserSettings>): Promise<BrowserSettings> {
     return this.#mutex.run(async () => {
       const current = await this.#read();
       const settings = BrowserSettings.parse({ ...current.settings, ...patch });
@@ -124,6 +124,59 @@ export class BrowserStore {
     return this.#mutex.run(async () => {
       const current = await this.#read();
       await this.#write({ ...current, userAgents: { ...current.userAgents, [key]: userAgent } });
+    });
+  }
+}
+
+const Secrets = z.object({
+  browserbase: z.object({ key: z.string(), project: z.string().optional() }).optional(),
+  steel: z.object({ key: z.string() }).optional(),
+  /** A DevTools address can carry its own token, so it's kept like a key. */
+  cdp: z.object({ address: z.string() }).optional(),
+});
+export type BrowserSecretsData = z.infer<typeof Secrets>;
+
+/**
+ * `~/.conch/browser.secrets.json`: the keys and addresses of browsers Conch
+ * reaches elsewhere (ADR 0080), sealed like every key Conch uses (ADR 0025).
+ * Never sent to the app, never logged, never in the agent's reach.
+ */
+export class BrowserSecrets {
+  #mutex = new Mutex();
+  #cache?: Promise<BrowserSecretsData>;
+
+  constructor(
+    private readonly home: string,
+    private readonly heal?: Heal,
+  ) {}
+
+  get path(): string {
+    return join(this.home, 'browser.secrets.json');
+  }
+
+  read(): Promise<BrowserSecretsData> {
+    this.#cache ??= readStore(this.path, Secrets, {
+      onRepair: () =>
+        this.heal?.(
+          'browser',
+          'The keys for the cloud browser couldn’t be read, so Conch kept a copy. Add them again in Settings › Browser.',
+        ),
+    }).then(
+      (read) => read.value,
+      (error: unknown) => {
+        this.#cache = undefined;
+        throw error;
+      },
+    );
+    return this.#cache;
+  }
+
+  update(fn: (data: BrowserSecretsData) => BrowserSecretsData): Promise<BrowserSecretsData> {
+    return this.#mutex.run(async () => {
+      const next = Secrets.parse(fn(structuredClone(await this.read())));
+      await writeJson(this.path, next);
+      this.#cache = Promise.resolve(next);
+      return next;
     });
   }
 }

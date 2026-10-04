@@ -16,6 +16,8 @@ export function protectedPaths(home: string): string[] {
     join(home, 'integrations.secrets.json'),
     join(home, 'google.secrets.json'),
     join(home, 'slack.secrets.json'),
+    // A cloud browser's key, or the address of a browser elsewhere (ADR 0080).
+    join(home, 'browser.secrets.json'),
     join(home, 'channels.secrets.json'),
     // The secrets other apps sign their messages to routines with (ADR 0056).
     join(home, 'routines.secrets.json'),

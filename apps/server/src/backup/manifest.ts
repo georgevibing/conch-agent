@@ -442,6 +442,12 @@ export const RULES: readonly BackupRule[] = [
     why: 'Google app credentials and account sign-ins.',
   },
   {
+    match: 'browser.secrets.json',
+    class: 'secret',
+    group: 'secrets',
+    why: 'The keys and addresses of a browser in the cloud, or elsewhere, that Conch uses (ADR 0080).',
+  },
+  {
     match: 'slack.secrets.json',
     class: 'secret',
     group: 'secrets',

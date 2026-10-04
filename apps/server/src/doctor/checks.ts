@@ -8,6 +8,7 @@ import { statfs } from 'node:fs/promises';
 
 import { awaitsSignIn, type DoctorItem, type Provider } from '@conch/protocol';
 
+import { BACKEND_NAMES } from '../browser/backends';
 import { CHANNEL_NAMES } from '../channels/catalog';
 import { sandboxSupport } from '../conversations/sandbox';
 import { secureHome } from '../auth/checkup';
@@ -249,9 +250,51 @@ export function browserCheck(services: Services): DoctorCheck {
               ? `Ready · ${status.browser.name}`
               : 'Ready.',
         },
+        ...(await browserBackendResult(services, status, repair)),
       ];
     },
   };
+}
+
+/**
+ * Where the browser runs, when it isn't Conch's own (ADR 0080): reachable, or
+ * fallen back to Conch's own meanwhile. Repair connects again.
+ */
+async function browserBackendResult(
+  services: Services,
+  status: Awaited<ReturnType<Services['browser']['status']>>,
+  repair: boolean,
+): Promise<DoctorItem[]> {
+  const backend = status.backend;
+  if (!backend || backend.chosen === 'local') return [];
+  const base = { id: 'browser-backend', group: COMPUTER, title: 'Where the browser runs' };
+  const name = BACKEND_NAMES[backend.chosen];
+  let fellBack = backend.fellBack;
+  if (fellBack && repair) {
+    await services.browser.reconnect().catch(() => undefined);
+    fellBack = (await services.browser.status()).backend?.fellBack;
+    if (!fellBack) return [{ ...base, state: 'fixed', message: `Connected to ${name} again.` }];
+  }
+  if (backend.chosen === 'chrome' && backend.chrome !== 'ready')
+    return [
+      {
+        ...base,
+        state: 'needs-you',
+        message:
+          'Your Chrome isn’t open with remote debugging allowed, so Conch uses its own browser meanwhile.',
+        action: { kind: 'open', label: 'Open', place: 'browser' },
+      },
+    ];
+  if (fellBack)
+    return [
+      {
+        ...base,
+        state: 'needs-you',
+        message: fellBack,
+        action: { kind: 'open', label: 'Open', place: 'browser' },
+      },
+    ];
+  return [{ ...base, state: 'ok', message: `${name}` }];
 }
 
 export function searchCheck(services: Services): DoctorCheck {

@@ -129,6 +129,8 @@ export const BackupPower = z.discriminatedUnion('kind', [
   }),
   /** The browser can open apps on this computer and the network. */
   z.object({ kind: z.literal('browser-local') }),
+  /** The browser is your own signed-in Chrome (ADR 0080). */
+  z.object({ kind: z.literal('browser-own-chrome') }),
   /** Other devices can open a terminal on this computer. */
   z.object({ kind: z.literal('terminal-remote') }),
   /** Publishers whose signed skills carry on updating without being turned off (ADR 0031). */

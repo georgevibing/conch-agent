@@ -1883,7 +1883,7 @@ export class ChannelService {
         if (e.handoff.state === 'waiting')
           void this.#say(
             relay,
-            `🖐️ I need you for a moment in the browser: ${e.handoff.reason}. Open Conch on your computer to take over.`,
+            `🖐️ I need you for a moment in the browser: ${e.handoff.reason}. Open Conch (on your phone works too) to take over; I carry on by myself once you’re through.`,
           ).catch(() => undefined);
         break;
       case 'integration.issue':

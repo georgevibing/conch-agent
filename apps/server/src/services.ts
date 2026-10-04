@@ -2,13 +2,14 @@ import { createHash } from 'node:crypto';
 import type { Server as HttpServer } from 'node:http';
 import { join, resolve, sep } from 'node:path';
 
-import type {
-  EngineId,
-  LoginState,
-  ServerEvent,
-  SkillSource,
-  TrayInfo,
-  TurnProblem,
+import {
+  ARTIFACT_FILES,
+  type EngineId,
+  type LoginState,
+  type ServerEvent,
+  type SkillSource,
+  type TrayInfo,
+  type TurnProblem,
 } from '@conch/protocol';
 
 import { Activity } from './activity/service';
@@ -557,6 +558,46 @@ export class Services {
       gatewayPort: config.CONCH_PORT,
       workspace: () => this.settings.workspace(),
       emit: (event) => this.broadcast.emit(event),
+      // What `browser_upload` may put on a page (ADR 0080): this chat's own files, or the work folder.
+      uploads: {
+        home: config.CONCH_HOME,
+        forbidden: [
+          ...protectedPaths(config.CONCH_HOME),
+          ...secretPlaces().map((p) => p.path),
+          join(config.CONCH_HOME, 'browser'),
+        ],
+        attachments: async (conversationId) => {
+          const { events } = await this.conversations.detail(conversationId);
+          const sent = events.flatMap((e) =>
+            e.type === 'user.message' ? (e.attachments ?? []) : [],
+          );
+          return sent.map((a) => ({
+            id: a.id,
+            name: a.name,
+            mimeType: a.mimeType,
+            read: async () => {
+              const bytes = await this.attachments.bytes(a.id);
+              if (!bytes) throw new Error(`“${a.name}” isn’t here any more.`);
+              return bytes;
+            },
+          }));
+        },
+        made: async (conversationId) => {
+          const all = await this.artifacts.store.list();
+          return all
+            .filter((a) => a.conversationId === conversationId)
+            .map((a) => {
+              const file = ARTIFACT_FILES[a.kind];
+              return {
+                id: a.id,
+                name: `${a.title.replace(/[\\/:*?"<>|\0]/g, '_').slice(0, 120)}.${file.ext}`,
+                mimeType: file.type,
+                read: async () =>
+                  Buffer.from((await this.artifacts.store.content(a.id)).content, 'utf8'),
+              };
+            });
+        },
+      },
     });
     // The browser fills sign-in fields from Passwords, with your OK (ADR 0025).
     this.browser.passwords = this.vault;
@@ -1771,6 +1812,30 @@ export class Services {
         hint: tail(slack.token),
         manage: { label: 'Open Apps', place: 'integrations' },
         reveal: async () => slack.token,
+      });
+    // A cloud browser's key, or a browser's address with its token (ADR 0080).
+    const browser = await this.browser.secrets.read().catch(() => undefined);
+    const browserKeys = [
+      browser?.browserbase?.key && {
+        kind: 'browserbase',
+        title: 'Browserbase',
+        value: browser.browserbase.key,
+      },
+      browser?.steel?.key && { kind: 'steel', title: 'Steel', value: browser.steel.key },
+      browser?.cdp?.address && {
+        kind: 'cdp',
+        title: 'Browser address',
+        value: browser.cdp.address,
+      },
+    ].filter((k): k is { kind: string; title: string; value: string } => Boolean(k));
+    for (const key of browserKeys)
+      out.push({
+        id: id('browser', key.kind),
+        title: key.title,
+        usedBy: 'The browser',
+        hint: key.kind === 'cdp' ? 'saved' : tail(key.value),
+        manage: { label: 'Open Browser settings', place: 'browser' },
+        reveal: async () => key.value,
       });
     for (const item of await this.integrations.store.all().catch(() => [])) {
       const secrets = await this.integrations.store.secrets(item.id).catch(() => undefined);

@@ -11,13 +11,16 @@ import type { ToolContext } from '../conversations/manager';
 import type { HostTool, HostToolResult } from '../engines/types';
 import { newId } from '../lib/ids';
 import { declineCookies } from './cookies';
+import { focused, targetAt } from './point';
 import { isHighStakes, SECRET_ATTR, secretLabel, type SecretKind } from './risk';
 import { BrowserProblemError } from './runtime';
 import { plainNavigationError, toUrl, type BrowserService } from './service';
 import { displayHost, siteOf } from './site';
 import { armCreate, armSignIn } from './passkeys';
 import { markSecrets, readPage } from './snapshot';
-import type { Tab } from './tab';
+import { MAX_TABS, type Tab } from './tab';
+import { resolveUploads, UploadRefused, type UploadFile } from './uploads';
+import { watchHandoff } from './handoff';
 
 /** The page's host, for a fill: https only, or this computer itself. */
 function hostOf(url: string): string | undefined {
@@ -72,6 +75,13 @@ const Element = z
   .string()
   .max(120)
   .describe('What the element is, in a few words (e.g. "Search box", "Sign in button").');
+/** How to use the pointer on something. */
+const How = z
+  .enum(['click', 'double', 'right', 'hover', 'drag'])
+  .optional()
+  .describe(
+    'click (default), double (double-click), right (right-click), hover (point at it without clicking, e.g. to open a menu), or drag (drag it onto `to`).',
+  );
 
 interface Outcome {
   text: string;
@@ -157,6 +167,9 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
         },
       });
     log('running', labels.running);
+    // Tabs that came and went before this step were heard about already.
+    tab.opened.length = 0;
+    tab.evicted.length = 0;
     try {
       const outcome = await work(tab);
       const shot = await service.saveShot(conversationId, (await tab.thumbnail())?.jpeg);
@@ -174,9 +187,23 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
           by: 'agent',
         },
       });
-      const note = touched
-        ? '(The user used the browser themselves since your last step, so the page may have changed.)\n'
-        : '';
+      const notes: string[] = [];
+      if (touched)
+        notes.push(
+          '(The user used the browser themselves since your last step, so the page may have changed.)',
+        );
+      // A link or a popup opened a tab: it's in view now, and the agent should know.
+      const opened = tab.opened.splice(0).filter((id) => tab.entry(id));
+      if (opened.length)
+        notes.push(
+          `(That opened a new tab, ${opened.join(', ')}, which is in view now. browser_tabs switches back.)`,
+        );
+      const evicted = tab.evicted.splice(0);
+      if (evicted.length)
+        notes.push(
+          `(A chat keeps ${MAX_TABS} tabs, so Conch closed the one unused longest: ${evicted.join(', ')}.)`,
+        );
+      const note = notes.length ? `${notes.join('\n')}\n` : '';
       return outcome.images
         ? { text: note + outcome.text, images: outcome.images }
         : note + outcome.text;
@@ -204,7 +231,12 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
   /** Ask before acting on a site, and always before something significant. */
   const permit = async (
     tab: Tab,
-    request: { action: string; highStakes: boolean; box?: BrowserBox; kind?: 'download' },
+    request: {
+      action: string;
+      highStakes: boolean;
+      box?: BrowserBox;
+      kind?: 'download' | 'upload';
+    },
   ): Promise<void> => {
     const url = tab.page.url();
     const site = siteOf(url) ?? displayHost(url);
@@ -216,12 +248,17 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
     const kind: BrowserPermission['kind'] =
       request.kind ?? (request.highStakes ? 'high-stakes' : 'site');
     // Read something untrusted (ADR 0028): even a trusted site, or Full trust, asks once per site.
+    // An upload sends the person's files out: it carries the same note when the chat read something.
     const untrusted =
-      kind === 'site' ? (ctx.untrusted?.() ?? (await ctx.restricted?.('browser'))) : undefined;
+      kind === 'site' || kind === 'upload'
+        ? (ctx.untrusted?.() ?? (await ctx.restricted?.('browser')))
+        : undefined;
+    // Your own Chrome is signed in to your life (ADR 0080): each site asks once per chat, always.
+    const own = service.runtime.backend.shared;
     if (kind === 'site') {
       if (tab.sites.has(site)) return;
-      if (!untrusted && ctx.permissionMode === 'bypassPermissions') return;
-      if (!untrusted && (await service.store.trusts(site))) return;
+      if (!untrusted && !own && ctx.permissionMode === 'bypassPermissions') return;
+      if (!untrusted && !own && (await service.store.trusts(site))) return;
     }
     const picture = await tab.thumbnail(request.box);
     const shot = await service.saveShot(conversationId, picture?.jpeg);
@@ -233,7 +270,16 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
         kind === 'site'
           ? `use ${site}`
           : `${request.action.charAt(0).toLowerCase()}${request.action.slice(1)} on ${site}`,
-      browser: { kind, site, url, title, action: request.action, box: picture?.box, shot },
+      browser: {
+        kind,
+        site,
+        url,
+        title,
+        action: request.action,
+        box: picture?.box,
+        shot,
+        ...(own && { ownChrome: true }),
+      },
       ...(untrusted && { taint: `${untrusted} So I’m checking before I act on ${site}.` }),
     });
     if (decision === 'deny') {
@@ -243,8 +289,9 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
           : `The user said no to “${request.action}”. Don’t try another way; ask what they’d like instead.`,
       );
     }
-    tab.sites.add(site);
-    if (decision === 'allow-always' && kind === 'site') await service.grantSite(site);
+    if (kind === 'site' || kind === 'high-stakes') tab.sites.add(site);
+    // "Always" in your own Chrome stays this chat's: it never grants a site for good there.
+    if (decision === 'allow-always' && kind === 'site' && !own) await service.grantSite(site);
   };
 
   /**
@@ -399,22 +446,41 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
   };
 
   /** You type the secret yourself: the agent waits, then carries on. */
-  const handoff = async (tab: Tab, reason: string): Promise<'done' | 'cancelled'> => {
+  const handoff = async (tab: Tab, reason: string): Promise<'done' | 'auto' | 'cancelled'> => {
     const handoffId = newId('handoff');
     const url = tab.page.url();
     tab.handoff = { handoffId, state: 'waiting', reason, url };
     ctx.append({ type: 'browser.handoff', handoff: tab.handoff });
     tab.setControl('user');
+    tab.lastInput = Date.now();
+    // A sign-in or a captcha: it carries on by itself once that's behind you.
+    let auto = false;
+    const unwatch = await watchHandoff(tab, () => {
+      auto = true;
+      tab.setControl('idle');
+    }).catch(() => () => undefined);
     const timeout = AbortSignal.timeout(HANDOFF_WAIT_MS);
     const either = AbortSignal.any([ctx.signal, timeout]);
-    let outcome: 'done' | 'cancelled' = 'done';
+    let outcome: 'done' | 'auto' | 'cancelled' = 'done';
     try {
       await tab.whenFree(either);
+      if (auto) outcome = 'auto';
     } catch {
       outcome = 'cancelled';
+    } finally {
+      unwatch();
     }
     tab.handoff = undefined;
-    ctx.append({ type: 'browser.handoff', handoff: { handoffId, state: outcome, reason, url } });
+    ctx.append({
+      type: 'browser.handoff',
+      handoff: {
+        handoffId,
+        state: outcome === 'cancelled' ? 'cancelled' : 'done',
+        reason,
+        url,
+        ...(outcome === 'auto' && { auto: true }),
+      },
+    });
     if (tab.control === 'user') tab.setControl('idle');
     return outcome;
   };
@@ -451,7 +517,16 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
     await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => undefined);
   };
 
-  const pageText = async (tab: Tab, find?: string) => (await readPage(tab.page, { find })).text;
+  /** The page as the agent reads it, with which tab it is when there's more than one. */
+  const pageText = async (tab: Tab, find?: string) => {
+    const text = (await readPage(tab.page, { find })).text;
+    if (tab.tabs.length < 2) return text;
+    const list = await tab.list();
+    const tabs = list
+      .map((t) => `${t.id}${t.active ? ' (in view)' : ''}: ${t.title || t.url || 'a new tab'}`)
+      .join(' · ');
+    return `Tabs: ${tabs}\n${text}`;
+  };
 
   const secretOf = async (locator: Locator): Promise<SecretKind | undefined> => {
     const value = await locator.getAttribute(SECRET_ATTR, { timeout: 2_000 }).catch(() => null);
@@ -526,39 +601,89 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
       ),
   };
 
-  const click: HostTool<{ ref: typeof Ref; element: typeof Element }> = {
+  const click: HostTool<{
+    ref: typeof Ref;
+    element: typeof Element;
+    how: typeof How;
+    to: z.ZodOptional<typeof Ref>;
+  }> = {
     name: 'browser_click',
     description:
-      'Click an element on the page by its ref. Conch asks the user the first time you act on a site, and before anything significant (buying, sending, deleting).',
-    input: { ref: Ref, element: Element },
-    run: ({ ref, element }) =>
-      step(
-        'click',
-        { running: `Clicking “${element}”`, done: `Clicked “${element}”` },
+      'Click an element on the page by its ref. `how` also double-clicks, right-clicks, hovers (to open a menu) or drags it onto another element (`to`). Conch asks the user the first time you act on a site, and before anything significant (buying, sending, deleting).',
+    input: {
+      ref: Ref,
+      element: Element,
+      how: How,
+      to: Ref.optional().describe('For drag: the ref of the element to drop it on.'),
+    },
+    run: ({ ref, element, how = 'click', to }) => {
+      const words = {
+        click: ['Clicking', 'Clicked'],
+        double: ['Double-clicking', 'Double-clicked'],
+        right: ['Right-clicking', 'Right-clicked'],
+        hover: ['Pointing at', 'Pointed at'],
+        drag: ['Dragging', 'Dragged'],
+      }[how];
+      const action: BrowserActionKind =
+        how === 'hover' ? 'hover' : how === 'drag' ? 'drag' : 'click';
+      return step(
+        action,
+        { running: `${words[0]} “${element}”`, done: `${words[1]} “${element}”` },
         async (tab) => {
+          if (how === 'drag' && !to)
+            throw new Refusal('To drag, say where to drop it: `to` is the ref of the place.');
           const target = locate(tab, ref);
-          const words = await wordsOf(target);
+          const own = await wordsOf(target);
+          // Scrolled into view inside whatever list or panel holds it, then measured.
+          await target.scrollIntoViewIfNeeded({ timeout: 4_000 }).catch(() => undefined);
           const box = await tab.boxOf(target);
+          if (how === 'hover') {
+            // Pointing changes nothing: no question, as with reading.
+            await point(tab, 'hover', `Pointing at “${element}”`, box);
+            await target.hover({ timeout: 6_000 });
+            await new Promise((r) => setTimeout(r, 400));
+            return { text: await pageText(tab) };
+          }
+          const drop = to ? locate(tab, to) : undefined;
+          const dropWords = drop ? await wordsOf(drop) : '';
           await permit(tab, {
-            action: `Click “${words || element}”`,
-            highStakes: isHighStakes(words) || isHighStakes(element),
+            action:
+              how === 'drag'
+                ? `Drag “${own || element}” onto “${dropWords || 'another element'}”`
+                : `${how === 'double' ? 'Double-click' : how === 'right' ? 'Right-click' : 'Click'} “${own || element}”`,
+            highStakes:
+              isHighStakes(own) ||
+              isHighStakes(element) ||
+              (how === 'drag' && isHighStakes(dropWords)),
             box,
           });
-          await point(tab, 'click', `Clicking “${element}”`, box);
+          await point(tab, action, `${words[0]} “${element}”`, box);
+          if (how === 'drag' && drop) {
+            await target.dragTo(drop, { timeout: 8_000 });
+            await settle(tab.page);
+            return { text: await pageText(tab) };
+          }
+          const press = () =>
+            target.click({
+              timeout: 6_000,
+              ...(how === 'double' && { clickCount: 2 }),
+              ...(how === 'right' && { button: 'right' as const }),
+            });
           let downloaded = '';
           try {
-            downloaded = await catchDownload(tab, () => target.click({ timeout: 6_000 }));
+            downloaded = await catchDownload(tab, press);
           } catch (error) {
             if (!/intercepts pointer events/.test(String((error as Error).message))) throw error;
             // Usually a cookie banner or a menu: clear it and try once more.
             await declineCookies(tab.page).catch(() => undefined);
             await tab.page.keyboard.press('Escape').catch(() => undefined);
-            downloaded = await catchDownload(tab, () => target.click({ timeout: 6_000 }));
+            downloaded = await catchDownload(tab, press);
           }
           await settle(tab.page);
           return { text: `${downloaded}${await pageText(tab)}` };
         },
-      ),
+      );
+    },
   };
 
   const type: HostTool<{
@@ -606,11 +731,11 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
             );
             return {
               label:
-                outcome === 'done'
+                outcome !== 'cancelled'
                   ? `You filled in “${element}”`
                   : `Waited for you at “${element}”`,
               text:
-                outcome === 'done'
+                outcome !== 'cancelled'
                   ? `That field takes ${secretLabel(secret)}, so the user typed it themselves (you never see it). Carry on from here.\n${await pageText(tab)}`
                   : 'The user didn’t fill in the field. Ask them how they’d like to continue.',
             };
@@ -654,13 +779,31 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
       ),
   };
 
-  const press: HostTool<{ key: z.ZodString }> = {
+  const press: HostTool<{ key: z.ZodString; ref: z.ZodOptional<typeof Ref> }> = {
     name: 'browser_press',
     description:
-      'Press a key in the page: Enter, Escape, Tab, ArrowDown, PageDown, or a shortcut like Control+A.',
-    input: { key: z.string().min(1).max(40).describe('A key name, e.g. "Enter" or "Escape".') },
-    run: ({ key }) =>
+      'Press a key or a shortcut: Enter, Escape, Tab, ArrowDown, PageDown, Control+A, Shift+Tab, Control+Shift+K. Give `ref` to press it on that element (it gets the focus first).',
+    input: {
+      key: z
+        .string()
+        .min(1)
+        .max(60)
+        .regex(/^[\w+\-.,;:'"`=/\\[\] ]+$/, 'A key name like "Enter", or keys joined by "+".')
+        .describe('A key name, or a shortcut with "+": "Enter", "Escape", "Control+A".'),
+      ref: Ref.optional().describe('Press it on this element, e.g. a text box or a list.'),
+    },
+    run: ({ key, ref }) =>
       step('press', { running: `Pressing ${key}`, done: `Pressed ${key}` }, async (tab) => {
+        const target = ref ? locate(tab, ref) : undefined;
+        if (target) {
+          await markSecrets(tab.page);
+          // A shortcut on a secret field could paste one in: those are the user's.
+          if ((await secretOf(target)) && !/^(enter|tab|escape|shift\+tab)$/i.test(key))
+            throw new Refusal(
+              'That field takes a password, code or card number: only the user types there. Use browser_handoff.',
+            );
+          await target.focus({ timeout: 5_000 });
+        }
         const enter = /^enter$/i.test(key);
         const formButton = enter
           ? await tab.page
@@ -670,11 +813,13 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
               .then(String)
               .catch(() => '')
           : '';
+        const box = target ? await tab.boxOf(target) : undefined;
         await permit(tab, {
           action: enter && formButton ? `Press Enter (${formButton.trim()})` : `Press ${key}`,
           highStakes: enter && isHighStakes(formButton),
+          box,
         });
-        await point(tab, 'press', `Pressing ${key}`);
+        await point(tab, 'press', `Pressing ${key}`, box);
         const downloaded = await catchDownload(tab, () => tab.page.keyboard.press(key));
         await settle(tab.page);
         return { text: `${downloaded}${await pageText(tab)}` };
@@ -715,24 +860,84 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
   };
 
   const scroll: HostTool<{
-    direction: z.ZodEnum<{ up: 'up'; down: 'down' }>;
+    direction: z.ZodOptional<z.ZodEnum<{ up: 'up'; down: 'down'; left: 'left'; right: 'right' }>>;
     ref: z.ZodOptional<typeof Ref>;
   }> = {
     name: 'browser_scroll',
     description:
-      'Scroll the page up or down by most of a screen, or bring an element (by ref) into view.',
+      'Scroll the page by most of a screen (`direction`), bring an element into view (`ref` alone, even inside a scrolling list or panel), or scroll inside a list or panel (`ref` and `direction`).',
     input: {
-      direction: z.enum(['up', 'down']),
-      ref: Ref.optional(),
+      direction: z.enum(['up', 'down', 'left', 'right']).optional(),
+      ref: Ref.optional().describe(
+        'An element: brought into view, or with `direction`, the list or panel to scroll in.',
+      ),
     },
     run: ({ direction, ref }) =>
       step(
         'scroll',
-        { running: `Scrolling ${direction}`, done: `Scrolled ${direction}` },
+        {
+          running: direction ? `Scrolling ${direction}` : 'Bringing it into view',
+          done: direction ? `Scrolled ${direction}` : 'Brought it into view',
+        },
         async (tab) => {
-          await point(tab, 'scroll', `Scrolling ${direction}`);
-          if (ref) await locate(tab, ref).scrollIntoViewIfNeeded({ timeout: 5_000 });
-          else await tab.page.mouse.wheel(0, direction === 'down' ? 640 : -640);
+          if (!direction && !ref)
+            throw new Refusal(
+              'Say which way to scroll (`direction`), or what to bring into view (`ref`).',
+            );
+          const target = ref ? locate(tab, ref) : undefined;
+          await point(
+            tab,
+            'scroll',
+            direction ? `Scrolling ${direction}` : 'Bringing it into view',
+          );
+          const dx = direction === 'left' ? -1 : direction === 'right' ? 1 : 0;
+          const dy = direction === 'up' ? -1 : direction === 'down' ? 1 : 0;
+          if (target && !direction) {
+            await target.scrollIntoViewIfNeeded({ timeout: 5_000 });
+          } else if (target) {
+            // The element, or the nearest thing around it that scrolls that way.
+            const moved = await target.evaluate(
+              (start: unknown, [x, y]: [number, number]) => {
+                interface Box {
+                  scrollTop: number;
+                  scrollLeft: number;
+                  scrollHeight: number;
+                  scrollWidth: number;
+                  clientHeight: number;
+                  clientWidth: number;
+                  parentElement: Box | null;
+                  scrollBy(dx: number, dy: number): void;
+                }
+                const view = globalThis as unknown as {
+                  getComputedStyle(el: Box): { overflowY: string; overflowX: string };
+                };
+                const scrolls = (el: Box) => {
+                  const style = view.getComputedStyle(el);
+                  return y
+                    ? /(auto|scroll|overlay)/.test(style.overflowY) &&
+                        el.scrollHeight > el.clientHeight
+                    : /(auto|scroll|overlay)/.test(style.overflowX) &&
+                        el.scrollWidth > el.clientWidth;
+                };
+                let el: Box | null = start as Box;
+                while (el && !scrolls(el)) el = el.parentElement;
+                if (!el) return false;
+                const before = [el.scrollLeft, el.scrollTop];
+                el.scrollBy(x * el.clientWidth * 0.8, y * el.clientHeight * 0.8);
+                return before[0] !== el.scrollLeft || before[1] !== el.scrollTop;
+              },
+              [dx, dy] as [number, number],
+            );
+            if (!moved) {
+              // Nothing there scrolls by script: the wheel over it does what a person's would.
+              const box = await target.boundingBox({ timeout: 2_000 }).catch(() => null);
+              if (box) await tab.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+              await tab.page.mouse.wheel(dx * 480, dy * 480);
+            }
+          } else {
+            await tab.page.mouse.move(tab.viewport.width / 2, tab.viewport.height / 2);
+            await tab.page.mouse.wheel(dx * 640, dy * 640);
+          }
           await new Promise((r) => setTimeout(r, 300));
           return { text: await pageText(tab) };
         },
@@ -771,11 +976,14 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
             maskColor: '#9a8f88',
           });
           const title = await tab.page.title().catch(() => '');
-          const size = tab.page.viewportSize();
+          // One picture pixel is one CSS pixel (the browser runs at scale 1), so a
+          // position read off the picture is a position on the page. browser_click_at's
+          // x,y are in this picture's pixels, whatever the panel does next. (Your own
+          // Chrome isn't emulated, so its size is what was measured, not `viewportSize`.)
+          const { width, height } = tab.page.viewportSize() ?? tab.viewport;
+          tab.shotViewport = { width, height };
           return {
-            // One picture pixel is one CSS pixel (the browser runs at scale 1),
-            // so a position read off the picture is a position on the page.
-            text: `Screenshot of “${title}” (${tab.page.url()}): the visible part of the page${size ? `, ${size.width}×${size.height} pixels, x across from the left and y down from the top` : ''}.`,
+            text: `Screenshot of “${title}” (${tab.page.url()}): the visible part of the page, ${width}×${height} pixels, x across from the left and y down from the top. Where there’s no ref to use (a canvas, an unlabelled control), browser_click_at acts at x,y in these pixels.`,
             images: [{ data: image.toString('base64'), mimeType: 'image/jpeg' }],
           };
         },
@@ -842,7 +1050,12 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
             };
           }
           await settle(tab.page);
-          return { text: `The user is done. Carry on from here.\n${await pageText(tab)}` };
+          return outcome === 'auto'
+            ? {
+                label: 'You got through, so I carried on',
+                text: `The user got through (Conch saw the sign-in or check go through). Carry on from here.\n${await pageText(tab)}`,
+              }
+            : { text: `The user is done. Carry on from here.\n${await pageText(tab)}` };
         },
       ),
   };
@@ -998,6 +1211,352 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
       ),
   };
 
+  const tabs: HostTool<{
+    action: z.ZodEnum<{ list: 'list'; open: 'open'; switch: 'switch'; close: 'close' }>;
+    tab: z.ZodOptional<z.ZodString>;
+    url: z.ZodOptional<z.ZodString>;
+  }> = {
+    name: 'browser_tabs',
+    description: `The chat’s browser tabs (up to ${MAX_TABS}): list them, open a new one (with an address or words to search), switch to one, or close one. Links that open a new tab, and sign-in popups, become tabs by themselves and come into view.`,
+    input: {
+      action: z.enum(['list', 'open', 'switch', 'close']),
+      tab: z
+        .string()
+        .regex(/^t\d{1,3}$/i, 'A tab id from the list, like t2.')
+        .optional()
+        .describe('For switch and close: the tab, e.g. "t2".'),
+      url: z
+        .string()
+        .min(1)
+        .max(4096)
+        .optional()
+        .describe('For open: a web address, or words to search for.'),
+    },
+    run: ({ action, tab: id, url: raw }) =>
+      step(
+        'tab',
+        {
+          running:
+            action === 'open'
+              ? 'Opening a new tab'
+              : action === 'switch'
+                ? `Switching to tab ${id ?? ''}`
+                : action === 'close'
+                  ? `Closing tab ${id ?? ''}`
+                  : 'Looking at the tabs',
+          done:
+            action === 'open'
+              ? 'Opened a new tab'
+              : action === 'switch'
+                ? `Switched to tab ${id ?? ''}`
+                : action === 'close'
+                  ? `Closed tab ${id ?? ''}`
+                  : 'Looked at the tabs',
+        },
+        async (tab) => {
+          const listed = async () =>
+            (await tab.list())
+              .map(
+                (t) =>
+                  `${t.id}${t.active ? ' (in view)' : ''}: ${t.title || '(no title)'} — ${t.url || 'a new tab'}`,
+              )
+              .join('\n');
+          if (action === 'list') return { text: `Tabs:\n${await listed()}` };
+          if (action === 'open') {
+            const url = raw ? toUrl(raw) : undefined;
+            if (url) {
+              const verdict = await service.guard.navigation(url);
+              if (!verdict.ok) throw new Refusal(verdict.message);
+            }
+            const opened = await service.openTab(tab);
+            if (!opened)
+              throw new Refusal(
+                `This chat already has ${MAX_TABS} tabs open. Close one first (browser_tabs close).`,
+              );
+            if (url) {
+              await point(tab, 'open', `Opening ${displayHost(url)}`);
+              await tab.page
+                .goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+                .catch(async (error: Error) => {
+                  if (!/Timeout/i.test(error.message)) throw error;
+                  await tab.page.goto(url, { waitUntil: 'commit', timeout: 30_000 });
+                });
+              await settle(tab.page);
+            }
+            return {
+              label: url ? `Opened ${displayHost(url)} in a new tab` : 'Opened a new tab',
+              text: `Opened tab ${opened}.\n${await pageText(tab)}`,
+            };
+          }
+          if (!id)
+            throw new Refusal(`Say which tab: one of ${tab.tabs.map((t) => t.id).join(', ')}.`);
+          if (action === 'switch') {
+            if (!tab.switchTo(id))
+              throw new Refusal(
+                `There’s no tab ${id}. The tabs are: ${tab.tabs.map((t) => t.id).join(', ')}.`,
+              );
+            return { text: await pageText(tab) };
+          }
+          const closed = await tab.closeTab(id);
+          if (closed === 'missing')
+            throw new Refusal(
+              `There’s no tab ${id}. The tabs are: ${tab.tabs.map((t) => t.id).join(', ')}.`,
+            );
+          if (closed === 'last')
+            throw new Refusal(
+              'That’s the only tab, so it stays open. Open another page in it instead.',
+            );
+          return { text: `Closed ${id}. Tabs now:\n${await listed()}\n${await pageText(tab)}` };
+        },
+      ),
+  };
+
+  const clickAt: HostTool<{
+    x: z.ZodNumber;
+    y: z.ZodNumber;
+    element: typeof Element;
+    how: typeof How;
+    to_x: z.ZodOptional<z.ZodNumber>;
+    to_y: z.ZodOptional<z.ZodNumber>;
+    text: z.ZodOptional<z.ZodString>;
+    submit: z.ZodOptional<z.ZodBoolean>;
+  }> = {
+    name: 'browser_click_at',
+    description:
+      'Click at a point on the page, by its x,y in the last browser_screenshot’s pixels: for canvases, maps and controls the page text has no ref for. Prefer refs when there are any. Give `text` to type after clicking (into the field there), and `submit` to press Enter. `how` double-clicks, right-clicks, hovers or drags to to_x,to_y. Conch asks the user just as it does for a click.',
+    input: {
+      x: z.number().min(0).max(10_000).describe('Pixels from the left of the screenshot.'),
+      y: z.number().min(0).max(10_000).describe('Pixels from the top of the screenshot.'),
+      element: Element,
+      how: How,
+      to_x: z.number().min(0).max(10_000).optional().describe('For drag: where to drop, x.'),
+      to_y: z.number().min(0).max(10_000).optional().describe('For drag: where to drop, y.'),
+      text: z
+        .string()
+        .max(5_000)
+        .optional()
+        .describe('Type this after clicking (it replaces what’s in a text field).'),
+      submit: z.boolean().optional().describe('Press Enter after typing.'),
+    },
+    run: ({ x, y, element, how = 'click', to_x, to_y, text, submit }) => {
+      const action: BrowserActionKind =
+        text !== undefined ? 'type' : how === 'hover' ? 'hover' : how === 'drag' ? 'drag' : 'click';
+      const running =
+        text !== undefined
+          ? `Typing in “${element}”`
+          : how === 'hover'
+            ? `Pointing at “${element}”`
+            : how === 'drag'
+              ? `Dragging “${element}”`
+              : `Clicking “${element}”`;
+      return step(
+        action,
+        {
+          running,
+          done:
+            text !== undefined
+              ? `Typed in “${element}”`
+              : how === 'hover'
+                ? `Pointed at “${element}”`
+                : how === 'drag'
+                  ? `Dragged “${element}”`
+                  : `Clicked “${element}”`,
+        },
+        async (tab) => {
+          // The screenshot's pixels, onto today's page (the panel may have changed its shape).
+          const shot = tab.shotViewport ?? tab.viewport;
+          const sx = tab.viewport.width / shot.width;
+          const sy = tab.viewport.height / shot.height;
+          const at = (px: number, py: number) => ({ px: px * sx, py: py * sy });
+          const { px, py } = at(x, y);
+          if (px >= tab.viewport.width || py >= tab.viewport.height)
+            throw new Refusal(
+              `${Math.round(x)},${Math.round(y)} is outside the page (${shot.width}×${shot.height}). Take a fresh browser_screenshot and use its pixels.`,
+            );
+          if (how === 'drag' && (to_x === undefined || to_y === undefined))
+            throw new Refusal('To drag, give where to drop it: to_x and to_y.');
+          await markSecrets(tab.page);
+          const hit = await targetAt(tab.page, px, py);
+          const box = tab.boxAt(hit.box ?? { x: px - 14, y: py - 14, width: 28, height: 28 });
+          // Secrets never pass through the model, by ref or by position.
+          if (text !== undefined && hit.secret) {
+            const outcome = await handoff(
+              tab,
+              `Please type ${secretLabel(hit.secret)} into “${element}”, then hand the browser back.`,
+            );
+            return {
+              label:
+                outcome !== 'cancelled'
+                  ? `You filled in “${element}”`
+                  : `Waited for you at “${element}”`,
+              text:
+                outcome !== 'cancelled'
+                  ? `That field takes ${secretLabel(hit.secret)}, so the user typed it themselves (you never see it). Carry on from here.\n${await pageText(tab)}`
+                  : 'The user didn’t fill in the field. Ask them how they’d like to continue.',
+            };
+          }
+          if (how === 'hover') {
+            await point(tab, 'hover', running, box);
+            await tab.page.mouse.move(px, py, { steps: 4 });
+            await new Promise((r) => setTimeout(r, 400));
+            return { text: await pageText(tab) };
+          }
+          const drop = how === 'drag' ? at(to_x ?? 0, to_y ?? 0) : undefined;
+          const dropHit = drop ? await targetAt(tab.page, drop.px, drop.py) : undefined;
+          const named = hit.words || element;
+          const verb =
+            how === 'double'
+              ? 'Double-click'
+              : how === 'right'
+                ? 'Right-click'
+                : how === 'drag'
+                  ? 'Drag'
+                  : 'Click';
+          await permit(tab, {
+            action:
+              how === 'drag'
+                ? `Drag “${named}” onto “${dropHit?.words || 'another place'}”`
+                : text !== undefined
+                  ? `${verb} “${named}” and type “${text.length > 40 ? `${text.slice(0, 40)}…` : text}”`
+                  : `${verb} “${named}”`,
+            highStakes:
+              isHighStakes(hit.words) ||
+              isHighStakes(element) ||
+              Boolean(dropHit && isHighStakes(dropHit.words)),
+            box,
+          });
+          await point(tab, action, running, box);
+          if (drop) {
+            await tab.page.mouse.move(px, py);
+            await tab.page.mouse.down();
+            await tab.page.mouse.move(drop.px, drop.py, { steps: 12 });
+            await tab.page.mouse.up();
+            await settle(tab.page);
+            return { text: await pageText(tab) };
+          }
+          let downloaded = await catchDownload(tab, () =>
+            tab.page.mouse.click(px, py, {
+              ...(how === 'double' && { clickCount: 2 }),
+              ...(how === 'right' && { button: 'right' as const }),
+            }),
+          );
+          if (text !== undefined) {
+            await markSecrets(tab.page);
+            const field = await focused(tab.page);
+            if (field?.secret)
+              throw new Refusal(
+                'That click put the cursor in a password, code or card field: only the user types there. Use browser_handoff.',
+              );
+            // A text field is replaced, as browser_type does; a canvas just takes the keys.
+            if (field?.editable) await tab.page.keyboard.press('ControlOrMeta+A');
+            await tab.page.keyboard.type(text, { delay: 8 });
+            if (submit) {
+              const formButton = String(
+                await tab.page
+                  .evaluate(
+                    'document.activeElement?.form?.querySelector("[type=submit], button:not([type])")?.innerText ?? ""',
+                  )
+                  .catch(() => ''),
+              ).trim();
+              if (isHighStakes(formButton))
+                await permit(tab, {
+                  action: `Press Enter (${formButton})`,
+                  highStakes: true,
+                  box,
+                });
+              downloaded += await catchDownload(tab, () => tab.page.keyboard.press('Enter'));
+            }
+          }
+          await settle(tab.page);
+          return { text: `${downloaded}${await pageText(tab)}` };
+        },
+      );
+    },
+  };
+
+  const upload: HostTool<{
+    ref: typeof Ref;
+    element: typeof Element;
+    files: z.ZodArray<z.ZodString>;
+  }> = {
+    name: 'browser_upload',
+    description:
+      'Put files into a file box on the page (an “Upload” or “Choose file” button, by its ref). Files can be ones the user attached in this chat (by name), things you made in this chat (by title), or files in the work folder (by path). Conch shows the user what goes where and asks every time.',
+    input: {
+      ref: Ref,
+      element: Element,
+      files: z
+        .array(z.string().min(1).max(1000))
+        .min(1)
+        .max(10)
+        .describe(
+          'Each file: an attachment’s name, something you made, or a path in the work folder.',
+        ),
+    },
+    run: ({ ref, element, files: wanted }) =>
+      step(
+        'upload',
+        {
+          running: `Uploading to “${element}”`,
+          done: `Uploaded ${wanted.length === 1 ? 'a file' : `${wanted.length} files`} to “${element}”`,
+        },
+        async (tab) => {
+          const sources = service.uploads;
+          if (!sources)
+            throw new Refusal('Uploading files isn’t available here. Ask the user to do it.');
+          let files: UploadFile[];
+          try {
+            files = await resolveUploads(wanted, {
+              conversationId,
+              workspace: await (ctx.workspace?.() ?? service.workspace()),
+              sources,
+            });
+          } catch (error) {
+            if (error instanceof UploadRefused) throw new Refusal(error.message);
+            throw error;
+          }
+          const target = locate(tab, ref);
+          const box = await tab.boxOf(target);
+          const kind = await target
+            .evaluate((el: { tagName: string; type?: string; multiple?: boolean }) => ({
+              input: el.tagName === 'INPUT' && el.type === 'file',
+              multiple: Boolean(el.multiple),
+            }))
+            .catch(() => ({ input: false, multiple: false }));
+          const names = files.map((f) => `“${f.name}”`).join(', ');
+          await permit(tab, {
+            action: `Upload ${names} (${files.map((f) => f.from).join(', ')})`,
+            highStakes: true,
+            box,
+            kind: 'upload',
+          });
+          await point(tab, 'upload', `Uploading to “${element}”`, box);
+          const payload = files.map(({ name, mimeType, buffer }) => ({ name, mimeType, buffer }));
+          if (kind.input) {
+            if (files.length > 1 && !kind.multiple)
+              throw new Refusal('That box takes one file at a time. Upload them one by one.');
+            await target.setInputFiles(payload, { timeout: 10_000 });
+          } else {
+            // A button that opens the file picker: answer the picker instead.
+            const chooser = tab.page.waitForEvent('filechooser', { timeout: 6_000 });
+            await target.click({ timeout: 6_000 });
+            const picker = await chooser.catch(() => undefined);
+            if (!picker)
+              throw new Refusal(
+                `Clicking “${element}” didn’t ask for a file. Find the upload button or file box (often “Choose file” or “Upload”) and use its ref.`,
+              );
+            if (files.length > 1 && !picker.isMultiple())
+              throw new Refusal('That box takes one file at a time. Upload them one by one.');
+            await picker.setFiles(payload, { timeout: 10_000 });
+          }
+          await settle(tab.page);
+          return {
+            text: `Put ${names} into “${element}”. If the site has its own button to send or save them, that’s the next step.\n${await pageText(tab)}`,
+          };
+        },
+      ),
+  };
+
   const all = [
     open,
     read,
@@ -1011,6 +1570,9 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
     screenshot,
     wait,
     handOff,
+    tabs,
+    clickAt,
+    upload,
   ] as HostTool[];
   for (const t of all) t.searchHint = 'browser web page website';
   // A browsing task starts with these, so they're there without a tool search first.

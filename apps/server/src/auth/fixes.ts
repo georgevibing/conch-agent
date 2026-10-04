@@ -72,6 +72,10 @@ export async function runFix(
       await services.browser.updateSettings({ allowLocal: false });
       return 'The browser can’t open local apps now.';
 
+    case 'browser-own-chrome-off':
+      await services.browser.setBackend({ kind: 'local' });
+      return 'The browser is Conch’s own again; your Chrome is left alone.';
+
     case 'terminal-remote-off':
       // The terminal's own settings route asks another device to confirm it's
       // you before any change; the fix keeps that rule.

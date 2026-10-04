@@ -437,6 +437,8 @@ export const CheckupAction = z.enum([
   'integrations-ask',
   /** The agent's browser stops opening pages on this computer and your network. */
   'browser-local-off',
+  /** The browser goes back to Conch's own, away from your own Chrome (ADR 0080). */
+  'browser-own-chrome-off',
   /** Other devices can no longer open a terminal. */
   'terminal-remote-off',
   /** The work folder's own Claude Code rules are set aside (renamed, never deleted). */

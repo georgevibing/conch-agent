@@ -2,14 +2,20 @@ import { rm } from 'node:fs/promises';
 import { platform } from 'node:os';
 import { join } from 'node:path';
 
-import type { BrowserCandidate, BrowserPhase, BrowserProblem } from '@conch/protocol';
-import { chromium, type BrowserContext } from 'playwright-core';
+import type {
+  BrowserBackendKind,
+  BrowserCandidate,
+  BrowserPhase,
+  BrowserProblem,
+} from '@conch/protocol';
+import { chromium, type BrowserContext, type Page } from 'playwright-core';
 
 import { run } from '../lib/proc';
+import { attach, BACKEND_NAMES, OWNED, type Attached, type Fetcher } from './backends';
 import type { BrowserGuard } from './guard';
 import { InstallError, installChromium, missingLibraries, type InstallProgress } from './install';
 import { findBrowsers, pickBrowser } from './locate';
-import type { BrowserStore } from './store';
+import type { BrowserSecrets, BrowserStore } from './store';
 
 /**
  * The browser process: finding one, starting it, keeping it contained, and
@@ -122,6 +128,69 @@ export interface RuntimeDeps {
   blockedPage: (message: string, url: string) => string;
   /** Where to look for browsers (tests hand in their own). */
   locate?: () => BrowserCandidate[];
+  /** Keys and addresses for browsers elsewhere (ADR 0080). */
+  secrets?: BrowserSecrets;
+  /** Where Chrome keeps its profiles (tests hand in their own). */
+  chromeDirs?: () => string[];
+  fetch?: Fetcher;
+}
+
+/** What runs: Conch's own browser here, or one it attached to (ADR 0080). */
+export interface RunningBackend {
+  kind: BrowserBackendKind;
+  name: string;
+  /** The person's own browser: only Conch's pages are touched, and nothing is resized. */
+  shared: boolean;
+}
+
+/**
+ * A small badge on every page Conch drives in your own Chrome, so it's never
+ * a secret which tabs are Conch's. Runs in the page (serialised, so it stays
+ * self-contained); hidden from the accessibility tree, so the agent never
+ * reads it, and it never takes a click.
+ */
+export function conchBadge(): void {
+  interface El {
+    id: string;
+    textContent: string | null;
+    style: Record<string, string>;
+    setAttribute(name: string, value: string): void;
+  }
+  const doc = (
+    globalThis as unknown as {
+      document?: {
+        documentElement: { appendChild(node: El): void } | null;
+        getElementById(id: string): El | null;
+        createElement(tag: string): El;
+        readyState: string;
+        addEventListener(event: string, run: () => void): void;
+      };
+    }
+  ).document;
+  if (!doc) return;
+  const add = () => {
+    if (!doc.documentElement || doc.getElementById('__conch_badge')) return;
+    const el = doc.createElement('div');
+    el.id = '__conch_badge';
+    el.textContent = 'Conch is using this tab';
+    el.setAttribute('aria-hidden', 'true');
+    Object.assign(el.style, {
+      position: 'fixed',
+      zIndex: '2147483647',
+      right: '12px',
+      bottom: '12px',
+      padding: '6px 10px',
+      borderRadius: '999px',
+      font: '600 12px system-ui, sans-serif',
+      color: '#fff',
+      background: 'rgba(76, 58, 130, 0.94)',
+      pointerEvents: 'none',
+      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.25)',
+    });
+    doc.documentElement.appendChild(el);
+  };
+  if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', add);
+  else add();
 }
 
 export class BrowserRuntime {
@@ -130,7 +199,11 @@ export class BrowserRuntime {
   install?: InstallProgress;
   running?: { name: string; id: string; version?: string };
   healed: { at: number; message: string }[] = [];
+  /** Why the chosen browser isn't the one running: Conch's own carries on meanwhile. */
+  fellBack?: string;
+  backend: RunningBackend = { kind: 'local', name: BACKEND_NAMES.local, shared: false };
   #context?: BrowserContext;
+  #attached?: Attached;
   #starting?: Promise<BrowserContext>;
   #stopping = false;
 
@@ -170,6 +243,25 @@ export class BrowserRuntime {
     this.#set('starting');
     try {
       const settings = await this.deps.store.settings();
+      if (settings.backend !== 'local' && this.deps.secrets) {
+        const name = BACKEND_NAMES[settings.backend];
+        try {
+          const attached = await attach(settings.backend, {
+            secrets: this.deps.secrets,
+            fetch: this.deps.fetch,
+            chromeDirs: this.deps.chromeDirs,
+          });
+          return this.#readyAttached(attached, settings.backend);
+        } catch (error) {
+          // Down, or not allowed yet: Conch's own browser carries on meanwhile.
+          const why =
+            error instanceof BrowserProblemError ? error.problem.message : `${name} didn’t answer.`;
+          this.fellBack = `${why} Until then, Conch uses its own browser.`;
+          this.heal(`${name} couldn’t be reached, so Conch used its own browser.`);
+        }
+      } else {
+        this.fellBack = undefined;
+      }
       let candidates = this.candidates();
       if (candidates.length === 0) {
         await this.#install();
@@ -227,7 +319,60 @@ export class BrowserRuntime {
     }
   }
 
+  async #readyAttached(attached: Attached, kind: BrowserBackendKind): Promise<BrowserContext> {
+    const { context } = attached;
+    // Your own Chrome is contained page by page (only Conch's pages); a browser
+    // of Conch's own elsewhere, as a whole, like the one here.
+    if (!attached.shared) await this.#contain(context);
+    this.#context = context;
+    this.#attached = attached;
+    this.fellBack = undefined;
+    this.backend = { kind, name: attached.name, shared: attached.shared };
+    this.running = { name: attached.name, id: kind, version: context.browser()?.version() };
+    const gone = () => {
+      if (this.#context !== context) return;
+      this.#context = undefined;
+      this.#attached = undefined;
+      this.running = undefined;
+      const expected = this.#stopping;
+      this.#set('off');
+      this.deps.onClosed();
+      if (!expected)
+        this.heal(`${attached.name} went away; Conch connects again when it’s needed.`);
+    };
+    context.on('close', gone);
+    context.browser()?.on('disconnected', gone);
+    this.#set('running');
+    return context;
+  }
+
+  /**
+   * A new page for a chat. In your own Chrome it's marked as Conch's (only
+   * those are ever touched), wears a badge, and goes past the guard on its own.
+   */
+  async newPage(context: BrowserContext): Promise<Page> {
+    const page = await context.newPage();
+    await this.adopt(page);
+    return page;
+  }
+
+  /**
+   * A page that's Conch's in a browser it attached to: a new tab, or one a page
+   * of Conch's opened. Closed when Conch lets go; in your own Chrome, also
+   * contained and marked.
+   */
+  async adopt(page: Page): Promise<void> {
+    if (!this.#attached || OWNED.has(page)) return;
+    OWNED.add(page);
+    if (!this.backend.shared) return;
+    await this.#contain(page);
+    await page.addInitScript(conchBadge).catch(() => undefined);
+    await page.evaluate(conchBadge).catch(() => undefined);
+  }
+
   #ready(context: BrowserContext, candidate: BrowserCandidate): BrowserContext {
+    this.backend = { kind: 'local', name: BACKEND_NAMES.local, shared: false };
+    this.#attached = undefined;
     this.#context = context;
     this.running = {
       name: candidate.name,
@@ -307,7 +452,9 @@ export class BrowserRuntime {
   }
 
   /** Every request and WebSocket goes past the guard (ADR 0014, "Containment"). */
-  async #contain(context: BrowserContext): Promise<void> {
+  async #contain(target: BrowserContext | Page): Promise<void> {
+    // A page routes just as a context does (your own Chrome: only Conch's pages).
+    const context = target as BrowserContext;
     await context.route('**/*', async (route) => {
       const request = route.request();
       try {
@@ -345,7 +492,9 @@ export class BrowserRuntime {
     if (!context) return;
     this.#stopping = true;
     try {
-      await context.close();
+      // A browser Conch attached to is let go of, never closed.
+      if (this.#attached) await this.#attached.release();
+      else await context.close();
     } catch {
       // Already gone.
     } finally {
