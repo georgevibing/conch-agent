@@ -104,7 +104,7 @@ function Welcome({ onNext }: { onNext: () => void }) {
         Hello.
       </Heading>
       <Text size="lg" tone="muted" align="center" className={styles.welcomeLead}>
-        I’m Conch, a calm place to think and build, right here on your computer.
+        I’m Conch. I set myself up, fix what breaks, and ask you only when I have to.
       </Text>
       <Button ref={ref} size="lg" trailingIcon={<ArrowRight />} onClick={onNext}>
         Get started

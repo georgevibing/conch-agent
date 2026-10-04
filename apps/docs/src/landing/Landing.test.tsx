@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router';
 import { describe, expect, it } from 'vitest';
 import reference from 'virtual:conch-reference';
 
+import { DOWNLOADS } from '../site/config';
 import { pageAt } from '../site/pages';
 import { Landing, LANDING_LINKS } from './Landing';
 
@@ -22,14 +23,17 @@ function open() {
 const channels = reference.channels.filter((channel) => channel.available);
 
 describe('the front page', () => {
-  it('says what Conch is, and the one line that installs it', async () => {
+  it('says what Conch is, the button that downloads it, and the one line that installs it', async () => {
     const { container } = open();
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
-      /A calm home for your AI agents\.\s*On your own computer\./,
+      /The AI agent that just works\.\s*Let it solve your problems\./,
     );
     expect(screen.getAllByRole('button', { name: 'Copy command' }).length).toBeGreaterThan(0);
-    for (const link of screen.getAllByRole('link', { name: 'Get started' }))
-      expect(link).toHaveAttribute('href', LANDING_LINKS.start);
+    // One download for every system, and the docs beside it.
+    for (const link of screen.getAllByRole('link', { name: 'Download Conch' }))
+      expect(link).toHaveAttribute('href', DOWNLOADS);
+    for (const link of screen.getAllByRole('link', { name: 'Read the docs' }))
+      expect(link).toHaveAttribute('href', LANDING_LINKS.docs);
     expect(document.title).toContain('Conch');
     const { violations } = await axe(container, {
       // Contrast needs real layout, which jsdom lacks: scripts/a11y.mjs covers it.

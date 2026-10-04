@@ -2,7 +2,7 @@
   "name": "conch",
   "version": "0.2.0",
   "private": true,
-  "description": "A self-hosted shell for the coding agents and models of your choosing.",
+  "description": "The AI agent that just works, and fixes itself: the subscriptions and API keys you already have, on your own computer.",
   "license": "MIT",
   "repository": {
     "type": "git",

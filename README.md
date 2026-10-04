@@ -8,12 +8,12 @@
 <h1 align="center">Conch</h1>
 
 <p align="center">
-  <b>A calm home for your AI agents. On your own computer.</b>
+  <b>The AI agent that just works. Let it solve your problems.</b>
 </p>
 
 <p align="center">
-  Every model you use, the apps you live in and the chat apps you already have,<br>
-  in one place that sets itself up, fixes what breaks, and asks only when it matters.
+  Use the AI subscriptions and API keys you already have.<br>
+  Conch sets itself up, fixes what breaks, and asks you only when it has to.
 </p>
 
 <p align="center">
@@ -46,13 +46,15 @@
 
 ## Why Conch
 
-- **One place for every model.** The plans you already pay for, a model on this
-  computer and the keys you have, all at once, from one picker. A chat can move
-  between them without losing its thread.
-- **Yours, and on your computer.** Chats, memories and settings are plain files
-  in `~/.conch`. There's no Conch account and no telemetry.
-- **Made for people who never open a terminal.** It installs what it needs,
-  repairs what breaks, and interrupts only for approvals that matter.
+- **It just works.** Download it and open it. Conch installs what it needs, and
+  there's no account to make. Made for people who never open a terminal.
+- **It fixes itself.** What breaks, it mends on its own. When something needs
+  you, like signing in again, you get one plain sentence and the button that does it.
+- **The AI you already pay for.** Sign in with your subscriptions or paste an API
+  key, and every model is in one picker. A chat can move between them without
+  losing its thread.
+- **Yours, on your computer.** Chats, memories and settings are plain files in
+  `~/.conch`. There's no Conch account and no telemetry.
 
 ## What it does
 

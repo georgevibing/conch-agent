@@ -1,4 +1,4 @@
-import { Badge, Button, DocsHero, Heading, LinkCard, Pearl, Text } from '@conch/nacre';
+import { Badge, Button, DocsHero, Heading, LinkCard, Text } from '@conch/nacre';
 import {
   ArrowRight,
   Blocks,
@@ -59,11 +59,8 @@ export function Home() {
       <DocsHero
         eyebrow={
           <>
-            <Pearl size="sm" label={null} />
-            <span>Documentation</span>
-            <Badge tone="neutral" size="sm">
-              {reference.version}
-            </Badge>
+            <Badge tone="accent">Documentation</Badge>
+            <Badge tone="neutral">{reference.version}</Badge>
           </>
         }
         title={

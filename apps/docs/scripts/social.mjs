@@ -5,7 +5,7 @@
  *   node apps/docs/scripts/social.mjs
  *
  * Writes `apps/docs/public/social.png`, 1200 × 630: the pearl, the name and
- * one line, in Nacre's own colours and type. Run it again when the line on the
+ * the front page's line, in Nacre's own colours and type. Run it again when the line on the
  * front page changes, and commit what it writes. Uses the Google Chrome
  * already installed, so nothing is downloaded.
  */
@@ -34,6 +34,11 @@ const page = `<!doctype html>
     src: url('${font('@fontsource/instrument-serif/files/instrument-serif-latin-400-normal.woff2')}');
   }
   @font-face {
+    font-family: 'Instrument Serif';
+    font-style: italic;
+    src: url('${font('@fontsource/instrument-serif/files/instrument-serif-latin-400-italic.woff2')}');
+  }
+  @font-face {
     font-family: 'Geist';
     font-weight: 100 900;
     src: url('${font('@fontsource-variable/geist/files/geist-latin-wght-normal.woff2')}');
@@ -57,13 +62,15 @@ const page = `<!doctype html>
   .pearl { width: 300px; height: 300px; flex: none; filter: drop-shadow(0 28px 36px rgb(138 111 122 / 0.28)); }
   .pearl svg { width: 100%; height: 100%; display: block; }
   h1 { font: 400 156px/0.9 'Instrument Serif', serif; letter-spacing: -0.02em; margin: 0 0 28px; }
-  p { font-size: 40px; line-height: 1.25; margin: 0; color: #5d5049; max-width: 640px; }
+  p { font: 400 56px/1.05 'Instrument Serif', serif; letter-spacing: -0.01em; margin: 0; color: #2a211c; max-width: 640px; }
+  /* The accent, as Nacre's --nc-text-accent draws it on the front page. */
+  em { display: block; color: oklch(0.5 0.1305 42); }
   .site { margin-top: 36px; font-size: 26px; font-weight: 500; color: #8a6f7a; letter-spacing: 0.01em; }
 </style>
 <div class="pearl">${pearl}</div>
 <div>
   <h1>Conch</h1>
-  <p>A calm home for your AI agents, on your own computer.</p>
+  <p>The AI agent that just works. <em>Let it solve your problems.</em></p>
   <div class="site">conchagent.com · open source</div>
 </div>`;
 
