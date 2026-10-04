@@ -19,7 +19,7 @@
  * - **Groups** (ADR 0075): in a space, Chat only delivers what @mentions the
  *   app; a space is answered only once you turn it on.
  */
-import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { ChannelBot, ChannelSecrets } from '@conch/protocol';
@@ -38,6 +38,7 @@ import { writeFileAtomic } from '../lib/fs';
 import type { ChannelEndpoints } from './adapters';
 import type { HookReply, HookRequest } from './door';
 import { blocks, fit, inline, prose } from './format';
+import { TextChoices } from './linked';
 import {
   type ChannelAdapter,
   type ChannelConnection,
@@ -277,7 +278,8 @@ export async function fromGoogleChat(
   const token = /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/.exec(
     authorization ?? '',
   )?.[1];
-  if (!token) return false;
+  // No token, no address of its own to be for, or no issuer to come from: nothing is accepted.
+  if (!token || !/^https:\/\/\S+$/.test(audience) || !issuers.length) return false;
   try {
     const header = decodeProtectedHeader(token);
     if (header.alg !== 'RS256' || typeof header.kid !== 'string') return false;
@@ -516,6 +518,8 @@ export class GoogleChatAdapter implements ChannelAdapter {
     };
 
     let toldAudience = false;
+    // Approvals are numbered replies, read like any message: from Google Chat's own copy.
+    const choices = new TextChoices();
     const ok = { status: 200, body: '{}', type: 'application/json' } as const;
     const deliver = async (request: HookRequest): Promise<HookReply> => {
       if (request.method !== 'POST') return { status: 405 };
@@ -557,13 +561,11 @@ export class GoogleChatAdapter implements ChannelAdapter {
         return { status: 400 };
       }
       events.heard?.();
-      // A token lasts an hour and isn't bound to the body: an event must be fresh,
-      // and each one is taken once, even across a restart.
+      // A token lasts an hour and isn't bound to the body: an event must be fresh, and
+      // what it says is read back from Google Chat, where each one is claimed once.
       const time = event.eventTime ? Date.parse(event.eventTime) : Number.NaN;
       if (!Number.isFinite(time) || Math.abs(Date.now() - time) > FRESH_MS) return ok;
-      const id = eventId(event);
-      if (!id || !(await this.#firstTime(id))) return ok;
-      void this.#event(event, events).catch(() => undefined);
+      void this.#event(event, events, choices).catch(() => undefined);
       return ok;
     };
 
@@ -577,25 +579,31 @@ export class GoogleChatAdapter implements ChannelAdapter {
 
     const send = async (chatId: string, markdown: string, options?: SendOptions) => {
       const refs: SentRef[] = [];
-      const parts = fit(markdown, PART, (p) => toGoogleChat(p).length);
-      for (const [index, part] of parts.entries()) {
-        const last = index === parts.length - 1;
+      const words = options?.buttons?.length
+        ? TextChoices.render(markdown, options.buttons)
+        : markdown;
+      for (const part of fit(words, PART, (p) => toGoogleChat(p).length)) {
         const sent = await this.call<{ name: string }>('POST', `/v1/${chatId}/messages`, {
           text: toGoogleChat(part) || '…',
-          ...(last && options?.buttons?.length && { cardsV2: cards(options) }),
         });
         refs.push({ chatId, messageId: sent.name });
       }
+      const last = refs.at(-1);
+      if (last && options?.buttons?.length) choices.remember(last, options.buttons);
       return refs;
     };
 
     return {
       send,
       edit: async (ref, markdown, options) => {
-        await this.call('PATCH', `/v1/${ref.messageId}?updateMask=text,cardsV2`, {
-          text: toGoogleChat(fit(markdown, PART, (p) => p.length)[0] ?? '…'),
-          cardsV2: options?.buttons?.length ? cards(options) : [],
+        choices.forget(ref);
+        const words = options?.buttons?.length
+          ? TextChoices.render(markdown, options.buttons)
+          : markdown;
+        await this.call('PATCH', `/v1/${ref.messageId}?updateMask=text`, {
+          text: toGoogleChat(fit(words, PART, (p) => p.length)[0] ?? '…'),
         });
+        if (options?.buttons?.length) choices.remember(ref, options.buttons);
       },
       // Chat shows no typing for apps.
       typing: () => Promise.resolve(),
@@ -631,14 +639,18 @@ export class GoogleChatAdapter implements ChannelAdapter {
       : undefined;
   }
 
-  /** Whether this event is new; remembered (on disk, for longer than a token lasts) if so. */
-  async #firstTime(id: string): Promise<boolean> {
+  /**
+   * Claim an event as taken: true the first time, false ever after (for longer
+   * than a token lasts, across a restart). Synchronous, so two copies arriving
+   * together can't both pass; the disk only follows what's already claimed.
+   */
+  #claim(id: string): boolean {
     if (!this.#seen) {
       this.#seen = new Map();
       const path = this.#seenPath();
       if (path)
         try {
-          const raw = JSON.parse(await readFile(path, 'utf8')) as { seen?: [string, number][] };
+          const raw = JSON.parse(readFileSync(path, 'utf8')) as { seen?: [string, number][] };
           for (const [key, at] of raw.seen ?? [])
             if (typeof key === 'string' && typeof at === 'number') this.#seen.set(key, at);
         } catch {
@@ -652,7 +664,7 @@ export class GoogleChatAdapter implements ChannelAdapter {
     while (this.#seen.size > SEEN) this.#seen.delete(this.#seen.keys().next().value ?? '');
     const path = this.#seenPath();
     if (path)
-      await writeFileAtomic(path, `${JSON.stringify({ seen: [...this.#seen] })}\n`).catch(
+      void writeFileAtomic(path, `${JSON.stringify({ seen: [...this.#seen] })}\n`).catch(
         () => undefined,
       );
     return true;
@@ -706,21 +718,36 @@ export class GoogleChatAdapter implements ChannelAdapter {
    * Act on an event. Google's token only proves Google sent it, not that the
    * body is the one it sent (a token captured in the hour it lasts could carry
    * another body). So who wrote what, and where, is read again from Google
-   * Chat with the app's own token, and only that copy is acted on.
+   * Chat with the app's own token, only that copy is acted on, and it's
+   * claimed by the name Google gives it, which the body can't change. Card
+   * clicks aren't taken at all: who clicked is only ever in the body.
    */
-  async #event(event: ChatEvent, events: ChannelEvents) {
+  async #event(event: ChatEvent, events: ChannelEvents, choices: TextChoices) {
     if (event.type === 'MESSAGE' && event.message?.name) {
       const copy = await this.#serverCopy(event.message.name);
       const sender = copy?.sender;
       if (!copy || !sender?.name || sender.type === 'BOT') return;
       const spaceName = copy.name.replace(/\/messages\/.*$/, '');
       const space = await this.#space(spaceName);
-      if (!space) return;
+      // Claimed after the reads, in one synchronous step: the first copy wins.
+      if (!space || !this.#claim(`m:${copy.name}`)) return;
       // Its display name comes from the event, but the person is the server's.
       const shown = event.user?.name === sender.name ? event.user.displayName : sender.displayName;
       const user: ChannelUser = { id: personId(sender.name), name: shown || 'Someone' };
       if (space.direct) {
         this.#dms.set(sender.name, spaceName);
+        // A numbered reply to a question: the person who answers is the server's sender.
+        const answer = choices.match(spaceName, copy.text ?? '');
+        if (answer) {
+          events.press({
+            chatId: spaceName,
+            user,
+            data: answer.data,
+            message: answer.ref,
+            ack: () => Promise.resolve(),
+          });
+          return;
+        }
         events.message({
           chatId: spaceName,
           messageId: copy.name,
@@ -747,77 +774,24 @@ export class GoogleChatAdapter implements ChannelAdapter {
       });
       return;
     }
-    const sender = event.user;
-    if (!event.space?.name || !sender?.name || sender.type === 'BOT') return;
-    const space = await this.#space(event.space.name);
-    if (!space) return;
-    const user: ChannelUser = { id: personId(sender.name), name: sender.displayName || 'Someone' };
-    if (event.type === 'CARD_CLICKED') {
-      // A click names the app's own question, which must be in this space; its data is a
-      // one-time key the service checks against the question asked there, from someone let in.
-      const data =
-        event.common?.parameters?.data ??
-        event.action?.parameters?.find((p) => p.key === 'data')?.value;
-      const asked = event.message?.name ? await this.#serverCopy(event.message.name) : undefined;
-      if (!data || asked?.sender?.type !== 'BOT' || !asked.name.startsWith(`${event.space.name}/`))
-        return;
-      events.press({
-        chatId: event.space.name,
-        user,
-        data,
-        message: { chatId: event.space.name, messageId: asked.name },
-        ack: () => Promise.resolve(),
-      });
-      return;
-    }
-    // Added to a space: it shows on the channel's page, off.
-    if (event.type === 'ADDED_TO_SPACE' && !space.direct)
+    // Added to a space: it shows on the channel's page, off (nothing more: nobody is let in).
+    if (event.type === 'ADDED_TO_SPACE' && event.space?.name) {
+      const space = await this.#space(event.space.name);
+      if (!space || space.direct || !this.#claim(`a:${event.space.name}`)) return;
       events.message({
         chatId: event.space.name,
-        messageId: `added-${event.eventTime ?? Date.now()}`,
-        user,
+        messageId: `added-${event.space.name}`,
+        user: {
+          id: personId(event.user?.name ?? 'users/unknown'),
+          name: 'Someone',
+          anonymous: true,
+        },
         text: '',
         files: [],
         direct: false,
         mentioned: false,
         group: space.name,
       });
+    }
   }
-}
-
-/** What makes an event itself: a message's name, or a click's place and moment. */
-function eventId(event: ChatEvent): string | undefined {
-  if (event.type === 'MESSAGE') return event.message?.name ? `m:${event.message.name}` : undefined;
-  if (!event.space?.name || !event.eventTime) return undefined;
-  return `${event.type ?? 'event'}:${event.space.name}:${event.user?.name ?? ''}:${event.message?.name ?? ''}:${event.eventTime}`;
-}
-
-/** A card with the question's buttons; a click comes back with the button's data. */
-function cards(options: SendOptions) {
-  return [
-    {
-      cardId: 'conch-ask',
-      card: {
-        sections: [
-          {
-            widgets: [
-              {
-                buttonList: {
-                  buttons: (options.buttons ?? []).map((b) => ({
-                    text: b.label,
-                    onClick: {
-                      action: { function: 'conch', parameters: [{ key: 'data', value: b.data }] },
-                    },
-                    ...(b.style === 'primary' && {
-                      color: { red: 0.1, green: 0.45, blue: 0.9, alpha: 1 },
-                    }),
-                  })),
-                },
-              },
-            ],
-          },
-        ],
-      },
-    },
-  ];
 }

@@ -47,27 +47,32 @@ door, answering through the Chat API with a service account's key.
     Conch hammer Google. If Google can't be reached, what isn't known is
     refused: it fails closed.
 - **A token isn't bound to the body**, and lasts an hour. So:
-  - **each event is taken once**: by its message's name (a click by its
-    place and moment), remembered on disk (`channels/googlechat-<id>.json`,
-    `derived` in backups) for two hours, so a replay after a restart is
-    still one event;
+  - **each event is taken once**, claimed by the name Google Chat itself
+    gives the message (read back, so the body can't vary it), in one
+    synchronous step after the read-back (two copies arriving together
+    can't both pass), and remembered on disk (`channels/googlechat-<id>.json`,
+    `derived` in backups) for two hours, so a replay after a restart is still
+    one event;
   - **an event's own time must be within five minutes of now**;
   - **who wrote what, and where, comes from Google Chat itself**: the
     message is read back with the app's own token (`spaces.messages.get`)
     and its space's kind with `spaces.get`, and only that copy is acted on.
     A forged body under a captured token names a message Google never had
     (nothing happens), or a real one whose sender and words are the server's,
-    not the body's. A click must name a question the app itself posted in
-    that space; its data is a one-time key the service checks against the
-    question asked there, from someone let in.
+    not the body's.
+  - **An empty or plain-`http` audience, or no issuer, fails closed**, as does
+    a token whose key Google can't be asked for.
 - **The other way Google Chat signs**, for the project number as audience
   (tokens from `chat@system.gserviceaccount.com`, checked against its X.509
   certificates), is never accepted: Conch doesn't know the project number.
   A genuine one only makes the channel say, in plain words, to set
   **Authentication Audience** to **HTTP endpoint URL**.
 - **Answers** are written in Chat's own marks (`*bold*`, `_italic_`,
-  `<url|label>`), at most 3900 characters a message; approvals a card whose
-  buttons say what was decided once pressed.
+  `<url|label>`), at most 3900 characters a message.
+- **Approvals are numbered replies** (`TextChoices`), read like any message:
+  from Google Chat's own copy, so the person answering is the server's
+  sender. Card clicks aren't taken at all: who clicked is only ever in the
+  posted body, which a captured token could carry forged.
 - **Groups** (ADR 0075): a space is answered once you turn it on, and only
   what mentions the app; everyone but you gets words only.
 - **Files** sent in Chat aren't taken yet (downloading them needs another
@@ -91,7 +96,10 @@ account exchanges with keys of its own.
   the owner wrote a member's message (the member it is), a replay of the
   same message (once, across a restart), a replay with a forged body
   (nothing), a stale or future event time, and a project-number token
-  (refused, the setting named).
+  (refused, the setting named), two copies of one event at once (one turn),
+  a forged body with a made-up message name, every kind of event without a
+  valid token, a click claiming the owner's approval (ignored), and no
+  address of its own (refused).
 - **Who may act**: the owner is the Google user (`users/<id>`) who said
   hello; anyone else in a DM is a request, and in a space gets words only
   (ADR 0075), their words read as someone else's.
