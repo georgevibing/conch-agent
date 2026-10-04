@@ -17,6 +17,7 @@ import { SkillStore } from '../store';
 import { MarketError } from './http';
 import { PretendMarket } from './pretend';
 import { categoryOf, SkillMarket, wider } from './service';
+import type { MarketSource } from './types';
 
 let home: string;
 let pretend: PretendMarket;
@@ -318,8 +319,62 @@ describe('Repair everything', () => {
   });
 });
 
+describe('a skill that doesn’t say what it does', () => {
+  it('a description of nothing but punctuation stops it: an assistant couldn’t know when to use it', async () => {
+    const files = new Map([
+      [
+        'SKILL.md',
+        Buffer.from(
+          '---\nname: meeting-notes\ndescription: ">"\n---\n\n# Meeting notes\n\nSteps.\n',
+        ),
+      ],
+    ]);
+    const source: MarketSource = {
+      id: 'skills-sh',
+      label: 'skills.sh',
+      listing: async () => {
+        throw new MarketError('not-found', 'no');
+      },
+      latest: async () => undefined,
+      fetch: async () => ({
+        listing: {
+          id: 'skills-sh:ada/skills/meeting-notes',
+          source: 'skills-sh',
+          sourceLabel: 'skills.sh',
+          name: 'meeting-notes',
+          title: 'Meeting notes',
+          description: '',
+          publisher: { name: 'ada' },
+          trust: 'community',
+          url: 'https://skills.sh/ada/skills/meeting-notes',
+        },
+        pin: {
+          kind: 'commit',
+          owner: 'ada',
+          repo: 'skills',
+          path: 'meeting-notes',
+          commit: 'a'.repeat(40),
+        },
+        files,
+        content: 'c',
+      }),
+    };
+    market = new SkillMarket({ home, store, sources: [source], now: () => now });
+    const look = await market.preview('skills-sh:ada/skills/meeting-notes');
+    expect(look.blocked).toMatch(/doesn’t say what it does/);
+  });
+});
+
 describe('small rules', () => {
-  it('sorts skills onto shelves by their own words', () => {
+  it('sorts skills onto shelves by the words they use most', () => {
+    expect(
+      categoryOf({
+        name: 'weather',
+        title: 'Weather',
+        description:
+          'Get current weather and forecasts for your travel plans (no API key required).',
+      }),
+    ).toBe('productivity');
     expect(categoryOf({ name: 'pptx', title: 'Slides', description: 'Makes presentations.' })).toBe(
       'documents',
     );

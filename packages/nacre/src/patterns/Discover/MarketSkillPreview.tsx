@@ -13,7 +13,14 @@ import { SkillPermissionList } from '../Skills/SkillPermissionList';
 import { SkillReview } from '../Skills/SkillReview';
 import styles from './Discover.module.css';
 import { marketTrustAbout, MarketTrustBadge } from './MarketTrustBadge';
-import { pinWords, roughly, type MarketListingView, type MarketPreviewView } from './types';
+import {
+  fromWords,
+  hostWords,
+  pinWords,
+  roughly,
+  type MarketListingView,
+  type MarketPreviewView,
+} from './types';
 
 /** Only an https address is ever opened from a skill's words. */
 const isWebLink = (url: string | undefined): url is string =>
@@ -88,13 +95,18 @@ export function MarketSkillPreview({
           <p className={styles.previewFrom}>
             <MarketTrustBadge trust={shown.trust} size="md" />
             <span>
-              From {shown.sourceLabel}, by{' '}
-              {isWebLink(shown.publisher.url) ? (
-                <a href={shown.publisher.url} target="_blank" rel="noreferrer noopener">
-                  {shown.publisher.name}
-                </a>
-              ) : (
-                shown.publisher.name
+              From {shown.sourceLabel}
+              {fromWords(shown.sourceLabel, shown.publisher.name) !== shown.sourceLabel && (
+                <>
+                  , by{' '}
+                  {isWebLink(shown.publisher.url) ? (
+                    <a href={shown.publisher.url} target="_blank" rel="noreferrer noopener">
+                      {shown.publisher.name}
+                    </a>
+                  ) : (
+                    shown.publisher.name
+                  )}
+                </>
               )}
               {used > 0 && ` · ${roughly(used)} people use it`}
             </span>
@@ -223,7 +235,7 @@ export function MarketSkillPreview({
                 </dt>
                 <dd>
                   <a href={shown.url} target="_blank" rel="noreferrer noopener">
-                    On {shown.sourceLabel}
+                    On {hostWords(shown.url)}
                   </a>
                 </dd>
               </div>

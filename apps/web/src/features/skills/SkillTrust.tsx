@@ -101,7 +101,9 @@ export function SkillSignatureSection({ skill }: { skill: Skill }) {
   const [trusting, setTrusting] = useState(false);
   const signature = skill.signature;
   // Your own unsigned skills need no line saying so.
-  if (!signature || (signature.state === 'unsigned' && skill.source === 'conch')) return null;
+  // Unsigned says nothing new for your own, or for one from Discover, which says where it came from.
+  if (!signature || (signature.state === 'unsigned' && (skill.source === 'conch' || skill.origin)))
+    return null;
   const who = signature.publisher ?? 'this publisher';
 
   const trust = async () => {

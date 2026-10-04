@@ -21,6 +21,8 @@ import {
   MarketShelf,
   MarketSkillPreview,
   Page,
+  fromWords,
+  hostWords,
   pinWords,
   Stack,
   Text,
@@ -354,11 +356,14 @@ export function MarketOriginSection({ skill }: { skill: SkillDetail }) {
 
   return (
     <Stack gap={3}>
-      <Callout tone="info" title={`Added from ${origin.sourceLabel}, by ${origin.publisher.name}`}>
+      <Callout
+        tone="info"
+        title={`Added from ${fromWords(origin.sourceLabel, origin.publisher.name).replace(' · ', ', by ')}`}
+      >
         Pinned to {pinWords(origin.pin)}. Conch never changes it by itself: an update waits for you
         to read what’s different.{' '}
         <a href={origin.url} target="_blank" rel="noreferrer noopener">
-          Its page on {origin.sourceLabel}
+          Its page on {hostWords(origin.url)}
         </a>
       </Callout>
       {origin.update && !open && (

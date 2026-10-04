@@ -67,6 +67,8 @@ export function marketTools(
     description:
       'Search skills people share (Anthropic, ClawHub, skills.sh) for one that would help with what the person asked. Give a few plain words for the kind of task ("meeting notes", "presentation slides"). Returns ids to `offer` with kind `market`; the person reads the skill and decides. Never adds anything.',
     input: { words: z.string().min(1).max(200) },
+    // The map tells the model to call it, so it must be there, not waiting to be searched for.
+    alwaysLoad: true,
     searchHint: 'search marketplace skills people share to offer one',
     run: async ({ words: asked }) => {
       if (ctx.unattended)

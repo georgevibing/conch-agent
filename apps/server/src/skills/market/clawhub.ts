@@ -415,11 +415,15 @@ export class SkillsShSource implements MarketSource {
     const text = files.get('SKILL.md')?.toString('utf8') ?? '';
     const description = plainLine(readKey(splitSkill(text).front, 'description'));
     const base = listing ?? (await this.listing(key, signal));
+    const repoLicense = await this.github
+      .rootLicense(owner, repo, commit, signal)
+      .catch(() => undefined);
     return {
       listing: { ...base, description: base.description || description, url: base.url },
       pin: { kind: 'commit', owner, repo, path, commit },
       files,
       content,
+      ...(repoLicense && { licenseHint: repoLicense }),
     };
   }
 }

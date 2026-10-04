@@ -81,3 +81,20 @@ export function roughly(n: number): string {
 export function pinWords(pin: MarketPinView): string {
   return pin.kind === 'commit' ? `commit ${pin.commit.slice(0, 7)}` : `version ${pin.version}`;
 }
+
+/** “ClawHub · Ada”, or just “Anthropic” when the place and the publisher are one. */
+export function fromWords(sourceLabel: string, publisher: string): string {
+  return sourceLabel.trim().toLowerCase() === publisher.trim().toLowerCase()
+    ? sourceLabel
+    : `${sourceLabel} · ${publisher}`;
+}
+
+/** Where a link goes, in a word: “GitHub”, “ClawHub”, “skills.sh”. */
+export function hostWords(url: string): string {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    return host === 'github.com' ? 'GitHub' : host === 'clawhub.ai' ? 'ClawHub' : host;
+  } catch {
+    return url;
+  }
+}
