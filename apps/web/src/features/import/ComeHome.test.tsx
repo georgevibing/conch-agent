@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useUi } from '../../app/ui';
 import { mockFetch, renderApp } from '../../test/harness';
 import { useImportProgress } from './api';
+import { ComeHomePage } from './ComeHomePage';
 import { ComeHomeSection } from './ComeHomeSection';
 
 const auth = { method: 'none', signedIn: true, setupRequired: false, secure: true };
@@ -130,36 +131,51 @@ describe('Come home', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 
+  it('takes a look on a page of its own, inside Settings → Memory', async () => {
+    const user = userEvent.setup();
+    const openSettings = vi.fn();
+    const before = useUi.getState().openSettings;
+    useUi.setState({ openSettings });
+    mockFetch({ 'GET /api/import': () => status(), 'GET /api/auth': () => auth });
+    renderApp(<ComeHomeSection />);
+    const offer = await screen.findByRole('region', { name: 'Bring your things from OpenClaw' });
+    expect(offer).toHaveTextContent('2 memories, 2 skills');
+    await user.click(within(offer).getByRole('button', { name: 'Take a look' }));
+    expect(openSettings).toHaveBeenCalledWith('memory', 'from-openclaw');
+    useUi.setState({ openSettings: before });
+  });
+
   it('previews exactly what comes over, brings the ticked things, then offers Undo', async () => {
     const user = userEvent.setup();
     const calls = mockFetch({
-      'GET /api/import': () => status(),
       'GET /api/import/openclaw': () => plan,
       'POST /api/import': () => result,
       'POST /api/import/undo': () => ({ removed: 3, restored: 1 }),
       'GET /api/auth': () => auth,
     });
-    renderApp(<ComeHomeSection />);
-    const offer = await screen.findByRole('region', { name: 'Bring your things from OpenClaw' });
-    expect(offer).toHaveTextContent('2 memories, 2 skills');
-    await user.click(within(offer).getByRole('button', { name: 'Take a look' }));
-
-    const dialog = await screen.findByRole('dialog', { name: 'Bring your things from OpenClaw' });
-    await within(dialog).findByRole('region', { name: 'Memories' });
-    expect(dialog).toHaveTextContent('/Users/ada/.openclaw');
+    const openSettings = vi.fn();
+    const before = useUi.getState().openSettings;
+    useUi.setState({ openSettings });
+    renderApp(<ComeHomePage source="openclaw" />);
+    await screen.findByRole('region', { name: 'Memories' });
+    expect(
+      screen.getByRole('heading', { name: 'Bring your things from OpenClaw' }),
+    ).toBeInTheDocument();
+    expect(document.body).toHaveTextContent('/Users/ada/.openclaw');
     // The worrying skill and the bot start unticked, and say why.
-    expect(within(dialog).getByRole('checkbox', { name: /solana helper/ })).not.toBeChecked();
-    expect(dialog).toHaveTextContent('Downloads something and runs it.');
-    expect(within(dialog).getByRole('checkbox', { name: /Telegram bot/ })).not.toBeChecked();
-    expect(dialog).toHaveTextContent('Stop OpenClaw first');
-    expect(dialog).toHaveTextContent('couldn’t all be read');
+    expect(screen.getByRole('checkbox', { name: /solana helper/ })).not.toBeChecked();
+    expect(document.body).toHaveTextContent('Downloads something and runs it.');
+    expect(screen.getByRole('checkbox', { name: /Telegram bot/ })).not.toBeChecked();
+    expect(document.body).toHaveTextContent('Stop OpenClaw first');
+    expect(document.body).toHaveTextContent('couldn’t all be read');
 
-    await user.click(within(dialog).getByRole('checkbox', { name: /Telegram bot/ }));
-    await user.click(within(dialog).getByRole('button', { name: 'Bring 4 things over' }));
+    await user.click(screen.getByRole('checkbox', { name: /Telegram bot/ }));
+    await user.click(screen.getByRole('button', { name: 'Bring 4 things over' }));
 
-    const summary = await within(dialog).findByRole('region', {
+    const summary = await screen.findByRole('region', {
       name: 'Your things from OpenClaw are here',
     });
+    expect(screen.getByRole('heading', { name: 'Welcome home' })).toBeInTheDocument();
     expect(calls.find((c) => c.method === 'POST' && c.path === '/api/import')?.body).toEqual({
       source: 'openclaw',
       items: ['persona:name', 'memory:0', 'routine:0', 'channel:telegram'],
@@ -174,14 +190,44 @@ describe('Come home', () => {
     await waitFor(() =>
       expect(calls.some((c) => c.method === 'POST' && c.path === '/api/import/undo')).toBe(true),
     );
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    // Undone: back to Memory.
+    await waitFor(() => expect(openSettings).toHaveBeenCalledWith('memory'));
+    useUi.setState({ openSettings: before });
+  });
+
+  it('shows everything at a glance, one kind at a time, and searches a long one', async () => {
+    const user = userEvent.setup();
+    const many = Array.from({ length: 14 }, (_, n) => ({
+      id: `memory:${n}`,
+      group: 'memories' as const,
+      title: n % 2 ? `**Project ${n}:** Uses Coolify` : `Project ${n}: Prefers pnpm`,
+      checked: true,
+    }));
+    mockFetch({
+      'GET /api/import/openclaw': () => ({
+        ...plan,
+        items: [...plan.items.filter((i) => i.group !== 'memories'), ...many],
+      }),
+      'GET /api/auth': () => auth,
+    });
+    renderApp(<ComeHomePage source="openclaw" />);
+    const glance = await screen.findByRole('group', { name: 'What there is to bring' });
+    expect(within(glance).getByRole('button', { name: /^Memories/ })).toHaveTextContent('14of 14');
+    await user.click(within(glance).getByRole('button', { name: /^Memories/ }));
+    expect(screen.queryByRole('region', { name: 'Skills' })).toBeNull();
+    // Markdown reads as words.
+    expect(screen.getByText('Project 1: Uses Coolify')).toBeInTheDocument();
+    await user.type(screen.getByRole('searchbox', { name: 'Search memories' }), 'coolify');
+    expect(screen.getByText('7 found')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Untick these' }));
+    expect(within(glance).getByRole('button', { name: /^Memories/ })).toHaveTextContent('7of 14');
+    expect(screen.getByRole('button', { name: /Bring \d+ things over/ })).toBeInTheDocument();
   });
 
   it('groups another agent’s things, and sends a half Slack bot to finish in Channels (ADR 0042)', async () => {
     const user = userEvent.setup();
     const atlas = { id: 'work', name: 'Atlas' };
     mockFetch({
-      'GET /api/import': () => status(),
       'GET /api/import/openclaw': () => ({
         ...plan,
         problems: [],
@@ -234,18 +280,16 @@ describe('Come home', () => {
       }),
       'GET /api/auth': () => auth,
     });
-    renderApp(<ComeHomeSection />);
-    await user.click(await screen.findByRole('button', { name: 'Take a look' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Bring your things from OpenClaw' });
-    const agent = await within(dialog).findByRole('region', { name: 'Atlas' });
+    renderApp(<ComeHomePage source="openclaw" />);
+    const agent = await screen.findByRole('region', { name: 'Atlas' });
     expect(agent).toHaveTextContent('Talk as Atlas');
     expect(agent).toHaveTextContent('Charles reviews');
-    expect(within(dialog).getByRole('region', { name: 'Model' })).toHaveTextContent(
+    expect(screen.getByRole('region', { name: 'Model' })).toHaveTextContent(
       'Use Claude Opus, as in OpenClaw',
     );
-    await user.click(within(dialog).getByRole('checkbox', { name: /Your Slack bot/ }));
-    await user.click(within(dialog).getByRole('button', { name: 'Bring 4 things over' }));
-    const summary = await within(dialog).findByRole('region', {
+    await user.click(screen.getByRole('checkbox', { name: /Your Slack bot/ }));
+    await user.click(screen.getByRole('button', { name: 'Bring 4 things over' }));
+    const summary = await screen.findByRole('region', {
       name: 'Your things from OpenClaw are here',
     });
     expect(summary).toHaveTextContent('1 model choice');
@@ -260,7 +304,6 @@ describe('Come home', () => {
     const user = userEvent.setup();
     let finish: () => void = () => undefined;
     mockFetch({
-      'GET /api/import': () => status(),
       'GET /api/import/openclaw': () => plan,
       'GET /api/auth': () => auth,
     });
@@ -273,41 +316,42 @@ describe('Come home', () => {
           })
         : routes(input, init),
     );
-    renderApp(<ComeHomeSection />);
-    await user.click(await screen.findByRole('button', { name: 'Take a look' }));
-    const dialog = await screen.findByRole('dialog');
-    await user.click(await within(dialog).findByRole('button', { name: /Bring 3 things over/ }));
+    renderApp(<ComeHomePage source="openclaw" />);
+    await user.click(await screen.findByRole('button', { name: /Bring 3 things over/ }));
     act(() => useImportProgress.setState({ done: 1, total: 3, current: 'Morning briefing' }));
     expect(
-      await within(dialog).findByRole('progressbar', { name: 'Bringing your things over' }),
+      await screen.findByRole('progressbar', { name: 'Bringing your things over' }),
     ).toHaveAttribute('aria-valuenow', '1');
-    expect(dialog).toHaveTextContent('Morning briefing');
+    expect(document.body).toHaveTextContent('Morning briefing');
     act(() => finish());
-    expect(await within(dialog).findByText('Welcome home')).toBeInTheDocument();
+    expect(await screen.findByText('Welcome home')).toBeInTheDocument();
   });
 
-  it('opens straight away from ⌘K or Repair everything, and Undo stays for the last import', async () => {
+  it('opens its page straight away from ⌘K or Repair everything, and Undo stays for the last import', async () => {
     const user = userEvent.setup();
     useUi.setState({ settingsFocus: 'come-home' });
+    const openSettings = vi.fn();
+    const before = useUi.getState().openSettings;
+    useUi.setState({ openSettings });
     const calls = mockFetch({
       'GET /api/import': () =>
         status({
           sources: [{ ...source, imported: { at: Date.now() - 60_000, count: 6 } }],
           last: { at: Date.now() - 60_000, source: 'openclaw', count: 6 },
         }),
-      'GET /api/import/openclaw': () => plan,
       'POST /api/import/undo': () => ({ removed: 6, restored: 0 }),
       'GET /api/auth': () => auth,
     });
     renderApp(<ComeHomeSection />);
-    const dialog = await screen.findByRole('dialog', { name: 'Bring your things from OpenClaw' });
-    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() =>
+      expect(openSettings).toHaveBeenCalledWith('memory', 'from-openclaw', { replace: true }),
+    );
     expect(useUi.getState().settingsFocus).toBeUndefined();
-    expect(screen.getByText(/Brought over 6 things/)).toBeInTheDocument();
+    expect(await screen.findByText(/Brought over 6 things/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Undo that import' }));
     await waitFor(() =>
       expect(calls.some((c) => c.method === 'POST' && c.path === '/api/import/undo')).toBe(true),
     );
+    useUi.setState({ openSettings: before });
   });
 });

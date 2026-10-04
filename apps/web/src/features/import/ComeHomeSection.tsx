@@ -1,4 +1,3 @@
-import type { ImportSourceId } from '@conch/protocol';
 import { Button, ImportOffer, Stack, Text, toast } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
@@ -10,7 +9,7 @@ import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
 import { Section } from '../settings/Section';
 import { COME_HOME_FOCUS, importApi, useImportStatus } from './api';
-import { ComeHomeDialog } from './ComeHomeDialog';
+import { comeHomeItem } from '../settings/paths';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 /** “just now”, “2 days ago”, “on 3 May”. */
@@ -28,25 +27,19 @@ export function ComeHomeSection() {
   const { data } = useImportStatus();
   const auth = useAuth();
   const { guard, dialog } = useVerify(auth.data?.method ?? 'none');
-  const [open, setOpen] = useState<ImportSourceId>();
   const [undoing, setUndoing] = useState(false);
+  const openSettings = useUi((s) => s.openSettings);
   const focus = useUi((s) => s.settingsFocus);
   const ref = useRef<HTMLElement>(null);
 
-  // ⌘K and Repair everything arrive here: the first one found opens at once.
-  const asked = focus === COME_HOME_FOCUS ? data?.sources[0]?.id : undefined;
-  const shown = open ?? asked;
+  // ⌘K and Repair everything arrive here: the first one found opens at once, as its page.
   useEffect(() => {
-    if (focus === COME_HOME_FOCUS && data) ref.current?.scrollIntoView({ block: 'nearest' });
-    // Nothing to open: the focus is spent.
-    if (focus === COME_HOME_FOCUS && data && !data.sources.length)
-      useUi.setState({ settingsFocus: undefined });
-  }, [focus, data]);
-  const close = () => {
-    setOpen(undefined);
-    if (useUi.getState().settingsFocus === COME_HOME_FOCUS)
-      useUi.setState({ settingsFocus: undefined });
-  };
+    if (focus !== COME_HOME_FOCUS || !data) return;
+    useUi.setState({ settingsFocus: undefined });
+    const first = data.sources[0]?.id;
+    if (first) openSettings('memory', comeHomeItem(first), { replace: true });
+    else ref.current?.scrollIntoView({ block: 'nearest' });
+  }, [focus, data, openSettings]);
 
   if (!data) return null;
   const last = data.last;
@@ -92,7 +85,7 @@ export function ComeHomeSection() {
               <Button
                 size="sm"
                 variant={s.imported ? 'surface' : 'solid'}
-                onClick={() => setOpen(s.id)}
+                onClick={() => openSettings('memory', comeHomeItem(s.id))}
               >
                 {s.imported ? 'Look again' : 'Take a look'}
               </Button>
@@ -110,7 +103,6 @@ export function ComeHomeSection() {
           </Stack>
         )}
       </Stack>
-      <ComeHomeDialog source={shown} onClose={close} guard={guard} />
       {dialog}
     </Section>
   );

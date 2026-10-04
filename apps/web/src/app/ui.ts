@@ -194,7 +194,10 @@ export const useUi = create<UiState>((set) => ({
     // A provider's page, and every memory, are places of their own; any other focus is
     // brought into view.
     const item =
-      tab === 'providers' || (tab === 'memory' && focus === MEMORY_ALL) ? focus : undefined;
+      tab === 'providers' ||
+      (tab === 'memory' && (focus === MEMORY_ALL || Boolean(focus?.startsWith('from-'))))
+        ? focus
+        : undefined;
     set({ settingsFocus: item ? undefined : focus, paletteOpen: false });
     showSettings(tab, item, move);
   },

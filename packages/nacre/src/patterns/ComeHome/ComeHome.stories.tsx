@@ -5,6 +5,8 @@ import { Button } from '../../components/Button';
 import { Stack } from '../../components/Stack';
 import { SkillReview } from '../Skills/SkillReview';
 import { openClawItems, openClawTeamItems, openClawTeamTicked, openClawTicked } from './fixtures';
+import { ComeHomeHero } from './ComeHomeHero';
+import { ImportOverview } from './ImportOverview';
 import { ImportPreview } from './ImportPreview';
 import { ImportOffer, ImportProgress, ImportSummary } from './ImportSummary';
 
@@ -146,4 +148,33 @@ export const Summary: Story = {
       />
     </div>
   ),
+};
+
+/** Come home as a page: the journey, everything at a glance, the list one kind at a time. */
+export const AtAGlance: Story = {
+  name: 'At a glance (the page)',
+  render: () => {
+    function Page() {
+      const [selected, setSelected] = useState(openClawTeamTicked);
+      const [view, setView] = useState('all');
+      return (
+        <Stack gap={5} style={{ inlineSize: 'min(46rem, 100%)' }}>
+          <ComeHomeHero from="OpenClaw" path="~/.openclaw" />
+          <ImportOverview
+            items={openClawTeamItems}
+            selected={selected}
+            view={view}
+            onViewChange={setView}
+          />
+          <ImportPreview
+            items={openClawTeamItems}
+            selected={selected}
+            onSelectedChange={setSelected}
+            view={view}
+          />
+        </Stack>
+      );
+    }
+    return <Page />;
+  },
 };

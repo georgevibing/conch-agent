@@ -11,10 +11,11 @@ If OpenClaw or Hermes is on this computer, Conch finds it and shows exactly what
 
 When Conch finds one during the welcome, it asks, with **Take a look** and **Not now**. After that, the offer lives in **Settings → Memory**, and <kbd>mod+k</kbd> finds it too.
 
-1. Open **Settings → Memory**. Under **Bring your things from another assistant**, press **Take a look** on the app's card.
-2. Read the list. Everything has a tick, and **Show what it says** opens its words. Tick what you want and untick the rest.
-3. Press the button at the bottom, which counts your ticks: **Bring 12 things over**. Conch may ask you to confirm it's you.
-4. Read the summary: what came over, what didn't and why, and what's left for you to do.
+1. Open **Settings → Memory**. Under **Bring your things from another assistant**, press **Take a look** on the app's card. It opens as a page inside Settings; **‹ Memory** goes back.
+2. Look at the tiles: one for each kind of thing (**Personality**, **Memories**, **Skills**…) and each of the app's other agents, with how many are ticked. Press a tile to see just that kind, or **Everything** to see it all.
+3. Read the list. Everything has a tick, and **Show what it says** opens its words. A long list has its own search: find what you want, then **Tick these** or **Untick these**.
+4. Press the button at the bottom, which counts your ticks and stays in reach however long the list: **Bring 12 things over**. Conch may ask you to confirm it's you.
+5. Read the summary: what came over, what didn't and why, and what's left for you to do.
 
 The section only shows when Conch has found one of the two apps.
 

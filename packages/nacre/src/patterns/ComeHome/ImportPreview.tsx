@@ -6,6 +6,7 @@ import {
   KeyRound,
   MessageCircle,
   Puzzle,
+  Search,
   Sparkles,
   TriangleAlert,
   User,
@@ -16,6 +17,7 @@ import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { Checkbox } from '../../components/Checkbox';
 import { Collapsible } from '../../components/Collapsible';
+import { Input } from '../../components/Input';
 import { cx } from '../../utils/cx';
 import styles from './ComeHome.module.css';
 
@@ -77,7 +79,7 @@ export const importGroups: Record<
   },
 };
 
-const ORDER: ImportGroupId[] = [
+export const IMPORT_ORDER: ImportGroupId[] = [
   'persona',
   'model',
   'about',
@@ -88,8 +90,18 @@ const ORDER: ImportGroupId[] = [
   'keys',
 ];
 
-/** How many of a long group show before “Show all”. */
+/** How many of a long group show before “Show all”: more when it's the one in view. */
 const FOLD = 6;
+const FOLD_ALONE = 40;
+/** A group this long gets its own search. */
+const SEARCH_FROM = 12;
+
+/** The words a person would look for in an item. */
+const wordsOf = (item: ImportPreviewItem) =>
+  [item.title, item.detail, item.preview]
+    .map((part) => (typeof part === 'string' ? part : ''))
+    .join(' ')
+    .toLowerCase();
 
 export interface ImportPreviewProps extends Omit<ComponentProps<'div'>, 'onChange'> {
   items: ImportPreviewItem[];
@@ -99,6 +111,8 @@ export interface ImportPreviewProps extends Omit<ComponentProps<'div'>, 'onChang
   /** What couldn't be read, in sentences. */
   problems?: string[];
   disabled?: boolean;
+  /** Show one kind (`memories`) or one other agent (`agent:<id>`); everything when unset. */
+  view?: string;
 }
 
 function Row({
@@ -165,9 +179,12 @@ function Group({
   toggle,
   setMany,
   disabled,
+  alone = false,
 }: {
   /** What the section is: a kind of thing, or an agent. */
   id: string;
+  /** The only group in view: shows more, and searches when long. */
+  alone?: boolean;
   head: { label: string; note?: string; icon: ReactNode; all: string };
   items: ImportPreviewItem[];
   selected: Set<string>;
@@ -177,9 +194,14 @@ function Group({
 }) {
   const headId = useId();
   const [all, setAll] = useState(false);
+  const [query, setQuery] = useState('');
   const ticked = items.filter((i) => selected.has(i.id)).length;
   const state = ticked === 0 ? false : ticked === items.length ? true : 'indeterminate';
-  const shown = all ? items : items.slice(0, FOLD);
+  const searchable = items.length >= SEARCH_FROM;
+  const q = query.trim().toLowerCase();
+  const found = q ? items.filter((i) => wordsOf(i).includes(q)) : items;
+  const fold = alone ? FOLD_ALONE : FOLD;
+  const shown = all || q ? found : found.slice(0, fold);
   return (
     <section className={styles.group} aria-labelledby={headId} data-group={id}>
       <header className={styles.groupHead}>
@@ -209,6 +231,53 @@ function Group({
         )}
       </header>
       {head.note && <p className={styles.groupNote}>{head.note}</p>}
+      {searchable && (
+        <div className={styles.find}>
+          <Input
+            size="sm"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={`Search ${items.length} ${head.label.toLowerCase()}`}
+            aria-label={`Search ${head.label.toLowerCase()}`}
+            leading={<Search aria-hidden />}
+          />
+          {q && (
+            <span className={styles.findActions}>
+              <span className={styles.findCount}>{found.length} found</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={disabled || !found.length}
+                onClick={() =>
+                  setMany(
+                    found.map((i) => i.id),
+                    true,
+                  )
+                }
+              >
+                Tick these
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={disabled || !found.length}
+                onClick={() =>
+                  setMany(
+                    found.map((i) => i.id),
+                    false,
+                  )
+                }
+              >
+                Untick these
+              </Button>
+            </span>
+          )}
+        </div>
+      )}
+      {q && !found.length && (
+        <p className={styles.groupNote}>Nothing there says “{query.trim()}”.</p>
+      )}
       <ul className={styles.items}>
         {shown.map((item) => (
           <Row
@@ -220,7 +289,7 @@ function Group({
           />
         ))}
       </ul>
-      {items.length > FOLD && (
+      {!q && items.length > fold && (
         <Button variant="ghost" size="sm" className={styles.more} onClick={() => setAll(!all)}>
           {all ? 'Show fewer' : `Show all ${items.length}`}
         </Button>
@@ -241,6 +310,7 @@ export function ImportPreview({
   onSelectedChange,
   problems = [],
   disabled,
+  view = 'all',
   className,
   ...props
 }: ImportPreviewProps) {
@@ -260,7 +330,8 @@ export function ImportPreview({
   ];
   return (
     <div className={cx(styles.preview, className)} {...props}>
-      {ORDER.map((g) => {
+      {IMPORT_ORDER.map((g) => {
+        if (view !== 'all' && view !== g) return null;
         const inGroup = items.filter((i) => i.group === g && !i.agent);
         const group = importGroups[g];
         return inGroup.length ? (
@@ -273,27 +344,31 @@ export function ImportPreview({
             toggle={toggle}
             setMany={setMany}
             disabled={disabled}
+            alone={view === g}
           />
         ) : null;
       })}
-      {agents.map((agent) => (
-        <Group
-          key={`agent:${agent.id}`}
-          id="agent"
-          head={{
-            label: agent.name,
-            note: 'Another of your agents. Its personality comes over as a skill you pick in a chat; what it knew and did comes too.',
-            icon: <Bot />,
-            all: `All of ${agent.name}`,
-          }}
-          items={items.filter((i) => i.agent?.id === agent.id)}
-          selected={set}
-          toggle={toggle}
-          setMany={setMany}
-          disabled={disabled}
-        />
-      ))}
-      {problems.length > 0 && (
+      {agents
+        .filter((agent) => view === 'all' || view === `agent:${agent.id}`)
+        .map((agent) => (
+          <Group
+            key={`agent:${agent.id}`}
+            id="agent"
+            head={{
+              label: agent.name,
+              note: 'Another of your agents. Its personality comes over as a skill you pick in a chat; what it knew and did comes too.',
+              icon: <Bot />,
+              all: `All of ${agent.name}`,
+            }}
+            items={items.filter((i) => i.agent?.id === agent.id)}
+            selected={set}
+            toggle={toggle}
+            setMany={setMany}
+            disabled={disabled}
+            alone={view === `agent:${agent.id}`}
+          />
+        ))}
+      {problems.length > 0 && view === 'all' && (
         <section className={styles.problems} aria-label="What stays behind">
           {problems.map((p) => (
             <p key={p} className={styles.warning}>

@@ -18,6 +18,7 @@ import { Link } from 'react-router';
 
 import { ApiError } from '../../api/client';
 import { finishSlackPath, importApi, useImportProgress } from './api';
+import styles from './ComeHomePage.module.css';
 
 type Guard = (task: () => Promise<unknown>) => Promise<boolean>;
 
@@ -75,6 +76,8 @@ function nextSteps(result: ImportResult, onClose: () => void): ReactNode[] {
  * which; it backs up, brings them over one at a time, and says what came,
  * what didn't, what's next, with Undo right there.
  */
+export { nextSteps };
+
 export function ComeHomeDialog({
   source,
   onClose,
@@ -104,7 +107,21 @@ export function ComeHomeDialog({
   );
 }
 
-function ComeHomeFlow({
+/** Markdown a memory was written in (`**Name:**`, backticks) read as plain words. */
+export function plain(text: string): string {
+  return text
+    .replace(/\*\*|__|`/g, '')
+    .replace(/^#+\s*/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Come home's state, for the page in Settings and the dialog in onboarding:
+ * Conch reads the other agent's folder, the person ticks what to bring, it
+ * backs up and brings them over, then says what came, with Undo.
+ */
+export function useComeHome({
   source,
   onClose,
   guard,
@@ -149,7 +166,7 @@ function ComeHomeFlow({
       (plan?.items ?? []).map((i) => ({
         id: i.id,
         group: i.group,
-        title: i.title,
+        title: plain(i.title),
         detail: i.detail,
         preview: i.preview,
         warning: i.warning,
@@ -208,9 +225,34 @@ function ComeHomeFlow({
     }
   };
 
-  const count = selected.length;
+  return {
+    step,
+    selected,
+    setSelected,
+    items,
+    label,
+    bring,
+    undo,
+    busy,
+    error,
+    progress,
+    count: selected.length,
+  };
+}
+
+function ComeHomeFlow(props: {
+  source: ImportSourceId;
+  onClose: () => void;
+  guard: Guard;
+  onImported?: (result: ImportResult) => void;
+}) {
+  const { onClose } = props;
+  const { step, selected, setSelected, items, label, bring, undo, busy, error, progress, count } =
+    useComeHome(props);
   return (
     <form
+      // Between the dialog and its body: the body can only scroll if this passes its layout on.
+      className={styles.dialogForm}
       onSubmit={(e) => {
         e.preventDefault();
         if (step.kind === 'preview' && count) void bring();

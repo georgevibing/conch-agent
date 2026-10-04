@@ -1,4 +1,4 @@
-import type { Persona } from '@conch/protocol';
+import { ImportSourceId, type Persona } from '@conch/protocol';
 import {
   Button,
   Dialog,
@@ -53,6 +53,7 @@ import { BrowserSettings } from '../browser/BrowserSettings';
 import { HealthTab } from '../health/HealthTab';
 import { OtherAppsTab } from '../otherapps/OtherAppsTab';
 import { ComeHomeSection } from '../import/ComeHomeSection';
+import { ComeHomePage } from '../import/ComeHomePage';
 import { MemoryView } from '../memory/MemoryView';
 import { AboutYou } from './AboutYou';
 import { NotificationsTab } from '../notifications/NotificationsTab';
@@ -141,6 +142,9 @@ function MemoryTab({
   const memories = useMemories();
   const update = useUpdateSettings();
   const openSettings = useUi((s) => s.openSettings);
+  // Bringing your things from another assistant: a place inside Memory.
+  const from = item?.startsWith('from-') ? ImportSourceId.safeParse(item.slice(5)) : undefined;
+  if (from?.success) return <ComeHomePage source={from.data} />;
   if (item === MEMORY_ALL)
     return (
       <Stack gap={5}>

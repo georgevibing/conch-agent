@@ -5,7 +5,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { expectAccessible, renderNacre } from '../../test/render';
 import { openClawItems, openClawTeamItems, openClawTeamTicked, openClawTicked } from './fixtures';
-import { ImportPreview } from './ImportPreview';
+import { ComeHomeHero } from './ComeHomeHero';
+import { ImportOverview } from './ImportOverview';
+import { ImportPreview, type ImportPreviewItem } from './ImportPreview';
 import { ImportOffer, ImportProgress, ImportSummary } from './ImportSummary';
 
 function Controlled({ onChange }: { onChange?: (ids: string[]) => void }) {
@@ -160,5 +162,55 @@ describe('ImportOffer, ImportProgress and ImportSummary', () => {
     );
     expect(summary).toHaveTextContent('backed itself up first');
     await expectAccessible(container);
+  });
+});
+
+describe('Come home, at a glance', () => {
+  const many: ImportPreviewItem[] = Array.from({ length: 14 }, (_, n) => ({
+    id: `memory:${n}`,
+    group: 'memories',
+    title: n % 2 ? `Uses Coolify for project ${n}` : `Prefers pnpm for project ${n}`,
+  }));
+
+  function Glance() {
+    const items = [...openClawItems.filter((i) => i.group !== 'memories'), ...many];
+    const [selected, setSelected] = useState(items.map((i) => i.id));
+    const [view, setView] = useState('all');
+    return (
+      <>
+        <ComeHomeHero from="OpenClaw" path="~/.openclaw" />
+        <ImportOverview items={items} selected={selected} view={view} onViewChange={setView} />
+        <ImportPreview
+          items={items}
+          selected={selected}
+          onSelectedChange={setSelected}
+          view={view}
+        />
+      </>
+    );
+  }
+
+  it('says where things come from, and that nothing there changes', async () => {
+    const { container } = renderNacre(<Glance />);
+    expect(screen.getByRole('heading', { name: 'Bring your things from OpenClaw' })).toBeVisible();
+    expect(screen.getByText(/Nothing there changes, and you can undo it all/)).toBeVisible();
+    await expectAccessible(container);
+  });
+
+  it('shows one kind at a time from its tile, and searches a long one', async () => {
+    const user = userEvent.setup();
+    renderNacre(<Glance />);
+    const glance = screen.getByRole('group', { name: 'What there is to bring' });
+    const tile = within(glance).getByRole('button', { name: /^Memories/ });
+    expect(tile).toHaveAttribute('aria-pressed', 'false');
+    await user.click(tile);
+    expect(tile).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('region', { name: 'Skills' })).toBeNull();
+    await user.type(screen.getByRole('searchbox', { name: 'Search memories' }), 'coolify');
+    expect(screen.getByText('7 found')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Untick these' }));
+    expect(tile).toHaveTextContent('7of 14');
+    await user.click(within(glance).getByRole('button', { name: /^Everything/ }));
+    expect(screen.getByRole('region', { name: 'Skills' })).toBeVisible();
   });
 });
