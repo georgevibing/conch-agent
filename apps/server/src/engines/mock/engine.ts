@@ -10,6 +10,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { newId } from '../../lib/ids';
+import { stripNearby } from '../../learning/near';
 import { installHints } from '../claude-code/detect';
 import { friendlyError } from '../claude-code/translate';
 import { readPastChatRead, readPastChatsFound, severityFor } from '@conch/protocol';
@@ -329,6 +330,8 @@ export class MockEngine implements Engine {
 
   /** Models asked to complete, most recent last (tests read this). */
   readonly completions: (string | undefined)[] = [];
+  /** Each turn's prompt as it arrived, most recent last (tests read this). */
+  readonly prompts: string[] = [];
 
   /**
    * Names a chat the way a small model would: greetings get a description,
@@ -543,11 +546,14 @@ export class MockEngine implements Engine {
   }
 
   async *runTurn(turn: TurnInput): AsyncIterable<EngineEvent> {
+    this.prompts.push(turn.prompt);
     // A chat-only model is never shown any tools, as a model API's isn't (ADR 0050).
     const chatOnly =
       turn.wordsOnly === true ||
       (await this.capabilities()).models.find((m) => m.id === turn.options.model)?.tools === false;
-    const input: TurnInput = chatOnly ? { ...turn, tools: [], bridgedTools: [] } : turn;
+    // The script reads what the person wrote: preferences put near it (ADR 0087) aren't part of it.
+    const words: TurnInput = { ...turn, prompt: stripNearby(turn.prompt) };
+    const input: TurnInput = chatOnly ? { ...words, tools: [], bridgedTools: [] } : words;
     const wait = (ms: number) => sleep(ms * this.#speed, input.signal);
     const messageId = newId('msg');
     this.#spend();

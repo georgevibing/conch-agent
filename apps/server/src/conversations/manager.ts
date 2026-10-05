@@ -672,6 +672,15 @@ export class ConversationManager {
       }) => Promise<void>;
       /** Say what was fixed on its own (Settings → Health). */
       heal?: (message: string) => void;
+      /** Quiet learning (ADR 0087): what a turn brings near the question, and what never to learn. */
+      learning?: {
+        /** The few preferences that bear on this message, as a block to go before it. */
+        nearby(said: string): Promise<string | undefined>;
+        /** The person marked this chat "Don't learn from this chat". */
+        isQuiet(conversationId: string): Promise<boolean>;
+        /** The person took this back once. */
+        refuses(content: string): Promise<boolean>;
+      };
     },
   ) {}
 
@@ -1558,6 +1567,14 @@ export class ConversationManager {
       ? []
       : (picked?.memories ?? (await this.deps.memory.list()).filter((m) => !m.pending));
     const memoryTotal = picked?.total ?? memories.length;
+    // Quiet learning (ADR 0087): a chat marked not to learn from remembers only when asked,
+    // and what you prefer that bears on this message goes just before it.
+    const learning = this.deps.learning;
+    const quiet = learning ? await learning.isQuiet(conversationId).catch(() => false) : false;
+    const near =
+      learning && !guest && said.trim()
+        ? await learning.nearby(said).catch(() => undefined)
+        : undefined;
     const started = new Map<string, number>();
     const calls = new Map<string, { name: string; input: unknown }>();
     // Conch's own tools get a row only when they found something to show (ADR 0060).
@@ -1685,6 +1702,7 @@ export class ConversationManager {
         return tainted.length ? describeTaint(tainted) : undefined;
       },
       waits: () => !watched || this.#tainted(live).some((source) => source.kind === 'person'),
+      ...(learning && { never: (content: string) => learning.refuses(content) }),
       onSaved: (memory) => {
         this.#append(live, { type: 'memory.saved', memory });
       },
@@ -1968,11 +1986,13 @@ export class ConversationManager {
       store && attachments.length
         ? await attachmentsForTurn(store, attachments, can).catch(() => undefined)
         : undefined;
+    // Preferences near the question go between what was attached and your words; never in the log.
+    const words = near ? `${near}\n\n${said}` : said;
     const prompt = attached?.block
       ? said
-        ? `${attached.block}\n\n${said}`
+        ? `${attached.block}\n\n${words}`
         : attached.block
-      : said;
+      : words;
     // Files sent earlier in the chat stay readable to engines that open files.
     const readableDirs =
       store && can.files
@@ -2037,7 +2057,7 @@ export class ConversationManager {
         profile: settings.profile,
         memories,
         total: memoryTotal,
-        autoMemory: settings.preferences.autoMemory,
+        autoMemory: settings.preferences.autoMemory && !quiet,
         tools: engine.hostTools !== false,
       });
       const pace = guardTurn(engine, {

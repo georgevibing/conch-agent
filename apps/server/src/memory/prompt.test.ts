@@ -1,7 +1,7 @@
 import { Persona, Profile } from '@conch/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { buildSystemAppend } from './prompt';
+import { buildSystemAppend, MEMORY_IS_NOT_EVIDENCE } from './prompt';
 
 describe('buildSystemAppend', () => {
   it('includes persona, profile, memories and tool guidance', () => {
@@ -71,5 +71,31 @@ describe('buildSystemAppend', () => {
     expect(text.length).toBeLessThan(9000);
     expect(text).toMatch(/more memories than these — use the recall tool/);
     expect(text).toContain('Only use the remember tool when the user explicitly asks');
+  });
+
+  it('says memories aren’t evidence, the same every turn, and names facts about this computer (ADR 0087)', () => {
+    const memory = (content: string, about?: 'environment' | 'pitfall') => ({
+      id: `m_${content.length}`,
+      content,
+      kind: 'fact' as const,
+      source: 'agent' as const,
+      createdAt: 1,
+      updatedAt: 1,
+      ...(about && { about }),
+    });
+    const input = (memories: ReturnType<typeof memory>[]) => ({
+      persona: Persona.parse({}),
+      profile: Profile.parse({}),
+      memories,
+      autoMemory: true,
+    });
+    const some = buildSystemAppend(input([memory('On this computer, `py` works.', 'environment')]));
+    const none = buildSystemAppend(input([]));
+    expect(some).toContain(MEMORY_IS_NOT_EVIDENCE);
+    expect(none).toContain(MEMORY_IS_NOT_EVIDENCE);
+    expect(some).toContain('(this computer) On this computer, `py` works.');
+    expect(buildSystemAppend(input([memory('Retry the build once', 'pitfall')]))).toContain(
+      '(lesson) Retry the build once',
+    );
   });
 });

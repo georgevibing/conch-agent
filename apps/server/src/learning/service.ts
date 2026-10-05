@@ -35,6 +35,7 @@ import type { Embedder } from '../memory/embed';
 import type { MemoryStore } from '../memory/store';
 import { overlap } from '../memory/tidy';
 import { turnsOf } from '../skills/learn';
+import { nearTheQuestion } from './near';
 import { neverMatch } from './never';
 import { gate, type GateContext } from './policy';
 import { parseReview, REVIEW_SYSTEM, reviewPrompt, type Change } from './review';
@@ -691,6 +692,19 @@ export class QuietLearning {
       seen: 1,
     });
     this.deps.changed?.();
+  }
+
+  // ── What a turn is told ────────────────────────────────────────────────
+
+  /** The few preferences that bear on this message, to go just before it (ADR 0087 § 7). */
+  nearby(said: string): Promise<string | undefined> {
+    return nearTheQuestion(said, this.deps.search);
+  }
+
+  /** Whether the person took this back once: `remember` waits for them then. */
+  async refuses(content: string): Promise<boolean> {
+    const meaning = await this.deps.meaning?.().catch(() => undefined);
+    return Boolean(await neverMatch(content, await this.store.never(), meaning));
   }
 
   // ── Chats you don't want learned from ──────────────────────────────────

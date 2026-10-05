@@ -932,6 +932,12 @@ export class Services {
       learn: async ({ conversationId, beforeSeq }) => {
         await this.learning.review(conversationId, { trigger: 'compaction', beforeSeq });
       },
+      // Preferences near the question, quiet chats, what never to learn again (ADR 0087).
+      learning: {
+        nearby: (said) => this.learning.nearby(said),
+        isQuiet: (id) => this.learning.isQuiet(id),
+        refuses: (content) => this.learning.refuses(content),
+      },
       heal: (message) => void this.healed.note('conversations', message),
     });
     // What unattended runs spend, and its guards (ADR 0057).
