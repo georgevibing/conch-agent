@@ -26,6 +26,7 @@ import { NeedsAppsItem } from './NeedsApps';
 import { CappedItem, SpendNoteItem } from '../spend/Spend';
 import { QuestionItem } from '../questions/QuestionItem';
 import { PastChatsItem } from './PastChatsItem';
+import { LearnedChatLine } from '../learning/LearnedChatLine';
 import { HeldItem, RoutedItem } from './OfflineBits';
 import { ArtifactChatCard } from '../artifacts/ArtifactChatCard';
 import { RoutineChatCard } from '../routines/RoutineChatCard';
@@ -474,6 +475,9 @@ export const Transcript = memo(function Transcript({
         />
       )}
       {block.item?.kind === 'memory' && <MemoryPill item={block.item} />}
+      {block.item?.kind === 'learned' && (
+        <LearnedChatLine items={block.item.items} decided={block.item.decided} />
+      )}
       {block.item?.kind === 'looked' && <PastChatsItem item={block.item} name={name} />}
       {block.item?.kind === 'skill' && (
         <SkillUsedLine item={block.item} carriedFrom={taskChat ? 'chat' : 'helper'} />

@@ -17,11 +17,13 @@ import {
 } from '@conch/nacre';
 import {
   Archive,
+  CircleOff,
   MoreHorizontal,
   PanelLeftClose,
   Pencil,
   Search,
   Settings,
+  Sparkles,
   SquarePen,
   Trash2,
 } from 'lucide-react';
@@ -39,6 +41,7 @@ import { ActivityLink } from '../activity/ActivityLink';
 import { DeleteChat } from '../archive/DeleteChat';
 import { ARCHIVE_PATH, archivedChats, isChat, useArchive } from '../archive/useArchive';
 import { PinnedApps } from '../artifacts/PinnedApps';
+import { useQuietChat } from '../learning/useQuietChat';
 import { PasswordsLink } from '../passwords/PasswordsLink';
 import { APPS } from '../channels/describe';
 import { AppsLink } from '../integrations/AppsLink';
@@ -91,6 +94,8 @@ function ConversationRow({
   onNavigate?: () => void;
 }) {
   const { archive, remove } = useArchive();
+  const { isQuiet, setQuiet } = useQuietChat();
+  const quiet = isQuiet(conversation.id);
   const client = useQueryClient();
   // The draft is taken from the current title when renaming starts — never a copy
   // made at mount, which would be the first-line placeholder, not the generated title.
@@ -172,6 +177,12 @@ function ConversationRow({
           </DropdownMenu.Item>
           <DropdownMenu.Item icon={<Archive />} onSelect={() => void archive(conversation)}>
             Archive
+          </DropdownMenu.Item>
+          <DropdownMenu.Item
+            icon={quiet ? <Sparkles /> : <CircleOff />}
+            onSelect={() => void setQuiet(conversation.id, !quiet)}
+          >
+            {quiet ? 'Learn from this chat again' : 'Don’t learn from this chat'}
           </DropdownMenu.Item>
           <DropdownMenu.Separator />
           <DropdownMenu.Item icon={<Trash2 />} tone="danger" onSelect={() => setConfirm(true)}>

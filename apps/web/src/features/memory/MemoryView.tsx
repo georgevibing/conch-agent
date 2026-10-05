@@ -26,6 +26,7 @@ import { api } from '../../api/client';
 import { keys, useAppState, useMemories, useUpdateSettings } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { relativeTime } from '../../lib/time';
+import { EarlierSection, LearnedSection, NeverSection } from '../learning/LearningSections';
 import { downloadMemories, memoryApi } from './api';
 import styles from './Memory.module.css';
 import { MemoryRow } from './MemoryRow';
@@ -67,8 +68,8 @@ function title(run: TidyRun) {
     : `Conch tidied ${memories}`;
 }
 
-/** Recent learnings: the tidy-up's runs, each change with Keep and Undo. */
-function Learnings({ autoMemory }: { autoMemory: boolean }) {
+/** Tidying up: the tidy-up's runs, each change with Keep and Undo. */
+function Tidying({ autoMemory }: { autoMemory: boolean }) {
   const tidy = useTidy();
   const client = useQueryClient();
   const update = useUpdateSettings();
@@ -108,7 +109,7 @@ function Learnings({ autoMemory }: { autoMemory: boolean }) {
     <section className={styles.section} aria-labelledby="memory-learnings">
       <div className={styles.sectionHead}>
         <Heading level={2} size="lg" id="memory-learnings">
-          Recent learnings
+          Tidying up
         </Heading>
         <Button
           size="sm"
@@ -128,7 +129,7 @@ function Learnings({ autoMemory }: { autoMemory: boolean }) {
             .then(() => client.invalidateQueries({ queryKey: memoryKeys.tidy }))
         }
         label="Tidy up every night"
-        description={`While you sleep, Conch merges repeats, updates what’s changed and learns from your chats — with the cheapest model you have. Every change shows up here, with Undo.${autoMemory ? '' : ' Remember things automatically is off, so anything new waits for your OK.'}`}
+        description={`While you sleep, Conch merges repeats and updates what’s changed — with the cheapest model you have. Every change shows up here, with Undo, and what used to be true is kept under Earlier.${autoMemory ? '' : ' Learn from your chats is off, so anything new waits for your OK.'}`}
       />
       {tidy.isPending ? (
         <Skeleton shape="block" height="5rem" />
@@ -351,7 +352,9 @@ export function MemoryView({ inSettings = false }: { inSettings?: boolean } = {}
         </section>
       )}
 
-      <Learnings autoMemory={app.data?.preferences.autoMemory ?? true} />
+      <LearnedSection />
+
+      <Tidying autoMemory={app.data?.preferences.autoMemory ?? true} />
 
       <section className={styles.section} aria-labelledby="memory-all">
         <Heading level={2} size="lg" id="memory-all">
@@ -426,6 +429,10 @@ export function MemoryView({ inSettings = false }: { inSettings?: boolean } = {}
         )}
         <SearchMode />
       </section>
+
+      <EarlierSection />
+
+      <NeverSection />
     </Shell>
   );
 }

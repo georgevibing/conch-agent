@@ -57,6 +57,7 @@ import {
   Route as RouteIcon,
   ShieldCheck,
   Sparkles,
+  CircleOff,
   Undo2,
   Upload,
   SquareSlash,
@@ -86,6 +87,9 @@ import { LIVE_DATA_FOCUS } from '../artifacts/LiveDataSection';
 import { ADDRESS_FOCUS, DEVICES_FOCUS, PASSKEYS_FOCUS } from '../auth/focus';
 import { FALLBACK_FOCUS } from '../settings/FallbackSection';
 import { PLAN_ROOM_FOCUS, ROUTINES_SPEND_FOCUS } from '../routines/SpendingSection';
+import { LEARNING_SPEND_FOCUS } from '../learning/LearningSpendSection';
+import { LEARNED_INTENT, NEVER_INTENT } from '../learning/LearningSections';
+import { useQuietChat } from '../learning/useQuietChat';
 import { TURN_LIMITS_FOCUS } from '../usage/TurnLimitsSection';
 import { APP_WORDS, APPS } from '../channels/describe';
 import { useChannels } from '../channels/queries';
@@ -176,6 +180,14 @@ const settingsPlaces: {
     label: 'What routines may spend',
     keywords:
       'routines routine spending spend limit monthly month cost costs money bill budget cap paused pause raise unattended',
+    icon: <Wallet />,
+  },
+  {
+    tab: 'usage',
+    focus: LEARNING_SPEND_FOCUS,
+    label: 'What learning may spend',
+    keywords:
+      'learning learn spending spend limit monthly month cost costs money budget cap paused memory memories quiet',
     icon: <Wallet />,
   },
   {
@@ -369,6 +381,7 @@ export function useFindables(query: string, conversationId: string | undefined):
   const holds = useLiveStore((s) => (conversationId ? s.views[conversationId]?.holds : undefined));
   const { data: conversations } = useConversations();
   const { archive, unarchive } = useArchive();
+  const { isQuiet, setQuiet } = useQuietChat();
   const here = conversations?.find((c) => c.id === conversationId);
   const offerHere = conversationId
     ? fromWork?.suggestions.find((s) => s.chat?.conversationId === conversationId)
@@ -823,6 +836,29 @@ export function useFindables(query: string, conversationId: string | undefined):
         openSettings('memory', MEMORY_ALL);
       },
     },
+    // Quiet learning (ADR 0087): what it learned by itself, and what it won't learn again.
+    {
+      id: 'learned',
+      label: 'What Conch learned',
+      keywords:
+        'learned learning learnt recently lately recap week picked up noticed corrections undo why self improving improve automatically',
+      icon: <Sparkles />,
+      run: () => {
+        useUi.getState().setMemoryIntent(LEARNED_INTENT);
+        openSettings('memory', MEMORY_ALL);
+      },
+    },
+    {
+      id: 'never-learn',
+      label: 'Things Conch won’t learn again',
+      keywords:
+        'never learn again taken back undone forgotten blocked do not learn ignore list remove relearn',
+      icon: <CircleOff />,
+      run: () => {
+        useUi.getState().setMemoryIntent(NEVER_INTENT);
+        openSettings('memory', MEMORY_ALL);
+      },
+    },
     {
       id: 'export-memories',
       label: 'Export what Conch knows',
@@ -861,6 +897,22 @@ export function useFindables(query: string, conversationId: string | undefined):
                 keywords: 'archive put away hide tidy declutter remove from list',
                 icon: <Archive />,
                 run: () => void archive(here),
+              },
+          isQuiet(here.id)
+            ? {
+                id: 'learn-chat',
+                label: 'Learn from this chat again',
+                keywords: 'learn learning remember again resume turn on this chat',
+                icon: <Sparkles />,
+                run: () => void setQuiet(here.id, false),
+              }
+            : {
+                id: 'quiet-chat',
+                label: 'Don’t learn from this chat',
+                keywords:
+                  'do not learn dont stop learning private incognito off the record forget this chat remember nothing',
+                icon: <CircleOff />,
+                run: () => void setQuiet(here.id, true),
               },
         ]
       : []),

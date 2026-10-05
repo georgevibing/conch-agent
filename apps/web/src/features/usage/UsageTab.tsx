@@ -7,6 +7,7 @@ import { api } from '../../api/client';
 import { keys, useUsage } from '../../api/queries';
 import { providerLogo } from '../models/catalog';
 import { useProviders } from '../providers/queries';
+import { LearningSpendSection } from '../learning/LearningSpendSection';
 import { SpendingSection } from '../routines/SpendingSection';
 import { Section, SaveStatus } from '../settings/Section';
 import { useAutosave } from '../settings/useAutosave';
@@ -128,6 +129,7 @@ export function UsageTab() {
       {/* Every chat on a key you pay as you go counts, whichever provider answers it (ADR 0079). */}
       {spend && <BudgetField initial={spend.budget} />}
       <SpendingSection />
+      <LearningSpendSection />
       <TurnLimitsSection />
     </Stack>
   );

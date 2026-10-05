@@ -10,6 +10,9 @@ export type { SettingsTab };
 /** Which composer picker is open (so `/model` and `/mode` can open them). */
 export type Picker = 'model' | 'mode' | null;
 
+/** Where the memories open to, once (⌘K). */
+export type MemoryIntent = 'tidy' | 'meaning' | 'learned' | 'never';
+
 /** A Conch app's page open beside a chat (ADR 0061): a draft's while it's being made, or an app's. */
 export interface AppPageOpen {
   conversationId: string;
@@ -126,9 +129,12 @@ interface UiState {
   terminalPaste: string | null;
   /** Bumped to ask the drawer for a new terminal. */
   terminalNew: number;
-  /** What to do as the memories open (⌘K → Tidy up, or Search by meaning): once. */
-  memoryIntent: 'tidy' | 'meaning' | null;
-  setMemoryIntent(intent: 'tidy' | 'meaning' | null): void;
+  /**
+   * What to do as the memories open, once: ⌘K → Tidy up, Search by meaning,
+   * What Conch learned, Things Conch won't learn again (ADR 0087).
+   */
+  memoryIntent: MemoryIntent | null;
+  setMemoryIntent(intent: MemoryIntent | null): void;
   /** Something the person is setting up in the terminal (a need), watched until it lands. */
   watchingNeed: string | null;
   watchNeed(id: string | null): void;

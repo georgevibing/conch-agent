@@ -176,8 +176,8 @@ function MemoryTab({
             onCheckedChange={(checked) =>
               void update.mutateAsync({ preferences: { autoMemory: checked } })
             }
-            label="Remember things automatically"
-            description="I’ll save useful details as we talk and always show you when I do."
+            label="Learn from your chats"
+            description="I’ll keep what lasts — how you like things, what changed — as we talk and once a chat goes quiet, and say so at the end of it, with Undo. Off, I remember only what you ask me to."
           />
           <Switch
             checked={tidyMemory}
@@ -185,7 +185,7 @@ function MemoryTab({
               void update.mutateAsync({ preferences: { tidyMemory: checked } })
             }
             label="Tidy up every night"
-            description="Merge repeats, update what’s changed and learn from your chats while you sleep. Every change is shown, with Undo."
+            description="Merge repeats and update what’s changed while you sleep. Every change is shown, with Undo."
           />
           <div className={styles.memoryDoor}>
             <Brain aria-hidden />

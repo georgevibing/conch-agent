@@ -1,4 +1,10 @@
-import type { Memory, MemoryIndexStatus, SkillSuggestion, TidyStatus } from '@conch/protocol';
+import type {
+  LearningStatus,
+  Memory,
+  MemoryIndexStatus,
+  SkillSuggestion,
+  TidyStatus,
+} from '@conch/protocol';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router';
@@ -135,6 +141,93 @@ describe('What Conch knows about you', () => {
     expect(offer).toHaveTextContent('(23 MB, downloaded once)');
     expect(within(offer).getByRole('button', { name: 'Get it' })).toBeInTheDocument();
     expect(calls.some((c) => c.path === '/api/memory/index/model')).toBe(false);
+  });
+
+  it('shows what it learned by itself, what used to be true, and what it won’t learn again (ADR 0087)', async () => {
+    const learned: LearningStatus = {
+      on: true,
+      entries: [
+        {
+          id: 'le_1',
+          at: now,
+          change: 'superseded',
+          before: memory({ id: 'm_9', content: 'Lives in Berlin' }),
+          after: lisbon,
+          why: 'You said you moved.',
+          from: {
+            conversationId: 'c1',
+            chatTitle: 'Weekend ideas',
+            quotes: ['I moved to Lisbon last month'],
+            signals: [],
+            trigger: 'idle',
+            model: { engine: 'mock', model: 'mock-small' },
+          },
+          state: 'applied',
+          seen: 1,
+        },
+        {
+          id: 'le_2',
+          at: now,
+          change: 'added',
+          after: memory({ id: 'm_8', content: 'Prefers trains', pending: true }),
+          why: '',
+          from: {
+            chatTitle: 'Trains to Lyon',
+            quotes: [],
+            signals: ['correction'],
+            trigger: 'idle',
+          },
+          waits: 'Learned in a chat that read trains.example.',
+          state: 'waiting',
+          seen: 1,
+        },
+      ],
+      waiting: 1,
+      never: [{ id: 'nv_1', text: 'Prefers dark mode', at: now, from: 'undo' }],
+      past: [memory({ id: 'm_9', content: 'Lives in Berlin', invalidAt: now })],
+      recap: { since: now - 86_400_000, count: 1, items: ['Lives in Lisbon'] },
+      spending: { limitUsd: 1, isDefault: true, monthUsd: 0 },
+      quiet: [],
+    };
+    const calls = mockFetch(
+      routes({
+        'GET /api/learning': () => learned,
+        'POST /api/learning/answer': () => ({ ...learned.entries[0], state: 'undone' }),
+        'POST /api/learning/never/remove': () => ({ removed: true }),
+        'POST /api/learning/recap/seen': () => ({ ok: true }),
+      }),
+    );
+    renderApp(<MemoryView />, { route: '/memory' });
+    const record = await screen.findByRole('list', { name: 'What Conch learned' });
+    expect(record).toHaveTextContent('Now: Lives in Lisbon');
+    expect(record).toHaveTextContent('From “Weekend ideas”');
+    expect(record).toHaveTextContent('Learned in a chat that read trains.example.');
+    await userEvent.click(within(record).getByRole('button', { name: 'Undo' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/api/learning/answer')?.body).toEqual({
+        entryId: 'le_1',
+        answer: 'undo',
+      }),
+    );
+    // The week at a glance, gone once seen.
+    const recap = screen.getByRole('region', { name: 'This week Conch learned one thing' });
+    await userEvent.click(within(recap).getByRole('button', { name: 'Got it' }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.path === '/api/learning/recap/seen')).toBe(true),
+    );
+    // What used to be true, dated.
+    const earlier = screen.getByRole('list', { name: 'What used to be true' });
+    expect(earlier).toHaveTextContent('Lives in Berlin');
+    expect(earlier).toHaveTextContent(/Until \w+ \d{4}/);
+    // What it won't learn again, with Remove.
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Let Conch learn “Prefers dark mode” again' }),
+    );
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/api/learning/never/remove')?.body).toEqual({
+        id: 'nv_1',
+      }),
+    );
   });
 
   it('says when it learned from a long chat before summarising it (ADR 0055)', async () => {

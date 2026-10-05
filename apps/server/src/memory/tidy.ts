@@ -436,8 +436,7 @@ export class MemoryTidy {
         ...(chat && { conversationId: chat.conversationId }),
         ...(waits && {
           pending: true,
-          untrusted:
-            untrusted ?? 'Remember things automatically is off, so this waits for your OK.',
+          untrusted: untrusted ?? 'Learn from your chats is off, so this waits for your OK.',
         }),
       });
       known.push(after);

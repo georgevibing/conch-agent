@@ -19,6 +19,7 @@ import { applyIntegrationEvent } from '../features/integrations/queries';
 import { healthKeys } from '../features/health/api';
 import { backupKeys } from '../features/health/backups';
 import { useImportProgress } from '../features/import/api';
+import { learningKeys } from '../features/learning/api';
 import { applyArtifactEvent } from '../features/artifacts/queries';
 import { applyConchAppsEvent } from '../features/conchapps/queries';
 import { applyRoutineEvent } from '../features/routines/queries';
@@ -184,6 +185,11 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           setVoicePrefs({ wake: false });
           break;
         case 'memory.changed':
+          void client.invalidateQueries({ queryKey: keys.memories });
+          break;
+        // Something was learned or answered, or what learning may spend changed (ADR 0087).
+        case 'learning.changed':
+          void client.invalidateQueries({ queryKey: learningKeys.all });
           void client.invalidateQueries({ queryKey: keys.memories });
           break;
         case 'usage.changed':

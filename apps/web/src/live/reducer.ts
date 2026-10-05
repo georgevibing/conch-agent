@@ -35,6 +35,7 @@ import type {
   SpendModel,
   TurnCost,
   Usage,
+  LearnedItem,
 } from '@conch/protocol';
 
 import { latestReplies, type LatestReplies } from '../features/replies/latest';
@@ -148,6 +149,16 @@ export type TranscriptItem =
       decided?: 'kept' | 'undone';
       /** One it forgot, whole, so Undo can put it back. */
       memory?: Memory;
+    }
+  /**
+   * What the chat taught Conch once it went quiet (ADR 0087): one folded line.
+   * `decided` holds what you answered since, by record id.
+   */
+  | {
+      kind: 'learned';
+      id: string;
+      items: LearnedItem[];
+      decided: Record<string, 'undone' | 'kept' | 'dismissed'>;
     }
   | {
       /** It looked through your other chats (ADR 0059): for what, with a link to each place. */
@@ -649,10 +660,25 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
       });
       return found ? { ...base, items: updated } : base;
     }
-    // What a chat learned once it went quiet (ADR 0087): drawn by the transcript in a later step.
+    // What the chat taught Conch once it went quiet (ADR 0087): one quiet line at its end.
     case 'learning.noted':
-    case 'learning.decided':
-      return base;
+      return {
+        ...base,
+        items: [
+          ...items,
+          { kind: 'learned', id: `learned-${event.reviewId}`, items: event.items, decided: {} },
+        ],
+      };
+    case 'learning.decided': {
+      let found = false;
+      const updated = items.map((item) => {
+        if (item.kind !== 'learned' || !item.items.some((i) => i.entryId === event.entryId))
+          return item;
+        found = true;
+        return { ...item, decided: { ...item.decided, [event.entryId]: event.state } };
+      });
+      return found ? { ...base, items: updated } : base;
+    }
     case 'memory.forgotten':
       return {
         ...base,

@@ -822,6 +822,68 @@ describe('Palette search', () => {
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/memory'));
   });
 
+  it('finds what Conch learned, what it won’t learn again and what learning may spend (ADR 0087)', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    renderApp(
+      <>
+        <Palette />
+        <Where />
+      </>,
+    );
+    act(() => useUi.getState().setPalette(true));
+    for (const words of ['learned', 'recap', 'self improving']) {
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(await screen.findByRole('option', { name: /What Conch learned/ })).toBeInTheDocument();
+    }
+    for (const words of ['never learn', 'taken back']) {
+      await user.clear(screen.getByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(
+        await screen.findByRole('option', { name: /Things Conch won’t learn again/ }),
+      ).toBeInTheDocument();
+    }
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'learning spend');
+    expect(
+      await screen.findByRole('option', { name: /What learning may spend/ }),
+    ).toBeInTheDocument();
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'what conch learned');
+    await user.click(await screen.findByRole('option', { name: /What Conch learned/ }));
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/memory'));
+    expect(useUi.getState().memoryIntent).toBe('learned');
+  });
+
+  it('marks the chat you’re reading not to learn from, and back (ADR 0087)', async () => {
+    const user = userEvent.setup();
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [conversation('c1', 'Plan my week')],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'PUT /api/learning/chats/c1': () => ({ quiet: true }),
+    });
+    renderApp(
+      <Routes>
+        <Route path="/c/:conversationId" element={<Palette />} />
+      </Routes>,
+      { route: '/c/c1' },
+    );
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'incognito');
+    await user.click(await screen.findByRole('option', { name: /Don’t learn from this chat/ }));
+    await waitFor(() =>
+      expect(calls).toContainEqual(
+        expect.objectContaining({ path: '/api/learning/chats/c1', body: { quiet: true } }),
+      ),
+    );
+  });
+
   it('finds archived chats by name, never as recent, and the archive by the words people use', async () => {
     const user = userEvent.setup();
     mockFetch({

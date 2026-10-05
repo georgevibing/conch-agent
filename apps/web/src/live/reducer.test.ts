@@ -211,6 +211,31 @@ describe('transcript reducer', () => {
     });
   });
 
+  it('folds what a chat taught Conch into one line, and what you decided since (ADR 0087)', () => {
+    const view = reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: 'No, I meant TypeScript' },
+        {
+          type: 'learning.noted',
+          reviewId: 'lr_1',
+          items: [
+            { entryId: 'le_1', text: 'Prefers TypeScript', change: 'added', state: 'applied' },
+            { entryId: 'le_2', text: 'Prefers trains', change: 'added', state: 'waiting' },
+          ],
+        },
+        { type: 'learning.decided', entryId: 'le_1', state: 'undone' },
+        // Something another chat learned changes nothing here.
+        { type: 'learning.decided', entryId: 'le_9', state: 'kept' },
+      ),
+    );
+    expect(view.items).toHaveLength(2);
+    expect(view.items[1]).toMatchObject({
+      kind: 'learned',
+      id: 'learned-lr_1',
+      decided: { le_1: 'undone' },
+    });
+  });
+
   it('starts empty', () => {
     expect(emptyView.items).toEqual([]);
   });
