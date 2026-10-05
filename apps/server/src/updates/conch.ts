@@ -27,6 +27,10 @@ const GIT_TIMEOUT_MS = 20_000;
 const STEP_TIMEOUT_MS = 10 * 60_000;
 /** Subjects read for "What's new" (the count stays right beyond it). */
 const SUBJECTS = 400;
+/** "What's new" lines kept: the update dialog lists them all. */
+export const WHATS_NEW = 40;
+/** How long building the web app takes when it hasn't been timed here yet. */
+export const BUILD_GUESS_MS = 45_000;
 
 /**
  * The folder Conch runs from: the nearest one above the gateway's own code
@@ -158,6 +162,19 @@ export const stream: Stream = (program, args, { cwd, onLine, timeout = STEP_TIME
     });
   });
 
+/** How often the build's progress moves. */
+const BUILD_TICK_MS = 700;
+
+/**
+ * The build's progress from how long it has run against how long it usually
+ * takes: about 90% at the usual time, then ever slower, never past 97%.
+ */
+export function buildProgress(elapsedMs: number, expectedMs: number): number {
+  const expected = Math.max(1_000, expectedMs);
+  const share = 1 - Math.exp((-2.3 * Math.max(0, elapsedMs)) / expected);
+  return Math.min(97, Math.round(share * 100));
+}
+
 /** pnpm's `Progress: resolved 838, reused 830, downloaded 8, added 412`, as a percentage. */
 export function installProgress(line: string): number | undefined {
   const match = /resolved (\d+).*?added (\d+)/i.exec(line);
@@ -204,6 +221,8 @@ export type ConchResult =
       to: string;
       improvements: number;
       whatsNew: string[];
+      /** How long the build took, so the next one's progress is told truly. */
+      builtMs?: number;
     }
   | { kind: 'rolled-back'; message: string }
   | { kind: 'failed'; message: string; command?: string };
@@ -392,7 +411,8 @@ export class ConchCheckout {
       ahead,
       behind,
       improvements: lines.length,
-      whatsNew: lines.slice(0, 8),
+      // Enough to read through before updating; Settings shows the first few.
+      whatsNew: lines.slice(0, WHATS_NEW),
       fetched,
       target,
       ...(problem && { problem }),
@@ -418,7 +438,10 @@ export class ConchCheckout {
    * found, install, and rebuild the web app. Any failure goes back to where
    * it started. Doesn't restart anything: the caller does.
    */
-  async update(onProgress: (progress: UpdateProgressReport) => void): Promise<ConchResult> {
+  async update(
+    onProgress: (progress: UpdateProgressReport) => void,
+    { buildMs = BUILD_GUESS_MS }: { buildMs?: number } = {},
+  ): Promise<ConchResult> {
     const steps = 3;
     const say = (phase: ConchUpdateStep, label: string, step: number, percent?: number) =>
       onProgress({ phase, label, step, steps, percent });
@@ -507,8 +530,22 @@ export class ConchCheckout {
           : 'installing its parts didn’t work',
       });
 
-    say('build', 'Getting the new look ready', 3);
-    const built = await run(pnpm, BUILD, { cwd: this.root });
+    // The build says nothing as it goes: its progress is how long the last
+    // one took, slowing as it nears the end so it never claims to be done.
+    say('build', 'Getting the new look ready', 3, 0);
+    const buildStart = Date.now();
+    const ticking = setInterval(
+      () =>
+        say(
+          'build',
+          'Getting the new look ready',
+          3,
+          buildProgress(Date.now() - buildStart, buildMs),
+        ),
+      BUILD_TICK_MS,
+    );
+    const built = await run(pnpm, BUILD, { cwd: this.root }).finally(() => clearInterval(ticking));
+    const builtMs = Date.now() - buildStart;
     if (built.code !== 0)
       return this.#rollback(git, pnpm, from, { install: true, build: true }, onProgress, {
         why: 'the new version wouldn’t build',
@@ -520,6 +557,7 @@ export class ConchCheckout {
       to,
       improvements: check.improvements,
       whatsNew: check.whatsNew,
+      builtMs,
     };
   }
 

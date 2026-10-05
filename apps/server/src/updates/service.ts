@@ -46,6 +46,10 @@ type Program = z.infer<typeof Program>;
 
 const ConchCache = z.object({
   head: z.string().optional(),
+  /** The upstream commit the last look found. */
+  target: z.string().optional(),
+  /** How long the last build took here, for the next update's progress. */
+  buildMs: z.number().int().positive().optional(),
   branch: z.string().optional(),
   behind: z.number().int().min(0).default(0),
   improvements: z.number().int().min(0).default(0),
@@ -333,6 +337,7 @@ export class UpdatesService {
       checkable: true,
       version,
       ...(known.head && { commit: known.head.slice(0, 7) }),
+      ...(!releases && known.target && known.behind > 0 && { target: known.target.slice(0, 7) }),
       ...(known.branch && { branch: known.branch }),
       behind: releases ? rel.offers.length : known.behind,
       improvements: releases ? notes.reduce((n, r) => n + lines(r).length, 0) : known.improvements,
@@ -444,6 +449,8 @@ export class UpdatesService {
     const before = this.#cache.conch;
     this.#cache.conch = {
       ...(found.head && { head: found.head }),
+      ...(found.target && found.behind > 0 && { target: found.target }),
+      ...(before.buildMs && { buildMs: before.buildMs }),
       ...(found.branch && { branch: found.branch }),
       behind: found.behind,
       improvements: found.improvements,
@@ -898,10 +905,14 @@ export class UpdatesService {
   async #updateConch(conch: ConchCheckout): Promise<void> {
     let result: ConchResult;
     try {
-      result = await conch.update((progress) => {
-        this.#conchJob = progress;
-        this.#emit();
-      });
+      const { buildMs } = this.#cache.conch;
+      result = await conch.update(
+        (progress) => {
+          this.#conchJob = progress;
+          this.#emit();
+        },
+        buildMs ? { buildMs } : {},
+      );
     } catch (error) {
       result = {
         kind: 'failed',
@@ -914,6 +925,8 @@ export class UpdatesService {
         this.#cache.conch = {
           ...this.#cache.conch,
           head: result.to,
+          target: undefined,
+          ...(result.builtMs && { buildMs: result.builtMs }),
           behind: 0,
           improvements: 0,
           whatsNew: [],
