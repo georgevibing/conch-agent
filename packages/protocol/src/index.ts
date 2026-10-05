@@ -606,6 +606,11 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     problem: TurnProblem.optional(),
     /** It stopped to check in, not because it was done (ADR 0085): the chat offers Carry on. */
     paused: TurnPause.optional(),
+    /**
+     * Why it ended when you didn't say so: Conch itself restarted mid-turn (an update, a crash,
+     * the machine running out of memory). `resumed`: it picks the work up again by itself.
+     */
+    restarted: z.object({ resumed: z.boolean() }).optional(),
     /** Which provider answered, and with which model when it said. */
     engine: EngineId.optional(),
     model: z.string().optional(),
@@ -900,6 +905,11 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('conversation.updated'), conversation: ConversationSummary }),
   z.object({ type: z.literal('conversation.deleted'), conversationId: z.string() }),
   z.object({ type: z.literal('conversation.event'), event: ConversationEvent }),
+  /**
+   * The log this tab has seen doesn't match the gateway's (it restarted and lost the end of a
+   * turn): forget the view; the whole log follows.
+   */
+  z.object({ type: z.literal('conversation.reset'), conversationId: z.string() }),
   z.object({ type: z.literal('engine.status'), status: EngineStatus }),
   z.object({ type: z.literal('engine.login'), login: LoginState }),
   z.object({ type: z.literal('memory.changed') }),

@@ -426,7 +426,22 @@ interface Live {
    * the log (`tool.finished`); these aren't, so a restart forgets them.
    */
   read?: Map<string, string>;
+  /** A save of the running turn's log is due (so a crash loses seconds, not the whole turn). */
+  checkpoint?: NodeJS.Timeout;
+  /** Saves go one at a time, so an older log never lands over a newer one. */
+  saving?: Promise<void>;
 }
+
+/** How often a running turn's log is saved: a crash loses this much, not the whole turn. */
+const CHECKPOINT_MS = 10_000;
+
+/** How many times in a row a chat is picked up again by itself after Conch stopped under it. */
+const MAX_AUTO_RESUMES = 2;
+
+/** What a turn that Conch's restart cut short is told when it carries on by itself. */
+const RESTART_PROMPT =
+  'Conch restarted while you were working on this, so the last stretch of your work was cut short. ' +
+  'Carry on with what I asked: first check what is already done (files changed, commands run) so you do not repeat it, then finish the rest.';
 
 /** How much of what one place brought in the memory check keeps to compare with (ADR 0087). */
 const READ_KEPT = 200_000;
@@ -794,6 +809,11 @@ export class ConversationManager {
   async eventsAfter(id: string, afterSeq = -1): Promise<ConversationEvent[]> {
     const live = await this.#get(id);
     return live.events.filter((e) => e.seq > afterSeq);
+  }
+
+  /** The newest event's number, for a tab to be told its own is from a log that no longer exists. */
+  async lastSeq(id: string): Promise<number> {
+    return (await this.#get(id)).events.at(-1)?.seq ?? -1;
   }
 
   /** Send a user message, creating the conversation if needed. Returns immediately; the turn streams. */
@@ -1270,6 +1290,59 @@ export class ConversationManager {
     this.#setStatus(live, 'awaiting-permission');
     // Saved now, so a restart finds the question (and says it was skipped).
     await this.#persist(live).catch(() => undefined);
+  }
+
+  /**
+   * Conch stopped under a turn (an update, a crash, memory running out): the chat says so,
+   * and carries on by itself, a couple of times at most so a turn that brings Conch down
+   * can't do it forever. Run once, when the gateway is up.
+   */
+  async recoverInterrupted(): Promise<number> {
+    await this.deps.store.list();
+    const ids = this.deps.store.interrupted.splice(0);
+    let resumed = 0;
+    for (const id of ids) {
+      try {
+        const live = await this.#get(id);
+        const lastAsked = live.events.findLastIndex((e) => e.type === 'user.message');
+        // Nothing was asked, or the turn did finish before the log was saved.
+        if (lastAsked === -1) continue;
+        const since = live.events.slice(lastAsked + 1);
+        const closed = since.findLastIndex((e) => e.type === 'turn.completed');
+        const last = closed === -1 ? undefined : since[closed];
+        if (last?.type === 'turn.completed' && !last.restarted) continue;
+        const tries = since.filter((e) => e.type === 'turn.completed' && e.restarted).length;
+        const again = tries < MAX_AUTO_RESUMES;
+        const finished = new Set(
+          live.events.flatMap((e) => (e.type === 'tool.finished' ? [e.toolUseId] : [])),
+        );
+        for (const e of live.events)
+          if (e.type === 'tool.started' && !finished.has(e.toolUseId))
+            this.#append(live, {
+              type: 'tool.finished',
+              toolUseId: e.toolUseId,
+              status: 'error',
+              output: 'Conch restarted.',
+              durationMs: 0,
+            });
+        this.#append(live, {
+          type: 'turn.completed',
+          outcome: 'interrupted',
+          restarted: { resumed: again },
+          engine: live.record.engine,
+        });
+        live.record = { ...live.record, status: 'idle', updatedAt: Date.now() };
+        this.#append(live, { type: 'status', status: 'idle' });
+        await this.#persist(live);
+        this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
+        if (!again) continue;
+        this.#held.set(id, { engine: live.record.engine, prompt: RESTART_PROMPT, attachments: [] });
+        if (await this.release(id).catch(() => false)) resumed++;
+      } catch (error) {
+        console.error('[conversations] could not pick up', id, error);
+      }
+    }
+    return resumed;
   }
 
   /** Messages that were waiting for the internet go now, in the order they were sent. */
@@ -2667,6 +2740,13 @@ export class ConversationManager {
       at: Date.now(),
     } as ConversationEvent;
     live.events.push(event);
+    if (live.abort && !live.checkpoint) {
+      live.checkpoint = setTimeout(() => {
+        live.checkpoint = undefined;
+        void this.#persist(live).catch(() => undefined);
+      }, CHECKPOINT_MS);
+      live.checkpoint.unref();
+    }
     if (defer) defer.push(event);
     else this.events.emit({ type: 'conversation.event', event });
   }
@@ -2683,8 +2763,14 @@ export class ConversationManager {
   }
 
   async #persist(live: Live) {
-    await this.deps.store.upsert(live.record);
-    await this.deps.store.saveEvents(live.record.id, live.events);
+    const save = (live.saving ?? Promise.resolve())
+      .catch(() => undefined)
+      .then(async () => {
+        await this.deps.store.upsert(live.record);
+        await this.deps.store.saveEvents(live.record.id, live.events);
+      });
+    live.saving = save;
+    await save;
   }
 
   /** Keep what a tool of Conch's own brought in, for the memory check (ADR 0087). */

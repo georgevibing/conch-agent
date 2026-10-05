@@ -159,6 +159,9 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
             });
           break;
         }
+        case 'conversation.reset':
+          live.forget(event.conversationId);
+          break;
         case 'conversation.deleted':
           live.forget(event.conversationId);
           client.setQueryData<ConversationSummary[]>(keys.conversations, (list) =>

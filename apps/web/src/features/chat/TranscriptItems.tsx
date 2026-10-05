@@ -585,6 +585,18 @@ export function TurnEnd({
       </Callout>
     );
   }
+  if (item.outcome === 'interrupted' && item.restarted) {
+    return (
+      <div className={styles.stopped}>
+        <span className={styles.stoppedMark}>
+          <span aria-hidden className={styles.stoppedGlyph} />
+          {item.restarted.resumed
+            ? 'Conch restarted while this was running. Picking it up again.'
+            : 'Conch restarted while this was running, so it stopped here. Say “carry on” to continue.'}
+        </span>
+      </div>
+    );
+  }
   if (item.outcome === 'interrupted') {
     // Where the reply ended because you said so: a quiet mark across the column.
     const after = item.usage?.durationMs;

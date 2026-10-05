@@ -336,6 +336,8 @@ export type TranscriptItem =
       problem?: TurnProblem;
       /** It stopped to check in, not because it was done (ADR 0085): Carry on picks it up. */
       paused?: TurnPause;
+      /** Conch restarted mid-turn; `resumed`: it carries on by itself. */
+      restarted?: { resumed: boolean };
       usage?: Usage;
       /** What it cost, the way its provider charges (ADR 0079). */
       cost?: TurnCost;
@@ -768,6 +770,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             error: event.error,
             ...(event.problem && { problem: event.problem }),
             ...(event.paused && { paused: event.paused }),
+            ...(event.restarted && { restarted: event.restarted }),
             usage: event.usage,
             ...(event.cost && { cost: event.cost }),
             engine: event.engine,

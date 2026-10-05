@@ -69,6 +69,8 @@ const IndexFile = z.array(StoredRecord);
 export class ConversationStore {
   #mutex = new Mutex();
   #index?: Promise<Map<string, ConversationRecord>>;
+  /** The chats that were mid-turn when Conch last stopped (read once, before they're reset to idle). */
+  interrupted: string[] = [];
 
   constructor(
     private readonly dir: string,
@@ -145,6 +147,9 @@ export class ConversationStore {
         );
     }
     // A turn (or a title being written) can't survive a restart; don't show stale states.
+    this.interrupted = records
+      .filter((r) => r.status === 'running' || r.status === 'awaiting-permission')
+      .map((r) => r.id);
     return new Map(
       records.map((r) => [r.id, { ...r, status: 'idle' as const, titling: undefined }]),
     );

@@ -2095,6 +2095,19 @@ export class Services {
     await this.providers.loadServers().catch(() => undefined);
     await this.providers.load();
     this.network.start();
+    // Chats a restart cut off say so, and carry on by themselves.
+    void this.conversations
+      .recoverInterrupted()
+      .then((sent) => {
+        if (sent)
+          void this.healed.note(
+            'gateway',
+            sent === 1
+              ? 'Conch restarted while a chat was working; it picked the work up again.'
+              : `Conch restarted while ${sent} chats were working; they picked the work up again.`,
+          );
+      })
+      .catch((error: unknown) => console.error('[conversations]', error));
     await this.#channelsReady;
     void this.door.start().catch((error: unknown) => console.error('[door]', error));
     void this.channels.start().catch((error: unknown) => console.error('[channels]', error));
