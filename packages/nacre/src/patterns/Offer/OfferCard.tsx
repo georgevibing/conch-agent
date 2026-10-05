@@ -174,7 +174,7 @@ export function OfferCard({
 
   const mark = (size: 'xs' | 'sm') =>
     app && !skill && !shared ? (
-      <AppIcon glyph={app.glyph} color={app.color} size={size} />
+      <AppIcon glyph={app.glyph} color={app.color} src={app.src} size={size} />
     ) : skill || shared ? (
       <SkillIcon
         name={brand ?? name}

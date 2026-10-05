@@ -42,6 +42,8 @@ export interface AppOfferProps extends Omit<ComponentProps<'div'>, 'children'> {
   state: AppOfferState;
   /** Why it failed, in one sentence. */
   message?: string;
+  /** Its picture (ADR 0090), drawn instead of the glyph while it can be. */
+  picture?: string;
   /** The protocol's words for it: abilities, who it's from, what changed. */
   words: AppWords;
   /** Settings that already have a value (an update keeps them): no field for those. */
@@ -83,6 +85,7 @@ export function AppOffer({
   summary,
   state,
   message,
+  picture,
   words,
   saved = [],
   busy,
@@ -153,7 +156,7 @@ export function AppOffer({
         data-state={state}
         {...props}
       >
-        <AppIcon glyph={manifest.icon.glyph} color={manifest.icon.color} size="xs" />
+        <AppIcon glyph={manifest.icon.glyph} color={manifest.icon.color} src={picture} size="xs" />
         <span className={styles.offerLineText}>
           {state === 'stale' ? (
             <>
@@ -178,6 +181,7 @@ export function AppOffer({
       <AppIcon
         glyph={manifest.icon.glyph}
         color={manifest.icon.color}
+        src={picture}
         size="md"
         className={styles.offerIcon}
       />
@@ -199,7 +203,12 @@ export function AppOffer({
         <div className={styles.welcomeHead}>
           <span className={styles.welcomeMark}>
             <span className={styles.welcomeRing} aria-hidden />
-            <AppIcon glyph={manifest.icon.glyph} color={manifest.icon.color} size="md" />
+            <AppIcon
+              glyph={manifest.icon.glyph}
+              color={manifest.icon.color}
+              src={picture}
+              size="md"
+            />
           </span>
           <div className={styles.offerHeadText}>
             <p id={titleId} className={styles.offerTitle} role="status">

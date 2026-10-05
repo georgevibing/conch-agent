@@ -5,6 +5,7 @@ import { IntegrationCard } from '../Integrations/IntegrationCard';
 import { IntegrationLogo } from '../Integrations/IntegrationLogo';
 import { AppIcon } from './AppIcon';
 import { AppMadeBadge } from './AppMadeBadge';
+import { samplePictures } from './fixtures';
 import { APP_COLORS, APP_GLYPHS } from './glyphs';
 
 const meta = {
@@ -21,7 +22,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'A Conch app’s icon (ADR 0061): one of Lucide’s glyphs on one of Nacre’s colours, drawn the way an integration’s logo is — the same tile, corners, glaze and status dot — so an app someone made sits among the brand logos on the Apps page as one of them. Nothing is fetched. White on most colours, a deep glyph of the same hue on amber, yellow and lime.',
+          'A Conch app’s icon (ADR 0061): one of Lucide’s glyphs on one of Nacre’s colours, drawn the way an integration’s logo is — the same tile, corners, glaze and status dot — so an app someone made sits among the brand logos on the Apps page as one of them. White on most colours, a deep glyph of the same hue on amber, yellow and lime. An app may have a picture instead (`src`, ADR 0090): it fades in over the glyph once loaded, so nothing moves, and the glyph stays if it can’t load.',
       },
     },
   },
@@ -150,6 +151,102 @@ export const OnACard: Story = {
         app={{ glyph: 'coffee', color: 'amber' }}
         badge={<AppMadeBadge kind="made" />}
         tagline="Counts what you spend on coffee, week by week"
+        onOpen={fn()}
+      />
+    </div>
+  ),
+};
+
+/**
+ * An app with a picture as its icon (ADR 0090): a logo or a photo from its own
+ * folder, in the same tile at every size. A mark with transparent edges sits
+ * on porcelain, so it reads in light and dark.
+ */
+export const Picture: Story = {
+  args: { src: samplePictures.sunrise, label: 'Morning walks' },
+  render: () => (
+    <div style={{ display: 'grid', gap: 16 }}>
+      <div style={row}>
+        {(['xs', 'sm', 'md', 'lg', 'xl'] as const).map((size) => (
+          <AppIcon
+            key={size}
+            glyph="sun"
+            color="orange"
+            src={samplePictures.sunrise}
+            size={size}
+            label={`Morning walks ${size}`}
+          />
+        ))}
+      </div>
+      <div style={row}>
+        {(['xs', 'sm', 'md', 'lg', 'xl'] as const).map((size) => (
+          <AppIcon
+            key={size}
+            glyph="flower"
+            color="pink"
+            src={samplePictures.blossom}
+            size={size}
+            label={`Blossom ${size}`}
+          />
+        ))}
+      </div>
+      <div style={row}>
+        <IntegrationLogo brand="notion" name="Notion" size="lg" />
+        <AppIcon
+          glyph="sun"
+          color="orange"
+          src={samplePictures.sunrise}
+          size="lg"
+          label="Morning walks"
+          status="ok"
+        />
+        <AppIcon glyph="sprout" color="green" size="lg" label="Plant diary" />
+        <AppIcon
+          glyph="flower"
+          color="pink"
+          src={samplePictures.blossom}
+          size="lg"
+          label="Blossom"
+        />
+        <IntegrationLogo brand="slack" name="Slack" size="lg" />
+      </div>
+    </div>
+  ),
+};
+
+/** A picture that can’t be drawn (gone, damaged): the glyph stays where it was. */
+export const PictureThatFails: Story = {
+  args: { glyph: 'heart', color: 'pink', src: samplePictures.broken, label: 'Yoga' },
+};
+
+/** On the Apps page: a card whose app has a picture. */
+export const PictureOnACard: Story = {
+  render: () => (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(17rem, 1fr))',
+        gap: 12,
+        maxInlineSize: 600,
+      }}
+    >
+      <IntegrationCard
+        variant="connected"
+        name="Morning walks"
+        app={{ glyph: 'sun', color: 'orange', src: samplePictures.sunrise }}
+        badge={<AppMadeBadge kind="made" />}
+        state="ok"
+        meta="2 tools · used today"
+        enabled
+        onToggle={fn()}
+        onOpen={fn()}
+      />
+      <IntegrationCard
+        variant="catalog"
+        name="Blossom"
+        app={{ glyph: 'flower', color: 'pink', src: samplePictures.blossom }}
+        badge={<AppMadeBadge kind="community" />}
+        tagline="Tells you what’s flowering near you this week"
         onOpen={fn()}
       />
     </div>

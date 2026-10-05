@@ -14,6 +14,7 @@ import {
   plantTools,
   plantUpdate,
   plantWords,
+  samplePictures,
 } from './fixtures';
 
 const meta = {
@@ -70,6 +71,9 @@ export const Ready: Story = {};
 
 /** Pressed: the card holds still while it's added. */
 export const Busy: Story = { args: { busy: true } };
+
+/** An app with a picture as its icon (ADR 0090): the card shows it where the glyph would be. */
+export const WithAPicture: Story = { args: { picture: samplePictures.blossom } };
 
 /** A new version of one you have: what changed first, new reach marked. */
 export const Update: Story = {

@@ -74,4 +74,47 @@
   .icon[data-app-color][data-size='sm'] svg {
     stroke-width: 2.4;
   }
+
+  /*
+   * Its picture (ADR 0090): the same tile, on porcelain so a logo with
+   * transparent edges reads in light and dark, with the tile's hairline drawn
+   * over it. It fades in over the glyph once loaded, so nothing moves.
+   */
+  .picture {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    border-radius: var(--il-radius);
+    corner-shape: var(--nc-corner-shape);
+    background: oklch(0.995 0.002 90);
+    opacity: 0;
+    transition: opacity var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .picture[data-shown] {
+    opacity: 1;
+  }
+
+  .picture::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    corner-shape: inherit;
+    box-shadow: inset 0 0 0 1px light-dark(oklch(0 0 0 / 0.08), oklch(1 0 0 / 0.14));
+    pointer-events: none;
+  }
+
+  .picture img {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .picture {
+      transition: none;
+    }
+  }
 }

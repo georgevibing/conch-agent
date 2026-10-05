@@ -79,7 +79,7 @@ export function IntegrationCard(props: IntegrationCardProps) {
   const stagger = { '--ic-i': Math.min(index, 12), ...style } as CSSProperties;
   const logo = (size: 'md' | 'lg', status?: IntegrationStateValue) =>
     app ? (
-      <AppIcon glyph={app.glyph} color={app.color} size={size} status={status} />
+      <AppIcon glyph={app.glyph} color={app.color} src={app.src} size={size} status={status} />
     ) : (
       <IntegrationLogo
         brand={brand}

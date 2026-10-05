@@ -30,6 +30,8 @@ export interface AppPreviewApp {
   warnings?: readonly { message: string }[];
   /** The version you have, when you have it. */
   installed?: string;
+  /** Its picture (ADR 0090), drawn instead of the glyph. */
+  picture?: string;
   /** Its settings that already have a value (from the app you have): no field for those. */
   saved?: readonly string[];
   changes?: AppChangesView;
@@ -194,7 +196,12 @@ function CollectionRow({
   return (
     <li className={styles.row} data-open={open || undefined}>
       <div className={styles.rowHead}>
-        <AppIcon glyph={manifest.icon.glyph} color={manifest.icon.color} size="md" />
+        <AppIcon
+          glyph={manifest.icon.glyph}
+          color={manifest.icon.color}
+          src={app.picture}
+          size="md"
+        />
         <div className={styles.rowText}>
           <p className={styles.rowName}>{manifest.name}</p>
           <p className={styles.rowTagline}>{manifest.tagline}</p>
@@ -347,7 +354,12 @@ function FoundApp({
     <div className={styles.found}>
       {!bare && (
         <div className={styles.head}>
-          <AppIcon glyph={manifest.icon.glyph} color={manifest.icon.color} size={size} />
+          <AppIcon
+            glyph={manifest.icon.glyph}
+            color={manifest.icon.color}
+            src={app.picture}
+            size={size}
+          />
           <div className={styles.headText}>
             <p id={titleId} className={styles.name}>
               {manifest.name}
