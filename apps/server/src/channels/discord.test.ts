@@ -26,7 +26,7 @@ async function setup() {
   await services.start();
   const discord = services.mockDiscord;
   if (!discord) throw new Error('no mock Discord');
-  discord.heartbeatMs = 150;
+  discord.heartbeatMs = 1000;
   return { s: services, discord };
 }
 

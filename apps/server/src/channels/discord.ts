@@ -380,13 +380,7 @@ export class DiscordAdapter implements ChannelAdapter {
           continue;
         }
       }
-      const closed = await this.#session(
-        `${url}/?v=10&encoding=json`,
-        session,
-        events,
-        signal,
-        () => backoff.reset(),
-      );
+      const closed = await this.#session(url, session, events, signal, () => backoff.reset());
       if (signal.aborted) return;
       if (closed.code === 4004) {
         events.state('needs-token', {
@@ -420,6 +414,30 @@ export class DiscordAdapter implements ChannelAdapter {
     }
   }
 
+  /** A resume address is untrusted input; it will receive the bot's token. */
+  #gatewayUrl(raw: string): string {
+    const url = new URL(raw);
+    const official =
+      url.protocol === 'wss:' &&
+      /^gateway(?:-[a-z0-9-]+)?\.discord\.gg$/.test(url.hostname) &&
+      !url.port &&
+      url.pathname === '/';
+    // Only a constructor-injected test endpoint may use another origin. The
+    // mock gateway shares its API's origin; received frames cannot grant one.
+    const api = new URL(this.api);
+    const mock =
+      this.api !== DISCORD_API &&
+      ['127.0.0.1', '[::1]', 'localhost'].includes(api.hostname) &&
+      url.origin === api.origin.replace(/^http/, 'ws') &&
+      url.pathname === '/gateway';
+    if ((!official && !mock) || url.username || url.password || url.search || url.hash) {
+      throw new ChannelError('network', 'Discord gave Conch an unexpected connection address.');
+    }
+    url.searchParams.set('v', '10');
+    url.searchParams.set('encoding', 'json');
+    return url.toString();
+  }
+
   /** One Gateway connection, until it closes. */
   #session(
     url: string,
@@ -433,7 +451,7 @@ export class DiscordAdapter implements ChannelAdapter {
       let invalid = false;
       let socket: WebSocket;
       try {
-        socket = new WebSocket(url);
+        socket = new WebSocket(this.#gatewayUrl(url));
       } catch {
         resolve({ code: 1006, resumable: false, invalid: false });
         return;
@@ -468,17 +486,36 @@ export class DiscordAdapter implements ChannelAdapter {
       signal.addEventListener('abort', abort, { once: true });
 
       socket.addEventListener('message', (event) => {
+        if (settled) return;
         let frame: Frame;
         try {
-          frame = JSON.parse(String(event.data)) as Frame;
+          const parsed: unknown = JSON.parse(String(event.data));
+          if (!parsed || typeof parsed !== 'object' || !('op' in parsed)) return;
+          frame = parsed as Frame;
         } catch {
           return;
         }
         if (typeof frame.s === 'number') session.seq = frame.s;
         switch (frame.op) {
           case 10: {
+            // One Hello per connection: duplicates must not orphan live timers.
+            if (heartbeat) break;
             const interval =
-              (frame.d as { heartbeat_interval?: number }).heartbeat_interval ?? 41_250;
+              frame.d && typeof frame.d === 'object' && 'heartbeat_interval' in frame.d
+                ? frame.d.heartbeat_interval
+                : undefined;
+            // Node turns negative, non-finite and overflowing delays into 1 ms.
+            if (
+              typeof interval !== 'number' ||
+              !Number.isInteger(interval) ||
+              interval < 1000 ||
+              interval > 120_000
+            ) {
+              resumable = false;
+              socket.close(4000);
+              finish(4000);
+              return;
+            }
             // The first beat is jittered, as Discord asks; then steady.
             heartbeat = setTimeout(() => {
               beat();
