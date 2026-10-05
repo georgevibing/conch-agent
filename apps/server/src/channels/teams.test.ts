@@ -199,6 +199,17 @@ describe('Teams pieces', () => {
     );
   });
 
+  it('parses mentions and markup without reassembling stripped tag fragments', () => {
+    expect(teamsText('<at><b>Conch</b></at><p>Hello</p><p>there</p>')).toBe('Hello\n\nthere');
+    expect(teamsText('<script>alert(1)</script>hello<style>body { color: red }</style>')).toBe(
+      'hello',
+    );
+    expect(teamsText('<scr<at>Conch</at>ipt>hello</script>')).not.toContain('<script>');
+    // Text extraction deliberately preserves escaped code as text. It is
+    // escaped again by the outbound formatter, never trusted as HTML.
+    expect(teamsText('&lt;script&gt;example&lt;/script&gt;')).toBe('<script>example</script>');
+  });
+
   it('makes an app package Teams can read: a manifest and two icons of the right sizes', () => {
     const zip = teamsAppPackage({
       appId: MockTeams.APP_ID,

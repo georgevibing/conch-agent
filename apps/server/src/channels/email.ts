@@ -280,10 +280,8 @@ export class EmailAdapter implements ChannelAdapter {
         [parent, ...ids.toReversed()].map((id) => id && known.get(id)).find(Boolean) ??
         `t${createHash('sha256').update(root).digest('base64url').slice(0, 22)}`;
       if (email.messageId) keep(known, email.messageId, chatId, 2000);
-      const subject = bareSubject(email.subject).replace(
-        this.#preset.plus ? /^$/ : SUBJECT_TAG,
-        '',
-      );
+      const bare = bareSubject(email.subject);
+      const subject = this.#preset.plus ? bare : bare.replace(SUBJECT_TAG, '');
       keep(threads, chatId, {
         to: from,
         subject: subject || 'Your assistant',

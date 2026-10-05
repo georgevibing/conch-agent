@@ -25,7 +25,11 @@ import {
 
 export class WeChatCryptoError extends Error {}
 
-/** `sha1(sort([token, timestamp, nonce, ...more]).join(''))`, in hex. */
+/**
+ * WeChat requires `sha1(sort([token, timestamp, nonce, ...more]).join(''))`.
+ * This is a wire-protocol compatibility requirement, never a choice for new
+ * cryptography; changing it breaks verification of Tencent's signed callbacks.
+ */
 export function signature(
   token: string,
   timestamp: string,
@@ -173,9 +177,7 @@ export function parseXml(xml: string): Record<string, string> {
     // The first of a name is the one WeChat wrote.
     if (name in out) continue;
     // One CDATA section, or several back to back (how `]]>` itself is written).
-    const cdata = /^\s*(?:<!\[CDATA\[[\s\S]*?\]\]>\s*)+$/.test(value)
-      ? [...value.matchAll(/<!\[CDATA\[([\s\S]*?)\]\]>/g)].map((c) => c[1] ?? '').join('')
-      : undefined;
+    const cdata = readCdata(value);
     out[name] =
       cdata !== undefined
         ? cdata
@@ -190,6 +192,22 @@ export function parseXml(xml: string): Record<string, string> {
             );
   }
   return out;
+}
+
+/** Read adjacent CDATA sections once each, including near-misses, without backtracking. */
+function readCdata(value: string): string | undefined {
+  const parts: string[] = [];
+  let at = 0;
+  while (at < value.length) {
+    while (at < value.length && /\s/.test(value[at] ?? '')) at++;
+    if (at === value.length) break;
+    if (!value.startsWith('<![CDATA[', at)) return undefined;
+    const end = value.indexOf(']]>', at + 9);
+    if (end < 0) return undefined;
+    parts.push(value.slice(at + 9, end));
+    at = end + 3;
+  }
+  return parts.length ? parts.join('') : undefined;
 }
 
 /** WeChat's XML for a reply: every value in CDATA (with `]]>` split so it can't close early). */

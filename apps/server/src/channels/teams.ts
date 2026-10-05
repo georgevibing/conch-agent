@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { type ChannelBot, type ChannelSecrets, TEAMS_APP_ID } from '@conch/protocol';
+import { convert } from 'html-to-text';
 
 import type { ChannelEndpoints } from './adapters';
 import type { HookReply, HookRequest } from './door';
@@ -634,20 +635,21 @@ function card(options: SendOptions) {
   };
 }
 
-/** What someone wrote, without the mention of the bot or Teams' markup. */
+/**
+ * Teams markup as plain text. This is not an HTML sanitizer: render its result
+ * as text, or escape it when creating an outbound HTML message.
+ */
 export function teamsText(text: string): string {
-  const stripped = text
-    .replace(/<at>[^<]*<\/at>/gi, '')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>\s*<p>/gi, '\n\n')
-    .replace(/<[^>]+>/g, '');
-  return stripped
-    .replaceAll('&nbsp;', ' ')
-    .replaceAll('&lt;', '<')
-    .replaceAll('&gt;', '>')
-    .replaceAll('&quot;', '"')
-    .replaceAll('&#39;', "'")
-    .replaceAll('&amp;', '&')
-    .replace(/[ \t]+\n/g, '\n')
-    .trim();
+  return convert(text, {
+    wordwrap: false,
+    preserveNewlines: true,
+    limits: { maxInputLength: 100_000, maxDepth: 30, maxChildNodes: 5000 },
+    selectors: [
+      { selector: 'at', format: 'skip' },
+      { selector: 'img', format: 'skip' },
+      { selector: 'script', format: 'skip' },
+      { selector: 'style', format: 'skip' },
+      { selector: 'a', options: { ignoreHref: true } },
+    ],
+  }).trim();
 }

@@ -150,6 +150,16 @@ describe('WeChat’s signatures and encryption', () => {
     ).toBe('oAda');
   });
 
+  it('reads long adjacent CDATA and rejects near-matches without exponential work', () => {
+    const sections = '<![CDATA[x]]>'.repeat(4000);
+    expect(parseXml(`<xml><Content>${sections}</Content></xml>`).Content).toBe('x'.repeat(4000));
+    // The old repeated lazy regex tried every partition before rejecting the
+    // trailing text. Keep the payload below the existing 64 KiB body limit.
+    const near = `${sections}!`;
+    expect(parseXml(`<xml><Content>${near}</Content></xml>`).Content).toBe(near);
+    expect(() => parseXml(`<xml><Content>${sections}<![CDATA[</Content></xml>`)).toThrow();
+  });
+
   it('makes a token and an EncodingAESKey WeChat accepts', () => {
     for (let i = 0; i < 50; i++) {
       const key = newAesKey();

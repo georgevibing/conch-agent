@@ -2,7 +2,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { loadConfig } from '../config';
 import { Services } from '../services';
@@ -120,6 +120,34 @@ describe('Mattermost (ADR 0081)', () => {
     );
     expect(said).toMatchObject({ text: 'what’s new?' });
     await until(() => mm.last(MockMattermost.TOWN.id), 'answer in the channel');
+  });
+
+  it('treats a server-provided bot username as literal text when stripping a mention', async () => {
+    const username = String.raw`conch\.(a+)+$x`;
+    const { mm, keys } = await setup();
+    const saved = MockMattermost.BOT.username;
+    MockMattermost.BOT.username = username;
+    const message = vi.fn();
+    const online = vi.fn();
+    const connection = new MattermostAdapter(keys).connect({
+      message,
+      state: online,
+      press: vi.fn(),
+      healed: vi.fn(),
+    });
+    try {
+      await until(() => online.mock.calls.some(([s]) => s === 'online'), 'online');
+      mm.sayIn(`@${username} hello`, MockMattermost.MEMBER, true);
+      await until(() => message.mock.calls.length, 'group message');
+      expect(message.mock.calls[0]?.[0]).toMatchObject({ mentioned: true, text: '@conch hello' });
+      // A username with regex syntax must not match and remove different text.
+      mm.sayIn('@conchXaaaa hello', MockMattermost.MEMBER, true);
+      await until(() => message.mock.calls.length === 2, 'second group message');
+      expect(message.mock.calls[1]?.[0]).toMatchObject({ text: '@conch @conchXaaaa hello' });
+    } finally {
+      connection.close();
+      MockMattermost.BOT.username = saved;
+    }
   });
 
   it('reconnects after a drop, and asks for a new token when the old one is revoked', async () => {

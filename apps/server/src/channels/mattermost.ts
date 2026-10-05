@@ -499,7 +499,10 @@ export class MattermostAdapter implements ChannelAdapter {
       mentions = [];
     }
     const mentioned = mentions.includes(me.id);
-    const handle = new RegExp(`(^|\\s)@${me.username.replace(/[.-]/g, '\\$&')}\\b[,:]?`, 'gi');
+    const handle = new RegExp(
+      `(^|\\s)@${me.username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b[,:]?`,
+      'gi',
+    );
     events.message({
       chatId: post.channel_id,
       messageId: post.id,
