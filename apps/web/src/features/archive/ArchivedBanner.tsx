@@ -4,7 +4,6 @@ import { Archive, ArchiveRestore } from 'lucide-react';
 import { useConversations } from '../../api/queries';
 import { relativeTime } from '../../lib/time';
 import routines from '../routines/Routines.module.css';
-import styles from './Archive.module.css';
 import { useArchive } from './useArchive';
 
 /**
@@ -17,9 +16,9 @@ export function ArchivedBanner({ conversationId }: { conversationId?: string }) 
   const chat = conversations?.find((c) => c.id === conversationId);
   if (!chat?.archivedAt) return null;
   return (
-    <div className={`${routines.runBanner} ${styles.banner}`} role="note">
+    <div className={routines.runBanner} role="note">
       <Archive size={14} aria-hidden />
-      <span className={styles.bannerText}>
+      <span>
         Archived {relativeTime(chat.archivedAt)}. Write here and it goes back to your list.
       </span>
       <Button

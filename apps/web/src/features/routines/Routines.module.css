@@ -212,10 +212,14 @@
     max-inline-size: 34rem;
   }
 
+  /* A note at the top of a chat (a routine's run, a chat app, the archive): the
+     sentence takes the room, and when that's short (a phone) the link or button
+     moves to a line of its own instead of squeezing it. */
   .runBanner {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--nc-space-2);
+    gap: var(--nc-space-1) var(--nc-space-2);
     max-inline-size: 48rem;
     margin: var(--nc-space-3) auto 0;
     padding: var(--nc-space-2) var(--nc-space-3);
@@ -227,8 +231,18 @@
     color: var(--nc-text-muted);
   }
 
-  .runBanner a {
+  .runBanner > span {
+    flex: 1 1 20rem;
+    min-inline-size: 0;
+  }
+
+  .runBanner > :is(a, button) {
+    flex-shrink: 0;
     margin-inline-start: auto;
+    white-space: nowrap;
+  }
+
+  .runBanner a {
     color: var(--nc-text-accent);
     font-weight: var(--nc-weight-medium);
     text-decoration: none;
