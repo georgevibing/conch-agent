@@ -1124,6 +1124,21 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
   need a passkey, password or key from the last 10 minutes (a passkey-only Conch has no
   secret to type, so only a passkey confirms it). Failed sign-ins back off per address
   and globally, and local sign-in is never locked out.
+- **Request budgets** (`auth/requests.ts`, `registerSecurity`): the common HTTP
+  guard charges API requests, WebSocket handshakes and OAuth callbacks before
+  body parsing or authentication work. Token buckets allow a burst of 300 per
+  client, refilling at 1,200/minute, with an overall burst of 1,000 refilling at
+  6,000/minute. Public credential requests, OAuth callbacks and confirmation of
+  identity have smaller buckets (10/client, 20 overall; refill 60 and 120/minute).
+  Authenticated writes share 30 admissions, refilling at 120/minute, per device
+  or access key across paths and addresses. Proven local browsers have separate
+  buckets from everyone else. Maps are bounded, idle entries expire, and new
+  identities share an overflow bucket when full; rotating identities cannot
+  evict an active limit. Rejections return `429` and `Retry-After`, while the
+  existing failed-sign-in backoff remains in force. This follows the
+  [OWASP denial-of-service guidance](https://cheatsheetseries.owasp.org/cheatsheets/Denial_of_Service_Cheat_Sheet.html)
+  on limiting requests before expensive work; it does not replace network-level
+  protection against a flood that saturates the connection.
 - **Devices:** each browser has a long-lived `HttpOnly` device cookie (hashed),
   so devices are listed across sign-ins. With **Approve new devices** on, a new
   device from elsewhere waits after the right password or key, holding a

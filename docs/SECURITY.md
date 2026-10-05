@@ -107,6 +107,13 @@ What keeps it safe there:
 - **Passkeys can't be phished.** A fake page can't ask for one.
 - **Wrong guesses slow down**, counted per address, which Conch sees as it really
   is.
+- **Request bursts slow down too**, before Conch parses their contents or starts
+  work. Sign-in attempts have a smaller allowance, even when several arrive at
+  once. Changes share an allowance for each signed-in device or access key;
+  reading keeps its own room. A request over the allowance gets `429` with
+  `Retry-After`: wait that many seconds before trying again. A browser opened
+  from Conch on this computer has a separate allowance, so a flood from elsewhere
+  does not take away your way back in.
 
 ## Use Conch on your phone
 

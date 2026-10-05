@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Config } from './config';
 import { Emitter } from './lib/emitter';
 import { SignInLimiter } from './auth/limiter';
+import { GatewayRequestLimits } from './auth/requests';
 import { HERE_COOKIE_MAX_AGE_S, hereCookieName, ThisComputer } from './auth/here';
 import { HostPolicy, isLoopbackAddress, isLoopbackHost } from './auth/network';
 import { PasskeyCeremonies, passkeyPlace } from './auth/passkeys';
@@ -54,6 +55,13 @@ const TRAY_API = new Set(['GET /api/tray/status', 'POST /api/tray/quit']);
 
 /** What this computer, proven, may ask even with sign-in on and no session (ADR 0063). */
 const HERE_API = new Set(['POST /api/here/link']);
+
+/** Cross-site navigations authenticated by their single-use OAuth flow, not a session cookie. */
+const OAUTH_CALLBACKS = new Set([
+  '/oauth/callback',
+  '/oauth/provider/:flowId',
+  '/oauth/google/callback',
+]);
 
 const COOKIE = 'conch_session';
 /** `__Host-` cookies must be Secure, host-only and Path=/ — browsers enforce it. */
@@ -467,13 +475,28 @@ function securityHeaders(request: FastifyRequest, reply: FastifyReply, secure: b
  * 1. **Host** must be one of ours — defeats DNS rebinding.
  * 2. **Fetch metadata / Origin** — a page on another site (or another port
  *    of localhost) can't call the API or open the WebSocket.
- * 3. **Sign-in** — everything but loading the app and signing in needs a
+ * 3. **Request budgets** — before body parsing, authentication or route work;
+ *    public credential attempts have a smaller budget, reserved immediately.
+ * 4. **Sign-in** — everything but loading the app and signing in needs a
  *    session, an access key, or (with sign-in off) this computer, proven
- *    (ADR 0063).
+ *    (ADR 0063). Signed-in writes also share a budget per device or access key.
  */
 export function registerSecurity(app: FastifyInstance, gate: Gatekeeper): void {
+  const localLimits = new GatewayRequestLimits();
+  const remoteLimits = new GatewayRequestLimits();
   const reject = (reply: FastifyReply, status: number, error: string, message: string) =>
     reply.code(status).send({ error, message });
+  const rateLimited = (reply: FastifyReply, wait: number) => {
+    const seconds = Math.ceil(wait / 1000);
+    return reply
+      .code(429)
+      .header('retry-after', String(seconds))
+      .send({
+        error: 'rate-limited',
+        message: `Conch is receiving too many requests. Wait ${seconds} seconds, then try again.`,
+        retryAfter: seconds,
+      });
+  };
 
   // Only JSON bodies. `text/plain` is a "simple" content type that a hostile
   // page can send cross-site without a preflight, so we don't parse it at all.
@@ -533,15 +556,34 @@ export function registerSecurity(app: FastifyInstance, gate: Gatekeeper): void {
         return reject(reply, 403, 'cross-origin', 'Cross-origin request refused.');
     }
 
-    if (!isApi || PUBLIC_API.has(`${request.method} ${path}`)) return;
+    const oauthCallback = OAUTH_CALLBACKS.has(path);
+    if (!isApi && !oauthCallback) return;
+    // Only this computer's proof gets its own recovery budget. A loopback
+    // socket, a claimed proxy address or an unverified cookie is not enough.
+    const limits = gate.isLocal(request) ? localLimits : remoteLimits;
+    const client = gate.clientKey(request);
+    const incomingWait = limits.incoming(client);
+    if (incomingWait) return rateLimited(reply, incomingWait);
+    const publicRoute = PUBLIC_API.has(`${request.method} ${path}`);
+    if ((publicRoute && isWrite) || path === '/api/access/verify' || oauthCallback) {
+      const credentialWait = limits.credentials(client);
+      if (credentialWait) return rateLimited(reply, credentialWait);
+    }
+    if (publicRoute || oauthCallback) return;
     // The menu bar helper (ADR 0029): only these, only with its own token, only from here.
     if (TRAY_API.has(`${request.method} ${path}`)) {
-      if (gate.trayAllowed(request)) return;
+      if (gate.trayAllowed(request)) {
+        const wait = isWrite ? limits.write('tray') : 0;
+        return wait ? rateLimited(reply, wait) : undefined;
+      }
       return reject(reply, 401, 'unauthorized', 'Only Conch’s menu bar helper can ask that.');
     }
     // Another one-time link, for a browser that is already this computer (ADR 0063).
     if (HERE_API.has(`${request.method} ${path}`)) {
-      if (gate.isLocal(request)) return;
+      if (gate.isLocal(request)) {
+        const wait = limits.write('local');
+        return wait ? rateLimited(reply, wait) : undefined;
+      }
       return reject(
         reply,
         401,
@@ -580,6 +622,16 @@ export function registerSecurity(app: FastifyInstance, gate: Gatekeeper): void {
       });
     }
     request.access = resolved;
+    if (isWrite) {
+      const principal =
+        resolved.kind === 'session'
+          ? `device:${resolved.session.deviceId ?? resolved.session.id}`
+          : resolved.kind === 'bearer'
+            ? `key:${resolved.keyId}`
+            : 'local';
+      const wait = limits.write(principal);
+      if (wait) return rateLimited(reply, wait);
+    }
     // A browser signed in before Conch kept devices gets its device cookie now.
     if (resolved.kind === 'session' && !gate.deviceToken(request)) {
       const adopted = await gate.store.adoptDevice(resolved.session.id, gate.clientKey(request));
