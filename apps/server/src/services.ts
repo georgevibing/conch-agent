@@ -1102,8 +1102,8 @@ export class Services {
       redact: this.vault.redactor(),
       onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
       heal,
-      // The mock engine's chats go quiet in moments, so tests and `pnpm dev:mock` see it.
-      ...(mock && { idleMs: 3_000, sweepMs: 2_000 }),
+      // The mock engine's chats go quiet in seconds, so tests and `pnpm dev:mock` see it.
+      ...(mock && { idleMs: 8_000, sweepMs: 2_000 }),
     });
     this.conversations.events.on((event) => {
       // An archived chat is read at once.

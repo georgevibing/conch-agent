@@ -184,6 +184,8 @@ const scenarios = {
   },
   // It learns you: what Conch knows, the tidy-up with Undo, memories that wait, skill suggestions.
   memory: { port: 4373, env: { CONCH_MOCK_STATE: 'ready' } },
+  // Quiet learning (ADR 0087): a correction learned once the chat goes quiet, Why?, Undo, never again.
+  learning: { port: 4336, env: { CONCH_MOCK_STATE: 'ready' } },
   // Search by meaning (ADR 0041): the pretend model's download, then meaning in search and skill suggestions.
   meaning: { port: 4362, env: { CONCH_MOCK_STATE: 'ready' } },
   // Hand it off: background tasks, helpers side by side, approvals from a task.
