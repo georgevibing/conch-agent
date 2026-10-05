@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { SITE_URL } from './config';
 import { applyHead, articleHead, headHtml, LANDING_HEAD, NOT_FOUND_HEAD, sentence } from './head';
 import { headOf, PAGES } from './pages';
+import { plain } from './text';
 
 const docs = resolve(import.meta.dirname, '..', '..');
 const indexHtml = readFileSync(resolve(docs, 'index.html'), 'utf8');
@@ -59,6 +60,30 @@ describe('what each page tells search engines', () => {
     expect(html).toContain('<title>A &quot;quoted&quot; &lt;title&gt; · Conch</title>');
     expect(html).not.toContain('</script><script>');
     expect(html).toContain(`<link rel="canonical" href="${SITE_URL}/x/" />`);
+  });
+
+  it.each([
+    '<<a>script>alert(1)<</a>/script>',
+    '<!-<!-- x -->-><<a>script>alert(1)<</a>/script>',
+    '"><img src=x onerror=alert(1)>',
+  ])('treats text from malformed Markdown as data in both head writers: %s', (markdown) => {
+    const text = plain(markdown);
+    const head = articleHead({ path: '/x', title: text, description: text, section: 'start' });
+    for (const write of [
+      (doc: Document) => (doc.head.innerHTML = headHtml(head)),
+      (doc: Document) => applyHead(head, doc),
+    ]) {
+      const doc = document.implementation.createHTMLDocument();
+      write(doc);
+      expect(doc.title).toBe(head.title);
+      expect(doc.querySelector('meta[name="description"]')?.getAttribute('content')).toBe(text);
+      expect(
+        doc.querySelector('img, [onerror], script:not([type="application/ld+json"])'),
+      ).toBeNull();
+      expect(JSON.parse(doc.getElementById('conch-ld')?.textContent ?? '{}')).toMatchObject({
+        '@graph': [expect.objectContaining({ headline: text }), expect.any(Object)],
+      });
+    }
   });
 
   it('keeps <head> true as people move between pages', () => {

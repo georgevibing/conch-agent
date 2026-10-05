@@ -162,6 +162,16 @@ describe('Gmail as an app', () => {
     expect(await readFile(join(home, 'google.secrets.json'), 'utf8')).toContain(ADDRESS);
   });
 
+  it('ties verified actions to this connection even when the same password is reconnected', async () => {
+    await google.connectPassword({ address: ADDRESS, password: PASSWORD });
+    const id = passwordId(ADDRESS);
+    const before = await google.verificationScope(id, 'mail-read');
+    expect(await google.verificationScope(id, 'mail-read')).toEqual(before);
+    await google.connectPassword({ address: ADDRESS, password: PASSWORD });
+    const after = await google.verificationScope(id, 'mail-read');
+    expect(after.authorization).not.toBe(before.authorization);
+  });
+
   it('stops someone guessing app passwords', async () => {
     for (let i = 0; i < 10; i++)
       await google
