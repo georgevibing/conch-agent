@@ -376,6 +376,13 @@ export async function runTask(task: EvalTask, options: RunOptions): Promise<Task
           .filter(Boolean)
           .map((line) => JSON.parse(line) as { tool: string; args: Record<string, unknown> }),
       memories: async () => (await services.memory.list()).map((m) => m.content),
+      // As if the chat had gone quiet (ADR 0087): with the model under test's provider.
+      review: async (chat) => {
+        const result = await services.learning.review(chat, { trigger: 'idle' });
+        return 'learned' in result
+          ? { learned: result.learned.map((e) => e.after.content) }
+          : { learned: [], why: result.why };
+      },
       onQuestion: (fn) => (answer = fn),
       seen,
       ...(options.partner && { partner: options.partner }),

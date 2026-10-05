@@ -43,6 +43,11 @@ export interface Scene {
   ledgerCalls(): Promise<{ tool: string; args: Record<string, unknown> }[]>;
   /** What Conch remembers now. */
   memories(): Promise<string[]>;
+  /**
+   * Conch's quiet look at a chat, as if it had gone quiet (ADR 0087): what it
+   * learned, or why it learned nothing.
+   */
+  review(chat: string): Promise<{ learned: string[]; why?: string }>;
   /** How to answer a question card; the default picks the first option. */
   onQuestion(answer: (question: Question) => QuestionAnswer | null): void;
   /** What happened so far: questions asked, handoffs, every tool call's input. */
@@ -228,6 +233,57 @@ export const TASKS: readonly EvalTask[] = [
           ? pass('saved and recalled it')
           : fail('saved it, but didn’t recall it in a new chat'))
       );
+    },
+  },
+  {
+    id: 'learns-correction',
+    title: 'Learn a correction, use it in the next chat',
+    about:
+      'Once a chat goes quiet, a correction in it is learned by itself; a new chat follows it unasked (ADR 0087).',
+    async run(scene) {
+      const first = await scene.say('Write a one-line command that prints today’s date.');
+      const missed = unanswered(first);
+      if (missed) return missed;
+      const corrected = await scene.say(
+        'No, I meant in Python. I always want Python for little scripts like this.',
+        { chat: first.chat },
+      );
+      const stopped = unanswered(corrected);
+      if (stopped) return stopped;
+      const looked = await scene.review(first.chat);
+      if (!looked.learned.some((m) => /python/i.test(m)))
+        return fail(
+          looked.why
+            ? `learned nothing (${looked.why})`
+            : `learned ${looked.learned.length ? looked.learned.map((m) => `“${m}”`).join(', ') : 'nothing'}, not the preference`,
+        );
+      const next = await scene.say('Write me a tiny script that prints today’s date.');
+      return (
+        unanswered(next) ??
+        (/```py|import datetime|from datetime|datetime\.|print\(/i.test(next.text)
+          ? pass('learned the correction and followed it in a new chat')
+          : fail('learned it, but the next chat didn’t use Python'))
+      );
+    },
+  },
+  {
+    id: 'learns-nothing',
+    title: 'Learn nothing from a chat with nothing lasting',
+    about:
+      'A chat that only sounds personal (“I always mix these up”) leaves nothing behind (ADR 0087).',
+    async run(scene) {
+      const first = await scene.say('I usually forget this — what’s the capital of Portugal?');
+      const missed = unanswered(first);
+      if (missed) return missed;
+      const second = await scene.say('Thanks! And of Spain? I always mix them up.', {
+        chat: first.chat,
+      });
+      const stopped = unanswered(second);
+      if (stopped) return stopped;
+      const looked = await scene.review(first.chat);
+      return looked.learned.length
+        ? fail(`kept ${looked.learned.map((m) => `“${m}”`).join(', ')}`)
+        : pass('kept nothing');
     },
   },
   {
