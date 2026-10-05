@@ -80,6 +80,11 @@
    * transparent edges reads in light and dark, with the tile's hairline drawn
    * over it. It fades in over the glyph once loaded, so nothing moves.
    */
+  /* Behind a picture, porcelain too: no colour shows at its rounded edge. */
+  .icon[data-app-color][data-picture] {
+    --il-bg: oklch(0.995 0.002 90);
+  }
+
   .picture {
     position: absolute;
     inset: 0;
