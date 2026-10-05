@@ -13,6 +13,7 @@ import { Artifact, ArtifactKind } from './artifacts';
 import { ATTACHMENT_LIMITS, Attachment } from './attachments';
 import {
   MutedSkill,
+  MutedProvider,
   Offer,
   OfferOutcome,
   PlanStep,
@@ -154,7 +155,7 @@ export type Profile = z.infer<typeof Profile>;
 
 /** Catalog ids, and skills as `skill:<id>` (ADR 0060), each once. */
 const MutedSuggestions = z
-  .array(z.union([CatalogId, MutedSkill]))
+  .array(z.union([CatalogId, MutedSkill, MutedProvider]))
   .max(100)
   .transform((ids) => [...new Set(ids)]);
 

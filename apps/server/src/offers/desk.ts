@@ -62,6 +62,7 @@ export interface OfferDeskDeps {
   };
   /** Whether what was offered is on, now. */
   apps?: { connected(catalogId: string): Promise<boolean> };
+  providers?: { connected(id: string): Promise<boolean> };
   skills?: {
     modeOf(id: string): Promise<SkillMode | undefined>;
     turnOn(id: string): Promise<void>;
@@ -78,7 +79,13 @@ export interface OfferDeskDeps {
 
 /** How a muted offer is written in `mutedSuggestions`. */
 export const mutedKey = (kind: OfferKind, target: string) =>
-  kind === 'skill' ? `skill:${target}` : kind === 'market' ? MUTED_MARKET : target;
+  kind === 'provider'
+    ? `provider:${target}`
+    : kind === 'skill'
+      ? `skill:${target}`
+      : kind === 'market'
+        ? MUTED_MARKET
+        : target;
 
 /**
  * Where this turn began: the person's last message, or the offer they took
@@ -184,6 +191,7 @@ export class OfferDesk {
       : '';
     return mapSection(
       {
+        providers: map.providers?.filter((p) => !muted.has(mutedKey('provider', p.id))),
         apps: map.apps.filter((a) => !muted.has(mutedKey('app', a.id))),
         skills: map.skills.filter((s) => !muted.has(mutedKey('skill', s.id))),
       },
@@ -265,9 +273,11 @@ export class OfferDesk {
     if (input.kind === 'market') return this.#proposeMarket(chat, input);
     const map = await this.deps.map?.(input.engine).catch(() => undefined);
     const found =
-      input.kind === 'app'
-        ? map?.apps.find((a) => a.id === input.target)
-        : map?.skills.find((s) => s.id === input.target || s.name === input.target);
+      input.kind === 'provider'
+        ? map?.providers?.find((p) => p.id === input.target)
+        : input.kind === 'app'
+          ? map?.apps.find((a) => a.id === input.target)
+          : map?.skills.find((s) => s.id === input.target || s.name === input.target);
     if (!found) return { dropped: 'not-in-map' };
     const name = 'title' in found ? found.title : found.name;
     const target = found.id;
@@ -359,11 +369,13 @@ export class OfferDesk {
       );
     const { offer } = made;
     const turn =
-      offer.kind === 'app'
-        ? await this.#app(offer)
-        : offer.kind === 'market'
-          ? await this.#market(offer)
-          : await this.#skill(offer, how.skill);
+      offer.kind === 'provider'
+        ? await this.#provider(offer)
+        : offer.kind === 'app'
+          ? await this.#app(offer)
+          : offer.kind === 'market'
+            ? await this.#market(offer)
+            : await this.#skill(offer, how.skill);
     return chat.carryOn(conversationId, offerId, turn);
   }
 
@@ -379,6 +391,16 @@ export class OfferDesk {
   #chat(): NonNullable<OfferDeskDeps['chat']> {
     if (!this.deps.chat) throw new OfferError('not-found', 'That wasn’t offered here.');
     return this.deps.chat;
+  }
+
+  async #provider(offer: Offer): Promise<CarryOn> {
+    if (!(await this.deps.providers?.connected(offer.target).catch(() => false)))
+      throw new OfferError('not-ready', `${offer.name} needs connecting first.`);
+    return offer.resume?.request
+      ? {
+          prompt: `${offer.name} is connected now. Carry on with what I asked:\n\n${offer.resume.request}`,
+        }
+      : {};
   }
 
   async #app(offer: Offer): Promise<CarryOn> {

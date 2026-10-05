@@ -42,6 +42,12 @@ import { TaskStore } from './tasks/store';
 import { QuestionDesk } from './questions/desk';
 import { QUESTIONS_PROMPT, questionTools } from './questions/tools';
 import { AttachmentStore } from './attachments/store';
+import { fileTools } from './files/tools';
+import { researchTools, publicWebFetcher } from './research/tools';
+import { ProcessService } from './processes/service';
+import { ImageService } from './images/service';
+import { documentTools } from './files/documents';
+import { publishTools } from './files/publish';
 import { type SystemKey, VaultService } from './vault/service';
 import { vaultTools } from './vault/tools';
 import { vaultCheck } from './vault/doctor';
@@ -95,7 +101,7 @@ import { Gatekeeper } from './security';
 import { linuxBrowserHome, ThisComputer } from './auth/here';
 import type { Config } from './config';
 import { CommandStore } from './commands/store';
-import { ConversationManager, type TurnRoute } from './conversations/manager';
+import { ConversationManager, type TurnRoute, type ToolContext } from './conversations/manager';
 import { ConversationStore } from './conversations/store';
 import type { ApiEngine } from './engines/api';
 import { builtInEngines, serverEngine } from './engines/registry';
@@ -246,6 +252,8 @@ export class Services {
   readonly commands: CommandStore;
   /** Files and long pastes sent with messages (ADR 0017). */
   readonly attachments: AttachmentStore;
+  readonly processes: ProcessService;
+  readonly images: ImageService;
   /** Passwords: Conch's own vault and the managers it reads (ADR 0025). */
   readonly vault: VaultService;
   readonly routines: RoutineService;
@@ -416,6 +424,10 @@ export class Services {
     });
     this.commands = new CommandStore(join(config.CONCH_HOME, 'commands'));
     this.attachments = new AttachmentStore(join(config.CONCH_HOME, 'attachments'));
+    this.processes = new ProcessService({
+      protectedPaths: protectedPaths(config.CONCH_HOME),
+      sealed: async () => (await this.settings.get()).preferences.sealedCommands,
+    });
     this.vault = new VaultService({
       home: config.CONCH_HOME,
       keystore: keystoreMode(config),
@@ -761,6 +773,18 @@ export class Services {
             ...yours,
           ],
           skills,
+          providers: (await this.keys.has('openrouter'))
+            ? []
+            : [
+                {
+                  id: 'openrouter',
+                  name: 'OpenRouter',
+                  tagline: 'Make and edit pictures',
+                  description:
+                    'Generate and edit pictures from any chat model, billed through your OpenRouter API key.',
+                  featured: true,
+                },
+              ],
           // Skills people share, found with `find_skills` (ADR 0074).
           market: Boolean(this.market),
         };
@@ -773,6 +797,11 @@ export class Services {
           Boolean((await this.conversations.detail(id)).conversation.origin),
         carryOn: (id, offerId, turn) => this.conversations.carryOn(id, offerId, turn),
         dismiss: (id, offerId) => this.conversations.dismissOffer(id, offerId),
+      },
+      providers: {
+        connected: async (id) =>
+          id === 'openrouter' &&
+          (await this.providers.engineFor('openrouter').detect()).state === 'ready',
       },
       apps: { connected: (id) => this.integrations.connected(id) },
       skills: {
@@ -789,6 +818,32 @@ export class Services {
     });
     // How each provider charges, asked once a minute at most: chats and routines share it.
     const billings = new Billings();
+    this.images = new ImageService({
+      key: (signal) => this.keys.value('openrouter', { signal }),
+      hasKey: () => this.keys.has('openrouter'),
+      store: this.attachments,
+      overBudget: async () => {
+        const { usd, budgetUsd } = await this.usage.month();
+        return budgetUsd !== undefined && usd >= budgetUsd;
+      },
+      spend: (usage) => this.usage.recordTurn(usage, undefined, { engine: 'openrouter' }),
+      offer: async (ctx) => {
+        const result = await this.offers.propose({
+          conversationId: ctx.conversationId,
+          engine: ctx.engine,
+          unattended: ctx.unattended,
+          kind: 'provider',
+          target: 'openrouter',
+          why: 'Make and edit pictures from this chat.',
+        });
+        if ('offer' in result) {
+          ctx.append({ type: 'offer', offer: result.offer });
+          return 'A card to connect OpenRouter is under this reply. Once connected, the image request carries on. Image generation is billed separately through its API key.';
+        }
+        return 'Image generation needs an OpenRouter API key. It can be connected in Settings → Providers. No image was generated.';
+      },
+    });
+    const fetchPublicWeb = publicWebFetcher(config.CONCH_PORT);
     this.conversations = new ConversationManager({
       // What each turn costs, what a chat has spent, and its limits (ADR 0079).
       spend: new ChatSpendDesk({
@@ -812,6 +867,12 @@ export class Services {
         ctx.engine.hostTools === false
           ? []
           : [
+              ...fileTools(ctx, () => this.#fileAccess(ctx)),
+              ...documentTools(ctx, () => this.#fileAccess(ctx)),
+              ...publishTools(ctx, () => this.#fileAccess(ctx), this.attachments),
+              ...researchTools(ctx, fetchPublicWeb),
+              ...this.processes.tools(ctx),
+              ...this.images.tools(ctx, () => this.#fileAccess(ctx)),
               ...this.routines.tools(ctx),
               ...this.skills.tools(ctx),
               ...this.browser.tools(ctx),
@@ -906,6 +967,7 @@ export class Services {
       integrations: this.integrations,
       offers: this.offers,
       attachments: this.attachments,
+      stopProcesses: (id) => this.processes.stopAll(id),
       redact: this.vault.redactor(),
       protectedPaths: protectedPaths(config.CONCH_HOME),
       // The sealed box, only where this computer can do it (ADR 0028).
@@ -987,6 +1049,7 @@ export class Services {
       ready: () => this.providers.ready(),
     });
     this.doctor.register(tasksCheck(this.tasks));
+    this.doctor.register(this.processes.doctorCheck());
     // Your other apps, reaching Conch through its door (ADR 0073).
     this.mcp = new McpService({
       store: new McpClientStore(config.CONCH_HOME),
@@ -2136,6 +2199,7 @@ export class Services {
   }
 
   async stop() {
+    this.processes.stopAll();
     void this.address.stop();
     this.googleApps.stop();
     void this.conchApps.stop();
@@ -2300,6 +2364,16 @@ export class Services {
     return status;
   }
 
+  async #fileAccess(ctx: ToolContext) {
+    return {
+      cwd: await (ctx.workspace?.() ?? this.settings.workspace()),
+      protectedPaths: protectedPaths(this.config.CONCH_HOME),
+      readableDirs: (await this.attachments.forConversation(ctx.conversationId)).map((a) =>
+        this.attachments.folder(a.id),
+      ),
+    };
+  }
+
   /** One provider's models, commands and modes: the default's unless another is named. */
   async capabilities(force = false, id?: EngineId) {
     const engine = this.providers.engineFor(id);
@@ -2307,7 +2381,10 @@ export class Services {
     return {
       ...(await engine.capabilities({ force })),
       engine: engine.id,
-      ...(engine.attachments && { attachments: engine.attachments }),
+      attachments: {
+        images: engine.attachments?.images ?? false,
+        files: engine.attachments?.files === true || engine.hostTools !== false,
+      },
     };
   }
 

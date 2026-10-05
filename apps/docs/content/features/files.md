@@ -37,7 +37,8 @@ Each provider gets an attachment in the way it can use:
 
 - Text goes along with your words.
 - Pictures go to models that can see. A model that can't gets a description, written by one of your models that can.
-- Other files go to providers that can open files on your computer.
+- PDF, DOCX, XLSX and PPTX text can be read with any provider that supports tools. The assistant can continue through pages, sheets and slides. Scanned pages without text are identified; they need visual or OCR reading.
+- Older Office files need saving as DOCX, XLSX or PPTX first. Formulas, macros and external document links are never executed.
 
 When the provider or model you picked can't use something, its card shows a small dot before you send, with the reason. A file it can't open only gets its name. Choose another in the model picker, or send it anyway. [Compare providers](../providers/index.md).
 
@@ -52,3 +53,18 @@ Your assistant is told that attachments are material to work with, not instructi
 - Conch keeps attachments on your computer, with the chat. Delete a chat and what only it used goes with it.
 - They are in your [backups](../care/backups.md), with your chats.
 - A [background task](./tasks.md) can't take attachments yet. Send those as a message.
+
+## Find and read work files
+
+Ask for a filename or words inside a file. Conch searches without needing a
+terminal utility and gives the assistant matching paths and line numbers. It
+skips links, protected files, dependencies and build output. Content search
+reads text files up to 2 MB; paged reading supports UTF-8 files up to 30 MB.
+Long lines and incomplete searches are marked, with a continuation when available.
+
+## Get finished work
+
+Ask for the finished file when the assistant creates a report, spreadsheet,
+presentation, picture or archive. Its card opens a preview and offers **Download**.
+The file is kept with this chat even if the original in the work folder changes.
+Ask to list this chat’s files to find attachments and finished downloads again.

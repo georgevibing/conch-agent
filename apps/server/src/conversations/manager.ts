@@ -684,6 +684,8 @@ export class ConversationManager {
       integrations?: TurnIntegrationsProvider;
       /** Where uploaded files and long pastes are kept (ADR 0017). */
       attachments?: AttachmentStore;
+      /** Stop managed command trees when the person stops or deletes this chat. */
+      stopProcesses?: (conversationId: string) => void;
       /** Takes saved secrets out of what's logged and shown (ADR 0025). */
       redact?: (text: string) => string;
       /** Where Passwords and Conch's keys live: never for the engine's own file tools. */
@@ -781,15 +783,13 @@ export class ConversationManager {
   }
 
   async remove(id: string) {
+    this.deps.stopProcesses?.(id);
     const live = this.#live.get(id);
     live?.abort?.abort();
     live?.titling?.abort();
     this.#live.delete(id);
     // What was attached here goes too, unless another conversation sent it as well.
-    const events = live?.events ?? (await this.deps.store.events(id).catch(() => []));
-    const attached = events.flatMap((e) =>
-      e.type === 'user.message' ? (e.attachments ?? []).map((a) => a.id) : [],
-    );
+    const attached = ((await this.deps.attachments?.forConversation(id)) ?? []).map((a) => a.id);
     // What an engine kept of it between turns goes too (a Codex thread).
     const record = live?.record ?? (await this.deps.store.get(id).catch(() => undefined));
     for (const [engineId, session] of Object.entries(record?.sessions ?? {})) {
@@ -1178,6 +1178,7 @@ export class ConversationManager {
   }
 
   async interrupt(id: string) {
+    this.deps.stopProcesses?.(id);
     const live = await this.#get(id);
     // Stop pressed right after sending, before the turn began (or while a
     // stopped one winds down): it stops as it starts.
@@ -1956,12 +1957,14 @@ export class ConversationManager {
             waive: key,
           };
       }
-      // Google draft creation and Slack sending always ask inside their trusted
-      // tool, after it has resolved the real account/channel and the full words.
+      // Writes below ask inside their trusted
+      // tools, after resolving the actual destination, model or command.
       // That one card also carries taint and skill restrictions; a generic
       // preflight would ask twice.
       if (
-        /^(?:mcp__conch__)?(?:google_mail_create_draft|slack_send_message)$/.test(request.toolName)
+        /^(?:mcp__conch__)?(?:google_mail_create_draft|slack_send_message|process_start|process_write|image_generate|task_control)$/.test(
+          request.toolName,
+        )
       )
         return undefined;
       const server = /^mcp__([a-z0-9_-]+?)__/.exec(request.toolName)?.[1];
@@ -2064,7 +2067,10 @@ export class ConversationManager {
     };
 
     // Attachments go in front of the words, as each provider can take them (ADR 0017).
-    const can = engine.attachments ?? { images: false, files: false };
+    const can = {
+      images: engine.attachments?.images ?? false,
+      files: engine.attachments?.files === true || engine.hostTools !== false,
+    };
     const store = this.deps.attachments;
     const attached =
       store && attachments.length
@@ -2078,15 +2084,7 @@ export class ConversationManager {
     // Files sent earlier in the chat stay readable to engines that open files.
     const readableDirs =
       store && can.files
-        ? [
-            ...new Set(
-              live.events.flatMap((e) =>
-                e.type === 'user.message'
-                  ? (e.attachments ?? []).map((a) => store.folder(a.id))
-                  : [],
-              ),
-            ),
-          ]
+        ? (await store.forConversation(conversationId)).map((a) => store.folder(a.id))
         : [];
 
     try {

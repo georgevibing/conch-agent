@@ -636,4 +636,8 @@
       text-underline-offset: 2px;
     }
   }
+  .sourceTitle {
+    font-weight: var(--nc-weight-medium);
+    overflow-wrap: anywhere;
+  }
 }

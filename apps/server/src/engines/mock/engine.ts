@@ -638,8 +638,15 @@ export class MockEngine implements Engine {
         const tool = input.tools.find((t) => t.name === name);
         const toolUseId = newId('tool');
         yield { type: 'tool-start', toolUseId, name: `mcp__conch__${name}`, input: args } as const;
-        const output = tool ? hostToolText(await tool.run(args as never)) : '';
-        yield { type: 'tool-end', toolUseId, status: 'success', output } as const;
+        const result = tool ? await tool.run(args as never) : '';
+        const output = hostToolText(result);
+        yield {
+          type: 'tool-end',
+          toolUseId,
+          status: 'success',
+          output,
+          ...(typeof result !== 'string' && result.view && { view: result.view }),
+        } as const;
         return output;
       };
       const speak = async function* (reply: string) {
@@ -650,6 +657,26 @@ export class MockEngine implements Engine {
         yield { type: 'message-done', messageId } as const;
         yield { type: 'done', outcome: 'success' } as const;
       };
+
+      // Real shared tools, deterministic journey: read an uploaded document and return a copy.
+      if (/read and publish this document/i.test(said) && !chatOnly) {
+        const listing = JSON.parse(yield* hostTool('list_attachments', { offset: 0 })) as {
+          files: { path: string; name: string }[];
+        };
+        const file = listing.files.find((f) => /\.docx$/i.test(f.name));
+        if (!file) throw new Error('Attach a DOCX for this journey.');
+        const document = JSON.parse(
+          yield* hostTool('read_document', {
+            file_path: file.path,
+            offset: 0,
+            limit: 5,
+            text_offset: 0,
+          }),
+        ) as { sections: { text: string }[] };
+        yield* hostTool('publish_file', { file_path: file.path, name: 'Finished document.docx' });
+        yield* speak(`The document says: ${document.sections.map((s) => s.text).join('\n')}`);
+        return;
+      }
 
       // Writing to you in a chat app: `send "hi" to my Telegram`, `message me "hi"`.
       const sendTo =
@@ -1014,8 +1041,15 @@ export class MockEngine implements Engine {
         const tool = input.tools.find((t) => t.name === name);
         const toolUseId = newId('tool');
         yield { type: 'tool-start', toolUseId, name: `mcp__conch__${name}`, input: args } as const;
-        const output = tool ? hostToolText(await tool.run(args as never)) : '';
-        yield { type: 'tool-end', toolUseId, status: 'success', output } as const;
+        const result = tool ? await tool.run(args as never) : '';
+        const output = hostToolText(result);
+        yield {
+          type: 'tool-end',
+          toolUseId,
+          status: 'success',
+          output,
+          ...(typeof result !== 'string' && result.view && { view: result.view }),
+        } as const;
         return output;
       };
       const askFor = /\bask me for my ([a-z0-9.-]+) (login|password|key)\b/i.exec(input.prompt);

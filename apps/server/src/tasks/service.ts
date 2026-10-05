@@ -927,10 +927,86 @@ export class TaskService {
           options: handed.options,
           by: handed.by,
         });
-        return `Started “${task.title}” in the background${task.by ? ` with ${task.by}` : ''}. Its result will come back to this chat, and the user will be told when it’s done.`;
+        return `Started “${task.title}” in the background${task.by ? ` with ${task.by}` : ''}. Its result will come back to this chat, and the user will be told when it’s done. Task id: ${task.id}.`;
       },
     };
-    return [delegate as HostTool, background as HostTool];
+    const owned = async (id: string) => {
+      const task = await this.get(id);
+      if (task.parentConversationId !== ctx.conversationId)
+        throw new TaskError('not-found', 'This task was not started in this chat.');
+      return task;
+    };
+    const control: HostTool[] = [
+      {
+        name: 'task_status',
+        description:
+          'List background tasks and helpers started in this chat, or read one by id. Returns progress, status, errors and the result. Cannot read tasks belonging to another chat.',
+        input: { id: z.string().min(1).max(128).optional() },
+        run: async (args) => {
+          const tasks = args.id
+            ? [await owned(String(args.id))]
+            : (await this.list()).tasks
+                .filter((t) => t.parentConversationId === ctx.conversationId)
+                .slice(0, 50);
+          return JSON.stringify(
+            tasks.map((t) => ({
+              id: t.id,
+              title: t.title,
+              status: t.status,
+              current: t.current,
+              error: t.error,
+              result: t.summary,
+            })),
+          );
+        },
+      },
+      {
+        name: 'task_control',
+        description:
+          'Stop, retry or continue a task started in this chat. Use only when the user requests it. Continue needs instructions; retry resumes an interrupted or failed task with its existing evidence and permissions. Cannot affect another chat’s tasks.',
+        input: {
+          id: z.string().min(1).max(128),
+          action: z.enum(['stop', 'retry', 'continue']),
+          instructions: z.string().min(1).max(8000).optional(),
+        },
+        run: async (args, call) => {
+          const task = await owned(String(args.id));
+          const action = String(args.action);
+          if (action === 'continue' && typeof args.instructions !== 'string')
+            throw new TaskError('invalid', 'Say what this task should do next.');
+          if (action !== 'stop') {
+            if (ctx.permissionMode === 'plan')
+              throw new TaskError('invalid', 'Leave plan mode before restarting a task.');
+            if (ctx.unattended)
+              throw new TaskError(
+                'invalid',
+                'Restart this task from its chat when you are there to review it.',
+              );
+            const restricted = await ctx.restricted?.('commands', '');
+            if (ctx.permissionMode !== 'bypassPermissions' || ctx.untrusted?.() || restricted) {
+              const choice = await ctx.ask({
+                toolName: 'task_control',
+                input: args,
+                summary: `${action === 'retry' ? 'Retry' : 'Continue'} “${task.title}”`,
+                ...((restricted || ctx.untrusted?.()) && {
+                  taint: restricted || ctx.untrusted?.(),
+                }),
+              });
+              if (choice === 'deny') return 'The user declined. The task was not restarted.';
+            }
+          }
+          ctx.signal.throwIfAborted();
+          const updated =
+            action === 'stop'
+              ? await this.stop(task.id)
+              : action === 'retry'
+                ? await this.retry(task.id)
+                : await this.continue(task.id, String(args.instructions), call?.operationId);
+          return JSON.stringify({ id: updated.id, title: updated.title, status: updated.status });
+        },
+      },
+    ];
+    return [delegate as HostTool, background as HostTool, ...control];
   }
 }
 

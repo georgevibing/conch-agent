@@ -17,12 +17,18 @@ import type { Capabilities, EngineId, EngineStatus, ToolView } from '@conch/prot
 import { z } from 'zod';
 
 import { authorizeTool, HOST_NAMES } from '../engines/host';
-import { hostToolText, type Engine, type EngineEvent, type TurnInput } from '../engines/types';
+import {
+  hostToolText,
+  type Engine,
+  type EngineEvent,
+  type TurnInput,
+  type ToolImage,
+} from '../engines/types';
 
 export interface CallResult {
   text: string;
   isError: boolean;
-  images?: { data: string; mimeType: 'image/jpeg' | 'image/png' }[];
+  images?: ToolImage[];
 }
 
 /** How much of a result the app's chat shows (the app gets all of it). */

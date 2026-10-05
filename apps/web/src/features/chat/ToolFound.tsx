@@ -1,7 +1,8 @@
 import type { ToolView } from '@conch/protocol';
-import { AgendaView, ChatMessages, FileList, MailList, replyRequest } from '@conch/nacre';
+import { AgendaView, ChatMessages, FileList, MailList, Sources, replyRequest } from '@conch/nacre';
 
 import { useUi } from '../../app/ui';
+import { SentAttachments } from './AttachmentViewer';
 
 /**
  * Words for the open chat's composer, from anywhere in it: the same way ⌘K's
@@ -21,6 +22,10 @@ export function useComposerInsert() {
 export function ToolFound({ view }: { view: ToolView }) {
   const insert = useComposerInsert();
   switch (view.kind) {
+    case 'downloads':
+      return <SentAttachments attachments={view.items} made />;
+    case 'sources':
+      return <Sources sources={view.items} />;
     case 'agenda':
       return <AgendaView events={view.items} from={view.from} to={view.to} />;
     case 'mail':

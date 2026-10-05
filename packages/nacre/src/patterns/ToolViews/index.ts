@@ -6,3 +6,6 @@ export { FileList, fileKindOf } from './FileList';
 export type { FileListProps, FoundFile, FoundFileKind } from './FileList';
 export { ChatMessages } from './ChatMessages';
 export type { ChatMessage, ChatMessagesProps } from './ChatMessages';
+
+export { Sources } from './Sources';
+export type { FoundSource, SourcesProps } from './Sources';

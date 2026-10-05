@@ -88,6 +88,10 @@ src/
   memory/                     file-per-memory store, prompt builder, memory tools; hybrid search
                               (index, embed), the tidy-up, What Conch knows (ADR 0032)
   conversations/              manager (turns, permissions, events) + JSONL store
+  files/                      bounded file/document reading, search and finished-file delivery (ADR 0088)
+  research/                   public web search and SSRF-checked page reading (ADR 0088)
+  processes/                  conversation-owned command supervisors, logs and stdin (ADR 0088)
+  images/                     image model discovery, approved generation/editing and downloads (ADR 0088)
   attachments/                uploads: sniffing, storage + sweep, per-engine prompt, sandboxed serving (ADR 0017)
   vault/                      Passwords: encrypted vault, keychain, other managers, import, fills (ADR 0025)
   backup/                     what's in a backup (manifest), the .conchbackup format, daily backups, restore (ADR 0020)

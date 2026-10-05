@@ -97,6 +97,13 @@
 - **A browser and a terminal.** The assistant uses a browser you can watch and
   take over: tabs that come back after a restart, uploads, dragging, even a canvas. It can run in your own Chrome
   or in the cloud, and a real shell is a keystroke away.
+- **Research and files.** Search the web and read sources with references. Read PDF and Office
+  text, find work files and continue through long text without a terminal utility.
+  Finished PDFs, spreadsheets, pictures and archives get preview and download cards.
+- **Pictures from any chat model.** Generate or edit a picture through an OpenRouter API key,
+  with connection offered in the chat and API costs counted separately.
+- **Managed commands.** Start a build or development server, read its logs, send input and stop
+  its process tree. Commands stay tied to the chat and have time and output limits.
 - **Show me.** Charts, pages and documents open beside the chat, with every version kept.
 - **Hand it off.** Send work to the background and keep chatting, or have another
   provider do a part ("have Codex write the tests").

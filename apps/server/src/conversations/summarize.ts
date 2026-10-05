@@ -3,6 +3,24 @@ export function summarizeToolUse(toolName: string, input: Record<string, unknown
   const str = (key: string) =>
     typeof input[key] === 'string' ? (input[key] as string) : undefined;
   const file = str('file_path') ?? str('path') ?? str('notebook_path');
+  const conch = toolName.replace(/^mcp__conch__/, '');
+  const labels: Record<string, string> = {
+    read_file: `Read ${file ?? 'a text file'}`,
+    read_document: `Read ${file ?? 'a document'}`,
+    search_files: `Find files${str('text') ? ` containing “${str('text')}”` : str('name') ? ` named “${str('name')}”` : ''}`,
+    web_search: `Search the web for “${str('query') ?? ''}”`,
+    web_fetch: `Read ${str('url') ?? 'a web page'}`,
+    process_start: `Start “${(str('command') ?? '').slice(0, 160)}”`,
+    process_read: 'Read command progress',
+    process_write: 'Send input to a command',
+    process_stop: 'Stop a command',
+    task_status: 'Read task progress',
+    task_control: `${str('action') ?? 'Update'} a task`,
+    publish_file: `Offer ${str('name') ?? file ?? 'a finished file'} to download`,
+    image_models: 'Find image models',
+    image_generate: str('source') ? 'Edit a picture' : 'Create a picture',
+  };
+  if (labels[conch]) return labels[conch];
   switch (toolName) {
     case 'Bash':
       return `Run \`${(str('command') ?? '').slice(0, 200)}\``;

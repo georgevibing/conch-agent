@@ -17,6 +17,7 @@ import { useState } from 'react';
 
 import { useAppState, useModels, useUpdateSettings } from '../../api/queries';
 import { useIntegrations } from '../integrations/queries';
+import { useProviders } from '../providers/queries';
 import { useSkills } from '../skills/queries';
 import { availableModes, effortOptions, pickerProviders } from '../models/catalog';
 import { findModel, modelKey, parseModelKey } from '../models/useTurnOptions';
@@ -221,6 +222,7 @@ function MutedSuggestions({
 }) {
   const { data } = useIntegrations();
   const { data: skills } = useSkills();
+  const { data: providers } = useProviders();
   return (
     <Section
       title="Offers in the chat"
@@ -229,12 +231,18 @@ function MutedSuggestions({
       {muted.length ? (
         <ul className={styles.commandList} aria-label="Not suggested">
           {muted.map((id) => {
+            const providerId = id.startsWith('provider:')
+              ? id.slice('provider:'.length)
+              : undefined;
+            const provider = providers?.providers.find((p) => p.id === providerId);
             const skillId = id.startsWith('skill:') ? id.slice('skill:'.length) : undefined;
             const skill = skillId ? skills?.skills.find((s) => s.id === skillId) : undefined;
             const entry = skillId ? undefined : data?.catalog.find((c) => c.id === id);
-            const name = skillId
-              ? (skill?.title ?? titleCase(skillId))
-              : (entry?.name ?? titleCase(id));
+            const name = providerId
+              ? (provider?.name ?? titleCase(providerId))
+              : skillId
+                ? (skill?.title ?? titleCase(skillId))
+                : (entry?.name ?? titleCase(id));
             return (
               <li key={id} className={styles.commandRow}>
                 <Stack direction="row" gap={3} align="center" className={styles.commandText}>
@@ -242,7 +250,7 @@ function MutedSuggestions({
                     <SkillIcon name={skill?.name ?? skillId} title={name} size="md" />
                   ) : (
                     <IntegrationLogo
-                      brand={id}
+                      brand={providerId ?? id}
                       name={name}
                       color={entry?.color}
                       size="sm"

@@ -20,16 +20,19 @@ import { signInResults } from '../integrations/useSignInResult';
 import { MarketOfferDialog } from '../skills/Discover';
 import { skillKeys, useSkills } from '../skills/queries';
 import { offersApi } from './api';
+import { ProviderOfferItem } from './ProviderOfferItem';
 
 type OfferEntry = Extract<TranscriptItem, { kind: 'offer' }>;
 
 /** How a muted offer is written in `mutedSuggestions`: apps by id, skills as `skill:<id>`. */
 export const mutedKey = (offer: OfferEntry['offer']) =>
-  offer.kind === 'skill'
-    ? `skill:${offer.target}`
-    : offer.kind === 'market'
-      ? MUTED_MARKET
-      : offer.target;
+  offer.kind === 'provider'
+    ? `provider:${offer.target}`
+    : offer.kind === 'skill'
+      ? `skill:${offer.target}`
+      : offer.kind === 'market'
+        ? MUTED_MARKET
+        : offer.target;
 
 /**
  * An offer to turn on what a request is missing (ADR 0060), under the reply
@@ -39,7 +42,7 @@ export const mutedKey = (offer: OfferEntry['offer']) =>
  * phone, signing in leaves the page and comes back to this chat with the
  * offer, which is then taken by itself.
  */
-export function OfferItem({
+function AppSkillOfferItem({
   item,
   conversationId,
   className,
@@ -220,7 +223,7 @@ export function OfferItem({
     <>
       <OfferCard
         className={className}
-        kind={offer.kind}
+        kind={offer.kind === 'provider' ? 'app' : offer.kind}
         name={offer.name}
         brand={
           isApp
@@ -333,4 +336,12 @@ export function OfferAlsoTryItem({
   const { data } = useIntegrations();
   const examples = data?.catalog.find((c) => c.id === target)?.examples ?? [];
   return <OfferAlsoTry className={className} examples={examples} onPick={onSend} />;
+}
+
+export function OfferItem(props: Parameters<typeof AppSkillOfferItem>[0]) {
+  return props.item.offer.kind === 'provider' ? (
+    <ProviderOfferItem {...props} />
+  ) : (
+    <AppSkillOfferItem {...props} />
+  );
 }

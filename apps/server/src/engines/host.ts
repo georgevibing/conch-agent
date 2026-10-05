@@ -36,7 +36,7 @@ async function canonical(path: string): Promise<string> {
 }
 
 /** Every protected place, in both the form it was given and its canonical form. */
-async function forbiddenPlaces(input: TurnInput): Promise<string[]> {
+export async function forbiddenPlaces(input: FileAccess): Promise<string[]> {
   const given = [...(input.protectedPaths ?? []), ...secretPlaces().map((p) => p.path)].map((p) =>
     resolve(p),
   );
@@ -53,7 +53,9 @@ export function hostEnvironment(): Record<string, string> {
   return env;
 }
 
-export async function hostPath(input: TurnInput, raw: string, writing = false): Promise<string> {
+export type FileAccess = Pick<TurnInput, 'cwd' | 'readableDirs' | 'protectedPaths'>;
+
+export async function hostPath(input: FileAccess, raw: string, writing = false): Promise<string> {
   const workspace = await realpath(input.cwd);
   const path = resolve(workspace, raw);
   const roots = [

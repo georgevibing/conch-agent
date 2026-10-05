@@ -10,6 +10,7 @@ export function toolSummary(name: string, raw: unknown): string | undefined {
   const input = (raw ?? {}) as Input;
   const file = str(input, 'file_path') ?? str(input, 'path') ?? str(input, 'notebook_path');
   switch (name) {
+    case 'mcp__conch__process_start':
     case 'Bash':
       return str(input, 'command');
     case 'Read':
@@ -22,10 +23,16 @@ export function toolSummary(name: string, raw: unknown): string | undefined {
       return str(input, 'pattern') && `“${str(input, 'pattern')}”${file ? ` in ${file}` : ''}`;
     case 'Glob':
       return str(input, 'pattern');
+    case 'mcp__conch__web_fetch':
     case 'WebFetch':
       return str(input, 'url');
+    case 'mcp__conch__web_search':
     case 'WebSearch':
       return str(input, 'query');
+    case 'mcp__conch__image_generate':
+      return str(input, 'prompt');
+    case 'mcp__conch__search_files':
+      return str(input, 'text') ?? str(input, 'name') ?? file;
     case 'Task':
     case 'Agent':
       return str(input, 'description');

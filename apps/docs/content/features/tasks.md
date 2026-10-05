@@ -60,3 +60,10 @@ When a job splits into parts that don't need each other, your assistant can run 
 
 - A background task can't take [attachments](./files.md) yet. Send those as a message.
 - Tasks stay out of your chat list. <kbd>mod+k</kbd> finds one by name. See [Find anything](./find.md).
+
+## Control work from the chat
+
+Ask what a task is doing, ask to stop it, or give it another instruction once it
+finishes. The assistant can list and control work started in that chat. It cannot
+reach tasks from a different chat. Retrying retains the task’s evidence and
+permission limits; it does not start with a clean slate.

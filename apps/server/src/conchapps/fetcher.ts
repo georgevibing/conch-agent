@@ -37,6 +37,8 @@ export interface FetcherDeps {
   /** Extra certificates to trust, for a test server. */
   ca?: string | Buffer;
   timeoutMs?: number;
+  /** Gateway-owned public web reader only; apps keep their manifest allowlist. */
+  publicRedirects?: boolean;
 }
 
 /** Headers an app may not set: the connection's, the proxy's, and anyone's cookies. */
@@ -158,7 +160,7 @@ export function createFetcher(deps: FetcherDeps = {}): AppFetcher {
         return `${target.host} isn’t a secure (https) address; apps only use https.`;
       if (target.username || target.password)
         return 'Addresses with a sign-in in them aren’t used: send it in a header.';
-      if (!reaches.has(target.hostname.toLowerCase()))
+      if (!reaches.has(target.hostname.toLowerCase()) && !(hop > 0 && deps.publicRedirects))
         return hop === 0
           ? `This app may only reach ${[...reaches].join(', ') || 'no websites'}, not ${target.hostname}. Add it to “reaches” in conch-app.json.`
           : `${target.hostname} isn’t one of the sites this app may reach, and the request was sent on to it.`;
@@ -251,7 +253,10 @@ export function createFetcher(deps: FetcherDeps = {}): AppFetcher {
         };
         continue;
       }
-      return read(response, target, current.method, timeout, signal);
+      return {
+        ...(await read(response, target, current.method, timeout, signal)),
+        url: target.href,
+      };
     }
     return refuse('The request was sent on too many times.');
   };

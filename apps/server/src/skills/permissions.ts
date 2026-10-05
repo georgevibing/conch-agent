@@ -156,15 +156,21 @@ export function needs(
   context: { workspace: string; server?: string },
 ): { capability: SkillCapability; detail?: string } | undefined {
   const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  if (/^(?:mcp__conch__)?image_generate$/.test(toolName))
+    return { capability: 'apps', detail: 'openrouter' };
   if (/^(?:mcp__conch__)?google_/.test(toolName)) return { capability: 'apps', detail: 'google' };
   if (/^(?:mcp__conch__)?slack_/.test(toolName)) return { capability: 'apps', detail: 'slack' };
-  if (toolName === 'Bash')
+  if (/^(?:mcp__conch__)?task_control$/.test(toolName) && args.action !== 'stop')
+    return { capability: 'commands', detail: '' };
+  if (/^(?:mcp__conch__)?process_write$/.test(toolName))
+    return { capability: 'commands', detail: '' };
+  if (toolName === 'Bash' || /^(?:mcp__conch__)?process_start$/.test(toolName))
     return { capability: 'commands', detail: typeof args.command === 'string' ? args.command : '' };
   if (['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(toolName)) {
     const path = String(args.file_path ?? args.notebook_path ?? '');
     return { capability: path && !inside(context.workspace, path) ? 'files-anywhere' : 'files' };
   }
-  if (toolName === 'WebFetch' || toolName === 'WebSearch' || BROWSER_READS.test(toolName))
+  if (/(?:WebFetch|WebSearch|web_fetch|web_search)$/.test(toolName) || BROWSER_READS.test(toolName))
     return { capability: 'web' };
   if (BROWSER_ACTS.test(toolName)) return { capability: 'browser' };
   if (/^(?:mcp__conch__)?passwords_/.test(toolName)) return { capability: 'passwords' };

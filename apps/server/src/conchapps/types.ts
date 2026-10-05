@@ -41,6 +41,8 @@ export interface AppFetchRequest {
 }
 
 export interface AppFetchResponse {
+  /** Final address after validated redirects. */
+  url?: string;
   ok: boolean;
   status: number;
   headers: Record<string, string>;

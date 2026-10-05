@@ -119,7 +119,7 @@ export async function forTurn(
 
     const what = attachment.kind === 'image' ? 'an image' : `a ${bytesLabel(attachment.size)} file`;
     const note = can.files
-      ? `(${what[0]?.toUpperCase()}${what.slice(1)}. Open it from its path with your tools.)`
+      ? `(${what[0]?.toUpperCase()}${what.slice(1)}. Use read_document for PDF, DOCX, XLSX or PPTX text, or read_file for text. Other formats need an appropriate tool.)`
       : attachment.kind === 'image'
         ? "(An image this model can't see. If the message depends on it, say so.)"
         : `(${what[0]?.toUpperCase()}${what.slice(1)} this provider can't open. If the message depends on it, say so.)`;

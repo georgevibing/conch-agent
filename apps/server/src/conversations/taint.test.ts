@@ -19,6 +19,26 @@ import { ConversationStore } from './store';
 import { describeTaint, heldTaints, leavesSandbox, sinkReason, taintFrom } from './taint';
 
 describe('what taints a chat', () => {
+  it('marks the shared research, document, image and task readers on every transport', () => {
+    for (const prefix of ['', 'mcp__conch__']) {
+      expect(taintFrom(`${prefix}web_search`, { query: 'weather' })).toMatchObject({ kind: 'web' });
+      expect(taintFrom(`${prefix}web_fetch`, { url: 'https://example.org' })).toMatchObject({
+        kind: 'web',
+      });
+      expect(taintFrom(`${prefix}read_document`, {})).toMatchObject({ kind: 'download' });
+      for (const tool of ['image_models', 'image_generate', 'task_status'])
+        expect(taintFrom(`${prefix}${tool}`, {})).toMatchObject({ kind: 'app' });
+      for (const tool of ['process_start', 'process_write', 'image_generate'])
+        expect(sinkReason(`${prefix}${tool}`, {}, { workspace: '/work' })).toBeTruthy();
+      expect(
+        sinkReason(`${prefix}task_control`, { action: 'retry' }, { workspace: '/work' }),
+      ).toBeTruthy();
+      expect(
+        sinkReason(`${prefix}task_control`, { action: 'stop' }, { workspace: '/work' }),
+      ).toBeUndefined();
+    }
+  });
+
   it('reading the web, downloading, an app’s tools; not working in files', () => {
     expect(taintFrom('WebFetch', { url: 'https://www.example.com/a' })).toEqual({
       kind: 'web',

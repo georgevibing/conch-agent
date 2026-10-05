@@ -91,7 +91,7 @@ export type Picture = Pick<TurnImage, 'data' | 'mimeType'>;
 /** A picture a tool returned (a screenshot): base64, no data-URL prefix. */
 export interface ToolImage {
   data: string;
-  mimeType: 'image/jpeg' | 'image/png';
+  mimeType: TurnImage['mimeType'];
 }
 
 /** The pictures in a host tool's result, if any. */
