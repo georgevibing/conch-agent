@@ -13,6 +13,7 @@ import {
   jwtVerify,
 } from 'jose';
 
+import { deliverMockHook, guardMockServer } from './guard';
 import { CHAT_SA_CERT, CHAT_SA_KEY } from './googlechat-fixture';
 
 export interface MockChatMessage {
@@ -71,6 +72,8 @@ export class MockGoogleChat {
   keyRevoked = false;
   /** Turn the public address into one this computer can reach (the door's own). */
   resolve: (url: string) => string = (url) => url;
+  /** The trusted door origin, set by Services independently of request data. */
+  deliveryOrigin: () => string | undefined = () => undefined;
 
   readonly email = 'conch-bot@conch-chat-123.iam.gserviceaccount.com';
 
@@ -106,8 +109,9 @@ export class MockGoogleChat {
       publicJwk: await exportJWK(account.publicKey),
       pem: await exportPKCS8(account.privateKey),
     };
-    const app = Fastify({ logger: false });
+    const app = Fastify({ logger: false, requestTimeout: 20_000 });
     this.#app = app;
+    guardMockServer(app);
     app.addContentTypeParser(
       'application/x-www-form-urlencoded',
       { parseAs: 'string' },
@@ -358,7 +362,7 @@ export class MockGoogleChat {
 
   async #post(body: unknown, token: string | undefined): Promise<number> {
     try {
-      const response = await fetch(this.resolve(this.#endpoint), {
+      const response = await deliverMockHook(this.deliveryOrigin(), this.resolve(this.#endpoint), {
         method: 'POST',
         headers: {
           'content-type': 'application/json',

@@ -4,6 +4,8 @@ import type { AddressInfo } from 'node:net';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { type JWK, SignJWT, exportJWK, generateKeyPair } from 'jose';
 
+import { deliverMockHook, guardMockServer } from './guard';
+
 export interface MockTeamsSent {
   conversation: string;
   id: string;
@@ -39,6 +41,8 @@ export class MockTeams {
   singleTenant = false;
   /** Turn the public address into one this computer can reach (the door's own). */
   resolve: (url: string) => string = (url) => url;
+  /** The trusted door origin, set by Services independently of request data. */
+  deliveryOrigin: () => string | undefined = () => undefined;
 
   static readonly APP_ID = '00000000-0000-4000-8000-00000000c0c4';
   static readonly SECRET = 'mock~Teams.Secret_value-0123456789abcdefgh';
@@ -62,8 +66,9 @@ export class MockTeams {
     const pair = await generateKeyPair('RS256', { extractable: true });
     this.#key = { private: pair.privateKey, public: await exportJWK(pair.publicKey) };
     this.#other = (await generateKeyPair('RS256')).privateKey;
-    const app = Fastify({ logger: false });
+    const app = Fastify({ logger: false, requestTimeout: 20_000 });
     this.#app = app;
+    guardMockServer(app);
     app.addContentTypeParser(
       'application/x-www-form-urlencoded',
       { parseAs: 'string' },
@@ -279,7 +284,7 @@ export class MockTeams {
     wrong?: Parameters<MockTeams['token']>[1],
   ): Promise<number> {
     if (!this.#endpoint) throw new Error('No messaging endpoint yet.');
-    const response = await fetch(this.resolve(this.#endpoint), {
+    const response = await deliverMockHook(this.deliveryOrigin(), this.resolve(this.#endpoint), {
       method: 'POST',
       headers: {
         authorization: `Bearer ${await this.token(activity, wrong)}`,

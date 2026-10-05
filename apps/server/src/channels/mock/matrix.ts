@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 
 import Fastify, { type FastifyInstance } from 'fastify';
 
+import { guardMockServer } from './guard';
 import { cryptoSdk } from '../matrix-crypto';
 
 type Sdk = Awaited<ReturnType<typeof cryptoSdk>>;
@@ -94,8 +95,9 @@ export class MockMatrix {
   }
 
   async start(port = 0): Promise<string> {
-    const app = Fastify({ logger: false, bodyLimit: 10 * 1024 * 1024 });
+    const app = Fastify({ logger: false, bodyLimit: 10 * 1024 * 1024, requestTimeout: 20_000 });
     this.#app = app;
+    guardMockServer(app);
     app.addContentTypeParser(
       ['image/jpeg', 'image/png', 'application/octet-stream'],
       { parseAs: 'buffer' },
@@ -130,7 +132,16 @@ export class MockMatrix {
         );
         if (result.status !== 200 && result.status !== undefined)
           return reply.code(result.status).send(result.body);
-        if (result.raw) return reply.type(result.raw.type).send(result.raw.bytes);
+        if (result.raw)
+          return reply
+            .type(result.raw.type)
+            .header('content-disposition', 'attachment; filename="mock-media"')
+            .header('x-content-type-options', 'nosniff')
+            .header('content-security-policy', "sandbox; default-src 'none'")
+            .send(result.raw.bytes);
+        // Account data may echo a string fixture; never let it become HTML.
+        if (typeof result.body === 'string')
+          return reply.type('text/plain; charset=utf-8').send(result.body);
         return result.body;
       },
     });
@@ -827,7 +838,8 @@ export class MockMatrix {
     const pending = () =>
       this.#items.some((item) => item.at > since && this.#concerns(user, item)) ||
       (this.#inbox.get(key)?.length ?? 0) > 0;
-    const timeout = Math.min(Number(query.timeout ?? 0), 1_500);
+    const requested = Number(query.timeout ?? 0);
+    const timeout = Number.isFinite(requested) ? Math.max(0, Math.min(requested, 1_500)) : 0;
     if (!pending() && timeout > 0)
       await new Promise<void>((resolve) => {
         const wake = () => {

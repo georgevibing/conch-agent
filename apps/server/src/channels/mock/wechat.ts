@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 import fastifyWebsocket from '@fastify/websocket';
 import Fastify, { type FastifyInstance } from 'fastify';
 
+import { deliverMockHook, guardMockServer } from './guard';
 import { buildXml, decrypt, encrypt, parseXml, signature } from '../wechat-crypto';
 
 interface Socket {
@@ -50,6 +51,8 @@ export class MockWeChat {
   verified = true;
   /** Hold every delivery's reply until it comes back (seconds WeChat waits before retrying). */
   resolve: (url: string) => string = (url) => url;
+  /** The trusted door origin, set by Services independently of request data. */
+  deliveryOrigin: () => string | undefined = () => undefined;
   connections = 0;
 
   static readonly APP_ID = 'wx' + '0123456789abcdef';
@@ -62,8 +65,9 @@ export class MockWeChat {
   static readonly USER = 'AdaLovelace';
 
   async start(port = 0): Promise<string> {
-    const app = Fastify({ logger: false });
+    const app = Fastify({ logger: false, requestTimeout: 20_000 });
     this.#app = app;
+    guardMockServer(app);
     await app.register(fastifyWebsocket);
     app.post('/cgi-bin/stable_token', (request) => {
       const body = (request.body ?? {}) as { appid?: string; secret?: string };
@@ -155,8 +159,8 @@ export class MockWeChat {
       nonce,
       echostr,
     });
-    const response = await fetch(`${this.resolve(url)}?${query}`);
-    const said = await response.text();
+    const response = await deliverMockHook(this.deliveryOrigin(), this.resolve(url), {}, query);
+    const said = response.body;
     return response.ok && said === echostr ? 200 : 400;
   }
 
@@ -201,12 +205,13 @@ export class MockWeChat {
       );
       body = buildXml({ ToUserName: MockWeChat.ACCOUNT, Encrypt: encrypted });
     }
-    const response = await fetch(`${this.resolve(config.url)}?${query}`, {
-      method: 'POST',
-      body,
-      headers: { 'content-type': 'text/xml' },
-    });
-    const reply = await response.text();
+    const response = await deliverMockHook(
+      this.deliveryOrigin(),
+      this.resolve(config.url),
+      { method: 'POST', body, headers: { 'content-type': 'text/xml' } },
+      query,
+    );
+    const reply = response.body;
     const status = response.status;
     if (status !== 200 || !reply || reply === 'success') return { status, msgId };
     let answer = parseXml(reply);

@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 
 import Fastify, { type FastifyInstance } from 'fastify';
 
+import { deliverMockHook, guardMockServer } from './guard';
 import { lineSignature } from '../line';
 
 export interface MockLineSent {
@@ -48,10 +49,13 @@ export class MockLine {
   #replyTokens = new Set<string>();
   /** Turn the public address into one this computer can reach (the door's own). */
   resolve: (url: string) => string = (url) => url;
+  /** The trusted door origin, set by Services independently of request data. */
+  deliveryOrigin: () => string | undefined = () => undefined;
 
   async start(port = 0): Promise<string> {
-    const app = Fastify({ logger: false });
+    const app = Fastify({ logger: false, requestTimeout: 20_000 });
     this.#app = app;
+    guardMockServer(app);
     app.addHook('onRequest', async (request, reply) => {
       if (request.url.startsWith('/__control')) return;
       const token = request.headers.authorization?.replace(/^Bearer /, '');
@@ -200,7 +204,7 @@ export class MockLine {
           ? lineSignature('ffffffffffffffff' + 'ffffffffffffffff', body)
           : undefined;
     try {
-      const response = await fetch(this.resolve(this.endpoint), {
+      const response = await deliverMockHook(this.deliveryOrigin(), this.resolve(this.endpoint), {
         method: 'POST',
         headers: {
           'content-type': 'application/json',

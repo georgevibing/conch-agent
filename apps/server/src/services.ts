@@ -1306,10 +1306,15 @@ export class Services {
     });
     this.door = door;
     if (this.mockTeams) this.mockTeams.resolve = (url) => door.localFor(url);
+    if (this.mockTeams) this.mockTeams.deliveryOrigin = () => door.local;
     if (this.mockWeChat) this.mockWeChat.resolve = (url) => door.localFor(url);
+    if (this.mockWeChat) this.mockWeChat.deliveryOrigin = () => door.local;
     if (this.mockTwilio) this.mockTwilio.resolve = (url) => door.localFor(url);
+    if (this.mockTwilio) this.mockTwilio.deliveryOrigin = () => door.local;
     if (this.mockLine) this.mockLine.resolve = (url) => door.localFor(url);
+    if (this.mockLine) this.mockLine.deliveryOrigin = () => door.local;
     if (this.mockGoogleChat) this.mockGoogleChat.resolve = (url) => door.localFor(url);
+    if (this.mockGoogleChat) this.mockGoogleChat.deliveryOrigin = () => door.local;
     this.mockMail = config.CONCH_ENGINE === 'mock' ? new MockMail() : undefined;
     this.mockMessages = config.CONCH_ENGINE === 'mock' ? new MockMessages() : undefined;
     this.linked = linkedChannels({
