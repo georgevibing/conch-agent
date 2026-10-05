@@ -97,7 +97,10 @@ export interface QuietLearningDeps {
   /** Writes into the chat's own log: what it learned, and what you decided. */
   note: (
     conversationId: string,
-    event: Extract<ConversationEventInput, { type: 'learning.noted' | 'learning.decided' }>,
+    event: Extract<
+      ConversationEventInput,
+      { type: 'learning.noted' | 'learning.decided' | 'memory.decided' }
+    >,
   ) => Promise<void>;
   /** Something was learned or decided: whoever shows it fetches again. */
   changed?: () => void;
@@ -213,8 +216,9 @@ export class QuietLearning {
         if (chat.status === 'running' || chat.status === 'awaiting-permission') continue;
         if (quiet.has(chat.id) || notYours(chat.origin)) continue;
         const state = await this.store.chat(chat.id);
-        // Nothing happened since it was last read.
-        if (state.at !== undefined && state.at >= chat.updatedAt) continue;
+        // Nothing happened since a look last finished.
+        if (state.upTo !== undefined && state.upTo >= chat.updatedAt) continue;
+        // A look that waited for money or a model is tried again an hour on.
         if (state.tried !== undefined && now - state.tried < HOUR) continue;
         looked++;
         await this.review(chat.id, { trigger: 'idle' });
@@ -232,9 +236,34 @@ export class QuietLearning {
   ): Promise<ReviewResult> {
     const next = this.#queue
       .catch(() => undefined)
-      .then(() => this.#review(conversationId, options));
+      .then(() => this.#finish(conversationId, options));
     this.#queue = next;
     return next;
+  }
+
+  /**
+   * A look, and what the sweep needs to know after it: unless it waits for
+   * money or a model (or an answer it may yet read), the chat as it stands
+   * now has been read.
+   */
+  async #finish(
+    id: string,
+    options: { trigger: LearningTrigger; beforeSeq?: number },
+  ): Promise<ReviewResult> {
+    const result = await this.#review(id, options);
+    const waits =
+      'why' in result &&
+      (result.why === 'no-model' ||
+        result.why === 'budget' ||
+        result.why === 'cap' ||
+        result.why === 'plan-room' ||
+        (result.why === 'unreadable' && (await this.store.chat(id)).unread));
+    // A compaction read only the start: the rest is still to read.
+    if (!waits && options.beforeSeq === undefined) {
+      const chat = (await this.deps.chats()).find((c) => c.id === id);
+      if (chat) await this.store.setChat(id, { upTo: chat.updatedAt });
+    }
+    return result;
   }
 
   // ── One look ───────────────────────────────────────────────────────────
@@ -616,12 +645,16 @@ export class QuietLearning {
       state,
       after,
     }));
-    if (
-      entry.from.conversationId &&
-      (state === 'undone' || state === 'kept' || state === 'dismissed')
-    )
+    const chat = entry.from.conversationId;
+    if (chat && (state === 'undone' || state === 'kept' || state === 'dismissed'))
       await this.deps
-        .note(entry.from.conversationId, { type: 'learning.decided', entryId: entry.id, state })
+        .note(
+          chat,
+          // What the assistant remembered in the chat shows as a "Remembered" pill there.
+          entry.from.trigger === 'tool'
+            ? { type: 'memory.decided', memoryId: entry.after.id, kept: state === 'kept' }
+            : { type: 'learning.decided', entryId: entry.id, state },
+        )
         .catch(() => undefined);
     this.deps.changed?.();
     return next;
@@ -652,8 +685,12 @@ export class QuietLearning {
     this.deps.changed?.();
   }
 
-  /** A person kept a memory that waited: its record says so. */
+  /**
+   * A person kept a memory that waited, or put one back: its record says so,
+   * and words they put back themselves come off the never-list.
+   */
   async kept(memory: Memory): Promise<void> {
+    if (await this.store.forgive(memory.content)) this.deps.changed?.();
     const entry = await this.store.byMemory(memory.id);
     if (entry?.state !== 'waiting') return;
     await this.store.update(entry.id, ({ waits: _waits, ...e }) => ({

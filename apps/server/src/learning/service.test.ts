@@ -473,6 +473,68 @@ describe('QuietLearning (ADR 0087)', () => {
     expect(await learning.sweep()).toBe(0);
   });
 
+  it('a look that waited for a model is tried again an hour on, and not before', async () => {
+    const clock = { at: NOW };
+    const model: { current: ReturnType<typeof provider> | null } = { current: null };
+    const t = await setup(
+      [
+        {
+          summary: { id: 'c1' },
+          events: [you('a'), ...reply(), you('No, I meant b.'), ...reply()],
+        },
+      ],
+      { now: clock },
+    );
+    t.deps.model = async () =>
+      model.current
+        ? { engine: model.current.engine, model: 'cheap', complete: model.current.complete }
+        : undefined;
+    const learning = new QuietLearning(t.deps);
+    expect(await learning.sweep()).toBe(1);
+    expect(await learning.sweep()).toBe(0);
+    model.current = provider();
+    clock.at += 61 * MIN;
+    expect(await learning.sweep()).toBe(1);
+    expect(model.current.asked).toHaveLength(1);
+    expect((await learning.store.entries()).map((e) => e.after.content)).toEqual(['Prefers b']);
+  });
+
+  it('a chat read through isn’t picked again until something new happens', async () => {
+    const { learning, summaries } = await setup([
+      { summary: { id: 'c1' }, events: [you('What is the capital of Peru?'), ...reply()] },
+    ]);
+    expect(await learning.sweep()).toBe(1);
+    expect(await learning.sweep()).toBe(0);
+    const chat = summaries[0];
+    if (chat) chat.updatedAt += 1;
+    expect(await learning.sweep()).toBe(1);
+  });
+
+  it('putting a memory back takes its words off the never-list', async () => {
+    const { learning, memory } = await setup([]);
+    const tea = await memory.add({ content: 'Prefers tea', source: 'agent' });
+    await learning.forgotten(tea);
+    expect((await learning.store.never()).map((n) => n.text)).toEqual(['Prefers tea']);
+    await learning.kept(tea);
+    expect(await learning.store.never()).toEqual([]);
+  });
+
+  it('Undo on what the assistant remembered in a chat tells that chat’s pill', async () => {
+    const { learning, memory, notes } = await setup([]);
+    const saved = await memory.add({
+      content: 'Prefers tea',
+      source: 'agent',
+      conversationId: 'c1',
+    });
+    await learning.remembered(saved, { id: 'c1', title: 'Drinks' });
+    const [entry] = await learning.store.entries();
+    await learning.answer(entry?.id ?? '', 'undo');
+    expect(notes.at(-1)).toEqual({
+      id: 'c1',
+      event: { type: 'memory.decided', memoryId: saved.id, kept: false },
+    });
+  });
+
   it('survives a restart: how far it read is kept', async () => {
     const { learning, deps } = await setup([
       {

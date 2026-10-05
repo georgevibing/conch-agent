@@ -48,6 +48,8 @@ const ChatState = z.object({
   unread: z.number().int().nonnegative().optional(),
   /** "Don't learn from this chat". */
   quiet: z.boolean().optional(),
+  /** The chat's `updatedAt` when a look last finished: nothing new since means nothing to read. */
+  upTo: z.number().optional(),
   /** When it was last touched here (to keep the newest). */
   at: z.number().optional(),
 });
@@ -175,6 +177,19 @@ export class LearningStore {
       file.items = [item, ...file.items].slice(0, KEEP_NEVER);
       await writeJson(join(this.dir, 'never.json'), file);
       return item;
+    });
+  }
+
+  /** You put it back yourself: these words come off the list. */
+  forgive(text: string): Promise<boolean> {
+    const clean = text.replace(/\s+/g, ' ').trim().toLowerCase();
+    return this.#mutex.run(async () => {
+      const file = await this.#loadNever();
+      const before = file.items.length;
+      file.items = file.items.filter((i) => i.text.toLowerCase() !== clean);
+      if (file.items.length === before) return false;
+      await writeJson(join(this.dir, 'never.json'), file);
+      return true;
     });
   }
 
