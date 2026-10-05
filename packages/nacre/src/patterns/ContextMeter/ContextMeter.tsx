@@ -35,6 +35,8 @@ export interface ContextMeterProps extends Omit<ComponentProps<'button'>, 'child
   window?: number;
   /** What the running turn has used so far, all its requests together. */
   working?: number;
+  /** Of that, what it wrote; the rest it read (mostly the chat again, from cache). */
+  written?: number;
   /** A turn is running: the chip counts its tokens as they go. */
   running?: boolean;
   /** Summarise older messages now. Absent: compacting isn't offered here. */
@@ -54,6 +56,7 @@ export function ContextMeter({
   used,
   window,
   working,
+  written,
   running = false,
   onCompact,
   compacting = false,
@@ -65,11 +68,14 @@ export function ContextMeter({
   const percent = fillOf(used, window);
   const counting = running && working !== undefined && working > 0;
   if (used === undefined && !counting) return null;
-  const label = counting
-    ? tokensShort(working)
-    : percent !== undefined
+  // How full stays the chip's word while a message runs (the live tally is in the
+  // working line); it counts only when there's no window to measure against.
+  const label =
+    percent !== undefined
       ? `${percent}%`
-      : tokensShort(used ?? 0);
+      : counting
+        ? tokensShort(working)
+        : tokensShort(used ?? 0);
   const severity = percent === undefined ? 'normal' : severityOf(percent);
   const said = [
     percent !== undefined
@@ -92,14 +98,17 @@ export function ContextMeter({
               severity={severity}
             />
           }
-          data-counting={counting || undefined}
+          data-counting={(counting && percent === undefined) || undefined}
           data-severity={percent === undefined ? undefined : severity}
           className={cx(styles.chip, className)}
           aria-label={`${said}. Details`}
           {...props}
         >
           {/* Keyed by what it counts, so a new number settles in softly. */}
-          <span key={counting ? 'working' : 'fill'} className={styles.count}>
+          <span
+            key={counting && percent === undefined ? 'working' : 'fill'}
+            className={styles.count}
+          >
             {label}
           </span>
         </ComposerChip>
@@ -131,7 +140,17 @@ export function ContextMeter({
           </p>
           {counting && (
             <p className={styles.line}>
-              This message so far: <strong>{tokensShort(working)} tokens</strong>
+              {written !== undefined && written <= working ? (
+                <>
+                  This message so far: wrote <strong>{tokensShort(written)}</strong>, read{' '}
+                  <strong>{tokensShort(working - written)}</strong> tokens (mostly this chat again,
+                  each step)
+                </>
+              ) : (
+                <>
+                  This message so far: <strong>{tokensShort(working)} tokens</strong>
+                </>
+              )}
             </p>
           )}
           {onCompact && (

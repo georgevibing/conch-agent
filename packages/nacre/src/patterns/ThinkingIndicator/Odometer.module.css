@@ -1,0 +1,69 @@
+@layer nacre.components {
+  .odometer {
+    --odo-turn: 360ms;
+
+    display: inline-flex;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  /* A separator or a unit ("," "k" "m"): it settles in when it first appears. */
+  .char {
+    display: inline-block;
+    animation: odo-in var(--odo-turn) var(--nc-ease-out) both;
+  }
+
+  /* A digit is a window onto a turning strip of 0–9. */
+  .wheel {
+    position: relative;
+    display: inline-block;
+    overflow: hidden;
+    block-size: 1lh;
+    vertical-align: bottom;
+    /* Soft top and bottom edges, so a turning digit rolls out of sight rather than being cut. */
+    mask: linear-gradient(180deg, transparent, #000 22%, #000 78%, transparent);
+  }
+
+  .strip {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-start: 0;
+    display: flex;
+    flex-direction: column;
+    text-align: center;
+    transform: translateY(calc(var(--odo-digit) * -1lh));
+    transition: transform var(--odo-turn) var(--nc-ease-out);
+  }
+
+  .strip > span {
+    block-size: 1lh;
+  }
+
+  .sizer {
+    visibility: hidden;
+  }
+
+  @keyframes odo-in {
+    from {
+      opacity: 0;
+      transform: translateY(0.4em);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .strip {
+      transition: none;
+    }
+    .char {
+      animation: none;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .strip {
+    transition: none;
+  }
+
+  [data-nacre-motion='reduced'] .char {
+    animation: none;
+  }
+}

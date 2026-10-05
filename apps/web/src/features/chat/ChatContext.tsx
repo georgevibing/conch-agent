@@ -27,6 +27,7 @@ export function ChatContext({
       used={view.context?.used}
       window={view.context?.window ?? window}
       working={working}
+      written={view.working?.outputTokens}
       running={running}
       open={open}
       onOpenChange={setOpen}

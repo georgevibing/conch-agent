@@ -70,7 +70,7 @@ Once a few chats haven't been touched for a month, a note at the end of the list
 
 <kbd>esc</kbd> or the stop button stops the reply. It ends there at once with a **Stopped** mark (and how long it ran), and you can write your next message straight away: if the provider is still winding down, it waits a moment and then goes.
 
-While it works, the little ring beside the mode picker counts what the message has used so far, ticking up as it goes: **24k**, **1.2M**. The words above the reply change as it goes too, and say what it's doing after each step: reading a command's output, looking at a page, checking an edit.
+While it works, the words above the reply say what it's doing after each step: reading a command's output, looking at a page, checking an edit. Beside them, a quiet tally: how long this step has taken, and what the reply has written so far, rolling up as it grows (**12s · 42.3k tokens**). The clock starts again with each step, so a long job reads step by step rather than as one big timer; each finished step keeps its own time on its row. Once a long reply is done, **Worked 12m · 412k tokens** among its buttons says what the whole of it took. The ring beside the mode picker keeps saying how full the chat is, and pressing it while a message runs shows what it has written and read so far.
 
 ### Long jobs
 
@@ -175,7 +175,7 @@ A chat can go on as long as you like, with any model. Each model reads only so m
 - Before the start of a chat is summarised, Conch learns what you said there, as the [memory](./memory.md) tidy-up does.
 - If the model still says the chat is too long, Conch summarises more and sends your message again by itself. Only if that isn't enough does the chat offer a model that reads more at once, or a new chat.
 
-**How full is it?** The ring beside the mode picker fills as the chat grows, with the share beside it (**35%**). It turns amber from three quarters and red from nine tenths. Press it to see how much the model reads each time, out of how much, and **Compact now**.
+**How full is it?** The ring beside the mode picker fills as the chat grows, with the share beside it (**35%**). It measures against the model you chose: a model that reads a million tokens fills ten times slower than one that reads 100k. It turns amber from three quarters and red from nine tenths. Press it to see how much the model reads each time, out of how much, and **Compact now**.
 
 Type `/compact`, or press **Compact now**, to summarise the start now. Add what matters most to you, and the summary keeps it: `/compact the garden plan`. In <kbd>mod+k</kbd>, **Summarise the start of this chat** does the same. Claude Code and Codex keep their own memory of the chat, so there `/compact` goes to them, and they summarise it their own way.
 

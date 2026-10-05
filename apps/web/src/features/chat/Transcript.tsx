@@ -313,12 +313,18 @@ export const Transcript = memo(function Transcript({
     view.status !== 'awaiting-permission' &&
     !handingOff;
   const startedAt = view.turnStartedAt ?? pending[0]?.at;
+  // What the reply has written so far this turn: the wait's tally climbs with it.
+  const written = view.working?.outputTokens;
   const wait: Wait = {
     verbs: verbsFor(prompt, 'starting', { seed: `${prompt}:${startedAt ?? ''}` }),
     startedAt,
+    tokens: written,
     srLabel: `${name} is thinking`,
   };
   const afterTool: Wait = {
+    // The clock counts from the last step's end: this stretch, not the whole turn.
+    clockFrom: last ? stepEndedAt(last) : undefined,
+    tokens: written,
     // Words for what just ran, in an order of their own for each step.
     verbs: verbsFor(prompt, 'after-tool', {
       seed: `${startedAt ?? ''}:${items.length}`,
@@ -400,7 +406,12 @@ export const Transcript = memo(function Transcript({
         <AssistantMessage
           item={block.item}
           name={name}
-          wait={busy ? wait : undefined}
+          // A reply that picks up after its steps counts its own stretch.
+          wait={
+            busy
+              ? { ...wait, clockFrom: block.item.continuation ? block.item.startedAt : undefined }
+              : undefined
+          }
           entrance={!(running && (position.get(block.item) ?? -1) > turnStart)}
           {...(rest && {
             attached: (
@@ -618,4 +629,10 @@ function familyAfter(item: TranscriptItem | undefined): ToolFamily {
     default:
       return 'other';
   }
+} /** When a step of the reply finished, for the clock of the stretch after it. */
+function stepEndedAt(item: TranscriptItem): number | undefined {
+  if (item.kind === 'tool')
+    return item.durationMs === undefined ? undefined : item.startedAt + item.durationMs;
+  if (item.kind === 'assistant') return item.endedAt ?? item.thoughtEndedAt ?? item.textAt;
+  return 'at' in item && typeof item.at === 'number' ? item.at : undefined;
 }

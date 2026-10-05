@@ -223,11 +223,32 @@
   }
 
   .elapsed {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.3em;
+    flex-shrink: 0;
+    white-space: nowrap;
     margin-inline-start: var(--nc-space-1);
     font-size: 0.86em;
     font-variant-numeric: tabular-nums;
     color: var(--nc-text-subtle);
     animation: nc-fade-in var(--nc-duration-slower) var(--nc-ease-out) both;
+  }
+
+  .sep {
+    opacity: 0.6;
+  }
+
+  /* After the turn: what it took, quiet among the reply's actions. */
+  .worked {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+    padding-inline: var(--nc-space-2);
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-subtle);
+    white-space: nowrap;
   }
 
   /* ── Trail: the newest words of the model's reasoning drift past ──── */

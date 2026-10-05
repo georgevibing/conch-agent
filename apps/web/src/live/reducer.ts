@@ -355,6 +355,8 @@ export type TranscriptItem =
       usage?: Usage;
       /** What it cost, the way its provider charges (ADR 0079). */
       cost?: TurnCost;
+      /** How long it ran, start to end, when this page saw it start. */
+      ranMs?: number;
       /** Which provider answered, and with which model. */
       engine?: EngineId;
       model?: string;
@@ -824,6 +826,8 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             ...(event.restarted && { restarted: event.restarted }),
             usage: event.usage,
             ...(event.cost && { cost: event.cost }),
+            // How long the turn ran, for "Worked 12m" under its reply.
+            ...(view.turnStartedAt !== undefined && { ranMs: event.at - view.turnStartedAt }),
             engine: event.engine,
             model: event.model,
           },

@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useEffect, useState } from 'react';
 
 import { Stack } from '../../components/Stack';
-import { ThinkingIndicator } from './ThinkingIndicator';
+import { ThinkingIndicator, WorkedFor } from './ThinkingIndicator';
 
 const meta = {
   title: 'Patterns/Chat/ThinkingIndicator',
@@ -70,6 +70,42 @@ export const Anticipation: Story = {
           verbs={['Taking that in', 'Reading the results', 'Piecing it together']}
           srLabel="Claude is working"
         />
+      </Stack>
+    );
+  },
+};
+
+/**
+ * A long job, as it goes: the clock counts this stretch (since the last step
+ * ended), not the whole turn, and what it has written climbs beside it, each
+ * digit rolling into place as it changes.
+ */
+export const AtWork: Story = {
+  render: () => {
+    const [{ turn, step }] = useState(() => ({
+      turn: Date.now() - 75 * 60_000,
+      step: Date.now() - 4_000,
+    }));
+    const [tokens, setTokens] = useState(41_200);
+    useEffect(() => {
+      const id = setInterval(
+        () => setTokens((t) => t + 380 + Math.round(Math.random() * 900)),
+        1400,
+      );
+      return () => clearInterval(id);
+    }, []);
+    return (
+      <Stack gap={6}>
+        <ThinkingIndicator
+          verbs={['Lining up what’s next', 'Checking the result', 'Reading the output']}
+          startedAt={turn}
+          clockFrom={step}
+          tokens={tokens}
+          srLabel="Conch is working"
+          orb
+          size="sm"
+        />
+        <WorkedFor ms={75 * 60_000 + 55_000} tokens={412_000} />
       </Stack>
     );
   },

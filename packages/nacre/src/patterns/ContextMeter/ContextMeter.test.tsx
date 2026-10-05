@@ -35,11 +35,20 @@ describe('ContextMeter', () => {
   it('counts what a running turn uses, and holds Compact until it’s done', async () => {
     const user = userEvent.setup();
     renderNacre(
-      <ContextMeter used={84_000} window={200_000} working={30_400} running onCompact={vi.fn()} />,
+      <ContextMeter
+        used={84_000}
+        window={200_000}
+        working={30_400}
+        written={1_200}
+        running
+        onCompact={vi.fn()}
+      />,
     );
     const chip = screen.getByRole('button', { name: /this message has used 30k tokens so far/ });
-    expect(chip).toHaveTextContent('30k');
+    // How full stays its word while it works; the tally is in the panel (and the working line).
+    expect(chip).toHaveTextContent('42%');
     await user.click(chip);
+    expect(screen.getByText(/wrote/)).toHaveTextContent('wrote 1.2k, read 29k tokens');
     expect(screen.getByRole('button', { name: 'Compact now' })).toBeDisabled();
     expect(screen.getByText('Once this message is done.')).toBeVisible();
   });

@@ -15,6 +15,7 @@ import {
   TaintNotice,
   Text,
   ThinkingIndicator,
+  WorkedFor,
   ToolCall,
   toast,
   TurnCostTag,
@@ -76,6 +77,9 @@ function thoughtFor(item: Of<'assistant'>): string {
   return `Thought for ${s}s`;
 }
 
+/** A turn this long says, once it's over, what it took. */
+const WORKED_FROM_MS = 20_000;
+
 const ArrivedLive = createContext(false);
 
 /**
@@ -114,6 +118,10 @@ export function Arrival({
 export interface Wait {
   verbs: readonly string[];
   startedAt?: number;
+  /** When this stretch began (the last step's end): its clock counts from here. */
+  clockFrom?: number;
+  /** What the reply has written so far this turn. */
+  tokens?: number;
   srLabel: string;
 }
 
@@ -131,6 +139,8 @@ export function Waiting({
       verbs={wait.verbs}
       srLabel={wait.srLabel}
       startedAt={wait.startedAt}
+      clockFrom={wait.clockFrom}
+      tokens={wait.tokens}
       trail={trail}
       orb={Boolean(compact)}
       size={compact ? 'sm' : 'md'}
@@ -225,6 +235,10 @@ export function AssistantMessage({
             <ReadAloud text={said} />
             <CopyButton value={said} label="Copy reply" />
             {ended?.cost && <TurnCostTag cost={ended.cost} tokens={ended.usage} />}
+            {/* A long turn says what it took, once: the live clock counted each stretch. */}
+            {ended?.ranMs !== undefined && ended.ranMs >= WORKED_FROM_MS && (
+              <WorkedFor ms={ended.ranMs} tokens={ended.usage?.outputTokens} />
+            )}
           </>
         ) : undefined
       }

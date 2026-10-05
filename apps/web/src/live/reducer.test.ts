@@ -57,6 +57,19 @@ describe('transcript reducer', () => {
     expect(compacted.context).toBeUndefined();
   });
 
+  it('keeps how long a turn ran, for what it took under its reply', () => {
+    const view = reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: 'Fix the tests' },
+        { type: 'turn.usage', usage: { inputTokens: 1_000, outputTokens: 40 } },
+        { type: 'turn.completed', outcome: 'success' } as ConversationEventInput,
+      ),
+    );
+    const end = view.items.findLast((i) => i.kind === 'turn-end');
+    // Asked at 1000, done at 1200.
+    expect(end).toMatchObject({ kind: 'turn-end', ranMs: 200 });
+  });
+
   it('streams deltas into one assistant message and closes it', () => {
     const view = reduceAll(
       log(

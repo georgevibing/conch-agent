@@ -2,7 +2,14 @@ import { screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { expectAccessible, renderNacre } from '../../test/render';
-import { formatElapsed, ThinkingIndicator, verbAt } from './ThinkingIndicator';
+import {
+  formatElapsed,
+  formatWorked,
+  ThinkingIndicator,
+  tokensLive,
+  verbAt,
+  WorkedFor,
+} from './ThinkingIndicator';
 
 describe('ThinkingIndicator', () => {
   it('is a polite status with its label', async () => {
@@ -13,13 +20,41 @@ describe('ThinkingIndicator', () => {
   });
 
   it('shows elapsed time', () => {
-    renderNacre(<ThinkingIndicator startedAt={Date.now() - 12_000} />);
-    expect(screen.getByText('12s')).toBeInTheDocument();
+    const { container } = renderNacre(<ThinkingIndicator startedAt={Date.now() - 12_000} />);
+    expect(container.querySelector('[data-value]')).toHaveAttribute('data-value', '12s');
+  });
+
+  it('counts this stretch, not the whole turn, and what it has written', () => {
+    const now = Date.now();
+    const { container } = renderNacre(
+      <ThinkingIndicator startedAt={now - 75 * 60_000} clockFrom={now - 64_000} tokens={4_200} />,
+    );
+    const shown = [...container.querySelectorAll('[data-value]')].map((e) =>
+      e.getAttribute('data-value'),
+    );
+    // This stretch's minute, never the turn's 75; and what it wrote, every token.
+    expect(shown).toEqual(['1m 04s', '4.2k']);
+    expect(container).toHaveTextContent('tokens');
   });
 
   it('formats elapsed durations', () => {
     expect(formatElapsed(900)).toBe('0s');
     expect(formatElapsed(65_000)).toBe('1m 05s');
+    expect(formatElapsed(76 * 60_000)).toBe('1h 16m');
+    expect(tokensLive(887)).toBe('887');
+    expect(tokensLive(42_340)).toBe('42.3k');
+    expect(tokensLive(412_699)).toBe('412.6k');
+    expect(tokensLive(1_234_567)).toBe('1.2M');
+    expect(formatWorked(42_000)).toBe('42s');
+    expect(formatWorked(192_000)).toBe('3m 12s');
+    expect(formatWorked(75 * 60_000 + 55_000)).toBe('1h 15m');
+  });
+
+  it('says what a long turn took, once it’s over', () => {
+    renderNacre(<WorkedFor ms={12 * 60_000} tokens={412_000} />);
+    expect(screen.getByLabelText('Worked for 12m, wrote 412k tokens')).toHaveTextContent(
+      'Worked 12m · 412k tokens',
+    );
   });
 
   it('announces a stable label while verbs change, and shows the thought trail', async () => {

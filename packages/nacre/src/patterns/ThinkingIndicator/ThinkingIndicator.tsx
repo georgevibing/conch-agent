@@ -7,7 +7,9 @@ import {
 } from 'react';
 
 import { cx } from '../../utils/cx';
+import { tokensShort } from '../ContextMeter/ContextMeter';
 import { useSmoothText } from '../StreamingText/useSmoothText';
+import { Odometer, useCountUp } from './Odometer';
 import styles from './ThinkingIndicator.module.css';
 
 export interface ThinkingIndicatorProps extends Omit<ComponentProps<'div'>, 'children'> {
@@ -24,8 +26,16 @@ export interface ThinkingIndicatorProps extends Omit<ComponentProps<'div'>, 'chi
   trail?: string;
   /** Optional secondary detail shown after the label. */
   detail?: ReactNode;
-  /** Epoch ms when work started — a quiet elapsed timer fades in after a few seconds. */
+  /** Epoch ms when work started: the words take turns from here. */
   startedAt?: number;
+  /**
+   * When this stretch of the work began (the last step's end), epoch ms. The
+   * quiet clock counts this stretch, not the whole turn, so a long job reads
+   * "12s", "1m 04s" step after step. Defaults to `startedAt`.
+   */
+  clockFrom?: number;
+  /** What the reply has written so far this turn: it climbs, rolling, as it grows. */
+  tokens?: number;
   size?: 'sm' | 'md';
   /** Show the swirling pearl. Turn off when something nearby (the message mark) already moves. */
   orb?: boolean;
@@ -37,7 +47,32 @@ export function formatElapsed(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
   if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
-  return `${m}m ${String(s % 60).padStart(2, '0')}s`;
+  if (m < 60) return `${m}m ${String(s % 60).padStart(2, '0')}s`;
+  return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
+}
+
+/**
+ * The live tally in words a person reads at a glance: every token under a
+ * thousand ("887"), then one decimal ("42.3k", "412.6k", "1.2M"), so the last
+ * wheel still turns as it climbs.
+ */
+export function tokensLive(count: number): string {
+  const n = Math.max(0, Math.round(count));
+  if (n < 1_000) return String(n);
+  const [value, unit] = n < 1_000_000 ? [n / 1_000, 'k'] : [n / 1_000_000, 'M'];
+  return `${(Math.floor(value * 10) / 10).toFixed(1)}${unit}`;
+}
+
+/** The written count, climbing to each new value and rolling as it goes. */
+function Written({ tokens, after }: { tokens: number; after: boolean }) {
+  const shown = useCountUp(tokens);
+  return (
+    <>
+      {after && <span className={styles.sep}>·</span>}
+      <Odometer value={tokensLive(shown)} />
+      <span>tokens</span>
+    </>
+  );
 }
 
 function useNow(enabled: boolean) {
@@ -168,6 +203,8 @@ export function ThinkingIndicator({
   trail,
   detail,
   startedAt,
+  clockFrom,
+  tokens,
   size = 'md',
   orb = true,
   srLabel,
@@ -180,7 +217,10 @@ export function ThinkingIndicator({
   // How long the wait has gone on when this mounts: the bubbles and the orb keep
   // that time, so an indicator that replaces another carries on instead of starting over.
   const [age] = useState(() => (startedAt === undefined ? 0 : Math.max(0, Date.now() - startedAt)));
-  const elapsed = startedAt === undefined ? undefined : now - startedAt;
+  const from = clockFrom ?? startedAt;
+  const elapsed = from === undefined ? undefined : now - from;
+  const showClock = elapsed !== undefined && elapsed >= 3000;
+  const showTokens = tokens !== undefined && tokens > 0;
   const cycling = current !== undefined;
 
   return (
@@ -215,13 +255,54 @@ export function ThinkingIndicator({
           <i />
         </span>
         {detail != null && <span className={styles.detail}>{detail}</span>}
-        {elapsed !== undefined && elapsed >= 3000 && (
+        {(showClock || showTokens) && (
+          // How long this stretch has taken, and what it has written: a quiet,
+          // living tally beside the words, never a giant timer.
           <span className={styles.elapsed} aria-hidden>
-            {formatElapsed(elapsed)}
+            {showClock && elapsed !== undefined && <Odometer value={formatElapsed(elapsed)} />}
+            {showTokens && <Written tokens={tokens} after={showClock} />}
           </span>
         )}
       </div>
       {trail && <Trail text={trail} />}
     </div>
+  );
+}
+
+/** "42s", "3m 12s", "12m", "1h 16m": how long a whole turn took, said plainly. */
+export function formatWorked(ms: number): string {
+  const s = Math.max(1, Math.round(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 10) return `${m}m ${String(s % 60).padStart(2, '0')}s`;
+  if (m < 60) return `${m}m`;
+  return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
+}
+
+export interface WorkedForProps extends Omit<ComponentProps<'span'>, 'children'> {
+  /** How long the turn ran. */
+  ms: number;
+  /** What it wrote, all its steps together. */
+  tokens?: number;
+}
+
+/**
+ * Once a long turn is over, what it took, in one quiet line among the reply's
+ * actions: "Worked 12m · 412k tokens". The live clock counted each stretch;
+ * this is the whole of it.
+ */
+export function WorkedFor({ ms, tokens, className, ...props }: WorkedForProps) {
+  const time = formatWorked(ms);
+  const written = tokens ? `${tokensShort(tokens)} tokens` : undefined;
+  return (
+    <span
+      className={cx(styles.worked, className)}
+      aria-label={`Worked for ${time}${written ? `, wrote ${written}` : ''}`}
+      {...props}
+    >
+      Worked {time}
+      {written && <span className={styles.sep}> · </span>}
+      {written}
+    </span>
   );
 }
