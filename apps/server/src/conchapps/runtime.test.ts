@@ -428,10 +428,11 @@ onMessage(async (m) => {
   await t('the inspector', async () => { const inspector = await import('node:inspector'); inspector.open(0); });
   await t('eval', () => eval('1'));
   const seen = JSON.stringify({ env: process.env, argv: process.argv, execArgv: process.execArgv });
-  results.leaks = seen.includes(m.settings.apiKey) || seen.includes('CONCH_TEST_GATEWAY_SECRET');
+  results.leaks = seen.includes(m.settings.apiKey) || seen.includes('CONCH_TEST_GATEWAY_SECRET')
+    || seen.includes('gateway-only') || seen.includes(':0x4D2:0x162E');
   // Windows needs SYSTEMROOT. CoreFoundation may add its encoding cache on macOS
   // even with env: {} (Apple CFStringEncodings.c, _CFStringGetUserDefaultEncoding).
-  // The real host's hidden process.env is checked separately above.
+  // The parent sentinel verifies that its value was not inherited.
   const systemKey = (k) =>
     (process.platform === 'win32' && k.toUpperCase() === 'SYSTEMROOT') ||
     (process.platform === 'darwin' && k === '__CF_USER_TEXT_ENCODING');
@@ -442,8 +443,14 @@ onMessage(async (m) => {
 `;
 
 describe('the permission model holds, whatever the code in the process', () => {
-  it('reads only its folder and the runtime, writes only its data, runs nothing, and gets no environment', async () => {
-    process.env.CONCH_TEST_GATEWAY_SECRET = 'gateway-only';
+  it('reads only its folder and the runtime, writes only its data, runs nothing, and inherits no gateway environment', async () => {
+    vi.stubEnv('CONCH_TEST_GATEWAY_SECRET', 'gateway-only');
+    // A valid triple for this UID survives if inherited. macOS replaces
+    // malformed values itself, which would conceal a leak in this check.
+    vi.stubEnv(
+      '__CF_USER_TEXT_ENCODING',
+      `0x${process.getuid?.().toString(16) ?? '0'}:0x4D2:0x162E`,
+    );
     try {
       const app = await makeApp('export const tools = {};\n');
       const runtimeDir = join(app.base, 'the runtime');
@@ -487,7 +494,7 @@ describe('the permission model holds, whatever the code in the process', () => {
       );
       expect(await readdir(app.appDir)).toEqual(['tools.mjs']);
     } finally {
-      delete process.env.CONCH_TEST_GATEWAY_SECRET;
+      vi.unstubAllEnvs();
     }
   });
 
