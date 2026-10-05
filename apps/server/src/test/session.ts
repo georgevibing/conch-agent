@@ -57,7 +57,13 @@ export type Gateway = Awaited<ReturnType<typeof gateway>>;
  * (a skill held to its own list, ADR 0047) is answered as a person would, with
  * Deny, so the reply still finishes.
  */
-export async function chat(services: Services, text: string, attachments: string[] = []) {
+export async function chat(
+  services: Services,
+  text: string,
+  attachments: string[] = [],
+  /** Carry on this chat rather than start a new one. */
+  conversationId?: string,
+) {
   const done = new Promise<void>((resolve) => {
     const off = services.conversations.events.on((event: ServerEvent) => {
       if (event.type !== 'conversation.event') return;
@@ -75,6 +81,7 @@ export async function chat(services: Services, text: string, attachments: string
     });
   });
   const convo = await services.conversations.send({
+    ...(conversationId && { conversationId }),
     clientMessageId: `m${Math.random()}`,
     text,
     attachments,
@@ -317,6 +324,30 @@ export async function useConch(g: Gateway) {
   if (!('offered' in learned)) throw new Error(`no offer: ${learned.why}`);
   // …and a skill used by name, which the tidy shelf counts.
   await chat(services, `/${String(skill.name)} for March`);
+  // What a chat taught Conch once it went quiet (ADR 0087): a correction, kept with where it
+  // came from; a move, with what used to be true kept, dated; and one taken back for good.
+  await ok(
+    await app.inject({
+      method: 'POST',
+      url: '/api/memories',
+      payload: { content: 'Lives in Berlin' },
+    }),
+  );
+  const scripts = await chat(services, 'Write me a script to rename my photos');
+  await chat(services, 'No, I meant TypeScript. Also, I moved to Lisbon.', [], scripts.id);
+  const quiet = await services.learning.review(scripts.id, { trigger: 'idle' });
+  if (!('learned' in quiet) || quiet.learned.length < 2)
+    throw new Error(`nothing learned: ${JSON.stringify(quiet)}`);
+  const preference = quiet.learned.find((e) => e.change === 'added');
+  if (preference) await services.learning.answer(preference.id, 'undo');
+  // …and what learning may spend, a person's choice.
+  await ok(
+    await app.inject({
+      method: 'PUT',
+      url: '/api/learning/spending',
+      payload: { limitUsd: 2 },
+    }),
+  );
   // A thumbnail of a page the agent looked at, as the browser keeps them.
   await services.browser.saveShot(convo.id, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
   // …and the tabs that chat had open, kept to open again.

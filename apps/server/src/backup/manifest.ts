@@ -41,7 +41,7 @@ export interface BackupRule {
    * Restored by merging with what's here rather than replacing it (and never
    * removed when the backup has none): `usage` keeps money already spent.
    */
-  merge?: 'usage' | 'tasks' | 'routine-spend';
+  merge?: 'usage' | 'tasks' | 'routine-spend' | 'learning-spend';
   /** Why, in one line (the ADR quotes these). */
   why: string;
 }
@@ -253,6 +253,25 @@ export const RULES: readonly BackupRule[] = [
     why: 'What your routines spent each month, and the monthly limit you chose (ADR 0057). Merged on restore: money already spent stays counted.',
   },
   { match: 'memory/*.md', class: 'kept', group: 'memory', why: 'Your memories, one file each.' },
+  {
+    match: 'memory/superseded/*.md',
+    class: 'kept',
+    group: 'memory',
+    why: 'Memories that stopped being true, each with when, kept for questions about before and for Undo (ADR 0087).',
+  },
+  {
+    match: 'learning/*.json',
+    class: 'kept',
+    group: 'memory',
+    why: 'What Conch learned from your chats and where (for Why? and Undo), what you told it never to learn again, and how far it read each chat (ADR 0087).',
+  },
+  {
+    match: 'learning-spend.json',
+    class: 'kept',
+    group: 'memory',
+    merge: 'learning-spend',
+    why: 'What learning from your chats spent each month, and the limit you chose (ADR 0087). Merged on restore: money already spent stays counted.',
+  },
   {
     match: 'artifacts/access.json',
     class: 'kept',
@@ -646,7 +665,7 @@ export function groupsFor(options: { chats: boolean; secrets: boolean }): Backup
  * `commands/` keeps the starter commands from coming back.
  */
 export const GROUP_DIRS: Partial<Record<BackupGroup, string[]>> = {
-  memory: ['memory'],
+  memory: ['memory', 'learning'],
   commands: ['commands'],
   routines: ['routines'],
   skills: ['skills'],

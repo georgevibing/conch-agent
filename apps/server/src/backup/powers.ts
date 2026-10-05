@@ -13,6 +13,7 @@
  */
 import { POWER_TEXT_MAX, type BackupPower } from '@conch/protocol';
 
+import { DEFAULT_LEARNING_USD } from '../learning/spend';
 import { DEFAULT_MONTHLY_USD } from '../routines/spend';
 
 /** The files the preview reads (routine files, not their run history). */
@@ -27,6 +28,7 @@ export function previewReads(path: string): boolean {
     path === 'skills.trust.json' ||
     path === 'artifacts/access.json' ||
     path === 'routine-spend.json' ||
+    path === 'learning-spend.json' ||
     /^routines\/[^/]+(?<!\.runs)\.json$/.test(path) ||
     /^routines\/when\/[^/]+(?<!\.seen)\.json$/.test(path)
   );
@@ -188,6 +190,14 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
   const limit = spend?.limit;
   if (limit === null || (typeof limit === 'number' && limit > DEFAULT_MONTHLY_USD))
     powers.push({ kind: 'routines-spend', limitUsd: typeof limit === 'number' ? limit : null });
+
+  // Learning from your chats allowed to spend more than Conch would by itself (ADR 0087).
+  const learning = json(read, 'learning-spend.json')?.limit;
+  if (learning === null || (typeof learning === 'number' && learning > DEFAULT_LEARNING_USD))
+    powers.push({
+      kind: 'learning-spend',
+      limitUsd: typeof learning === 'number' ? learning : null,
+    });
 
   const browser = json(read, 'browser.json');
   const sites = (Array.isArray(browser?.sites) ? browser.sites : [])

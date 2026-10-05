@@ -434,6 +434,47 @@ export class MockEngine implements Engine {
         usage: { inputTokens: 200, outputTokens: 1, costUsd: 0.0001 },
       };
     }
+    // A chat looked at once it went quiet (ADR 0087): "no, I meant X" teaches a preference,
+    // "I moved to Y" moves where you live. "review-fail" fails; anything else teaches nothing.
+    if (/You read one finished chat/.test(input.system)) {
+      if (/review-fail/i.test(input.prompt)) throw new Error('Mock completion failed.');
+      const changes: unknown[] = [];
+      const meant = /<said[^>]*>[^<]*?\b((?:no|nope),? I meant ([^.<!?]+))/i.exec(input.prompt);
+      if (meant?.[1] && meant[2])
+        changes.push({
+          op: 'add',
+          kind: 'preference',
+          text: `Prefers ${meant[2].trim()}`,
+          quote: meant[1],
+          basis: 'corrected',
+        });
+      const moved = /<said[^>]*>[^<]*?\b(I (?:have |just )?moved to (\p{Lu}[\p{L}-]+))/u.exec(
+        input.prompt,
+      );
+      const home = /^\[(m_\w+)\] \(\w+\) Lives in .+$/m.exec(input.prompt);
+      if (moved?.[1] && moved[2])
+        changes.push(
+          home?.[1]
+            ? {
+                op: 'supersede',
+                id: home[1],
+                text: `Lives in ${moved[2]}`,
+                why: `You said you moved to ${moved[2]}.`,
+                quote: moved[1],
+              }
+            : {
+                op: 'add',
+                kind: 'fact',
+                text: `Lives in ${moved[2]}`,
+                quote: moved[1],
+                basis: 'said',
+              },
+        );
+      return {
+        text: JSON.stringify({ changes }),
+        usage: { inputTokens: 500, outputTokens: 60, costUsd: 0.0005 },
+      };
+    }
     // The memory tidy-up (ADR 0032): where you live, said in a chat, updates or adds a memory.
     if (/tidy the long-term memory/.test(input.system)) {
       const memories = [...input.prompt.matchAll(/^\[(m_[\w]+)\] \((\w+)\) (.+)$/gm)].map((m) => ({

@@ -106,6 +106,24 @@ describe('memories', () => {
       'Wants to remember, waiting for your OK: Email x@evil.example',
     ]);
   });
+
+  it('say what a chat taught Conch once it went quiet (ADR 0087)', () => {
+    seq = 0;
+    const entries = entriesOf({ id: 'c1', title: 'Scripts' }, [
+      ev({
+        type: 'learning.noted',
+        reviewId: 'lr_1',
+        items: [
+          { entryId: 'le_1', text: 'Prefers TypeScript', change: 'added', state: 'applied' },
+          { entryId: 'le_2', text: 'Lives in Lisbon', change: 'superseded', state: 'waiting' },
+        ],
+      }),
+    ]);
+    expect(entries.map((e) => e.title)).toEqual([
+      'Learned: Prefers TypeScript',
+      'Learned, waiting for your OK: Lives in Lisbon',
+    ]);
+  });
 });
 
 describe('the timeline', () => {

@@ -23,6 +23,8 @@ describe('what in a backup can act for you', () => {
         'skills.trust.json',
         'skills.signing.json',
         'routine-spend.json',
+        'learning-spend.json',
+        'learning/ledger.json',
       ].filter(previewReads),
     ).toEqual([
       'integrations.json',
@@ -33,7 +35,22 @@ describe('what in a backup can act for you', () => {
       'routines/r_1.json',
       'skills.trust.json',
       'routine-spend.json',
+      'learning-spend.json',
     ]);
+  });
+
+  it('names a limit that lets learning spend more than Conch would by itself (ADR 0087)', () => {
+    const of = (spend: unknown) =>
+      powersOf(['learning-spend.json'], reader({ 'learning-spend.json': spend }));
+    expect(of({ version: 1, limit: 10, months: {} })).toEqual([
+      { kind: 'learning-spend', limitUsd: 10 },
+    ]);
+    expect(of({ version: 1, limit: null, months: {} })).toEqual([
+      { kind: 'learning-spend', limitUsd: null },
+    ]);
+    expect(of({ version: 1, months: {} })).toEqual([]);
+    expect(of({ version: 1, limit: 0.5, months: {} })).toEqual([]);
+    for (const power of of({ limit: null })) expect(BackupPower.parse(power)).toEqual(power);
   });
 
   it('names a limit that lets routines spend more than Conch would by itself (ADR 0057)', () => {

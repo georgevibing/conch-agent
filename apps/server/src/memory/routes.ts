@@ -27,7 +27,7 @@ export function registerLearningRoutes(
     getMeaningModel: (languages: string[]) => Promise<void>;
     meaningState: () => { getting?: number; problem?: string };
     /** A memory a chat learned was kept: the chat's own log says so. */
-    decided?: (memory: { id: string; conversationId?: string }, kept: boolean) => Promise<void>;
+    decided?: (memory: Memory, kept: boolean) => Promise<void>;
   },
 ): void {
   const { store, index, tidy, suggester } = deps;

@@ -22,6 +22,7 @@ import {
   Id,
   LoginCodeBody,
   type Health,
+  type Memory,
   PROTOCOL_VERSION,
   CreateRoutineBody,
   EngineId,
@@ -91,6 +92,7 @@ import { registerFirstJobRoutes } from './onboarding/first-job';
 import { registerBackgroundRoutes } from './background/routes';
 import { registerImportRoutes } from './import/routes';
 import { registerLearningRoutes } from './memory/routes';
+import { registerQuietLearningRoutes } from './learning/routes';
 import { ProfileUnavailable, understandProfile } from './profile/understand';
 import { registerBackupRoutes } from './backup/routes';
 import { registerBrowserRoutes } from './browser/routes';
@@ -221,14 +223,21 @@ export async function buildApp(services: Services) {
     () => services.trayInfo(),
   );
   // Keep and Undo on a memory a chat learned are written into that chat, so it shows them after a reload.
-  const memoryDecided = async (memory: { id: string; conversationId?: string }, kept: boolean) => {
+  const memoryDecided = async (memory: Memory, kept: boolean) => {
     if (memory.conversationId)
       await services.conversations.note(memory.conversationId, {
         type: 'memory.decided',
         memoryId: memory.id,
         kept,
       });
+    // What Conch learned keeps its record (ADR 0087): kept, or never learned again.
+    if (kept) await services.learning.kept(memory);
+    else await services.learning.forgotten(memory);
   };
+  registerQuietLearningRoutes(app, {
+    learning: services.learning,
+    spend: services.learningSpend,
+  });
   registerLearningRoutes(app, {
     decided: memoryDecided,
     store: services.memory,

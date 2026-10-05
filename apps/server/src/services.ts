@@ -145,6 +145,7 @@ import { MemoryIndex } from './memory/index';
 import { OnDeviceModel } from './memory/ondevice';
 import { cheapModel, MeaningModel, yourRequests, yourWords } from './memory/learning';
 import { registerLearningDoctor } from './memory/doctor';
+import { registerQuietLearningDoctor } from './learning/doctor';
 import { QuietLearning } from './learning/service';
 import { LearningSpend } from './learning/spend';
 import { MemoryStore } from './memory/store';
@@ -1077,7 +1078,10 @@ export class Services {
       search: (query, limit) => this.memoryIndex.search(query, limit),
       spend: this.learningSpend,
       chats: () => this.conversations.list(),
-      events: (id) => conversationStore.events(id),
+      // What's happened, not what's reached the disk yet.
+      events: async (id) =>
+        (await this.conversations.detail(id).catch(() => undefined))?.events ??
+        conversationStore.events(id),
       // The provider that answered the chat has seen it already; else one on this computer.
       model: async (id) => {
         const engine = id ? this.providers.engineFor(id) : this.engine();
@@ -1130,6 +1134,7 @@ export class Services {
       }
     });
     this.learning.start();
+    registerQuietLearningDoctor(this.doctor, this.learning);
     void (this.mockVendor?.start() ?? Promise.resolve()).then(() => this.integrations.start());
     this.googleApps.start();
     this.activity = new Activity({

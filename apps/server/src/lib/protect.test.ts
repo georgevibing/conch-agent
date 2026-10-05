@@ -14,6 +14,15 @@ describe('what the assistant’s own tools never touch', () => {
     expect(touchesProtected({ file_path: join(home, 'tray', 'token') }, paths)).toBe(true);
   });
 
+  it('keeps out what Conch learned, what it won’t learn again, and what learning may spend (ADR 0087)', () => {
+    const home = join('/home', 'ada', '.conch');
+    const paths = protectedPaths(home);
+    expect(touchesProtected({ command: `rm ${join(home, 'learning', 'never.json')}` }, paths)).toBe(
+      true,
+    );
+    expect(touchesProtected({ file_path: join(home, 'learning-spend.json') }, paths)).toBe(true);
+  });
+
   it('keeps out where Conch is reached: the address, and the names the hello link goes to', () => {
     const home = join('/home', 'ada', '.conch');
     const paths = protectedPaths(home);

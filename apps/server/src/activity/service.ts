@@ -242,6 +242,19 @@ export function entriesOf(
           memory: { id: e.memoryId, content: e.content, action: 'forgotten' },
         });
         break;
+      // What Conch learned from the chat once it went quiet (ADR 0087): one row each.
+      case 'learning.noted':
+        e.items.forEach((item, i) =>
+          out.push({
+            ...base,
+            id: `${chat.id}:${e.seq}:${i}`,
+            at: e.at,
+            kind: 'memory',
+            title: `${item.state === 'waiting' ? 'Learned, waiting for your OK' : 'Learned'}: ${item.text.slice(0, 120)}`,
+            status: 'done',
+          }),
+        );
+        break;
       default:
         break;
     }
