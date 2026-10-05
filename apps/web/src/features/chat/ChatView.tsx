@@ -61,6 +61,7 @@ import { useNeed } from '../setup/useNeed';
 import { UsageComposerNotice } from '../usage/UsageComposerNotice';
 import { ChatSpend } from '../spend/Spend';
 import styles from './ChatView.module.css';
+import { ChatContext } from './ChatContext';
 import { attachmentUrl } from './uploads';
 import { composerHistory, loadDraft, rememberSent, saveDraft } from './composer';
 
@@ -822,6 +823,12 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
             {(engine?.state === 'ready' || chosenReady) && (
               <ComposerControls turn={turn} name={name} />
             )}
+            <ChatContext
+              view={view}
+              window={turn.model?.context}
+              running={running}
+              {...(conversationId && { onCompact: () => slash.compact() })}
+            />
             <ChatSpend conversationId={conversationId} />
             <Tooltip content={app?.workspace ?? ''}>
               <ComposerChip

@@ -34,6 +34,7 @@ import type {
   SpendLimitKind,
   SpendModel,
   TurnCost,
+  ContextFill,
   Usage,
   MemoryHold,
 } from '@conch/protocol';
@@ -361,6 +362,10 @@ export interface ConversationView {
   holds?: readonly SkillHold[];
   /** Replies to send next under the latest reply (ADR 0060); gone once anything newer arrives. */
   replies?: LatestReplies;
+  /** What the running turn has used so far, as it goes (`turn.usage`); gone when it ends. */
+  working?: Usage;
+  /** How full the context is, as last heard: live while a turn runs, its last word after. */
+  context?: ContextFill;
 }
 
 export const emptyView: ConversationView = { lastSeq: -1, items: [], status: 'idle' };
@@ -456,11 +461,18 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
       : view.items;
 
   switch (event.type) {
+    case 'turn.usage':
+      return {
+        ...base,
+        working: event.usage,
+        ...(event.context && { context: event.context }),
+      };
     case 'user.message': {
       const withoutPending = items.filter((i) => !(i.kind === 'user' && i.id === event.messageId));
       return {
         ...base,
         turnStartedAt: event.at,
+        working: undefined,
         items: [
           // A message waiting at a spending limit goes with this one, or is let go (ADR 0079).
           ...settleCapped(withoutPending, 'moved-on'),
@@ -728,6 +740,8 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
       };
       return {
         ...base,
+        // Summarised: the old reading is gone; the next request says how full it is now.
+        context: undefined,
         items: at === -1 ? [...kept, line] : [...kept.slice(0, at), line, ...kept.slice(at)],
       };
     }
@@ -761,6 +775,8 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
       return {
         ...base,
         turnStartedAt: undefined,
+        working: undefined,
+        context: event.context ?? view.context,
         items: [
           ...closed,
           {

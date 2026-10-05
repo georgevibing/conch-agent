@@ -75,6 +75,18 @@ export function useSlashCommands(options: {
   const navigate = useNavigate();
   const client = useQueryClient();
 
+  /** Make room in the chat now: `/compact`, and the context meter's Compact now. */
+  const compact = async (args?: string) => {
+    // A provider that keeps its own memory of the chat (Claude Code, Codex) does its own /compact.
+    if (engineCommands.some((c) => c.name.toLowerCase() === 'compact'))
+      return send(args ? `/compact ${args}` : '/compact');
+    if (!conversationId)
+      return void toast('Nothing to summarise yet', {
+        description: 'A chat that grows long is summarised by itself.',
+      });
+    return compactChat(conversationId, args);
+  };
+
   const items: CommandItem[] = [
     ...builtins.map((b) => ({
       id: `conch:${b.name}`,
@@ -177,14 +189,7 @@ export function useSlashCommands(options: {
       case 'new':
         return void navigate('/');
       case 'compact':
-        // A provider that keeps its own memory of the chat (Claude Code) does its own /compact.
-        if (engineCommands.some((c) => c.name.toLowerCase() === 'compact'))
-          return send(args ? `/compact ${args}` : '/compact');
-        if (!conversationId)
-          return toast('Nothing to summarise yet', {
-            description: 'A chat that grows long is summarised by itself.',
-          });
-        return void compactChat(conversationId, args);
+        return void compact(args);
       case 'remember':
         if (!args) return setDraft('/remember ');
         // Said at once; the toast with Undo follows once it's kept.
@@ -272,6 +277,7 @@ export function useSlashCommands(options: {
   return {
     menu,
     submit,
+    compact,
     onDraftChange: (value: string) => {
       setDismissed(false);
       setDraft(value);

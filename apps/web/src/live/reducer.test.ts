@@ -20,6 +20,43 @@ function log(...inputs: ConversationEventInput[]): ConversationEvent[] {
 }
 
 describe('transcript reducer', () => {
+  it('counts what a running turn uses as it goes, and keeps how full the chat is after', () => {
+    const events = log(
+      { type: 'user.message', messageId: 'u1', text: 'Fix the tests' },
+      {
+        type: 'turn.usage',
+        usage: { inputTokens: 20_000, outputTokens: 400 },
+        context: { used: 20_400, window: 200_000 },
+      },
+      { type: 'turn.usage', usage: { inputTokens: 61_000, outputTokens: 1_200 } },
+      {
+        type: 'turn.completed',
+        outcome: 'success',
+        usage: { inputTokens: 90_000, outputTokens: 2_000 },
+        context: { used: 31_000, window: 200_000 },
+      },
+    );
+    const during = reduceAll(events.slice(0, 3));
+    expect(during.working).toEqual({ inputTokens: 61_000, outputTokens: 1_200 });
+    // A reading without a context keeps the last one heard.
+    expect(during.context).toEqual({ used: 20_400, window: 200_000 });
+    const after = reduceAll(events);
+    expect(after.working).toBeUndefined();
+    expect(after.context).toEqual({ used: 31_000, window: 200_000 });
+    // Summarised: the old reading goes until the next request says how full it is.
+    const compacted = reduce(after, {
+      type: 'context.compacted',
+      conversationId: 'c1',
+      seq: 9,
+      at: 9_000,
+      summary: 'Earlier: tests.',
+      engine: 'openrouter',
+      turns: 3,
+      asked: true,
+    } as ConversationEvent);
+    expect(compacted.context).toBeUndefined();
+  });
+
   it('streams deltas into one assistant message and closes it', () => {
     const view = reduceAll(
       log(
