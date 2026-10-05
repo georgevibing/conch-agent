@@ -47,6 +47,20 @@ Validation used Node 24.21.0 and `TMPDIR=/private/tmp`. The full `pnpm check` pa
 
 The concurrent CI/browser-fixture update `4fe04e0d` was preserved before publication. Final scan results are recorded with the commits and alert comments. Source fixes are allowed to close naturally after a successful default-branch scan; retained false positives receive individual evidence. A dismissal records an audit judgment, not a source fix, and can be reopened if the boundary changes.
 
+## Post-push review — 6 October
+
+JavaScript/TypeScript analysis `1896747682` on `04bd3e21` completed successfully with 93 findings. It automatically closed 17 alert identities and added four: #123 consolidates the four mock callback flows at the shared helper; #124/#125 follow the newly escaped browser-fixture paths; #126 is a plain-text query echo in the new mock guard test. The cumulative state before manual triage was **33 fixed, 93 open**. Actions analysis `1896731313` had zero findings.
+
+Each new trace was reviewed:
+
+- **#123:** every reported caller reaches `deliverMockHook`'s independent origin/path validation before `fetch`; redirects are disabled. The trace does not recognize that guard. The attack tests cover all five callback senders, other ports, hostile paths and redirects.
+- **#124/#125:** the paths are escaped in ampersand/less-than/greater-than order and used only as HTML text and title text. The traces retain taint through `replaceAll`; raw HTTP regressions verify that title/script terminators are escaped in the complete response.
+- **#126:** Fastify's string return is `text/plain; charset=utf-8`, not HTML. Direct injection against the installed Fastify version confirmed that content type and literal script-looking bytes. The query echo tests preservation of data, not an HTML document.
+
+These four are verified false positives. Together with the 88 previously reviewed residuals, **92 alerts were dismissed with evidence** after checking each latest trace. A fresh GitHub API read confirmed **1 open, 33 fixed and 92 dismissed**. The sole open alert is #93. Individual GitHub comments record the reviewed commit, guard/data flow and supporting tests, linking to this full audit. No genuine unresolved finding was dismissed.
+
+The first hosted CI run also exposed an overly broad assertion in the new Gmail generation test: `expiresAt` intentionally moves with the clock. The assertion now compares only the stable account and authorization marker; the focused 14-test Gmail suite and full `pnpm check` passed again after that correction. A separate browser journey exceeded its ten-second panel expectation during cold startup; its trace showed an accepted message, successful API requests and the browser still starting, with four subsequent browser journeys passing. That failure is outside the security changes and must not be represented as a security-check pass.
+
 ## References
 
 - [OWASP denial-of-service guidance](https://cheatsheetseries.owasp.org/cheatsheets/Denial_of_Service_Cheat_Sheet.html): limit resource consumption before expensive work.
