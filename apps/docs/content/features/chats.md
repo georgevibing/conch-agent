@@ -58,6 +58,12 @@ Once a few chats haven't been touched for a month, a note at the end of the list
 
 <kbd>alt+up</kbd> and <kbd>alt+down</kbd> go to the chat above or below. Double-click a title to rename it.
 
+## Search
+
+Press <kbd>mod+k</kbd> to search chats and messages. The search window stays the
+same size as you type or move between results. Scroll the results and the preview
+separately; the search box stays in place. On a narrow screen, only results are shown.
+
 ## Writing a message
 
 <kbd>enter</kbd> sends and <kbd>shift+enter</kbd> starts a new line. You can start typing anywhere in the chat: the words go in the message box.

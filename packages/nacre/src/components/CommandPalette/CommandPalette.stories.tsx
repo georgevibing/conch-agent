@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import { SearchPreview } from '../../patterns/SearchPreview';
 import { useNacreTheme } from '../../theme';
 import { Button } from '../Button';
 import { Kbd } from '../Kbd';
@@ -25,7 +26,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The ⌘K palette. Built on cmdk inside a Nacre dialog: fuzzy search, grouped results, a gliding selection wash and a list that springs to its new height as results filter.',
+          'The ⌘K palette. Built on cmdk inside a Nacre dialog: fuzzy search, grouped results, a gliding selection wash and a steady search field above independently scrolling results and previews.',
       },
     },
   },
@@ -191,6 +192,42 @@ export const WithPreview: Story = {
           <CommandPalette.Item icon={<FileCode2 />} inset>
             …raise HEALTH_TIMEOUT to 90 and redeploy.
           </CommandPalette.Item>
+        </CommandPalette.Group>
+      </CommandPalette>
+    </>
+  ),
+};
+
+/** A long conversation must scroll without squeezing the search field. */
+export const LongPreview: Story = {
+  render: () => (
+    <>
+      <Text tone="muted">Search palette with a long conversation</Text>
+      <CommandPalette
+        defaultOpen
+        hotkey={null}
+        size="lg"
+        placeholder="Search chats, skills, models, apps…"
+        aside={
+          <SearchPreview
+            title="Planning the garden"
+            meta="24 messages"
+            messages={Array.from({ length: 24 }, (_, i) => ({
+              id: String(i),
+              from: i % 2 ? 'assistant' : 'user',
+              author: i % 2 ? 'Conch' : 'You',
+              text: 'Let’s plan the garden for spring. We need room for herbs, tomatoes and a quiet place to sit in the afternoon sun.',
+            }))}
+            footer="Open chat"
+          />
+        }
+      >
+        <CommandPalette.Group heading="Recent">
+          {Array.from({ length: 24 }, (_, i) => (
+            <CommandPalette.Item key={i} icon={<MessageSquare />}>
+              {i === 0 ? 'Planning the garden' : `Garden notes ${i}`}
+            </CommandPalette.Item>
+          ))}
         </CommandPalette.Group>
       </CommandPalette>
     </>

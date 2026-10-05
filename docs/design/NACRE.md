@@ -82,6 +82,14 @@ pearly near-white instead of mud.
   `corner-shape: squircle` (continuous curvature) with radii re-tuned so the optical
   size is unchanged.
 
+### Search
+
+The command palette holds its size while results filter or a preview loads. Its
+search field and keyboard hints keep their height; results and previews scroll
+inside the space between them. The large palette leaves room for both panes,
+while narrow screens show results alone. Its height fits the visible viewport,
+including the space above a phone’s keyboard.
+
 ## Elevation
 
 `--nc-elevation-0…4`: stacked tight + ambient shadows tinted with the neutral hue,

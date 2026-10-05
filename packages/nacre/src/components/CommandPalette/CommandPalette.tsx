@@ -280,7 +280,7 @@ function CommandPaletteSeparator({
 
 /**
  * ⌘K command palette. Fuzzy search, grouped results, a gliding selection and a
- * list that springs to its new height as results filter.
+ * stable frame that keeps the search field in place as results filter.
  */
 export const CommandPalette = Object.assign(CommandPaletteRoot, {
   Group: CommandPaletteGroup,

@@ -8,6 +8,7 @@ const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
  */
 test('search across chats and find within one', async ({ page, request }) => {
   await request.patch('/api/settings', { data: { onboarded: true, profile: { name: 'Ada' } } });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
 
   const send = async (text: string, count: number) => {
@@ -36,16 +37,41 @@ test('search across chats and find within one', async ({ page, request }) => {
   // ⌘K, type part of a word from the *first* chat.
   await page.keyboard.press(`${mod}+k`);
   const box = page.getByRole('combobox');
+  const dialog = page.getByRole('dialog');
+  await expect(box).toBeFocused();
+  const frame = await dialog.boundingBox();
+  const input = await box.boundingBox();
+  expect(input!.height).toBeGreaterThanOrEqual(44);
+  const expectSteady = async () => {
+    expect(await dialog.boundingBox()).toEqual(frame);
+    expect(await box.boundingBox()).toEqual(input);
+  };
   await box.fill('lisb');
   const hit = page.getByRole('option', { name: /capital of Portugal/ });
   await expect(hit).toBeVisible();
   await expect(hit.locator('mark').first()).toHaveText(/lisb/i);
   await expect(page.getByRole('region', { name: 'Preview' })).toContainText('Lisbon');
 
+  await expectSteady();
+
   // Typos still find it.
   await box.fill('marmelade');
   await expect(page.getByText('No exact matches — showing close ones')).toBeVisible();
   await expect(page.getByRole('option', { name: /marmalade recipe/ }).first()).toBeVisible();
+
+  await expectSteady();
+
+  // Empty results and action previews keep the same room for typing.
+  await box.fill('zzzz-nothing-matches');
+  await expect(page.getByRole('option')).toHaveCount(1);
+  await expect(page.getByRole('option')).toContainText('Find “zzzz-nothing-matches” in this chat');
+  await expectSteady();
+  await box.fill('settings');
+  await expect(page.getByRole('option', { name: 'Settings', exact: true })).toBeVisible();
+  await expectSteady();
+  await box.fill('');
+  await expect(page.getByRole('option').first()).toBeVisible();
+  await expectSteady();
 
   // Open the Lisbon hit: lands in that chat with find open on the match.
   await box.fill('lisbon');
