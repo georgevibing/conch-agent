@@ -482,6 +482,13 @@
     }
   }
 
+  /* A touch screen types at 16px (see base.css), so the lines open up to match. */
+  @media (pointer: coarse) {
+    .textarea {
+      line-height: 1.4;
+    }
+  }
+
   /* Fingers, not a pointer: the one button that matters is a full-size target. */
   @container composer (max-width: 34rem) {
     @media (pointer: coarse) {

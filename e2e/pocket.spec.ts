@@ -88,6 +88,26 @@ test('notifications and voice have their own place in Settings', async ({ page }
   await expect(talk).toBeHidden();
 });
 
+test('tapping the message box on a phone doesn’t zoom the page', async ({ browser }, info) => {
+  // A phone zooms into any field typed in under 16px, and stays zoomed.
+  const phone = await browser.newContext({
+    baseURL: info.project.use.baseURL,
+    storageState: info.project.use.storageState,
+    locale: 'en-US',
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  const page = await phone.newPage();
+  await page.goto('/');
+  const composer = page.getByRole('textbox', { name: 'Message Conch' });
+  await composer.tap();
+  await expect(composer).toBeFocused();
+  await expect(composer).toHaveCSS('font-size', '16px');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await phone.close();
+});
+
 // Last: it turns sign-in on, which the others don't expect.
 test('a secure address for your phone, in one press, then its sign-in code', async ({ page }) => {
   await openConch(page);

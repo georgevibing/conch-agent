@@ -54,6 +54,33 @@
     letter-spacing: inherit;
   }
 
+  /* A phone zooms the whole page into any field typed in under 16px, and
+     leaves it zoomed. Nacre's rem is 14px, so on a touch screen every field
+     is 16 real pixels. Important, so neither a component's own size nor an
+     app's unlayered one can take it back down. */
+  @media (pointer: coarse) {
+    :where([data-nacre-root])
+      :is(
+        textarea,
+        select,
+        [contenteditable]:not([contenteditable='false']),
+        input:not(
+          [type='checkbox'],
+          [type='radio'],
+          [type='range'],
+          [type='color'],
+          [type='file'],
+          [type='button'],
+          [type='submit'],
+          [type='reset'],
+          [type='image'],
+          [type='hidden']
+        )
+      ) {
+      font-size: 16px !important;
+    }
+  }
+
   :where([data-nacre-root]) :is(img, svg, video, canvas) {
     display: block;
     max-width: 100%;
