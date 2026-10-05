@@ -267,7 +267,7 @@ export function assess(
 // ── What it may do: only what the work needed ─────────────────────────────
 
 /** `cd x && npm test 2>&1 | tail` → `cd`, `npm`, `tail`; undefined when it can't say plainly. */
-function programsIn(command: string): string[] | undefined {
+export function programsIn(command: string): string[] | undefined {
   if (/`|\$\(|<\(/.test(command)) return undefined;
   const out: string[] = [];
   // Where output goes (`> out.txt`, `2>&1`) isn't a program.
@@ -378,8 +378,8 @@ const Reply = z.object({
   instructions: z.string().max(12_000).default(''),
 });
 
-/** Keys, tokens and passwords written out: never in a skill. */
-const SECRET =
+/** Keys, tokens and passwords written out: never in a skill (nor a memory, ADR 0087). */
+export const SECRET =
   /\b(?:sk|pk|rk)-[A-Za-z0-9_-]{16,}|\bgh[pousr]_[A-Za-z0-9]{20,}|\bgithub_pat_\w{20,}|\bxox[abprs]-[\w-]{10,}|\bAKIA[0-9A-Z]{16}\b|-----BEGIN [A-Z ]*PRIVATE KEY-----|\bBearer\s+[A-Za-z0-9._~+/=-]{20,}|\b(?:password|passwd|pwd|secret|token|api[_-]?key)\s*[:=]\s*\S{6,}/i;
 const STEP = /^\s*(?:\d+[.)]|[-*•])\s+\S/gm;
 const ABSOLUTE =
