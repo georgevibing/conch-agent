@@ -9,6 +9,7 @@ import {
   ChannelSecrets,
   ChannelSettings,
   Id,
+  TurnOptions,
 } from '@conch/protocol';
 import { z } from 'zod';
 
@@ -37,6 +38,8 @@ export const StoredChannel = z.object({
    * each person has their own, under `group:<group id>:<person id>`.
    */
   chats: z.record(z.string(), z.string()).default({}),
+  /** Owner choices for private chats here, also used after /new. */
+  chatOptions: TurnOptions.default({}),
   lastMessageAt: z.number().optional(),
   /** How far the connection has read (iMessage, email), so a restart carries on from there. */
   cursor: z.string().max(200).optional(),

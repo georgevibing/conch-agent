@@ -72,6 +72,26 @@ const access = (patch: Partial<AccessFile> = {}): AccessFile => ({
 });
 
 describe('checkup findings', () => {
+  it('warns about a channel’s saved Full trust even when global defaults ask first', () => {
+    const items = checkup({
+      config: loadConfig({ CONCH_HOME: join(tmpdir(), 'conch-x') }),
+      access: access({}),
+      permissionMode: 'default',
+      secure: true,
+      homeProblems: [],
+      workspaceRules: [],
+      trustedIntegrations: [],
+      channels: [{ app: 'Telegram', bot: 'Conch', others: [], fullTrust: true }],
+    });
+    expect(items).toContainEqual(
+      expect.objectContaining({
+        id: 'channel-settings-full-trust',
+        level: 'warn',
+        detail: expect.stringContaining('/mode'),
+      }),
+    );
+  });
+
   const everything = () =>
     checkup({
       config: loadConfig({

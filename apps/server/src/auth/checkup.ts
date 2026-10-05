@@ -185,7 +185,13 @@ export interface CheckupInput {
   /** Defaults to this computer's. */
   platform?: NodeJS.Platform;
   /** Chat apps that reach the assistant, and who besides you may use each. */
-  channels?: { app: string; bot: string; others: string[]; groups?: string[] }[];
+  channels?: {
+    app: string;
+    bot: string;
+    others: string[];
+    groups?: string[];
+    fullTrust?: boolean;
+  }[];
   /** The public door (ADR 0045): where the internet reaches it, and for which apps. */
   door?: { url: string; apps: string[] };
   /** Safe hands (ADR 0028): the guard, and the sealed box for commands. */
@@ -453,6 +459,15 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       fix: { kind: 'act', label: 'Ask first', action: 'ask-first' },
     });
   }
+  const fullTrustChannels = channels.filter((c) => c.fullTrust);
+  if (fullTrustChannels.length)
+    items.push({
+      id: 'channel-settings-full-trust',
+      level: 'warn',
+      title: 'Some chat apps have their own Full trust setting',
+      detail: `${fullTrustChannels.map((c) => c.app).join(', ')} can start chats that change files or run commands without asking. In each app, send /mode and choose Ask first to change its saved choice.`,
+      fix: { kind: 'open', label: 'Review', place: 'channels' },
+    });
   const shared = channels.filter((c) => c.others.length);
   if (shared.length) {
     const people = [...new Set(shared.flatMap((c) => c.others))];

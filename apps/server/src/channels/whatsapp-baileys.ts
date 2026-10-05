@@ -258,7 +258,13 @@ function toInbound(message: WAMessage, normalize: Normalize): WaInbound | undefi
   const group = chat.endsWith('@g.us');
   const sender = group ? (key.participant ?? '') : chat;
   const alt = group ? key.participantAlt : key.remoteJidAlt;
-  const quoted = content.extendedTextMessage?.contextInfo?.stanzaId ?? undefined;
+  const context =
+    content.extendedTextMessage?.contextInfo ??
+    content.imageMessage?.contextInfo ??
+    content.videoMessage?.contextInfo ??
+    content.documentMessage?.contextInfo ??
+    content.audioMessage?.contextInfo;
+  const quoted = context?.stanzaId ?? undefined;
   const at = Number(message.messageTimestamp ?? 0) * 1000 || Date.now();
   return {
     id: key.id,
@@ -272,5 +278,6 @@ function toInbound(message: WAMessage, normalize: Normalize): WaInbound | undefi
     files,
     group,
     ...(quoted && { quoted }),
+    ...(context?.isForwarded && { forwarded: true }),
   };
 }

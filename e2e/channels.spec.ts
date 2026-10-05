@@ -161,3 +161,73 @@ test('Slack: two keys, sorted whichever box they land in', async ({ page, reques
   await page.getByRole('button', { name: 'That’s me' }).click();
   await expect(page.getByText('You’re connected, Ada')).toBeVisible();
 });
+
+test('Telegram settings choose the model before a chat and the web shows the same choice', async ({
+  page,
+  request,
+}) => {
+  const made = await (
+    await request.post('/api/channels', { data: { kind: 'telegram', token: BOTFATHER } })
+  ).json();
+  const code = new URL(made.pairing.link).searchParams.get('start');
+  const before = (await telegramSent(request)).length;
+  await request.post(`${TELEGRAM}/__control/say`, { data: { text: `/start ${code}` } });
+  await expect
+    .poll(async () =>
+      (await telegramSent(request)).slice(before).some((m) => m.text.includes('Hi Ada!')),
+    )
+    .toBe(true);
+  const say = async (text: string) => request.post(`${TELEGRAM}/__control/say`, { data: { text } });
+  const choose = async (label: string) => {
+    const message = (await telegramSent(request)).at(-1);
+    const button = message?.buttons.find((b) => b.text === label);
+    expect(button, `button ${label}`).toBeDefined();
+    const count = (await telegramSent(request)).length;
+    await request.post(`${TELEGRAM}/__control/press`, {
+      data: { data: button?.callback_data, messageId: message?.message_id },
+    });
+    await expect
+      .poll(async () => {
+        const sent = await telegramSent(request);
+        return sent.length > count && Boolean(sent.at(-1)?.buttons.length);
+      })
+      .toBe(true);
+  };
+  await say('/model');
+  await expect
+    .poll(async () => (await telegramSent(request)).at(-1)?.text)
+    .toContain('Choose a connected provider');
+  await choose('Claude Code');
+  await choose('Sonnet 5.5');
+  await choose('Save change');
+  await say('/effort');
+  await expect
+    .poll(async () => (await telegramSent(request)).at(-1)?.text)
+    .toContain('Choose how hard');
+  await choose('More');
+  await choose('High');
+  await choose('Save change');
+  await say('Hello from my configured Telegram chat');
+  let conversationId = '';
+  await expect
+    .poll(async () => {
+      const conversations = (await (await request.get('/api/conversations')).json()) as {
+        id: string;
+        origin?: { channelId?: string };
+      }[];
+      conversationId = conversations.find((c) => c.origin?.channelId === made.id)?.id ?? '';
+      return conversationId;
+    })
+    .not.toBe('');
+  await page.goto(`/c/${conversationId}`);
+  await expect(page.getByText('From Telegram.')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Sonnet 5.5/ }).first()).toBeVisible();
+  await expect(page.getByText('Hello from my configured Telegram chat').first()).toBeVisible();
+  await say('/status');
+  await expect
+    .poll(async () => (await telegramSent(request)).at(-1)?.text)
+    .toContain('Effort: High');
+  await expect
+    .poll(async () => (await telegramSent(request)).at(-1)?.text)
+    .toContain('Model: Sonnet 5.5');
+});

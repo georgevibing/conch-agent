@@ -248,6 +248,8 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
   for (const raw of Array.isArray(channels) ? channels : []) {
     const channel = record(raw);
     if (!channel || !on(channel.enabled)) continue;
+    if (record(channel.chatOptions)?.permissionMode === 'bypassPermissions')
+      powers.push({ kind: 'chats-never-ask' });
     const people = [
       ...(Array.isArray(channel.people) ? channel.people : [])
         .map(record)

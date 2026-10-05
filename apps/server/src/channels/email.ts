@@ -325,7 +325,10 @@ export class EmailAdapter implements ChannelAdapter {
       const fresh = !parent && !ids.length;
       // A new thread's subject is part of what was asked.
       const text =
-        fresh && subject && !words.text.startsWith(subject)
+        fresh &&
+        subject &&
+        !words.text.startsWith(subject) &&
+        !/^\/[\w-]+(?:@\w+)?(?:\s|$)/.test(words.text)
           ? `${subject}\n\n${words.text}`.trim()
           : words.text;
       if (!text && !attached.length) return;

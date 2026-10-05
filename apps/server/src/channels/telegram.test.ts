@@ -23,6 +23,23 @@ const quiet: ChannelEvents = {
 };
 
 describe('TelegramAdapter', () => {
+  it('gives settings their own rows so model names remain readable on a phone', async () => {
+    const connection = adapter.connect(quiet);
+    await connection.send('4242', 'Choose a model', {
+      buttons: [
+        { label: 'A model with a long name', data: 's:menu:0' },
+        { label: 'Another model with a long name', data: 's:menu:1' },
+      ],
+    });
+    expect(telegram.calls.find((c) => c.method === 'sendMessage')?.params.reply_markup).toEqual({
+      inline_keyboard: [
+        [{ text: 'A model with a long name', callback_data: 's:menu:0' }],
+        [{ text: 'Another model with a long name', callback_data: 's:menu:1' }],
+      ],
+    });
+    connection.close();
+  });
+
   it('sends formatted text, and plain text when Telegram refuses the formatting', async () => {
     const connection = adapter.connect(quiet);
     await connection.send('4242', '**Hi** there');

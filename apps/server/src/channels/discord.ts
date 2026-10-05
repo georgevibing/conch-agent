@@ -662,15 +662,15 @@ export class DiscordAdapter implements ChannelAdapter {
 }
 
 function components(options: SendOptions) {
-  return [
-    {
-      type: 1,
-      components: (options.buttons ?? []).map((button) => ({
-        type: 2,
-        style: button.style === 'primary' ? 1 : button.style === 'danger' ? 4 : 2,
-        label: button.label.slice(0, 80),
-        custom_id: button.data.slice(0, 100),
-      })),
-    },
-  ];
+  const buttons = options.buttons ?? [];
+  const rows = buttons.some((b) => b.data.startsWith('s:')) ? buttons.map((b) => [b]) : [buttons];
+  return rows.map((row) => ({
+    type: 1,
+    components: row.map((button) => ({
+      type: 2,
+      style: button.style === 'primary' ? 1 : button.style === 'danger' ? 4 : 2,
+      label: button.label.slice(0, 80),
+      custom_id: button.data.slice(0, 100),
+    })),
+  }));
 }

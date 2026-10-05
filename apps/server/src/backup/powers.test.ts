@@ -7,6 +7,19 @@ const reader = (files: Record<string, unknown>) => (path: string) =>
   path in files ? Buffer.from(JSON.stringify(files[path])) : undefined;
 
 describe('what in a backup can act for you', () => {
+  it('discloses Full trust saved from a channel settings menu', () => {
+    expect(
+      powersOf(
+        ['channels.json'],
+        reader({
+          'channels.json': {
+            channels: [{ enabled: true, chatOptions: { permissionMode: 'bypassPermissions' } }],
+          },
+        }),
+      ),
+    ).toContainEqual({ kind: 'chats-never-ask' });
+  });
+
   it('reads only the few files that can say so', () => {
     expect(
       [

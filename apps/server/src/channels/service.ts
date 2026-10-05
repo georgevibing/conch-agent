@@ -1,6 +1,8 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 import {
+  type ModelCatalog,
+  type UpdateSettingsBody,
   type Channel,
   type ChannelBot,
   type ChannelCheck,
@@ -72,6 +74,7 @@ import {
   type WaitingNote,
 } from './voice-notes';
 import { normalizeWeChat } from './wechat';
+import { ChannelSettingsMenu, type SettingsContext } from './settings';
 
 /** What hearing one voice note came to: its words, or why not (yet). */
 interface Heard {
@@ -294,12 +297,17 @@ export class ChannelService {
   #toldWaiting = new Set<string>();
   #hearingAgain?: Promise<void>;
 
+  #settingsMenu = new ChannelSettingsMenu();
+
   constructor(
     private readonly deps: {
       store: ChannelStore;
       conversations: ConversationManager;
       attachments: AttachmentStore;
       settings: SettingsStore;
+      models?: () => Promise<ModelCatalog>;
+      saveSettings?: (patch: UpdateSettingsBody) => Promise<void>;
+      address?: () => string | undefined;
       adapter: (secrets: ChannelSecrets) => ChannelAdapter;
       /** Slack's keys, checked apart. */
       slack?: (parts: { botToken?: string; appToken?: string }) => SlackCheck;
@@ -353,6 +361,7 @@ export class ChannelService {
   }
 
   stop() {
+    this.#settingsMenu.clear();
     this.#started = false;
     for (const live of this.#live.values()) live.connection.close();
     this.#live.clear();
@@ -527,13 +536,16 @@ export class ChannelService {
   }
 
   /** What the security checkup needs: each channel that's on, and who besides you may use it. */
-  async checkupCopy(): Promise<{ app: string; bot: string; others: string[]; groups: string[] }[]> {
+  async checkupCopy(): Promise<
+    { app: string; bot: string; others: string[]; groups: string[]; fullTrust?: boolean }[]
+  > {
     return (await this.deps.store.all())
       .filter((c) => c.enabled && c.people.length > 0)
       .map((c) => ({
         app: CHANNEL_NAMES[c.kind],
         bot: c.bot.username ? `@${c.bot.username}` : c.bot.name,
         others: c.people.slice(1).map((p) => p.name),
+        ...(c.chatOptions.permissionMode === 'bypassPermissions' && { fullTrust: true }),
         groups: c.groups.filter((g) => g.on).map((g) => g.name),
       }));
   }
@@ -1213,6 +1225,7 @@ export class ChannelService {
   }
 
   #disconnect(id: string) {
+    this.#settingsMenu.clear(id);
     const live = this.#live.get(id);
     live?.connection.close();
     this.#live.delete(id);
@@ -1402,6 +1415,7 @@ export class ChannelService {
 
   /** Stop someone from talking to your assistant here. */
   async removePerson(id: string, personId: string): Promise<Channel> {
+    this.#settingsMenu.clear(id);
     await this.#require(id);
     // What they sent and what's running for them stops with them.
     this.#dropGathered(id, personId);
@@ -1413,7 +1427,12 @@ export class ChannelService {
     }
     const stored = await this.deps.store.update(id, (c) => {
       const { [personId]: _, ...chats } = c.chats;
-      return { ...c, people: c.people.filter((p) => p.id !== personId), chats };
+      return {
+        ...c,
+        people: c.people.filter((p) => p.id !== personId),
+        chats,
+        ...(c.people[0]?.id === personId && { chatOptions: {} }),
+      };
     });
     await this.#emit(id);
     return this.#view(stored ?? (await this.#require(id)));
@@ -1542,6 +1561,7 @@ export class ChannelService {
     }));
     void this.#emit(id);
 
+    if (await this.#settingsMessage(stored, live, message)) return;
     const command = /^\/(start|new|stop|help)(?:@\w+)?\s*$/i.exec(text)?.[1]?.toLowerCase();
     const seat = seatOf(message.user);
     if (command) {
@@ -1630,6 +1650,15 @@ export class ChannelService {
       name: isOwner ? owner.name : message.user.name,
       group: { id: group.id, name: group.name, owner: isOwner },
     };
+    if (
+      /^\/(settings|status|model|effort|mode|cancel)(?:@\w+)?(?:\s|$)/i.test(message.text.trim())
+    ) {
+      await live.connection.send(
+        message.chatId,
+        'Open settings in your private chat with me. Settings belong to the channel owner.',
+      );
+      return;
+    }
     const command = /^\/(start|new|stop|help)(?:@\w+)?\s*$/i.exec(message.text.trim())?.[1];
     if (command) {
       await this.#command(stored, live, message, command.toLowerCase(), seat);
@@ -1727,6 +1756,158 @@ export class ChannelService {
     }
   }
 
+  /** Settings are direct human input. They never reach the assistant. */
+  async #settingsMessage(stored: StoredChannel, live: LiveChannel, message: ChannelMessage) {
+    const match = /^\/(settings|status|model|effort|mode|cancel)(?:@\w+)?(?:\s.*)?$/i.exec(
+      message.text.trim(),
+    );
+    const command = match?.[1]?.toLowerCase();
+    const owner = stored.people[0]?.id === message.user.id;
+    if (!owner || message.outside || message.quote || message.files.length) {
+      if (command)
+        await live.connection.send(
+          message.chatId,
+          'Settings need a message typed by the channel owner in this private chat.',
+        );
+      return Boolean(command);
+    }
+    if (command === 'cancel') {
+      this.#settingsMenu.clear(stored.id);
+      await live.connection.send(message.chatId, 'Settings closed.');
+      return true;
+    }
+    // Other commands abandon a free-text setting before normal command/skill handling.
+    if (!command && message.text.trim().startsWith('/')) {
+      this.#settingsMenu.clear(stored.id);
+      return false;
+    }
+    if (!command && !this.#settingsMenu.waiting(stored.id, message.chatId, message.user.id))
+      return false;
+    try {
+      const ctx = await this.#settingsContext(stored.id, message.chatId, message.user.id);
+      if (command) {
+        await this.#settingsMenu.command(
+          ctx,
+          command,
+          message.text.trim().replace(/^\/[^\s]+\s*/, ''),
+        );
+        return true;
+      }
+      return await this.#settingsMenu.input(ctx, message.text);
+    } catch (error) {
+      await live.connection.send(message.chatId, explain(error));
+      return true;
+    }
+  }
+
+  async #settingsContext(id: string, chatId: string, userId: string): Promise<SettingsContext> {
+    const stored = await this.#require(id);
+    const live = this.#live.get(id);
+    if (
+      !live ||
+      !stored.enabled ||
+      stored.blocked.includes(userId) ||
+      stored.people[0]?.id !== userId
+    )
+      throw new ChannelServiceError('unavailable', 'Only the channel owner can change settings.');
+    const conversationId = stored.chats[userId];
+    let conversation;
+    try {
+      conversation = conversationId
+        ? (await this.deps.conversations.detail(conversationId)).conversation
+        : undefined;
+    } catch (error) {
+      if (!(error instanceof ConversationError) || error.code !== 'not-found') throw error;
+      this.#fresh(id, userId);
+      await this.deps.store.update(id, (c) => {
+        const { [userId]: _, ...chats } = c.chats;
+        return { ...c, chats };
+      });
+      return this.#settingsContext(id, chatId, userId);
+    }
+    const settings = await this.deps.settings.get();
+    const revision = (
+      options: SettingsContext['options'],
+      current: SettingsContext['settings'],
+      channel: SettingsContext['channel'],
+    ) =>
+      `${conversationId ?? ''}:${this.#epoch(id, userId)}:${JSON.stringify([options, current.preferences, current.persona, current.profile, channel])}`;
+    const verify = async () => {
+      const fresh = await this.#settingsContext(id, chatId, userId);
+      if (fresh.revision !== ctx.revision)
+        throw new ChannelServiceError(
+          'unavailable',
+          'These settings changed while the menu was open. Send /settings to refresh.',
+        );
+    };
+    const ctx: SettingsContext = {
+      channelId: id,
+      chatId,
+      ownerId: userId,
+      revision: revision(conversation?.options ?? stored.chatOptions, settings, stored.settings),
+      options: conversation?.options ?? stored.chatOptions,
+      settings,
+      channel: stored.settings,
+      busy:
+        this.#inflight.has(`${id}:${userId}`) ||
+        this.#gathering.has(`${id}:${userId}`) ||
+        conversation?.status === 'running',
+      catalog:
+        this.deps.models ?? (async () => ({ default: settings.preferences.engine, providers: [] })),
+      address: this.deps.address?.(),
+      send: async (text, buttons) => {
+        await live.connection.send(chatId, text, { buttons });
+      },
+      saveOptions: async (options) => {
+        await verify();
+        const current = await this.#require(id);
+        if (
+          !current.enabled ||
+          current.people[0]?.id !== userId ||
+          current.blocked.includes(userId)
+        )
+          throw new ChannelServiceError(
+            'unavailable',
+            'Settings access has changed. Open /settings again.',
+          );
+        if (
+          current.chats[userId] !== conversationId ||
+          this.#inflight.has(`${id}:${userId}`) ||
+          this.#gathering.has(`${id}:${userId}`)
+        )
+          throw new ChannelServiceError(
+            'unavailable',
+            'This conversation has changed or is busy. Open /settings again.',
+          );
+        if (conversationId) await this.deps.conversations.configure(conversationId, options);
+        const merged = Object.fromEntries(
+          Object.entries({ ...ctx.options, ...options }).filter(([, value]) => value !== undefined),
+        );
+        await this.deps.store.update(id, (c) => ({ ...c, chatOptions: merged }));
+        ctx.options = merged;
+        ctx.revision = revision(ctx.options, ctx.settings, ctx.channel);
+      },
+      saveSettings: async (patch) => {
+        await verify();
+        if (!this.deps.saveSettings)
+          throw new ChannelServiceError(
+            'unavailable',
+            'Open Settings in Conch to change defaults.',
+          );
+        await this.deps.saveSettings(patch);
+        ctx.settings = await this.deps.settings.get();
+        ctx.revision = revision(ctx.options, ctx.settings, ctx.channel);
+      },
+      saveChannel: async (patch) => {
+        await verify();
+        const updated = await this.update(id, { settings: patch });
+        ctx.channel = updated.settings;
+        ctx.revision = revision(ctx.options, ctx.settings, ctx.channel);
+      },
+    };
+    return ctx;
+  }
+
   async #command(
     stored: StoredChannel,
     live: LiveChannel,
@@ -1763,6 +1944,8 @@ export class ChannelService {
         `I’m **${assistant}**, your assistant on Conch. Ask me anything, or send a photo or a file.\n\n` +
           '• /new — start a fresh conversation\n' +
           '• /stop — stop what I’m doing\n' +
+          '• /settings — model, effort, permissions and preferences\n' +
+          '• /status — see this chat’s settings\n' +
           '• /your-skill — use one of your skills by name\n\n' +
           'Everything we say here is also in Conch on your computer.',
       );
@@ -1790,6 +1973,7 @@ export class ChannelService {
   }
 
   #fresh(id: string, personId: string) {
+    this.#settingsMenu.clear(id);
     this.#epochs.set(`${id}:${personId}`, this.#epoch(id, personId) + 1);
   }
 
@@ -2068,6 +2252,7 @@ export class ChannelService {
           ...(conversationId && { conversationId }),
           clientMessageId,
           text,
+          ...(!conversationId && fromOwner && !seat.group && { options: current.chatOptions }),
           ...(attachments.length && { attachments }),
           ...(!fromOwner && {
             untrusted: {
@@ -2484,6 +2669,27 @@ export class ChannelService {
 
   async #onPress(id: string, press: ChannelPress) {
     const stored = await this.deps.store.get(id);
+    if (press.data.startsWith('s:')) {
+      const live = this.#live.get(id);
+      if (
+        !stored?.enabled ||
+        !live ||
+        stored.blocked.includes(press.user.id) ||
+        stored.people[0]?.id !== press.user.id
+      ) {
+        await press.ack('Only the channel owner can change settings.');
+        return;
+      }
+      await press.ack();
+      try {
+        const ctx = await this.#settingsContext(id, press.chatId, press.user.id);
+        await this.#settingsMenu.press(ctx, press.data);
+      } catch (error) {
+        await live.connection.send(press.chatId, explain(error));
+      }
+      return;
+    }
+
     if (!stored?.people.some((p) => p.id === press.user.id)) {
       await press.ack('Only people who were let in can answer.');
       return;

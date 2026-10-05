@@ -12,6 +12,7 @@ import { VoiceError, type Hearing } from '../voice/service';
 import { MockMail } from './mock/email';
 import { MockSlack } from './mock/slack';
 import { MockTelegram } from './mock/telegram';
+import { ChannelStore } from './store';
 
 let services: Services | undefined;
 
@@ -815,5 +816,128 @@ describe('ChannelService — which app a channel belongs to (ADR 0052)', () => {
       email: 'gmail',
       telegram: null,
     });
+  });
+});
+
+describe('Channel settings through Telegram', () => {
+  async function choose(telegram: MockTelegram, label: string) {
+    const message = telegram.last();
+    const button = message?.buttons.find((b) => b.text === label);
+    if (!button || !message) throw new Error(`Missing ${label}: ${JSON.stringify(message)}`);
+    const before = telegram.sent.length;
+    telegram.press(button.callback_data, message.message_id);
+    await until(
+      () => telegram.sent.length > before && telegram.last()?.buttons.length,
+      'next settings page',
+    );
+  }
+
+  it('selects a model and effort before the first message, persists it, and reads web changes back', async () => {
+    const { s, telegram, channel } = await paired();
+    telegram.say('/model');
+    await until(() => telegram.last()?.text.includes('Choose a connected provider'), 'providers');
+    await choose(telegram, 'Claude Code');
+    await choose(telegram, 'Opus 5.5');
+    await choose(telegram, 'Save change');
+    telegram.say('/effort');
+    await until(() => telegram.last()?.text.includes('Choose how hard'), 'effort');
+    await choose(telegram, 'More');
+    await choose(telegram, 'High');
+    await choose(telegram, 'Save change');
+    expect(await s.conversations.list()).toEqual([]);
+    telegram.say('Hello there');
+    const chat = await until(
+      async () =>
+        (await s.conversations.list()).find(
+          (c) => c.origin?.kind === 'channel' && c.status === 'idle',
+        ),
+      'finished chat',
+    );
+    expect(chat.options).toMatchObject({ model: 'opus', effort: 'high' });
+    expect(
+      (await new ChannelStore(s.config.CONCH_HOME).get(channel.id))?.chatOptions,
+    ).toMatchObject({ model: 'opus', effort: 'high' });
+    await until(
+      async () =>
+        (await s.conversations.eventsAfter(chat.id)).some((e) => e.type === 'turn.completed'),
+      'turn completed',
+    );
+    await s.conversations.configure(chat.id, { effort: 'low' });
+    telegram.say('/status');
+    await until(() => telegram.last()?.text.includes('Effort: Low'), 'web choice reflected');
+    // Disconnect/reconnect reloads the adapter without losing the stored channel choices.
+    await s.channels.update(channel.id, { enabled: false });
+    await s.channels.update(channel.id, { enabled: true });
+    telegram.say('/new');
+    await until(() => telegram.last()?.text.includes('Fresh start'), 'new chat');
+    telegram.say('Another hello');
+    const next = await until(
+      async () =>
+        (await s.conversations.list()).find(
+          (c) => c.id !== chat.id && c.origin?.kind === 'channel',
+        ),
+      'next chat',
+    );
+    expect(next.options).toMatchObject({ model: 'opus', effort: 'high' });
+    await until(
+      async () =>
+        (await s.conversations.eventsAfter(next.id)).some((e) => e.type === 'turn.completed'),
+      'second turn completed',
+    );
+    telegram.say('/settings');
+    await until(() => telegram.last()?.buttons.some((b) => b.text === 'This chat'), 'settings');
+    await choose(telegram, 'This chat');
+    await choose(telegram, 'More');
+    await choose(telegram, 'Use Conch defaults');
+    await choose(telegram, 'Save change');
+    expect((await s.conversations.detail(next.id)).conversation.options).toEqual({});
+    expect((await new ChannelStore(s.config.CONCH_HOME).get(channel.id))?.chatOptions).toEqual({});
+  });
+
+  it('refuses another person, a forward, group presses and stale menus after /new', async () => {
+    const { s, telegram, channel } = await paired();
+    telegram.say('/effort');
+    await until(() => telegram.last()?.text.includes('Choose how hard'), 'menu');
+    const menu = telegram.last();
+    const data = menu?.buttons[1]?.callback_data;
+    if (!menu || !data) throw new Error('Missing settings menu');
+    telegram.press(data, menu.message_id, MockTelegram.MEMBER);
+    await until(
+      () =>
+        telegram.calls.some(
+          (c) =>
+            c.method === 'answerCallbackQuery' &&
+            String(c.params.text).includes('Only the channel owner'),
+        ),
+      'owner check',
+    );
+    telegram.press(data, menu.message_id, MockTelegram.OWNER, MockTelegram.GROUP.id);
+    await until(
+      () => telegram.last(MockTelegram.GROUP.id)?.text.includes('expired'),
+      'chat binding',
+    );
+    telegram.say('/new');
+    await until(() => telegram.last()?.text.includes('Fresh start'), 'new');
+    telegram.press(data, menu.message_id);
+    await until(() => telegram.last()?.text.includes('expired'), 'old menu expired');
+    telegram.say('/settings', MockTelegram.OWNER, {
+      forward_origin: { type: 'hidden_user', sender_user_name: 'Someone', date: 1 },
+    });
+    await until(
+      () => telegram.last()?.text.includes('typed by the channel owner'),
+      'forward refused',
+    );
+    expect(await s.conversations.list()).toEqual([]);
+    await s.channels.removePerson(channel.id, String(MockTelegram.OWNER.id));
+    telegram.press(data, menu.message_id);
+    await until(
+      () =>
+        telegram.calls.filter(
+          (c) =>
+            c.method === 'answerCallbackQuery' &&
+            String(c.params.text).includes('Only the channel owner'),
+        ).length >= 2,
+      'revoked owner',
+    );
   });
 });

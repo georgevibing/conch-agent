@@ -45,6 +45,7 @@ export const WA_CLOSE = {
 
 /** A message as the transport hands it over: already reduced to what Conch reads. */
 export interface WaInbound {
+  forwarded?: boolean;
   id: string;
   /** Where it was written (and where an answer goes). */
   chat: string;
@@ -203,7 +204,9 @@ export class WhatsAppAdapter implements ChannelAdapter {
         const user = toSelf
           ? { id, name: me.name?.trim() || 'You' }
           : { id, name: message.name?.trim() || phoneOf(id.replace(/^l/, '')) };
-        const answer = choices.match(message.chat, message.text, message.quoted);
+        const answer = message.forwarded
+          ? undefined
+          : choices.match(message.chat, message.text, message.quoted);
         if (answer && !message.files.length) {
           events.press({
             chatId: message.chat,
@@ -223,6 +226,7 @@ export class WhatsAppAdapter implements ChannelAdapter {
           text: message.text,
           files: message.files,
           direct: !message.group,
+          ...(message.forwarded && { outside: 'a forwarded WhatsApp message' }),
         });
       }
     };

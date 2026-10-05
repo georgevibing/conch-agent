@@ -1,3 +1,4 @@
+import { SETTINGS_COMMANDS } from './settings';
 import type { ChannelBot } from '@conch/protocol';
 
 import { botAvatar } from './assets';
@@ -58,6 +59,8 @@ interface TgEntity {
 }
 
 interface TgMessage {
+  forward_origin?: unknown;
+  forward_date?: number;
   message_id: number;
   from?: TgUser;
   chat: { id: number; type: string; title?: string };
@@ -212,6 +215,7 @@ export class TelegramAdapter implements ChannelAdapter {
           { command: 'new', description: 'Start a fresh conversation' },
           { command: 'stop', description: 'Stop what I’m doing' },
           { command: 'help', description: 'What I can do here' },
+          ...SETTINGS_COMMANDS,
         ],
       }),
       this.call('setMyShortDescription', {
@@ -519,6 +523,9 @@ export class TelegramAdapter implements ChannelAdapter {
         text: message.text ?? message.caption ?? '',
         files,
         direct,
+        ...((message.forward_origin || message.forward_date) && {
+          outside: 'a forwarded Telegram message',
+        }),
       };
     const { mentioned, text } = this.#addressed(message);
     // Replying to someone else's message: what they said comes along, as theirs.
@@ -641,14 +648,15 @@ export class TelegramAdapter implements ChannelAdapter {
 }
 
 function keyboard(options: SendOptions) {
+  const buttons = (options.buttons ?? []).map((button) => ({
+    text: button.label,
+    callback_data: button.data,
+    ...(button.style && { style: button.style }),
+  }));
   return {
-    inline_keyboard: [
-      (options.buttons ?? []).map((button) => ({
-        text: button.label,
-        callback_data: button.data,
-        ...(button.style && { style: button.style }),
-      })),
-    ],
+    inline_keyboard: options.buttons?.some((b) => b.data.startsWith('s:'))
+      ? buttons.map((button) => [button])
+      : [buttons],
   };
 }
 

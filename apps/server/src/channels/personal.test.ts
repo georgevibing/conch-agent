@@ -63,6 +63,25 @@ describe('Email through Conch', () => {
     return { ...ctx, channel };
   }
 
+  it('changes effort with numbered email replies without sending settings to the model', async () => {
+    const { s, mail, channel } = await connected();
+    await until(async () => (await s.channels.get(channel.id)).health.state === 'online', 'online');
+    const request = mail.deliver({ subject: 'Settings', text: '/effort' });
+    const menu = await until(
+      () => mail.sent.find((m) => m.inReplyTo === request && m.text.includes('Choose how hard')),
+      'effort menu',
+    );
+    expect(menu.text).toContain('Reply with a number');
+    mail.deliver({ subject: 'Re: Settings', text: '2', inReplyTo: menu.messageId });
+    const confirmation = await until(
+      () => mail.sent.find((m) => m.text.includes('Save this change?')),
+      'confirmation',
+    );
+    mail.deliver({ subject: 'Re: Settings', text: '1', inReplyTo: confirmation.messageId });
+    await until(() => mail.sent.find((m) => m.text.includes('Effort: Low')), 'saved low effort');
+    expect(await channelChats(s)).toEqual([]);
+  });
+
   it('lets you in on connecting, with no hello, and says so by email', async () => {
     const { s, mail, channel } = await connected();
     expect(channel.people).toHaveLength(1);

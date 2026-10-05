@@ -7,7 +7,7 @@ import { join } from 'node:path';
 
 import type { ConversationEventInput, PermissionMode } from '@conch/protocol';
 import { chromium } from 'playwright-core';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { AskRequest, ToolContext } from '../conversations/manager';
 import type { Engine, HostTool, PermissionDecision } from '../engines/types';
@@ -82,6 +82,11 @@ beforeAll(async () => {
   if (!existsSync(file)) throw new Error(`Browser fixture did not start: ${startupError}`);
   const [port, path] = (await readFile(file, 'utf8')).split(/\r?\n/);
   devtools = `ws://127.0.0.1:${port}${path}`;
+  // The port file appears before Chrome has finished creating its initial page.
+  // Wait for the fixture itself, so CDP does not attach midway through startup.
+  await vi.waitFor(async () => expect(await yourTabs()).toContain('My bank'), {
+    timeout: 10_000,
+  });
   bb = { status: 200, body: { id: 's1', connectUrl: devtools }, calls: [] };
   browser = new BrowserService({
     home,
@@ -170,7 +175,7 @@ describe.skipIf(!executable)('your own Chrome, for real', () => {
       const { call, asked } = harness('conv_chrome', ['allow-always'], 'bypassPermissions');
       let text = await call('browser_open', { url: `${origin}/` });
       expect(text).toContain('Page: Shop');
-      expect((await browser.status()).backend?.using).toBe('chrome');
+      expect((await browser.status()).backend).toMatchObject({ using: 'chrome' });
       text = await call('browser_click', {
         ref: /\[ref=([a-z0-9]+)\]/.exec(
           text.split('\n').find((l) => l.includes('Add to cart')) ?? '',

@@ -144,8 +144,13 @@ export class TextChoices {
   /** The button a reply presses, if it's an answer to an open question. */
   match(chatId: string, text: string, quoted?: string): { data: string; ref: SentRef } | undefined {
     const list = this.#open.get(chatId);
-    // A command (/stop, /new) is never an answer.
-    if (!list?.length || text.trim().startsWith('/')) return undefined;
+    // Commands abandon settings menus, but never a pending permission question.
+    if (text.trim().startsWith('/')) {
+      for (const question of list ?? [])
+        if (question.buttons.some((b) => b.data.startsWith('s:'))) question.buttons = [];
+      return undefined;
+    }
+    if (!list?.length) return undefined;
     const question = (quoted && list.find((q) => q.ref.messageId === quoted)) || list.at(-1);
     if (!question) return undefined;
     const said = normal(text);
@@ -157,6 +162,14 @@ export class TextChoices {
       buttons.find((b) => normal(b.label) === said) ??
       (YES.has(said) ? (buttons.find((b) => b.style === 'primary') ?? buttons[0]) : undefined) ??
       (NO.has(said) ? buttons.find((b) => b.style === 'danger') : undefined);
+    if (button?.data.startsWith('s:')) {
+      // Consume settings choices once, including older pages. A later free-text
+      // setting such as a name must not be mistaken for an old menu answer.
+      // Keep an empty latest question so it cannot fall back to an older
+      // permission request and interpret that name as an approval.
+      for (const old of list)
+        if (old.buttons.some((b) => b.data.startsWith('s:'))) old.buttons = [];
+    }
     return button ? { data: button.data, ref: question.ref } : undefined;
   }
 }

@@ -580,6 +580,8 @@ Bitwarden, KeePassXC, Proton Pass, Dashlane, Keeper and the macOS Keychain:
 
 ## Adding a channel
 
+Channel configuration uses `channels/settings.ts` (ADR 0091): owner-only private menus, capability-matched choices, confirmed changes, and the adapter’s existing buttons or numbered replies.
+
 Channels are chat apps your assistant can be reached from (ADR 0018). More are
 coming, and each one follows the same shape:
 

@@ -360,6 +360,7 @@ export class RocketChatAdapter implements ChannelAdapter {
           msg?: string;
           id?: string;
           error?: unknown;
+          subs?: string[];
           collection?: string;
           fields?: { eventName?: string; args?: unknown[] };
         };
@@ -389,6 +390,11 @@ export class RocketChatAdapter implements ChannelAdapter {
             name: 'stream-room-messages',
             params: ['__my_messages__', false],
           });
+          return;
+        }
+        // Login is not readiness: messages can arrive only after the subscription
+        // is acknowledged. Reporting online sooner can lose the first message.
+        if (frame.msg === 'ready' && frame.subs?.includes('messages')) {
           onReady();
           events.state('online');
           return;

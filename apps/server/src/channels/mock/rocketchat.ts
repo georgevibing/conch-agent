@@ -37,6 +37,18 @@ export class MockRocketChat {
 
   #app?: FastifyInstance;
   #sockets = new Set<Socket>();
+  #subscriptions = new Map<Socket, () => void>();
+  holdSubscriptions = false;
+
+  get waitingSubscriptions() {
+    return this.#subscriptions.size;
+  }
+
+  releaseSubscriptions() {
+    this.holdSubscriptions = false;
+    for (const ready of this.#subscriptions.values()) ready();
+    this.#subscriptions.clear();
+  }
   base = '';
   readonly sent: MockRocketMessage[] = [];
   readonly tokens = new Set<string>([MockRocketChat.TOKEN]);
@@ -112,6 +124,8 @@ export class MockRocketChat {
   }
 
   async stop() {
+    for (const socket of this.#subscriptions.keys()) socket.close(1001);
+    this.#subscriptions.clear();
     for (const socket of this.#sockets) socket.close(1001);
     await this.#app?.close();
   }
@@ -145,12 +159,20 @@ export class MockRocketChat {
           JSON.stringify({ msg: 'result', id: frame.id, result: { id: MockRocketChat.BOT._id } }),
         );
       } else if (frame.msg === 'sub' && frame.name === 'stream-room-messages') {
-        this.#sockets.add(socket);
-        socket.send(JSON.stringify({ msg: 'ready', subs: [frame.id] }));
+        const ready = () => {
+          if (socket.readyState !== 1) return;
+          this.#sockets.add(socket);
+          socket.send(JSON.stringify({ msg: 'ready', subs: [frame.id] }));
+        };
+        if (this.holdSubscriptions) this.#subscriptions.set(socket, ready);
+        else ready();
       } else if (frame.msg === 'method')
         socket.send(JSON.stringify({ msg: 'result', id: frame.id, result: null }));
     });
-    socket.on('close', () => this.#sockets.delete(socket));
+    socket.on('close', () => {
+      this.#sockets.delete(socket);
+      this.#subscriptions.delete(socket);
+    });
   }
 
   #stream(message: Record<string, unknown>) {

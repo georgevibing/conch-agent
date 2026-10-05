@@ -54,7 +54,39 @@ Turn a group off, and your assistant goes quiet there at once. **Forget** takes 
 - **Voice notes** are turned into words on your computer and answered like anything you typed. See [Voice](../features/voice.md#voice-notes-from-your-chat-apps).
 - **Routine results**, and a routine's questions, come to you there when the channel has **Routine results** on.
 - **Messages your assistant starts.** Ask in any chat, here or in Conch, "text me on WhatsApp when it's done" or "send the weather to my Telegram", and your assistant writes to you there. A [routine](../features/routines.md) can do the same. It only ever writes to your own private chat with Conch, never to anyone else. Without an app named, it uses the one you wrote from last.
-- **Three commands:** `/new` starts a fresh conversation, `/stop` stops the answer, `/help` explains. Any other `/name` runs your skill of that name.
+- **Chat controls:** `/new` starts a fresh conversation, `/stop` stops the answer, `/help` explains. `/settings` opens configuration and `/status` shows the current choices. Other `/name` commands run your skill of that name.
+
+## Choose how Conch works here
+
+Send `/settings` in your private chat. The menu shows the current provider, model,
+effort, fast mode and permissions. Telegram and other apps with buttons let you
+tap a choice; email, Signal, WhatsApp and other text-only apps show numbered
+answers. `/model`, `/effort` and `/mode` go straight to those choices. To find a
+model quickly, send `/model` followed by its name or a few words. You can also
+write `/effort high` or `/mode plan`; Conch still asks before saving.
+
+**This chat** changes the current conversation and saves your choices for fresh
+conversations in this channel. **Defaults across Conch** changes the defaults
+throughout Conch. Existing chats without their own choices follow those defaults
+on their next turn. Each change says which scope it affects and asks you to save it.
+Choose a provider and model from the connected providers; only the effort and
+speed controls that model supports are offered. If an answer is running, stop it
+or wait before changing this chat.
+
+The menu also controls routine notifications and voice replies in this channel,
+automatic titles, learning and memory tidying, offline fallback, personality,
+your name and About you, and turn limits. When Conch asks for text, the next
+message fills that setting; `/cancel` leaves it without saving. Menus expire
+after ten minutes. Open `/settings` again if a menu is old or Conch restarted.
+
+Only the channel owner can use settings, in a private chat. Another person you
+let in, a group member or a forwarded message cannot change them. Full trust
+has its own warning before you save it.
+
+**All other settings** opens Conch's existing settings pages when it has an
+address. Sign in there as usual. Credentials, choosing files, device appearance
+and controls that require a fresh sign-in stay there. Without an address, the
+menu tells you where to find them on the computer running Conch.
 
 ## It reconnects by itself
 

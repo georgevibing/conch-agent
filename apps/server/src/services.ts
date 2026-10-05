@@ -1331,6 +1331,15 @@ export class Services {
       conversations: this.conversations,
       attachments: this.attachments,
       settings: this.settings,
+      models: () => this.providers.models(),
+      address: () => this.address.status().url,
+      saveSettings: async (patch) => {
+        if (patch.preferences?.engine) await this.providers.use(patch.preferences.engine);
+        const learnedBefore = (await this.settings.get()).preferences.autoMemory;
+        await this.settings.update(patch);
+        if (!learnedBefore && patch.preferences?.autoMemory === true)
+          await this.learning.resumed().catch(() => undefined);
+      },
       adapter: (secrets) => adapterFor(secrets, endpoints),
       slack: (parts) => slackCheckFor(parts, endpoints),
       emit: (event) => this.broadcast.emit(event),

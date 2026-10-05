@@ -82,6 +82,21 @@ describe('Rocket.Chat (ADR 0083)', () => {
     });
   });
 
+  it('stays connecting until the message subscription is ready', async () => {
+    const { s, rc, keys } = await setup();
+    rc.holdSubscriptions = true;
+    const channel = await s.channels.create(keys);
+    await until(() => rc.waitingSubscriptions === 1, 'subscription requested');
+    expect(await state(s, channel.id)).toBe('connecting');
+    rc.releaseSubscriptions();
+    await until(() => state(s, channel.id).then((st) => st === 'online'), 'online');
+    rc.say('hi');
+    await until(
+      async () => (await s.channels.get(channel.id)).requests.length === 1,
+      'first message',
+    );
+  });
+
   it('talks with the owner over the realtime API, and asks with a number', async () => {
     const { s, rc } = await paired();
     expect(rc.last()?.text).toContain('**');

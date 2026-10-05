@@ -18,6 +18,10 @@ The link opens your bot in Telegram with one button, **START**. Press it and the
 
 <!-- conch:channel-scene telegram hello -->
 
+## Choose a model and settings
+
+Open the bot’s command menu and choose `/settings`. You can inspect the current model, select another provider or model, and set effort and permissions without sending a message to the assistant. Tap a choice, then **Save change**. `/status` shows what is selected. See [Choose how Conch works here](index.md#choose-how-conch-works-here) for preferences, defaults and other settings.
+
 ## Good to know
 
 - **Answers arrive as they're written.** Telegram shows the reply as a draft while your assistant works, with its own Stop button.

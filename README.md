@@ -131,7 +131,8 @@
   Microsoft Teams, Google Chat, Matrix, WeChat, LINE, Mattermost, Rocket.Chat, and plain text
   messages to a number of its own. In a group you turn on, it answers when
   mentioned: you as in private, everyone else in words only. Voice notes are
-  heard on your own computer.
+  heard on your own computer. From your private chat, `/settings` chooses the
+  model, effort, permissions and preferences; every channel uses the same controls.
 - **Your phone.** An installable app over a private Tailscale address, with
   notifications and voice.
 - **Your own address.** On a server, Conch answers at `conch.yourname.com` with
