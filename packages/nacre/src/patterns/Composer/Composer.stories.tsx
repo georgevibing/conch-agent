@@ -5,6 +5,7 @@ import { fn } from 'storybook/test';
 
 import { IconButton } from '../../components/IconButton';
 import { Tooltip } from '../../components/Tooltip';
+import { ContextMeter } from '../ContextMeter';
 import { DemoToolbar } from '../ModelPicker/fixtures';
 import { Composer, ComposerAttachment, ComposerChip, ComposerQueued } from './Composer';
 
@@ -197,6 +198,7 @@ export const Phone: Story = {
     toolbar: (
       <>
         <DemoToolbar initial={{ mode: 'bypassPermissions', effort: 'medium' }} />
+        <ContextMeter used={84_000} window={200_000} />
         <FolderChip path="~/projects/conch" />
       </>
     ),
@@ -210,8 +212,41 @@ export const Phone: Story = {
   ],
 };
 
-/** On a phone while it works: Stop takes the place, the rest stays put. */
+/** On a phone while it works: Stop takes the place, and the ring counts what it has used. */
 export const PhoneRunning: Story = {
   ...Phone,
-  args: { ...Phone.args, running: true, placeholder: 'Conch is working… Write what’s next' },
+  args: {
+    ...Phone.args,
+    running: true,
+    placeholder: 'Conch is working… Write what’s next',
+    toolbar: (
+      <>
+        <DemoToolbar initial={{ mode: 'bypassPermissions', effort: 'medium' }} />
+        <ContextMeter used={184_000} window={200_000} working={1_240_000} running />
+        <FolderChip path="~/projects/conch" />
+      </>
+    ),
+  },
+};
+
+/** The smallest phones (320 px), nearly full: the model's name gives way first, never the ring. */
+export const PhoneSmall: Story = {
+  ...Phone,
+  args: {
+    ...Phone.args,
+    toolbar: (
+      <>
+        <DemoToolbar initial={{ mode: 'acceptEdits', effort: 'medium' }} />
+        <ContextMeter used={186_000} window={200_000} />
+        <FolderChip path="~/projects/conch" />
+      </>
+    ),
+  },
+  decorators: [
+    (Story) => (
+      <div style={{ maxInlineSize: 320, marginInline: 'auto', paddingInline: 8 }}>
+        <Story />
+      </div>
+    ),
+  ],
 };
