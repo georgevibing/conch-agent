@@ -21,6 +21,7 @@ import type {
   Usage,
 } from '@conch/protocol';
 import { authorizeTool, hostComputerTools, HOST_NAMES } from '../host';
+import { runsUnsealedByTrust } from '../trust';
 
 import { cheapestModel } from '../../conversations/title';
 import { turnBudget, TurnWatch, withNote } from '../budget';
@@ -306,13 +307,19 @@ export function buildTools(
         // Read forgivingly, checked strictly; what's authorised is what runs (ADR 0072).
         const checked = checkHostArgs(host, raw, name);
         if (!checked.ok) return { text: checked.message, isError: true };
-        const denied = await authorizeTool(input, display, checked.args, id);
+        // Full trust, and the command needs what the seal withholds: it's asked for as leaving the
+        // box, so the guard sees it as that (a chat that read something untrusted still asks).
+        const args =
+          display === 'Bash' && runsUnsealedByTrust(input, String(checked.args.command ?? ''))
+            ? { ...checked.args, dangerouslyDisableSandbox: true }
+            : checked.args;
+        const denied = await authorizeTool(input, display, args, id);
         if (denied) return { text: denied, isError: true };
         // What went wrong goes back as it is (the command's own output, the file's missing): a
         // model told only "could not complete" guesses, and tells the person it's read-only.
         let result;
         try {
-          result = await run(host, checked.args);
+          result = await run(host, args);
         } catch (error) {
           input.signal.throwIfAborted();
           const said = error instanceof Error ? error.message : '';

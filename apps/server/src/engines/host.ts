@@ -10,7 +10,7 @@ import { z } from 'zod';
 
 import { sandboxSupport, secretPlaces } from '../conversations/sandbox';
 import { PROTECTED_MESSAGE, touchesProtected } from '../lib/protect';
-import { runsUnsealedByTrust, SEALED_HINT } from './trust';
+import { SEALED_HINT } from './trust';
 import type { HostTool, TurnInput } from './types';
 
 const MAX_FILE = 1024 * 1024;
@@ -115,7 +115,7 @@ export async function runHostCommand(
 ): Promise<string> {
   input.signal.throwIfAborted();
   // No box for this turn: this computer can't make one, or sealing is off in Settings.
-  const unboxed = unsealed || !sealable(input) || runsUnsealedByTrust(input, command);
+  const unboxed = unsealed || !sealable(input);
   if (unboxed) {
     // A command that names Conch's keys or your sign-ins is refused. Only a
     // speed bump: unsealed, a command runs with your access, which is why it asks first.
