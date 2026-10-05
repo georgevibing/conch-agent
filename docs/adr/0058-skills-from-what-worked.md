@@ -37,6 +37,10 @@ how far a bad skill travels once it's on a shelf.
 Conch's rule stays the one from ADR 0032: **the agent proposes, the person
 keeps.** Nothing is saved, turned on or trusted by Conch.
 
+> **Update (2026-10-05):** since [ADR 0087](./0087-quiet-learning.md), this rule covers
+> skills only. Memories learned in a chat you were in, that read nothing from outside, are
+> kept by themselves and said afterwards, with Undo.
+
 ## Decision
 
 ### 1. What counts as work that went well
