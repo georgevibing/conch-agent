@@ -285,6 +285,45 @@ describe('updating Conch itself', () => {
     },
   });
 
+  it('looks for a new Conch every quarter hour, and when a page comes back to an old look', async () => {
+    let looks = 0;
+    let behind = 0;
+    const { service, at, now, seen } = await world({
+      conch: {
+        head: async () => 'a'.repeat(40),
+        check: async ({ fetch }) => {
+          if (fetch) looks += 1;
+          return check({ behind, improvements: behind });
+        },
+      },
+    });
+    const start = now();
+    service.start();
+    service.stop();
+    // The daily look (programs too) comes first, then Conch alone, every quarter hour.
+    at(start + 7 * MINUTE);
+    await service.tick();
+    expect(looks).toBe(1);
+    at(start + 15 * MINUTE);
+    await service.tick();
+    expect(looks).toBe(1);
+    behind = 3;
+    at(start + 23 * MINUTE);
+    await service.tick();
+    expect(looks).toBe(2);
+    // What it found reaches every page at once.
+    expect(seen.at(-1)?.conch.behind).toBe(3);
+    // A page coming back: a look only when the last one is older than asked.
+    await service.lookConch({ ifOlderThan: 5 * MINUTE });
+    expect(looks).toBe(2);
+    at(start + 29 * MINUTE);
+    await Promise.all([
+      service.lookConch({ ifOlderThan: 5 * MINUTE }),
+      service.lookConch({ ifOlderThan: 5 * MINUTE }),
+    ]);
+    expect(looks).toBe(3);
+  });
+
   it('says how many improvements are waiting, and what’s new', async () => {
     const { service } = await world({ conch: fake({ kind: 'current' }) });
     await service.check();

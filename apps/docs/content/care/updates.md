@@ -4,7 +4,7 @@ description: Conch follows its releases, says what each one brings, and updates 
 order: 3
 ---
 
-Conch looks for updates once a day, quietly. When a new version of Conch is ready, a small **Update** button sits beside your name at the foot of the sidebar, wherever you are. A new release also gets a calm line at the top of the app, once: **Conch 0.3 is ready**, with **What's new**, **Update** and **Not now**. Programs Conch uses get a dot on the Settings button. Updating is one press, and Conch goes back to the version you had if anything fails.
+Conch looks for a new version of itself quietly and often: every quarter of an hour, every hour for releases, and whenever you come back to it. The programs it uses are looked at once a day. When a new version of Conch is ready, a small **Update** button sits beside your name at the foot of the sidebar, wherever you are. A new release also gets a calm line at the top of the app, once: **Conch 0.3 is ready**, with **What's new**, **Update** and **Not now**. Programs Conch uses get a dot on the Settings button. Updating is one press, and Conch goes back to the version you had if anything fails.
 
 ## See what's waiting
 

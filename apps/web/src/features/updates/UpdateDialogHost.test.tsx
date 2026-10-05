@@ -154,6 +154,37 @@ describe('the update dialog', () => {
   });
 });
 
+describe('noticing a new Conch', () => {
+  it('asks for a quick look when the page opens, and not again at once when it comes back', async () => {
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/updates': () => status(),
+      // It answers at once with what it knew; what the look finds arrives live.
+      'POST /api/updates/look': () => status(),
+    });
+    renderApp(<App />);
+    await waitFor(() =>
+      expect(calls.filter((c) => c.path === '/api/updates/look')).toHaveLength(1),
+    );
+    act(() =>
+      FakeSocket.last?.push({
+        type: 'updates.changed',
+        status: status({ behind: 4, improvements: 4, whatsNew: ['Attach files to a message'] }),
+      }),
+    );
+    // What the look found shows at once: the button beside your name.
+    expect(
+      await screen.findByRole('button', { name: 'Update Conch: 4 improvements' }),
+    ).toBeVisible();
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(calls.filter((c) => c.path === '/api/updates/look')).toHaveLength(1);
+  });
+});
+
 describe('updateView', () => {
   it('says why one press can’t do it, with the command', () => {
     const view = updateView(

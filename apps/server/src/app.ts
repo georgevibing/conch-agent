@@ -189,6 +189,9 @@ function sendError(reply: FastifyReply, error: unknown) {
   throw error;
 }
 
+/** A page coming back looks for a new Conch only if the last look is older than this. */
+const LOOK_AGAIN_MS = 5 * 60_000;
+
 export async function buildApp(services: Services) {
   const { config } = services;
   const app = Fastify({
@@ -872,6 +875,12 @@ export async function buildApp(services: Services) {
   app.get('/api/updates', () => services.updates.status());
   app.post('/api/updates/check', async () => {
     void services.updates.check();
+    return services.updates.status();
+  });
+  // A page coming back into view: look for a new Conch, unless someone just did.
+  // At most one quick look every few minutes, however often it's asked.
+  app.post('/api/updates/look', async () => {
+    void services.updates.lookConch({ ifOlderThan: LOOK_AGAIN_MS });
     return services.updates.status();
   });
   app.post('/api/updates/conch', async (request, reply) => {

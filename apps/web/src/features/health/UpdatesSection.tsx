@@ -364,7 +364,7 @@ export function UpdatesSection() {
     <Section
       ref={ref}
       title="Updates"
-      description="Conch looks once a day, quietly, and tells you here."
+      description="Conch looks for a new version of itself every few minutes, and for its programs once a day, and tells you here."
       status={
         <Button
           size="sm"

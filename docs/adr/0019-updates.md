@@ -22,7 +22,13 @@ So this is as much about what Conch refuses to do as about what it does.
 
 - `UpdatesService` (`apps/server/src/updates/`) looks once a day in the
   background: never in the first minute after start-up, a day after the last
-  look give or take an hour of jitter, and on **Check now**. Nothing waits on
+  look give or take an hour of jitter, and on **Check now**. Conch's own
+  version is looked at far more often, alone, since it's one quick question
+  (amended Oct 2026): every 15 minutes for a copy following its branch, every
+  hour for releases (a fifth of jitter either way), and when a page comes back
+  into view (`POST /api/updates/look`, single-flight, skipped if the last look
+  is under five minutes old; a page asks at most once a minute). What it finds
+  reaches open pages live (`updates.changed`). Nothing waits on
   a look. What it found is kept in `~/.conch/updates.json`, so the answer is
   there at once after a restart; a damaged file starts again with a note.
 - **Conch itself.** The checkout is found from the gateway's own location

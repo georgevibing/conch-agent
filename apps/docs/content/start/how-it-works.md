@@ -12,7 +12,7 @@ Your chats, memories, skills and settings are plain files in one folder, `~/.con
 
 Two things leave your computer, and only when you ask: what you say to the provider you chose, and what your assistant does in an app you connected. Choose the [model on this computer](../providers/ollama.md), and not even that.
 
-Conch itself only looks things up: once a day it looks for new versions of itself and of the programs it uses (`CONCH_UPDATE_CHECKS=off` stops that), and every few minutes it reaches a few well-known addresses to tell whether you're online. Neither carries anything of yours.
+Conch itself only looks things up: every quarter of an hour (every hour for releases) it looks for a new version of itself, once a day for the programs it uses, (`CONCH_UPDATE_CHECKS=off` stops that), and every few minutes it reaches a few well-known addresses to tell whether you're online. Neither carries anything of yours.
 
 ## The provider answers. Conch does the rest.
 

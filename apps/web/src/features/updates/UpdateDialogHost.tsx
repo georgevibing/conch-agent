@@ -3,7 +3,7 @@ import { Download, RefreshCw, RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useUi } from '../../app/ui';
-import { followRestart, useUpdateActions, useUpdates } from './queries';
+import { followRestart, useLookWhenBack, useUpdateActions, useUpdates } from './queries';
 import { ARRIVED, noteItems, short, updateView, type UpdateOffer } from './view';
 
 /**
@@ -13,6 +13,8 @@ import { ARRIVED, noteItems, short, updateView, type UpdateOffer } from './view'
  */
 export function UpdateDialogHost() {
   const { data: status } = useUpdates();
+  // A new Conch shows up while you're here, or as soon as you come back.
+  useLookWhenBack();
   const actions = useUpdateActions();
   const how = useUi((s) => s.updateDialog);
   const slow = useUi((s) => s.restartSlow);

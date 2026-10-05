@@ -20,6 +20,21 @@ export function nextLook(checkedAt: number, random: () => number): number {
   return checkedAt + DAY + Math.round((random() * 2 - 1) * HOUR);
 }
 
+/**
+ * When to look for a new Conch again: often, since it's one quick question
+ * (a `git fetch`, or one request for the releases) — every quarter of an hour
+ * for a copy that follows its branch, every hour for releases, give or take
+ * a fifth so many copies don't ask together. The programs keep their daily look.
+ */
+export function nextConchLook(
+  lookedAt: number,
+  source: 'branch' | 'releases',
+  random: () => number,
+): number {
+  const every = source === 'branch' ? 15 * MINUTE : HOUR;
+  return lookedAt + every + Math.round((random() * 2 - 1) * every * 0.2);
+}
+
 /** A look is due: not before the first one is allowed, nor before the next one is. */
 export function lookDue(now: number, earliest: number, next: number | undefined): boolean {
   return now >= Math.max(earliest, next ?? 0);

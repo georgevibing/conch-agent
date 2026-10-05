@@ -30,7 +30,7 @@ import { downloadReason, type AppReleases } from './app';
 import type { ConchCheckout, ConchResult, UpdateProgressReport } from './conch';
 import { currentFolder, readState, swapIn, writeState } from './layout';
 import type { Offer, ReleaseFollower } from './releases';
-import { DAY, MINUTE, firstLook, lookDue, nextLook, overnight } from './schedule';
+import { DAY, MINUTE, firstLook, lookDue, nextConchLook, nextLook, overnight } from './schedule';
 import { compareVersions, isNewer } from './version';
 
 const Program = z.object({
@@ -105,6 +105,9 @@ const Cache = z.object({
   auto: z.boolean().default(false),
   checkedAt: z.number().optional(),
   nextCheckAt: z.number().optional(),
+  /** The last look at Conch's own version, and the next one due (more often than the rest). */
+  conchLookedAt: z.number().optional(),
+  conchNextAt: z.number().optional(),
   conch: ConchCache.prefault({}),
   programs: z.record(z.string(), Program).default({}),
   outcome: ConchUpdate.shape.outcome,
@@ -186,6 +189,7 @@ export class UpdatesService {
   #loaded?: Promise<void>;
   #saving: Promise<void> = Promise.resolve();
   #checking?: Promise<void>;
+  #lookingConch?: Promise<void>;
   #conchJob?: UpdateProgressReport;
   /** The commit Conch started from: another one in its folder means a restart finishes an update. */
   #bootHead?: string;
@@ -436,7 +440,40 @@ export class UpdatesService {
     const now = this.#now();
     this.#cache.checkedAt = now;
     this.#cache.nextCheckAt = nextLook(now, this.deps.random ?? Math.random);
+    this.#lookedAtConch(now);
     await this.#save();
+  }
+
+  #lookedAtConch(now: number): void {
+    this.#cache.conchLookedAt = now;
+    this.#cache.conchNextAt = nextConchLook(
+      now,
+      this.#followsReleases() || this.deps.app ? 'releases' : 'branch',
+      this.deps.random ?? Math.random,
+    );
+  }
+
+  /**
+   * Look for a new Conch only (single-flight): one quick question, so it's
+   * asked often, and whenever someone comes back to Conch and the last look
+   * is older than `ifOlderThan`. What it finds reaches every open page at once.
+   */
+  lookConch({ ifOlderThan }: { ifOlderThan?: number } = {}): Promise<void> {
+    const busy = this.#lookingConch ?? this.#checking;
+    if (busy) return busy;
+    this.#lookingConch = (async () => {
+      await this.#load();
+      const now = this.#now();
+      const last = this.#cache.conchLookedAt;
+      if (this.#conchJob || (ifOlderThan !== undefined && last && now - last < ifOlderThan)) return;
+      await this.#checkConch(true);
+      this.#lookedAtConch(this.#now());
+      await this.#save();
+      this.#emit();
+    })().finally(() => {
+      this.#lookingConch = undefined;
+    });
+    return this.#lookingConch;
   }
 
   async #checkConch(fetch: boolean): Promise<void> {
@@ -1063,6 +1100,8 @@ export class UpdatesService {
     await this.#load();
     if (!this.#checking && lookDue(now, this.#earliest, this.#cache.nextCheckAt))
       await this.check();
+    // Conch's own version, more often: a push or a release shows within the quarter hour.
+    else if (lookDue(now, this.#earliest, this.#cache.conchNextAt)) await this.lookConch();
     if (!this.#cache.auto || !overnight(now) || this.deps.busy() || this.#jobs.size) return;
     for (const program of (await this.status()).programs) {
       const known: Program | undefined = this.#cache.programs[program.id];

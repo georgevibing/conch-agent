@@ -6,6 +6,8 @@ import { request } from '../../api/client';
 export const updatesApi = {
   status: () => request(UpdatesStatus, '/api/updates'),
   check: () => request(UpdatesStatus, '/api/updates/check', { method: 'POST', body: {} }),
+  /** A quick look for a new Conch only, unless one was just had; what it finds arrives live. */
+  look: () => request(UpdatesStatus, '/api/updates/look', { method: 'POST', body: {} }),
   updateConch: () => request(UpdatesStatus, '/api/updates/conch', { method: 'POST', body: {} }),
   updateAll: () => request(UpdatesStatus, '/api/updates/programs', { method: 'POST', body: {} }),
   updateProgram: (id: string) =>

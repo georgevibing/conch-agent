@@ -1,6 +1,6 @@
 import type { ReleaseChannel, UpdatesStatus } from '@conch/protocol';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { ApiError } from '../../api/client';
 import { useUi } from '../../app/ui';
@@ -126,4 +126,38 @@ export function useUpdateActions() {
     error,
     dialog,
   };
+}
+
+/** A page asks for a fresh look at most this often; the gateway holds back further. */
+const LOOK_EVERY_MS = 60_000;
+
+/**
+ * Coming back to Conch (opening it, switching to its tab, unlocking the
+ * phone, the network returning) asks for a quick look for a new Conch, so the
+ * Update button shows up without waiting for the next scheduled look. What it
+ * finds reaches the page at once; the gateway's own look runs every quarter
+ * hour as well.
+ */
+export function useLookWhenBack(): void {
+  const client = useQueryClient();
+  useEffect(() => {
+    let last = 0;
+    const look = () => {
+      if (document.visibilityState === 'hidden' || Date.now() - last < LOOK_EVERY_MS) return;
+      last = Date.now();
+      void updatesApi
+        .look()
+        .then((next) => client.setQueryData(updateKeys.status, next))
+        .catch(() => undefined);
+    };
+    look();
+    document.addEventListener('visibilitychange', look);
+    window.addEventListener('focus', look);
+    window.addEventListener('online', look);
+    return () => {
+      document.removeEventListener('visibilitychange', look);
+      window.removeEventListener('focus', look);
+      window.removeEventListener('online', look);
+    };
+  }, [client]);
 }

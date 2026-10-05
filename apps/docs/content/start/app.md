@@ -42,7 +42,7 @@ Turn on **Always on** in **Settings → Health**. The app then starts when you l
 
 ## Updates
 
-The app looks for new releases once a day, in the channel you chose in **Settings → Health → Updates**, and says so quietly. **Update Conch** downloads the new version, checks it against the release, installs it and opens it again. Your chats are safe.
+The app looks for new releases every hour, and when you come back to it, in the channel you chose in **Settings → Health → Updates**, and says so quietly. **Update Conch** downloads the new version, checks it against the release, installs it and opens it again. Your chats are safe.
 
 A Mac app that isn't signed, and the `.deb`, can't replace themselves. There the button says **Download Conch** and opens the release page; install the new version over the old one. See [Updates](../care/updates.md).
 
