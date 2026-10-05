@@ -12,7 +12,7 @@
  * it stays on this computer or your own network (`isPrivateUrl`). A key goes
  * only to the server it was given for. Nothing here follows a redirect.
  */
-import { randomBytes } from 'node:crypto';
+import { randomInt } from 'node:crypto';
 
 import type { ServerPreset, ServerProbe } from '@conch/protocol';
 
@@ -137,8 +137,7 @@ export function keyCheckFor(base: string): string | undefined {
 /** A new server's id. */
 export function newServerId(): `server-${string}` {
   const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  const bytes = randomBytes(8);
-  return `server-${[...bytes].map((b) => alphabet[b % alphabet.length]).join('')}`;
+  return `server-${Array.from({ length: 8 }, () => alphabet[randomInt(alphabet.length)]).join('')}`;
 }
 
 /**
