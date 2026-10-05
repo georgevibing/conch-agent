@@ -32,6 +32,8 @@ export interface RoutineSpendingGaugeProps extends Omit<ComponentProps<'div'>, '
   projectedUsd?: number;
   /** When the month starts again (the 1st). */
   resetsAt: number;
+  /** What's spending: “Routines this month”, “Learning this month” (ADR 0087). */
+  label?: string;
   locale?: string;
   timeZone?: string;
 }
@@ -46,6 +48,7 @@ export function RoutineSpendingGauge({
   limitUsd,
   projectedUsd,
   resetsAt,
+  label = 'Routines this month',
   locale = 'en-US',
   timeZone,
   className,
@@ -73,7 +76,7 @@ export function RoutineSpendingGauge({
     .join(' · ');
   return (
     <UsageGauge
-      label="Routines this month"
+      label={label}
       reading={reading}
       {...(limitUsd !== null && { percentLeft: Math.round(100 - used) })}
       severity={over && severity === 'normal' ? 'warning' : severity}

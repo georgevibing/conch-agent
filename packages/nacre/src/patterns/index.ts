@@ -61,6 +61,7 @@ export * from './ComeHome';
 export * from './Artifacts';
 export * from './ConchApps';
 export * from './Memory';
+export * from './Learning';
 export * from './Docs';
 export * from './Site';
 export * from './Welcome';
