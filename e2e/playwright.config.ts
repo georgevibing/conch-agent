@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -7,6 +7,10 @@ import { defineConfig, devices } from '@playwright/test';
 
 import { hereCookieName, ThisComputer } from '../apps/server/src/auth/here';
 import { hermesHome, openClawHome, openClawTeamHome } from '../apps/server/src/import/fixtures';
+import { selectProjects } from '../scripts/e2e-projects.mjs';
+
+// Match the file guard's canonical roots, including macOS's /var → /private/var.
+const tempRoot = realpathSync(tmpdir());
 
 /**
  * End-to-end tests run the real gateway (with the scripted mock engine) serving
@@ -21,7 +25,7 @@ import { hermesHome, openClawHome, openClawTeamHome } from '../apps/server/src/i
  */
 // Workers load this file again: they inherit the folder the main process made.
 const devicesHome = (process.env.CONCH_E2E_DEVICES_HOME ??= mkdtempSync(
-  join(tmpdir(), 'conch-e2e-devices-'),
+  join(tempRoot, 'conch-e2e-devices-'),
 ));
 
 /**
@@ -29,7 +33,7 @@ const devicesHome = (process.env.CONCH_E2E_DEVICES_HOME ??= mkdtempSync(
  * folder with `~/.openclaw` in it (apps/server/src/import/fixtures.ts).
  */
 const importHome = (process.env.CONCH_E2E_IMPORT_HOME ??= (() => {
-  const home = mkdtempSync(join(tmpdir(), 'conch-e2e-import-'));
+  const home = mkdtempSync(join(tempRoot, 'conch-e2e-import-'));
   openClawHome(home);
   return home;
 })());
@@ -39,7 +43,7 @@ const importHome = (process.env.CONCH_E2E_IMPORT_HOME ??= (() => {
  * Slack bot with one key, and Hermes with its model and the same.
  */
 const importMoreHome = (process.env.CONCH_E2E_IMPORT_MORE_HOME ??= (() => {
-  const home = mkdtempSync(join(tmpdir(), 'conch-e2e-import-more-'));
+  const home = mkdtempSync(join(tempRoot, 'conch-e2e-import-more-'));
   openClawTeamHome(home);
   hermesHome(home);
   return home;
@@ -61,7 +65,7 @@ function withHereKey(home: string): string {
 }
 
 /** The cookie a browser gets once Conch has opened it, made with the same key, for a gateway's port. */
-const thisComputer = new ThisComputer(withHereKey(mkdtempSync(join(tmpdir(), 'conch-e2e-here-'))));
+const thisComputer = new ThisComputer(withHereKey(mkdtempSync(join(tempRoot, 'conch-e2e-here-'))));
 const openedFromConch = (port: number) => ({
   cookies: [
     {
@@ -80,7 +84,7 @@ const openedFromConch = (port: number) => ({
 
 /** The `this-computer` journey asks for links through this gateway's own folder, as a launcher does. */
 const thisComputerHome = (process.env.CONCH_E2E_THIS_COMPUTER_HOME ??= mkdtempSync(
-  join(tmpdir(), 'conch-e2e-this-computer-'),
+  join(tempRoot, 'conch-e2e-this-computer-'),
 ));
 
 /**
@@ -88,22 +92,22 @@ const thisComputerHome = (process.env.CONCH_E2E_THIS_COMPUTER_HOME ??= mkdtempSy
  * `conch hello` does, and starts again from scratch with `conch reset`'s own store call.
  */
 const passkeysHome = (process.env.CONCH_E2E_PASSKEYS_HOME ??= mkdtempSync(
-  join(tmpdir(), 'conch-e2e-passkeys-'),
+  join(tempRoot, 'conch-e2e-passkeys-'),
 ));
 
 /** The `trust` journey puts a signed skill where its gateway looks, and changes it. */
 const trustHome = (process.env.CONCH_E2E_TRUST_HOME ??= mkdtempSync(
-  join(tmpdir(), 'conch-e2e-trust-'),
+  join(tempRoot, 'conch-e2e-trust-'),
 ));
 
 /** The `skill-scope` journey puts a skill where its gateway looks, and signs one from the terminal. */
 const skillScopeHome = (process.env.CONCH_E2E_SKILL_SCOPE_HOME ??= mkdtempSync(
-  join(tmpdir(), 'conch-e2e-skill-scope-'),
+  join(tempRoot, 'conch-e2e-skill-scope-'),
 ));
 
 /** The `releases` journey's pretend upstream: a bare origin with signed release tags (ADR 0051). */
 const releasesWorld = (process.env.CONCH_E2E_RELEASES_WORLD ??= mkdtempSync(
-  join(tmpdir(), 'conch-e2e-releases-'),
+  join(tempRoot, 'conch-e2e-releases-'),
 ));
 
 const scenarios = {
@@ -167,7 +171,7 @@ const scenarios = {
     port: 4344,
     env: {
       CONCH_MOCK_STATE: 'ready',
-      GH_CONFIG_DIR: mkdtempSync(join(tmpdir(), 'conch-e2e-gh-')),
+      GH_CONFIG_DIR: mkdtempSync(join(tempRoot, 'conch-e2e-gh-')),
       GH_TOKEN: '',
       GITHUB_TOKEN: '',
     },
@@ -260,24 +264,16 @@ const root = join(import.meta.dirname, '..');
 
 /**
  * Which journeys run, so only their gateways start (other sessions may be using
- * the other ports): `--project x`, or `CONCH_E2E_ONLY=local,ready`. The browser
- * journeys depend on every other one, so choosing them runs everything.
+ * the other ports): `--project x`, or `CONCH_E2E_ONLY=local,ready`.
+ * CI partitions projects before creating gateways, rather than starting all 54
+ * on every shard. A selected browser project waits only for its shard's journeys.
  */
-function picked(): Set<string> | undefined {
-  const names = [
-    ...process.argv.flatMap((arg, i, all) =>
-      arg === '--project'
-        ? [all[i + 1] ?? '']
-        : arg.startsWith('--project=')
-          ? [arg.slice(10)]
-          : [],
-    ),
-    ...(process.env.CONCH_E2E_ONLY?.split(',').map((name) => name.trim()) ?? []),
-  ].filter(Boolean);
-  return names.length && !names.includes('browser') ? new Set(names) : undefined;
-}
-const only = picked();
-const chosen = Object.entries(scenarios).filter(([name]) => !only || only.has(name));
+const only = selectProjects(Object.keys(scenarios), {
+  argv: process.argv.slice(2),
+  only: process.env.CONCH_E2E_ONLY,
+  shard: process.env.CONCH_E2E_SHARD,
+});
+const chosen = Object.entries(scenarios).filter(([name]) => only.has(name));
 
 export default defineConfig({
   testDir: '.',
@@ -288,12 +284,15 @@ export default defineConfig({
   // timing-sensitive ones (streaming, sign-in, the terminal) — and ends sooner, not later.
   // CI's runner has four cores.
   workers: process.env.CI ? 2 : 3,
-  reporter: [['list']],
+  forbidOnly: Boolean(process.env.CI),
+  reporter: process.env.CI ? [['list'], ['github'], ['html', { open: 'never' }]] : [['list']],
   use: {
     ...devices['Desktop Chrome'],
     ...(process.env.CONCH_TEST_BROWSER
       ? { launchOptions: { executablePath: process.env.CONCH_TEST_BROWSER } }
-      : { channel: 'chrome' }),
+      : process.env.CI
+        ? {}
+        : { channel: 'chrome' }),
     // The specs read dates and times as en-US; don't inherit the machine's locale.
     locale: 'en-US',
     trace: 'retain-on-failure',
@@ -329,16 +328,16 @@ export default defineConfig({
       CONCH_MOCK_SPEED: '0.25',
       CONCH_PORT: String(s.port),
       CONCH_HOME: withHereKey(
-        (s.env as Record<string, string>).CONCH_HOME ?? mkdtempSync(join(tmpdir(), 'conch-e2e-')),
+        (s.env as Record<string, string>).CONCH_HOME ?? mkdtempSync(join(tempRoot, 'conch-e2e-')),
       ),
       // No journey sees the OpenClaw or Hermes of whoever runs it: only `import` has one.
       CONCH_IMPORT_HOME:
         (s.env as Record<string, string>).CONCH_IMPORT_HOME ??
-        mkdtempSync(join(tmpdir(), 'conch-e2e-nohome-')),
+        mkdtempSync(join(tempRoot, 'conch-e2e-nohome-')),
       CONCH_WEB_DIST: join(root, 'apps/web/dist'),
       CONCH_LOG_LEVEL: 'warn',
       // No journey can reach GitHub as whoever runs it: no gh sign-in, no token.
-      GH_CONFIG_DIR: mkdtempSync(join(tmpdir(), 'conch-e2e-gh-')),
+      GH_CONFIG_DIR: mkdtempSync(join(tempRoot, 'conch-e2e-gh-')),
       GH_TOKEN: '',
       GITHUB_TOKEN: '',
     },

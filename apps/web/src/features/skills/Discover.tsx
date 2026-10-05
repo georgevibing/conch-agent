@@ -38,8 +38,8 @@ import {
   SearchX,
   ShieldCheck,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router';
 
 import { ApiError } from '../../api/client';
 import { useAssistantName } from '../integrations/queries';
@@ -68,16 +68,18 @@ const turnedOff = (error: unknown) => error instanceof ApiError && error.status 
  */
 export function DiscoverPanel() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [params, setParams] = useSearchParams();
   const q = params.get('q')?.trim() ?? '';
   const asked = params.get('kind');
   const category = MarketCategory.safeParse(asked).success ? (asked as MarketCategory) : undefined;
   const [typed, setTyped] = useState(q);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // A short pause after typing before asking: one search, not one per letter.
   useEffect(() => {
     const words = typed.trim();
-    if (words === q) return;
-    const timer = setTimeout(
+    if (words === q || !/^\/skills\/discover\/?$/.test(pathname)) return;
+    searchTimer.current = setTimeout(
       () =>
         setParams(
           (now) => {
@@ -90,8 +92,8 @@ export function DiscoverPanel() {
         ),
       350,
     );
-    return () => clearTimeout(timer);
-  }, [typed, q, setParams]);
+    return () => clearTimeout(searchTimer.current);
+  }, [typed, q, setParams, pathname]);
 
   const { data, isPending, isFetching, error } = useMarket(q, category);
   const setCategory = (next: string | undefined) =>
@@ -161,7 +163,12 @@ export function DiscoverPanel() {
         offline={offline || (Boolean(error) && !listings.length)}
         limited={limited}
         query={q}
-        onOpen={(listing) => void navigate(listingPath(listing.id))}
+        onOpen={(listing) => {
+          // A lazy route may take longer than the debounce to mount. Cancel now,
+          // before navigation, so a pending search cannot take us back to the shelf.
+          clearTimeout(searchTimer.current);
+          void navigate(listingPath(listing.id));
+        }}
         emptyAction={
           q ? (
             <Button

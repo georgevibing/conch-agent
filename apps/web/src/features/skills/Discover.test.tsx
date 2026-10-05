@@ -5,7 +5,7 @@ import type {
   SkillDetail,
   SkillOrigin,
 } from '@conch/protocol';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -14,7 +14,10 @@ import { MarketSkillView } from './Discover';
 import { SkillDetailView } from './SkillDetailView';
 import { SkillsView } from './SkillsView';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 const notes: MarketListing = {
   id: 'clawhub:ada/meeting-notes',
@@ -86,6 +89,26 @@ const added: SkillDetail = {
 };
 
 describe('Discover', () => {
+  it.each(['/skills/discover', '/skills/discover?q=canvas'])(
+    'opening a skill from %s cancels a pending search, even while the shelf stays mounted',
+    async (route) => {
+      mockFetch({
+        'GET /api/state': () => appState(),
+        'GET /api/skills': () => ({ skills: [], sources: [] }),
+        'GET /api/skills/market': () => results([canvas, notes]),
+      });
+      const { where } = renderApp(<SkillsView />, { route });
+      const open = await screen.findByRole('button', { name: /Meeting notes, from ClawHub/ });
+      vi.useFakeTimers();
+      const search = screen.getByRole('searchbox', { name: 'Search skills people share' });
+      // Keep the search pending until after the click, regardless of runner speed.
+      fireEvent.change(search, { target: { value: 'meeting' } });
+      fireEvent.click(open);
+      await act(() => vi.advanceTimersByTimeAsync(1_000));
+      expect(where()).toBe(`/skills/discover/${encodeURIComponent(notes.id)}`);
+    },
+  );
+
   it('is its own tab, with ideas, kinds and a shelf; a search goes in the address', async () => {
     const calls = mockFetch({
       'GET /api/state': () => appState(),

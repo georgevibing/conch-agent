@@ -39,6 +39,7 @@ test.beforeEach(async ({ request }) => {
     await request.delete(`/api/channels/${c.id}`);
   // Gmail the app, when a journey let the email channel's sign-in be used for it.
   await request.delete('/api/integrations/gmail');
+  await request.post(`${MAIL}/__control/reset`);
   await request.post(`${MESSAGES}/__control/show`);
 });
 
@@ -158,6 +159,18 @@ test('a revoked app password stops only that channel, and a new one brings it ba
     },
   });
   const id = ((await made.json()) as { id: string }).id;
+  expect(made.ok()).toBe(true);
+  // Creation checks the credentials, then starts the inbox connection in the
+  // background. Revoke an established connection, not a half-finished greeting
+  // (which exercises the connection timeout instead of password revocation).
+  await expect
+    .poll(async () => {
+      const { channels } = (await (await request.get('/api/channels')).json()) as {
+        channels: { id: string; health: { state: string } }[];
+      };
+      return channels.find((channel) => channel.id === id)?.health.state;
+    })
+    .toBe('online');
   await request.post(`${MAIL}/__control/revoke`);
   await page.goto(`/channels/${id}`);
   await expect(page.getByText('It needs a new app password')).toBeVisible({ timeout: 20_000 });

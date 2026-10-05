@@ -13,8 +13,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
-    runs-on: ubuntu-latest
+  static:
+    name: Format, lint, types and builds
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -23,27 +25,77 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test:installer
-      # `check` bounds both layers of parallelism: static checks first, then one
-      # test workspace with two Vitest workers. Running every task/pool together
-      # starves axe scans until they time out and leak into the following test.
-      - run: pnpm check
+      - run: pnpm format:check
+      - run: pnpm test:tooling
+      - run: pnpm exec turbo run lint typecheck --concurrency=2
       - run: pnpm build-storybook
       - run: pnpm docs:build
+
+  unit:
+    name: Unit / ${{ matrix.suite }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: server 1 of 2
+            command: pnpm --filter @conch/server test --maxWorkers=2 --shard=1/2
+          - suite: server 2 of 2
+            command: pnpm --filter @conch/server test --maxWorkers=2 --shard=2/2
+          - suite: nacre
+            command: pnpm --filter @conch/nacre test --maxWorkers=2
+          - suite: web, docs, protocol and desktop
+            command: pnpm exec turbo run test --filter='!@conch/server' --filter='!@conch/nacre' --concurrency=1 -- --maxWorkers=2
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Bound concurrency on each runner; scale out instead of competing with axe,
+      # real sockets and child processes on the same machine. Run every suite even
+      # if another fails, so one cleanup error doesn't hide the rest of the results.
+      - run: ${{ matrix.command }}
+
+  e2e:
+    name: Browser journeys / ${{ matrix.shard }} of 4
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      CONCH_E2E_SHARD: ${{ matrix.shard }}/4
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Use the browser matching Playwright, not the runner image's moving Chrome.
+      - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm e2e
-      # When a journey fails, keep what it saw (screenshots, traces, the page's text).
-      - if: failure()
+      - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-results
-          path: test-results/
+          name: e2e-results-${{ matrix.shard }}
+          path: |
+            test-results/
+            playwright-report/
           retention-days: 7
           if-no-files-found: ignore
 
   # The desktop app (ADR 0054), driven for real: it opens Conch, keeps it
   # running with its window closed, restarts a crashed gateway, and quits.
   desktop:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -55,10 +107,25 @@ jobs:
       # Ubuntu 24.04 keeps apps from making the namespaces Chromium's sandbox uses.
       - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: xvfb-run -a pnpm desktop:e2e
-      - if: failure()
+      # Keep evidence of a failed first attempt even when the retry passes.
+      - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: desktop-e2e-results
           path: test-results/desktop/
           retention-days: 7
           if-no-files-found: ignore
+
+  # Preserve one stable gate for branch rules. Website publication still waits
+  # for the entire CI workflow, so no partial pass can publish the site.
+  check:
+    if: ${{ always() }}
+    needs: [static, unit, e2e, desktop]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require every suite to pass
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node -e 'const jobs = JSON.parse(process.env.RESULTS); for (const [name, job] of Object.entries(jobs)) { console.log(`${name}: ${job.result}`); } if (Object.values(jobs).some(job => job.result !== "success")) process.exit(1);'

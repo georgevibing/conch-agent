@@ -1246,6 +1246,13 @@ Known limits:
 | Visual        | Storybook 10 (+ a11y addon), `scripts/snap.mjs` screenshots                                   |
 | Orchestration | Turborepo (`pnpm check`)                                                                      |
 
+CI runs static checks/builds, bounded unit-test pools, four browser-journey shards,
+and the desktop journey on separate Ubuntu 24.04 runners. The final `check` job
+requires every suite to succeed. Browser shards select their projects before
+starting gateways; every journey stays together, and the browser project waits
+only for other journeys in its own shard. See [CI](./docs/CI.md) for commands,
+failure triage and the October 2026 audit.
+
 ## Decisions
 
 Recorded in [docs/adr](./docs/adr). Start with

@@ -2,6 +2,8 @@ pnpm-lock.yaml
 dist
 storybook-static
 coverage
+test-results
+playwright-report
 .turbo
 apps/desktop/payload
 apps/desktop/.cache

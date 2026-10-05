@@ -18,6 +18,9 @@ import { brokenConch, notes, pretendConch } from './releases-world';
  * in and restarts — the page comes back by itself on the new version.
  */
 const world = process.env.CONCH_E2E_RELEASES_WORLD ?? '';
+// Rollback deliberately builds on the installed version from the first journey.
+// If that journey fails, report its cause once and don't run on a broken fixture.
+test.describe.configure({ mode: 'serial' });
 const where = () =>
   JSON.parse(readFileSync(join(world, 'world.json'), 'utf8')) as {
     origin: string;

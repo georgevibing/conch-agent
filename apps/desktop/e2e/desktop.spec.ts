@@ -35,6 +35,26 @@ test.beforeEach(() => {
 });
 
 test.afterEach(async () => {
+  const info = test.info();
+  if (app) {
+    const failed = info.status !== info.expectedStatus;
+    if (failed) {
+      const page = app.windows().find((window) => !window.isClosed());
+      const path = info.outputPath('desktop.png');
+      await page
+        ?.screenshot({ path, timeout: 5_000 })
+        .then(() => info.attach('desktop', { path, contentType: 'image/png' }))
+        .catch(() => undefined);
+    }
+    const path = failed ? info.outputPath('trace.zip') : undefined;
+    await app
+      .context()
+      .tracing.stop({ path })
+      .then(async () => {
+        if (path) await info.attach('trace', { path, contentType: 'application/zip' });
+      })
+      .catch(() => undefined);
+  }
   await app?.close().catch(() => undefined);
   app = undefined;
   for (const child of others.splice(0)) child.kill();
@@ -75,6 +95,9 @@ async function launch(): Promise<{ app: ElectronApplication; page: Page }> {
     args: [here],
     env: { ...env, CONCH_HOME: home, CONCH_PORT: String(port), CONCH_ENGINE: 'mock' },
   });
+  // Electron contexts aren't created by Playwright's page fixture, so record
+  // them explicitly; the fixture's `use.trace` option doesn't start this trace.
+  await app.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
   // Links and sign-ins go to the person's browser: here, to a list.
   await app.evaluate(({ shell }) => {
     const opened: string[] = [];
@@ -117,7 +140,9 @@ async function onboard(page: Page) {
   expect(saved.status()).toBe(200);
   await api.dispose();
   await page.reload();
-  await expect(page.getByRole('textbox', { name: 'Message Conch' })).toBeVisible();
+  // Focus is set after the composer's keyboard handler is attached. Visibility
+  // alone lets a fast test press Enter before React is ready to send it.
+  await expect(page.getByRole('textbox', { name: 'Message Conch' })).toBeFocused();
 }
 
 test('opens Conch in its window, on the gateway it carries, and talks', async () => {
