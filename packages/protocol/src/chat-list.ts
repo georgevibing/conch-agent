@@ -77,6 +77,14 @@ export const BulkChatsBody = z
   });
 export type BulkChatsBody = z.infer<typeof BulkChatsBody>;
 
+/** How many changed, and which couldn't (one already gone counts as neither). */
+export const BulkChatsResult = z.object({
+  ok: z.literal(true),
+  done: z.number(),
+  failed: z.array(z.string()).default([]),
+});
+export type BulkChatsResult = z.infer<typeof BulkChatsResult>;
+
 // ── What's new ──────────────────────────────────────────────────────────────
 
 interface Seeable {

@@ -865,7 +865,11 @@ export class ConversationManager {
   /** A folder went: its chats go back to the list, nothing else about them changes. */
   async unfile(folderId: string) {
     for (const record of await this.deps.store.list())
-      if (record.folderId === folderId) await this.change(record.id, { folder: null });
+      if (record.folderId === folderId)
+        await this.change(record.id, { folder: null }).catch((error: unknown) => {
+          // Deleted meanwhile: nothing left to take out.
+          if (!(error instanceof ConversationError && error.code === 'not-found')) throw error;
+        });
   }
 
   /**
@@ -3080,8 +3084,15 @@ export class ConversationManager {
     const stored = await this.deps.store.get(id);
     if (!stored) throw new ConversationError('not-found', 'Conversation not found.');
     const events = await this.deps.store.events(id);
+    // While the log was read, someone else may have loaded it, or changed how it's listed
+    // (pinned, filed, seen): keep theirs, never the record from before the wait.
+    const meanwhile = this.#live.get(id);
+    if (meanwhile) return meanwhile;
+    const latest = (await this.deps.store.get(id)) ?? stored;
+    const raced = this.#live.get(id);
+    if (raced) return raced;
     const live: Live = {
-      record: upgrade(stored, events.at(-1)?.seq ?? -1),
+      record: upgrade(latest, events.at(-1)?.seq ?? -1),
       events,
       seq: (events.at(-1)?.seq ?? -1) + 1,
       permissions: new Map(),

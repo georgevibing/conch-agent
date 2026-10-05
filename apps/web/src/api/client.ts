@@ -19,6 +19,7 @@ import {
   CompactResult,
   ConversationSummary,
   ChatFolder,
+  BulkChatsResult,
   type BulkChatsBody,
   type ChatChange,
   type NewFolderBody,
@@ -267,7 +268,7 @@ export const api = {
     request(Ok, `/api/conversations/${id}`, { method: 'PATCH', body: { seen: true } }),
   /** The same change to many chats, or deleting them (Select in the list). */
   bulkConversations: (body: BulkChatsBody) =>
-    request(z.object({ ok: z.literal(true), done: z.number() }), '/api/conversations/bulk', {
+    request(BulkChatsResult, '/api/conversations/bulk', {
       method: 'POST',
       body,
     }),

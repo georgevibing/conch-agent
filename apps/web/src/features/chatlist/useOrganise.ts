@@ -32,9 +32,19 @@ export function useOrganise() {
   const navigate = useNavigate();
   const { conversationId } = useParams();
 
-  const snapshot = () => client.getQueryData<ConversationSummary[]>(keys.conversations);
-  const restore = (before: ConversationSummary[] | undefined) => {
-    if (before) client.setQueryData(keys.conversations, before);
+  /**
+   * Put these chats back as they were, and only these: anything that arrived
+   * meanwhile (a new chat from a chat app, another chat's reply) stays.
+   */
+  const restore = (chats: readonly ConversationSummary[]) => {
+    const before = new Map(chats.map((c) => [c.id, c]));
+    client.setQueryData<ConversationSummary[]>(keys.conversations, (list) => {
+      const present = new Set((list ?? []).map((c) => c.id));
+      const missing = chats.filter((c) => !present.has(c.id));
+      return [...(list ?? []).map((c) => before.get(c.id) ?? c), ...missing].sort(
+        (a, b) => b.updatedAt - a.updatedAt,
+      );
+    });
   };
   const applyLocally = (ids: ReadonlySet<string>, change: ChatChange) =>
     client.setQueryData<ConversationSummary[]>(keys.conversations, (list) =>
@@ -44,15 +54,24 @@ export function useOrganise() {
   /** One change to one chat or several; true when it held. */
   const change = async (chats: readonly ConversationSummary[], next: ChatChange) => {
     if (!chats.length) return false;
-    const before = snapshot();
     applyLocally(new Set(chats.map((c) => c.id)), next);
     try {
       const [only] = chats;
       if (chats.length === 1 && only) await api.changeConversation(only.id, next);
-      else await api.bulkConversations({ ids: chats.map((c) => c.id), change: next });
+      else {
+        const { failed } = await api.bulkConversations({
+          ids: chats.map((c) => c.id),
+          change: next,
+        });
+        if (failed.length) {
+          restore(chats.filter((c) => failed.includes(c.id)));
+          toast.error(`Couldn’t change ${plural(failed.length, 'chat')}`);
+          return failed.length < chats.length;
+        }
+      }
       return true;
     } catch (e) {
-      restore(before);
+      restore(chats);
       toast.error('Couldn’t change that', { description: (e as Error).message });
       return false;
     }
@@ -121,18 +140,19 @@ export function useOrganise() {
 
   /** For good, all of them: the caller asks first. */
   const remove = async (chats: readonly ConversationSummary[]) => {
-    const before = snapshot();
     const ids = new Set(chats.map((c) => c.id));
     client.setQueryData<ConversationSummary[]>(keys.conversations, (list) =>
       (list ?? []).filter((c) => !ids.has(c.id)),
     );
     if (conversationId && ids.has(conversationId)) void navigate('/');
     try {
-      await api.bulkConversations({ ids: [...ids], remove: true });
-      toast(`Deleted ${plural(chats.length, 'chat')}`);
-      return true;
+      const { done, failed } = await api.bulkConversations({ ids: [...ids], remove: true });
+      if (failed.length) restore(chats.filter((c) => failed.includes(c.id)));
+      if (done) toast(`Deleted ${plural(done, 'chat')}`);
+      if (failed.length) toast.error(`Couldn’t delete ${plural(failed.length, 'chat')}`);
+      return !failed.length;
     } catch (e) {
-      restore(before);
+      restore(chats);
       toast.error('Couldn’t delete those chats', { description: (e as Error).message });
       return false;
     }
@@ -173,7 +193,9 @@ export function useOrganise() {
   /** Its chats go back to the list; the folder alone goes. */
   const deleteFolder = async (folder: ChatFolder) => {
     const before = folders();
-    const chats = before.length ? snapshot() : undefined;
+    const chats = (client.getQueryData<ConversationSummary[]>(keys.conversations) ?? []).filter(
+      (c) => c.folderId === folder.id,
+    );
     setFolders(before.filter((f) => f.id !== folder.id));
     client.setQueryData<ConversationSummary[]>(keys.conversations, (list) =>
       list?.map((c) => (c.folderId === folder.id ? applyChange(c, { folder: null }) : c)),

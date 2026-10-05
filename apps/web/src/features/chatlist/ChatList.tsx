@@ -137,9 +137,16 @@ export function ChatList({ onNavigate }: { onNavigate?: () => void }) {
     );
   }, [folderFocus]);
 
+  // What's on screen, in order: chats in a folded folder can't be stepped to or swept
+  // into a Shift-click range, since you can't see them.
+  const folded = new Set(
+    list.folders.filter((f) => !isOpen(f.folder.id)).flatMap((f) => f.chats.map((c) => c.id)),
+  );
+  const visible = list.order.filter((c) => !folded.has(c.id));
+
   // ⌥↑ / ⌥↓: the chat above or below, in the order the list shows them.
   const step = (by: number) => {
-    const order = list.order;
+    const order = visible;
     if (!order.length) return;
     const at = order.findIndex((c) => c.id === conversationId);
     const next = at < 0 ? (by > 0 ? order[0] : order.at(-1)) : order[at + by];
@@ -158,7 +165,7 @@ export function ChatList({ onNavigate }: { onNavigate?: () => void }) {
   const toggle = (id: string, on: boolean, range: boolean) => {
     setSelected((current) => {
       const next = new Set(current ?? []);
-      const order = list.order.map((c) => c.id);
+      const order = visible.map((c) => c.id);
       const from = anchor.current ? order.indexOf(anchor.current) : -1;
       const to = order.indexOf(id);
       if (range && from >= 0 && to >= 0) {

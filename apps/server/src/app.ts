@@ -1183,17 +1183,19 @@ export async function buildApp(services: Services) {
       if (body.change?.folder && !(await services.folders.has(body.change.folder)))
         throw new FolderError('not-found', 'That folder isn’t there any more.');
       let done = 0;
+      const failed: string[] = [];
       for (const id of new Set(body.ids)) {
         try {
           if (body.remove) await services.conversations.remove(id);
           else if (body.change) await services.conversations.change(id, body.change);
           done++;
         } catch (error) {
-          // One that went meanwhile doesn't stop the rest.
-          if (!(error instanceof ConversationError && error.code === 'not-found')) throw error;
+          // One that went meanwhile is skipped; one that couldn't change doesn't stop the
+          // rest, and is named, so the list puts back only that one.
+          if (!(error instanceof ConversationError && error.code === 'not-found')) failed.push(id);
         }
       }
-      return { ok: true, done };
+      return { ok: true, done, failed };
     } catch (error) {
       return sendError(reply, error);
     }

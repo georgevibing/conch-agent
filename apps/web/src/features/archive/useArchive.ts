@@ -44,19 +44,32 @@ export function useArchive() {
   const navigate = useNavigate();
   const { conversationId } = useParams();
 
-  const set = (id: string, archivedAt: number | undefined) =>
+  const set = (id: string, archivedAt: number | undefined, pinned?: number) =>
     client.setQueryData<ConversationSummary[]>(keys.conversations, (list) =>
-      list?.map((c) => (c.id === id ? stamp(c, archivedAt) : c)),
+      list?.map((c) => {
+        if (c.id !== id) return c;
+        const next = stamp(c, archivedAt);
+        // Archiving unpins (ADR 0089); putting it back pins it where it was.
+        if (archivedAt) delete next.pinned;
+        else if (pinned !== undefined) next.pinned = pinned;
+        return next;
+      }),
     );
 
   const unarchive = async (
     chat: ConversationSummary,
     { reopen = false, quiet = false }: { reopen?: boolean; quiet?: boolean } = {},
   ) => {
-    set(chat.id, undefined);
+    set(chat.id, undefined, chat.pinned);
     if (reopen) void navigate(`/c/${chat.id}`);
     try {
-      await api.archiveConversation(chat.id, false);
+      if (chat.pinned !== undefined)
+        await api.changeConversation(chat.id, {
+          archived: false,
+          pinned: true,
+          pinOrder: chat.pinned,
+        });
+      else await api.archiveConversation(chat.id, false);
     } catch (e) {
       set(chat.id, chat.archivedAt);
       toast.error('Couldn’t unarchive that chat', { description: (e as Error).message });
@@ -75,7 +88,7 @@ export function useArchive() {
     try {
       await api.archiveConversation(chat.id, true);
     } catch (e) {
-      set(chat.id, undefined);
+      set(chat.id, undefined, chat.pinned);
       if (open) void navigate(`/c/${chat.id}`);
       toast.error('Couldn’t archive that chat', { description: (e as Error).message });
       return;

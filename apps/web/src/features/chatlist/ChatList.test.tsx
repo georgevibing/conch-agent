@@ -116,6 +116,34 @@ describe('The chat list, organised', () => {
     );
   });
 
+  it('Undo after archiving a pinned chat puts it back where it was pinned', async () => {
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/folders': () => [],
+      'GET /api/conversations': () => [chat('c1', 'Reading list', { pinned: 7 })],
+      'PATCH /api/conversations/c1': () => ({ ok: true }),
+    });
+    sidebar();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'Options for Reading list' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Archive' }));
+    const note = (await screen.findByText('Archived “Reading list”')).closest(
+      '[data-sonner-toast]',
+    );
+    if (!(note instanceof HTMLElement)) throw new Error('the note');
+    await user.click(within(note).getByRole('button', { name: 'Undo' }));
+    const pinned = await screen.findByRole('region', { name: 'Pinned' });
+    expect(within(pinned).getByRole('link', { name: 'Reading list' })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(calls).toContainEqual(
+        expect.objectContaining({
+          method: 'PATCH',
+          body: { archived: false, pinned: true, pinOrder: 7 },
+        }),
+      ),
+    );
+  });
+
   it('the open chat is marked seen, and never shows as new', async () => {
     const calls = mockFetch({
       'GET /api/state': () => appState(),
