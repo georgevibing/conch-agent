@@ -49,6 +49,14 @@ export const AppsModel = z.object({
 });
 export type AppsModel = z.infer<typeof AppsModel>;
 
+function modelLabel(label: string): string {
+  const trimmed = label.trimEnd();
+  const suffix = '(recommended)';
+  return trimmed.toLowerCase().endsWith(suffix)
+    ? trimmed.slice(0, -suffix.length).trimEnd()
+    : label;
+}
+
 /**
  * The best model to switch to when the chat's can't use an app: one the
  * person already set up, never a new provider. The same provider first (its
@@ -78,7 +86,7 @@ export function appsModel(
       return {
         engine: provider.engine,
         model: pick.id,
-        label: pick.label.replace(/\s*\(recommended\)\s*$/i, ''),
+        label: modelLabel(pick.label),
         provider: provider.label,
       };
   }

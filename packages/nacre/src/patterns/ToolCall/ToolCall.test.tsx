@@ -48,6 +48,25 @@ describe('ToolCall', () => {
     expect(parseToolName('Bash')).toEqual({ tool: 'Bash' });
   });
 
+  it('splits the first nonempty MCP server and tool, and keeps malformed names intact', () => {
+    expect(parseToolName('mcp__my_server__read_file')).toEqual({
+      server: 'my_server',
+      tool: 'read file',
+    });
+    expect(parseToolName('mcp_____read')).toEqual({ server: '_', tool: 'read' });
+    expect(parseToolName('mcp__a__b__c')).toEqual({ server: 'a', tool: 'b  c' });
+    for (const name of ['mcp____read', 'mcp__server__', 'mcp__server', 'mcp__a__b\n']) {
+      expect(parseToolName(name)).toEqual({ tool: name });
+    }
+  });
+
+  it('does not retry every separator in a long malformed MCP name', () => {
+    const name = `mcp__a__${'a__a'.repeat(30_000)}\nb`;
+    const began = Date.now();
+    expect(parseToolName(name)).toEqual({ tool: name });
+    expect(Date.now() - began).toBeLessThan(1000);
+  });
+
   it('formats durations', () => {
     expect(formatDuration(42)).toBe('42ms');
     expect(formatDuration(2140)).toBe('2.1s');

@@ -75,9 +75,11 @@ export function toolIcon(name: string): LucideIcon {
 
 /** `mcp__github__create_pull_request` → `{ server: 'github', tool: 'create pull request' }`. */
 export function parseToolName(name: string): { server?: string; tool: string } {
-  const mcp = /^mcp__(.+?)__(.+)$/.exec(name);
-  if (!mcp) return { tool: name };
-  return { server: mcp[1], tool: (mcp[2] ?? '').replace(/_/g, ' ') };
+  if (!name.startsWith('mcp__') || /[\r\n\u2028\u2029]/.test(name)) return { tool: name };
+  // Start after the first server character: both parts must be nonempty.
+  const at = name.indexOf('__', 6);
+  if (at < 0 || at + 2 === name.length) return { tool: name };
+  return { server: name.slice(5, at), tool: name.slice(at + 2).replaceAll('_', ' ') };
 }
 
 export function formatDuration(ms: number): string {

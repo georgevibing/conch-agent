@@ -188,6 +188,18 @@ describe('appSourceLine', () => {
       'Signed by Ada Lovelace',
     );
   });
+
+  it('trims path edges without retrying long interior slash runs', () => {
+    const path = `apps${'/'.repeat(100_000)}plants`;
+    const began = Date.now();
+    expect(appSourceLine({ ...github, path: `///${path}///` }, unsigned)).toBe(
+      `From github.com/ada/plant-diary/${path}`,
+    );
+    expect(appSourceLine({ ...github, path: '///' }, unsigned)).toBe(
+      'From github.com/ada/plant-diary/',
+    );
+    expect(Date.now() - began).toBeLessThan(1000);
+  });
 });
 
 it('shows page storage and query caching on cards and names the new abilities in updates', () => {

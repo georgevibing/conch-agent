@@ -39,7 +39,9 @@ export interface PathPickerProps {
 }
 
 function split(path: string): { name: string; parent: string } {
-  const clean = path.replace(/[/\\]+$/, '');
+  let end = path.length;
+  while (end > 0 && (path[end - 1] === '/' || path[end - 1] === '\\')) end--;
+  const clean = path.slice(0, end);
   const at = Math.max(clean.lastIndexOf('/'), clean.lastIndexOf('\\'));
   return { name: clean.slice(at + 1) || clean, parent: at > 0 ? clean.slice(0, at) : '' };
 }

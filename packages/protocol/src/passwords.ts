@@ -106,7 +106,13 @@ const COMMON = new Set(
 function isTooCommon(password: string): boolean {
   if (isCommonPassword(password)) return true;
   const lower = password.toLowerCase();
-  const core = lower.replace(/[\d\W_]+$/u, '').replace(/^[\d\W_]+/u, '');
+  // Walk from each edge once; a trailing-suffix regexp retries each digit
+  // in a long run before a letter, freezing the password meter and checkup.
+  let start = 0;
+  let end = lower.length;
+  while (start < end && !/[a-z]/.test(lower.charAt(start))) start++;
+  while (end > start && !/[a-z]/.test(lower.charAt(end - 1))) end--;
+  const core = lower.slice(start, end);
   if (COMMON.has(lower) || COMMON.has(core)) return true;
   // Digits only, and short: a PIN-like password is guessed at once.
   return /^\d{1,10}$/.test(password);

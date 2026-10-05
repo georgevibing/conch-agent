@@ -47,6 +47,23 @@ describe('PathPicker', () => {
     expect(screen.getByRole('textbox', { name: 'Folder' })).toBeInTheDocument();
   });
 
+  it.each(['/', '\\'])('handles long runs of %s inside and at the end of a path', (slash) => {
+    const parent = `work${slash.repeat(30_000)}`;
+    const began = Date.now();
+    renderNacre(
+      <PathPicker
+        label="Folder"
+        kind="folder"
+        value={`${parent}notes${slash.repeat(30_000)}`}
+        onChange={() => undefined}
+      />,
+    );
+    expect(screen.getByRole('radio', { name: 'notes' })).toHaveAccessibleDescription(
+      parent.slice(0, -1),
+    );
+    expect(Date.now() - began).toBeLessThan(1000);
+  });
+
   it('says so when the Open dialog can’t come up, and offers typing instead', async () => {
     const onChoose = vi.fn(() => Promise.reject(new Error('The Open dialog didn’t come up.')));
     renderNacre(

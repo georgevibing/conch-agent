@@ -95,6 +95,41 @@ describe('AvatarPicker', () => {
     expect(await screen.findByRole('dialog', { name: 'Frame your photo' })).toBeVisible();
   });
 
+  it('uses an object URL for untrusted picture bytes and saves only the rasterized canvas', async () => {
+    const upload = new File(
+      [
+        '<svg xmlns="http://www.w3.org/2000/svg"><script>globalThis.avatarScriptRan = true</script></svg>',
+      ],
+      '"><img src=x onerror=alert(1)>.svg',
+      { type: 'image/svg+xml' },
+    );
+    const photo = new Blob(['rasterized pixels'], { type: 'image/webp' });
+    const drawImage = vi.fn();
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      drawImage,
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((callback) =>
+      callback(photo),
+    );
+    const onSave = vi.fn();
+    renderNacre(<AvatarPicker name="George" onSave={onSave} onRemove={vi.fn()} />);
+    await act(async () => {
+      fireEvent.drop(screen.getByRole('button', { name: 'Add a photo' }), {
+        dataTransfer: { types: ['Files'], files: [upload] },
+      });
+    });
+    const dialog = await screen.findByRole('dialog', { name: 'Frame your photo' });
+    expect(URL.createObjectURL).toHaveBeenCalledWith(upload);
+    expect(dialog.querySelector('img')).toHaveAttribute('src', 'blob:photo');
+    expect(dialog.querySelectorAll('img')).toHaveLength(1);
+    expect(dialog.querySelector('script, iframe, object, embed, [onerror]')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Use this photo' }));
+    await vi.waitFor(() => expect(onSave).toHaveBeenCalledWith(photo));
+    expect(drawImage).toHaveBeenCalledOnce();
+    expect(onSave).not.toHaveBeenCalledWith(upload);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:photo');
+  });
+
   it('with a photo, offers a new one or taking it away', async () => {
     const user = userEvent.setup();
     const onRemove = vi.fn();

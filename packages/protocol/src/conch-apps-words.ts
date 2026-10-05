@@ -158,8 +158,14 @@ export function appSourceLine(
   if (signature.state !== 'unsigned' && signature.publisher)
     return `Signed by ${signature.publisher}`;
   switch (source.kind) {
-    case 'github':
-      return `From github.com/${source.owner}/${source.repo}${source.path ? `/${source.path.replace(/^\/+|\/+$/g, '')}` : ''}`;
+    case 'github': {
+      const path = source.path ?? '';
+      let start = 0;
+      let end = path.length;
+      while (start < end && path[start] === '/') start++;
+      while (end > start && path[end - 1] === '/') end--;
+      return `From github.com/${source.owner}/${source.repo}${path ? `/${path.slice(start, end)}` : ''}`;
+    }
     case 'link': {
       // The host alone: who it's from, without a path to read.
       const host = /^https?:\/\/(?:[^@/?#]*@)?([^:/?#\s]+)/i.exec(source.url)?.[1];

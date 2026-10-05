@@ -101,6 +101,23 @@ describe('models that can’t use apps', () => {
     ).toBeUndefined();
   });
 
+  it.each([
+    ['  Big \t(ReCoMmEnDeD)\n', '  Big'],
+    ['Big (recommended) edition  ', 'Big (recommended) edition  '],
+    ['Big\n(recommended)', 'Big'],
+  ])('removes only a recommendation suffix from %j', (label, expected) => {
+    const providers = [{ engine: 'mock' as const, label: 'Mock', models: [model('big', label)] }];
+    expect(appsModel(providers, { engine: 'mock', model: 'tiny' })?.label).toBe(expected);
+  });
+
+  it('handles a long whitespace run in an untrusted model label', () => {
+    const label = `Big${' '.repeat(100_000)}X`;
+    const providers = [{ engine: 'mock' as const, label: 'Mock', models: [model('big', label)] }];
+    const began = Date.now();
+    expect(appsModel(providers, { engine: 'mock', model: 'tiny' })?.label).toBe(label);
+    expect(Date.now() - began).toBeLessThan(1000);
+  });
+
   it('only switches a waiting message to a model with its provider', () => {
     expect(ReleaseTurnBody.safeParse({ engine: 'mock', model: 'opus' }).success).toBe(true);
     expect(ReleaseTurnBody.safeParse({ model: 'opus' }).success).toBe(false);
