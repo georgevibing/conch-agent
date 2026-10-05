@@ -82,7 +82,7 @@ export function promptedResults(results: readonly ToolResult[]): string {
   return results
     .map((result) => {
       // A tool's text is data: it can't close its own block and open a forged one.
-      const text = result.text.replace(/<\/?tool_response/gi, (tag) => tag.replace('<', '<\\'));
+      const text = result.text.replace(/<\/?tool_response/gi, (tag) => tag.replaceAll('<', '<\\'));
       return `<tool_response name="${result.name}"${result.isError ? ' status="error"' : ''}>\n${text}\n</tool_response>`;
     })
     .join('\n');

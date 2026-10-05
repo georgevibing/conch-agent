@@ -69,7 +69,7 @@ export function lookup(deps: LookupDeps = {}): LatestLookup {
       if (!NPM_NAME.test(pkg)) return undefined;
       try {
         const response = await (deps.fetch ?? fetch)(
-          `https://registry.npmjs.org/${pkg.replace('/', '%2F')}/latest`,
+          `https://registry.npmjs.org/${pkg.replaceAll('/', '%2F')}/latest`,
           { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(timeout) },
         );
         if (!response.ok) return undefined;

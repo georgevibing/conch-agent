@@ -163,7 +163,7 @@ const mark: Record<Status, string> = {
   error: 'error',
   skipped: '—',
 };
-const md = (text: string) => text.replace(/\|/g, '\\|').replace(/\n/g, ' ');
+const md = (text: string) => text.replace(/[\\|]/g, '\\$&').replace(/[\r\n]/g, ' ');
 
 export function markdown(run: RunResults, previous?: RunResults): string {
   const lines: string[] = [];

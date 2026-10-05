@@ -200,6 +200,14 @@ const runOf = (results: TaskResult[], runId = 'now'): RunResults => ({
 });
 
 describe('the report', () => {
+  it('keeps backslashes and pipes inside Markdown table cells', () => {
+    const run = runOf([result({})]);
+    const model = run.models[0];
+    if (!model) throw new Error('Missing model fixture');
+    model.label = 'Provider\\|extra\r\nrow';
+    expect(markdown(run)).toContain('Provider\\\\\\|extra  row');
+  });
+
   it('puts regressions first, then fixes, and ignores noise', () => {
     const before = runOf([result({}), result({ task: 'u', status: 'fail', reason: 'no' })], 'then');
     const now = runOf([result({ status: 'fail', reason: 'lost the form' }), result({ task: 'u' })]);
