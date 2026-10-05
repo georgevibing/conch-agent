@@ -43,6 +43,8 @@ export class PretendAuthenticator {
     private readonly options: {
       /** The password manager it pretends to be. Defaults to Apple Passwords. */
       aaguid?: string;
+      /** Fixed bytes for testing credential identifiers at their format boundaries. */
+      credentialId?: Uint8Array;
       /** Synced (backed up): the counter stays 0, as iCloud Keychain's does. */
       synced?: boolean;
       /** The person touched and was recognised. Off: user presence only, no verification. */
@@ -65,7 +67,7 @@ export class PretendAuthenticator {
     const user = options.user as { id: string };
     const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
     const jwk = publicKey.export({ format: 'jwk' });
-    const credentialId = new Uint8Array(randomBytes(32));
+    const credentialId = this.options.credentialId ?? new Uint8Array(randomBytes(32));
     const cose = isoCBOR.encode(
       new Map<number, number | Uint8Array>([
         [1, 2],

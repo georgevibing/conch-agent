@@ -710,39 +710,45 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
   /** A credential id: base64url, and it can be long (up to 1,023 bytes). */
   const PasskeyId = z.string().regex(/^[A-Za-z0-9_-]{16,1400}$/);
 
-  app.patch<{ Params: { id: string } }>('/api/access/passkeys/:id', async (request, reply) => {
-    const id = parse(PasskeyId, request.params.id, reply);
-    if (!id) return;
-    const body = parse(RenamePasskeyBody, request.body, reply);
-    if (!body) return;
-    try {
-      await store.renamePasskey(id, body.name);
-    } catch (error) {
-      if (error instanceof AccessError)
-        return reply.code(404).send({ error: error.code, message: error.message });
-      throw error;
-    }
-    return settings(request);
-  });
+  app.patch<{ Params: { credentialId: string } }>(
+    '/api/access/passkeys/:credentialId',
+    async (request, reply) => {
+      const id = parse(PasskeyId, request.params.credentialId, reply);
+      if (!id) return;
+      const body = parse(RenamePasskeyBody, request.body, reply);
+      if (!body) return;
+      try {
+        await store.renamePasskey(id, body.name);
+      } catch (error) {
+        if (error instanceof AccessError)
+          return reply.code(404).send({ error: error.code, message: error.message });
+        throw error;
+      }
+      return settings(request);
+    },
+  );
 
-  app.delete<{ Params: { id: string } }>('/api/access/passkeys/:id', async (request, reply) => {
-    const id = parse(PasskeyId, request.params.id, reply);
-    if (!id) return;
-    if (!requireVerified(request, reply)) return;
-    try {
-      const ended = await store.removePasskey(id, passkeyPlace(request)?.rpId);
-      gate.disconnect(ended);
-      if (ended.includes(currentSessionId(request) ?? ''))
-        reply.header('set-cookie', gate.clearCookies());
-    } catch (error) {
-      if (error instanceof AccessError)
-        return reply
-          .code(error.code === 'not-found' ? 404 : 409)
-          .send({ error: error.code, message: error.message });
-      throw error;
-    }
-    return settings(request);
-  });
+  app.delete<{ Params: { credentialId: string } }>(
+    '/api/access/passkeys/:credentialId',
+    async (request, reply) => {
+      const id = parse(PasskeyId, request.params.credentialId, reply);
+      if (!id) return;
+      if (!requireVerified(request, reply)) return;
+      try {
+        const ended = await store.removePasskey(id, passkeyPlace(request)?.rpId);
+        gate.disconnect(ended);
+        if (ended.includes(currentSessionId(request) ?? ''))
+          reply.header('set-cookie', gate.clearCookies());
+      } catch (error) {
+        if (error instanceof AccessError)
+          return reply
+            .code(error.code === 'not-found' ? 404 : 409)
+            .send({ error: error.code, message: error.message });
+        throw error;
+      }
+      return settings(request);
+    },
+  );
 
   // ── The hello link: a new Conch is made yours (ADR 0064) ─────────────────
 

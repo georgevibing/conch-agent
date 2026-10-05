@@ -195,6 +195,9 @@ const LOOK_AGAIN_MS = 5 * 60_000;
 export async function buildApp(services: Services) {
   const { config } = services;
   const app = Fastify({
+    // WebAuthn credential IDs can be 1,023 bytes (1,364 base64url characters).
+    // Each route still validates its own parameter; ordinary :id stays bounded below.
+    routerOptions: { maxParamLength: 1400 },
     logger:
       config.CONCH_LOG_LEVEL === 'silent'
         ? false

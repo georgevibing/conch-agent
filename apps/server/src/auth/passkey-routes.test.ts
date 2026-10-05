@@ -117,10 +117,13 @@ class Browser {
 }
 
 /** Make Conch yours from the hello link with Touch ID, as `conch setup` leads to. */
-async function claimWithPasskey(app: App, store: Services['access']) {
+async function claimWithPasskey(
+  app: App,
+  store: Services['access'],
+  authenticator = new PretendAuthenticator(),
+) {
   const { code } = await store.createHello();
   const laptop = new Browser(app, '203.0.113.10');
-  const authenticator = new PretendAuthenticator();
   const { options } = (await laptop.post('/api/auth/passkey', { purpose: 'hello', code })).json();
   const res = await laptop.post('/api/auth/hello/finish', {
     with: 'passkey',
@@ -259,20 +262,60 @@ describe('passkeys, signed in', () => {
     expect((await laptop.access()).passkeys.map((p) => p.name)).toContain('Bitwarden');
   });
 
-  it('signs out what a removed passkey signed in, and keeps the last way in', async () => {
-    const { app, store } = await setup();
-    const { laptop, authenticator } = await claimWithPasskey(app, store);
-    const phone = new Browser(app, '203.0.113.20', IPHONE);
-    await phone.passkeySignIn(authenticator);
-    const [only] = (await laptop.access()).passkeys;
-    const last = await laptop.fetch(`/api/access/passkeys/${only?.id}`, { method: 'DELETE' });
-    expect(last.statusCode).toBe(409);
+  it.each([
+    { label: 'leading dash', byte: 251, length: 32 },
+    { label: 'leading underscore', byte: 255, length: 32 },
+    { label: 'long credential', byte: 0, length: 1023 },
+  ])(
+    'renames and removes a $label passkey without removing the last way in',
+    async ({ byte, length }) => {
+      const { app, store } = await setup();
+      const { laptop, authenticator } = await claimWithPasskey(
+        app,
+        store,
+        new PretendAuthenticator({ credentialId: new Uint8Array(length).fill(byte) }),
+      );
+      const phone = new Browser(app, '203.0.113.20', IPHONE);
+      await phone.passkeySignIn(authenticator);
+      const [only] = (await laptop.access()).passkeys;
+      expect(only?.id).toBe(authenticator.passkeys[0]?.id);
+      const renamed = await laptop.fetch(`/api/access/passkeys/${only?.id}`, {
+        method: 'PATCH',
+        payload: { name: 'My passkey' },
+      });
+      expect(renamed.statusCode).toBe(200);
+      expect((await laptop.access()).passkeys[0]?.name).toBe('My passkey');
+      const last = await laptop.fetch(`/api/access/passkeys/${only?.id}`, { method: 'DELETE' });
+      expect(last.statusCode).toBe(409);
 
-    await laptop.post('/api/access/keys', { name: 'Spare' });
-    expect(await store.method()).toBe('key');
-    const removed = await laptop.fetch(`/api/access/passkeys/${only?.id}`, { method: 'DELETE' });
-    expect(removed.statusCode).toBe(200);
-    expect(await phone.status()).toMatchObject({ signedIn: false });
+      await laptop.post('/api/access/keys', { name: 'Spare' });
+      expect(await store.method()).toBe('key');
+      const removed = await laptop.fetch(`/api/access/passkeys/${only?.id}`, { method: 'DELETE' });
+      expect(removed.statusCode).toBe(200);
+      expect(await phone.status()).toMatchObject({ signedIn: false });
+    },
+  );
+
+  it('rejects malformed credential IDs and keeps ordinary IDs bounded', async () => {
+    const { app, store } = await setup();
+    const { laptop } = await claimWithPasskey(app, store);
+    for (const method of ['PATCH', 'DELETE']) {
+      for (const id of ['short', 'a'.repeat(16) + '%2Fescape', 'a'.repeat(16) + '!']) {
+        const response = await laptop.fetch(`/api/access/passkeys/${id}`, {
+          method,
+          ...(method === 'PATCH' && { payload: { name: 'No' } }),
+        });
+        expect(response.statusCode).toBe(400);
+      }
+      const tooLong = await laptop.fetch(`/api/access/passkeys/${'a'.repeat(1401)}`, {
+        method,
+        ...(method === 'PATCH' && { payload: { name: 'No' } }),
+      });
+      expect(tooLong.statusCode).toBe(414);
+    }
+    expect(await store.passkeyRecords()).toHaveLength(1);
+    for (const id of ['_invalid', 'a'.repeat(129)])
+      expect((await laptop.fetch(`/api/conversations/${id}`)).statusCode).toBe(404);
   });
 
   it('never lets a script’s access key add a passkey (it would let its own device in)', async () => {

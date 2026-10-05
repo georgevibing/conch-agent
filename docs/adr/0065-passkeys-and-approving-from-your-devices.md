@@ -55,6 +55,17 @@ they know. So a passkey must be the easy way, never the only way.
   for a password or another passkey first. `conch reset` removes them all, as it removes
   passwords and keys.
 
+### Credential IDs in management routes
+
+Rename and removal use a `:credentialId` parameter validated as bounded base64url,
+not Conch's file-safe `:id`. Valid credentials can begin with `-` or `_` and can
+exceed 128 characters. The router permits up to 1,400 characters so the existing
+credential validator can accept WebAuthn's 1,023-byte IDs; ordinary IDs retain their
+own narrower validation. Credentials are looked up in the access store, never used
+as file paths. Sign-in, recent verification, last-way-in protection and revocation
+of sessions remain enforced. Tests cover both leading symbols, long IDs, malformed
+IDs and the ordinary ID boundary.
+
 ### The button names what you have
 
 Nobody sees the word "passkey" unless they look for it. The web app asks the browser whether
@@ -138,6 +149,11 @@ whose name is kept beside it).
   maintained, rather than hand-written COSE and CBOR parsing.
 
 ## Sources
+
+- [WebAuthn credential IDs](https://www.w3.org/TR/webauthn-3/#credential-id),
+  [Fastify router parameter limits](https://fastify.dev/docs/latest/Reference/Server/#maxparamlength),
+  and [OWASP field-specific input validation](https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html)
+  for the management route bounds.
 
 - W3C Web Authentication Level 3; FIDO Alliance passkey design and UX guidelines (naming the
   platform's own biometric, "use a phone" for cross-device sign-in).
