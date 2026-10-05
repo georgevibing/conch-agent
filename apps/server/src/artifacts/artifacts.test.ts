@@ -105,7 +105,7 @@ describe('a page, sealed off', () => {
       page.indexOf('if(e.source!==parent||e.origin!==o)return'),
     );
     expect(page).toContain('watch:function(source,params,f){');
-    expect(page).toContain(',call:q});');
+    expect(page).toContain(',call:q,state:state,query:query,observe:observe});');
     // An accent that isn't a name or a colour is left out.
     expect(
       frameDocument('<p>x</p>', {

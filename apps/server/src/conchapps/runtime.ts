@@ -112,6 +112,7 @@ const RawTool = z.object({
   description: z.string().max(10_000).nullable(),
   input: z.unknown(),
   changes: z.boolean().nullable(),
+  cache: z.unknown().optional(),
   runs: z.boolean(),
 });
 
@@ -307,6 +308,7 @@ export class SealedRuntime implements AppRuntime {
         title: d.title ?? '',
         description: d.description ?? '',
         changes: d.changes === true,
+        ...(d.cache === undefined ? {} : { cache: d.cache }),
         // Its input schema, so every model is told what to send.
         ...(d.input && typeof d.input === 'object' && !Array.isArray(d.input)
           ? { input: d.input as Record<string, unknown> }

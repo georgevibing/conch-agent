@@ -159,6 +159,17 @@ function pageProblems(
   warnings: AppCheckItem[],
 ) {
   const at = (index: number) => ({ file, line: lineAt(html, index) });
+  if (
+    quality &&
+    /conch\.call\s*\(/.test(html) &&
+    !/conch\.observe\s*\(/.test(html) &&
+    !/\b(?:show|load|refresh|render)\s*\(\s*\)\s*;/.test(html)
+  )
+    warnings.push({
+      file,
+      message:
+        'Load useful read data when this page opens; prefer conch.observe for saved results, refresh and error states.',
+    });
   let linksOut = false;
   for (const tag of html.matchAll(TAG)) {
     const name = (tag[1] ?? '').toLowerCase();
@@ -321,6 +332,14 @@ function toolProblems(
         message: `The tool ${name} has a description over 1,000 characters: shorten it.`,
         file,
       });
+    if (
+      d.cache !== undefined &&
+      (d.changes === true || !ConchAppTool.shape.cache.safeParse(d.cache).success)
+    )
+      problems.push({
+        file,
+        message: `The tool ${name} needs cache: { maxAge: 15–86400 } and must be read-only. Changing tools cannot be cached.`,
+      });
     if (quality) {
       if (!d.title?.trim())
         problems.push({
@@ -359,6 +378,7 @@ function toolProblems(
       title: d.title ?? '',
       description: d.description ?? '',
       changes: d.changes === true,
+      ...(d.cache === undefined ? {} : { cache: d.cache }),
     });
     if (parsed.success && d.runs) tools.push(parsed.data);
   }

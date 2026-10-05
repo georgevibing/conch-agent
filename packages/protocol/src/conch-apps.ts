@@ -254,6 +254,8 @@ export const ConchAppManifest = z
     /** The websites its tools may reach. Empty: none. */
     reaches: z.array(AppHost).max(10).default([]),
     settings: z.array(AppSetting).max(8).default([]),
+    /** Small page preferences, saved locally without an action approval. */
+    pageState: z.boolean().optional(),
     /** For the assistant: when to use it, and how. */
     instructions: z.string().trim().max(1500).default(''),
     /** Things a person might say to use it. */
@@ -321,6 +323,11 @@ export const ConchAppTool = z.object({
   description: z.string().max(1000),
   /** It changes something (else it only looks). */
   changes: z.boolean(),
+  /** Opt-in host caching for read-only queries; never for changing tools. */
+  cache: z
+    .object({ maxAge: z.number().int().min(15).max(86400) })
+    .strict()
+    .optional(),
   /**
    * Its arguments, as the JSON Schema object the module declares (`input`).
    * The runtime fills it in, so every model gets the tool's real arguments.
@@ -410,6 +417,8 @@ export const ConchAppChanges = z.object({
   /** A tool that only looked now changes things. */
   toolsNowChange: z.array(z.string()).default([]),
   pagesAdded: z.array(z.string()).default([]),
+  pageStateAdded: z.boolean().optional(),
+  queryCacheAdded: z.boolean().optional(),
   /**
    * It comes from another maker than the app you have (another source or
    * signer): it replaces that app, and its settings and keys don't carry over.
@@ -655,7 +664,7 @@ export type PublishState = z.infer<typeof PublishState>;
 /** A page calling its own app's tool (`conch.call`), through the panel. */
 export const AppCallBody = z
   .object({
-    tool: ConchAppToolName,
+    tool: z.union([ConchAppToolName, z.enum(['__query', '__state'])]),
     input: z.record(z.string(), z.unknown()).default({}),
     /** The person pressed something in the page, or said yes: a change may go. */
     confirmed: z.boolean().default(false),

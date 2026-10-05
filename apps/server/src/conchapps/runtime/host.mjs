@@ -82,6 +82,7 @@
  * the gateway checks every message anyway.
  */
 import { randomBytes } from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { isBuiltin, registerHooks } from 'node:module';
 import { Socket } from 'node:net';
@@ -621,13 +622,22 @@ function serial(key, work) {
   return run;
 }
 
+const callContext = new AsyncLocalStorage();
+function mayWriteData() {
+  if (callContext.getStore()?.cache)
+    throw new Error(
+      'A cacheable query cannot write app.data. Use a changing tool for durable records; Conch saves query results itself.',
+    );
+}
 const data = freeze({
   get: async (key) => readValue(checkKey(key)),
   set: async (key, value) => {
+    mayWriteData();
     checkKey(key);
     await serial(key, () => writeValue(key, value));
   },
   update: async (key, fn) => {
+    mayWriteData();
     checkKey(key);
     if (typeof fn !== 'function') throw new Error('app.data.update needs a function.');
     return serial(key, async () => {
@@ -637,6 +647,7 @@ const data = freeze({
     });
   },
   delete: async (key) => {
+    mayWriteData();
     checkKey(key);
     await serial(key, () => removeValue(key));
   },
@@ -790,6 +801,7 @@ function definitionOf(name, tool) {
     description: text(tool.description) === null ? null : trim(tool.description, 10_000),
     input,
     changes: typeof tool.changes === 'boolean' ? tool.changes : null,
+    ...(tool.cache === undefined ? {} : { cache: jsonParse(jsonStringify(tool.cache)) }),
     runs: typeof tool.run === 'function',
   };
 }
@@ -865,7 +877,11 @@ async function call(message) {
   try {
     if (!tool || typeof tool.run !== 'function')
       throw new Error(`This app has no tool called “${trim(String(message.tool), 40)}”.`);
-    const out = textOf(await tool.run(freeze(message.input ?? {}), appContext));
+    const out = textOf(
+      await callContext.run({ cache: Boolean(tool.cache) }, () =>
+        tool.run(freeze(message.input ?? {}), appContext),
+      ),
+    );
     reply = { t: 'result', id: message.id, ok: true, text: trim(out.text, limits.text) };
     if (out.json !== undefined) reply.json = out.json;
   } catch (error) {

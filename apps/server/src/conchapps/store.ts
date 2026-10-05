@@ -68,6 +68,8 @@ export const AppRecord = z.object({
   updateHash: z.string().optional(),
   /** The settings that aren't secret. Secret ones are in the sealed file. */
   values: z.record(z.string(), z.string()).default({}),
+  /** Account epoch for page caches; no credential hashes or values in the cache identity. */
+  pageDataEpoch: z.number().int().nonnegative().optional(),
 });
 export type AppRecord = z.infer<typeof AppRecord>;
 

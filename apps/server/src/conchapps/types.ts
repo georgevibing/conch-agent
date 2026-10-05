@@ -81,6 +81,7 @@ export interface AppToolDefinition {
   input: unknown;
   /** `null` when the module didn't say. */
   changes: boolean | null;
+  cache?: unknown;
   /** It has a `run` function. */
   runs: boolean;
 }

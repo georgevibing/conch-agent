@@ -645,7 +645,14 @@ describe('the preview before a restore', () => {
     // allowed, and the linked WhatsApp and Signal answering their owner. A
     // restore names them.
     expect(preview.powers).toEqual([
-      { kind: 'conch-apps', names: ['Tally', 'Weather (reaches api.weather.example)'], more: 0 },
+      {
+        kind: 'conch-apps',
+        names: [
+          'Tally (remembers page preferences; saves lookup results)',
+          'Weather (reaches api.weather.example)',
+        ],
+        more: 0,
+      },
       { kind: 'routine-address', name: 'From my shop' },
       { kind: 'routines-spend', limitUsd: 30 },
       { kind: 'learning-spend', limitUsd: 2 },

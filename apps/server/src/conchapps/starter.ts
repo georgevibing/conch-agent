@@ -58,16 +58,14 @@ export const tools = {
     description: 'Adds a note to ${name}. Use when the person wants something written down here.',
     input: {
       type: 'object',
-      properties: { text: { type: 'string', description: 'The note, in the person’s words' } },
+      properties: { text: { type: 'string', minLength: 1, maxLength: 4000, description: 'The note, in the person’s words' } },
       required: ['text'],
     },
     changes: true,
     async run({ text }, app) {
       const note = String(text ?? '').trim();
       if (!note) throw new Error('The note is empty. Ask the person what to write down.');
-      const notes = (await app.data.get('notes')) ?? [];
-      notes.push({ text: note, at: app.now() });
-      await app.data.set('notes', notes);
+      await app.data.update('notes', (notes = []) => [...notes, { text: note, at: app.now() }]);
       return \`Added: \${note}\`;
     },
   },
@@ -76,6 +74,7 @@ export const tools = {
     description: 'Lists the notes in ${name}, newest first. Use when the person asks what they wrote down.',
     input: { type: 'object', properties: {} },
     changes: false,
+    cache: { maxAge: 30 },
     async run(_input, app) {
       const notes = (await app.data.get('notes')) ?? [];
       return { notes: [...notes].reverse() };
@@ -106,8 +105,7 @@ export const tools = {
     const list = document.getElementById('notes');
     const empty = document.getElementById('empty');
     const status = document.getElementById('status');
-    async function show() {
-      const result = await conch.call('list_notes', {});
+    function show(result) {
       if (!result.ok) {
         status.textContent = result.message;
         return;
@@ -122,20 +120,27 @@ export const tools = {
         }),
       );
       empty.hidden = notes.length > 0;
+      status.textContent = result.error || (result.refreshing ? 'Updating…' : result.stale ? 'Showing saved notes.' : 'Up to date.');
     }
+    const notesView = conch.observe('list_notes', {}, { every: 30 }, show);
     const field = document.getElementById('note');
+    const addButton = document.getElementById('add');
     async function add() {
-      if (!field.value.trim()) return;
-      const result = await conch.call('add_note', { text: field.value });
+      if (addButton.disabled || !field.value.trim()) return;
+      addButton.disabled = true;
+      let result;
+      try { result = await conch.call('add_note', { text: field.value }); }
+      catch { status.textContent = 'The note could not be saved. Try again.'; return; }
+      finally { addButton.disabled = false; }
       status.textContent = result.ok ? '' : result.message;
       if (result.ok) field.value = '';
-      await show();
+      if (result.ok) notesView.refresh();
     }
     document.getElementById('add').addEventListener('click', add);
     field.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') add();
     });
-    show();
+
   </script>
 </body>
 </html>

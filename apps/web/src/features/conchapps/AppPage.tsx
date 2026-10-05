@@ -145,6 +145,12 @@ export function AppPageFrame({
 }) {
   const { resolvedMode, accent } = useNacreTheme();
   const { onCall, confirm } = usePageBridge(owner, appName, tools);
+  const [refresh, setRefresh] = useState(0);
+  useEffect(() => {
+    const changed = () => setRefresh((n) => n + 1);
+    window.addEventListener('conch-app-query-refresh', changed);
+    return () => window.removeEventListener('conch-app-query-refresh', changed);
+  }, []);
   return (
     <>
       <SealedFrame
@@ -159,6 +165,7 @@ export function AppPageFrame({
         initialHeight={420}
         onOpenLink={askToOpen}
         onCall={onCall}
+        refresh={refresh}
       />
       {confirm}
     </>

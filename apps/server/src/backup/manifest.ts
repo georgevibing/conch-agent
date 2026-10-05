@@ -416,7 +416,7 @@ export const RULES: readonly BackupRule[] = [
     match: 'conch-app-data/**',
     class: 'kept',
     group: 'integrations',
-    why: 'What each app keeps for you: its notes, its counts, its lists.',
+    why: 'What each app keeps for you: notes, counts, lists, page preferences and saved lookup results.',
   },
   {
     match: 'app-workshop/**',

@@ -110,6 +110,7 @@ interface ToolDef {
   description?: string;
   input?: Record<string, unknown>;
   changes?: boolean;
+  cache?: { maxAge: number };
   run: (input: Record<string, unknown>, app: unknown) => Promise<unknown>;
 }
 
@@ -176,6 +177,7 @@ export function fakeParts(options: FakeOptions = {}): FakeParts {
           title: t.title ?? name,
           description: t.description ?? '',
           changes: t.changes === true,
+          ...(t.cache ? { cache: t.cache } : {}),
           ...(t.input && { input: t.input }),
         }));
       },

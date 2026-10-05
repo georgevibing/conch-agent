@@ -95,6 +95,7 @@ export function putConchApp(client: QueryClient, app: ConchApp) {
  * Settings → Updates.
  */
 export function applyConchAppsEvent(client: QueryClient) {
+  window.dispatchEvent(new Event('conch-app-query-refresh'));
   void client.invalidateQueries({ queryKey: conchAppKeys.all });
   void client.invalidateQueries({ queryKey: integrationKeys.all });
   void client.invalidateQueries({ queryKey: updateKeys.status });

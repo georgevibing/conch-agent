@@ -248,7 +248,11 @@ export function SealedFrame({
         document.activeElement === ref.current &&
         performance.now() - pressedHere.current > ACTIVATION_MS;
       const input = callInput(call.input);
-      if (typeof call.tool !== 'string' || !TOOL.test(call.tool) || !input) {
+      if (
+        typeof call.tool !== 'string' ||
+        !(TOOL.test(call.tool) || call.tool === '__query' || call.tool === '__state') ||
+        !input
+      ) {
         answer({
           conch: 'app-call',
           id,

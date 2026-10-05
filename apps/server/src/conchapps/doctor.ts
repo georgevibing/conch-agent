@@ -10,6 +10,7 @@ import type { DoctorItem } from '@conch/protocol';
 
 import type { DoctorCheck } from '../doctor/service';
 import type { ConchAppService } from './service';
+import { checkPageData } from './page-data';
 
 const GROUP = 'Apps';
 /** Past this, the drafts in the workshop are worth a look. */
@@ -75,6 +76,20 @@ export function conchAppsCheck(service: ConchAppService): DoctorCheck {
             });
             continue;
           }
+        }
+        const pageData = await checkPageData(data, app.hash, repair).catch(
+          () => 'damaged' as const,
+        );
+        if (pageData !== 'ok') {
+          items.push({
+            ...base,
+            id: `${base.id}:page-data`,
+            state: pageData === 'fixed' ? 'fixed' : 'warning',
+            message:
+              pageData === 'fixed'
+                ? 'Saved page data was reset; its damaged copy was kept. Open the page to reload it.'
+                : 'Saved page data does not read. Repair keeps a copy and resets it so the page can load again.',
+          });
         }
         if (!app.enabled) {
           items.push({ ...base, state: 'off', message: 'Turned off.' });

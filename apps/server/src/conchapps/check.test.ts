@@ -525,3 +525,35 @@ describe('an app’s picture (ADR 0090)', () => {
     ]);
   });
 });
+
+it('rejects changing or malformed cached tools even in the safety-only package check', async () => {
+  const changing = await check(pkg(), { safetyOnly: true }, [
+    definition({ cache: { maxAge: 60 } }),
+  ]);
+  expect(messages(changing.problems).join(' ')).toContain('must be read-only');
+  const malformed = await check(pkg(), { safetyOnly: true }, [
+    definition({ changes: false, cache: { maxAge: 0 } }),
+  ]);
+  expect(messages(malformed.problems).join(' ')).toContain('15–86400');
+});
+
+it('encourages useful data at page open and recognizes the observer API', async () => {
+  const manual = await check(
+    pkg({
+      'pages/main.html': PAGE.replace(
+        '</body>',
+        '<script>button.onclick = () => conch.call("read", {});</script></body>',
+      ),
+    }),
+  );
+  expect(messages(manual.warnings).join(' ')).toContain('when this page opens');
+  const observed = await check(
+    pkg({
+      'pages/main.html': PAGE.replace(
+        '</body>',
+        '<script>conch.observe("read", {}, render);</script></body>',
+      ),
+    }),
+  );
+  expect(messages(observed.warnings).join(' ')).not.toContain('when this page opens');
+});

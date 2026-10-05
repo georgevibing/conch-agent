@@ -23,6 +23,7 @@ import {
 } from '../test/conchapps';
 import { conchAppsCheck } from './doctor';
 import { ConchAppError, ConchAppService } from './service';
+import { createRuntime } from './runtime';
 
 const homes: string[] = [];
 afterEach(async () => {
@@ -909,6 +910,8 @@ describe('its tools, for every model', () => {
     );
     expect(working[0]).toContain('in its maker’s words: “Use Tally when');
     expect(working[0]).toContain('“Count one more coffee”');
+    expect(working[0]).toContain('remembers local page preferences');
+    expect(working[0]).toContain('saves lookup results for page refresh');
   });
 
   it('a stranger’s words reach the model as fenced, one-line data, and using its tools taints the chat', async () => {
@@ -1602,4 +1605,139 @@ describe('your own app, changed in a chat that read something', () => {
     // Still from outside in every other way.
     expect((await h.service.hosted.get('capp_tally')).policy).toBe('ask');
   });
+});
+
+describe('page preferences and query lifecycle', () => {
+  async function cachedTally() {
+    const h = await harness();
+    const files = tallyFiles('1.0.0');
+    const manifest = JSON.parse(files['conch-app.json'] ?? '{}') as Record<string, unknown>;
+    manifest.pageState = true;
+    files['conch-app.json'] = JSON.stringify(manifest);
+
+    const { offer } = await makeTally(h, '1.0.0', files);
+    await h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' });
+    return h;
+  }
+  it('uses the same query lifecycle in a draft, entirely on scratch data', async () => {
+    const h = await harness();
+    const { draft } = await makeTally(h);
+    const ref = { draftId: draft.id };
+    const read = { tool: 'read_count', input: {} };
+    expect(await h.service.callFromPage(ref, '__query', read, false)).toMatchObject({
+      ok: true,
+      json: { value: { json: { total: 1 } } },
+    });
+    await h.service.callFromPage(ref, 'count', { by: 2 }, true);
+    expect(
+      await h.service.callFromPage(ref, '__query', { ...read, mode: 'peek' }, false),
+    ).toMatchObject({ ok: true, json: { stale: true, value: { json: { total: 1 } } } });
+    expect(await h.service.callFromPage(ref, '__query', read, false)).toMatchObject({
+      ok: true,
+      json: { value: { json: { total: 3 } } },
+    });
+    await h.service.stop();
+  });
+  it('stores preferences without an action approval, caches reads, invalidates on writes and checks switches even for saved results', async () => {
+    const h = await cachedTally();
+    const ref = { appId: 'tally' };
+    expect(
+      await h.service.callFromPage(
+        ref,
+        '__state',
+        { op: 'set', key: 'date', value: 'today' },
+        false,
+      ),
+    ).toMatchObject({ ok: true });
+    expect(
+      await h.service.callFromPage(ref, '__state', { op: 'get', key: 'date' }, false),
+    ).toMatchObject({ ok: true, json: 'today' });
+    expect(
+      await h.service.callFromPage(ref, '__query', { tool: 'count', input: { by: 10 } }, true),
+    ).toMatchObject({ ok: false });
+    const read = { tool: 'read_count', input: {} };
+    expect(await h.service.callFromPage(ref, '__query', read, false)).toMatchObject({
+      ok: true,
+      json: { value: { ok: true }, stale: false },
+    });
+    expect(await h.service.callFromPage(ref, 'count', { by: 3 }, false)).toMatchObject({
+      reason: 'confirm',
+    });
+    await h.service.callFromPage(ref, 'count', { by: 3 }, true);
+    expect(
+      await h.service.callFromPage(ref, '__query', { ...read, mode: 'peek' }, false),
+    ).toMatchObject({ ok: true, json: { stale: true } });
+    await h.service.setSettings('tally', {});
+    expect(
+      await h.service.callFromPage(ref, '__query', { ...read, mode: 'peek' }, false),
+    ).toMatchObject({ ok: true, json: { value: null } });
+    expect(
+      await h.service.callFromPage(ref, '__state', { op: 'get', key: 'date' }, false),
+    ).toMatchObject({ ok: true, json: null });
+    await h.service.store.patch('tally', (app) => {
+      app.toolPolicies.read_count = 'off';
+    });
+    expect(
+      await h.service.callFromPage(ref, '__query', { ...read, mode: 'peek' }, false),
+    ).toMatchObject({ ok: false, reason: 'off' });
+    await h.service.store.patch('tally', (app) => {
+      app.enabled = false;
+    });
+    expect(
+      await h.service.callFromPage(ref, '__state', { op: 'get', key: 'date' }, false),
+    ).toMatchObject({ ok: false, reason: 'off' });
+    await h.service.stop();
+  });
+});
+
+it('exercises successful service responses in an isolated sealed fixture runtime, without treating setup as success', async () => {
+  const h = await harness();
+  h.parts.runtime = createRuntime;
+  const { draft } = await h.service.newDraft(h.chat().conversationId, {
+    name: 'Fixture diary',
+    id: 'fixture-diary',
+  });
+  await h.service.write(
+    draft.id,
+    'conch-app.json',
+    JSON.stringify({
+      conch: 1,
+      id: 'fixture-diary',
+      name: 'Fixture diary',
+      tagline: 'Reads a diary',
+      version: '1.0.0',
+      icon: { glyph: 'utensils', color: 'green' },
+      tools: 'tools.mjs',
+      reaches: ['api.example.com'],
+    }),
+  );
+  await h.service.write(
+    draft.id,
+    'tools.mjs',
+    `export const tools = { read_day: { title: 'Read day', description: 'Reads the diary. Use when reviewing nutrition.', input: { type: 'object', properties: {} }, changes: false, async run(_input, app) {
+    if (!app.settings.api_key) return { setup_required: true };
+    const response = await app.fetch('https://api.example.com/day');
+    if (!response.ok) throw new Error('Offline'); return await response.json();
+  } } };`,
+  );
+  await h.service.write(
+    draft.id,
+    'fixtures.json',
+    JSON.stringify({
+      fixtures: {
+        today: {
+          settings: { api_key: 'pretend' },
+          responses: [{ url: 'https://api.example.com/day', json: { energy: 357 } }],
+        },
+      },
+    }),
+  );
+  expect((await h.service.tryTool(draft.id, 'read_day', {})).untried).toEqual(['read_day']);
+  const tried = await h.service.tryTool(draft.id, 'read_day', {}, undefined, 'today');
+  expect(tried.outcome).toMatchObject({ ok: true, json: { energy: 357 } });
+  expect(tried.untried).toEqual([]);
+  expect((await h.service.tryTool(draft.id, 'read_day', {})).outcome).toMatchObject({
+    json: { setup_required: true },
+  });
+  await h.service.stop();
 });

@@ -193,3 +193,63 @@ test('from inside its page, an app can’t fetch, can’t call another app’s t
   });
   expect(await unpressed.json()).toMatchObject({ ok: false, reason: 'confirm' });
 });
+
+test('app pages autoload saved queries, remember preferences and update after a tool runs elsewhere', async ({
+  page,
+  request,
+}, testInfo) => {
+  await request.delete('/api/conch-apps/tally?keepData=0');
+  await openConch(page);
+  await say(page, 'make me an app that counts things', /Press Add to my apps on the card/);
+  await page.getByRole('button', { name: 'Add Tally to my apps' }).click();
+  await expect(page.getByText('Tally is in your apps')).toBeVisible();
+  await page.goto('/apps/capp_tally/main');
+  await expect(tally(page).locator('#total')).toHaveText('0');
+  const frame = await page
+    .locator('iframe[title="Tally"]')
+    .elementHandle()
+    .then((h) => h?.contentFrame());
+  if (!frame) throw new Error('Tally’s page is missing');
+  // Real opaque frame → bridge → authenticated host → bounded local state.
+  await frame.evaluate(async () => {
+    const app = (
+      window as unknown as { conch: { state: { set(key: string, value: unknown): Promise<void> } } }
+    ).conch;
+    await app.state.set('selected-day', 'today');
+  });
+  // The same service call used by chat invalidates cached reads and notifies this open page.
+  const changed = await request.post('/api/conch-apps/tally/call', {
+    data: { tool: 'count', input: { by: 7 }, confirmed: true },
+  });
+  expect(changed.ok()).toBe(true);
+  await expect(tally(page).locator('#total')).toHaveText('7');
+  for (const theme of ['light', 'dark'] as const) {
+    await page.evaluate(
+      (mode) => localStorage.setItem('conch.theme', JSON.stringify({ mode })),
+      theme,
+    );
+    await page.reload();
+    await expect(tally(page).locator('#total')).toHaveText('7');
+    await page.screenshot({ path: testInfo.outputPath(`app-queries-${theme}.png`) });
+  }
+  const reopened = await page
+    .locator('iframe[title="Tally"]')
+    .elementHandle()
+    .then((h) => h?.contentFrame());
+  if (!reopened) throw new Error('Tally’s page is missing');
+  expect(
+    await reopened.evaluate(async () =>
+      (
+        window as unknown as { conch: { state: { get(key: string): Promise<unknown> } } }
+      ).conch.state.get('selected-day'),
+    ),
+  ).toBe('today');
+  const peek = await request.post('/api/conch-apps/tally/call', {
+    data: { tool: '__query', input: { tool: 'read_count', input: {}, mode: 'peek' } },
+  });
+  expect(await peek.json()).toMatchObject({ ok: true, json: { value: { json: { total: 7 } } } });
+  const unsafe = await request.post('/api/conch-apps/tally/call', {
+    data: { tool: '__query', input: { tool: 'count', input: { by: 100 } }, confirmed: true },
+  });
+  expect(await unsafe.json()).toMatchObject({ ok: false });
+});

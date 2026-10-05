@@ -87,3 +87,52 @@ Everything else your apps follow applies to it too: **Ask before changes**, the 
 
 > [!NOTE]
 > Sealing uses the permission system built into Node, the program Conch runs on. It keeps an app away from your files and programs. On today's Node it also keeps an app off the network by closing every way to it inside the app's process, rather than in the operating system. That's strong, but it isn't a wall the operating system holds.
+
+## Pages that remember and refresh
+
+An app can declare `pageState: true` in its manifest. Its card then says it remembers page preferences on this computer. A page uses `await conch.state.get('selected-day')`, `set(key, value)` and `delete(key)` for small JSON preferences. These are local view state, not diary entries or secrets. Each value is at most 64 KB; preferences and query results share a 2 MB limit. The state survives closing the page and restarting Conch. Changing account settings clears it.
+
+A read tool can declare `cache: { maxAge: 60 }` (seconds, 15–86,400). It must be read-only and cannot write `app.data`; Conch saves its successful result. `await conch.query('read_diary', { date, section: 'summary' })` returns the usual tool result plus `at` (a timestamp in milliseconds) and `stale`. `{ mode: 'peek' }` reads saved data without fetching; `{ mode: 'refresh' }` explicitly refreshes.
+
+For an automatically loaded page:
+
+```js
+const diary = conch.observe('read_diary', { date, section: 'summary' }, { every: 60 }, (result) => {
+  if (!result.ok) {
+    status.textContent = result.message;
+    return;
+  }
+  render(result.json);
+  status.textContent = result.error || (result.refreshing ? 'Updating…' : 'Up to date.');
+});
+// A refresh button calls diary.refresh(). Before selecting another date:
+// diary.stop(); then observe the new input.
+```
+
+The observer shows saved results immediately, refreshes stale data, pauses while hidden and refreshes on return. Changing tools called from the page or chat invalidate queries and notify open pages. Refresh failures keep the last successful result and retry with backoff. Nothing runs after the page closes. Use explicit dates for day-based queries; update the observed input when the local calendar day changes.
+
+Ordinary `app.data` remains the place for durable app records. Writing those records, sending messages, or editing another service still requires an honest `changes: true` tool and follows its existing approval policy. Page storage does not give access to another app's data, your files, or the network.
+
+## Testing with fake service responses
+
+Write `fixtures.json` in the app folder:
+
+```json
+{
+  "fixtures": {
+    "today": {
+      "settings": { "api_key": "pretend" },
+      "responses": [
+        {
+          "url": "https://api.example.com/diary?date=2026-10-05",
+          "method": "GET",
+          "status": 200,
+          "json": { "energy": 357 }
+        }
+      ]
+    }
+  }
+}
+```
+
+Then call `app_try` with `fixture: "today"` and the tool's realistic input. The test gets only those fake settings and exact responses, uses fresh scratch data, and never makes a network request. An unmatched URL, method or supplied body fails. Add cases for offline errors, missing records and invalid input. A response saying only that setup is required does not count as a successful tool test. Never put real credentials in fixtures.

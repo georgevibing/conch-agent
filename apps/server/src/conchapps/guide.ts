@@ -237,7 +237,7 @@ Export plain tool definitions, with no imports and no dependencies (other files 
 - **name**: lowercase letters, numbers and underscores, at most 20 characters. A verb: \`log_watering\`, \`due\`, \`find_trains\`.
 - **title**: a few words for people. **description**: what it does, then "Use when …", so a model picks it at the right moment.
 - **input**: a JSON Schema object, a \`description\` on every property, \`required\`, and bounds (\`minLength\`, \`maximum\`, \`enum\`). Conch checks what the model sends against it before \`run\` sees it.
-- **changes**: \`true\` when it keeps, sends or deletes anything; leave it out when it only looks. Be honest: the person's choices (Ask before changes) rely on it.
+- **changes**: \`true\` when it keeps durable app records, sends or deletes anything; leave it out when it only looks. Be honest: the person's choices (Ask before changes) rely on it.
 - **run** returns text, or JSON (an object or array; the model gets it as pretty JSON, a page gets it as \`json\`), or nothing ("Done."). Throw an Error whose message says what went wrong and what to do next: "The city wasn't found. Ask the person for a nearby town." The model reads it.
 - Few tools that each do one clear thing beat many. Make changing tools safe to repeat where you can.
 
@@ -264,6 +264,17 @@ ${kit}
 - No network, no forms (buttons with click handlers instead), no links that leave the page, no new windows, no frames, no outside fonts, pictures or scripts.
 - Each page has \`lang\`, a \`<title>\`, a viewport meta tag, and a label for every field.
 - Show something useful at once: the number that matters at the top, then the list, then the action. While a call is out, disable its button; after it, say what happened in a \`role="status"\` line and show the new state.
+
+## Pages that remember and refresh
+
+- Declare \`pageState: true\` in the manifest for small local page preferences. Use \`await conch.state.get(key)\`, \`set(key, value)\` or \`delete(key)\`. Each preference is at most 64 KB; preferences and saved queries share 2 MB. No secrets. Settings changes clear page data.
+- A read tool may declare \`cache: { maxAge: 60 }\` (seconds, 15–86400). It must not change anything or write \`app.data\`; Conch saves its successful result. \`conch.query(tool, input, { mode: 'read' })\` returns the usual result with \`at\` (milliseconds) and \`stale\`. Modes: read, peek (saved only), refresh.
+- Prefer \`conch.observe(tool, input, { every: 60 }, render)\`: it shows saved data, refreshes stale results, pauses when hidden, wakes on return, and updates when a changing tool runs through chat or the page. It returns \`refresh()\` and \`stop()\`. Results include \`refreshing\`; a failed refresh keeps data and adds \`error\`. Stop the old observer when inputs change. Use explicit dates and handle the local calendar day changing.
+- Load useful data automatically. Show freshness, keep values while updating, and give a manual refresh button. Disable action buttons during calls. Durable records and external edits still use honest \`changes: true\` tools.
+
+## Scratch service fixtures
+
+Write \`fixtures.json\`: \`{ "fixtures": { "today": { "settings": { "api_key": "pretend" }, "responses": [{ "url": "https://api.example.com/day", "method": "GET", "status": 200, "json": { "energy": 357 } }] } } }\` (use a host already in reaches). Call \`app_try\` with \`fixture: "today"\`. The runtime uses fresh scratch data, only fake settings, and exact responses, with no network. An unmatched URL, method or optional body fails. Test successes, service errors and invalid input. Setup-required answers do not count as successful tries. Never put real credentials in fixtures.
 
 ## The quality bar
 

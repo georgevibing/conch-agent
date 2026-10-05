@@ -133,7 +133,14 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
         (r): r is string => typeof r === 'string',
       );
       const name = text(manifest?.name ?? app?.id, 'An app');
-      return text(reaches.length ? `${name} (reaches ${reaches.join(', ')})` : name, 'An app');
+      const abilities = [
+        ...(manifest?.pageState === true ? ['remembers page preferences'] : []),
+        ...(Array.isArray(app?.tools) && app.tools.some((tool) => record(tool)?.cache)
+          ? ['saves lookup results']
+          : []),
+        ...(reaches.length ? [`reaches ${reaches.join(', ')}`] : []),
+      ];
+      return text(abilities.length ? `${name} (${abilities.join('; ')})` : name, 'An app');
     });
   if (appNames.length)
     powers.push({

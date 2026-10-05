@@ -128,6 +128,36 @@ describe('what in a backup can act for you', () => {
     for (const power of powers) expect(BackupPower.safeParse(power).success).toBe(true);
   });
 
+  it('shows restored apps’ page storage and lookup caches', () => {
+    const powers = powersOf(
+      ['conch-apps.json'],
+      reader({
+        'conch-apps.json': {
+          apps: [
+            {
+              enabled: true,
+              tools: [{ name: 'today', cache: { maxAge: 60 } }],
+              manifest: {
+                name: 'Diary',
+                pageState: true,
+                tools: 'tools.mjs',
+                reaches: ['diary.example'],
+              },
+            },
+          ],
+        },
+      }),
+    );
+    expect(powers).toEqual([
+      {
+        kind: 'conch-apps',
+        names: ['Diary (remembers page preferences; saves lookup results; reaches diary.example)'],
+        more: 0,
+      },
+    ]);
+    for (const power of powers) expect(BackupPower.safeParse(power).success).toBe(true);
+  });
+
   it('names whose skills it trusts, so a backup can’t quietly vouch for someone (ADR 0031)', () => {
     const powers = powersOf(
       ['skills.trust.json'],

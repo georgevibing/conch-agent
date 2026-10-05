@@ -304,8 +304,12 @@ export class ConchApps implements HostedApps {
       const who = made
         ? 'a Conch app the user made'
         : `a Conch app the user added from ${sourceName(app.source)}`;
+      const pagePowers = [
+        ...(app.manifest.pageState ? ['remembers local page preferences'] : []),
+        ...(app.tools.some((tool) => tool.cache) ? ['saves lookup results for page refresh'] : []),
+      ];
       const lines = [
-        `- ${name} (${who}; tools ${tools.join(', ') || 'none'}): ${plainLine(app.manifest.tagline, 80)} — ${POLICY_LABELS[item.policy].toLowerCase()}.`,
+        `- ${name} (${who}; tools ${tools.join(', ') || 'none'}): ${plainLine(app.manifest.tagline, 80)} — ${POLICY_LABELS[item.policy].toLowerCase()}.${pagePowers.length ? ` Its pages: ${pagePowers.join('; ')}.` : ''}`,
       ];
       const instructions = app.manifest.instructions ? quoted(app.manifest.instructions, 1500) : '';
       const examples = app.manifest.examples.map((e) => quoted(e, 120)).join('; ');

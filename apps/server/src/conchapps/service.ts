@@ -46,6 +46,9 @@ import {
 } from '@conch/protocol';
 
 import { frameDocument } from '../artifacts/frame';
+import { PageData, QueryRequest } from './page-data';
+import { inputProblem } from './runtime';
+import { scratchFixture } from './fixtures';
 import { describeTaint } from '../conversations/taint';
 import { newId } from '../lib/ids';
 import { Mutex, removeTree } from '../lib/fs';
@@ -141,6 +144,8 @@ function heldPicture(files: AppFiles) {
 
 /** A tool as a card shows it: no schema, which only the model needs. */
 const cardTool = ({ input: _input, ...tool }: ConchAppTool): ConchAppTool => tool;
+const pageScope = (app: Pick<AppRecord, 'hash' | 'pageDataEpoch'>) =>
+  `${app.hash}:${app.pageDataEpoch ?? 0}`;
 
 /** A tool as an app's record keeps it: its input schema rebuilt from the allowlist (`safeSchema`). */
 const storedTool = (tool: ConchAppTool): ConchAppTool => {
@@ -160,6 +165,10 @@ export function changesOf(
   return {
     from: from.manifest.version,
     to: to.manifest.version,
+    ...(!from.manifest.pageState && to.manifest.pageState ? { pageStateAdded: true } : {}),
+    ...(!from.tools.some((t) => t.cache) && to.tools.some((t) => t.cache)
+      ? { queryCacheAdded: true }
+      : {}),
     reachesAdded: minus(to.manifest.reaches, from.manifest.reaches),
     reachesRemoved: minus(from.manifest.reaches, to.manifest.reaches),
     settingsAdded: minus(
@@ -285,6 +294,7 @@ const noFetch: AppFetcher = async () => ({
 });
 
 export class ConchAppService {
+  #pageData = new PageData();
   readonly store: ConchAppStore;
   readonly workshop: Workshop;
   readonly hosted: ConchApps;
@@ -616,7 +626,14 @@ export class ConchAppService {
     signal?: AbortSignal,
   ): Promise<AppCallOutcome> {
     try {
-      const outcome = await (await this.runtimeFor(id)).call(tool, input, signal);
+      const runtime = await this.runtimeFor(id);
+      const app = await this.#record(id);
+      const changing = app.tools.some((t) => t.name === tool && t.changes);
+      const outcome = await runtime.call(tool, input, signal);
+      if (changing) {
+        await this.#pageData.invalidate(this.store.dataDir(id), pageScope(app));
+        await this.#changed(id);
+      }
       if (this.#failures.delete(id)) await this.#changed(id);
       return outcome;
     } catch (error) {
@@ -849,6 +866,7 @@ export class ConchAppService {
     tool: string,
     input: Record<string, unknown>,
     signal?: AbortSignal,
+    fixture?: string,
   ): Promise<{ outcome: AppCallOutcome; untried: string[]; tools: ConchAppTool[] }> {
     const files = await this.workshop.files(draftId);
     const read = await this.deps.parts.readFiles(files);
@@ -858,37 +876,67 @@ export class ConchAppService {
         `The draft doesn’t read as an app yet: ${problemText(read.problems)} Fix that, then try again.`,
       );
     await mkdir(this.workshop.dataDir(draftId), { recursive: true, mode: 0o700 });
-    const runtime = this.#draftRuntime(draftId, read.app);
-    let tools: ConchAppTool[];
+    const fake = fixture ? scratchFixture(files, fixture) : undefined;
+    const fixtureDir = join(this.workshop.dataDir(draftId), 'fixtures', newId('test'));
+    if (fake) await mkdir(fixtureDir, { recursive: true, mode: 0o700 });
+    const runtime = fake
+      ? this.deps.parts.runtime({
+          appDir: this.workshop.filesDir(draftId),
+          dataDir: fixtureDir,
+          manifest: read.app.manifest,
+          settings: async () => fake.settings,
+          fetcher: fake.fetcher,
+        })
+      : this.#draftRuntime(draftId, read.app);
     try {
-      tools = await runtime.list();
-    } catch (error) {
-      throw new ConchAppError(
-        'invalid',
-        `The tools module didn’t start: ${error instanceof Error ? error.message : 'it failed'}. Run app_check to see why.`,
-      );
+      let tools: ConchAppTool[];
+      try {
+        tools = await runtime.list();
+      } catch (error) {
+        throw new ConchAppError(
+          'invalid',
+          `The tools module didn’t start: ${error instanceof Error ? error.message : 'it failed'}. Run app_check to see why.`,
+        );
+      }
+      if (!tools.some((t) => t.name === tool))
+        throw new ConchAppError(
+          'invalid',
+          `The draft has no tool called “${tool}”. Its tools are: ${tools.map((t) => t.name).join(', ') || 'none'}.`,
+        );
+      let outcome: AppCallOutcome;
+      try {
+        outcome = await runtime.call(tool, input, signal);
+      } catch (error) {
+        outcome = { ok: false, text: error instanceof Error ? error.message : 'It failed.' };
+      }
+      if (!fake && tools.some((t) => t.name === tool && t.changes)) {
+        await this.#pageData.invalidate(this.workshop.dataDir(draftId), `${read.app.hash}:0`);
+        this.deps.emit({ type: 'conch-apps.changed' });
+      }
+      const key = this.#triedKey(files);
+      const info = await this.workshop.patch(draftId, (draft) => {
+        if (
+          !outcome.ok ||
+          (outcome.json && typeof outcome.json === 'object' && 'setup_required' in outcome.json)
+        )
+          return;
+        const tried = new Set(draft.tried[key] ?? []);
+        tried.add(tool);
+        // Only the newest files matter; what was tried on older ones is forgotten.
+        draft.tried = { [key]: [...tried] };
+      });
+      const tried = info.tried[key] ?? [];
+      return {
+        outcome,
+        tools,
+        untried: tools.map((t) => t.name).filter((t) => !tried.includes(t)),
+      };
+    } finally {
+      if (fake) {
+        await runtime.stop();
+        await removeTree(fixtureDir);
+      }
     }
-    if (!tools.some((t) => t.name === tool))
-      throw new ConchAppError(
-        'invalid',
-        `The draft has no tool called “${tool}”. Its tools are: ${tools.map((t) => t.name).join(', ') || 'none'}.`,
-      );
-    let outcome: AppCallOutcome;
-    try {
-      outcome = await runtime.call(tool, input, signal);
-    } catch (error) {
-      outcome = { ok: false, text: error instanceof Error ? error.message : 'It failed.' };
-    }
-    const key = this.#triedKey(files);
-    const info = await this.workshop.patch(draftId, (draft) => {
-      if (!outcome.ok) return;
-      const tried = new Set(draft.tried[key] ?? []);
-      tried.add(tool);
-      // Only the newest files matter; what was tried on older ones is forgotten.
-      draft.tried = { [key]: [...tried] };
-    });
-    const tried = info.tried[key] ?? [];
-    return { outcome, tools, untried: tools.map((t) => t.name).filter((t) => !tried.includes(t)) };
   }
 
   /**
@@ -1804,10 +1852,16 @@ export class ConchAppService {
     const { secret, plain } = this.#settingsFor(app.manifest, values);
     if (Object.keys(secret).length) await this.store.setSecrets(id, secret);
     await this.store.patch(id, (record) => {
+      record.pageDataEpoch = (record.pageDataEpoch ?? 0) + 1;
       record.values = Object.fromEntries(
         Object.entries({ ...record.values, ...plain }).filter(([, value]) => value !== ''),
       );
     });
+    await this.#pageData.invalidate(
+      this.store.dataDir(id),
+      pageScope(await this.#record(id)),
+      true,
+    );
     // The runtime reads settings when it starts.
     await this.#stop(id);
     await this.#changed(id);
@@ -2062,6 +2116,7 @@ export class ConchAppService {
   ): Promise<AppCallResult> {
     if ('appId' in ref) {
       const app = await this.#record(ref.appId);
+      if (tool === '__query' || tool === '__state') return this.#pageOperation(app, tool, input);
       const known = app.tools.find((t) => t.name === tool);
       if (!known)
         return {
@@ -2107,7 +2162,22 @@ export class ConchAppService {
     if (!read.ok)
       return { ok: false, reason: 'error', message: 'The draft doesn’t read as an app yet.' };
     const runtime = this.#draftRuntime(ref.draftId, read.app);
-    const known = (await runtime.list().catch(() => [])).find((t) => t.name === tool);
+    const draftTools = await runtime.list().catch(() => []);
+    if (tool === '__state')
+      return this.#pageOperation(
+        {
+          id: read.app.manifest.id,
+          hash: read.app.hash,
+          manifest: read.app.manifest,
+          enabled: true,
+          toolPolicies: {},
+          tools: draftTools,
+        },
+        tool,
+        input,
+        { id: ref.draftId, runtime },
+      );
+    const known = draftTools.find((t) => t.name === (tool === '__query' ? input.tool : tool));
     if (!known)
       return {
         ok: false,
@@ -2126,6 +2196,20 @@ export class ConchAppService {
           message: `${describeTaint(taints)} ${read.app.manifest.name} would send to ${reaches.join(', ')}. Allow it?`,
         };
     }
+    if (tool === '__query')
+      return this.#pageOperation(
+        {
+          id: read.app.manifest.id,
+          hash: read.app.hash,
+          manifest: read.app.manifest,
+          enabled: true,
+          toolPolicies: {},
+          tools: draftTools,
+        },
+        tool,
+        input,
+        { id: ref.draftId, runtime },
+      );
     if (known.changes && !confirmed)
       return {
         ok: false,
@@ -2137,9 +2221,98 @@ export class ConchAppService {
       ok: false,
       text: error instanceof Error ? error.message : 'It failed.',
     }));
+    if (known.changes) {
+      await this.#pageData.invalidate(this.workshop.dataDir(ref.draftId), `${read.app.hash}:0`);
+      this.deps.emit({ type: 'conch-apps.changed' });
+    }
     return outcome.ok
       ? { ok: true, text: outcome.text, ...(outcome.json !== undefined && { json: outcome.json }) }
       : { ok: false, reason: 'error', message: outcome.text };
+  }
+
+  /** Page infrastructure never borrows an action approval. Every cached read checks policy again. */
+  async #pageOperation(
+    app: Pick<
+      AppRecord,
+      'id' | 'hash' | 'pageDataEpoch' | 'manifest' | 'enabled' | 'toolPolicies' | 'tools'
+    >,
+    operation: string,
+    input: Record<string, unknown>,
+    draft?: { id: string; runtime: AppRuntime },
+  ): Promise<AppCallResult> {
+    try {
+      if (!app.enabled)
+        return { ok: false, reason: 'off', message: `${app.manifest.name} is turned off in Apps.` };
+      const dir = draft ? this.workshop.dataDir(draft.id) : this.store.dataDir(app.id);
+      await mkdir(dir, { recursive: true, mode: 0o700 });
+      if (operation === '__state') {
+        if (!app.manifest.pageState)
+          return {
+            ok: false,
+            reason: 'off',
+            message: 'This app has not declared pageState: true.',
+          };
+        const json = await this.#pageData.state(dir, pageScope(app), input);
+        return { ok: true, text: 'Page preference loaded or saved.', json };
+      }
+      const query = QueryRequest.parse(input);
+      const known = app.tools.find((t) => t.name === query.tool);
+      if (!known?.cache || known.changes)
+        return {
+          ok: false,
+          reason: 'error',
+          message: 'Only a read-only tool declaring cache: { maxAge } can be queried.',
+        };
+      if (own(app.toolPolicies, query.tool) === 'off')
+        return { ok: false, reason: 'off', message: `${known.title} is turned off in Apps.` };
+      if (!draft && this.#missing.get(app.id)?.length)
+        return {
+          ok: false,
+          reason: 'missing-settings',
+          message: 'Add this app’s settings in Apps first.',
+        };
+      const runtime = draft?.runtime ?? (await this.runtimeFor(app.id));
+      const tools = await runtime.list();
+      const current = tools.find((t) => t.name === query.tool);
+      if (!current?.cache || current.changes)
+        return {
+          ok: false,
+          reason: 'error',
+          message: 'The query tool has changed. Check this app in Apps.',
+        };
+      const problem = inputProblem(current.input, query.input);
+      if (problem) return { ok: false, reason: 'error', message: problem };
+      const json = await this.#pageData.query(
+        dir,
+        pageScope(app),
+        query,
+        current.cache.maxAge,
+        () =>
+          draft
+            ? runtime.call(query.tool, query.input)
+            : this.#call(app.id, query.tool, query.input),
+      );
+      // A switch or account can change while a refresh waits.
+      const after = draft ? app : await this.#record(app.id);
+      if (
+        !after.enabled ||
+        (!draft && this.#started.get(app.id) !== runtime) ||
+        pageScope(after) !== pageScope(app) ||
+        own(after.toolPolicies, query.tool) === 'off'
+      )
+        return {
+          ok: false,
+          reason: 'off',
+          message: 'This app or query changed while loading. Open its page again.',
+        };
+      return { ok: true, text: 'Query result.', json };
+    } catch (error) {
+      return {
+        ok: false,
+        reason: 'error',
+        message: error instanceof Error ? error.message : 'The page request failed.',
+      };
+    }
   }
 
   // ── Whole Conch ─────────────────────────────────────────────────────────

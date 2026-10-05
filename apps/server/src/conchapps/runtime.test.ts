@@ -1092,3 +1092,22 @@ describe('shipping the runtime', () => {
     expect(APP_LIMITS.callMs).toBe(30_000);
   });
 });
+
+describe('cacheable queries', () => {
+  it('lists cache declarations and refuses durable data writes, including overlapping calls', async () => {
+    const app = await makeApp(`export const tools = {
+      ${tool('query', "await new Promise(r => setTimeout(r, 25)); await app.data.set('notes', [1]);", 'cache: { maxAge: 60 }, changes: false,')}
+      ${tool('write', "await app.data.set('notes', [2]); return await app.data.get('notes');", 'changes: true,')}
+    };`);
+    const runtime = start(app);
+    expect(await runtime.list()).toContainEqual(
+      expect.objectContaining({ name: 'query', cache: { maxAge: 60 } }),
+    );
+    const results = await Promise.all([runtime.call('query', {}), runtime.call('write', {})]);
+    expect(results[0]).toMatchObject({
+      ok: false,
+      text: expect.stringContaining('cannot write app.data'),
+    });
+    expect(results[1]).toMatchObject({ ok: true, json: [2] });
+  });
+});

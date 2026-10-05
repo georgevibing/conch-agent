@@ -718,6 +718,8 @@ cap, and teach `parseLink` its links. Its packages go through `findApps`,
 `checkApp` (`safetyOnly`) and `verifyApp` like every other; nothing it says is
 trusted, and its descriptions taint the chat.
 
+**Page state and queries** ([ADR 0092](./docs/adr/0092-app-page-state-and-queries.md)): `pageState: true` grants only small local preferences through `conch.state`. A read tool's `cache: { maxAge }` opts into host-owned results; cacheable tools cannot write `app.data`. `conch.query` and `conch.observe` show saved results and refresh while visible. Every cache access checks switches and settings; changing tools invalidate results. Account setting changes clear page state and queries. The file stays in the app's existing data/backup/protection boundary. `fixtures.json` and `app_try`'s `fixture` argument run isolated fake service tests without network or installed credentials. Setup-only answers do not count as successful tries.
+
 **Making the apps better** is changing the guide, the starter, the quality bar
 and the page kit. Read a few apps the assistant makes after every such change
 (a real provider in `pnpm dev`, or the mock's Tally in `pnpm dev:mock`).

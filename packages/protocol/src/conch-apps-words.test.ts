@@ -189,3 +189,26 @@ describe('appSourceLine', () => {
     );
   });
 });
+
+it('shows page storage and query caching on cards and names the new abilities in updates', () => {
+  const declared = { ...manifest, pageState: true };
+  const cached = tools.map((t) => (t.changes ? t : { ...t, cache: { maxAge: 60 } }));
+  expect(appAbilities(declared, cached)).toContainEqual({
+    kind: 'data',
+    text: 'Remembers page preferences on this computer',
+  });
+  expect(appAbilities(declared, cached)).toContainEqual({
+    kind: 'data',
+    text: 'Saves lookup results locally for quick loading and refresh',
+  });
+  const changes = ConchAppChanges.parse({
+    from: '1.0.0',
+    to: '1.1.0',
+    pageStateAdded: true,
+    queryCacheAdded: true,
+  });
+  expect(describeChanges(changes)).toContain('Now remembers page preferences on this computer');
+  expect(describeChanges(changes)).toContain(
+    'Now saves lookup results locally for quick loading and refresh',
+  );
+});

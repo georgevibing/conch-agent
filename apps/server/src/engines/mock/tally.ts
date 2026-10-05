@@ -21,6 +21,7 @@ export function tallyFiles(version = '1.0.0'): Record<string, string> {
         pages: [{ id: 'main', title: 'Tally', file: 'pages/main.html' }],
         reaches: [],
         settings: [],
+        pageState: true,
         instructions:
           'Use Tally when the person wants to count something or asks how many. Add with count; read with read_count.',
         examples: ['Count one more coffee', 'How many is the tally at?'],
@@ -48,6 +49,7 @@ export function tallyFiles(version = '1.0.0'): Record<string, string> {
     description: 'Says what the tally is at. Use when the person asks how many.',
     input: { type: 'object', properties: {} },
     changes: false,
+    cache: { maxAge: 30 },
     async run(_input, app) {
       return { total: (await app.data.get('total')) ?? 0 };
     },
@@ -71,17 +73,21 @@ export function tallyFiles(version = '1.0.0'): Record<string, string> {
   <script>
     const total = document.getElementById('total');
     const status = document.getElementById('status');
-    async function show() {
-      const r = await conch.call('read_count', {});
+    function show(r) {
       if (r.ok) total.textContent = r.json.total;
       else status.textContent = r.message;
     }
-    document.getElementById('add').addEventListener('click', async () => {
-      const r = await conch.call('count', { by: 1 });
+    const view = conch.observe('read_count', {}, { every: 30 }, show);
+    const add = document.getElementById('add');
+    add.addEventListener('click', async () => {
+      add.disabled = true;
+      let r;
+      try { r = await conch.call('count', { by: 1 }); }
+      finally { add.disabled = false; }
       status.textContent = r.ok ? '' : r.message;
-      await show();
+      if (r.ok) view.refresh();
     });
-    show();
+
   </script>
 </body>
 </html>

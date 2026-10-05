@@ -14,9 +14,9 @@ export interface AppAbilityLine {
 
 /** The parts of a manifest the words read (a draft's may be partly filled). */
 type ManifestWords = Pick<ConchAppManifest, 'tools'> &
-  Partial<Pick<ConchAppManifest, 'reaches' | 'settings'>>;
+  Partial<Pick<ConchAppManifest, 'reaches' | 'settings' | 'pageState'>>;
 
-type ToolWords = Pick<ConchAppTool, 'name' | 'title' | 'changes'>;
+type ToolWords = Pick<ConchAppTool, 'name' | 'title' | 'changes' | 'cache'>;
 
 /** Names shown in one line before "and 3 more". */
 const SHOWN = 4;
@@ -53,9 +53,16 @@ export function appAbilities(
   const lines: AppAbilityLine[] = [];
   const reaches = manifest.reaches ?? [];
   const settings = manifest.settings ?? [];
-  // Only its tools can keep anything: a page has no storage of its own.
+  // Durable records belong to tools; page preferences and cached reads are separate.
   if (manifest.tools || tools.length)
     lines.push({ kind: 'data', text: 'Keeps its own notes on this computer' });
+  if (manifest.pageState)
+    lines.push({ kind: 'data', text: 'Remembers page preferences on this computer' });
+  if (tools.some((t) => t.cache))
+    lines.push({
+      kind: 'data',
+      text: 'Saves lookup results locally for quick loading and refresh',
+    });
   lines.push({
     kind: 'reach',
     text: reaches.length ? `Reaches ${and(reaches)}` : 'Reaches no websites',
@@ -107,6 +114,9 @@ export function describeChanges(changes: ConchAppChanges, names: ChangeNames = {
         ? `Your saved settings will go with it, and it now also reaches ${and(changes.reachesAdded)}`
         : `Now also reaches ${and(changes.reachesAdded)}`,
     );
+  if (changes.pageStateAdded) out.push('Now remembers page preferences on this computer');
+  if (changes.queryCacheAdded)
+    out.push('Now saves lookup results locally for quick loading and refresh');
   if (changes.toolsNowChange.length)
     out.push(
       `${list(changes.toolsNowChange.map(tool))} ${changes.toolsNowChange.length > 1 ? 'now make' : 'now makes'} changes`,

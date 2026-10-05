@@ -354,6 +354,7 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
   const tryTool: HostTool<{
     draft: typeof draftArg;
     tool: z.ZodString;
+    fixture: z.ZodOptional<z.ZodString>;
     input: z.ZodOptional<z.ZodObject<Record<string, never>, z.core.$loose>>;
   }> = {
     name: 'app_try',
@@ -365,15 +366,22 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
       // An open object, not `z.record`: the MCP SDK can't list a record, and one
       // tool that won't list takes every Conch tool away from Claude Code.
       input: z.looseObject({}).optional().describe('Its arguments'),
+      fixture: z
+        .string()
+        .regex(/^[A-Za-z0-9_-]{1,64}$/)
+        .optional()
+        .describe(
+          'Named fixture in fixtures.json; fake settings and exact responses, with no network',
+        ),
     },
-    run: safely(async ({ draft, tool, input }) => {
+    run: safely(async ({ draft, tool, input, fixture }) => {
       const info = await draftOf(draft);
       const manifest = (await service.draft(info)).manifest;
       // A draft that reaches the web is a way out (ADR 0028): after reading something untrusted, ask
       // first. Full trust doesn't, and "Always allow" lets every try through for the rest of the chat.
       const tainted = ctx.untrusted?.();
       if (tainted) {
-        if (manifest?.reaches.length) {
+        if (manifest?.reaches.length && !fixture) {
           const answer = await ctx.ask({
             toolName: 'app_try',
             input: { tool, input: input ?? {} },
@@ -387,7 +395,13 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
             };
         }
       }
-      const { outcome, untried } = await service.tryTool(info.id, tool, input ?? {}, ctx.signal);
+      const { outcome, untried } = await service.tryTool(
+        info.id,
+        tool,
+        input ?? {},
+        ctx.signal,
+        fixture,
+      );
       // What it fetched came from outside, as for an added app (`hosted.ts`).
       if (manifest?.reaches.length)
         ctx.taint?.({ kind: 'app', label: `${plainLine(manifest.name, 60)} content` });
