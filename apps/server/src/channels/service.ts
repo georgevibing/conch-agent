@@ -2384,7 +2384,7 @@ export class ChannelService {
         e.permissionId,
         e.summary,
         `In **${relay.seat.group.name}**, ${assistant} would like to:`,
-        { always: !e.taint },
+        { always: !e.taint && !e.once },
       );
     }
     if (e.taint) {
@@ -2406,7 +2406,7 @@ export class ChannelService {
       e.summary,
       undefined,
       {
-        always: !e.taint,
+        always: !e.taint && !e.once,
       },
     );
   }

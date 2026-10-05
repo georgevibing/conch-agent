@@ -51,3 +51,36 @@ describe('a question asked because of what the chat read', () => {
     expect(screen.getByRole('button', { name: 'Allow' })).toBeInTheDocument();
   });
 });
+
+describe('a question from one of Conch’s own tools', () => {
+  it('offers “Always allow” when trying an app’s draft', () => {
+    renderApp(
+      <PermissionCard
+        item={asked({
+          toolName: 'app_try',
+          summary: 'try Yazio’s check_connection, which can reach yzapi.yazio.com',
+          input: {},
+        })}
+        name="Conch"
+        onRespond={() => {}}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Always allow' })).toBeInTheDocument();
+  });
+
+  it('is this once when it shows words going to other people', () => {
+    renderApp(
+      <PermissionCard
+        item={asked({
+          toolName: 'slack_send_message',
+          summary: 'send this to #general in Slack: “hi”',
+          input: {},
+          once: true,
+        })}
+        name="Conch"
+        onRespond={() => {}}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Always allow' })).not.toBeInTheDocument();
+  });
+});

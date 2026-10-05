@@ -97,6 +97,8 @@ export type TranscriptItem =
       taint?: string;
       /** Asked for a reason "Always allow" can lift (what it read, the sealed box). */
       lasting?: boolean;
+      /** Shows what goes to other people, so it's asked each time: no "always". */
+      once?: boolean;
     }
   | {
       /**
@@ -572,6 +574,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             ...(event.vault && { vault: event.vault }),
             ...(event.taint && { taint: event.taint }),
             ...((event.lasting || event.afterReading) && { lasting: true }),
+            ...(event.once && { once: true }),
           },
         ],
       };

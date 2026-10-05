@@ -373,8 +373,9 @@ export function PermissionCard({
           {draft ? 'Don’t save' : 'Deny'}
         </Button>
         {/* Asked because of what it read or for leaving the sealed box, "always" lets this
-            tool through for the rest of the chat; for a skill's list, it's this once. */}
-        {(!item.taint || item.lasting) && allowAlways && !draft && (
+            tool through for the rest of the chat; for a skill's list, or words going to
+            other people, it's this once. */}
+        {(!item.taint || item.lasting) && !item.once && allowAlways && !draft && (
           <Button
             variant="surface"
             onClick={() => respond('allow-always')}

@@ -443,7 +443,9 @@ aimed at your assistant. Conch can't tell a hostile page from a friendly one, so
 it doesn't try: once a chat has read something from outside, anything that could
 send your things somewhere or change this computer **asks you first**, and the
 question says why. Reading on is free. **Always allow** on that question lets
-that kind of step through for the rest of the chat, as it does anywhere else.
+that kind of step through for the rest of the chat, as it does anywhere else,
+your apps and an app being made included. A message or a draft for other
+people shows you its words each time.
 
 **Full trust** is the one mode that doesn't stop to ask: you chose to let the
 assistant act, and a web page it reads could trick it (the mode picker says so).

@@ -502,6 +502,8 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     lasting: z.boolean().optional(),
     /** The same, as the first version of this field said it (2026-10-04). */
     afterReading: z.boolean().optional(),
+    /** Shows exactly what goes to other people, so it's asked each time: no "Always allow". */
+    once: z.boolean().optional(),
   }),
   z.object({
     ...logged,
