@@ -39,6 +39,14 @@ An app with a page has it at the top of the sidebar, as a tile with the app's ic
 
 Switched an app off? Ask for something it does, and the chat offers it back with **Turn on**, then carries on.
 
+## Give it a logo or a picture
+
+Every app starts with a small symbol on a colour as its icon. To use a logo or a picture instead, ask in the chat: "use the Strava logo as its icon", or attach a picture and say "make this its icon". Conch finds the logo on the web or takes the picture you attached, and shows the app with it on a new card. Press **Update** to keep it.
+
+The picture shows wherever the app does: on its card in **Apps**, its page, the tiles at the top of the sidebar, and ⌘K. It can be a PNG, JPEG or WebP of up to 512 KB. A square picture about 256 pixels across looks best. Conch doesn't use SVG files or pictures that move. If the picture can't be shown, the app shows its symbol instead.
+
+The picture is kept inside the app, so it goes with the app when you share it.
+
 ## Change it
 
 Ask in the chat where you made it: "also remind me when a plant hasn't been watered for a week". Or press **Change it** on the app's page. Conch shows a new card with what's different, and **Update**. Until you press it, the app stays as it was.

@@ -49,29 +49,30 @@ plant-diary/
   pages/main.html    a page of its own (optional, up to 4)
   skills/<name>/SKILL.md   longer know-how for the assistant (optional)
   README.md          for people who find it on GitHub
+  icon.png           its picture, drawn instead of the glyph (optional; ADR 0090)
   conch-app.sig      who made it (optional, written by Conch)
 ```
 
 `conch-app.json` (`ConchAppManifest` in `@conch/protocol`, checked on both sides):
 
-| Key            | What it is                                                                                                             |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `conch`        | The format, `1`.                                                                                                       |
-| `id`           | `a-z0-9` and single hyphens, 2–40 characters. Its tools are named after it.                                            |
-| `name`         | 1–40 characters, sentence case ("Plant diary").                                                                        |
-| `tagline`      | What it does, at most 80 characters, for its card.                                                                     |
-| `description`  | At most 600 characters, for its page and its install preview.                                                          |
-| `version`      | `major.minor.patch`.                                                                                                   |
-| `icon`         | `{ glyph, color }`: one of Nacre's app glyphs (`APP_GLYPHS`) on one of its colours (`APP_COLORS`). Nothing is fetched. |
-| `kind`         | Where it sits in the gallery: one of the gallery's kinds, or `personal`.                                               |
-| `tools`        | The tools module, `tools.mjs`.                                                                                         |
-| `pages`        | `[{ id, title, file }]`, at most 4.                                                                                    |
-| `reaches`      | The websites its tools may reach: exact host names, at most 10, https only. Empty means none.                          |
-| `settings`     | `[{ key, label, help?, link?, secret?, optional? }]`, at most 8: what it needs from the person, such as an API key.    |
-| `instructions` | At most 1,500 characters, for the assistant: when to use it, and how.                                                  |
-| `examples`     | At most 6 things a person might say to use it ("I watered the fern").                                                  |
-| `author`       | `{ name, url? }`, optional.                                                                                            |
-| `repository`   | Where it's published, set by Conch when it publishes.                                                                  |
+| Key            | What it is                                                                                                                                                                                                                                      |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `conch`        | The format, `1`.                                                                                                                                                                                                                                |
+| `id`           | `a-z0-9` and single hyphens, 2–40 characters. Its tools are named after it.                                                                                                                                                                     |
+| `name`         | 1–40 characters, sentence case ("Plant diary").                                                                                                                                                                                                 |
+| `tagline`      | What it does, at most 80 characters, for its card.                                                                                                                                                                                              |
+| `description`  | At most 600 characters, for its page and its install preview.                                                                                                                                                                                   |
+| `version`      | `major.minor.patch`.                                                                                                                                                                                                                            |
+| `icon`         | `{ glyph, color }`: one of Nacre's app glyphs (`APP_GLYPHS`) on one of its colours (`APP_COLORS`). Nothing is fetched. A picture in the folder is drawn instead, with this as its fallback ([ADR 0090](./0090-an-apps-picture-as-its-icon.md)). |
+| `kind`         | Where it sits in the gallery: one of the gallery's kinds, or `personal`.                                                                                                                                                                        |
+| `tools`        | The tools module, `tools.mjs`.                                                                                                                                                                                                                  |
+| `pages`        | `[{ id, title, file }]`, at most 4.                                                                                                                                                                                                             |
+| `reaches`      | The websites its tools may reach: exact host names, at most 10, https only. Empty means none.                                                                                                                                                   |
+| `settings`     | `[{ key, label, help?, link?, secret?, optional? }]`, at most 8: what it needs from the person, such as an API key.                                                                                                                             |
+| `instructions` | At most 1,500 characters, for the assistant: when to use it, and how.                                                                                                                                                                           |
+| `examples`     | At most 6 things a person might say to use it ("I watered the fern").                                                                                                                                                                           |
+| `author`       | `{ name, url? }`, optional.                                                                                                                                                                                                                     |
+| `repository`   | Where it's published, set by Conch when it publishes.                                                                                                                                                                                           |
 
 A package is at most 2 MB unpacked, 200 files, and only text files of known
 kinds (`.json`, `.mjs`, `.js`, `.html`, `.css`, `.md`, `.txt`, `.svg`, `.csv`).
