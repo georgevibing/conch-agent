@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import { platform } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 
@@ -25,8 +25,16 @@ export async function writeFileAtomic(
 ): Promise<void> {
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   const tmp = `${path}.${randomBytes(4).toString('hex')}.tmp`;
-  await writeFile(tmp, data, { mode });
+  const file = await open(tmp, 'wx', mode);
   try {
+    try {
+      await file.writeFile(data);
+      // Restore the requested mode exactly, including when Conch itself runs
+      // with a restrictive umask. Use the descriptor, never a mutable path.
+      await file.chmod(mode);
+    } finally {
+      await file.close();
+    }
     await replace(tmp, path);
   } catch (error) {
     await rm(tmp, { force: true });

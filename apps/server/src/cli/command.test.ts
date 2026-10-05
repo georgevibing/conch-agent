@@ -195,7 +195,7 @@ describe('removing it', () => {
 
 describe('cliName', () => {
   it('says conch once Conch’s command is on PATH, and pnpm conch before', async () => {
-    const local = { LOCALAPPDATA: join(home, 'L') };
+    const local = { LOCALAPPDATA: join(home, 'L'), HOME: home, USERPROFILE: home };
     const { dir, file } = shimPlace(process.platform, home, local);
     const env = { ...local, PATH: [join(home, 'x'), dir].join(delimiter) };
     expect(cliName(env, process.platform, true)).toBe('pnpm conch');
