@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app';
 import { loadConfig } from '../config';
 import { Services } from '../services';
-import { onThisComputer } from '../test/here';
+import { NOT_HERE, onThisComputer } from '../test/here';
 import { proofFor } from './endpoint';
 
 vi.setConfig({ testTimeout: 30_000 });
@@ -198,6 +198,41 @@ describe('from elsewhere', () => {
 });
 
 describe('the launcher', () => {
+  it('a burst of anonymous hellos cannot evict another launcher’s waiting nonce', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.now());
+    const { app, pair, home } = await setup();
+    const { client } = await pair({ app: 'other', scopes: ['memory.read'] });
+    const key = (await readFile(join(home, 'mcp', 'keys', `${client.id}.key`), 'utf8')).trim();
+    const headers = { [NOT_HERE]: '1' };
+    const hello = await app.inject({
+      method: 'POST',
+      url: '/mcp/hello',
+      headers,
+      payload: { client: client.id },
+    });
+    const { nonce } = hello.json() as { nonce: string };
+    const flood = await Promise.all(
+      Array.from({ length: 80 }, (_, i) =>
+        app.inject({
+          method: 'POST',
+          url: '/mcp/hello',
+          headers,
+          payload: { client: `unpaired_${i}` },
+        }),
+      ),
+    );
+    expect(flood.filter((r) => r.statusCode === 200)).toHaveLength(9);
+    expect(flood.filter((r) => r.statusCode === 429)).toHaveLength(71);
+    now.mockReturnValue(Date.now() + 1000);
+    const opened = await app.inject({
+      method: 'POST',
+      url: '/mcp/session',
+      headers,
+      payload: { client: client.id, nonce, proof: proofFor(key, client.id, nonce) },
+    });
+    expect(opened.statusCode, opened.body).toBe(200);
+  });
+
   it('proves it holds the key without sending it, and gets the app’s tools', async () => {
     const { app, pair, home } = await setup();
     const { client } = await pair({ app: 'other', scopes: ['memory.read'] });
@@ -279,6 +314,84 @@ describe('the launcher', () => {
 });
 
 describe('a scope over the door', () => {
+  it('charges every batched tool request to the paired app without blocking lifecycle messages', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now());
+    const { app, pair, services } = await setup();
+    const one = await pair({ app: 'other', scopes: ['memory.read'], http: true });
+    const two = await pair({ app: 'other', scopes: ['memory.read'], http: true });
+    const headers = bearer(one.setup?.key ?? '');
+    const run = vi.spyOn(services.mcp, 'call').mockResolvedValue({ text: 'Done', isError: false });
+    for (let i = 0; i < 29; i++)
+      expect(
+        (await rpc(app, call('search_memory', { query: 'tea' }), headers)).json(),
+      ).toHaveProperty('result');
+    const batch = (
+      await rpc(
+        app,
+        Array.from({ length: 3 }, (_, i) => ({
+          ...call('search_memory', { query: 'tea' }),
+          id: i,
+        })),
+        headers,
+      )
+    ).json() as { id: number; result?: unknown; error?: { code: number; data: unknown } }[];
+    expect(batch.filter((r) => r.result !== undefined)).toHaveLength(1);
+    expect(batch.filter((r) => r.error !== undefined)).toHaveLength(2);
+    expect(batch.find((r) => r.error)?.error).toMatchObject({
+      code: -32000,
+      data: { retryAfter: 1 },
+    });
+    expect(run).toHaveBeenCalledTimes(30);
+    expect((await rpc(app, LIST, headers)).json()).toHaveProperty('error');
+    expect((await rpc(app, INIT, headers)).json()).toHaveProperty('result');
+    expect(
+      (await rpc(app, { jsonrpc: '2.0', method: 'notifications/initialized' }, headers)).statusCode,
+    ).toBe(202);
+    expect(
+      (
+        await rpc(app, call('search_memory', { query: 'tea' }), bearer(two.setup?.key ?? ''))
+      ).json(),
+    ).toHaveProperty('result');
+  });
+
+  it('bounds waiting tool calls per app and overall, then releases their slots when work ends', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now());
+    const { app, pair, services } = await setup();
+    const keys: string[] = [];
+    for (let i = 0; i < 5; i++)
+      keys.push(
+        (await pair({ app: 'other', scopes: ['memory.read'], http: true })).setup?.key ?? '',
+      );
+    let finish = () => {};
+    const held = new Promise<{ text: string; isError: boolean }>((resolve) => {
+      finish = () => resolve({ text: 'Done', isError: false });
+    });
+    const run = vi.spyOn(services.mcp, 'call').mockImplementation(() => held);
+    const pending: Promise<Awaited<ReturnType<typeof rpc>>>[] = [];
+    try {
+      for (let i = 0; i < 4; i++) {
+        for (let j = 0; j < 8; j++)
+          pending.push(
+            Promise.resolve(
+              rpc(app, call('search_memory', { query: 'tea' }), bearer(keys[i] ?? '')),
+            ),
+          );
+        await vi.waitFor(() => expect(run).toHaveBeenCalledTimes((i + 1) * 8));
+        const busy = (await rpc(app, call('search_memory', {}), bearer(keys[i] ?? ''))).json();
+        expect(busy).toMatchObject({ error: { code: -32000, data: { retryAfter: 1 } } });
+      }
+      const full = (await rpc(app, call('search_memory', {}), bearer(keys[4] ?? ''))).json();
+      expect(full).toMatchObject({ error: { code: -32000, data: { retryAfter: 1 } } });
+      expect(run).toHaveBeenCalledTimes(32);
+    } finally {
+      finish();
+      await Promise.all(pending);
+    }
+    const resumed = (await rpc(app, call('search_memory', {}), bearer(keys[4] ?? ''))).json();
+    expect(resumed).toHaveProperty('result');
+    expect(run).toHaveBeenCalledTimes(33);
+  });
+
   it('a call outside it is refused in words, and nothing outside it is listed', async () => {
     const { app, pair } = await setup();
     const { setup: given } = await pair({ app: 'other', scopes: ['memory.read'], http: true });

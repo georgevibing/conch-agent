@@ -1125,11 +1125,12 @@ user guide: [docs/SECURITY.md](./docs/SECURITY.md).
   secret to type, so only a passkey confirms it). Failed sign-ins back off per address
   and globally, and local sign-in is never locked out.
 - **Request budgets** (`auth/requests.ts`, `registerSecurity`): the common HTTP
-  guard charges API requests, WebSocket handshakes and OAuth callbacks before
+  guard charges API requests, WebSocket handshakes, MCP requests and OAuth callbacks before
   body parsing or authentication work. Token buckets allow a burst of 300 per
   client, refilling at 1,200/minute, with an overall burst of 1,000 refilling at
   6,000/minute. Public credential requests, OAuth callbacks and confirmation of
-  identity have smaller buckets (10/client, 20 overall; refill 60 and 120/minute).
+  identity, including MCP launcher handshakes, have smaller buckets (10/client,
+  20 overall; refill 60 and 120/minute).
   Authenticated writes share 30 admissions, refilling at 120/minute, per device
   or access key across paths and addresses. Proven local browsers have separate
   buckets from everyone else. Maps are bounded, idle entries expire, and new

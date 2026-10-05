@@ -65,6 +65,20 @@ path, so the assistant's own tools can't read it.
   a bearer token, compared by hash in constant time. That key does travel, so it's only
   for apps marked `http`; the launcher's apps' keys are refused as bearers.
 - Failures are throttled like sign-ins (`SignInLimiter`, per address).
+- All three MCP routes share the gateway's HTTP admission limits, before their
+  bodies are parsed. The launcher handshake also uses the smaller public
+  credential allowance, so a burst of anonymous hellos cannot flush its nonce
+  pool. A loopback socket alone never gets the browser's reserved local allowance.
+- After authentication, `tools/list` and `tools/call` share a token bucket per
+  paired app (30 immediate requests, refilling at 120/minute). Each message in a
+  JSON-RPC batch spends an admission. At most eight expensive requests per app,
+  and 32 overall, may be running or waiting; closing the HTTP connection does not
+  free a slot until the underlying work ends. This bounds the queue even when a
+  call waits for a person's approval. Overload returns an MCP error with
+  `data.retryAfter` in seconds. Initialization and notifications stay available
+  under the general HTTP limits. These controls follow the
+  [OWASP denial-of-service guidance](https://cheatsheetseries.owasp.org/cheatsheets/Denial_of_Service_Cheat_Sheet.html)
+  to limit resource use before starting expensive work.
 
 ### Connecting in one press
 

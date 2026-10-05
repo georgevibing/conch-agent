@@ -73,6 +73,9 @@ async function gateway() {
   server.get('/oauth/callback', work);
   server.get('/oauth/provider/:flowId', work);
   server.get('/oauth/google/callback', work);
+  server.post('/mcp', work);
+  server.post('/mcp/hello', work);
+  server.post('/mcp/session', work);
   server.get('/assets/app.js', work);
   // Isolate the common guard from the auth store, whose real checks have their
   // own integration tests. Only these two fixed fixture credentials resolve.
@@ -91,6 +94,39 @@ async function gateway() {
 }
 
 describe('the common gateway guard', () => {
+  it('budgets the MCP transport before parsing while leaving its authentication to the endpoint', async () => {
+    const { server, resolve, work } = await gateway();
+    for (let i = 0; i < 300; i++)
+      expect((await server.inject({ method: 'POST', url: '/mcp' })).statusCode).toBe(200);
+    const blocked = await server.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers: { 'content-type': 'application/json' },
+      payload: '{',
+    });
+    expect(blocked.statusCode).toBe(429);
+    expect(blocked.headers['retry-after']).toBe('1');
+    expect(work).toHaveBeenCalledTimes(300);
+    expect(resolve).not.toHaveBeenCalled();
+  });
+
+  it('counts both MCP handshake routes before malformed bodies can reach them', async () => {
+    const { server, work } = await gateway();
+    const responses = await Promise.all(
+      Array.from({ length: 20 }, (_, i) =>
+        server.inject({
+          method: 'POST',
+          url: i % 2 ? '/mcp/hello' : '/mcp/session',
+          headers: { 'content-type': 'application/json' },
+          payload: '{',
+        }),
+      ),
+    );
+    expect(responses.filter((r) => r.statusCode === 400)).toHaveLength(10);
+    expect(responses.filter((r) => r.statusCode === 429)).toHaveLength(10);
+    expect(work).not.toHaveBeenCalled();
+  });
+
   it('caps concurrent public credential work before body parsing or any completion', async () => {
     const { server, work } = await gateway();
     const responses = await Promise.all(

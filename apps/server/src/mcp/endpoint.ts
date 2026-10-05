@@ -25,13 +25,18 @@ import { createHmac, randomBytes } from 'node:crypto';
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  McpError,
+} from '@modelcontextprotocol/sdk/types.js';
 import type { McpClient } from '@conch/protocol';
 import { Id } from '@conch/protocol';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { SignInLimiter } from '../auth/limiter';
+import { RequestLimiter } from '../auth/requests';
 import { hashToken, safeEqual } from '../auth/secrets';
 import type { Gatekeeper } from '../security';
 import { SERVER_VERSION } from '../version';
@@ -134,8 +139,39 @@ export function registerMcpEndpoint(
   sessions: McpSessions,
   limiter = new SignInLimiter(),
 ): void {
+  const work = new RequestLimiter(30, 120);
+  const active = new Map<string, number>();
+  let running = 0;
   const deny = (reply: FastifyReply, status: number, error: string, message: string) =>
     reply.code(status).send({ error, message });
+
+  /**
+   * Charge each expensive RPC, including each member of a batch. Protocol
+   * notifications and initialization stay available while an app backs off.
+   * Keep slots until the actual work ends, even if its HTTP caller disconnects.
+   */
+  const runWork = async <T>(client: string, run: () => Promise<T>): Promise<T> => {
+    const count = active.get(client) ?? 0;
+    if (count >= 8 || running >= 32)
+      throw new McpError(-32000, 'Conch is still handling other requests. Wait, then try again.', {
+        retryAfter: 1,
+      });
+    const wait = work.take(client);
+    if (wait)
+      throw new McpError(-32000, 'This app is asking too quickly. Wait, then try again.', {
+        retryAfter: Math.ceil(wait / 1000),
+      });
+    active.set(client, count + 1);
+    running++;
+    try {
+      return await run();
+    } finally {
+      const remaining = (active.get(client) ?? 1) - 1;
+      if (remaining) active.set(client, remaining);
+      else active.delete(client);
+      running--;
+    }
+  };
 
   /** A program on this computer, or over HTTPS through your address when you allowed it. */
   const admit = async (
@@ -254,32 +290,36 @@ export function registerMcpEndpoint(
       { name: 'conch', version: SERVER_VERSION },
       { capabilities: { tools: {} }, instructions: INSTRUCTIONS },
     );
-    server.setRequestHandler(ListToolsRequestSchema, async () => ({
-      tools: (await mcp.tools(client)).map((tool) => ({
-        name: tool.name,
-        description: tool.description,
-        inputSchema: { type: 'object' as const, ...tool.inputSchema },
-        ...(tool.annotations && { annotations: tool.annotations }),
+    server.setRequestHandler(ListToolsRequestSchema, () =>
+      runWork(client.id, async () => ({
+        tools: (await mcp.tools(client)).map((tool) => ({
+          name: tool.name,
+          description: tool.description,
+          inputSchema: { type: 'object' as const, ...tool.inputSchema },
+          ...(tool.annotations && { annotations: tool.annotations }),
+        })),
       })),
-    }));
-    server.setRequestHandler(CallToolRequestSchema, async (call) => {
-      const args =
-        call.params.arguments && typeof call.params.arguments === 'object'
-          ? (call.params.arguments as Record<string, unknown>)
-          : {};
-      const result = await mcp.call(client, call.params.name, args, abort.signal);
-      return {
-        isError: result.isError,
-        content: [
-          { type: 'text' as const, text: result.text },
-          ...(result.images ?? []).map((image) => ({
-            type: 'image' as const,
-            data: image.data,
-            mimeType: image.mimeType,
-          })),
-        ],
-      };
-    });
+    );
+    server.setRequestHandler(CallToolRequestSchema, (call) =>
+      runWork(client.id, async () => {
+        const args =
+          call.params.arguments && typeof call.params.arguments === 'object'
+            ? (call.params.arguments as Record<string, unknown>)
+            : {};
+        const result = await mcp.call(client, call.params.name, args, abort.signal);
+        return {
+          isError: result.isError,
+          content: [
+            { type: 'text' as const, text: result.text },
+            ...(result.images ?? []).map((image) => ({
+              type: 'image' as const,
+              data: image.data,
+              mimeType: image.mimeType,
+            })),
+          ],
+        };
+      }),
+    );
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,

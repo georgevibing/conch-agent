@@ -63,6 +63,9 @@ const OAUTH_CALLBACKS = new Set([
   '/oauth/google/callback',
 ]);
 
+/** Other apps authenticate inside their own routes, but share HTTP admission limits. */
+const MCP_ENDPOINTS = new Set(['/mcp', '/mcp/hello', '/mcp/session']);
+
 const COOKIE = 'conch_session';
 /** `__Host-` cookies must be Secure, host-only and Path=/ — browsers enforce it. */
 const SECURE_COOKIE = `__Host-${COOKIE}`;
@@ -557,7 +560,8 @@ export function registerSecurity(app: FastifyInstance, gate: Gatekeeper): void {
     }
 
     const oauthCallback = OAUTH_CALLBACKS.has(path);
-    if (!isApi && !oauthCallback) return;
+    const mcpEndpoint = MCP_ENDPOINTS.has(path);
+    if (!isApi && !oauthCallback && !mcpEndpoint) return;
     // Only this computer's proof gets its own recovery budget. A loopback
     // socket, a claimed proxy address or an unverified cookie is not enough.
     const limits = gate.isLocal(request) ? localLimits : remoteLimits;
@@ -565,11 +569,16 @@ export function registerSecurity(app: FastifyInstance, gate: Gatekeeper): void {
     const incomingWait = limits.incoming(client);
     if (incomingWait) return rateLimited(reply, incomingWait);
     const publicRoute = PUBLIC_API.has(`${request.method} ${path}`);
-    if ((publicRoute && isWrite) || path === '/api/access/verify' || oauthCallback) {
+    if (
+      (publicRoute && isWrite) ||
+      path === '/api/access/verify' ||
+      oauthCallback ||
+      (mcpEndpoint && path !== '/mcp')
+    ) {
       const credentialWait = limits.credentials(client);
       if (credentialWait) return rateLimited(reply, credentialWait);
     }
-    if (publicRoute || oauthCallback) return;
+    if (publicRoute || oauthCallback || mcpEndpoint) return;
     // The menu bar helper (ADR 0029): only these, only with its own token, only from here.
     if (TRAY_API.has(`${request.method} ${path}`)) {
       if (gate.trayAllowed(request)) {

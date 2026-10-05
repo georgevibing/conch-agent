@@ -286,6 +286,9 @@ Claude Desktop, Cursor, VS Code and other MCP apps can use Conch (ADR 0073).
   this computer. Web pages are refused (they say where they come from), and so is any
   name but Conch's own. Apps from elsewhere get in only if you turn that on, over HTTPS
   through your own address, and only apps you marked for it.
+- **A busy app has to wait.** Sign-ins, tool lists and tool calls have request
+  allowances. Only a bounded number of calls may run or wait for approval at
+  once; an app asking for more is told to wait before trying again.
 - **No key in the app's settings.** Conch's launcher reads the app's key from a file only
   you can read, and proves it holds it without sending it. An app that connects over
   HTTP sends its key, which Conch keeps only as a hash. **Remove** ends it at once.
