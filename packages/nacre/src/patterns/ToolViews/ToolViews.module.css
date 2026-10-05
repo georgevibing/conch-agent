@@ -102,6 +102,18 @@
     color: var(--nc-text-muted);
   }
 
+  /* What a page or result says: three lines at most, and a long link wraps instead of running out. */
+  .snippet {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    overflow-wrap: anywhere;
+  }
+
   .metaGlyph {
     flex: none;
     inline-size: 0.75rem;

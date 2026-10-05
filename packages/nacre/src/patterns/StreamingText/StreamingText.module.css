@@ -1,7 +1,7 @@
 @layer nacre.components {
   .root {
     white-space: pre-wrap;
-    overflow-wrap: break-word;
+    overflow-wrap: anywhere;
   }
 
   /* A slim pearl caret that breathes rather than blinks. */

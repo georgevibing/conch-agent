@@ -7,7 +7,7 @@
     font-size: var(--prose-size);
     line-height: var(--prose-leading);
     color: var(--nc-text);
-    overflow-wrap: break-word;
+    overflow-wrap: anywhere;
     min-inline-size: 0;
   }
 

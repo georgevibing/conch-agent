@@ -23,6 +23,10 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    /* A link, a path or an id with nowhere to wrap (a fetched page's text, a
+       file name, a model's answer) breaks where it must, instead of pushing
+       its card, or the page, wider than the screen. Ordinary words never break. */
+    overflow-wrap: anywhere;
   }
 
   :where([data-nacre-root]) ::selection {

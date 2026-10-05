@@ -382,6 +382,8 @@
 
     appearance: none;
     flex: none;
+    /* A long label wraps inside the card rather than running past it. */
+    max-inline-size: 100%;
     margin: 0;
     border: 0;
     border-radius: var(--nc-radius-md);

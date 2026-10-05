@@ -59,3 +59,17 @@ export const Long: Story = {
     ],
   },
 };
+
+/** A fetched page whose text is mostly a long link: it wraps, three lines at most, inside the card. */
+export const LongLink: Story = {
+  args: {
+    sources: [
+      {
+        title: 'Healthy Weight Loss & Eating: Lose Weight Fast with Yazio',
+        url: 'https://www.yazio.com/en',
+        snippet:
+          'BUILD HEALTHY HABITS YOU’LL LOVE TO KEEP Get your custom plan in minutes Try it now [/en/app/onboarding/welcome?utm_source=yaziocom&utm_medium=front_page&utm_campaign=main-cta&trial=1] Start where you are Stay consistent See it pay off REACH YOUR GOALS, YOUR WAY Lose weight Build muscle',
+      },
+    ],
+  },
+};

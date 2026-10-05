@@ -43,7 +43,7 @@ export function Sources({ sources, ...props }: SourcesProps) {
                   <span className={styles.meta}>
                     {url ? new URL(url).hostname : 'Unavailable link'}
                   </span>
-                  {source.snippet && <span className={styles.meta}>{source.snippet}</span>}
+                  {source.snippet && <span className={styles.snippet}>{source.snippet}</span>}
                 </span>
                 {url && <ArrowUpRight aria-hidden className={styles.open} />}
               </>
