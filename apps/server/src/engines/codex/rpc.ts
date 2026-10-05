@@ -41,7 +41,17 @@ export function lastWords(stderr: string): string {
     .split('\n')
     .map((l) => l.trim())
     .findLast(Boolean);
-  return line ? redact(line.replace(/^error:\s*/i, '')) : '';
+  if (!line) return '';
+  // Beyond credentials: addresses (sign-in links carry codes), emails, device codes and the
+  // user's own folders never leave the process, so the line is safe in the log and in a chat.
+  return redact(
+    line
+      .replace(/^error:\s*/i, '')
+      .replace(/\b[a-z][a-z0-9+.-]*:\/\/\S+/gi, '<address>')
+      .replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, '<email>')
+      .replace(/\b[A-Z0-9]{3,5}-[A-Z0-9]{3,5}\b/g, '<code>')
+      .replace(/(?:[A-Za-z]:)?[\\/](?:Users|home)[\\/][^\\/\s"']+/g, '~'),
+  ).slice(0, 160);
 }
 
 /** Codex answered a request with an error: which request, and why (redacted). */

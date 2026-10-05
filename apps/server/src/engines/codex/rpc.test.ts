@@ -15,6 +15,14 @@ describe('what a Codex process said on its way out', () => {
     expect(said).not.toContain('abcdefghijklmnop');
   });
 
+  it('drops sign-in links, device codes, emails and home folders', () => {
+    const said = lastWords(
+      'open https://example.com/device?user_code=ABCD-1234 as me@example.com, code ABCD-1234 in /home/yiotis/.conch',
+    );
+    expect(said).not.toMatch(/example.com|ABCD-1234|yiotis/);
+    expect(said).toContain('<address>');
+  });
+
   it('says nothing when there was nothing', () => {
     expect(lastWords('')).toBe('');
   });
