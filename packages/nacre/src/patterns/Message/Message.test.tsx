@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { act, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -150,5 +150,70 @@ describe('MessageList', () => {
       </MessageList>,
     );
     expect(top).toBe(1000);
+  });
+
+  it('keeps to the newest message when more arrives before its scroll lands, until the reader reads up', () => {
+    const observers: ResizeObserverCallback[] = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          observers.push(callback);
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    renderNacre(
+      <MessageList>
+        <Message from="user">Hi</Message>
+      </MessageList>,
+    );
+    const log = screen.getByRole('log');
+    const viewport = log.parentElement as HTMLElement;
+    let top = 0;
+    let height = 1000;
+    Object.defineProperties(viewport, {
+      scrollHeight: { configurable: true, get: () => height },
+      clientHeight: { configurable: true, value: 100 },
+      scrollTop: {
+        configurable: true,
+        get: () => top,
+        set: (value: number) => {
+          top = Math.min(value, height - 100);
+        },
+      },
+    });
+    const resized = (target: Element) =>
+      act(() => {
+        for (const callback of observers)
+          callback([{ target } as ResizeObserverEntry], {} as ResizeObserver);
+      });
+    const scrolled = () => act(() => void viewport.dispatchEvent(new Event('scroll')));
+
+    resized(log);
+    expect(top).toBe(900);
+    // The chat grows again before the scroll to the bottom is heard.
+    height = 2000;
+    scrolled();
+    resized(log);
+    expect(top).toBe(1900);
+    expect(screen.queryByRole('button', { name: 'Jump to latest' })).toBeNull();
+
+    // The list getting shorter (a keyboard coming up) keeps the newest in view.
+    resized(viewport);
+    expect(top).toBe(1900);
+
+    // Reading up lets go: more arriving offers the pill instead of pulling them down.
+    top = 600;
+    scrolled();
+    height = 2500;
+    resized(log);
+    expect(top).toBe(600);
+    expect(screen.getByRole('button', { name: 'Jump to latest' })).toBeInTheDocument();
+    resized(viewport);
+    expect(top).toBe(600);
+    vi.unstubAllGlobals();
   });
 });

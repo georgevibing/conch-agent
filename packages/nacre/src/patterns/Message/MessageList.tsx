@@ -61,16 +61,26 @@ export function MessageList({
     const el = viewport.current;
     const inner = content.current;
     if (!el || !inner) return;
+    // Only reading upwards lets go of the bottom. A scroll event can land after
+    // more of the chat has arrived below (a chat opening, a reply streaming in),
+    // which leaves it far from the bottom without the reader having moved.
+    let lastTop = el.scrollTop;
     const onScroll = () => {
-      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-      pinned.current = distance <= stickThreshold;
+      const top = el.scrollTop;
+      const distance = el.scrollHeight - top - el.clientHeight;
+      if (distance <= stickThreshold) pinned.current = true;
+      else if (top < lastTop) pinned.current = false;
+      lastTop = top;
       if (pinned.current) setShowJump(false);
     };
-    const observer = new ResizeObserver(() => {
+    // The list itself getting shorter (a phone's keyboard coming up) keeps the
+    // newest message in view too; only new content offers the pill.
+    const observer = new ResizeObserver((entries) => {
       if (pinned.current) scrollToBottom();
-      else setShowJump(true);
+      else if (entries.some((entry) => entry.target === inner)) setShowJump(true);
     });
     observer.observe(inner);
+    observer.observe(el);
     el.addEventListener('scroll', onScroll, { passive: true });
     scrollToBottom();
     return () => {
