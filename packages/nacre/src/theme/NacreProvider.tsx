@@ -22,6 +22,7 @@ import {
   type NeutralName,
   type NeutralTint,
 } from './accents';
+import { installVisibleViewport } from './visibleViewport';
 
 export type ColorMode = 'light' | 'dark' | 'system';
 export type MotionPreference = 'system' | 'reduced' | 'full';
@@ -145,6 +146,8 @@ export function NacreProvider({
   const resolvedMode = theme.mode === 'system' ? (prefersDark ? 'dark' : 'light') : theme.mode;
 
   useEffect(() => installLustre(), []);
+
+  useIsoLayoutEffect(() => (scope === 'document' ? installVisibleViewport() : undefined), [scope]);
 
   useIsoLayoutEffect(() => {
     if (scope !== 'document') return;

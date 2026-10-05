@@ -32,7 +32,8 @@
     --nc-sheen-hover: 0.1;
 
     position: fixed;
-    inset-block-start: 46%;
+    /* In what can be seen: above a phone's keyboard while one is typed in. */
+    inset-block-start: calc(var(--nc-visible-top, 0px) + var(--nc-visible-height, 100dvh) * 0.46);
     inset-inline-start: 50%;
     translate: -50% -50%;
     z-index: var(--nc-z-modal);
@@ -41,7 +42,7 @@
     inline-size: min(var(--dialog-w), calc(100vw - 2rem));
     /* Centred a little high (46%), so the room is 2 × 46%: a tall dialog keeps 1.5rem
        above it instead of running off the top of a short screen. */
-    max-block-size: calc(92dvh - 3rem);
+    max-block-size: calc(var(--nc-visible-height, 100dvh) * 0.92 - 3rem);
     overflow: hidden;
     border-radius: var(--nc-radius-xl);
     corner-shape: var(--nc-corner-shape);
@@ -73,10 +74,10 @@
     --nc-rim-rest: 0;
     --nc-rim-hover: 0;
     --nc-sheen-hover: 0;
-    inset: 0;
+    inset: var(--nc-visible-top, 0px) 0 auto;
     translate: none;
     inline-size: 100vw;
-    block-size: 100dvh;
+    block-size: var(--nc-visible-height, 100dvh);
     max-block-size: none;
     border-radius: 0;
     background: var(--nc-canvas);

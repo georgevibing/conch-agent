@@ -1,8 +1,13 @@
 @layer nacre.components {
+  /* Exactly the part of the window that can be seen, so a phone's keyboard
+     never covers the composer (or pushes the header off the top). */
   .shell {
+    position: fixed;
+    inset-inline: 0;
+    inset-block-start: var(--nc-visible-top, 0px);
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    block-size: 100dvh;
+    block-size: var(--nc-visible-height, 100dvh);
     background: var(--nc-canvas);
   }
 

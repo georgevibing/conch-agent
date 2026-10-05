@@ -46,8 +46,11 @@
 
   .content[data-side='bottom'] {
     inset-inline: var(--sheet-gap);
-    inset-block-end: var(--sheet-gap);
-    max-block-size: min(var(--sheet-size), calc(100dvh - 3rem));
+    /* Rests on the keyboard while one is up, not under it. */
+    inset-block-end: calc(
+      100% - var(--nc-visible-top, 0px) - var(--nc-visible-height, 100%) + var(--sheet-gap)
+    );
+    max-block-size: min(var(--sheet-size), calc(var(--nc-visible-height, 100dvh) - 3rem));
     margin-inline: auto;
     max-inline-size: 40rem;
     --sheet-from: translateY(calc(100% + var(--sheet-gap) + 1rem));
