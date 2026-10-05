@@ -7,6 +7,25 @@ import { channelsApi } from './api';
 
 export const channelKeys = { all: ['channels'] as const, door: ['channel-door'] as const };
 
+/** Live changes that arrived after a list request began must outlive its snapshot. */
+const duringFetch = new WeakMap<QueryClient, Map<string, Channel | null>>();
+
+async function readChannels(client: QueryClient): Promise<ChannelList> {
+  const changes = new Map<string, Channel | null>();
+  duringFetch.set(client, changes);
+  try {
+    const list = await channelsApi.list();
+    const channels = new Map(list.channels.map((channel) => [channel.id, channel]));
+    for (const [id, channel] of changes) {
+      if (channel) channels.set(id, channel);
+      else channels.delete(id);
+    }
+    return { ...list, channels: [...channels.values()] };
+  } finally {
+    if (duringFetch.get(client) === changes) duringFetch.delete(client);
+  }
+}
+
 /** The public door Teams and WeChat deliver to (ADR 0045), kept current by `channel.door`. */
 export function useDoor(enabled = true) {
   return useQuery({
@@ -42,7 +61,12 @@ export function useChannelLink(id: string | undefined) {
 }
 
 export function useChannels() {
-  return useQuery({ queryKey: channelKeys.all, queryFn: channelsApi.list, staleTime: 30_000 });
+  const client = useQueryClient();
+  return useQuery({
+    queryKey: channelKeys.all,
+    queryFn: () => readChannels(client),
+    staleTime: 30_000,
+  });
 }
 
 export function useChannel(id: string | undefined) {
@@ -51,6 +75,7 @@ export function useChannel(id: string | undefined) {
 }
 
 export function putChannel(client: QueryClient, channel: Channel) {
+  duringFetch.get(client)?.set(channel.id, channel);
   client.setQueryData<ChannelList>(channelKeys.all, (data) => {
     if (!data) return data;
     const exists = data.channels.some((c) => c.id === channel.id);
@@ -81,6 +106,7 @@ export function applyChannelEvent(
     return;
   }
   if (event.type === 'channel.deleted') {
+    duringFetch.get(client)?.set(event.channelId, null);
     client.setQueryData<ChannelList>(channelKeys.all, (data) =>
       data ? { ...data, channels: data.channels.filter((c) => c.id !== event.channelId) } : data,
     );
@@ -89,11 +115,13 @@ export function applyChannelEvent(
   const before = client
     .getQueryData<ChannelList>(channelKeys.all)
     ?.channels.find((c) => c.id === event.channel.id);
+  putChannel(client, event.channel);
   if (!client.getQueryData(channelKeys.all)) {
-    void client.invalidateQueries({ queryKey: channelKeys.all });
+    // The first response has the catalog as well as the channels. Keep its
+    // request, folding in the event above instead of dropping it while loading.
+    if (!duringFetch.has(client)) void client.invalidateQueries({ queryKey: channelKeys.all });
     return;
   }
-  putChannel(client, event.channel);
   // A new request from someone, once there's an owner (the owner's own hello is on screen already).
   const fresh = event.channel.requests.filter((r) => !before?.requests.some((b) => b.id === r.id));
   if (before && fresh.length && event.channel.people.length > 0) {
