@@ -523,7 +523,7 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     kept: z.boolean(),
   }),
   /**
-   * Conch learned from this chat once it went quiet (ADR 0087): one quiet
+   * Conch learned from this chat once it went quiet (ADR 0088): one quiet
    * line at its end, with Undo, Why? and, for what waits, Keep and Forget.
    */
   z.object({
@@ -906,7 +906,7 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('engine.status'), status: EngineStatus }),
   z.object({ type: z.literal('engine.login'), login: LoginState }),
   z.object({ type: z.literal('memory.changed') }),
-  /** Something was learned, kept or undone, or what learning may spend changed (ADR 0087). */
+  /** Something was learned, kept or undone, or what learning may spend changed (ADR 0088). */
   z.object({ type: z.literal('learning.changed') }),
   z.object({ type: z.literal('routine.changed'), routine: Routine }),
   z.object({ type: z.literal('routine.deleted'), routineId: z.string() }),

@@ -29,7 +29,7 @@ function meaning(close: [string, string][], same = 0.5): Embedder {
   } as Embedder;
 }
 
-describe('never learned again (ADR 0087 § 6)', () => {
+describe('never learned again (ADR 0088 § 6)', () => {
   it('the same words, or nearly', async () => {
     const list = [item('Likes dark mode')];
     expect(await neverMatch('likes dark mode', list)).toBeDefined();

@@ -11,7 +11,7 @@
  * while "Remember things automatically" is off, waits for your OK instead of
  * being applied. Without a model it still merges exact repeats.
  *
- * Since quiet learning (ADR 0087): an updated memory is superseded, kept with
+ * Since quiet learning (ADR 0088): an updated memory is superseded, kept with
  * its date, not overwritten; a merge that would lose a number or a name, or
  * shrink what it merges, isn't made; and what you took back once isn't added.
  * Learning from one chat before its start is summarised is quiet learning's
@@ -77,7 +77,7 @@ export interface TidyDeps {
   settings: () => Promise<{ autoMemory: boolean; tidyMemory: boolean }>;
   /** A chat is working: nightly tidy-ups wait for a quiet moment. */
   busy: () => boolean;
-  /** You took this back once (ADR 0087): it isn't added again. */
+  /** You took this back once (ADR 0088): it isn't added again. */
   never?: (content: string) => Promise<boolean>;
   emit?: (status: TidyStatus) => void;
   now?: () => number;
@@ -398,7 +398,7 @@ export class MemoryTidy {
         });
         continue;
       }
-      // Superseded, not overwritten (ADR 0087): what used to be true is kept, dated.
+      // Superseded, not overwritten (ADR 0088): what used to be true is kept, dated.
       const moved = await store.supersede(current.id, {
         content: proposed.content,
         kind: current.kind,
@@ -463,7 +463,7 @@ export class MemoryTidy {
     if (!change) return this.status();
     const { store } = this.deps;
     const [first] = change.before;
-    // An update that superseded (ADR 0087): a new memory, and the old one kept, dated.
+    // An update that superseded (ADR 0088): a new memory, and the old one kept, dated.
     const superseded =
       change.kind === 'updated' && change.after && first && change.after.id !== first.id;
     if (change.state === 'applied' && answer === 'undo') {

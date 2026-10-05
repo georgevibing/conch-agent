@@ -191,7 +191,7 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
   if (limit === null || (typeof limit === 'number' && limit > DEFAULT_MONTHLY_USD))
     powers.push({ kind: 'routines-spend', limitUsd: typeof limit === 'number' ? limit : null });
 
-  // Learning from your chats allowed to spend more than Conch would by itself (ADR 0087).
+  // Learning from your chats allowed to spend more than Conch would by itself (ADR 0088).
   const learning = json(read, 'learning-spend.json')?.limit;
   if (learning === null || (typeof learning === 'number' && learning > DEFAULT_LEARNING_USD))
     powers.push({

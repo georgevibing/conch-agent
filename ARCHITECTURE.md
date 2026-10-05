@@ -88,7 +88,7 @@ src/
   memory/                     file-per-memory store, prompt builder, memory tools; hybrid search
                               (index, embed), the tidy-up, What Conch knows (ADR 0032)
   learning/                   quiet learning: each chat read once it goes quiet, the gate, the
-                              record and the never-list, preferences near the question (ADR 0087)
+                              record and the never-list, preferences near the question (ADR 0088)
   conversations/              manager (turns, permissions, events) + JSONL store
   attachments/                uploads: sniffing, storage + sweep, per-engine prompt, sandboxed serving (ADR 0017)
   vault/                      Passwords: encrypted vault, keychain, other managers, import, fills (ADR 0025)
@@ -454,7 +454,7 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   skill to review. Routes: `/api/memories/{search,export,:id/keep}`,
   `/api/memory/{index,index/model,tidy}`, `/api/skills/suggestions`.
 
-- **Quiet learning** ([ADR 0087](./docs/adr/0087-quiet-learning.md)). `QuietLearning`
+- **Quiet learning** ([ADR 0088](./docs/adr/0088-quiet-learning.md)). `QuietLearning`
   (`learning/service.ts`) sweeps every few minutes for chats you were in that went quiet
   with new words from you (archived chats at once; a long chat's start before it's
   summarised). `signalsOf` reads Conch's own log by code (corrections, rephrasing, Stop,

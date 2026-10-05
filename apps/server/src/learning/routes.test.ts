@@ -1,5 +1,5 @@
 /**
- * Quiet learning end to end (ADR 0087): the real gateway with the mock
+ * Quiet learning end to end (ADR 0088): the real gateway with the mock
  * engine, whose quick look at a chat turns "no, I meant X" into a preference.
  */
 import { mkdtemp } from 'node:fs/promises';
@@ -51,7 +51,7 @@ function send(services: Services, text: string, conversationId?: string) {
   });
 }
 
-describe('quiet learning through the gateway (ADR 0087)', () => {
+describe('quiet learning through the gateway (ADR 0088)', () => {
   it('learns a correction, says so in the chat, and Undo takes it back for good', async () => {
     const { services, app } = await setup();
     const id = await send(services, 'Write me a script to rename photos');

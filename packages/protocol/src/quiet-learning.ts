@@ -1,5 +1,5 @@
 /**
- * Quiet learning (ADR 0087): once a chat you were in goes quiet, Conch reads
+ * Quiet learning (ADR 0088): once a chat you were in goes quiet, Conch reads
  * your words in it and keeps what's worth keeping. What's safe is applied and
  * said afterwards, in one quiet line with Undo and Why?. What came after
  * reading something from outside, or from someone else's words, waits for
@@ -95,7 +95,7 @@ export const NeverItem = z.object({
 });
 export type NeverItem = z.infer<typeof NeverItem>;
 
-/** What learning may spend: a person's choice, never the agent's (ADR 0087 § 8). */
+/** What learning may spend: a person's choice, never the agent's (ADR 0088 § 8). */
 export const LearningSpending = z.object({
   /** USD a month; `null`: no limit. */
   limitUsd: z.number().positive().nullable(),

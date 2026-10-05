@@ -222,7 +222,7 @@ export interface LearnedLineProps extends Omit<ComponentProps<'div'>, 'children'
 }
 
 /**
- * What a chat taught Conch, once it went quiet (ADR 0087): one folded,
+ * What a chat taught Conch, once it went quiet (ADR 0088): one folded,
  * quiet line at the end of the chat — "Learned 2 things". Open, each thing
  * has Undo and Why?; what waits for your OK has Keep and Forget, and is the
  * only thing here that asks for attention. Never a dialog, never a toast.
@@ -286,7 +286,7 @@ export interface LearningTimelineProps extends ComponentProps<'ul'> {
   children: ReactNode;
 }
 
-/** Everything Conch learned, newest first (ADR 0087): the Memory page's Recent learnings. */
+/** Everything Conch learned, newest first (ADR 0088): the Memory page's Recent learnings. */
 export function LearningTimeline({ className, ...props }: LearningTimelineProps) {
   return (
     <ul aria-label="What Conch learned" className={cx(styles.timeline, className)} {...props} />
@@ -335,7 +335,7 @@ export interface WeeklyRecapProps extends Omit<ComponentProps<'section'>, 'title
 }
 
 /**
- * The week at a glance (ADR 0087): what Conch learned by itself, in one
+ * The week at a glance (ADR 0088): what Conch learned by itself, in one
  * calm card on the Memory page. No push, no badge; it goes when you've seen it.
  */
 export function WeeklyRecap({
@@ -394,7 +394,7 @@ export interface NeverListProps extends Omit<ComponentProps<'ul'>, 'children'> {
   busy?: string;
 }
 
-/** Things Conch won't learn again (ADR 0087): each one you took back, with Remove. */
+/** Things Conch won't learn again (ADR 0088): each one you took back, with Remove. */
 export function NeverList({ items, onRemove, busy, className, ...props }: NeverListProps) {
   return (
     <ul

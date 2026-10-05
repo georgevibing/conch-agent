@@ -257,20 +257,20 @@ export const RULES: readonly BackupRule[] = [
     match: 'memory/superseded/*.md',
     class: 'kept',
     group: 'memory',
-    why: 'Memories that stopped being true, each with when, kept for questions about before and for Undo (ADR 0087).',
+    why: 'Memories that stopped being true, each with when, kept for questions about before and for Undo (ADR 0088).',
   },
   {
     match: 'learning/*.json',
     class: 'kept',
     group: 'memory',
-    why: 'What Conch learned from your chats and where (for Why? and Undo), what you told it never to learn again, and how far it read each chat (ADR 0087).',
+    why: 'What Conch learned from your chats and where (for Why? and Undo), what you told it never to learn again, and how far it read each chat (ADR 0088).',
   },
   {
     match: 'learning-spend.json',
     class: 'kept',
     group: 'memory',
     merge: 'learning-spend',
-    why: 'What learning from your chats spent each month, and the limit you chose (ADR 0087). Merged on restore: money already spent stays counted.',
+    why: 'What learning from your chats spent each month, and the limit you chose (ADR 0088). Merged on restore: money already spent stays counted.',
   },
   {
     match: 'artifacts/access.json',

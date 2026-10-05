@@ -1,5 +1,5 @@
 /**
- * What quiet learning keeps (ADR 0087), in `~/.conch/learning/`:
+ * What quiet learning keeps (ADR 0088), in `~/.conch/learning/`:
  *
  * - `ledger.json`: the record of everything learned, newest first, with where
  *   it came from, what it replaced and how it stands now (Why?, Undo);
@@ -60,7 +60,7 @@ const ChatsFile = z.object({
   chats: z.record(z.string(), ChatState).default({}),
   /** The recap you've seen up to. */
   recapSeen: z.number().optional(),
-  /** What was applied by itself today (a day's limit, ADR 0087 § 4). */
+  /** What was applied by itself today (a day's limit, ADR 0088 § 4). */
   day: z.object({ key: z.string(), applied: z.number().int().nonnegative() }).optional(),
 });
 type ChatsFile = z.infer<typeof ChatsFile>;

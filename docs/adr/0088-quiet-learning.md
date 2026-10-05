@@ -1,4 +1,4 @@
-# 0087 — Quiet learning: learned while you're away, said afterwards, undone in one press
+# 0088 — Quiet learning: learned while you're away, said afterwards, undone in one press
 
 - Status: accepted
 - Date: 2026-10-05

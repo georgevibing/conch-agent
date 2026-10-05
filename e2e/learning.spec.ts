@@ -3,7 +3,7 @@ import { expect, test, type APIRequestContext } from '@playwright/test';
 import { say } from './app';
 
 /**
- * Quiet learning, end to end (ADR 0087): once a chat you were in goes quiet,
+ * Quiet learning, end to end (ADR 0088): once a chat you were in goes quiet,
  * a correction in it is learned and said at its end, in one quiet line. Why?
  * shows your words; Undo takes it back, a reload still says so, and the same
  * correction in another chat isn't learned again. The mock engine's chats go

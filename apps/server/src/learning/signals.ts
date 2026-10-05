@@ -1,5 +1,5 @@
 /**
- * What a chat says about how it went (ADR 0087 § 2), read by code from
+ * What a chat says about how it went (ADR 0088 § 2), read by code from
  * Conch's own log — the same for every provider. Corrections and rephrasing
  * say more than thanks; a command that failed for a reason Conch knows, and
  * another program that did the same job straight after, is a fact about this

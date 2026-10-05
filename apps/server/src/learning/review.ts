@@ -1,5 +1,5 @@
 /**
- * The quiet look at one chat (ADR 0087 § 3): what a cheap model reads, and
+ * The quiet look at one chat (ADR 0088 § 3): what a cheap model reads, and
  * what it may answer. It reads your words framed as data, the steps as Conch
  * summarises them (never their output), the memories close to what was said
  * and what you took back once. It may answer at most a few changes, each an

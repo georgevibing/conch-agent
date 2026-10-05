@@ -30,7 +30,7 @@ function command(text: string, status: 'success' | 'error', output = ''): Input[
   ];
 }
 
-describe('what a chat says about how it went (ADR 0087 § 2)', () => {
+describe('what a chat says about how it went (ADR 0088 § 2)', () => {
   it.each([
     ['No, I meant TypeScript', 'correction'],
     ['Actually, make it shorter', 'correction'],

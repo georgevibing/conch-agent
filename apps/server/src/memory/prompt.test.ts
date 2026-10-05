@@ -73,7 +73,7 @@ describe('buildSystemAppend', () => {
     expect(text).toContain('Only use the remember tool when the user explicitly asks');
   });
 
-  it('says memories aren’t evidence, the same every turn, and names facts about this computer (ADR 0087)', () => {
+  it('says memories aren’t evidence, the same every turn, and names facts about this computer (ADR 0088)', () => {
     const memory = (content: string, about?: 'environment' | 'pitfall') => ({
       id: `m_${content.length}`,
       content,

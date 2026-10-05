@@ -151,7 +151,7 @@ export type TranscriptItem =
       memory?: Memory;
     }
   /**
-   * What the chat taught Conch once it went quiet (ADR 0087): one folded line.
+   * What the chat taught Conch once it went quiet (ADR 0088): one folded line.
    * `decided` holds what you answered since, by record id.
    */
   | {
@@ -660,7 +660,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
       });
       return found ? { ...base, items: updated } : base;
     }
-    // What the chat taught Conch once it went quiet (ADR 0087): one quiet line at its end.
+    // What the chat taught Conch once it went quiet (ADR 0088): one quiet line at its end.
     case 'learning.noted':
       return {
         ...base,

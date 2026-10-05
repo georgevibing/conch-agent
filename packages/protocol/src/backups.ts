@@ -117,7 +117,7 @@ export const BackupPower = z.discriminatedUnion('kind', [
     /** USD a month; `null`: no limit. */
     limitUsd: z.number().positive().nullable(),
   }),
-  /** Learning may spend more each month than Conch's default, or without a limit (ADR 0087). */
+  /** Learning may spend more each month than Conch's default, or without a limit (ADR 0088). */
   z.object({
     kind: z.literal('learning-spend'),
     /** USD a month; `null`: no limit. */

@@ -1,5 +1,5 @@
 /**
- * Preferences near the question (ADR 0087 § 7). Models follow a stated
+ * Preferences near the question (ADR 0088 § 7). Models follow a stated
  * preference far less once it's a dozen turns behind them, unless it's said
  * again near the question. So each turn, the few remembered preferences —
  * and facts about this computer, and lessons — that match the message go

@@ -246,7 +246,7 @@ export class MemoryIndex {
   }
 
   /**
-   * Memories that stopped being true (ADR 0087), best match first, by words
+   * Memories that stopped being true (ADR 0088), best match first, by words
    * alone: they're few, and only `recall` asks, for questions about before.
    */
   async searchPast(query: string, limit = 5): Promise<Memory[]> {

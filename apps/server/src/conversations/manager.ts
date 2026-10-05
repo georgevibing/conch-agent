@@ -587,7 +587,7 @@ export class ConversationManager {
       memoryIndex?: {
         forPrompt(said: string): Promise<{ memories: Memory[]; total: number }>;
         search(query: string, limit?: number): Promise<{ memory: Memory }[]>;
-        /** Memories that stopped being true, for `recall` (ADR 0087). */
+        /** Memories that stopped being true, for `recall` (ADR 0088). */
         searchPast?(query: string): Promise<Memory[]>;
       };
       /** The provider for a turn: the one a conversation chose, else the default. */
@@ -672,7 +672,7 @@ export class ConversationManager {
       }) => Promise<void>;
       /** Say what was fixed on its own (Settings → Health). */
       heal?: (message: string) => void;
-      /** Quiet learning (ADR 0087): what a turn brings near the question, and what never to learn. */
+      /** Quiet learning (ADR 0088): what a turn brings near the question, and what never to learn. */
       learning?: {
         /** The few preferences that bear on this message, as a block to go before it. */
         nearby(said: string): Promise<string | undefined>;
@@ -1567,7 +1567,7 @@ export class ConversationManager {
       ? []
       : (picked?.memories ?? (await this.deps.memory.list()).filter((m) => !m.pending));
     const memoryTotal = picked?.total ?? memories.length;
-    // Quiet learning (ADR 0087): a chat marked not to learn from remembers only when asked,
+    // Quiet learning (ADR 0088): a chat marked not to learn from remembers only when asked,
     // and what you prefer that bears on this message goes just before it.
     const learning = this.deps.learning;
     const quiet = learning ? await learning.isQuiet(conversationId).catch(() => false) : false;

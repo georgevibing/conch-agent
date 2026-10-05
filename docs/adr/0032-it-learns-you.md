@@ -99,7 +99,7 @@ for your OK" with **Keep** and **Forget**. On the page it sits under **Waiting f
 your OK**, the Repair check counts it (`needs-you`), and Activity says so. The tool
 tells the model it's waiting, so it doesn't claim to remember.
 
-> **Update (2026-10-05):** [ADR 0087](./0087-quiet-learning.md) changes §2 and §3.
+> **Update (2026-10-05):** [ADR 0088](./0088-quiet-learning.md) changes §2 and §3.
 >
 > - Conch now reads each chat by itself once it goes quiet, with the same rules: only your words, and what came after reading something from outside waits.
 > - The tidy-up supersedes the memories it updates instead of overwriting them.

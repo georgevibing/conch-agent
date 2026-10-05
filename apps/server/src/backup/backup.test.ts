@@ -29,7 +29,7 @@ import { BackupService, IDLE_MS } from './service';
 vi.setConfig({ testTimeout: 90_000 });
 
 const PASSPHRASE = 'seven lemons sail past the harbour';
-/** What the used Conch remembers: one you added, and a move it learned by itself (ADR 0087). */
+/** What the used Conch remembers: one you added, and a move it learned by itself (ADR 0088). */
 const KNOWN = ['Ada takes her tea with lemon.', 'Lives in Lisbon'].sort();
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -186,7 +186,7 @@ describe('back up, restore on another computer, undo', () => {
     const state = json(await b.app.inject({ url: '/api/state', headers: { cookie: bCookie } }));
     expect(state).toMatchObject({ persona: { name: 'Shelly' }, profile: { name: 'Ada' } });
     expect((await b.services.memory.list()).map((m) => m.content).sort()).toEqual(KNOWN);
-    // What used to be true, and what Conch learned and won't learn again, came too (ADR 0087).
+    // What used to be true, and what Conch learned and won't learn again, came too (ADR 0088).
     expect((await b.services.memory.listPast()).map((m) => m.content)).toEqual(['Lives in Berlin']);
     const learned = await b.services.learning.status();
     expect(learned.never.map((n) => n.text)).toEqual(['Prefers TypeScript']);

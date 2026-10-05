@@ -38,7 +38,7 @@ const supersede = (id: string, text: string, quote = 'I moved to Lisbon last mon
   quote,
 });
 
-describe('the gate (ADR 0087 § 4), row by row', () => {
+describe('the gate (ADR 0088 § 4), row by row', () => {
   it('a person was there, nothing from outside, every check passes: applied', () => {
     expect(gate(add('Prefers TypeScript over Python'), ctx())).toEqual({ verdict: 'apply' });
     expect(gate(supersede('m_berlin', 'Lives in Lisbon'), ctx())).toEqual({ verdict: 'apply' });

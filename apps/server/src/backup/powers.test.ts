@@ -39,7 +39,7 @@ describe('what in a backup can act for you', () => {
     ]);
   });
 
-  it('names a limit that lets learning spend more than Conch would by itself (ADR 0087)', () => {
+  it('names a limit that lets learning spend more than Conch would by itself (ADR 0088)', () => {
     const of = (spend: unknown) =>
       powersOf(['learning-spend.json'], reader({ 'learning-spend.json': spend }));
     expect(of({ version: 1, limit: 10, months: {} })).toEqual([

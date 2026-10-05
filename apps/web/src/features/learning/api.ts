@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { request } from '../../api/client';
 
-/** Quiet learning (ADR 0087): what Conch learned from your chats, and your answers. */
+/** Quiet learning (ADR 0088): what Conch learned from your chats, and your answers. */
 export const learningApi = {
   status: () => request(LearningStatus, '/api/learning'),
   /** Keep, Undo or Forget one thing learned. */

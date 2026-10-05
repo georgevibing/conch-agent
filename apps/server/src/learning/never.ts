@@ -1,5 +1,5 @@
 /**
- * Never learned again (ADR 0087 § 6): something the person took back once
+ * Never learned again (ADR 0088 § 6): something the person took back once
  * stays out, in these words or close ones.
  *
  * A match must be close in words. Meaning only confirms a looser match,

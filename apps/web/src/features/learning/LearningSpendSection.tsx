@@ -97,7 +97,7 @@ function SpendingBody({ spending }: { spending: LearningSpending }) {
 }
 
 /**
- * Settings → Usage → Learning from your chats (ADR 0087): what the quiet
+ * Settings → Usage → Learning from your chats (ADR 0088): what the quiet
  * looks at your chats spent this month, and the cap on it. A person's choice:
  * the assistant has no way to change it.
  */

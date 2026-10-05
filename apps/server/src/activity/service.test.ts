@@ -107,7 +107,7 @@ describe('memories', () => {
     ]);
   });
 
-  it('say what a chat taught Conch once it went quiet (ADR 0087)', () => {
+  it('say what a chat taught Conch once it went quiet (ADR 0088)', () => {
     seq = 0;
     const entries = entriesOf({ id: 'c1', title: 'Scripts' }, [
       ev({

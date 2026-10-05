@@ -46,7 +46,7 @@ export function protectedPaths(home: string): string[] {
     // Task evidence is authority: the model must never forge completion or erase dedupe.
     join(home, 'tasks.json'),
     // What Conch learned and what it was told never to learn again, and what learning may
-    // spend (ADR 0087): an assistant that could write these would clear its own never-list
+    // spend (ADR 0088): an assistant that could write these would clear its own never-list
     // or raise its own cap.
     join(home, 'learning'),
     join(home, 'learning-spend.json'),

@@ -143,7 +143,7 @@ describe('What Conch knows about you', () => {
     expect(calls.some((c) => c.path === '/api/memory/index/model')).toBe(false);
   });
 
-  it('shows what it learned by itself, what used to be true, and what it won’t learn again (ADR 0087)', async () => {
+  it('shows what it learned by itself, what used to be true, and what it won’t learn again (ADR 0088)', async () => {
     const learned: LearningStatus = {
       on: true,
       entries: [

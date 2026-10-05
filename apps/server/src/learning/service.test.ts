@@ -131,7 +131,7 @@ async function setup(
   return { learning, memory, notes, model, home, deps, clock, summaries };
 }
 
-describe('QuietLearning (ADR 0087)', () => {
+describe('QuietLearning (ADR 0088)', () => {
   it('a correction in a chat you were in is learned, and the chat says so', async () => {
     const { learning, memory, notes } = await setup([
       {

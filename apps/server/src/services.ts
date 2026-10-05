@@ -244,7 +244,7 @@ export class Services {
   readonly suggester: SkillSuggester;
   /** Save how I did this: skills offered from work that went well (ADR 0058). */
   readonly learner: SkillLearner;
-  /** Quiet learning (ADR 0087): each chat read once it goes quiet, said afterwards, with Undo. */
+  /** Quiet learning (ADR 0088): each chat read once it goes quiet, said afterwards, with Undo. */
   readonly learning: QuietLearning;
   /** What learning may spend a month: a person's choice, never the agent's. */
   readonly learningSpend: LearningSpend;
@@ -929,11 +929,11 @@ export class Services {
         const { usd, budgetUsd } = await this.usage.month();
         return budgetUsd !== undefined && usd >= budgetUsd;
       },
-      // Before a long chat's start is summarised, what you said there is learned (ADR 0055, ADR 0087).
+      // Before a long chat's start is summarised, what you said there is learned (ADR 0055, ADR 0088).
       learn: async ({ conversationId, beforeSeq }) => {
         await this.learning.review(conversationId, { trigger: 'compaction', beforeSeq });
       },
-      // Preferences near the question, quiet chats, what never to learn again (ADR 0087).
+      // Preferences near the question, quiet chats, what never to learn again (ADR 0088).
       learning: {
         nearby: (said) => this.learning.nearby(said),
         isQuiet: (id) => this.learning.isQuiet(id),
@@ -1065,7 +1065,7 @@ export class Services {
     this.usage.changed.on((usage) => this.broadcast.emit({ type: 'usage.changed', usage }));
     // Each turn's money is counted by the chat as it ends (ADR 0079), so it can say when the month nears its budget.
     this.usage.start();
-    // Quiet learning (ADR 0087): each chat you were in, read once it goes quiet.
+    // Quiet learning (ADR 0088): each chat you were in, read once it goes quiet.
     this.learningSpend = new LearningSpend({
       home: config.CONCH_HOME,
       billings,

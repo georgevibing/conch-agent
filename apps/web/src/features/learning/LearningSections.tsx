@@ -62,7 +62,7 @@ function useAnswer() {
 }
 
 /**
- * Recent learnings (ADR 0087): the week at a glance, then everything Conch
+ * Recent learnings (ADR 0088): the week at a glance, then everything Conch
  * learned by itself, newest first — each with Undo and Why?, and Keep and
  * Forget on what waits.
  */
@@ -144,7 +144,7 @@ export function LearnedSection() {
   );
 }
 
-/** Earlier (ADR 0087): what used to be true, with when it stopped. Undo on what replaced it brings it back. */
+/** Earlier (ADR 0088): what used to be true, with when it stopped. Undo on what replaced it brings it back. */
 export function EarlierSection() {
   const { data } = useLearning();
   const past = data?.past ?? [];
@@ -169,7 +169,7 @@ export function EarlierSection() {
   );
 }
 
-/** Things Conch won't learn again (ADR 0087): each you took back once, with Remove. */
+/** Things Conch won't learn again (ADR 0088): each you took back once, with Remove. */
 export function NeverSection() {
   const { data } = useLearning();
   const client = useQueryClient();

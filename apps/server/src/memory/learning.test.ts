@@ -338,7 +338,7 @@ describe('the tidy-up', () => {
     ]);
     expect(result.changes[1]?.untrusted).toBe('Learned in a chat that read evil.example.');
     const list = await t.memories.list();
-    // Superseded, not overwritten (ADR 0087): the old one is kept, dated.
+    // Superseded, not overwritten (ADR 0088): the old one is kept, dated.
     expect(list.find((m) => m.id === berlin.id)).toBeUndefined();
     expect(list.find((m) => /Lives in/.test(m.content))?.content).toBe('Lives in Lisbon');
     expect((await t.memories.listPast()).map((m) => m.content)).toEqual(['Lives in Berlin']);
@@ -377,7 +377,7 @@ describe('the tidy-up', () => {
     expect((await t.run.run('now')).changes).toEqual([]);
   });
 
-  it('doesn’t make a merge that would lose a number or a name (ADR 0087)', async () => {
+  it('doesn’t make a merge that would lose a number or a name (ADR 0088)', async () => {
     const t = tidy({ reply: {} });
     const a = await t.memories.add({
       content: 'Has a dog called Rex, 3 years old',
@@ -400,7 +400,7 @@ describe('the tidy-up', () => {
     expect(keepsDetail('Born in Porto', ['Born in Porto in 1990'])).toBe(false);
   });
 
-  it('doesn’t add what you took back once (ADR 0087)', async () => {
+  it('doesn’t add what you took back once (ADR 0088)', async () => {
     const memories = store();
     const run = new MemoryTidy({
       home,

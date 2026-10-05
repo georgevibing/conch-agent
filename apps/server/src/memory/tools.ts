@@ -20,10 +20,10 @@ export function memoryTools(options: {
    * at once and the chat says so, with Undo.
    */
   waits?: () => boolean;
-  /** Memories that stopped being true, for questions about before (ADR 0087). */
+  /** Memories that stopped being true, for questions about before (ADR 0088). */
   searchPast?: (query: string) => Promise<Memory[]>;
   /**
-   * The person took this back once (ADR 0087 § 6): what the assistant tries to
+   * The person took this back once (ADR 0088 § 6): what the assistant tries to
    * remember again waits for their OK.
    */
   never?: (content: string) => Promise<boolean>;
@@ -39,7 +39,7 @@ export function memoryTools(options: {
       // remembered with where it came from, and waits for an OK only when nobody can undo it.
       const untrusted = options.untrusted?.();
       const waits = Boolean(untrusted) && (options.waits?.() ?? true);
-      // Something the person took back once waits for them, wherever it comes from (ADR 0087).
+      // Something the person took back once waits for them, wherever it comes from (ADR 0088).
       const refused = await options.never?.(content).catch(() => false);
       const memory = await store.add({
         content,
@@ -82,7 +82,7 @@ export function memoryTools(options: {
       const results = options.search
         ? (await options.search(query)).map((r) => r.memory)
         : (await store.search(query)).filter((m) => !m.pending);
-      // What used to be true, dated, for questions about before (ADR 0087).
+      // What used to be true, dated, for questions about before (ADR 0088).
       const past = (await options.searchPast?.(query).catch(() => [])) ?? [];
       const lines = [
         ...results.map((m) => `[${m.id}] (${m.kind}) ${m.content}`),

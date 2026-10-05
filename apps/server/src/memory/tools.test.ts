@@ -17,7 +17,7 @@ function tool(tools: HostTool[], name: string) {
   return (input: Record<string, unknown>) => found.run(input as never, {} as never);
 }
 
-describe('the memory tools and what stopped being true (ADR 0087)', () => {
+describe('the memory tools and what stopped being true (ADR 0088)', () => {
   it('recall finds what used to be true, with when it stopped', async () => {
     const store = new MemoryStore(await temp());
     const berlin = await store.add({ content: 'Lives in Berlin', source: 'user' });

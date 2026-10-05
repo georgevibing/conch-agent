@@ -58,7 +58,7 @@ async function setup(now = { at: OCT_10 }) {
 
 const cost = (usd: number) => ({ inputTokens: 0, outputTokens: 0, costUsd: usd });
 
-describe('what learning may spend (ADR 0087 § 8)', () => {
+describe('what learning may spend (ADR 0088 § 8)', () => {
   it('a dollar a month until a person says otherwise', async () => {
     const { spend } = await setup();
     expect(await spend.state()).toEqual({

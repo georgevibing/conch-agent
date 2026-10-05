@@ -1,5 +1,5 @@
 /**
- * What learning may spend (ADR 0087 § 8): a small monthly cap on the money
+ * What learning may spend (ADR 0088 § 8): a small monthly cap on the money
  * the quiet looks at your chats cost. Only pay-as-you-go money counts; a plan
  * or a model on this computer costs nothing here, though a plan that's
  * nearly used up is left to your own chats. At the cap, learning that costs

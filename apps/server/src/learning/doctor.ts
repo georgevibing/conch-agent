@@ -1,5 +1,5 @@
 /**
- * Repair everything's look at quiet learning (ADR 0087): the record of what
+ * Repair everything's look at quiet learning (ADR 0088): the record of what
  * was learned (read through `readStore`, so a damaged one is set aside and
  * started again by reading it), and whether learning is resting — at its cap,
  * or with no provider that can read a chat. Neither is wrong; both are

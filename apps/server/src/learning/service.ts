@@ -1,5 +1,5 @@
 /**
- * Quiet learning (ADR 0087): once a chat you were in goes quiet, Conch reads
+ * Quiet learning (ADR 0088): once a chat you were in goes quiet, Conch reads
  * your words in it, keeps what's worth keeping, and says so at the end of
  * that chat — one quiet line, Undo on each thing, Why? on where it came
  * from. What came after reading something from outside, or with nobody
@@ -733,7 +733,7 @@ export class QuietLearning {
 
   // ── What a turn is told ────────────────────────────────────────────────
 
-  /** The few preferences that bear on this message, to go just before it (ADR 0087 § 7). */
+  /** The few preferences that bear on this message, to go just before it (ADR 0088 § 7). */
   nearby(said: string): Promise<string | undefined> {
     return nearTheQuestion(said, this.deps.search);
   }

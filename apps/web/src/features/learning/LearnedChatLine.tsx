@@ -8,7 +8,7 @@ import { learningApi, learningKeys, useLearning } from './api';
 import { thingFromChat } from './things';
 
 /**
- * What this chat taught Conch once it went quiet (ADR 0087): one folded line
+ * What this chat taught Conch once it went quiet (ADR 0088): one folded line
  * at its end, with Undo and Why?, and Keep and Forget on what waits. What
  * you press shows at once; the chat's own log says it after a reload.
  */

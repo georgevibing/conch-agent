@@ -187,7 +187,7 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         case 'memory.changed':
           void client.invalidateQueries({ queryKey: keys.memories });
           break;
-        // Something was learned or answered, or what learning may spend changed (ADR 0087).
+        // Something was learned or answered, or what learning may spend changed (ADR 0088).
         case 'learning.changed':
           void client.invalidateQueries({ queryKey: learningKeys.all });
           void client.invalidateQueries({ queryKey: keys.memories });

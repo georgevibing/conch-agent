@@ -211,7 +211,7 @@ describe('transcript reducer', () => {
     });
   });
 
-  it('folds what a chat taught Conch into one line, and what you decided since (ADR 0087)', () => {
+  it('folds what a chat taught Conch into one line, and what you decided since (ADR 0088)', () => {
     const view = reduceAll(
       log(
         { type: 'user.message', messageId: 'u1', text: 'No, I meant TypeScript' },

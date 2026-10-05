@@ -131,7 +131,7 @@ interface UiState {
   terminalNew: number;
   /**
    * What to do as the memories open, once: ⌘K → Tidy up, Search by meaning,
-   * What Conch learned, Things Conch won't learn again (ADR 0087).
+   * What Conch learned, Things Conch won't learn again (ADR 0088).
    */
   memoryIntent: MemoryIntent | null;
   setMemoryIntent(intent: MemoryIntent | null): void;

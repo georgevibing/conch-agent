@@ -58,7 +58,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Quiet learning (ADR 0087). Once a chat you were in goes quiet, Conch reads your words in it and keeps what lasts: a correction, a move, what this computer needs. It says so afterwards in one folded line at the end of the chat — “Learned 2 things” — never a dialog or a toast. Open, every thing has Undo (and what you undo is never learned again) and Why?, which shows the chat, your words, what Conch noticed and the model that read it. What came after reading something from outside waits for your OK: the line opens by itself, and Keep and Forget are the only things asking for attention.',
+          'Quiet learning (ADR 0088). Once a chat you were in goes quiet, Conch reads your words in it and keeps what lasts: a correction, a move, what this computer needs. It says so afterwards in one folded line at the end of the chat — “Learned 2 things” — never a dialog or a toast. Open, every thing has Undo (and what you undo is never learned again) and Why?, which shows the chat, your words, what Conch noticed and the model that read it. What came after reading something from outside waits for your OK: the line opens by itself, and Keep and Forget are the only things asking for attention.',
       },
     },
   },

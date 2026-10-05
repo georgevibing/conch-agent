@@ -822,7 +822,7 @@ describe('Palette search', () => {
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/memory'));
   });
 
-  it('finds what Conch learned, what it won’t learn again and what learning may spend (ADR 0087)', async () => {
+  it('finds what Conch learned, what it won’t learn again and what learning may spend (ADR 0088)', async () => {
     const user = userEvent.setup();
     mockFetch({
       'GET /api/state': () => appState(),
@@ -860,7 +860,7 @@ describe('Palette search', () => {
     expect(useUi.getState().memoryIntent).toBe('learned');
   });
 
-  it('marks the chat you’re reading not to learn from, and back (ADR 0087)', async () => {
+  it('marks the chat you’re reading not to learn from, and back (ADR 0088)', async () => {
     const user = userEvent.setup();
     const calls = mockFetch({
       'GET /api/state': () => appState(),

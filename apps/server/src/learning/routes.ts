@@ -10,7 +10,7 @@ import type { QuietLearning } from './service';
 import type { LearningSpend } from './spend';
 
 /**
- * Quiet learning (ADR 0087), under `/api`, behind the gateway's host, origin
+ * Quiet learning (ADR 0088), under `/api`, behind the gateway's host, origin
  * and sign-in checks. Everything here is a person's answer: Keep, Undo,
  * Forget, "Don't learn from this chat", what learning may spend, letting
  * something be learned again. No tool the assistant has reaches any of it.

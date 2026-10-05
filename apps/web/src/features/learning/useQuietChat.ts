@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { learningApi, learningKeys, useLearning } from './api';
 
 /**
- * "Don't learn from this chat" (ADR 0087), from the chat's menu or ⌘K: shown
+ * "Don't learn from this chat" (ADR 0088), from the chat's menu or ⌘K: shown
  * at once, put back if it didn't save.
  */
 export function useQuietChat() {

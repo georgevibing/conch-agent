@@ -15,7 +15,7 @@ const memory = (content: string, extra: Partial<Memory> = {}): Memory => ({
 
 const search = (found: Memory[]) => async () => found.map((m) => ({ memory: m }));
 
-describe('preferences near the question (ADR 0087 § 7)', () => {
+describe('preferences near the question (ADR 0088 § 7)', () => {
   it('brings up how you like things, this computer and lessons; not other facts', async () => {
     const block = await nearTheQuestion(
       'Write me a script',

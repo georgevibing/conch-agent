@@ -32,7 +32,7 @@ export interface RoutineSpendingGaugeProps extends Omit<ComponentProps<'div'>, '
   projectedUsd?: number;
   /** When the month starts again (the 1st). */
   resetsAt: number;
-  /** What's spending: “Routines this month”, “Learning this month” (ADR 0087). */
+  /** What's spending: “Routines this month”, “Learning this month” (ADR 0088). */
   label?: string;
   locale?: string;
   timeZone?: string;

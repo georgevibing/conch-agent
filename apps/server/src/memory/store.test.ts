@@ -87,7 +87,7 @@ async function readAsBefore(dir: string): Promise<string[]> {
   return out;
 }
 
-describe('superseded, not overwritten (ADR 0087)', () => {
+describe('superseded, not overwritten (ADR 0088)', () => {
   it('keeps what used to be true, dated, out of the live memories', async () => {
     const dir = await temp();
     const store = new MemoryStore(dir);

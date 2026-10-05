@@ -7,7 +7,7 @@ import { Mutex, safeJoin, writeFileAtomic } from '../lib/fs';
 import { newId } from '../lib/ids';
 
 /**
- * Where memories that stopped being true are kept (ADR 0087). The version
+ * Where memories that stopped being true are kept (ADR 0088). The version
  * before reads only `memory/*.md`, so after going back one never returns as
  * if it were still true.
  */
@@ -22,7 +22,7 @@ export interface NewMemory {
   /** Waiting for the person's OK (ADR 0032), and why. */
   pending?: boolean;
   untrusted?: string;
-  /** What a learned fact is about, and the record that taught it (ADR 0087). */
+  /** What a learned fact is about, and the record that taught it (ADR 0088). */
   about?: MemoryAbout;
   learned?: string;
 }
@@ -74,7 +74,7 @@ export class MemoryStore {
   }
 
   /**
-   * What's true now replaces a memory (ADR 0087): the new one is written, and
+   * What's true now replaces a memory (ADR 0088): the new one is written, and
    * the old one moves to `memory/superseded/` saying when it stopped being
    * true and what replaced it. Nothing is lost; `unsupersede` puts it back.
    */

@@ -39,7 +39,7 @@ const memory = {
   learned: 'le_1',
 } as const;
 
-describe('quiet learning on the wire (ADR 0087)', () => {
+describe('quiet learning on the wire (ADR 0088)', () => {
   it('a learned memory is still a memory to the version before', () => {
     const now = Memory.parse(memory);
     const before = PreviousMemory.safeParse(now);

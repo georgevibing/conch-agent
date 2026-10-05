@@ -44,7 +44,7 @@ export interface Scene {
   /** What Conch remembers now. */
   memories(): Promise<string[]>;
   /**
-   * Conch's quiet look at a chat, as if it had gone quiet (ADR 0087): what it
+   * Conch's quiet look at a chat, as if it had gone quiet (ADR 0088): what it
    * learned, or why it learned nothing.
    */
   review(chat: string): Promise<{ learned: string[]; why?: string }>;
@@ -239,7 +239,7 @@ export const TASKS: readonly EvalTask[] = [
     id: 'learns-correction',
     title: 'Learn a correction, use it in the next chat',
     about:
-      'Once a chat goes quiet, a correction in it is learned by itself; a new chat follows it unasked (ADR 0087).',
+      'Once a chat goes quiet, a correction in it is learned by itself; a new chat follows it unasked (ADR 0088).',
     async run(scene) {
       const first = await scene.say('Write a one-line command that prints today’s date.');
       const missed = unanswered(first);
@@ -270,7 +270,7 @@ export const TASKS: readonly EvalTask[] = [
     id: 'learns-nothing',
     title: 'Learn nothing from a chat with nothing lasting',
     about:
-      'A chat that only sounds personal (“I always mix these up”) leaves nothing behind (ADR 0087).',
+      'A chat that only sounds personal (“I always mix these up”) leaves nothing behind (ADR 0088).',
     async run(scene) {
       const first = await scene.say('I usually forget this — what’s the capital of Portugal?');
       const missed = unanswered(first);

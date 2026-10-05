@@ -324,7 +324,7 @@ export async function useConch(g: Gateway) {
   if (!('offered' in learned)) throw new Error(`no offer: ${learned.why}`);
   // …and a skill used by name, which the tidy shelf counts.
   await chat(services, `/${String(skill.name)} for March`);
-  // What a chat taught Conch once it went quiet (ADR 0087): a correction, kept with where it
+  // What a chat taught Conch once it went quiet (ADR 0088): a correction, kept with where it
   // came from; a move, with what used to be true kept, dated; and one taken back for good.
   // (Learned before, so the move replaces it by itself: one you wrote would wait for your OK.)
   await services.memory.add({ content: 'Lives in Berlin', source: 'agent' });

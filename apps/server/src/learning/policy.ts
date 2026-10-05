@@ -1,5 +1,5 @@
 /**
- * The gate (ADR 0087 § 4): each change the review proposes is applied by
+ * The gate (ADR 0088 § 4): each change the review proposes is applied by
  * itself, waits for the person's OK, or is dropped. Dropped first, so nothing
  * unsafe even waits:
  *
@@ -116,7 +116,7 @@ export function dropWhy(
   return undefined;
 }
 
-/** Apply, wait or drop one change (ADR 0087 § 4). */
+/** Apply, wait or drop one change (ADR 0088 § 4). */
 export function gate(
   change: Change,
   ctx: GateContext,

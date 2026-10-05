@@ -116,7 +116,7 @@ neither the next fold nor the nightly tidy-up reads them again. Without a model,
 or with an answer it can't read, nothing is marked read and the nightly still has
 them.
 
-> **Update (2026-10-05):** since [ADR 0087](./0087-quiet-learning.md), the words before the
+> **Update (2026-10-05):** since [ADR 0088](./0088-quiet-learning.md), the words before the
 > cut go to Conch's quiet look at the chat, `QuietLearning.review`, instead of
 > `MemoryTidy.learn`. It keeps the same rules and records how far it has read in each chat.
 

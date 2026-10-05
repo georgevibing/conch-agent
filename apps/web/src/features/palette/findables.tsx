@@ -836,7 +836,7 @@ export function useFindables(query: string, conversationId: string | undefined):
         openSettings('memory', MEMORY_ALL);
       },
     },
-    // Quiet learning (ADR 0087): what it learned by itself, and what it won't learn again.
+    // Quiet learning (ADR 0088): what it learned by itself, and what it won't learn again.
     {
       id: 'learned',
       label: 'What Conch learned',

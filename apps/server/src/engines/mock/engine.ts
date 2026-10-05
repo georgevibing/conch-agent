@@ -434,7 +434,7 @@ export class MockEngine implements Engine {
         usage: { inputTokens: 200, outputTokens: 1, costUsd: 0.0001 },
       };
     }
-    // A chat looked at once it went quiet (ADR 0087): "no, I meant X" teaches a preference,
+    // A chat looked at once it went quiet (ADR 0088): "no, I meant X" teaches a preference,
     // "I moved to Y" moves where you live. "review-fail" fails; anything else teaches nothing.
     if (/You read one finished chat/.test(input.system)) {
       if (/review-fail/i.test(input.prompt)) throw new Error('Mock completion failed.');
@@ -592,7 +592,7 @@ export class MockEngine implements Engine {
     const chatOnly =
       turn.wordsOnly === true ||
       (await this.capabilities()).models.find((m) => m.id === turn.options.model)?.tools === false;
-    // The script reads what the person wrote: preferences put near it (ADR 0087) aren't part of it.
+    // The script reads what the person wrote: preferences put near it (ADR 0088) aren't part of it.
     const words: TurnInput = { ...turn, prompt: stripNearby(turn.prompt) };
     const input: TurnInput = chatOnly ? { ...words, tools: [], bridgedTools: [] } : words;
     const wait = (ms: number) => sleep(ms * this.#speed, input.signal);

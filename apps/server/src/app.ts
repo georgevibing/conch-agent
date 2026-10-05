@@ -230,7 +230,7 @@ export async function buildApp(services: Services) {
         memoryId: memory.id,
         kept,
       });
-    // What Conch learned keeps its record (ADR 0087): kept, or never learned again.
+    // What Conch learned keeps its record (ADR 0088): kept, or never learned again.
     if (kept) await services.learning.kept(memory);
     else await services.learning.forgotten(memory);
   };

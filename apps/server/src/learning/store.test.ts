@@ -29,7 +29,7 @@ const entry = (id: string, memoryId = `m_${id}`): Omit<LearnedEntry, 'id'> & { i
   seen: 1,
 });
 
-describe('LearningStore (ADR 0087)', () => {
+describe('LearningStore (ADR 0088)', () => {
   it('keeps the record newest first, and reads it back', async () => {
     const home = await temp();
     const store = new LearningStore({ home });

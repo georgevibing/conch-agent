@@ -1,5 +1,5 @@
 /**
- * Preferences near the question (ADR 0087 § 7): the turn's prompt carries
+ * Preferences near the question (ADR 0088 § 7): the turn's prompt carries
  * them just before the person's words; the chat's log and the system prompt
  * never do, and a guest never gets them. A chat marked "Don't learn from this
  * chat" remembers only when asked.
@@ -97,7 +97,7 @@ async function finished(manager: ConversationManager, id: string): Promise<Conve
   throw new Error('the turn never finished');
 }
 
-describe('preferences near the question (ADR 0087)', () => {
+describe('preferences near the question (ADR 0088)', () => {
   it('go just before your words in the turn, never in the log or the system prompt', async () => {
     const { manager, engine, asked } = await setup();
     const chat = await manager.send({ clientMessageId: 'u1', text: 'Write me a script' });
