@@ -46,6 +46,7 @@ export function IntegrationIssue({ item }: { item: Issue }) {
 const MAKER_STEPS: Record<string, string> = {
   app_new: 'Starting the app',
   app_write: 'Writing',
+  app_icon: 'Giving it a picture',
   app_read: 'Reading',
   app_check: 'Checking the app',
   app_try: 'Trying',

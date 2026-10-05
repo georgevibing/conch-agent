@@ -54,6 +54,9 @@ export function toolSummary(name: string, raw: unknown): string | undefined {
       return str(input, 'query');
     case 'mcp__conch__app_get':
       return str(input, 'link');
+    // Where its picture came from; never the bytes themselves.
+    case 'mcp__conch__app_icon':
+      return str(input, 'url') ?? str(input, 'file');
     case 'mcp__conch__app_check':
     case 'mcp__conch__app_present':
     case 'mcp__conch__app_share':

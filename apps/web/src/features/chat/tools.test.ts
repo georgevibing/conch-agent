@@ -15,5 +15,10 @@ describe('what a tool row says it’s about', () => {
       'github.com/ada/plant-diary',
     );
     expect(toolSummary('mcp__conch__app_check', {})).toBeUndefined();
+    // An app's picture: where it came from, never its bytes.
+    expect(
+      toolSummary('mcp__conch__app_icon', { url: 'https://www.yazio.com/apple-touch-icon.png' }),
+    ).toBe('https://www.yazio.com/apple-touch-icon.png');
+    expect(toolSummary('mcp__conch__app_icon', { base64: 'iVBORw0KGgo…' })).toBeUndefined();
   });
 });
