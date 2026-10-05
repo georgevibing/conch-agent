@@ -64,6 +64,10 @@
   Codex CLI, asking through Conch); Codex, GitHub Copilot, Gemini CLI and Grok
   through their own sign-in; Ollama, LM Studio or a server of your own; keys
   from OpenRouter, Anthropic, OpenAI, Google, Mistral, DeepSeek and more.
+- **A chat list that keeps itself tidy.** Pin chats, sort them into folders, and
+  see at a glance which are working, which need you and which have news. Pinned
+  apps sit on top as tiles. Select many at once, drag, swipe on a phone, and
+  archive month-old chats in one press.
 - **Long chats on any model.** When a chat outgrows what a model reads at once,
   its start becomes a summary you can open, and what you said there is learned first.
 - **Long jobs that finish, and cost less.** Big tasks run as long as they need,
