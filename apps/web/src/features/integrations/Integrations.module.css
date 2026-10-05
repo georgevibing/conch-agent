@@ -79,6 +79,9 @@
     flex-wrap: wrap;
     align-items: center;
     gap: var(--nc-space-2);
+    /* The filters scroll within the page's width on a phone, never past it. */
+    min-inline-size: 0;
+    max-inline-size: 100%;
   }
 
   .search {

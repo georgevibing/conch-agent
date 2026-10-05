@@ -245,3 +245,39 @@ export const WhenSomethingHappens: Story = {
     </Stack>
   ),
 };
+
+/**
+ * On a phone, in a grid like the Routines page's: a long outcome stays on
+ * one line with an ellipsis, and never makes the card (or the page) wider.
+ */
+export const PhoneLongOutcome: Story = {
+  args: {
+    title: 'Send a greeting',
+    summary: 'Sends a hello to your Telegram once.',
+    scheduleText: 'Once, Sat, Oct 4, 8:37 PM',
+    status: 'completed',
+    cost: { text: 'Runs on your Claude Max plan', billing: 'plan' },
+    lastRun: {
+      status: 'failed',
+      at: now - 3 * hour,
+      outcome:
+        'Telegram integration not configured. No Telegram MCP server or app connection found for this routine, so nothing was sent.',
+    },
+  },
+  render: (args) => (
+    <ul
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 22rem), 1fr))',
+        maxInlineSize: 358,
+        margin: 0,
+        padding: 0,
+        listStyle: 'none',
+      }}
+    >
+      <li>
+        <RoutineCard {...args} />
+      </li>
+    </ul>
+  ),
+};

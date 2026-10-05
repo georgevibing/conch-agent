@@ -53,7 +53,7 @@ import { EmailSetup } from './ConnectEmail';
 import { ImessageSetup } from './ConnectImessage';
 import { HelloStep } from './HelloStep';
 import { LinkedSetup } from './LinkedSetup';
-import { TALK_PATH } from '../integrations/paths';
+import { APPS_PATH } from '../integrations/paths';
 import { MatrixSetup } from './MatrixSetup';
 import { TeamsSetup } from './TeamsSetup';
 import { GoogleChatSetup } from './GoogleChatSetup';
@@ -113,7 +113,7 @@ export function SetupPage({
             leadingIcon={<ArrowLeft />}
             className={styles.back}
           >
-            <Link to={TALK_PATH}>Apps</Link>
+            <Link to={APPS_PATH}>Apps</Link>
           </Button>
           <Stack gap={2}>
             <IntegrationLogo brand={kind} name={app.name} color={app.color} size="lg" decorative />

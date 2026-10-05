@@ -215,7 +215,10 @@
   }
 
   .lastText {
+    flex: 1;
     min-inline-size: 0;
+    /* One line however long the outcome: it never asks the card (or the page) for its width. */
+    contain: inline-size;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
