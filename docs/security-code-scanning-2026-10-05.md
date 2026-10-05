@@ -1,5 +1,7 @@
 # Code scanning review — 5 October 2026
 
+The [second audit](./security-code-scanning-2026-10-05-followup.md) revisits all remaining alerts, fixes the deferred mock and test issues, and records the subsequent triage decisions. This first-pass report is retained as a historical snapshot.
+
 Reviewed all **120 open CodeQL alerts** in `georgevibing/conch-agent` at commit `382a01e82b2dbf276bee680962a4602cdccd4c1b` (JavaScript/TypeScript analysis `1896005990`, CodeQL 2.27.1). The Actions analysis had zero findings. This is an implementation review of that snapshot, not a claim that GitHub has closed every alert.
 
 ## Priorities and threat model
