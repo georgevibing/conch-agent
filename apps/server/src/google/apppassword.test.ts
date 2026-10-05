@@ -166,7 +166,11 @@ describe('Gmail as an app', () => {
     await google.connectPassword({ address: ADDRESS, password: PASSWORD });
     const id = passwordId(ADDRESS);
     const before = await google.verificationScope(id, 'mail-read');
-    expect(await google.verificationScope(id, 'mail-read')).toEqual(before);
+    // The expiry rolls forward with the clock; the account/generation stays fixed.
+    expect(await google.verificationScope(id, 'mail-read')).toMatchObject({
+      account: before.account,
+      authorization: before.authorization,
+    });
     await google.connectPassword({ address: ADDRESS, password: PASSWORD });
     const after = await google.verificationScope(id, 'mail-read');
     expect(after.authorization).not.toBe(before.authorization);
