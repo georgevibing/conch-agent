@@ -20,7 +20,7 @@ Your chats are in the sidebar, newest first, grouped by day. Point at one and pr
 
 ### Long jobs
 
-Your assistant can take as many steps as a job needs: booking something across a few websites, tidying a big folder. A message you're watching runs until it's done, with no limit on steps, time or reading. It only stops by itself when it keeps trying the same thing without getting anywhere. It's told first, and tries another way; only if it carries on does it pause.
+Your assistant can take as many steps as a job needs: booking something across a few websites, tidying a big folder. A message you're watching runs until it's done, with no limit on steps, time or reading. It only stops by itself when it's plainly getting nowhere: the very same step coming back with the very same answer, again and again in quick succession. Checking on something that takes a while, failing tests on the way to fixing them, or a search that finds nothing are all work, never a reason to stop. It's told first, twice, and tries another way; only if it carries on does it pause, with **Carry on** to pick up where it was.
 
 The reply then ends with one sentence saying why it paused. Press **Carry on** and it picks up exactly where it stopped, with everything it had done. Or say what to do differently.
 

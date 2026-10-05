@@ -633,10 +633,11 @@ describe('the tool loop', () => {
       }),
     );
     const events = await collect(engine.runTurn(turn({ tools: [rememberTool(saved)] })));
-    // The third identical call carries a nudge; the fifth isn't run, and the turn pauses.
+    // The third and sixth identical answers carry a nudge; after the tenth the turn pauses.
     const sent = resultsSent(requests);
     expect(sent.find((t) => t.includes('this exact'))).toContain('3 times');
-    expect(saved).toHaveLength(4);
+    expect(new Set(sent.filter((t) => t.includes('this exact'))).size).toBe(2);
+    expect(saved).toHaveLength(10);
     expect(events.at(-1)).toMatchObject({
       type: 'done',
       outcome: 'success',
@@ -646,7 +647,7 @@ describe('the tool loop', () => {
     for (const e of events) if (e.type === 'tool-end') expect(e.output).not.toContain('From Conch');
   });
 
-  it('nudges after a run of failures, then pauses', async () => {
+  it('nudges after a run of failures, and lets it find its way', async () => {
     let steps = 0;
     const requests: WireRequest[] = [];
     const { engine } = await engineFor(
@@ -654,6 +655,8 @@ describe('the tool loop', () => {
         stream: (request) => {
           requests.push(structuredClone({ ...request, signal: undefined }) as never);
           steps++;
+          if (steps > 20)
+            return toolTurn([], 'Those all failed: the memory tool wants a "content".');
           return toolTurn([
             {
               id: `call_${steps}`,
@@ -667,10 +670,10 @@ describe('the tool loop', () => {
     );
     const events = await collect(engine.runTurn(turn({ tools: [rememberTool([])] })));
     expect(resultsSent(requests).some((t) => t.includes('tool calls failed'))).toBe(true);
-    // Told after four, paused by eight at the latest (the same long error back sooner).
-    expect(steps).toBeGreaterThan(4);
-    expect(steps).toBeLessThanOrEqual(8);
-    expect(events.at(-1)).toMatchObject({ outcome: 'success', paused: { reason: 'loop' } });
+    // Told after four; trying different things is work, so it's never paused for it.
+    expect(steps).toBe(21);
+    expect(events.at(-1)).toMatchObject({ type: 'done', outcome: 'success' });
+    expect(events.at(-1)).not.toHaveProperty('paused');
   });
 
   it('pauses when the turn has spent its fresh tokens', async () => {

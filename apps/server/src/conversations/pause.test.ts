@@ -146,7 +146,7 @@ describe('pausing to check in (ADR 0085)', () => {
     const heard: string[] = [];
     const engine = new Scripted(async function* (input) {
       const recall = input.tools.find((t) => t.name === 'recall');
-      for (let i = 0; i < 20 && !input.signal.aborted; i++) {
+      for (let i = 0; i < 30 && !input.signal.aborted; i++) {
         const id = `t${i}`;
         yield {
           type: 'tool-start',
@@ -169,6 +169,6 @@ describe('pausing to check in (ADR 0085)', () => {
     });
     // The engine heard about the loop in the answer it read, before it was paused.
     expect(heard[2]).toContain('From Conch');
-    expect(heard.length).toBeLessThan(8);
+    expect(heard.length).toBeLessThan(12);
   });
 });

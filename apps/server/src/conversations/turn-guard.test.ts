@@ -39,7 +39,7 @@ describe('the turn budget from outside (ADR 0085)', () => {
     expect(pace.signal).toBe(signal);
   });
 
-  it('pauses a program repeating its own command, and says so as a pause', async () => {
+  it('pauses a program running the very same command for the very same answer, and says so as a pause', async () => {
     const stop = new AbortController();
     const pace = guardTurn({}, { budget: roomy, tools: [], signal: stop.signal });
     const events = await collect(
@@ -51,12 +51,34 @@ describe('the turn budget from outside (ADR 0085)', () => {
         })),
       ),
     );
-    expect(events.filter((e) => e.type === 'tool-start').length).toBeLessThanOrEqual(6);
+    expect(events.filter((e) => e.type === 'tool-start').length).toBeLessThanOrEqual(11);
     expect(events.at(-1)).toMatchObject({
       type: 'done',
       outcome: 'success',
       paused: { reason: 'loop' },
     });
+  });
+
+  it('lets a program check on a test run, fail tests and search for nothing on its way', async () => {
+    const stop = new AbortController();
+    const pace = guardTurn({}, { budget: roomy, tools: [], signal: stop.signal });
+    const events = await collect(
+      pace.events(
+        program(pace.signal, (i) =>
+          i % 3 === 0
+            ? {
+                name: 'shell',
+                input: { command: "python3 - <<'PY' check PY" },
+                output: `${i} passed`,
+              }
+            : i % 3 === 1
+              ? { name: 'shell', input: { command: `grep -rn thing${i}` }, output: '' }
+              : { name: 'shell', input: { command: 'pnpm test' }, output: `FAIL ${i}` },
+        ),
+      ),
+    );
+    expect(events.filter((e) => e.type === 'tool-start')).toHaveLength(50);
+    expect(events.at(-1)).toEqual({ type: 'done', outcome: 'success' });
   });
 
   it('caps a program by its calls, and lets varied work run', async () => {
@@ -99,13 +121,15 @@ describe('the turn budget from outside (ADR 0085)', () => {
     const pace = guardTurn({}, { budget: roomy, tools: [tool as HostTool], signal: stop.signal });
     const [wrapped] = pace.tools;
     const answers: string[] = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 11; i++) {
       const result = await wrapped?.run({ q: 'tea' } as never);
       answers.push(typeof result === 'string' ? result : (result?.text ?? ''));
     }
     expect(answers[1]).toBe('Nothing found.');
     expect(answers[2]).toContain('From Conch');
-    expect(answers[4]).toMatch(/^Not run/);
+    expect(answers[5]).toContain('From Conch');
+    expect(answers[9]).toMatch(/^Nothing found/);
+    expect(answers[10]).toMatch(/^Not run/);
     expect(pace.signal.aborted).toBe(true);
   });
 

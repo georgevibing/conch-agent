@@ -160,3 +160,25 @@ never fixes; Ollama's busy server waits two seconds.
 - **Known limits:** the outside watch can't nudge a loop in a program's own tools (a
   Codex shell command), only pause it. Claude Code is trusted to pace itself. The
   thresholds are judgement, kept in one file, and measured against real runs.
+
+## Revisited (2026-10-05): getting nowhere, not repeating
+
+A Codex chat paused with "it kept trying the same thing" while it was checking, every
+few seconds, whether a test run had finished, then finished within five minutes of
+**Carry on**. The outside watch can't nudge Codex, so its first word was the pause, and
+three of its rules were counting work as a loop: the same command five times (polling),
+eight failures in a row (any non-zero exit: failing tests, a `grep` that finds nothing),
+and the same answer seven times.
+
+OpenClaw's loop detection is off by default; when on, it counts the same call with the
+same result, resets on any meaningful change in the output (ignoring timestamps and
+durations), warns in the tool result, and only ends the run on a second critical hit.
+Hermes has no loop stop at all: a 90-step budget with warnings as it nears the end.
+
+Now (`engines/budget.ts`): a loop is the **same call coming back with the same answer**
+(times, clocks and durations taken out), each hard on the last. A changed answer is
+progress; repeats 20 seconds or more apart are waiting, not looping. The model is told
+at the third and sixth, and the turn pauses at the tenth. Failures in a row get one
+word to the model and never pause it; the same long answer from different calls pauses
+at twelve fast ones, and never for errors. A chat someone is watching still has no
+step, token or time limit until they set one.

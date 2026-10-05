@@ -3,11 +3,16 @@
  *
  * A turn used to stop after 24 tool steps, which cut long browser tasks off
  * halfway. Now each turn has a generous budget in steps, fresh tokens and
- * time, and a watch for the things that really go wrong: the same call made
- * again and again, the same answer coming back, one failure after another.
- * The model hears about a loop first (a nudge in the tool result); only if it
- * carries on does the turn pause. A pause is never a failure: it ends with one
- * plain sentence and a **Carry on** that picks up exactly where it stopped.
+ * time, and a watch for the one thing that really goes wrong: getting nowhere.
+ * That's the same call coming back with the same answer, again and again, in
+ * quick succession. A changed answer is progress (a test run that's further
+ * along, a page that moved), and so is time: a check made every half a minute
+ * is waiting for something, not looping. Failures in a row are how debugging
+ * goes, so they earn a word to the model, never a pause.
+ * The model hears about it first (a nudge in the tool result), twice; only a
+ * plain, fast run of the very same thing pauses the turn. A pause is never a
+ * failure: it ends with one plain sentence and a **Carry on** that picks up
+ * exactly where it stopped.
  *
  * Pure: no I/O and an injectable clock, so every rule is a test.
  */
@@ -72,18 +77,19 @@ export type Verdict =
 
 const GO: Verdict = { kind: 'go' };
 
-/** The same call this many times in the recent window: tell the model. */
-export const REPEAT_NUDGE = 3;
-/** And this many: pause. */
-export const REPEAT_STOP = 5;
-/** How many recent calls a repeat is counted in. */
-const WINDOW = 12;
-/** Failures in a row before the model is told to step back, and before the turn pauses. */
+/** The same call with the same answer this many times: tell the model; again at twice that. */
+export const LOOP_NUDGE = 3;
+/** And this many, each hard on the last: pause. */
+export const LOOP_STOP = 10;
+/** How many recent outcomes a loop is counted in. */
+const WINDOW = 30;
+/** Repeats this far apart are waiting (a test run, a build, a download), not a loop. */
+export const PATIENT_MS = 20_000;
+/** Failures in a row before the model is told to step back (it's never paused for them). */
 export const ERRORS_NUDGE = 4;
-export const ERRORS_STOP = 8;
-/** The same answer from the same tool, in a row: nothing is changing. */
+/** The same long answer from different calls, in a row: nothing they do is changing anything. */
 export const SAME_NUDGE = 4;
-export const SAME_STOP = 7;
+export const SAME_STOP = 12;
 /** Answers shorter than this are confirmations, not a page or a listing that should change. */
 const SAME_MIN_CHARS = 200;
 /** Near the end of the budget, the model is asked to wrap up so the pause lands well. */
@@ -102,6 +108,17 @@ export function stableJson(value: unknown): string {
 
 const digest = (text: string) => createHash('sha256').update(text).digest('base64url').slice(0, 16);
 
+/**
+ * An answer as it bears on progress: times, clocks and durations change on
+ * every run of the same thing, so they don't make it a different answer.
+ */
+export function steady(text: string): string {
+  return text
+    .replace(/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?/g, '<time>')
+    .replace(/\b\d{1,2}:\d{2}(:\d{2})?(\.\d+)?\b/g, '<clock>')
+    .replace(/\b\d+(\.\d+)?\s?(ms|s|sec|seconds?|m|min|minutes?)\b/gi, '<took>');
+}
+
 /** The words a person reads when a turn pauses. */
 export function pauseFor(reason: TurnPause['reason'], budget: TurnBudget, count?: number) {
   const minutes = Math.max(1, Math.round(budget.ms / MINUTE));
@@ -110,7 +127,7 @@ export function pauseFor(reason: TurnPause['reason'], budget: TurnBudget, count?
     tokens:
       'Paused: this has read and written a lot for one message, so it’s checking in before it spends more.',
     time: `Paused after ${minutes} minute${minutes === 1 ? '' : 's'} of work, so this doesn’t run on without you.`,
-    loop: 'Paused: it kept trying the same thing without getting anywhere.',
+    loop: 'Paused: the same step kept coming back with the same answer, so it’s checking in before trying again.',
   };
   return { reason, message: message[reason] } satisfies TurnPause;
 }
@@ -126,10 +143,10 @@ export class TurnWatch {
   #steps = 0;
   #calls = 0;
   #fresh = 0;
-  #recent: string[] = [];
-  #nudged = new Set<string>();
+  /** Recent outcomes (a call and its answer), with how many times each came straight back. */
+  #outcomes: { key: string; at: number; run: number }[] = [];
   #errors = 0;
-  #same = { key: '', count: 0 };
+  #same = { key: '', count: 0, at: 0 };
   #wrapped = false;
 
   constructor(
@@ -182,33 +199,41 @@ export class TurnWatch {
   }
 
   /** A tool is about to run with these arguments. */
-  call(name: string, args: unknown): Verdict {
+  call(_name: string, _args: unknown): Verdict {
     this.#calls++;
-    const key = `${name}\u0000${stableJson(args ?? {})}`;
-    this.#recent.push(key);
-    if (this.#recent.length > WINDOW) this.#recent.shift();
-    const times = this.#recent.filter((k) => k === key).length;
-    if (times >= REPEAT_STOP && this.#nudged.has(key))
-      return { kind: 'stop', pause: pauseFor('loop', this.budget) };
-    if (times >= REPEAT_NUDGE && !this.#nudged.has(key)) {
-      this.#nudged.add(key);
-      return {
-        kind: 'nudge',
-        note: `[From Conch: you’ve made this exact ${name} call ${times} times in this turn. Don’t repeat it again: try a different way, or stop and tell the person what’s in the way.]`,
-      };
-    }
     return GO;
   }
 
-  /** What the tool answered. */
-  result(name: string, text: string, isError: boolean): Verdict {
+  /**
+   * What the tool answered. A loop is the same call coming back with the same
+   * answer, each time hard on the last; anything else is progress or patience.
+   */
+  result(name: string, args: unknown, text: string, isError: boolean): Verdict {
+    const at = this.now();
+    const answer = steady(text);
+    const key = `${name}\u0000${stableJson(args ?? {})}\u0000${digest(answer)}`;
+    const before = this.#outcomes.findLast((o) => o.key === key);
+    const run = before && at - before.at < PATIENT_MS ? before.run + 1 : 1;
+    this.#outcomes.push({ key, at, run });
+    if (this.#outcomes.length > WINDOW) this.#outcomes.shift();
+
     this.#errors = isError ? this.#errors + 1 : 0;
-    // A short answer ("Saved.") is a confirmation, the same every time by design.
-    const key = text.length >= SAME_MIN_CHARS ? `${name}\u0000${digest(text)}` : '';
+    // A short answer ("Saved.") is a confirmation, the same every time by design; the same
+    // error to different tries is still trying (only the very same call counts, above).
+    const same =
+      !isError && answer.length >= SAME_MIN_CHARS ? `${name}\u0000${digest(answer)}` : '';
     this.#same =
-      key && this.#same.key === key ? { key, count: this.#same.count + 1 } : { key, count: 1 };
-    if (this.#errors >= ERRORS_STOP || this.#same.count >= SAME_STOP)
+      same && this.#same.key === same && at - this.#same.at < PATIENT_MS
+        ? { key: same, count: this.#same.count + 1, at }
+        : { key: same, count: 1, at };
+
+    if (run >= LOOP_STOP || this.#same.count >= SAME_STOP)
       return { kind: 'stop', pause: pauseFor('loop', this.budget) };
+    if (run === LOOP_NUDGE || run === LOOP_NUDGE * 2)
+      return {
+        kind: 'nudge',
+        note: `[From Conch: this exact ${name} call has given the same answer ${run} times in a row. Don’t run it again as it is: change something, try a different way, or tell the person what’s in the way. If you’re waiting on something, wait longer between checks.]`,
+      };
     if (this.#errors === ERRORS_NUDGE)
       return {
         kind: 'nudge',

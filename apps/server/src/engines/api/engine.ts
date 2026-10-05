@@ -381,7 +381,7 @@ const NOT_RUN = 'Not run: Conch paused this turn here to check in with the perso
 export function carryOnNote(message: WireMessage, reason: TurnPause['reason']): WireMessage {
   const note =
     reason === 'loop'
-      ? '[From Conch: your last turn paused because it kept trying the same thing. If the person asks you to carry on, pick up where you stopped, but try a different way.]'
+      ? '[From Conch: your last turn paused because the same step kept giving the same answer. If the person asks you to carry on, pick up where you stopped, but try a different way.]'
       : '[From Conch: your last turn paused to check in before the work was finished. If the person asks you to carry on, pick up exactly where you stopped; don’t start again.]';
   const content = message.content;
   if (typeof content === 'string') return { ...message, content: `${note}\n\n${content}` };
@@ -1102,7 +1102,12 @@ export class ApiEngine implements Engine {
             input: args ?? { arguments: call.argumentsJson.slice(0, 2_000) },
           };
           const { text, status, view, images } = await this.#call(tool, read, call, input);
-          const after = watch.result(call.name, text, status === 'error');
+          const after = watch.result(
+            call.name,
+            args ?? call.argumentsJson,
+            text,
+            status === 'error',
+          );
           if (after.kind === 'stop') paused = after.pause;
           // The model hears about a loop in the answer it reads; the person sees the answer.
           const notes = [before, after].flatMap((v) => (v.kind === 'nudge' ? [v.note] : []));
