@@ -30,6 +30,10 @@ import {
   AddServerBody,
   UpdateServerBody,
   UpdateConversationBody,
+  BulkChatsBody,
+  FolderId,
+  NewFolderBody,
+  UpdateFolderBody,
   CompactBody,
   type CompactResult,
   ServerId,
@@ -65,6 +69,7 @@ import { registerVaultRoutes } from './vault/routes';
 import { AttachmentError } from './attachments/store';
 import { isLoopbackAddress } from './auth/network';
 import { ConversationError } from './conversations/manager';
+import { FolderError } from './conversations/folders';
 import { OfferError } from './offers/desk';
 import { BOOT_ID, restart, restartable } from './lib/lifecycle';
 import { googleRoutes } from './google/routes';
@@ -145,6 +150,10 @@ const oauthParam = (value: unknown, max = 4096) =>
   typeof value === 'string' && value.length > 0 && value.length <= max ? value : undefined;
 
 function sendError(reply: FastifyReply, error: unknown) {
+  if (error instanceof FolderError) {
+    const status = { 'not-found': 404, 'too-many': 409 }[error.code];
+    return reply.code(status).send({ error: error.code, message: error.message });
+  }
   if (error instanceof ProviderError) {
     const status = { 'not-found': 404, invalid: 400, pinned: 409 }[error.code];
     return reply.code(status).send({ error: error.code, message: error.message });
@@ -1149,19 +1158,74 @@ export async function buildApp(services: Services) {
       return sendError(reply, error);
     }
   });
-  /** Rename a conversation, archive it, or put it back in the list. */
+  /** Rename a conversation, archive it or put it back, pin it, file it, or mark it seen. */
   app.patch<{ Params: { id: string } }>('/api/conversations/:id', async (request, reply) => {
     const body = parse(UpdateConversationBody, request.body, reply);
     if (!body) return;
     try {
-      if (body.title !== undefined)
-        await services.conversations.rename(request.params.id, body.title);
-      if (body.archived !== undefined)
-        await services.conversations.archive(request.params.id, body.archived);
+      const { title, seen, ...change } = body;
+      if (change.folder && !(await services.folders.has(change.folder)))
+        throw new FolderError('not-found', 'That folder isn’t there any more.');
+      if (title !== undefined) await services.conversations.rename(request.params.id, title);
+      if (Object.keys(change).length)
+        await services.conversations.change(request.params.id, change);
+      if (seen) await services.conversations.seen(request.params.id);
       return { ok: true };
     } catch (error) {
       return sendError(reply, error);
     }
+  });
+  /** The same change to many chats, or deleting them: Select in the chat list (ADR 0089). */
+  app.post('/api/conversations/bulk', async (request, reply) => {
+    const body = parse(BulkChatsBody, request.body, reply);
+    if (!body) return;
+    try {
+      if (body.change?.folder && !(await services.folders.has(body.change.folder)))
+        throw new FolderError('not-found', 'That folder isn’t there any more.');
+      let done = 0;
+      for (const id of new Set(body.ids)) {
+        try {
+          if (body.remove) await services.conversations.remove(id);
+          else if (body.change) await services.conversations.change(id, body.change);
+          done++;
+        } catch (error) {
+          // One that went meanwhile doesn't stop the rest.
+          if (!(error instanceof ConversationError && error.code === 'not-found')) throw error;
+        }
+      }
+      return { ok: true, done };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+  // ── Folders in the chat list (ADR 0089) ──────────────────────────────────
+  app.get('/api/folders', () => services.folders.list());
+  app.post('/api/folders', async (request, reply) => {
+    const body = parse(NewFolderBody, request.body, reply);
+    if (!body) return;
+    try {
+      return await services.folders.create(body);
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+  app.patch<{ Params: { id: string } }>('/api/folders/:id', async (request, reply) => {
+    const id = parse(FolderId, request.params.id, reply);
+    const body = id && parse(UpdateFolderBody, request.body, reply);
+    if (!id || !body) return;
+    try {
+      return await services.folders.update(id, body);
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+  /** A folder goes; its chats go back to the list, untouched. */
+  app.delete<{ Params: { id: string } }>('/api/folders/:id', async (request, reply) => {
+    const id = parse(FolderId, request.params.id, reply);
+    if (!id) return;
+    await services.conversations.unfile(id);
+    await services.folders.remove(id);
+    return { ok: true };
   });
   app.delete<{ Params: { id: string } }>('/api/conversations/:id', async (request) => {
     await services.conversations.remove(request.params.id);

@@ -103,6 +103,7 @@ import type { Config } from './config';
 import { CommandStore } from './commands/store';
 import { ConversationManager, type TurnRoute, type ToolContext } from './conversations/manager';
 import { ConversationStore } from './conversations/store';
+import { ChatFolders } from './conversations/folders';
 import type { ApiEngine } from './engines/api';
 import { builtInEngines, serverEngine } from './engines/registry';
 import { appsNeeded } from './providers/apps';
@@ -267,6 +268,8 @@ export class Services {
   /** What routines spend, and the limits on it (ADR 0057). */
   readonly routineSpend: RoutineSpend;
   readonly conversations: ConversationManager;
+  /** The folders in the chat list (ADR 0089). */
+  readonly folders: ChatFolders;
   /** Questions the assistant asked, waiting for your answer (ADR 0060 §4). */
   readonly questions = new QuestionDesk();
   /** Every offer to turn something on in a chat goes through here (ADR 0060). */
@@ -668,6 +671,9 @@ export class Services {
     // The browser fills sign-in fields from Passwords, with your OK (ADR 0025).
     this.browser.passwords = this.vault;
     const conversationStore = new ConversationStore(join(config.CONCH_HOME, 'conversations'), heal);
+    this.folders = new ChatFolders(join(config.CONCH_HOME, 'conversations'), heal, (folders) =>
+      this.broadcast.emit({ type: 'folders.changed', folders }),
+    );
     // Undo (ADR 0030): never keeps or writes where keys live, or Conch's own folder.
     const secret = [...protectedPaths(config.CONCH_HOME), ...secretPlaces().map((p) => p.path)];
     this.undo = new UndoService({

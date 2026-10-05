@@ -25,6 +25,7 @@ import type {
   TurnProblem,
   Usage,
   ContextFill,
+  ChatChange,
 } from '@conch/protocol';
 
 import { honouredMode, skillHolds, type PermissionMode, type SkillHold } from '@conch/protocol';
@@ -793,11 +794,78 @@ export class ConversationManager {
    * chat keeps its place in search, and a turn still running carries on.
    */
   async archive(id: string, archived: boolean) {
-    const live = await this.#get(id);
-    if (Boolean(live.record.archivedAt) === archived) return;
-    live.record = { ...live.record, archivedAt: archived ? Date.now() : undefined };
-    await this.deps.store.upsert(live.record);
-    this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
+    await this.change(id, { archived });
+  }
+
+  /**
+   * Organise a chat from the list (ADR 0089): pin it or move it among the
+   * pinned, file it in a folder or take it out, archive it or bring it back.
+   * Archiving unpins it — the archive is where a chat goes to be out of the
+   * way — but keeps its folder, so it comes back where it was.
+   */
+  async change(id: string, change: ChatChange) {
+    const before = await this.#summaryRecord(id);
+    let next: ConversationRecord = { ...before };
+    if (change.archived !== undefined && Boolean(before.archivedAt) !== change.archived)
+      next.archivedAt = change.archived ? Date.now() : undefined;
+    if (change.pinned === false) next.pinned = undefined;
+    else if (
+      change.pinned === true ||
+      (change.pinOrder !== undefined && before.pinned !== undefined)
+    )
+      next.pinned = change.pinOrder ?? before.pinned ?? Date.now();
+    if (next.archivedAt && change.pinned !== true) next.pinned = undefined;
+    if (change.folder !== undefined) next.folderId = change.folder ?? undefined;
+    next = withoutUndefined(next);
+    if (
+      next.archivedAt === before.archivedAt &&
+      next.pinned === before.pinned &&
+      next.folderId === before.folderId
+    )
+      return;
+    await this.#saveRecord(next);
+  }
+
+  /** You have it open, here or on another device: nothing in it is new any more. */
+  async seen(id: string) {
+    const record = await this.#summaryRecord(id);
+    if (record.seenAt !== undefined && record.seenAt >= record.updatedAt) return;
+    await this.#saveRecord({ ...record, seenAt: Date.now() });
+  }
+
+  /**
+   * A chat's record, for changes to how it's listed: the live one when it's
+   * loaded, otherwise the index's — never its whole log, so changing many
+   * chats at once stays cheap.
+   */
+  async #summaryRecord(id: string): Promise<ConversationRecord> {
+    const record = this.#live.get(id)?.record ?? (await this.deps.store.get(id));
+    if (!record) throw new ConversationError('not-found', 'Conversation not found.');
+    return record;
+  }
+
+  async #saveRecord(next: ConversationRecord) {
+    const live = this.#live.get(next.id);
+    // Only the listing changed; anything a turn wrote meanwhile is kept.
+    const record = live
+      ? {
+          ...live.record,
+          archivedAt: next.archivedAt,
+          pinned: next.pinned,
+          folderId: next.folderId,
+          seenAt: next.seenAt,
+        }
+      : next;
+    const clean = withoutUndefined(record);
+    if (live) live.record = clean;
+    await this.deps.store.upsert(clean);
+    this.events.emit({ type: 'conversation.updated', conversation: summary(clean) });
+  }
+
+  /** A folder went: its chats go back to the list, nothing else about them changes. */
+  async unfile(folderId: string) {
+    for (const record of await this.deps.store.list())
+      if (record.folderId === folderId) await this.change(record.id, { folder: null });
   }
 
   /**
@@ -936,6 +1004,8 @@ export class ConversationManager {
         preview: said.slice(0, 140),
         createdAt: now,
         updatedAt: now,
+        // Started here, you're looking at it; from a chat app, its reply is news.
+        seenAt: input.origin ? 0 : now,
         status: 'idle',
         options: clean(input.options ?? {}),
         engine: engine.id,
@@ -2582,7 +2652,13 @@ export class ConversationManager {
         : outcome === 'error' && !next
           ? 'error'
           : 'idle';
-      live.record = { ...live.record, status, updatedAt: Date.now() };
+      // A chat from before Conch kept track starts now: this reply is new until it's seen.
+      live.record = {
+        ...live.record,
+        status,
+        updatedAt: Date.now(),
+        seenAt: live.record.seenAt ?? 0,
+      };
       this.#append(live, { type: 'status', status }, tail);
       await this.#persist(live);
       for (const event of tail) this.events.emit({ type: 'conversation.event', event });
@@ -3034,8 +3110,21 @@ export class ConversationManager {
 }
 
 function summary(record: ConversationRecord): ConversationSummary {
-  const { id, title, preview, createdAt, updatedAt, status, origin, titling, archivedAt, spend } =
-    record;
+  const {
+    id,
+    title,
+    preview,
+    createdAt,
+    updatedAt,
+    status,
+    origin,
+    titling,
+    archivedAt,
+    pinned,
+    folderId,
+    seenAt,
+    spend,
+  } = record;
   return {
     id,
     title,
@@ -3047,8 +3136,17 @@ function summary(record: ConversationRecord): ConversationSummary {
     options: record.options ?? {},
     ...(origin && { origin }),
     ...(archivedAt && { archivedAt }),
+    ...(pinned !== undefined && { pinned }),
+    ...(folderId && { folderId }),
+    ...(seenAt !== undefined && { seenAt }),
     ...(spend && { spend }),
   };
+}
+
+function withoutUndefined(record: ConversationRecord): ConversationRecord {
+  return Object.fromEntries(
+    Object.entries(record).filter(([, v]) => v !== undefined),
+  ) as unknown as ConversationRecord;
 }
 
 /** Drop unset keys so "no override" is stored as absence, not `undefined`. */

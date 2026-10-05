@@ -454,6 +454,12 @@ export const RULES: readonly BackupRule[] = [
     why: 'The chat list.',
   },
   {
+    match: 'conversations/folders.json',
+    class: 'kept',
+    group: 'chats',
+    why: 'The folders you sort your chats into.',
+  },
+  {
     match: 'conversations/*.jsonl',
     class: 'kept',
     group: 'chats',

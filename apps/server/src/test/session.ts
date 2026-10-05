@@ -105,6 +105,8 @@ export async function useConch(g: Gateway) {
       payload: { onboarded: true, persona: { name: 'Shelly' }, profile: { name: 'Ada' } },
     }),
   );
+  // A folder in the chat list (ADR 0089).
+  await ok(await app.inject({ method: 'POST', url: '/api/folders', payload: { name: 'Garden' } }));
   const memory = await ok(
     await app.inject({
       method: 'POST',

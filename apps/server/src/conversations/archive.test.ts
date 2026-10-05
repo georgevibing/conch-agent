@@ -129,7 +129,7 @@ describe('PATCH /api/conversations/:id', () => {
 
     expect((await patch({})).statusCode).toBe(400);
     expect((await patch({ archived: 'yes' })).statusCode).toBe(400);
-    expect((await patch({ pinned: true })).statusCode).toBe(400);
+    expect((await patch({ pinned: 'yes' })).statusCode).toBe(400);
     const missing = await app.inject({
       method: 'PATCH',
       url: '/api/conversations/c_nope',

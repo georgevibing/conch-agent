@@ -24,6 +24,7 @@ import {
 } from './chat-cards';
 import { BrowserHandoff, BrowserPermission, BrowserStatus, BrowserStep } from './browser';
 import { Channel, ChannelDoor, ChannelOrigin } from './channels';
+import { ChatChange, ChatFolder, FolderId } from './chat-list';
 import { ConchAppOffer, ConchAppShareCard } from './conch-apps';
 import { ChannelLink } from './linking';
 import {
@@ -62,6 +63,7 @@ export * from './address';
 export * from './apps';
 export * from './artifacts';
 export * from './chat-cards';
+export * from './chat-list';
 export * from './conch-apps';
 export * from './conch-apps-words';
 export * from './questions';
@@ -396,19 +398,31 @@ export const ConversationSummary = z.object({
    * it, or it needing you, puts it back.
    */
   archivedAt: z.number().optional(),
+  /** Pinned to the top of the list (ADR 0089): its place there, smallest first. */
+  pinned: z.number().optional(),
+  /** The folder it's filed in (ADR 0089). */
+  folderId: FolderId.optional(),
+  /**
+   * When you last had it open, on any device. Anything after is new to you
+   * (`isUnread`); absent for chats from before Conch kept track.
+   */
+  seenAt: z.number().optional(),
   /** What it has spent, its tasks included, and its own limit (ADR 0079). */
   spend: ChatSpend.optional(),
 });
 export type ConversationSummary = z.infer<typeof ConversationSummary>;
 
-/** Rename a conversation, archive it, or put it back — at least one of them. */
-export const UpdateConversationBody = z
-  .object({
-    title: z.string().trim().min(1).max(120).optional(),
-    archived: z.boolean().optional(),
-  })
+/**
+ * Rename a conversation, archive it or put it back, pin it, file it, or say
+ * you've seen it — at least one of them.
+ */
+export const UpdateConversationBody = ChatChange.extend({
+  title: z.string().trim().min(1).max(120).optional(),
+  /** You have it open: nothing in it is new any more. */
+  seen: z.literal(true).optional(),
+})
   .strict()
-  .refine((body) => body.title !== undefined || body.archived !== undefined, {
+  .refine((body) => Object.values(body).some((v) => v !== undefined), {
     message: 'Nothing to change.',
   });
 export type UpdateConversationBody = z.infer<typeof UpdateConversationBody>;
@@ -943,6 +957,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('conversation.updated'), conversation: ConversationSummary }),
   z.object({ type: z.literal('conversation.deleted'), conversationId: z.string() }),
+  /** The folders in the chat list, all of them, after any change (ADR 0089). */
+  z.object({ type: z.literal('folders.changed'), folders: z.array(ChatFolder) }),
   z.object({ type: z.literal('conversation.event'), event: ConversationEvent }),
   /**
    * The log this tab has seen doesn't match the gateway's (it restarted and lost the end of a
