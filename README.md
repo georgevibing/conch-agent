@@ -105,6 +105,9 @@
 
 - **Memory you can read.** Memories are Markdown files you can edit or forget.
   Search finds any line in months of chats, and "like last time" finds the chat it means.
+- **Learns by itself, and says so.** Once a chat goes quiet, Conch keeps what will
+  still matter: a correction, a move, what this computer needs. One quiet line at the
+  end of the chat shows it, with Undo and Why?. What you undo is never learned again.
 - **Skills from what worked.** After the assistant works something hard out, one
   press keeps how it did it as a skill. Nothing is saved or turned on until you say so.
   Or describe one in a sentence, and it writes the steps for you to read and change.

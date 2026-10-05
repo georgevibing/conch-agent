@@ -87,6 +87,8 @@ src/
   settings/store.ts           ~/.conch/settings.json and secrets.json (0600)
   memory/                     file-per-memory store, prompt builder, memory tools; hybrid search
                               (index, embed), the tidy-up, What Conch knows (ADR 0032)
+  learning/                   quiet learning: each chat read once it goes quiet, the gate, the
+                              record and the never-list, preferences near the question (ADR 0087)
   conversations/              manager (turns, permissions, events) + JSONL store
   attachments/                uploads: sniffing, storage + sweep, per-engine prompt, sandboxed serving (ADR 0017)
   vault/                      Passwords: encrypted vault, keychain, other managers, import, fills (ADR 0025)
@@ -169,7 +171,7 @@ src/
   provider's cheapest model, carried in front of the first kept message. It says so
   with a `compacted` event (where the kept turns start, from `TurnInput.seq`); the
   conversation logs `context.compacted` (the chat's quiet line, Nacre
-  `SummaryDivider`) and learns what the person said before it (`MemoryTidy.learn`).
+  `SummaryDivider`) and learns what the person said before it (`QuietLearning.review`).
   A "too long" refusal folds harder and goes again once, by itself, before it becomes
   the `too-long` problem. `/compact` is `POST /api/conversations/:id/compact`.
 - **Tools on every model** ([ADR 0072](./docs/adr/0072-every-model-gets-its-tools.md)).
@@ -443,12 +445,31 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   relevant ones, then the newest). Model vectors are cached in `memory-index.db`
   (derived, healed). `MemoryTidy` (on request, or nightly with `preferences.tidyMemory`)
   asks the cheapest model to merge, update and add. It applies changes with Undo, or
-  leaves them `pending` when they came from a tainted chat or `autoMemory` is off.
+  leaves them `pending` when they came from a tainted chat or `autoMemory` is off. An
+  update supersedes (`MemoryStore.supersede`); a merge that loses a number or a name
+  isn't made (`keepsDetail`).
   `remember` in a tainted chat saves `pending` too. Pending memories never reach the
   prompt, `recall` or the export. `SkillSuggester` finds requests made in three chats
   (by meaning when a model is here: average linkage over their vectors) and drafts a
   skill to review. Routes: `/api/memories/{search,export,:id/keep}`,
   `/api/memory/{index,index/model,tidy}`, `/api/skills/suggestions`.
+
+- **Quiet learning** ([ADR 0087](./docs/adr/0087-quiet-learning.md)). `QuietLearning`
+  (`learning/service.ts`) sweeps every few minutes for chats you were in that went quiet
+  with new words from you (archived chats at once; a long chat's start before it's
+  summarised). `signalsOf` reads Conch's own log by code (corrections, rephrasing, Stop,
+  Undo, a command that worked another way, which becomes a fact from a template). Only
+  when something lasting was said or corrected does the cheapest model of the provider
+  that answered read your words and step labels (`review.ts`), within `LearningSpend`'s
+  cap. Its `add`/`supersede` changes go through `gate` (`policy.ts`): dropped when not
+  grounded in your words, secret, about the assistant, a power or on the never-list;
+  waiting (a pending memory, or a record entry) after reading, with nobody watching or
+  over something you wrote; else applied. `LearningStore` keeps the record
+  (`learning/ledger.json`), the never-list and how far each chat was read. The chat gets
+  `learning.noted`/`learning.decided`; Nacre `LearnedLine`. A superseded memory moves to
+  `memory/superseded/`, which the version before doesn't read. `nearTheQuestion` puts
+  the few preferences that fit a message in front of it in `TurnInput.prompt`, never in
+  the system prompt or the log. Routes: `/api/learning/{answer,spending,chats/:id,never/remove,recap/seen}`.
 
 - **Skills from what worked** ([ADR 0058](./docs/adr/0058-skills-from-what-worked.md)).
   `SkillLearner` (`skills/learn.ts`) listens to the broadcast: a turn that ended well, a
@@ -788,7 +809,7 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   [ADR 0059 — Looking through earlier chats](./docs/adr/0059-looking-through-earlier-chats.md).
 - Local data lives in `~/.conch/` (`CONCH_HOME`): `settings.json`, `secrets.json`
   (the API key and a key per provider, or a 1Password reference to one),
-  `memory/*.md` (+ derived `memory-index.db`, `memory-tidy.json`, `models/`; `skill-suggestions.json`, `skill-learned.json`, `skill-usage.json`), `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`, `routines/when/*.json`; derived `routines/when/*.seen.json`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `search.db`,
+  `memory/*.md` (+ `memory/superseded/*.md`, `learning/*.json`, `learning-spend.json`; derived `memory-index.db`, `memory-tidy.json`, `models/`; `skill-suggestions.json`, `skill-learned.json`, `skill-usage.json`), `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`, `routines/when/*.json`; derived `routines/when/*.seen.json`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `search.db`,
   `integrations.json` + `integrations.secrets.json`, `skills/<name>/SKILL.md` +
   `skills.json` (modes for skills Conch doesn't own), `local.json` (the local model chosen, the last download speed), `api-sessions/<id>.json` (the
   transcript a plain model API needs, since it keeps no session of its own),
