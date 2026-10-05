@@ -1,10 +1,62 @@
 ---
 title: Your chats
-description: Write and queue messages, answer its questions with a tap, send what to say next, rename, archive, find or delete a chat, and keep a long one going.
+description: Pin, file and tidy your chats, see which need you, write and queue messages, answer its questions with a tap, and keep a long chat going.
 order: 12
 ---
 
-Your chats are in the sidebar, newest first, grouped by day. Point at one and press **⋯** for what you can do with it.
+Your chats are in the sidebar. Point at one and press **⋯**, or right-click it, for what you can do with it. On a phone, press and hold.
+
+## Your list
+
+From the top, the sidebar shows:
+
+- **Pinned apps.** App pages you pinned, as a row of app tiles. Each tile has its app's icon. Point at one to see where it's from, like "Page of the Tally app". Right-click a tile, or press and hold it, for **Unpin** and the app's details.
+- **Needs you.** Chats waiting for you to allow or answer something stay here until you do.
+- **Pinned.** Chats you keep at the top.
+- **Folders.** Your own groups of chats.
+- **Everything else, by when.** Today, Yesterday, Previous 7 days, Previous 30 days, then one group per month.
+- **Archived**, at the end.
+
+You only see a part once there's something in it.
+
+### What each chat is doing
+
+A small mark beside a chat says what's happening in it:
+
+- **The pearl:** it's working.
+- **An amber dot:** it needs you.
+- **A dot and a bolder title:** something new happened while you were elsewhere, like a reply that finished or a message from a [chat app](../channels/index.md). Open the chat and the mark goes, on your phone too.
+- **A red dot:** the last reply didn't finish.
+
+The menu beside **Chats** shows **All chats**, only what's **New**, or only chats **From chat apps**.
+
+### Pin a chat
+
+Choose **Pin** to keep a chat at the top. There's no limit. Drag pinned chats to put them in your own order, or use **Move up** and **Move down**. Archiving a chat unpins it.
+
+### Folders
+
+Choose **Move to → New folder…**. Give the folder a name, and pick a mark and a colour. Then:
+
+- Drag chats onto a folder, or choose **Move to** and the folder.
+- Press a folder's name to fold or unfold it.
+- Press **⋯** beside a folder to **Edit** or **Remove** it. Removing a folder puts its chats back in your list. It deletes nothing.
+
+Folders only sort your chats. They don't change how your assistant answers.
+
+### Many at once
+
+Hold <kbd>mod</kbd> or <kbd>shift</kbd> and click chats to select them, or choose **Select** from a chat's menu. A bar at the bottom offers **Pin**, **Move to**, **Archive** and **Delete**. **Done** or <kbd>esc</kbd> ends it.
+
+### On a phone
+
+Swipe a chat to the right to pin it, or to the left to archive it. **Undo** puts it back.
+
+### Tidy up
+
+Once a few chats haven't been touched for a month, a note at the end of the list offers **Archive them**. It leaves out anything pinned, in a folder, working, waiting for you or new. Nothing is archived until you press it, and **Undo** brings them back. **Not now** hides the note.
+
+<kbd>alt+up</kbd> and <kbd>alt+down</kbd> go to the chat above or below. Double-click a title to rename it.
 
 ## Writing a message
 
@@ -131,4 +183,5 @@ Type `/compact`, or press **Compact now**, to summarise the start now. Add what 
 
 - Chats from your [chat apps](../channels/index.md) archive the same way. A new message from there brings the chat back.
 - Routines, tasks and pinned apps keep their runs on their own pages, so they're never in this list or the archive.
-- Archiving is kept with the chat, so it's in your [backups](../care/backups.md) too.
+- Archiving, pins and folders are kept with your chats, so they're in your [backups](../care/backups.md) too.
+- In <kbd>mod+k</kbd>, type a folder's name to open it, or **Pin this chat**, **Move this chat to…** or **New folder**.

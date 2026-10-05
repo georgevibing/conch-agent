@@ -53,7 +53,7 @@ At the top of the panel are **Copy**, **Download**, **Pin as an app** and **Full
 
 ## Pin it as an app
 
-**Pin as an app** puts it in the sidebar under **Apps**, on a page of its own, one press from anywhere.
+**Pin as an app** puts it at the top of the sidebar as an app tile, on a page of its own, one press from anywhere. Right-click the tile, or press and hold it, to unpin it.
 
 When the numbers have moved on, press **Refresh**. Your assistant gets fresh data and makes a new version. It does that in a chat of its own, which can only update that one thing. **Watch it refresh** opens that chat.
 

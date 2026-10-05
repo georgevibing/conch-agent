@@ -35,7 +35,7 @@ Nothing is added until you press the button. Your assistant can make an app and 
 
 Talk to your assistant as you would anyway. It knows the apps you have and what each one is for, so "I watered the fern" goes to your plant diary without you naming it.
 
-An app with a page has it in the sidebar, under **Pinned**, and on its page in **Apps**. Buttons in the page work at once when you press them. If a page tries to change something without a press, Conch asks you first.
+An app with a page has it at the top of the sidebar, as a tile with the app's icon, and on its page in **Apps**. Buttons in the page work at once when you press them. If a page tries to change something without a press, Conch asks you first.
 
 Switched an app off? Ask for something it does, and the chat offers it back with **Turn on**, then carries on.
 
