@@ -271,6 +271,8 @@ the app: the pictures are the components themselves, playing a short script.
   picture. A tile can be `live` instead: the real component, left in reach, where using
   it says more than watching it. `Facts` is a row of numbers in the serif; `Marquee`
   drifts a long list of logos (`LogoChip`) past, slowly, and stops under the pointer.
+  `LogoRow` fits catalog marks into one row, reserving room for “+N more” when
+  they exceed the available width. It measures again as the card or text changes size.
 - **Holding still** (`Steady`). A picture that plays is the same size from its first
   moment to its last, at every width: the tallest moments lie under the one showing,
   unseen, and hold the room. Nothing on the page moves because a picture did.

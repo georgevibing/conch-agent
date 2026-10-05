@@ -1,4 +1,4 @@
-import { IntegrationLogo, Pearl, Surface, Text } from '@conch/nacre';
+import { LogoRow, Pearl, Surface, Text } from '@conch/nacre';
 import { ArrowLeftRight, Laptop, MessagesSquare, Smartphone } from 'lucide-react';
 import type { ReactNode } from 'react';
 import reference from 'virtual:conch-reference';
@@ -48,19 +48,7 @@ export function HowItWorks() {
         Keeps your chats, memory, skills, apps and routines. Asks before anything that matters.
       </Part>
       <Between />
-      <Part
-        title="Your providers"
-        mark={reference.providers.map((provider) => (
-          <IntegrationLogo
-            key={provider.id}
-            brand={provider.id}
-            name={provider.name}
-            color={provider.color}
-            size="xs"
-            decorative
-          />
-        ))}
-      >
+      <Part title="Your providers" mark={<LogoRow items={reference.providers} decorative />}>
         The assistants and models you connect. All of them answer, from one picker.
       </Part>
     </ol>

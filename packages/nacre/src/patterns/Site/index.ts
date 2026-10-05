@@ -4,6 +4,8 @@ export { Facts } from './Facts';
 export type { FactProps, FactsProps } from './Facts';
 export { LogoChip } from './LogoChip';
 export type { LogoChipProps } from './LogoChip';
+export { LogoRow } from './LogoRow';
+export type { LogoRowProps } from './LogoRow';
 export { Marquee } from './Marquee';
 export type { MarqueeProps } from './Marquee';
 export { Reveal, useInView } from './Reveal';

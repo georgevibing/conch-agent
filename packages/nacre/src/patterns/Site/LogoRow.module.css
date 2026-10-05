@@ -1,0 +1,27 @@
+@layer nacre.components {
+  .row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    inline-size: 100%;
+    min-inline-size: 0;
+    overflow: clip;
+    padding-block: var(--nc-space-0-5);
+  }
+
+  .more {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .measure {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: inherit;
+    inline-size: max-content;
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
