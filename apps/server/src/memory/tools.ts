@@ -20,6 +20,13 @@ export function memoryTools(options: {
    * at once and the chat says so, with Undo.
    */
   waits?: () => boolean;
+  /** Memories that stopped being true, for questions about before (ADR 0087). */
+  searchPast?: (query: string) => Promise<Memory[]>;
+  /**
+   * The person took this back once (ADR 0087 § 6): what the assistant tries to
+   * remember again waits for their OK.
+   */
+  never?: (content: string) => Promise<boolean>;
 }): HostTool[] {
   const { store, conversationId } = options;
   const remember: HostTool<{ content: z.ZodString; kind: z.ZodOptional<typeof MemoryKind> }> = {
@@ -32,6 +39,8 @@ export function memoryTools(options: {
       // remembered with where it came from, and waits for an OK only when nobody can undo it.
       const untrusted = options.untrusted?.();
       const waits = Boolean(untrusted) && (options.waits?.() ?? true);
+      // Something the person took back once waits for them, wherever it comes from (ADR 0087).
+      const refused = await options.never?.(content).catch(() => false);
       const memory = await store.add({
         content,
         kind,
@@ -41,8 +50,14 @@ export function memoryTools(options: {
           ...(waits && { pending: true }),
           untrusted: `Learned in a chat that ${untrusted.replace(/^This chat /, '').replace(/, which could be trying to steer me\.$/, '')}.`,
         }),
+        ...(refused && {
+          pending: true,
+          untrusted: 'You took this back once, so it waits for your OK.',
+        }),
       });
       options.onSaved(memory);
+      if (refused && memory.pending)
+        return `Noted as ${memory.id}, waiting for the user's OK: they took this back once before.`;
       return memory.pending
         ? `Noted as ${memory.id}, waiting for the user's OK before it's remembered (this chat read something from outside).`
         : `Saved to memory as ${memory.id}.`;
@@ -67,10 +82,24 @@ export function memoryTools(options: {
       const results = options.search
         ? (await options.search(query)).map((r) => r.memory)
         : (await store.search(query)).filter((m) => !m.pending);
-      return results.length
-        ? results.map((m) => `[${m.id}] (${m.kind}) ${m.content}`).join('\n')
-        : 'Nothing relevant in memory.';
+      // What used to be true, dated, for questions about before (ADR 0087).
+      const past = (await options.searchPast?.(query).catch(() => [])) ?? [];
+      const lines = [
+        ...results.map((m) => `[${m.id}] (${m.kind}) ${m.content}`),
+        ...(past.length
+          ? [
+              'No longer true (kept for questions about before):',
+              ...past.map((m) => `- ${m.content} (until ${until(m.invalidAt ?? m.updatedAt)})`),
+            ]
+          : []),
+      ];
+      return lines.length ? lines.join('\n') : 'Nothing relevant in memory.';
     },
   };
   return [remember, forget, recall] as HostTool[];
+}
+
+/** "August 2026": when a memory stopped being true. */
+function until(at: number): string {
+  return new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(at);
 }

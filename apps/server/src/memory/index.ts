@@ -246,6 +246,24 @@ export class MemoryIndex {
   }
 
   /**
+   * Memories that stopped being true (ADR 0087), best match first, by words
+   * alone: they're few, and only `recall` asks, for questions about before.
+   */
+  async searchPast(query: string, limit = 5): Promise<Memory[]> {
+    const past = await this.deps.store.listPast();
+    const q = tokens(query);
+    if (!past.length || !q.length) return [];
+    const docs = past.map((m) => withConcepts(tokens(m.content)));
+    const scores = bm25(withConcepts(forgive(q, docs)), docs);
+    return past
+      .map((memory, i) => ({ memory, score: scores[i] ?? 0 }))
+      .filter((s) => s.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map((s) => s.memory);
+  }
+
+  /**
    * The memories this turn's prompt carries. All of them while they fit (the
    * same every turn, so the provider's prompt cache keeps working); beyond
    * that, the ones that match what was just said, then the newest.

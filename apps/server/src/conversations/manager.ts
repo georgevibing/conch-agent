@@ -587,6 +587,8 @@ export class ConversationManager {
       memoryIndex?: {
         forPrompt(said: string): Promise<{ memories: Memory[]; total: number }>;
         search(query: string, limit?: number): Promise<{ memory: Memory }[]>;
+        /** Memories that stopped being true, for `recall` (ADR 0087). */
+        searchPast?(query: string): Promise<Memory[]>;
       };
       /** The provider for a turn: the one a conversation chose, else the default. */
       engine: (id?: EngineId) => Engine;
@@ -1667,6 +1669,9 @@ export class ConversationManager {
       conversationId,
       ...(this.deps.memoryIndex && {
         search: (q: string) => this.deps.memoryIndex?.search(q) ?? Promise.resolve([]),
+      }),
+      ...(this.deps.memoryIndex?.searchPast && {
+        searchPast: (q: string) => this.deps.memoryIndex?.searchPast?.(q) ?? Promise.resolve([]),
       }),
       // Learned in a chat that read something untrusted (ADR 0032): noted, and remembered at
       // once where you can see it and undo it; a routine or a chat app waits for an OK.
