@@ -429,8 +429,13 @@ onMessage(async (m) => {
   await t('eval', () => eval('1'));
   const seen = JSON.stringify({ env: process.env, argv: process.argv, execArgv: process.execArgv });
   results.leaks = seen.includes(m.settings.apiKey) || seen.includes('CONCH_TEST_GATEWAY_SECRET');
-  // Windows needs SYSTEMROOT to start a process; everything else is empty or absent.
-  results.env = Object.entries(process.env).filter(([k, v]) => v && k.toUpperCase() !== 'SYSTEMROOT').map(([k]) => k);
+  // Windows needs SYSTEMROOT. CoreFoundation may add its encoding cache on macOS
+  // even with env: {} (Apple CFStringEncodings.c, _CFStringGetUserDefaultEncoding).
+  // The real host's hidden process.env is checked separately above.
+  const systemKey = (k) =>
+    (process.platform === 'win32' && k.toUpperCase() === 'SYSTEMROOT') ||
+    (process.platform === 'darwin' && k === '__CF_USER_TEXT_ENCODING');
+  results.env = Object.entries(process.env).filter(([k, v]) => v && !systemKey(k)).map(([k]) => k);
   results.flags = process.execArgv;
   send({ t: 'ready', tools: [{ name: 'probe', title: null, description: JSON.stringify(results), input: null, changes: null, runs: true }] });
 });
@@ -476,6 +481,7 @@ describe('the permission model holds, whatever the code in the process', () => {
         env: [],
       });
       expect(sealedEnv('linux')).toEqual({});
+      expect(sealedEnv('darwin')).toEqual({});
       expect(results.flags).toEqual(
         expect.arrayContaining(['--permission', '--disallow-code-generation-from-strings']),
       );

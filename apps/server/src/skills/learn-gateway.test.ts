@@ -73,6 +73,11 @@ describe('save how I did this, through the gateway and the mock engine', () => {
       expect(usage.from[created.id]).toMatchObject({ origin: 'learned' });
 
       // Using it by name is counted, as it's asked for (not once the answer is done).
+      const finished = new Set<string>();
+      const off = services.conversations.events.on((event) => {
+        if (event.type === 'conversation.event' && event.event.type === 'turn.completed')
+          finished.add(event.event.conversationId);
+      });
       const used = await services.conversations.send({
         clientMessageId: 'use-it',
         text: `/${created.id} for 1.4`,
@@ -86,6 +91,10 @@ describe('save how I did this, through the gateway and the mock engine', () => {
         JSON.parse(await readFile(join(home, 'skill-usage.json'), 'utf8')).used,
       ).toHaveProperty(created.id);
       await services.conversations.interrupt(used.id);
+      // Stop requests cancellation; the completion event arrives after the final
+      // writes. Don't remove the gateway's temporary home while they are in flight.
+      await expect.poll(() => finished.has(used.id)).toBe(true);
+      off();
 
       // The shelf is empty: it's new, and it was just used.
       expect(

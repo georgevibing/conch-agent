@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -18,8 +18,8 @@ let world: World;
 let outside: string;
 
 beforeAll(async () => {
-  const home = await mkdtemp(join(tmpdir(), 'conch-eval-test-'));
-  outside = await mkdtemp(join(tmpdir(), 'conch-eval-outside-'));
+  const home = await realpath(await mkdtemp(join(tmpdir(), 'conch-eval-test-')));
+  outside = await realpath(await mkdtemp(join(tmpdir(), 'conch-eval-outside-')));
   await mkdir(join(home, 'workspace'));
   await writeFile(join(outside, 'secret.txt'), 'no');
   world = {

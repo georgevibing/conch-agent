@@ -203,9 +203,12 @@ describe.skipIf(!hasBrowser)('tabs, for real', () => {
       // …and someone looking at the chat opens them again, the same one in view.
       const looking = watcher();
       service.watch('conv_back', looking.w);
-      await expect.poll(() => service.tabIfOpen('conv_back')?.tabs.length).toBe(3);
+      // Starting a real browser under suite load can outlast the default one-second poll.
+      await expect
+        .poll(() => service.tabIfOpen('conv_back')?.tabs.length, { timeout: 10_000 })
+        .toBe(3);
       const again = service.tabIfOpen('conv_back');
-      await expect.poll(() => again?.page.url()).toBe(`${origin}/b`);
+      await expect.poll(() => again?.page.url(), { timeout: 10_000 }).toBe(`${origin}/b`);
       expect(looking.events.some((e) => e.type === 'tab' && e.tab === null && e.restoring)).toBe(
         true,
       );
