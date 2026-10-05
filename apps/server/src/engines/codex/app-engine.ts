@@ -559,7 +559,14 @@ export class CodexEngine implements Engine {
       engine: this.id,
       label: this.label,
       models: [],
-      commands: [],
+      // Codex summarises its own thread when asked (`thread/compact/start`).
+      commands: [
+        {
+          name: 'compact',
+          description: 'Summarise the conversation so far, to make room',
+          argumentHint: '',
+        },
+      ],
       permissionModes: ['default', 'plan', 'acceptEdits', 'bypassPermissions'],
       tools: { host: true, files: true, shell: true, approvals: true },
       attachments: this.attachments,
@@ -719,8 +726,22 @@ export class CodexEngine implements Engine {
           });
           void done.catch(() => {});
           rpc.onFailure(fail);
+          /** `/compact`: Codex summarises the thread so far instead of taking a turn. */
+          const compacting = /^\/compact(\s|$)/i.test(input.prompt.trim());
+          let compacted = false;
           const onMessage = (message: RpcMessage) => {
             const p = object(message.params);
+            if (
+              compacting &&
+              !compacted &&
+              (message.method === 'thread/compacted' ||
+                (message.method === 'item/completed' &&
+                  object(p.item).type === 'contextCompaction'))
+            ) {
+              compacted = true;
+              emit({ type: 'compacted', summary: '', turns: 0 });
+              complete();
+            }
             if (message.id !== undefined && message.method) {
               if (message.method === 'item/tool/call') {
                 const job = toolTail.then(async () => {
@@ -903,9 +924,22 @@ export class CodexEngine implements Engine {
                 inputTokens: z.number().nonnegative(),
                 outputTokens: z.number().nonnegative(),
                 cachedInputTokens: z.number().nonnegative().optional(),
+                totalTokens: z.number().nonnegative().optional(),
               });
               const total = counts.safeParse(object(p.tokenUsage).total);
               const last = counts.safeParse(object(p.tokenUsage).last);
+              // How full the thread is: its latest request, read and answered, of the window.
+              const window = z
+                .number()
+                .int()
+                .positive()
+                .safeParse(object(p.tokenUsage).modelContextWindow);
+              const context = last.success
+                ? {
+                    used: last.data.totalTokens ?? last.data.inputTokens + last.data.outputTokens,
+                    ...(window.success && { window: window.data }),
+                  }
+                : undefined;
               if (total.success) {
                 before ??= {
                   inputTokens: Math.max(0, total.data.inputTokens - (last.data?.inputTokens ?? 0)),
@@ -928,7 +962,7 @@ export class CodexEngine implements Engine {
                   ...(cached > 0 && { cachedInputTokens: cached }),
                 };
                 // A running total, so an unattended run can stop at its limit (ADR 0057).
-                emit({ type: 'usage', usage });
+                emit({ type: 'usage', usage, ...(context && { context }) });
               }
             }
             if (message.method === 'turn/completed') {
@@ -1004,6 +1038,21 @@ export class CodexEngine implements Engine {
               !resumed &&
               (!wanted || wanted.tools === toolsKey) && { restarted: 'lost' as const }),
           });
+          if (compacting) {
+            if (resumed) await rpc.request('thread/compact/start', { threadId });
+            else {
+              const said = newId('msg');
+              emit({
+                type: 'text',
+                messageId: said,
+                delta: 'There’s nothing to summarise yet: this conversation is just getting going.',
+              });
+              emit({ type: 'message-done', messageId: said });
+              complete();
+            }
+            await done;
+            return;
+          }
           // A carried-on thread gets what it missed; a new one, the whole conversation.
           const text = resumed ? input.prompt : (input.freshPrompt ?? input.prompt);
           const startedTurn = object(

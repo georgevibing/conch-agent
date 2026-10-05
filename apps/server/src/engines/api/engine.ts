@@ -206,6 +206,8 @@ interface Fitting {
   healed?: boolean;
   /** What the summary cost, added to the turn's. */
   spent?: (usage: Usage | undefined) => void;
+  /** How much a request may read before older turns are summarised: the meter's full mark. */
+  room?: number;
 }
 
 /** A notice the engine may need to emit from inside a retry loop. */
@@ -1058,14 +1060,21 @@ export class ApiEngine implements Engine {
         session.messages.push(end.message);
         if (said) yield { type: 'message-done', messageId };
 
+        // What this request read is how full the chat is now; the reply joins it next time.
+        const context = end.usage?.inputTokens
+          ? {
+              used: end.usage.inputTokens + (end.usage.outputTokens ?? 0),
+              ...(fitting.room && { window: fitting.room }),
+            }
+          : undefined;
         if (!end.toolCalls.length) {
           await save();
-          yield { type: 'done', outcome: 'success', usage: usage() };
+          yield { type: 'done', outcome: 'success', usage: usage(), ...(context && { context }) };
           return;
         }
 
         // Another request follows: say what the turn has used so far (ADR 0057).
-        yield { type: 'usage', usage: usage() };
+        yield { type: 'usage', usage: usage(), ...(context && { context }) };
 
         const results: ToolResult[] = [];
         let stopped = false;
@@ -1228,6 +1237,7 @@ export class ApiEngine implements Engine {
       system: count(fitting.system),
       tools: count(fitting.specs),
     });
+    fitting.room = budget + count(fitting.system) + count(fitting.specs);
     const summaryCost = session.summary
       ? Math.ceil(textTokens(preface(session.summary.text)) * factor)
       : 0;

@@ -24,6 +24,7 @@ import type {
   TurnPause,
   TurnProblem,
   Usage,
+  ContextFill,
 } from '@conch/protocol';
 
 import { honouredMode, skillHolds, type PermissionMode, type SkillHold } from '@conch/protocol';
@@ -434,6 +435,8 @@ interface Live {
 
 /** How often a running turn's log is saved: a crash loses this much, not the whole turn. */
 const CHECKPOINT_MS = 10_000;
+/** How often, at most, a running turn tells the chat what it has used (`turn.usage`). */
+const USAGE_EVERY_MS = 750;
 
 /** How many times in a row a chat is picked up again by itself after Conch stopped under it. */
 const MAX_AUTO_RESUMES = 2;
@@ -1865,6 +1868,9 @@ export class ConversationManager {
       ? handoff(live.events, { afterSeq: -1, beforeSeq: asked, restart: true })
       : undefined;
     let answeredWith: string | undefined;
+    /** How full the context is, as the engine last said; and when the chat last heard the count. */
+    let context: ContextFill | undefined;
+    let usageSaidAt = 0;
     const integrations = this.deps.integrations;
     const appendIssue = (issue: IntegrationIssueInput) =>
       this.#append(live, { type: 'integration.issue', ...issue });
@@ -2319,6 +2325,16 @@ export class ConversationManager {
             );
             break;
           case 'usage': {
+            if (event.context) context = event.context;
+            // The chat sees the count go up as it works, a few times a second at most.
+            if (Date.now() - usageSaidAt >= USAGE_EVERY_MS) {
+              usageSaidAt = Date.now();
+              this.#append(live, {
+                type: 'turn.usage',
+                usage: event.usage,
+                ...(context && { context }),
+              });
+            }
             extras?.onUsage?.(event.usage, { engine, model: answeredWith ?? resolved.model });
             const spent = watch && desk?.usd(event.usage, answeredWith ?? resolved.model);
             if (watch && spent !== undefined && !capped) {
@@ -2333,6 +2349,7 @@ export class ConversationManager {
           }
           case 'done':
             outcome = event.outcome;
+            if (event.context) context = event.context;
             completed = {
               usage: event.usage,
               error: event.error,
@@ -2389,6 +2406,7 @@ export class ConversationManager {
           outcome,
           usage: completed?.usage,
           ...(cost && { cost }),
+          ...(context && { context }),
           ...(problem && { problem }),
           // A spending limit stops the turn with its own card: never a pause beside it (ADR 0085).
           ...(completed?.paused && !capped && { paused: completed.paused }),

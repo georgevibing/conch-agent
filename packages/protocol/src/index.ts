@@ -34,6 +34,7 @@ import {
   TurnOptions,
   TurnPause,
   TurnProblem,
+  ContextFill,
   Usage,
 } from './common';
 import { DoctorReport } from './doctor';
@@ -597,6 +598,17 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     by: z.string().max(80).optional(),
   }),
   z.object({ ...logged, type: z.literal('status'), status: ConversationStatus }),
+  /**
+   * What the running turn has used so far, and how full the context is, as it goes: a live
+   * reading for the chat to show, never kept in the chat's history (`turn.completed` keeps
+   * the last word).
+   */
+  z.object({
+    ...logged,
+    type: z.literal('turn.usage'),
+    usage: Usage,
+    context: ContextFill.optional(),
+  }),
   z.object({
     ...logged,
     type: z.literal('turn.completed'),
@@ -617,6 +629,8 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     model: z.string().optional(),
     /** What it cost, the way its provider charges (ADR 0079). */
     cost: TurnCost.optional(),
+    /** How full the context was when it ended, for the composer's meter. */
+    context: ContextFill.optional(),
   }),
   z.object({ ...logged, type: z.literal('title'), title: z.string() }),
   /**

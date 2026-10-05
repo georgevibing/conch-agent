@@ -17,7 +17,11 @@ export async function fakeCodexApp(
     /** Steps of a `turn/plan/updated`, sent before the answer. */
     plan?: unknown[];
     /** `thread/tokenUsage/updated`s, sent before the answer: the thread's running `total` and the request's own `last`. */
-    tokenUsage?: { total: Record<string, number>; last: Record<string, number> }[];
+    tokenUsage?: {
+      total: Record<string, number>;
+      last: Record<string, number>;
+      modelContextWindow?: number;
+    }[];
     /**
      * Codex CLI's own work (ADR 0066): announce a command or a change, ask to
      * approve it, then run it (or not) as the answer says.
@@ -103,6 +107,12 @@ rl.createInterface({input:process.stdin}).on('line', line => {
    if (OPTIONS.native.command) note('item/completed',{threadId:TID,turnId:'turn1',item:{type:'commandExecution',id:'cmd1',command:OPTIONS.native.command,cwd:'/work',status:ok?'completed':'declined',aggregatedOutput:ok?'ran it':null,exitCode:ok?0:null}});
    else note('item/completed',{threadId:TID,turnId:'turn1',item:{type:'fileChange',id:'fc1',status:ok?'completed':'declined',changes:OPTIONS.native.paths.map(p=>({path:p,kind:{type:'update',move_path:null},diff:''}))}});
    complete();
+ }
+ else if (m.method === 'thread/compact/start') {
+   reply({});
+   note('item/started',{threadId:TID,turnId:'turn2',item:{type:'contextCompaction',id:'c1'}});
+   note('item/completed',{threadId:TID,turnId:'turn2',item:{type:'contextCompaction',id:'c1'}});
+   note('turn/completed',{threadId:TID,turn:{id:'turn2',status:'completed'}});
  }
  else if (m.method === 'turn/interrupt') { reply({}); note('turn/completed',{threadId:TID,turn:{id:'turn1',status:'interrupted'}}); }
 });

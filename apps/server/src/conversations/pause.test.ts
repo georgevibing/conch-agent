@@ -14,7 +14,7 @@ import { hostToolText, type Engine, type EngineEvent, type TurnInput } from '../
 import { MemoryStore } from '../memory/store';
 import { SettingsStore } from '../settings/store';
 import { ConversationManager } from './manager';
-import { ConversationStore } from './store';
+import { compact, ConversationStore } from './store';
 
 /** An engine scripted per test; `own` says it keeps the budget itself. */
 class Scripted implements Engine {
@@ -170,5 +170,36 @@ describe('pausing to check in (ADR 0085)', () => {
     // The engine heard about the loop in the answer it read, before it was paused.
     expect(heard[2]).toContain('From Conch');
     expect(heard.length).toBeLessThan(12);
+  });
+});
+
+describe('what a turn uses, as it goes', () => {
+  it('tells the chat the count and how full it is while it works, and keeps only the last word', async () => {
+    const engine = new Scripted(async function* () {
+      const context = { used: 1_010, window: 200_000 };
+      yield { type: 'usage', usage: { inputTokens: 1_000, outputTokens: 10 }, context };
+      // Hard on the last: the chat isn't told every one.
+      yield { type: 'usage', usage: { inputTokens: 2_000, outputTokens: 20 }, context };
+      yield {
+        type: 'done',
+        outcome: 'success',
+        usage: { inputTokens: 5_000, outputTokens: 40 },
+        context: { used: 5_040, window: 200_000 },
+      };
+    }, true);
+    const manager = await setup(engine);
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'Hello' });
+    const events = await finished(manager, convo.id);
+    const live = events.filter((e) => e.type === 'turn.usage');
+    expect(live).toHaveLength(1);
+    expect(live[0]).toMatchObject({
+      usage: { inputTokens: 1_000, outputTokens: 10 },
+      context: { used: 1_010, window: 200_000 },
+    });
+    expect(events.find((e) => e.type === 'turn.completed')).toMatchObject({
+      context: { used: 5_040, window: 200_000 },
+    });
+    // The live readings aren't history.
+    expect(compact(events).some((e) => e.type === 'turn.usage')).toBe(false);
   });
 });

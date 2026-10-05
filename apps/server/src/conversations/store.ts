@@ -220,7 +220,10 @@ export function recordFromLog(
   };
 }
 
-/** Merge consecutive deltas of the same message and kind; keeps the last `seq`. */
+/**
+ * Merge consecutive deltas of the same message and kind; keeps the last `seq`. Live readings
+ * (status, the running count) aren't history: `turn.completed` keeps the last word.
+ */
 export function compact(events: ConversationEvent[]): ConversationEvent[] {
   const out: ConversationEvent[] = [];
   for (const event of events) {
@@ -232,7 +235,7 @@ export function compact(events: ConversationEvent[]): ConversationEvent[] {
       prev.kind === event.kind
     ) {
       out[out.length - 1] = { ...event, delta: prev.delta + event.delta };
-    } else if (event.type !== 'status') {
+    } else if (event.type !== 'status' && event.type !== 'turn.usage') {
       out.push(event);
     }
   }

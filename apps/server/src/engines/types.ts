@@ -13,6 +13,7 @@ import type {
   ToolView,
   TurnPause,
   TurnProblem,
+  ContextFill,
   Usage,
   UsageKind,
   UsageWindow,
@@ -342,7 +343,12 @@ export type EngineEvent =
    * that know it before the end — so an unattended run can stop at its limit
    * (ADR 0057). The `done` event's usage stays the final word.
    */
-  | { type: 'usage'; usage: Usage }
+  | {
+      type: 'usage';
+      usage: Usage;
+      /** How full the model's context is now (its latest request), when the engine knows. */
+      context?: ContextFill;
+    }
   | {
       type: 'done';
       outcome: 'success' | 'interrupted' | 'error';
@@ -352,6 +358,8 @@ export type EngineEvent =
       problem?: TurnProblem;
       /** It stopped to check in, with room to carry on (ADR 0085). Only with `success`. */
       paused?: TurnPause;
+      /** How full the model's context is at the end, when the engine knows. */
+      context?: ContextFill;
     };
 
 /** A one-shot, tool-less request for small housekeeping jobs (e.g. naming a chat). */
