@@ -337,7 +337,7 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
       tiles at most. A picture that plays never changes size (Nacre `Steady`),
       so nothing under it moves.
     - **Every page is found by search.** The site is drawn ahead of time and
-      published at conchagent.com (`SITE_URL`); each page's title and
+      published at conchagent.com (`SITE_URL`, ADR 0093: verified stable, or validated main before the first stable; `/docs/next/` follows validated main); each page's title and
       `description` become what a search result and a shared link show
       (`src/site/head.ts`). Give a new page a `description` of one sentence, at
       most 160 characters, and a title no other page has:

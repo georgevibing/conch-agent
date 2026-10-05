@@ -96,7 +96,7 @@ function Article({ page }: { page: Page }) {
           <footer className={styles.foot}>
             <Button variant="ghost" tone="neutral" size="sm" leadingIcon={<PencilLine />} asChild>
               <a href={fileUrl(page.file)} target="_blank" rel="noreferrer">
-                Edit this page
+                View page source
               </a>
             </Button>
             <DocsPager>

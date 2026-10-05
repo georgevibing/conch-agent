@@ -5,6 +5,8 @@ import { nacreCssModules } from '@conch/nacre/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
+import { conchPublication } from './publishing/plugin.ts';
+
 import { conchReference } from './reference/plugin.ts';
 
 const REPO = resolve(import.meta.dirname, '../..');
@@ -12,7 +14,7 @@ const REPO = resolve(import.meta.dirname, '../..');
 export default defineConfig({
   // `CONCH_DOCS_BASE=/conch-agent/ pnpm docs:build` for a site served from a folder.
   base: process.env.CONCH_DOCS_BASE ?? '/',
-  plugins: [react(), conchReference()],
+  plugins: [react(), conchReference(), conchPublication(REPO)],
   // Every page is drawn ahead of time (scripts/prerender.mjs): the manifest says which
   // code and styles each one loads, and the build for Node takes Nacre's source as it is.
   build: { manifest: true },

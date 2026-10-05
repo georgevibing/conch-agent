@@ -264,6 +264,11 @@ for a week. It's in **Settings → Memory**, or `pnpm conch import`.
 
 ## Documentation
 
+[Read the docs](https://conchagent.com/docs/) for the latest stable release, or
+validated development version before the first stable. [Development docs](https://conchagent.com/docs/next/)
+follow validated `main`. [Release notes](https://conchagent.com/releases/) include
+stable, beta and alpha versions.
+
 `pnpm docs:dev` serves the site at http://localhost:4400: guides for every
 provider, chat app and feature, plus a reference for the command line,
 configuration and API that's read from the code. The sources:

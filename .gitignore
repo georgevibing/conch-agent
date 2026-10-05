@@ -24,3 +24,6 @@ playwright-report/
 
 # The eval suite's results (pnpm eval, ADR 0071).
 /.evals/
+
+# Website publishing checkouts and public build metadata
+.site/

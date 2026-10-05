@@ -58,7 +58,7 @@ describe('what each page tells search engines', () => {
     );
     expect(html).toContain('<title>A &quot;quoted&quot; &lt;title&gt; · Conch</title>');
     expect(html).not.toContain('</script><script>');
-    expect(html).toContain(`<link rel="canonical" href="${SITE_URL}/x" />`);
+    expect(html).toContain(`<link rel="canonical" href="${SITE_URL}/x/" />`);
   });
 
   it('keeps <head> true as people move between pages', () => {
@@ -76,7 +76,7 @@ describe('what each page tells search engines', () => {
     expect(document.querySelectorAll('link[rel="canonical"]')).toHaveLength(1);
     expect(document.querySelector('link[rel="canonical"]')).toHaveAttribute(
       'href',
-      `${SITE_URL}/start/install`,
+      `${SITE_URL}/start/install/`,
     );
     expect(document.querySelector('meta[name="description"]')).toHaveAttribute(
       'content',

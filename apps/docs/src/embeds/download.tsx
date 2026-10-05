@@ -1,8 +1,8 @@
-import { Button } from '@conch/nacre';
-import { Download } from 'lucide-react';
+import { Button, Callout } from '@conch/nacre';
+import { Download, ArrowRight } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-import { DOWNLOADS } from '../site/config';
+import { DOWNLOADS, HAS_DOWNLOAD } from '../site/config';
 import styles from './embeds.module.css';
 
 /**
@@ -18,11 +18,18 @@ export function DownloadApp({
   children?: ReactNode;
   args?: string[];
 }) {
+  if (!HAS_DOWNLOAD && !children)
+    return (
+      <Callout tone="neutral" title="Use the terminal installer for this version">
+        Desktop downloads have not been published for this version. The command below installs
+        Conch.
+      </Callout>
+    );
   return (
     <div className={styles.download}>
-      <Button size={size} leadingIcon={<Download />} asChild>
+      <Button size={size} leadingIcon={HAS_DOWNLOAD ? <Download /> : <ArrowRight />} asChild>
         <a href={DOWNLOADS} target="_blank" rel="noreferrer">
-          Download Conch
+          {HAS_DOWNLOAD ? 'Download Conch' : 'Install Conch'}
         </a>
       </Button>
       {children}

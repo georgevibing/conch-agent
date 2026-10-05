@@ -1,9 +1,18 @@
+import publication from 'virtual:conch-publication';
+
 /** Where the site is: every page's one true address starts here. */
 export const SITE_URL = 'https://conchagent.com';
 
 /** Where the code lives, for "Edit this page" and links to files that aren't pages. */
 export const REPO_URL = 'https://github.com/georgevibing/conch-agent';
-export const REPO_BRANCH = 'main';
+export const REPO_BRANCH = publication.commit;
+export const DEVELOPMENT = publication.next;
+export const VERSION_LABEL = publication.tag
+  ? `Stable · ${publication.tag}`
+  : `Development · ${publication.commit.slice(0, 8)}`;
+export const HAS_DOWNLOAD =
+  !DEVELOPMENT &&
+  publication.releases.some((release) => release.tag === publication.tag && release.downloads);
 
 /** Who signs the note on the front page. */
 export const AUTHOR = { name: 'George Kal', url: 'https://github.com/georgevibing' } as const;
@@ -12,14 +21,22 @@ export const AUTHOR = { name: 'George Kal', url: 'https://github.com/georgevibin
  * Where the app is downloaded (ADR 0054): the newest release on GitHub, with
  * the files for every system attached by the release workflow.
  */
-export const DOWNLOADS = `${REPO_URL}/releases/latest`;
+export const DOWNLOADS = HAS_DOWNLOAD
+  ? `${REPO_URL}/releases/tag/${publication.tag}`
+  : `${SITE_URL}${DEVELOPMENT ? '/docs/next' : ''}/start/install`;
 
 /** The one-line installers (README § Install), served by the site from `scripts/` when it's built. */
 export const INSTALL = {
-  unix: `curl -fsSL ${SITE_URL}/install.sh | sh`,
-  windows: `irm ${SITE_URL}/install.ps1 | iex`,
+  unix: DEVELOPMENT
+    ? `curl -fsSL ${SITE_URL}/docs/next/install.sh | CONCH_BRANCH=main sh`
+    : `curl -fsSL ${SITE_URL}/install.sh | sh`,
+  windows: DEVELOPMENT
+    ? `$env:CONCH_BRANCH='main'; irm ${SITE_URL}/docs/next/install.ps1 | iex`
+    : `irm ${SITE_URL}/install.ps1 | iex`,
   /** On a server: no screen, so it asks how you'll reach Conch (ADR 0064). */
-  server: `curl -fsSL ${SITE_URL}/install.sh | sh -s -- --server`,
+  server: DEVELOPMENT
+    ? `curl -fsSL ${SITE_URL}/docs/next/install.sh | CONCH_BRANCH=main sh -s -- --server`
+    : `curl -fsSL ${SITE_URL}/install.sh | sh -s -- --server`,
 } as const;
 
 export interface Section {

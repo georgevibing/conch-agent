@@ -9,6 +9,7 @@ import reference from 'virtual:conch-reference';
 import { Home } from '../home/Home';
 import { Landing } from '../landing/Landing';
 import { DocPage } from '../pages/DocPage';
+import { Releases } from '../releases/Releases';
 import { Layout } from '../shell/Layout';
 import { SECTIONS } from '../site/config';
 
@@ -20,6 +21,7 @@ function open(path: string) {
           <Route element={<Layout />}>
             <Route index element={<Landing />} />
             <Route path="docs" element={<Home />} />
+            <Route path="releases" element={<Releases />} />
             <Route path="*" element={<DocPage />} />
           </Route>
         </Routes>
@@ -159,6 +161,17 @@ describe('a page', () => {
 });
 
 describe('search', () => {
+  it('finds the published release notes by channel', async () => {
+    const user = userEvent.setup();
+    open('/');
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Search the documentation' });
+    await user.type(within(dialog).getByRole('combobox'), 'alpha');
+    await user.click(await within(dialog).findByRole('option', { name: /Release notes/ }));
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'What’s new in Conch' }),
+    ).toBeVisible();
+  });
   it('opens from the bar and finds a command by what it does', async () => {
     const user = userEvent.setup();
     open('/');

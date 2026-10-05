@@ -1,4 +1,6 @@
 import {
+  Badge,
+  Stack,
   Button,
   Heading,
   IconButton,
@@ -13,7 +15,7 @@ import { ArrowUpRight, Menu, Moon, Search as SearchIcon, Sun } from 'lucide-reac
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router';
 
-import { REPO_URL } from '../site/config';
+import { DEVELOPMENT, REPO_URL, REPO_BRANCH, VERSION_LABEL } from '../site/config';
 import styles from './Layout.module.css';
 
 // Search and the contents know every page, so they come with the guides, not with the front page.
@@ -132,6 +134,32 @@ export function Layout() {
         </div>
       </header>
 
+      <Stack
+        direction="row"
+        wrap
+        align="center"
+        justify="between"
+        className={styles.version}
+        as="nav"
+        aria-label="Documentation versions"
+      >
+        <Stack direction="row" wrap align="center" gap={2}>
+          <Badge tone="neutral">{VERSION_LABEL}</Badge>
+          <Button variant="ghost" tone="neutral" size="sm" asChild>
+            <a href={`${REPO_URL}/tree/${REPO_BRANCH}`}>Source</a>
+          </Button>
+        </Stack>
+        <Stack direction="row" wrap gap={1}>
+          <Button variant="ghost" tone="neutral" size="sm" asChild>
+            <a href={DEVELOPMENT ? '/docs/' : '/docs/next/'}>
+              {DEVELOPMENT ? 'Default docs' : 'Development docs'}
+            </a>
+          </Button>
+          <Button variant="ghost" tone="neutral" size="sm" asChild>
+            <a href="/releases/">Release notes</a>
+          </Button>
+        </Stack>
+      </Stack>
       <Outlet />
 
       {/* Loaded the first time it's asked for: by the button, or by ⌘K. */}

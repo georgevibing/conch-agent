@@ -58,7 +58,7 @@ describe('Markdown', () => {
     const code = screen.getByRole('link', { name: 'the code' });
     expect(code).toHaveAttribute(
       'href',
-      expect.stringContaining('/blob/main/apps/server/src/cli.ts'),
+      expect.stringMatching(/\/blob\/[0-9a-f]{40,64}\/apps\/server\/src\/cli\.ts$/),
     );
     expect(code).toHaveAttribute('target', '_blank');
   });

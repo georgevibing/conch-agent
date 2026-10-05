@@ -24,7 +24,7 @@ import reference from 'virtual:conch-reference';
 import { DownloadApp } from '../embeds/download';
 import { HowItWorks } from '../embeds/how';
 import { InstallCommand } from '../embeds/install';
-import { AUTHOR, REPO_URL } from '../site/config';
+import { AUTHOR, REPO_URL, VERSION_LABEL } from '../site/config';
 import { LANDING_HEAD, useHead } from '../site/head';
 import {
   AddressDemo,
@@ -129,7 +129,7 @@ export function Landing() {
           eyebrow={
             <>
               <Badge tone="accent">Open source</Badge>
-              <Badge tone="neutral">{reference.version}</Badge>
+              <Badge tone="neutral">{VERSION_LABEL}</Badge>
             </>
           }
           title={
@@ -544,7 +544,7 @@ export function Landing() {
 
         <footer className={styles.footer}>
           <Text as="span" size="sm" tone="muted">
-            Conch {reference.version}. Made with{' '}
+            Conch {VERSION_LABEL}. Made with{' '}
             <TextLink asChild>
               <Link to={LANDING_LINKS.nacre}>Nacre</Link>
             </TextLink>

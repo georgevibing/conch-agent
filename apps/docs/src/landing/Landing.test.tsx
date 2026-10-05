@@ -6,7 +6,7 @@ import { MemoryRouter } from 'react-router';
 import { describe, expect, it } from 'vitest';
 import reference from 'virtual:conch-reference';
 
-import { DOWNLOADS } from '../site/config';
+import { DOWNLOADS, HAS_DOWNLOAD } from '../site/config';
 import { pageAt } from '../site/pages';
 import { Landing, LANDING_LINKS } from './Landing';
 
@@ -30,7 +30,9 @@ describe('the front page', () => {
     );
     expect(screen.getAllByRole('button', { name: 'Copy command' }).length).toBeGreaterThan(0);
     // One download for every system, and the docs beside it.
-    for (const link of screen.getAllByRole('link', { name: 'Download Conch' }))
+    for (const link of screen.getAllByRole('link', {
+      name: HAS_DOWNLOAD ? 'Download Conch' : 'Install Conch',
+    }))
       expect(link).toHaveAttribute('href', DOWNLOADS);
     for (const link of screen.getAllByRole('link', { name: 'Read the docs' }))
       expect(link).toHaveAttribute('href', LANDING_LINKS.docs);

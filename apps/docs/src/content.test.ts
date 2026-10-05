@@ -167,7 +167,7 @@ describe('search', () => {
   });
 
   it('leads only to pages that exist', () => {
-    const paths = new Set(PAGES.map((page) => page.path));
+    const paths = new Set(['/releases', ...PAGES.map((page) => page.path)]);
     const lost = FINDABLES.filter((item) => !paths.has(item.to.split('#')[0] ?? ''));
     expect(lost.map((item) => `${item.title} → ${item.to}`)).toEqual([]);
   });
