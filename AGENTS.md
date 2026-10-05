@@ -401,6 +401,16 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
       use is a power in the runtime, with words a person reads on the card; never
       a way around the seal.
 
+16. **Leave a trail, a small one.** Anything Conch starts (a provider's program, a helper,
+    a sandbox) must say why it stopped. Never throw its stderr away: keep the last few
+    lines in memory, redact them (`engines/codex/rpc.ts` `redact`/`lastWords`), and write
+    them to the gateway's log (`~/.conch/logs/conch.log`) when it exits, and put the gist in
+    the error the chat shows. Bounded on purpose: a few KB per process, never whole
+    transcripts, never anything unredacted. A failure that reads only "stopped" with
+    nothing to look at is a bug. Settings that go into another program's config (a TOML
+    table, a profile) are built from sets, so a duplicate can't make the program refuse to
+    start.
+
 ## Adding a provider
 
 Most companies speak OpenAI's chat format; adding one is rows, not code

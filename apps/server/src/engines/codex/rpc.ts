@@ -32,6 +32,18 @@ export function redact(text: string): string {
     .slice(0, 240);
 }
 
+/** How much of what Codex wrote to stderr is kept to explain a sudden exit. */
+const STDERR_KEPT = 4096;
+
+/** The last thing Codex said, redacted and short: enough to tell one failure from the next. */
+export function lastWords(stderr: string): string {
+  const line = stderr
+    .split('\n')
+    .map((l) => l.trim())
+    .findLast(Boolean);
+  return line ? redact(line.replace(/^error:\s*/i, '')) : '';
+}
+
 /** Codex answered a request with an error: which request, and why (redacted). */
 export class CodexRefusal extends Error {
   constructor(
@@ -136,15 +148,29 @@ export class CodexRpc {
         } else for (const listener of this.#listeners) listener(message);
       }
     });
-    // Drain diagnostics but never retain or surface raw provider output (tokens, paths, auth URLs).
-    this.child.stderr.resume();
+    // Keep the last words Codex said on its way out (redacted before they go anywhere), so a
+    // process that dies at once says why instead of leaving "stopped" and nothing to look at.
+    let tail = '';
+    this.child.stderr.on('data', (chunk: Buffer) => {
+      tail = (tail + chunk.toString('utf8')).slice(-STDERR_KEPT);
+    });
     this.child.stdin.on('error', () => this.#fail(new Error('The Codex connection closed.')));
     this.child.once('error', () =>
       this.#fail(new Error('Codex could not start. Open Settings → Providers.')),
     );
-    this.child.once('close', () => {
+    this.child.once('close', (code, signal) => {
       this.#exited = true;
-      this.#fail(new Error('Codex stopped before the request finished.'));
+      const said = lastWords(tail);
+      console.error(
+        `[codex] exited (${signal ?? `code ${code ?? '?'}`})${said ? `: ${said}` : ' without saying why'}`,
+      );
+      this.#fail(
+        new Error(
+          said
+            ? `Codex stopped before the request finished: ${said}`
+            : 'Codex stopped before the request finished.',
+        ),
+      );
     });
   }
 
