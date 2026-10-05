@@ -117,6 +117,12 @@ export const BackupPower = z.discriminatedUnion('kind', [
     /** USD a month; `null`: no limit. */
     limitUsd: z.number().positive().nullable(),
   }),
+  /** Learning may spend more each month than Conch's default, or without a limit (ADR 0087). */
+  z.object({
+    kind: z.literal('learning-spend'),
+    /** USD a month; `null`: no limit. */
+    limitUsd: z.number().positive().nullable(),
+  }),
   /** A routine that starts when something happens, and may act on it without asking (ADR 0056). */
   z.object({ kind: z.literal('routine-acts-on-events'), name: PowerText }),
   /** Another app can start a routine through the public address (ADR 0056). */

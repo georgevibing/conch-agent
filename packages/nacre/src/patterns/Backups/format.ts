@@ -30,6 +30,7 @@ export type BackupPowerInfo =
   | { kind: 'chats-never-ask' }
   | { kind: 'routine-never-asks'; name: string }
   | { kind: 'routines-spend'; limitUsd: number | null }
+  | { kind: 'learning-spend'; limitUsd: number | null }
   | { kind: 'routine-acts-on-events'; name: string }
   | { kind: 'routine-address'; name: string }
   | { kind: 'browser-sites'; sites: string[]; more?: number }
@@ -85,6 +86,14 @@ export function powerWords(power: BackupPowerInfo): PowerWords {
     case 'routines-spend':
       return {
         subject: 'Routines',
+        text:
+          power.limitUsd === null
+            ? 'Spend money without a monthly limit'
+            : `Spend up to $${power.limitUsd.toLocaleString('en-US')} a month without asking`,
+      };
+    case 'learning-spend':
+      return {
+        subject: 'Learning from your chats',
         text:
           power.limitUsd === null
             ? 'Spend money without a monthly limit'

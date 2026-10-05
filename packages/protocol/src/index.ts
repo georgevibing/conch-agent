@@ -39,6 +39,7 @@ import { DoctorReport } from './doctor';
 import { Memory, MemoryKind } from './memory';
 import { MAX_PROFILE_FACTS, ProfileFact } from './profile';
 import { PastChatsLooked } from './past-chats';
+import { LearnedItem } from './quiet-learning';
 import { EngineStatus, LoginState } from './engine';
 import { HealNote } from './healed';
 import { CatalogId, Integration } from './integrations';
@@ -74,6 +75,7 @@ export * from './healed';
 export * from './import';
 export * from './integrations';
 export * from './learning';
+export * from './quiet-learning';
 export * from './linking';
 export * from './local';
 export * from './memory';
@@ -520,6 +522,23 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     memoryId: z.string(),
     kept: z.boolean(),
   }),
+  /**
+   * Conch learned from this chat once it went quiet (ADR 0087): one quiet
+   * line at its end, with Undo, Why? and, for what waits, Keep and Forget.
+   */
+  z.object({
+    ...logged,
+    type: z.literal('learning.noted'),
+    reviewId: z.string(),
+    items: z.array(LearnedItem).min(1).max(5),
+  }),
+  /** You undid, kept or put away something this chat learned (from the chat or the Memory page). */
+  z.object({
+    ...logged,
+    type: z.literal('learning.decided'),
+    entryId: z.string(),
+    state: z.enum(['undone', 'kept', 'dismissed']),
+  }),
   /** The chat read something from outside: from here on, sending and changing ask first (ADR 0028). */
   z.object({
     ...logged,
@@ -887,6 +906,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('engine.status'), status: EngineStatus }),
   z.object({ type: z.literal('engine.login'), login: LoginState }),
   z.object({ type: z.literal('memory.changed') }),
+  /** Something was learned, kept or undone, or what learning may spend changed (ADR 0087). */
+  z.object({ type: z.literal('learning.changed') }),
   z.object({ type: z.literal('routine.changed'), routine: Routine }),
   z.object({ type: z.literal('routine.deleted'), routineId: z.string() }),
   z.object({ type: z.literal('routine.run'), run: RoutineRun }),

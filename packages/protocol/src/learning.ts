@@ -1,7 +1,8 @@
 /**
  * It learns you (ADR 0032): memory search that understands meaning, a
  * tidy-up you can read and undo, and skills suggested from what you keep
- * asking for. Every change is shown; nothing is learned silently.
+ * asking for. Every change is shown. What Conch learns by itself from a chat
+ * that went quiet is in `quiet-learning.ts` (ADR 0087).
  */
 import { z } from 'zod';
 

@@ -38,6 +38,7 @@ const ICONS: Record<BackupPowerInfo['kind'], ReactNode> = {
   'chats-never-ask': <MessagesSquare />,
   'routine-never-asks': <Repeat />,
   'routines-spend': <Wallet />,
+  'learning-spend': <Wallet />,
   'routine-acts-on-events': <Zap />,
   'routine-address': <Webhook />,
   'browser-sites': <Globe />,

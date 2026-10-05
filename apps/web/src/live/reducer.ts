@@ -649,6 +649,10 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
       });
       return found ? { ...base, items: updated } : base;
     }
+    // What a chat learned once it went quiet (ADR 0087): drawn by the transcript in a later step.
+    case 'learning.noted':
+    case 'learning.decided':
+      return base;
     case 'memory.forgotten':
       return {
         ...base,
