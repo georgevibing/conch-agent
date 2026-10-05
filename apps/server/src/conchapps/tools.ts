@@ -242,7 +242,8 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
     run: safely(async ({ draft, tool, input }) => {
       const info = await draftOf(draft);
       const manifest = (await service.draft(info)).manifest;
-      // A draft that reaches the web is a way out (ADR 0028): after reading something untrusted, ask first.
+      // A draft that reaches the web is a way out (ADR 0028): after reading something untrusted, ask
+      // first. Full trust doesn't, and "Always allow" lets every try through for the rest of the chat.
       const tainted = ctx.untrusted?.();
       if (tainted) {
         if (manifest?.reaches.length) {

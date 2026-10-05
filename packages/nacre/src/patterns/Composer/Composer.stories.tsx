@@ -1,8 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Folder } from 'lucide-react';
+import { Folder, Mic } from 'lucide-react';
 import { useState } from 'react';
 import { fn } from 'storybook/test';
 
+import { IconButton } from '../../components/IconButton';
 import { Tooltip } from '../../components/Tooltip';
 import { DemoToolbar } from '../ModelPicker/fixtures';
 import { Composer, ComposerAttachment, ComposerChip, ComposerQueued } from './Composer';
@@ -11,7 +12,7 @@ function FolderChip({ path }: { path: string }) {
   const name = path.split(/[\\/]/).filter(Boolean).at(-1) ?? path;
   return (
     <Tooltip content={path}>
-      <ComposerChip icon={<Folder />} aria-label={`Working folder: ${name}`}>
+      <ComposerChip icon={<Folder />} tuck aria-label={`Working folder: ${name}`}>
         {name}
       </ComposerChip>
     </Tooltip>
@@ -167,4 +168,50 @@ export const Interactive: Story = {
       </div>
     );
   },
+};
+
+const mic = (
+  <IconButton label="Dictate" shape="circle">
+    <Mic />
+  </IconButton>
+);
+
+/**
+ * With nothing typed, the one button is Talk, in a slow ring of pearl
+ * light; typing turns it into Send.
+ */
+export const TalkWhenEmpty: Story = {
+  args: { voice: { label: 'Talk with Conch', onClick: fn() }, actions: mic },
+};
+
+/**
+ * On a phone the composer keeps to one calm line: the mode is its tinted
+ * icon, the model keeps its name, the folder steps out (Settings has it),
+ * and Talk shares Send's place.
+ */
+export const Phone: Story = {
+  args: {
+    voice: { label: 'Talk with Conch', onClick: fn() },
+    actions: mic,
+    placeholder: 'Message Conch, or type / for commands',
+    toolbar: (
+      <>
+        <DemoToolbar initial={{ mode: 'bypassPermissions', effort: 'medium' }} />
+        <FolderChip path="~/projects/conch" />
+      </>
+    ),
+  },
+  decorators: [
+    (Story) => (
+      <div style={{ maxInlineSize: 390, marginInline: 'auto', paddingInline: 12 }}>
+        <Story />
+      </div>
+    ),
+  ],
+};
+
+/** On a phone while it works: Stop takes the place, the rest stays put. */
+export const PhoneRunning: Story = {
+  ...Phone,
+  args: { ...Phone.args, running: true, placeholder: 'Conch is working… Write what’s next' },
 };

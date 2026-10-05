@@ -249,7 +249,7 @@ const readsPage = async function* (): AsyncGenerator<EngineEvent> {
 
 describe('the guard, end to end', () => {
   it('lets the trusted Google draft tool ask once with the complete preview, not a generic taint prompt first', async () => {
-    const { manager, engine } = await setup((ctx) => [
+    const { manager, engine, settings } = await setup((ctx) => [
       {
         name: 'google_mail_create_draft',
         description: 'Fixture owns its concrete approval',
@@ -265,11 +265,13 @@ describe('the guard, end to end', () => {
             },
             summary: 'save this exact draft',
             taint: ctx.untrusted?.(),
+            once: true,
           });
           return decision === 'deny' ? 'Not saved' : 'Saved';
         },
       },
     ]);
+    await settings.update({ preferences: { permissionMode: 'default' } });
     engine.script.push(async function* (input) {
       for (const name of ['google_mail_create_draft', 'mcp__conch__google_mail_create_draft'])
         engine.decisions.push(await input.guard?.({ toolName: name, input: {} }));
@@ -293,11 +295,161 @@ describe('the guard, end to end', () => {
       toolName: 'google_mail_create_draft',
       input: { body: 'The complete draft', accountEmail: 'person@example.com' },
       taint: expect.stringContaining('Gmail'),
+      once: true,
     });
+    expect(permission.lasting).toBeUndefined();
     await manager.respond(convo.id, permission.permissionId, 'deny');
     const done = await settle(manager, convo.id, (e) => e.some((x) => x.type === 'turn.completed'));
     expect(done.filter((e) => e.type === 'permission.requested')).toHaveLength(1);
   });
+  /** One of Conch's own tools that asks by itself after reading, like trying an app's draft. */
+  const reaching: ToolProvider = (ctx) => [
+    {
+      name: 'app_try',
+      description: 'Fixture: sends to the web',
+      input: {},
+      run: async () => {
+        const tainted = ctx.untrusted?.();
+        if (tainted) {
+          const answer = await ctx.ask({
+            toolName: 'app_try',
+            input: {},
+            summary: 'try Yazio’s check_connection, which can reach yzapi.yazio.com',
+            taint: `${tainted} Trying this draft would send to yzapi.yazio.com.`,
+          });
+          if (answer === 'deny') return 'Not tried';
+        }
+        return 'Tried';
+      },
+    },
+  ];
+  const tries = async function* (input: TurnInput): AsyncGenerator<EngineEvent> {
+    const tool = input.tools.find((t) => t.name === 'app_try');
+    if (!tool) throw new Error('Missing tool');
+    yield { type: 'text', messageId: 'm', delta: String(await tool.run({})) };
+  };
+
+  it('in Full trust, Conch’s own tools don’t ask after reading either', async () => {
+    const { manager, engine } = await setup(reaching);
+    engine.script.push(readsPage, tries);
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'read it, then try it' });
+    await settle(manager, convo.id, (e) => e.some((x) => x.type === 'turn.completed'));
+    await manager.send({ conversationId: convo.id, clientMessageId: 'u2', text: 'try it' });
+    const events = await settle(
+      manager,
+      convo.id,
+      (e) => e.filter((x) => x.type === 'turn.completed').length === 2,
+    );
+    expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
+    expect(events.find((e) => e.type === 'taint')).toBeTruthy();
+  });
+
+  it('in Full trust, someone else’s words still stop Conch’s own tools, with no “always”', async () => {
+    const { manager, engine } = await setup(reaching);
+    engine.script.push(tries);
+    const convo = await manager.send({
+      clientMessageId: 'u1',
+      text: 'try it for me',
+      untrusted: { kind: 'person', label: 'Ana on Telegram' },
+    });
+    const asked = await settle(manager, convo.id, (e) =>
+      e.some((x) => x.type === 'permission.requested'),
+    );
+    const request = asked.find((e) => e.type === 'permission.requested');
+    if (request?.type !== 'permission.requested') throw new Error('no request');
+    expect(request.taint).toMatch(/Ana on Telegram/);
+    expect(request.lasting).toBeUndefined();
+    await manager.respond(convo.id, request.permissionId, 'deny');
+    await settle(manager, convo.id, (e) => e.some((x) => x.type === 'turn.completed'));
+  });
+
+  it('in Ask first, Conch’s own tool asks after reading, and “Always allow” holds for the chat', async () => {
+    const { manager, engine, settings } = await setup(reaching);
+    await settings.update({ preferences: { permissionMode: 'default' } });
+    engine.script.push(readsPage, tries, tries);
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'read it' });
+    await settle(manager, convo.id, (e) => e.some((x) => x.type === 'turn.completed'));
+    await manager.send({ conversationId: convo.id, clientMessageId: 'u2', text: 'try it' });
+    const asked = await settle(manager, convo.id, (e) =>
+      e.some((x) => x.type === 'permission.requested'),
+    );
+    const request = asked.find((e) => e.type === 'permission.requested');
+    if (request?.type !== 'permission.requested') throw new Error('no request');
+    expect(request).toMatchObject({ toolName: 'app_try', lasting: true });
+    await manager.respond(convo.id, request.permissionId, 'allow-always');
+    await settle(
+      manager,
+      convo.id,
+      (e) => e.filter((x) => x.type === 'turn.completed').length === 2,
+    );
+    await manager.send({ conversationId: convo.id, clientMessageId: 'u3', text: 'again' });
+    const events = await settle(
+      manager,
+      convo.id,
+      (e) => e.filter((x) => x.type === 'turn.completed').length === 3,
+    );
+    expect(events.filter((e) => e.type === 'permission.requested')).toHaveLength(1);
+  });
+
+  it('a Conch tool’s plain question takes “Always allow”; one showing words for others never does', async () => {
+    const { manager, engine } = await setup((ctx) => [
+      {
+        name: 'ask_plain',
+        description: 'Fixture: a tool the person set to Ask',
+        input: {},
+        run: async () =>
+          (await ctx.ask({ toolName: 'ask_plain', input: {}, summary: 'look', chosen: true })) ===
+          'deny'
+            ? 'No'
+            : 'Yes',
+      },
+      {
+        name: 'ask_send',
+        description: 'Fixture: sends a message',
+        input: {},
+        run: async () =>
+          (await ctx.ask({ toolName: 'ask_send', input: {}, summary: 'send “hi”', once: true })) ===
+          'deny'
+            ? 'No'
+            : 'Yes',
+      },
+    ]);
+    const both = async function* (input: TurnInput): AsyncGenerator<EngineEvent> {
+      for (const name of ['ask_plain', 'ask_send']) {
+        const tool = input.tools.find((t) => t.name === name);
+        if (!tool) throw new Error(`Missing ${name}`);
+        engine.decisions.push((await tool.run({})) === 'Yes' ? 'allow' : 'deny');
+      }
+      yield { type: 'text', messageId: 'm', delta: 'ok' };
+    };
+    engine.script.push(both, both);
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'go' });
+    const answer = async (count: number, decision: PermissionDecision) => {
+      const asked = await settle(
+        manager,
+        convo.id,
+        (e) => e.filter((x) => x.type === 'permission.requested').length === count,
+      );
+      const request = asked.findLast((e) => e.type === 'permission.requested');
+      if (request?.type !== 'permission.requested') throw new Error('no request');
+      await manager.respond(convo.id, request.permissionId, decision);
+      return request;
+    };
+    expect(await answer(1, 'allow-always')).not.toHaveProperty('once');
+    expect(await answer(2, 'allow')).toMatchObject({ toolName: 'ask_send', once: true });
+    await settle(manager, convo.id, (e) => e.some((x) => x.type === 'turn.completed'));
+    await manager.send({ conversationId: convo.id, clientMessageId: 'u2', text: 'again' });
+    // The plain one goes by itself now; the message is shown again.
+    expect(await answer(3, 'allow')).toMatchObject({ toolName: 'ask_send' });
+    const events = await settle(
+      manager,
+      convo.id,
+      (e) => e.filter((x) => x.type === 'turn.completed').length === 2,
+    );
+    expect(events.filter((e) => e.type === 'permission.requested')).toHaveLength(3);
+    expect(engine.decisions).toEqual(['allow', 'allow', 'allow', 'allow']);
+  });
+
   it('in Full trust, a chat you’re in carries on after reading a page; what it read is still noted', async () => {
     const { manager, engine } = await setup();
     const command = async function* (input: TurnInput): AsyncGenerator<EngineEvent> {

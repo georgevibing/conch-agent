@@ -10,8 +10,10 @@
  *  - Conch's own tools (memory, the browser, apps) answer through Conch, so a
  *    loop is first pointed out to the model in the answer it reads, then
  *    stopped there, exactly as for the model APIs.
- *  - The program's own tools (Codex's shell) are only seen go by, so a loop
- *    there is stopped without a nudge, at the same count.
+ *  - The program's own tools (Codex's shell) are only seen go by, so Conch
+ *    can't say a word to it: only the plainest loop pauses it (the very same
+ *    command, the very same answer, ten times hard on each other). Polling a
+ *    test run, failing tests, a grep that finds nothing: all of that is work.
  *  - Steps (two calls to a step), time and fresh tokens are checked as events
  *    arrive, and time also by a timer, for a program that's gone quiet.
  *
@@ -70,7 +72,7 @@ export function guardTurn(
       stop(before);
       if (paused) return NOT_RUN;
       const result = await tool.run(args);
-      const after = watch.result(name, hostToolText(result), false);
+      const after = watch.result(name, args, hostToolText(result), false);
       stop(after);
       const notes = [before, after].flatMap((v) => (v.kind === 'nudge' ? [v.note] : []));
       if (!notes.length) return result;
@@ -86,17 +88,19 @@ export function guardTurn(
     signal: AbortSignal.any([input.signal, pausing.signal]),
     async *events(stream) {
       /** The program's own calls still running, by id; Conch's were counted as they ran. */
-      const outside = new Map<string, string>();
+      const outside = new Map<string, { name: string; input: unknown }>();
       try {
         for await (const event of stream) {
           if (event.type === 'tool-start' && !isHostTool(event.name)) {
-            outside.set(event.toolUseId, event.name);
+            outside.set(event.toolUseId, { name: event.name, input: event.input });
             stop(watch.call(event.name, event.input));
           } else if (event.type === 'tool-end') {
-            const name = outside.get(event.toolUseId);
-            if (name) {
+            const call = outside.get(event.toolUseId);
+            if (call) {
               outside.delete(event.toolUseId);
-              stop(watch.result(name, event.output ?? '', event.status === 'error'));
+              stop(
+                watch.result(call.name, call.input, event.output ?? '', event.status === 'error'),
+              );
             }
           }
           if (event.type === 'usage') watch.used(event.usage);

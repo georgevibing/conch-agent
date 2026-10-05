@@ -431,7 +431,7 @@ describe('a turn with an ACP agent', () => {
           }),
         );
         // A program stuck on one call, the same every time.
-        for (let i = 0; i < 10 && !cancelled; i++) {
+        for (let i = 0; i < 16 && !cancelled; i++) {
           const result = await client
             .callTool({ name: 'mcp__conch__remember', arguments: { content: 'tea' } })
             .catch(() => undefined);
@@ -454,7 +454,7 @@ describe('a turn with an ACP agent', () => {
     );
     // The third identical call told the program to stop repeating it.
     expect(answers[2]).toContain('From Conch');
-    expect(saved.length).toBeLessThan(5);
+    expect(saved.length).toBeLessThanOrEqual(10);
     expect(agents[0]?.received.some((m) => m.method === 'session/cancel')).toBe(true);
     // Not "Stopped": a pause the person can carry on from.
     expect(events.at(-1)).toMatchObject({

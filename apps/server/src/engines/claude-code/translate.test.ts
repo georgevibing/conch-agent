@@ -94,6 +94,8 @@ describe('Translator', () => {
     expect(first.at(-1)).toEqual({
       type: 'usage',
       usage: { inputTokens: 20_100, outputTokens: 50, cachedInputTokens: 20_000 },
+      // How full the conversation is: that request, read and answered, of Claude's 200k.
+      context: { used: 20_150, window: 200_000 },
     });
     // The same request arriving as a second message counts once.
     t.translate(
@@ -114,6 +116,8 @@ describe('Translator', () => {
       {
         type: 'usage',
         usage: { inputTokens: 21_100, outputTokens: 90, cachedInputTokens: 20_000 },
+        // A sub-agent's request is its own conversation: the main one stays as it was.
+        context: { used: 20_180, window: 200_000 },
       },
     ]);
     const [done] = t.translate(

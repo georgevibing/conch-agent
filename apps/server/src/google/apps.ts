@@ -407,6 +407,7 @@ export class GoogleApps {
             toolName: tool.name,
             input: args,
             summary: summary(tool.name, args),
+            chosen: true,
           });
           if (answer === 'deny')
             return {

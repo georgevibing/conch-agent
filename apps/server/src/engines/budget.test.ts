@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ERRORS_NUDGE,
-  ERRORS_STOP,
-  REPEAT_NUDGE,
-  REPEAT_STOP,
+  LOOP_NUDGE,
+  LOOP_STOP,
+  PATIENT_MS,
   SAME_NUDGE,
   SAME_STOP,
   stableJson,
+  steady,
   turnBudget,
   TurnWatch,
 } from './budget';
@@ -52,9 +53,11 @@ describe('turnBudget', () => {
     now = 48 * 60 * 60_000;
     expect(watch.next().kind).toBe('go');
     expect(watch.outside().kind).toBe('go');
-    const calls = Array.from({ length: REPEAT_STOP }, () => watch.call('browser_click', { id: 1 }));
-    expect(calls.some((v) => v.kind === 'nudge')).toBe(true);
-    expect(calls.at(-1)).toMatchObject({ kind: 'stop', pause: { reason: 'loop' } });
+    const answers = Array.from({ length: LOOP_STOP }, () =>
+      watch.result('browser_click', { id: 1 }, 'Nothing happened.', false),
+    );
+    expect(answers.some((v) => v.kind === 'nudge')).toBe(true);
+    expect(answers.at(-1)).toMatchObject({ kind: 'stop', pause: { reason: 'loop' } });
   });
 });
 
@@ -88,12 +91,59 @@ describe('TurnWatch', () => {
     expect(verdicts.indexOf('nudge')).toBe(8);
   });
 
-  it('nudges a repeated call, then stops it, and sees through key order', () => {
+  it('nudges the same call coming back with the same answer, twice, then pauses', () => {
     const watch = new TurnWatch(roomy);
     const kinds: string[] = [];
-    for (let i = 0; i < REPEAT_STOP; i++)
-      kinds.push(watch.call('browser_click', i % 2 ? { b: 1, a: 'x' } : { a: 'x', b: 1 }).kind);
-    expect(kinds[REPEAT_NUDGE - 1]).toBe('nudge');
+    for (let i = 0; i < LOOP_STOP; i++)
+      kinds.push(
+        watch.result(
+          'browser_click',
+          i % 2 ? { b: 1, a: 'x' } : { a: 'x', b: 1 },
+          'No change.',
+          false,
+        ).kind,
+      );
+    expect(kinds[LOOP_NUDGE - 1]).toBe('nudge');
+    expect(kinds[LOOP_NUDGE * 2 - 1]).toBe('nudge');
+    expect(kinds.filter((k) => k === 'nudge')).toHaveLength(2);
+    expect(kinds.slice(0, -1)).not.toContain('stop');
+    expect(kinds.at(-1)).toBe('stop');
+  });
+
+  it('a changed answer is progress: checking on a test run as it moves along never pauses', () => {
+    const watch = new TurnWatch(roomy);
+    for (let i = 0; i < 200; i++)
+      expect(
+        watch.result(
+          'shell',
+          { command: 'python3 check.py' },
+          `running: ${i} of 4278 passed`,
+          false,
+        ).kind,
+      ).not.toBe('stop');
+  });
+
+  it('checks spaced out in time are waiting, not a loop', () => {
+    let now = 0;
+    const watch = new TurnWatch(roomy, () => now);
+    for (let i = 0; i < 60; i++) {
+      now += PATIENT_MS;
+      expect(
+        watch.result('shell', { command: 'tail -1 run.log' }, 'still running', false).kind,
+      ).toBe('go');
+    }
+  });
+
+  it('times, clocks and durations don’t make an answer new', () => {
+    expect(steady('Done in 376ms at 09:43:12 (2026-10-05T07:43:12Z)')).toBe(
+      steady('Done in 56ms at 09:44:01 (2026-10-05T07:44:01Z)'),
+    );
+    expect(steady('12 of 40 passed')).not.toBe(steady('13 of 40 passed'));
+    const watch = new TurnWatch(roomy);
+    const kinds = Array.from(
+      { length: LOOP_STOP },
+      (_, i) => watch.result('shell', { command: 'status' }, `idle, took ${i}ms`, false).kind,
+    );
     expect(kinds.at(-1)).toBe('stop');
   });
 
@@ -101,37 +151,36 @@ describe('TurnWatch', () => {
     const watch = new TurnWatch(roomy);
     for (let i = 0; i < 200; i++) {
       expect(watch.call('browser_click', { ref: `e${i}` }).kind).toBe('go');
-      expect(watch.result('browser_click', `page ${i} `.repeat(40), false).kind).toBe('go');
+      expect(
+        watch.result('browser_click', { ref: `e${i}` }, `page ${i} `.repeat(40), false).kind,
+      ).toBe('go');
     }
   });
 
-  it('nudges a run of failures, then stops; a success resets it', () => {
+  it('tells the model about a run of failures, and never pauses for them', () => {
     const watch = new TurnWatch(roomy);
     const kinds = Array.from(
-      { length: ERRORS_STOP },
-      (_, i) => watch.result('x', `failed ${i}`, true).kind,
+      { length: 50 },
+      (_, i) => watch.result('shell', { command: `try ${i}` }, `failed ${i}`, true).kind,
     );
     expect(kinds[ERRORS_NUDGE - 1]).toBe('nudge');
-    expect(kinds.at(-1)).toBe('stop');
-
-    const healed = new TurnWatch(roomy);
-    for (let i = 0; i < ERRORS_STOP - 1; i++) healed.result('x', `failed ${i}`, true);
-    healed.result('x', 'worked', false);
-    expect(healed.result('x', 'failed again', true).kind).toBe('go');
+    expect(kinds.filter((k) => k === 'nudge')).toHaveLength(1);
+    expect(kinds).not.toContain('stop');
   });
 
-  it('notices the same long answer coming back, but not a short confirmation', () => {
+  it('notices the same long answer coming back fast, but not a short confirmation', () => {
     const page = `Page: Shop\n${'- button "Next" [ref=e1]\n'.repeat(20)}`;
     const watch = new TurnWatch(roomy);
     const kinds = Array.from(
       { length: SAME_STOP },
-      () => watch.result('browser_scroll', page, false).kind,
+      (_, i) => watch.result('browser_click', { ref: `e${i}` }, page, false).kind,
     );
     expect(kinds[SAME_NUDGE - 1]).toBe('nudge');
     expect(kinds.at(-1)).toBe('stop');
 
     const saved = new TurnWatch(roomy);
-    for (let i = 0; i < 20; i++) expect(saved.result('remember', 'Saved.', false).kind).toBe('go');
+    for (let i = 0; i < 20; i++)
+      expect(saved.result('remember', { text: `fact ${i}` }, 'Saved.', false).kind).toBe('go');
   });
 
   it('caps an outside agent by its calls, two to a step', () => {

@@ -51,7 +51,14 @@ function accountLine(provider: Provider): string {
  * and with nothing connected it offers to connect a provider. `/usage`, the
  * palette and the composer's limit notice open it too.
  */
-export function ChatProvider({ conversationId }: { conversationId?: string }) {
+export function ChatProvider({
+  conversationId,
+  compact = false,
+}: {
+  conversationId?: string;
+  /** A phone's header: the provider's mark and its ring, without the words. */
+  compact?: boolean;
+}) {
   const client = useQueryClient();
   const turn = useTurnOptions(conversationId);
   const { data: list } = useProviders();
@@ -67,7 +74,7 @@ export function ChatProvider({ conversationId }: { conversationId?: string }) {
 
   if (!list) return null;
   if (!list.providers.some((p) => p.ready))
-    return <ProviderMeter onClick={() => openSettings('providers')} />;
+    return <ProviderMeter compact={compact} onClick={() => openSettings('providers')} />;
   if (!provider) return null;
 
   const attention = attentionOf(provider);
@@ -87,6 +94,7 @@ export function ChatProvider({ conversationId }: { conversationId?: string }) {
     >
       <Popover.Trigger asChild>
         <ProviderMeter
+          compact={compact}
           provider={{ label: provider.name, logo: providerLogo(provider.id) }}
           usage={usage}
           attention={attention}

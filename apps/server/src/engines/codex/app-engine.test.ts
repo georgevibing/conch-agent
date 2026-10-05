@@ -321,16 +321,26 @@ describe('Codex app-server parity', () => {
         },
         {
           total: { inputTokens: 2_300_000, cachedInputTokens: 2_000_000, outputTokens: 42_000 },
-          last: { inputTokens: 200_000, cachedInputTokens: 200_000, outputTokens: 2_000 },
+          last: {
+            inputTokens: 200_000,
+            cachedInputTokens: 200_000,
+            outputTokens: 2_000,
+            totalTokens: 202_000,
+          },
+          modelContextWindow: 272_000,
         },
       ],
     });
-    const usage = (await collect(engine.runTurn(turn()))).flatMap((e) =>
-      e.type === 'usage' ? [e.usage] : [],
-    );
+    const events = await collect(engine.runTurn(turn()));
+    const usage = events.flatMap((e) => (e.type === 'usage' ? [e.usage] : []));
     expect(usage).toEqual([
       { inputTokens: 200_000, outputTokens: 1_000, cachedInputTokens: 150_000 },
       { inputTokens: 400_000, outputTokens: 3_000, cachedInputTokens: 350_000 },
+    ]);
+    // How full the thread is: its latest request, read and answered, of Codex's window.
+    expect(events.flatMap((e) => (e.type === 'usage' ? [e.context] : []))).toEqual([
+      { used: 201_000 },
+      { used: 202_000, window: 272_000 },
     ]);
   });
   it('reads only real plan steps', () => {
@@ -655,6 +665,23 @@ describe('Codex carrying a chat on (ADR 0066 § Carrying on)', () => {
     expect(kept).toContain('My colour is teal');
     expect(kept).toContain('What is my colour?');
     expect(second.at(-1)).toMatchObject({ type: 'done', outcome: 'success' });
+  });
+
+  it('summarises the thread when asked (/compact), and says so on a thread just started', async () => {
+    const { engine, fake, turn } = await setup({ signedIn: true });
+    const fresh = await collect(engine.runTurn(turn({ prompt: '/compact' })));
+    expect(fresh.some((e) => e.type === 'text' && e.delta.includes('nothing to summarise'))).toBe(
+      true,
+    );
+    const resumeId = sessionOf(await collect(engine.runTurn(turn({ prompt: 'Hello' }))))?.resumeId;
+    const compacted = await collect(engine.runTurn(turn({ prompt: '/compact', resumeId })));
+    expect(compacted.some((e) => e.type === 'compacted')).toBe(true);
+    expect(compacted.at(-1)).toMatchObject({ type: 'done', outcome: 'success' });
+    const calls = await fake.calls();
+    expect(calls.filter((c) => c.method === 'thread/compact/start')).toHaveLength(1);
+    // Asked to summarise, it doesn't take a turn as well.
+    expect(calls.filter((c) => c.method === 'turn/start').map(textOf)).toEqual(['Hello']);
+    expect((await engine.capabilities()).commands.map((c) => c.name)).toContain('compact');
   });
 
   it('tells a resumed thread Conch’s instructions again only when they changed', async () => {

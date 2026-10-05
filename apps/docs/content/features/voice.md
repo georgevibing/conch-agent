@@ -28,7 +28,7 @@ If a natural voice can't speak for a moment, your device's own voice reads the r
 
 ## Talk, hands free
 
-**Talk** is a calm full screen with the pearl. Say something, and when you pause, it goes to your assistant; the answer is spoken as it arrives, then Conch listens again. Everything stays in the chat in writing.
+While the message box is empty, its round button is **Talk**, ringed in pearl light; as soon as you type, it turns into Send. **Talk** is a calm full screen with the pearl. Say something, and when you pause, it goes to your assistant; the answer is spoken as it arrives, then Conch listens again. Everything stays in the chat in writing.
 
 To interrupt, just start talking: Conch stops, drops the rest of its answer and listens. It cancels its own voice from what the microphone hears, so it doesn't interrupt itself, and a cough or a click doesn't count. Tapping the pearl works too, and so do **Pause** and **Type instead**.
 

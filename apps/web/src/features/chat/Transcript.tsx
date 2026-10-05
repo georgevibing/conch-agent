@@ -2,7 +2,7 @@ import { MessageList, SkillHoldEnded, SummaryDivider } from '@conch/nacre';
 import { memo, useState, type ReactNode, type Ref } from 'react';
 
 import { isTurnStart, type ConversationView, type TranscriptItem } from '../../live/reducer';
-import { verbsFor } from './stream';
+import { familyOf, verbsFor, type ToolFamily } from './verbs';
 import {
   AssistantMessage,
   Arrival,
@@ -311,12 +311,16 @@ export const Transcript = memo(function Transcript({
     !handingOff;
   const startedAt = view.turnStartedAt ?? pending[0]?.at;
   const wait: Wait = {
-    verbs: verbsFor(prompt, 'starting'),
+    verbs: verbsFor(prompt, 'starting', { seed: `${prompt}:${startedAt ?? ''}` }),
     startedAt,
     srLabel: `${name} is thinking`,
   };
   const afterTool: Wait = {
-    verbs: verbsFor(prompt, 'after-tool'),
+    // Words for what just ran, in an order of their own for each step.
+    verbs: verbsFor(prompt, 'after-tool', {
+      seed: `${startedAt ?? ''}:${items.length}`,
+      tool: familyAfter(last),
+    }),
     startedAt,
     srLabel: `${name} is working`,
   };
@@ -593,3 +597,21 @@ export const Transcript = memo(function Transcript({
     </MessageList>
   );
 });
+
+/** What the wait after a step talks about: the tool, page or memory that just went by. */
+function familyAfter(item: TranscriptItem | undefined): ToolFamily {
+  switch (item?.kind) {
+    case 'tool':
+      return familyOf(item.name);
+    case 'browser':
+      return 'browser';
+    case 'memory':
+      return 'memory';
+    case 'files':
+      return 'edit';
+    case 'looked':
+      return 'search';
+    default:
+      return 'other';
+  }
+}

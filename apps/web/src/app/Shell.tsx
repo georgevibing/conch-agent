@@ -22,6 +22,7 @@ import { RestoredNotice } from '../features/health/RestoredNotice';
 import { ChannelDetailView } from '../features/channels/ChannelDetailView';
 import { ConnectChannel } from '../features/channels/ConnectChannel';
 import { ChatView } from '../features/chat/ChatView';
+import { HeaderMore } from '../features/chat/HeaderMore';
 import { WakeWord } from '../features/voice/WakeWord';
 import { PasswordsView } from '../features/passwords/PasswordsView';
 import { ChatProvider } from '../features/engine/ChatProvider';
@@ -46,6 +47,9 @@ import { useProviderSignInResult } from '../features/providers/useSignInResult';
 import { MEMORY_ALL } from '../features/settings/paths';
 import { useUi } from './ui';
 import { useHotkey } from './useHotkey';
+
+/** A phone's width: the header folds what it can into one button. */
+export const PHONE = '(max-width: 560px)';
 
 function Reconnecting() {
   const connection = useLiveStore((s) => s.connection);
@@ -129,6 +133,8 @@ export function Shell() {
   useUnsavedGuard();
   const { data: conversations } = useConversations();
   const narrow = useMediaQuery('(max-width: 820px)');
+  // A phone: the header keeps the chat's name in view, and folds the rest away.
+  const phone = useMediaQuery(PHONE);
   const { sidebarOpen, toggleSidebar, mobileSidebarOpen, setMobileSidebar, openSettings } = useUi();
   const openFind = useUi((s) => s.openFind);
   const terminalMax = useUi((s) => s.terminalOpen && s.terminalMax);
@@ -252,17 +258,23 @@ export function Shell() {
             </LiveTitle>
           </Text>
           <WakeWord onChat={onChat} />
-          {onChat && <ChatProvider conversationId={conversationId} />}
-          {conversationId && <BrowserToggle conversationId={conversationId} />}
-          <TerminalToggle />
-          {conversationId && (
-            <IconButton
-              label="Find in chat"
-              shortcut="mod+f"
-              onClick={() => openFind(conversationId)}
-            >
-              <TextSearch />
-            </IconButton>
+          {onChat && <ChatProvider conversationId={conversationId} compact={phone} />}
+          {phone && conversationId ? (
+            <HeaderMore conversationId={conversationId} />
+          ) : (
+            <>
+              {conversationId && <BrowserToggle conversationId={conversationId} />}
+              <TerminalToggle />
+              {conversationId && (
+                <IconButton
+                  label="Find in chat"
+                  shortcut="mod+f"
+                  onClick={() => openFind(conversationId)}
+                >
+                  <TextSearch />
+                </IconButton>
+              )}
+            </>
           )}
         </header>
         <Reconnecting />

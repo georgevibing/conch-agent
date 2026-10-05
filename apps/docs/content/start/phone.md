@@ -19,6 +19,10 @@ Prefer the terminal? `conch phone` turns the address on, and `conch pair` shows 
 
 In your phone's browser, add Conch to the Home Screen (in Safari: **Share → Add to Home Screen**). It opens like any app, with no app store.
 
+## Made for the small screen
+
+On a phone, Conch keeps the chat's name in view and folds the rest away. The header shows your provider's mark and how much of its limit is left as a ring; **⋯** holds **Find in chat**, the browser and the terminal. The message box keeps to one line: the model by name, the mode as its icon (tap it to see which), and **Talk** in Send's place until you type. The working folder is in **Settings → General**. Filters that don't fit (in **Apps**, **Activity** and elsewhere) slide sideways, and the page itself never does.
+
 ## Let it reach you
 
 Turn on notifications in **Settings → Notifications**. Conch tells you when it needs your OK (with **Deny** right there) or has a question for you, when an answer is ready while you're away, and when a routine has run. It never notifies you while you're looking at it.

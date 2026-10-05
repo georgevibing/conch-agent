@@ -59,6 +59,10 @@ export class Translator {
   #problem?: TurnProblem;
   /** Each model request's tokens (by message id: one request can arrive as several messages). */
   #used = new Map<string, { input: number; cached: number; output: number }>();
+  /** How much the model reads at once: a million for a `[1m]` model, else Claude's 200k. */
+  #window = 200_000;
+  /** How full the main conversation is: its latest request, read and answered. */
+  #context?: number;
 
   /** The turn so far, sub-agents included: they spend too. */
   #total() {
@@ -84,6 +88,7 @@ export class Translator {
     switch (msg.type) {
       case 'system':
         if (msg.subtype === 'init') {
+          if (/\[1m\]/i.test(msg.model)) this.#window = 1_000_000;
           return [{ type: 'session', resumeId: msg.session_id, model: msg.model }];
         }
         if (msg.subtype === 'api_retry') {
@@ -145,8 +150,17 @@ export class Translator {
             cached,
             output: used.output_tokens ?? 0,
           });
+          // The main conversation's latest request is how full it is (a sub-agent has its own).
+          if (!msg.parent_tool_use_id) {
+            const entry = this.#used.get(msg.message.id);
+            if (entry) this.#context = entry.input + entry.output;
+          }
           // A running total, so an unattended run can stop at its limit (ADR 0057).
-          progress = { type: 'usage', usage: this.#total() };
+          progress = {
+            type: 'usage',
+            usage: this.#total(),
+            ...(this.#context && { context: { used: this.#context, window: this.#window } }),
+          };
         }
         if (msg.parent_tool_use_id) return progress ? [progress] : [];
         const out: EngineEvent[] = [];

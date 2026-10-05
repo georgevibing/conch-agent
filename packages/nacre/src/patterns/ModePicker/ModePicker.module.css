@@ -134,4 +134,28 @@
     justify-content: flex-end;
     gap: var(--nc-space-2);
   }
+
+  /* A narrow composer (a phone): the mode is its icon, in its colour, in a
+     round button. The name is on the button for screen readers, and in the
+     list it opens. */
+  @container composer (max-width: 34rem) {
+    /* `[data-tone]` outranks the shared chip's corner. */
+    .chip[data-tone] {
+      justify-content: center;
+      gap: 0;
+      inline-size: var(--nc-control-sm);
+      padding: 0;
+      border-radius: var(--nc-radius-full);
+      corner-shape: round;
+    }
+
+    .chip > :not(.chipIcon) {
+      display: none;
+    }
+
+    .chipIcon > svg {
+      inline-size: 1rem;
+      block-size: 1rem;
+    }
+  }
 }

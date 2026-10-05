@@ -24,6 +24,7 @@ import type {
   TurnPause,
   TurnProblem,
   Usage,
+  ContextFill,
 } from '@conch/protocol';
 
 import { honouredMode, skillHolds, type PermissionMode, type SkillHold } from '@conch/protocol';
@@ -126,6 +127,8 @@ interface PendingPermission {
    * for leaving the sealed box.
    */
   waive?: string;
+  /** Asked because of what the person chose in Apps: picking Full trust doesn't answer it. */
+  everyMode?: boolean;
 }
 
 /**
@@ -149,6 +152,16 @@ export interface AskRequest {
   vault?: VaultPermission;
   /** Asked because the chat read something untrusted (ADR 0028): why. */
   taint?: string;
+  /**
+   * No "Always allow": it shows exactly what goes to other people (a message,
+   * a draft), so it's asked each time.
+   */
+  once?: boolean;
+  /**
+   * Asked because the person set this tool to Ask in Apps: it asks in every
+   * mode, and "Always allow" lets it through for the rest of the chat.
+   */
+  chosen?: boolean;
 }
 
 /** Per-turn additions used by routines (and future automations). */
@@ -360,6 +373,8 @@ export interface ToolContext {
   /**
    * The chat has read something untrusted (ADR 0028): why, in a sentence.
    * Tools that would act without asking (a trusted site) ask once instead.
+   * In Full trust, in a chat someone is in, only someone else's words count:
+   * what it read alone doesn't stop it.
    */
   untrusted?: () => string | undefined;
   /**
@@ -434,6 +449,8 @@ interface Live {
 
 /** How often a running turn's log is saved: a crash loses this much, not the whole turn. */
 const CHECKPOINT_MS = 10_000;
+/** How often, at most, a running turn tells the chat what it has used (`turn.usage`). */
+const USAGE_EVERY_MS = 750;
 
 /** How many times in a row a chat is picked up again by itself after Conch stopped under it. */
 const MAX_AUTO_RESUMES = 2;
@@ -1737,6 +1754,7 @@ export class ConversationManager {
       for (const [permissionId, pending] of live.permissions)
         if (
           pending.remember &&
+          !pending.everyMode &&
           (!pending.waive || watched) &&
           trustAllows(mode, pending.toolName, nativeTools)
         )
@@ -1756,6 +1774,7 @@ export class ConversationManager {
           toolName: request.toolName,
           remember: request.remember,
           ...(request.waive && { waive: request.waive }),
+          ...(request.chosen && { everyMode: true }),
         });
         const expire = () => {
           if (!live.permissions.delete(permissionId)) return;
@@ -1784,9 +1803,37 @@ export class ConversationManager {
           ...(request.vault && { vault: request.vault }),
           ...(request.taint && { taint: request.taint }),
           ...(request.waive && { lasting: true }),
+          ...(request.once && { once: true }),
         });
         this.#setStatus(live, 'awaiting-permission');
       });
+    };
+
+    /** Full trust is yours to give (ADR 0028): a chat you're in doesn't stop to check. */
+    const trusting = () => watched && resolved.permissionMode === 'bypassPermissions';
+    /** What a skill's list said this turn: "always" can't lift those (ADR 0031). */
+    const limitsSaid = new Set<string>();
+    /**
+     * A question one of Conch's own tools puts (an app's tool, trying a draft,
+     * a paid picture): "Always allow" holds for the rest of the chat, as for any
+     * other tool. Not where "always" would be untrue: the browser and Passwords
+     * keep their own, words going to other people are shown each time, and
+     * someone else's words in the chat or a skill's list ask every time.
+     */
+    const hostAsk = (request: AskRequest): Promise<PermissionDecision> => {
+      if (request.browser || request.vault || request.once)
+        return askUser({ ...request, remember: false }, abort.signal);
+      if (!request.taint) {
+        if (live.alwaysAllow.has(request.toolName)) return Promise.resolve('allow');
+        return askUser({ ...request, remember: true }, abort.signal);
+      }
+      const lifts =
+        this.#tainted(live).every((source) => source.kind !== 'person') &&
+        ![...limitsSaid].some((limit) => request.taint?.includes(limit));
+      if (!lifts) return askUser({ ...request, remember: false }, abort.signal);
+      const waive = `read:${request.toolName}`;
+      if (live.waived.has(waive)) return Promise.resolve('allow');
+      return askUser({ ...request, remember: true, waive }, abort.signal);
     };
 
     const tools = memoryTools({
@@ -1838,15 +1885,21 @@ export class ConversationManager {
             append: (event) => this.#append(live, event),
             engine,
             permissionMode: resolved.permissionMode,
-            ask: (request) => askUser({ ...request, remember: false }, abort.signal),
+            ask: hostAsk,
             signal: abort.signal,
-            restricted: (capability, detail) => skillLimit({ capability, detail }),
+            restricted: async (capability, detail) => {
+              const limit = await skillLimit({ capability, detail });
+              if (limit) limitsSaid.add(limit);
+              return limit;
+            },
             unattended: Boolean(extras || live.record.origin),
             ...(live.record.origin && { origin: live.record.origin }),
             ...(resolved.model && { model: resolved.model }),
             waitingForYou: (waiting) => this.#waitingForYou(live, waiting),
             untrusted: () => {
-              const tainted = settings.preferences.checkAfterReading ? this.#tainted(live) : [];
+              const tainted = settings.preferences.checkAfterReading
+                ? this.#tainted(live).filter((source) => !trusting() || source.kind === 'person')
+                : [];
               return tainted.length ? describeTaint(tainted) : undefined;
             },
             taints: () => this.#tainted(live),
@@ -1893,6 +1946,9 @@ export class ConversationManager {
       ? handoff(live.events, { afterSeq: -1, beforeSeq: asked, restart: true })
       : undefined;
     let answeredWith: string | undefined;
+    /** How full the context is, as the engine last said; and when the chat last heard the count. */
+    let context: ContextFill | undefined;
+    let usageSaidAt = 0;
     const integrations = this.deps.integrations;
     const appendIssue = (issue: IntegrationIssueInput) =>
       this.#append(live, { type: 'integration.issue', ...issue });
@@ -1969,13 +2025,12 @@ export class ConversationManager {
       toolName: string;
       input: Record<string, unknown>;
     }): Promise<{ reason: string; waive?: string } | undefined> => {
-      // Full trust is yours to give: a chat you're in doesn't stop to check.
-      // One that runs by itself (a routine, a chat app) still does, and so does
-      // one where someone else is talking to the assistant.
-      const trusting = watched && resolved.permissionMode === 'bypassPermissions';
+      // One that runs by itself (a routine, a chat app) still checks, and so
+      // does one where someone else is talking to the assistant.
+      const trusted = trusting();
       if (leavesSandbox(request.toolName, request.input)) {
         const key = `box:${request.toolName}`;
-        if (!trusting && !live.waived.has(key))
+        if (!trusted && !live.waived.has(key))
           return {
             reason: !sandboxSupport().available
               ? 'This computer can’t seal commands, so this one runs with your access to this computer and the internet.'
@@ -2002,7 +2057,7 @@ export class ConversationManager {
       if (limited) return { reason: limited };
       // "Always allow" for this tool, said after the chat read before, holds the same way.
       const readKey = `read:${request.toolName}`;
-      const waived = trusting || live.waived.has(readKey);
+      const waived = trusted || live.waived.has(readKey);
       const tainted = guardOn
         ? this.#tainted(live).filter((source) => !waived || source.kind === 'person')
         : [];
@@ -2349,6 +2404,16 @@ export class ConversationManager {
             );
             break;
           case 'usage': {
+            if (event.context) context = event.context;
+            // The chat sees the count go up as it works, a few times a second at most.
+            if (Date.now() - usageSaidAt >= USAGE_EVERY_MS) {
+              usageSaidAt = Date.now();
+              this.#append(live, {
+                type: 'turn.usage',
+                usage: event.usage,
+                ...(context && { context }),
+              });
+            }
             extras?.onUsage?.(event.usage, { engine, model: answeredWith ?? resolved.model });
             const spent = watch && desk?.usd(event.usage, answeredWith ?? resolved.model);
             if (watch && spent !== undefined && !capped) {
@@ -2363,6 +2428,7 @@ export class ConversationManager {
           }
           case 'done':
             outcome = event.outcome;
+            if (event.context) context = event.context;
             completed = {
               usage: event.usage,
               error: event.error,
@@ -2419,6 +2485,7 @@ export class ConversationManager {
           outcome,
           usage: completed?.usage,
           ...(cost && { cost }),
+          ...(context && { context }),
           ...(problem && { problem }),
           // A spending limit stops the turn with its own card: never a pause beside it (ADR 0085).
           ...(completed?.paused && !capped && { paused: completed.paused }),

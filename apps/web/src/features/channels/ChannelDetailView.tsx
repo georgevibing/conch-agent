@@ -57,7 +57,7 @@ import {
 } from './queries';
 import { AlwaysOnHint } from '../background/AlwaysOnHint';
 import { googleApi } from '../integrations/googleApi';
-import { appPath, connectPath, TALK_PATH } from '../integrations/paths';
+import { APPS_PATH, appPath, connectPath } from '../integrations/paths';
 import { integrationKeys, useIntegrations } from '../integrations/queries';
 
 /** The apps a channel can be a half of (ADR 0052), for the way back. */
@@ -79,7 +79,7 @@ export function ChannelDetailView({ channelId }: { channelId: string }) {
         <EmptyState
           title="That isn’t connected any more"
           description="It may have been disconnected on another device."
-          actions={<Button onClick={() => void navigate(TALK_PATH)}>See all apps</Button>}
+          actions={<Button onClick={() => void navigate(APPS_PATH)}>See all apps</Button>}
         />
       </Page>
     );
@@ -146,7 +146,7 @@ function Detail({ channel }: { channel: Channel }) {
         data ? { ...data, channels: data.channels.filter((c) => c.id !== channel.id) } : data,
       );
       toast(`${app.name} is disconnected.`);
-      void navigate(TALK_PATH);
+      void navigate(APPS_PATH);
     } catch (error) {
       toast.error(errorText(error, 'Couldn’t disconnect it.'));
     }
@@ -162,8 +162,8 @@ function Detail({ channel }: { channel: Channel }) {
         leadingIcon={<ArrowLeft />}
         className={styles.back}
       >
-        {/* Back to the app it's a half of (Slack, Gmail), or to Apps. */}
-        <Link to={channel.app ? appPath(channel.app) : TALK_PATH}>
+        {/* Back to the app it's a half of (Slack, Gmail), or to Apps as you'd find it: unfiltered. */}
+        <Link to={channel.app ? appPath(channel.app) : APPS_PATH}>
           {channel.app ? (CATALOG_NAMES[channel.app] ?? 'Apps') : 'Apps'}
         </Link>
       </Button>

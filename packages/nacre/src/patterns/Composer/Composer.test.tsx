@@ -65,6 +65,38 @@ describe('Composer', () => {
     expect(onSubmit).toHaveBeenCalledWith('ship it');
   });
 
+  it('offers Talk in Send’s place while the box is empty, and Send once you type', async () => {
+    const user = userEvent.setup();
+    const onTalk = vi.fn();
+    const onSubmit = vi.fn();
+    const { container } = renderNacre(
+      <Composer voice={{ label: 'Talk with Conch', onClick: onTalk }} onSubmit={onSubmit} />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Talk with Conch' }));
+    expect(onTalk).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('button', { name: 'Send message' })).toBeNull();
+    await expectAccessible(container);
+
+    await user.type(screen.getByRole('textbox'), 'hi');
+    expect(screen.queryByRole('button', { name: 'Talk with Conch' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Send message' }));
+    expect(onSubmit).toHaveBeenCalledWith('hi');
+    // Empty again: Talk is back.
+    expect(screen.getByRole('button', { name: 'Talk with Conch' })).toBeEnabled();
+  });
+
+  it('keeps Stop, not Talk, while running', () => {
+    renderNacre(
+      <Composer
+        running
+        onStop={() => {}}
+        voice={{ label: 'Talk with Conch', onClick: () => {} }}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Talk with Conch' })).toBeNull();
+  });
+
   it('becomes a Stop button while running and stops on Escape', async () => {
     const user = userEvent.setup();
     const onStop = vi.fn();

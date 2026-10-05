@@ -261,6 +261,7 @@ export class ConchApps implements HostedApps {
         // The card reads “Conch would like to use Tally to count one more: 2”.
         summary: `use ${plainLine(app.manifest.name, 40)} to ${inSentence(plainLine(tool.title || tool.name, 80))}${what ? `: ${what}` : ''}`,
         ...(why && { taint: why }),
+        ...(decision === 'ask' && { chosen: true }),
       });
       if (answer === 'deny')
         return {

@@ -265,3 +265,16 @@ can be:
 - `sandboxSupport` offers the command only where it can help: missing
   programs, or Ubuntu's restriction. A container that refuses namespaces gets
   no command, because none would work.
+
+## Update (2026-10-05): Conch's own tools too
+
+Conch's own tools ask by themselves (an app's tool, `app_try` on a draft that
+reaches the web, a paid picture), and they had missed both rules above: their
+`untrusted` still spoke in Full trust, and their questions never remembered, so
+**Always allow** on them did nothing. Now `untrusted` is quiet in Full trust in
+a chat someone is in, unless someone else's words are in it, and every such
+question takes **Always allow** for the rest of the chat (`read:<tool>` after
+reading, the tool itself otherwise). Not the browser and Passwords, which keep
+their own; not a Slack message or a Gmail draft (`once`), whose words are shown
+each time; not someone else's words or a skill's list. A tool the person set to
+Ask in Apps (`chosen`) still asks in Full trust, and takes **Always allow**.

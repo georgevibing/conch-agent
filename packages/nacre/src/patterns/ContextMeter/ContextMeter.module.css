@@ -1,0 +1,85 @@
+@layer nacre.components {
+  /* Never squeezed to its ring: the number is short, and it's the point. Longer chips give way. */
+  .chip {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* A new number settles in: a soft rise and fade, never a jump in width. */
+  .count {
+    display: inline-block;
+    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .chip[data-counting] .count {
+    color: var(--nc-text-muted);
+  }
+
+  .chip[data-severity='warning'] .count {
+    color: light-dark(oklch(0.5 0.12 60), oklch(0.85 0.12 var(--nc-warning-h)));
+  }
+
+  .chip[data-severity='critical'] .count {
+    color: light-dark(oklch(0.5 0.17 var(--nc-danger-h)), oklch(0.78 0.14 var(--nc-danger-h)));
+  }
+
+  .panel {
+    inline-size: min(19rem, calc(100vw - var(--nc-space-8)));
+  }
+
+  .body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+  }
+
+  .head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+  }
+
+  .title {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  .share,
+  .line {
+    font-size: var(--nc-text-sm);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-muted);
+  }
+
+  .line {
+    margin: 0;
+  }
+
+  .line strong {
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .note {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-subtle);
+  }
+
+  .compact {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2) var(--nc-space-3);
+    padding-block-start: var(--nc-space-1);
+  }
+
+  .hint {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+}

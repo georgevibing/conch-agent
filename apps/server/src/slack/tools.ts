@@ -75,7 +75,13 @@ export function slackTools(slack: SlackService, ctx: ToolContext): HostTool[] {
   const people = new Map<string, string>();
   const person = (id: string) => people.get(id);
 
-  const ask = async (name: SlackToolName, summary: string, input: Record<string, unknown>) => {
+  /** `send` shows the words each time; a read the person set to Ask takes "Always allow". */
+  const ask = async (
+    name: SlackToolName,
+    summary: string,
+    input: Record<string, unknown>,
+    why: 'send' | 'chosen',
+  ) => {
     const restricted = await ctx.restricted?.('apps', 'slack');
     const warning = [ctx.untrusted?.(), restricted].filter(Boolean).join(' ');
     return ctx.ask({
@@ -83,6 +89,7 @@ export function slackTools(slack: SlackService, ctx: ToolContext): HostTool[] {
       input,
       summary,
       ...(warning ? { taint: warning } : {}),
+      ...(why === 'send' ? { once: true } : { chosen: true }),
     });
   };
 
@@ -106,7 +113,7 @@ export function slackTools(slack: SlackService, ctx: ToolContext): HostTool[] {
       const args = z.object(input).parse(raw);
       try {
         if ((await slack.decide(name)) === 'ask') {
-          const decision = await ask(name, summary(args), args);
+          const decision = await ask(name, summary(args), args, 'chosen');
           if (decision === 'deny')
             return { text: 'The user said no, so Slack wasn’t read.', effect: 'not-executed' };
         }
@@ -329,6 +336,7 @@ export function slackTools(slack: SlackService, ctx: ToolContext): HostTool[] {
           'slack_send_message',
           `send this to #${name} in Slack${args.thread ? ' (in a thread)' : ''}: “${args.text}”`,
           { ...args, channelName: name },
+          'send',
         );
         if (decision === 'deny')
           return { text: 'The user said no, so nothing was sent.', effect: 'not-executed' };

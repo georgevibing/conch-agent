@@ -1770,6 +1770,23 @@ export class MockEngine implements Engine {
         return;
       }
 
+      // A long turn that says what it has used as it goes, and how full the chat is.
+      if (/\bcount as you go\b/i.test(text)) {
+        const window = 200_000;
+        let usage = { inputTokens: 0, outputTokens: 0 };
+        for (let i = 1; i <= 8; i++) {
+          await wait(600);
+          usage = {
+            inputTokens: usage.inputTokens + 18_000 + i * 6_000,
+            outputTokens: usage.outputTokens + 300,
+          };
+          yield { type: 'usage', usage, context: { used: 18_000 + i * 6_300, window } };
+        }
+        yield { type: 'text', messageId, delta: 'Counted as I went.' };
+        yield { type: 'message-done', messageId };
+        yield { type: 'done', outcome: 'success', usage, context: { used: 69_000, window } };
+        return;
+      }
       const report = input.tools.find((t) => t.name === 'report_outcome');
       // A routine that never stops looking: each step re-sends its whole context,
       // as a real tool loop does, until its spending limit stops it (ADR 0057).

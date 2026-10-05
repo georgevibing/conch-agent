@@ -113,6 +113,19 @@
     transform: rotate(180deg);
   }
 
+  /* A narrow composer (a phone): the model's name gets the room; how hard it
+     thinks is in the panel it opens, and on the button for screen readers. */
+  @container composer (max-width: 34rem) {
+    .chipMeta {
+      display: none;
+    }
+
+    .chip {
+      gap: var(--nc-space-1);
+      padding-inline: var(--nc-space-1-5) var(--nc-space-1);
+    }
+  }
+
   /* ── Panel ──────────────────────────────────────────────────────────── */
   /* A column: when the space above the composer runs short, the model list
      gives way first, so the dials and the footer always stay in view. */

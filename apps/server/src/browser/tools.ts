@@ -247,7 +247,8 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
     }
     const kind: BrowserPermission['kind'] =
       request.kind ?? (request.highStakes ? 'high-stakes' : 'site');
-    // Read something untrusted (ADR 0028): even a trusted site, or Full trust, asks once per site.
+    // Read something untrusted (ADR 0028): even a trusted site asks once per site (Full trust
+    // doesn't, in a chat you're in: `untrusted` is empty there unless someone else spoke).
     // An upload sends the person's files out: it carries the same note when the chat read something.
     const untrusted =
       kind === 'site' || kind === 'upload'

@@ -419,6 +419,8 @@ export function googleTools(
         input: { ...args, accountEmail: account.email },
         summary: `save a draft to ${args.to.join(', ')} with subject “${args.subject}” (not send it)`,
         ...(warning ? { taint: warning } : {}),
+        // The exact draft is shown each time.
+        once: true,
       });
       if (decision === 'deny')
         return {

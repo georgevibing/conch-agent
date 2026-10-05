@@ -18,9 +18,11 @@ Your chats are in the sidebar, newest first, grouped by day. Point at one and pr
 
 <kbd>esc</kbd> or the stop button stops the reply. It ends there at once with a **Stopped** mark (and how long it ran), and you can write your next message straight away: if the provider is still winding down, it waits a moment and then goes.
 
+While it works, the little ring beside the mode picker counts what the message has used so far, ticking up as it goes: **24k**, **1.2M**. The words above the reply change as it goes too, and say what it's doing after each step: reading a command's output, looking at a page, checking an edit.
+
 ### Long jobs
 
-Your assistant can take as many steps as a job needs: booking something across a few websites, tidying a big folder. A message you're watching runs until it's done, with no limit on steps, time or reading. It only stops by itself when it keeps trying the same thing without getting anywhere. It's told first, and tries another way; only if it carries on does it pause.
+Your assistant can take as many steps as a job needs: booking something across a few websites, tidying a big folder. A message you're watching runs until it's done, with no limit on steps, time or reading. It only stops by itself when it's plainly getting nowhere: the very same step coming back with the very same answer, again and again in quick succession. Checking on something that takes a while, failing tests on the way to fixing them, or a search that finds nothing are all work, never a reason to stop. It's told first, twice, and tries another way; only if it carries on does it pause, with **Carry on** to pick up where it was.
 
 The reply then ends with one sentence saying why it paused. Press **Carry on** and it picks up exactly where it stopped, with everything it had done. Or say what to do differently.
 
@@ -121,7 +123,9 @@ A chat can go on as long as you like, with any model. Each model reads only so m
 - Before the start of a chat is summarised, Conch learns what you said there, as the [memory](./memory.md) tidy-up does.
 - If the model still says the chat is too long, Conch summarises more and sends your message again by itself. Only if that isn't enough does the chat offer a model that reads more at once, or a new chat.
 
-Type `/compact` to summarise the start now. Add what matters most to you, and the summary keeps it: `/compact the garden plan`. In <kbd>mod+k</kbd>, **Summarise the start of this chat** does the same. Claude Code and Codex summarise long chats themselves, so there `/compact` is theirs.
+**How full is it?** The ring beside the mode picker fills as the chat grows, with the share beside it (**35%**). It turns amber from three quarters and red from nine tenths. Press it to see how much the model reads each time, out of how much, and **Compact now**.
+
+Type `/compact`, or press **Compact now**, to summarise the start now. Add what matters most to you, and the summary keeps it: `/compact the garden plan`. In <kbd>mod+k</kbd>, **Summarise the start of this chat** does the same. Claude Code and Codex keep their own memory of the chat, so there `/compact` goes to them, and they summarise it their own way.
 
 ## Good to know
 

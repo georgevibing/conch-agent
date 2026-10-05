@@ -2,8 +2,11 @@ import { MotionConfig, motion } from 'motion/react';
 import { ToggleGroup } from 'radix-ui';
 import {
   createContext,
+  useCallback,
   useContext,
   useId,
+  useLayoutEffect,
+  useRef,
   useState,
   type ComponentProps,
   type ReactNode,
@@ -44,11 +47,14 @@ function SegmentedControlRoot({
   block,
   className,
   children,
+  ref: forwarded,
+  onScroll,
   ...props
 }: SegmentedControlProps) {
   const [internal, setInternal] = useState(defaultValue);
   const value = valueProp ?? internal;
   const indicatorId = useId();
+  const { ref, edges, measure } = useOverflow(value);
 
   return (
     <SegmentedContext.Provider value={{ value, indicatorId }}>
@@ -63,14 +69,67 @@ function SegmentedControlRoot({
           }}
           data-size={size}
           data-block={block || undefined}
+          data-more-start={edges.start || undefined}
+          data-more-end={edges.end || undefined}
           className={cx(styles.root, className)}
           {...props}
+          ref={(el: HTMLDivElement | null) => {
+            ref.current = el;
+            if (typeof forwarded === 'function') forwarded(el);
+            else if (forwarded) forwarded.current = el;
+          }}
+          onScroll={(event) => {
+            measure();
+            onScroll?.(event);
+          }}
         >
           {children}
         </ToggleGroup.Root>
       </MotionConfig>
     </SegmentedContext.Provider>
   );
+}
+
+/**
+ * Wider than the room it has (a phone): it scrolls sideways within its own
+ * width instead of pushing the page wider, fades at the edge that has more,
+ * and keeps the chosen segment in view.
+ */
+function useOverflow(value: string) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ start: false, end: false });
+  const measure = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const max = el.scrollWidth - el.clientWidth;
+    const at = Math.abs(el.scrollLeft);
+    const next = { start: max > 1 && at > 1, end: max > 1 && at < max - 1 };
+    setEdges((prev) => (prev.start === next.start && prev.end === next.end ? prev : next));
+  }, []);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [measure]);
+  // The chosen one in view, without moving the page around it.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || el.scrollWidth <= el.clientWidth) return;
+    const on = el.querySelector<HTMLElement>('[data-state="on"]');
+    if (!on) return;
+    const box = el.getBoundingClientRect();
+    const item = on.getBoundingClientRect();
+    const left = item.left - box.left + el.scrollLeft;
+    const right = left + item.width;
+    if (left < el.scrollLeft) el.scrollLeft = left - 16;
+    else if (right > el.scrollLeft + el.clientWidth) el.scrollLeft = right - el.clientWidth + 16;
+    measure();
+  }, [value, measure]);
+  return { ref, edges, measure };
 }
 
 export interface SegmentedControlItemProps extends ComponentProps<typeof ToggleGroup.Item> {

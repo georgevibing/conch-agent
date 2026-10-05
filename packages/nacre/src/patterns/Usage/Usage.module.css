@@ -214,6 +214,18 @@
     background: var(--usage-fill);
   }
 
+  /* A phone's header: the mark and the ring say it; the rest is in the panel. */
+  .provider[data-compact] {
+    gap: var(--nc-space-1);
+    padding-inline: var(--nc-space-2);
+  }
+
+  /* What only the person can fix ("Sign in") keeps its words. */
+  .provider[data-compact][data-kind='provider'] .providerName,
+  .provider[data-compact] .meterText {
+    display: none;
+  }
+
   .provider[data-kind='connect'] {
     background: var(--nc-accent-3);
     box-shadow: inset 0 0 0 1px var(--nc-accent-6);

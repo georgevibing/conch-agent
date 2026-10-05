@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { closeOpenMarkdown, splitBlocks, verbsFor } from './stream';
+import { closeOpenMarkdown, splitBlocks } from './stream';
+import { ALL_VERBS, familyOf, verbsFor } from './verbs';
 
 describe('splitBlocks', () => {
   it('splits at blank lines and keeps offsets', () => {
@@ -53,12 +54,31 @@ describe('verbsFor', () => {
       'Tracing the problem',
     ]);
     expect(verbsFor('Draft an email to Sam', 'starting')).toContain('Finding the words');
-    expect(verbsFor('hello', 'starting')).toContain('Thinking it through');
+    expect(verbsFor('hello', 'starting').length).toBeGreaterThan(8);
   });
 
-  it('admits a long think and reads results after tools', () => {
-    const verbs = verbsFor('hello', 'starting');
-    expect(verbs.at(-1)).toBe('Still with you');
-    expect(verbsFor('hello', 'after-tool')).toContain('Reading the results');
+  it('admits a long think, and talks about what just ran after a tool', () => {
+    expect(verbsFor('hello', 'starting').slice(-3).join(' ')).toMatch(
+      /still|deeper|right|careful|thorough|time|solid|persisting|twice|corners|mile|harder|haul|properly/i,
+    );
+    expect(verbsFor('fix the tests', 'after-tool', { tool: 'shell' }).join(' ')).toMatch(
+      /output|log|print|exit|ran|run|passed|lines|trace|warn|error|verdict|left|command|numbers|changed|bit|worked|said|tail/i,
+    );
+    expect(familyOf('Bash')).toBe('shell');
+    expect(familyOf('mcp__conch__browser_click')).toBe('browser');
+    expect(familyOf('mcp__conch__remember')).toBe('memory');
+    expect(familyOf('mcp__notion__create_page')).toBe('apps');
+  });
+
+  it('has hundreds of words, and every wait gets its own order', () => {
+    expect(ALL_VERBS.size).toBeGreaterThan(300);
+    const firsts = new Set(
+      Array.from({ length: 20 }, (_, i) => verbsFor('x', 'after-tool', { seed: `step ${i}` })[0]),
+    );
+    expect(firsts.size).toBeGreaterThan(8);
+    // The same wait keeps its words while it lasts.
+    expect(verbsFor('x', 'after-tool', { seed: 'a' })).toEqual(
+      verbsFor('x', 'after-tool', { seed: 'a' }),
+    );
   });
 });

@@ -106,8 +106,20 @@ export const Usage = z.object({
 export type Usage = z.infer<typeof Usage>;
 
 /**
+ * How full the model's context is: what its latest request read (its whole
+ * conversation, instructions and tools included) against how much it can read
+ * before older messages get summarised. `window` is absent when the provider
+ * doesn't say.
+ */
+export const ContextFill = z.object({
+  used: z.number().int().nonnegative(),
+  window: z.number().int().positive().optional(),
+});
+export type ContextFill = z.infer<typeof ContextFill>;
+
+/**
  * A turn that stopped to check in rather than run on (ADR 0085): it did a lot
- * for one message, or kept trying the same thing. Not a failure: the chat
+ * for one message, or the same step kept giving the same answer. Not a failure: the chat
  * offers **Carry on**, which picks up where it stopped.
  */
 export const TurnPause = z.object({

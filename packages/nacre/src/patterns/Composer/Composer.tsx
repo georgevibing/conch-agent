@@ -1,5 +1,6 @@
 import {
   ArrowUp,
+  AudioLines,
   CornerDownRight,
   FileText,
   Image as ImageIcon,
@@ -95,6 +96,13 @@ export interface ComposerProps extends Omit<
   /** What the send button does, when it isn't plain sending (e.g. "Send when it’s done"). */
   sendLabel?: string;
   /**
+   * Talking instead of typing. While the box is empty (and nothing is
+   * running) the send button becomes this, so there's one button fewer and
+   * the empty box still has something to press; the moment you type, it's
+   * Send again.
+   */
+  voice?: { label: string; onClick: () => void };
+  /**
    * Messages sent before, oldest first. ↑ in an empty box brings back the
    * latest, and again the one before; ↓ walks forward, past the newest to an
    * empty box. A recalled message you change is yours: the arrows move the
@@ -151,6 +159,7 @@ export function Composer({
   canSubmitEmpty = false,
   sendBlocked,
   sendLabel = 'Send message',
+  voice,
   history,
   className,
   ...props
@@ -282,6 +291,8 @@ export function Composer({
   };
 
   const showStop = running && !(allowSubmitWhileRunning && hasContent);
+  const showVoice = Boolean(voice) && !showStop && !running && !hasContent && !disabled;
+  const mode = showStop ? 'stop' : showVoice ? 'talk' : 'send';
 
   return (
     <div
@@ -389,19 +400,26 @@ export function Composer({
             {actions}
             <IconButton
               variant="solid"
-              tone={showStop ? 'neutral' : 'accent'}
+              tone={mode === 'stop' ? 'neutral' : 'accent'}
               shape="circle"
               size="sm"
-              label={showStop ? 'Stop' : (sendBlocked ?? sendLabel)}
-              shortcut={showStop ? 'esc' : 'enter'}
-              data-mode={showStop ? 'stop' : 'send'}
+              label={
+                mode === 'stop'
+                  ? 'Stop'
+                  : mode === 'talk' && voice
+                    ? voice.label
+                    : (sendBlocked ?? sendLabel)
+              }
+              shortcut={mode === 'stop' ? 'esc' : mode === 'send' ? 'enter' : undefined}
+              data-mode={mode}
               className={styles.send}
-              disabled={showStop ? !onStop : !canSubmit}
-              onClick={showStop ? onStop : submit}
+              disabled={mode === 'stop' ? !onStop : mode === 'send' && !canSubmit}
+              onClick={mode === 'stop' ? onStop : mode === 'talk' ? voice?.onClick : submit}
             >
               <span className={styles.sendIcons}>
                 <ArrowUp className={styles.arrow} />
                 <Square className={styles.stop} />
+                <AudioLines className={styles.voice} />
               </span>
             </IconButton>
           </div>
@@ -414,6 +432,11 @@ export function Composer({
 export interface ComposerChipProps extends ComponentProps<'button'> {
   /** Icon before the label; stays visible when the label is squeezed out. */
   icon?: ReactNode;
+  /**
+   * Steps out entirely on a narrow composer (a phone), for something that
+   * can be reached elsewhere. The rest keep their room.
+   */
+  tuck?: boolean;
 }
 
 /**
@@ -424,6 +447,7 @@ export interface ComposerChipProps extends ComponentProps<'button'> {
  */
 export function ComposerChip({
   icon,
+  tuck = false,
   type = 'button',
   className,
   children,
@@ -433,6 +457,7 @@ export function ComposerChip({
     <button
       type={type}
       data-lustre=""
+      data-tuck={tuck || undefined}
       className={cx(picker.chip, styles.chip, className)}
       {...props}
     >

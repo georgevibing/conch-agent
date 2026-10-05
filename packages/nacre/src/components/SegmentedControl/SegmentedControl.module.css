@@ -18,6 +18,36 @@
       inset 0 0 0 1px var(--nc-border-subtle),
       inset 0 1px 2px 0 var(--nc-wash-1);
     isolation: isolate;
+    /* Never wider than its room: past that it scrolls sideways (a phone). */
+    --fade: var(--nc-space-6);
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .root::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* More to see past an edge: that edge fades, so it reads as a row to swipe. */
+  .root[data-more-start] {
+    mask-image: linear-gradient(90deg, transparent, #000 var(--fade));
+  }
+
+  .root[data-more-end] {
+    mask-image: linear-gradient(90deg, #000 calc(100% - var(--fade)), transparent);
+  }
+
+  .root[data-more-start][data-more-end] {
+    mask-image: linear-gradient(
+      90deg,
+      transparent,
+      #000 var(--fade),
+      #000 calc(100% - var(--fade)),
+      transparent
+    );
   }
 
   .root[data-size='sm'] {
@@ -40,6 +70,7 @@
   .item {
     appearance: none;
     position: relative;
+    flex-shrink: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
