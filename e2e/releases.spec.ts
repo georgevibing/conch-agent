@@ -83,8 +83,18 @@ test('a new release: noticed once, its notes, a forged one refused, the channel,
   await page.setViewportSize({ width: 1280, height: 720 });
   await banner.getByRole('button', { name: 'What’s new' }).click();
 
-  // Settings → Health → Updates: the release, in its own words.
+  // The banner opens the dedicated update dialog, with notes ready to read.
+  const preview = page.getByRole('dialog', { name: 'Conch 0.2 is ready' });
+  await expect(preview).toBeVisible();
+  await expect(preview.getByRole('list', { name: 'New' })).toContainText(
+    'Edit pages by hand, with a live preview',
+  );
+  await preview.getByRole('button', { name: 'Later', exact: true }).click();
+
+  // Settings → Health still owns channel selection and the complete update history.
+  await page.getByRole('button', { name: /^Settings(?:,|$)/ }).click({ timeout: 10_000 });
   const settings = page.getByRole('dialog', { name: /Settings/ });
+  await settings.getByRole('tab', { name: 'Health' }).click();
   const card = settings.getByRole('region', { name: 'Conch 0.2 is ready' });
   await expect(card).toBeVisible();
   await expect(card).toContainText('You have 0.1.0');
@@ -143,7 +153,13 @@ test('a new release: noticed once, its notes, a forged one refused, the channel,
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k');
   await page.getByRole('combobox').fill('update conch');
   await page.getByRole('option', { name: /Update Conch to 0\.2/ }).click();
-  await expect(page.getByText('Updating Conch…').first()).toBeVisible({ timeout: 60_000 });
+  await page
+    .getByRole('dialog', { name: 'Conch 0.2 is ready' })
+    .getByRole('button', { name: 'Update now' })
+    .click();
+  await expect(page.getByRole('heading', { name: 'Updating Conch', exact: true })).toBeVisible({
+    timeout: 60_000,
+  });
   await expect
     .poll(() => bootId(request), { timeout: 90_000 })
     .not.toMatch(new RegExp(`^(${before})?$`));
@@ -161,11 +177,12 @@ test('a new release: noticed once, its notes, a forged one refused, the channel,
   expect(git(conch, 'status', '--porcelain', '--untracked-files=no')).toBe('');
 
   // The page came back by itself, on the new version, with what it brought.
-  const updated = page
-    .getByRole('dialog', { name: /Settings/ })
-    .getByRole('region', { name: 'Conch is up to date' });
+  const updated = page.getByRole('dialog', { name: 'You’re on the new Conch' });
   await expect(updated).toBeVisible({ timeout: 60_000 });
-  await expect(updated).toContainText(/0\.2\.0 · Updated/);
+  await expect(updated).toContainText(/Conch 0\.2 · Updated/);
+  await updated.getByRole('button', { name: 'Done', exact: true }).click();
+  await page.getByRole('button', { name: /^Settings(?:,|$)/ }).click({ timeout: 10_000 });
+  await settings.getByRole('tab', { name: 'Health' }).click();
   await expect(page.getByRole('button', { name: 'Go back to 0.1.0' })).toBeVisible();
 });
 
@@ -190,7 +207,9 @@ test('a release that doesn’t start: Conch goes back by itself, says so once, a
     .getByRole('region', { name: 'Conch 0.3 is ready' })
     .getByRole('button', { name: 'Update' })
     .click();
-  await expect(page.getByText('Updating Conch…').first()).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole('heading', { name: 'Updating Conch', exact: true })).toBeVisible({
+    timeout: 60_000,
+  });
   await expect
     .poll(() => bootId(request), { timeout: 150_000 })
     .not.toMatch(new RegExp(`^(${before})?$`));
@@ -199,9 +218,9 @@ test('a release that doesn’t start: Conch goes back by itself, says so once, a
     .toBe('0.2.0');
 
   // The gateway can be ready before RestartWatch reloads the browser. Let it
-  // finish and reopen Settings itself; navigating here races that reload and
+  // finish and open the outcome dialog itself; navigating here races that reload and
   // would also hide a broken automatic recovery from this journey.
-  const settings = page.getByRole('dialog', { name: /Settings/ });
+  const settings = page.getByRole('dialog', { name: 'The update didn’t finish' });
   await expect(settings).toBeVisible({ timeout: 60_000 });
   await expect(
     settings.getByText(
