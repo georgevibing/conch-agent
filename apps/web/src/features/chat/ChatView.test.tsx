@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Toaster } from '@conch/nacre';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -33,7 +33,7 @@ function events(conversationId: string, from: number, list: Record<string, unkno
 const sends = () =>
   (FakeSocket.last?.sent ?? []).filter(
     (m) => (m as { type: string }).type === 'conversation.send',
-  ) as { text: string }[];
+  ) as { text: string; steer?: boolean }[];
 
 describe('ChatView', () => {
   it('doesn’t take focus from a field you’re already typing in', async () => {
@@ -513,21 +513,28 @@ describe('The message box', () => {
     expect(box).toHaveValue('');
   });
 
-  it('queues what you send while it works, and sends it when the reply is over', async () => {
+  it('queues each message you send while it works, and sends them one at a time', async () => {
     const { box } = await open('c-queue');
     events('c-queue', 0, [
       { type: 'user.message', messageId: 'u1', text: 'Fix the bug' },
       { type: 'status', status: 'running' },
     ]);
     await userEvent.type(box, 'Then run the tests');
-    await userEvent.click(screen.getByRole('button', { name: 'Send when Conch is done' }));
-    expect(box).toHaveValue('');
-    expect(screen.getByRole('status', { name: 'Queued message' })).toHaveTextContent(
-      /Then run the tests/,
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Queue it: sends when Conch is done' }),
     );
-    expect(screen.getByText('Sends when Conch is done')).toBeInTheDocument();
-    // More written meanwhile joins it.
-    await userEvent.type(box, 'and the linter{Enter}');
+    expect(box).toHaveValue('');
+    await userEvent.type(box, 'And the linter{Enter}');
+    const queue = screen.getByRole('region', { name: '2 messages waiting' });
+    expect(
+      within(queue)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual([
+      expect.stringContaining('Then run the tests'),
+      expect.stringContaining('And the linter'),
+    ]);
+    expect(queue).toHaveTextContent('Sends one at a time when Conch is done');
     expect(sends()).toEqual([]);
     // Still writing when it goes: that stays in the box.
     await userEvent.type(box, 'one more thing');
@@ -536,28 +543,113 @@ describe('The message box', () => {
       { type: 'status', status: 'idle' },
     ]);
     await waitFor(() =>
-      expect(sends()).toEqual([
-        expect.objectContaining({ text: 'Then run the tests\n\nand the linter' }),
-      ]),
+      expect(sends()).toEqual([expect.objectContaining({ text: 'Then run the tests' })]),
     );
-    expect(screen.queryByText('Sends when Conch is done')).toBeNull();
     expect(box).toHaveValue('one more thing');
+    // The next waits for that reply.
+    expect(screen.getByRole('region', { name: 'A message waiting' })).toHaveTextContent(
+      'And the linter',
+    );
+    const sent = sends() as unknown as { clientMessageId: string }[];
+    events('c-queue', 4, [
+      { type: 'user.message', messageId: sent[0]?.clientMessageId, text: 'Then run the tests' },
+      { type: 'status', status: 'running' },
+      { type: 'turn.completed', outcome: 'success' },
+      { type: 'status', status: 'idle' },
+    ]);
+    await waitFor(() => expect(sends()).toHaveLength(2));
+    expect(sends()[1]).toMatchObject({ text: 'And the linter' });
+    expect(screen.queryByRole('region', { name: /waiting/ })).toBeNull();
   });
 
-  it('puts a queued message back in the box when the reply is stopped', async () => {
+  it('changes the order of what waits with the arrow keys on its handle', async () => {
+    const { box } = await open('c-order');
+    events('c-order', 0, [
+      { type: 'user.message', messageId: 'u1', text: 'Fix the bug' },
+      { type: 'status', status: 'running' },
+    ]);
+    await userEvent.type(box, 'First{Enter}');
+    await userEvent.type(box, 'Second{Enter}');
+    const handle = screen.getByRole('button', { name: /^Move “Second”, 2 of 2/ });
+    handle.focus();
+    await userEvent.keyboard('{ArrowUp}');
+    const queue = screen.getByRole('region', { name: '2 messages waiting' });
+    expect(
+      within(queue)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual([expect.stringContaining('Second'), expect.stringContaining('First')]);
+    expect(within(queue).getByRole('status')).toHaveTextContent('Moved to 1 of 2.');
+  });
+
+  it('steers with one: stops the reply and sends it now, and the rest keep waiting', async () => {
+    const { box } = await open('c-steer');
+    events('c-steer', 0, [
+      { type: 'user.message', messageId: 'u1', text: 'Refactor the parser' },
+      { type: 'status', status: 'running' },
+    ]);
+    await userEvent.type(box, 'Use the new API{Enter}');
+    await userEvent.type(box, 'Then add tests{Enter}');
+    const queue = screen.getByRole('region', { name: '2 messages waiting' });
+    const [first] = within(queue).getAllByRole('button', {
+      name: 'Steer: stop Conch and send this now',
+    });
+    await userEvent.click(first as HTMLElement);
+    // One step: the gateway stops the reply and then sends it, so nothing lands between.
+    expect(sends()).toEqual([expect.objectContaining({ text: 'Use the new API', steer: true })]);
+    // The stopped reply's end isn't a reason to hold the rest back, nor to send them yet.
+    events('c-steer', 2, [
+      { type: 'turn.completed', outcome: 'interrupted' },
+      { type: 'status', status: 'idle' },
+    ]);
+    expect(sends()).toHaveLength(1);
+    expect(screen.getByRole('region', { name: 'A message waiting' })).toHaveTextContent(
+      'Then add tests',
+    );
+    // The steered message's own reply ends: the next one goes, as any queued one would.
+    const steered = sends()[0] as unknown as { clientMessageId: string };
+    events('c-steer', 4, [
+      { type: 'user.message', messageId: steered.clientMessageId, text: 'Use the new API' },
+      { type: 'status', status: 'running' },
+      { type: 'turn.completed', outcome: 'success' },
+      { type: 'status', status: 'idle' },
+    ]);
+    await waitFor(() => expect(sends()).toHaveLength(2));
+    expect(sends()[1]).toMatchObject({ text: 'Then add tests' });
+  });
+
+  it('steers with what is in the box on mod+Enter instead of queueing it', async () => {
+    const { box } = await open('c-steer2');
+    events('c-steer2', 0, [
+      { type: 'user.message', messageId: 'u1', text: 'Refactor the parser' },
+      { type: 'status', status: 'running' },
+    ]);
+    await userEvent.type(box, 'Stop, use the old one{Control>}{Enter}{/Control}');
+    expect(sends()).toEqual([
+      expect.objectContaining({ text: 'Stop, use the old one', steer: true }),
+    ]);
+    expect(box).toHaveValue('');
+    expect(screen.queryByRole('region', { name: /waiting/ })).toBeNull();
+  });
+
+  it('holds the queue when you stop the reply, and sends one when you say', async () => {
     const { box } = await open('c-stopq');
     events('c-stopq', 0, [
       { type: 'user.message', messageId: 'u1', text: 'Write a story' },
       { type: 'status', status: 'running' },
     ]);
     await userEvent.type(box, 'Make it funny{Enter}');
-    expect(box).toHaveValue('');
     events('c-stopq', 2, [
       { type: 'turn.completed', outcome: 'interrupted' },
       { type: 'status', status: 'idle' },
     ]);
-    await waitFor(() => expect(box).toHaveValue('Make it funny'));
+    const queue = await screen.findByRole('region', { name: 'A message waiting' });
+    await waitFor(() => expect(queue).toHaveTextContent('Waiting: the reply was stopped'));
     expect(sends()).toEqual([]);
+    await userEvent.click(within(queue).getByRole('button', { name: 'Send this now' }));
+    // Nothing runs: a plain send, no steer.
+    expect(sends()).toEqual([expect.objectContaining({ text: 'Make it funny' })]);
+    expect(sends()[0]).not.toHaveProperty('steer');
   });
 
   it('takes a queued message back to change it', async () => {
@@ -567,10 +659,10 @@ describe('The message box', () => {
       { type: 'status', status: 'running' },
     ]);
     await userEvent.type(box, 'Make it funny{Enter}');
-    await userEvent.click(screen.getByRole('button', { name: 'Edit queued message' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Edit: take it back into the box' }));
     expect(box).toHaveValue('Make it funny');
     expect(box).toHaveFocus();
-    expect(screen.queryByText('Sends when Conch is done')).toBeNull();
+    expect(screen.queryByRole('region', { name: /waiting/ })).toBeNull();
   });
 
   it('keeps what you were writing in a chat when you come back to it', async () => {

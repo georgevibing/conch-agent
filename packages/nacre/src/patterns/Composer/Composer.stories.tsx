@@ -8,6 +8,7 @@ import { Tooltip } from '../../components/Tooltip';
 import { ContextMeter } from '../ContextMeter';
 import { DemoToolbar } from '../ModelPicker/fixtures';
 import { Composer, ComposerAttachment, ComposerChip, ComposerQueued } from './Composer';
+import { ComposerQueue } from './ComposerQueue';
 
 function FolderChip({ path }: { path: string }) {
   const name = path.split(/[\\/]/).filter(Boolean).at(-1) ?? path;
@@ -250,3 +251,48 @@ export const PhoneSmall: Story = {
     ),
   ],
 };
+
+function QueueDemo({ width }: { width?: number }) {
+  const [items, setItems] = useState([
+    { id: 'a', text: 'Once the PR is green, figure out why GitHub CI is failing on main' },
+    { id: 'b', text: 'Then update the docs for the new queue', meta: '2 files' },
+    { id: 'c', text: 'And tell me what changed, in a few lines' },
+  ]);
+  return (
+    <div style={{ maxInlineSize: width, marginInline: 'auto' }}>
+      <Composer
+        running
+        allowSubmitWhileRunning
+        onStop={fn()}
+        placeholder="Conch is working… Write what’s next"
+        toolbar={toolbar}
+        onSubmit={(text) => setItems((q) => [...q, { id: `${Date.now()}`, text }])}
+        queued={
+          items.length > 0 && (
+            <ComposerQueue
+              items={items}
+              name="Conch"
+              onReorder={(ids) =>
+                setItems((q) => ids.flatMap((id) => q.find((i) => i.id === id) ?? []))
+              }
+              onSteer={(id) => setItems((q) => q.filter((i) => i.id !== id))}
+              onEdit={(id) => setItems((q) => q.filter((i) => i.id !== id))}
+              onRemove={(id) => setItems((q) => q.filter((i) => i.id !== id))}
+            />
+          )
+        }
+      />
+    </div>
+  );
+}
+
+/**
+ * Several messages written while it works wait their turn above the box, and
+ * go one at a time. Drag one by its handle to change the order (the others
+ * make room as it passes), or move it with the arrow keys; **Steer** sends one
+ * now, stopping what's running.
+ */
+export const Queue: Story = { render: () => <QueueDemo /> };
+
+/** The same on a phone: drag with a finger on the handle. */
+export const QueuePhone: Story = { render: () => <QueueDemo width={390} /> };

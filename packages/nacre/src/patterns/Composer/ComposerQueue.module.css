@@ -1,0 +1,186 @@
+@layer nacre.components {
+  /* Messages waiting their turn, inside the composer above the text. */
+  .queue {
+    --q-gap: 4px;
+    --q-list-max: 11.5rem;
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    margin: var(--nc-space-2) var(--nc-space-2) 0;
+    animation: q-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--q-gap);
+    max-block-size: var(--q-list-max);
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    list-style: none;
+    scrollbar-width: thin;
+  }
+
+  /* While one is in hand, the list doesn't scroll or clip it. */
+  .queue[data-dragging] .list {
+    overflow: visible;
+  }
+
+  .item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+    padding: var(--nc-space-1) var(--nc-space-1) var(--nc-space-1) var(--nc-space-1);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    transform: translateY(var(--q-shift, 0px));
+    transition:
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy),
+      box-shadow var(--nc-duration-base) var(--nc-ease-out),
+      background-color var(--nc-duration-base) var(--nc-ease-out);
+    animation: q-in var(--nc-spring-soft-duration) var(--nc-spring-soft) backwards;
+  }
+
+  /* The frame a drop lands: rows are already where they belong, so nothing slides. */
+  .queue[data-settling] .item {
+    transition: none;
+  }
+
+  /* In hand: it follows the finger exactly, lifts off the page and catches the light. */
+  .item[data-lifted] {
+    z-index: 2;
+    background: var(--nc-surface-hi);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, var(--nc-accent-9) 35%, var(--nc-border)),
+      0 0 0 3px color-mix(in oklch, var(--nc-pearl-3) 35%, transparent),
+      var(--nc-elevation-3);
+    transform: translateY(var(--q-shift, 0px)) scale(1.015);
+    transition:
+      box-shadow var(--nc-duration-base) var(--nc-ease-out),
+      background-color var(--nc-duration-base) var(--nc-ease-out);
+    cursor: grabbing;
+  }
+
+  .handle,
+  .place {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: 1.5rem;
+    block-size: 1.875rem;
+    border-radius: var(--nc-radius-sm);
+    color: var(--nc-text-subtle);
+  }
+
+  .place {
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .handle {
+    appearance: none;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: grab;
+    /* A finger on the handle drags the message, not the page. */
+    touch-action: none;
+  }
+
+  .handle svg {
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
+  }
+
+  @media (hover: hover) {
+    .handle:hover {
+      color: var(--nc-text);
+      background: var(--nc-wash-2);
+    }
+  }
+
+  .handle:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 0;
+  }
+
+  .text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+    line-height: var(--nc-leading-snug);
+  }
+
+  /* Two lines at most: enough to know which one it is. */
+  .message {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text);
+  }
+
+  .meta {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .actions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .note {
+    margin: 0;
+    padding-inline: var(--nc-space-2);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .note[data-paused] {
+    color: light-dark(oklch(0.5 0.12 var(--nc-warning-h)), oklch(0.82 0.12 var(--nc-warning-h)));
+  }
+
+  /* A phone: the message keeps its room; editing is a tap on the pencil, as on a wider screen. */
+  @container composer (max-width: 34rem) {
+    .queue {
+      margin-inline: var(--nc-space-1-5);
+    }
+
+    .item {
+      gap: var(--nc-space-1);
+    }
+  }
+
+  @keyframes q-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px) scale(0.98);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .queue,
+    .item {
+      animation: none;
+      transition: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .queue,
+  :global([data-nacre-motion='reduced']) .item {
+    animation: none;
+    transition: none;
+  }
+}

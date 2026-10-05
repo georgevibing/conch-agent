@@ -82,10 +82,12 @@ Want it to check in sooner? In **Settings → Usage → Long turns**, turn on **
 
 Routines and background tasks have their own room (200 steps, an hour), since nobody is there to press **Carry on**. That doesn't change with the switch.
 
-You don't have to wait to say what's next. Write it and press <kbd>enter</kbd>: it waits above the message box, **Sends when Conch is done**, and goes by itself the moment the reply is over. Anything more you send meanwhile joins it.
+You don't have to wait to say what's next. Write it and press <kbd>enter</kbd>: it waits above the message box and goes by itself the moment the reply is over. Send more and each waits its turn, in order, one at a time: the next goes when the reply before it is done.
 
-- The pencil takes it back into the box to change it, and the cross doesn't send it.
-- If you stop the reply, or it fails, the message comes back to the box instead of going.
+- **Drag** one by its handle to change the order (with a finger on a phone), or focus the handle and use the arrow keys.
+- **Steer** (the lightning) sends one now: the reply stops where it is, nothing it did is lost, and it reads your message next. <kbd>mod+enter</kbd> steers with what's in the box. The rest keep waiting and carry on after. It works the same with every provider.
+- The pencil takes one back into the box to change it, and the cross doesn't send it.
+- If you stop the reply, or it fails, the queue waits for you instead of going on, and each one offers to send now.
 
 ## When it asks you something
 

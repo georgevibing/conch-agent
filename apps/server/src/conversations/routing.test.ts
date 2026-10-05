@@ -393,6 +393,38 @@ describe('Stop, at once', () => {
     await idle(manager, convo.id);
   });
 
+  it('steers: a message that stops the running reply and goes next, in one step', async () => {
+    const { manager, engine } = await talkative();
+    engine.windDownMs = 150;
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'go on' });
+    await running(manager, convo.id);
+    // No separate Stop: the message itself says to steer, so it never finds the chat busy.
+    await manager.send({
+      conversationId: convo.id,
+      clientMessageId: 'u2',
+      text: 'actually, do this',
+      steer: true,
+    });
+    for (let i = 0; i < 200 && engine.turns.length < 2; i++)
+      await new Promise((r) => setTimeout(r, 5));
+    expect(engine.turns.map((t) => t.prompt)).toEqual(['go on', 'actually, do this']);
+    const ends = (await log(manager, convo.id)).filter((e) => e.type === 'turn.completed');
+    expect(ends[0]).toMatchObject({ outcome: 'interrupted' });
+    await manager.interrupt(convo.id);
+    await idle(manager, convo.id);
+  });
+
+  it('without steer, a message sent while it works is still turned away', async () => {
+    const { manager } = await talkative();
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'go on' });
+    await running(manager, convo.id);
+    await expect(
+      manager.send({ conversationId: convo.id, clientMessageId: 'u2', text: 'too soon' }),
+    ).rejects.toMatchObject({ code: 'busy' });
+    await manager.interrupt(convo.id);
+    await idle(manager, convo.id);
+  });
+
   it('Stop pressed again while the next message waits stops that one too', async () => {
     const { manager, engine } = await talkative();
     engine.windDownMs = 150;

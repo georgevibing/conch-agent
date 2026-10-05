@@ -5,3 +5,5 @@ export type {
   ComposerProps,
   ComposerQueuedProps,
 } from './Composer';
+export { ComposerQueue } from './ComposerQueue';
+export type { ComposerQueueItem, ComposerQueueProps } from './ComposerQueue';

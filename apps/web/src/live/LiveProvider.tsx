@@ -40,6 +40,8 @@ interface LiveApi {
     conversationId?: string,
     options?: TurnOptions,
     attachments?: Attachment[],
+    /** `steer`: stop the running reply first, then send this, as one step. */
+    how?: { steer?: boolean },
   ): string;
   /** Change a conversation's model/effort/mode. */
   configure(conversationId: string, options: TurnOptions): void;
@@ -366,7 +368,7 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
 
   const value = useMemo<LiveApi>(
     () => ({
-      send(text, conversationId, options, attachments) {
+      send(text, conversationId, options, attachments, how) {
         const clientMessageId = `u_${crypto.randomUUID().slice(0, 12)}`;
         // A new chat keeps what it was started with until the server names it.
         if (!conversationId) useLiveStore.getState().setStartedWith(options);
@@ -383,6 +385,7 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           text,
           ...(attachments?.length && { attachments: attachments.map((a) => a.id) }),
           ...(options && { options }),
+          ...(how?.steer && { steer: true }),
         });
         if (!conversationId)
           startedNew.current = [...startedNew.current.slice(-9), clientMessageId];

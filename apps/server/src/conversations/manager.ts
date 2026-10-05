@@ -928,9 +928,15 @@ export class ConversationManager {
     origin?: ConversationRecord['origin'];
     /** The words are someone else's (a chat app's other people): the chat reads them as untrusted (ADR 0028). */
     untrusted?: TaintSource;
+    /** Steer: stop the running reply first, then send this, in order. */
+    steer?: boolean;
   }) {
     const began = Date.now();
     const existing = input.conversationId ? await this.#get(input.conversationId) : undefined;
+    // Steering stops what's running here, in the same step, so the message
+    // never finds the chat still busy; then it waits for that turn to close.
+    if (input.steer && existing?.abort && !existing.abort.signal.aborted)
+      await this.interrupt(existing.record.id);
     if (existing) await this.#afterStop(existing);
     // A question waits (ADR 0060): what's typed answers it, as a message of yours.
     if (existing?.abort && this.deps.questions?.waiting(existing.record.id))

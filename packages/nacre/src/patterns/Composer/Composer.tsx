@@ -55,8 +55,13 @@ export interface ComposerProps extends Omit<
   name?: string;
   /** Attachment chips shown above the text field (use `ComposerAttachment`). */
   attachments?: ReactNode;
-  /** A message waiting to go once the agent is done, above everything (use `ComposerQueued`). */
+  /**
+   * Messages waiting to go once the agent is done, above everything (use
+   * `ComposerQueue`, or `ComposerQueued` for one).
+   */
   queued?: ReactNode;
+  /** The keyboard hint while it runs, instead of "esc to stop" (e.g. queue · steer · stop). */
+  runningHint?: ReactNode;
   /** Controls on the left of the footer (model picker, mode toggles…). */
   toolbar?: ReactNode;
   /** Controls on the right of the footer, before the send button. */
@@ -146,6 +151,7 @@ export function Composer({
   name,
   attachments,
   queued,
+  runningHint,
   toolbar,
   actions,
   ref,
@@ -385,9 +391,11 @@ export function Composer({
           <span className={styles.hintSlot} aria-hidden>
             <span className={styles.hint}>
               {running && onStop ? (
-                <>
-                  <Kbd keys="esc" size="sm" /> to stop
-                </>
+                (runningHint ?? (
+                  <>
+                    <Kbd keys="esc" size="sm" /> to stop
+                  </>
+                ))
               ) : (
                 <>
                   <Kbd keys="enter" size="sm" /> to send · <Kbd keys="shift+enter" size="sm" /> new

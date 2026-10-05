@@ -914,6 +914,11 @@ export const ClientCommand = z.discriminatedUnion('type', [
       attachments: z.array(Id).max(ATTACHMENT_LIMITS.maxCount).optional(),
       /** Model/effort/mode for this and later turns of the conversation. */
       options: TurnOptions.optional(),
+      /**
+       * Steer: stop the reply that's running, then send this, as one step, so
+       * nothing lands in between. The same with every provider.
+       */
+      steer: z.boolean().optional(),
     })
     .refine((command) => command.text.length > 0 || Boolean(command.attachments?.length), {
       message: 'Write a message or attach something.',

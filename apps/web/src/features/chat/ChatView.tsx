@@ -12,10 +12,11 @@ import {
   CommandMenu,
   Composer,
   ComposerChip,
-  ComposerQueued,
+  ComposerQueue,
   DropOverlay,
   Heading,
   IconButton,
+  Kbd,
   Pearl,
   Stack,
   Text,
@@ -289,6 +290,13 @@ function useTurnRecovery(
   };
 }
 
+/** A message written while the reply runs, waiting its turn. */
+interface Queued {
+  id: string;
+  text: string;
+  attachments: Attachment[];
+}
+
 export function ChatView({ conversationId: routeId }: { conversationId?: string }) {
   const live = useLive();
   const navigate = useNavigate();
@@ -420,7 +428,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
   const send = (
     text: string,
     attached: Attachment[] = attachments.ready,
-    { keepDraft = false }: { keepDraft?: boolean } = {},
+    { keepDraft = false, steer = false }: { keepDraft?: boolean; steer?: boolean } = {},
   ) => {
     const trimmed = text.trim();
     if (!trimmed && !attached.length) return;
@@ -461,55 +469,95 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
       return;
     }
     rememberSent(trimmed);
-    const id = live.send(trimmed, conversationId, turn.takeDraft(), attached);
+    const id = live.send(trimmed, conversationId, turn.takeDraft(), attached, { steer });
     if (!conversationId) setSentId(id);
     if (!keepDraft) setDraft('');
     if (attached === attachments.ready) attachments.clear();
+    return id;
   };
 
   /**
-   * Written while the reply is still coming: it waits above the box and goes
-   * the moment the reply is over. More written meanwhile joins it.
+   * Written while the reply is still coming: each waits its turn above the
+   * box, in an order you can change, and goes by itself once the reply before
+   * it is over, one at a time. Steer sends one at once: the reply stops where
+   * it is (nothing it did is lost) and reads it now. The same with every
+   * provider, since it's a stop and a send.
    */
-  const [queued, setQueued] = useState<{ text: string; attachments: Attachment[] }>();
-  const queue = (text: string) => {
+  const [queue, setQueue] = useState<Queued[]>([]);
+  /** The reply was stopped (not steered): the queue waits instead of sending by itself. */
+  const [paused, setPaused] = useState(false);
+  /**
+   * The message a steer sent: until its own reply is over, an end you see is
+   * the stopped reply's (never a reason to hold the queue), and nothing else goes.
+   */
+  const steered = useRef<string | undefined>(undefined);
+  const enqueue = (text: string) => {
     const attached = attachments.ready;
-    setQueued((q) =>
-      q
-        ? {
-            text: [q.text, text].filter(Boolean).join('\n\n'),
-            attachments: [...q.attachments, ...attached],
-          }
-        : { text, attachments: attached },
-    );
+    setQueue((q) => [...q, { id: crypto.randomUUID(), text, attachments: attached }]);
     setDraft('');
     attachments.clear();
   };
-  /** Take the queued message back into the box, after whatever is there. */
-  const unqueue = () => {
-    if (!queued) return;
-    setQueued(undefined);
-    setDraft((d) => [d, queued.text].filter((t) => t.trim()).join('\n\n'));
-    if (queued.attachments.length) attachments.restore(queued.attachments);
+  const take = (id: string) => {
+    const item = queue.find((q) => q.id === id);
+    setQueue((q) => q.filter((i) => i.id !== id));
+    return item;
+  };
+  /** Take a waiting message back into the box, after whatever is there. */
+  const editQueued = (id: string) => {
+    const item = take(id);
+    if (!item) return;
+    setDraft((d) => [d, item.text].filter((t) => t.trim()).join('\n\n'));
+    if (item.attachments.length) attachments.restore(item.attachments);
     composerRef.current?.focus();
   };
-  // The reply is over: send what waited. Stopped or failed, it comes back to the box instead.
+  /** Send it now: while a reply runs, it stops first, and reads this next. */
+  const steerWith = (text: string, attached: Attachment[]) => {
+    setPaused(false);
+    // One step on the gateway: it stops the reply, waits for it to close, then sends this.
+    const steering = busy && Boolean(conversationId);
+    const id = send(text, attached, { keepDraft: true, steer: steering });
+    if (steering) steered.current = id;
+  };
+  const steer = (id: string) => {
+    const item = take(id);
+    if (item) steerWith(item.text, item.attachments);
+  };
+  /** ⌘↩ while it works: what's in the box steers instead of waiting. */
+  const steerDraft = () => {
+    const attached = attachments.ready;
+    steerWith(draft, attached);
+    setDraft('');
+    if (attached.length) attachments.clear();
+  };
+  // A reply is over: the next waiting message goes. Stopped or failed, the queue waits for you.
   const replyOver = useEffectEvent(() => {
-    if (!queued) return;
+    if (steered.current) {
+      // Its reply hasn't ended yet (or it hasn't even arrived): it's on its way.
+      const at = view.items.findIndex((i) => i.kind === 'user' && i.id === steered.current);
+      if (at < 0 || !view.items.slice(at + 1).some((i) => i.kind === 'turn-end')) return;
+      steered.current = undefined;
+    }
+    if (!queue.length) return;
     const end = view.items.findLast((i) => i.kind === 'turn-end');
-    if (end?.kind === 'turn-end' && end.outcome !== 'success') return unqueue();
-    setQueued(undefined);
+    if (end?.kind === 'turn-end' && end.outcome !== 'success') {
+      setPaused(true);
+      return;
+    }
+    const [next, ...rest] = queue;
+    if (!next) return;
+    setQueue(rest);
     // Whatever you've started writing since stays in the box.
-    send(queued.text, queued.attachments, { keepDraft: true });
+    send(next.text, next.attachments, { keepDraft: true });
   });
   const wasBusy = useRef(busy);
   useEffect(() => {
     if (wasBusy.current && !busy) replyOver();
     wasBusy.current = busy;
   }, [busy]);
-  // Leaving the chat before it went: it stays here as what you were writing.
+  // Leaving the chat before they went: they stay here as what you were writing.
   const leaving = useEffectEvent(() => {
-    if (queued) saveDraft(key, [draft, queued.text].filter((t) => t.trim()).join('\n\n'));
+    if (queue.length)
+      saveDraft(key, [draft, ...queue.map((q) => q.text)].filter((t) => t.trim()).join('\n\n'));
   });
   useEffect(() => () => leaving(), []);
 
@@ -744,18 +792,31 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
         onValueChange={slash.onDraftChange}
         onSubmit={(text) => {
           if (text && slash.submit(text)) return;
-          if (busy && !asking) queue(text);
+          if (busy && !asking) enqueue(text);
           else send(text);
         }}
         history={history}
         queued={
-          queued && (
-            <ComposerQueued
-              text={queued.text || `${queued.attachments.length} attached`}
-              meta={`Sends when ${name} is done`}
-              onEdit={unqueue}
-              onRemove={() => {
-                setQueued(undefined);
+          queue.length > 0 && (
+            <ComposerQueue
+              items={queue.map((q) => ({
+                id: q.id,
+                text: q.text || `${q.attachments.length} attached`,
+                ...(q.text &&
+                  q.attachments.length > 0 && {
+                    meta: `${q.attachments.length} ${q.attachments.length === 1 ? 'file' : 'files'}`,
+                  }),
+              }))}
+              name={name}
+              running={busy}
+              paused={paused && !busy}
+              onReorder={(ids) =>
+                setQueue((q) => ids.flatMap((id) => q.find((i) => i.id === id) ?? []))
+              }
+              onSteer={steer}
+              onEdit={editQueued}
+              onRemove={(id) => {
+                take(id);
                 composerRef.current?.focus();
               }}
             />
@@ -768,7 +829,15 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
         canSubmitEmpty={attachments.ready.length > 0 && !asking}
         // While it works, what you send waits its turn (or answers its question).
         allowSubmitWhileRunning
-        sendLabel={busy && !asking ? `Send when ${name} is done` : undefined}
+        sendLabel={busy && !asking ? `Queue it: sends when ${name} is done` : undefined}
+        runningHint={
+          asking ? undefined : (
+            <>
+              <Kbd keys="enter" size="sm" /> to queue · <Kbd keys="mod+enter" size="sm" /> to steer
+              · <Kbd keys="esc" size="sm" /> to stop
+            </>
+          )
+        }
         sendBlocked={
           asking && attachments.ready.length
             ? 'Answer the question first, then send your files'
@@ -785,6 +854,14 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
             return;
           }
           slash.menu.onKeyDown(e);
+          if (e.defaultPrevented) return;
+          // ⌘↩ while it works: send this now, steering the reply, instead of queueing it.
+          const steerable =
+            busy && !asking && (draft.trim() || attachments.ready.length) && !draft.startsWith('/');
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.shiftKey && steerable) {
+            e.preventDefault();
+            steerDraft();
+          }
         }}
         textareaProps={slash.menu.inputProps}
         overlay={<CommandMenu {...slash.menu.menuProps} />}
