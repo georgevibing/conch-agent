@@ -54,7 +54,17 @@ import type { ConchAppParts } from './deps';
 import { ConchApps, defaultPolicy, inSentence, integrationIdOf } from './hosted';
 import { PAGE_KIT_CSS } from './pagekit.generated';
 import { type StarterSeed, starterFiles } from './starter';
-import { type AppRecord, ConchAppStore, pathIn, writeFiles } from './store';
+import {
+  describePicture,
+  hasPictureFile,
+  type Picture,
+  pictureName,
+  pictureOf,
+  readPicture,
+  readPictureFile,
+  withoutPicture,
+} from './picture';
+import { type AppRecord, ConchAppStore, pathIn, short, writeFiles } from './store';
 import {
   type AppCallOutcome,
   type AppFetcher,
@@ -120,6 +130,13 @@ interface Package {
   at: number;
   source: ConchAppSource;
   apps: Map<string, Found>;
+}
+
+/** A held package's picture, checked: what the picture routes serve. */
+function heldPicture(files: AppFiles) {
+  const picture = pictureOf(files);
+  const bytes = picture && files.get(picture.name);
+  return picture && bytes ? { name: picture.name, type: picture.type, bytes } : undefined;
 }
 
 /** A tool as a card shows it: no schema, which only the model needs. */
@@ -411,6 +428,9 @@ export class ConchAppService {
       ...(app.draftId && { draftId: app.draftId }),
       pinned: app.pinned,
       ...(app.published && { published: app.published }),
+      ...((await hasPictureFile(this.store.current(app.id)).catch(() => false)) && {
+        picture: `/api/conch-apps/${app.id}/icon?v=${short(app.hash)}`,
+      }),
     };
   }
 
@@ -721,6 +741,53 @@ export class ConchAppService {
     return this.workshop.remove(draftId, path).catch(rethrow);
   }
 
+  /**
+   * The draft's picture (ADR 0090), from bytes the maker's tools brought:
+   * read as a picture first, kept under the name its kind says, and the only
+   * one. No bytes takes it away, back to the glyph.
+   */
+  async setPicture(draftId: string, bytes: Buffer | undefined): Promise<Picture | undefined> {
+    if (!bytes) {
+      await this.workshop.setPicture(draftId).catch(rethrow);
+      return undefined;
+    }
+    const read = readPicture(bytes);
+    if (!read.ok) throw new ConchAppError('invalid', read.problem);
+    const name = pictureName(read.type);
+    await this.workshop.setPicture(draftId, { name, bytes }).catch(rethrow);
+    return { name, type: read.type, width: read.width, height: read.height, bytes: bytes.length };
+  }
+
+  /** An added app's picture, read from its folder and checked again. */
+  async appPicture(id: string) {
+    const app = await this.#record(id);
+    return readPictureFile(this.store.current(app.id));
+  }
+
+  /** A draft's picture, as its files are now. */
+  async draftPicture(draftId: string) {
+    await this.workshop.info(draftId).catch(rethrow);
+    return readPictureFile(this.workshop.filesDir(draftId));
+  }
+
+  /** The picture of an app in a package looked at in the last half hour. */
+  packagePicture(packageId: string, appId: string) {
+    const found = this.#package(packageId)?.apps.get(appId);
+    return found ? heldPicture(found.pkg.files) : undefined;
+  }
+
+  /** The picture of the update waiting for an app, while it's held. */
+  updatePicture(id: string) {
+    const held = this.#updates.get(id);
+    return held ? heldPicture(held.pkg.files) : undefined;
+  }
+
+  /** The draft's picture in words, for the maker's tools; undefined when it has none. */
+  async describeDraftPicture(draftId: string): Promise<string | undefined> {
+    const picture = pictureOf(await this.workshop.files(draftId));
+    return picture ? `${picture.name}, ${describePicture(picture)}` : undefined;
+  }
+
   async files(draftId: string): Promise<{ path: string; bytes: number }[]> {
     return [...(await this.workshop.files(draftId))].map(([path, bytes]) => ({
       path,
@@ -746,15 +813,29 @@ export class ConchAppService {
     return runtime;
   }
 
+  /**
+   * What `app_try` is remembered against: every file but the picture, so
+   * changing only the icon (ADR 0090) never asks for every tool to be tried
+   * again.
+   */
+  #triedKey(files: AppFiles): string {
+    return this.deps.parts.appHash(withoutPicture(files));
+  }
+
+  /** The tools `app_try` ran for the draft's files as they are now. */
+  async tried(info: DraftInfo): Promise<string[]> {
+    const files = await this.workshop.files(info.id).catch(() => undefined);
+    return files ? (info.tried[this.#triedKey(files)] ?? []) : [];
+  }
+
   /** The quality bar, on the draft's newest files. */
   async check(draftId: string): Promise<ConchAppCheck> {
     const info = await this.workshop.info(draftId);
     const files = await this.workshop.files(draftId);
-    const hash = this.deps.parts.appHash(files);
     await mkdir(this.workshop.dataDir(draftId), { recursive: true, mode: 0o700 });
     const check = await this.deps.parts.checkApp(files, {
       runtime: (app) => this.#draftRuntime(draftId, app),
-      tried: info.tried[hash] ?? [],
+      tried: info.tried[this.#triedKey(files)] ?? [],
     });
     await this.workshop.patch(draftId, (draft) => {
       draft.check = check;
@@ -798,14 +879,15 @@ export class ConchAppService {
     } catch (error) {
       outcome = { ok: false, text: error instanceof Error ? error.message : 'It failed.' };
     }
+    const key = this.#triedKey(files);
     const info = await this.workshop.patch(draftId, (draft) => {
       if (!outcome.ok) return;
-      const tried = new Set(draft.tried[read.app.hash] ?? []);
+      const tried = new Set(draft.tried[key] ?? []);
       tried.add(tool);
       // Only the newest files matter; what was tried on older ones is forgotten.
-      draft.tried = { [read.app.hash]: [...tried] };
+      draft.tried = { [key]: [...tried] };
     });
-    const tried = info.tried[read.app.hash] ?? [];
+    const tried = info.tried[key] ?? [];
     return { outcome, tools, untried: tools.map((t) => t.name).filter((t) => !tried.includes(t)) };
   }
 
@@ -833,7 +915,7 @@ export class ConchAppService {
         'invalid',
         `The last app_check found problems: ${problemText(check.problems)} Fix them, run app_check again, then app_present.`,
       );
-    const tried = info.tried[hash] ?? [];
+    const tried = info.tried[this.#triedKey(files)] ?? [];
     const untried = check.tools.map((t) => t.name).filter((t) => !tried.includes(t));
     if (untried.length)
       throw new ConchAppError(
@@ -897,6 +979,9 @@ export class ConchAppService {
         },
       }),
       ...(summary && { summary: summary.slice(0, 300) }),
+      ...(pictureOf(files) && {
+        picture: `/api/conch-apps/drafts/${info.id}/icon?v=${short(hash)}`,
+      }),
       state: 'ready',
     };
     const events = await this.deps.chats.events(ctx.conversationId).catch(() => []);
@@ -1318,6 +1403,12 @@ export class ConchAppService {
       );
     const packageId = newId('cpkg');
     this.#package(packageId);
+    for (const [id, held] of apps)
+      if (pictureOf(held.pkg.files))
+        held.found = {
+          ...held.found,
+          picture: `/api/conch-apps/packages/${packageId}/${id}/icon?v=${short(held.pkg.hash)}`,
+        };
     this.#packages.set(packageId, { at: this.#now(), source, apps });
     return { packageId, source, apps: [...apps.values()].map((a) => a.found) };
   }
@@ -1400,6 +1491,7 @@ export class ConchAppService {
       source: preview.source,
       signature: found.signature,
       ...(found.changes && { changes: found.changes }),
+      ...(found.picture && { picture: found.picture }),
       state: 'ready',
     };
     ctx.append({ type: 'conch-app.offer', offer });
@@ -1563,7 +1655,9 @@ export class ConchAppService {
       this.#updates.set(id, held);
     }
     const { found } = await this.#look(held.pkg, held.source);
-    return found;
+    return pictureOf(held.pkg.files)
+      ? { ...found, picture: `/api/conch-apps/${id}/update/icon?v=${short(held.pkg.hash)}` }
+      : found;
   }
 
   /**

@@ -32,6 +32,7 @@ import { dirname, join } from 'node:path';
 import {
   APP_LIMITS,
   AppId,
+  isAppPicture,
   type ConchAppManifest,
   type ConchAppTool,
   type PublishState,
@@ -122,9 +123,20 @@ export function readCode(output: string): string | undefined {
 }
 
 /** What the person sees on GitHub and in the app's README: what it is and can do. */
-export function readme(manifest: ConchAppManifest, tools: readonly ConchAppTool[] = []): string {
+export function readme(
+  manifest: ConchAppManifest,
+  tools: readonly ConchAppTool[] = [],
+  /** Its picture (ADR 0090), shown above its name. */
+  picture?: string,
+): string {
   const line = (text: string) => text.replace(/\s+/g, ' ').trim();
-  const out = [`# ${line(manifest.name)}`, '', line(manifest.tagline), ''];
+  const out = [
+    ...(picture ? [`<img src="${picture}" alt="" width="72" height="72">`, ''] : []),
+    `# ${line(manifest.name)}`,
+    '',
+    line(manifest.tagline),
+    '',
+  ];
   if (manifest.description) out.push(manifest.description.trim(), '');
   out.push('## What it can do', '');
   if (manifest.reaches.length > 0)
@@ -452,7 +464,14 @@ export function createPublisher(deps: PublisherDeps = {}): GitHubPublisher {
       await copyFile(join(app.dir, ...file.split('/')), to);
     }
     if (!files.some((file) => file.toLowerCase() === 'readme.md'))
-      await writeFile(join(into, 'README.md'), readme(app.manifest, app.tools));
+      await writeFile(
+        join(into, 'README.md'),
+        readme(
+          app.manifest,
+          app.tools,
+          files.find((file) => isAppPicture(file)),
+        ),
+      );
   }
 
   /** Empties a clone, keeping only its `.git`. */

@@ -52,7 +52,7 @@ export async function appsPrompt(
     if (!draft) continue;
     // A change to an app from elsewhere carries its maker's name: one plain line.
     const name = draft.manifest ? quoted(draft.manifest.name, 40) : 'An app that doesn’t read yet';
-    const tried = info.tried[draft.hash] ?? [];
+    const tried = await service.tried(info);
     const check = draft.check && { ...draft.check, tried };
     parts.push(
       [

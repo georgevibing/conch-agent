@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -10,9 +10,11 @@ import { hostToolText } from '../engines/types';
 import { tallyFiles } from '../engines/mock/tally';
 import { fakePack, fakeParts, type FakeOptions } from '../test/conchapps';
 import { textFiles } from '../test/conchapps';
+import { jpeg, png, webp } from '../test/pictures';
 import { appsPrompt, MAKING_APPS } from './prompt';
 import { ConchAppService } from './service';
 import { type MakerContext, makerTools } from './tools';
+import type { AppFetcher, AppFetchResponse } from './types';
 
 const homes: string[] = [];
 afterEach(async () => {
@@ -274,5 +276,124 @@ describe('the maker’s tools (ADR 0061 §4)', () => {
     expect(await appsPrompt(service, 'c_chat', { tools: true })).toMatch(
       /still to try with app_try: add_note, list_notes/,
     );
+  });
+});
+
+describe('app_icon: a picture as the app’s icon (ADR 0090)', () => {
+  /** Tally, made, checked and every tool tried: ready to present. */
+  async function ready(ctx: Partial<MakerContext> = {}) {
+    const made = await setup({}, ctx);
+    await made.run('app_new', { name: 'Tally', id: 'tally' });
+    for (const [path, content] of Object.entries(tallyFiles()))
+      await made.run('app_write', { path, content });
+    await made.run('app_try', { tool: 'count', input: { by: 1 } });
+    await made.run('app_try', { tool: 'read_count' });
+    return made;
+  }
+
+  it('takes base64, keeps it under the name its kind says, and the tools tried still count', async () => {
+    const { run, service, log } = await ready();
+    const said = await run('app_icon', { base64: png(180).toString('base64') });
+    expect(said).toMatch(
+      /Set the app’s picture from the bytes you gave: icon\.png, a 180 × 180 PNG/,
+    );
+    expect(said).toMatch(/glyph .* stays in conch-app\.json/);
+    expect(said).toMatch(/tools already tried still count/);
+    expect(await run('app_read')).toMatch(/- icon\.png \(\d+ bytes\)/);
+    expect(await run('app_read', { path: 'icon.png' })).toMatch(
+      /icon\.png is the app’s picture: a 180 × 180 PNG/,
+    );
+    // A data: address is base64 too; a JPEG replaces the PNG rather than sitting beside it.
+    await run('app_icon', { base64: `data:image/jpeg;base64,${jpeg(200).toString('base64')}` });
+    const [draft] = await service.workshop.ofChat('c_chat');
+    const files = await service.files(draft?.id ?? '');
+    expect(files.map((f) => f.path)).toContain('icon.jpg');
+    expect(files.map((f) => f.path)).not.toContain('icon.png');
+    expect(await run('app_check')).toMatch(/It passes/);
+    expect(await run('app_present', { summary: 'Tally counts.' })).toMatch(/A card to add Tally/);
+    const offer = log.findLast((e) => e.type === 'conch-app.offer');
+    expect(offer?.type === 'conch-app.offer' && offer.offer.picture).toMatch(
+      /^\/api\/conch-apps\/drafts\/draft_[^/]+\/icon\?v=[0-9a-f]{12}$/,
+    );
+  });
+
+  it('refuses what isn’t a picture, in words, and leaves the draft as it was', async () => {
+    const { run, service } = await ready();
+    expect(await run('app_icon', { base64: Buffer.from('<svg/>').toString('base64') })).toMatch(
+      /document \(SVG or HTML\), not a picture/,
+    );
+    expect(await run('app_icon', { base64: 'not base64 at all!' })).toMatch(/isn’t base64/);
+    expect(await run('app_icon', {})).toMatch(/Give exactly one of url/);
+    expect(
+      await run('app_icon', { base64: png(64).toString('base64'), url: 'https://x.example/a.png' }),
+    ).toMatch(/Give exactly one/);
+    // Only app_icon writes the picture: app_write can't put a document in its place.
+    expect(await run('app_write', { path: 'icon.png', content: '<html></html>' })).toMatch(
+      /set it with app_icon/,
+    );
+    const [draft] = await service.workshop.ofChat('c_chat');
+    expect((await service.files(draft?.id ?? '')).map((f) => f.path)).not.toContain('icon.png');
+  });
+
+  it('fetches a picture from an https address through Conch’s fetcher, never anything else', async () => {
+    const asked: { url: string; reaches: readonly string[] }[] = [];
+    const fetcher: AppFetcher = async (app, request): Promise<AppFetchResponse> => {
+      asked.push({ url: request.url, reaches: app.reaches });
+      if (request.url.endsWith('/page'))
+        return { ok: true, status: 200, headers: {}, body: '<!doctype html><title>Yazio</title>' };
+      if (request.url.endsWith('/missing.png'))
+        return { ok: false, status: 404, headers: {}, body: 'Not found' };
+      return {
+        ok: true,
+        status: 200,
+        url: 'https://www.example.com/apple-touch-icon.png',
+        headers: { 'content-type': 'image/png' },
+        body: png(180).toString('base64'),
+        bodyBase64: true,
+      };
+    };
+    const { run } = await ready({ fetcher });
+    expect(await run('app_icon', { url: 'http://example.com/icon.png' })).toMatch(
+      /secure \(https\)/,
+    );
+    expect(await run('app_icon', { url: 'https://me:pw@example.com/icon.png' })).toMatch(
+      /without a sign-in/,
+    );
+    expect(await run('app_icon', { url: 'file:///etc/passwd' })).toMatch(/secure \(https\)/);
+    expect(asked).toEqual([]);
+    expect(await run('app_icon', { url: 'https://example.com/page' })).toMatch(/is a document/);
+    expect(await run('app_icon', { url: 'https://example.com/missing.png' })).toMatch(
+      /answered 404/,
+    );
+    expect(await run('app_icon', { url: 'https://example.com/apple-touch-icon.png#x' })).toMatch(
+      /Set the app’s picture from example\.com: icon\.png, a 180 × 180 PNG/,
+    );
+    expect(asked.at(-1)).toEqual({
+      url: 'https://example.com/apple-touch-icon.png',
+      reaches: ['example.com'],
+    });
+  });
+
+  it('reads a picture from the work folder or the chat’s attachments, and nowhere else', async () => {
+    const work = await mkdtemp(join(tmpdir(), 'conch-icon-work-'));
+    homes.push(work);
+    const outside = await mkdtemp(join(tmpdir(), 'conch-icon-outside-'));
+    homes.push(outside);
+    await writeFile(join(work, 'logo.webp'), webp(128));
+    await writeFile(join(outside, 'private.png'), png(64));
+    const { run } = await ready({ files: async () => ({ cwd: work }) });
+    expect(await run('app_icon', { file: 'logo.webp' })).toMatch(/icon\.webp, a 128 × 128 WebP/);
+    expect(await run('app_icon', { file: join(outside, 'private.png') })).toMatch(
+      /inside this conversation’s work folder/,
+    );
+    expect(await run('app_icon', { file: '../private.png' })).toMatch(/work folder/);
+  });
+
+  it('takes the picture away again', async () => {
+    const { run, service } = await ready();
+    await run('app_icon', { base64: png(64).toString('base64') });
+    expect(await run('app_icon', { remove: true })).toMatch(/its glyph is its icon again/);
+    const [draft] = await service.workshop.ofChat('c_chat');
+    expect((await service.files(draft?.id ?? '')).map((f) => f.path)).not.toContain('icon.png');
   });
 });

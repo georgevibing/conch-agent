@@ -175,6 +175,13 @@ export function sinkReason(
   if (/(?:WebSearch|web_search)$/.test(toolName)) return 'send a search query to the web';
   if (/(?:WebFetch|web_fetch)$/.test(toolName) && typeof args.url === 'string' && carries(args.url))
     return 'open a web address that could carry what it read';
+  // An app's picture fetched from an address (ADR 0090): the same way out as web_fetch.
+  if (
+    /^(?:mcp__conch__)?app_icon$/.test(toolName) &&
+    typeof args.url === 'string' &&
+    carries(args.url)
+  )
+    return 'fetch a picture from a web address that could carry what it read';
   const integration = INTEGRATION.exec(toolName);
   if (integration && integration[1] !== 'conch' && context.access !== 'read')
     return `act in ${context.app ?? integration[1] ?? 'an app'}`;

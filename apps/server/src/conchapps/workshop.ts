@@ -8,11 +8,20 @@
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 
-import { APP_LIMITS, AppId, ConchAppCheck, Id } from '@conch/protocol';
+import {
+  APP_LIMITS,
+  APP_PICTURES,
+  AppId,
+  type AppPictureName,
+  ConchAppCheck,
+  Id,
+  isAppPicture,
+} from '@conch/protocol';
 import { z } from 'zod';
 
 import { newId } from '../lib/ids';
 import { Mutex, readJson, removeTree, safeJoin, writeJson } from '../lib/fs';
+import { describePicture, picturesIn, readPicture } from './picture';
 import { folderBytes, pathIn, writeFiles } from './store';
 import type { AppFiles } from './types';
 
@@ -146,7 +155,7 @@ export class Workshop {
   }
 
   /** Write one file, held to the package's limits as it's written. */
-  write(draftId: string, path: string, content: string): Promise<DraftInfo> {
+  write(draftId: string, path: string, content: string | Buffer): Promise<DraftInfo> {
     return this.#mutex.run(async () => {
       const info = await this.info(draftId);
       if (path === SIG)
@@ -163,11 +172,44 @@ export class Workshop {
           `“${path}” isn’t a path Conch can keep in an app. Use a path inside the app’s folder with letters, numbers, dashes and dots, like pages/main.html.`,
         );
       }
+      const bytes = typeof content === 'string' ? Buffer.from(content, 'utf8') : content;
+      if (isAppPicture(path) && typeof content === 'string')
+        throw new WorkshopError(
+          'invalid',
+          `${path} is the app’s picture: set it with app_icon, from a link, a file or base64.`,
+        );
       const files = await this.files(draftId);
-      files.set(path, Buffer.from(content, 'utf8'));
+      files.set(path, bytes);
       limits(files);
       await mkdir(join(target, '..'), { recursive: true, mode: 0o700 });
-      await writeFile(target, content, { mode: 0o600 });
+      await writeFile(target, bytes, { mode: 0o600 });
+      info.updatedAt = Date.now();
+      await this.#save(info);
+      return info;
+    });
+  }
+
+  /**
+   * The draft's picture (ADR 0090): this one under its own name, or none.
+   * Any other picture it had goes, so a draft never holds two.
+   */
+  setPicture(
+    draftId: string,
+    picture?: { name: AppPictureName; bytes: Buffer },
+  ): Promise<DraftInfo> {
+    return this.#mutex.run(async () => {
+      const info = await this.info(draftId);
+      const files = await this.files(draftId);
+      for (const name of picturesIn(files)) files.delete(name);
+      if (picture) files.set(picture.name, picture.bytes);
+      limits(files);
+      const dir = this.filesDir(draftId);
+      for (const name of Object.keys(APP_PICTURES))
+        if (name !== picture?.name) await rm(pathIn(dir, name), { force: true });
+      if (picture) {
+        await mkdir(dir, { recursive: true, mode: 0o700 });
+        await writeFile(pathIn(dir, picture.name), picture.bytes, { mode: 0o600 });
+      }
       info.updatedAt = Date.now();
       await this.#save(info);
       return info;
@@ -183,7 +225,13 @@ export class Workshop {
       throw new WorkshopError('invalid', `“${path}” isn’t a path inside the app’s folder.`);
     }
     try {
-      return await readFile(target, 'utf8');
+      const bytes = await readFile(target);
+      if (!isAppPicture(path)) return bytes.toString('utf8');
+      // A picture isn't words: say what it is instead.
+      const read = readPicture(bytes);
+      return read.ok
+        ? `${path} is the app’s picture: ${describePicture({ ...read, bytes: bytes.length })}. app_icon changes or removes it.`
+        : `${path} is meant to be the app’s picture, but ${read.problem}`;
     } catch {
       throw new WorkshopError(
         'not-found',
@@ -247,10 +295,10 @@ export function limits(files: AppFiles): void {
   let total = 0;
   for (const [path, bytes] of files) {
     const ext = extname(path).toLowerCase();
-    if (!(APP_LIMITS.extensions as readonly string[]).includes(ext))
+    if (!isAppPicture(path) && !(APP_LIMITS.extensions as readonly string[]).includes(ext))
       throw new WorkshopError(
         'invalid',
-        `“${path}” isn’t a kind of file an app can hold. Use one of ${APP_LIMITS.extensions.join(', ')}.`,
+        `“${path}” isn’t a kind of file an app can hold. Use one of ${APP_LIMITS.extensions.join(', ')}; a picture can only be the app’s icon, set with app_icon.`,
       );
     total += bytes.length;
   }

@@ -241,6 +241,11 @@ export const ConchAppManifest = z
     tagline: z.string().trim().min(1).max(80),
     description: z.string().trim().max(600).default(''),
     version: z.string().regex(/^\d{1,4}\.\d{1,4}\.\d{1,6}$/, 'Use a version like 1.0.0.'),
+    /**
+     * Its glyph on its colour. A picture in its folder (`APP_PICTURES`) is drawn
+     * instead; this is still what shows where the picture can't be (an older
+     * Conch, a picture that didn't load).
+     */
     icon: z.object({ glyph: AppGlyph, color: AppColor }).strict(),
     kind: ConchAppKind.default('personal'),
     /** The tools module, run sealed off. */
@@ -282,7 +287,26 @@ export const APP_LIMITS = {
   /** Earlier versions kept for Go back. */
   keep: 3,
   extensions: ['.json', '.mjs', '.js', '.html', '.css', '.md', '.txt', '.svg', '.csv'],
+  /**
+   * An app's picture (ADR 0090): one PNG, JPEG or WebP at the top of its
+   * folder, drawn as its icon instead of the glyph. The bytes must be the
+   * kind its name says; never SVG, and drawn from its own folder only.
+   */
+  picture: { bytes: 512 * 1024, minSide: 16, maxSide: 1024 },
 } as const;
+
+/** The names an app's picture may have, each the one kind of picture it says. */
+export const APP_PICTURES = {
+  'icon.png': 'image/png',
+  'icon.jpg': 'image/jpeg',
+  'icon.webp': 'image/webp',
+} as const;
+export type AppPictureName = keyof typeof APP_PICTURES;
+export type AppPictureType = (typeof APP_PICTURES)[AppPictureName];
+
+/** This path is an app's picture (`icon.png`, `icon.jpg` or `icon.webp`, at the top). */
+export const isAppPicture = (path: string): path is AppPictureName =>
+  Object.hasOwn(APP_PICTURES, path);
 
 /** The host tool name of an app's tool: short enough for every provider. */
 export const appToolName = (app: string, tool: string) =>
@@ -445,6 +469,8 @@ export const ConchApp = z.object({
   pinned: z.boolean().default(false),
   /** Where it was published on GitHub, when you published it. */
   published: z.string().optional(),
+  /** Its picture (ADR 0090), drawn instead of the glyph: an address under `/api/conch-apps`. */
+  picture: z.string().max(300).optional(),
 });
 export type ConchApp = z.infer<typeof ConchApp>;
 
@@ -506,6 +532,8 @@ export const ConchAppOffer = z.object({
   ]),
   /** Why it failed, in one sentence. */
   message: z.string().max(500).optional(),
+  /** Its picture, while the draft or package is still here (ADR 0090); else its glyph. */
+  picture: z.string().max(300).optional(),
 });
 export type ConchAppOffer = z.infer<typeof ConchAppOffer>;
 
@@ -550,6 +578,8 @@ export const ConchAppFound = z.object({
   /** The version you have, when you have it. */
   installed: z.string().optional(),
   changes: ConchAppChanges.optional(),
+  /** Its picture, while the package is held (ADR 0090). */
+  picture: z.string().max(300).optional(),
 });
 export type ConchAppFound = z.infer<typeof ConchAppFound>;
 

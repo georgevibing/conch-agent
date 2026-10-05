@@ -1,5 +1,6 @@
 /**
- * A Conch app's package (ADR 0061 §1): a small folder of text files, read
+ * A Conch app's package (ADR 0061 §1): a small folder of text files (and
+ * perhaps one picture as its icon, ADR 0090), read
  * from disk, from a `.conchapp` (a tar.gz) or from a GitHub tarball.
  *
  * Whatever it came from, it's held to the same rules before anything looks
@@ -13,7 +14,14 @@ import { lstat, open, readdir } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { createGunzip } from 'node:zlib';
 
-import { APP_LIMITS, AppFilePath, ConchAppManifest, SkillName } from '@conch/protocol';
+import {
+  APP_LIMITS,
+  APP_PICTURES,
+  AppFilePath,
+  ConchAppManifest,
+  isAppPicture,
+  SkillName,
+} from '@conch/protocol';
 import type { z } from 'zod';
 
 import { BackupError, readTar, TarWriter } from '../backup/archive';
@@ -21,6 +29,7 @@ import { validRelPath } from '../backup/paths';
 import { safeJoin } from '../lib/fs';
 import type { AppCheckItem } from '@conch/protocol';
 
+import { pictureProblem, picturesIn } from './picture';
 import type { AppFiles, AppPackage, PackageRead } from './types';
 
 export const MANIFEST_FILE = 'conch-app.json';
@@ -64,14 +73,16 @@ function isText(bytes: Buffer): boolean {
 
 const quote = (text: string) => `“${text.slice(0, 80)}”`;
 
+const PICTURE_NAMES = Object.keys(APP_PICTURES).join(', ');
+
 /** Why a path can't be in a package, or nothing when it can. */
 function pathProblem(path: string): string | undefined {
   if (!AppFilePath.safeParse(path).success || !validRelPath(path))
     return `${quote(path)} can’t be in an app: use plain names inside the app’s folder, with no hidden files.`;
   const name = path.slice(path.lastIndexOf('/') + 1);
-  if (path === SIGNATURE_FILE || PLAIN_NAMES.has(name)) return undefined;
+  if (path === SIGNATURE_FILE || PLAIN_NAMES.has(name) || isAppPicture(path)) return undefined;
   if (!(APP_LIMITS.extensions as readonly string[]).includes(extensionOf(path)))
-    return `${quote(path)} isn’t a kind of file an app can carry. Apps carry only ${APP_LIMITS.extensions.join(', ')} files.`;
+    return `${quote(path)} isn’t a kind of file an app can carry. Apps carry only ${APP_LIMITS.extensions.join(', ')} files, and one picture as their icon at the top: ${PICTURE_NAMES}.`;
   return undefined;
 }
 
@@ -131,8 +142,22 @@ export function readFiles(files: AppFiles): PackageRead {
     const other = seen.get(folded);
     if (other !== undefined) say(`${quote(path)} and ${quote(other)} differ only in case.`, path);
     seen.set(folded, path);
-    if (!isText(bytes)) say(`${quote(path)} isn’t text: apps carry only text files.`, path);
+    // The one picture (ADR 0090) is read byte by byte; everything else is text.
+    if (isAppPicture(path)) {
+      const wrong = pictureProblem(path, bytes);
+      if (wrong) say(wrong, path);
+    } else if (!isText(bytes))
+      say(
+        `${quote(path)} isn’t text: apps carry only text files, and one picture as their icon (${PICTURE_NAMES}).`,
+        path,
+      );
   }
+  const pictures = picturesIn(files);
+  if (pictures.length > 1)
+    say(
+      `An app has one picture as its icon, and this one has ${pictures.join(' and ')}. Keep one.`,
+      pictures[1],
+    );
 
   const raw = files.get(MANIFEST_FILE);
   if (!raw) {

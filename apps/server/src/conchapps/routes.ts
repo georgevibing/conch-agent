@@ -15,6 +15,7 @@
  */
 import {
   AcceptAppOfferBody,
+  AppId,
   AppCallBody,
   ApplyUpdateBody,
   AppSettingsBody,
@@ -260,6 +261,65 @@ export function registerConchAppRoutes(
       noStore(reply).send(await service.publish(request.params.id)),
     );
   });
+
+  // ── Pictures (ADR 0090) ─────────────────────────────────────────────────
+  //
+  // An app's picture is someone else's bytes: served only after they read as
+  // the PNG, JPEG or WebP their name says, with that type and nothing else,
+  // never sniffed, sandboxed, and only to Conch's own pages. The address
+  // carries the app's hash (`?v=`), so a new version is a new address.
+
+  type Served = { name: string; type: string; bytes: Buffer } | undefined;
+  const picture = async (reply: FastifyReply, find: () => Promise<Served> | Served) =>
+    guarded(reply, async () => {
+      const found = await find();
+      if (!found)
+        return noStore(reply)
+          .code(404)
+          .send({ error: 'not-found', message: 'This app has no picture.' });
+      reply.headers({
+        'content-type': found.type,
+        'content-disposition': `inline; filename="${found.name}"`,
+        'content-security-policy': "default-src 'none'; sandbox",
+        'x-content-type-options': 'nosniff',
+        'cross-origin-resource-policy': 'same-origin',
+        'cache-control': 'private, max-age=86400',
+      });
+      return reply.send(found.bytes);
+    });
+
+  app.get<{ Params: { id: string } }>('/api/conch-apps/:id/icon', (request, reply) =>
+    picture(reply, () => service.appPicture(request.params.id)),
+  );
+
+  app.get<{ Params: { id: string } }>('/api/conch-apps/:id/update/icon', (request, reply) =>
+    picture(reply, () =>
+      AppId.safeParse(request.params.id).success
+        ? service.updatePicture(request.params.id)
+        : undefined,
+    ),
+  );
+
+  app.get<{ Params: { draftId: string } }>(
+    '/api/conch-apps/drafts/:draftId/icon',
+    (request, reply) =>
+      picture(reply, () =>
+        Id.safeParse(request.params.draftId).success
+          ? service.draftPicture(request.params.draftId)
+          : undefined,
+      ),
+  );
+
+  app.get<{ Params: { packageId: string; appId: string } }>(
+    '/api/conch-apps/packages/:packageId/:appId/icon',
+    (request, reply) =>
+      picture(reply, () =>
+        Id.safeParse(request.params.packageId).success &&
+        AppId.safeParse(request.params.appId).success
+          ? service.packagePicture(request.params.packageId, request.params.appId)
+          : undefined,
+      ),
+  );
 
   // ── Pages ───────────────────────────────────────────────────────────────
 

@@ -343,6 +343,10 @@ describe('reading what gh says', () => {
       'In Conch, open **Apps**, press **Add your own**, choose **From a link** and paste this page’s address.',
     );
     expect(readme({ ...manifest, reaches: [] })).toContain('Doesn’t reach any website.');
+    // Its picture (ADR 0090) above its name, from the app's own folder.
+    expect(readme(manifest, [], 'icon.png')).toMatch(
+      /^<img src="icon\.png" alt="" width="72" height="72">\n\n# Plant diary/,
+    );
   });
 });
 

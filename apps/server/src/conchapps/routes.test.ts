@@ -4,7 +4,7 @@
  * a sealed page's `null` origin, a change that needs it to be you, a secret
  * that must never come back.
  */
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -16,7 +16,8 @@ import { onThisComputer } from '../test/here';
 import { tallyFiles } from '../engines/mock/tally';
 import { loadConfig } from '../config';
 import { Services } from '../services';
-import { fakePack, fakeParts, fakeSign, textFiles } from '../test/conchapps';
+import { fakePack, fakeParts, fakeSign, textFiles, unpack } from '../test/conchapps';
+import { png, webp } from '../test/pictures';
 import { chat, cookieOf, PASSWORD } from '../test/session';
 
 vi.setConfig({ testTimeout: 30_000 });
@@ -398,5 +399,136 @@ describe('Conch apps over HTTP: the attacks', () => {
     expect(added.body).not.toContain('sk-typed-into-card');
     expect(added.json()).toMatchObject({ source: { kind: 'github' }, saved: ['apiKey'] });
     expect((await g.services.conchApps.hosted.get('capp_weather')).policy).toBe('ask');
+  });
+});
+
+describe('an app’s picture over HTTP (ADR 0090)', () => {
+  const withPicture = (picture: Buffer, name = 'icon.png') => {
+    const files = unpack(Buffer.from(weather(), 'base64'));
+    files.delete('conch-app.sig');
+    files.set(name, picture);
+    return fakePack(files).toString('base64');
+  };
+
+  it('is served as the picture it is, sealed, to a signed-in person only', async () => {
+    const g = await setup();
+    const signedIn = await g.app.inject({
+      method: 'PUT',
+      url: '/api/access/password',
+      payload: { username: 'ada', password: PASSWORD },
+    });
+    const cookie = cookieOf(signedIn);
+    const preview = await g.app.inject({
+      method: 'POST',
+      url: '/api/conch-apps/preview',
+      headers: { cookie },
+      payload: { file: withPicture(png(128)), name: 'weather.conchapp' },
+    });
+    const { packageId, apps } = preview.json() as {
+      packageId: string;
+      apps: { hash: string; picture?: string }[];
+    };
+    expect(apps[0]?.picture).toMatch(
+      new RegExp(`^/api/conch-apps/packages/${packageId}/weather/icon[?]v=[0-9a-f]{12}$`),
+    );
+    const held = await g.app.inject({
+      method: 'GET',
+      url: apps[0]?.picture ?? '',
+      headers: { cookie },
+    });
+    expect(held.statusCode).toBe(200);
+    expect(held.rawPayload.equals(png(128))).toBe(true);
+
+    const added = await g.app.inject({
+      method: 'POST',
+      url: '/api/conch-apps/install',
+      headers: { cookie },
+      payload: { packageId, appId: 'weather', hash: apps[0]?.hash, settings: { apiKey: 'x' } },
+    });
+    expect(added.statusCode).toBe(200);
+    const picture = (added.json() as { picture?: string }).picture;
+    expect(picture).toMatch(/^\/api\/conch-apps\/weather\/icon\?v=[0-9a-f]{12}$/);
+    const listed = (
+      await g.app.inject({ method: 'GET', url: '/api/conch-apps', headers: { cookie } })
+    ).json() as {
+      apps: { picture?: string }[];
+    };
+    expect(listed.apps[0]?.picture).toBe(picture);
+
+    const served = await g.app.inject({ method: 'GET', url: picture ?? '', headers: { cookie } });
+    expect(served.statusCode).toBe(200);
+    expect(served.headers['content-type']).toBe('image/png');
+    expect(served.headers['x-content-type-options']).toBe('nosniff');
+    expect(served.headers['content-security-policy']).toBe("default-src 'none'; sandbox");
+    expect(served.headers['cross-origin-resource-policy']).toBe('same-origin');
+    expect(served.headers['cache-control']).toBe('private, max-age=86400');
+    expect(served.rawPayload.equals(png(128))).toBe(true);
+
+    // Nobody signed in, another site, a sealed page: refused like the rest of /api.
+    expect((await g.app.inject({ method: 'GET', url: picture ?? '' })).statusCode).toBe(401);
+    expect(
+      (
+        await g.app.inject({
+          method: 'GET',
+          url: picture ?? '',
+          headers: { cookie, 'sec-fetch-site': 'cross-site' },
+        })
+      ).statusCode,
+    ).toBe(403);
+    expect(
+      (
+        await g.app.inject({
+          method: 'GET',
+          url: picture ?? '',
+          headers: { cookie, origin: 'null' },
+        })
+      ).statusCode,
+    ).toBe(403);
+
+    // Changed on disk into something else after it was added: not served at all.
+    await writeFile(
+      join(g.services.conchApps.store.current('weather'), 'icon.png'),
+      '<svg onload="x"/>',
+    );
+    const swapped = await g.app.inject({ method: 'GET', url: picture ?? '', headers: { cookie } });
+    expect(swapped.statusCode).toBe(404);
+    expect(swapped.headers['content-type']).toMatch(/^application\/json/);
+  });
+
+  it('serves a draft’s picture, and nothing for an id that isn’t one', async () => {
+    const g = await setup();
+    const { draft } = await g.services.conchApps.newDraft('c_pictures', { name: 'Yoga' });
+    const url = `/api/conch-apps/drafts/${draft.id}/icon`;
+    expect((await g.app.inject({ method: 'GET', url })).statusCode).toBe(404);
+    await g.services.conchApps.setPicture(draft.id, webp(96));
+    const served = await g.app.inject({ method: 'GET', url });
+    expect(served.statusCode).toBe(200);
+    expect(served.headers['content-type']).toBe('image/webp');
+    for (const bad of [
+      '/api/conch-apps/drafts/..%2F..%2Fconch-apps.json/icon',
+      '/api/conch-apps/drafts/draft_nope/icon',
+      '/api/conch-apps/packages/cpkg_nope/weather/icon',
+      '/api/conch-apps/packages/cpkg_x/..%2Fweather/icon',
+      '/api/conch-apps/..%2Fsecrets/icon',
+      '/api/conch-apps/weather/update/icon',
+      '/api/conch-apps/nobody/icon',
+    ])
+      expect((await g.app.inject({ method: 'GET', url: bad })).statusCode, bad).toBe(404);
+  });
+
+  it('refuses a package whose picture is a document dressed as one', async () => {
+    const g = await setup();
+    // The fake parts read packages loosely; the real reader is held to it in picture.test.ts.
+    // Here: whatever got in, the address serves only a picture that reads as one.
+    const preview = await g.app.inject({
+      method: 'POST',
+      url: '/api/conch-apps/preview',
+      payload: {
+        file: withPicture(Buffer.from('<html><script>x</script></html>')),
+        name: 'w.conchapp',
+      },
+    });
+    const found = (preview.json() as { apps: { picture?: string }[] }).apps[0];
+    expect(found?.picture).toBeUndefined();
   });
 });

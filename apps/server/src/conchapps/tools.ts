@@ -5,8 +5,10 @@
  * Every answer is words a model can act on, ending in what to do next.
  */
 import {
+  APP_LIMITS,
   AppFilePath,
   AppId,
+  isAppPicture,
   madeHere,
   type ConchAppCheck,
   type ConversationEventInput,
@@ -14,10 +16,14 @@ import {
 } from '@conch/protocol';
 import { z } from 'zod';
 
+import type { FileAccess } from '../engines/host';
 import type { HostTool, HostToolResult } from '../engines/types';
+import { fileBytes } from '../files/read';
 import { makerGuide } from './guide';
 import { plainLine, quoted, sourceName } from './words';
+import { describePicture } from './picture';
 import { ConchAppError, type ConchAppService } from './service';
+import type { AppFetcher } from './types';
 
 export interface MakerContext {
   conversationId: string;
@@ -39,6 +45,23 @@ export interface MakerContext {
   }) => Promise<'allow' | 'allow-always' | 'deny'>;
   /** The person's own last message, to tell a link they typed from one the chat read. */
   lastMessage?: () => Promise<string | undefined>;
+  /** The chat's work folder and attachments, for a picture on this computer (`app_icon`). */
+  files?: () => Promise<FileAccess>;
+  /** The public web, through the SSRF guard: for a picture at an address (`app_icon`). */
+  fetcher?: AppFetcher;
+}
+
+/** Base64 for a picture: room for the largest picture an app may have, as text. */
+const PICTURE_BASE64 = Math.ceil((APP_LIMITS.picture.bytes * 4) / 3) + 200;
+
+/** A picture's bytes from base64, with or without a `data:` prefix; undefined when it isn't base64. */
+function fromBase64(text: string): Buffer | undefined {
+  const body = text
+    .trim()
+    .replace(/^data:[a-z/+.-]+;base64,/i, '')
+    .replace(/\s+/g, '');
+  if (!body || !/^[A-Za-z0-9+/_-]+={0,2}$/.test(body)) return undefined;
+  return Buffer.from(body.replaceAll('-', '+').replaceAll('_', '/'), 'base64');
 }
 
 const words = (error: unknown): string => {
@@ -151,7 +174,11 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
       });
       const appId = (JSON.parse(made.files.get('conch-app.json') ?? '{}') as { id?: string }).id;
       const clash = appId ? (await service.list()).find((a) => a.id === appId) : undefined;
-      const files = [...made.files].map(([path, text]) => `--- ${path} ---\n${text}`).join('\n');
+      const files = [...made.files]
+        .map(([path, text]) =>
+          isAppPicture(path) ? `--- ${path} --- (the app’s picture)` : `--- ${path} ---\n${text}`,
+        )
+        .join('\n');
       return [
         made.reused
           ? `This chat already has a draft of that app: ${made.draft.id}. Carry on with it.`
@@ -198,6 +225,106 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
       if (content === undefined) return 'Give the whole file as content, or delete: true.';
       await service.write(info.id, path, content);
       return `Wrote ${path} (${Buffer.byteLength(content)} bytes). Write the rest, then app_check.`;
+    }),
+  };
+
+  const icon: HostTool<{
+    draft: typeof draftArg;
+    url: z.ZodOptional<z.ZodString>;
+    file: z.ZodOptional<z.ZodString>;
+    base64: z.ZodOptional<z.ZodString>;
+    remove: z.ZodOptional<z.ZodBoolean>;
+  }> = {
+    name: 'app_icon',
+    description:
+      'Give the app being made a picture as its icon (a logo, a photo), drawn instead of its glyph: a PNG, JPEG or WebP from an https address, a file in the work folder or the chat’s attachments, or base64. Give exactly one of url, file or base64, or remove: true to go back to the glyph. Then app_check.',
+    input: {
+      draft: draftArg,
+      url: z
+        .string()
+        .max(2000)
+        .optional()
+        .describe(
+          'An https address of the picture itself (ending .png, .jpg or .webp, or a site’s apple-touch-icon), never a page',
+        ),
+      file: z
+        .string()
+        .max(4096)
+        .optional()
+        .describe('A picture in the work folder, or one the person attached in this chat'),
+      base64: z.string().max(PICTURE_BASE64).optional().describe('The picture’s bytes, as base64'),
+      remove: z.boolean().optional().describe('Take the picture away, back to the glyph'),
+    },
+    run: safely(async ({ draft, url, file, base64, remove }) => {
+      const info = await draftOf(draft);
+      const given = [url, file, base64].filter((v) => v !== undefined && v !== '').length;
+      if (remove) {
+        if (given) return 'Give remove: true on its own, or one picture without it.';
+        await service.setPicture(info.id, undefined);
+        return 'The app has no picture now: its glyph is its icon again. Run app_check, then app_present.';
+      }
+      if (given !== 1)
+        return 'Give exactly one of url (an https address of the picture), file (a path in the work folder or the chat’s attachments) or base64.';
+      let bytes: Buffer;
+      let from: string;
+      if (base64) {
+        const decoded = fromBase64(base64);
+        if (!decoded)
+          return 'That isn’t base64. Give the picture’s bytes as base64, or use url or file.';
+        bytes = decoded;
+        from = 'the bytes you gave';
+      } else if (file) {
+        if (!ctx.files)
+          return 'Pictures on this computer can’t be read in this chat. Use url or base64.';
+        bytes = await fileBytes(await ctx.files(), file, ctx.signal, APP_LIMITS.picture.bytes + 1);
+        from = file;
+      } else {
+        if (!ctx.fetcher)
+          return 'Pictures from the web can’t be fetched in this chat. Use file or base64.';
+        let address: URL;
+        try {
+          address = new URL(url ?? '');
+        } catch {
+          return 'That isn’t a web address. Give the https address of the picture itself.';
+        }
+        if (address.protocol !== 'https:' || address.username || address.password)
+          return 'Use a secure (https) address without a sign-in in it.';
+        address.hash = '';
+        const got = await ctx.fetcher(
+          { id: `icon-${ctx.conversationId}`, reaches: [address.hostname] },
+          {
+            url: address.href,
+            method: 'GET',
+            headers: { accept: 'image/png, image/jpeg, image/webp;q=0.9, */*;q=0.1' },
+          },
+          ctx.signal,
+        );
+        if (got.refused) return `The picture couldn’t be fetched: ${got.refused}`;
+        if (!got.ok)
+          return `${address.hostname} answered ${got.status}, so there’s no picture there. Find the picture’s own address (open it in the browser and copy it), or use another one.`;
+        bytes = Buffer.from(got.body, got.bodyBase64 ? 'base64' : 'utf8');
+        from = hostOf(got.url ?? address.href);
+      }
+      const picture = await service.setPicture(info.id, bytes);
+      if (!picture) return 'Nothing was set.';
+      const manifest = (await service.draft(info)).manifest;
+      const square =
+        picture.width === picture.height
+          ? ''
+          : ' It isn’t square, so the tile shows its middle; a square picture fits best.';
+      const small =
+        Math.min(picture.width, picture.height) < 96
+          ? ' It’s small, so it may look soft on a big screen; 256 × 256 looks best.'
+          : '';
+      return [
+        `Set the app’s picture from ${from}: ${picture.name}, ${describePicture(picture)}.${square}${small}`,
+        manifest
+          ? `Its glyph (${manifest.icon.glyph} on ${manifest.icon.color}) stays in conch-app.json, as what shows where the picture can’t.`
+          : '',
+        'Only the picture changed, so tools already tried still count. Run app_check, then app_present.',
+      ]
+        .filter(Boolean)
+        .join(' ');
     }),
   };
 
@@ -419,6 +546,7 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
   const steps = [
     create,
     write,
+    icon,
     read,
     check,
     tryTool,

@@ -7,7 +7,8 @@
  *   sealed runtime; it imports only its own files and reaches only the
  *   hosts on its card; its pages load nothing from the web and never send
  *   the page elsewhere; its skills pass the skill scan; nothing the vault
- *   would hide is written in it.
+ *   would hide is written in it; its picture, if any, is the still PNG, JPEG
+ *   or WebP its name says (read with the package, `picture.ts`, ADR 0090).
  * - **Quality** (what Conch makes): every tool has a title, a description
  *   that says when to use it, an object input schema, an honest `changes`,
  *   and has been tried; pages have a language, a title, a viewport, labels,
@@ -16,11 +17,12 @@
  * Every message names the file (and the line where it can) and says what to
  * change, so the model that wrote the app can fix it.
  */
-import { ConchAppToolName, ConchAppTool, type AppCheckItem } from '@conch/protocol';
+import { ConchAppToolName, ConchAppTool, isAppPicture, type AppCheckItem } from '@conch/protocol';
 
 import { navigates } from '../artifacts/frame';
 import { scanText } from '../skills/scan';
 import { appHash, readFiles } from './package';
+import { pictureOf } from './picture';
 import type { AppPackage, AppRuntime, AppToolDefinition, CheckApp } from './types';
 
 const MAX_TOOLS = 24;
@@ -402,6 +404,8 @@ export const checkApp: CheckApp = async (files, options) => {
   const pages = new Set(manifest.pages.map((p) => p.file));
 
   for (const [file, bytes] of app.files) {
+    // The picture was read byte by byte with the package (`readFiles`); it isn't words.
+    if (isAppPicture(file)) continue;
     const text = bytes.toString('utf8');
     if (/\.m?js$/i.test(file)) codeProblems(file, text, reaches, problems, warnings);
     if (/\.html$/i.test(file))
@@ -457,6 +461,24 @@ export const checkApp: CheckApp = async (files, options) => {
       warnings.push({
         message:
           'Add instructions to conch-app.json: when the assistant should use the app, and how.',
+        file: 'conch-app.json',
+      });
+    // Its picture (ADR 0090): drawn in a square tile, from 20 px to 72 px across.
+    const picture = pictureOf(app.files);
+    if (picture && picture.width !== picture.height)
+      warnings.push({
+        message: `${picture.name} is ${picture.width} × ${picture.height}, not square, so the tile shows only its middle. Use a square picture (app_icon).`,
+        file: picture.name,
+      });
+    if (picture && Math.min(picture.width, picture.height) < 64)
+      warnings.push({
+        message: `${picture.name} is ${picture.width} × ${picture.height}, small enough to look soft on a big screen. Use one around 256 × 256 (app_icon).`,
+        file: picture.name,
+      });
+    if (!picture && [...app.files.keys()].some((f) => /^(?:icon|logo)\.svg$/i.test(f)))
+      warnings.push({
+        message:
+          'An SVG isn’t drawn as the app’s icon: Conch draws only a PNG, JPEG or WebP picture. Give it one with app_icon, or keep the glyph.',
         file: 'conch-app.json',
       });
   }

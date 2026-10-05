@@ -908,6 +908,9 @@ export class Services {
               ...this.conchApps.hosted.tools(ctx),
               ...makerTools(this.conchApps, {
                 ...ctx,
+                // A picture for an app's icon (ADR 0090): from the chat's files, or the public web.
+                files: () => this.#fileAccess(ctx),
+                fetcher: fetchPublicWeb,
                 lastMessage: async () =>
                   (
                     await this.conversations.detail(ctx.conversationId).catch(() => undefined)

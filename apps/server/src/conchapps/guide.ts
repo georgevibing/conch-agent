@@ -5,7 +5,7 @@
  * prompt says so. What the code can list (glyphs, colours, the page kit's
  * classes, the limits) is read from the code, never typed here.
  */
-import { APP_COLORS, APP_GLYPHS, APP_LIMITS } from '@conch/protocol';
+import { APP_COLORS, APP_GLYPHS, APP_LIMITS, APP_PICTURES } from '@conch/protocol';
 
 import { PAGE_KIT_CSS } from './pagekit.generated';
 
@@ -32,6 +32,7 @@ export const MAKER_TOOLS = [
   'app_guide',
   'app_new',
   'app_write',
+  'app_icon',
   'app_read',
   'app_check',
   'app_try',
@@ -56,6 +57,10 @@ export const APP_API = [
 ] as const;
 
 const mb = (bytes: number) => `${bytes / 1024 / 1024} MB`;
+const kb = (bytes: number) => `${bytes / 1024} KB`;
+const pictureNames = Object.keys(APP_PICTURES)
+  .map((name) => `\`${name}\``)
+  .join(', ');
 
 const EXAMPLE_MANIFEST = `{
   "conch": 1,
@@ -197,20 +202,31 @@ Build first. Ask only what you can't sensibly assume (a key only they have, a ch
 - \`pages/<name>.html\`: up to 4 pages of its own.
 - \`skills/<name>/SKILL.md\`: longer know-how, with front matter \`name\` (the folder's name) and \`description\` ("Does X. Use when Y.").
 - \`README.md\`: for people who find it on GitHub.
+- ${pictureNames}: its picture, when it has one (see **Its icon**). Only **app_icon** writes it.
 
-At most ${mb(APP_LIMITS.bytes)} and ${APP_LIMITS.files} files, text only: ${APP_LIMITS.extensions.join(' ')}. Paths stay inside the folder (\`pages/main.html\`), never a dot-file.
+At most ${mb(APP_LIMITS.bytes)} and ${APP_LIMITS.files} files, text only (${APP_LIMITS.extensions.join(' ')}) but for that one picture. Paths stay inside the folder (\`pages/main.html\`), never a dot-file.
 
 ## conch-app.json
 
 - \`conch\`: 1. \`id\`: lowercase letters, numbers and single dashes, 2–24 characters; its tools are named after it. \`name\`: sentence case, at most 40 characters.
 - \`tagline\`: what it does for the person, at most 80 characters ("Remembers when you water your plants", not "A plant app"). \`description\`: at most 600.
 - \`version\`: major.minor.patch. Raise it with every change to an app the person has.
-- \`icon\`: \`{ "glyph", "color" }\`. Glyphs: ${APP_GLYPHS.join(', ')}. Colours: ${APP_COLORS.join(', ')}. Pick the glyph a person would recognise at a glance.
+- \`icon\`: \`{ "glyph", "color" }\`. Glyphs: ${APP_GLYPHS.join(', ')}. Colours: ${APP_COLORS.join(', ')}. Pick the glyph a person would recognise at a glance. Always set it, even when the app has a picture: it's what shows where the picture can't.
 - \`kind\`: productivity, developer, files, design, business, home or personal.
 - \`tools\`: "tools.mjs". \`pages\`: \`[{ "id", "title", "file" }]\`.
 - \`reaches\`: the websites its tools fetch from, exact host names, https only, at most 10. Empty means none. Ask for as few as you can: the card shows every one to the person. Prefer services that need no key.
 - \`settings\`: \`[{ "key", "label", "help", "link", "secret", "optional" }]\`, at most 8: what only the person has, like an API key or their city. They type it into the card; you never see it. Put where to get it in \`link\` (an https page) and one sentence in \`help\`.
 - \`instructions\`: for the assistant, at most 1,500 characters: when to use it, which tool for what, and what words mean. \`examples\`: up to 6 things a person would really say.
+
+## Its icon
+
+The glyph on its colour is the icon, unless the app has a picture: a logo or a photo, drawn in the same rounded tile everywhere the app shows. Give it one when the person asks for a logo or a picture, or when the app is about one brand or service and its own mark says it best.
+
+- **app_icon** with \`url\`: the https address of the picture itself, never a page. For a service's logo, try its \`https://<its site>/apple-touch-icon.png\` first (most sites keep a 180 × 180 one there); otherwise open the site in the browser, find the logo's own picture and pass its address. If one is refused, app_icon says why: try the next.
+- **app_icon** with \`file\`: a picture in the work folder, or one the person attached in this chat. With \`base64\`: the bytes themselves. With \`remove: true\`: back to the glyph.
+- PNG, JPEG or WebP, read from its bytes: at most ${kb(APP_LIMITS.picture.bytes)}, from ${APP_LIMITS.picture.minSide} to ${APP_LIMITS.picture.maxSide} pixels a side, still (not animated). Square and about 256 × 256 looks best. SVG is never drawn: find a PNG of it instead (Wikimedia gives one at any width, like \`…/256px-Logo.svg.png\`).
+- It's kept as ${pictureNames} by its kind; conch-app.json doesn't name it, and the glyph stays. Changing only the picture keeps the tools you tried: app_check, then app_present.
+- Use a logo only for the service the app is for, as that service shows it.
 
 ## tools.mjs
 

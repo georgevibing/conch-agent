@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path';
 import type { AppCheckItem } from '@conch/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { jpeg, png, webp } from '../test/pictures';
 import { checkApp } from './check';
 import { appHash } from './package';
 import { createRuntime, type SealedRuntime } from './runtime';
@@ -488,5 +489,39 @@ describe('with the real sealed runtime', () => {
     expect(result.problems[0]?.message).toMatch(
       /^The tools didn’t load in the sealed runtime: tools\.mjs didn’t load: /,
     );
+  });
+});
+
+describe('an app’s picture (ADR 0090)', () => {
+  const withBytes = (extra: Record<string, Buffer>) => {
+    const files = new Map<string, Buffer>(pkg());
+    for (const [path, bytes] of Object.entries(extra)) files.set(path, bytes);
+    return files;
+  };
+
+  it('passes with a square picture of a good size, read as a picture rather than words', async () => {
+    const result = await check(withBytes({ 'icon.png': png(256) }));
+    expect(result.problems).toEqual([]);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('warns about a picture that isn’t square or is small, and an SVG that won’t be drawn', async () => {
+    expect(messages((await check(withBytes({ 'icon.jpg': jpeg(300, 150) }))).warnings)).toEqual([
+      expect.stringMatching(/^icon\.jpg is 300 × 150, not square/),
+    ]);
+    expect(messages((await check(withBytes({ 'icon.webp': webp(32) }))).warnings)).toEqual([
+      expect.stringMatching(/^icon\.webp is 32 × 32, small enough to look soft/),
+    ]);
+    expect(
+      messages((await check(withBytes({ 'icon.svg': Buffer.from('<svg/>') }))).warnings),
+    ).toEqual([expect.stringMatching(/An SVG isn’t drawn as the app’s icon/)]);
+  });
+
+  it('blocks one that isn’t the picture it says', async () => {
+    const result = await check(withBytes({ 'icon.png': Buffer.from('<html></html>') }));
+    expect(result.ok).toBe(false);
+    expect(messages(result.problems)).toEqual([
+      expect.stringMatching(/^icon\.png: This is a document/),
+    ]);
   });
 });
