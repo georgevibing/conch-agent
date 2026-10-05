@@ -48,7 +48,7 @@ test('make Tally, add it, use it, count on its page, save it, remove it and add 
   await card.getByRole('button', { name: 'Add Tally to my apps' }).click();
   await expect(page.getByText('Tally is in your apps')).toBeVisible();
   // Its page is in the sidebar.
-  await expect(page.getByRole('region', { name: 'Pinned' })).toContainText('Tally');
+  await expect(page.getByRole('region', { name: 'Pinned apps' })).toContainText('Tally');
 
   // 3. A message uses its tool: a change, so it asks first.
   const composer = page.getByRole('textbox', { name: 'Message Conch' });

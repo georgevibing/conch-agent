@@ -8,6 +8,8 @@ import {
 } from '@conch/protocol';
 import {
   AppIcon,
+  FolderMark,
+  useMediaQuery,
   type AppIconLook,
   ARTIFACT_KINDS,
   CHAT_ONLY_WORDS,
@@ -27,6 +29,10 @@ import {
   BatteryMedium,
   Coins,
   Folder,
+  FolderMinus,
+  FolderPlus,
+  Pin,
+  PinOff,
   Settings2,
   Bell,
   Blocks,
@@ -77,10 +83,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 
-import { useConversations } from '../../api/queries';
+import { useConversations, useFolders } from '../../api/queries';
 import { useUi, type SettingsTab } from '../../app/ui';
 import { MEMORY_ALL } from '../settings/paths';
 import { ARCHIVE_PATH, isChat, useArchive } from '../archive/useArchive';
+import { useOrganise } from '../chatlist/useOrganise';
 import { COME_HOME_FOCUS } from '../import/api';
 import { doctorApi } from '../health/api';
 import { LIVE_DATA_FOCUS } from '../artifacts/LiveDataSection';
@@ -381,6 +388,12 @@ export function useFindables(query: string, conversationId: string | undefined):
   const holds = useLiveStore((s) => (conversationId ? s.views[conversationId]?.holds : undefined));
   const { data: conversations } = useConversations();
   const { archive, unarchive } = useArchive();
+  // The chat list, organised (ADR 0089): folders by name, pinning and filing the open chat.
+  const { data: folders } = useFolders();
+  const { pin, fileIn } = useOrganise();
+  const showFolder = useUi((s) => s.showFolder);
+  const openFolderDialog = useUi((s) => s.openFolderDialog);
+  const narrow = useMediaQuery('(max-width: 820px)');
   const { isQuiet, setQuiet } = useQuietChat();
   const here = conversations?.find((c) => c.id === conversationId);
   const offerHere = conversationId
@@ -612,6 +625,39 @@ export function useFindables(query: string, conversationId: string | undefined):
     description: item.scheduleText,
     icon: <Repeat />,
     run: () => void navigate(`/routines/${item.id}`),
+  }));
+
+  // Folders in the chat list (ADR 0089): open in the sidebar, unfolded; or the open chat moved in.
+  const folderItems = find(
+    folders ?? [],
+    q,
+    (f) => f.name,
+    () => 'folder chats group',
+    4,
+  ).map(({ item, match }): Findable => ({
+    id: `folder:${item.id}`,
+    label: item.name,
+    ranges: match.ranges,
+    description: 'Folder',
+    icon: <FolderMark glyph={item.glyph} color={item.color} size="xs" />,
+    run: () => showFolder(item.id, narrow),
+  }));
+  const moveItems = find(
+    here && isChat(here) && /\b(?:move|file|folder|put)\b/i.test(q)
+      ? (folders ?? []).filter((f) => f.id !== here.folderId)
+      : [],
+    q,
+    (f) => `Move this chat to ${f.name}`,
+    (f) => `move file put folder ${f.name}`,
+    3,
+  ).map(({ item, match }): Findable => ({
+    id: `move-to:${item.id}`,
+    label: `Move this chat to ${item.name}`,
+    ranges: match.ranges,
+    icon: <FolderMark glyph={item.glyph} color={item.color} size="xs" />,
+    run: () => {
+      if (here) void fileIn([here], item);
+    },
   }));
 
   // The pages of apps you made or added (ADR 0061): "Plant diary — Plants".
@@ -874,6 +920,13 @@ export function useFindables(query: string, conversationId: string | undefined):
       run: () => void navigate('/activity'),
     },
     {
+      id: 'new-folder',
+      label: 'New folder',
+      keywords: 'folder create make add new group organise organize sort chats',
+      icon: <FolderPlus />,
+      run: () => openFolderDialog(here && isChat(here) && !here.archivedAt ? [here.id] : undefined),
+    },
+    {
       id: 'archived',
       label: 'Archived chats',
       keywords: 'archive archived put away hidden old chats conversations unarchive restore',
@@ -898,6 +951,36 @@ export function useFindables(query: string, conversationId: string | undefined):
                 icon: <Archive />,
                 run: () => void archive(here),
               },
+          ...(here.archivedAt
+            ? []
+            : [
+                here.pinned !== undefined
+                  ? {
+                      id: 'unpin-chat',
+                      label: 'Unpin this chat',
+                      keywords: 'unpin remove from top pinned',
+                      icon: <PinOff />,
+                      run: () => void pin([here], false),
+                    }
+                  : {
+                      id: 'pin-chat',
+                      label: 'Pin this chat',
+                      keywords: 'pin keep top favourite favorite star important stick',
+                      icon: <Pin />,
+                      run: () => void pin([here], true),
+                    },
+              ]),
+          ...(here.folderId
+            ? [
+                {
+                  id: 'unfile-chat',
+                  label: 'Take this chat out of its folder',
+                  keywords: 'remove from folder unfile move out back to list',
+                  icon: <FolderMinus />,
+                  run: () => void fileIn([here], null),
+                },
+              ]
+            : []),
           isQuiet(here.id)
             ? {
                 id: 'learn-chat',
@@ -1144,6 +1227,7 @@ export function useFindables(query: string, conversationId: string | undefined):
     { heading: 'Models', items: modelItems },
     { heading: 'Apps', items: [...appItems, ...pageItems] },
     { heading: 'Talk to me here', items: channelItems },
+    { heading: 'Folders', items: [...folderItems, ...moveItems] },
     { heading: 'Routines', items: routineItems },
     { heading: 'Made for you', items: [...artifactItems, ...editItems] },
     { heading: 'Tasks', items: taskItems },

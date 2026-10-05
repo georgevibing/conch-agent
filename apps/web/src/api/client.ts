@@ -18,6 +18,11 @@ import {
   Capabilities,
   CompactResult,
   ConversationSummary,
+  ChatFolder,
+  type BulkChatsBody,
+  type ChatChange,
+  type NewFolderBody,
+  type UpdateFolderBody,
   CustomCommand,
   EngineStatus,
   HealLog,
@@ -254,6 +259,24 @@ export const api = {
   archiveConversation: (id: string, archived: boolean) =>
     request(Ok, `/api/conversations/${id}`, { method: 'PATCH', body: { archived } }),
   deleteConversation: (id: string) => request(Ok, `/api/conversations/${id}`, { method: 'DELETE' }),
+  /** Pin, file, archive: how a chat sits in the list (ADR 0089). */
+  changeConversation: (id: string, change: ChatChange) =>
+    request(Ok, `/api/conversations/${id}`, { method: 'PATCH', body: change }),
+  /** You have it open: nothing in it is new any more, on any device. */
+  seeConversation: (id: string) =>
+    request(Ok, `/api/conversations/${id}`, { method: 'PATCH', body: { seen: true } }),
+  /** The same change to many chats, or deleting them (Select in the list). */
+  bulkConversations: (body: BulkChatsBody) =>
+    request(z.object({ ok: z.literal(true), done: z.number() }), '/api/conversations/bulk', {
+      method: 'POST',
+      body,
+    }),
+  folders: () => request(z.array(ChatFolder), '/api/folders'),
+  createFolder: (body: NewFolderBody) =>
+    request(ChatFolder, '/api/folders', { method: 'POST', body }),
+  updateFolder: (id: string, body: UpdateFolderBody) =>
+    request(ChatFolder, `/api/folders/${id}`, { method: 'PATCH', body }),
+  deleteFolder: (id: string) => request(Ok, `/api/folders/${id}`, { method: 'DELETE' }),
   /**
    * A waiting message goes now — with `engine` (the model on this computer), if
    * given; switched to its `model` (one that can use the apps it needs), if given.

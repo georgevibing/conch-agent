@@ -42,6 +42,7 @@ import { useAppState, useConversations } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { MEMORY_ALL } from '../settings/paths';
 import { relativeTime } from '../../lib/time';
+import { isChat } from '../archive/useArchive';
 import { compactChat } from '../chat/compact';
 import { useSearchPreview, useSearchResults } from '../search/useSearch';
 import { useFindables } from './findables';
@@ -286,7 +287,10 @@ export function Palette() {
         .map(({ item }) => item)
     : actions;
   // Archived chats are put away: found by name, never offered as recent.
-  const recent = q ? [] : (conversations ?? []).filter((c) => !c.archivedAt).slice(0, 6);
+  // Your own chats, as the sidebar lists them: not a routine's runs or a task's work.
+  const recent = q
+    ? []
+    : (conversations ?? []).filter((c) => isChat(c) && !c.archivedAt).slice(0, 6);
   const groups: SearchGroup[] = search.data?.groups ?? [];
   const fuzzy = search.data?.mode === 'fuzzy';
   const titleById = new Map((conversations ?? []).map((c) => [c.id, c]));

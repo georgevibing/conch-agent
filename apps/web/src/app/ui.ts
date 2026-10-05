@@ -33,6 +33,14 @@ export interface FindState {
 interface UiState {
   sidebarOpen: boolean;
   mobileSidebarOpen: boolean;
+  /** A folder in the chat list to unfold and bring into view, once (⌘K). */
+  folderFocus?: { id: string; at: number };
+  /** Show a folder in the sidebar: open it (the sheet on a phone), unfold it, scroll to it. */
+  showFolder(id: string, narrow: boolean): void;
+  /** The New folder dialog, from anywhere; `file`: chats to move into it once it's made. */
+  folderDialog?: { file?: string[] };
+  openFolderDialog(file?: string[]): void;
+  closeFolderDialog(): void;
   /**
    * Conch is starting itself again (an update, a restore): the page rests
    * until it's back. `reopen`: the settings tab to show again after the reload.
@@ -207,6 +215,16 @@ export const useUi = create<UiState>((set) => ({
       return { sidebarOpen: !s.sidebarOpen };
     }),
   setMobileSidebar: (mobileSidebarOpen) => set({ mobileSidebarOpen }),
+  showFolder: (id, narrow) =>
+    set(() => {
+      if (!narrow) localStorage.setItem(SIDEBAR_KEY, '1');
+      return {
+        folderFocus: { id, at: Date.now() },
+        ...(narrow ? { mobileSidebarOpen: true } : { sidebarOpen: true }),
+      };
+    }),
+  openFolderDialog: (file) => set({ folderDialog: { ...(file?.length && { file }) } }),
+  closeFolderDialog: () => set({ folderDialog: undefined }),
   openSettings: (tab, focus, move) => {
     // A provider's page, and every memory, are places of their own; any other focus is
     // brought into view.

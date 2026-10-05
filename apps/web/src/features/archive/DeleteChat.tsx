@@ -8,6 +8,7 @@ import { Trash2 } from 'lucide-react';
 export function DeleteChat({
   chat,
   count,
+  archived = true,
   open,
   onOpenChange,
   onDelete,
@@ -15,6 +16,8 @@ export function DeleteChat({
   /** The one chat being deleted; leave it out with `count` for several. */
   chat?: { title: string };
   count?: number;
+  /** Several from the archive (the default), or chosen in the list. */
+  archived?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDelete: () => void;
@@ -25,7 +28,9 @@ export function DeleteChat({
       <AlertDialog.Content tone="danger" icon={<Trash2 />}>
         <AlertDialog.Header>
           <AlertDialog.Title>
-            {many ? `Delete ${count} archived chats?` : 'Delete this conversation?'}
+            {many
+              ? `Delete ${count} ${archived ? 'archived ' : ''}chats?`
+              : 'Delete this conversation?'}
           </AlertDialog.Title>
           <AlertDialog.Description>
             {many

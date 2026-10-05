@@ -1,0 +1,51 @@
+@layer nacre.components {
+  .scroll {
+    flex: 1;
+    min-block-size: 0;
+  }
+
+  /* Radix ScrollArea wraps content in a display:table box that grows with
+     its widest row; keep rows within the sidebar so titles can truncate. */
+  .scroll [data-radix-scroll-area-viewport] > div {
+    display: block !important;
+    min-inline-size: 0 !important;
+  }
+
+  /* "Chats", the filter in use, and the menu that changes it. */
+  .heading {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    padding: var(--nc-space-2) var(--nc-space-2) 0 var(--nc-space-3);
+  }
+
+  .headingLabel {
+    flex: 1;
+    margin: 0;
+    padding-inline: var(--nc-space-2);
+  }
+
+  .empty {
+    padding: var(--nc-space-3) var(--nc-space-4);
+  }
+
+  .folderEmpty {
+    padding: var(--nc-space-1-5) var(--nc-space-3);
+  }
+
+  .archived {
+    margin: 0;
+    padding: 0 var(--nc-space-2) var(--nc-space-3);
+    list-style: none;
+  }
+
+  .count {
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tidy {
+    margin: 0 var(--nc-space-3) var(--nc-space-4);
+  }
+}

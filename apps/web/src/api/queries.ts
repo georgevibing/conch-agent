@@ -7,6 +7,8 @@ export const keys = {
   state: ['state'] as const,
   engine: ['engine'] as const,
   conversations: ['conversations'] as const,
+  /** The folders in the chat list (ADR 0089); kept fresh by `folders.changed`. */
+  folders: ['folders'] as const,
   memories: ['memories'] as const,
   capabilities: ['capabilities'] as const,
   /** Under `capabilities`, so anything that refreshes one refreshes both. */
@@ -101,6 +103,11 @@ export function withSettings(state: AppState, body: UpdateSettingsBody): AppStat
 
 export function useConversations() {
   return useQuery({ queryKey: keys.conversations, queryFn: api.conversations });
+}
+
+/** The folders in the chat list, in their order (ADR 0089). */
+export function useFolders() {
+  return useQuery({ queryKey: keys.folders, queryFn: api.folders, staleTime: 60_000 });
 }
 
 export function useMemories() {

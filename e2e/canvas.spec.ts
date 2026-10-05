@@ -314,7 +314,7 @@ test('live data: asked once, read through Conch, updated, failing calmly, taken 
   await expect(question).toBeVisible();
   await panel.getByRole('button', { name: 'Pin as an app' }).click();
   await page
-    .getByRole('region', { name: 'Pinned' })
+    .getByRole('region', { name: 'Pinned apps' })
     .getByRole('button', { name: 'Weather now' })
     .click();
   await expect(page).toHaveURL(/\/apps\/a_/);

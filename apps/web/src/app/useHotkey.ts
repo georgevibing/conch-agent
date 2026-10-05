@@ -26,7 +26,10 @@ export function useHotkey(
     const onKey = (event: KeyboardEvent) => {
       const mod = isMac ? event.metaKey : event.ctrlKey;
       if (mod !== wants.mod || event.shiftKey !== wants.shift || event.altKey !== wants.alt) return;
-      if (event.key.toLowerCase() !== key && event.code.toLowerCase() !== `key${key}`) return;
+      const pressed = event.key.toLowerCase();
+      // `up`, `down`, `left`, `right`: the arrows, written as the keyboard page shows them.
+      if (pressed !== key && pressed !== `arrow${key}` && event.code.toLowerCase() !== `key${key}`)
+        return;
       const target = event.target as HTMLElement | null;
       if (!allowInInputs && target?.closest('input, textarea, [contenteditable]')) return;
       event.preventDefault();

@@ -189,6 +189,9 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
             });
           break;
         }
+        case 'folders.changed':
+          client.setQueryData(keys.folders, event.folders);
+          break;
         case 'conversation.reset':
           live.forget(event.conversationId);
           break;

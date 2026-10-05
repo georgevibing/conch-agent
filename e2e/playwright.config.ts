@@ -172,6 +172,8 @@ const scenarios = {
       GITHUB_TOKEN: '',
     },
   },
+  // The chat list, organised (ADR 0089): pins, folders, drag, Select, kept across a reload.
+  'chat-list': { port: 4349, env: { CONCH_MOCK_STATE: 'ready' } },
   // Show me: things made beside the chat, sealed pages, pinned apps (ADR 0034).
   'show-me': { port: 4371, env: { CONCH_MOCK_STATE: 'ready' } },
   // What a tool found, drawn as it is (ADR 0060): the mock's pretend calendar, mail, files and Slack.

@@ -80,6 +80,7 @@ import { BrowserDock } from '../browser/BrowserDock';
 import { Dictate } from '../voice/Dictate';
 import { canSpeak } from '../voice/speak';
 import { Talk } from '../voice/Talk';
+import { useSeen } from '../chatlist/useSeen';
 
 const suggestions = [
   { label: 'Plan my week', prompt: 'Help me plan my week. Ask me a couple of questions first.' },
@@ -388,6 +389,8 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
     if (!conversationId) return;
     return live.watch(conversationId);
   }, [conversationId, live]);
+  // What lands while you're looking isn't new to you, here or on your phone (ADR 0089).
+  useSeen(conversationId);
 
   // A new chat becomes a real conversation once the server confirms it. It's the
   // same chat (`fromNew`): the view stays as it is, only its address changes.
