@@ -1,0 +1,266 @@
+@layer nacre.components {
+  /* Each folder colour is an app colour (`--nc-app-*`). */
+  :is(.mark, .swatch, .picker)[data-folder-color='red'] {
+    --fm-color: var(--nc-app-red);
+  }
+  :is(.mark, .swatch, .picker)[data-folder-color='orange'] {
+    --fm-color: var(--nc-app-orange);
+  }
+  :is(.mark, .swatch, .picker)[data-folder-color='amber'] {
+    --fm-color: var(--nc-app-amber);
+  }
+  :is(.mark, .swatch, .picker)[data-folder-color='yellow'] {
+    --fm-color: var(--nc-app-yellow);
+  }
+  :is(.mark, .swatch, .picker)[data-folder-color='lime'] {
+    --fm-color: var(--nc-app-lime);
+  }
+  :is(.mark, .swatch, .picker)[data-folder-color='green'] {
+    --fm-color: var(--nc-app-green);
+  }
+  :is(.mark, .swatch, .picker)[data-folder-color='teal'] {
+    --fm-color: var(--nc-app-teal);
+  }
+  :is(.mark, .swatch, .picker)[data-folder-color='cyan'] {
+    --fm-color: var(--nc-app-cyan);
+  }
+  :is(.mark, .swatch, .picker)[data-folder-color='blue'] {
+    --fm-color: var(--nc-app-blue);
+  }
+  :is(.mark, .swatch, .picker)[data-folder-color='indigo'] {
+    --fm-color: var(--nc-app-indigo);
+  }
+  :is(.mark, .swatch, .picker)[data-folder-color='violet'] {
+    --fm-color: var(--nc-app-violet);
+  }
+  :is(.mark, .swatch, .picker)[data-folder-color='pink'] {
+    --fm-color: var(--nc-app-pink);
+  }
+  :is(.mark, .swatch, .picker)[data-folder-color='slate'] {
+    --fm-color: var(--nc-app-slate);
+  }
+
+  /* ── The mark: the glyph in its colour, on a soft wash of it ── */
+
+  .mark,
+  .glyph {
+    /* Deep enough to read on the wash in Pearl, light enough in Abalone. */
+    --fm-ink: light-dark(
+      color-mix(in oklab, var(--fm-color) 78%, oklch(0.22 0.02 var(--nc-neutral-h))),
+      color-mix(in oklab, var(--fm-color) 72%, oklch(0.98 0 0))
+    );
+    --fm-wash: color-mix(in oklab, var(--fm-color) 18%, transparent);
+  }
+
+  .mark {
+    --fm-size: 1.125rem;
+
+    display: inline-grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: var(--fm-size);
+    block-size: var(--fm-size);
+    border-radius: var(--nc-radius-xs);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--fm-wash);
+    color: var(--fm-ink);
+  }
+
+  .mark[data-size='xs'] {
+    --fm-size: 0.95rem;
+  }
+
+  .mark[data-size='md'] {
+    --fm-size: 1.75rem;
+    border-radius: var(--nc-radius-sm);
+  }
+
+  .mark > svg {
+    inline-size: 66%;
+    block-size: 66%;
+    stroke-width: 2.3;
+  }
+
+  .mark[data-size='md'] > svg {
+    stroke-width: 2.1;
+  }
+
+  /* ── The picker ── */
+
+  .picker {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-4);
+  }
+
+  .pickerGroup {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+  }
+
+  .pickerLabel {
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1-5);
+  }
+
+  .swatch {
+    appearance: none;
+    display: grid;
+    place-items: center;
+    inline-size: var(--nc-control-xs);
+    block-size: var(--nc-control-xs);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: var(--fm-color);
+    color: oklch(1 0 0);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--fm-color) 80%, oklch(0 0 0));
+    cursor: pointer;
+    transition:
+      scale var(--nc-spring-snappy-duration) var(--nc-spring-snappy),
+      box-shadow var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .swatch:hover {
+      scale: 1.08;
+    }
+  }
+
+  .swatch:active {
+    scale: 0.92;
+  }
+
+  /* Chosen: a ring of the canvas, then of the colour, like a picked swatch in Settings. */
+  .swatch[data-state='checked'] {
+    box-shadow:
+      0 0 0 2px var(--nc-surface-overlay),
+      0 0 0 3.5px var(--fm-color);
+  }
+
+  .swatch:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 4px;
+  }
+
+  .swatchTick {
+    display: grid;
+    place-items: center;
+  }
+
+  .swatchTick > svg {
+    inline-size: 0.8rem;
+    block-size: 0.8rem;
+    stroke-width: 3;
+  }
+
+  /* The light colours keep a dark tick. */
+  .swatch:is(
+    [data-folder-color='amber'],
+    [data-folder-color='yellow'],
+    [data-folder-color='lime']
+  ) {
+    color: oklch(0.3 0.06 80);
+  }
+
+  .glyphs {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--nc-control-sm), 1fr));
+    gap: var(--nc-space-1);
+  }
+
+  .glyph {
+    appearance: none;
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: var(--nc-text-muted);
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      scale var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .glyph > svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    stroke-width: 2;
+  }
+
+  @media (hover: hover) {
+    .glyph:hover {
+      background: var(--nc-wash-2);
+      color: var(--nc-text);
+    }
+  }
+
+  .glyph:active {
+    scale: 0.92;
+  }
+
+  /* Chosen: drawn as the folder will be, its glyph on its colour's wash. */
+  .glyph[data-state='checked'] {
+    background: var(--fm-wash);
+    color: var(--fm-ink);
+    box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--fm-color) 55%, transparent);
+  }
+
+  .glyph:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 1px;
+  }
+
+  /* ── The dialog ── */
+
+  .form {
+    display: contents;
+  }
+
+  .dialogBody {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-4);
+  }
+
+  /* How it'll sit in the list: the mark and the name, on a sliver of sidebar. */
+  .preview {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+    padding: var(--nc-space-2-5) var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-canvas-raised);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .previewName {
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-medium);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .previewName[data-empty] {
+    color: var(--nc-text-subtle);
+    font-weight: var(--nc-weight-regular);
+  }
+}

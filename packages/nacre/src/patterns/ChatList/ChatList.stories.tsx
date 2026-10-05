@@ -1,0 +1,575 @@
+import type { Meta, StoryObj } from '@storybook/react-vite';
+import {
+  Archive,
+  ChartColumn,
+  FileText,
+  FolderInput,
+  MoreHorizontal,
+  Pencil,
+  Pin,
+  PinOff,
+  Trash2,
+} from 'lucide-react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
+import { fn } from 'storybook/test';
+
+import { DropdownMenu } from '../../components/DropdownMenu';
+import { ContextMenu } from '../../components/ContextMenu';
+import { IconButton } from '../../components/IconButton';
+import { AppIcon } from '../ConchApps/AppIcon';
+import { IntegrationLogo } from '../Integrations/IntegrationLogo';
+import { AppDock, DockGlyph, type AppDockItem } from './AppDock';
+import { ChatListSection } from './ChatListSection';
+import { ChatRow, ChatRowSkeleton, type ChatStatus } from './ChatRow';
+import { FolderDialog } from './FolderDialog';
+import { FolderMark } from './FolderMark';
+import { SelectionBar } from './SelectionBar';
+import { TidyCard } from './TidyCard';
+
+interface PlaygroundArgs {
+  title: string;
+  status?: ChatStatus;
+  active: boolean;
+  selecting: boolean;
+  selected: boolean;
+  fromTelegram: boolean;
+}
+
+const meta = {
+  title: 'Patterns/Chat/ChatList',
+  parameters: {
+    layout: 'padded',
+    docs: {
+      description: {
+        component:
+          'The pieces of the chat list in the sidebar. **Rows** keep today’s calm look (muted text, the open chat lifted onto the surface, ⋯ on hover) and add where each chat is: a breathing pearl while Conch works, an amber dot that softly calls when it needs you, an accent dot and a firmer title for something new, a hollow ring when a turn didn’t finish — each also said aloud, never colour alone. **Groups** hold Pinned, light folders (a glyph on a wash of its colour, folding away with a count) and stretches of time. Pinned pages sit above as a **dock of app icons**, so they read as apps, not chats. Choosing several brings up a **bar**; chats drag onto a folder or Pinned on a computer and swipe on a phone. A quiet **tidy-up** offer sits at the very end, never a warning.',
+      },
+    },
+  },
+  args: {
+    title: 'Plan a week in Lisbon',
+    status: undefined,
+    active: false,
+    selecting: false,
+    selected: false,
+    fromTelegram: false,
+  },
+  argTypes: {
+    status: {
+      control: 'inline-radio',
+      options: [undefined, 'working', 'waiting', 'unread', 'error'],
+    },
+  },
+  decorators: [
+    (Story) => (
+      <div style={sidebar}>
+        <Story />
+      </div>
+    ),
+  ],
+} satisfies Meta<PlaygroundArgs>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+const sidebar: CSSProperties = {
+  inlineSize: '17rem',
+  background: 'var(--nc-canvas-raised)',
+  borderRadius: 'var(--nc-radius-lg)',
+  boxShadow: 'inset 0 0 0 1px var(--nc-border-subtle)',
+  paddingBlock: 'var(--nc-space-1)',
+};
+
+function RowMenu({ title, pinned }: { title: string; pinned?: boolean }) {
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <IconButton size="sm" label={`Options for ${title}`} tooltip={false}>
+          <MoreHorizontal />
+        </IconButton>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Content align="start">
+        <DropdownMenu.Item icon={pinned ? <PinOff /> : <Pin />}>
+          {pinned ? 'Unpin' : 'Pin'}
+        </DropdownMenu.Item>
+        <DropdownMenu.Item icon={<FolderInput />}>Move to…</DropdownMenu.Item>
+        <DropdownMenu.Item icon={<Pencil />}>Rename</DropdownMenu.Item>
+        <DropdownMenu.Item icon={<Archive />}>Archive</DropdownMenu.Item>
+        <DropdownMenu.Separator />
+        <DropdownMenu.Item icon={<Trash2 />} tone="danger">
+          Delete
+        </DropdownMenu.Item>
+      </DropdownMenu.Content>
+    </DropdownMenu.Root>
+  );
+}
+
+function RowContext({ pinned }: { pinned?: boolean }) {
+  return (
+    <>
+      <ContextMenu.Item icon={pinned ? <PinOff /> : <Pin />}>
+        {pinned ? 'Unpin' : 'Pin'}
+      </ContextMenu.Item>
+      <ContextMenu.Item icon={<FolderInput />}>Move to…</ContextMenu.Item>
+      <ContextMenu.Item icon={<Pencil />}>Rename</ContextMenu.Item>
+      <ContextMenu.Item icon={<Archive />}>Archive</ContextMenu.Item>
+      <ContextMenu.Separator />
+      <ContextMenu.Item icon={<Trash2 />} tone="danger">
+        Delete
+      </ContextMenu.Item>
+    </>
+  );
+}
+
+const telegram = <IntegrationLogo brand="telegram" name="Telegram" size="xs" />;
+
+interface Chat {
+  id: string;
+  title: string;
+  status?: ChatStatus;
+  leading?: ReactNode;
+  active?: boolean;
+  pinned?: boolean;
+}
+
+function Row({ chat }: { chat: Chat }) {
+  return (
+    <ChatRow
+      status={chat.status}
+      leading={chat.leading}
+      active={chat.active}
+      dragIds={[chat.id]}
+      menu={<RowMenu title={chat.title} pinned={chat.pinned} />}
+      contextMenu={<RowContext pinned={chat.pinned} />}
+      swipeStart={{ label: chat.pinned ? 'Unpin' : 'Pin', icon: <Pin />, onAction: fn() }}
+      swipeEnd={{ label: 'Archive', icon: <Archive />, tone: 'danger', onAction: fn() }}
+    >
+      <a href={`#${chat.id}`}>{chat.title}</a>
+    </ChatRow>
+  );
+}
+
+function FolderActions({ name }: { name: string }) {
+  return (
+    <IconButton size="sm" label={`Options for ${name}`} tooltip={false}>
+      <MoreHorizontal />
+    </IconButton>
+  );
+}
+
+export const Playground: Story = {
+  render: ({ title, status, active, selecting, selected, fromTelegram }) => (
+    <ChatListSection label="Today">
+      <ChatRow
+        status={status}
+        active={active}
+        selecting={selecting}
+        selected={selected}
+        leading={fromTelegram ? telegram : undefined}
+        menu={<RowMenu title={title} />}
+        contextMenu={<RowContext />}
+        onSelectRequest={fn()}
+        onSelectedChange={fn()}
+      >
+        <a href="#chat">{title}</a>
+      </ChatRow>
+      <ChatRow menu={<RowMenu title="Groceries for Sunday" />}>
+        <a href="#other">Groceries for Sunday</a>
+      </ChatRow>
+    </ChatListSection>
+  ),
+};
+
+/**
+ * Where each chat is. Working leads with the pearl, as today. The dots sit at
+ * the ⋯’s place and give way to it under the pointer: amber calls softly for
+ * “Needs you”, the accent marks “New” (with a firmer title), and a hollow ring
+ * says “Didn’t finish”. Each is also read after the title.
+ */
+export const Statuses: Story = {
+  render: () => (
+    <ChatListSection label="Today">
+      <Row chat={{ id: 'a', title: 'Summarise the board deck', status: 'working' }} />
+      <Row chat={{ id: 'b', title: 'Book the dentist for Friday', status: 'waiting' }} />
+      <Row chat={{ id: 'c', title: 'Weekly reading list', status: 'unread' }} />
+      <Row chat={{ id: 'd', title: 'Scrape the venue prices', status: 'error' }} />
+      <Row chat={{ id: 'e', title: 'Plan a week in Lisbon', active: true }} />
+      <Row chat={{ id: 'f', title: 'Groceries for Sunday', leading: telegram }} />
+    </ChatListSection>
+  ),
+};
+
+function SelectingDemo() {
+  const chats = [
+    'Plan a week in Lisbon',
+    'Groceries for Sunday',
+    'Testing OpenRouter connectivity',
+    'Quarterly planning offsite agenda',
+    'Fix the flaky backup test',
+  ];
+  const [selecting, setSelecting] = useState(true);
+  const [chosen, setChosen] = useState<Set<number>>(new Set([0, 2]));
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', minBlockSize: '20rem' }}>
+      <ChatListSection label="Previous 7 days">
+        {chats.map((title, i) => (
+          <ChatRow
+            key={title}
+            selecting={selecting}
+            selected={chosen.has(i)}
+            onSelectedChange={(on) =>
+              setChosen((prev) => {
+                const next = new Set(prev);
+                if (on) next.add(i);
+                else next.delete(i);
+                return next;
+              })
+            }
+            onSelectRequest={() => {
+              setSelecting(true);
+              setChosen(new Set([i]));
+            }}
+            menu={<RowMenu title={title} />}
+          >
+            <a href={`#${i}`}>{title}</a>
+          </ChatRow>
+        ))}
+      </ChatListSection>
+      <div style={{ flex: 1 }} />
+      {selecting && (
+        <SelectionBar
+          count={chosen.size}
+          onDone={() => {
+            setSelecting(false);
+            setChosen(new Set());
+          }}
+        >
+          <IconButton size="sm" label="Pin">
+            <Pin />
+          </IconButton>
+          <IconButton size="sm" label="Move to…">
+            <FolderInput />
+          </IconButton>
+          <IconButton size="sm" label="Archive">
+            <Archive />
+          </IconButton>
+          <IconButton size="sm" label="Delete">
+            <Trash2 />
+          </IconButton>
+        </SelectionBar>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Choosing several: a tick box leads each row, a press ticks instead of
+ * opening, and the bar rises at the foot with what can be done. Shift-, ⌘- or
+ * Ctrl-click a row to start; Done or Escape to stop.
+ */
+export const Selecting: Story = { render: () => <SelectingDemo /> };
+
+/**
+ * On a phone, swipe a row right to pin it, left to archive it. The row
+ * follows the finger over the action's colour; past 40% (or with a quick
+ * flick) letting go does it, with a light tap of haptics, and otherwise it
+ * springs back. Up and down still scroll. To try it here, open the story in a
+ * phone simulator or the browser's device mode (touch events), and swipe a
+ * row.
+ */
+export const Swipe: Story = {
+  render: () => (
+    <ChatListSection label="Today">
+      <Row chat={{ id: 'a', title: 'Plan a week in Lisbon' }} />
+      <Row chat={{ id: 'b', title: 'Groceries for Sunday', pinned: true }} />
+      <Row chat={{ id: 'c', title: 'Testing OpenRouter connectivity' }} />
+    </ChatListSection>
+  ),
+};
+
+/**
+ * Folders are light: a glyph on a soft wash of its colour, never a solid
+ * tile (those are apps). The label folds a folder away and keeps how many
+ * chats are inside beside it.
+ */
+export const Folders: Story = {
+  render: () => (
+    <>
+      <ChatListSection
+        label="Work"
+        icon={<FolderMark glyph="briefcase" color="blue" />}
+        collapsible
+        count={3}
+        actions={<FolderActions name="Work" />}
+      >
+        <Row chat={{ id: 'w1', title: 'Quarterly planning offsite agenda' }} />
+        <Row chat={{ id: 'w2', title: 'Draft the hiring post', status: 'unread' }} />
+        <Row chat={{ id: 'w3', title: 'Summarise the board deck' }} />
+      </ChatListSection>
+      <ChatListSection
+        label="Home"
+        icon={<FolderMark glyph="house" color="green" />}
+        collapsible
+        defaultOpen={false}
+        count={5}
+        actions={<FolderActions name="Home" />}
+      >
+        <Row chat={{ id: 'h1', title: 'Boiler service quotes' }} />
+      </ChatListSection>
+    </>
+  ),
+};
+
+/**
+ * While chats are dragged, places that take them show a faint ring; the one
+ * under the pointer fills with a wash of the accent and says what letting go
+ * will do. Reordering Pinned, a line marks where a chat dropped on a row will
+ * land (`dropBefore`). (Forced on here with `data-drop-ready`, `data-drop-over`.)
+ */
+export const DropTarget: Story = {
+  render: () => (
+    <>
+      <ChatListSection
+        label="Pinned"
+        onDropChats={fn()}
+        dropHint="Drop to pin"
+        data-drop-ready=""
+        data-drop-over=""
+      >
+        <Row chat={{ id: 'p1', title: 'Weekly reading list', pinned: true }} />
+      </ChatListSection>
+      <ChatListSection label="Pinned, reordering">
+        <Row chat={{ id: 'r1', title: 'Weekly reading list', pinned: true }} />
+        {/* A chat dragged onto this row lands just above it. */}
+        <ChatRow dropBefore menu={<RowMenu title="Summarise the board deck" pinned />}>
+          <a href="#r2">Summarise the board deck</a>
+        </ChatRow>
+        <Row chat={{ id: 'r3', title: 'Sourdough starter schedule', pinned: true }} />
+      </ChatListSection>
+      <ChatListSection
+        label="Work"
+        icon={<FolderMark glyph="briefcase" color="blue" />}
+        collapsible
+        defaultOpen={false}
+        count={3}
+        onDropChats={fn()}
+        dropHint="Move to Work"
+        data-drop-ready=""
+      >
+        <Row chat={{ id: 'w1', title: 'Quarterly planning offsite agenda' }} />
+      </ChatListSection>
+    </>
+  ),
+};
+
+function DockMenu() {
+  return (
+    <>
+      <ContextMenu.Item>Open</ContextMenu.Item>
+      <ContextMenu.Item>About this app</ContextMenu.Item>
+      <ContextMenu.Separator />
+      <ContextMenu.Item icon={<PinOff />}>Unpin</ContextMenu.Item>
+    </>
+  );
+}
+
+const dockItems: AppDockItem[] = [
+  {
+    key: 'tally',
+    label: 'Tally',
+    icon: <AppIcon glyph="wallet" color="green" />,
+    source: 'Page of the Tally app',
+    active: true,
+    onOpen: fn(),
+    menu: <DockMenu />,
+  },
+  {
+    key: 'plants',
+    label: 'Plant diary',
+    icon: <AppIcon glyph="sprout" color="lime" />,
+    source: 'Page of the Plant diary app',
+    onOpen: fn(),
+    menu: <DockMenu />,
+  },
+  {
+    key: 'runs',
+    label: 'Running log',
+    icon: <AppIcon glyph="activity" color="orange" />,
+    source: 'Page of the Running log app',
+    status: 'unread',
+    onOpen: fn(),
+    menu: <DockMenu />,
+  },
+  {
+    key: 'sales',
+    label: 'Q3 sales',
+    icon: <DockGlyph icon={<ChartColumn />} color="indigo" />,
+    source: 'Made in a chat',
+    onOpen: fn(),
+    menu: <DockMenu />,
+  },
+  {
+    key: 'notes',
+    label: 'Trip notes',
+    icon: <DockGlyph icon={<FileText />} />,
+    source: 'Made in a chat',
+    onOpen: fn(),
+    menu: <DockMenu />,
+  },
+];
+
+/**
+ * Pinned pages as a dock of app icons: four to a row, the name beneath, the
+ * open one marked with a small dot like a running app. A Conch app's page
+ * wears its app's icon; a page made in a chat wears a glyph on the same
+ * glazed tile, so the row reads as one set of apps. Hover for where each is
+ * from; right-click (or long-press) for Open, About and Unpin.
+ */
+export const Dock: Story = {
+  render: () => <AppDock items={dockItems} />,
+};
+
+function FolderDialogDemo({ mode }: { mode: 'new' | 'edit' }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)}>
+        Open
+      </button>
+      <FolderDialog
+        open={open}
+        onOpenChange={setOpen}
+        mode={mode}
+        initial={mode === 'edit' ? { name: 'Work', glyph: 'briefcase', color: 'blue' } : undefined}
+        onSave={fn()}
+      />
+    </>
+  );
+}
+
+/** A name, a colour and a glyph, with the folder previewed as it'll sit in the list. */
+export const NewFolder: Story = { render: () => <FolderDialogDemo mode="new" /> };
+
+export const EditFolder: Story = { render: () => <FolderDialogDemo mode="edit" /> };
+
+/** The quiet offer at the end of the list. Never a warning; Not now means not now. */
+export const Tidy: Story = {
+  render: () => (
+    <>
+      <TidyCard count={14} days={30} onTidy={fn()} onDismiss={fn()} />
+      <TidyCard count={6} days={14} onTidy={fn()} onDismiss={fn()} />
+    </>
+  ),
+};
+
+/** While the list loads. */
+export const Loading: Story = {
+  render: () => (
+    <ChatListSection label="Today" aria-busy>
+      <ChatRowSkeleton width="72%" />
+      <ChatRowSkeleton width="54%" />
+      <ChatRowSkeleton width="64%" />
+    </ChatListSection>
+  ),
+};
+
+/**
+ * The whole list as it sits in the sidebar: pinned pages as a dock, what
+ * needs you, Pinned, two folders (one folded away), then the months, the
+ * way into the archive, and a tidy-up offer at the end.
+ */
+export const Sidebar: Story = {
+  parameters: { layout: 'centered' },
+  render: () => (
+    <>
+      <AppDock items={dockItems.slice(0, 4)} />
+      <ChatListSection label="Needs you">
+        <Row chat={{ id: 'n1', title: 'Book the dentist for Friday', status: 'waiting' }} />
+      </ChatListSection>
+      <ChatListSection label="Pinned" onDropChats={fn()} dropHint="Drop to pin">
+        <Row chat={{ id: 'p1', title: 'Weekly reading list', pinned: true }} />
+        <Row
+          chat={{ id: 'p2', title: 'Summarise the board deck', status: 'working', pinned: true }}
+        />
+      </ChatListSection>
+      <ChatListSection
+        label="Work"
+        icon={<FolderMark glyph="briefcase" color="blue" />}
+        collapsible
+        count={2}
+        actions={<FolderActions name="Work" />}
+        onDropChats={fn()}
+        dropHint="Move to Work"
+      >
+        <Row chat={{ id: 'w1', title: 'Quarterly planning offsite agenda' }} />
+        <Row chat={{ id: 'w2', title: 'Draft the hiring post' }} />
+      </ChatListSection>
+      <ChatListSection
+        label="Home"
+        icon={<FolderMark glyph="house" color="green" />}
+        collapsible
+        defaultOpen={false}
+        count={5}
+        actions={<FolderActions name="Home" />}
+        onDropChats={fn()}
+        dropHint="Move to Home"
+      >
+        <Row chat={{ id: 'h1', title: 'Boiler service quotes' }} />
+      </ChatListSection>
+      <ChatListSection label="Today">
+        <Row chat={{ id: 't1', title: 'Plan a week in Lisbon', active: true }} />
+        <Row chat={{ id: 't2', title: 'Groceries for Sunday', leading: telegram }} />
+        <Row chat={{ id: 't3', title: 'What to read after Piranesi', status: 'unread' }} />
+      </ChatListSection>
+      <ChatListSection label="Yesterday">
+        <Row chat={{ id: 'y1', title: 'Testing OpenRouter connectivity' }} />
+        <Row chat={{ id: 'y2', title: 'Fix the flaky backup test', status: 'error' }} />
+      </ChatListSection>
+      <ChatListSection label="Previous 7 days">
+        <Row chat={{ id: 's1', title: 'Rewrite the landing page hero' }} />
+        <Row chat={{ id: 's2', title: 'Birthday ideas for Maya' }} />
+      </ChatListSection>
+      <ChatListSection label="Previous 30 days">
+        <Row chat={{ id: 'm1', title: 'Compare health insurance plans' }} />
+      </ChatListSection>
+      <ChatListSection label="September">
+        <Row chat={{ id: 'sep1', title: 'Explain this TypeScript error' }} />
+        <Row chat={{ id: 'sep2', title: 'Sourdough starter schedule' }} />
+      </ChatListSection>
+      <ChatListSection label="August 2025">
+        <Row chat={{ id: 'aug1', title: 'Packing list for Crete' }} />
+      </ChatListSection>
+      <ul style={{ margin: 0, padding: '0 var(--nc-space-2) var(--nc-space-1)' }}>
+        <ChatRow
+          quiet
+          leading={<Archive aria-hidden />}
+          trailing={
+            <>
+              12 <span className="nc-visually-hidden">chats</span>
+            </>
+          }
+        >
+          <a href="#archived">Archived</a>
+        </ChatRow>
+      </ul>
+      <TidyCard count={9} days={30} onTidy={fn()} onDismiss={fn()} />
+    </>
+  ),
+};
+
+/** A folder's mark at its three sizes, in a few colours. */
+export const FolderMarks: Story = {
+  render: () => (
+    <div style={{ display: 'flex', gap: 8, padding: 12, flexWrap: 'wrap' }}>
+      <FolderMark glyph="briefcase" color="blue" />
+      <FolderMark glyph="house" color="green" />
+      <FolderMark glyph="heart" color="pink" />
+      <FolderMark glyph="code" color="violet" />
+      <FolderMark glyph="plane" color="teal" />
+      <FolderMark glyph="graduation-cap" color="amber" />
+      <FolderMark glyph="list-checks" color="slate" />
+      <FolderMark glyph="book-open" color="orange" size="md" />
+      <FolderMark glyph="lightbulb" color="red" size="xs" />
+    </div>
+  ),
+};

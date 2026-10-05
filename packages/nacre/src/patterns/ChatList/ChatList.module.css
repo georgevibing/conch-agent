@@ -1,0 +1,723 @@
+@layer nacre.components {
+  /* ── A group ─────────────────────────────────────────────────────────── */
+
+  .section {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    padding: var(--nc-space-2) var(--nc-space-2) var(--nc-space-3);
+  }
+
+  /* Where dragged chats can land: a faint ring while any chat is dragged,
+     an accent wash and a firmer ring while it's over this group. Drawn
+     inside the group's padding, so it never touches the sidebar's edge. */
+  .section::before {
+    content: '';
+    position: absolute;
+    inset: var(--nc-space-1) var(--nc-space-1) var(--nc-space-1-5);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    pointer-events: none;
+    opacity: 0;
+    transition:
+      opacity var(--nc-duration-fast) var(--nc-ease-out),
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      box-shadow var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .section[data-drop-ready]::before {
+    opacity: 1;
+    box-shadow: inset 0 0 0 1px var(--nc-accent-5);
+  }
+
+  .section[data-drop-over]::before {
+    opacity: 1;
+    background: color-mix(in oklab, var(--nc-accent-9) 9%, transparent);
+    box-shadow: inset 0 0 0 1.5px var(--nc-accent-8);
+  }
+
+  .sectionHead {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    min-block-size: var(--nc-control-xs);
+    margin-block-end: var(--nc-space-0-5);
+    padding-inline: var(--nc-space-3) var(--nc-space-1);
+  }
+
+  .sectionTitle,
+  .sectionToggle {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    line-height: var(--nc-leading-snug);
+  }
+
+  /* The label is the button: it keeps the label's place and only gains a
+     soft wash under the pointer. */
+  .sectionToggle {
+    appearance: none;
+    margin: 0;
+    margin-inline-start: calc(-1 * var(--nc-space-1-5));
+    padding: var(--nc-space-0-5) var(--nc-space-1-5);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    font-family: inherit;
+    text-align: start;
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .sectionToggle:hover {
+      background: var(--nc-wash-2);
+      color: var(--nc-text-muted);
+    }
+  }
+
+  .sectionToggle:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 0;
+  }
+
+  .sectionLabel {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sectionIcon {
+    display: inline-flex;
+    flex-shrink: 0;
+  }
+
+  .sectionCount {
+    flex-shrink: 0;
+    font-weight: var(--nc-weight-regular);
+    font-variant-numeric: tabular-nums;
+    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .sectionChevron {
+    flex-shrink: 0;
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    stroke-width: 2.4;
+    opacity: 0.8;
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .sectionToggle[data-state='open'] .sectionChevron {
+    transform: rotate(90deg);
+  }
+
+  /* Small buttons (size sm) that keep the label's height: they overhang it a little. */
+  .sectionActions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    margin-block: calc((var(--nc-control-xs) - var(--nc-control-sm)) / 2);
+    margin-inline-start: auto;
+    opacity: 0;
+    transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .section:hover .sectionActions {
+      opacity: 1;
+    }
+  }
+
+  .sectionHead:focus-within .sectionActions,
+  .sectionActions:has([data-state='open']) {
+    opacity: 1;
+  }
+
+  @media (hover: none) {
+    .sectionActions {
+      opacity: 1;
+    }
+  }
+
+  .dropHint {
+    display: none;
+    flex-shrink: 0;
+    margin-inline-start: auto;
+    padding-inline-end: var(--nc-space-2);
+    color: var(--nc-text-accent);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    animation: nc-fade-in var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .section[data-drop-over] .dropHint {
+    display: block;
+  }
+
+  .section[data-drop-over] .sectionActions {
+    display: none;
+  }
+
+  .sectionList {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* Folding: the rows' height eases away; a little room past the edge so a
+     row's focus ring and the open chat's shadow aren't cut off. */
+  .sectionContent {
+    overflow: clip;
+    overflow-clip-margin: var(--nc-space-1);
+  }
+
+  .sectionContent[data-state='open'] {
+    animation: cl-open var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .sectionContent[data-state='closed'] {
+    animation: cl-close var(--nc-duration-base) var(--nc-ease-in-out);
+  }
+
+  @keyframes cl-open {
+    from {
+      block-size: 0;
+      opacity: 0;
+    }
+    to {
+      block-size: var(--radix-collapsible-content-height);
+      opacity: 1;
+    }
+  }
+
+  @keyframes cl-close {
+    from {
+      block-size: var(--radix-collapsible-content-height);
+      opacity: 1;
+    }
+    to {
+      block-size: 0;
+      opacity: 0;
+    }
+  }
+
+  /* ── A row ───────────────────────────────────────────────────────────── */
+
+  .item {
+    /* The ⋯ button sits over the row's end; titles stop short of it, with room to breathe. */
+    --cl-more-end: var(--nc-space-1);
+    --cl-more-room: calc(var(--cl-more-end) + var(--nc-control-sm) + var(--nc-space-2));
+    --cl-dot: 0.5rem;
+    /* What's behind a row as it slides: the sidebar's own colour. */
+    --cl-row-bg: var(--nc-canvas-raised);
+    --cl-check: 0.9375rem;
+
+    position: relative;
+    display: flex;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    transition: opacity var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .item[data-has-menu],
+  .item[data-dot] {
+    --cl-end-room: var(--cl-more-room);
+  }
+
+  .row {
+    position: relative;
+    display: flex;
+    flex: 1;
+    align-items: center;
+    min-inline-size: 0;
+    border-radius: inherit;
+    corner-shape: inherit;
+    translate: var(--cl-swipe-x, 0px) 0;
+  }
+
+  .link {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+    block-size: 2.125rem;
+    padding-inline: var(--nc-space-3) var(--cl-end-room, var(--nc-space-3));
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-md);
+    text-decoration: none;
+    -webkit-user-drag: element;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      padding var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  @media (hover: hover) {
+    .link:hover {
+      background: var(--nc-wash-2);
+      color: var(--nc-text);
+    }
+  }
+
+  .link:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+
+  /* The open chat: lifted onto the surface, like a card set down on the list. */
+  .link[aria-current='page'],
+  .link[data-active] {
+    background: var(--nc-surface);
+    color: var(--nc-text);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-1);
+  }
+
+  .title {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pearl {
+    flex-shrink: 0;
+  }
+
+  .leading {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+  }
+
+  /* A chat app's logo, as small as the text beside it. */
+  .leading > span[data-size] {
+    --il-size: 0.9rem;
+  }
+
+  .leading > svg {
+    inline-size: 0.95rem;
+    block-size: 0.95rem;
+  }
+
+  .trailing {
+    flex-shrink: 0;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Something new: the title steps forward, in full colour and a touch heavier. */
+  .item[data-status='unread'] .link {
+    color: var(--nc-text);
+  }
+
+  .item[data-status='unread'] .title {
+    font-weight: var(--nc-weight-medium);
+  }
+
+  /* Quieter than any chat: the way into the archive. */
+  .item[data-quiet] .link {
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-sm);
+  }
+
+  .editing {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  /* ── Status dots ── at the ⋯'s place, giving way to it under the pointer. */
+
+  .dot {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-end: calc(var(--cl-more-end) + (var(--nc-control-sm) - var(--cl-dot)) / 2);
+    inline-size: var(--cl-dot);
+    block-size: var(--cl-dot);
+    border-radius: var(--nc-radius-full);
+    translate: 0 -50%;
+    pointer-events: none;
+    transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .dot[data-status='unread'] {
+    background: var(--nc-accent-9);
+  }
+
+  /* Needs you: amber, breathing a soft ring outwards. */
+  .dot[data-status='waiting'] {
+    --cl-amber: light-dark(
+      oklch(0.74 0.16 var(--nc-warning-h)),
+      oklch(0.8 0.15 var(--nc-warning-h))
+    );
+    background: var(--cl-amber);
+    animation: cl-call 2.4s var(--nc-ease-out) infinite;
+  }
+
+  /* Didn't finish: a hollow ring, so it reads apart from the filled dots without colour. */
+  .dot[data-status='error'] {
+    background: transparent;
+    box-shadow: inset 0 0 0 1.5px
+      light-dark(oklch(0.6 0.2 var(--nc-danger-h)), oklch(0.7 0.17 var(--nc-danger-h)));
+  }
+
+  @keyframes cl-call {
+    0% {
+      box-shadow: 0 0 0 0 color-mix(in oklab, var(--cl-amber) 55%, transparent);
+    }
+    70%,
+    100% {
+      box-shadow: 0 0 0 0.3rem color-mix(in oklab, var(--cl-amber) 0%, transparent);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dot[data-status='waiting'] {
+      animation: none;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .dot[data-status='waiting'] {
+    animation: none;
+  }
+
+  @media (hover: hover) {
+    .item[data-has-menu]:hover .dot {
+      opacity: 0;
+    }
+  }
+
+  .item[data-has-menu]:focus-within .dot,
+  .item[data-has-menu]:has(.more [data-state='open']) .dot {
+    opacity: 0;
+  }
+
+  /* On touch the ⋯ is always there: the dot sits just before it. */
+  @media (hover: none) {
+    .item[data-has-menu][data-dot] {
+      --cl-end-room: calc(var(--cl-more-room) + var(--cl-dot) + var(--nc-space-1));
+    }
+
+    .item[data-has-menu] .dot {
+      inset-inline-end: calc(var(--cl-more-end) + var(--nc-control-sm) + var(--nc-space-1));
+    }
+
+    .item[data-has-menu]:focus-within .dot {
+      opacity: 1;
+    }
+  }
+
+  /* ── The ⋯ ── */
+
+  .more {
+    position: absolute;
+    inset-inline-end: var(--cl-more-end);
+    display: inline-flex;
+    opacity: 0;
+    transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .item:hover .more {
+      opacity: 1;
+    }
+  }
+
+  .item:focus-within .more,
+  .more:has([data-state='open']) {
+    opacity: 1;
+  }
+
+  @media (hover: none) {
+    .more {
+      opacity: 1;
+    }
+  }
+
+  /* ── Choosing several ── */
+
+  .check {
+    position: absolute;
+    inset-inline-start: var(--nc-space-3);
+    z-index: 1;
+    animation: cl-check-in var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) both;
+  }
+
+  .item[data-selecting] .link {
+    padding-inline-start: calc(var(--nc-space-3) + var(--cl-check) + var(--nc-space-2-5));
+    cursor: default;
+  }
+
+  .item[data-selected] .link {
+    background: color-mix(in oklab, var(--nc-accent-9) 11%, transparent);
+    color: var(--nc-text);
+    box-shadow: none;
+  }
+
+  @media (hover: hover) {
+    .item[data-selected] .link:hover {
+      background: color-mix(in oklab, var(--nc-accent-9) 15%, transparent);
+    }
+  }
+
+  @keyframes cl-check-in {
+    from {
+      scale: 0.4;
+      opacity: 0;
+    }
+  }
+
+  /* ── Dragging ── */
+
+  .item[data-dragging] {
+    opacity: 0.4;
+  }
+
+  /* A chat dropped here lands just above this row: a line along its top
+     edge, inset to the row's text, in the 1px gap between rows. */
+  .item[data-drop-before]::before {
+    content: '';
+    position: absolute;
+    inset-block-start: -1.5px;
+    inset-inline: var(--nc-space-3);
+    z-index: 2;
+    block-size: 2px;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-9);
+    pointer-events: none;
+    animation: nc-fade-in var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .dragImage {
+    position: fixed;
+    inset-block-start: -100px;
+    inset-inline-start: 0;
+    padding: var(--nc-space-1) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-9);
+    color: var(--nc-accent-contrast);
+    font-family: var(--nc-font-sans);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    box-shadow: var(--nc-elevation-2);
+    pointer-events: none;
+  }
+
+  /* ── Swiping (touch) ── */
+
+  .item[data-swipeable] {
+    touch-action: pan-y;
+  }
+
+  .item[data-swiping] {
+    overflow: clip;
+  }
+
+  .item[data-swiping] .row {
+    background: var(--cl-row-bg);
+  }
+
+  .item[data-swiping='settling'] .row {
+    transition: translate var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .swipeBack {
+    --cl-swipe-bg: var(--nc-accent-9);
+    --cl-swipe-fg: var(--nc-accent-contrast);
+
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding-inline: var(--nc-space-4);
+    border-radius: inherit;
+    corner-shape: inherit;
+    background: var(--cl-swipe-bg);
+    color: var(--cl-swipe-fg);
+  }
+
+  .swipeBack[data-side='end'] {
+    justify-content: flex-end;
+  }
+
+  .swipeBack[data-tone='neutral'] {
+    --cl-swipe-bg: var(--nc-surface-inverse);
+    --cl-swipe-fg: var(--nc-text-inverse);
+  }
+
+  .swipeBack[data-tone='danger'] {
+    --cl-swipe-bg: light-dark(
+      oklch(0.58 0.19 var(--nc-danger-h)),
+      oklch(0.56 0.17 var(--nc-danger-h))
+    );
+    --cl-swipe-fg: oklch(1 0 0);
+  }
+
+  .swipeAction {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    opacity: 0.8;
+    transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .swipeBack[data-armed] .swipeAction {
+    opacity: 1;
+  }
+
+  .swipeIcon {
+    display: inline-flex;
+    transition: scale var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  .swipeIcon > svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .swipeBack[data-armed] .swipeIcon {
+    scale: 1.18;
+  }
+
+  /* ── Loading ── */
+
+  .skeleton {
+    display: flex;
+    align-items: center;
+    block-size: 2.125rem;
+    padding-inline: var(--nc-space-3);
+  }
+
+  /* ── Choosing several: the bar ── */
+
+  /* Two rows, so a narrow sidebar never cuts the count short: how many and
+     Done on top, what can be done with them below, like a toolbar. */
+  .selectionBar {
+    position: sticky;
+    inset-block-end: var(--nc-space-2);
+    z-index: var(--nc-z-sticky);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'count done'
+      'actions actions';
+    align-items: center;
+    gap: var(--nc-space-0-5) var(--nc-space-1);
+    margin: var(--nc-space-2);
+    padding: var(--nc-space-1) var(--nc-space-1) var(--nc-space-1) var(--nc-space-3);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-3);
+    animation: cl-bar-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  .selectionDone {
+    grid-area: done;
+  }
+
+  @keyframes cl-bar-in {
+    from {
+      translate: 0 calc(100% + var(--nc-space-3));
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .selectionBar {
+      animation-name: nc-fade-in;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .selectionBar {
+    animation-name: nc-fade-in;
+  }
+
+  .selectionCount {
+    grid-area: count;
+    min-inline-size: 0;
+    overflow: hidden;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    font-variant-numeric: tabular-nums;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .selectionActions {
+    display: flex;
+    grid-area: actions;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-around;
+    gap: var(--nc-space-0-5);
+    margin-inline-start: calc(-1 * var(--nc-space-2));
+    padding-block-start: var(--nc-space-1);
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  /* ── Tidy up ── */
+
+  .tidy {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    margin: var(--nc-space-1) var(--nc-space-3) var(--nc-space-3);
+    padding: var(--nc-space-3);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-wash-1);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .tidyText {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    text-wrap: pretty;
+  }
+
+  .tidyIcon {
+    flex-shrink: 0;
+    inline-size: 0.95rem;
+    block-size: 0.95rem;
+    margin-block-start: 0.1em;
+    color: var(--nc-text-subtle);
+  }
+
+  .tidyActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1);
+    padding-inline-start: calc(0.95rem + var(--nc-space-2));
+  }
+}

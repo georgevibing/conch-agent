@@ -1,0 +1,148 @@
+@layer nacre.components {
+  .dock {
+    padding: var(--nc-space-1) var(--nc-space-2) var(--nc-space-2);
+  }
+
+  /* Four to a row, the way a dock holds them; each column shares the width. */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--nc-space-0-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .cell {
+    display: flex;
+    min-inline-size: 0;
+  }
+
+  .tile {
+    position: relative;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+    margin: 0;
+    padding: var(--nc-space-2) var(--nc-space-0-5) var(--nc-space-2-5);
+    border: 0;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: var(--nc-text-muted);
+    font: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .tile:hover {
+      background: var(--nc-wash-2);
+      color: var(--nc-text);
+    }
+  }
+
+  .tile:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+
+  .icon {
+    position: relative;
+    display: grid;
+    place-items: center;
+    transition: scale var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  /* A press sinks the icon a little, and it springs back on release. */
+  .tile:active .icon {
+    scale: 0.94;
+  }
+
+  .label {
+    max-inline-size: 100%;
+    overflow: hidden;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-snug);
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tile[data-active] {
+    color: var(--nc-text);
+  }
+
+  .tile[data-active] .label {
+    font-weight: var(--nc-weight-medium);
+  }
+
+  /* The open one: a small dot beneath it, as a home screen marks what's running. */
+  .running {
+    position: absolute;
+    inset-block-end: var(--nc-space-1);
+    inset-inline: 0;
+    inline-size: 0.25rem;
+    block-size: 0.25rem;
+    margin-inline: auto;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-text-muted);
+    opacity: 0;
+    scale: 0.4;
+    transition:
+      opacity var(--nc-duration-base) var(--nc-ease-out),
+      scale var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  .tile[data-active] .running {
+    opacity: 1;
+    scale: 1;
+  }
+
+  /* Status: a dot notched into the icon's corner, ringed with the sidebar's colour. */
+  .status {
+    position: absolute;
+    inset-block-start: -0.1875rem;
+    inset-inline-end: -0.1875rem;
+    inline-size: 0.625rem;
+    block-size: 0.625rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-9);
+    box-shadow: 0 0 0 2px var(--nc-canvas-raised);
+  }
+
+  .status[data-status='working'] {
+    animation: nc-breathe 1.6s var(--nc-ease-in-out) infinite;
+  }
+
+  .status[data-status='waiting'] {
+    background: light-dark(
+      oklch(0.74 0.16 var(--nc-warning-h)),
+      oklch(0.8 0.15 var(--nc-warning-h))
+    );
+  }
+
+  .status[data-status='error'] {
+    background: var(--nc-canvas-raised);
+    box-shadow:
+      0 0 0 2px var(--nc-canvas-raised),
+      inset 0 0 0 2px
+        light-dark(oklch(0.6 0.2 var(--nc-danger-h)), oklch(0.7 0.17 var(--nc-danger-h)));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .status {
+      animation: none !important;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .status {
+    animation: none;
+  }
+}
