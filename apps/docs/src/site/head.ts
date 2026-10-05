@@ -7,9 +7,9 @@
  * between pages (`useHead`).
  */
 import { useEffect } from 'react';
-import reference from 'virtual:conch-reference';
+import publication from 'virtual:conch-publication';
 
-import { AUTHOR, DOWNLOADS, REPO_URL, SITE_URL } from './config';
+import { AUTHOR, DEVELOPMENT, DOWNLOADS, REPO_URL, SITE_URL } from './config';
 
 export interface Head {
   title: string;
@@ -34,7 +34,8 @@ export const SOCIAL_IMAGE = {
 } as const;
 
 /** A page's full address. */
-export const absolute = (path: string): string => `${SITE_URL}${path === '/' ? '/' : path}`;
+export const absolute = (path: string): string =>
+  `${SITE_URL}${DEVELOPMENT ? '/docs/next' : ''}${path === '/' || /\.[a-z0-9]+$/i.test(path) ? path : `${path.replace(/\/$/, '')}/`}`;
 
 /** One sentence, short enough for a search result: whole words, then an ellipsis. */
 export function sentence(text: string, max = 160): string {
@@ -72,7 +73,7 @@ export const LANDING_HEAD: Head = {
       image: absolute(SOCIAL_IMAGE.path),
       applicationCategory: 'DeveloperApplication',
       operatingSystem: 'macOS, Windows, Linux',
-      softwareVersion: reference.version,
+      softwareVersion: publication.tag?.slice(1) ?? `development-${publication.commit.slice(0, 8)}`,
       downloadUrl: DOWNLOADS,
       license: 'https://opensource.org/licenses/MIT',
       isAccessibleForFree: true,
@@ -98,6 +99,13 @@ export const DOCS_HEAD: Head = {
       ],
     },
   ],
+};
+
+export const RELEASES_HEAD: Head = {
+  title: 'Conch release notes',
+  description:
+    'What changed in Conch: published stable, beta and alpha releases, with their notes and source versions.',
+  path: '/releases',
 };
 
 export const NOT_FOUND_HEAD: Head = {
@@ -155,8 +163,8 @@ function tags(head: Head): { tag: 'meta' | 'link'; key: string; attrs: Record<st
   });
   return [
     meta('name', 'description', head.description),
-    meta('name', 'robots', head.noindex ? 'noindex' : 'index, follow'),
-    ...(head.noindex
+    meta('name', 'robots', head.noindex || DEVELOPMENT ? 'noindex' : 'index, follow'),
+    ...(head.noindex || DEVELOPMENT
       ? []
       : [{ tag: 'link' as const, key: 'rel=canonical', attrs: { rel: 'canonical', href: url } }]),
     meta('property', 'og:type', head.type ?? 'website'),
@@ -205,7 +213,7 @@ export function headHtml(head: Head): string {
 export function applyHead(head: Head, doc: Document = document): void {
   doc.title = head.title;
   // A missing page has no address of its own to give.
-  if (head.noindex) doc.head.querySelector('link[rel="canonical"]')?.remove();
+  if (head.noindex || DEVELOPMENT) doc.head.querySelector('link[rel="canonical"]')?.remove();
   for (const { tag, key, attrs } of tags(head)) {
     const [attr = '', name = ''] = key.split('=');
     let element = doc.head.querySelector(`${tag}[${attr}="${name}"]`);

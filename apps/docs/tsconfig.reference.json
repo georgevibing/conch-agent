@@ -1,7 +1,13 @@
 {
   "extends": "@conch/tsconfig/node.json",
   "compilerOptions": {
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "allowImportingTsExtensions": true
   },
-  "include": ["reference/build.ts", "reference/print.ts", "reference/types.ts"]
+  "include": [
+    "reference/build.ts",
+    "reference/print.ts",
+    "reference/types.ts",
+    "publishing/**/*.ts"
+  ]
 }

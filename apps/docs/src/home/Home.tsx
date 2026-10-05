@@ -12,12 +12,11 @@ import {
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
-import reference from 'virtual:conch-reference';
 
 import { ChannelGrid } from '../embeds/channels';
 import { InstallCommand } from '../embeds/install';
 import { ProviderGrid } from '../embeds/providers';
-import { SECTIONS } from '../site/config';
+import { SECTIONS, VERSION_LABEL, DEVELOPMENT } from '../site/config';
 import { DOCS_HEAD, useHead } from '../site/head';
 import { pagesIn } from '../site/pages';
 import styles from './Home.module.css';
@@ -51,7 +50,7 @@ function Band({ title, lede, children }: { title: string; lede: string; children
 
 /** The documentation's own front page: where everything is, and where to start. */
 export function Home() {
-  useHead(DOCS_HEAD);
+  useHead(DEVELOPMENT ? { ...DOCS_HEAD, path: '/' } : DOCS_HEAD);
   const first = pagesIn('start')[0];
 
   return (
@@ -60,7 +59,7 @@ export function Home() {
         eyebrow={
           <>
             <Badge tone="accent">Documentation</Badge>
-            <Badge tone="neutral">{reference.version}</Badge>
+            <Badge tone="neutral">{VERSION_LABEL}</Badge>
           </>
         }
         title={

@@ -4,7 +4,7 @@ import globals from 'globals';
 export default [
   ...react,
   {
-    files: ['reference/**/*.ts', 'vite.config.ts'],
+    files: ['reference/**/*.ts', 'publishing/**/*.ts', 'vite.config.ts'],
     languageOptions: { globals: { ...globals.node } },
   },
   {

@@ -6,6 +6,7 @@
  */
 import reference from 'virtual:conch-reference';
 
+import { RELEASES_HEAD } from './head';
 import { SECTIONS } from './config';
 import { PAGES } from './pages';
 import { slugify } from './text';
@@ -94,4 +95,17 @@ export const BROWSABLE: readonly Findable[] = pages.filter((page) =>
 );
 
 /** Everything, once someone types. */
-export const FINDABLES: readonly Findable[] = [...pages, ...named, ...headings];
+export const FINDABLES: readonly Findable[] = [
+  {
+    id: 'page /releases',
+    title: 'Release notes',
+    where: 'Conch',
+    description: RELEASES_HEAD.description,
+    to: '/releases',
+    keywords: ['versions', 'what’s new', 'stable', 'beta', 'alpha', 'changelog'],
+    kind: 'page',
+  },
+  ...pages,
+  ...named,
+  ...headings,
+];

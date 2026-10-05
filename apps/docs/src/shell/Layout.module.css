@@ -99,3 +99,10 @@
     display: none;
   }
 }
+
+.version {
+  inline-size: 100%;
+  max-inline-size: var(--docs-wide);
+  margin-inline: auto;
+  padding: var(--nc-space-2) var(--docs-gutter);
+}

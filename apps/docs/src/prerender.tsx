@@ -7,7 +7,15 @@ import { prerender } from 'react-dom/static';
 import { StaticRouter } from 'react-router';
 
 import { BASE, preloadPage, Site, SiteRoutes } from './app/App';
-import { DOCS_HEAD, headHtml, LANDING_HEAD, NOT_FOUND_HEAD, type Head } from './site/head';
+import {
+  DOCS_HEAD,
+  headHtml,
+  LANDING_HEAD,
+  RELEASES_HEAD,
+  NOT_FOUND_HEAD,
+  type Head,
+} from './site/head';
+import { DEVELOPMENT } from './site/config';
 import { headOf, pageAt, PAGES } from './site/pages';
 
 export { headHtml };
@@ -17,10 +25,16 @@ export { SITE_URL } from './site/config';
 export const MISSING = '/404';
 
 /** Every address with a page, front page first. */
-export const PATHS: readonly string[] = ['/', '/docs', ...PAGES.map((page) => page.path)];
+export const PATHS: readonly string[] = [
+  '/',
+  '/docs',
+  '/releases',
+  ...PAGES.map((page) => page.path),
+];
 
 export function headFor(path: string): Head {
-  if (path === '/') return LANDING_HEAD;
+  if (path === '/') return DEVELOPMENT ? { ...DOCS_HEAD, path: '/' } : LANDING_HEAD;
+  if (path === '/releases') return RELEASES_HEAD;
   if (path === '/docs') return DOCS_HEAD;
   const page = pageAt(path);
   return page ? headOf(page) : NOT_FOUND_HEAD;
@@ -28,12 +42,14 @@ export function headFor(path: string): Head {
 
 /** The file whose code draws the page (as Vite's manifest names it), to fetch it early. */
 export function codeFor(path: string): string | undefined {
-  if (path === '/') return undefined;
+  if (path === '/releases') return 'src/releases/Releases.tsx';
+  if (path === '/') return DEVELOPMENT ? 'src/home/Home.tsx' : undefined;
   return path === '/docs' ? 'src/home/Home.tsx' : 'src/pages/DocPage.tsx';
 }
 
 /** The file in the repository a page's words live in, for when it last changed. */
 export function sourceOf(path: string): string | undefined {
+  if (path === '/releases') return undefined;
   if (path === '/') return 'apps/docs/src/landing/Landing.tsx';
   if (path === '/docs') return 'apps/docs/src/home/Home.tsx';
   return pageAt(path)?.file;

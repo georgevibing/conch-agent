@@ -9,3 +9,6 @@ apps/desktop/out
 
 # Other checkouts of this repo (git worktrees) format themselves.
 .worktrees
+
+# Website publishing artifacts and detached content checkouts
+.site

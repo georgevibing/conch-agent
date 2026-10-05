@@ -1,42 +1,90 @@
 name: Website
 
-# conchagent.com: the front page and the documentation (apps/docs), every page
-# drawn ahead of time, published to GitHub Pages whenever main changes.
-#
-# Once, in the repository's Settings → Pages: Source "GitHub Actions", custom
-# domain conchagent.com, Enforce HTTPS. DNS for the domain: docs/RELEASING.md.
-
+# Publish only validated main or a verified stable release (ADR 0093).
+# Always run this orchestration from main, never from a release/PR's workflow.
 on:
-  push:
-    branches: [main]
+  workflow_run:
+    workflows: [CI, Desktop app]
+    types: [completed]
+  release:
+    types: [published, edited, deleted]
+  schedule:
+    - cron: '23 5 * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
+  actions: read
 
-# One publish at a time; a newer push waits rather than cancelling one halfway.
 concurrency:
   group: pages
   cancel-in-progress: false
 
 jobs:
   build:
+    if: >-
+      github.repository == 'georgevibing/conch-agent' &&
+      (github.event_name != 'workflow_run' ||
+       (github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event != 'pull_request' &&
+        github.event.workflow_run.head_repository.full_name == github.repository))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
-          # The sitemap says when each page last changed, from its file's history.
+          ref: main
           fetch-depth: 0
+          persist-credentials: false
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm docs:build
+      - name: Test publication rules
+        run: pnpm --filter @conch/docs exec vitest run src/site/publication.test.ts --maxWorkers=2
+      - name: Select verified releases and validated main
+        id: selection
+        working-directory: apps/docs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node --import tsx publishing/prepare.ts
+      - name: Check out the exact content revisions
+        env:
+          PRODUCTION: ${{ steps.selection.outputs.production }}
+          NEXT: ${{ steps.selection.outputs.next }}
+        run: |
+          git worktree add --detach .site/production "$PRODUCTION"
+          git worktree add --detach .site/next "$NEXT"
+      - name: Build the public site from its own code
+        working-directory: .site/production
+        env:
+          CONCH_SITE_MANIFEST: ${{ github.workspace }}/.site/production.json
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm docs:build
+      - name: Build development documentation from its own code
+        working-directory: .site/next
+        env:
+          CONCH_SITE_MANIFEST: ${{ github.workspace }}/.site/next.json
+          CONCH_DOCS_BASE: /docs/next/
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm docs:build
+      - name: Assemble and check one deployable site
+        run: node apps/docs/scripts/assemble.mjs
+      - name: Check the published pages in a browser
+        run: |
+          pnpm exec playwright install --with-deps chromium
+          node apps/docs/scripts/published-smoke.mjs
+      - name: Refuse a stale selection
+        working-directory: apps/docs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node --import tsx publishing/prepare.ts --verify
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: apps/docs/dist
+          path: .site/output
 
   deploy:
     needs: build

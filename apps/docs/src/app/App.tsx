@@ -3,6 +3,7 @@ import { lazy, Suspense, type ComponentType, type ReactNode } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router';
 
 import { Landing } from '../landing/Landing';
+import { DEVELOPMENT } from '../site/config';
 import { Layout } from '../shell/Layout';
 import styles from './App.module.css';
 
@@ -23,6 +24,7 @@ function onDemand(load: () => Promise<ComponentType>) {
 
 // The front page comes alone: the guides (every word of them) arrive when someone opens one.
 const Home = onDemand(() => import('../home/Home').then((module) => module.Home));
+const Releases = onDemand(() => import('../releases/Releases').then((module) => module.Releases));
 const DocPage = onDemand(() => import('../pages/DocPage').then((module) => module.DocPage));
 
 function Arriving() {
@@ -38,7 +40,15 @@ export const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 /** The page at an address, from the top of the site: `/`, `/docs`, `/start/install`. */
 const pageFor = (path: string) =>
-  path === '/' ? undefined : path.replace(/\/+$/, '') === '/docs' ? Home : DocPage;
+  path.replace(/\/+$/, '') === '/releases'
+    ? Releases
+    : path === '/'
+      ? DEVELOPMENT
+        ? Home
+        : undefined
+      : path.replace(/\/+$/, '') === '/docs'
+        ? Home
+        : DocPage;
 
 /**
  * The code for the page at `pathname`, fetched before the site first draws: a
@@ -54,7 +64,26 @@ export function SiteRoutes() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<Landing />} />
+        <Route
+          index
+          element={
+            DEVELOPMENT ? (
+              <Suspense fallback={<Arriving />}>
+                <Home />
+              </Suspense>
+            ) : (
+              <Landing />
+            )
+          }
+        />
+        <Route
+          path="releases"
+          element={
+            <Suspense fallback={<Arriving />}>
+              <Releases />
+            </Suspense>
+          }
+        />
         <Route
           path="docs"
           element={

@@ -8,7 +8,7 @@ order: 1
 
 <!-- conch:download -->
 
-Open the file you downloaded, and Conch opens. Everything it needs comes with it. [The app](./app.md) says what's different about it, and what to do if your computer asks before opening it.
+When a desktop download is available, open the downloaded file and Conch opens. Everything it needs comes with it. [The app](./app.md) says what's different about it, and what to do if your computer asks before opening it.
 
 ## One line in a terminal
 

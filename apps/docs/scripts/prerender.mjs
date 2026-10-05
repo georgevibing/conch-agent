@@ -2,13 +2,13 @@
 // `vite build --ssr src/prerender.tsx` (the same pages, for Node):
 //
 //   dist/index.html              the front page
-//   dist/docs.html               the documentation's home
-//   dist/<section>/<page>.html   every guide and decision, at its own address
+//   dist/docs/index.html               the documentation's home
+//   dist/<section>/<page>/index.html   every guide and decision, at its own address
 //   dist/404.html                what an address with nothing behind it shows
 //   dist/sitemap.xml, robots.txt, CNAME, install.sh, install.ps1, favicon.ico
 //
-// A host serves `/start/install` from `start/install.html` (GitHub Pages,
-// Cloudflare Pages and Netlify all do), so every page answers with its own
+// Directory indexes support both /start/install and /start/install/ on Pages.
+// Every page answers with its own
 // words, its own title and a 200, and the live page takes over in the browser.
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -23,8 +23,12 @@ const base = process.env.CONCH_DOCS_BASE ?? '/';
 
 const site = await import(pathToFileURL(join(built, 'prerender.js')).href);
 const siteUrl = site.SITE_URL;
+const development = base === '/docs/next/';
 
-const template = readFileSync(join(dist, 'index.html'), 'utf8');
+const originalTemplate = readFileSync(join(dist, 'index.html'), 'utf8');
+const template = development
+  ? originalTemplate.replace(/<link rel="sitemap"[^>]*>/, '')
+  : originalTemplate;
 const HEAD = /<!--head-->[\s\S]*?<!--\/head-->/;
 const ROOT = '<div id="root"></div>';
 if (!HEAD.test(template) || !template.includes(ROOT))
@@ -92,12 +96,16 @@ for (const path of [...site.PATHS, site.MISSING]) {
     .replace('</head>', `${early(site.codeFor(path)).join('\n    ')}\n  </head>`)
     .replace(ROOT, `<div id="root">${body}</div>`);
   const name =
-    path === '/' ? 'index.html' : path === site.MISSING ? '404.html' : `${path.slice(1)}.html`;
+    path === '/'
+      ? 'index.html'
+      : path === site.MISSING
+        ? '404.html'
+        : `${path.slice(1)}/index.html`;
   write(name, page);
-  if (!head.noindex) entries.push({ path, lastmod: changed(site.sourceOf(path)) });
+  if (!head.noindex && !development) entries.push({ path, lastmod: changed(site.sourceOf(path)) });
 }
 
-const url = (path) => `${siteUrl}${path === '/' ? '/' : path}`;
+const url = (path) => `${siteUrl}${path === '/' ? '/' : `${path}/`}`;
 write(
   'sitemap.xml',
   [
@@ -112,7 +120,8 @@ write(
   ].join('\n'),
 );
 write('robots.txt', `User-agent: *\nAllow: /\n\nSitemap: ${siteUrl}/sitemap.xml\n`);
-// GitHub Pages serves the site at its own domain from this file.
+write('.nojekyll', '');
+// Pages custom-domain settings own routing; CNAME also documents it in the artifact.
 write('CNAME', `${new URL(siteUrl).host}\n`);
 
 // The one-line installers, at the site's own address (README § Install).
