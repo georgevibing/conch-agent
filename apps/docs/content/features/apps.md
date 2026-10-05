@@ -91,6 +91,8 @@ Choose how your assistant uses each app. Saving a Gmail draft always asks, whate
 
 Under **Each tool**, every tool the app offers has its own **Allow**, **Ask** or **Off**, for when the switches under **What it does** aren't fine enough. Turn off what you don't need: your assistant stays more focused with fewer tools. Sending a Slack message, like saving a Gmail draft, only offers **Ask** or **Off**.
 
+**Full trust** in a chat takes precedence over **Ask every time**, **Ask before changes** and a tool's **Ask** setting. Enabled app tools run without those questions, with every provider. Choosing Full trust also answers an ordinary app question already waiting. The saved app settings stay as they are and apply again when you leave Full trust. Tools turned **Off** stay off. Saving a Gmail draft, sending a Slack message and other mandatory confirmations still ask.
+
 If an app later changes what one of its tools does, Conch stops allowing that tool by itself and tells you.
 
 The switch at the top turns an app off and keeps its sign-in for later. **Disconnect** makes Conch forget the sign-in. To remove Conch on the app's side too, look for "connected apps" in that app's own settings.

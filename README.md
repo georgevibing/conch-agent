@@ -87,6 +87,7 @@
 
 - **Apps and skills for every model.** Gmail, Google Calendar and Drive, Slack,
   GitHub, Notion, Linear and more from one gallery, plus Agent Skills (`SKILL.md`).
+  Full trust in a chat skips ordinary app approval questions.
   When one that isn't on would help, the chat offers it, and carries on once it's on.
   **Discover** adds skills people share (Anthropic's, ClawHub, skills.sh), each read
   in full, pinned to the version you read and held to what it says it needs.

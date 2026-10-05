@@ -277,4 +277,42 @@ question takes **Always allow** for the rest of the chat (`read:<tool>` after
 reading, the tool itself otherwise). Not the browser and Passwords, which keep
 their own; not a Slack message or a Gmail draft (`once`), whose words are shown
 each time; not someone else's words or a skill's list. A tool the person set to
-Ask in Apps (`chosen`) still asks in Full trust, and takes **Always allow**.
+Ask in Apps (`chosen`) initially still asked in Full trust, and took **Always allow**.
+The precedence correction below supersedes that exception.
+
+### Full trust takes precedence over ordinary app approvals (2026-10-05)
+
+Full trust skips **Ask every time**, **Ask before changes** and per-tool **Ask**.
+Native MCP already followed the mode; the shared bridge and Conch's own apps
+now do too. `trustAllows` no longer excludes bridged MCP tools, and `hostAsk`
+recognises `chosen` as an ordinary app policy, after mandatory reasons. Switching
+to Full trust also answers an ordinary app question already waiting. It never
+stores an Allow policy: leaving Full trust restores the app's saved choices.
+
+The threat is an agent steered by an app's output into a write the person did
+not intend. Only the person's existing mode control grants this bypass; app
+output cannot grant it. Off, protected paths, skill holds, other people's words
+and unattended after-reading checks remain enforced before ordinary approvals.
+The browser, Passwords and exact-preview confirmations (`once`, including Slack
+messages and Gmail drafts) retain their own rules. The security checkup now
+explicitly names enabled apps in its Full trust warning. No new stored power,
+backup rule or health state is introduced.
+
+Tests cover native and bridged calls, hosted app tools, both app Ask policies,
+per-tool Ask and Off, mode changes while waiting, leaving Full trust, and
+mandatory confirmations. Existing skill-hold and protected-path tests still run.
+
+This follows the general bypass-mode convention, not a claim that every agent
+has identical exceptions. Sources reviewed 2026-10-05:
+
+- [Claude Code permission modes](https://code.claude.com/docs/en/permission-modes):
+  bypass skips ordinary prompts; some mandatory actions still ask.
+- [Claude Code connector permissions](https://code.claude.com/docs/en/permissions#mcp):
+  organization-enforced connector Ask rules can survive bypass.
+- [Gemini CLI policy engine](https://geminicli.com/docs/reference/policy-engine/):
+  YOLO auto-approves tools; policy tiers retain higher-priority restrictions.
+- [Codex CLI reference](https://developers.openai.com/codex/cli/reference/):
+  `--yolo` bypasses command approvals and sandboxing. This does not establish
+  identical app-policy precedence in Codex.
+- [OWASP prompt injection prevention](https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html):
+  keep external content untrusted and enforce tool permissions in code.

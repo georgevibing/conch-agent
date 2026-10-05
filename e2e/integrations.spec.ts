@@ -121,3 +121,54 @@ test('saying no on the sign-in page leaves nothing half-connected', async ({ pag
   await page.keyboard.press('Escape');
   await expect(page.getByRole('region', { name: 'Connected' })).toHaveCount(0);
 });
+
+test('Full trust takes precedence over app questions and leaving it restores them', async ({
+  page,
+  request,
+}, testInfo) => {
+  const connected = await request.post('/api/integrations', {
+    data: {
+      catalogId: 'github',
+      values: { token: 'github_pat_' + 'mock_0123456789abcdefghij' },
+    },
+  });
+  expect(connected.ok()).toBe(true);
+  const { integration } = await connected.json();
+  await page.goto(`/apps/${integration.id}`);
+  await expect(
+    page.getByText(/Full trust in a chat skips these app and tool questions/),
+  ).toBeVisible();
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await page.screenshot({
+      path: testInfo.outputPath(`app-policy-${colorScheme}.png`),
+      fullPage: true,
+    });
+  }
+
+  await page.goto('/');
+  const composer = page.getByRole('textbox', { name: /Message/ });
+  await expect(page.getByRole('button', { name: 'Mode: Ask first', exact: true })).toBeVisible();
+  await composer.fill('create a page in github');
+  await composer.press('Enter');
+  await expect(page.getByText('would like to create a page in GitHub')).toBeVisible();
+
+  // A deliberate mode change answers the waiting question immediately.
+  await page.getByRole('button', { name: 'Mode: Ask first', exact: true }).click();
+  await page.getByRole('radio', { name: /Full trust/ }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Turn on' }).click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByText('I created Notes from Conch')).toBeVisible();
+
+  // The mode didn't persistently grant Allow to the app or any tool.
+  const apps = (await (await request.get('/api/integrations')).json()).integrations;
+  expect(apps.find((app: { id: string }) => app.id === integration.id).policy).toBe('ask-writes');
+  await page.getByRole('button', { name: 'Mode: Full trust', exact: true }).click();
+  await page.getByRole('radio', { name: /Ask first/ }).click();
+  await page.keyboard.press('Escape');
+  await composer.fill('create another page in github');
+  await composer.press('Enter');
+  await expect(page.getByRole('button', { name: 'Allow', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Deny', exact: true }).click();
+  await expect(page.getByText('No problem — I left it alone.')).toBeVisible();
+});

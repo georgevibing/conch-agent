@@ -399,6 +399,8 @@ export function PolicyAndTools({
           className={styles.policyHelp}
         >
           {policyHelp[integration.policy](integration.name, assistant)}
+          {integration.policy !== 'trust' &&
+            ' Full trust in a chat skips these app and tool questions. Tools turned off stay off.'}
           {integration.tools.some((t) => t.alwaysAsks) &&
             (slack
               ? ' Sending a message always asks, whatever you choose here.'

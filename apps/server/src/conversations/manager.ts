@@ -128,18 +128,15 @@ interface PendingPermission {
    * for leaving the sealed box.
    */
   waive?: string;
-  /** Asked because of what the person chose in Apps: picking Full trust doesn't answer it. */
-  everyMode?: boolean;
 }
 
 /**
  * Would Full trust have let this through without asking? Everything a mode asks
- * about, except a plan's go-ahead and integration tools Conch bridges (those ask
- * in every mode).
+ * about, including app policies, except a plan's go-ahead. Mandatory guards
+ * are checked separately, before this mode can allow anything.
  */
-function trustAllows(mode: PermissionMode, toolName: string, nativeTools: boolean): boolean {
-  if (mode !== 'bypassPermissions' || toolName === 'ExitPlanMode') return false;
-  return nativeTools || !toolName.startsWith('mcp__');
+function trustAllows(mode: PermissionMode, toolName: string): boolean {
+  return mode === 'bypassPermissions' && toolName !== 'ExitPlanMode';
 }
 
 /** A question a host tool puts to the user, through the same prompt as any permission. */
@@ -159,8 +156,8 @@ export interface AskRequest {
    */
   once?: boolean;
   /**
-   * Asked because the person set this tool to Ask in Apps: it asks in every
-   * mode, and "Always allow" lets it through for the rest of the chat.
+   * An ordinary Ask policy in Apps: Full trust skips it, and "Always allow"
+   * lets it through for the rest of the chat. Mandatory reasons still hold.
    */
   chosen?: boolean;
 }
@@ -1820,7 +1817,6 @@ export class ConversationManager {
     // The mode the chat shows for this provider is the one it runs in.
     const modes = await honouredModes(engine);
     resolved.permissionMode = honouredMode(resolved.permissionMode, modes);
-    const nativeTools = engine.integrations.mode === 'native';
     /** Someone is in this chat to answer: not a routine's run, not a message from a chat app. */
     const watched = !extras && !live.record.origin;
     // A mode picked mid-turn holds from the next step, not the next message
@@ -1832,12 +1828,7 @@ export class ConversationManager {
       resolved.permissionMode = mode;
       for (const listener of modeListeners) listener(mode);
       for (const [permissionId, pending] of live.permissions)
-        if (
-          pending.remember &&
-          !pending.everyMode &&
-          (!pending.waive || watched) &&
-          trustAllows(mode, pending.toolName, nativeTools)
-        )
+        if (pending.remember && (!pending.waive || watched) && trustAllows(mode, pending.toolName))
           this.#resolvePermission(live, permissionId, 'allow');
     };
     if (!extras?.permissionMode) live.setTurnMode = setTurnMode;
@@ -1854,7 +1845,6 @@ export class ConversationManager {
           toolName: request.toolName,
           remember: request.remember,
           ...(request.waive && { waive: request.waive }),
-          ...(request.chosen && { everyMode: true }),
         });
         const expire = () => {
           if (!live.permissions.delete(permissionId)) return;
@@ -1904,6 +1894,8 @@ export class ConversationManager {
       if (request.browser || request.vault || request.once)
         return askUser({ ...request, remember: false }, abort.signal);
       if (!request.taint) {
+        if (request.chosen && trustAllows(resolved.permissionMode, request.toolName))
+          return Promise.resolve('allow');
         if (live.alwaysAllow.has(request.toolName)) return Promise.resolve('allow');
         return askUser({ ...request, remember: true }, abort.signal);
       }
@@ -2171,7 +2163,7 @@ export class ConversationManager {
       )
         return 'deny';
       await keepBefore(request.toolUseId, request.toolName, request.input);
-      // Your choices in Apps come first: "Don't ask", or a tool you turned off.
+      // Off is absolute. Full trust overrides ordinary Ask policies, after the guards.
       const policy = await integrations?.decide(request.toolName).catch(() => undefined);
       if (policy === 'off') return 'deny';
       const asked = await mustAsk(request);
@@ -2179,7 +2171,7 @@ export class ConversationManager {
       if (!asked) {
         if (policy === 'allow') return 'allow';
         // Full trust picked mid-turn, for an engine still running the mode it started in.
-        if (trustAllows(resolved.permissionMode, request.toolName, nativeTools)) return 'allow';
+        if (trustAllows(resolved.permissionMode, request.toolName)) return 'allow';
         if (live.alwaysAllow.has(request.toolName)) return 'allow';
       }
       const described = await integrations?.describeTool(request.toolName).catch(() => undefined);

@@ -456,7 +456,10 @@ people shows you its words each time.
 
 **Full trust** is the one mode that doesn't stop to ask: you chose to let the
 assistant act, and a web page it reads could trick it (the mode picker says so).
-The chat still notes what it read. Some things hold even then: a routine running
+It overrides ordinary app and tool **Ask** settings, including **Ask before changes**,
+with every provider. Those saved settings apply again when you leave Full trust.
+Tools turned **Off**, protected paths and mandatory confirmations such as Gmail
+drafts and Slack messages still hold. The chat still notes what it read. Some things hold even then: a routine running
 by itself, or a chat where someone else is talking to the assistant (a chat
 app), still asks, and so does a step a skill's list doesn't cover.
 

@@ -404,7 +404,7 @@ describe('the guard, end to end', () => {
   });
 
   it('a Conch tool’s plain question takes “Always allow”; one showing words for others never does', async () => {
-    const { manager, engine } = await setup((ctx) => [
+    const { manager, engine, settings } = await setup((ctx) => [
       {
         name: 'ask_plain',
         description: 'Fixture: a tool the person set to Ask',
@@ -426,6 +426,7 @@ describe('the guard, end to end', () => {
             : 'Yes',
       },
     ]);
+    await settings.update({ preferences: { permissionMode: 'default' } });
     const both = async function* (input: TurnInput): AsyncGenerator<EngineEvent> {
       for (const name of ['ask_plain', 'ask_send']) {
         const tool = input.tools.find((t) => t.name === name);
