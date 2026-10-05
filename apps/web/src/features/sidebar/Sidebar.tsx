@@ -14,6 +14,7 @@ import {
   cx,
   toast,
   Tooltip,
+  UpdateChip,
 } from '@conch/nacre';
 import {
   Archive,
@@ -46,6 +47,7 @@ import { RoutinesLink } from '../routines/RoutinesLink';
 import { SkillsLink } from '../skills/SkillsLink';
 import { TasksLink } from '../tasks/TasksLink';
 import { updatesWaiting, useUpdates } from '../updates/queries';
+import { chipView } from '../updates/view';
 import styles from './Sidebar.module.css';
 
 function RenameField({
@@ -237,8 +239,12 @@ export function Sidebar({
   const setPalette = useUi((s) => s.setPalette);
   const navigate = useNavigate();
   const { conversationId } = useParams();
-  // Updates wait quietly: a dot on Settings, never a toast.
-  const updates = updatesWaiting(useUpdates().data);
+  // Updates wait quietly: a dot on Settings, never a toast. Conch's own is one
+  // press away beside your name.
+  const { data: updateStatus } = useUpdates();
+  const updates = updatesWaiting(updateStatus);
+  const chip = chipView(updateStatus);
+  const openUpdate = useUi((s) => s.openUpdate);
 
   const groups = new Map<DayGroup, ConversationSummary[]>();
   // Routine runs live under Routines, tasks under Tasks, refreshes under their app, and
@@ -343,6 +349,14 @@ export function Sidebar({
           />
           <span className={styles.meName}>{app?.profile.name || 'You'}</span>
         </button>
+        {chip && (
+          <UpdateChip
+            state={chip.state}
+            value={chip.value}
+            aria-label={chip.label}
+            onClick={() => openUpdate()}
+          />
+        )}
         <IconButton
           size="sm"
           label="Settings"

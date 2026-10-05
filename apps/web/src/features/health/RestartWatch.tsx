@@ -1,7 +1,8 @@
 import { RestartScreen } from '@conch/nacre';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
 import { useUi, type SettingsTab } from '../../app/ui';
+import { ARRIVED } from '../updates/view';
 import { bootId } from './restart';
 
 /** Taking longer than this, the screen says what to do. */
@@ -16,7 +17,9 @@ const REOPEN = 'conch.reopenAfterRestart';
  */
 export function RestartWatch() {
   const restarting = useUi((s) => s.restarting);
-  const [slow, setSlow] = useState(false);
+  const slow = useUi((s) => s.restartSlow);
+  // An update's restart shows in its dialog, while that's open.
+  const inDialog = useUi((s) => Boolean(s.restarting?.update && s.updateDialog));
 
   // Back from a restart: where you were (Settings → Health, after an update).
   useEffect(() => {
@@ -42,13 +45,15 @@ export function RestartWatch() {
         done = true;
         try {
           if (restarting.reopen) sessionStorage.setItem(REOPEN, restarting.reopen);
+          if (restarting.update) sessionStorage.setItem(ARRIVED, '1');
         } catch {
           // Not remembered; nothing else changes.
         }
         window.location.reload();
         return;
       }
-      if (Date.now() - started > SLOW_MS) setSlow(true);
+      if (Date.now() - started > SLOW_MS && !useUi.getState().restartSlow)
+        useUi.setState({ restartSlow: true });
       // Quit on purpose, it may be hours: look calmly rather than every moment.
       setTimeout(
         () => void look(),
@@ -62,7 +67,7 @@ export function RestartWatch() {
     };
   }, [restarting]);
 
-  if (!restarting) return null;
+  if (!restarting || inDialog) return null;
   return (
     <RestartScreen
       title={restarting.title}

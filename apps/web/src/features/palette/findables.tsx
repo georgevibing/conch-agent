@@ -1031,8 +1031,8 @@ export function useFindables(query: string, conversationId: string | undefined):
       icon: <Laptop />,
       run: () => openSettings('providers', 'ollama'),
     },
-    // Both open Settings → Health, which checks (or starts the update, asking
-    // you to confirm it's you) and shows how it goes.
+    // Checking opens Settings → Health and looks; updating opens the update
+    // dialog, which says what it brings first.
     {
       id: 'check-updates',
       label: 'Check for updates',
@@ -1049,7 +1049,8 @@ export function useFindables(query: string, conversationId: string | undefined):
               : 'Update Conch',
             keywords: 'update upgrade install new version latest restart',
             icon: <CircleArrowUp />,
-            run: () => openSettings('health', 'update-conch'),
+            // What it brings, and one press: the update dialog.
+            run: () => useUi.getState().openUpdate(),
           },
         ]
       : []),

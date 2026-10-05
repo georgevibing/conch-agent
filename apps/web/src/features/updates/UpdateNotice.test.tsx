@@ -7,7 +7,7 @@ import { useUi } from '../../app/ui';
 import { mockFetch, renderApp } from '../../test/harness';
 import { UpdateNotice } from './UpdateNotice';
 
-afterEach(() => useUi.setState({ settingsFocus: undefined }));
+afterEach(() => useUi.setState({ settingsFocus: undefined, updateDialog: undefined }));
 
 function status(announce: boolean): UpdatesStatus {
   return {
@@ -34,7 +34,7 @@ function status(announce: boolean): UpdatesStatus {
 }
 
 describe('the new-release banner', () => {
-  it('says a release is ready, opens Updates, and is put away for that version', async () => {
+  it('says a release is ready, opens the update dialog, and is put away for that version', async () => {
     const user = userEvent.setup();
     let announce = true;
     const calls = mockFetch({
@@ -44,13 +44,12 @@ describe('the new-release banner', () => {
         return status(false);
       },
     });
-    const { where } = renderApp(<UpdateNotice />);
+    renderApp(<UpdateNotice />);
     expect(await screen.findByRole('region', { name: 'Conch 0.3 is ready' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'What’s new' }));
-    expect(where()).toBe('/settings/health');
-    expect(useUi.getState().settingsFocus).toBe('updates');
+    expect(useUi.getState().updateDialog).toEqual({});
     await user.click(screen.getByRole('button', { name: 'Update' }));
-    expect(useUi.getState()).toMatchObject({ settingsFocus: 'update-conch' });
+    expect(useUi.getState().updateDialog).toEqual({ start: true });
     await user.click(screen.getByRole('button', { name: 'Not now' }));
     await waitFor(() => expect(screen.queryByRole('region')).toBeNull());
     expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({ dismiss: '0.3.0' });

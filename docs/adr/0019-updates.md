@@ -106,7 +106,21 @@ Repair everything's `updates` check (a `warning` per update with its one
 action; never Conch's own update), and ⌘K ("Check for updates", "Update
 Conch"). The only ambient signals are a dot on the sidebar's Settings button
 and on the Health tab, and an "Update available" line at the top of Health.
-No toasts, no modals.
+No toasts.
+
+**Amended (Oct 2026): Conch's own update, from anywhere.** When Conch itself
+can update, a small `UpdateChip` sits beside your name at the foot of the
+sidebar. It never updates by itself: it opens `UpdateDialog`, the one modal
+here, which says what the update brings (a release's notes, or every change
+in plain words on a branch, up to 40 lines, `from → to` commits) and has the
+one press. The same dialog carries the update forward (`PearlProgress`: the
+pearl fills a ring of nacre; a reading light moves down what's coming;
+ripples while Conch starts again; a bloom and "You're on the new Conch" when
+the page is back). It never flashes back, can be closed at any point, and is
+the calm screen during the restart while it's open (`RestartWatch` stands
+aside). The banner, ⌘K and Settings' **Update Conch** open it too. The build
+step's progress is told from how long the last build took here
+(`buildProgress`, never past 97%), so step 3 no longer sits still.
 
 ### Routes
 

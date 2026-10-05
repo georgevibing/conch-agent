@@ -9,6 +9,7 @@ import { ProviderDone } from '../features/providers/ProviderDone';
 import { Onboarding } from '../features/onboarding/Onboarding';
 import { behindOf, settingsAt } from '../features/settings/paths';
 import { Settings } from '../features/settings/Settings';
+import { UpdateDialogHost } from '../features/updates/UpdateDialogHost';
 import { Shell } from './Shell';
 import styles from './Root.module.css';
 
@@ -84,6 +85,8 @@ export function Root() {
         <Route path="*" element={<Shell />} />
       </Routes>
       <Settings />
+      {/* Conch's own update, from anywhere: over Settings too. */}
+      <UpdateDialogHost />
     </>
   );
 }

@@ -8,11 +8,20 @@ import { appState, FakeSocket, mockFetch, renderApp } from '../../test/harness';
 import { Sidebar } from '../sidebar/Sidebar';
 import { HealthTab } from './HealthTab';
 import { RestartWatch } from './RestartWatch';
+import { UpdateDialogHost } from '../updates/UpdateDialogHost';
 import { UpdatesSection } from './UpdatesSection';
+
+/** Settings' card, and the update dialog it opens. */
+const WithDialog = () => (
+  <>
+    <UpdatesSection />
+    <UpdateDialogHost />
+  </>
+);
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  useUi.setState({ restarting: undefined, settingsFocus: undefined });
+  useUi.setState({ restarting: undefined, settingsFocus: undefined, updateDialog: undefined });
 });
 
 const HOUR = 3_600_000;
@@ -204,7 +213,7 @@ describe('Settings → Health → Updates', () => {
         return current;
       },
     });
-    renderApp(<UpdatesSection />);
+    renderApp(<WithDialog />);
     const card = await screen.findByRole('region', { name: 'An update is ready' });
     expect(card).toHaveTextContent('9 improvements · Checked 2 hours ago');
     expect(card).toHaveTextContent('Conch restarts by itself when it’s done. Your chats are safe.');
@@ -216,8 +225,13 @@ describe('Settings → Health → Updates', () => {
 
     await user.click(within(card).getByRole('button', { name: 'Update Conch' }));
     expect(calls.some((c) => c.method === 'POST' && c.path === '/api/updates/conch')).toBe(true);
-    const progress = await screen.findByRole('progressbar', { name: 'Installing · 2 of 3' });
+    // The update dialog carries it from here, and you can keep working.
     // Step 2 of 3, halfway through: half of the middle third.
+    const dialog = await screen.findByRole('dialog', { name: 'Updating Conch' });
+    expect(dialog).toHaveAccessibleDescription('Installing · Step 2 of 3 · 50%');
+    await user.click(within(dialog).getByRole('button', { name: 'Keep working' }));
+    // Behind it, the card shows the same progress.
+    const progress = await screen.findByRole('progressbar', { name: 'Installing · 2 of 3' });
     expect(progress).toHaveAttribute('aria-valuenow', '50');
     expect(screen.queryByRole('button', { name: 'Update Conch' })).toBeNull();
   });
@@ -237,7 +251,11 @@ describe('Settings → Health → Updates', () => {
     );
     // Settings steps aside for the calm screen; its address brings it back after the reload.
     await waitFor(() =>
-      expect(useUi.getState().restarting).toEqual({ title: 'Updating Conch…', from: 'boot-1' }),
+      expect(useUi.getState().restarting).toEqual({
+        title: 'Starting the new Conch',
+        from: 'boot-1',
+        update: true,
+      }),
     );
     expect(where()).toBe('/settings/health');
   });
@@ -608,7 +626,7 @@ describe('quiet signals when updates wait', () => {
       'POST /api/updates/conch': () => status({}, ready),
     });
     useUi.setState({ settingsFocus: 'update-conch' });
-    renderApp(<UpdatesSection />);
+    renderApp(<WithDialog />);
     await waitFor(() =>
       expect(
         calls.filter((c) => c.method === 'POST' && c.path === '/api/updates/conch'),
@@ -663,7 +681,7 @@ describe('Settings → Health → Updates, following releases', () => {
         return current;
       },
     });
-    renderApp(<UpdatesSection />);
+    renderApp(<WithDialog />);
     const card = await screen.findByRole('region', { name: 'Conch 0.4 is ready' });
     expect(card).toHaveTextContent('You have 0.2.0 · Checked 2 hours ago');
     await user.click(within(card).getByRole('button', { name: 'What’s new' }));
@@ -678,8 +696,8 @@ describe('Settings → Health → Updates, following releases', () => {
     await user.click(within(card).getByRole('button', { name: 'Update Conch' }));
     expect(calls.some((c) => c.method === 'POST' && c.path === '/api/updates/conch')).toBe(true);
     expect(
-      await screen.findByRole('progressbar', { name: 'Installing · 2 of 4' }),
-    ).toBeInTheDocument();
+      await screen.findByRole('dialog', { name: 'Updating Conch' }),
+    ).toHaveAccessibleDescription('Installing · Step 2 of 4 · 25%');
   });
 
   it('chooses a channel, and says when going back to stable waits', async () => {

@@ -18,7 +18,6 @@ import {
   Text,
   useNow,
   type ProgramUpdateItemProps,
-  type ReleaseNoteItem,
   type SoftwareUpdateProps,
 } from '@conch/nacre';
 import { ArrowUpRight, Download, RefreshCw, RotateCcw, Undo2 } from 'lucide-react';
@@ -35,6 +34,7 @@ import { conchAppPath } from '../conchapps/words';
 import { errorText } from '../integrations/queries';
 import { updateKeys, updatesApi } from '../updates/api';
 import { relativeTime } from '../../lib/time';
+import { noteItems } from '../updates/view';
 import { Section } from '../settings/Section';
 import {
   followRestart,
@@ -58,20 +58,6 @@ function changes(conch: ConchUpdate): string {
   return conch.improvements > 0
     ? plural(conch.improvements, 'improvement')
     : plural(conch.behind, 'small change');
-}
-
-/** A release's notes as Nacre draws them, with its date in words. */
-export function noteItems(releases: Notes[]): ReleaseNoteItem[] {
-  return releases.map((r) => ({
-    version: r.version,
-    ...(r.date && {
-      date: new Date(r.date).toLocaleDateString(undefined, { day: 'numeric', month: 'long' }),
-    }),
-    headsUp: r.headsUp,
-    new: r.new,
-    better: r.better,
-    fixed: r.fixed,
-  }));
 }
 
 export type ConchCard = Omit<SoftwareUpdateProps, 'action' | 'notes'> & {
@@ -324,7 +310,8 @@ export function UpdatesSection() {
     started.current = true;
     if (focus === 'check-updates') void actions.check();
     // An app that can’t replace itself only shows its download (ADR 0054).
-    else if (status.conch.behind > 0 && !status.conch.blocked?.download) void actions.updateConch();
+    else if (status.conch.behind > 0 && !status.conch.blocked?.download)
+      useUi.getState().openUpdate({ start: true });
   }, [focus, status, actions]);
 
   if (!status) return null;
@@ -363,7 +350,8 @@ export function UpdatesSection() {
       <Button
         leadingIcon={<RefreshCw />}
         loading={conchBusy}
-        onClick={() => void actions.updateConch()}
+        // The update dialog carries it from here: the pearl, what's coming, the restart.
+        onClick={() => useUi.getState().openUpdate({ start: true })}
       >
         {card.offer === 'retry' ? 'Try again' : 'Update Conch'}
       </Button>
