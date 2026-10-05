@@ -326,13 +326,8 @@ export async function useConch(g: Gateway) {
   await chat(services, `/${String(skill.name)} for March`);
   // What a chat taught Conch once it went quiet (ADR 0087): a correction, kept with where it
   // came from; a move, with what used to be true kept, dated; and one taken back for good.
-  await ok(
-    await app.inject({
-      method: 'POST',
-      url: '/api/memories',
-      payload: { content: 'Lives in Berlin' },
-    }),
-  );
+  // (Learned before, so the move replaces it by itself: one you wrote would wait for your OK.)
+  await services.memory.add({ content: 'Lives in Berlin', source: 'agent' });
   const scripts = await chat(services, 'Write me a script to rename my photos');
   await chat(services, 'No, I meant TypeScript. Also, I moved to Lisbon.', [], scripts.id);
   const quiet = await services.learning.review(scripts.id, { trigger: 'idle' });

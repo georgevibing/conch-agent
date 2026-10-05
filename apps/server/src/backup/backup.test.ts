@@ -29,6 +29,8 @@ import { BackupService, IDLE_MS } from './service';
 vi.setConfig({ testTimeout: 90_000 });
 
 const PASSPHRASE = 'seven lemons sail past the harbour';
+/** What the used Conch remembers: one you added, and a move it learned by itself (ADR 0087). */
+const KNOWN = ['Ada takes her tea with lemon.', 'Lives in Lisbon'].sort();
 const DAY = 24 * 60 * 60 * 1000;
 
 const opened: Gateway[] = [];
@@ -121,7 +123,7 @@ describe('back up, restore on another computer, undo', () => {
       downloadable: false,
       contents: {
         settings: true,
-        memories: 1,
+        memories: 2,
         commands: expect.any(Number),
         routines: 3,
         skills: 2,
@@ -183,9 +185,12 @@ describe('back up, restore on another computer, undo', () => {
     const bCookie = await signIn(b.app);
     const state = json(await b.app.inject({ url: '/api/state', headers: { cookie: bCookie } }));
     expect(state).toMatchObject({ persona: { name: 'Shelly' }, profile: { name: 'Ada' } });
-    expect((await b.services.memory.list()).map((m) => m.content)).toEqual([
-      'Ada takes her tea with lemon.',
-    ]);
+    expect((await b.services.memory.list()).map((m) => m.content).sort()).toEqual(KNOWN);
+    // What used to be true, and what Conch learned and won't learn again, came too (ADR 0087).
+    expect((await b.services.memory.listPast()).map((m) => m.content)).toEqual(['Lives in Berlin']);
+    const learned = await b.services.learning.status();
+    expect(learned.never.map((n) => n.text)).toEqual(['Prefers TypeScript']);
+    expect(learned.spending).toMatchObject({ limitUsd: 2, isDefault: false });
     expect((await b.services.routines.list()).map((r) => r.title).sort()).toEqual([
       'After the briefing',
       'From my shop',
@@ -301,9 +306,7 @@ describe('back up, restore on another computer, undo', () => {
     });
     expect(await b.services.settings.providerSecret('openrouter')).toBeUndefined();
     expect(await b.services.skillTrust.signingKey()).toEqual({ state: 'none' });
-    expect((await b.services.memory.list()).map((m) => m.content)).toEqual([
-      'Ada takes her tea with lemon.',
-    ]);
+    expect((await b.services.memory.list()).map((m) => m.content).sort()).toEqual(KNOWN);
     // The integration is back, and asks to be signed in to again.
     const [integration] = await b.services.integrations.store.all();
     expect(integration?.catalogId).toBe('github');
@@ -645,6 +648,7 @@ describe('the preview before a restore', () => {
       { kind: 'conch-apps', names: ['Tally', 'Weather (reaches api.weather.example)'], more: 0 },
       { kind: 'routine-address', name: 'From my shop' },
       { kind: 'routines-spend', limitUsd: 30 },
+      { kind: 'learning-spend', limitUsd: 2 },
       { kind: 'page-data-sites', sites: ['api.weather.example'], more: 0 },
       { kind: 'channel-people', name: 'Ada Lovelace on WhatsApp', people: ['Ada'], more: 0 },
       { kind: 'channel-people', name: 'Ada Lovelace on Signal', people: ['Ada'], more: 0 },
@@ -836,9 +840,7 @@ describe('finishing a restore at start', () => {
     await applyPlan(a.home, plan);
     expect((await applyPendingRestore(a.home)).kind).toBe('applied');
     const b = await open(a.home);
-    expect((await b.services.memory.list()).map((m) => m.content)).toEqual([
-      'Ada takes her tea with lemon.',
-    ]);
+    expect((await b.services.memory.list()).map((m) => m.content).sort()).toEqual(KNOWN);
   });
 
   it('makes the Undo copy again at start, with what changed while it waited', async () => {
@@ -852,14 +854,12 @@ describe('finishing a restore at start', () => {
       JSON.parse(await readFile(join(stagingDir(a.home), 'plan.json'), 'utf8')),
     );
     const b = (await restart(a)).g;
-    expect((await b.services.memory.list()).map((m) => m.content)).toEqual([
-      'Ada takes her tea with lemon.',
-    ]);
+    expect((await b.services.memory.list()).map((m) => m.content).sort()).toEqual(KNOWN);
     const undone = await b.services.backups.restore(plan.undoId ?? '');
     expect(undone.kind).toBe('before-restore');
     const c = (await restart(b)).g;
     expect((await c.services.memory.list()).map((m) => m.content).sort()).toEqual(
-      ['Added while the restore waited.', 'Ada takes her tea with lemon.'].sort(),
+      [...KNOWN, 'Added while the restore waited.'].sort(),
     );
   });
 
