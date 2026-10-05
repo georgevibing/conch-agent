@@ -3,8 +3,6 @@ import { expect, test, type Page } from '@playwright/test';
 import { MockSlack } from '../apps/server/src/channels/mock/slack';
 import { openConch } from './app';
 
-const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
-
 /**
  * Come home, the rest of it (ADR 0042), from a pretend OpenClaw and Hermes:
  * Hermes's model matched to what's connected and put back by Undo; a Slack
@@ -16,20 +14,13 @@ test.describe.configure({ mode: 'serial' });
 
 async function comeHome(page: Page, from: 'OpenClaw' | 'Hermes') {
   await openConch(page);
-  await page.keyboard.press(`${mod}+k`);
-  await page.getByRole('combobox').fill('hermes');
-  await page.getByRole('option', { name: /Bring your things from OpenClaw or Hermes/ }).click();
-  // ⌘K opens the first one found (OpenClaw); the other is beside it in Settings.
-  const first = page.getByRole('dialog', { name: 'Bring your things from OpenClaw' });
-  await expect(first).toBeVisible();
-  if (from === 'OpenClaw') return first;
-  await first.getByRole('button', { name: 'Cancel' }).click();
-  await page
-    .getByRole('dialog', { name: /Settings/ })
-    .getByRole('region', { name: `Bring your things from ${from}` })
-    .getByRole('button', { name: /Take a look|Look again/ })
-    .click();
-  return page.getByRole('dialog', { name: `Bring your things from ${from}` });
+  // Each is a page inside Settings → Memory (⌘K's way there is in import.spec.ts).
+  await page.goto(`/settings/memory/from-${from.toLowerCase()}`);
+  const here = page.getByRole('dialog', { name: 'Settings' }).getByRole('tabpanel');
+  await expect(
+    here.getByRole('heading', { name: `Bring your things from ${from}`, level: 2 }),
+  ).toBeVisible();
+  return here;
 }
 
 test('Hermes’s model and its half Slack bot come over, and Undo takes both back', async ({
@@ -52,9 +43,7 @@ test('Hermes’s model and its half Slack bot come over, and Undo takes both bac
   await slack.click();
 
   await dialog.getByRole('button', { name: /^Bring \d+ things over$/ }).click();
-  const summary = page
-    .getByRole('dialog', { name: 'Welcome home' })
-    .getByRole('region', { name: 'Your things from Hermes are here' });
+  const summary = page.getByRole('region', { name: 'Your things from Hermes are here' });
   await expect(summary).toBeVisible({ timeout: 15_000 });
   await expect(summary).toContainText('1 model choice');
   await expect(summary).toContainText('New chats start with Sonnet 5.5');
@@ -104,9 +93,7 @@ test('OpenClaw’s other agents come over each under its name, as a skill that s
   await expect(dialog.getByRole('region', { name: 'Family' })).toContainText('0 of 2');
 
   await dialog.getByRole('button', { name: /^Bring \d+ things over$/ }).click();
-  const summary = page
-    .getByRole('dialog', { name: 'Welcome home' })
-    .getByRole('region', { name: 'Your things from OpenClaw are here' });
+  const summary = page.getByRole('region', { name: 'Your things from OpenClaw are here' });
   await expect(summary).toBeVisible({ timeout: 15_000 });
 
   const skills = (await (await request.get('/api/skills')).json()) as {

@@ -11,6 +11,7 @@ import {
   explainFetch,
   findCheckout,
   findPnpm,
+  buildProgress,
   installProgress,
   overwritten,
   type UpdateProgressReport,
@@ -416,6 +417,15 @@ describe('finding Conch’s folder', () => {
   it('reads pnpm’s install progress', () => {
     expect(installProgress('Progress: resolved 838, reused 830, downloaded 8, added 419')).toBe(50);
     expect(installProgress('Already up to date')).toBeUndefined();
+  });
+
+  it('tells the build’s progress from how long the last one took, never claiming it’s done', () => {
+    expect(buildProgress(0, 40_000)).toBe(0);
+    expect(buildProgress(20_000, 40_000)).toBeGreaterThan(60);
+    expect(buildProgress(40_000, 40_000)).toBe(90);
+    // Slower than usual: it keeps moving, ever more slowly, and stops short of the end.
+    expect(buildProgress(80_000, 40_000)).toBe(97);
+    expect(buildProgress(10 * 60_000, 40_000)).toBe(97);
   });
 });
 

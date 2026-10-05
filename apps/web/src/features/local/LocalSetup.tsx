@@ -187,7 +187,12 @@ export function LocalSetup({ provider }: { provider: Provider }) {
   /** Where the steps are, so pressing Get brings them into view. */
   const steps = useRef<HTMLOListElement>(null);
 
-  const put = (next: LocalStatus) => client.setQueryData(localKeys.status, next);
+  // A look already on its way started before this answer: it mustn't land after it and undo it
+  // (a download that just began would read as not started, and nothing would look again).
+  const put = async (next: LocalStatus) => {
+    await client.cancelQueries({ queryKey: localKeys.status });
+    client.setQueryData(localKeys.status, next);
+  };
   const refreshElsewhere = () => {
     void client.invalidateQueries({ queryKey: providerKeys.list });
     void client.invalidateQueries({ queryKey: appKeys.capabilities });
@@ -195,7 +200,7 @@ export function LocalSetup({ provider }: { provider: Provider }) {
 
   const pull = async (name: string) => {
     const next = await localApi.pull(name);
-    put(next);
+    await put(next);
   };
 
   /** Get a model: install Ollama first if it isn't here, and carry on without a second press. */
@@ -230,7 +235,7 @@ export function LocalSetup({ provider }: { provider: Provider }) {
   const act = (task: () => Promise<LocalStatus>, fallback: string) => async () => {
     setError(undefined);
     try {
-      put(await task());
+      await put(await task());
     } catch (e) {
       setError(errorText(e, fallback));
     }

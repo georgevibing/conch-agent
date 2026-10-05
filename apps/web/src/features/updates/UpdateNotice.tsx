@@ -16,7 +16,7 @@ const short = (version: string) => version.replace(/^(\d+\.\d+)\.0$/, '$1');
 export function UpdateNotice({ className }: { className?: string }) {
   const { data: status } = useUpdates();
   const client = useQueryClient();
-  const openSettings = useUi((s) => s.openSettings);
+  const openUpdate = useUi((s) => s.openUpdate);
   const conch = status?.conch;
   const latest = conch?.latest;
   if (!conch?.announce || !latest || conch.running) return null;
@@ -24,8 +24,8 @@ export function UpdateNotice({ className }: { className?: string }) {
     <div className={className}>
       <UpdateBanner
         title={`Conch ${short(latest.version)} is ready`}
-        onWhatsNew={() => openSettings('health', 'updates')}
-        onUpdate={() => openSettings('health', 'update-conch')}
+        onWhatsNew={() => openUpdate()}
+        onUpdate={() => openUpdate({ start: true })}
         onDismiss={() =>
           void updatesApi
             .setSettings({ dismiss: latest.version })

@@ -1,9 +1,17 @@
-import { DismissSuggestionBody, GetMeaningBody, Memory, TidyAnswerBody } from '@conch/protocol';
+import {
+  CreateMemoryBody,
+  DismissSuggestionBody,
+  GetMeaningBody,
+  KeepMemoryBody,
+  TidyAnswerBody,
+  UpdateMemoryBody,
+} from '@conch/protocol';
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 
 import type { SkillLearner } from '../skills/learn';
 import type { SkillSuggester } from '../skills/suggest';
+import { mintConsent, NEW_MEMORY, wordsHash } from './consent';
 import type { MemoryIndex } from './index';
 import type { MemoryStore } from './store';
 import type { MemoryTidy } from './tidy';
@@ -26,8 +34,12 @@ export function registerLearningRoutes(
     /** Get Conch's own model for meaning (ADR 0041), and how far it got. */
     getMeaningModel: (languages: string[]) => Promise<void>;
     meaningState: () => { getting?: number; problem?: string };
-    /** A memory a chat learned was kept: the chat's own log says so. */
-    decided?: (memory: Memory, kept: boolean) => Promise<void>;
+    /** A memory a chat learned was kept: the chat's own log says so (and Activity, ADR 0087). */
+    decided?: (
+      memory: { id: string; conversationId?: string; content: string },
+      kept: boolean,
+      how?: { edited?: boolean; anyway?: boolean },
+    ) => Promise<void>;
   },
 ): void {
   const { store, index, tidy, suggester } = deps;
@@ -37,23 +49,115 @@ export function registerLearningRoutes(
     return { results: (await index.search(q, 50)).map((r) => r.memory) };
   });
 
+  // What you write on What Conch knows is yours: a person's answer, the one
+  // thing that skips the memory check (ADR 0087). These routes, and no other
+  // code, mint it (`consent.test.ts`).
+  app.post('/api/memories', async (request, reply) => {
+    const body = CreateMemoryBody.safeParse(request.body);
+    if (!body.success)
+      return reply.code(400).send({ error: 'bad-request', message: body.error.issues[0]?.message });
+    return store.add(
+      { ...body.data, source: 'user' },
+      mintConsent(request, 'add', { id: NEW_MEMORY, content: body.data.content }),
+    );
+  });
+  app.patch<{ Params: { id: string } }>('/api/memories/:id', async (request, reply) => {
+    const body = UpdateMemoryBody.safeParse(request.body);
+    if (!body.success)
+      return reply.code(400).send({ error: 'bad-request', message: body.error.issues[0]?.message });
+    const current = await store.get(request.params.id);
+    if (!current) return reply.code(404).send({ error: 'not-found', message: 'Memory not found.' });
+    // Your answer is for the words you wrote, or, changing only its kind, the
+    // ones you saw: those must still be what's there (ADR 0087).
+    const words = body.data.content ?? body.data.seen;
+    if (words === undefined)
+      return reply
+        .code(400)
+        .send({ error: 'bad-request', message: 'Say which words you’re changing.' });
+    if (body.data.content === undefined && wordsHash(words) !== wordsHash(current.content))
+      return reply.code(409).send({
+        error: 'changed',
+        message: 'That memory changed since you looked at it. Have another look.',
+      });
+    const memory = await store.update(
+      request.params.id,
+      {
+        ...(body.data.content !== undefined && { content: body.data.content }),
+        ...(body.data.kind !== undefined && { kind: body.data.kind }),
+      },
+      mintConsent(request, 'edit', { id: current.id, content: words }),
+    );
+    return memory ?? reply.code(404).send({ error: 'not-found', message: 'Memory not found.' });
+  });
+
+  // Keep a memory that waits: as it is, in your words (Edit first), or, for one
+  // the memory check refused, only with `anyway` (ADR 0087). Only a person gets here.
   app.post<{ Params: { id: string } }>('/api/memories/:id/keep', async (request, reply) => {
-    const kept = await store.keep(request.params.id);
+    const body = KeepMemoryBody.safeParse(request.body ?? {});
+    if (!body.success)
+      return reply.code(400).send({ error: 'bad-request', message: body.error.issues[0]?.message });
+    const before = await store.get(request.params.id);
+    if (!before)
+      return reply
+        .code(404)
+        .send({ error: 'not-found', message: 'That memory isn’t there any more.' });
+    // The answer is for the words the person saw (or wrote): if what's there now
+    // is different, they didn't say yes to it.
+    const words = body.data.content ?? body.data.seen;
+    if (words === undefined)
+      return reply
+        .code(400)
+        .send({ error: 'bad-request', message: 'Say which words you’re keeping.' });
+    if (body.data.content === undefined && wordsHash(words) !== wordsHash(before.content))
+      return reply.code(409).send({
+        error: 'changed',
+        message: 'That memory changed since you looked at it. Have another look.',
+      });
+    const kept = await store.keep(
+      request.params.id,
+      mintConsent(request, body.data.anyway ? 'anyway' : 'keep', { id: before.id, content: words }),
+      {
+        ...(body.data.content !== undefined && { content: body.data.content }),
+        ...(body.data.anyway && { anyway: true }),
+      },
+    );
+    if (kept === 'needs-anyway')
+      return reply.code(409).send({
+        error: 'needs-anyway',
+        message: 'This one was refused. Choose Remember anyway if you’re sure.',
+      });
     if (!kept)
       return reply
         .code(404)
         .send({ error: 'not-found', message: 'That memory isn’t there any more.' });
     void index.sync();
-    await deps.decided?.(kept, true).catch(() => undefined);
+    await deps
+      .decided?.(kept, true, {
+        ...(body.data.content !== undefined &&
+          body.data.content !== before?.content && { edited: true }),
+        ...(before?.held?.verdict === 'refuse' && { anyway: true }),
+      })
+      .catch(() => undefined);
     return kept;
   });
 
-  // Put back a memory the assistant forgot (Undo on "Forgot" in a chat): exactly as it was.
+  // Put back a memory the assistant forgot (Undo on "Forgot" in a chat): from
+  // Conch's own copy, made when it was forgotten, by its id alone (ADR 0087).
+  // Never the words a request sends, never more trusted than it was, and once.
   app.post('/api/memories/restore', async (request, reply) => {
-    const body = z.object({ memory: Memory }).safeParse(request.body);
+    const body = z
+      .object({ id: z.string().min(1).max(80) })
+      .strict()
+      .safeParse(request.body);
     if (!body.success)
-      return reply.code(400).send({ error: 'bad-request', message: 'That isn’t a memory.' });
-    const restored = await store.restore(body.data.memory);
+      return reply
+        .code(400)
+        .send({ error: 'bad-request', message: 'Say which memory to put back.' });
+    const restored = await store.unforget(body.data.id);
+    if (!restored)
+      return reply
+        .code(404)
+        .send({ error: 'not-found', message: 'There’s nothing to put back for that memory.' });
     void index.sync();
     await deps.decided?.(restored, true).catch(() => undefined);
     return restored;
@@ -139,7 +243,17 @@ export function registerLearningRoutes(
     const body = TidyAnswerBody.safeParse(request.body);
     if (!body.success)
       return reply.code(400).send({ error: 'bad-request', message: body.error.issues[0]?.message });
-    return tidy.answer(body.data.runId, body.data.changeId, body.data.answer);
+    // One answer for each memory the card showed, for exactly the words it showed.
+    const change = (await tidy.status()).runs
+      .find((r) => r.id === body.data.runId)
+      ?.changes.find((c) => c.id === body.data.changeId);
+    const shown = change ? [...change.before, ...(change.after ? [change.after] : [])] : [];
+    return tidy.answer(
+      body.data.runId,
+      body.data.changeId,
+      body.data.answer,
+      shown.map((m) => mintConsent(request, 'tidy', { id: m.id, content: m.content })),
+    );
   });
 
   app.get<{ Querystring: { fresh?: string } }>('/api/skills/suggestions', async (request) => ({

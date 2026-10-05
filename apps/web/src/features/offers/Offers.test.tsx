@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { reduceAll } from '../../live/reducer';
 import { useLiveStore } from '../../live/store';
-import { appState, FakeSocket, mockFetch, renderApp } from '../../test/harness';
+import { appState, baseProviders, FakeSocket, mockFetch, renderApp } from '../../test/harness';
 import { ChatView } from '../chat/ChatView';
 import { ModelsTab } from '../settings/ModelsTab';
 
@@ -238,6 +238,63 @@ describe('offers in the chat (ADR 0060)', () => {
         }),
       ),
     );
+  });
+
+  it('connects an image provider in place and resumes once without changing the chat model', async () => {
+    const { calls, push } = open({
+      extra: {
+        'GET /api/providers': () => baseProviders,
+        'PUT /api/providers/openrouter/key': () => ({
+          ...baseProviders,
+          providers: baseProviders.providers.map((p) =>
+            p.id === 'openrouter'
+              ? {
+                  ...p,
+                  ready: true,
+                  status: { ...p.status, state: 'ready' },
+                  key: { source: 'conch', hint: '…test', savedAt: 2 },
+                }
+              : p,
+          ),
+        }),
+      },
+    });
+    await waitFor(() => expect(FakeSocket.last).toBeDefined());
+    push(
+      turn(
+        offer({
+          kind: 'provider',
+          target: 'openrouter',
+          name: 'OpenRouter',
+          description: 'Make and edit pictures.',
+          why: 'Create your picture.',
+        }),
+      ),
+    );
+    const card = await screen.findByRole('group', { name: 'OpenRouter isn’t connected yet' });
+    await userEvent.click(within(card).getByRole('button', { name: 'Connect OpenRouter' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Connect OpenRouter' });
+    await userEvent.click(within(dialog).getByLabelText('OpenRouter key'));
+    await userEvent.paste('sk-or-v1-fixture-not-a-real-key');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
+    await waitFor(() => expect(accepted(calls)).toHaveLength(1), { timeout: 5000 });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(calls.some((c) => c.path.endsWith('/use'))).toBe(false);
+    push(carriedOn());
+    await screen.findByText('Three issues.');
+    expect(accepted(calls)).toHaveLength(1);
+  });
+
+  it('does not resume an image request when connection is cancelled', async () => {
+    const { calls, push } = open({ extra: { 'GET /api/providers': () => baseProviders } });
+    await waitFor(() => expect(FakeSocket.last).toBeDefined());
+    push(turn(offer({ kind: 'provider', target: 'openrouter', name: 'OpenRouter' })));
+    await userEvent.click(await screen.findByRole('button', { name: 'Connect OpenRouter' }));
+    await screen.findByRole('dialog');
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(accepted(calls)).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Connect OpenRouter' })).toBeEnabled();
   });
 
   it('back from signing in on a phone, the chat takes the offer by itself', async () => {

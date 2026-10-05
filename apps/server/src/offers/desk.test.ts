@@ -374,3 +374,53 @@ describe('the map, for this turn', () => {
     expect(firstApp).toMatch(/`todoist`/);
   });
 });
+
+describe('a provider needed for images', () => {
+  it('offers from the map, checks connection on acceptance, and carries on only after setup', async () => {
+    const events = [asked('Make a picture')];
+    let connected = false;
+    const carryOn = vi.fn(async () => 'started' as const);
+    const service = new OfferDesk({
+      map: async () => ({
+        apps: [],
+        skills: [],
+        providers: [
+          {
+            id: 'openrouter',
+            name: 'OpenRouter',
+            tagline: 'Pictures',
+            description: 'Create pictures',
+            featured: true,
+          },
+        ],
+      }),
+      muted: async () => [],
+      providers: { connected: async () => connected },
+      chat: {
+        events: async () => events,
+        taint: async () => [],
+        unattended: async () => false,
+        carryOn,
+        dismiss: async () => {},
+      },
+    });
+    expect(await service.section(engine, 'c1')).toContain('provider `openrouter`');
+    const result = await service.propose({
+      conversationId: 'c1',
+      engine,
+      kind: 'provider',
+      target: 'openrouter',
+    });
+    if (!('offer' in result)) throw new Error('Expected offer');
+    events.push(offered(result.offer));
+    await expect(service.accept('c1', result.offer.offerId)).rejects.toThrow('connecting');
+    expect(carryOn).not.toHaveBeenCalled();
+    connected = true;
+    await service.accept('c1', result.offer.offerId);
+    expect(carryOn).toHaveBeenCalledWith(
+      'c1',
+      result.offer.offerId,
+      expect.objectContaining({ prompt: expect.stringContaining('Make a picture') }),
+    );
+  });
+});

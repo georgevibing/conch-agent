@@ -132,6 +132,18 @@ export class AttachmentStore {
     return { attachment: parsed.data, path: safeJoin(this.folder(id), file) };
   }
 
+  /** Includes finished files made here, even if a turn stopped before its result was logged. */
+  async forConversation(conversationId: string): Promise<Attachment[]> {
+    const items: Attachment[] = [];
+    for (const id of await readdir(this.dir).catch(() => [] as string[])) {
+      const stored = await this.#read(id);
+      if (!stored?.conversations.includes(conversationId)) continue;
+      const parsed = Attachment.safeParse(stored);
+      if (parsed.success) items.push(parsed.data);
+    }
+    return items;
+  }
+
   /** Bytes of an attachment, or undefined if it's gone. */
   async bytes(id: string): Promise<Buffer | undefined> {
     const found = await this.get(id);

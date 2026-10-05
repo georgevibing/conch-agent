@@ -983,3 +983,61 @@ describe('merged results', () => {
 });
 
 void vi;
+
+describe('task controls in the originating chat', () => {
+  it('lists only owned tasks and refuses another chat’s handles', async () => {
+    const { tasks, conversations, engines } = await setup({ background: 0 });
+    const chat = await conversations.send({ clientMessageId: 'owner', text: 'hello' });
+    await until(
+      () => conversations.detail(chat.id),
+      (d) => d.conversation.status === 'idle',
+    );
+    const owned = await tasks.create({
+      kind: 'background',
+      text: 'work',
+      parentConversationId: chat.id,
+    });
+    const other = await tasks.create({ kind: 'background', text: 'other work' });
+    const context = {
+      conversationId: chat.id,
+      engine: engines.get('mock') as Engine,
+      append: () => {},
+      permissionMode: 'default' as const,
+      ask: async () => 'allow' as const,
+      signal: new AbortController().signal,
+    };
+    const tools = tasks.tools(context);
+    const statusTool = tools.find((t) => t.name === 'task_status');
+    const control = tools.find((t) => t.name === 'task_control');
+    expect(await statusTool?.run({})).toContain(owned.id);
+    expect(await statusTool?.run({})).not.toContain(other.id);
+    await expect(statusTool?.run({ id: other.id })).rejects.toThrow('not started in this chat');
+    await expect(control?.run({ id: other.id, action: 'stop' })).rejects.toThrow(
+      'not started in this chat',
+    );
+    await control?.run({ id: owned.id, action: 'stop' });
+    expect((await tasks.get(owned.id)).status).toBe('stopped');
+    const denied = tasks
+      .tools({ ...context, ask: async () => 'deny' as const })
+      .find((t) => t.name === 'task_control');
+    expect(await denied?.run({ id: owned.id, action: 'retry' })).toContain('declined');
+    expect((await tasks.get(owned.id)).status).toBe('stopped');
+    const restrictedAsk = vi.fn(async () => 'deny' as const);
+    const held = tasks
+      .tools({
+        ...context,
+        permissionMode: 'bypassPermissions',
+        restricted: async () => 'This skill cannot restart work.',
+        ask: restrictedAsk,
+      })
+      .find((t) => t.name === 'task_control');
+    expect(await held?.run({ id: owned.id, action: 'retry' })).toContain('declined');
+    expect(restrictedAsk).toHaveBeenCalledOnce();
+    await control?.run({ id: owned.id, action: 'continue', instructions: 'New instruction' });
+    expect(await tasks.get(owned.id)).toMatchObject({
+      status: 'queued',
+      prompt: 'New instruction',
+      parentConversationId: chat.id,
+    });
+  });
+});

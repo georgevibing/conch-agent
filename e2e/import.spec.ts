@@ -49,7 +49,11 @@ test('previews, brings things over after a backup, says what’s next, and undoe
   await page.getByRole('combobox').fill('openclaw');
   await page.getByRole('option', { name: /Bring your things from OpenClaw or Hermes/ }).click();
 
-  const dialog = page.getByRole('dialog', { name: 'Bring your things from OpenClaw' });
+  // A page inside Settings, not a dialog of its own.
+  const dialog = page.getByRole('dialog', { name: 'Settings' }).getByRole('tabpanel');
+  await expect(
+    dialog.getByRole('heading', { name: 'Bring your things from OpenClaw', level: 2 }),
+  ).toBeVisible();
   await expect(dialog.getByRole('region', { name: 'Memories' })).toBeVisible();
   // Safe things start ticked; a worrying skill, the bot and the keys don't, and say why.
   await expect(dialog.getByRole('checkbox', { name: /Ada takes her tea/ })).toBeChecked();
@@ -67,14 +71,13 @@ test('previews, brings things over after a backup, says what’s next, and undoe
   await expect(dialog.getByText(/British spelling/).first()).toBeVisible();
 
   await dialog.getByRole('button', { name: /^Bring \d+ things over$/ }).click();
-  const done = page.getByRole('dialog', { name: 'Welcome home' });
-  const summary = done.getByRole('region', { name: 'Your things from OpenClaw are here' });
+  const summary = page.getByRole('region', { name: 'Your things from OpenClaw are here' });
   await expect(summary).toBeVisible({ timeout: 15_000 });
   await expect(summary).toContainText('3 memories');
   await expect(summary).toContainText('1 skill, off for now');
   await expect(summary).toContainText('1 routine, as a draft');
   await expect(summary).toContainText('backed itself up first');
-  await done.getByRole('button', { name: 'Done' }).click();
+  await page.getByRole('button', { name: 'Done' }).click();
 
   // It's all here: the name, the memories, the draft routine, the skill (off).
   const settings = page.getByRole('dialog', { name: /Settings/ });

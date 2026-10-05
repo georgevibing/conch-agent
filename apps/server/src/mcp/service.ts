@@ -87,6 +87,8 @@ export interface McpDeps {
   /** The default provider: an app's chat record borrows its id, and never runs it. */
   engineId: () => EngineId;
   memory: MemoryStore;
+  /** Settings → Safety → Check what it remembers (ADR 0087). */
+  checkMemories?: () => Promise<boolean>;
   /** Meaning search (ADR 0032); keyword search without it. */
   search?: (query: string) => Promise<{ memory: Memory }[]>;
   skills: { list(): Promise<SkillsList> };
@@ -302,12 +304,23 @@ export class McpService {
           .strict()
           .safeParse(args);
         if (!parsed.success) return refusal(argumentProblem(parsed.error));
-        const memory = await this.deps.memory.add({
-          content: parsed.data.content,
-          source: 'agent',
-          pending: true,
-          untrusted: `Suggested by ${client.name}, through Conch.`,
-        });
+        // It always waits for the person; the memory check says why when it looks planted (ADR 0087).
+        const memory = await this.deps.memory.add(
+          {
+            content: parsed.data.content,
+            source: 'agent',
+            pending: true,
+            untrusted: `Suggested by ${client.name}, through Conch.`,
+            provenance: { via: 'app', read: [client.name.slice(0, 120)] },
+          },
+          {
+            via: 'app',
+            cameFrom: `${client.name}, an app using Conch`,
+            ...(this.deps.checkMemories && {
+              on: await this.deps.checkMemories().catch(() => true),
+            }),
+          },
+        );
         return textOf(
           memory.pending
             ? 'Suggested. It waits for the user’s OK in Conch before it’s remembered.'

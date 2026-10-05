@@ -7,7 +7,8 @@
   [ADR 0032](./0032-it-learns-you.md) (it learns you),
   [ADR 0055](./0055-long-chats-on-every-model.md) (learn before forgetting),
   [ADR 0058](./0058-skills-from-what-worked.md) (skills from what worked),
-  [ADR 0079](./0079-what-a-chat-costs.md) (what a chat costs)
+  [ADR 0079](./0079-what-a-chat-costs.md) (what a chat costs),
+  [ADR 0087](./0087-the-memory-check.md) (the memory check)
 - Amends: ADR 0032 §2–3, ADR 0055 §4, and ADR 0058's "nothing is saved by Conch",
   which from now on covers skills only.
 
@@ -123,6 +124,8 @@ Code applies every change. A model never rewrites a stored memory in place.
 | It's only close to something you told Conch not to learn                    | **waits**, saying what you took back     |
 | Already known                                                               | nothing new; it's counted as seen again  |
 
+Then it's written like any memory, through the memory check (ADR 0087), told what the chat read and what you said. If the check holds it, it waits for your OK with the check's own reasons, whatever the gate said. Keep on something that waits is a person's answer, minted by the route that takes it, for exactly the words you saw.
+
 ### 5. Superseded, not overwritten
 
 A memory that's replaced moves to `memory/superseded/`, marked with when it stopped being true (`invalidAt`) and what replaced it (`supersededBy`).
@@ -133,7 +136,10 @@ A memory that's replaced moves to `memory/superseded/`, marked with when it stop
 - The new fields are optional. A previous version reading a memory with them simply ignores them.
 - Facts about this computer and lessons from dead ends are ordinary `fact` memories with `about: environment` or `about: pitfall`. A new kind would make the previous version drop the memory.
 
-The tidy-up (ADR 0032) supersedes too, when it updates a memory. Its merges are now checked: a merge that loses a number or a name, or ends up shorter than 60% of the longest memory it merges, isn't made.
+- A replacement that waits for your OK leaves the old memory true until you keep it.
+- Copies of what used to be true are sealed like every memory file (ADR 0087). One brought back from a backup, or changed by hand, is checked again when it's read, and left out if the check would hold it. Undo brings the old one back from that copy, through the same check, never from the record's words. **Earlier → Forget** removes a copy and touches nothing live.
+
+The tidy-up (ADR 0032) still updates a memory in place, with its own Undo. Its merges are now checked: a merge that loses a number or a name, or ends up shorter than 60% of the longest memory it merges, isn't made.
 
 ### 6. Never learned again
 

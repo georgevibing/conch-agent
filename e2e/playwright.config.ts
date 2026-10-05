@@ -289,7 +289,9 @@ export default defineConfig({
   reporter: [['list']],
   use: {
     ...devices['Desktop Chrome'],
-    channel: 'chrome',
+    ...(process.env.CONCH_TEST_BROWSER
+      ? { launchOptions: { executablePath: process.env.CONCH_TEST_BROWSER } }
+      : { channel: 'chrome' }),
     // The specs read dates and times as en-US; don't inherit the machine's locale.
     locale: 'en-US',
     trace: 'retain-on-failure',

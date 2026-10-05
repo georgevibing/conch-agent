@@ -172,6 +172,10 @@ export type LearningSpendingBody = z.infer<typeof LearningSpendingBody>;
 export const ChatLearningBody = z.object({ quiet: z.boolean() }).strict();
 export type ChatLearningBody = z.infer<typeof ChatLearningBody>;
 
+/** Forget something that used to be true (Memory → Earlier → Forget). */
+export const ForgetPastBody = z.object({ id: z.string().min(1).max(80) }).strict();
+export type ForgetPastBody = z.infer<typeof ForgetPastBody>;
+
 /** Let Conch learn something again that you'd once taken back. */
 export const NeverRemoveBody = z.object({ id: z.string().min(1).max(64) }).strict();
 export type NeverRemoveBody = z.infer<typeof NeverRemoveBody>;

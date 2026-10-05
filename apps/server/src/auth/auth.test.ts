@@ -10,6 +10,9 @@ import { loadConfig } from '../config';
 import { Services } from '../services';
 import { AccessStore } from './store';
 
+// The launcher installed on the test machine must not change this fixture.
+vi.mock('../cli/command', () => ({ cliName: () => 'pnpm conch' }));
+
 // Password hashing is deliberately slow (scrypt, N=2^17); shared CI runners need headroom.
 vi.setConfig({ testTimeout: 20_000 });
 
@@ -177,9 +180,11 @@ describe('this computer, proven', () => {
     expect((await hidden(app, '/api/state', { cookie: `conch_here_1=${value}` })).statusCode).toBe(
       401,
     );
-    expect(
-      (await hidden(app, '/api/state', { cookie: `${cookie.slice(0, -2)}AA` })).statusCode,
-    ).toBe(401);
+    // Flip the first signature character: replacing its suffix with 'AA'
+    // occasionally left a randomly generated signature unchanged.
+    const signature = cookie.lastIndexOf('.') + 1;
+    const changed = `${cookie.slice(0, signature)}${cookie[signature] === 'A' ? 'B' : 'A'}${cookie.slice(signature + 1)}`;
+    expect((await hidden(app, '/api/state', { cookie: changed })).statusCode).toBe(401);
   });
 
   it('sets the cookie HttpOnly, SameSite=Strict, for 400 days', async () => {

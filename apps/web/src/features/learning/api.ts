@@ -23,6 +23,12 @@ export const learningApi = {
       `/api/learning/chats/${encodeURIComponent(conversationId)}`,
       { method: 'PUT', body: { quiet } },
     ),
+  /** Forget something that used to be true: only Conch's copy of it goes. */
+  forgetPast: (id: string) =>
+    request(z.object({ forgotten: z.boolean() }), '/api/learning/past/forget', {
+      method: 'POST',
+      body: { id },
+    }),
   /** Let Conch learn something again. */
   removeNever: (id: string) =>
     request(z.object({ removed: z.boolean() }), '/api/learning/never/remove', {

@@ -3,12 +3,14 @@ import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import { lstat, open, realpath, readdir } from 'node:fs/promises';
+
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 import { z } from 'zod';
 
 import { sandboxSupport, secretPlaces } from '../conversations/sandbox';
 import { PROTECTED_MESSAGE, touchesProtected } from '../lib/protect';
+import { SEALED_HINT } from './trust';
 import type { HostTool, TurnInput } from './types';
 
 const MAX_FILE = 1024 * 1024;
@@ -34,7 +36,7 @@ async function canonical(path: string): Promise<string> {
 }
 
 /** Every protected place, in both the form it was given and its canonical form. */
-async function forbiddenPlaces(input: TurnInput): Promise<string[]> {
+export async function forbiddenPlaces(input: FileAccess): Promise<string[]> {
   const given = [...(input.protectedPaths ?? []), ...secretPlaces().map((p) => p.path)].map((p) =>
     resolve(p),
   );
@@ -51,7 +53,9 @@ export function hostEnvironment(): Record<string, string> {
   return env;
 }
 
-export async function hostPath(input: TurnInput, raw: string, writing = false): Promise<string> {
+export type FileAccess = Pick<TurnInput, 'cwd' | 'readableDirs' | 'protectedPaths'>;
+
+export async function hostPath(input: FileAccess, raw: string, writing = false): Promise<string> {
   const workspace = await realpath(input.cwd);
   const path = resolve(workspace, raw);
   const roots = [
@@ -74,6 +78,9 @@ export async function hostPath(input: TurnInput, raw: string, writing = false): 
     throw new Error('Linked files are not available to this tool.');
   return actual;
 }
+
+/** A model asking for 1s to run `pnpm check` only gets it killed: no command gets less than this. */
+const MIN_COMMAND_MS = 10_000;
 
 /** A separate runtime per command: its global sandbox policy cannot cross conversations. */
 const WORKER = `
@@ -143,10 +150,13 @@ export async function runHostCommand(
       /* Already exited. */
     }
   };
-  const timer = setTimeout(() => {
-    timedOut = true;
-    stop();
-  }, timeoutMs).unref();
+  const timer = setTimeout(
+    () => {
+      timedOut = true;
+      stop();
+    },
+    Math.max(timeoutMs, MIN_COMMAND_MS),
+  ).unref();
   input.signal.addEventListener('abort', stop, { once: true });
   const collect = (chunk: Buffer) => {
     output = (output + chunk.toString('utf8')).slice(-64_000);
@@ -185,7 +195,10 @@ export async function runHostCommand(
       throw new Error(
         `The command took longer than ${Math.round(timeoutMs / 1000)}s and was stopped. For a long one (a big clone, an install), set timeout_ms higher.`,
       );
-    if (code !== 0) throw new Error(`Command exited with code ${code ?? 'unknown'}.\n${output}`);
+    if (code !== 0)
+      throw new Error(
+        `Command exited with code ${code ?? 'unknown'}.\n${output}${unboxed ? '' : SEALED_HINT}`,
+      );
     return output || 'Command completed with no output.';
   } finally {
     clearTimeout(timer);
@@ -281,7 +294,7 @@ export function hostComputerTools(input: TurnInput): HostTool[] {
     {
       name: 'Bash',
       description: sealable(input)
-        ? 'Run a command in the work folder, sealed by the operating system: no network, no secrets, and writes stay in the work folder (not .git). For a command that needs more (the network for git clone or an install, or files elsewhere), set dangerouslyDisableSandbox: true; it then runs with the person’s own access, and they are asked first unless they chose Full trust.'
+        ? 'Run a command in the work folder, sealed by the operating system: no network, no secrets, and writes stay in the work folder (not .git). For a command that needs more (the network for git clone or an install, or files elsewhere), set dangerouslyDisableSandbox: true; it then runs with the person’s own access, and they are asked first unless they chose Full trust, where git, installs and work in their other folders run that way by themselves. Never tell the person the session is read-only: ask for what you need.'
         : 'Run a command in the work folder. This computer can’t seal commands, so each one runs with the person’s own access (the network included), and they are asked first unless they chose Full trust.',
       input: {
         command: z.string().min(1).max(32_000),

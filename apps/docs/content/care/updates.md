@@ -4,7 +4,7 @@ description: Conch follows its releases, says what each one brings, and updates 
 order: 3
 ---
 
-Conch looks for updates once a day, quietly. When a new release of Conch is out, a calm line at the top of the app says so once: **Conch 0.3 is ready**, with **What's new**, **Update** and **Not now**. Otherwise a dot on the Settings button is the only sign. Updating is one press, and Conch goes back to the version you had if anything fails.
+Conch looks for updates once a day, quietly. When a new version of Conch is ready, a small **Update** button sits beside your name at the foot of the sidebar, wherever you are. A new release also gets a calm line at the top of the app, once: **Conch 0.3 is ready**, with **What's new**, **Update** and **Not now**. Programs Conch uses get a dot on the Settings button. Updating is one press, and Conch goes back to the version you had if anything fails.
 
 ## See what's waiting
 
@@ -29,9 +29,10 @@ Conch only installs releases signed by Conch's makers. A release that isn't is r
 
 ## Update Conch
 
-1. Press **Update Conch**. If you [sign in to Conch](../security/signing-in.md), it asks you to confirm it's you.
-2. Conch checks the release is really from Conch's makers. It gets it ready in a folder of its own while you keep working, and backs up your things. The card shows which step it's on.
-3. Conch starts again on the new version. The page shows **Updating Conch…** for a few seconds and comes back by itself, on the same page.
+1. Press **Update** beside your name (or **Update Conch** in Settings, or <kbd>mod+k</kbd> then **Update Conch**). A small window says what the update brings: a release's notes, or each change in plain words for a copy following its branch.
+2. Press **Update now**. If you [sign in to Conch](../security/signing-in.md), it asks you to confirm it's you.
+3. Conch checks the release is really from Conch's makers, gets it ready while you keep working, and backs up your things. The pearl fills a ring as it goes, and the window says which step it's on. **Keep working** closes the window. The button beside your name keeps showing how far it's come, and opens the window again.
+4. Conch starts again on the new version, in a few seconds. The page comes back by itself, on the same page, and says what arrived.
 
 Your chats are safe. If a chat is still working, Conch asks you to update when it's finished, so nothing is cut short.
 

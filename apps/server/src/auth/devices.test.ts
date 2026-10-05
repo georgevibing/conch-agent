@@ -19,6 +19,9 @@ import { APPROVAL_TTL_MS, AccessStore, MAX_WAITING } from './store';
  * a flood of requests hiding the real one.
  */
 
+// Command hints do not depend on the launcher installed on this test machine.
+vi.mock('../cli/command', () => ({ cliName: () => 'pnpm conch' }));
+
 vi.setConfig({ testTimeout: 30_000 });
 
 const PASSWORD = 'purple otters juggle at dawn';

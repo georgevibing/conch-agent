@@ -371,4 +371,119 @@
     line-height: var(--nc-leading-normal);
     text-wrap: pretty;
   }
+
+  /* A memory the check held (ADR 0087): calm but clear. What it wants to
+     remember, why it looks off in Conch's words, where it came from, and three
+     answers. A refused one is a shade firmer; a settled one folds to a line. */
+  .check {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2-5);
+    padding: var(--nc-space-3) var(--nc-space-4);
+    border: 1px solid
+      light-dark(oklch(0.88 0.06 var(--nc-warning-h)), oklch(0.4 0.06 var(--nc-warning-h)));
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: light-dark(
+      oklch(0.985 0.015 var(--nc-warning-h)),
+      oklch(0.24 0.025 var(--nc-warning-h))
+    );
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .check[data-refused] {
+    border-color: light-dark(
+      oklch(0.85 0.07 var(--nc-danger-h)),
+      oklch(0.42 0.08 var(--nc-danger-h))
+    );
+    background: light-dark(
+      oklch(0.985 0.012 var(--nc-danger-h)),
+      oklch(0.24 0.03 var(--nc-danger-h))
+    );
+  }
+
+  .checkHead {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .checkHead > svg {
+    flex-shrink: 0;
+    inline-size: 1rem;
+    block-size: 1rem;
+    color: light-dark(oklch(0.5 0.12 var(--nc-warning-h)), oklch(0.82 0.1 var(--nc-warning-h)));
+  }
+
+  .check[data-refused] .checkHead > svg {
+    color: light-dark(oklch(0.5 0.16 var(--nc-danger-h)), oklch(0.8 0.1 var(--nc-danger-h)));
+  }
+
+  .checkWhat {
+    margin: 0;
+    padding: var(--nc-space-2) var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-surface);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    overflow-wrap: anywhere;
+    color: var(--nc-text);
+  }
+
+  .checkWhy {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+    text-wrap: pretty;
+  }
+
+  .checkFrom {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+  }
+
+  .checkActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1-5);
+  }
+
+  .checkSettled {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    align-self: flex-start;
+    max-inline-size: 100%;
+    margin: 0;
+    padding: var(--nc-space-0-5) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-full);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+    background: var(--nc-wash-1);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .checkSettled > svg {
+    flex-shrink: 0;
+    inline-size: 0.85rem;
+    block-size: 0.85rem;
+  }
+
+  .checkSettled > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }

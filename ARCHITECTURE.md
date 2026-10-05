@@ -90,6 +90,10 @@ src/
   learning/                   quiet learning: each chat read once it goes quiet, the gate, the
                               record and the never-list, preferences near the question (ADR 0088)
   conversations/              manager (turns, permissions, events) + JSONL store
+  files/                      bounded file/document reading, search and finished-file delivery (ADR 0088)
+  research/                   public web search and SSRF-checked page reading (ADR 0088)
+  processes/                  conversation-owned command supervisors, logs and stdin (ADR 0088)
+  images/                     image model discovery, approved generation/editing and downloads (ADR 0088)
   attachments/                uploads: sniffing, storage + sweep, per-engine prompt, sandboxed serving (ADR 0017)
   vault/                      Passwords: encrypted vault, keychain, other managers, import, fills (ADR 0025)
   backup/                     what's in a backup (manifest), the .conchbackup format, daily backups, restore (ADR 0020)

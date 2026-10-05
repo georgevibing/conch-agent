@@ -112,13 +112,16 @@ Both checks start on, and both are `preferences`:
 
 - **Check before acting on what it read** (`checkAfterReading`).
 - **Seal commands** (`sealedCommands`).
+- **Check what it remembers** (`checkMemories`), added by
+  [ADR 0087](./0087-the-memory-check.md): a memory that looks planted is held and
+  asked about.
 
-Turning either off:
+Turning any off:
 
 - says what could happen;
 - needs a recent password or key (the server refuses `false` without it);
 - shows in the security checkup with a one-press fix (`check-after-reading`,
-  `sealed-commands`);
+  `sealed-commands`, `check-memories`);
 - shows in Repair everything.
 
 ### 4. Activity

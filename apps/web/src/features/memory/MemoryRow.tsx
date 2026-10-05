@@ -16,11 +16,14 @@ function Editor({
   onChange,
   onSave,
   onCancel,
+  saveOnBlur = true,
 }: {
   value: string;
   onChange: (value: string) => void;
   onSave: () => void;
   onCancel: () => void;
+  /** A held memory is kept only by Enter, never by looking away. */
+  saveOnBlur?: boolean;
 }) {
   const ref = useAutoFocus<HTMLTextAreaElement>();
   return (
@@ -32,7 +35,7 @@ function Editor({
       aria-label="Edit memory"
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      onBlur={onSave}
+      onBlur={saveOnBlur ? onSave : undefined}
       onKeyDown={(e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
@@ -58,9 +61,15 @@ export function MemoryRow({ memory, showKind = false }: { memory: Memory; showKi
       toast.error((e as Error).message);
     }
   };
+  const held = memory.pending ? memory.held : undefined;
   const save = () => {
     setEditing(false);
     const next = value.trim();
+    // Edit first on a held memory (ADR 0087): your words are what's kept.
+    if (held) {
+      if (next) void run(() => memoryApi.keep(memory.id, { content: next }));
+      return;
+    }
     if (!next || next === memory.content) return setValue(memory.content);
     void run(() => api.updateMemory(memory.id, { content: next }));
   };
@@ -82,14 +91,47 @@ export function MemoryRow({ memory, showKind = false }: { memory: Memory; showKi
       source={memory.source}
       time={relativeTime(memory.updatedAt)}
       {...(showKind && { kind: memory.kind })}
-      {...(memory.pending && { waiting: memory.untrusted ?? 'It waits for your OK.' })}
+      {...(memory.pending && !held && { waiting: memory.untrusted ?? 'It waits for your OK.' })}
+      {...(held && {
+        held: {
+          reasons: held.reasons.map((r) => r.words),
+          ...(held.from && { from: held.from }),
+          refused: held.verdict === 'refuse',
+        },
+      })}
       actions={
-        memory.pending ? (
+        held ? (
+          <>
+            <Button
+              size="sm"
+              variant={held.verdict === 'refuse' ? 'surface' : 'soft'}
+              {...(held.verdict === 'refuse' && { tone: 'danger' as const })}
+              onClick={() =>
+                void run(() =>
+                  memoryApi.keep(memory.id, {
+                    seen: memory.content,
+                    ...(held.verdict === 'refuse' && { anyway: true }),
+                  }),
+                )
+              }
+            >
+              {held.verdict === 'refuse' ? 'Remember anyway' : 'Remember it'}
+            </Button>
+            <Button size="sm" variant="ghost" tone="neutral" onClick={forget}>
+              Don’t remember
+            </Button>
+            {!editing && (
+              <Button size="sm" variant="ghost" tone="neutral" onClick={() => setEditing(true)}>
+                Edit first
+              </Button>
+            )}
+          </>
+        ) : memory.pending ? (
           <>
             <Button
               size="sm"
               variant="soft"
-              onClick={() => void run(() => memoryApi.keep(memory.id))}
+              onClick={() => void run(() => memoryApi.keep(memory.id, { seen: memory.content }))}
             >
               Keep
             </Button>
@@ -114,6 +156,7 @@ export function MemoryRow({ memory, showKind = false }: { memory: Memory; showKi
           value={value}
           onChange={setValue}
           onSave={save}
+          saveOnBlur={!held}
           onCancel={() => {
             setValue(memory.content);
             setEditing(false);

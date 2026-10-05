@@ -57,6 +57,10 @@ export async function runFix(
       await services.settings.update({ preferences: { sealedCommands: true } });
       return 'Commands run sealed again.';
 
+    case 'check-memories':
+      await services.settings.update({ preferences: { checkMemories: true } });
+      return 'A memory that looks planted is held and asked about again.';
+
     case 'integrations-ask': {
       const trusted = (await services.integrations.store.all()).filter(
         (i) => i.enabled && i.policy === 'trust',

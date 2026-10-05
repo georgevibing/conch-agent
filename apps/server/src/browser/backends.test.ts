@@ -58,16 +58,28 @@ beforeAll(async () => {
     executable,
     [
       '--headless=new',
+      // Local fixture pages only; match Playwright's default on CI hosts without user namespaces.
+      '--no-sandbox',
       '--remote-debugging-port=0',
       `--user-data-dir=${profile}`,
       '--no-first-run',
       '--no-default-browser-check',
       'data:text/html,<title>My bank</title><h1>Mine</h1>',
     ],
-    { stdio: 'ignore' },
+    { stdio: ['ignore', 'ignore', 'pipe'] },
   );
+  let startupError = '';
+  yours.stderr?.on('data', (chunk: Buffer) => {
+    startupError = (startupError + chunk.toString()).slice(-4000);
+  });
+  yours.on('error', (error) => {
+    startupError = error.message;
+  });
   const file = join(profile, 'DevToolsActivePort');
-  for (let i = 0; i < 100 && !existsSync(file); i++) await new Promise((r) => setTimeout(r, 100));
+  for (let i = 0; i < 100 && !existsSync(file) && yours.exitCode === null; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  if (!existsSync(file)) throw new Error(`Browser fixture did not start: ${startupError}`);
   const [port, path] = (await readFile(file, 'utf8')).split(/\r?\n/);
   devtools = `ws://127.0.0.1:${port}${path}`;
   bb = { status: 200, body: { id: 's1', connectUrl: devtools }, calls: [] };
@@ -94,7 +106,7 @@ afterAll(async () => {
   await browser?.stop();
   yours?.kill();
   site?.closeAllConnections();
-  await new Promise((resolve) => site?.close(resolve));
+  if (site) await new Promise((resolve) => site.close(resolve));
   await rm(home, { recursive: true, force: true, maxRetries: 5 }).catch(() => undefined);
   await rm(profile, { recursive: true, force: true, maxRetries: 5 }).catch(() => undefined);
 }, 60_000);

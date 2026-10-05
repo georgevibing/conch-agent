@@ -76,8 +76,15 @@ describe('something only an administrator can do', () => {
   it('offers the command to copy where there’s no terminal', async () => {
     mockFetch({ 'GET /api/state': () => appState(), 'GET /api/terminal': () => terminal(false) });
     renderApp(<AdminCommand command={COMMAND} label="Seal commands" watch="command-sandbox" />);
-    expect(await screen.findByRole('button', { name: /Copy command/ })).toBeInTheDocument();
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn(async () => undefined) },
+    });
+    const copy = await screen.findByRole('button', { name: /Copy command/ });
     expect(screen.queryByRole('button', { name: 'Seal commands' })).toBeNull();
+    // Copied to run elsewhere: Conch watches for it all the same.
+    await userEvent.click(copy);
+    await waitFor(() => expect(useUi.getState().watchingNeed).toBe('command-sandbox'));
     expect(screen.getByText(/Run it in a terminal on the computer Conch runs on/)).toBeVisible();
   });
 });

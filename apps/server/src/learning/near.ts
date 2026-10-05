@@ -11,6 +11,8 @@
  */
 import type { Memory } from '@conch/protocol';
 
+import { outsideOf } from '../memory/prompt';
+
 /** At most this many lines… */
 export const NEARBY_MAX = 3;
 /** …in at most this many characters, which fits lean mode too (ADR 0086). */
@@ -24,13 +26,15 @@ const HEAD =
 /**
  * What's worth saying again near the question: how they like things, this
  * computer, a lesson. Never something that came from outside (a page, a
- * download, someone else's words): it stays in the system prompt's marked
- * memory, not here beside the person's own words.
+ * download, someone else's words) and was never made the person's own: it
+ * stays in the system prompt's datamarked memory (ADR 0087), not here beside
+ * the person's own words.
  */
 function nearby(memory: Memory): boolean {
   return (
     !memory.pending &&
-    !memory.untrusted &&
+    !memory.held &&
+    !outsideOf(memory) &&
     (memory.kind === 'preference' || memory.about === 'environment' || memory.about === 'pitfall')
   );
 }

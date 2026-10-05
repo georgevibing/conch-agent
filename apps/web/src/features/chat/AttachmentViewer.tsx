@@ -112,11 +112,17 @@ function SentCard({ attachment, onOpen }: { attachment: Attachment; onOpen: () =
 }
 
 /** What you sent with a message, above its bubble. */
-export function SentAttachments({ attachments }: { attachments: Attachment[] }) {
+export function SentAttachments({
+  attachments,
+  made = false,
+}: {
+  attachments: Attachment[];
+  made?: boolean;
+}) {
   const [open, setOpen] = useState<number>();
   return (
     <>
-      <AttachmentList align="end" label="Attached">
+      <AttachmentList align={made ? 'start' : 'end'} label={made ? 'Finished files' : 'Attached'}>
         {attachments.map((attachment, i) => (
           <SentCard key={attachment.id} attachment={attachment} onOpen={() => setOpen(i)} />
         ))}

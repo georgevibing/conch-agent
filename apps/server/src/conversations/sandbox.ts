@@ -82,7 +82,7 @@ export function sandboxFor(
   conch: { protectedPaths: string[]; home: string },
 ): { allowWrite: string[]; denyRead: string[] } {
   return {
-    allowWrite: [workspace, tmpdir(), '/tmp', '/private/tmp', ...writableCaches()],
+    allowWrite: [...new Set([workspace, tmpdir(), '/tmp', '/private/tmp', ...writableCaches()])],
     denyRead: [
       ...secretPlaces().map((p) => p.path),
       ...conch.protectedPaths,

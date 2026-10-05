@@ -13,6 +13,7 @@ import { Artifact, ArtifactKind } from './artifacts';
 import { ATTACHMENT_LIMITS, Attachment } from './attachments';
 import {
   MutedSkill,
+  MutedProvider,
   Offer,
   OfferOutcome,
   PlanStep,
@@ -37,7 +38,7 @@ import {
 } from './common';
 import { DoctorReport } from './doctor';
 import { Memory, MemoryKind } from './memory';
-import { MAX_PROFILE_FACTS, ProfileFact } from './profile';
+import { MAX_PROFILE_FACTS, ProfileAvatar, ProfileFact } from './profile';
 import { PastChatsLooked } from './past-chats';
 import { LearnedItem } from './quiet-learning';
 import { EngineStatus, LoginState } from './engine';
@@ -149,12 +150,14 @@ export const Profile = z.object({
   about: z.string().max(4000).default(''),
   /** Who they are in cards: work, home, people, interests, how they like things. */
   facts: z.array(ProfileFact).max(MAX_PROFILE_FACTS).default([]),
+  /** A photo of theirs, set only through `PUT /api/profile/avatar`. */
+  avatar: ProfileAvatar.optional(),
 });
 export type Profile = z.infer<typeof Profile>;
 
 /** Catalog ids, and skills as `skill:<id>` (ADR 0060), each once. */
 const MutedSuggestions = z
-  .array(z.union([CatalogId, MutedSkill]))
+  .array(z.union([CatalogId, MutedSkill, MutedProvider]))
   .max(100)
   .transform((ids) => [...new Set(ids)]);
 
@@ -212,6 +215,11 @@ export const Preferences = z.object({
    * and can't read where keys and passwords live (ADR 0028).
    */
   sealedCommands: z.boolean().default(true),
+  /**
+   * A memory that looks planted (ADR 0087) is held and asked about, not saved.
+   * Off: only passwords, keys and hidden characters are still held.
+   */
+  checkMemories: z.boolean().default(true),
   /** Conch in the menu bar, tray or panel, whenever it runs (ADR 0029). */
   menuBar: z.boolean().default(true),
   /** A Mac on mains power stays awake while Conch runs in the background (ADR 0029). */
@@ -253,6 +261,8 @@ export const CreateMemoryBody = z.object({
 export const UpdateMemoryBody = z.object({
   content: z.string().trim().min(1).max(2000).optional(),
   kind: MemoryKind.optional(),
+  /** Without new words: the words you saw (ADR 0087), so your answer is about them. */
+  seen: z.string().min(1).max(2000).optional(),
 });
 
 // ── Health (public) ────────────────────────────────────────────────────────
@@ -321,9 +331,10 @@ export const UpdateSettingsBody = z.object({
       /** `null` goes back to waiting for the limit to reset. */
       limitFallback: EngineId.nullable(),
       mutedSuggestions: MutedSuggestions,
-      /** Turning either off needs a recent password or key (ADR 0028). */
+      /** Turning any of these off needs a recent password or key (ADR 0028, ADR 0087). */
       checkAfterReading: z.boolean(),
       sealedCommands: z.boolean(),
+      checkMemories: z.boolean(),
       menuBar: z.boolean(),
       keepAwake: z.boolean(),
       tidyMemory: z.boolean(),
@@ -521,6 +532,12 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     type: z.literal('memory.decided'),
     memoryId: z.string(),
     kept: z.boolean(),
+    /** What it said, so Activity can name it (ADR 0087). */
+    content: z.string().optional(),
+    /** You changed its words before keeping it. */
+    edited: z.boolean().optional(),
+    /** Kept although the check refused it (a secret, hidden characters): your explicit override. */
+    anyway: z.boolean().optional(),
   }),
   /**
    * Conch learned from this chat once it went quiet (ADR 0088): one quiet
@@ -612,6 +629,11 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     problem: TurnProblem.optional(),
     /** It stopped to check in, not because it was done (ADR 0085): the chat offers Carry on. */
     paused: TurnPause.optional(),
+    /**
+     * Why it ended when you didn't say so: Conch itself restarted mid-turn (an update, a crash,
+     * the machine running out of memory). `resumed`: it picks the work up again by itself.
+     */
+    restarted: z.object({ resumed: z.boolean() }).optional(),
     /** Which provider answered, and with which model when it said. */
     engine: EngineId.optional(),
     model: z.string().optional(),
@@ -906,6 +928,11 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('conversation.updated'), conversation: ConversationSummary }),
   z.object({ type: z.literal('conversation.deleted'), conversationId: z.string() }),
   z.object({ type: z.literal('conversation.event'), event: ConversationEvent }),
+  /**
+   * The log this tab has seen doesn't match the gateway's (it restarted and lost the end of a
+   * turn): forget the view; the whole log follows.
+   */
+  z.object({ type: z.literal('conversation.reset'), conversationId: z.string() }),
   z.object({ type: z.literal('engine.status'), status: EngineStatus }),
   z.object({ type: z.literal('engine.login'), login: LoginState }),
   z.object({ type: z.literal('memory.changed') }),

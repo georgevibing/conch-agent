@@ -21,7 +21,14 @@ import { isAbsolute, relative, resolve } from 'node:path';
 import type { ConversationEvent, TaintSource } from '@conch/protocol';
 
 /** Built-in tools that bring the outside in. */
-const WEB_READERS = new Set(['WebFetch', 'WebSearch']);
+const WEB_READERS = new Set([
+  'WebFetch',
+  'WebSearch',
+  'web_fetch',
+  'web_search',
+  'mcp__conch__web_fetch',
+  'mcp__conch__web_search',
+]);
 /** Conch's browser: every look at a page is the outside coming in. */
 const BROWSER =
   /^(?:mcp__conch__)?browser_(?:open|read|screenshot|click|click_at|back|scroll|wait|select|press|type|tabs|upload)$/;
@@ -62,15 +69,23 @@ export function taintFrom(toolName: string, input: unknown, app?: string): Taint
     return { kind: 'app', label: 'Google account content' };
   if (/^(?:mcp__conch__)?slack_(?:channels|search|read_channel)$/.test(toolName))
     return { kind: 'app', label: 'Slack messages' };
+  if (/^(?:mcp__conch__)?image_(?:models|generate)$/.test(toolName))
+    return { kind: 'app', label: 'OpenRouter image service' };
+  if (/^(?:mcp__conch__)?task_status$/.test(toolName))
+    return { kind: 'app', label: 'background task results' };
+  if (/^(?:mcp__conch__)?read_document$/.test(toolName))
+    return { kind: 'download', label: 'document content' };
   if (WEB_READERS.has(toolName))
     return {
       kind: 'web',
-      label: toolName === 'WebSearch' ? 'web search results' : (hostOf(args.url) ?? 'a web page'),
+      label: /(?:WebSearch|web_search)$/.test(toolName)
+        ? 'web search results'
+        : (hostOf(args.url) ?? 'a web page'),
     };
   if (BROWSER.test(toolName))
     return { kind: 'web', label: hostOf(args.url) ?? 'pages in the browser' };
   if (
-    toolName === 'Bash' &&
+    (toolName === 'Bash' || /^(?:mcp__conch__)?process_(?:start|read)$/.test(toolName)) &&
     typeof args.command === 'string' &&
     DOWNLOADS.test(args.command.replace(NOT_DOWNLOADS, '$1 '))
   )
@@ -143,6 +158,12 @@ export function sinkReason(
   const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
   if (/^(?:mcp__conch__)?google_mail_create_draft$/.test(toolName)) return 'save a Gmail draft';
   if (/^(?:mcp__conch__)?slack_send_message$/.test(toolName)) return 'send a Slack message';
+  if (/^(?:mcp__conch__)?image_generate$/.test(toolName))
+    return 'send a prompt or source picture to an image service';
+  if (/^(?:mcp__conch__)?process_(?:start|write)$/.test(toolName))
+    return 'run or send input to a command';
+  if (/^(?:mcp__conch__)?task_control$/.test(toolName) && args.action !== 'stop')
+    return 'restart a background task';
   if (toolName === 'Bash' || toolName === 'BashOutput' || toolName === 'KillShell')
     return toolName === 'Bash' ? 'run a command' : undefined;
   if (['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(toolName)) {
@@ -151,7 +172,8 @@ export function sinkReason(
       ? 'change a file outside your work folder'
       : undefined;
   }
-  if (toolName === 'WebFetch' && typeof args.url === 'string' && carries(args.url))
+  if (/(?:WebSearch|web_search)$/.test(toolName)) return 'send a search query to the web';
+  if (/(?:WebFetch|web_fetch)$/.test(toolName) && typeof args.url === 'string' && carries(args.url))
     return 'open a web address that could carry what it read';
   const integration = INTEGRATION.exec(toolName);
   if (integration && integration[1] !== 'conch' && context.access !== 'read')

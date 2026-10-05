@@ -43,7 +43,18 @@ interface UiState {
     reopen?: SettingsTab;
     /** Quit on purpose: the page rests until Conch is opened again. */
     stopped?: boolean;
+    /** Starting on a new version: the update dialog, if open, is the calm screen. */
+    update?: boolean;
   };
+  /** Starting again is taking longer than it should. */
+  restartSlow: boolean;
+  /**
+   * Conch's own update dialog, from anywhere (the sidebar, the banner, ⌘K,
+   * Settings). `start`: update at once. `arrived`: just back on the new version.
+   */
+  updateDialog?: { start?: boolean; arrived?: boolean };
+  openUpdate(how?: { start?: boolean; arrived?: boolean }): void;
+  closeUpdate(): void;
   /** Something in a settings place to bring into view, once (Settings → Security → Devices). */
   settingsFocus?: string;
   paletteOpen: boolean;
@@ -210,7 +221,14 @@ export const useUi = create<UiState>((set) => ({
   // The whole page rests while Conch starts again: nothing stays open over the calm
   // screen (Settings steps aside, and is where it was after the reload).
   setRestarting: (restarting) =>
-    set(restarting ? { restarting, paletteOpen: false } : { restarting }),
+    set(
+      restarting
+        ? { restarting, restartSlow: false, paletteOpen: false }
+        : { restarting, restartSlow: false },
+    ),
+  restartSlow: false,
+  openUpdate: (how = {}) => set({ updateDialog: how, paletteOpen: false }),
+  closeUpdate: () => set({ updateDialog: undefined }),
   closeSettings: () => leaveSettings(),
   setPalette: (paletteOpen) => set({ paletteOpen }),
   openFind: (conversationId, query, target) =>

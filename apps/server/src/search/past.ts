@@ -76,6 +76,10 @@ export const withOthers = (taint: readonly TaintSource[]) => taint.some((t) => t
 function notHere(ctx: ToolContext): string | undefined {
   // A turn that can't say what its chat has read is treated as the worst case.
   if (!ctx.taints) return 'Looking through earlier chats isn’t available here.';
+  // Only a chat the user is in, or their own chat from a chat app: never a routine's
+  // run or a task, which now get Conch's other tools (as `#pastChatsPrompt` says).
+  if (ctx.origin && ctx.origin.kind !== 'channel')
+    return 'Looking through earlier chats isn’t available here.';
   if (withOthers(ctx.taints()))
     return 'Someone other than the user writes in this chat, so their earlier chats stay private here. Don’t look them up another way.';
   return undefined;

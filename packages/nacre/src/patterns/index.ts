@@ -15,6 +15,7 @@ export * from './CommandMenu';
 export * from './ModelPicker';
 export * from './ModelSwitch';
 export * from './Portrait';
+export * from './AvatarPicker';
 export * from './ReplyChips';
 export * from './QuestionCard';
 export * from './Offer';

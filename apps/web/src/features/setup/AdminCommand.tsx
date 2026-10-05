@@ -40,6 +40,10 @@ export function AdminCommand({
     paste(command);
     if (watch) watchNeed(watch);
   };
+  // Copied to run somewhere else: Conch watches for it all the same.
+  const copied = () => {
+    if (watch) watchNeed(watch);
+  };
   const buttons = (
     <Stack direction="row" gap={2} wrap align="center">
       {canType && (
@@ -52,7 +56,11 @@ export function AdminCommand({
           {label}
         </Button>
       )}
-      <CopyButton value={command} label={canType ? 'Copy' : 'Copy command'} />
+      <CopyButton
+        value={command}
+        label={canType ? 'Copy the command instead' : 'Copy command'}
+        onCopied={copied}
+      />
     </Stack>
   );
   if (compact) return buttons;
@@ -63,12 +71,24 @@ export function AdminCommand({
           {what}
         </Text>
       )}
-      <code className={styles.command}>{command}</code>
+      {canType ? (
+        // The command itself opens it in the terminal, typed for you.
+        <button
+          type="button"
+          className={styles.command}
+          onClick={open}
+          title="Type it into Conch’s terminal"
+        >
+          {command}
+        </button>
+      ) : (
+        <code className={styles.command}>{command}</code>
+      )}
       {buttons}
       <Text size="xs" tone="subtle">
         {canType
-          ? 'It opens in the terminal, typed for you. Press Enter there and type your password; Conch notices when it’s done.'
-          : 'Run it in a terminal on the computer Conch runs on. Conch notices when it’s done.'}
+          ? 'It opens in Conch’s terminal, typed for you. Press Enter there and type your password; Conch notices when it’s done.'
+          : 'Run it in a terminal on the computer Conch runs on. Conch notices when it’s done, no reload needed.'}
       </Text>
     </Stack>
   );

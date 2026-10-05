@@ -40,12 +40,14 @@ import type {
   PermissionDecision,
   ResolvedOptions,
 } from '../engines/types';
+import { hostToolText } from '../engines/types';
 import { forTurn as attachmentsForTurn } from '../attachments/prompt';
 import type { AttachmentStore } from '../attachments/store';
 import { Emitter } from '../lib/emitter';
 import { newId } from '../lib/ids';
 import { buildSystemAppend, systemParts } from '../memory/prompt';
 import type { MemoryStore } from '../memory/store';
+import type { LookModel, ReadThing } from '../memory/guard';
 import { memoryTools } from '../memory/tools';
 import type { SettingsStore } from '../settings/store';
 import { handoff } from './handoff';
@@ -418,6 +420,48 @@ interface Live {
   setTurnMode?: (mode: PermissionMode) => void;
   /** Waiting for the chat to be free (a message sent while a stopped turn winds down). */
   waiters?: (() => void)[];
+  /**
+   * What Conch's own tools brought in from outside this run, by where (ADR
+   * 0087): the memory check compares a memory with it. Others' results are in
+   * the log (`tool.finished`); these aren't, so a restart forgets them.
+   */
+  read?: Map<string, string>;
+  /** A save of the running turn's log is due (so a crash loses seconds, not the whole turn). */
+  checkpoint?: NodeJS.Timeout;
+  /** Saves go one at a time, so an older log never lands over a newer one. */
+  saving?: Promise<void>;
+}
+
+/** How often a running turn's log is saved: a crash loses this much, not the whole turn. */
+const CHECKPOINT_MS = 10_000;
+
+/** How many times in a row a chat is picked up again by itself after Conch stopped under it. */
+const MAX_AUTO_RESUMES = 2;
+
+/** What a turn that Conch's restart cut short is told when it carries on by itself. */
+const RESTART_PROMPT =
+  'Conch restarted while you were working on this, so the last stretch of your work was cut short. ' +
+  'Carry on with what I asked: first check what is already done (files changed, commands run) so you do not repeat it, then finish the rest.';
+
+/** How much of what one place brought in the memory check keeps to compare with (ADR 0087). */
+const READ_KEPT = 200_000;
+
+/** What this chat remembered (or wanted to) in the last hour: a plant may come in pieces (ADR 0087). */
+export function recentMemories(
+  events: readonly ConversationEvent[],
+  now = Date.now(),
+): { id: string; content: string; held?: boolean }[] {
+  const out = new Map<string, { id: string; content: string; held?: boolean }>();
+  for (const e of events)
+    if (e.type === 'memory.saved' && now - e.at < 3_600_000)
+      out.set(e.memory.id, {
+        id: e.memory.id,
+        content: e.memory.content,
+        ...(e.memory.held && { held: true }),
+      });
+    else if (e.type === 'memory.forgotten' || (e.type === 'memory.decided' && !e.kept))
+      out.delete(e.memoryId);
+  return [...out.values()];
 }
 
 /** How long a Stop pressed just before a turn starts still counts. */
@@ -590,6 +634,8 @@ export class ConversationManager {
         /** Memories that stopped being true, for `recall` (ADR 0088). */
         searchPast?(query: string): Promise<Memory[]>;
       };
+      /** A cheap model for the memory check's second look (ADR 0087); it can only raise a flag. */
+      memoryLook?: () => Promise<LookModel | undefined>;
       /** The provider for a turn: the one a conversation chose, else the default. */
       engine: (id?: EngineId) => Engine;
       tools?: ToolProvider;
@@ -640,6 +686,8 @@ export class ConversationManager {
       integrations?: TurnIntegrationsProvider;
       /** Where uploaded files and long pastes are kept (ADR 0017). */
       attachments?: AttachmentStore;
+      /** Stop managed command trees when the person stops or deletes this chat. */
+      stopProcesses?: (conversationId: string) => void;
       /** Takes saved secrets out of what's logged and shown (ADR 0025). */
       redact?: (text: string) => string;
       /** Where Passwords and Conch's keys live: never for the engine's own file tools. */
@@ -746,15 +794,13 @@ export class ConversationManager {
   }
 
   async remove(id: string) {
+    this.deps.stopProcesses?.(id);
     const live = this.#live.get(id);
     live?.abort?.abort();
     live?.titling?.abort();
     this.#live.delete(id);
     // What was attached here goes too, unless another conversation sent it as well.
-    const events = live?.events ?? (await this.deps.store.events(id).catch(() => []));
-    const attached = events.flatMap((e) =>
-      e.type === 'user.message' ? (e.attachments ?? []).map((a) => a.id) : [],
-    );
+    const attached = ((await this.deps.attachments?.forConversation(id)) ?? []).map((a) => a.id);
     // What an engine kept of it between turns goes too (a Codex thread).
     const record = live?.record ?? (await this.deps.store.get(id).catch(() => undefined));
     for (const [engineId, session] of Object.entries(record?.sessions ?? {})) {
@@ -774,6 +820,11 @@ export class ConversationManager {
   async eventsAfter(id: string, afterSeq = -1): Promise<ConversationEvent[]> {
     const live = await this.#get(id);
     return live.events.filter((e) => e.seq > afterSeq);
+  }
+
+  /** The newest event's number, for a tab to be told its own is from a log that no longer exists. */
+  async lastSeq(id: string): Promise<number> {
+    return (await this.#get(id)).events.at(-1)?.seq ?? -1;
   }
 
   /** Send a user message, creating the conversation if needed. Returns immediately; the turn streams. */
@@ -1138,6 +1189,7 @@ export class ConversationManager {
   }
 
   async interrupt(id: string) {
+    this.deps.stopProcesses?.(id);
     const live = await this.#get(id);
     // Stop pressed right after sending, before the turn began (or while a
     // stopped one winds down): it stops as it starts.
@@ -1255,6 +1307,59 @@ export class ConversationManager {
     this.#setStatus(live, 'awaiting-permission');
     // Saved now, so a restart finds the question (and says it was skipped).
     await this.#persist(live).catch(() => undefined);
+  }
+
+  /**
+   * Conch stopped under a turn (an update, a crash, memory running out): the chat says so,
+   * and carries on by itself, a couple of times at most so a turn that brings Conch down
+   * can't do it forever. Run once, when the gateway is up.
+   */
+  async recoverInterrupted(): Promise<number> {
+    await this.deps.store.list();
+    const ids = this.deps.store.interrupted.splice(0);
+    let resumed = 0;
+    for (const id of ids) {
+      try {
+        const live = await this.#get(id);
+        const lastAsked = live.events.findLastIndex((e) => e.type === 'user.message');
+        // Nothing was asked, or the turn did finish before the log was saved.
+        if (lastAsked === -1) continue;
+        const since = live.events.slice(lastAsked + 1);
+        const closed = since.findLastIndex((e) => e.type === 'turn.completed');
+        const last = closed === -1 ? undefined : since[closed];
+        if (last?.type === 'turn.completed' && !last.restarted) continue;
+        const tries = since.filter((e) => e.type === 'turn.completed' && e.restarted).length;
+        const again = tries < MAX_AUTO_RESUMES;
+        const finished = new Set(
+          live.events.flatMap((e) => (e.type === 'tool.finished' ? [e.toolUseId] : [])),
+        );
+        for (const e of live.events)
+          if (e.type === 'tool.started' && !finished.has(e.toolUseId))
+            this.#append(live, {
+              type: 'tool.finished',
+              toolUseId: e.toolUseId,
+              status: 'error',
+              output: 'Conch restarted.',
+              durationMs: 0,
+            });
+        this.#append(live, {
+          type: 'turn.completed',
+          outcome: 'interrupted',
+          restarted: { resumed: again },
+          engine: live.record.engine,
+        });
+        live.record = { ...live.record, status: 'idle', updatedAt: Date.now() };
+        this.#append(live, { type: 'status', status: 'idle' });
+        await this.#persist(live);
+        this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
+        if (!again) continue;
+        this.#held.set(id, { engine: live.record.engine, prompt: RESTART_PROMPT, attachments: [] });
+        if (await this.release(id).catch(() => false)) resumed++;
+      } catch (error) {
+        console.error('[conversations] could not pick up', id, error);
+      }
+    }
+    return resumed;
   }
 
   /** Messages that were waiting for the internet go now, in the order they were sent. */
@@ -1563,9 +1668,7 @@ export class ConversationManager {
       this.deps.memoryIndex && !guest
         ? await this.deps.memoryIndex.forPrompt(said).catch(() => undefined)
         : undefined;
-    const memories = guest
-      ? []
-      : (picked?.memories ?? (await this.deps.memory.list()).filter((m) => !m.pending));
+    const memories = guest ? [] : (picked?.memories ?? (await this.deps.memory.usable()));
     const memoryTotal = picked?.total ?? memories.length;
     // Quiet learning (ADR 0088): a chat marked not to learn from remembers only when asked,
     // and what you prefer that bears on this message goes just before it.
@@ -1703,6 +1806,14 @@ export class ConversationManager {
       },
       waits: () => !watched || this.#tainted(live).some((source) => source.kind === 'person'),
       ...(learning && { never: (content: string) => learning.refuses(content) }),
+      // The memory check (ADR 0087): what it read, what you said, what it remembered just now.
+      check: {
+        read: () => this.#readThings(live),
+        said: () => this.#yourWords(live),
+        recent: () => recentMemories(live.events),
+        on: async () => (await this.deps.settings.get()).preferences.checkMemories,
+        ...(this.deps.memoryLook && { look: this.deps.memoryLook }),
+      },
       onSaved: (memory) => {
         this.#append(live, { type: 'memory.saved', memory });
       },
@@ -1765,7 +1876,9 @@ export class ConversationManager {
         ...tool,
         run: async (args, context) => {
           const result = await tool.run(args, context);
-          this.#taint(live, taintFrom(tool.name, args) ?? source);
+          const read = taintFrom(tool.name, args) ?? source;
+          this.#taint(live, read);
+          this.#noteRead(live, read.label, hostToolText(result));
           return result;
         },
       };
@@ -1872,12 +1985,14 @@ export class ConversationManager {
             waive: key,
           };
       }
-      // Google draft creation and Slack sending always ask inside their trusted
-      // tool, after it has resolved the real account/channel and the full words.
+      // Writes below ask inside their trusted
+      // tools, after resolving the actual destination, model or command.
       // That one card also carries taint and skill restrictions; a generic
       // preflight would ask twice.
       if (
-        /^(?:mcp__conch__)?(?:google_mail_create_draft|slack_send_message)$/.test(request.toolName)
+        /^(?:mcp__conch__)?(?:google_mail_create_draft|slack_send_message|process_start|process_write|image_generate|task_control)$/.test(
+          request.toolName,
+        )
       )
         return undefined;
       const server = /^mcp__([a-z0-9_-]+?)__/.exec(request.toolName)?.[1];
@@ -1980,7 +2095,10 @@ export class ConversationManager {
     };
 
     // Attachments go in front of the words, as each provider can take them (ADR 0017).
-    const can = engine.attachments ?? { images: false, files: false };
+    const can = {
+      images: engine.attachments?.images ?? false,
+      files: engine.attachments?.files === true || engine.hostTools !== false,
+    };
     const store = this.deps.attachments;
     const attached =
       store && attachments.length
@@ -1996,15 +2114,7 @@ export class ConversationManager {
     // Files sent earlier in the chat stay readable to engines that open files.
     const readableDirs =
       store && can.files
-        ? [
-            ...new Set(
-              live.events.flatMap((e) =>
-                e.type === 'user.message'
-                  ? (e.attachments ?? []).map((a) => store.folder(a.id))
-                  : [],
-              ),
-            ),
-          ]
+        ? (await store.forConversation(conversationId)).map((a) => store.folder(a.id))
         : [];
 
     try {
@@ -2658,6 +2768,13 @@ export class ConversationManager {
       at: Date.now(),
     } as ConversationEvent;
     live.events.push(event);
+    if (live.abort && !live.checkpoint) {
+      live.checkpoint = setTimeout(() => {
+        live.checkpoint = undefined;
+        void this.#persist(live).catch(() => undefined);
+      }, CHECKPOINT_MS);
+      live.checkpoint.unref();
+    }
     if (defer) defer.push(event);
     else this.events.emit({ type: 'conversation.event', event });
   }
@@ -2674,8 +2791,54 @@ export class ConversationManager {
   }
 
   async #persist(live: Live) {
-    await this.deps.store.upsert(live.record);
-    await this.deps.store.saveEvents(live.record.id, live.events);
+    const save = (live.saving ?? Promise.resolve())
+      .catch(() => undefined)
+      .then(async () => {
+        await this.deps.store.upsert(live.record);
+        await this.deps.store.saveEvents(live.record.id, live.events);
+      });
+    live.saving = save;
+    await save;
+  }
+
+  /** Keep what a tool of Conch's own brought in, for the memory check (ADR 0087). */
+  #noteRead(live: Live, label: string, text: string) {
+    live.read ??= new Map();
+    const before = live.read.get(label) ?? '';
+    live.read.set(label, `${before}\n${text}`.slice(-READ_KEPT));
+  }
+
+  /** What this chat read from outside, with what it brought back where Conch has it (ADR 0087). */
+  #readThings(live: Live): ReadThing[] {
+    const outputs = new Map<string, string>();
+    for (const e of live.events)
+      if (e.type === 'tool.finished' && e.output) outputs.set(e.toolUseId, e.output);
+    const texts = new Map<string, string>(live.read);
+    for (const e of live.events)
+      if (e.type === 'taint' && e.toolUseId) {
+        const output = outputs.get(e.toolUseId);
+        if (output)
+          texts.set(
+            e.source.label,
+            `${texts.get(e.source.label) ?? ''}\n${output}`.slice(-READ_KEPT),
+          );
+      }
+    return this.#tainted(live).map((source) => ({
+      kind: source.kind,
+      label: source.label,
+      ...(texts.has(source.label) && { text: texts.get(source.label) }),
+    }));
+  }
+
+  /**
+   * The person's own words in this chat (ADR 0087). None where they could be
+   * someone else's: a routine's run carries what happened, and a chat app
+   * with other people in it carries theirs.
+   */
+  #yourWords(live: Live): string[] {
+    if (live.extras || live.record.origin?.kind === 'routine') return [];
+    if (this.#tainted(live).some((source) => source.kind === 'person')) return [];
+    return live.events.flatMap((e) => (e.type === 'user.message' ? [e.text] : []));
   }
 
   /** What untrusted things this chat has read, from its own log (so it survives a restart). */

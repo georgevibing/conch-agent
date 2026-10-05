@@ -2,7 +2,13 @@ import { MemoryKind, type Memory } from '@conch/protocol';
 import { z } from 'zod';
 
 import type { HostTool } from '../engines/types';
+import { datamark, type LookModel, type ReadThing } from './guard';
+import { outsideOf } from './prompt';
 import type { MemoryStore } from './store';
+
+/** What the model is told when a memory is held: enough to carry on, nothing to work around. */
+const HELD =
+  'Not remembered yet: it waits for the user to look at it in Conch (the chat shows them why). Don’t save it again in other words; carry on with what they asked.';
 
 /** The memory tools every engine exposes to the agent, bound to one conversation. */
 export function memoryTools(options: {
@@ -27,6 +33,19 @@ export function memoryTools(options: {
    * remember again waits for their OK.
    */
   never?: (content: string) => Promise<boolean>;
+  /**
+   * The memory check (ADR 0087). What the chat read, with what it brought
+   * back; the person's own words; what this chat remembered a moment ago; and
+   * whether the check is on (Settings → Safety). Without them, nothing was read.
+   */
+  check?: {
+    read: () => readonly ReadThing[];
+    said: () => readonly string[];
+    recent: () => readonly { id: string; content: string; held?: boolean }[];
+    on: () => Promise<boolean>;
+    /** A cheap model for the second look; it can only raise a flag. */
+    look?: () => Promise<LookModel | undefined>;
+  };
 }): HostTool[] {
   const { store, conversationId } = options;
   const remember: HostTool<{ content: z.ZodString; kind: z.ZodOptional<typeof MemoryKind> }> = {
@@ -41,21 +60,52 @@ export function memoryTools(options: {
       const waits = Boolean(untrusted) && (options.waits?.() ?? true);
       // Something the person took back once waits for them, wherever it comes from (ADR 0088).
       const refused = await options.never?.(content).catch(() => false);
-      const memory = await store.add({
-        content,
-        kind,
-        source: 'agent',
-        conversationId,
-        ...(untrusted && {
-          ...(waits && { pending: true }),
-          untrusted: `Learned in a chat that ${untrusted.replace(/^This chat /, '').replace(/, which could be trying to steer me\.$/, '')}.`,
-        }),
-        ...(refused && {
-          pending: true,
-          untrusted: 'You took this back once, so it waits for your OK.',
-        }),
-      });
+      // And it's looked at first (ADR 0087): one that looks planted is held and asked about.
+      const check = options.check;
+      const read = check?.read() ?? [];
+      const recent = check?.recent() ?? [];
+      // The store runs the check where it writes (ADR 0087); this says what's behind it.
+      const { memory, verdict } = await store.write(
+        {
+          content,
+          kind,
+          source: 'agent',
+          conversationId,
+          ...(untrusted && {
+            ...(waits && { pending: true }),
+            untrusted: `Learned in a chat that ${untrusted.replace(/^This chat /, '').replace(/, which could be trying to steer me\.$/, '')}.`,
+          }),
+          ...(refused && {
+            pending: true,
+            untrusted: 'You took this back once, so it waits for your OK.',
+          }),
+          provenance: {
+            via: 'chat',
+            ...(read.length > 0 && { read: [...new Set(read.map((r) => r.label))].slice(0, 12) }),
+          },
+        },
+        {
+          via: 'chat',
+          read,
+          said: check?.said() ?? [],
+          recent: recent.map(({ id, content: words }) => ({ id, content: words })),
+          wary: recent.some((r) => r.held),
+          ...(check && { on: await check.on().catch(() => true) }),
+          ...(check?.look && { look: check.look }),
+        },
+      );
+      const held = memory.held;
+      // What it adds up to with the pieces before it: those wait too.
+      if (held && verdict.pieces)
+        for (const id of verdict.pieces) {
+          const piece = await store.get(id);
+          if (piece && !piece.pending) {
+            const again = await store.hold(id, held);
+            if (again) options.onSaved(again);
+          }
+        }
       options.onSaved(memory);
+      if (memory.held) return HELD;
       if (refused && memory.pending)
         return `Noted as ${memory.id}, waiting for the user's OK: they took this back once before.`;
       return memory.pending
@@ -79,9 +129,12 @@ export function memoryTools(options: {
     description: 'Search long-term memory for things you may know about the user.',
     input: { query: z.string().min(1).max(200) },
     async run({ query }) {
-      const results = options.search
-        ? (await options.search(query)).map((r) => r.memory)
-        : (await store.search(query)).filter((m) => !m.pending);
+      // Nothing waiting for an OK is ever handed to a model (ADR 0032, ADR 0087).
+      const results = (
+        options.search
+          ? (await options.search(query)).map((r) => r.memory)
+          : await store.search(query)
+      ).filter((m) => !m.pending);
       // What used to be true, dated, for questions about before (ADR 0088).
       const past = (await options.searchPast?.(query).catch(() => [])) ?? [];
       const lines = [
@@ -89,7 +142,11 @@ export function memoryTools(options: {
         ...(past.length
           ? [
               'No longer true (kept for questions about before):',
-              ...past.map((m) => `- ${m.content} (until ${until(m.invalidAt ?? m.updatedAt)})`),
+              // One from outside is marked as data, as in the prompt (ADR 0087).
+              ...past.map(
+                (m) =>
+                  `- ${outsideOf(m) ? datamark(m.content) : m.content} (until ${until(m.invalidAt ?? m.updatedAt)})`,
+              ),
             ]
           : []),
       ];

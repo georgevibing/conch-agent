@@ -8,14 +8,13 @@
  *
  * Every change is a card you can read, with Undo. Nothing is silent. What
  * came from a chat that read something untrusted (ADR 0028), or anything new
- * while "Remember things automatically" is off, waits for your OK instead of
- * being applied. Without a model it still merges exact repeats.
+ * while "Learn from your chats" is off, waits for your OK instead of being
+ * applied. Without a model it still merges exact repeats.
  *
- * Since quiet learning (ADR 0088): an updated memory is superseded, kept with
- * its date, not overwritten; a merge that would lose a number or a name, or
- * shrink what it merges, isn't made; and what you took back once isn't added.
- * Learning from one chat before its start is summarised is quiet learning's
- * now (`learning/service.ts`).
+ * Since quiet learning (ADR 0088): a merge that would lose a number or a name,
+ * or shrink what it merges, isn't made; and what you took back once isn't
+ * added. Learning from one chat before its start is summarised is quiet
+ * learning's now (`learning/service.ts`).
  */
 import { join } from 'node:path';
 
@@ -33,6 +32,8 @@ import { writeJson } from '../lib/fs';
 import { newId } from '../lib/ids';
 import { readStore } from '../lib/recover';
 import { tokens } from './embed';
+import type { PersonConsent } from './consent';
+import { checkMemory, holdOf, type ReadThing } from './guard';
 import type { MemoryStore } from './store';
 
 /** How much of what you said goes to the model in one tidy-up. */
@@ -60,6 +61,8 @@ export interface Said {
   at: number;
   /** The chat read something untrusted: why, in a sentence (ADR 0028). */
   untrusted?: string;
+  /** What it read, by where (ADR 0087): the memory check names it. */
+  read?: readonly ReadThing[];
 }
 
 export interface TidyModel {
@@ -74,7 +77,7 @@ export interface TidyDeps {
   model: () => Promise<TidyModel | undefined>;
   /** What you said in chats changed since `since` (your own words only). */
   said: (since: number) => Promise<Said[]>;
-  settings: () => Promise<{ autoMemory: boolean; tidyMemory: boolean }>;
+  settings: () => Promise<{ autoMemory: boolean; tidyMemory: boolean; checkMemories?: boolean }>;
   /** A chat is working: nightly tidy-ups wait for a quiet moment. */
   busy: () => boolean;
   /** You took this back once (ADR 0088): it isn't added again. */
@@ -224,6 +227,34 @@ interface Learning {
   autoMemory: boolean;
   touched: Set<string>;
   changes: TidyChange[];
+  /** The memory check is on (ADR 0087). */
+  check: boolean;
+}
+
+/** Learned from outside and never made the person's own (ADR 0087). */
+function fromOutside(m: Memory): boolean {
+  return !m.provenance?.yours && Boolean(m.provenance?.read?.length || m.untrusted);
+}
+
+/** What the store's check is told about something learned from these chats (ADR 0087). */
+function contextFor(chats: readonly Said[], on: boolean) {
+  return {
+    via: 'tidy' as const,
+    read: chats.flatMap((s) => s.read ?? []),
+    said: chats.map((s) => s.text),
+    on,
+  };
+}
+
+/** The memory check on something learned from these chats (ADR 0087). */
+function verdictFor(content: string, chats: readonly Said[], on: boolean) {
+  return checkMemory({
+    content,
+    via: 'tidy',
+    read: chats.flatMap((s) => s.read ?? []),
+    said: chats.map((s) => s.text),
+    on,
+  });
 }
 
 /** "This chat read …" as the reason a change waits: "Learned in a chat that read …". */
@@ -293,13 +324,59 @@ export class MemoryTidy {
     const touched = new Set<string>();
     let problem: string | undefined;
 
+    const { checkMemories = true } = await this.deps.settings();
     const merge = async (group: Memory[], content: string, why: string) => {
       const live = group.filter((m) => byId.has(m.id) && !touched.has(m.id));
       if (live.length < 2) return;
       const [keep, ...drop] = [...live].sort((a, b) => b.updatedAt - a.updatedAt);
       if (!keep) return;
       for (const m of live) touched.add(m.id);
-      const after = (await store.update(keep.id, { content })) ?? keep;
+      // A merge is a new write (ADR 0087), as strict as the strictest of what it
+      // merges: anything from outside makes it from outside, and it's the
+      // person's own words only if every one of them was.
+      const outside = live.filter(fromOutside);
+      const read = [
+        ...new Set(outside.flatMap((m) => m.provenance?.read ?? ['something from outside'])),
+      ];
+      const context = {
+        via: 'tidy' as const,
+        read: read.map((label) => ({ kind: label.includes('.') ? 'web' : 'app', label }) as const),
+        said: live.filter((m) => !fromOutside(m)).map((m) => m.content),
+        on: checkMemories,
+      };
+      const provenance = {
+        via: 'tidy' as const,
+        ...(read.length > 0 && { read: read.slice(0, 12) }),
+        ...(live.every((m) => m.provenance?.yours) && { yours: true }),
+      };
+      const proposed = { ...keep, content, provenance, updatedAt: this.#now };
+      const held = holdOf(checkMemory({ content, ...context }));
+      if (held) {
+        // Never applied by itself: it waits on the card, with why.
+        changes.push({
+          id: newId('tc'),
+          kind: 'merged',
+          why: why || 'They said the same thing.',
+          before: live,
+          after: proposed,
+          state: 'pending',
+          untrusted: held.reasons[0]?.words ?? 'It looks off, so it waits for your OK.',
+        });
+        return;
+      }
+      const after = (await store.update(keep.id, { content, provenance }, context)) ?? keep;
+      if (after.pending) {
+        changes.push({
+          id: newId('tc'),
+          kind: 'merged',
+          why: why || 'They said the same thing.',
+          before: live,
+          after,
+          state: 'pending',
+          untrusted: after.held?.reasons[0]?.words ?? 'It looks off, so it waits for your OK.',
+        });
+        return;
+      }
       for (const d of drop) await store.remove(d.id);
       changes.push({
         id: newId('tc'),
@@ -344,7 +421,14 @@ export class MemoryTidy {
     for (const group of repeats(memories.filter((m) => !touched.has(m.id))))
       await merge(group, group[0]?.content ?? '', 'They said the same thing.');
 
-    await this.#learnFrom(reply, { memories, said, autoMemory, touched, changes });
+    await this.#learnFrom(reply, {
+      memories,
+      said,
+      autoMemory,
+      touched,
+      changes,
+      check: checkMemories,
+    });
 
     const run: TidyRun = {
       id: newId('tr'),
@@ -370,16 +454,20 @@ export class MemoryTidy {
   /** Updates and new memories from a reply, by the rules: what came from an untrusted chat waits. */
   async #learnFrom(reply: z.infer<typeof Reply> | undefined, learning: Learning) {
     const { store } = this.deps;
-    const { memories, said, autoMemory, touched, changes } = learning;
+    const { memories, said, autoMemory, touched, changes, check } = learning;
     const byId = new Map(memories.map((m) => [m.id, m]));
     const fromChat = new Map(said.map((s) => [s.conversationId, s]));
     for (const u of reply?.update ?? []) {
       const current = byId.get(u.id);
       if (!current || touched.has(u.id) || current.content === u.content.trim()) continue;
       touched.add(u.id);
-      const untrusted = u.from
-        ? fromChat.get(u.from)?.untrusted
-        : said.find((s) => s.untrusted)?.untrusted;
+      const chats = u.from ? said.filter((s) => s.conversationId === u.from) : said;
+      const held = holdOf(verdictFor(u.content.trim(), chats, check));
+      const untrusted = held
+        ? held.reasons[0]?.words
+        : u.from
+          ? fromChat.get(u.from)?.untrusted
+          : said.find((s) => s.untrusted)?.untrusted;
       const proposed = {
         ...current,
         content: u.content.trim(),
@@ -394,25 +482,23 @@ export class MemoryTidy {
           before: [current],
           after: proposed,
           state: 'pending',
-          untrusted: learnedIn(untrusted),
+          untrusted: held ? untrusted : learnedIn(untrusted),
         });
         continue;
       }
-      // Superseded, not overwritten (ADR 0088): what used to be true is kept, dated.
-      const moved = await store.supersede(current.id, {
-        content: proposed.content,
-        kind: current.kind,
-        source: 'tidy',
-        ...(current.conversationId && { conversationId: current.conversationId }),
-      });
-      if (!moved) continue;
+      // Checked again where it's written (ADR 0087), with the same chats behind it:
+      // if the store holds it, the card waits for you rather than saying it's done.
+      const after =
+        (await store.update(current.id, { content: proposed.content }, contextFor(chats, check))) ??
+        proposed;
       changes.push({
         id: newId('tc'),
         kind: 'updated',
         why: u.why || 'Something you said more recently replaces it.',
         before: [current],
-        after: moved.after,
-        state: 'applied',
+        after,
+        state: after.pending ? 'pending' : 'applied',
+        ...(after.held && { untrusted: after.held.reasons[0]?.words }),
       });
     }
 
@@ -427,18 +513,34 @@ export class MemoryTidy {
         : said.length && said.every((s) => s.conversationId === said[0]?.conversationId)
           ? said[0]
           : undefined;
-      const untrusted = chat?.untrusted ? learnedIn(chat.untrusted) : undefined;
+      const chats = chat ? said.filter((s) => s.conversationId === chat.conversationId) : said;
+      const verdict = verdictFor(content, chats, check);
+      const held = holdOf(verdict);
+      const untrusted = held
+        ? held.reasons[0]?.words
+        : chat?.untrusted
+          ? learnedIn(chat.untrusted)
+          : undefined;
       const waits = Boolean(untrusted) || !autoMemory;
-      const after = await store.add({
-        content,
-        kind: a.kind,
-        source: 'tidy',
-        ...(chat && { conversationId: chat.conversationId }),
-        ...(waits && {
-          pending: true,
-          untrusted: untrusted ?? 'Learn from your chats is off, so this waits for your OK.',
-        }),
-      });
+      const read = [...new Set(chats.flatMap((s) => s.read ?? []).map((r) => r.label))];
+      const after = await store.add(
+        {
+          content,
+          kind: a.kind,
+          source: 'tidy',
+          ...(chat && { conversationId: chat.conversationId }),
+          ...(waits && {
+            pending: true,
+            untrusted: untrusted ?? 'Learn from your chats is off, so this waits for your OK.',
+          }),
+          provenance: {
+            via: 'tidy',
+            ...(read.length > 0 && { read: read.slice(0, 12) }),
+            ...(verdict.yours && { yours: true }),
+          },
+        },
+        contextFor(chats, check),
+      );
       known.push(after);
       changes.push({
         id: newId('tc'),
@@ -446,8 +548,10 @@ export class MemoryTidy {
         why: a.why || 'Something you said in a chat.',
         before: [],
         after,
-        state: waits ? 'pending' : 'applied',
-        ...(untrusted && { untrusted }),
+        state: after.pending ? 'pending' : 'applied',
+        ...((after.held?.reasons[0]?.words ?? untrusted) && {
+          untrusted: after.held?.reasons[0]?.words ?? untrusted,
+        }),
       });
     }
   }
@@ -457,34 +561,36 @@ export class MemoryTidy {
     runId: string,
     changeId: string,
     answer: 'keep' | 'undo' | 'dismiss',
+    /**
+     * The person's answers (ADR 0087), one for each memory the card showed, for
+     * exactly the words it showed: what lets Keep and Undo past the memory check.
+     */
+    consents: readonly PersonConsent[] = [],
   ): Promise<TidyStatus> {
+    const consent = (id: string) => consents.find((c) => c.id === id);
     const file = await this.#read();
     const change = file.runs.find((r) => r.id === runId)?.changes.find((c) => c.id === changeId);
     if (!change) return this.status();
     const { store } = this.deps;
-    const [first] = change.before;
-    // An update that superseded (ADR 0088): a new memory, and the old one kept, dated.
-    const superseded =
-      change.kind === 'updated' && change.after && first && change.after.id !== first.id;
     if (change.state === 'applied' && answer === 'undo') {
-      if (superseded && change.after && first) await store.unsupersede(change.after.id, first);
-      else {
-        for (const m of change.before) await store.restore(m);
-        if (change.kind === 'added' && change.after) await store.remove(change.after.id);
-      }
+      for (const m of change.before) await store.restore(m, consent(m.id));
+      if (change.kind === 'added' && change.after) await store.remove(change.after.id);
       change.state = 'undone';
     } else if (change.state === 'applied' && answer === 'keep') {
       change.state = 'kept';
     } else if (change.state === 'pending' && answer === 'keep') {
-      if (change.kind === 'added' && change.after) await store.keep(change.after.id);
-      if (change.kind === 'updated' && change.after && first) {
-        const moved = await store.supersede(first.id, {
-          content: change.after.content,
-          kind: first.kind,
-          source: 'tidy',
-          ...(first.conversationId && { conversationId: first.conversationId }),
-        });
-        if (moved) change.after = moved.after;
+      // Keep on the card is the person's own choice, with the why in front of them.
+      const yes = change.after && consent(change.after.id);
+      if (!change.after || !yes) return this.status();
+      if (change.kind === 'added') {
+        const kept = await store.keep(change.after.id, yes, { anyway: true });
+        if (!kept || kept === 'needs-anyway') return this.status();
+      }
+      if (change.kind === 'updated' || change.kind === 'merged') {
+        const kept = await store.update(change.after.id, { content: change.after.content }, yes);
+        if (!kept || kept.pending) return this.status();
+        if (change.kind === 'merged')
+          for (const m of change.before) if (m.id !== change.after.id) await store.remove(m.id);
       }
       change.state = 'kept';
     } else if (change.state === 'pending' && (answer === 'dismiss' || answer === 'undo')) {

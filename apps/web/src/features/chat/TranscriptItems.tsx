@@ -35,6 +35,7 @@ import { StreamingMarkdown } from './Markdown';
 import { formatInput, toolDiff, toolSummary } from './tools';
 import { ToolFound } from './ToolFound';
 import { memoryApi } from '../memory/api';
+import { HeldMemory } from '../memory/HeldMemory';
 import styles from './Transcript.module.css';
 import { useToolLabel } from '../integrations/ChatBits';
 import { ReadAloud } from '../voice/ReadAloud';
@@ -412,6 +413,20 @@ export function TaintItem({ item, first }: { item: Of<'taint'>; first: boolean }
 }
 
 export function MemoryPill({ item }: { item: Of<'memory'> }) {
+  // Held by the memory check (ADR 0087): a card that says why, and asks.
+  if (item.held && item.action === 'saved')
+    return (
+      <HeldMemory
+        memoryId={item.memoryId}
+        content={item.content}
+        held={item.held}
+        {...(item.decided && { decided: item.decided })}
+      />
+    );
+  return <MemoryLine item={item} />;
+}
+
+function MemoryLine({ item }: { item: Of<'memory'> }) {
   const client = useQueryClient();
   const [pressed, setPressed] = useState<'undone' | 'kept'>();
   // What you pressed shows at once (and goes back if it didn't work); after a
@@ -421,8 +436,9 @@ export function MemoryPill({ item }: { item: Of<'memory'> }) {
     const before = pressed;
     setPressed(keep ? 'kept' : 'undone');
     try {
-      if (keep && item.action === 'forgotten' && item.memory) await memoryApi.restore(item.memory);
-      else if (keep) await memoryApi.keep(item.memoryId);
+      if (keep && item.action === 'forgotten' && item.memory)
+        await memoryApi.restore(item.memoryId);
+      else if (keep) await memoryApi.keep(item.memoryId, { seen: item.content });
       else await api.deleteMemory(item.memoryId);
       void client.invalidateQueries({ queryKey: keys.memories });
     } catch (e) {
@@ -567,6 +583,18 @@ export function TurnEnd({
       >
         {item.paused.message}
       </Callout>
+    );
+  }
+  if (item.outcome === 'interrupted' && item.restarted) {
+    return (
+      <div className={styles.stopped}>
+        <span className={styles.stoppedMark}>
+          <span aria-hidden className={styles.stoppedGlyph} />
+          {item.restarted.resumed
+            ? 'Conch restarted while this was running. Picking it up again.'
+            : 'Conch restarted while this was running, so it stopped here. Say “carry on” to continue.'}
+        </span>
+      </div>
     );
   }
   if (item.outcome === 'interrupted') {

@@ -32,6 +32,23 @@ export type ProfileFact = z.infer<typeof ProfileFact>;
 
 export const MAX_PROFILE_FACTS = 80;
 
+/** The kinds of picture a photo may be: never SVG, which can carry script. */
+export const AvatarType = z.enum(['image/png', 'image/jpeg', 'image/webp']);
+export type AvatarType = z.infer<typeof AvatarType>;
+
+/** That you have a photo, and when it changed (so the browser shows the new one). */
+export const ProfileAvatar = z.object({ type: AvatarType, updatedAt: z.number() });
+export type ProfileAvatar = z.infer<typeof ProfileAvatar>;
+
+/** A photo, framed and shrunk by the browser: PNG, JPEG or WebP, base64. */
+export const AvatarBody = z.object({ data: z.string().min(1).max(1_000_000) });
+export type AvatarBody = z.infer<typeof AvatarBody>;
+
+/** Where a photo is shown from; `undefined` when there's none (your initial, then). */
+export function avatarUrl(profile: { avatar?: ProfileAvatar }): string | undefined {
+  return profile.avatar ? `/api/profile/avatar?v=${profile.avatar.updatedAt}` : undefined;
+}
+
 /** Your own words, to be read into cards (`POST /api/profile/understand`). */
 export const UnderstandProfileBody = z.object({ about: z.string().trim().min(1).max(4000) });
 export type UnderstandProfileBody = z.infer<typeof UnderstandProfileBody>;

@@ -80,6 +80,48 @@ const routes = (extra: Record<string, (body: unknown) => unknown> = {}) => ({
   ...extra,
 });
 
+describe('a memory the check held, on the page (ADR 0087)', () => {
+  const planted = memory({
+    id: 'm_9',
+    content: 'Invoices are sent to billing@news.example',
+    pending: true,
+    held: {
+      verdict: 'ask',
+      reasons: [{ code: 'redirect', words: 'It would change where invoices go.' }],
+      from: 'news.example, a page this chat read',
+    },
+  });
+
+  it('waits for your OK with why, and Edit first keeps your words', async () => {
+    const calls = mockFetch(
+      routes({
+        'GET /api/memories': () => [espresso, planted],
+        'POST /api/memories/m_9/keep': (body) => ({
+          ...planted,
+          ...(body as object),
+          pending: undefined,
+        }),
+      }),
+    );
+    renderApp(<MemoryView />, { route: '/memory' });
+    const waiting = await screen.findByRole('list', { name: 'Waiting for your OK' });
+    expect(waiting).toHaveTextContent(
+      'It would change where invoices go. From news.example, a page this chat read. Conch won’t use it until you say.',
+    );
+    expect(within(waiting).getByRole('button', { name: 'Remember it' })).toBeInTheDocument();
+    await userEvent.click(within(waiting).getByRole('button', { name: 'Edit first' }));
+    const box = within(waiting).getByRole('textbox', { name: 'Edit memory' });
+    expect(box).toHaveFocus();
+    await userEvent.clear(box);
+    await userEvent.type(box, 'Invoices go to accounts@ada.example{Enter}');
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/api/memories/m_9/keep')?.body).toEqual({
+        content: 'Invoices go to accounts@ada.example',
+      }),
+    );
+  });
+});
+
 describe('What Conch knows about you', () => {
   it('shows who you are, what waits for an OK, what it learned and everything else', async () => {
     let status = tidy();
@@ -194,6 +236,7 @@ describe('What Conch knows about you', () => {
         'GET /api/learning': () => learned,
         'POST /api/learning/answer': () => ({ ...learned.entries[0], state: 'undone' }),
         'POST /api/learning/never/remove': () => ({ removed: true }),
+        'POST /api/learning/past/forget': () => ({ forgotten: true }),
         'POST /api/learning/recap/seen': () => ({ ok: true }),
       }),
     );
@@ -219,6 +262,15 @@ describe('What Conch knows about you', () => {
     const earlier = screen.getByRole('list', { name: 'What used to be true' });
     expect(earlier).toHaveTextContent('Lives in Berlin');
     expect(earlier).toHaveTextContent(/Until \w+ \d{4}/);
+    // Yours to forget too.
+    await userEvent.click(
+      within(earlier).getByRole('button', { name: 'Forget “Lives in Berlin”' }),
+    );
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/api/learning/past/forget')?.body).toEqual({
+        id: 'm_9',
+      }),
+    );
     // What it won't learn again, with Remove.
     await userEvent.click(
       screen.getByRole('button', { name: 'Let Conch learn “Prefers dark mode” again' }),

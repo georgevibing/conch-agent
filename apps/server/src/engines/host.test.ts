@@ -155,16 +155,32 @@ describe('commands, on every provider that uses Conch’s tools', () => {
     expect(ask).toHaveBeenCalledOnce();
   });
 
+  it('lets the guard see a Full trust command that leaves the seal, so a tainted chat still asks', async () => {
+    const guard = vi.fn(async () => ({ decision: 'deny' as const, message: 'Asked first.' }));
+    const input = await turn({
+      guard,
+      options: { permissionMode: 'bypassPermissions', effort: 'auto', fastMode: false },
+    });
+    const result = await buildTools(input).get('Bash')?.run({ command: 'git pull' }, 'b3');
+    expect(result).toMatchObject({ isError: true, text: 'Asked first.' });
+    expect(guard).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({ dangerouslyDisableSandbox: true }),
+      }),
+    );
+  });
+
   it('refuses a command that names Conch’s keys or your sign-ins', async () => {
     const input = await turn({
       options: { permissionMode: 'bypassPermissions', effort: 'auto', fastMode: false },
     });
     const secret = join(input.cwd, '..', 'secrets.json');
     await writeFile(secret, 'key');
+    // The refusal goes back as the tool's own answer, so the model can say why.
     await expect(
       buildTools({ ...input, protectedPaths: [secret] })
         .get('Bash')
         ?.run({ command: `cat ${secret}`, dangerouslyDisableSandbox: true }, 'b2'),
-    ).rejects.toThrow(/passwords/);
+    ).resolves.toMatchObject({ isError: true, text: expect.stringMatching(/passwords/) });
   });
 });

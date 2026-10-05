@@ -349,6 +349,27 @@ export class PushService {
       });
       return;
     }
+    // A memory the check held (ADR 0087): waiting for you, like an OK. The words
+    // are Conch's own, never the memory's: a lock screen is no place for a plant.
+    if (e.type === 'memory.saved' && e.memory.held) {
+      const name = await this.deps.persona();
+      const chat = await this.deps.conversation(e.conversationId);
+      const what =
+        e.memory.held.verdict === 'refuse'
+          ? 'Something it was asked to remember was refused.'
+          : 'Something it was asked to remember looks off.';
+      await this.notify('approvals', {
+        title: `${name} wants to check a memory with you`,
+        body: clip(chat?.title ? `${what} · ${chat.title}` : what),
+        quiet: 'Open Conch to see it.',
+        url,
+        tag: `memory-${e.memory.id}`,
+        actions: [{ action: 'open', title: 'Review' }],
+        requireInteraction: true,
+        urgency: 'high',
+      });
+      return;
+    }
     // A question with answers to tap (ADR 0060): waiting for you, like an OK.
     if (e.type === 'question') {
       const name = await this.deps.persona();

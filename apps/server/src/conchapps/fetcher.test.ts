@@ -363,6 +363,15 @@ describe('app.fetch: where an app may go', () => {
     expect((await go(f, request('/to-http'))).refused).toMatch(/https/);
   });
 
+  it('allows public research redirects while still rejecting private and insecure destinations', async () => {
+    const f = fetcher({ publicRedirects: true });
+    const result = await go(f, request('/to-elsewhere'));
+    expect(result.refused).toBeUndefined();
+    expect(result.url).toBe(`https://elsewhere.example.test:${port}/echo`);
+    expect((await go(f, request('/to-metadata'))).refused).toMatch(/never connects/);
+    expect((await go(f, request('/to-http'))).refused).toMatch(/https/);
+  });
+
   it('makes at most 600 requests an hour per app, then holds off', async () => {
     let now = 1_000_000;
     const f = fetcher({ now: () => now });

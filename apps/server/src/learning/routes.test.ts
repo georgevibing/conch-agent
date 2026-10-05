@@ -146,6 +146,45 @@ describe('quiet learning through the gateway (ADR 0088)', () => {
     ).toBe(404);
   });
 
+  it('Keep on what waits is your answer for the words you saw (ADR 0087)', async () => {
+    const { services, app } = await setup();
+    const waiting = await services.memory.add({
+      content: 'Prefers trains',
+      source: 'agent',
+      conversationId: 'c1',
+      pending: true,
+      untrusted: 'Learned in a chat that read trains.example.',
+    });
+    await services.learning.remembered(waiting, { id: 'c1' });
+    const [entry] = await services.learning.store.entries();
+    const answer = (payload: object) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/learning/answer',
+        payload: { entryId: entry?.id, answer: 'keep', ...payload },
+      });
+    // No words: no answer. Other words: not what's there.
+    expect((await answer({})).statusCode).toBe(400);
+    expect((await answer({ seen: 'Prefers planes' })).statusCode).toBe(409);
+    expect((await services.memory.get(waiting.id))?.pending).toBe(true);
+    const kept = await answer({ seen: 'Prefers trains' });
+    expect(kept.statusCode).toBe(200);
+    expect(JSON.parse(kept.body).state).toBe('kept');
+    expect((await services.memory.get(waiting.id))?.pending).toBeUndefined();
+  });
+
+  it('Forget on something that used to be true removes only that', async () => {
+    const { services, app } = await setup();
+    const berlin = await services.memory.add({ content: 'Lives in Berlin', source: 'agent' });
+    await services.memory.supersede(berlin.id, { content: 'Lives in Lisbon', source: 'agent' });
+    const forget = (id: string) =>
+      app.inject({ method: 'POST', url: '/api/learning/past/forget', payload: { id } });
+    expect(JSON.parse((await forget(berlin.id)).body)).toEqual({ forgotten: true });
+    expect(await services.memory.listPast()).toEqual([]);
+    expect((await services.memory.list()).map((m) => m.content)).toEqual(['Lives in Lisbon']);
+    expect(JSON.parse((await forget('../memory.seal')).body)).toEqual({ forgotten: false });
+  });
+
   it('Repair everything says how learning is doing', async () => {
     const { services } = await setup();
     const report = await services.doctor.run({ repair: false });

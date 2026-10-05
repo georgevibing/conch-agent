@@ -399,6 +399,25 @@ describe('Codex CLI: Codex with its own tools, asking through Conch (ADR 0066)',
     expect(config).toContain('features.apps=false');
   });
 
+  it('names each path once, so Codex never refuses its own profile as a duplicate key', async () => {
+    const { engine, fake, turn, home } = await agent({});
+    const vault = join(home, 'vault');
+    await collect(
+      engine.runTurn(
+        turn({
+          protectedPaths: [vault, vault],
+          sandbox: { allowWrite: ['/tmp', '/tmp', vault], denyRead: [vault] },
+        }),
+      ),
+    );
+    const config = await configOf(fake);
+    const count = (needle: string) => config.split(needle).length - 1;
+    expect(count(`${JSON.stringify('/tmp')}="write"`)).toBe(1);
+    expect(count(`${JSON.stringify(vault)}=`)).toBe(1);
+    // Written and denied: the deny stands.
+    expect(config).toContain(`${JSON.stringify(vault)}="deny"`);
+  });
+
   it('asks the person before a command, through the guard, and shows it like any tool', async () => {
     const { engine, fake, turn } = await agent({ native: { command: 'npm test' } });
     const guard = vi.fn(async () => undefined);

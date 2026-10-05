@@ -6,9 +6,20 @@ import type { ConversationEvent, ConversationSummary, TaintSource } from '@conch
 import { describe, expect, it } from 'vitest';
 
 import type { CompletionInput, Engine } from '../engines/types';
+import { mintConsent } from '../memory/consent';
 import { MemoryStore } from '../memory/store';
 import { QuietLearning, type QuietLearningDeps } from './service';
 import { LearningSpend } from './spend';
+
+/** Keep, as the route answers it: the person's answer for the words they saw (ADR 0087). */
+async function keep(learning: QuietLearning, entryId: string, seen?: string) {
+  const entry = await learning.store.entry(entryId);
+  const consent = mintConsent({ method: 'POST', url: '/api/learning/answer' }, 'keep', {
+    id: entry?.after.id ?? '',
+    content: seen ?? entry?.after.content ?? '',
+  });
+  return learning.answer(entryId, 'keep', consent);
+}
 
 const NOW = new Date(2026, 9, 10, 12).getTime();
 const MIN = 60_000;
@@ -197,7 +208,7 @@ describe('QuietLearning (ADR 0088)', () => {
       items: [{ state: 'waiting', waits: 'Learned in a chat that read recipes.example.' }],
     });
     // Keep: it's remembered, and the chat says so.
-    await learning.answer(('learned' in result && result.learned[0]?.id) || '', 'keep');
+    await keep(learning, ('learned' in result && result.learned[0]?.id) || '');
     expect((await memory.list())[0]?.pending).toBeUndefined();
     expect(notes.at(-1)?.event).toMatchObject({ type: 'learning.decided', state: 'kept' });
   });
@@ -343,10 +354,12 @@ describe('QuietLearning (ADR 0088)', () => {
     const result = await learning.review('c1', { trigger: 'idle' });
     const entry = 'learned' in result ? result.learned[0] : undefined;
     expect(entry?.state).toBe('waiting');
-    expect((await memory.list()).map((m) => m.content)).toEqual(['Lives in Berlin']);
-    const kept = await learning.answer(entry?.id ?? '', 'keep');
-    expect(kept !== 'changed' && kept?.state).toBe('kept');
+    // It waits as a memory waiting for your OK; Berlin is still what's true.
+    expect((await memory.usable()).map((m) => m.content)).toEqual(['Lives in Berlin']);
+    const kept = await keep(learning, entry?.id ?? '');
+    expect(typeof kept === 'object' && kept.state).toBe('kept');
     expect((await memory.list()).map((m) => m.content)).toEqual(['Lives in Porto']);
+    expect((await memory.listPast()).map((m) => m.content)).toEqual(['Lives in Berlin']);
   });
 
   it('what you undid is never learned again', async () => {
@@ -603,10 +616,10 @@ describe('QuietLearning (ADR 0088)', () => {
     ]);
     const result = await learning.review('c1', { trigger: 'idle' });
     const id = ('learned' in result && result.learned[0]?.id) || '';
-    expect(await learning.answer(id, 'keep', 'Prefers steak')).toBe('changed');
+    expect(await keep(learning, id, 'Prefers steak')).toBe('changed');
     expect((await memory.list())[0]?.pending).toBe(true);
-    const kept = await learning.answer(id, 'keep', 'Prefers vegetarian');
-    expect(kept !== 'changed' && kept?.state).toBe('kept');
+    const kept = await keep(learning, id, 'Prefers vegetarian');
+    expect(typeof kept === 'object' && kept.state).toBe('kept');
   });
 
   it('a chat read through isn’t picked again until something new happens', async () => {

@@ -44,6 +44,7 @@ import { findAgent, signedInBefore, type AcpAgent } from './agents';
 import { AcpCalls, namesDoorTool } from './calls';
 import { DOOR_NAME, openDoor, type Door } from './door';
 import { ACP_CODES, AcpConnection, AcpError, type AcpStreams } from './rpc';
+import { lastWords } from '../codex/rpc';
 
 /** How long a program waits, unused, before Conch lets it go. */
 const IDLE_MS = 5 * 60_000;
@@ -188,8 +189,17 @@ function spawnProgram(file: string, args: string[], env: Record<string, string>)
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   });
-  // Its diagnostics can hold paths, tokens and sign-in addresses: drained, never kept.
-  child.stderr.resume();
+  // Its diagnostics can hold paths, tokens and sign-in addresses: only the last words are kept,
+  // redacted, and only for the gateway's log when it exits, so a program that dies can be told why.
+  let tail = '';
+  child.stderr.on('data', (chunk: Buffer) => {
+    tail = (tail + chunk.toString('utf8')).slice(-4096);
+  });
+  child.once('close', (code, signal) => {
+    const said = lastWords(tail);
+    if (code !== 0 && code !== null)
+      console.error(`[acp] ${file} exited (${signal ?? `code ${code}`})${said ? `: ${said}` : ''}`);
+  });
   child.stdin.on('error', () => undefined);
   return {
     input: child.stdin,

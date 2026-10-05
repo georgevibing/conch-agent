@@ -29,6 +29,7 @@ export interface MapSkill {
 /** Everything that could be offered, for the provider answering, right now. */
 export interface OfferMap {
   apps: MapApp[];
+  providers?: MapApp[];
   skills: MapSkill[];
   /** Skills people publish can be searched with `find_skills` (ADR 0074). */
   market?: boolean;
@@ -85,13 +86,20 @@ function names(said: string, name: string): boolean {
  * person's own), then the other apps; each alphabetical. What doesn't fit is
  * dropped from the end, so the apps the person is least likely to want go first.
  */
-export function keepOrder(map: OfferMap, said = ''): { kind: 'app' | 'skill'; line: string }[] {
+export function keepOrder(
+  map: OfferMap,
+  said = '',
+): { kind: 'app' | 'skill' | 'provider'; line: string }[] {
   const named = map.apps.filter((a) => names(said, a.name) || names(said, a.id)).sort(byName);
   const rest = map.apps.filter((a) => !named.includes(a));
   const featured = rest.filter((a) => a.featured).sort(byName);
   const others = rest.filter((a) => !a.featured).sort(byName);
   const skills = [...map.skills].sort((a, b) => byName({ name: a.title }, { name: b.title }));
   return [
+    ...(map.providers ?? []).map((p) => ({
+      kind: 'provider' as const,
+      line: `- provider \`${p.id}\`: ${p.name} (${p.tagline})`,
+    })),
     ...named.map((a) => ({ kind: 'app' as const, line: appLine(a) })),
     ...featured.map((a) => ({ kind: 'app' as const, line: appLine(a) })),
     ...skills.map((s) => ({ kind: 'skill' as const, line: skillLine(s) })),
@@ -109,11 +117,18 @@ export function mapSection(map: OfferMap, budget = MAP_BUDGET, said = ''): strin
   const order = keepOrder(map, said);
   if (!order.length && !map.market) return '';
   const draw = (kept: typeof order, left: number) => {
+    const providers = kept.filter((k) => k.kind === 'provider').map((k) => k.line);
     const apps = kept.filter((k) => k.kind === 'app').map((k) => k.line);
     const skills = kept.filter((k) => k.kind === 'skill').map((k) => k.line);
     return [
       HEADING,
       INTRO,
+      ...(providers.length
+        ? [
+            'Providers for additional abilities (connect once, use from any chat model):',
+            ...providers,
+          ]
+        : []),
       ...(apps.length ? ['Apps that aren’t connected:', ...apps] : []),
       ...(skills.length ? ['Skills that are off, or used only when asked:', ...skills] : []),
       ...(left

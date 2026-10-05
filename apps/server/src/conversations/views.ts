@@ -11,7 +11,14 @@
 import { ToolView, type ConversationEventInput, type ToolStatus } from '@conch/protocol';
 
 /** The most rows each kind may carry, as the protocol caps them. */
-const CAPS: Record<ToolView['kind'], number> = { agenda: 60, mail: 30, files: 30, messages: 30 };
+const CAPS: Record<ToolView['kind'], number> = {
+  agenda: 60,
+  mail: 30,
+  files: 30,
+  messages: 30,
+  sources: 10,
+  downloads: 10,
+};
 
 /** A web link worth opening: `http(s)`, parseable, and with no sign-in tucked into it. */
 function webUrl(value: string): string | undefined {

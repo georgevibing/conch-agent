@@ -74,6 +74,8 @@ export const ConchUpdate = z.object({
   version: z.string(),
   /** The commit Conch's folder is on (short). */
   commit: z.string().optional(),
+  /** The commit an update moves it to (short), for a copy following its branch. */
+  target: z.string().optional(),
   branch: z.string().optional(),
   /** Changes waiting upstream; 0 is up to date. */
   behind: z.number().int().min(0).default(0),

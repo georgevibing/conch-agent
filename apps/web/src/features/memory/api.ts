@@ -1,4 +1,10 @@
-import { Memory, MemoryIndexStatus, SkillSuggestions, TidyStatus } from '@conch/protocol';
+import {
+  Memory,
+  MemoryIndexStatus,
+  SkillSuggestions,
+  TidyStatus,
+  type KeepMemoryBody,
+} from '@conch/protocol';
 import { z } from 'zod';
 
 import { request } from '../../api/client';
@@ -15,12 +21,15 @@ export const memoryApi = {
         signal,
       },
     ),
-  /** Put back a memory the assistant forgot, exactly as it was. */
-  restore: (memory: Memory) =>
-    request(Memory, '/api/memories/restore', { method: 'POST', body: { memory } }),
-  /** Keep a memory that waits for your OK. */
-  keep: (id: string) =>
-    request(Memory, `/api/memories/${encodeURIComponent(id)}/keep`, { method: 'POST', body: {} }),
+  /** Put back a memory the assistant forgot, from Conch's own copy: by its id only (ADR 0087). */
+  restore: (id: string) =>
+    request(Memory, '/api/memories/restore', { method: 'POST', body: { id } }),
+  /**
+   * Keep a memory that waits for your OK: as it is, in your words (Edit
+   * first), or, one the memory check refused, `anyway` (ADR 0087).
+   */
+  keep: (id: string, body: KeepMemoryBody = {}) =>
+    request(Memory, `/api/memories/${encodeURIComponent(id)}/keep`, { method: 'POST', body }),
   exportUrl: (format: 'md' | 'json') =>
     `/api/memories/export${format === 'json' ? '?format=json' : ''}`,
   index: (languages: readonly string[] = []) =>

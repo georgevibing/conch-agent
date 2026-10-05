@@ -2,6 +2,7 @@ import type { LearnedEntry as Entry } from '@conch/protocol';
 import {
   Button,
   Heading,
+  IconButton,
   LearnedEntry,
   LearningTimeline,
   MemoryItem,
@@ -13,6 +14,7 @@ import {
   WeeklyRecap,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
+import { Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -148,8 +150,22 @@ export function LearnedSection() {
 /** Earlier (ADR 0088): what used to be true, with when it stopped. Undo on what replaced it brings it back. */
 export function EarlierSection() {
   const { data } = useLearning();
+  const client = useQueryClient();
+  const [busy, setBusy] = useState<string>();
   const past = data?.past ?? [];
   if (!past.length) return null;
+  // Only Conch's copy of what used to be true goes; nothing live is touched.
+  const forget = async (id: string) => {
+    setBusy(id);
+    try {
+      await learningApi.forgetPast(id);
+      void client.invalidateQueries({ queryKey: learningKeys.all });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(undefined);
+    }
+  };
   return (
     <section className={styles.section} aria-labelledby="memory-earlier">
       <Heading level={2} size="lg" id="memory-earlier">
@@ -161,7 +177,21 @@ export function EarlierSection() {
       </Text>
       <MemoryList aria-label="What used to be true">
         {past.map((m) => (
-          <MemoryItem key={m.id} source={m.source} time={until(m.invalidAt ?? m.updatedAt)}>
+          <MemoryItem
+            key={m.id}
+            source={m.source}
+            time={until(m.invalidAt ?? m.updatedAt)}
+            actions={
+              <IconButton
+                size="sm"
+                label={`Forget “${m.content}”`}
+                disabled={busy === m.id}
+                onClick={() => void forget(m.id)}
+              >
+                <Trash2 />
+              </IconButton>
+            }
+          >
             {m.content}
           </MemoryItem>
         ))}

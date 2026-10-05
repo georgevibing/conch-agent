@@ -6,6 +6,7 @@ import type { Memory } from '@conch/protocol';
 import { describe, expect, it } from 'vitest';
 
 import type { HostTool } from '../engines/types';
+import { datamark } from './guard';
 import { MemoryStore } from './store';
 import { memoryTools } from './tools';
 
@@ -21,17 +22,42 @@ describe('the memory tools and what stopped being true (ADR 0088)', () => {
   it('recall finds what used to be true, with when it stopped', async () => {
     const store = new MemoryStore(await temp());
     const berlin = await store.add({ content: 'Lives in Berlin', source: 'user' });
-    const moved = await store.supersede(berlin.id, { content: 'Lives in Lisbon', source: 'agent' });
+    await store.supersede(berlin.id, { content: 'Lives in Lisbon', source: 'agent' });
     const tools = memoryTools({
       store,
       conversationId: 'c1',
       onSaved: () => undefined,
       onForgotten: () => undefined,
-      searchPast: async () => (moved ? [moved.past] : []),
+      searchPast: () => store.listPast(),
     });
     const text = String(await tool(tools, 'recall')({ query: 'where do I live' }));
     expect(text).toContain('No longer true');
     expect(text).toMatch(/Lives in Berlin \(until \w+ \d{4}\)/);
+  });
+
+  it('what used to be true and came from outside is marked as data there too', async () => {
+    const store = new MemoryStore(await temp());
+    const tools = memoryTools({
+      store,
+      conversationId: 'c1',
+      onSaved: () => undefined,
+      onForgotten: () => undefined,
+      searchPast: async () => [
+        {
+          id: 'm_1',
+          content: 'Sends invoices to Acme',
+          kind: 'fact',
+          source: 'agent',
+          createdAt: 1,
+          updatedAt: 1,
+          invalidAt: 2,
+          provenance: { via: 'chat', read: ['news.example'] },
+        },
+      ],
+    });
+    const text = String(await tool(tools, 'recall')({ query: 'invoices' }));
+    expect(text).not.toContain('Sends invoices to Acme');
+    expect(text).toContain(datamark('Sends invoices to Acme'));
   });
 
   it('what the person took back once waits for them', async () => {

@@ -1,0 +1,247 @@
+@layer nacre.components {
+  .dialog {
+    --ud-dot: 0.4375rem;
+    --ud-list-max: 15rem;
+    --ud-stagger: 70ms;
+    --ud-arrive: 520ms;
+  }
+
+  /* ── The pearl, and where things stand ─────────────────────────────── */
+  .hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    padding: var(--nc-space-8) var(--nc-space-6) var(--nc-space-2);
+    text-align: center;
+  }
+
+  .pearl {
+    margin-block-end: var(--nc-space-3);
+  }
+
+  .title {
+    margin: 0;
+    font-size: var(--nc-text-xl);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+
+  .detail {
+    margin: 0;
+    min-block-size: calc(var(--nc-text-sm) * var(--nc-leading-normal));
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    font-variant-numeric: tabular-nums;
+    text-wrap: balance;
+  }
+
+  .step {
+    color: var(--nc-text);
+  }
+
+  .srOnly {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* ── What it brings ────────────────────────────────────────────────── */
+  .body {
+    max-block-size: var(--ud-list-max);
+    padding-block: var(--nc-space-3) var(--nc-space-2);
+    mask: linear-gradient(
+      180deg,
+      transparent 0,
+      #000 var(--nc-space-3),
+      #000 calc(100% - var(--nc-space-5)),
+      transparent 100%
+    );
+  }
+
+  /* Nothing to press while it starts again: the list keeps a margin below. */
+  .dialog[data-stage='restarting'] .body {
+    padding-block-end: var(--nc-space-5);
+  }
+
+  .label {
+    margin: 0 0 var(--nc-space-2);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--nc-text-subtle);
+  }
+
+  .changes {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .change {
+    display: flex;
+    align-items: baseline;
+    gap: var(--nc-space-2-5);
+    padding: var(--nc-space-1) var(--nc-space-2);
+    margin-inline: calc(var(--nc-space-2) * -1);
+    border-radius: var(--nc-radius-md);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text);
+    transition:
+      color var(--nc-duration-slower) var(--nc-ease-out),
+      background-color var(--nc-duration-slower) var(--nc-ease-out);
+  }
+
+  .line {
+    min-inline-size: 0;
+    text-wrap: pretty;
+  }
+
+  /* A tiny pearl for each change. */
+  .dot,
+  .dotless {
+    flex-shrink: 0;
+    inline-size: var(--ud-dot);
+    block-size: var(--ud-dot);
+    border-radius: 50%;
+    translate: 0 -0.0625rem;
+  }
+
+  .dot {
+    background:
+      radial-gradient(circle at 34% 30%, oklch(1 0 0 / 0.9) 0, transparent 45%),
+      conic-gradient(var(--nc-pearl-spectrum));
+    box-shadow: inset 0 0 0 0.5px var(--nc-border-subtle);
+    transition: scale var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .more {
+    color: var(--nc-text-subtle);
+  }
+
+  /* While it updates: everything waits a little dimmer, the light reads one line. */
+  .changes[data-moving] .change {
+    color: var(--nc-text-muted);
+  }
+
+  .changes[data-moving] .change[data-lit] {
+    color: var(--nc-text);
+    background: var(--nc-wash-1);
+  }
+
+  .changes[data-moving] .change[data-lit] .dot {
+    scale: 1.45;
+  }
+
+  /* Arrived: every change ticks in, one after another. */
+  .check {
+    flex-shrink: 0;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    translate: 0 0.125rem;
+    color: light-dark(oklch(0.52 0.13 var(--nc-success-h)), oklch(0.8 0.12 var(--nc-success-h)));
+  }
+
+  .dialog[data-stage='done'] .change {
+    animation: ud-arrive var(--ud-arrive) var(--nc-ease-out) both;
+    animation-delay: calc(var(--nc-duration-slower) + var(--ud-i, 0) * var(--ud-stagger));
+  }
+
+  .notes {
+    font-size: var(--nc-text-sm);
+  }
+
+  /* ── When it didn't work ───────────────────────────────────────────── */
+  .notice {
+    padding: var(--nc-space-2) var(--nc-space-5) 0;
+  }
+
+  .notice p {
+    margin: 0;
+    text-wrap: pretty;
+  }
+
+  .command {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    margin-block-start: var(--nc-space-2);
+    padding: var(--nc-space-1) var(--nc-space-1) var(--nc-space-1) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-wash-2);
+  }
+
+  .command code {
+    flex: 1;
+    min-inline-size: 0;
+    overflow-x: auto;
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xs);
+    white-space: pre;
+  }
+
+  .slow {
+    margin: var(--nc-space-2) var(--nc-space-6) 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-subtle);
+    text-align: center;
+    text-wrap: balance;
+  }
+
+  /* ── The buttons ───────────────────────────────────────────────────── */
+  .footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--nc-space-3);
+    padding-block-start: var(--nc-space-4);
+  }
+
+  .footnote {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-subtle);
+    text-align: center;
+    text-wrap: balance;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap-reverse;
+    justify-content: center;
+    gap: var(--nc-space-2);
+  }
+
+  .actions > * {
+    flex: 1 1 0;
+  }
+
+  @keyframes ud-arrive {
+    from {
+      opacity: 0;
+      translate: 0 0.25rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dialog[data-stage='done'] .change {
+      animation: none;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .dialog[data-stage='done'] .change {
+    animation: none;
+  }
+}

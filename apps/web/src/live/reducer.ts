@@ -36,6 +36,7 @@ import type {
   TurnCost,
   Usage,
   LearnedItem,
+  MemoryHold,
 } from '@conch/protocol';
 
 import { latestReplies, type LatestReplies } from '../features/replies/latest';
@@ -149,6 +150,8 @@ export type TranscriptItem =
       decided?: 'kept' | 'undone';
       /** One it forgot, whole, so Undo can put it back. */
       memory?: Memory;
+      /** The memory check held it (ADR 0087): why, and where it came from. */
+      held?: MemoryHold;
     }
   /**
    * What the chat taught Conch once it went quiet (ADR 0088): one folded line.
@@ -344,6 +347,8 @@ export type TranscriptItem =
       problem?: TurnProblem;
       /** It stopped to check in, not because it was done (ADR 0085): Carry on picks it up. */
       paused?: TurnPause;
+      /** Conch restarted mid-turn; `resumed`: it carries on by itself. */
+      restarted?: { resumed: boolean };
       usage?: Usage;
       /** What it cost, the way its provider charges (ADR 0079). */
       cost?: TurnCost;
@@ -617,21 +622,24 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
       }));
       return updated ? { ...base, items: updated } : base;
     }
-    case 'memory.saved':
-      return {
-        ...base,
-        items: [
-          ...items,
-          {
-            kind: 'memory',
-            id: `mem-${event.seq}`,
-            memoryId: event.memory.id,
-            content: event.memory.content,
-            action: 'saved',
-            ...(event.memory.pending && { pending: true }),
-          },
-        ],
+    case 'memory.saved': {
+      const item = {
+        kind: 'memory' as const,
+        id: `mem-${event.seq}`,
+        memoryId: event.memory.id,
+        content: event.memory.content,
+        action: 'saved' as const,
+        ...(event.memory.pending && { pending: true }),
+        ...(event.memory.held && { held: event.memory.held }),
       };
+      // Held again after it was remembered (a plant in pieces, ADR 0087): the same line, now asking.
+      const at = items.findIndex(
+        (i) => i.kind === 'memory' && i.memoryId === event.memory.id && i.action === 'saved',
+      );
+      if (at !== -1 && event.memory.held)
+        return { ...base, items: items.map((i, n) => (n === at ? { ...item, id: i.id } : i)) };
+      return { ...base, items: [...items, item] };
+    }
     case 'chats.looked':
       return {
         ...base,
@@ -792,6 +800,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             error: event.error,
             ...(event.problem && { problem: event.problem }),
             ...(event.paused && { paused: event.paused }),
+            ...(event.restarted && { restarted: event.restarted }),
             usage: event.usage,
             ...(event.cost && { cost: event.cost }),
             engine: event.engine,

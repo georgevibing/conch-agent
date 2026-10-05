@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
 
 /**
@@ -183,4 +184,40 @@ test('a pasted screenshot attaches as a picture', async ({ page }) => {
     );
   }, PNG.toString('base64'));
   await expect(page.getByRole('button', { name: /image\.png, PNG/ })).toBeVisible();
+});
+
+test('reads an Office attachment through the shared tool and returns a durable download', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Attach files' }).click();
+  const bytes = await readFile(new URL('./fixtures/everyday.docx', import.meta.url));
+  await (
+    await chooser
+  ).setFiles({
+    name: 'everyday.docx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    buffer: bytes,
+  });
+  await expect(page.getByRole('button', { name: 'Send message' })).toBeEnabled();
+  const composer = page.getByRole('textbox', { name: /Message/ });
+  await composer.fill('Read and publish this document');
+  await composer.press('Enter');
+  await expect(page.getByText('The document says: A document read by Conch.')).toBeVisible();
+  const file = page
+    .getByRole('list', { name: 'Finished files' })
+    .getByRole('button', { name: /^Finished document\.docx,/ });
+  await expect(file).toBeVisible();
+  await page.reload();
+  await expect(file).toBeVisible();
+  await file.click();
+  const preview = page.getByRole('dialog', { name: 'Finished document.docx' });
+  const download = page.waitForEvent('download');
+  await preview.getByRole('link', { name: /Download/ }).click();
+  const saved = await download;
+  expect(saved.suggestedFilename()).toBe('Finished document.docx');
+  const path = await saved.path();
+  expect(path).toBeTruthy();
+  expect(await readFile(path!)).toEqual(bytes);
 });

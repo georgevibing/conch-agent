@@ -649,17 +649,17 @@ export class CodexEngine implements Engine {
       const instructions = digest(input.systemAppend);
       let restored = false;
       let threadId = '';
-      const profile = [
-        // Codex CLI writes where the chat may (the work folder is the profile's own).
-        ...(agent ? (input.sandbox?.allowWrite ?? []).map((p) => [p, 'write'] as const) : []),
-        ...[
-          ...(input.protectedPaths ?? []),
-          this.#home.home,
-          ...(input.sandbox?.denyRead ?? []),
-        ].map((p) => [p, 'deny'] as const),
-      ]
-        .map(([p, mode]) => `${JSON.stringify(p)}="${mode}"`)
-        .join(',');
+      // One entry per path: Codex reads this as a TOML table, and a path twice is an error that
+      // stops it before it answers. Where a path is both written and denied, the deny stands.
+      const modes = new Map<string, 'write' | 'deny'>();
+      if (agent) for (const p of input.sandbox?.allowWrite ?? []) modes.set(p, 'write');
+      for (const p of [
+        ...(input.protectedPaths ?? []),
+        this.#home.home,
+        ...(input.sandbox?.denyRead ?? []),
+      ])
+        modes.set(p, 'deny');
+      const profile = [...modes].map(([p, mode]) => `${JSON.stringify(p)}="${mode}"`).join(',');
       /** Codex CLI's own commands and changes, by item id, as Codex announced them. */
       const items = new Map<string, Record<string, unknown>>();
       /** Items already asked about: a second request for one is Codex wanting out of its sandbox. */

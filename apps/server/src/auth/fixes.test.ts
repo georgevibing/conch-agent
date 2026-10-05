@@ -353,6 +353,47 @@ describe('POST /api/access/fix', () => {
     expect((await services.terminal.settings()).allowRemote).toBe(false);
   });
 
+  it('says when the memory check is off, and turns it back on (ADR 0087)', async () => {
+    const { app, services } = await setup();
+    expect(ids(await findings(app))).not.toContain('check-memories');
+    await services.settings.update({ preferences: { checkMemories: false } });
+    const off = (await findings(app)).find((i) => i.id === 'check-memories');
+    expect(off).toMatchObject({ level: 'warn', fix: { action: 'check-memories' } });
+    expect(off?.detail).toMatch(/where your invoices go/);
+    const res = await fix(app, 'check-memories');
+    expect(res.statusCode).toBe(200);
+    expect((await services.settings.get()).preferences.checkMemories).toBe(true);
+    expect(ids(res.json().access.checkup)).not.toContain('check-memories');
+  });
+
+  it('asks a phone that it’s you before the memory check is turned down', async () => {
+    const { app, services } = await setup();
+    await app.inject({
+      method: 'PUT',
+      url: '/api/access/password',
+      payload: { username: 'ada', password: PASSWORD },
+    });
+    const signIn = await app.inject({
+      method: 'POST',
+      url: '/api/auth/sign-in',
+      remoteAddress: REMOTE.remoteAddress,
+      headers: { host: REMOTE.host },
+      payload: { with: 'password', username: 'ada', password: PASSWORD },
+    });
+    const cookie = String(signIn.headers['set-cookie']).split(';')[0] ?? '';
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 11 * 60 * 1000);
+    const blocked = await app.inject({
+      method: 'PATCH',
+      url: '/api/settings',
+      remoteAddress: REMOTE.remoteAddress,
+      headers: { host: REMOTE.host, cookie },
+      payload: { preferences: { checkMemories: false } },
+    });
+    expect(blocked.statusCode).toBe(403);
+    expect(blocked.json().error).toBe('verify-required');
+    expect((await services.settings.get()).preferences.checkMemories).toBe(true);
+  });
+
   it('sets the work folder’s own rules aside', async () => {
     const { app, services } = await setup();
     const workspace = await services.settings.workspace();

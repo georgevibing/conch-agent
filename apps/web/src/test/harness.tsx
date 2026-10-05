@@ -164,6 +164,7 @@ export function appState(patch: Partial<AppState> = {}): AppState {
       mutedSuggestions: [],
       checkAfterReading: true,
       sealedCommands: true,
+      checkMemories: true,
       menuBar: true,
       keepAwake: false,
       tidyMemory: false,

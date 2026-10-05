@@ -36,6 +36,7 @@ const ICONS: Record<BackupPowerInfo['kind'], ReactNode> = {
   'integration-never-asks': <Blocks />,
   'tools-never-ask': <Wrench />,
   'chats-never-ask': <MessagesSquare />,
+  'safety-off': <ShieldAlert />,
   'routine-never-asks': <Repeat />,
   'routines-spend': <Wallet />,
   'learning-spend': <Wallet />,

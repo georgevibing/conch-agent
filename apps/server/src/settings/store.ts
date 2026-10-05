@@ -97,6 +97,21 @@ export class SettingsStore {
     return this.#cache;
   }
 
+  /** Your photo is set or taken away only through its own route (`profile/avatar.ts`). */
+  setAvatar(avatar: Settings['profile']['avatar']): Promise<Settings> {
+    return this.#mutex.run(async () => {
+      const current = await this.get();
+      const { avatar: _old, ...profile } = current.profile;
+      const next = SettingsFile.parse({
+        ...current,
+        profile: { ...profile, ...(avatar && { avatar }) },
+      });
+      await writeJson(this.#path, next);
+      this.#cache = Promise.resolve(next);
+      return next;
+    });
+  }
+
   update(patch: UpdateSettingsBody): Promise<Settings> {
     return this.#mutex.run(async () => {
       const current = await this.get();

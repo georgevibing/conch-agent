@@ -312,7 +312,8 @@ describe('what Conch remembers', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(await screen.findByText('Put back')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
-    expect(calls.find((c) => c.path === '/api/memories/restore')?.body).toEqual({ memory });
+    // By its id only: Conch puts back its own copy, never words the page sends (ADR 0087).
+    expect(calls.find((c) => c.path === '/api/memories/restore')?.body).toEqual({ id: memory.id });
   });
 
   it('shows what you chose after a reload: kept, or undone', () => {

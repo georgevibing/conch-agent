@@ -31,8 +31,10 @@ import { describeTaint, heldTaints } from '../conversations/taint';
 import type { Completion, CompletionInput, Engine } from '../engines/types';
 import { newId } from '../lib/ids';
 import type { Heal } from '../lib/recover';
+import type { PersonConsent } from '../memory/consent';
 import type { Embedder } from '../memory/embed';
-import type { MemoryStore } from '../memory/store';
+import type { ReadThing } from '../memory/guard';
+import type { MemoryStore, WriteContext } from '../memory/store';
 import { overlap } from '../memory/tidy';
 import { turnsOf } from '../skills/learn';
 import { nearTheQuestion } from './near';
@@ -141,6 +143,8 @@ const WAITS: ReadonlySet<string> = new Set(['no-model', 'budget', 'cap', 'plan-r
 /** What every change in one look is judged against. */
 interface Look {
   said: string[];
+  /** What the chat read from outside, for the memory check (ADR 0087). */
+  read: ReadThing[];
   untrusted?: string;
   watched: boolean;
   memories: Map<string, Memory>;
@@ -302,6 +306,7 @@ export class QuietLearning {
     const context = await this.#context(
       chat,
       signals,
+      taint.map((t) => ({ kind: t.kind, label: t.label })),
       taint.length ? describeTaint(taint) : undefined,
     );
     const learned: LearnedEntry[] = [];
@@ -317,11 +322,12 @@ export class QuietLearning {
     const fact = signals.environment[0];
     if (fact) {
       const change: Change = { op: 'add', kind: 'fact', text: fact.text, quote: '', basis: 'said' };
-      const entry = await this.#keep(change, await this.#facts(change, context), {
-        ...from,
-        quotes: [fact.quote],
-        about: 'environment',
-      });
+      const entry = await this.#keep(
+        change,
+        await this.#facts(change, context),
+        { ...from, quotes: [fact.quote], about: 'environment' },
+        context,
+      );
       if (entry) this.#took(entry, learned, items, context);
     }
 
@@ -367,11 +373,12 @@ export class QuietLearning {
       ...(model.model && { model: model.model.slice(0, 200) }),
     };
     for (const change of asked.changes) {
-      const entry = await this.#keep(change, await this.#facts(change, context), {
-        ...from,
-        quotes: change.quote ? [change.quote.slice(0, 240)] : [],
-        model: modelFrom,
-      });
+      const entry = await this.#keep(
+        change,
+        await this.#facts(change, context),
+        { ...from, quotes: change.quote ? [change.quote.slice(0, 240)] : [], model: modelFrom },
+        context,
+      );
       if (entry) this.#took(entry, learned, items, context);
     }
     await store.setChat(id, { reviewed: Math.max(lastSeq, afterSeq), unread: 0, tried: undefined });
@@ -383,12 +390,14 @@ export class QuietLearning {
   async #context(
     chat: ConversationSummary,
     signals: ChatSignals,
+    read: ReadThing[],
     untrusted: string | undefined,
   ): Promise<Look> {
     const live = await this.deps.memory.list();
     const meaning = await this.deps.meaning?.().catch(() => undefined);
     return {
       said: signals.said.map((s) => s.text),
+      read,
       ...(untrusted && { untrusted }),
       // Someone sees the chat: not a chat app, not another app through Conch.
       watched: !chat.origin,
@@ -426,11 +435,17 @@ export class QuietLearning {
     };
   }
 
-  /** Apply or keep waiting one change, by the gate; the record says how it went. */
+  /**
+   * Apply or keep waiting one change, by the gate; the record says how it
+   * went. Every write goes through the memory check where the store writes
+   * (ADR 0087), told what the chat read and what the person said: one it
+   * holds waits for the person, with its reasons, like one the gate held.
+   */
   async #keep(
     change: Change,
     ctx: GateContext,
     from: LearnedEntry['from'] & { about?: 'environment' | 'pitfall' },
+    look: Look,
   ): Promise<LearnedEntry | undefined> {
     const { about, ...given } = from;
     // Your words are kept as Why?: never a saved password with them (ADR 0025).
@@ -447,63 +462,46 @@ export class QuietLearning {
     const conversationId = source.conversationId;
     const waits = verdict.verdict === 'wait' ? verdict.waits : undefined;
     const kind = change.op === 'add' ? change.kind : (ctx.memories.get(change.id)?.kind ?? 'fact');
-    const base = {
+    const labels = [...new Set(look.read.map((r) => r.label))].slice(0, 12);
+    const input = {
       content: change.text,
       kind,
       source: 'agent' as const,
       ...(conversationId && { conversationId }),
       ...(about && { about }),
       learned: id,
-    };
-    const why = change.op === 'supersede' ? change.why : '';
-    if (change.op === 'add') {
       // Something that waits is a memory waiting for your OK, like any other (ADR 0032).
-      const after = await this.deps.memory.add({
-        ...base,
-        ...(waits && { pending: true, untrusted: waits }),
-      });
-      return this.store.record({
-        id,
-        at: this.#now,
-        change: 'added',
-        after,
-        why,
-        from: source,
-        ...(waits && { waits }),
-        state: waits ? 'waiting' : 'applied',
-        seen: 1,
-      });
+      ...(waits && { pending: true, untrusted: waits }),
+      provenance: { via: 'chat' as const, ...(labels.length > 0 && { read: labels }) },
+    };
+    const write: WriteContext = { via: 'chat', read: look.read, said: look.said };
+    const why = change.op === 'supersede' ? change.why : '';
+    let before: Memory | undefined;
+    let after: Memory;
+    if (change.op === 'add') {
+      after = (await this.deps.memory.write(input, write)).memory;
+    } else {
+      // A replacement that waits leaves the old one true until you keep it.
+      const moved = await this.deps.memory.supersede(change.id, input, write);
+      if (!moved) return undefined;
+      before = moved.before;
+      after = moved.after;
     }
-    const target = ctx.memories.get(change.id);
-    if (!target) return undefined;
-    if (waits) {
-      // Nothing changes until you say so: the record holds what would.
-      const now = this.#now;
-      const proposed: Memory = { id: newId('m'), ...base, createdAt: now, updatedAt: now };
-      return this.store.record({
-        id,
-        at: now,
-        change: 'superseded',
-        before: target,
-        after: proposed,
-        why,
-        from: source,
-        waits,
-        state: 'waiting',
-        seen: 1,
-      });
-    }
-    const moved = await this.deps.memory.supersede(target.id, base);
-    if (!moved) return undefined;
+    // Words already known (yours, say) are refreshed, not learned: nothing to record or undo.
+    if (after.learned !== id) return undefined;
+    // The memory check held it: it waits for you, saying why in its own words.
+    const held = after.held?.reasons[0]?.words;
+    const waiting = after.pending ? (waits ?? held ?? after.untrusted) : undefined;
     return this.store.record({
       id,
       at: this.#now,
-      change: 'superseded',
-      before: moved.before,
-      after: moved.after,
+      change: change.op === 'add' ? 'added' : 'superseded',
+      ...(before && { before }),
+      after,
       why,
       from: source,
-      state: 'applied',
+      ...(waiting && { waits: waiting.slice(0, 300) }),
+      state: after.pending ? 'waiting' : 'applied',
       seen: 1,
     });
   }
@@ -576,7 +574,8 @@ export class QuietLearning {
     // What matches what was said, then the newest: "I moved to Lisbon" shares no word
     // with "Lives in Berlin", and the review can only replace what it's shown.
     const found = (await this.deps.search(words, RELATED).catch(() => [])).map((r) => r.memory);
-    const newest = (await this.deps.memory.list()).filter((m) => !m.pending);
+    // Only what a model may be given (ADR 0087): nothing held, nothing changed outside Conch.
+    const newest = await this.deps.memory.usable();
     const memories = [...new Map([...found, ...newest].map((m) => [m.id, m])).values()].slice(
       0,
       RELATED,
@@ -617,25 +616,19 @@ export class QuietLearning {
   // ── Your answers ───────────────────────────────────────────────────────
 
   /**
-   * Keep, Undo or Forget one thing learned. `seen`: the words the person saw
-   * when they answered — Keep on something that waits is their answer for
-   * exactly those, so different words now are `'changed'`, and nothing is kept.
+   * Keep, Undo or Forget one thing learned. Keep on something that waits
+   * needs the person's answer (`consent`, minted by the route for the words
+   * they saw, ADR 0087): different words there now are `'changed'`, and one
+   * the memory check refused is `'needs-anyway'` — nothing is kept either way.
    */
   async answer(
     entryId: string,
     answer: 'keep' | 'undo' | 'dismiss',
-    seen?: string,
-  ): Promise<LearnedEntry | 'changed' | undefined> {
+    consent?: PersonConsent,
+  ): Promise<LearnedEntry | 'changed' | 'needs-anyway' | undefined> {
     const entry = await this.store.entry(entryId);
     if (!entry) return undefined;
     const { memory } = this.deps;
-    if (answer === 'keep' && entry.state === 'waiting' && seen !== undefined) {
-      const now =
-        entry.change === 'added'
-          ? ((await memory.get(entry.after.id))?.content ?? entry.after.content)
-          : entry.after.content;
-      if (now.trim() !== seen.trim()) return 'changed';
-    }
     let state = entry.state;
     let after = entry.after;
     if (entry.state === 'applied' || entry.state === 'kept') {
@@ -644,8 +637,9 @@ export class QuietLearning {
         const live = await memory.get(entry.after.id);
         if (!live) state = 'gone';
         else {
+          // What it replaced comes back from Conch's own sealed copy, never from the record.
           if (entry.change === 'superseded' && entry.before)
-            await memory.unsupersede(entry.after.id, entry.before);
+            await memory.unsupersede(entry.after.id, entry.before.id);
           else await memory.remove(entry.after.id);
           await this.store.addNever(entry.after.content, 'undo');
           state = 'undone';
@@ -653,26 +647,22 @@ export class QuietLearning {
       }
     } else if (entry.state === 'waiting') {
       if (answer === 'keep') {
-        if (entry.change === 'added') {
-          const kept = await memory.keep(entry.after.id);
+        const waiting = await memory.get(entry.after.id);
+        if (!waiting) state = 'gone';
+        else {
+          if (!consent) return 'changed';
+          const kept = await memory.keep(waiting.id, consent).catch(() => 'changed' as const);
+          if (kept === 'changed' || kept === 'needs-anyway') return kept;
           state = kept ? 'kept' : 'gone';
-          if (kept) after = kept;
-        } else {
-          const moved = entry.before
-            ? await memory.supersede(entry.before.id, {
-                content: entry.after.content,
-                kind: entry.after.kind,
-                source: 'agent',
-                ...(entry.after.conversationId && { conversationId: entry.after.conversationId }),
-                ...(entry.after.about && { about: entry.after.about }),
-                learned: entry.id,
-              })
-            : undefined;
-          state = moved ? 'kept' : 'gone';
-          if (moved) after = moved.after;
+          if (kept) {
+            after = kept;
+            // Kept: what it replaces stops being true now.
+            if (entry.change === 'superseded' && entry.before)
+              await memory.retire(entry.before.id, kept.id);
+          }
         }
       } else {
-        if (entry.change === 'added') await memory.remove(entry.after.id);
+        await memory.remove(entry.after.id);
         await this.store.addNever(entry.after.content, 'dismissed');
         state = 'dismissed';
       }
@@ -703,15 +693,18 @@ export class QuietLearning {
    * when Conch wrote it, it isn't learned again, and the record says so.
    */
   async forgotten(memory: Pick<Memory, 'id' | 'content'> & { source?: Memory['source'] }) {
-    if (memory.source === 'user') return;
+    // Only what Conch wrote: yours, or one whose writer isn't known, never goes on the list.
+    if (memory.source !== 'agent' && memory.source !== 'tidy') return;
     await this.store.addNever(memory.content, 'forgot');
     const entry = await this.store.byMemory(memory.id);
     if (
       entry &&
       (entry.state === 'applied' || entry.state === 'kept' || entry.state === 'waiting')
     ) {
-      // Forgetting what replaced something doesn't bring back what it replaced: it's gone.
-      const state = entry.change === 'superseded' ? 'gone' : 'undone';
+      // Forgetting what waited is a no; forgetting what replaced something doesn't
+      // bring back what it replaced: it's gone.
+      const state =
+        entry.state === 'waiting' ? 'dismissed' : entry.change === 'superseded' ? 'gone' : 'undone';
       await this.store.update(entry.id, (e) => ({ ...e, state }));
       if (entry.from.conversationId)
         await this.deps
@@ -721,18 +714,27 @@ export class QuietLearning {
     this.deps.changed?.();
   }
 
+  /** Something that used to be true was forgotten: whoever shows Earlier fetches again. */
+  pastChanged(): void {
+    this.deps.changed?.();
+  }
+
   /**
    * A person kept a memory that waited, or put one back: its record says so,
    * and words they put back themselves come off the never-list.
    */
-  async kept(memory: Memory): Promise<void> {
+  async kept(memory: Pick<Memory, 'id' | 'content'>): Promise<void> {
     if (await this.store.forgive(memory.content)) this.deps.changed?.();
     const entry = await this.store.byMemory(memory.id);
     if (entry?.state !== 'waiting') return;
+    const now = await this.deps.memory.get(memory.id);
+    // Kept on the Memory page: what it replaces stops being true now.
+    if (now && !now.pending && entry.change === 'superseded' && entry.before)
+      await this.deps.memory.retire(entry.before.id, now.id);
     await this.store.update(entry.id, ({ waits: _waits, ...e }) => ({
       ...e,
       state: 'kept',
-      after: memory,
+      after: now ?? { ...e.after, content: memory.content },
     }));
     if (entry.from.conversationId)
       await this.deps

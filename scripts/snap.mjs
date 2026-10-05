@@ -36,7 +36,11 @@ const globals = [
 const url = `http://localhost:${opts.port ?? 6006}/iframe.html?id=${storyId}&viewMode=story${globals ? `&globals=${globals}` : ''}`;
 const out = opts.out ?? `.artifacts/snaps/${storyId}${opts.mode ? `-${opts.mode}` : ''}.png`;
 
-const browser = await chromium.launch({ channel: 'chrome' });
+const browser = await chromium.launch(
+  process.env.CONCH_TEST_BROWSER
+    ? { executablePath: process.env.CONCH_TEST_BROWSER }
+    : { channel: 'chrome' },
+);
 const page = await browser.newPage({
   viewport: { width: Number(opts.width ?? 900), height: Number(opts.height ?? 600) },
   deviceScaleFactor: 2,

@@ -176,3 +176,16 @@ keeps its `untrusted` note (where it was learned) on the Memory page. It still
 waits for **Keep** when nobody is there to undo it: a routine, a chat started
 from a chat app, or someone else's words in the chat. Keep and Undo are
 written into the chat's log (`memory.decided`), so it shows them after a reload.
+
+## Update (2026-10-04): a memory that looks planted is asked about
+
+Remembering at once after reading made one thing too easy: a page getting the
+assistant to remember where invoices go, silently.
+[ADR 0087](./0087-the-memory-check.md) adds a check before any memory is written,
+on every way one is: an ordinary memory is still remembered at once with Undo, and
+one that looks planted (a value the person never typed that the chat read, a
+redirect, an order, a secret, hidden characters…) is held — `pending` with a
+`held` reason, never in recall or a prompt — and the chat asks **Remember it**,
+**Don't remember** or **Edit first**, saying why and where it came from. Memories
+now keep their `provenance`, and those learned after reading are datamarked in
+the prompt.

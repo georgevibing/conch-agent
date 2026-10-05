@@ -71,8 +71,12 @@ describe('Archiving from the chat list', () => {
     await user.click(screen.getByRole('button', { name: 'Undo' }));
     expect(await screen.findByRole('link', { name: 'Plan my week' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /^Archived/ })).not.toBeInTheDocument();
+    // The last change sent puts it back (other rows may still be fetching what they show).
     await waitFor(() =>
-      expect(calls.at(-1)).toMatchObject({ method: 'PATCH', body: { archived: false } }),
+      expect(calls.filter((c) => c.method !== 'GET').at(-1)).toMatchObject({
+        method: 'PATCH',
+        body: { archived: false },
+      }),
     );
   });
 

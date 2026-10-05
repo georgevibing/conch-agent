@@ -1362,11 +1362,9 @@ describe('Palette search', () => {
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'update conch');
     await user.click(await screen.findByRole('option', { name: /Update Conch/ }));
-    expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
-      at: '/settings/health',
-      focus: 'update-conch',
-    });
-    useUi.setState({ settingsFocus: undefined });
+    // The update dialog: what it brings first, then one press.
+    expect(useUi.getState().updateDialog).toEqual({});
+    useUi.setState({ settingsFocus: undefined, updateDialog: undefined });
   });
 
   it('finds Apps by its old names too: integrations, and channels for Talk to me here', async () => {

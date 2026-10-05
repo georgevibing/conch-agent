@@ -10,6 +10,7 @@ import {
 } from 'react';
 
 import { Avatar } from '../../components/Avatar';
+import { AvatarPicker } from '../AvatarPicker';
 import { Button } from '../../components/Button';
 import { IconButton } from '../../components/IconButton';
 import { Input } from '../../components/Input';
@@ -41,6 +42,11 @@ export interface PortraitCard {
 export interface PortraitProps {
   name: string;
   onNameChange: (name: string) => void;
+  /** Your photo, if you've set one; your initial shows otherwise. */
+  photo?: string;
+  /** With these, pressing your initial adds a photo (and, once set, changes or removes it). */
+  onPhotoSave?: (photo: Blob) => Promise<void> | void;
+  onPhotoRemove?: () => Promise<void> | void;
   /** One line under the name, drawn from the cards. */
   summary?: string;
   cards: PortraitCard[];
@@ -65,6 +71,9 @@ export interface PortraitProps {
 export function Portrait({
   name,
   onNameChange,
+  photo,
+  onPhotoSave,
+  onPhotoRemove,
   summary,
   cards,
   facts,
@@ -80,7 +89,16 @@ export function Portrait({
   return (
     <section className={cx(styles.portrait, className)} aria-label="About you">
       <header className={styles.hero}>
-        <Avatar size="xl" name={name.trim() || 'You'} className={styles.avatar} />
+        {onPhotoSave && onPhotoRemove ? (
+          <AvatarPicker
+            name={name.trim() || 'You'}
+            src={photo}
+            onSave={onPhotoSave}
+            onRemove={onPhotoRemove}
+          />
+        ) : (
+          <Avatar size="xl" name={name.trim() || 'You'} src={photo} className={styles.avatar} />
+        )}
         <div className={styles.who}>
           <input
             className={styles.name}

@@ -75,7 +75,7 @@ describe('Repair everything, on trust (ADR 0031)', () => {
         },
       ],
     }).run({ repair: false, signal: new AbortController().signal });
-    expect(items.slice(2)).toMatchObject([
+    expect(items.slice(3)).toMatchObject([
       {
         id: 'safety:sealed:codex-agent',
         state: 'warning',
@@ -91,9 +91,18 @@ describe('Repair everything, on trust (ADR 0031)', () => {
 });
 
 describe('Conch-owned commands', () => {
-  it('are always sealed or absent, even when the native-provider sealing toggle is off', () => {
+  it('are sealed where this computer can and sealing is on; otherwise they ask first, and say so', () => {
     const provider = [{ id: 'openrouter', label: 'OpenRouter', commandSandbox: 'conch' as const }];
-    expect(coverage(provider, { available: true, on: false })[0]?.state).toBe('sealed');
-    expect(coverage(provider, { available: false, on: false })[0]?.state).toBe('no-commands');
+    expect(coverage(provider, { available: true, on: true })[0]?.state).toBe('sealed');
+    expect(coverage(provider, { available: true, on: false })[0]).toMatchObject({
+      state: 'not-sealed',
+      note: expect.stringMatching(/Sealing is off/),
+    });
+    expect(coverage(provider, { available: false, on: true })[0]).toMatchObject({
+      state: 'not-sealed',
+      note: expect.stringMatching(
+        /can’t seal commands yet, so they run with your access and ask first/,
+      ),
+    });
   });
 });

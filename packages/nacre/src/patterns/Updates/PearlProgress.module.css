@@ -1,0 +1,221 @@
+@property --pp-value {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --pp-turn {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: 0deg;
+}
+
+@layer nacre.components {
+  .root {
+    /* The pearl, the gap around it, and the ring's width. */
+    --pp-pearl: 4.5rem;
+    --pp-gap: 0.625rem;
+    --pp-ring: 3px;
+    --pp-size: calc(var(--pp-pearl) + var(--pp-gap) * 2);
+    --pp-sheen: 9s;
+    --pp-ripple: 2.4s;
+    --pp-fill: 900ms;
+    --pp-turning: 1.4s;
+    --pp-bloom: 1400ms;
+    --pp-arrive: 900ms;
+    /* How far ripples spread, as a multiple of the ring: room around it decides. */
+    --pp-spread: 1.5;
+
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    inline-size: var(--pp-size);
+    block-size: var(--pp-size);
+    flex-shrink: 0;
+    isolation: isolate;
+    transition: --pp-value var(--pp-fill) var(--nc-ease-out);
+    animation: pp-sheen var(--pp-sheen) linear infinite;
+  }
+
+  .root[data-size='md'] {
+    --pp-pearl: 2.5rem;
+    --pp-gap: 0.375rem;
+    --pp-ring: 2px;
+  }
+
+  .root > span {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+  }
+
+  .root > .pearl {
+    position: relative;
+    inset: auto;
+    display: grid;
+    place-items: center;
+    transition: scale var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  /* ── The ring ──────────────────────────────────────────────────────── */
+  .track,
+  .arc {
+    mask: radial-gradient(
+      farthest-side,
+      transparent calc(100% - var(--pp-ring) - 0.5px),
+      #000 calc(100% - var(--pp-ring))
+    );
+    opacity: 0;
+    transition: opacity var(--nc-duration-slower) var(--nc-ease-out);
+  }
+
+  .track {
+    background: var(--nc-wash-3);
+  }
+
+  /* The pearl's own spectrum, drifting slowly, shown as far as the update has come. */
+  .arc {
+    background: conic-gradient(
+      from var(--pp-turn),
+      var(--nc-accent-9),
+      var(--nc-pearl-spectrum),
+      var(--nc-accent-9)
+    );
+    mask:
+      radial-gradient(
+        farthest-side,
+        transparent calc(100% - var(--pp-ring) - 0.5px),
+        #000 calc(100% - var(--pp-ring))
+      ),
+      conic-gradient(#000 calc(var(--pp-value) * 1%), transparent 0);
+    mask-composite: intersect;
+  }
+
+  .root:not([data-state='resting']) .track,
+  .root:not([data-state='resting']) .arc {
+    opacity: 1;
+  }
+
+  .root[data-state='failed'] .arc {
+    opacity: 0;
+  }
+
+  /* Can't be known: a quarter of the ring, turning. */
+  .root[data-indeterminate] .arc {
+    mask:
+      radial-gradient(
+        farthest-side,
+        transparent calc(100% - var(--pp-ring) - 0.5px),
+        #000 calc(100% - var(--pp-ring))
+      ),
+      conic-gradient(transparent 0, #000 25%, transparent 25%);
+    mask-composite: intersect;
+    animation: nc-spin var(--pp-turning) linear infinite;
+  }
+
+  /* ── Arrived: the ring glows, and light blooms out once ─────────────── */
+  .bloom {
+    background: radial-gradient(
+      circle,
+      transparent 52%,
+      color-mix(in oklch, var(--nc-pearl-3) 70%, transparent) 64%,
+      color-mix(in oklch, var(--nc-pearl-5) 40%, transparent) 70%,
+      transparent 74%
+    );
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .root[data-state='done'] .bloom {
+    animation: pp-bloom var(--pp-bloom) var(--nc-ease-out) var(--nc-duration-slow) both;
+  }
+
+  .root[data-state='done'] .pearl {
+    animation: pp-arrive var(--pp-arrive) var(--nc-ease-out) var(--nc-duration-base) both;
+  }
+
+  .root[data-state='done'] .arc,
+  .root[data-state='restarting'] .arc {
+    filter: drop-shadow(0 0 6px color-mix(in oklch, var(--nc-pearl-3) 80%, transparent));
+  }
+
+  /* ── Starting again: rings spread like a pearl dropped in water ─────── */
+  .ripple {
+    box-shadow: inset 0 0 0 1.5px color-mix(in oklch, var(--nc-pearl-3) 75%, transparent);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .root[data-state='restarting'] .ripple {
+    animation: pp-ripple var(--pp-ripple) var(--nc-ease-out) infinite;
+  }
+
+  .root[data-state='restarting'] .ripple:nth-child(2) {
+    animation-delay: calc(var(--pp-ripple) / 3);
+  }
+
+  .root[data-state='restarting'] .ripple:nth-child(3) {
+    animation-delay: calc(var(--pp-ripple) * 2 / 3);
+  }
+
+  @keyframes pp-sheen {
+    to {
+      --pp-turn: 360deg;
+    }
+  }
+
+  @keyframes pp-ripple {
+    0% {
+      opacity: 0.9;
+      scale: 1;
+    }
+    100% {
+      opacity: 0;
+      scale: var(--pp-spread);
+    }
+  }
+
+  @keyframes pp-bloom {
+    0% {
+      opacity: 0;
+      scale: 0.9;
+    }
+    30% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      scale: 1.9;
+    }
+  }
+
+  @keyframes pp-arrive {
+    0% {
+      scale: 1;
+    }
+    40% {
+      scale: 1.08;
+    }
+    100% {
+      scale: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root,
+    .root[data-indeterminate] .arc,
+    .root .ripple,
+    .root .bloom,
+    .root .pearl {
+      animation: none !important;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .root,
+  [data-nacre-motion='reduced'] .root[data-indeterminate] .arc,
+  [data-nacre-motion='reduced'] .root .ripple,
+  [data-nacre-motion='reduced'] .root .bloom,
+  [data-nacre-motion='reduced'] .root .pearl {
+    animation: none !important;
+  }
+}

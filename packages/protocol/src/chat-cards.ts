@@ -7,6 +7,7 @@
 import { z } from 'zod';
 
 import { MarketTrust } from './market-basics';
+import { Attachment } from './attachments';
 
 const Hex = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 /** An ISO 8601 date or date-time, as a tool read it. */
@@ -21,7 +22,7 @@ const WebUrl = z
 
 /** What can be offered: an app from the catalog, or a skill that's off or waits to be asked. */
 /** An app to connect, a skill of yours to turn on, or one from Discover to add (ADR 0074). */
-export const OfferKind = z.enum(['app', 'skill', 'market']);
+export const OfferKind = z.enum(['app', 'skill', 'market', 'provider']);
 export type OfferKind = z.infer<typeof OfferKind>;
 
 /**
@@ -87,6 +88,8 @@ export const MutedSkill = z
   .string()
   .regex(/^skill:[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/, 'Unknown skill.');
 export type MutedSkill = z.infer<typeof MutedSkill>;
+export const MutedProvider = z.string().regex(/^provider:[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/);
+export type MutedProvider = z.infer<typeof MutedProvider>;
 
 // ── Questions ───────────────────────────────────────────────────────────────
 
@@ -243,6 +246,19 @@ export type ChatMessageItem = z.infer<typeof ChatMessageItem>;
  * Everything here came from outside, so it's drawn as plain text, never markup.
  */
 export const ToolView = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('downloads'), items: z.array(Attachment).max(10) }),
+  z.object({
+    kind: z.literal('sources'),
+    items: z
+      .array(
+        z.object({
+          title: z.string().max(300),
+          url: WebUrl,
+          snippet: z.string().max(600).optional(),
+        }),
+      )
+      .max(10),
+  }),
   z.object({
     kind: z.literal('agenda'),
     items: z.array(AgendaItem).max(60),

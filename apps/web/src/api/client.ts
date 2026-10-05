@@ -48,6 +48,16 @@ export class ApiError extends Error {
 /** Fired when the gateway says this browser isn't (or is no longer) signed in. */
 export const SIGNED_OUT_EVENT = 'conch:signed-out';
 
+/** A file as base64, without the `data:` prefix. */
+function base64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',', 2)[1] ?? '');
+    reader.onerror = () => reject(reader.error ?? new Error('That photo couldn’t be read.'));
+    reader.readAsDataURL(blob);
+  });
+}
+
 export async function request<T extends z.ZodType>(
   schema: T,
   path: string,
@@ -183,6 +193,13 @@ export const api = {
   healed: () => request(HealLog, '/api/healed'),
   updateSettings: (body: UpdateSettingsBody) =>
     request(AppState, '/api/settings', { method: 'PATCH', body }),
+  /** Your photo, framed in About you: PNG, JPEG or WebP. */
+  savePhoto: async (photo: Blob) =>
+    request(AppState, '/api/profile/avatar', {
+      method: 'PUT',
+      body: { data: await base64(photo) },
+    }),
+  removePhoto: () => request(AppState, '/api/profile/avatar', { method: 'DELETE' }),
 
   engine: (refresh = false) => request(EngineStatus, `/api/engine${refresh ? '?refresh=1' : ''}`),
   startLogin: (method: 'subscription' | 'console') =>
@@ -226,7 +243,7 @@ export const api = {
   memories: () => request(z.array(Memory), '/api/memories'),
   addMemory: (content: string, kind: MemoryKind = 'fact') =>
     request(Memory, '/api/memories', { method: 'POST', body: { content, kind } }),
-  updateMemory: (id: string, patch: { content?: string; kind?: MemoryKind }) =>
+  updateMemory: (id: string, patch: { content?: string; kind?: MemoryKind; seen?: string }) =>
     request(Memory, `/api/memories/${id}`, { method: 'PATCH', body: patch }),
   deleteMemory: (id: string) => request(Ok, `/api/memories/${id}`, { method: 'DELETE' }),
 
