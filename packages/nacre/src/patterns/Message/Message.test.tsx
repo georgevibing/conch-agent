@@ -152,6 +152,52 @@ describe('MessageList', () => {
     expect(top).toBe(1000);
   });
 
+  it('while a conversation is on its way shows its outline, then all of it at its newest message', async () => {
+    const { rerender, container } = renderNacre(
+      <MessageList loading>
+        <Message from="user">Hi</Message>
+      </MessageList>,
+    );
+    expect(screen.getByRole('status', { name: 'Opening the conversation' })).toBeInTheDocument();
+    expect(screen.getByRole('log')).toHaveAttribute('aria-busy', 'true');
+    expect(screen.queryByText('Hi')).toBeNull();
+    await expectAccessible(container);
+
+    const viewport = screen.getByRole('log').parentElement as HTMLElement;
+    let top = 0;
+    Object.defineProperties(viewport, {
+      scrollHeight: { configurable: true, value: 1000 },
+      clientHeight: { configurable: true, value: 100 },
+      scrollTop: {
+        configurable: true,
+        get: () => top,
+        set: (value: number) => {
+          top = value;
+        },
+      },
+    });
+    rerender(
+      <MessageList>
+        <Message from="user">Hi</Message>
+      </MessageList>,
+    );
+    expect(screen.getByText('Hi')).toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'Opening the conversation' })).toBeNull();
+    expect(screen.getByRole('log')).not.toHaveAttribute('aria-busy');
+    // At the newest message before it's ever seen, fading in where it is.
+    expect(top).toBe(1000);
+    expect(screen.getByRole('log')).toHaveAttribute('data-arrived');
+  });
+
+  it('shows a conversation that is already here at once, with no fade', () => {
+    renderNacre(
+      <MessageList>
+        <Message from="user">Hi</Message>
+      </MessageList>,
+    );
+    expect(screen.getByRole('log')).not.toHaveAttribute('data-arrived');
+  });
+
   it('keeps to the newest message when more arrives before its scroll lands, until the reader reads up', () => {
     const observers: ResizeObserverCallback[] = [];
     vi.stubGlobal(

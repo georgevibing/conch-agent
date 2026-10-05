@@ -666,6 +666,51 @@ describe('gateway WebSocket', () => {
     expect(summary?.options).toEqual({ fastMode: true, permissionMode: 'plan' });
   });
 
+  it('sends a tab the log it asks for, then says it’s all there, even for a chat it can’t read', async () => {
+    const { app } = await setup();
+    close = () => app.close();
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const port = (app.server.address() as { port: number }).port;
+    const open = async () => {
+      const ws = new WebSocket(`ws://localhost:${port}/ws`, hereInit(app));
+      const events: ServerEvent[] = [];
+      ws.onmessage = (msg) => events.push(ServerEvent.parse(JSON.parse(String(msg.data))));
+      await new Promise((r) => (ws.onopen = r));
+      return { ws, events };
+    };
+    const until = async (events: ServerEvent[], done: (e: ServerEvent) => boolean) => {
+      while (!events.some(done)) await new Promise((r) => setTimeout(r, 10));
+    };
+
+    const first = await open();
+    first.ws.send(JSON.stringify({ type: 'conversation.send', clientMessageId: 'u1', text: 'hi' }));
+    await until(
+      first.events,
+      (e) => e.type === 'conversation.event' && e.event.type === 'turn.completed',
+    );
+    const id = first.events.flatMap((e) =>
+      e.type === 'conversation.created' ? [e.conversation.id] : [],
+    )[0];
+    first.ws.close();
+
+    const other = await open();
+    other.ws.send(JSON.stringify({ type: 'conversation.subscribe', conversationId: id }));
+    other.ws.send(JSON.stringify({ type: 'conversation.subscribe', conversationId: 'nope' }));
+    await until(
+      other.events,
+      (e) => e.type === 'conversation.synced' && e.conversationId === 'nope',
+    );
+    other.ws.close();
+    const mine = other.events.filter(
+      (e) =>
+        (e.type === 'conversation.event' && e.event.conversationId === id) ||
+        (e.type === 'conversation.synced' && e.conversationId === id),
+    );
+    expect(mine.length).toBeGreaterThan(2);
+    expect(mine.at(-1)).toEqual({ type: 'conversation.synced', conversationId: id });
+    expect(mine.filter((e) => e.type === 'conversation.synced')).toHaveLength(1);
+  });
+
   it('offline, a message waits and goes by itself when the internet is back', async () => {
     const { app, services } = await setup();
     close = () => app.close();

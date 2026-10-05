@@ -1351,16 +1351,22 @@ export async function buildApp(services: Services) {
           case 'conversation.subscribe': {
             if (subscribed.size >= 200) subscribed.delete(subscribed.values().next().value ?? '');
             subscribed.add(command.conversationId);
-            // A tab ahead of the log (Conch restarted and lost the end of a turn) starts over.
-            const ahead =
-              command.afterSeq !== undefined &&
-              command.afterSeq > (await services.conversations.lastSeq(command.conversationId));
-            if (ahead) send({ type: 'conversation.reset', conversationId: command.conversationId });
-            const events = await services.conversations.eventsAfter(
-              command.conversationId,
-              ahead ? undefined : command.afterSeq,
-            );
-            for (const event of events) send({ type: 'conversation.event', event });
+            try {
+              // A tab ahead of the log (Conch restarted and lost the end of a turn) starts over.
+              const ahead =
+                command.afterSeq !== undefined &&
+                command.afterSeq > (await services.conversations.lastSeq(command.conversationId));
+              if (ahead)
+                send({ type: 'conversation.reset', conversationId: command.conversationId });
+              const events = await services.conversations.eventsAfter(
+                command.conversationId,
+                ahead ? undefined : command.afterSeq,
+              );
+              for (const event of events) send({ type: 'conversation.event', event });
+            } finally {
+              // Even when the log couldn't be read: the tab draws what it has, never waits on.
+              send({ type: 'conversation.synced', conversationId: command.conversationId });
+            }
             return;
           }
           case 'conversation.unsubscribe':

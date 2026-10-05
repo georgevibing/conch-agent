@@ -1,6 +1,7 @@
 import type {
   AppState,
   Attachment,
+  ConversationEvent,
   ConversationSummary,
   HealLog,
   TurnOptions,
@@ -59,6 +60,15 @@ function upsertSummary(list: ConversationSummary[] | undefined, next: Conversati
   return [next, ...rest].sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
+/** Per chat: the events held until its log is all here, and how many asks are still answering. */
+type CatchingUp = Map<string, { events: ConversationEvent[]; asked: number }>;
+
+function askedFor(catchingUp: CatchingUp, id: string) {
+  const entry = catchingUp.get(id) ?? { events: [], asked: 0 };
+  entry.asked += 1;
+  catchingUp.set(id, entry);
+}
+
 /** In front of someone: the tab is showing and the window has focus. */
 const visibleNow = () =>
   document.visibilityState === 'visible' &&
@@ -75,6 +85,12 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
   const startedNew = useRef<string[]>([]);
   /** Devices waiting for approval, as last heard, to notice a new one asking. */
   const waitingDevices = useRef(0);
+  /**
+   * Chats whose log is on its way (subscribed, not yet synced): what arrives is
+   * held and folded in at once, so the chat is drawn whole, not piling in.
+   */
+  const catchingUp = useRef<CatchingUp>(new Map());
+  const askFor = (id: string) => askedFor(catchingUp.current, id);
 
   useEffect(() => {
     const store = useLiveStore.getState();
@@ -83,8 +99,11 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
       onOpen: () => {
         // Whether this page is in front of someone: notifications wait while one is (ADR 0027).
         socket.send({ type: 'presence', visible: visibleNow() });
-        // Resume every watched conversation from the last event we saw.
+        // Resume every watched conversation from the last event we saw. What the
+        // last connection was still sending won't come; this one sends it again.
+        catchingUp.current.clear();
         for (const id of watching.current.keys()) {
+          askFor(id);
           const lastSeq = useLiveStore.getState().views[id]?.lastSeq;
           socket.send({
             type: 'conversation.subscribe',
@@ -106,9 +125,19 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
     const off = socket.on((event) => {
       const live = useLiveStore.getState();
       switch (event.type) {
-        case 'conversation.event':
-          live.apply(event.event);
+        case 'conversation.event': {
+          const held = catchingUp.current.get(event.event.conversationId);
+          if (held) held.events.push(event.event);
+          else live.apply(event.event);
           break;
+        }
+        case 'conversation.synced': {
+          const held = catchingUp.current.get(event.conversationId);
+          if (!held || --held.asked > 0) break;
+          catchingUp.current.delete(event.conversationId);
+          live.catchUp(event.conversationId, held.events);
+          break;
+        }
         case 'conversation.created': {
           // Only the tab that sent the first message is subscribed by the gateway. A chat
           // started elsewhere (another tab, Telegram) is subscribed when someone opens it.
@@ -397,6 +426,7 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         const count = watching.current.get(conversationId) ?? 0;
         watching.current.set(conversationId, count + 1);
         if (count === 0) {
+          askFor(conversationId);
           const lastSeq = useLiveStore.getState().views[conversationId]?.lastSeq;
           socketRef.current?.send({
             type: 'conversation.subscribe',

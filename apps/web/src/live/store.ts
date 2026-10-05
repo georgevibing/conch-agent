@@ -47,6 +47,11 @@ interface LiveState {
 
   setConnection(state: ConnectionState): void;
   apply(event: ConversationEvent): void;
+  /**
+   * A chat's log since it was asked for, all at once (`conversation.synced`): one
+   * update, so it's drawn whole, and its view knows it has everything so far.
+   */
+  catchUp(conversationId: string, events: readonly ConversationEvent[]): void;
   /** Stop pressed: the chat shows it stopped now, before the gateway says so. */
   stop(key: string): void;
   /** An approval answered: the card shows the answer now; the gateway's echo says the same. */
@@ -79,6 +84,30 @@ function without<T>(record: Record<string, T>, key: string): Record<string, T> {
   return rest;
 }
 
+type Applied = Pick<LiveState, 'views' | 'pending' | 'stopping'>;
+
+/** One event folded in: its chat's view, the message it echoes, the Stop it settles. */
+function applied<S extends Applied>(state: S, event: ConversationEvent): S {
+  const current = state.views[event.conversationId] ?? emptyView;
+  const next = reduce(current, event);
+  if (next === current) return state;
+  const pending =
+    event.type === 'user.message'
+      ? (state.pending[event.conversationId] ?? []).filter(
+          (p) =>
+            p.clientMessageId !== event.messageId &&
+            !(p.byText && event.text.includes(p.text.trim())),
+        )
+      : state.pending[event.conversationId];
+  return {
+    ...state,
+    views: { ...state.views, [event.conversationId]: next },
+    pending: pending ? { ...state.pending, [event.conversationId]: pending } : state.pending,
+    ...(event.conversationId in state.stopping &&
+      settlesStop(event) && { stopping: without(state.stopping, event.conversationId) }),
+  };
+}
+
 export const useLiveStore = create<LiveState>((set) => ({
   connection: 'connecting',
   views: {},
@@ -88,25 +117,14 @@ export const useLiveStore = create<LiveState>((set) => ({
   setStartedWith: (startedWith) => set({ startedWith }),
 
   setConnection: (connection) => set({ connection }),
-  apply: (event) =>
+  apply: (event) => set((state) => applied(state, event)),
+  catchUp: (conversationId, events) =>
     set((state) => {
-      const current = state.views[event.conversationId] ?? emptyView;
-      const next = reduce(current, event);
-      if (next === current) return state;
-      const pending =
-        event.type === 'user.message'
-          ? (state.pending[event.conversationId] ?? []).filter(
-              (p) =>
-                p.clientMessageId !== event.messageId &&
-                !(p.byText && event.text.includes(p.text.trim())),
-            )
-          : state.pending[event.conversationId];
-      return {
-        views: { ...state.views, [event.conversationId]: next },
-        pending: pending ? { ...state.pending, [event.conversationId]: pending } : state.pending,
-        ...(event.conversationId in state.stopping &&
-          settlesStop(event) && { stopping: without(state.stopping, event.conversationId) }),
-      };
+      // In order, whatever order they came in: a live event can overtake the log it follows.
+      let next: Applied = state;
+      for (const event of [...events].sort((a, b) => a.seq - b.seq)) next = applied(next, event);
+      const view = next.views[conversationId] ?? emptyView;
+      return { ...next, views: { ...next.views, [conversationId]: { ...view, loaded: true } } };
     }),
   stop: (key) => set((state) => ({ stopping: { ...state.stopping, [key]: Date.now() } })),
   decide: (conversationId, permissionId, decision) =>

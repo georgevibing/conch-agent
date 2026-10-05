@@ -381,6 +381,8 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
   // A question waits (ADR 0060): what's typed here answers it.
   const asking = running && Boolean(pendingQuestion(view));
   const isEmpty = view.items.length === 0 && pending.length === 0;
+  // A chat this tab hasn't seen yet: its log is on its way, and it shows whole when it's here.
+  const opening = Boolean(conversationId) && isEmpty && !view.loaded;
 
   useEffect(() => {
     if (!conversationId) return;
@@ -845,7 +847,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
         <Talk conversationId={conversationId} send={(text) => send(text, [])} name={name} />
       )}
       {/* Said once, where a chat starts: under every reply it would only be noise. */}
-      {isEmpty && (
+      {isEmpty && !opening && (
         <Text size="2xs" tone="subtle" align="center" className={styles.hint}>
           {name} can make mistakes, and {modeInfo(turn.options.permissionMode).hint}.
         </Text>
@@ -925,6 +927,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
       <ArchivedBanner conversationId={conversationId} />
       <Transcript
         view={view}
+        opening={opening}
         conversationId={conversationId}
         columnRef={columnRef}
         routineRun={isRoutineRun}

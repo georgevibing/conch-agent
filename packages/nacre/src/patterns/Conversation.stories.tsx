@@ -42,7 +42,15 @@ const toolbar = (
   </>
 );
 
-function Shell({ children, composer }: { children: ReactNode; composer: ReactNode }) {
+function Shell({
+  children,
+  composer,
+  loading,
+}: {
+  children: ReactNode;
+  composer: ReactNode;
+  loading?: boolean;
+}) {
   return (
     <div
       style={{
@@ -53,7 +61,7 @@ function Shell({ children, composer }: { children: ReactNode; composer: ReactNod
         marginInline: 'auto',
       }}
     >
-      <MessageList>{children}</MessageList>
+      <MessageList loading={loading}>{children}</MessageList>
       <div style={{ padding: '0 16px 20px' }}>{composer}</div>
     </div>
   );
@@ -143,6 +151,37 @@ export const Session: Story = {
             <p>Done — the burst test passes in 94 ms with no dropped frames.</p>
           </Prose>
         </Message>
+      </Shell>
+    );
+  },
+};
+
+/**
+ * Opening a conversation that isn't here yet: its outline rests where the newest
+ * messages will be (only once the wait could be noticed), then the whole
+ * conversation fades in, already at its newest message — nothing piles in.
+ */
+export const Opening: Story = {
+  render: function Render() {
+    const [loading, setLoading] = useState(true);
+    useEffect(() => {
+      if (!loading) return;
+      const timer = setTimeout(() => setLoading(false), 1600);
+      return () => clearTimeout(timer);
+    }, [loading]);
+    return (
+      <Shell
+        loading={loading}
+        composer={
+          <div style={{ display: 'grid', gap: 8 }}>
+            <Composer toolbar={toolbar} placeholder="Reply to Claude…" />
+            <button type="button" onClick={() => setLoading(true)}>
+              Open it again
+            </button>
+          </div>
+        }
+      >
+        <History />
       </Shell>
     );
   },

@@ -379,6 +379,8 @@ export interface ConversationView {
   working?: Usage;
   /** How full the context is, as last heard: live while a turn runs, its last word after. */
   context?: ContextFill;
+  /** The whole log so far is here (the gateway said so), not just what happened while watching. */
+  loaded?: boolean;
 }
 
 export const emptyView: ConversationView = { lastSeq: -1, items: [], status: 'idle' };

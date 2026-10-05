@@ -12,6 +12,8 @@ import { LiveProvider } from '../live/LiveProvider';
 /** In-memory WebSocket so tests can assert what's sent and push server events. */
 export class FakeSocket {
   static last?: FakeSocket;
+  /** Answer a subscribe with `conversation.synced` by itself; off, a test sends it when it likes. */
+  static autoSync = true;
   static readonly OPEN = 1;
   readonly OPEN = 1;
   readyState = 0;
@@ -29,7 +31,17 @@ export class FakeSocket {
   }
 
   send(data: string) {
-    this.sent.push(JSON.parse(data));
+    const command = JSON.parse(data) as { type: string; conversationId?: string };
+    this.sent.push(command);
+    // Like the gateway: the log so far (none here), then word that it's all been sent.
+    if (
+      FakeSocket.autoSync &&
+      command.type === 'conversation.subscribe' &&
+      command.conversationId
+    ) {
+      const conversationId = command.conversationId;
+      queueMicrotask(() => this.push({ type: 'conversation.synced', conversationId }));
+    }
   }
 
   close() {

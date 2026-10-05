@@ -74,7 +74,9 @@ Zod schemas for everything on the wire:
 - A conversation is an **append-only log of `ConversationEvent`s** (user message,
   assistant deltas, tool start/finish, permission requested/resolved, memory
   saved/forgotten, status, turn completed). Each has a per-conversation `seq`; clients
-  resubscribe with the last `seq` they saw and the server replays the rest.
+  resubscribe with the last `seq` they saw and the server replays the rest, then sends
+  `conversation.synced`. The web holds a chat's replayed events until then and folds them in
+  at once, so a chat opens whole, at its newest message, instead of piling in.
 
 ### Gateway (`apps/server`)
 

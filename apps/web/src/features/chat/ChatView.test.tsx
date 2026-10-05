@@ -447,6 +447,43 @@ describe('ChatView', () => {
       conversationId: 'c-stop',
     });
   });
+
+  it('opens a chat whole: its outline while the log is on its way, then all of it at once', async () => {
+    FakeSocket.autoSync = false;
+    try {
+      mockFetch({ 'GET /api/state': () => appState(), 'GET /api/conversations': () => [] });
+      renderApp(<ChatView conversationId="c-open" />, { route: '/c/c-open' });
+      await waitFor(() =>
+        expect(FakeSocket.last?.sent).toContainEqual(
+          expect.objectContaining({ type: 'conversation.subscribe', conversationId: 'c-open' }),
+        ),
+      );
+      expect(screen.getByRole('status', { name: 'Opening the conversation' })).toBeInTheDocument();
+      // A new chat's "can make mistakes" line is no part of an old chat opening.
+      expect(screen.queryByText(/can make mistakes/)).toBeNull();
+
+      // The log arrives (a live event can overtake it), and nothing is drawn piece by piece.
+      events('c-open', 2, [{ type: 'user.message', messageId: 'u2', text: 'And tomorrow?' }]);
+      events('c-open', 0, [
+        { type: 'user.message', messageId: 'u1', text: 'What’s the weather?' },
+        { type: 'turn.completed', outcome: 'success' },
+      ]);
+      expect(screen.queryByText('What’s the weather?')).toBeNull();
+      expect(screen.getByRole('status', { name: 'Opening the conversation' })).toBeInTheDocument();
+
+      act(() => FakeSocket.last?.push({ type: 'conversation.synced', conversationId: 'c-open' }));
+      expect(screen.getByText('What’s the weather?')).toBeInTheDocument();
+      expect(screen.getByText('And tomorrow?')).toBeInTheDocument();
+      expect(screen.queryByRole('status', { name: 'Opening the conversation' })).toBeNull();
+      expect(useLiveStore.getState().views['c-open']).toMatchObject({ lastSeq: 2, loaded: true });
+
+      // From here on, what happens shows as it happens.
+      events('c-open', 3, [{ type: 'turn.completed', outcome: 'success' }]);
+      expect(useLiveStore.getState().views['c-open']?.lastSeq).toBe(3);
+    } finally {
+      FakeSocket.autoSync = true;
+    }
+  });
 });
 
 describe('The message box', () => {

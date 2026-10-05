@@ -949,6 +949,11 @@ export const ServerEvent = z.discriminatedUnion('type', [
    * turn): forget the view; the whole log follows.
    */
   z.object({ type: z.literal('conversation.reset'), conversationId: z.string() }),
+  /**
+   * Everything a `conversation.subscribe` asked for has been sent: the tab can draw the chat
+   * whole, at once, instead of event by event as they came.
+   */
+  z.object({ type: z.literal('conversation.synced'), conversationId: z.string() }),
   z.object({ type: z.literal('engine.status'), status: EngineStatus }),
   z.object({ type: z.literal('engine.login'), login: LoginState }),
   z.object({ type: z.literal('memory.changed') }),

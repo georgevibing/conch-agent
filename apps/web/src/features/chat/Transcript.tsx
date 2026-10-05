@@ -42,6 +42,8 @@ import type { PendingMessage } from '../../live/store';
 
 export interface TranscriptProps {
   view: ConversationView;
+  /** The chat's log is still on its way: its outline shows, then the chat whole. */
+  opening?: boolean;
   pending: PendingMessage[];
   name: string;
   onRespond: (permissionId: string, decision: 'allow' | 'allow-always' | 'deny') => void;
@@ -236,6 +238,7 @@ function timeOf(item: TranscriptItem): number | undefined {
 /** Memoised: typing in the composer doesn't draw the whole chat again. */
 export const Transcript = memo(function Transcript({
   view,
+  opening = false,
   pending,
   name,
   onRespond,
@@ -571,6 +574,7 @@ export const Transcript = memo(function Transcript({
       overlay={overlay}
       // What you just sent is what you want to see, wherever you'd scrolled to.
       follow={pending.at(-1)?.clientMessageId}
+      loading={opening}
     >
       <div ref={columnRef} className={styles.column}>
         {rows.map((row) =>
