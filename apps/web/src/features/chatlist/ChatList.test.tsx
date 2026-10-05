@@ -9,8 +9,17 @@ import { appState, FakeSocket, mockFetch, renderApp } from '../../test/harness';
 import { Sidebar } from '../sidebar/Sidebar';
 import { useSeen } from './useSeen';
 
-afterEach(() => vi.unstubAllGlobals());
-beforeEach(() => localStorage.clear());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+beforeEach(() => {
+  localStorage.clear();
+  // “An hour ago” is only Today after 01:00. Keep date grouping independent of
+  // the wall clock while leaving interaction and query timers running normally.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(2026, 6, 15, 12));
+});
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;

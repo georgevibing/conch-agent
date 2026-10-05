@@ -21,8 +21,15 @@ async function titles(page: Page): Promise<string[]> {
 
 test('pin, file, drag, select and archive, and it all stays after a reload', async ({ page }) => {
   await openConch(page);
-  for (const text of ['Plan a week in Lisbon', 'Groceries for Sunday', 'Birthday ideas for Maya']) {
-    await page.getByRole('button', { name: 'New chat' }).click();
+  const messages = ['Plan a week in Lisbon', 'Groceries for Sunday', 'Birthday ideas for Maya'];
+  for (const [index, text] of messages.entries()) {
+    if (index > 0) {
+      await page.getByRole('button', { name: 'New chat' }).click();
+      // Wait for the new view and its focus effect before typing. The previous
+      // chat's composer can still be present while navigation is settling.
+      await expect(page).toHaveURL('/');
+      await expect(page.getByRole('textbox', { name: 'Message Conch' })).toBeFocused();
+    }
     await say(page, text, /Ask me to/);
   }
   // Each is titled by now; work with whatever names they were given.

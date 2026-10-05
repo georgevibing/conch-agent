@@ -262,3 +262,41 @@ exposed two more failures:
 No test was removed, no retry was added, and the aggregate gate correctly rejected
 the two failing jobs. A green revision does not establish that later changes are
 green; the exact current main revision must finish all checks.
+
+## Email recovery: the page lost a live update
+
+[Run 37381720109](https://github.com/georgevibing/conch-agent/actions/runs/37381720109)
+passed all static and unit jobs, desktop, and three browser shards. Shard 4 failed
+on email revocation, so its dependent browser-control project did not run.
+
+The trace established that the channel was online before revocation. The server
+then reconnected, detected the refused password, and delivered `channel.changed`
+with `health.state=needs-token` over the page's socket about one second later.
+The page nevertheless remained on **Reconnecting** for its entire twenty-second
+wait. Waiting for the initial handshake had fixed a fixture precondition, but
+had not fixed this separate client-side race.
+
+Channel events arriving before the initial list populated the query cache were
+discarded; invalidating an already pending initial query did not fetch it again.
+A live change during a later refetch could also be overwritten by that request's
+older response. Channel queries now retain changes and deletions received during
+each fetch and fold them into its result. The complete catalog still comes from
+the response, and existing views receive live changes immediately.
+
+Four controlled regression cases failed before this fix and pass afterwards:
+changes and deletions during both initial loading and refetching. The existing
+channel UI tests also pass. This repairs actual stale UI state without removing
+the revoked-password recovery journey or increasing its timeout.
+
+The full local shard also exposed a chat-list setup race: the second message was
+typed immediately after **New chat**, while the old composer could still be
+mounted. The trace showed the first chat completed, then a blank new-chat view
+with the second message lost. That journey now waits for the new-chat URL and
+composer focus before typing. Its list, folder, drag and archive assertions stay
+the same.
+
+Running the full web suite after local midnight revealed another clock-dependent
+fixture: chat-list tests labelled `Date.now() - one hour` as **Today**, although
+it was yesterday. Those date-grouping tests now fix only the Date clock at noon;
+interaction and query timers remain real. The assertions still check the actual
+Today and month groups.
