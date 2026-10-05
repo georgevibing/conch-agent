@@ -28,11 +28,17 @@ export function registerQuietLearningRoutes(
   app.post('/api/learning/answer', async (request, reply) => {
     const body = LearningAnswerBody.safeParse(request.body);
     if (!body.success) return bad(reply, body.error.issues[0]?.message);
-    const entry = await learning.answer(body.data.entryId, body.data.answer);
+    const { entryId, answer, seen } = body.data;
+    const entry = await learning.answer(entryId, answer, seen);
     if (!entry)
       return reply
         .code(404)
         .send({ error: 'not-found', message: 'That isn’t in what Conch learned any more.' });
+    if (entry === 'changed')
+      return reply.code(409).send({
+        error: 'changed',
+        message: 'Those words changed since you saw them. Have a look again first.',
+      });
     return entry;
   });
 

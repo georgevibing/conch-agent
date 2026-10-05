@@ -201,12 +201,12 @@ export function signalsOf(
       }
     }
   }
-  const words = said.map((s) => s.text).join('\n');
   return {
     signals: ORDER.filter((s) => found.has(s)),
     said,
     environment,
-    durable: ABOUT_ME.test(words) && LASTING.test(words),
+    // In one message: "I" in one and "always" in another is no cue at all.
+    durable: said.some((s) => ABOUT_ME.test(s.text) && LASTING.test(s.text)),
   };
 }
 

@@ -202,7 +202,7 @@ describe('What Conch knows about you', () => {
     expect(record).toHaveTextContent('Now: Lives in Lisbon');
     expect(record).toHaveTextContent('From “Weekend ideas”');
     expect(record).toHaveTextContent('Learned in a chat that read trains.example.');
-    await userEvent.click(within(record).getByRole('button', { name: 'Undo' }));
+    await userEvent.click(within(record).getByRole('button', { name: 'Undo “Lives in Lisbon”' }));
     await waitFor(() =>
       expect(calls.find((c) => c.path === '/api/learning/answer')?.body).toEqual({
         entryId: 'le_1',

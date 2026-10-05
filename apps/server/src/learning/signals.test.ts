@@ -144,6 +144,11 @@ describe('what a chat says about how it went (ADR 0088 § 2)', () => {
     expect(signalsOf(chat(you('My partner is vegetarian'))).durable).toBe(true);
     expect(signalsOf(chat(you('What is the capital of Peru?'))).durable).toBe(false);
   });
+
+  it('“I” in one message and “always” in another is no cue', () => {
+    const events = chat(you('Can you help me with this?'), you('Does it always rain in Bergen?'));
+    expect(signalsOf(events).durable).toBe(false);
+  });
 });
 
 describe('environmentFact', () => {

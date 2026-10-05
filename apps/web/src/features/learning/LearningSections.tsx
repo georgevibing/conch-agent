@@ -46,10 +46,11 @@ function until(at: number): string {
 function useAnswer() {
   const client = useQueryClient();
   const [busy, setBusy] = useState<string>();
-  const answer = async (id: string, kind: 'keep' | 'undo' | 'dismiss') => {
+  const answer = async (id: string, kind: 'keep' | 'undo' | 'dismiss', seen?: string) => {
     setBusy(id);
     try {
-      await learningApi.answer(id, kind);
+      // The words you saw: a Keep is your answer for exactly those (ADR 0087).
+      await learningApi.answer(id, kind, seen);
       void client.invalidateQueries({ queryKey: learningKeys.all });
       void client.invalidateQueries({ queryKey: keys.memories });
     } catch (e) {
@@ -127,7 +128,7 @@ export function LearnedSection() {
                 thing={thingOf(entry, open)}
                 meta={metaOf(entry)}
                 onUndo={(id) => void answer(id, 'undo')}
-                onKeep={(id) => void answer(id, 'keep')}
+                onKeep={(id) => void answer(id, 'keep', entry.after.content)}
                 onForget={(id) => void answer(id, 'dismiss')}
                 {...(busy && { busy })}
               />

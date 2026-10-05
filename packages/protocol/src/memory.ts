@@ -34,8 +34,11 @@ export const Memory = z.object({
   pending: z.boolean().optional(),
   /** Why it waits, in a sentence: “Learned in a chat that read news.example.” */
   untrusted: z.string().max(300).optional(),
-  /** What a learned fact is about (ADR 0088). */
-  about: MemoryAbout.optional(),
+  /**
+   * What a learned fact is about (ADR 0088). One this version doesn't know
+   * (from a later one) is left out, never the whole memory.
+   */
+  about: MemoryAbout.optional().catch(undefined),
   /** The record of how Conch learned it (`LearnedEntry.id`), for Why? and Undo (ADR 0088). */
   learned: z.string().max(40).optional(),
   /**

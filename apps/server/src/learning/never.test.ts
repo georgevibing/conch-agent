@@ -30,14 +30,23 @@ function meaning(close: [string, string][], same = 0.5): Embedder {
 }
 
 describe('never learned again (ADR 0088 § 6)', () => {
-  it('the same words, or nearly', async () => {
+  it('the very same thing is dropped', async () => {
     const list = [item('Likes dark mode')];
-    expect(await neverMatch('likes dark mode', list)).toBeDefined();
-    expect(await neverMatch('Likes the dark mode', list)).toBeDefined();
+    expect(await neverMatch('likes dark mode', list)).toMatchObject({ exact: true });
+    expect(await neverMatch('Likes the dark mode', list)).toMatchObject({ exact: true });
     expect(await neverMatch('Drinks tea', list)).toBeUndefined();
   });
 
-  it('never blocks a real change: Berlin to Lisbon', async () => {
+  it('the opposite correction is only close: it waits, never dropped', async () => {
+    expect(await neverMatch('Prefers light mode', [item('Prefers dark mode')])).toMatchObject({
+      exact: false,
+    });
+    expect(
+      await neverMatch('Prefers TypeScript over Python', [item('Prefers Python over TypeScript')]),
+    ).toMatchObject({ exact: false });
+  });
+
+  it('never stands in the way of a real change: Berlin to Lisbon', async () => {
     const list = [item('Lives in Berlin')];
     expect(await neverMatch('Lives in Lisbon', list)).toBeUndefined();
     // Even when a model thinks they're close.
@@ -46,13 +55,13 @@ describe('never learned again (ADR 0088 § 6)', () => {
     ).toBeUndefined();
   });
 
-  it('meaning confirms a looser match in words', async () => {
+  it('meaning confirms a looser match in words, as close', async () => {
     // Stems in common: 0.4, close enough to ask, not enough by themselves.
     const list = [item('Prefers short replies in the morning')];
     const said = 'Prefers short answers';
     const model = meaning([['Prefers short replies in the morning', said]]);
     expect(await neverMatch(said, list)).toBeUndefined();
-    expect(await neverMatch(said, list, model)).toBeDefined();
+    expect(await neverMatch(said, list, model)).toMatchObject({ exact: false });
     expect(await neverMatch(said, list, meaning([]))).toBeUndefined();
   });
 

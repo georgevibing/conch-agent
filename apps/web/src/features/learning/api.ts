@@ -7,9 +7,12 @@ import { request } from '../../api/client';
 /** Quiet learning (ADR 0088): what Conch learned from your chats, and your answers. */
 export const learningApi = {
   status: () => request(LearningStatus, '/api/learning'),
-  /** Keep, Undo or Forget one thing learned. */
-  answer: (entryId: string, answer: 'keep' | 'undo' | 'dismiss') =>
-    request(LearnedEntry, '/api/learning/answer', { method: 'POST', body: { entryId, answer } }),
+  /** Keep, Undo or Forget one thing learned; `seen`, the words you saw when you answered. */
+  answer: (entryId: string, answer: 'keep' | 'undo' | 'dismiss', seen?: string) =>
+    request(LearnedEntry, '/api/learning/answer', {
+      method: 'POST',
+      body: { entryId, answer, ...(seen && { seen }) },
+    }),
   /** What learning may spend a month; `null`: no limit. */
   setSpending: (limitUsd: number | null) =>
     request(LearningSpending, '/api/learning/spending', { method: 'PUT', body: { limitUsd } }),

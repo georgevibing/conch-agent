@@ -127,11 +127,19 @@ describe('what learning may spend (ADR 0088 § 8)', () => {
     expect(mergeLearningSpend(undefined, Buffer.from('nonsense')).months).toEqual({});
   });
 
-  it('nothing to count is nothing counted', async () => {
+  it('nothing to count is nothing counted; what can’t be priced counts at the dearest price', async () => {
     const { spend } = await setup();
     expect(await spend.record(undefined, engine())).toBe(0);
-    expect(
-      await spend.record({ inputTokens: 10, outputTokens: 10 }, engine(), 'an-unknown-model'),
-    ).toBe(0);
+    // A model it doesn't know, or the provider's own default: never free.
+    const unknown = await spend.record(
+      { inputTokens: 10_000, outputTokens: 1_000 },
+      engine(),
+      'an-unknown-model',
+    );
+    expect(unknown).toBeCloseTo((10_000 * 10 + 1_000 * 50) / 1e6, 6);
+    expect(await spend.record({ inputTokens: 10_000, outputTokens: 1_000 }, engine())).toBeCloseTo(
+      unknown,
+      6,
+    );
   });
 });

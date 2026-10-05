@@ -15,6 +15,7 @@
  */
 import type { Memory } from '@conch/protocol';
 
+import { tokens } from '../memory/embed';
 import { SECRET } from '../skills/learn';
 import type { Change } from './review';
 
@@ -50,8 +51,11 @@ export interface GateContext {
   watched: boolean;
   /** Live and waiting memories, by id. */
   memories: ReadonlyMap<string, Memory>;
-  /** It's on the never-list. */
-  refused: boolean;
+  /**
+   * It's on the never-list: the very same thing (`exact`, dropped), or only
+   * close to something there (it waits, saying what).
+   */
+  refused?: { exact: boolean; text: string };
   /** A live or waiting memory that already says it. */
   duplicate?: Memory;
   appliedThisLook: number;
@@ -69,15 +73,29 @@ function fold(text: string): string {
     .trim();
 }
 
-/** Whether a quote is words the person wrote: in one message, exactly or nearly. */
-export function grounded(quote: string, said: readonly string[]): boolean {
+/** A quote long enough to say something: three words, or a dozen letters. */
+const QUOTE_WORDS = 3;
+const QUOTE_CHARS = 12;
+
+/**
+ * Whether a quote is words the person wrote, and what's learned rests on it:
+ * whole words of one message (exactly, or nearly for a longer quote), long
+ * enough to say something, sharing a word that matters with what's learned.
+ * "the" in "there is a bug" grounds nothing.
+ */
+export function grounded(quote: string, said: readonly string[], text?: string): boolean {
   const q = fold(quote);
-  if (q.length < 3) return false;
   const words = q.split(' ').filter((w) => w.length > 1);
+  if (words.length < QUOTE_WORDS && q.length < QUOTE_CHARS) return false;
+  // What's learned shares a word that matters with the words it rests on.
+  if (text !== undefined) {
+    const theirs = new Set(tokens(quote));
+    if (!tokens(text).some((t) => t.length >= 3 && theirs.has(t))) return false;
+  }
   for (const s of said) {
     const f = fold(s);
-    if (f.includes(q)) return true;
-    if (words.length >= 3) {
+    if (` ${f} `.includes(` ${q} `)) return true;
+    if (words.length >= QUOTE_WORDS + 1) {
       const have = new Set(f.split(' '));
       if (words.filter((w) => have.has(w)).length / words.length >= 0.8) return true;
     }
@@ -101,13 +119,13 @@ export function dropWhy(
 ): string | undefined {
   const text = change.text;
   // Facts about this computer are written by code from a template, not quoted.
-  if (!options.observed && !grounded(change.quote, ctx.said))
+  if (!options.observed && !grounded(change.quote, ctx.said, text))
     return 'it doesn’t rest on words you wrote';
   if (SECRET.test(text) || (ctx.redact && ctx.redact(text) !== text)) return 'something secret';
   if (HEALTH_OR_MONEY.test(text)) return 'health or money';
   if (ABOUT_ASSISTANT.test(text) || ORDER.test(text)) return 'about the assistant, or an order';
   if (POWER.test(text)) return 'a power';
-  if (ctx.refused) return 'you took it back once';
+  if (ctx.refused?.exact) return 'you took it back once';
   if (change.op === 'supersede') {
     const target = ctx.memories.get(change.id);
     if (!target) return 'nothing to replace';
@@ -126,6 +144,12 @@ export function gate(
   if (why) return { verdict: 'drop', why };
   if (change.op === 'add' && ctx.duplicate) return { verdict: 'seen', memory: ctx.duplicate };
   if (ctx.untrusted) return { verdict: 'wait', waits: learnedIn(ctx.untrusted) };
+  // Close to something you took back: maybe the correction that came next, so you say.
+  if (ctx.refused)
+    return {
+      verdict: 'wait',
+      waits: `You took back “${ctx.refused.text.slice(0, 120)}” before, so this waits for your OK.`,
+    };
   if (!ctx.watched)
     return {
       verdict: 'wait',

@@ -146,6 +146,9 @@ function Thing({
 }: { thing: LearnedThing; meta?: ReactNode } & Answers) {
   const settled = SETTLED[thing.state];
   const working = busy === thing.id;
+  // Each button names its thing, so a list of them reads as more than "Undo, Undo, Undo".
+  const short = thing.text.length > 80 ? `${thing.text.slice(0, 79)}…` : thing.text;
+  const named = (answer: string) => `${answer} “${short}”`;
   return (
     <>
       <div className={styles.row}>
@@ -170,13 +173,20 @@ function Thing({
                   variant="ghost"
                   tone="neutral"
                   disabled={working}
+                  aria-label={named('Forget')}
                   onClick={() => onForget(thing.id)}
                 >
                   Forget
                 </Button>
               )}
               {onKeep && (
-                <Button size="sm" variant="soft" loading={working} onClick={() => onKeep(thing.id)}>
+                <Button
+                  size="sm"
+                  variant="soft"
+                  loading={working}
+                  aria-label={named('Keep')}
+                  onClick={() => onKeep(thing.id)}
+                >
                   Keep
                 </Button>
               )}
@@ -190,6 +200,7 @@ function Thing({
                 tone="neutral"
                 leadingIcon={<Undo2 />}
                 loading={working}
+                aria-label={named('Undo')}
                 onClick={() => onUndo(thing.id)}
               >
                 Undo

@@ -156,6 +156,8 @@ export const LearningAnswerBody = z
   .object({
     entryId: z.string().min(1).max(64),
     answer: z.enum(['keep', 'undo', 'dismiss']),
+    /** The words you saw when you answered: Keep is your answer for exactly those. */
+    seen: z.string().min(1).max(2000).optional(),
   })
   .strict();
 export type LearningAnswerBody = z.infer<typeof LearningAnswerBody>;

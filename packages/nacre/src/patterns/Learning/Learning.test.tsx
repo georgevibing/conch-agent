@@ -51,8 +51,10 @@ describe('LearnedLine', () => {
     // A move shows what it replaced (and says so to a screen reader).
     expect(line).toHaveTextContent('Now: Lives in Lisbon');
     expect(line).toHaveTextContent('it was: Lives in Berlin');
-    await user.click(screen.getAllByRole('button', { name: 'Undo' })[0] as HTMLElement);
+    // Each Undo names its thing, so a list of them reads as more than "Undo, Undo".
+    await user.click(screen.getByRole('button', { name: 'Undo “Prefers TypeScript over Python”' }));
     expect(onUndo).toHaveBeenCalledWith('le_1');
+    expect(screen.getByRole('button', { name: 'Undo “Lives in Lisbon”' })).toBeInTheDocument();
     await expectAccessible(container);
   });
 
@@ -76,8 +78,8 @@ describe('LearnedLine', () => {
     );
     expect(screen.getByRole('group')).toHaveTextContent('Learned 2 things · 1 waits for your OK');
     expect(screen.getByText('Learned in a chat that read trains.example.')).toBeVisible();
-    await user.click(screen.getByRole('button', { name: 'Keep' }));
-    await user.click(screen.getByRole('button', { name: 'Forget' }));
+    await user.click(screen.getByRole('button', { name: 'Keep “Prefers trains”' }));
+    await user.click(screen.getByRole('button', { name: 'Forget “Prefers trains”' }));
     expect(onKeep).toHaveBeenCalledWith('le_3');
     expect(onForget).toHaveBeenCalledWith('le_3');
     await expectAccessible(container);
@@ -97,7 +99,7 @@ describe('LearnedLine', () => {
     expect(screen.getByText('Undone · won’t learn this again')).toBeInTheDocument();
     expect(screen.getByText('Kept')).toBeInTheDocument();
     // Kept can still be undone; undone can't be undone again.
-    expect(screen.getAllByRole('button', { name: 'Undo' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /^Undo/ })).toHaveLength(1);
     expect(screen.getByRole('group')).toHaveTextContent('Learned 2 things');
   });
 

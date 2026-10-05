@@ -19,9 +19,17 @@ import { Mutex, writeJson } from '../lib/fs';
 import { readStore, type Heal } from '../lib/recover';
 import { monthKey, nextMonth, PLAN_ROOM_PERCENT } from '../routines/spend';
 import { Billings, priceUsage } from '../usage/billing';
+import { costAt, type Price } from '../usage/prices';
 
 /** The cap until a person sets one: a few hundred cheap looks a month. */
 export const DEFAULT_LEARNING_USD = 1;
+
+/**
+ * What a pay-as-you-go look costs when neither the provider nor the price
+ * list can say (a model Conch doesn't know, the provider's own default): the
+ * dearest price Conch knows, so the cap can only trip early, never late.
+ */
+export const UNKNOWN_PRICE: Price = { input: 10, output: 50 };
 
 const SpendFile = z.object({
   version: z.literal(1).default(1),
@@ -139,7 +147,7 @@ export class LearningSpend {
     if (!usage) return 0;
     const info = await this.#billings.of(engine);
     if (info.billing === 'free' || info.billing === 'plan') return 0;
-    const usd = priceUsage(usage, model).usd ?? 0;
+    const usd = priceUsage(usage, model).usd ?? costAt(UNKNOWN_PRICE, usage);
     if (usd <= 0) return 0;
     const crossed = await this.#mutex.run(async () => {
       const file = await this.#load();

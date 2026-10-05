@@ -13,7 +13,7 @@
  */
 import { join } from 'node:path';
 
-import { LearnedEntry, NeverItem } from '@conch/protocol';
+import { LearnedEntry, LearnedItem, NeverItem } from '@conch/protocol';
 import { z } from 'zod';
 
 import { Mutex, writeJson } from '../lib/fs';
@@ -50,6 +50,8 @@ const ChatState = z.object({
   quiet: z.boolean().optional(),
   /** The chat's `updatedAt` when a look last finished: nothing new since means nothing to read. */
   upTo: z.number().optional(),
+  /** Learned while a turn ran: said at the end of the chat by its next quiet look. */
+  unsaid: z.array(LearnedItem).max(5).optional(),
   /** When it was last touched here (to keep the newest). */
   at: z.number().optional(),
 });

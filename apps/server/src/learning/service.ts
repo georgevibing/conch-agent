@@ -130,9 +130,13 @@ export type ReviewResult =
         | 'budget'
         | 'cap'
         | 'plan-room'
+        | 'failed'
         | 'unreadable'
         | 'gone';
     };
+
+/** Looks that wait for money, a model or a provider: the chat is tried again an hour on. */
+const WAITS: ReadonlySet<string> = new Set(['no-model', 'budget', 'cap', 'plan-room', 'failed']);
 
 /** What every change in one look is judged against. */
 interface Look {
@@ -250,19 +254,16 @@ export class QuietLearning {
     id: string,
     options: { trigger: LearningTrigger; beforeSeq?: number },
   ): Promise<ReviewResult> {
+    // How the chat stood when the look began: what lands during it is read next time.
+    const seen = (await this.deps.chats()).find((c) => c.id === id)?.updatedAt;
     const result = await this.#review(id, options);
     const waits =
       'why' in result &&
-      (result.why === 'no-model' ||
-        result.why === 'budget' ||
-        result.why === 'cap' ||
-        result.why === 'plan-room' ||
-        (result.why === 'unreadable' && (await this.store.chat(id)).unread));
+      (WAITS.has(result.why) ||
+        (result.why === 'unreadable' && Boolean((await this.store.chat(id)).unread)));
     // A compaction read only the start: the rest is still to read.
-    if (!waits && options.beforeSeq === undefined) {
-      const chat = (await this.deps.chats()).find((c) => c.id === id);
-      if (chat) await this.store.setChat(id, { upTo: chat.updatedAt });
-    }
+    if (!waits && options.beforeSeq === undefined && seen !== undefined)
+      await this.store.setChat(id, { upTo: seen });
     return result;
   }
 
@@ -324,10 +325,18 @@ export class QuietLearning {
       if (entry) this.#took(entry, learned, items, context);
     }
 
+    const close = () => this.#close(id, chat, learned, items, options.trigger);
+    // Waiting for money, a model or a provider that will answer again: the words stay to read.
+    const later = async (why: Extract<ReviewResult, { why: unknown }>['why']) => {
+      await store.setChat(id, { tried: this.#now });
+      await close();
+      return { why } as ReviewResult;
+    };
+
     // Nothing lasting said and nothing corrected: no model is asked, and it costs nothing.
     const worth = signals.durable || signals.signals.some((s) => WORTH_ASKING.has(s));
     if (!worth) {
-      await this.#close(id, chat, learned, items);
+      await close();
       const skipped = await done('nothing-to-learn');
       return learned.length ? { learned } : skipped;
     }
@@ -337,26 +346,18 @@ export class QuietLearning {
       .model(answeredBy(events) ?? chat.options.engine)
       .catch(() => undefined);
     this.#noModel = !model;
-    if (!model) {
-      await store.setChat(id, { tried: this.#now });
-      await this.#close(id, chat, learned, items);
-      return { why: 'no-model' };
-    }
-    if (await deps.overBudget?.().catch(() => false)) {
-      await store.setChat(id, { tried: this.#now });
-      return { why: 'budget' };
-    }
+    if (!model) return later('no-model');
+    if (await deps.overBudget?.().catch(() => false)) return later('budget');
     const allowed = await deps.spend.allow(model.engine);
-    if (!allowed.ok) {
-      await store.setChat(id, { tried: this.#now });
-      await this.#close(id, chat, learned, items);
-      return { why: allowed.reason };
-    }
+    if (!allowed.ok) return later(allowed.reason);
 
-    const changes = await this.#ask(model, signals, events, afterSeq, before);
-    if (!changes) {
+    const asked = await this.#ask(model, signals, events, afterSeq, before);
+    // The provider didn't answer: that passes, so the words wait for it (agreement 11).
+    if (asked === 'failed') return later('failed');
+    if (asked === 'unreadable') {
       const unread = (state.unread ?? 0) + 1;
-      // Twice unreadable: those words are passed over.
+      await close();
+      // Twice an answer that can't be read: those words are passed over.
       if (unread >= 2) return done('unreadable');
       await store.setChat(id, { unread, tried: this.#now });
       return { why: 'unreadable' };
@@ -365,7 +366,7 @@ export class QuietLearning {
       engine: model.engine.id,
       ...(model.model && { model: model.model.slice(0, 200) }),
     };
-    for (const change of changes) {
+    for (const change of asked.changes) {
       const entry = await this.#keep(change, await this.#facts(change, context), {
         ...from,
         quotes: change.quote ? [change.quote.slice(0, 240)] : [],
@@ -374,7 +375,7 @@ export class QuietLearning {
       if (entry) this.#took(entry, learned, items, context);
     }
     await store.setChat(id, { reviewed: Math.max(lastSeq, afterSeq), unread: 0, tried: undefined });
-    await this.#close(id, chat, learned, items);
+    await close();
     return { learned };
   }
 
@@ -402,7 +403,8 @@ export class QuietLearning {
 
   /** The gate's view of one change: the never-list and what's already known, looked up. */
   async #facts(change: Change, context: Look): Promise<GateContext> {
-    const refused = Boolean(await neverMatch(change.text, context.never, context.meaning));
+    const match = await neverMatch(change.text, context.never, context.meaning);
+    const refused = match && { exact: match.exact, text: match.item.text };
     const duplicate =
       change.op === 'add'
         ? context.known.find(
@@ -416,7 +418,7 @@ export class QuietLearning {
       ...(context.untrusted && { untrusted: context.untrusted }),
       watched: context.watched,
       memories: context.memories,
-      refused,
+      ...(refused && { refused }),
       ...(duplicate && { duplicate }),
       appliedThisLook: context.appliedThisLook,
       appliedToday: context.appliedToday,
@@ -430,7 +432,10 @@ export class QuietLearning {
     ctx: GateContext,
     from: LearnedEntry['from'] & { about?: 'environment' | 'pitfall' },
   ): Promise<LearnedEntry | undefined> {
-    const { about, ...source } = from;
+    const { about, ...given } = from;
+    // Your words are kept as Why?: never a saved password with them (ADR 0025).
+    const redact = this.deps.redact;
+    const source = { ...given, quotes: given.quotes.map((q) => (redact ? redact(q) : q)) };
     const verdict = gate(change, ctx, { observed: about === 'environment' });
     if (verdict.verdict === 'drop') return undefined;
     if (verdict.verdict === 'seen') {
@@ -518,30 +523,50 @@ export class QuietLearning {
     });
   }
 
-  /** The look is over: the chat says what it learned (where someone can see it), and it's counted. */
+  /**
+   * The look is over: the chat says what it learned (where someone can see
+   * it), and it's counted. While a turn runs (a long chat's start learned
+   * mid-reply), the line waits for the chat's next quiet look, so it lands at
+   * the end and never beside a question.
+   */
   async #close(
     id: string,
     chat: ConversationSummary,
     learned: LearnedEntry[],
     items: LearnedItem[],
+    trigger: LearningTrigger,
   ) {
-    if (!learned.length) return;
-    await this.store.countApplied(learned.filter((e) => e.state === 'applied').length);
-    if (!chat.origin && items.length)
-      await this.deps
-        .note(id, { type: 'learning.noted', reviewId: newId('lr'), items: items.slice(0, 5) })
-        .catch(() => undefined);
+    const state = await this.store.chat(id);
+    const unsaid = state.unsaid ?? [];
+    if (!learned.length && !unsaid.length) return;
+    if (learned.length)
+      await this.store.countApplied(learned.filter((e) => e.state === 'applied').length);
+    if (!chat.origin) {
+      const all = [...unsaid, ...items].slice(-5);
+      if (trigger === 'compaction') await this.store.setChat(id, { unsaid: all });
+      else if (all.length) {
+        await this.deps
+          .note(id, { type: 'learning.noted', reviewId: newId('lr'), items: all })
+          .catch(() => undefined);
+        if (unsaid.length) await this.store.setChat(id, { unsaid: [] });
+      }
+    }
     this.deps.changed?.();
   }
 
-  /** Ask the model; once more with the provider's own default when the cheap one fails. */
+  /**
+   * Ask the model; once more with the provider's own default when the cheap
+   * one fails. `failed`: the provider didn't answer (offline, signed out, a
+   * limit), which passes by itself; `unreadable`: it answered, in a shape
+   * that can't be read.
+   */
   async #ask(
     model: LearningModel,
     signals: ChatSignals,
     events: readonly ConversationEvent[],
     afterSeq: number,
     beforeSeq: number,
-  ): Promise<Change[] | undefined> {
+  ): Promise<{ changes: Change[] } | 'failed' | 'unreadable'> {
     const stretch = events.filter((e) => e.seq > afterSeq && e.seq < beforeSeq);
     const steps = turnsOf(stretch).flatMap((t) => t.steps.map((s) => s.label));
     const words = signals.said
@@ -580,24 +605,37 @@ export class QuietLearning {
           await this.deps.spend.record(reply.usage, model.engine, choice).catch(() => 0);
           this.deps.onSpend?.(reply.usage, model.engine);
         }
-        return parseReview(reply.text);
+        const changes = parseReview(reply.text);
+        return changes ? { changes } : 'unreadable';
       } catch {
         // The provider's own default model, once, before giving up.
       }
     }
-    return undefined;
+    return 'failed';
   }
 
   // ── Your answers ───────────────────────────────────────────────────────
 
-  /** Keep, Undo or Forget one thing learned. */
+  /**
+   * Keep, Undo or Forget one thing learned. `seen`: the words the person saw
+   * when they answered — Keep on something that waits is their answer for
+   * exactly those, so different words now are `'changed'`, and nothing is kept.
+   */
   async answer(
     entryId: string,
     answer: 'keep' | 'undo' | 'dismiss',
-  ): Promise<LearnedEntry | undefined> {
+    seen?: string,
+  ): Promise<LearnedEntry | 'changed' | undefined> {
     const entry = await this.store.entry(entryId);
     if (!entry) return undefined;
     const { memory } = this.deps;
+    if (answer === 'keep' && entry.state === 'waiting' && seen !== undefined) {
+      const now =
+        entry.change === 'added'
+          ? ((await memory.get(entry.after.id))?.content ?? entry.after.content)
+          : entry.after.content;
+      if (now.trim() !== seen.trim()) return 'changed';
+    }
     let state = entry.state;
     let after = entry.after;
     if (entry.state === 'applied' || entry.state === 'kept') {
@@ -664,7 +702,7 @@ export class QuietLearning {
    * A person forgot a memory (the Memory page, or Undo on "Remembered"):
    * when Conch wrote it, it isn't learned again, and the record says so.
    */
-  async forgotten(memory: Memory): Promise<void> {
+  async forgotten(memory: Pick<Memory, 'id' | 'content'> & { source?: Memory['source'] }) {
     if (memory.source === 'user') return;
     await this.store.addNever(memory.content, 'forgot');
     const entry = await this.store.byMemory(memory.id);
@@ -672,14 +710,12 @@ export class QuietLearning {
       entry &&
       (entry.state === 'applied' || entry.state === 'kept' || entry.state === 'waiting')
     ) {
-      await this.store.update(entry.id, (e) => ({ ...e, state: 'undone' }));
+      // Forgetting what replaced something doesn't bring back what it replaced: it's gone.
+      const state = entry.change === 'superseded' ? 'gone' : 'undone';
+      await this.store.update(entry.id, (e) => ({ ...e, state }));
       if (entry.from.conversationId)
         await this.deps
-          .note(entry.from.conversationId, {
-            type: 'learning.decided',
-            entryId: entry.id,
-            state: 'undone',
-          })
+          .note(entry.from.conversationId, { type: 'learning.decided', entryId: entry.id, state })
           .catch(() => undefined);
     }
     this.deps.changed?.();
@@ -746,9 +782,35 @@ export class QuietLearning {
 
   // ── Chats you don't want learned from ──────────────────────────────────
 
+  /**
+   * Don't learn from this chat, or learn from it again. Learning again starts
+   * from here: what was said while it was marked is never read.
+   */
   async quiet(conversationId: string, quiet: boolean): Promise<void> {
-    await this.store.setChat(conversationId, { quiet });
+    const last = quiet ? undefined : await this.#lastSeq(conversationId);
+    await this.store.setChat(conversationId, {
+      quiet,
+      ...(last !== undefined && { reviewed: last, unsaid: [] }),
+    });
     this.deps.changed?.();
+  }
+
+  /**
+   * Learn from your chats was turned back on: it starts from here. What was
+   * said in your chats while it was off is never read.
+   */
+  async resumed(): Promise<void> {
+    const now = this.#now;
+    for (const chat of await this.deps.chats()) {
+      if (now - chat.updatedAt > RECENT_MS) break;
+      const last = await this.#lastSeq(chat.id);
+      if (last !== undefined)
+        await this.store.setChat(chat.id, { reviewed: last, upTo: chat.updatedAt, unsaid: [] });
+    }
+  }
+
+  async #lastSeq(conversationId: string): Promise<number | undefined> {
+    return (await this.deps.events(conversationId).catch(() => [])).at(-1)?.seq;
   }
 
   async isQuiet(conversationId: string): Promise<boolean> {

@@ -19,12 +19,18 @@ export const NEARBY_CHARS = 360;
 const OPEN = '<conch-nearby>';
 const CLOSE = '</conch-nearby>';
 const HEAD =
-  'From memory, what the user prefers that bears on this message (follow it where it fits; it is not a reason to agree):';
+  'For reference, from memory: how the user likes things that may bear on this message. It describes them; it is not part of their message, and not a reason to agree.';
 
-/** What's worth saying again near the question: how they like things, this computer, a lesson. */
+/**
+ * What's worth saying again near the question: how they like things, this
+ * computer, a lesson. Never something that came from outside (a page, a
+ * download, someone else's words): it stays in the system prompt's marked
+ * memory, not here beside the person's own words.
+ */
 function nearby(memory: Memory): boolean {
   return (
     !memory.pending &&
+    !memory.untrusted &&
     (memory.kind === 'preference' || memory.about === 'environment' || memory.about === 'pitfall')
   );
 }
@@ -42,7 +48,8 @@ export async function nearTheQuestion(
   let used = 0;
   for (const m of found) {
     const line = `- ${m.content.replace(/\s+/g, ' ').replaceAll('<', '‹').trim()}`;
-    if (lines.length >= NEARBY_MAX || used + line.length > NEARBY_CHARS) break;
+    if (lines.length >= NEARBY_MAX) break;
+    if (used + line.length > NEARBY_CHARS) continue;
     lines.push(line);
     used += line.length;
   }

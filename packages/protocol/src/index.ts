@@ -532,12 +532,15 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     reviewId: z.string(),
     items: z.array(LearnedItem).min(1).max(5),
   }),
-  /** You undid, kept or put away something this chat learned (from the chat or the Memory page). */
+  /**
+   * You undid, kept or put away something this chat learned (from the chat or
+   * the Memory page); `gone`: you forgot what it learned some other way since.
+   */
   z.object({
     ...logged,
     type: z.literal('learning.decided'),
     entryId: z.string(),
-    state: z.enum(['undone', 'kept', 'dismissed']),
+    state: z.enum(['undone', 'kept', 'dismissed', 'gone']),
   }),
   /** The chat read something from outside: from here on, sending and changing ask first (ADR 0028). */
   z.object({

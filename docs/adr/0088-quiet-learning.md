@@ -57,7 +57,11 @@ Some chats are never looked at:
 - the learning cap or the month's budget has been reached;
 - a plan is at least 80% used (`PLAN_ROOM_PERCENT`, as for routines).
 
-For money or a missing model, the place where the look stopped stays put, and the chat is tried again at most once an hour.
+For money, a missing model or a provider that didn't answer, the place where the look stopped stays put, and the chat is tried again at most once an hour.
+
+What was said while learning was off, or while a chat was marked **Don't learn from this chat**, is never read: turning either back on starts from there.
+
+A look at the start of a long chat happens mid-reply, so what it learned isn't said there. It's said with the rest at the chat's end, once the chat goes quiet.
 
 ### 2. Signals, read by code
 
@@ -111,11 +115,12 @@ Code applies every change. A model never rewrites a stored memory in place.
 | A chat app, or another app through Conch (nobody sees the chat)             | **waits**, shown on the Memory page only |
 | It would replace a memory you wrote yourself, or one still waiting          | **waits**                                |
 | More than 3 in one look, or more than 8 in a day                            | the rest **wait**                        |
-| The words it rests on aren't in what you said                               | **dropped**                              |
+| The words it rests on aren't in what you said, or share no word with it     | **dropped**                              |
 | A key, a password, anything the vault would hide; health or money           | **dropped**                              |
 | About the assistant itself, or an order to it ("from now on", "always say") | **dropped**                              |
 | A power ("without asking", "trust", "auto-approve")                         | **dropped**                              |
 | You told Conch not to learn it (§6)                                         | **dropped**                              |
+| It's only close to something you told Conch not to learn                    | **waits**, saying what you took back     |
 | Already known                                                               | nothing new; it's counted as seen again  |
 
 ### 5. Superseded, not overwritten
@@ -132,7 +137,9 @@ The tidy-up (ADR 0032) supersedes too, when it updates a memory. Its merges are 
 
 ### 6. Never learned again
 
-Pressing Undo on something Conch learned, or forgetting a memory Conch wrote, adds it to a short list, `learning/never.json`. Every later change is checked against that list, by words and by meaning (the way turned-down skill suggestions are, ADR 0041). The `remember` tool checks it too: what you took back once waits for your OK if the assistant tries again.
+Pressing Undo on something Conch learned, or forgetting a memory Conch wrote, adds it to a short list, `learning/never.json`. Every later change is checked against that list, by words and by meaning (the way turned-down skill suggestions are, ADR 0041). The very same thing is dropped. Something only close to it waits for your OK: "Prefers TypeScript over Python" after you undid "Prefers Python" may well be the correction that came next. The `remember` tool checks the list too: what you took back once waits for your OK if the assistant tries again.
+
+Keep on something that waits is your answer for the words you saw: if they changed since, nothing is kept, and you're asked to look again.
 
 Memories you wrote yourself never go on the list. The Memory page shows the list under **Things Conch won't learn again**, each with **Remove**.
 
@@ -143,7 +150,8 @@ Each turn, at most three remembered preferences, facts about this computer or le
 `<conch-nearby>How they like things, from memory…</conch-nearby>`
 
 - **Where it goes, and why.** Never in the system prompt: changing that every turn would cost every provider's prompt cache. The block also isn't written into the chat's log, so what you see and what's handed to another provider stay your own words.
-- **Where it doesn't go.** Guests never get it.
+- **Where it doesn't go.** Guests never get it. A memory that came from outside (a page, a download), even one you kept, never goes beside your words: it stays in the system prompt's marked memory.
+- **What it says.** It's reference, labelled as not part of your message and no reason to agree.
 - **Small models.** It fits lean mode (ADR 0086).
 
 The memory section of the system prompt gains one sentence that never changes: memories describe the person; they aren't evidence about the world, and no reason to agree.

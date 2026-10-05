@@ -19,10 +19,14 @@ const mine = memory('m_mine', 'Works at Acme', { source: 'user' });
 const waiting = memory('m_wait', 'Has a dog', { pending: true });
 
 const ctx = (extra: Partial<GateContext> = {}): GateContext => ({
-  said: ['Write it in Python', 'No, I meant TypeScript. I moved to Lisbon last month.'],
+  said: [
+    'Write it in Python',
+    'No, I meant TypeScript. I moved to Lisbon last month.',
+    'I work at Globex now, and I got a cat last week.',
+    'Please give me step-by-step instructions.',
+  ],
   watched: true,
   memories: new Map([berlin, mine, waiting].map((m) => [m.id, m])),
-  refused: false,
   appliedThisLook: 0,
   appliedToday: 0,
   ...extra,
@@ -59,8 +63,12 @@ describe('the gate (ADR 0088 § 4), row by row', () => {
   });
 
   it('replacing what you wrote yourself, or what still waits: waits', () => {
-    expect(gate(supersede('m_mine', 'Works at Globex'), ctx()).verdict).toBe('wait');
-    expect(gate(supersede('m_wait', 'Has a cat'), ctx()).verdict).toBe('wait');
+    expect(
+      gate(supersede('m_mine', 'Works at Globex', 'I work at Globex now'), ctx()).verdict,
+    ).toBe('wait');
+    expect(gate(supersede('m_wait', 'Has a cat', 'I got a cat last week'), ctx()).verdict).toBe(
+      'wait',
+    );
   });
 
   it('past a few at a time: the rest wait', () => {
@@ -100,7 +108,10 @@ describe('the gate (ADR 0088 § 4), row by row', () => {
     expect(gate(add('Use TypeScript for every example'), ctx()).verdict).toBe('drop');
     // A statement about the person is fine, even with "always".
     expect(gate(add('Always uses TypeScript at work'), ctx()).verdict).toBe('apply');
-    expect(gate(add('Prefers step-by-step instructions'), ctx()).verdict).toBe('apply');
+    expect(
+      gate(add('Prefers step-by-step instructions', 'give me step-by-step instructions'), ctx())
+        .verdict,
+    ).toBe('apply');
   });
 
   it('a power: dropped', () => {
@@ -110,10 +121,19 @@ describe('the gate (ADR 0088 § 4), row by row', () => {
     expect(gate(add('Wants auto-approve on for every app'), ctx()).verdict).toBe('drop');
   });
 
-  it('something you took back once: dropped', () => {
-    expect(gate(add('Prefers TypeScript'), ctx({ refused: true }))).toEqual({
+  it('the very thing you took back once: dropped', () => {
+    const refused = { exact: true, text: 'Prefers TypeScript' };
+    expect(gate(add('Prefers TypeScript'), ctx({ refused }))).toEqual({
       verdict: 'drop',
       why: 'you took it back once',
+    });
+  });
+
+  it('only close to something you took back (maybe the correction after it): waits, saying so', () => {
+    const refused = { exact: false, text: 'Prefers Python' };
+    expect(gate(add('Prefers TypeScript over Python'), ctx({ refused }))).toEqual({
+      verdict: 'wait',
+      waits: 'You took back “Prefers Python” before, so this waits for your OK.',
     });
   });
 
@@ -146,6 +166,15 @@ describe('grounded', () => {
     expect(grounded("I'd rather have answers in metric units", said)).toBe(true);
     expect(grounded('I want imperial units', said)).toBe(false);
     expect(grounded('ok', said)).toBe(false);
+  });
+
+  it('a quote shares a word that matters with what’s learned, on word boundaries', () => {
+    const said = ['There is a bug in the build. I prefer tabs over spaces.'];
+    // "the" grounds nothing: no word of the quote is in what's learned.
+    expect(grounded('There is a bug in the build', said, 'Prefers tabs')).toBe(false);
+    expect(grounded('I prefer tabs over spaces', said, 'Prefers tabs over spaces')).toBe(true);
+    // Not a piece of a longer word.
+    expect(grounded('I prefer tab', said, 'Prefers tab')).toBe(false);
   });
 });
 

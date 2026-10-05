@@ -7,6 +7,9 @@ import { keys } from '../../api/queries';
 import { learningApi, learningKeys, useLearning } from './api';
 import { thingFromChat } from './things';
 
+/** What you answered about one thing a chat learned. */
+type Decided = 'undone' | 'kept' | 'dismissed' | 'gone';
+
 /**
  * What this chat taught Conch once it went quiet (ADR 0088): one folded line
  * at its end, with Undo and Why?, and Keep and Forget on what waits. What
@@ -17,18 +20,20 @@ export function LearnedChatLine({
   decided,
 }: {
   items: LearnedItem[];
-  decided: Record<string, 'undone' | 'kept' | 'dismissed'>;
+  decided: Record<string, Decided>;
 }) {
   const client = useQueryClient();
   const { data } = useLearning();
   const [busy, setBusy] = useState<string>();
-  const [pressed, setPressed] = useState<Record<string, 'undone' | 'kept' | 'dismissed'>>({});
+  const [pressed, setPressed] = useState<Record<string, Decided>>({});
   const entries = new Map((data?.entries ?? []).map((e) => [e.id, e]));
   const answer = async (id: string, kind: 'keep' | 'undo' | 'dismiss') => {
     setBusy(id);
     try {
-      const entry = await learningApi.answer(id, kind);
-      setPressed((p) => ({ ...p, [id]: entry.state as 'undone' | 'kept' | 'dismissed' }));
+      // The words you saw: a Keep is your answer for exactly those (ADR 0087).
+      const seen = items.find((i) => i.entryId === id)?.text;
+      const entry = await learningApi.answer(id, kind, seen);
+      setPressed((p) => ({ ...p, [id]: entry.state as Decided }));
       void client.invalidateQueries({ queryKey: learningKeys.all });
       void client.invalidateQueries({ queryKey: keys.memories });
     } catch (e) {

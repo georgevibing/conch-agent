@@ -99,7 +99,7 @@ export const UndoOne: Story = {
   args: { defaultOpen: true, items: [preference] },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: 'Undo' }));
+    await userEvent.click(canvas.getByRole('button', { name: /^Undo “/ }));
     await expect(args.onUndo).toHaveBeenCalledWith('le_1');
   },
 };

@@ -393,7 +393,11 @@ export async function buildApp(services: Services) {
         return sendError(reply, error);
       }
     }
+    const learnedBefore = (await services.settings.get()).preferences.autoMemory;
     await services.settings.update(body);
+    // Learn from your chats, on again: it starts from here, never reading what was said while off.
+    if (!learnedBefore && body.preferences?.autoMemory === true)
+      await services.learning.resumed().catch(() => undefined);
     return appState();
   });
 

@@ -158,7 +158,7 @@ export type TranscriptItem =
       kind: 'learned';
       id: string;
       items: LearnedItem[];
-      decided: Record<string, 'undone' | 'kept' | 'dismissed'>;
+      decided: Record<string, 'undone' | 'kept' | 'dismissed' | 'gone'>;
     }
   | {
       /** It looked through your other chats (ADR 0059): for what, with a link to each place. */

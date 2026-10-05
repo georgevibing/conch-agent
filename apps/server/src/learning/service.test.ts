@@ -345,7 +345,7 @@ describe('QuietLearning (ADR 0088)', () => {
     expect(entry?.state).toBe('waiting');
     expect((await memory.list()).map((m) => m.content)).toEqual(['Lives in Berlin']);
     const kept = await learning.answer(entry?.id ?? '', 'keep');
-    expect(kept?.state).toBe('kept');
+    expect(kept !== 'changed' && kept?.state).toBe('kept');
     expect((await memory.list()).map((m) => m.content)).toEqual(['Lives in Porto']);
   });
 
@@ -480,7 +480,7 @@ describe('QuietLearning (ADR 0088)', () => {
       [
         {
           summary: { id: 'c1' },
-          events: [you('a'), ...reply(), you('No, I meant b.'), ...reply()],
+          events: [you('a'), ...reply(), you('No, I meant Rust.'), ...reply()],
         },
       ],
       { now: clock },
@@ -496,7 +496,117 @@ describe('QuietLearning (ADR 0088)', () => {
     clock.at += 61 * MIN;
     expect(await learning.sweep()).toBe(1);
     expect(model.current.asked).toHaveLength(1);
-    expect((await learning.store.entries()).map((e) => e.after.content)).toEqual(['Prefers b']);
+    expect((await learning.store.entries()).map((e) => e.after.content)).toEqual(['Prefers Rust']);
+  });
+
+  it('a provider that didn’t answer: the words wait for it, not passed over', async () => {
+    const clock = { at: NOW };
+    const down = provider({ fail: true });
+    const t = await setup(
+      [
+        {
+          summary: { id: 'c1' },
+          events: [you('a'), ...reply(), you('No, I meant Rust.'), ...reply()],
+        },
+      ],
+      { model: down, now: clock },
+    );
+    expect(await t.learning.review('c1', { trigger: 'idle' })).toEqual({ why: 'failed' });
+    expect((await t.learning.store.chat('c1')).reviewed).toBeUndefined();
+    // An hour on, it answers: the same words are read.
+    const up = provider();
+    t.deps.model = async () => ({ engine: up.engine, model: 'cheap', complete: up.complete });
+    clock.at += 61 * MIN;
+    expect(await t.learning.sweep()).toBe(1);
+    expect((await t.memory.list()).map((m) => m.content)).toEqual(['Prefers Rust']);
+  });
+
+  it('what was said while a chat was marked not to learn from is never read', async () => {
+    const { learning, memory, model } = await setup([
+      {
+        summary: { id: 'c1' },
+        events: [you('a'), ...reply(), you('No, I meant Rust.'), ...reply()],
+      },
+    ]);
+    await learning.quiet('c1', true);
+    await learning.quiet('c1', false);
+    expect(await learning.review('c1', { trigger: 'idle' })).toEqual({ why: 'nothing-new' });
+    expect(model?.asked).toHaveLength(0);
+    expect(await memory.list()).toEqual([]);
+  });
+
+  it('learning turned back on starts from there', async () => {
+    const { learning, memory } = await setup([
+      {
+        summary: { id: 'c1' },
+        events: [you('a'), ...reply(), you('No, I meant Rust.'), ...reply()],
+      },
+    ]);
+    await learning.resumed();
+    expect(await learning.review('c1', { trigger: 'idle' })).toEqual({ why: 'nothing-new' });
+    expect(await memory.list()).toEqual([]);
+  });
+
+  it('what a compaction learned is said with the rest, once the chat goes quiet', async () => {
+    const { learning, notes } = await setup([
+      {
+        summary: { id: 'c1' },
+        events: [
+          you('a'),
+          ...reply(),
+          you('No, I meant TypeScript.'),
+          ...reply(),
+          you('No, I meant Rust.'),
+          ...reply(),
+        ],
+      },
+    ]);
+    // Mid-chat: nothing is said yet, so nothing lands in the middle of a reply.
+    await learning.review('c1', { trigger: 'compaction', beforeSeq: 7 });
+    expect(notes).toHaveLength(0);
+    await learning.review('c1', { trigger: 'idle' });
+    expect(notes).toHaveLength(1);
+    expect(notes[0]?.event).toMatchObject({
+      type: 'learning.noted',
+      items: [{ text: 'Prefers TypeScript' }, { text: 'Prefers Rust' }],
+    });
+    expect((await learning.store.chat('c1')).unsaid).toEqual([]);
+  });
+
+  it('forgetting what replaced something leaves it gone, not undone', async () => {
+    const { learning, memory } = await setup([
+      {
+        summary: { id: 'c1' },
+        events: [you('Weekend ideas?'), ...reply(), you('I moved to Lisbon in May.'), ...reply()],
+      },
+    ]);
+    await memory.add({ content: 'Lives in Berlin', source: 'agent' });
+    const result = await learning.review('c1', { trigger: 'idle' });
+    const entry = 'learned' in result ? result.learned[0] : undefined;
+    const lisbon = (await memory.list())[0];
+    if (lisbon) await learning.forgotten(lisbon);
+    expect((await learning.store.entry(entry?.id ?? ''))?.state).toBe('gone');
+  });
+
+  it('Keep is for the words you saw: different words now keep nothing', async () => {
+    const { learning, memory } = await setup([
+      {
+        summary: { id: 'c1' },
+        events: [
+          you('Find me a recipe'),
+          taint({ kind: 'web', label: 'recipes.example' }),
+          ...reply(),
+          you('No, I meant vegetarian.'),
+          ...reply(),
+        ],
+      },
+    ]);
+    const result = await learning.review('c1', { trigger: 'idle' });
+    const id = ('learned' in result && result.learned[0]?.id) || '';
+    expect(await learning.answer(id, 'keep', 'Prefers steak')).toBe('changed');
+    expect((await memory.list())[0]?.pending).toBe(true);
+    const kept = await learning.answer(id, 'keep', 'Prefers vegetarian');
+    expect(kept !== 'changed' && kept?.state).toBe('kept');
   });
 
   it('a chat read through isn’t picked again until something new happens', async () => {
