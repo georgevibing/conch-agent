@@ -47,8 +47,16 @@ test.afterAll(async () => {
 test.beforeEach(async ({ request }) => {
   await request.patch('/api/settings', { data: { onboarded: true, profile: { name: 'Ada' } } });
   // The test site is on this computer, which the browser avoids unless told.
-  const res = await request.patch('/api/browser/settings', { data: { allowLocal: true } });
+  const res = await request.patch('/api/browser/settings', {
+    data: {
+      allowLocal: true,
+      // Use the same locked Chromium as the test driver on CI. The runner's
+      // preinstalled Chrome changes independently and has stalled on first launch.
+      ...(process.env.CI && { preferred: 'downloaded' }),
+    },
+  });
   expect(res.ok()).toBe(true);
+  if (process.env.CI) expect(await res.json()).toMatchObject({ browser: { id: 'downloaded' } });
 });
 
 test('watch it browse, allow the site once, and find it all in the chat', async ({ page }) => {
@@ -57,9 +65,10 @@ test('watch it browse, allow the site once, and find it all in the chat', async 
   await composer.fill(`Open ${origin}/ and click “See availability”`);
   await composer.press('Enter');
 
-  // The panel slides in by itself and shows the page.
+  // First use launches a second browser, then relaunches with its remembered
+  // user agent. Allow its startup budget; subsequent UI assertions stay at 10s.
   const panel = page.getByRole('complementary', { name: 'Browser panel' });
-  await expect(panel).toBeVisible();
+  await expect(panel).toBeVisible({ timeout: 30_000 });
   await expect(panel.getByRole('button', { name: /Address: .*127\.0\.0\.1/ })).toBeVisible();
 
   // Acting on a new site asks once, showing what it's about to do.

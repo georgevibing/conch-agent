@@ -231,3 +231,34 @@ the corrected configuration passed all 35 tests in shard 2 with `CI=1` and no
 executable override. All eight backend tests passed, and the packaged desktop
 chat passed five consecutive runs with retries disabled. Hosted validation must
 still run every job on the pushed revision before calling the correction green.
+
+## Hosted validation and the next revision
+
+[Run 37379268078](https://github.com/georgevibing/conch-agent/actions/runs/37379268078)
+on `4fe04e0d` passed all eleven jobs, including the final gate. All 152 browser
+journeys and seven desktop journeys passed without retries. The workflow took
+6 min 29 s from creation to completion, compared with about 35 minutes of check
+execution in the earlier green run. This is one measured result, not a guarantee
+about runner availability or future timing.
+
+Main then advanced with the security follow-up. Its
+[run 37380076577](https://github.com/georgevibing/conch-agent/actions/runs/37380076577)
+exposed two more failures:
+
+- The new Gmail account-generation test compared whole verification scopes from
+  successive calls. Each scope intentionally expires one hour from the call;
+  the two expiry timestamps differed by one millisecond. The test now compares
+  the account and authorization identity, and still requires reconnection with
+  the same password to change the authorization identity.
+- The first browser journey timed out waiting for its panel. The trace confirmed
+  that the message was sent and Conch was still in the `starting` browser phase,
+  selecting `/usr/bin/google-chrome-stable`. The remaining four browser journeys
+  passed. CI now chooses the installed, locked Chromium for Conch's browser as
+  well as the Playwright driver, and asserts that selection. The first panel wait
+  allows 30 seconds for cold startup (which launches twice to remember the user
+  agent); subsequent UI assertions retain their ten-second bound. Browser
+  discovery and fallback remain covered by the server tests.
+
+No test was removed, no retry was added, and the aggregate gate correctly rejected
+the two failing jobs. A green revision does not establish that later changes are
+green; the exact current main revision must finish all checks.
