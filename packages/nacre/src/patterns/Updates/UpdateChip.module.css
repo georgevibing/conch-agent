@@ -1,0 +1,104 @@
+@property --uc-value {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@layer nacre.components {
+  .chip {
+    --uc-ring: 1.5px;
+    --uc-turning: 1.4s;
+    --uc-fill: 900ms;
+
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    block-size: 1.75rem;
+    padding: 0 var(--nc-space-2-5) 0 var(--nc-space-2);
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: color-mix(in oklch, var(--nc-accent-9) 14%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--nc-accent-9) 26%, transparent);
+    color: var(--nc-text-accent);
+    font: inherit;
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-semibold);
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      box-shadow var(--nc-duration-fast) var(--nc-ease-out),
+      --uc-value var(--uc-fill) var(--nc-ease-out);
+    animation: uc-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  @media (hover: hover) {
+    .chip:hover {
+      background: color-mix(in oklch, var(--nc-accent-9) 22%, transparent);
+    }
+  }
+
+  .chip:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 1px;
+  }
+
+  .chip[data-state='updating'] {
+    background: var(--nc-wash-2);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text-muted);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .mark {
+    position: relative;
+    display: grid;
+    place-items: center;
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+  }
+
+  /* How far it's come, in the pearl's colours, around the tiny pearl. */
+  .ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(var(--nc-accent-9), var(--nc-pearl-spectrum), var(--nc-accent-9));
+    mask:
+      radial-gradient(
+        farthest-side,
+        transparent calc(100% - var(--uc-ring) - 0.5px),
+        #000 calc(100% - var(--uc-ring))
+      ),
+      conic-gradient(#000 calc(var(--uc-value) * 1%), transparent 0);
+    mask-composite: intersect;
+  }
+
+  .chip[data-indeterminate] .ring {
+    animation: nc-spin var(--uc-turning) linear infinite;
+  }
+
+  .words {
+    font-variant-numeric: tabular-nums;
+  }
+
+  @keyframes uc-in {
+    from {
+      opacity: 0;
+      scale: 0.85;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chip,
+    .chip[data-indeterminate] .ring {
+      animation: none;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .chip,
+  [data-nacre-motion='reduced'] .chip[data-indeterminate] .ring {
+    animation: none;
+  }
+}

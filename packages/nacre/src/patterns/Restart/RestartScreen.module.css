@@ -19,7 +19,10 @@
     text-align: center;
   }
 
+  /* The whole window is room: ripples spread wide. */
   .center > :first-child {
+    --pp-spread: 2.4;
+
     margin-block-end: var(--nc-space-3);
   }
 
