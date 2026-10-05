@@ -105,6 +105,25 @@ describe('normalising arguments against the tool’s own schema', () => {
     );
   });
 
+  it('preserves app_try input while dropping unknown outer arguments', () => {
+    const tool = {
+      name: 'app_try',
+      input: { tool: z.string(), input: z.looseObject({}).optional() },
+    };
+    const input = { section: 'summary', date: '2026-10-05', nested: { amount: 200 } };
+    const result = ok(checkHostArgs(tool, { tool: 'read_diary', input, typo: true }));
+    expect(result.args).toEqual({ tool: 'read_diary', input });
+    expect(result.notes).toEqual(['Ignored a field this tool doesn’t take: typo.']);
+  });
+
+  it('still validates values permitted by a nested catch-all schema', () => {
+    const tool = { name: 'settings', input: { values: z.object({}).catchall(z.number()) } };
+    expect(ok(checkHostArgs(tool, { values: { count: 3 } })).args).toEqual({
+      values: { count: 3 },
+    });
+    expect(checkHostArgs(tool, { values: { count: 'invalid' } }).ok).toBe(false);
+  });
+
   it('unwraps an {"arguments": …} envelope the tool doesn’t take', () => {
     expect(ok(checkHostArgs(search, { arguments: { query: 'tea' } })).args.query).toBe('tea');
     expect(ok(checkHostArgs(search, { input: '{"query": "tea"}' })).args.query).toBe('tea');

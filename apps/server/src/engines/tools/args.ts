@@ -268,7 +268,10 @@ function normaliseObject(
 ): Record<string, unknown> {
   const properties = isRecord(schema['properties']) ? schema['properties'] : undefined;
   if (!properties) return value;
-  const closed = dropUnknown || schema['additionalProperties'] === false;
+  // Explicit catch-all schemas belong to the tool (for example app_try's input).
+  // Keep their fields; the tool's Zod schema still validates them afterwards.
+  const extra = schema['additionalProperties'];
+  const closed = extra === false || (dropUnknown && extra !== true && !isRecord(extra));
   const entries: [string, unknown][] = [];
   for (const [key, field] of Object.entries(value)) {
     const spec = Object.hasOwn(properties, key) ? properties[key] : undefined;
@@ -288,7 +291,8 @@ function normaliseObject(
 /**
  * Arguments brought to the schema where a model's slip is unambiguous.
  * `dropUnknown` drops fields the schema doesn't name, at every level (Conch's
- * own tools, which are strict); otherwise only where the schema says
+ * own tools, which are strict), except explicit catch-all object schemas;
+ * otherwise only where the schema says
  * `additionalProperties: false` (an integration's, which may take more).
  */
 export function normaliseArgs(

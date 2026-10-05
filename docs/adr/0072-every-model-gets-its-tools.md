@@ -135,3 +135,5 @@ a model that then refuses tools gets them in words.
 toolmodes}.test.ts` (a fake-fetch matrix: a model past the top 60, a failed list, the public
   lookup, OpenRouter's 404, Gemini's schema refusal and the strict retry, tools in words end
   to end), `browser/ref.test.ts`.
+
+Explicit open object schemas retain their fields during argument normalisation. For example, `app_try.input` carries the arguments of the app tool being tested. Unknown outer arguments and fields of closed nested objects are still dropped, and the original Zod schema still validates catch-all values.
