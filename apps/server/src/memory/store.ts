@@ -547,8 +547,10 @@ export class MemoryStore {
    * What's true now replaces a memory (ADR 0088). The new one is written
    * through the check like any memory; once it's usable, the old one moves to
    * `memory/superseded/`, sealed, saying when it stopped being true and what
-   * replaced it. A new one that waits (held, or waiting for an OK) leaves the
-   * old one where it is: nothing is retired on words nobody has looked at.
+   * replaced it. A new one that waits (asked to, held, or waiting for an OK)
+   * leaves the old one where it is: nothing is retired on words nobody has
+   * looked at. Words already known are that memory, refreshed, and nothing is
+   * retired by them: a supersede only ever retires for a memory it made.
    */
   async supersede(
     id: string,
@@ -557,66 +559,85 @@ export class MemoryStore {
   ): Promise<{ before: Memory; after: Memory; retired: boolean } | undefined> {
     const before = await this.get(id);
     if (!before) return undefined;
+    const known = new Set((await this.list()).map((m) => m.id));
     const { memory: after } = await this.write(next, how);
-    if (after.id === id) return { before, after, retired: false };
-    const retired = after.pending ? false : await this.retire(id, after.id);
+    if (known.has(after.id)) return { before, after, retired: false };
+    const retired = next.pending || after.pending ? false : await this.retire(id, after.id);
     return { before, after, retired };
   }
 
   /**
    * A memory that waited to replace another was kept: the other one stops
-   * being true now. Only ever stricter: it only moves a memory out of use.
+   * being true now. Only ever stricter: it only moves a usable memory out of
+   * use. One held or waiting for an OK stays where the person will see it.
    */
   async retire(id: string, replacedBy: string): Promise<boolean> {
-    const replacement = await this.get(replacedBy);
+    const [target, replacement] = [await this.get(id), await this.get(replacedBy)];
+    if (!target || target.pending || target.held) return false;
     if (!replacement || replacement.pending) return false;
-    const { memory } = await this.#commit(
+    let moved = false;
+    await this.#commit(
       'supersede',
       id,
-      () => null,
+      // Decided again under the lock: held since, it stays.
+      (current) => {
+        if (!current || current.pending || current.held) return undefined;
+        moved = true;
+        return null;
+      },
       undefined,
       'stricter',
       replacedBy,
     );
-    return Boolean(memory);
+    return moved;
   }
 
   /**
    * Undo a supersede: the memory that stopped being true comes back from
    * Conch's own sealed copy, through the same check as any write (like
    * `unforget`), and then the one that replaced it goes. A stop part way
-   * leaves both, never neither. Only ids come in, never words.
+   * leaves both, never neither: a copy that can't be put back leaves the new
+   * one too. With no copy at all (forgotten from Earlier) the new one still
+   * goes: that's what Undo asked. Only ids come in, never words.
    */
   async unsupersede(afterId: string, beforeId: string): Promise<Memory | undefined> {
-    let restored: Memory | undefined;
-    if (/^m_[\w-]{1,64}$/.test(beforeId) && !(await this.get(beforeId))) {
-      const text = await readFile(this.#past(beforeId), 'utf8').catch(() => undefined);
-      const was = text ? parse(text) : undefined;
-      if (text && was?.id === beforeId) {
-        const { key } = await this.#sealKey();
-        const ours = sealHolds(text, key) && hashLine(text) === wordsHash(was.content);
-        const { invalidAt: _i, supersededBy: _s, ...live } = was;
-        const memory: Memory = ours
-          ? live
-          : {
-              ...live,
-              ...(live.provenance && { provenance: { ...live.provenance, yours: false } }),
-            };
-        const context: WriteContext = ours
-          ? {
-              via: 'chat',
-              read: (live.provenance?.read ?? []).map((label) => ({
-                kind: label.includes('.') ? ('web' as const) : ('app' as const),
-                label,
-              })),
-              said: live.provenance?.yours || live.source === 'user' ? [live.content] : [],
-            }
-          : { via: 'other' };
-        restored = (await this.#commit('unsupersede', undefined, () => memory, context, 'check'))
-          .memory;
-        if (restored) await rm(this.#past(beforeId), { force: true });
-      }
+    if (!/^m_[\w-]{1,64}$/.test(beforeId)) return undefined;
+    if (await this.get(beforeId)) {
+      await this.remove(afterId);
+      return undefined;
     }
+    const text = await readFile(this.#past(beforeId), 'utf8').catch(() => undefined);
+    if (text === undefined) {
+      await this.remove(afterId);
+      return undefined;
+    }
+    const was = parse(text);
+    if (was?.id !== beforeId) return undefined;
+    const { key } = await this.#sealKey();
+    const ours = sealHolds(text, key) && hashLine(text) === wordsHash(was.content);
+    const { invalidAt: _i, supersededBy: _s, ...live } = was;
+    const memory: Memory = ours
+      ? live
+      : { ...live, ...(live.provenance && { provenance: { ...live.provenance, yours: false } }) };
+    // As `unforget`: the person's own words only where the copy says they were.
+    const yours = ours && Boolean(live.provenance?.yours);
+    const context: WriteContext = ours
+      ? {
+          via: 'chat',
+          read: (live.provenance?.read ?? []).map((label) => ({
+            kind: label.includes('.') ? ('web' as const) : ('app' as const),
+            label,
+          })),
+          said: yours ? [live.content] : [],
+        }
+      : { via: 'other' };
+    const restored = (
+      await this.#commit('unsupersede', undefined, () => memory, context, 'check').catch(() => ({
+        memory: undefined,
+      }))
+    ).memory;
+    if (!restored) return undefined;
+    await rm(this.#past(beforeId), { force: true });
     await this.remove(afterId);
     return restored;
   }
@@ -645,13 +666,16 @@ export class MemoryStore {
       const text = await readFile(join(this.dir, PAST_DIR, file), 'utf8').catch(() => '');
       const memory = parse(text);
       if (!memory || live.has(memory.id) || `${memory.id}.md` !== file) continue;
+      // What used to be true is handed to a model (recall): never words held or waiting.
+      if (memory.pending || memory.held) continue;
       if (sealHolds(text, key) && hashLine(text) === wordsHash(memory.content)) {
         past.push(memory);
         continue;
       }
       const verdict = guarded({ content: rawContent(text) ?? memory.content, via: 'other', on });
       if (verdict.verdict !== 'ok') continue;
-      const { held: _h, untrusted: _u, pending: _p, provenance, ...rest } = memory;
+      // Where it says it came from isn't believed; a note that it came from outside only adds care.
+      const { provenance, ...rest } = memory;
       const cleaned = cleanProvenance(provenance);
       past.push({
         ...rest,

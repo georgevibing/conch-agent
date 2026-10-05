@@ -657,8 +657,7 @@ export class QuietLearning {
           if (kept) {
             after = kept;
             // Kept: what it replaces stops being true now.
-            if (entry.change === 'superseded' && entry.before)
-              await memory.retire(entry.before.id, kept.id);
+            await this.#retireFor(entry, kept);
           }
         }
       } else {
@@ -714,6 +713,18 @@ export class QuietLearning {
     this.deps.changed?.();
   }
 
+  /**
+   * A waiting replacement was kept: what it replaces stops being true — only
+   * if it still says what the card showed. Words the person changed since are
+   * theirs, and stay.
+   */
+  async #retireFor(entry: LearnedEntry, kept: Memory): Promise<void> {
+    if (entry.change !== 'superseded' || !entry.before) return;
+    const target = await this.deps.memory.get(entry.before.id);
+    if (target?.content !== entry.before.content) return;
+    await this.deps.memory.retire(target.id, kept.id);
+  }
+
   /** Something that used to be true was forgotten: whoever shows Earlier fetches again. */
   pastChanged(): void {
     this.deps.changed?.();
@@ -727,14 +738,15 @@ export class QuietLearning {
     if (await this.store.forgive(memory.content)) this.deps.changed?.();
     const entry = await this.store.byMemory(memory.id);
     if (entry?.state !== 'waiting') return;
+    // Put back with Undo on "Forgot" is still waiting: only a Keep ends that.
     const now = await this.deps.memory.get(memory.id);
+    if (!now || now.pending) return;
     // Kept on the Memory page: what it replaces stops being true now.
-    if (now && !now.pending && entry.change === 'superseded' && entry.before)
-      await this.deps.memory.retire(entry.before.id, now.id);
+    await this.#retireFor(entry, now);
     await this.store.update(entry.id, ({ waits: _waits, ...e }) => ({
       ...e,
       state: 'kept',
-      after: now ?? { ...e.after, content: memory.content },
+      after: now,
     }));
     if (entry.from.conversationId)
       await this.deps

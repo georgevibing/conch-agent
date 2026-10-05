@@ -49,8 +49,24 @@ const WRITES: Record<string, (s: MemoryStore) => Promise<Memory | undefined>> = 
     return (await s.supersede(benign.id, { content: PLANT, source: 'agent' }, page))?.after;
   },
 };
+/**
+ * What a method needs in place first, made before commits are counted, so the
+ * count is the method's own: an id it's handed as `ready`.
+ */
+const PREPARE: Record<string, (s: MemoryStore, id: string) => Promise<string>> = {
+  retire: async (s) =>
+    (await s.add({ content: 'Likes green tea', source: 'user' }, person('Likes green tea'))).id,
+  unsupersede: async (s, id) =>
+    (
+      await s.supersede(
+        id,
+        { content: 'Likes green tea', source: 'user' },
+        person('Likes green tea'),
+      )
+    )?.after.id ?? '',
+};
 /** Every method that changes a memory, and how to call it once (with a plant, and no person). */
-const MUTATING: Record<string, (s: MemoryStore, id: string) => Promise<unknown>> = {
+const MUTATING: Record<string, (s: MemoryStore, id: string, ready: string) => Promise<unknown>> = {
   add: (s) => s.add({ content: PLANT, source: 'agent' }, page),
   write: (s) => s.write({ content: PLANT, source: 'agent' }, page),
   update: (s, id) => s.update(id, { content: PLANT }, page),
@@ -67,21 +83,8 @@ const MUTATING: Record<string, (s: MemoryStore, id: string) => Promise<unknown>>
     return s.unforget(id);
   },
   supersede: (s, id) => s.supersede(id, { content: PLANT, source: 'agent' }, page),
-  retire: async (s, id) => {
-    const next = await s.add(
-      { content: 'Likes green tea', source: 'user' },
-      person('Likes green tea'),
-    );
-    return s.retire(id, next.id);
-  },
-  unsupersede: async (s, id) => {
-    const moved = await s.supersede(
-      id,
-      { content: 'Likes green tea', source: 'user' },
-      person('Likes green tea'),
-    );
-    return s.unsupersede(moved?.after.id ?? '', id);
-  },
+  retire: (s, id, next) => s.retire(id, next),
+  unsupersede: (s, id, after) => s.unsupersede(after, id),
 };
 const READS = ['list', 'get', 'search', 'usable', 'listPast'];
 /**
@@ -106,8 +109,9 @@ describe('the store runs the memory check on every write', () => {
         { content: 'Likes tea', source: 'user' },
         person('Likes tea'),
       );
+      const ready = (await PREPARE[name]?.(memories, seed.id)) ?? '';
       commits.length = 0;
-      await call(memories, seed.id).catch(() => undefined);
+      await call(memories, seed.id, ready).catch(() => undefined);
       expect(commits.length, name).toBeGreaterThan(0);
     }
     // And nothing but the gate writes or deletes a memory file.
@@ -194,6 +198,53 @@ describe('the store runs the memory check on every write', () => {
     walk(root);
     // Keep on something Conch learned by itself is a person's answer too (ADR 0088).
     expect(minting.sort()).toEqual(['learning/routes.ts', 'memory/consent.ts', 'memory/routes.ts']);
+  });
+
+  it('what used to be true never hands a model words that were held or waiting', async () => {
+    const memories = store();
+    const tea = await memories.add({ content: 'Likes tea', source: 'user' }, person('Likes tea'));
+    const held = await memories.add({ content: PLANT, source: 'agent' }, page);
+    const next = await memories.add(
+      { content: 'Likes green tea', source: 'user' },
+      person('Likes green tea'),
+    );
+    // A held memory is never retired into the past: it stays where the person sees it.
+    expect(await memories.retire(held.id, next.id)).toBe(false);
+    expect(await memories.retire(tea.id, next.id)).toBe(true);
+    expect((await memories.listPast()).map((m) => m.content)).toEqual(['Likes tea']);
+    // Nor is a held copy that got there some other way (an old backup) read back.
+    const { writeFileSync: write } = await import('node:fs');
+    write(
+      join(home, 'memory', 'superseded', `${held.id}.md`),
+      readFileSync(join(home, 'memory', `${held.id}.md`), 'utf8'),
+    );
+    expect((await memories.listPast()).map((m) => m.content)).toEqual(['Likes tea']);
+  });
+
+  it('a supersede onto words already known retires nothing', async () => {
+    const memories = store();
+    const mine = await memories.add(
+      { content: 'Lives in Berlin', source: 'user' },
+      person('Lives in Berlin'),
+    );
+    await memories.add({ content: 'Lives in Lisbon', source: 'user' }, person('Lives in Lisbon'));
+    const moved = await memories.supersede(mine.id, {
+      content: 'Lives in Lisbon',
+      source: 'agent',
+    });
+    expect(moved?.retired).toBe(false);
+    expect((await memories.usable()).map((m) => m.content).sort()).toEqual([
+      'Lives in Berlin',
+      'Lives in Lisbon',
+    ]);
+    // Nor does one asked to wait, whatever the check says.
+    const asked = await memories.supersede(mine.id, {
+      content: 'Lives in Porto',
+      source: 'agent',
+      pending: true,
+    });
+    expect(asked?.retired).toBe(false);
+    expect((await memories.get(mine.id))?.content).toBe('Lives in Berlin');
   });
 
   it('a plant that would replace a memory waits, and what it would replace stays true', async () => {

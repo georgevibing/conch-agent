@@ -642,6 +642,46 @@ describe('QuietLearning (ADR 0088)', () => {
     expect(await learning.store.never()).toEqual([]);
   });
 
+  it('put back while it still waits (Undo on “Forgot”) isn’t kept', async () => {
+    const { learning, memory } = await setup([]);
+    const trains = await memory.add({
+      content: 'Prefers trains',
+      source: 'agent',
+      conversationId: 'c1',
+      pending: true,
+      untrusted: 'Learned in a chat that read trains.example.',
+    });
+    await learning.remembered(trains, { id: 'c1' });
+    await learning.kept(trains);
+    expect((await learning.store.entries())[0]?.state).toBe('waiting');
+  });
+
+  it('Keep on a replacement leaves words you changed since, and says nothing’s gone', async () => {
+    const { learning, memory } = await setup([
+      {
+        summary: { id: 'c1' },
+        events: [
+          you('Weekend ideas?'),
+          ...reply(),
+          you('I moved to Porto, by the way.'),
+          ...reply(),
+        ],
+      },
+    ]);
+    const mine = await memory.add({ content: 'Lives in Berlin', source: 'user' });
+    const result = await learning.review('c1', { trigger: 'idle' });
+    const entry = 'learned' in result ? result.learned[0] : undefined;
+    expect(entry?.state).toBe('waiting');
+    // You changed it yourself before answering: those words are yours, and stay.
+    await memory.update(mine.id, { content: 'Lives in Berlin and Porto' });
+    await keep(learning, entry?.id ?? '');
+    expect((await memory.list()).map((m) => m.content).sort()).toEqual([
+      'Lives in Berlin and Porto',
+      'Lives in Porto',
+    ]);
+    expect(await memory.listPast()).toEqual([]);
+  });
+
   it('Undo on what the assistant remembered in a chat tells that chat’s pill', async () => {
     const { learning, memory, notes } = await setup([]);
     const saved = await memory.add({

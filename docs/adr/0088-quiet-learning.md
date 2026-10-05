@@ -136,7 +136,7 @@ A memory that's replaced moves to `memory/superseded/`, marked with when it stop
 - The new fields are optional. A previous version reading a memory with them simply ignores them.
 - Facts about this computer and lessons from dead ends are ordinary `fact` memories with `about: environment` or `about: pitfall`. A new kind would make the previous version drop the memory.
 
-- A replacement that waits for your OK leaves the old memory true until you keep it.
+- A replacement that waits for your OK leaves the old memory true until you keep it. Keep retires the old one only if it still says what the card showed, and never one that is itself held or waiting. A "replacement" that only repeats a memory already there retires nothing.
 - Copies of what used to be true are sealed like every memory file (ADR 0087). One brought back from a backup, or changed by hand, is checked again when it's read, and left out if the check would hold it. Undo brings the old one back from that copy, through the same check, never from the record's words. **Earlier → Forget** removes a copy and touches nothing live.
 
 The tidy-up (ADR 0032) still updates a memory in place, with its own Undo. Its merges are now checked: a merge that loses a number or a name, or ends up shorter than 60% of the longest memory it merges, isn't made.

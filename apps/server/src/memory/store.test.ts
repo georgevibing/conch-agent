@@ -244,6 +244,21 @@ describe('superseded, not overwritten (ADR 0088)', () => {
     expect(back).toMatchObject({ pending: true, held: { verdict: 'ask' } });
   });
 
+  it('Undo never leaves neither: a copy it can’t put back leaves the new one too', async () => {
+    const dir = await temp();
+    const store = new MemoryStore(dir);
+    const berlin = await store.add({ content: 'Lives in Berlin', source: 'user' });
+    const moved = await store.supersede(berlin.id, { content: 'Lives in Lisbon', source: 'agent' });
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile(join(dir, 'superseded', `${berlin.id}.md`), 'not a memory');
+    expect(await store.unsupersede(moved?.after.id ?? '', berlin.id)).toBeUndefined();
+    expect((await store.list()).map((m) => m.content)).toEqual(['Lives in Lisbon']);
+    // Forgotten from Earlier on purpose: Undo still takes the new one back, as asked.
+    await store.forgetPast(berlin.id);
+    await store.unsupersede(moved?.after.id ?? '', berlin.id);
+    expect(await store.list()).toEqual([]);
+  });
+
   it('Forget on something that used to be true touches nothing live', async () => {
     const store = new MemoryStore(await temp());
     const berlin = await store.add({ content: 'Lives in Berlin', source: 'user' });
