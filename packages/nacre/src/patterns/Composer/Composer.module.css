@@ -3,6 +3,9 @@
   .frame {
     --cmp-radius: var(--nc-radius-xl);
     --cmp-line: 1.5rem;
+    --cmp-talk-spin: 7s;
+    /* Its own width decides how roomy it is, wherever it sits (a phone, a side panel). */
+    container: composer / inline-size;
     position: relative;
     isolation: isolate;
     min-inline-size: 0;
@@ -254,16 +257,53 @@
     border-radius: 3px;
   }
 
-  .send[data-mode='stop'] .arrow {
+  .voice {
+    stroke-width: 2.2;
+    transform: scale(0.5);
+    opacity: 0;
+    filter: blur(2px);
+  }
+
+  .send[data-mode='stop'] .arrow,
+  .send[data-mode='talk'] .arrow {
     transform: translateY(-60%) scale(0.6);
     opacity: 0;
     filter: blur(2px);
   }
 
-  .send[data-mode='stop'] .stop {
+  .send[data-mode='stop'] .stop,
+  .send[data-mode='talk'] .voice {
     transform: none;
     opacity: 1;
     filter: none;
+  }
+
+  /* Talk: the empty box's one button wears a slow ring of pearl light. */
+  .end .send[data-mode] {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .end .send[data-mode]::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    z-index: -1;
+    border-radius: 50%;
+    background: conic-gradient(from var(--nc-angle), var(--nc-pearl-spectrum));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+    opacity: 0;
+    transform: scale(0.8);
+    transition:
+      opacity var(--nc-duration-slow) var(--nc-ease-out),
+      transform var(--nc-spring-soft-duration) var(--nc-spring-soft);
+    pointer-events: none;
+  }
+
+  .end .send[data-mode='talk']::after {
+    opacity: calc(0.4 + var(--nc-lustre) * 0.5);
+    transform: none;
+    animation: frame-orbit var(--cmp-talk-spin) linear infinite;
   }
 
   /* Disabled send: quiet, not faded-out accent. */
@@ -411,15 +451,58 @@
     margin-inline-start: auto;
   }
 
+  /* ── Narrow (a phone) ─────────────────────────────────────────────── */
+  /* Fewer, calmer things on one line: the chips say what they must in the
+     least room (the mode by its tinted icon, the model by its name), what
+     lives elsewhere steps out, and the text gets the space. */
+  @container composer (max-width: 34rem) {
+    .textarea {
+      padding: var(--nc-space-3) var(--nc-space-3-5) var(--nc-space-0-5);
+    }
+
+    .footer {
+      padding: var(--nc-space-1) var(--nc-space-1-5) var(--nc-space-1-5);
+    }
+
+    .toolbar {
+      gap: var(--nc-space-0-5);
+    }
+
+    .end {
+      gap: var(--nc-space-0-5);
+      margin-inline-start: var(--nc-space-1);
+    }
+
+    .chip[data-tuck] {
+      display: none;
+    }
+
+    .attachments {
+      padding-inline: var(--nc-space-2-5);
+    }
+  }
+
+  /* Fingers, not a pointer: the one button that matters is a full-size target. */
+  @container composer (max-width: 34rem) {
+    @media (pointer: coarse) {
+      .end .send[data-mode] {
+        --btn-h: var(--nc-control-md);
+        --btn-icon: 1.125rem;
+      }
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .frame[data-running],
-    .queued {
+    .queued,
+    .end .send[data-mode='talk']::after {
       animation: none;
     }
   }
 
   :global([data-nacre-motion='reduced']) .frame[data-running],
-  :global([data-nacre-motion='reduced']) .queued {
+  :global([data-nacre-motion='reduced']) .queued,
+  :global([data-nacre-motion='reduced']) .end .send[data-mode='talk']::after {
     animation: none;
   }
 }

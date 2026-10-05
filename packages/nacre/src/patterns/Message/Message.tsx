@@ -195,12 +195,12 @@ export function Message({
           {attached}
         </div>
       )}
-      {actions && status !== 'streaming' && (
-        <div className={styles.actions} data-visibility={actionsVisibility}>
-          {actions}
-        </div>
-      )}
     </>
+  );
+  const actionBar = actions && status !== 'streaming' && (
+    <div className={styles.actions} data-visibility={actionsVisibility}>
+      {actions}
+    </div>
   );
 
   return (
@@ -229,14 +229,21 @@ export function Message({
               {timestamp && <Timestamp value={timestamp} />}
             </div>
             {body}
+            {actionBar}
           </div>
         </>
       ) : (
         <div className={styles.main}>
           {body}
-          {timestamp && (
-            <div className={styles.userMeta}>
-              <Timestamp value={timestamp} />
+          {/* When it was sent and what you can do with it, on one quiet line. */}
+          {(timestamp || actionBar) && (
+            <div className={styles.userFoot}>
+              {timestamp && (
+                <div className={styles.userMeta}>
+                  <Timestamp value={timestamp} />
+                </div>
+              )}
+              {actionBar}
             </div>
           )}
         </div>

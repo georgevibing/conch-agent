@@ -18,6 +18,12 @@ export interface ProviderMeterProps extends Omit<ComponentProps<'button'>, 'valu
   attention?: string;
   /** Freeze the clock (stories/tests). Defaults to a live 30 s tick. */
   now?: number;
+  /**
+   * A narrow header (a phone): the provider's mark and its ring, without the
+   * name or "39% left" (they stay on the button for screen readers, and in
+   * the panel it opens). What needs the person still says so in words.
+   */
+  compact?: boolean;
 }
 
 /**
@@ -32,6 +38,7 @@ export function ProviderMeter({
   usage,
   attention,
   now,
+  compact = false,
   className,
   ...props
 }: ProviderMeterProps) {
@@ -56,6 +63,7 @@ export function ProviderMeter({
       type="button"
       data-lustre=""
       data-kind={provider ? 'provider' : 'connect'}
+      data-compact={compact || undefined}
       data-attention={attention ? '' : undefined}
       data-severity={attention ? 'warning' : gauge && head ? head.severity : 'normal'}
       aria-label={label}
@@ -65,7 +73,7 @@ export function ProviderMeter({
       {!provider ? (
         <>
           <Plug aria-hidden className={styles.meterIcon} />
-          <span className={styles.providerName}>Connect a provider</span>
+          <span className={styles.providerName}>{compact ? 'Connect' : 'Connect a provider'}</span>
         </>
       ) : (
         <>

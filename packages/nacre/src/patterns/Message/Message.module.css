@@ -247,9 +247,15 @@
     overflow-wrap: anywhere;
   }
 
+  .userFoot {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--nc-space-1);
+  }
+
   .userMeta {
     padding-inline-end: var(--nc-space-1);
-    margin-block-start: calc(var(--nc-space-1) * -1);
   }
 
   @media (hover: hover) {

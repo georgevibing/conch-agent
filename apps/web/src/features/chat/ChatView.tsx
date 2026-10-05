@@ -23,7 +23,7 @@ import {
   toast,
   useFileDrop,
 } from '@conch/nacre';
-import { ArrowRight, AudioLines, Folder, ListPlus } from 'lucide-react';
+import { ArrowRight, Folder, ListPlus } from 'lucide-react';
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router';
@@ -793,6 +793,12 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
               : `Message ${name}, or type / for commands`
         }
         label={`Message ${name}`}
+        // An empty box's one button is Talk; typing turns it into Send.
+        voice={
+          canTalk
+            ? { label: `Talk with ${name}`, onClick: () => useUi.setState({ talking: {} }) }
+            : undefined
+        }
         actions={
           <>
             {draft.trim() && (
@@ -807,15 +813,6 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
               </IconButton>
             )}
             <Dictate draft={draft} setDraft={setDraft} />
-            {canTalk && (
-              <IconButton
-                label={`Talk with ${name}`}
-                shape="circle"
-                onClick={() => useUi.setState({ talking: {} })}
-              >
-                <AudioLines />
-              </IconButton>
-            )}
           </>
         }
         toolbar={
@@ -833,6 +830,8 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
             <Tooltip content={app?.workspace ?? ''}>
               <ComposerChip
                 icon={<Folder />}
+                // A phone can't choose a folder on this computer: Settings → General has it.
+                tuck
                 onClick={chooseFolder}
                 aria-label={`Working folder: ${workspaceName}. Choose another`}
               >
