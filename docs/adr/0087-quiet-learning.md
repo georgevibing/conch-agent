@@ -33,7 +33,7 @@ Research on agents that learn from use points the same way, and warns about the 
 
 ## Decision
 
-Conch learns from every chat you were in, by itself, once the chat goes quiet. It applies what's safe without asking. Then it says so quietly at the end of that chat, where one press undoes it and **Why?** shows the words it learned from. It still asks first after reading something from outside, when someone else's words are in the chat, and when nobody is there to see it. It never deletes, and it never learns a power.
+Conch learns from every chat you were in, by itself, once the chat goes quiet. It applies what's safe without asking. Then it says so quietly at the end of that chat, where one press undoes it and **Why?** shows the words it learned from. It still asks first after reading something from outside, and when nobody is there to see it. It learns nothing from a chat with someone else's words in it. It never deletes, and it never learns a power.
 
 ### 1. A quiet look at a chat once it goes quiet
 
@@ -53,6 +53,7 @@ Some chats are never looked at:
 - learning is off (**Learn from your chats**, the setting `autoMemory`);
 - the chat is marked **Don't learn from this chat**;
 - a guest in a group (ADR 0075), a routine's run, a task or a page fetching its data;
+- someone else's words are in it: they aren't yours to learn from (ADR 0032);
 - the learning cap or the month's budget has been reached;
 - a plan is at least 80% used (`PLAN_ROOM_PERCENT`, as for routines).
 
@@ -62,17 +63,17 @@ For money or a missing model, the place where the look stopped stays put, and th
 
 `signals.ts` reads Conch's own log of the chat, which is the same for every provider. It looks for:
 
-| Signal              | What it is                                                                                                                                                                      |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| a correction        | "no, I meant…", "actually…", "I said…"                                                                                                                                          |
-| rephrasing          | the same thing asked again in other words                                                                                                                                       |
-| a retry             | the same message sent again                                                                                                                                                     |
-| a Stop              | you stopped a reply                                                                                                                                                             |
-| an Undo of files    | the assistant's changes put back (ADR 0030)                                                                                                                                     |
-| an Undo of a memory | a memory the chat learned, taken back                                                                                                                                           |
-| frustration         | a short list of words                                                                                                                                                           |
-| thanks              | the same words skills use (ADR 0058)                                                                                                                                            |
-| worked another way  | a command failed for a reason a fixed list knows ("not found", "is not recognized", "No such file", `ModuleNotFoundError`), and another program did the same job straight after |
+| Signal              | What it is                                                                                                                           |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| a correction        | "no, I meant…", "actually…", "I said…"                                                                                               |
+| rephrasing          | the same thing asked again in other words                                                                                            |
+| a retry             | the same message sent again                                                                                                          |
+| a Stop              | you stopped a reply                                                                                                                  |
+| an Undo of files    | the assistant's changes put back (ADR 0030)                                                                                          |
+| an Undo of a memory | a memory the chat learned, taken back                                                                                                |
+| frustration         | a short list of words                                                                                                                |
+| thanks              | the same words skills use (ADR 0058)                                                                                                 |
+| worked another way  | a command's own program wasn't there ("command not found", "is not recognized"), and another program did the same job straight after |
 
 **Worked another way** becomes a fact about this computer, written by code from a template ("On this computer, `python` isn't found; `py` works."). No model writes it, and no tool output reaches any prompt.
 
@@ -107,7 +108,6 @@ Code applies every change. A model never rewrites a stored memory in place.
 | --------------------------------------------------------------------------- | ---------------------------------------- |
 | You were in the chat, it read nothing from outside, every check passes      | **applied**, and the chat says so        |
 | The chat read something from outside (ADR 0028)                             | **waits**, saying where it was learned   |
-| Someone else's words are in the chat                                        | **waits**                                |
 | A chat app, or another app through Conch (nobody sees the chat)             | **waits**, shown on the Memory page only |
 | It would replace a memory you wrote yourself, or one still waiting          | **waits**                                |
 | More than 3 in one look, or more than 8 in a day                            | the rest **wait**                        |
