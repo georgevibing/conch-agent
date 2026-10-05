@@ -1,7 +1,7 @@
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import { describe, expect, it } from 'vitest';
 
-import { Translator } from './translate';
+import { reportedWindow, Translator } from './translate';
 
 const m = (value: unknown) => value as SDKMessage;
 
@@ -133,6 +133,64 @@ describe('Translator', () => {
     expect(done).toMatchObject({
       usage: { inputTokens: 21_100, cachedInputTokens: 20_000, outputTokens: 90, costUsd: 0.05 },
     });
+  });
+
+  it('learns the model’s own window from its turn, and starts the next turn with it', () => {
+    const first = new Translator();
+    first.translate(
+      m({ type: 'system', subtype: 'init', session_id: 's', model: 'claude-opus-9' }),
+    );
+    first.translate(
+      m({
+        type: 'assistant',
+        parent_tool_use_id: null,
+        message: {
+          id: 'a',
+          content: [],
+          usage: { input_tokens: 100_000, cache_read_input_tokens: 0, output_tokens: 500 },
+        },
+      }),
+    );
+    const [done] = first.translate(
+      m({
+        type: 'result',
+        subtype: 'success',
+        is_error: false,
+        usage: { input_tokens: 100_000, output_tokens: 500 },
+        modelUsage: { 'claude-opus-9': { inputTokens: 100_000, contextWindow: 1_000_000 } },
+        total_cost_usd: 0,
+        duration_ms: 10,
+      }),
+    );
+    // A million-token model isn't shown as half full of 200k.
+    expect(done).toMatchObject({ context: { used: 100_500, window: 1_000_000 } });
+
+    const next = new Translator();
+    next.translate(m({ type: 'system', subtype: 'init', session_id: 's', model: 'claude-opus-9' }));
+    const [progress] = next.translate(
+      m({
+        type: 'assistant',
+        parent_tool_use_id: null,
+        message: { id: 'b', content: [], usage: { input_tokens: 10, output_tokens: 1 } },
+      }),
+    );
+    expect(progress).toMatchObject({ context: { window: 1_000_000 } });
+  });
+
+  it('reads the window of the model that answered, else the one that read the most', () => {
+    expect(
+      reportedWindow('claude-sonnet-9', {
+        'claude-haiku-9': { inputTokens: 900, contextWindow: 200_000 },
+        'claude-sonnet-9': { inputTokens: 100, contextWindow: 1_000_000 },
+      }),
+    ).toBe(1_000_000);
+    expect(
+      reportedWindow('opus', {
+        'claude-haiku-9': { inputTokens: 900, contextWindow: 200_000 },
+        'claude-opus-9[1m]': { inputTokens: 90_000, contextWindow: 1_000_000 },
+      }),
+    ).toBe(1_000_000);
+    expect(reportedWindow('x', undefined)).toBeUndefined();
   });
 
   it('falls back to full assistant text when nothing streamed', () => {

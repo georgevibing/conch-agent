@@ -52,6 +52,30 @@ function toolOutput(content: unknown): string {
  * from the following `user` message. Sub-agent traffic is folded away — the
  * user sees the tool call that spawned it, not its inner monologue.
  */
+/**
+ * What each model said its window is (the SDK's `modelUsage.contextWindow`
+ * after a turn), so the next turn on it is right from its first request: a
+ * model with a million tokens isn't shown as 200k full.
+ */
+const windows = new Map<string, number>();
+
+/** The window a model's turn reported: its own entry, else the one that read the most. */
+export function reportedWindow(
+  model: string | undefined,
+  usage:
+    | Record<string, { contextWindow?: number; inputTokens?: number; canonicalModel?: string }>
+    | undefined,
+): number | undefined {
+  if (!usage) return undefined;
+  const entries = Object.entries(usage);
+  const own =
+    (model ? usage[model] : undefined) ??
+    entries.find(([, u]) => model && u.canonicalModel && model.startsWith(u.canonicalModel))?.[1] ??
+    entries.sort(([, a], [, b]) => (b.inputTokens ?? 0) - (a.inputTokens ?? 0))[0]?.[1];
+  const window = own?.contextWindow;
+  return typeof window === 'number' && window > 0 ? window : undefined;
+}
+
 export class Translator {
   #streamed = new Set<string>();
   #current?: string;
@@ -59,8 +83,12 @@ export class Translator {
   #problem?: TurnProblem;
   /** Each model request's tokens (by message id: one request can arrive as several messages). */
   #used = new Map<string, { input: number; cached: number; output: number }>();
-  /** How much the model reads at once: a million for a `[1m]` model, else Claude's 200k. */
+  /**
+   * How much the model reads at once: what it reported last time, else a
+   * million for a `[1m]` model, else Claude's 200k until it says.
+   */
   #window = 200_000;
+  #model?: string;
   /** How full the main conversation is: its latest request, read and answered. */
   #context?: number;
 
@@ -88,7 +116,9 @@ export class Translator {
     switch (msg.type) {
       case 'system':
         if (msg.subtype === 'init') {
-          if (/\[1m\]/i.test(msg.model)) this.#window = 1_000_000;
+          this.#model = msg.model;
+          this.#window =
+            windows.get(msg.model) ?? (/\[1m\]/i.test(msg.model) ? 1_000_000 : this.#window);
           return [{ type: 'session', resumeId: msg.session_id, model: msg.model }];
         }
         if (msg.subtype === 'api_retry') {
@@ -236,8 +266,20 @@ export class Translator {
           costUsd: msg.total_cost_usd,
           durationMs: msg.duration_ms,
         };
+        // The model's own window, as it reported it: remembered for its next turns.
+        const window = reportedWindow(
+          this.#model,
+          'modelUsage' in msg ? msg.modelUsage : undefined,
+        );
+        if (window) {
+          this.#window = window;
+          if (this.#model) windows.set(this.#model, window);
+        }
+        const context = this.#context
+          ? { context: { used: this.#context, window: this.#window } }
+          : {};
         if (msg.subtype === 'success' && !msg.is_error) {
-          return [{ type: 'done', outcome: 'success', usage }];
+          return [{ type: 'done', outcome: 'success', usage, ...context }];
         }
         const detail = 'errors' in msg ? msg.errors.join('\n') : undefined;
         return [
@@ -249,6 +291,7 @@ export class Translator {
               this.#error ??
               (detail || ('result' in msg ? String(msg.result) : 'Something went wrong.')),
             ...(this.#problem && { problem: this.#problem }),
+            ...context,
           },
         ];
       }
