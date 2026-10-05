@@ -22,7 +22,7 @@ import { useLiveStore } from '../../live/store';
 import { conchAppsApi, pageFrameUrl, type PageOwner } from './api';
 import styles from './ConchApps.module.css';
 import { useConchApp } from './queries';
-import { conchAppPath } from './words';
+import { appLook, conchAppPath } from './words';
 import { askToOpen } from '../artifacts/openLink';
 
 /** "Count one more" → "count one more": a tool's title inside a sentence. */
@@ -202,7 +202,7 @@ export function AppPageView({ appId, pageId }: { appId: string; pageId: string }
         >
           <ArrowLeft />
         </IconButton>
-        <PageTitle icon={app.manifest.icon} title={titled} />
+        <PageTitle icon={appLook(app)} title={titled} />
       </header>
       <AppPageFrame
         key={`${app.id}:${app.hash}:${page.id}`}
@@ -220,7 +220,7 @@ export function AppPageView({ appId, pageId }: { appId: string; pageId: string }
 function PageTitle({ icon, title }: { icon: AppIconLook; title: string }) {
   return (
     <div className={styles.pageTitle}>
-      <AppIcon glyph={icon.glyph} color={icon.color} size="xs" />
+      <AppIcon {...icon} size="xs" />
       <Heading level={1} size="sm" weight="medium" truncate>
         {title}
       </Heading>
@@ -279,7 +279,7 @@ export function AppPagePanel({ conversationId }: { conversationId: string }) {
     <section className={styles.panel} aria-label={title}>
       <div className={styles.panelBar}>
         <PageTitle
-          icon={manifest.icon}
+          icon={app ? appLook(app) : offer ? appLook(offer) : manifest.icon}
           title={
             draftId
               ? offer?.action === 'update'

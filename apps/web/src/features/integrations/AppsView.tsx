@@ -35,7 +35,7 @@ import { TalkIntro } from '../channels/TalkIntro';
 import conchStyles from '../conchapps/ConchApps.module.css';
 import { putConchApp, useCommunityApps, useConchApps } from '../conchapps/queries';
 import { updateApp } from '../conchapps/update';
-import { conchAppPath } from '../conchapps/words';
+import { appLook, conchAppPath } from '../conchapps/words';
 import { vaultApi } from '../passwords/api';
 import { useVault, vaultKeys } from '../passwords/queries';
 import {
@@ -363,7 +363,7 @@ export function AppsView() {
                       brand={item.brand}
                       color={item.color}
                       {...(conch && {
-                        app: conch.manifest.icon,
+                        app: appLook(conch),
                         ...(madeHere(conch.source)
                           ? { badge: <AppMadeBadge kind="made" /> }
                           : conch.source.kind === 'github' && {

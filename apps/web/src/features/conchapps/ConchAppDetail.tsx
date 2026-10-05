@@ -58,7 +58,7 @@ import { conchAppKeys, putConchApp, useConchApp } from './queries';
 import { ShareFlow } from './ShareFlow';
 import { updateApp } from './update';
 import { useStartChat } from './useStartChat';
-import { appWords, conchPagePath, sizeInWords } from './words';
+import { appLook, appWords, conchPagePath, sizeInWords } from './words';
 
 const SETTINGS_ID = 'capp-settings';
 
@@ -243,12 +243,7 @@ function Detail({
       </div>
 
       <header className={intStyles.detailHeader}>
-        <AppIcon
-          glyph={manifest.icon.glyph}
-          color={manifest.icon.color}
-          size="xl"
-          status={enabled ? health.state : 'off'}
-        />
+        <AppIcon {...appLook(app)} size="xl" status={enabled ? health.state : 'off'} />
         <Stack gap={1} className={intStyles.detailTitle}>
           <Heading level={1} size="2xl">
             {manifest.name}
@@ -484,6 +479,7 @@ function Detail({
                     ...(looking.warnings && { warnings: looking.warnings }),
                     installed: looking.installed ?? manifest.version,
                     ...(looking.changes && { changes: looking.changes }),
+                    ...(looking.picture && { picture: looking.picture }),
                     saved: looking.changes?.otherMaker ? [] : app.saved,
                     words: appWords({
                       manifest: looking.manifest,

@@ -14,7 +14,7 @@ import { useLocation, useNavigate } from 'react-router';
 import { usePinnedApps, useUpdateArtifact } from '../artifacts/queries';
 import { conchAppsApi } from '../conchapps/api';
 import { putConchApp, useConchApps } from '../conchapps/queries';
-import { conchAppPath, conchPagePath } from '../conchapps/words';
+import { appLook, conchAppPath, conchPagePath } from '../conchapps/words';
 
 /**
  * Pinned apps at the top of the chat list (ADR 0089, after ADR 0034 and 0061):
@@ -60,7 +60,7 @@ export function PinnedAppsDock({ onNavigate }: { onNavigate?: () => void }) {
         return {
           key: `${a.id}/${page.id}`,
           label: many ? page.title : a.manifest.name,
-          icon: <AppIcon glyph={a.manifest.icon.glyph} color={a.manifest.icon.color} size="md" />,
+          icon: <AppIcon {...appLook(a)} size="md" />,
           source: many ? `Page of the ${a.manifest.name} app` : `The ${a.manifest.name} app`,
           active: path === to,
           onOpen: () => go(to),

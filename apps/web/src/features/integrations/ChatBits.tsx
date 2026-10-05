@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router';
 
 import type { TranscriptItem } from '../../live/reducer';
 import { useConchApps } from '../conchapps/queries';
+import { appLook } from '../conchapps/words';
 import styles from './ChatBits.module.css';
 import { useAssistantName, useIntegrations } from './queries';
 import { useFix } from './useFix';
@@ -99,7 +100,7 @@ export function useToolLabel() {
           title: tool?.title || humanizeTool(mine[2] ?? ''),
           leading: (
             <span className={styles.toolLabel}>
-              <AppIcon glyph={app.manifest.icon.glyph} color={app.manifest.icon.color} size="xs" />
+              <AppIcon {...appLook(app)} size="xs" />
               <span className={styles.toolApp}>{app.manifest.name}</span>
             </span>
           ),

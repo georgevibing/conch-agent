@@ -200,6 +200,7 @@ export function FromLink({
             ...(found.warnings && { warnings: found.warnings }),
             ...(found.installed && { installed: found.installed }),
             ...(found.changes && { changes: found.changes }),
+            ...(found.picture && { picture: found.picture }),
             ...(have && !found.changes?.otherMaker && { saved: have.saved }),
             words: appWords({
               manifest: found.manifest,

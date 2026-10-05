@@ -99,6 +99,9 @@ export function AppOfferItem({
         {...(offer.summary && { summary: offer.summary })}
         state={state}
         {...(offer.message && { message: offer.message })}
+        {...(((done && installed?.picture) || offer.picture) && {
+          picture: (done && installed?.picture) || offer.picture,
+        })}
         words={appWords(offer)}
         saved={offer.changes?.otherMaker ? [] : (installed?.saved ?? [])}
         busy={busy}

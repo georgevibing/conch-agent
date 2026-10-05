@@ -109,7 +109,7 @@ import { modelLabel, providerLogo } from '../models/catalog';
 import { modelKey, useTurnOptions } from '../models/useTurnOptions';
 import { useArtifacts } from '../artifacts/queries';
 import { useConchApps } from '../conchapps/queries';
-import { conchPagePath } from '../conchapps/words';
+import { appLook, conchPagePath } from '../conchapps/words';
 import { useRoutines } from '../routines/queries';
 import { taskKeys } from '../tasks/queries';
 import { listingPath } from '../skills/Discover';
@@ -499,15 +499,18 @@ export function useFindables(query: string, conversationId: string | undefined):
     connected: boolean;
     app?: AppIconLook;
   }[] = [
-    ...connected.map((i) => ({
-      id: i.id,
-      name: i.name,
-      brand: i.catalogId ?? 'custom',
-      color: integrations?.catalog.find((c) => c.id === i.catalogId)?.color,
-      connected: true,
-      // An app you made or added wears its own icon (ADR 0061).
-      app: conchApps?.find((a) => a.id === i.conchApp)?.manifest.icon,
-    })),
+    ...connected.map((i) => {
+      const conch = conchApps?.find((a) => a.id === i.conchApp);
+      return {
+        id: i.id,
+        name: i.name,
+        brand: i.catalogId ?? 'custom',
+        color: integrations?.catalog.find((c) => c.id === i.catalogId)?.color,
+        connected: true,
+        // An app you made or added wears its own icon (ADR 0061), its picture too (ADR 0090).
+        ...(conch && { app: appLook(conch) }),
+      };
+    }),
     ...(integrations?.catalog ?? [])
       .filter((c) => !connected.some((i) => i.catalogId === c.id))
       .map((c) => ({ id: c.id, name: c.name, brand: c.id, color: c.color, connected: false })),
@@ -534,7 +537,7 @@ export function useFindables(query: string, conversationId: string | undefined):
     ranges: match.ranges,
     hint: item.connected ? 'Open' : 'Connect',
     icon: item.app ? (
-      <AppIcon glyph={item.app.glyph} color={item.app.color} size="xs" />
+      <AppIcon {...item.app} size="xs" />
     ) : (
       <IntegrationLogo
         brand={item.brand}
@@ -670,7 +673,7 @@ export function useFindables(query: string, conversationId: string | undefined):
           : `${a.manifest.name} — ${page.title}`,
       words: `${a.manifest.name} ${page.title} ${a.manifest.tagline} page open app`,
       to: conchPagePath(a.id, page.id),
-      icon: a.manifest.icon,
+      icon: appLook(a),
     })),
   );
   const pageItems = find(
@@ -684,7 +687,7 @@ export function useFindables(query: string, conversationId: string | undefined):
     label: item.label,
     ranges: match.ranges,
     hint: 'Open',
-    icon: <AppIcon glyph={item.icon.glyph} color={item.icon.color} size="xs" />,
+    icon: <AppIcon {...item.icon} size="xs" />,
     run: () => void navigate(item.to),
   }));
 

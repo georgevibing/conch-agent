@@ -6,6 +6,7 @@ import { useSearchParams } from 'react-router';
 
 import { api } from '../../api/client';
 import { useConchApps } from '../conchapps/queries';
+import { appLook } from '../conchapps/words';
 import { integrationsApi } from '../integrations/api';
 import { useAppState, useUpdateSettings } from '../../api/queries';
 import type { TranscriptItem } from '../../live/reducer';
@@ -250,7 +251,7 @@ function AppSkillOfferItem({
             declared: permissions.declared,
           },
         })}
-        {...(made && { app: made.manifest.icon })}
+        {...(made && { app: appLook(made) })}
         onTake={
           conchApp
             ? () => void turnOn()

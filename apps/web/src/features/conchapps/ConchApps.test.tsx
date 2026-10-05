@@ -321,6 +321,17 @@ describe('the Apps page with Conch apps', () => {
     const card = await screen.findByRole('article', { name: 'Tally' });
     expect(within(card).getByText('Made by you')).toBeInTheDocument();
     expect(card.querySelector('[data-app-color]')).not.toBeNull();
+    expect(card.querySelector('img')).toBeNull();
+  });
+
+  it('an app with a picture wears it on its card and its page, the glyph beneath (ADR 0090)', async () => {
+    const picture = '/api/conch-apps/tally/icon?v=0123456789ab';
+    mockFetch(routes({ apps: [tally({ picture })], integrations: [integration()] }));
+    renderApp(<AppsView />, { route: '/apps' });
+    const card = await screen.findByRole('article', { name: 'Tally' });
+    expect(card.querySelector('img')).toHaveAttribute('src', picture);
+    // The glyph is still there, for until (or unless) the picture loads.
+    expect(card.querySelector('[data-app-color] svg')).not.toBeNull();
   });
 
   it('an update is the card’s calm notice', async () => {

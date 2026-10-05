@@ -13,7 +13,7 @@ import {
   type ConchAppTool,
   type SkillSignature,
 } from '@conch/protocol';
-import type { AppWords } from '@conch/nacre';
+import type { AppIconLook, AppWords } from '@conch/nacre';
 
 export function appWords({
   manifest,
@@ -59,3 +59,13 @@ export const conchAppPath = (id: string) => `/apps/capp_${encodeURIComponent(id)
 /** One of its pages, on a page of its own: `/apps/capp_tally/main`. */
 export const conchPagePath = (id: string, pageId: string) =>
   `${conchAppPath(id)}/${encodeURIComponent(pageId)}`;
+
+/**
+ * An app's icon as Nacre draws it: its glyph on its colour, and its picture
+ * when it has one (ADR 0090). The glyph stays as what shows until, or unless,
+ * the picture loads.
+ */
+export const appLook = (app: {
+  manifest: Pick<ConchAppManifest, 'icon'>;
+  picture?: string | undefined;
+}): AppIconLook => ({ ...app.manifest.icon, ...(app.picture && { src: app.picture }) });
