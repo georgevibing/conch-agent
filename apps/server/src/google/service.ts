@@ -630,8 +630,9 @@ export class GoogleService {
   }
   async credential(id: string, required: GoogleCapability, force = false): Promise<Credential> {
     const data = await this.store.read(),
-      account = data.accounts[id];
-    if (!account && data.passwords[id]) throw new GoogleError('scope', APP_PASSWORD_ONLY_MAIL);
+      account = Object.hasOwn(data.accounts, id) ? data.accounts[id] : undefined;
+    if (!account && Object.hasOwn(data.passwords, id))
+      throw new GoogleError('scope', APP_PASSWORD_ONLY_MAIL);
     if (!account || !data.config || account.profile.state === 'needs-auth')
       throw new GoogleError('expired', 'Reconnect this Google account in Apps.');
     if (!SCOPES[required].every((s) => account.credential.scopes.includes(s)))
@@ -671,6 +672,8 @@ export class GoogleService {
         scopes: credentials.scope?.split(' ') ?? old.scopes,
       };
       await this.store.update((data) => {
+        if (!Object.hasOwn(data.accounts, id))
+          throw new GoogleError('expired', 'Google account changed. Try your job again.');
         const current = data.accounts[id];
         if (!current || current.credential.generation !== old.generation)
           throw new GoogleError('expired', 'Google account changed. Try your job again.');

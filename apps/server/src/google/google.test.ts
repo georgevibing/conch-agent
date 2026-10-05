@@ -463,6 +463,27 @@ describe('Google consent and credentials', () => {
     await expect(request).rejects.toMatchObject({ kind: 'not-executed' });
     expect(fetcher).not.toHaveBeenCalled();
   });
+  it('never treats inherited object properties as Google accounts', async () => {
+    for (const id of ['__proto__', 'constructor', 'toString'])
+      await expect(service.credential(id, 'mail-read')).rejects.toThrow(
+        'Reconnect this Google account',
+      );
+    await connect();
+    const data = await store.read();
+    const inherited = data.accounts;
+    data.accounts = {};
+    Object.setPrototypeOf(data.accounts, inherited);
+    const read = vi.spyOn(store, 'read').mockResolvedValue(data);
+    try {
+      await expect(service.credential('account1', 'mail-read')).rejects.toThrow(
+        'Reconnect this Google account',
+      );
+      expect(client.refreshAccessToken).not.toHaveBeenCalled();
+      expect(Object.hasOwn(Object.prototype, 'credential')).toBe(false);
+    } finally {
+      read.mockRestore();
+    }
+  });
   it('single-flights concurrent refresh, preserves refresh token, and marks revoked consent', async () => {
     await connect();
     await store.update((d) => {
