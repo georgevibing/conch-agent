@@ -10,7 +10,7 @@ import { cosine, ollamaEmbedder, stem, wordsVector, type Embedder } from './embe
 import { bm25, distance, forgive, MemoryIndex } from './index';
 import { chatWords, yourWords } from './learning';
 import { MemoryStore } from './store';
-import { MemoryTidy, parseReply, repeats, type Said } from './tidy';
+import { keepsDetail, MemoryTidy, parseReply, repeats, type Said } from './tidy';
 import { memoryTools } from './tools';
 
 let home: string;
@@ -338,10 +338,19 @@ describe('the tidy-up', () => {
     ]);
     expect(result.changes[1]?.untrusted).toBe('Learned in a chat that read evil.example.');
     const list = await t.memories.list();
-    expect(list.find((m) => m.id === berlin.id)?.content).toBe('Lives in Lisbon');
+    // Superseded, not overwritten (ADR 0087): the old one is kept, dated.
+    expect(list.find((m) => m.id === berlin.id)).toBeUndefined();
+    expect(list.find((m) => /Lives in/.test(m.content))?.content).toBe('Lives in Lisbon');
+    expect((await t.memories.listPast()).map((m) => m.content)).toEqual(['Lives in Berlin']);
     expect(list.find((m) => /Ana/.test(m.content))?.pending).toBe(true);
     await t.run.answer(result.id, result.changes[1]?.id ?? '', 'keep');
     expect((await t.memories.list()).find((m) => /Ana/.test(m.content))?.pending).toBeUndefined();
+    // Undo on the update brings Berlin back exactly, and Lisbon goes.
+    await t.run.answer(result.id, result.changes[0]?.id ?? '', 'undo');
+    const back = await t.memories.list();
+    expect(back.find((m) => m.id === berlin.id)).toEqual(berlin);
+    expect(back.some((m) => m.content === 'Lives in Lisbon')).toBe(false);
+    expect(await t.memories.listPast()).toEqual([]);
   });
 
   it('with Remember automatically off, anything new waits', async () => {
@@ -368,115 +377,48 @@ describe('the tidy-up', () => {
     expect((await t.run.run('now')).changes).toEqual([]);
   });
 
-  describe('before a long chat’s start is summarised (ADR 0055)', () => {
-    const earlier = Date.now() - 60_000;
-    const said = (text: string, at = earlier, untrusted?: string): Said => ({
-      conversationId: 'long',
-      text,
-      at,
-      ...(untrusted && { untrusted }),
+  it('doesn’t make a merge that would lose a number or a name (ADR 0087)', async () => {
+    const t = tidy({ reply: {} });
+    const a = await t.memories.add({
+      content: 'Has a dog called Rex, 3 years old',
+      source: 'agent',
     });
+    const b = await t.memories.add({ content: 'Has a dog', source: 'agent' });
+    const reply = { merge: [{ ids: [a.id, b.id], content: 'Has a dog', why: 'Same.' }] };
+    t.complete.mockResolvedValue({ text: JSON.stringify(reply) });
+    const result = await t.run.run('now');
+    expect(result.changes).toEqual([]);
+    expect(await t.memories.list()).toHaveLength(2);
+  });
 
-    it('learns what you said there, as a run with cards and Undo', async () => {
-      const t = tidy({
-        reply: { add: [{ content: 'Grows tomatoes', kind: 'project', from: 'long' }] },
-      });
-      const run = await t.run.learn('long', [said('I grow tomatoes on my balcony')]);
-      expect(run).toMatchObject({ trigger: 'now', chat: 'long', model: true });
-      expect(run?.changes.map((c) => [c.kind, c.state])).toEqual([['added', 'applied']]);
-      expect((await t.memories.list())[0]).toMatchObject({
-        content: 'Grows tomatoes',
-        conversationId: 'long',
-      });
-      expect(t.complete).toHaveBeenCalledWith(
-        expect.objectContaining({
-          prompt: expect.stringContaining('I grow tomatoes on my balcony'),
+  it('keepsDetail: every number and name, and not much shorter', () => {
+    expect(
+      keepsDetail('Has a dog called Rex', ['Has a dog called Rex', 'Owns a dog named Rex']),
+    ).toBe(true);
+    expect(keepsDetail('Has a dog', ['Has a dog called Rex'])).toBe(false);
+    expect(keepsDetail('Born in 1990 in Porto', ['Born in Porto in 1990'])).toBe(true);
+    expect(keepsDetail('Born in Porto', ['Born in Porto in 1990'])).toBe(false);
+  });
+
+  it('doesn’t add what you took back once (ADR 0087)', async () => {
+    const memories = store();
+    const run = new MemoryTidy({
+      home,
+      store: memories,
+      model: async () => ({
+        complete: async () => ({
+          text: JSON.stringify({
+            add: [{ content: 'Loves hiking', kind: 'preference', from: 'c1' }],
+          }),
         }),
-      );
+      }),
+      said: async () => [{ conversationId: 'c1', text: 'I love hiking', at: Date.now() }],
+      settings: async () => ({ autoMemory: true, tidyMemory: true }),
+      busy: () => false,
+      never: async (content) => content === 'Loves hiking',
     });
-
-    it('in a chat that read something untrusted, what it learns waits for your OK', async () => {
-      const t = tidy({
-        reply: { add: [{ content: 'Owns a red car', kind: 'fact', from: 'long' }] },
-      });
-      const run = await t.run.learn('long', [
-        said(
-          'my car is red',
-          earlier,
-          'This chat read evil.example, which could be trying to steer me.',
-        ),
-      ]);
-      expect(run?.changes[0]).toMatchObject({
-        state: 'pending',
-        untrusted: 'Learned in a chat that read evil.example.',
-      });
-      expect((await t.memories.list())[0]?.pending).toBe(true);
-    });
-
-    it('with Remember automatically off, it only proposes', async () => {
-      const t = tidy({
-        autoMemory: false,
-        reply: { add: [{ content: 'Likes jazz', kind: 'preference', from: 'long' }] },
-      });
-      const run = await t.run.learn('long', [said('I love jazz')]);
-      expect(run?.changes[0]?.state).toBe('pending');
-    });
-
-    it('never reads the same words twice: not in the next fold, not in the nightly tidy-up', async () => {
-      const t = tidy({
-        said: [said('I grow tomatoes on my balcony')],
-        reply: { add: [{ content: 'Grows tomatoes', kind: 'project', from: 'long' }] },
-      });
-      await t.run.learn('long', [said('I grow tomatoes on my balcony')]);
-      expect(t.complete).toHaveBeenCalledTimes(1);
-
-      // The next fold of the same chat has nothing new to read.
-      expect(await t.run.learn('long', [said('I grow tomatoes on my balcony')])).toBeUndefined();
-      expect(t.complete).toHaveBeenCalledTimes(1);
-
-      // Tonight's tidy-up doesn't read them again, and proposes nothing twice.
-      const night = await t.run.run('nightly');
-      // Nothing new was said and there's nothing to merge: the model isn't even asked.
-      expect(t.complete).toHaveBeenCalledTimes(1);
-      expect(night.changes).toEqual([]);
-      expect(await t.memories.list()).toHaveLength(1);
-    });
-
-    it('doesn’t propose again what already waits for an OK', async () => {
-      const t = tidy({
-        reply: { add: [{ content: 'Owns a red car', kind: 'fact', from: 'long' }] },
-      });
-      await t.memories.add({
-        content: 'Owns a red car',
-        source: 'agent',
-        pending: true,
-        untrusted: 'waits',
-      });
-      const run = await t.run.learn('long', [said('my car is red')]);
-      expect(run).toBeUndefined();
-      expect(await t.memories.list()).toHaveLength(1);
-    });
-
-    it('leaves the words for the nightly when no model answers', async () => {
-      const t = tidy({ model: false, said: [said('I grow tomatoes')] });
-      expect(await t.run.learn('long', [said('I grow tomatoes')])).toBeUndefined();
-      // Nothing was marked read: the next tidy-up still has them.
-      const file = await t.run.status();
-      expect(file.runs).toEqual([]);
-      const withModel = tidy({
-        said: [said('I grow tomatoes')],
-        reply: { add: [{ content: 'Grows tomatoes', kind: 'project', from: 'long' }] },
-      });
-      expect((await withModel.run.run('nightly')).changes).toHaveLength(1);
-    });
-
-    it('reads only words no tidy-up has read yet', async () => {
-      const t = tidy({ said: [] });
-      await t.run.run('nightly');
-      // Said before that tidy-up: it had them already.
-      expect(await t.run.learn('long', [said('old words', earlier)])).toBeUndefined();
-      expect(t.complete).toHaveBeenCalledTimes(0);
-    });
+    expect((await run.run('now')).changes).toEqual([]);
+    expect(await memories.list()).toEqual([]);
   });
 
   it('repeats groups only the same kind', () => {

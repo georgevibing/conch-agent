@@ -10,6 +10,12 @@
  * came from a chat that read something untrusted (ADR 0028), or anything new
  * while "Remember things automatically" is off, waits for your OK instead of
  * being applied. Without a model it still merges exact repeats.
+ *
+ * Since quiet learning (ADR 0087): an updated memory is superseded, kept with
+ * its date, not overwritten; a merge that would lose a number or a name, or
+ * shrink what it merges, isn't made; and what you took back once isn't added.
+ * Learning from one chat before its start is summarised is quiet learning's
+ * now (`learning/service.ts`).
  */
 import { join } from 'node:path';
 
@@ -71,8 +77,34 @@ export interface TidyDeps {
   settings: () => Promise<{ autoMemory: boolean; tidyMemory: boolean }>;
   /** A chat is working: nightly tidy-ups wait for a quiet moment. */
   busy: () => boolean;
+  /** You took this back once (ADR 0087): it isn't added again. */
+  never?: (content: string) => Promise<boolean>;
   emit?: (status: TidyStatus) => void;
   now?: () => number;
+}
+
+/** Numbers, and names past a sentence's first word: what a merge must keep. */
+function details(text: string): string[] {
+  const words = text.split(/\s+/);
+  return [
+    ...(text.match(/\d+(?:[.,:]\d+)*/g) ?? []),
+    ...words
+      .slice(1)
+      .filter((w) => /^\p{Lu}[\p{L}\p{N}'’-]{1,}/u.test(w))
+      .map((w) => w.replace(/[^\p{L}\p{N}'’-]+$/u, '')),
+  ];
+}
+
+/**
+ * A model's merge that keeps what the memories said: every number and name
+ * in them, and at least 60% as long as the longest. One that loses them would
+ * quietly shrink what Conch knows ("context collapse"), so it isn't made.
+ */
+export function keepsDetail(merged: string, originals: readonly string[]): boolean {
+  const longest = Math.max(0, ...originals.map((o) => o.trim().length));
+  if (merged.trim().length < 0.6 * longest) return false;
+  const lower = merged.toLowerCase();
+  return originals.every((o) => details(o).every((d) => lower.includes(d.toLowerCase())));
 }
 
 /** Jaccard over word stems: how much two memories say the same. */
@@ -202,7 +234,6 @@ function learnedIn(untrusted: string): string {
 export class MemoryTidy {
   #file?: Promise<TidyFile>;
   #running?: Promise<TidyRun>;
-  #learning?: Promise<TidyRun | undefined>;
   #timer?: NodeJS.Timeout;
 
   constructor(private readonly deps: TidyDeps) {}
@@ -298,13 +329,18 @@ export class MemoryTidy {
       }
     }
 
-    // Merges the model found, then any exact repeats it didn't.
-    for (const m of reply?.merge ?? [])
-      await merge(
-        m.ids.map((id) => byId.get(id)).filter((x): x is Memory => Boolean(x)),
-        m.content.trim(),
-        m.why,
-      );
+    // Merges the model found (when they keep every detail), then any exact repeats it didn't.
+    for (const m of reply?.merge ?? []) {
+      const group = m.ids.map((id) => byId.get(id)).filter((x): x is Memory => Boolean(x));
+      if (
+        !keepsDetail(
+          m.content,
+          group.map((g) => g.content),
+        )
+      )
+        continue;
+      await merge(group, m.content.trim(), m.why);
+    }
     for (const group of repeats(memories.filter((m) => !touched.has(m.id))))
       await merge(group, group[0]?.content ?? '', 'They said the same thing.');
 
@@ -362,13 +398,20 @@ export class MemoryTidy {
         });
         continue;
       }
-      const after = (await store.update(current.id, { content: proposed.content })) ?? proposed;
+      // Superseded, not overwritten (ADR 0087): what used to be true is kept, dated.
+      const moved = await store.supersede(current.id, {
+        content: proposed.content,
+        kind: current.kind,
+        source: 'tidy',
+        ...(current.conversationId && { conversationId: current.conversationId }),
+      });
+      if (!moved) continue;
       changes.push({
         id: newId('tc'),
         kind: 'updated',
         why: u.why || 'Something you said more recently replaces it.',
         before: [current],
-        after,
+        after: moved.after,
         state: 'applied',
       });
     }
@@ -378,6 +421,7 @@ export class MemoryTidy {
     for (const a of reply?.add ?? []) {
       const content = a.content.trim();
       if (known.some((m) => overlap(m.content, content) >= 0.7)) continue;
+      if (await this.deps.never?.(content).catch(() => false)) continue;
       const chat = a.from
         ? fromChat.get(a.from)
         : said.length && said.every((s) => s.conversationId === said[0]?.conversationId)
@@ -409,70 +453,6 @@ export class MemoryTidy {
     }
   }
 
-  /**
-   * Learn from one chat just before its start is summarised away (ADR 0055):
-   * what you said there that no tidy-up has read yet, by the same rules — your
-   * own words, a chat that read something untrusted waits for your OK, and
-   * nothing is merged here (that's the nightly's job). It's a run with cards
-   * and Undo like any other, and the tidy-up won't read those words again.
-   * Without a model, or with an answer it can't read, nothing is marked read:
-   * the chat keeps every word, and the next tidy-up still has them.
-   */
-  learn(conversationId: string, said: readonly Said[]): Promise<TidyRun | undefined> {
-    const after = Promise.all([
-      this.#learning?.catch(() => undefined),
-      this.#running?.catch(() => undefined),
-    ]);
-    const next = after.then(() => this.#learnChat(conversationId, said));
-    this.#learning = next;
-    return next;
-  }
-
-  async #learnChat(conversationId: string, all: readonly Said[]): Promise<TidyRun | undefined> {
-    const file = await this.#read();
-    const seen = Math.max(
-      file.readUntil ?? Number.NEGATIVE_INFINITY,
-      file.learned?.[conversationId] ?? Number.NEGATIVE_INFINITY,
-    );
-    const said = all.filter((s) => s.conversationId === conversationId && s.at > seen);
-    if (!said.length) return undefined;
-    const model = await this.deps.model().catch(() => undefined);
-    if (!model) return undefined;
-    const { autoMemory } = await this.deps.settings();
-    const memories = (await this.deps.store.list()).filter((m) => !m.pending);
-    let reply: z.infer<typeof Reply> | undefined;
-    try {
-      const answer = await model.complete({
-        system: SYSTEM,
-        prompt: prompt(memories, said),
-        model: model.model,
-        signal: AbortSignal.timeout(90_000),
-      });
-      reply = parseReply(answer.text);
-    } catch {
-      return undefined;
-    }
-    if (!reply) return undefined;
-    const changes: TidyChange[] = [];
-    await this.#learnFrom(reply, { memories, said, autoMemory, touched: new Set(), changes });
-    file.learned = { ...file.learned, [conversationId]: Math.max(...said.map((s) => s.at)) };
-    if (!changes.length) {
-      await this.#save(file);
-      return undefined;
-    }
-    const run: TidyRun = {
-      id: newId('tr'),
-      at: this.#now,
-      trigger: 'now',
-      model: true,
-      changes,
-      chat: conversationId,
-    };
-    file.runs = [run, ...file.runs];
-    await this.#save(file);
-    return run;
-  }
-
   /** Keep, Undo or Dismiss one change. */
   async answer(
     runId: string,
@@ -483,16 +463,30 @@ export class MemoryTidy {
     const change = file.runs.find((r) => r.id === runId)?.changes.find((c) => c.id === changeId);
     if (!change) return this.status();
     const { store } = this.deps;
+    const [first] = change.before;
+    // An update that superseded (ADR 0087): a new memory, and the old one kept, dated.
+    const superseded =
+      change.kind === 'updated' && change.after && first && change.after.id !== first.id;
     if (change.state === 'applied' && answer === 'undo') {
-      for (const m of change.before) await store.restore(m);
-      if (change.kind === 'added' && change.after) await store.remove(change.after.id);
+      if (superseded && change.after && first) await store.unsupersede(change.after.id, first);
+      else {
+        for (const m of change.before) await store.restore(m);
+        if (change.kind === 'added' && change.after) await store.remove(change.after.id);
+      }
       change.state = 'undone';
     } else if (change.state === 'applied' && answer === 'keep') {
       change.state = 'kept';
     } else if (change.state === 'pending' && answer === 'keep') {
       if (change.kind === 'added' && change.after) await store.keep(change.after.id);
-      if (change.kind === 'updated' && change.after)
-        await store.update(change.after.id, { content: change.after.content });
+      if (change.kind === 'updated' && change.after && first) {
+        const moved = await store.supersede(first.id, {
+          content: change.after.content,
+          kind: first.kind,
+          source: 'tidy',
+          ...(first.conversationId && { conversationId: first.conversationId }),
+        });
+        if (moved) change.after = moved.after;
+      }
       change.state = 'kept';
     } else if (change.state === 'pending' && (answer === 'dismiss' || answer === 'undo')) {
       if (change.kind === 'added' && change.after) await store.remove(change.after.id);

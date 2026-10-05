@@ -1186,7 +1186,12 @@ export class ConversationManager {
    */
   async note(
     id: string,
-    event: Extract<ConversationEventInput, { type: 'artifact' | 'task' | 'memory.decided' }>,
+    event: Extract<
+      ConversationEventInput,
+      {
+        type: 'artifact' | 'task' | 'memory.decided' | 'learning.noted' | 'learning.decided';
+      }
+    >,
   ): Promise<void> {
     const live = await this.#get(id);
     this.#append(live, event);

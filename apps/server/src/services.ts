@@ -143,8 +143,10 @@ import { hostedApps } from './integrations/hosted';
 import { IntegrationService } from './integrations/service';
 import { MemoryIndex } from './memory/index';
 import { OnDeviceModel } from './memory/ondevice';
-import { chatWords, cheapModel, MeaningModel, yourRequests, yourWords } from './memory/learning';
+import { cheapModel, MeaningModel, yourRequests, yourWords } from './memory/learning';
 import { registerLearningDoctor } from './memory/doctor';
+import { QuietLearning } from './learning/service';
+import { LearningSpend } from './learning/spend';
 import { MemoryStore } from './memory/store';
 import { MemoryTidy } from './memory/tidy';
 import { SkillLearner } from './skills/learn';
@@ -241,6 +243,10 @@ export class Services {
   readonly suggester: SkillSuggester;
   /** Save how I did this: skills offered from work that went well (ADR 0058). */
   readonly learner: SkillLearner;
+  /** Quiet learning (ADR 0087): each chat read once it goes quiet, said afterwards, with Undo. */
+  readonly learning: QuietLearning;
+  /** What learning may spend a month: a person's choice, never the agent's. */
+  readonly learningSpend: LearningSpend;
   /** When each skill was last used, for the tidy shelf (ADR 0058). */
   readonly skillUsage: SkillUsage;
   readonly commands: CommandStore;
@@ -922,15 +928,9 @@ export class Services {
         const { usd, budgetUsd } = await this.usage.month();
         return budgetUsd !== undefined && usd >= budgetUsd;
       },
-      // Before a long chat's start is summarised, what you said there is learned (ADR 0055).
-      learn: async ({ conversationId, origin, events, beforeSeq }) => {
-        await this.tidy.learn(
-          conversationId,
-          chatWords({ id: conversationId, ...(origin && { origin }) }, events, {
-            since: Number.NEGATIVE_INFINITY,
-            beforeSeq,
-          }),
-        );
+      // Before a long chat's start is summarised, what you said there is learned (ADR 0055, ADR 0087).
+      learn: async ({ conversationId, beforeSeq }) => {
+        await this.learning.review(conversationId, { trigger: 'compaction', beforeSeq });
       },
       heal: (message) => void this.healed.note('conversations', message),
     });
@@ -1058,6 +1058,72 @@ export class Services {
     this.usage.changed.on((usage) => this.broadcast.emit({ type: 'usage.changed', usage }));
     // Each turn's money is counted by the chat as it ends (ADR 0079), so it can say when the month nears its budget.
     this.usage.start();
+    // Quiet learning (ADR 0087): each chat you were in, read once it goes quiet.
+    this.learningSpend = new LearningSpend({
+      home: config.CONCH_HOME,
+      billings,
+      heal,
+      changed: () => this.broadcast.emit({ type: 'learning.changed' }),
+    });
+    this.learning = new QuietLearning({
+      home: config.CONCH_HOME,
+      memory: this.memory,
+      search: (query, limit) => this.memoryIndex.search(query, limit),
+      spend: this.learningSpend,
+      chats: () => this.conversations.list(),
+      events: (id) => conversationStore.events(id),
+      // The provider that answered the chat has seen it already; else one on this computer.
+      model: async (id) => {
+        const engine = id ? this.providers.engineFor(id) : this.engine();
+        const pick = engine.complete
+          ? engine
+          : (await this.providers.ready().catch(() => [])).find((e) => e.local && e.complete);
+        const cheap = pick && (await cheapModel(pick));
+        return pick && cheap && { engine: pick, ...cheap };
+      },
+      settings: async () => ({ autoMemory: (await this.settings.get()).preferences.autoMemory }),
+      overBudget: async () => {
+        const { usd, budgetUsd } = await this.usage.month();
+        return budgetUsd !== undefined && usd >= budgetUsd;
+      },
+      note: (id, event) => this.conversations.note(id, event),
+      changed: () => this.broadcast.emit({ type: 'learning.changed' }),
+      meaning,
+      redact: this.vault.redactor(),
+      onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
+      heal,
+      // The mock engine's chats go quiet in moments, so tests and `pnpm dev:mock` see it.
+      ...(mock && { idleMs: 3_000, sweepMs: 2_000 }),
+    });
+    this.conversations.events.on((event) => {
+      // An archived chat is read at once.
+      if (
+        event.type === 'conversation.updated' &&
+        event.conversation.archivedAt &&
+        event.conversation.status === 'idle'
+      )
+        void this.learning
+          .review(event.conversation.id, { trigger: 'archived' })
+          .catch(() => undefined);
+      // What the assistant remembered in a chat goes in the record too, for Why? and the timeline.
+      if (
+        event.type === 'conversation.event' &&
+        event.event.type === 'memory.saved' &&
+        event.event.memory.source === 'agent'
+      ) {
+        const { memory, conversationId } = event.event;
+        void conversationStore
+          .get(conversationId)
+          .then((chat) =>
+            this.learning.remembered(memory, {
+              id: conversationId,
+              ...(chat && { title: chat.title }),
+            }),
+          )
+          .catch(() => undefined);
+      }
+    });
+    this.learning.start();
     void (this.mockVendor?.start() ?? Promise.resolve()).then(() => this.integrations.start());
     this.googleApps.start();
     this.activity = new Activity({
@@ -2124,6 +2190,7 @@ export class Services {
     this.door.stop();
     this.tailscale.stop();
     this.tidy.stop();
+    this.learning.stop();
     this.learner.stop();
     this.memoryIndex.close();
     void this.onDevice.unload();
