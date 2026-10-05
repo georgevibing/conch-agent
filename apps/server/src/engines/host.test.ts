@@ -161,10 +161,11 @@ describe('commands, on every provider that uses Conch’s tools', () => {
     });
     const secret = join(input.cwd, '..', 'secrets.json');
     await writeFile(secret, 'key');
+    // The refusal goes back as the tool's own answer, so the model can say why.
     await expect(
       buildTools({ ...input, protectedPaths: [secret] })
         .get('Bash')
         ?.run({ command: `cat ${secret}`, dangerouslyDisableSandbox: true }, 'b2'),
-    ).rejects.toThrow(/passwords/);
+    ).resolves.toMatchObject({ isError: true, text: expect.stringMatching(/passwords/) });
   });
 });

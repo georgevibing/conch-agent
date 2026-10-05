@@ -308,7 +308,22 @@ export function buildTools(
         if (!checked.ok) return { text: checked.message, isError: true };
         const denied = await authorizeTool(input, display, checked.args, id);
         if (denied) return { text: denied, isError: true };
-        const result = await run(host, checked.args);
+        // What went wrong goes back as it is (the command's own output, the file's missing): a
+        // model told only "could not complete" guesses, and tells the person it's read-only.
+        let result;
+        try {
+          result = await run(host, checked.args);
+        } catch (error) {
+          input.signal.throwIfAborted();
+          const said = error instanceof Error ? error.message : '';
+          return {
+            text: (said || 'The tool could not complete. Check the action and try again.').slice(
+              0,
+              16_000,
+            ),
+            isError: true,
+          };
+        }
         return { ...result, text: withNotes(result.text, checked.notes), isError: false };
       },
     }));

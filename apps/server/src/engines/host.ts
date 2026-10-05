@@ -3,12 +3,14 @@ import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import { lstat, open, realpath, readdir } from 'node:fs/promises';
+
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 import { z } from 'zod';
 
 import { sandboxSupport, secretPlaces } from '../conversations/sandbox';
 import { PROTECTED_MESSAGE, touchesProtected } from '../lib/protect';
+import { runsUnsealedByTrust, SEALED_HINT } from './trust';
 import type { HostTool, TurnInput } from './types';
 
 const MAX_FILE = 1024 * 1024;
@@ -75,6 +77,9 @@ export async function hostPath(input: TurnInput, raw: string, writing = false): 
   return actual;
 }
 
+/** A model asking for 1s to run `pnpm check` only gets it killed: no command gets less than this. */
+const MIN_COMMAND_MS = 10_000;
+
 /** A separate runtime per command: its global sandbox policy cannot cross conversations. */
 const WORKER = `
 import { spawn } from 'node:child_process';
@@ -110,7 +115,7 @@ export async function runHostCommand(
 ): Promise<string> {
   input.signal.throwIfAborted();
   // No box for this turn: this computer can't make one, or sealing is off in Settings.
-  const unboxed = unsealed || !sealable(input);
+  const unboxed = unsealed || !sealable(input) || runsUnsealedByTrust(input, command);
   if (unboxed) {
     // A command that names Conch's keys or your sign-ins is refused. Only a
     // speed bump: unsealed, a command runs with your access, which is why it asks first.
@@ -143,10 +148,13 @@ export async function runHostCommand(
       /* Already exited. */
     }
   };
-  const timer = setTimeout(() => {
-    timedOut = true;
-    stop();
-  }, timeoutMs).unref();
+  const timer = setTimeout(
+    () => {
+      timedOut = true;
+      stop();
+    },
+    Math.max(timeoutMs, MIN_COMMAND_MS),
+  ).unref();
   input.signal.addEventListener('abort', stop, { once: true });
   const collect = (chunk: Buffer) => {
     output = (output + chunk.toString('utf8')).slice(-64_000);
@@ -185,7 +193,10 @@ export async function runHostCommand(
       throw new Error(
         `The command took longer than ${Math.round(timeoutMs / 1000)}s and was stopped. For a long one (a big clone, an install), set timeout_ms higher.`,
       );
-    if (code !== 0) throw new Error(`Command exited with code ${code ?? 'unknown'}.\n${output}`);
+    if (code !== 0)
+      throw new Error(
+        `Command exited with code ${code ?? 'unknown'}.\n${output}${unboxed ? '' : SEALED_HINT}`,
+      );
     return output || 'Command completed with no output.';
   } finally {
     clearTimeout(timer);
@@ -281,7 +292,7 @@ export function hostComputerTools(input: TurnInput): HostTool[] {
     {
       name: 'Bash',
       description: sealable(input)
-        ? 'Run a command in the work folder, sealed by the operating system: no network, no secrets, and writes stay in the work folder (not .git). For a command that needs more (the network for git clone or an install, or files elsewhere), set dangerouslyDisableSandbox: true; it then runs with the person’s own access, and they are asked first unless they chose Full trust.'
+        ? 'Run a command in the work folder, sealed by the operating system: no network, no secrets, and writes stay in the work folder (not .git). For a command that needs more (the network for git clone or an install, or files elsewhere), set dangerouslyDisableSandbox: true; it then runs with the person’s own access, and they are asked first unless they chose Full trust, where git, installs and work in their other folders run that way by themselves. Never tell the person the session is read-only: ask for what you need.'
         : 'Run a command in the work folder. This computer can’t seal commands, so each one runs with the person’s own access (the network included), and they are asked first unless they chose Full trust.',
       input: {
         command: z.string().min(1).max(32_000),
