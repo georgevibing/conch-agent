@@ -89,9 +89,19 @@ describe.skipIf(!run)('your own address, against Pebble', () => {
       expect(status).toMatchObject({ state: 'ready', name: NAME, url: `https://${NAME}:8443` });
       expect(status.certificate?.issuer).toMatch(/Pebble/);
 
+      const first = await service.store.certificate();
+      expect(first).toBeDefined();
       const peer = await new Promise<{ subject: string; issuer: string }>((resolve, reject) => {
         const socket = connect(
-          { host: '127.0.0.1', port: 8443, servername: NAME, rejectUnauthorized: false },
+          {
+            host: '127.0.0.1',
+            port: 8443,
+            servername: NAME,
+            // Pebble creates a new issuing CA on every run. Trust only the chain
+            // just obtained from its authenticated ACME API, retaining name checks.
+            ca: first?.certPem,
+            allowPartialTrustChain: true,
+          },
           () => {
             const cert = socket.getPeerCertificate();
             resolve({ subject: cert.subjectaltname ?? '', issuer: String(cert.issuer.CN ?? '') });
@@ -107,7 +117,6 @@ describe.skipIf(!run)('your own address, against Pebble', () => {
       // Pebble offers renewal information (RFC 9773): Conch plans by it.
       expect(status.certificate?.renewsAt).toBeGreaterThan(Date.now());
       // Renewing replaces the certificate it has, and keeps answering.
-      const first = await service.store.certificate();
       const renewed = await service.renew();
       expect(renewed).toMatchObject({ state: 'ready' });
       expect(renewed.problem).toBeUndefined();

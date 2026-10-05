@@ -181,7 +181,7 @@ describe('find_skills', () => {
       '`clawhub:ada/meeting-notes`: meeting notes (Everyday, ClawHub, publisher vouched for by the registry, 18.4k people use it)',
     );
     expect(text).toContain('`skills-sh:bob/s/notes_v2`: notes v2 script (');
-    expect(text).not.toMatch(/Ignore|wallet|flagged|mine|<script>/);
+    expect(text).not.toMatch(/ignore|wallet|flagged|mine|<script\b/i);
   });
 
   it('not in a chat that read something from outside, nor for nobody', async () => {

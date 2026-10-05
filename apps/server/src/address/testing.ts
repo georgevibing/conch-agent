@@ -3,7 +3,7 @@
  * pretend ACME server (RFC 8555) that checks every signed request and asks
  * for the `http-01` answer the way Let's Encrypt does.
  */
-import { createHash, randomBytes, webcrypto } from 'node:crypto';
+import { createHash, randomBytes, randomInt, webcrypto } from 'node:crypto';
 
 // @peculiar/x509 needs the Reflect metadata API before it loads.
 import 'reflect-metadata';
@@ -27,19 +27,29 @@ export interface TestCa {
   keys: webcrypto.CryptoKeyPair;
 }
 
-export async function testCa(): Promise<TestCa> {
+/** A root, or an intermediate signed by `issuer`, for local certificate tests. */
+export async function testCa(issuer?: TestCa): Promise<TestCa> {
   const keys = (await webcrypto.subtle.generateKey(ALG, true, [
     'sign',
     'verify',
   ])) as webcrypto.CryptoKeyPair;
-  const cert = await x509.X509CertificateGenerator.createSelfSigned({
-    name: 'C=US, O=Pretend Encrypt, CN=P1',
+  const params = {
+    name: `C=US, O=Pretend Encrypt, CN=${issuer ? 'I1' : 'P1'}`,
     keys: keys as never,
     signingAlgorithm: ALG,
     notBefore: new Date(Date.now() - 86_400_000),
     notAfter: new Date(Date.now() + 365 * 86_400_000),
     extensions: [new x509.BasicConstraintsExtension(true, undefined, true)],
-  });
+  };
+  const cert = issuer
+    ? await x509.X509CertificateGenerator.create({
+        ...params,
+        subject: params.name,
+        issuer: issuer.cert.subject,
+        publicKey: keys.publicKey as never,
+        signingKey: issuer.keys.privateKey as never,
+      })
+    : await x509.X509CertificateGenerator.createSelfSigned(params);
   return { cert, keys };
 }
 
@@ -54,7 +64,7 @@ export async function leafFor(
   ])) as webcrypto.CryptoKeyPair;
   const ca = options.ca;
   const params = {
-    serialNumber: `${(0x80 + ((randomBytes(1)[0] ?? 0) % 0x7f)).toString(16)}${randomBytes(15).toString('hex')}`,
+    serialNumber: `${randomInt(0x80, 0xff).toString(16)}${randomBytes(15).toString('hex')}`,
     subject: `CN=${name}`,
     issuer: ca ? ca.cert.subject : `CN=${name}`,
     notBefore: options.notBefore ?? new Date(Date.now() - 60_000),

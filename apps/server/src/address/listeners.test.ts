@@ -8,9 +8,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { AddressListeners } from './listeners';
 import { AddressProblemError } from './problems';
-import { leafFor } from './testing';
+import { leafFor, testCa, type TestCa } from './testing';
 
 const NAME = 'conch.example.com';
+let authority: TestCa;
 
 interface Answer {
   status: number;
@@ -34,7 +35,7 @@ function get(
         path,
         method,
         headers: { host },
-        ...(kind === 'https' && { rejectUnauthorized: false, servername: NAME }),
+        ...(kind === 'https' && { ca: authority.cert.toString('pem'), servername: NAME }),
       },
       (res) => {
         let text = '';
@@ -58,6 +59,7 @@ describe('AddressListeners', () => {
   const checks = new Map<string, string>();
 
   beforeEach(async () => {
+    authority = await testCa();
     app = Fastify();
     await app.register(websocket);
     app.get('/api/who', (request) => ({
@@ -92,24 +94,68 @@ describe('AddressListeners', () => {
   });
 
   it('hands HTTPS requests to the gateway, as HTTPS from the client', async () => {
-    await listeners.startHttps(await leafFor(NAME));
+    await listeners.startHttps(await leafFor(NAME, { ca: authority }));
     const answer = await get('https', listeners.ports().https ?? 0, '/api/who');
     expect(answer.status).toBe(200);
     expect(JSON.parse(answer.body)).toEqual({ protocol: 'https', remote: '127.0.0.1', host: NAME });
   });
 
+  it('verifies the test certificate chain and the TLS name', async () => {
+    await listeners.startHttps(await leafFor(NAME, { ca: authority }));
+    const port = listeners.ports().https ?? 0;
+    const handshake = (ca: string, servername: string) =>
+      new Promise<void>((resolve, reject) => {
+        const socket = tlsConnect({ host: '127.0.0.1', port, ca, servername }, () => {
+          socket.destroy();
+          resolve();
+        });
+        socket.once('error', reject);
+      });
+    await expect(handshake(authority.cert.toString('pem'), NAME)).resolves.toBeUndefined();
+    await expect(
+      handshake(authority.cert.toString('pem'), 'other.example.com'),
+    ).rejects.toMatchObject({
+      code: 'ERR_TLS_CERT_ALTNAME_INVALID',
+    });
+    await expect(handshake((await testCa()).cert.toString('pem'), NAME)).rejects.toThrow();
+  });
+
+  it('can trust an issued intermediate chain without accepting another name or issuer', async () => {
+    const intermediate = await testCa(authority);
+    const issued = await leafFor(NAME, { ca: intermediate });
+    await listeners.startHttps(issued);
+    const port = listeners.ports().https ?? 0;
+    // Like Pebble, this chain contains the leaf and intermediate, without the root.
+    const handshake = (ca: string, servername = NAME) =>
+      new Promise<boolean>((resolve, reject) => {
+        const socket = tlsConnect(
+          { host: '127.0.0.1', port, ca, servername, allowPartialTrustChain: true },
+          () => {
+            resolve(socket.authorized);
+            socket.destroy();
+          },
+        );
+        socket.once('error', reject);
+      });
+    await expect(handshake(issued.certPem)).resolves.toBe(true);
+    await expect(handshake(issued.certPem, 'other.example.com')).rejects.toMatchObject({
+      code: 'ERR_TLS_CERT_ALTNAME_INVALID',
+    });
+    await expect(handshake((await testCa()).cert.toString('pem'))).rejects.toThrow();
+  });
+
   it('refuses any other name before the gateway sees it', async () => {
-    await listeners.startHttps(await leafFor(NAME));
+    await listeners.startHttps(await leafFor(NAME, { ca: authority }));
     const answer = await get('https', listeners.ports().https ?? 0, '/api/who', 'evil.example.net');
     expect(answer.status).toBe(421);
   });
 
   it('hands WebSocket upgrades to the gateway', async () => {
-    await listeners.startHttps(await leafFor(NAME));
+    await listeners.startHttps(await leafFor(NAME, { ca: authority }));
     const port = listeners.ports().https ?? 0;
     const head = await new Promise<string>((resolve, reject) => {
       const socket = tlsConnect(
-        { host: '127.0.0.1', port, servername: NAME, rejectUnauthorized: false },
+        { host: '127.0.0.1', port, servername: NAME, ca: authority.cert.toString('pem') },
         () =>
           socket.write(
             [
@@ -134,13 +180,13 @@ describe('AddressListeners', () => {
   });
 
   it('stops promptly with a WebSocket still open, and ends it', async () => {
-    await listeners.startHttps(await leafFor(NAME));
+    await listeners.startHttps(await leafFor(NAME, { ca: authority }));
     const port = listeners.ports().https ?? 0;
     const socket = tlsConnect({
       host: '127.0.0.1',
       port,
       servername: NAME,
-      rejectUnauthorized: false,
+      ca: authority.cert.toString('pem'),
     });
     await new Promise<void>((resolve) => socket.once('secureConnect', () => resolve()));
     socket.write(
@@ -166,12 +212,12 @@ describe('AddressListeners', () => {
   });
 
   it('swaps a renewed certificate in without a restart', async () => {
-    await listeners.startHttps(await leafFor(NAME));
+    await listeners.startHttps(await leafFor(NAME, { ca: authority }));
     const port = listeners.ports().https ?? 0;
     const fingerprint = () =>
       new Promise<string>((resolve, reject) => {
         const socket = tlsConnect(
-          { host: '127.0.0.1', port, servername: NAME, rejectUnauthorized: false },
+          { host: '127.0.0.1', port, servername: NAME, ca: authority.cert.toString('pem') },
           () => {
             resolve(socket.getPeerCertificate().fingerprint256);
             socket.destroy();
@@ -180,13 +226,13 @@ describe('AddressListeners', () => {
         socket.on('error', reject);
       });
     const before = await fingerprint();
-    listeners.updateCertificate(await leafFor(NAME));
+    listeners.updateCertificate(await leafFor(NAME, { ca: authority }));
     expect(await fingerprint()).not.toBe(before);
     expect(listeners.ports().https).toBe(port);
   });
 
   it('sends the door’s path to the door, never to the gateway', async () => {
-    await listeners.startHttps(await leafFor(NAME));
+    await listeners.startHttps(await leafFor(NAME, { ca: authority }));
     const port = listeners.ports().https ?? 0;
     expect((await get('https', port, '/conch/hooks/abc')).status).toBe(404);
     door = createServer((req, res) => {

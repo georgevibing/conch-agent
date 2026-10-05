@@ -545,9 +545,7 @@ test('the Windows installer follows the same releases', () => {
   // Its tag pattern, read as .NET reads it (the same syntax JavaScript has here).
   const pattern = /\[regex\]::Match\("\$tag"\.Trim\(\), "(.+?)"\)/.exec(ps)?.[1];
   assert.ok(pattern);
-  const tagRe = new RegExp(
-    pattern.replaceAll('$num', '(0|[1-9][0-9]{0,5})').replace(/\?\$$/, '?$'),
-  );
+  const tagRe = new RegExp(pattern.replaceAll('$num', '(0|[1-9][0-9]{0,5})'));
   const kind = (tag) => tagRe.exec(tag)?.[4] ?? (tagRe.test(tag) ? 'stable' : undefined);
   assert.equal(kind('v0.3.0'), 'stable');
   assert.equal(kind('v0.3.0-beta.2'), 'beta');

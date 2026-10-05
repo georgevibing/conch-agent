@@ -4,6 +4,7 @@
  * spends money and runs only through `pnpm eval`.
  */
 import { describe, expect, it } from 'vitest';
+import { convert } from 'html-to-text';
 
 import { SITE, startSite } from './fixtures/site';
 import { EVAL_MODELS, keyFrom, pickModel, SWITCH_FROM } from './models';
@@ -161,7 +162,7 @@ describe('the fixture site', () => {
       const account = await fetch(`${site.url}/account`, { headers: { cookie } });
       expect(await account.text()).toContain(SITE.membership);
       const meter = await (await fetch(`${site.url}/meter`)).text();
-      expect(meter.replace(/<script>[\s\S]*<\/script>/, '')).not.toContain(SITE.meter);
+      expect(convert(meter)).not.toContain(SITE.meter);
       const product = await (await fetch(`${site.url}/shop/garden/blue-watering-can`)).text();
       expect(product).toContain(SITE.orderCode);
     } finally {

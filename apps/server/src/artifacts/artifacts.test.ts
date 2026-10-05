@@ -83,15 +83,20 @@ describe('a page, sealed off', () => {
     expect(doc).toContain('<html lang="en"><head>');
   });
 
-  it('keeps script terminators in the parent origin inside the bridge string', () => {
-    const parentOrigin = 'https://example.test/</script><script>alert("escaped")</script><!--';
-    const page = frameDocument('<p>Hi</p>', { title: 't', theme: 'light', parentOrigin });
-    expect(page.match(/<script>/g)).toHaveLength(1);
-    expect(page.match(/<\/script>/g)).toHaveLength(1);
-    const encoded = page.slice(page.indexOf('var o=') + 6, page.indexOf(',n=0'));
-    expect(encoded).not.toContain('<');
-    expect(JSON.parse(encoded)).toBe(parentOrigin);
-  });
+  it.each([
+    'https://example.test/</script><script>alert("escaped")</script><!--',
+    'https://example.test/</ScRiPt ><ScRiPt src=x>alert("escaped")</ScRiPt><!--',
+  ])(
+    'keeps script terminators in the parent origin inside the bridge string: %s',
+    (parentOrigin) => {
+      const page = frameDocument('<p>Hi</p>', { title: 't', theme: 'light', parentOrigin });
+      expect(page.match(/<script\b/gi)).toHaveLength(1);
+      expect(page.match(/<\/script\s*>/gi)).toHaveLength(1);
+      const encoded = page.slice(page.indexOf('var o=') + 6, page.indexOf(',n=0'));
+      expect(encoded).not.toContain('<');
+      expect(JSON.parse(encoded)).toBe(parentOrigin);
+    },
+  );
 
   it('gives a Conch app’s page the page kit before its own styles, its accent, and conch.call (ADR 0061)', () => {
     const page = frameDocument(

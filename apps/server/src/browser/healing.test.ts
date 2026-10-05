@@ -1,5 +1,5 @@
 import { mkdtemp, rm } from 'node:fs/promises';
-import { createServer, type Server } from 'node:http';
+import { createServer, request, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -28,7 +28,11 @@ const homes: string[] = [];
 beforeAll(async () => {
   site = createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'text/html' });
-    res.end(`<!doctype html><title>Page ${req.url}</title><h1>${req.url}</h1>`);
+    const url = (req.url ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;');
+    res.end(`<!doctype html><title>Page ${url}</title><h1>${url}</h1>`);
   });
   await new Promise<void>((resolve) => site.listen(0, '127.0.0.1', resolve));
   const address = site.address();
@@ -41,6 +45,28 @@ afterAll(async () => {
   await new Promise((resolve) => site.close(resolve));
   for (const home of homes)
     await rm(home, { recursive: true, force: true, maxRetries: 5 }).catch(() => undefined);
+});
+
+it('serves request paths as text in its local test page', async () => {
+  // A raw request preserves characters that fetch and browser URLs percent-encode.
+  const body = await new Promise<string>((resolve, reject) => {
+    const req = request(
+      `${origin}/`,
+      { path: '/</title><ScRiPt>alert(1)</ScRiPt><h1>&' },
+      (res) => {
+        let text = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk: string) => (text += chunk));
+        res.on('end', () => resolve(text));
+      },
+    );
+    req.on('error', reject);
+    req.end();
+  });
+  expect(body).toBe(
+    '<!doctype html><title>Page /&lt;/title&gt;&lt;ScRiPt&gt;alert(1)&lt;/ScRiPt&gt;&lt;h1&gt;&amp;</title>' +
+      '<h1>/&lt;/title&gt;&lt;ScRiPt&gt;alert(1)&lt;/ScRiPt&gt;&lt;h1&gt;&amp;</h1>',
+  );
 });
 
 async function newHome() {

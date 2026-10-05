@@ -264,7 +264,7 @@ describe('reading a failure the way each provider means it', () => {
 describe('a key and its company’s regions', () => {
   it('tries each of the company’s own addresses, keeps the one that took the key, and starts there next time', async () => {
     const fetch = fakeFetch((call) =>
-      call.url.startsWith('https://api.moonshot.ai')
+      new URL(call.url).origin === 'https://api.moonshot.ai'
         ? jsonResponse(
             { error: { message: 'Invalid Authentication', type: 'invalid_authentication_error' } },
             401,
