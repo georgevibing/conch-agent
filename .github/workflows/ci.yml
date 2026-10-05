@@ -58,6 +58,8 @@ jobs:
       # Bound concurrency on each runner; scale out instead of competing with axe,
       # real sockets and child processes on the same machine. Run every suite even
       # if another fails, so one cleanup error doesn't hide the rest of the results.
+      - if: startsWith(matrix.suite, 'server ')
+        run: pnpm exec playwright install --with-deps --no-shell chromium
       - run: ${{ matrix.command }}
 
   e2e:
@@ -78,8 +80,9 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Use the browser matching Playwright, not the runner image's moving Chrome.
-      - run: pnpm exec playwright install --with-deps chromium
+      # Full Chromium in new headless mode; Headless Shell crashes on these pages.
+      # The config's chromium channel and this install must stay in agreement.
+      - run: pnpm exec playwright install --with-deps --no-shell chromium
       - run: pnpm e2e
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7

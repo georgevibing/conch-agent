@@ -21,6 +21,11 @@ changing the web app. Local journeys normally use installed Chrome; set
 `CONCH_TEST_BROWSER` to another Chromium executable if needed. CI installs the
 Chromium version matching the locked Playwright package. The gateway's own
 browser tests still exercise Conch's browser discovery and healing.
+CI uses the explicit `chromium` channel (the full browser's headless mode), with
+`playwright install --with-deps --no-shell chromium`. Omitting the channel selects
+the separate Headless Shell, which crashes on these pages. A local override is
+not validation of the CI browser: reproduce with `CI=1` and `CONCH_TEST_BROWSER`
+unset. Server unit runners also install full Chromium for their real CDP fixture.
 
 - **Static checks/builds:** formatting, installer/tooling tests, lint, types,
   Storybook and the documentation build.
@@ -188,3 +193,41 @@ and [fixture lifecycle](https://playwright.dev/docs/test-fixtures).
 These checks ran locally on macOS. The changed hosted workflow has not run yet;
 its Linux results, queue behaviour and execution-time improvement remain to be
 measured. The full 151-test browser suite was enumerated, not rerun in its entirety.
+
+## Follow-up: the first sharded hosted run
+
+[Run 37376545092](https://github.com/georgevibing/conch-agent/actions/runs/37376545092)
+on `ca5772b5` failed. Static checks, Nacre, the web/docs/protocol/desktop unit group,
+and server shard 2 passed. All four browser shards and server shard 1 failed;
+the aggregate correctly refused success. Desktop passed only after a retry.
+
+- **A regression introduced by the CI change:** leaving out the browser channel
+  selected Chromium Headless Shell 153.0.8010.12. The browser shards reported
+  108 failed tests, with repeated `Target crashed`/`Page crashed` errors. Local
+  validation had substituted a full Chrome executable and therefore failed to
+  validate the actual CI runtime. The crash reproduced locally with the original
+  CI configuration. The correction explicitly selects `channel: 'chromium'` and
+  installs only the matching full Chromium build. This follows Playwright's
+  [documented new headless mode](https://playwright.dev/docs/browsers#chromium-new-headless-mode).
+- **A fragile external-browser fixture:** `browser/backends.test.ts` spawned the
+  runner's Chrome directly and waited ten seconds for a port file. The fixture
+  never became ready; all assertions in that suite were blocked. It now prefers
+  the installed Playwright Chromium and launches a persistent context through
+  Playwright, then exposes CDP to Conch. Launch readiness and process shutdown
+  are awaited. The tests still verify that Conch leaves the fixture's own tab and
+  browser alive after disconnecting.
+- **Desktop's early keypress was still unreliable:** the retained trace showed
+  `hello` left in the composer, no chat created, and no send after Enter. Waiting
+  for DOM focus had not solved it. The packaged desktop smoke test now clicks its
+  visible Send button, which auto-waits for readiness. Enter-to-send coverage
+  remains in browser journeys and Composer component tests.
+
+The hosted run started its jobs after about five minutes queued; server shard 2
+finished after roughly 5 min 18 s of execution. Fast failure in the browser shards
+is not a speed benchmark for successful browser coverage.
+
+Correction checks: the original CI configuration reproduced the crash locally;
+the corrected configuration passed all 35 tests in shard 2 with `CI=1` and no
+executable override. All eight backend tests passed, and the packaged desktop
+chat passed five consecutive runs with retries disabled. Hosted validation must
+still run every job on the pushed revision before calling the correction green.

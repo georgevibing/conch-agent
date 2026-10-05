@@ -1,4 +1,3 @@
-import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
@@ -6,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { ConversationEventInput, PermissionMode } from '@conch/protocol';
-import { chromium } from 'playwright-core';
+import { chromium, type BrowserContext } from 'playwright-core';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { AskRequest, ToolContext } from '../conversations/manager';
@@ -24,15 +23,15 @@ import { BrowserService } from './service';
  * falls back to its own browser when the chosen one can't be reached.
  */
 
-const executable =
-  findBrowsers({ downloaded: () => chromium.executablePath() })[0]?.path ??
-  (existsSync(chromium.executablePath()) ? chromium.executablePath() : undefined);
+const executable = existsSync(chromium.executablePath())
+  ? chromium.executablePath()
+  : findBrowsers()[0]?.path;
 
 let site: Server;
 let origin = '';
 let home = '';
 let profile = '';
-let yours: ChildProcess | undefined;
+let yours: BrowserContext | undefined;
 let devtools = '';
 let browser: BrowserService;
 let bb: { status: number; body: unknown; calls: { url: string; init?: RequestInit }[] };
@@ -54,32 +53,18 @@ beforeAll(async () => {
   home = await mkdtemp(join(tmpdir(), 'conch-backends-'));
   profile = await mkdtemp(join(tmpdir(), 'conch-yours-'));
   // "Your Chrome": open with remote debugging, and a tab of your own in it.
-  yours = spawn(
-    executable,
-    [
-      '--headless=new',
-      // Local fixture pages only; match Playwright's default on CI hosts without user namespaces.
-      '--no-sandbox',
-      '--remote-debugging-port=0',
-      `--user-data-dir=${profile}`,
-      '--no-first-run',
-      '--no-default-browser-check',
-      'data:text/html,<title>My bank</title><h1>Mine</h1>',
-    ],
-    { stdio: ['ignore', 'ignore', 'pipe'] },
-  );
-  let startupError = '';
-  yours.stderr?.on('data', (chunk: Buffer) => {
-    startupError = (startupError + chunk.toString()).slice(-4000);
+  // Playwright supplies its tested launch flags, waits for readiness and drains
+  // shutdown. A raw Chrome spawn plus a short port-file loop depended on the
+  // runner's installed Chrome and sometimes never reached a usable browser.
+  yours = await chromium.launchPersistentContext(profile, {
+    executablePath: executable,
+    headless: true,
+    args: ['--remote-debugging-port=0'],
+    timeout: 30_000,
   });
-  yours.on('error', (error) => {
-    startupError = error.message;
-  });
+  const ownTab = yours.pages()[0] ?? (await yours.newPage());
+  await ownTab.goto('data:text/html,<title>My bank</title><h1>Mine</h1>');
   const file = join(profile, 'DevToolsActivePort');
-  for (let i = 0; i < 100 && !existsSync(file) && yours.exitCode === null; i++) {
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  if (!existsSync(file)) throw new Error(`Browser fixture did not start: ${startupError}`);
   const [port, path] = (await readFile(file, 'utf8')).split(/\r?\n/);
   devtools = `ws://127.0.0.1:${port}${path}`;
   // The port file appears before Chrome has finished creating its initial page.
@@ -109,7 +94,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await browser?.stop();
-  yours?.kill();
+  await yours?.close();
   site?.closeAllConnections();
   if (site) await new Promise((resolve) => site.close(resolve));
   await rm(home, { recursive: true, force: true, maxRetries: 5 }).catch(() => undefined);

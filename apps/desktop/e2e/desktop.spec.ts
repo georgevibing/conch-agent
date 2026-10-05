@@ -140,8 +140,7 @@ async function onboard(page: Page) {
   expect(saved.status()).toBe(200);
   await api.dispose();
   await page.reload();
-  // Focus is set after the composer's keyboard handler is attached. Visibility
-  // alone lets a fast test press Enter before React is ready to send it.
+  // Wait for the chat's initial focus effect before interacting with the page.
   await expect(page.getByRole('textbox', { name: 'Message Conch' })).toBeFocused();
 }
 
@@ -151,7 +150,10 @@ test('opens Conch in its window, on the gateway it carries, and talks', async ()
   expect(await page.title()).toMatch(/Conch/);
   const composer = page.getByRole('textbox', { name: 'Message Conch' });
   await composer.fill('hello');
-  await composer.press('Enter');
+  // Exercise the desktop send action with its visible readiness condition.
+  // Keyboard sending is covered by browser journeys and the Composer tests;
+  // Electron under Xvfb can drop an early native key even with DOM focus.
+  await page.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(page.getByText(/Ask me to/).last()).toBeVisible();
   // The gateway runs on the app's own Node, and says the app started it.
   const record = JSON.parse(readFileSync(join(home, 'gateway.json'), 'utf8')) as { port: number };

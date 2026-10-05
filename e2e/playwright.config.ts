@@ -291,7 +291,7 @@ export default defineConfig({
     ...(process.env.CONCH_TEST_BROWSER
       ? { launchOptions: { executablePath: process.env.CONCH_TEST_BROWSER } }
       : process.env.CI
-        ? {}
+        ? { channel: 'chromium' }
         : { channel: 'chrome' }),
     // The specs read dates and times as en-US; don't inherit the machine's locale.
     locale: 'en-US',
