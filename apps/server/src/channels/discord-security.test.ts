@@ -38,11 +38,12 @@ afterEach(() => {
   connection = undefined;
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
-function connect(gateway = 'wss://gateway.discord.gg') {
+function connect(gateway = 'wss://gateway.discord.gg', api?: string) {
   const state = vi.fn();
-  connection = new DiscordAdapter('test-token', undefined, gateway).connect({
+  connection = new DiscordAdapter('test-token', api, gateway).connect({
     state,
     message: vi.fn(),
     press: vi.fn(),
@@ -110,6 +111,39 @@ describe('Discord gateway boundaries', () => {
       op: 6,
       d: { session_id: 'session' },
     });
+  });
+
+  it('keeps mock resume tokens on the exact injected loopback gateway', async () => {
+    connect('ws://127.0.0.1:4318/gateway', 'http://127.0.0.1:4318/api');
+    const first = Socket.opened[0];
+    first?.receive({ op: 10, d: { heartbeat_interval: 45_000 } });
+    first?.receive({
+      op: 0,
+      t: 'READY',
+      d: {
+        session_id: 'session',
+        resume_gateway_url: 'ws://127.0.0.1:4319/gateway',
+        guilds: [],
+      },
+    });
+    first?.close();
+    await vi.advanceTimersByTimeAsync(2600);
+    expect(Socket.opened.length).toBeGreaterThan(1);
+    expect(Socket.opened.every((socket) => new URL(socket.url).port === '4318')).toBe(true);
+    expect(Socket.opened[1]?.url).toBe('ws://127.0.0.1:4318/gateway?v=10&encoding=json');
+  });
+
+  it('reconnects when the first heartbeat is not acknowledged', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    connect();
+    const first = Socket.opened[0];
+    first?.receive({ op: 10, d: { heartbeat_interval: 1000 } });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(first?.readyState).toBe(Socket.OPEN);
+    expect(first?.send).toHaveBeenLastCalledWith(JSON.stringify({ op: 1, d: null }));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(first?.readyState).toBe(3);
+    expect(first?.send).toHaveBeenCalledTimes(2); // Identify, then the unacknowledged beat.
   });
 
   it.each([undefined, null, 0, -1, 0.5, 999, 120_001, 2 ** 31, '45000'])(

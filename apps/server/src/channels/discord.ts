@@ -518,6 +518,7 @@ export class DiscordAdapter implements ChannelAdapter {
             }
             // The first beat is jittered, as Discord asks; then steady.
             heartbeat = setTimeout(() => {
+              acked = false;
               beat();
               heartbeat = setInterval(() => {
                 if (!acked) {
