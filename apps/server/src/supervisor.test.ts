@@ -8,9 +8,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { saveRecoveryState } from './recovery/supervisor-state';
 import {
   gatewayLaunch,
+  legacyProofWindow,
   nextStep,
   nodeFlags,
   RESTART_CODE,
+  shouldAdoptSupervisor,
   shouldSupervise,
   supervise,
 } from './supervisor';
@@ -18,6 +20,7 @@ import { point, prove, readState, swapIn, writeState } from './updates/layout';
 
 const homes: string[] = [];
 afterEach(() => {
+  vi.unstubAllEnvs();
   for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true });
 });
 /** A CONCH_HOME of its own, so no test reads the versions of whoever runs it. */
@@ -33,6 +36,61 @@ describe('keeping Conch running', () => {
     expect(shouldSupervise({ CONCH_SUPERVISE: '1', CONCH_SUPERVISED: '1' })).toBe(false);
     expect(shouldSupervise({})).toBe(false);
   });
+
+  it('adopts only legacy supervised children, never modern IPC or desktop gateways', () => {
+    const legacy = { CONCH_SUPERVISE: '1', CONCH_SUPERVISED: '1' };
+    expect(shouldAdoptSupervisor(legacy, false)).toBe(true);
+    expect(shouldAdoptSupervisor(legacy, true)).toBe(false);
+    expect(shouldAdoptSupervisor({ CONCH_SUPERVISE: '1' }, false)).toBe(false);
+    expect(shouldAdoptSupervisor({ CONCH_SUPERVISED: '1' }, false)).toBe(false);
+    expect(shouldAdoptSupervisor({}, false)).toBe(false);
+    expect(shouldAdoptSupervisor({ ...legacy, CONCH_APP: '/Conch.app' }, false)).toBe(false);
+  });
+
+  it('leaves shutdown and a margin before the old parent’s first release deadline', () => {
+    expect(legacyProofWindow(1_000, 1_000)).toBe(70_000);
+    expect(legacyProofWindow(1_000, 21_000)).toBe(50_000);
+    expect(legacyProofWindow(1_000, 91_000)).toBe(0);
+    // A future timestamp cannot extend the legacy parent's real startup allowance.
+    expect(legacyProofWindow(1_000_000, 0)).toBe(70_000);
+    expect(legacyProofWindow(1_000, 1_000, 5_000)).toBe(80_000);
+  });
+
+  it.each(['restart', 'crash', 'invalid'])(
+    'preserves the adopted reason %s and uses durable recovery state',
+    async (reason) => {
+      vi.stubEnv('CONCH_STARTED_BECAUSE', reason);
+      vi.stubEnv('CONCH_RECOVERY_MODE', '0');
+      vi.stubEnv('CONCH_SUPERVISOR_ROOT', '/legacy/conch');
+      const home = tempHome();
+      saveRecoveryState(home, { recoveryMode: true, failures: [], incidents: [] });
+      const spawn = vi.fn(
+        (_cmd: string, _args: string[], options: { env: NodeJS.ProcessEnv; stdio: string[] }) => {
+          expect(options.env.CONCH_STARTED_BECAUSE).toBe(reason === 'invalid' ? 'start' : reason);
+          expect(options.env.CONCH_RECOVERY_MODE).toBe('1');
+          expect(options.env.CONCH_LEGACY_SUPERVISOR_ROOT).toBe('/legacy/conch');
+          expect(options.env.CONCH_SUPERVISOR_ROOT).not.toBe('/legacy/conch');
+          expect(options.stdio).toContain('ipc');
+          expect(shouldAdoptSupervisor(options.env, true)).toBe(false);
+          const child = new EventEmitter();
+          queueMicrotask(() => child.emit('exit', 0, null));
+          return child;
+        },
+      );
+      await expect(
+        supervise({
+          adoptLegacy: true,
+          home,
+          spawn: spawn as never,
+          log: () => undefined,
+          exit: ((code: number) => {
+            throw Object.assign(new Error('exit'), { code });
+          }) as never,
+        }),
+      ).rejects.toMatchObject({ code: 0 });
+      expect(spawn).toHaveBeenCalledOnce();
+    },
+  );
 
   it('starts it again at once when it asks, and after a crash with backoff', () => {
     expect(nextStep(RESTART_CODE, null, [], 0, false)).toEqual({
@@ -203,6 +261,95 @@ describe('starting the version swapped in, and going back when it fails', () => 
     expect(state.current?.version).toBe('0.3.0');
     expect(state.previous?.version).toBe('0.2.0');
     expect(state.failed).toEqual([]);
+  });
+});
+
+describe('release proof while adopting a legacy supervisor', () => {
+  it('rolls back before launching when the legacy parent’s initial deadline has no room left', async () => {
+    const home = tempHome();
+    const old = version(home, '0.2.0');
+    const next = version(home, '0.3.0');
+    swapIn(
+      home,
+      { folder: next, version: '0.3.0' },
+      { folder: old, version: '0.2.0' },
+      Date.now() - 90_000,
+    );
+    const launched: string[] = [];
+    const signals: NodeJS.Signals[] = [];
+    const spawn = vi.fn((_cmd: string, _args: string[], options: { cwd: string }) => {
+      launched.push(options.cwd);
+      const child = Object.assign(new EventEmitter(), {
+        kill: (signal: NodeJS.Signals) => {
+          signals.push(signal);
+          queueMicrotask(() => child.emit('exit', null, signal));
+        },
+      });
+      queueMicrotask(() => child.emit('exit', 0, null));
+      return child;
+    });
+    await expect(
+      supervise({
+        adoptLegacy: true,
+        home,
+        spawn: spawn as never,
+        log: () => undefined,
+        proveWithinMs: 200,
+        lookEveryMs: 5,
+        exit: ((code: number) => {
+          throw Object.assign(new Error('exit'), { code });
+        }) as never,
+      }),
+    ).rejects.toMatchObject({ code: 0 });
+    expect(signals).toEqual([]);
+    expect(launched).toEqual([join(old, 'apps/server')]);
+    expect(readState(home).pending).toBeUndefined();
+    expect(readState(home).current?.folder).toBe(old);
+  });
+
+  it('uses the normal proof allowance for a later update, after adoption has finished', async () => {
+    const home = tempHome();
+    const old = version(home, '0.2.0');
+    const next = version(home, '0.3.0');
+    point(home, old);
+    const launched: string[] = [];
+    const spawn = vi.fn((_cmd: string, _args: string[], options: { cwd: string }) => {
+      launched.push(options.cwd);
+      const child = Object.assign(new EventEmitter(), {
+        kill: () => queueMicrotask(() => child.emit('exit', null, 'SIGTERM')),
+      });
+      if (launched.length === 1) {
+        swapIn(
+          home,
+          { folder: next, version: '0.3.0' },
+          { folder: old, version: '0.2.0' },
+          Date.now() - 90_000,
+        );
+        queueMicrotask(() => child.emit('exit', RESTART_CODE, null));
+      } else if (launched.length === 2)
+        setTimeout(() => {
+          prove(home, next);
+          child.emit('exit', 0, null);
+        }, 30);
+      else queueMicrotask(() => child.emit('exit', 0, null));
+      return child;
+    });
+    await expect(
+      supervise({
+        adoptLegacy: true,
+        home,
+        spawn: spawn as never,
+        log: () => undefined,
+        proveWithinMs: 200,
+        lookEveryMs: 5,
+        exit: ((code: number) => {
+          throw Object.assign(new Error('exit'), { code });
+        }) as never,
+      }),
+    ).rejects.toMatchObject({ code: 0 });
+    expect(launched).toEqual([join(old, 'apps/server'), join(next, 'apps/server')]);
+    expect(readState(home).current?.folder).toBe(next);
+    expect(readState(home).failed).toEqual([]);
   });
 });
 

@@ -49,7 +49,27 @@ export function shouldSupervise(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.CONCH_SUPERVISE === '1' && env.CONCH_SUPERVISED !== '1';
 }
 
+/**
+ * Older supervisors started their gateway without IPC. Adopt their next updated
+ * child as the current supervisor; its own gateway has IPC and never adopts.
+ * The old parent remains a launcher until its next normal stop, on every OS.
+ */
+export function shouldAdoptSupervisor(
+  env: NodeJS.ProcessEnv = process.env,
+  hasIpc = typeof process.send === 'function',
+): boolean {
+  return env.CONCH_SUPERVISE === '1' && env.CONCH_SUPERVISED === '1' && !hasIpc && !env.CONCH_APP;
+}
+
+/** Leave the legacy parent's first release probe time to see our completed rollback. */
+export function legacyProofWindow(since: number, now: number, stopMs = 15_000): number {
+  const reserve = stopMs + 5_000;
+  return Math.max(0, Math.min(PROVE_WITHIN_MS - reserve, since + PROVE_WITHIN_MS - now - reserve));
+}
+
 export interface SuperviseDeps {
+  /** Running in an updated child of a pre-IPC supervisor; consumed on the first launch. */
+  adoptLegacy?: boolean;
   spawn?: typeof spawn;
   exit?: (code: number) => never;
   log?: (message: string) => void;
@@ -125,6 +145,11 @@ export async function supervise(deps: SuperviseDeps = {}): Promise<never> {
   const sleep = deps.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
   const home = deps.home ?? process.env.CONCH_HOME ?? join(homedir(), '.conch');
   const recovery = readRecoveryState(home);
+  // The legacy launcher remains alive until its next normal stop. Keep its code
+  // through subsequent release cleanup too, without accumulating ancestor roots.
+  const legacyRoot = deps.adoptLegacy
+    ? process.env.CONCH_SUPERVISOR_ROOT
+    : process.env.CONCH_LEGACY_SUPERVISOR_ROOT;
   const record = (reason: RecoveryReason, resource?: RecoveryResource) => {
     recovery.incidents.push({ at: now(), reason, ...(resource && { resource }) });
     recovery.incidents = recovery.incidents.slice(-40);
@@ -149,7 +174,12 @@ export async function supervise(deps: SuperviseDeps = {}): Promise<never> {
     process.on(signal, stop);
   }
 
-  let reason: 'start' | 'restart' | 'crash' = 'start';
+  const inheritedReason = process.env.CONCH_STARTED_BECAUSE;
+  let reason: 'start' | 'restart' | 'crash' =
+    deps.adoptLegacy && (inheritedReason === 'restart' || inheritedReason === 'crash')
+      ? inheritedReason
+      : 'start';
+  let adopting = deps.adoptLegacy === true;
   try {
     for (;;) {
       if (cooldownRemaining(recovery, now())) {
@@ -168,6 +198,17 @@ export async function supervise(deps: SuperviseDeps = {}): Promise<never> {
         pending && launch.folder && resolve(pending.folder) === resolve(launch.folder)
           ? pending
           : undefined;
+      const legacyProof = adopting ? proving : undefined;
+      adopting = false;
+      if (legacyProof && legacyProofWindow(legacyProof.since, now(), deps.watchdog?.stopMs) === 0) {
+        // Do not start a child we cannot stop before the old parent's deadline.
+        const back = goBack(home, now());
+        log(
+          `\n  Conch ${back?.version ?? legacyProof.version} ran out of time to start, so Conch went back to ${back?.to ?? legacyProof.from.version}.\n`,
+        );
+        reason = 'restart';
+        continue;
+      }
       child = start(process.execPath, launch.args, {
         stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
         ...(launch.cwd && { cwd: launch.cwd }),
@@ -179,6 +220,7 @@ export async function supervise(deps: SuperviseDeps = {}): Promise<never> {
           ...(launch.folder && { CONCH_RELEASE_ROOT: launch.folder }),
           // The folder this supervisor runs from: never tidied away under it.
           CONCH_SUPERVISOR_ROOT: resolve(import.meta.dirname, '..', '..', '..'),
+          ...(legacyRoot && { CONCH_LEGACY_SUPERVISOR_ROOT: legacyRoot }),
         },
       });
       const running = child;
@@ -210,7 +252,16 @@ export async function supervise(deps: SuperviseDeps = {}): Promise<never> {
         });
       });
       if (proving) {
-        const verdict = await prove(exited, deps, () => readState(home).pending === undefined);
+        const proofDeps = legacyProof
+          ? {
+              ...deps,
+              proveWithinMs: Math.min(
+                deps.proveWithinMs ?? PROVE_WITHIN_MS,
+                legacyProofWindow(legacyProof.since, now(), deps.watchdog?.stopMs),
+              ),
+            }
+          : deps;
+        const verdict = await prove(exited, proofDeps, () => readState(home).pending === undefined);
         if (verdict !== 'proved' && !stopping) {
           if (verdict === 'silent') {
             watch.stop();

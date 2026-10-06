@@ -291,6 +291,11 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
       `recovery/supervisor-state.ts`. Heartbeats prove the actual HTTP listener is
       responding. First reduce managed work, then request a bounded shutdown, and
       only then force termination. A busy but responsive host is not a crash.
+    - **Activate protection as part of the update.** An older background launcher
+      must pick up the new watchdog without a terminal command. `start.ts` adopts
+      supervision when a legacy supervisor launches it without IPC; the actual
+      gateway has IPC and cannot adopt again. Preserve intentional Quit, the
+      startup reason and release rollback. Fresh installations start protected.
     - **Restart without repeating effects.** Shutdown stops admission and saves
       conversation checkpoints before closing services. Record uncertain actions
       before dispatch, preserve them across a restart, and reconcile them before

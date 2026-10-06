@@ -1616,7 +1616,9 @@ export class Services {
             })
           : undefined,
       announce: (version) => void this.push.releaseReady(version).catch(() => undefined),
-      keep: [process.env.CONCH_SUPERVISOR_ROOT].filter((f): f is string => Boolean(f)),
+      keep: [process.env.CONCH_SUPERVISOR_ROOT, process.env.CONCH_LEGACY_SUPERVISOR_ROOT].filter(
+        (f): f is string => Boolean(f),
+      ),
       version: SERVER_VERSION,
       build: SERVER_BUILD,
       bootId: BOOT_ID,

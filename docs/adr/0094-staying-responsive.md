@@ -58,6 +58,29 @@ for missing messages it cannot produce. Direct development runs have no external
 watchdog. An explicit Quit is never mistaken for a crash; losing the supervising
 parent shuts down its gateway rather than leaving an orphan.
 
+### Activate protection during an upgrade
+
+An in-app update restarts the gateway, while an existing background supervisor
+can remain in memory. Requiring a separate service-manager command to activate
+the watchdog would leave upgraded installations unprotected.
+
+When `start.ts` runs under a legacy supervisor (`CONCH_SUPERVISE=1` and
+`CONCH_SUPERVISED=1`, without Node IPC), it takes on supervision instead of loading
+the gateway. Its child receives IPC, so adoption happens only once. Desktop
+children are excluded; packaged desktop updates already replace the application.
+Fresh installations start the current supervisor directly. The legacy outer
+launcher remains until the next normal full stop, with no extra person-facing step.
+Release cleanup retains both supervisors' folders while that compatibility layer
+is running, so another update cannot remove code still in use.
+
+The first adopted launch keeps its inherited restart or crash reason and reads
+recovery mode from durable state. If an initial release still needs proving,
+adoption leaves time to terminate and roll back before the legacy outer launcher's
+deadline. Intentional shutdown propagates through both layers. This is compatibility
+with pre-IPC launchers, not a promise that an arbitrary future change to an already
+running supervisor module can be hot-loaded; such changes must also account for
+their activation path.
+
 ### Bound repeated restarts and keep a usable recovery mode
 
 A private, atomic state file in `CONCH_HOME/recovery/` keeps bounded failure history,

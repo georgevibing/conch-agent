@@ -38,6 +38,8 @@ Conch only installs releases signed by Conch's makers. A release that isn't is r
 
 Your chats are safe. If a chat is still working, Conch asks you to update when it's finished, so nothing is cut short.
 
+Updating from a version without freeze detection activates that protection as part of the normal restart. There is no separate service command to run. New installations include it from their first start. See [Staying responsive](./health.md#after-repeated-trouble).
+
 Where Conch can't restart itself, the card says **Restart Conch to finish**, and the new version starts the next time Conch does.
 
 ## If an update doesn't work
