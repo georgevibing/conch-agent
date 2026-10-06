@@ -264,6 +264,8 @@ export class Tab {
       if (this.#tabs.length === 0) {
         this.#active = undefined;
         this.#closed = true;
+        for (const wake of this.#waiters) wake();
+        this.#waiters.clear();
       } else if (this.#active?.page === page) {
         // Back to the tab that opened it, else the one in view before.
         const back =
@@ -492,11 +494,13 @@ export class Tab {
 
   /** Resolves once you're not driving (right away if you aren't). Rejects if `signal` aborts. */
   whenFree(signal: AbortSignal): Promise<void> {
+    if (signal.aborted || this.#closed) return Promise.reject(new Error('stopped'));
     if (this.control !== 'user') return Promise.resolve();
     return new Promise((resolve, reject) => {
       const wake = () => {
         signal.removeEventListener('abort', stop);
-        resolve();
+        if (signal.aborted || this.#closed) reject(new Error('stopped'));
+        else resolve();
       };
       const stop = () => {
         this.#waiters.delete(wake);

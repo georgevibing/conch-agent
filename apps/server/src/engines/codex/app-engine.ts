@@ -41,6 +41,7 @@ import type {
 import { DOCS_URL, MIN_VERSION, findCodex, installHints, isAtLeast, parseVersion } from './detect';
 import { CodexHome } from './home';
 import type { RpcMessage } from './rpc';
+import { ToolQueue } from './tool-queue';
 import { CodexThreads, digest, parseResumeId, resumeIdFor, toolsDigest } from './threads';
 
 const Account = z.object({
@@ -716,7 +717,7 @@ export class CodexEngine implements Engine {
         async (rpc) => {
           let turnId = '';
           const pendingTools = new Set<Promise<void>>();
-          let toolTail = Promise.resolve();
+          const toolQueue = new ToolQueue();
           const invoked = new Set<string>();
           let complete!: () => void;
           let fail!: (error: Error) => void;
@@ -744,33 +745,34 @@ export class CodexEngine implements Engine {
             }
             if (message.id !== undefined && message.method) {
               if (message.method === 'item/tool/call') {
-                const job = toolTail.then(async () => {
-                  const parsed = z
-                    .object({
-                      threadId: z.string(),
-                      tool: z.string(),
-                      callId: z.string(),
-                      arguments: z.record(z.string(), z.unknown()),
-                    })
-                    .safeParse(p);
-                  if (
-                    !parsed.success ||
-                    parsed.data.threadId !== threadId ||
-                    invoked.has(parsed.data.callId) ||
-                    invoked.size >= 512
-                  ) {
-                    rpc.send({
-                      id: message.id,
-                      result: {
-                        success: false,
-                        contentItems: [{ type: 'inputText', text: 'Invalid or stale tool call.' }],
-                      },
-                    });
-                    return;
-                  }
-                  const call = parsed.data;
-                  invoked.add(call.callId);
-                  const tool = tools.get(call.tool);
+                const parsed = z
+                  .object({
+                    threadId: z.string(),
+                    tool: z.string(),
+                    callId: z.string(),
+                    arguments: z.record(z.string(), z.unknown()),
+                  })
+                  .safeParse(p);
+                if (
+                  !parsed.success ||
+                  parsed.data.threadId !== threadId ||
+                  invoked.has(parsed.data.callId) ||
+                  invoked.size >= 512
+                ) {
+                  rpc.send({
+                    id: message.id,
+                    result: {
+                      success: false,
+                      contentItems: [{ type: 'inputText', text: 'Invalid or stale tool call.' }],
+                    },
+                  });
+                  return;
+                }
+                const call = parsed.data;
+                invoked.add(call.callId);
+                const tool = tools.get(call.tool);
+                const job = toolQueue.run(tool?.display, async () => {
+                  signal.throwIfAborted();
                   await publish({
                     type: 'tool-start',
                     toolUseId: call.callId,
@@ -818,7 +820,6 @@ export class CodexEngine implements Engine {
                       },
                     });
                 });
-                toolTail = job.catch(() => {});
                 pendingTools.add(job);
                 void job.catch(fail).finally(() => pendingTools.delete(job));
               } else if (
@@ -1094,12 +1095,25 @@ export class CodexEngine implements Engine {
               }
             }
           };
+          // The provider may finish before yielded tools return. Stop must still
+          // release the run (and its temporary home) while those tools wind down.
+          let stopWaiting!: () => void;
+          const stopped = new Promise<void>((resolve) => {
+            stopWaiting = resolve;
+          });
           signal.addEventListener('abort', interrupt, { once: true });
+          signal.addEventListener('abort', stopWaiting, { once: true });
+          if (signal.aborted) stopWaiting();
           try {
-            await done;
-            await Promise.all(pendingTools);
+            await Promise.race([
+              done.then(async () => {
+                await Promise.all(pendingTools);
+              }),
+              stopped,
+            ]);
           } finally {
             signal.removeEventListener('abort', interrupt);
+            signal.removeEventListener('abort', stopWaiting);
           }
         },
         {

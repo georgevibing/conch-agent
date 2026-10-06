@@ -13,6 +13,14 @@ import type { LoginState } from '@conch/protocol';
 import type { EngineEvent, TurnInput } from '../types';
 import { CodexEngine, codexPlan, codexProblem, codexUsage, escapes } from './app-engine';
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 const homes: string[] = [];
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -281,6 +289,167 @@ describe('Codex app-server parity', () => {
         type: 'done',
         outcome: 'error',
       });
+    }
+  });
+  it('lets an independent read finish while a browser call waits', async () => {
+    const { engine, turn } = await setup({
+      signedIn: true,
+      tools: [{ tool: 'conch__browser_open' }, { tool: 'conch__read_file' }],
+    });
+    const browser = deferred<string>();
+    const read = vi.fn(async () => 'Read the file.');
+    const guard = vi.fn(async () => undefined);
+    const stream = collect(
+      engine.runTurn(
+        turn({
+          guard,
+          tools: [
+            { name: 'browser_open', description: 'Browser', input: {}, run: () => browser.promise },
+            { name: 'read_file', description: 'Read', input: {}, run: read },
+          ],
+        }),
+      ),
+    );
+    try {
+      await expect.poll(() => read.mock.calls.length, { timeout: 2_000 }).toBe(1);
+    } finally {
+      browser.resolve('Page read.');
+      await stream;
+    }
+    const events = await stream;
+    expect(guard).toHaveBeenCalledWith({
+      toolName: 'mcp__conch__read_file',
+      toolUseId: 'batch1',
+      input: {},
+    });
+    expect(events.findIndex((e) => e.type === 'tool-end' && e.toolUseId === 'batch1')).toBeLessThan(
+      events.findIndex((e) => e.type === 'tool-end' && e.toolUseId === 'batch0'),
+    );
+    expect(events.at(-1)).toMatchObject({ type: 'done', outcome: 'success' });
+  });
+  it('still applies a denied guard to a read that passes a waiting browser', async () => {
+    const { engine, turn } = await setup({
+      signedIn: true,
+      tools: [{ tool: 'conch__browser_open' }, { tool: 'conch__read_file' }],
+    });
+    const browser = deferred<string>();
+    const read = vi.fn(async () => 'Must not run.');
+    const guarded = deferred<undefined>();
+    const stream = collect(
+      engine.runTurn(
+        turn({
+          guard: async (request) => {
+            if (request.toolName !== 'mcp__conch__read_file') return undefined;
+            guarded.resolve(undefined);
+            return { decision: 'deny', message: 'Protected file.' };
+          },
+          tools: [
+            { name: 'browser_open', description: 'Browser', input: {}, run: () => browser.promise },
+            { name: 'read_file', description: 'Read', input: {}, run: read },
+          ],
+        }),
+      ),
+    );
+    try {
+      await guarded.promise;
+      expect(read).not.toHaveBeenCalled();
+    } finally {
+      browser.resolve('Page read.');
+      await stream;
+    }
+    expect(await stream).toContainEqual({
+      type: 'tool-end',
+      toolUseId: 'batch1',
+      status: 'error',
+      output: 'Protected file.',
+    });
+  });
+  it('does not start a queued action after Stop, even when the browser finishes late', async () => {
+    const { engine, turn } = await setup({
+      signedIn: true,
+      tools: [{ tool: 'conch__browser_open' }, { tool: 'conch__remember' }],
+    });
+    const browser = deferred<string>();
+    const started = deferred<undefined>();
+    const action = vi.fn(async () => 'Must not run.');
+    const stop = new AbortController();
+    const stream = collect(
+      engine.runTurn(
+        turn({
+          signal: stop.signal,
+          tools: [
+            {
+              name: 'browser_open',
+              description: 'Browser',
+              input: {},
+              run: () => {
+                started.resolve(undefined);
+                return browser.promise;
+              },
+            },
+            { name: 'remember', description: 'Save', input: {}, run: action },
+          ],
+        }),
+      ),
+    );
+    try {
+      await started.promise;
+      stop.abort();
+      expect((await stream).at(-1)).toMatchObject({ type: 'done', outcome: 'interrupted' });
+    } finally {
+      browser.resolve('Late result.');
+      await stream;
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(action).not.toHaveBeenCalled();
+    expect((await stream).some((e) => e.type === 'tool-start' && e.toolUseId === 'batch1')).toBe(
+      false,
+    );
+  });
+  it('can stop draining pending tools after the provider has already completed', async () => {
+    const { engine, turn, home } = await setup({
+      signedIn: true,
+      tools: [{ tool: 'conch__browser_open' }],
+      completeBeforeTools: true,
+    });
+    const browser = deferred<string>();
+    const started = deferred<undefined>();
+    const answered = deferred<undefined>();
+    const stop = new AbortController();
+    let finished = false;
+    const stream = (async () => {
+      const events: EngineEvent[] = [];
+      for await (const event of engine.runTurn(
+        turn({
+          signal: stop.signal,
+          tools: [
+            {
+              name: 'browser_open',
+              description: 'Browser',
+              input: {},
+              run: () => {
+                started.resolve(undefined);
+                return browser.promise;
+              },
+            },
+          ],
+        }),
+      )) {
+        events.push(event);
+        if (event.type === 'message-done') answered.resolve(undefined);
+      }
+      finished = true;
+      return events;
+    })();
+    try {
+      await Promise.all([started.promise, answered.promise]);
+      stop.abort();
+      await expect.poll(() => finished, { timeout: 2_000 }).toBe(true);
+      expect((await stream).at(-1)).toMatchObject({ type: 'done', outcome: 'interrupted' });
+      expect(await readdir(join(home, 'codex-runtime'))).toEqual([]);
+    } finally {
+      browser.resolve('Late result.');
+      await stream;
     }
   });
   it('aborts a running turn, closes its process and removes temporary credentials', async () => {

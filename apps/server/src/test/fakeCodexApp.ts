@@ -10,6 +10,10 @@ export async function fakeCodexApp(
     loginFails?: boolean;
     tool?: string;
     args?: Record<string, unknown>;
+    /** Concurrent dynamic calls, as emitted by a parallel tool batch. */
+    tools?: { tool: string; args?: Record<string, unknown> }[];
+    /** A provider can finish its turn while a yielded tool is still pending. */
+    completeBeforeTools?: boolean;
     hang?: boolean;
     fail?: boolean;
     malformed?: boolean;
@@ -44,6 +48,7 @@ const send = (v) => process.stdout.write(JSON.stringify(v)+'\\n');
 const note = (method, params) => send({method,params});
 const auth = path.join(process.env.CODEX_HOME, 'auth.json');
 let TID = 't1';
+let pendingCalls = 0;
 // Codex keeps a thread where it looks for it again: its home's sessions folder.
 const rolloutOf = (id) => path.join(process.env.CODEX_HOME, 'sessions', '2026', '10', '04', 'rollout-2026-10-04T00-00-00-' + id + '.jsonl');
 const findRollout = (id) => { try { return fs.readdirSync(path.join(process.env.CODEX_HOME, 'sessions'), {recursive:true}).map(String).find(f => f.endsWith('-' + id + '.jsonl')); } catch { return undefined; } };
@@ -90,6 +95,11 @@ rl.createInterface({input:process.stdin}).on('line', line => {
    const file = findRollout(TID);
    if (file) fs.appendFileSync(path.join(process.env.CODEX_HOME, 'sessions', file), JSON.stringify({type:'user', input:m.params.input})+'\\n');
    if (OPTIONS.malformed) process.stdout.write('not-json\\n');
+   else if (OPTIONS.tools) {
+     pendingCalls = OPTIONS.tools.length;
+     OPTIONS.tools.forEach((t, i) => send({id:'batch'+i,method:'item/tool/call',params:{threadId:TID,turnId:'turn1',callId:'batch'+i,tool:t.tool,arguments:t.args || {}}}));
+     if (OPTIONS.completeBeforeTools || !pendingCalls) complete();
+   }
    else if (OPTIONS.tool) send({id:'call1',method:'item/tool/call',params:{threadId:TID,turnId:'turn1',callId:'tool1',tool:OPTIONS.tool,arguments:OPTIONS.args || {}}});
    else if (OPTIONS.native && OPTIONS.native.command) {
      note('item/started',{threadId:TID,turnId:'turn1',item:{type:'commandExecution',id:'cmd1',command:OPTIONS.native.command,cwd:'/work',status:'inProgress',aggregatedOutput:null,exitCode:null}});
@@ -101,6 +111,7 @@ rl.createInterface({input:process.stdin}).on('line', line => {
    }
    else complete();
  }
+ else if (typeof m.id === 'string' && m.id.startsWith('batch')) { if (--pendingCalls === 0) complete(); }
  else if (m.id === 'call1') complete();
  else if (m.id === 'approve1') {
    const ok = m.result && m.result.decision === 'accept';
