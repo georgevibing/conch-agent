@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { saveRecoveryState } from './recovery/supervisor-state';
 import {
   gatewayLaunch,
   nextStep,
@@ -202,5 +203,120 @@ describe('starting the version swapped in, and going back when it fails', () => 
     expect(state.current?.version).toBe('0.3.0');
     expect(state.previous?.version).toBe('0.2.0');
     expect(state.failed).toEqual([]);
+  });
+});
+
+describe('recovering without restarting forever', () => {
+  it('remembers failures across supervisor launches and starts with less background work', async () => {
+    const home = tempHome();
+    const started: NodeJS.ProcessEnv[] = [];
+    const codes = [1, 1, 1, 0, 0];
+    const spawn = vi.fn((_cmd: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
+      started.push(options.env);
+      const child = new EventEmitter();
+      queueMicrotask(() => child.emit('exit', codes.shift(), null));
+      return child;
+    });
+    const deps = {
+      home,
+      spawn: spawn as never,
+      log: () => undefined,
+      sleep: async () => undefined,
+      exit: ((code: number) => {
+        throw Object.assign(new Error('exit'), { code });
+      }) as never,
+    };
+    const listeners = process.listenerCount('SIGTERM');
+    await expect(supervise(deps)).rejects.toMatchObject({ code: 0 });
+    await expect(supervise(deps)).rejects.toMatchObject({ code: 0 });
+    expect(started.map((env) => env.CONCH_RECOVERY_MODE)).toEqual(['0', '0', '0', '1', '1']);
+    expect(process.listenerCount('SIGTERM')).toBe(listeners);
+  });
+
+  it('cools down an exhausted durable budget before starting, keeping waits interruptible', async () => {
+    const home = tempHome();
+    let now = 1_000_000;
+    saveRecoveryState(home, {
+      failures: [now - 50, now - 40, now - 30, now - 20, now - 10, now],
+      incidents: [],
+    });
+    const waited: number[] = [];
+    const spawn = vi.fn((_cmd: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
+      expect(now).toBeGreaterThanOrEqual(1_599_950);
+      expect(options.env.CONCH_RECOVERY_MODE).toBe('1');
+      const child = new EventEmitter();
+      queueMicrotask(() => child.emit('exit', 0, null));
+      return child;
+    });
+    await expect(
+      supervise({
+        home,
+        now: () => now,
+        spawn: spawn as never,
+        log: () => undefined,
+        sleep: async (ms) => {
+          waited.push(ms);
+          now += ms;
+        },
+        exit: ((code: number) => {
+          throw Object.assign(new Error('exit'), { code });
+        }) as never,
+      }),
+    ).rejects.toMatchObject({ code: 0 });
+    expect(spawn).toHaveBeenCalledOnce();
+    expect(Math.max(...waited)).toBeLessThanOrEqual(1_000);
+  });
+
+  it('backs off repeated requested restarts and enters recovery mode', async () => {
+    const codes = [RESTART_CODE, RESTART_CODE, RESTART_CODE, RESTART_CODE, RESTART_CODE, 0];
+    const modes: (string | undefined)[] = [];
+    const slept: number[] = [];
+    const spawn = vi.fn((_cmd: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
+      modes.push(options.env.CONCH_RECOVERY_MODE);
+      const child = new EventEmitter();
+      queueMicrotask(() => child.emit('exit', codes.shift(), null));
+      return child;
+    });
+    await expect(
+      supervise({
+        home: tempHome(),
+        spawn: spawn as never,
+        log: () => undefined,
+        sleep: async (ms) => {
+          slept.push(ms);
+        },
+        exit: ((code: number) => {
+          throw Object.assign(new Error('exit'), { code });
+        }) as never,
+      }),
+    ).rejects.toMatchObject({ code: 0 });
+    expect(slept).toEqual([1_000, 3_000, 10_000]);
+    expect(modes).toEqual(['0', '0', '0', '0', '0', '1']);
+  });
+
+  it('restarts a frozen gateway even when its graceful shutdown exits zero', async () => {
+    let starts = 0;
+    const reasons: (string | undefined)[] = [];
+    const spawn = vi.fn((_cmd: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
+      reasons.push(options.env.CONCH_STARTED_BECAUSE);
+      const child = Object.assign(new EventEmitter(), {
+        kill: () => queueMicrotask(() => child.emit('exit', 0, null)),
+      });
+      if (++starts === 2) queueMicrotask(() => child.emit('exit', 0, null));
+      return child;
+    });
+    await expect(
+      supervise({
+        home: tempHome(),
+        spawn: spawn as never,
+        log: () => undefined,
+        sleep: async () => undefined,
+        watchdog: { startupMs: 10, pollMs: 5, recoverMs: 10, stopMs: 10 },
+        exit: ((code: number) => {
+          throw Object.assign(new Error('exit'), { code });
+        }) as never,
+      }),
+    ).rejects.toMatchObject({ code: 0 });
+    expect(reasons).toEqual(['start', 'crash']);
   });
 });

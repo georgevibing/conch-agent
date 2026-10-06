@@ -85,6 +85,11 @@ export const RULES: readonly BackupRule[] = [
 
   // ── Derived: rebuilt by itself, or only about this computer ────────────
   {
+    match: 'recovery/**',
+    class: 'derived',
+    why: 'This computer’s bounded recovery history and restart budget; never carried into a restore.',
+  },
+  {
     match: (path) => isBrokenCopy(base(path)),
     class: 'derived',
     why: 'A damaged copy Conch set aside while healing (lib/recover.ts); the good file is backed up.',

@@ -15,8 +15,24 @@
  * broken, and the supervisor goes back to the version before by itself.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
+
+import {
+  clearRecovery,
+  cooldownRemaining,
+  needsRecovery,
+  recordFailure,
+  recoveryCooldown,
+  repeatedRestartRequest,
+  readRecoveryState,
+  recentFailures,
+  saveRecoveryState,
+  type RecoveryReason,
+  type RecoveryResource,
+} from './recovery/supervisor-state';
+import { watchGateway, type WatchdogOptions } from './recovery/watchdog';
 
 import { currentFolder, goBack, PROVE_WITHIN_MS, readState } from './updates/layout';
 
@@ -45,6 +61,7 @@ export interface SuperviseDeps {
   proveWithinMs?: number;
   /** How often to look whether it has. */
   lookEveryMs?: number;
+  watchdog?: Partial<WatchdogOptions>;
 }
 
 /**
@@ -107,82 +124,144 @@ export async function supervise(deps: SuperviseDeps = {}): Promise<never> {
   const now = deps.now ?? Date.now;
   const sleep = deps.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
   const home = deps.home ?? process.env.CONCH_HOME ?? join(homedir(), '.conch');
-  const crashes: number[] = [];
+  const recovery = readRecoveryState(home);
+  const record = (reason: RecoveryReason, resource?: RecoveryResource) => {
+    recovery.incidents.push({ at: now(), reason, ...(resource && { resource }) });
+    recovery.incidents = recovery.incidents.slice(-40);
+    try {
+      saveRecoveryState(home, recovery);
+    } catch {
+      log('Conch could not save its recovery history. Recovery remains active for this session.');
+    }
+  };
   let stopping = false;
   let child: ChildProcess | undefined;
 
+  let watching: ReturnType<typeof watchGateway> | undefined;
+  const signals = new Map<NodeJS.Signals, () => void>();
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-    process.on(signal, () => {
+    const stop = () => {
       stopping = true;
       // The child shares the terminal and gets Ctrl+C itself; make sure of SIGTERM.
-      if (signal === 'SIGTERM') child?.kill('SIGTERM');
-    });
+      watching?.stop(signal);
+    };
+    signals.set(signal, stop);
+    process.on(signal, stop);
   }
 
   let reason: 'start' | 'restart' | 'crash' = 'start';
-  for (;;) {
-    const launch = gatewayLaunch(home);
-    // A version swapped in that hasn't answered yet: watch it.
-    const pending = readState(home).pending;
-    const proving =
-      pending && launch.folder && resolve(pending.folder) === resolve(launch.folder)
-        ? pending
-        : undefined;
-    child = start(process.execPath, launch.args, {
-      stdio: 'inherit',
-      ...(launch.cwd && { cwd: launch.cwd }),
-      env: {
-        ...process.env,
-        CONCH_SUPERVISED: '1',
-        CONCH_STARTED_BECAUSE: reason,
-        ...(launch.folder && { CONCH_RELEASE_ROOT: launch.folder }),
-        // The folder this supervisor runs from: never tidied away under it.
-        CONCH_SUPERVISOR_ROOT: resolve(import.meta.dirname, '..', '..', '..'),
-      },
-    });
-    const running = child;
-    const exited = new Promise<[number | null, NodeJS.Signals | null]>((resolve) => {
-      running.once('exit', (c, s) => resolve([c, s]));
-      running.once('error', () => resolve([1, null]));
-    });
-    if (proving) {
-      const verdict = await prove(exited, deps, () => readState(home).pending === undefined);
-      if (verdict !== 'proved' && !stopping) {
-        if (verdict === 'silent') {
-          running.kill('SIGTERM');
-          const forced = setTimeout(() => running.kill('SIGKILL'), 5_000);
-          await exited;
-          clearTimeout(forced);
-        }
-        const back = goBack(home, now());
+  try {
+    for (;;) {
+      if (cooldownRemaining(recovery, now())) {
         log(
-          `\n  Conch ${back?.version ?? proving.version} didn’t start properly, so Conch went back to ${back?.to ?? proving.from.version}.\n`,
+          'Conch is giving this computer a moment to recover before starting with less background work.',
         );
-        reason = 'restart';
-        continue;
+        await recoveryCooldown(recovery, { now, sleep, stopping: () => stopping });
+        if (stopping) return exit(0);
       }
-    }
-    const [code, signal] = await exited;
-    const step = nextStep(code, signal, crashes, now(), stopping);
-    if (step.kind === 'exit') {
-      if (!stopping && code !== 0)
-        log(
-          '\n  Conch kept stopping, so it won’t start again by itself. The messages above say why;\n  run `pnpm start` to try again.\n',
-        );
-      return exit(step.code);
-    }
-    if (step.crashed) {
-      crashes.push(now());
-      log(
-        `\n  Conch stopped unexpectedly. Starting it again${step.delay ? ' in a moment' : ''}…\n`,
+      const recoveryMode = needsRecovery(recovery, now());
+      if (recoveryMode) record('recovery-mode');
+      const launch = gatewayLaunch(home);
+      // A version swapped in that hasn't answered yet: watch it.
+      const pending = readState(home).pending;
+      const proving =
+        pending && launch.folder && resolve(pending.folder) === resolve(launch.folder)
+          ? pending
+          : undefined;
+      child = start(process.execPath, launch.args, {
+        stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
+        ...(launch.cwd && { cwd: launch.cwd }),
+        env: {
+          ...process.env,
+          CONCH_SUPERVISED: '1',
+          CONCH_RECOVERY_MODE: recoveryMode ? '1' : '0',
+          CONCH_STARTED_BECAUSE: reason,
+          ...(launch.folder && { CONCH_RELEASE_ROOT: launch.folder }),
+          // The folder this supervisor runs from: never tidied away under it.
+          CONCH_SUPERVISOR_ROOT: resolve(import.meta.dirname, '..', '..', '..'),
+        },
+      });
+      const running = child;
+      watching = watchGateway(running, {
+        // Rollbacks may predate heartbeats; never restart a healthy old release for a message it cannot send.
+        enabled:
+          !launch.folder ||
+          existsSync(join(launch.folder, 'apps', 'server', 'src', 'recovery', 'gateway.ts')),
+        ...deps.watchdog,
+        now: deps.now,
+        stopping: () => stopping,
+        incident: record,
+        repaired: () => {
+          clearRecovery(recovery);
+          record('repaired');
+        },
+      });
+      const watch = watching;
+      const exited = new Promise<[number | null, NodeJS.Signals | null]>((resolve) => {
+        running.once('exit', (c, s) => {
+          watch.close();
+          resolve([c, s]);
+        });
+        running.once('error', () => {
+          if (!running.pid) {
+            watch.close();
+            resolve([1, null]);
+          }
+        });
+      });
+      if (proving) {
+        const verdict = await prove(exited, deps, () => readState(home).pending === undefined);
+        if (verdict !== 'proved' && !stopping) {
+          if (verdict === 'silent') {
+            watch.stop();
+            await exited;
+          }
+          const back = goBack(home, now());
+          log(
+            `\n  Conch ${back?.version ?? proving.version} didn’t start properly, so Conch went back to ${back?.to ?? proving.from.version}.\n`,
+          );
+          reason = 'restart';
+          continue;
+        }
+      }
+      const [actualCode, signal] = await exited;
+      let code = watch.failed() ? 1 : actualCode;
+      if (code === RESTART_CODE && !stopping) {
+        if (repeatedRestartRequest(recovery, now())) code = 1;
+        record('restart-request');
+      }
+      // The durable budget owns exhaustion: keep a recovery launch after cooldown.
+      const step = nextStep(
+        code,
+        signal,
+        recentFailures(recovery, now()).slice(-4),
+        now(),
+        stopping,
       );
-      reason = 'crash';
-    } else {
-      log('\n  Restarting Conch…\n');
-      reason = 'restart';
+      if (step.kind === 'exit') {
+        if (!stopping && code !== 0)
+          log(
+            '\n  Conch kept stopping, so it won’t start again by itself. The messages above say why;\n  run `pnpm start` to try again.\n',
+          );
+        return exit(step.code);
+      }
+      if (step.crashed) {
+        recordFailure(recovery, now());
+        record('crash');
+        log(
+          `\n  Conch stopped unexpectedly. Starting it again${step.delay ? ' in a moment' : ''}…\n`,
+        );
+        reason = 'crash';
+      } else {
+        log('\n  Restarting Conch…\n');
+        reason = 'restart';
+      }
+      if (step.delay) await sleep(step.delay);
+      if (stopping) return exit(0);
     }
-    if (step.delay) await sleep(step.delay);
-    if (stopping) return exit(0);
+  } finally {
+    watching?.close();
+    for (const [signal, listener] of signals) process.off(signal, listener);
   }
 }
 

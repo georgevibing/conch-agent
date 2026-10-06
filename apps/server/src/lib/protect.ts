@@ -44,6 +44,8 @@ export function protectedPaths(home: string): string[] {
     // Where the running Conch listens and the names it answers to: `conch hello` puts its
     // one-time link at those names, so a name written here would receive the link's code.
     join(home, 'gateway.json'),
+    // Restart budgets and recovery evidence cannot be reset by an agent's tools.
+    join(home, 'recovery'),
     join(home, 'access.json'),
     // What proves a browser or a program is on this computer (ADR 0063): this computer's key,
     // the one-time files that open Conch, and the menu bar helper's token. With either, the

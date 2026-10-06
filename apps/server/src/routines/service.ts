@@ -90,6 +90,8 @@ export class RoutineService {
       engine: (id?: EngineId) => Engine;
       emit: (event: ServerEvent) => void;
       now?: () => number;
+      /** Resource admission for automatic runs; manual Run now stays available. */
+      allowed?: () => boolean;
       /** Leaves a “fixed on its own” note (a held run went once its provider came back). */
       onHeal?: (message: string) => void;
       /** What runs spend, and the guards on it (ADR 0057). */
@@ -122,12 +124,15 @@ export class RoutineService {
 
   // ── Lifecycle ──────────────────────────────────────────────────────────
 
-  async start() {
-    if (this.#started) return;
-    this.#started = true;
-    await this.#restoreHeld();
-    await this.#tick();
-    await this.deps.when?.start();
+  /** Keep schedule bookkeeping alive in recovery mode without polling external sources. */
+  async start({ watch = true }: { watch?: boolean } = {}) {
+    if (!this.#started) {
+      this.#started = true;
+      await this.#restoreHeld();
+      await this.#tick();
+    }
+    // Repair may enable sources after clocks have already started in recovery mode.
+    if (watch && this.#started) await this.deps.when?.start();
   }
 
   /** Evaluate schedules now (the timer calls this; tests and wake-from-sleep can too). */
@@ -236,7 +241,11 @@ export class RoutineService {
       ...(patch.summary !== undefined && { summary: tidySentence(patch.summary) }),
       // A new schedule (or turning it back on) starts counting from now — never
       // fire a backlog of runs that were "missed" while it was paused.
-      ...((reschedule || reactivating) && { anchor: now, lastScheduledFor: now }),
+      ...((reschedule || reactivating) && {
+        anchor: now,
+        lastScheduledFor: now,
+        resourceDeferredFor: undefined,
+      }),
       updatedAt: now,
     });
     const routine = await this.#changed(stored);
@@ -299,6 +308,10 @@ export class RoutineService {
   async fire(id: string, batch: FiredBatch): Promise<FireResult> {
     const routine = await this.deps.store.get(id);
     if (!routine || routine.status !== 'active' || !isWhenSchedule(routine.schedule)) return 'gone';
+    if (this.deps.allowed && !this.deps.allowed())
+      return {
+        held: 'Conch is waiting for this computer to have room before starting this routine.',
+      };
     const going = new Set([...this.#running.keys(), ...this.#firing]);
     if (going.has(id) || going.size >= MAX_CONCURRENT) return 'busy';
     const engine = this.deps.engine(routine.options.engine);
@@ -307,6 +320,10 @@ export class RoutineService {
     // Spending guards (ADR 0057): what happened waits in the pulse, with the reason, until it may run.
     const allowed = await this.#allow(routine, engine);
     if (!allowed.ok) return { held: allowed.message };
+    if (this.deps.allowed && !this.deps.allowed())
+      return {
+        held: 'Conch is waiting for this computer to have room before starting this routine.',
+      };
     if (this.#running.has(id) || this.#firing.has(id)) return 'busy';
     this.#firing.add(id);
     void this.#execute(routine, 'event', undefined, batch)
@@ -439,6 +456,7 @@ export class RoutineService {
   }
 
   async #resumeHeld({ now = false }: { now?: boolean }) {
+    if (this.deps.allowed && !this.deps.allowed()) return;
     for (const [routineId, held] of this.#waiting) {
       if (this.#now - held.since > WAIT_FOR_PROVIDER_MS) {
         this.#waiting.delete(routineId);
@@ -597,11 +615,20 @@ export class RoutineService {
       if (firstDue === undefined || firstDue > now) continue;
       // …and the most recent one, which is what we run (a single catch-up, never a backlog).
       const due = previousRun(routine.schedule, routine.timezone, now, routine.anchor) ?? firstDue;
+      if (this.deps.allowed && !this.deps.allowed()) {
+        if (routine.resourceDeferredFor === undefined)
+          await this.deps.store.save({ ...routine, resourceDeferredFor: due });
+        continue;
+      }
       const late = now - firstDue > LATE_MS;
-      await this.deps.store.save({ ...routine, lastScheduledFor: due });
+      await this.deps.store.save({
+        ...routine,
+        lastScheduledFor: due,
+        resourceDeferredFor: undefined,
+      });
       // Its next time came: that run replaces one still waiting for room.
       this.#roomWait.delete(routine.id);
-      if (late && !routine.catchUp) {
+      if (late && !routine.catchUp && routine.resourceDeferredFor === undefined) {
         await this.#record(routine, { trigger: 'schedule', status: 'missed', scheduledFor: due });
         await this.#afterRun(routine.id);
         continue;
@@ -620,6 +647,7 @@ export class RoutineService {
     if (!this.#started) return;
     if (this.#timer) clearTimeout(this.#timer);
     void this.deps.store.all().then((all) => {
+      if (!this.#started) return;
       const now = this.#now;
       const next = all
         .filter((r) => r.status === 'active')

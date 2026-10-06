@@ -102,6 +102,8 @@ export interface TaskDeps {
   git?: Git;
   now?: () => number;
   background?: number;
+  /** Automatic work waits while the gateway recovers or resources are scarce. */
+  allowed?: () => boolean;
   helpers?: number;
 }
 
@@ -112,6 +114,8 @@ export class TaskService {
   readonly #worktrees = new Map<string, Worktree>();
   readonly #waiters = new Map<string, Set<(task: Task) => void>>();
   #pumping = Promise.resolve();
+  #wake?: NodeJS.Timeout;
+  #closed = false;
   readonly #creation = new Mutex();
 
   constructor(private readonly deps: TaskDeps) {}
@@ -412,10 +416,23 @@ export class TaskService {
 
   // ── Running ─────────────────────────────────────────────────────────────
 
+  /** Stop admitting queued tasks during gateway shutdown. Running work stays recoverable. */
+  close(): void {
+    this.#closed = true;
+    clearTimeout(this.#wake);
+  }
+
   /** Start whatever has room, oldest first. One pass at a time. */
   #pump(): void {
     this.#pumping = this.#pumping.then(
       async () => {
+        if (this.#closed) return;
+        if (this.deps.allowed && !this.deps.allowed()) {
+          clearTimeout(this.#wake);
+          this.#wake = setTimeout(() => this.#pump(), 5000);
+          this.#wake.unref();
+          return;
+        }
         const tasks = await this.deps.store.list();
         for (const kind of ['background', 'helper'] as const) {
           const limit =

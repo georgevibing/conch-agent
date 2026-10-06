@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { ServerEvent } from '@conch/protocol';
+import { vi } from 'vitest';
 
 import { buildApp } from '../app';
 import { onThisComputer } from './here';
@@ -45,8 +46,22 @@ export async function gateway(home?: string) {
     // Conch apps' sealed runtime and package reader are stood in for (ADR 0061).
     { conchAppParts: fakeParts() },
   );
+  // Fixtures exercise admission and the real health probe without depending on
+  // other tests' CPU/memory use on the host running this simulated Conch.
+  vi.spyOn(services.processes, 'resourceSnapshot').mockResolvedValue({
+    at: Date.now(),
+    totalBytes: 8 * 1024 ** 3,
+    availableBytes: 6 * 1024 ** 3,
+    cpuCount: 4,
+    loadPerCpu: 0,
+    memoryPressure: 0,
+    level: 'healthy',
+    concurrency: 3,
+    reason: 'The test computer has room to work.',
+  });
   const app = onThisComputer(await buildApp(services), services);
   await app.ready();
+  await services.recovery.start(async () => (await app.inject('/api/health')).statusCode === 200);
   return { home: dir, services, app };
 }
 
@@ -64,9 +79,16 @@ export async function chat(
   /** Carry on this chat rather than start a new one. */
   conversationId?: string,
 ) {
+  const clientMessageId = `m${Math.random()}`;
+  let target: string | undefined;
   const done = new Promise<void>((resolve) => {
     const off = services.conversations.events.on((event: ServerEvent) => {
       if (event.type !== 'conversation.event') return;
+      // send emits the user's message before resolving. Bind before a fast
+      // engine can finish, and never mistake another task's completion for ours.
+      if (event.event.type === 'user.message' && event.event.messageId === clientMessageId)
+        target = event.event.conversationId;
+      if (event.event.conversationId !== target) return;
       if (event.event.type === 'permission.requested') {
         void services.conversations.respond(
           event.event.conversationId,
@@ -82,7 +104,7 @@ export async function chat(
   });
   const convo = await services.conversations.send({
     ...(conversationId && { conversationId }),
-    clientMessageId: `m${Math.random()}`,
+    clientMessageId,
     text,
     attachments,
   });

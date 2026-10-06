@@ -21,6 +21,7 @@ When all is well, it's one calm line. **Show details** opens the whole list, in 
 - **Providers**: each one you use is installed, signed in and answering.
 - **Apps** and **Talk to me here**: every app and chat app you connected still works.
 - **This computer**: the browser, search, the internet, disk space, and whether Conch's files are private to you.
+- **Staying responsive**: whether this computer has room for more work, and what Conch did after a slowdown or restart.
 - **Your data**: [backups](./backups.md), passwords, memory and [undo](./undo.md).
 - **Updates**: Conch and the programs it uses. See [Updates](./updates.md).
 - **Routines** and **Tasks**: anything that is waiting for you.
@@ -36,11 +37,29 @@ Further down the same page, **Fixed on its own** lists what Conch repaired by it
 Without asking, Conch:
 
 - starts itself again after a crash;
+- waits to start heavy commands when this computer is busy, and stops a managed command if memory pressure stays high;
+- checks that its web connection still responds, reduces managed work when it does not, and restarts if that does not help;
 - starts on the next free port when another program has taken its usual one;
 - sets aside one of its own files that got damaged, and carries on with what still reads;
 - renews an expired sign-in to a connected app, and tries again when a service was down for a moment;
 - reconnects a bot whose connection dropped;
 - holds a message that couldn't go while you were [offline](./offline.md), and sends it when you're back.
+
+## When this computer is busy
+
+Commands can say **Waiting to start**, with a reason. They keep their place until there is room. Stopping the chat cancels its waiting commands too; a stopped or expired command will not start later.
+
+If memory pressure stays high, Conch may stop one of its managed commands to protect the rest of your work. Its output stays available in the chat. Conch does not stop other applications or automatically run that command again.
+
+After a restart, interrupted chats carry on gradually. When Conch cannot tell whether an action finished, it keeps that uncertainty and asks you to check before continuing. It does not automatically repeat a possibly completed change or approve a question for you.
+
+## After repeated trouble
+
+Conch starts with background work paused so you can still open your chats and settings. Scheduled routines, automatic learning and managed commands wait. **Settings → Health** explains what happened.
+
+Once this computer has settled, press **Repair everything**. Conch checks that it has been responding with room to work before letting waiting work continue. A restart does not silently clear that pause. If Conch cannot start even with background work paused, its supervisor waits before trying again, rather than restarting continuously.
+
+Freeze detection runs in the supervisor used by the installed background service, `pnpm start`, and the desktop app. A development gateway started directly has resource protection, but no outside process to restart it if its event loop freezes.
 
 ## A program a feature needs
 

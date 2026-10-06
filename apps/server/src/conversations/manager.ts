@@ -114,6 +114,7 @@ export async function turnProblem(
 }
 
 interface PendingPermission {
+  toolUseId?: string;
   resolve: (decision: PermissionDecision) => void;
   toolName: string;
   /**
@@ -453,6 +454,67 @@ const USAGE_EVERY_MS = 750;
 /** How many times in a row a chat is picked up again by itself after Conch stopped under it. */
 const MAX_AUTO_RESUMES = 2;
 
+/** Unknown tools are never assumed safe to repeat after losing their result. */
+function restartReadOnly(name: string): boolean {
+  return ['Read', 'Glob', 'Grep', 'LS', 'BashOutput'].includes(name);
+}
+
+/** A managed command's admission succeeds before the command itself has finished. */
+function settledCalls(events: ConversationEvent[], toolUseId: string): Set<string> {
+  const settled = new Set<string>();
+  const call = events.findLast((e) => e.type === 'tool.started' && e.toolUseId === toolUseId);
+  const result = events.findLast((e) => e.type === 'tool.finished' && e.toolUseId === toolUseId);
+  if (
+    call?.type !== 'tool.started' ||
+    result?.type !== 'tool.finished' ||
+    result.status !== 'success'
+  )
+    return settled;
+  const name = call.name.replace(/^mcp__conch__/, '');
+  const snapshots = (text?: string): { id: string; status: string; exitCode?: number }[] => {
+    try {
+      const parsed: unknown = JSON.parse(text ?? '');
+      return (Array.isArray(parsed) ? parsed : [parsed]).filter(
+        (entry): entry is { id: string; status: string; exitCode?: number } =>
+          Boolean(
+            entry &&
+            typeof entry === 'object' &&
+            typeof entry.id === 'string' &&
+            typeof entry.status === 'string',
+          ),
+      );
+    } catch {
+      return [];
+    }
+  };
+  if (name !== 'process_start' && name !== 'process_write') settled.add(toolUseId);
+  const completed = new Set(
+    snapshots(result.output)
+      .filter((p) => p.status === 'exited' && p.exitCode === 0)
+      .map((p) => p.id),
+  );
+  if ((name !== 'process_read' && name !== 'process_start') || !completed.size) return settled;
+  for (const start of events) {
+    if (start.type !== 'tool.started') continue;
+    const tool = start.name.replace(/^mcp__conch__/, '');
+    if (tool === 'process_write') {
+      const input = start.input as { id?: string } | undefined;
+      if (input?.id && completed.has(input.id)) settled.add(start.toolUseId);
+    } else if (tool === 'process_start') {
+      const output = events.findLast(
+        (e) => e.type === 'tool.finished' && e.toolUseId === start.toolUseId,
+      );
+      if (
+        output?.type === 'tool.finished' &&
+        output.status === 'success' &&
+        snapshots(output.output).some((p) => completed.has(p.id))
+      )
+        settled.add(start.toolUseId);
+    }
+  }
+  return settled;
+}
+
 /** What a turn that Conch's restart cut short is told when it carries on by itself. */
 const RESTART_PROMPT =
   'Conch restarted while you were working on this, so the last stretch of your work was cut short. ' +
@@ -632,10 +694,16 @@ export class ConversationManager {
   /** Offers taken whose carrying on is waiting for the reply before it (ADR 0060). */
   #carrying = new Set<string>();
   #cueDesk?: Pick<OfferDesk, 'cue'>;
+  #draining = false;
+  #recoveryTimer?: NodeJS.Timeout;
+  #recoveryRunning?: Promise<number>;
+  #recoveryQueue: string[] = [];
 
   constructor(
     private readonly deps: {
       store: ConversationStore;
+      /** Resource admission for automatic recovery; manual chats remain available. */
+      recovery?: { allowed: () => boolean; intervalMs?: number };
       settings: SettingsStore;
       memory: MemoryStore;
       /**
@@ -746,6 +814,28 @@ export class ConversationManager {
       };
     },
   ) {}
+
+  /** Stop admitting work and flush logs without declaring unfinished turns complete. */
+  async drain(): Promise<void> {
+    this.#draining = true;
+    clearTimeout(this.#recoveryTimer);
+    await Promise.all(
+      [...this.#live.values()].map(async (live) => {
+        clearTimeout(live.checkpoint);
+        live.checkpoint = undefined;
+        live.titling?.abort();
+        await this.#persist(live);
+      }),
+    );
+  }
+
+  #admit() {
+    if (this.#draining)
+      throw new ConversationError(
+        'busy',
+        'Conch is saving your progress before restarting. Try again in a moment.',
+      );
+  }
 
   /**
    * Something is running or waiting on someone, somewhere: a turn, a title
@@ -928,6 +1018,7 @@ export class ConversationManager {
     /** Steer: stop the running reply first, then send this, in order. */
     steer?: boolean;
   }) {
+    this.#admit();
     const began = Date.now();
     const existing = input.conversationId ? await this.#get(input.conversationId) : undefined;
     // Steering stops what's running here, in the same step, so the message
@@ -1191,6 +1282,7 @@ export class ConversationManager {
      */
     engine?: Engine;
   }): Promise<{ conversationId: string; result: Promise<TurnResult> }> {
+    this.#admit();
     if (input.conversationId) {
       const live = await this.#get(input.conversationId);
       if (live.abort) throw new ConversationError('busy', 'This task is already running.');
@@ -1298,6 +1390,8 @@ export class ConversationManager {
    * then was meant for the turn that just ended, not this one.
    */
   #claim(live: Live, since?: number): AbortController {
+    this.#admit();
+    live.record = { ...live.record, recoveryPending: undefined, recoveryQueued: undefined };
     const abort = new AbortController();
     if (
       live.stopAt &&
@@ -1354,10 +1448,10 @@ export class ConversationManager {
   }
 
   async respond(id: string, permissionId: string, decision: PermissionDecision) {
-    this.#resolvePermission(await this.#get(id), permissionId, decision);
+    await this.#resolvePermission(await this.#get(id), permissionId, decision);
   }
 
-  #resolvePermission(live: Live, permissionId: string, decision: PermissionDecision) {
+  async #resolvePermission(live: Live, permissionId: string, decision: PermissionDecision) {
     const pending = live.permissions.get(permissionId);
     if (!pending) return;
     live.permissions.delete(permissionId);
@@ -1368,7 +1462,21 @@ export class ConversationManager {
     this.#append(live, { type: 'permission.resolved', permissionId, decision });
     if (live.permissions.size === 0 && !this.deps.questions?.waiting(live.record.id))
       this.#setStatus(live, 'running');
-    pending.resolve(decision);
+    if (
+      decision === 'deny' &&
+      pending.toolUseId &&
+      live.record.pendingToolCalls?.includes(pending.toolUseId)
+    ) {
+      live.record = {
+        ...live.record,
+        pendingToolCalls: live.record.pendingToolCalls.filter((id) => id !== pending.toolUseId),
+      };
+      try {
+        await this.#persist(live);
+      } finally {
+        pending.resolve(decision);
+      }
+    } else pending.resolve(decision);
   }
 
   /**
@@ -1408,50 +1516,142 @@ export class ConversationManager {
    * and carries on by itself, a couple of times at most so a turn that brings Conch down
    * can't do it forever. Run once, when the gateway is up.
    */
-  async recoverInterrupted(): Promise<number> {
+  recoverInterrupted(): Promise<number> {
+    if (this.#recoveryRunning) return this.#recoveryRunning;
+    this.#recoveryRunning = this.#recoverInterrupted().finally(() => {
+      this.#recoveryRunning = undefined;
+    });
+    return this.#recoveryRunning;
+  }
+
+  async #recoverInterrupted(): Promise<number> {
     await this.deps.store.list();
-    const ids = this.deps.store.interrupted.splice(0);
+    this.#recoveryQueue.push(...this.deps.store.interrupted.splice(0));
     let resumed = 0;
-    for (const id of ids) {
+    while (this.#recoveryQueue.length && !this.#draining) {
+      if (this.deps.recovery && (!this.deps.recovery.allowed() || this.busy())) break;
+      const id = this.#recoveryQueue.shift();
+      if (!id) break;
       try {
         const live = await this.#get(id);
+        if (live.abort) continue;
         const lastAsked = live.events.findLastIndex((e) => e.type === 'user.message');
-        // Nothing was asked, or the turn did finish before the log was saved.
         if (lastAsked === -1) continue;
         const since = live.events.slice(lastAsked + 1);
-        const closed = since.findLastIndex((e) => e.type === 'turn.completed');
-        const last = closed === -1 ? undefined : since[closed];
+        const last = since.findLast((e) => e.type === 'turn.completed');
         if (last?.type === 'turn.completed' && !last.restarted) continue;
+        // A recovery already announced but not admitted (offline or shutting down)
+        // retries the same saved attempt; it must not spend the crash budget again.
+        if (
+          live.record.recoveryQueued &&
+          last?.type === 'turn.completed' &&
+          last.restarted?.resumed
+        ) {
+          this.#held.set(id, {
+            engine: live.record.engine,
+            prompt: RESTART_PROMPT,
+            attachments: [],
+          });
+          if (await this.release(id).catch(() => false)) resumed++;
+          else this.#recoveryQueue.push(id);
+          break;
+        }
         const tries = since.filter((e) => e.type === 'turn.completed' && e.restarted).length;
-        const again = tries < MAX_AUTO_RESUMES;
         const finished = new Set(
           live.events.flatMap((e) => (e.type === 'tool.finished' ? [e.toolUseId] : [])),
         );
-        for (const e of live.events)
-          if (e.type === 'tool.started' && !finished.has(e.toolUseId))
+        const unfinished = live.events.filter(
+          (e) => e.type === 'tool.started' && !finished.has(e.toolUseId),
+        );
+        const refused = new Set(
+          since.flatMap((e) => {
+            if (e.type !== 'permission.requested' || !e.toolUseId) return [];
+            return since.some(
+              (answer) =>
+                answer.type === 'permission.resolved' &&
+                answer.permissionId === e.permissionId &&
+                answer.decision === 'deny',
+            )
+              ? [e.toolUseId]
+              : [];
+          }),
+        );
+        const uncertain =
+          Boolean(live.record.pendingToolCalls?.length) ||
+          unfinished.some(
+            (e) =>
+              e.type === 'tool.started' && !refused.has(e.toolUseId) && !restartReadOnly(e.name),
+          );
+        const answered = new Set(
+          since.flatMap((e) => (e.type === 'permission.resolved' ? [e.permissionId] : [])),
+        );
+        const approval = since.some(
+          (e) => e.type === 'permission.requested' && !answered.has(e.permissionId),
+        );
+        const question = since.some(
+          (e) =>
+            e.type === 'question' &&
+            !since.some(
+              (answer) =>
+                answer.type === 'question.answered' &&
+                answer.questionId === e.question.questionId &&
+                answer.answer !== null,
+            ),
+        );
+        const scoped = Boolean(live.record.origin);
+        const again = tries < MAX_AUTO_RESUMES && !uncertain && !approval && !question && !scoped;
+        for (const e of unfinished)
+          if (e.type === 'tool.started')
             this.#append(live, {
               type: 'tool.finished',
               toolUseId: e.toolUseId,
               status: 'error',
-              output: 'Conch restarted.',
+              output: 'Conch restarted. Check whether this action finished before trying it again.',
               durationMs: 0,
             });
         this.#append(live, {
           type: 'turn.completed',
           outcome: 'interrupted',
           restarted: { resumed: again },
+          ...(!again && {
+            error: uncertain
+              ? 'Conch saved your progress. An action may have finished before the restart. Check its result before continuing so it is not repeated.'
+              : approval || question
+                ? 'Conch restarted while waiting for your approval. Review the action before continuing.'
+                : scoped
+                  ? 'Your progress is saved. Resume this work from its task or routine.'
+                  : 'This work has been interrupted repeatedly. Review it before continuing.',
+          }),
           engine: live.record.engine,
         });
-        live.record = { ...live.record, status: 'idle', updatedAt: Date.now() };
+        live.record = {
+          ...live.record,
+          recoveryPending: again || undefined,
+          recoveryQueued: again || undefined,
+          status: 'idle',
+          updatedAt: Date.now(),
+        };
         this.#append(live, { type: 'status', status: 'idle' });
         await this.#persist(live);
         this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
         if (!again) continue;
         this.#held.set(id, { engine: live.record.engine, prompt: RESTART_PROMPT, attachments: [] });
         if (await this.release(id).catch(() => false)) resumed++;
+        else {
+          this.#recoveryQueue.push(id);
+          break;
+        }
+        if (this.deps.recovery) break;
       } catch (error) {
         console.error('[conversations] could not pick up', id, error);
       }
+    }
+    if (this.#recoveryQueue.length && !this.#draining) {
+      clearTimeout(this.#recoveryTimer);
+      this.#recoveryTimer = setTimeout(() => {
+        void this.recoverInterrupted().catch(() => undefined);
+      }, this.deps.recovery?.intervalMs ?? 5000);
+      this.#recoveryTimer.unref();
     }
     return resumed;
   }
@@ -1479,6 +1679,7 @@ export class ConversationManager {
     /** The person just chose at a spending limit: it's been looked at. */
     { chosen: atLimit = false } = {},
   ): Promise<boolean> {
+    if (this.#draining) return false;
     const live = await this.#get(id);
     if (live.abort) return false;
     const held = this.#held.get(id) ?? heldFromLog(live.events);
@@ -1829,7 +2030,7 @@ export class ConversationManager {
       for (const listener of modeListeners) listener(mode);
       for (const [permissionId, pending] of live.permissions)
         if (pending.remember && (!pending.waive || watched) && trustAllows(mode, pending.toolName))
-          this.#resolvePermission(live, permissionId, 'allow');
+          void this.#resolvePermission(live, permissionId, 'allow');
     };
     if (!extras?.permissionMode) live.setTurnMode = setTurnMode;
 
@@ -1843,6 +2044,7 @@ export class ConversationManager {
         live.permissions.set(permissionId, {
           resolve,
           toolName: request.toolName,
+          ...(request.toolUseId && { toolUseId: request.toolUseId }),
           remember: request.remember,
           ...(request.waive && { waive: request.waive }),
         });
@@ -2199,6 +2401,8 @@ export class ConversationManager {
       toolUseId?: string;
       input: Record<string, unknown>;
     }): Promise<GuardDecision | undefined> => {
+      if (this.#draining)
+        return { decision: 'deny', message: 'Conch is saving progress before restarting.' };
       if (guest) return { decision: 'deny', message: GUEST_TOOL_MESSAGE };
       const blocked = await extras?.beforeTool?.(
         request.toolName,
@@ -2217,7 +2421,17 @@ export class ConversationManager {
           decision: 'deny',
           message: 'The user turned this tool off in Apps.',
         };
+      if (!restartReadOnly(request.toolName)) {
+        const id = request.toolUseId ?? newId('pending');
+        live.record = {
+          ...live.record,
+          pendingToolCalls: [...new Set([...(live.record.pendingToolCalls ?? []), id])],
+        };
+        await this.#persist(live);
+      }
       const asked = await mustAsk(request);
+      if (this.#draining)
+        return { decision: 'deny', message: 'Conch is saving progress before restarting.' };
       return asked ? { decision: 'ask', reason: asked.reason } : undefined;
     };
 
@@ -2411,7 +2625,11 @@ export class ConversationManager {
             break;
           case 'tool-start':
             if (isHostTool(event.name)) {
-              for (const shown of hostRows.start(event, rowTools.has(event.name)))
+              for (const shown of hostRows.start(
+                event,
+                rowTools.has(event.name) ||
+                  Boolean(live.record.pendingToolCalls?.includes(event.toolUseId)),
+              ))
                 this.#append(live, shown);
               break;
             }
@@ -2435,12 +2653,27 @@ export class ConversationManager {
             });
             break;
           case 'tool-end': {
+            const settle = async () => {
+              if (!live.record.pendingToolCalls?.length) return;
+              const settled = settledCalls(live.events, event.toolUseId);
+              if (settled.size && live.record.pendingToolCalls?.some((id) => settled.has(id))) {
+                live.record = {
+                  ...live.record,
+                  pendingToolCalls: live.record.pendingToolCalls.filter((id) => !settled.has(id)),
+                };
+              }
+              await this.#persist(live);
+            };
             if (hostRows.owns(event.toolUseId)) {
               for (const shown of hostRows.end(event)) this.#append(live, shown);
+              await settle();
               break;
             }
             const at = started.get(event.toolUseId);
-            if (at === undefined) break;
+            if (at === undefined) {
+              await settle();
+              break;
+            }
             const call = calls.get(event.toolUseId);
             if (call && event.status === 'success') {
               const app = call.name.startsWith('mcp__')
@@ -2456,6 +2689,7 @@ export class ConversationManager {
               output: event.output,
               durationMs: Date.now() - at,
             });
+            await settle();
             await tracker?.after(event.toolUseId).catch(() => undefined);
             break;
           }
@@ -2913,7 +3147,7 @@ export class ConversationManager {
       at: Date.now(),
     } as ConversationEvent;
     live.events.push(event);
-    if (live.abort && !live.checkpoint) {
+    if (live.abort && !live.checkpoint && !this.#draining) {
       live.checkpoint = setTimeout(() => {
         live.checkpoint = undefined;
         void this.#persist(live).catch(() => undefined);
@@ -2939,8 +3173,10 @@ export class ConversationManager {
     const save = (live.saving ?? Promise.resolve())
       .catch(() => undefined)
       .then(async () => {
-        await this.deps.store.upsert(live.record);
-        await this.deps.store.saveEvents(live.record.id, live.events);
+        const record = live.record;
+        const events = [...live.events];
+        await this.deps.store.saveEvents(record.id, events);
+        await this.deps.store.upsert(record);
       });
     live.saving = save;
     await save;

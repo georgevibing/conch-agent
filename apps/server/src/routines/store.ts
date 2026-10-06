@@ -20,6 +20,8 @@ export const StoredRoutine = Routine.omit({
 }).extend({
   /** The scheduled time most recently handled (run, skipped or missed). */
   lastScheduledFor: z.number().optional(),
+  /** A due run held by resource pressure, retained even without catch-up enabled. */
+  resourceDeferredFor: z.number().optional(),
   /** Start of interval schedules, so "every 2 hours" doesn't drift. */
   anchor: z.number().optional(),
 });

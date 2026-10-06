@@ -279,6 +279,40 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
     - **Test the healing, not just the happy path.** Every self-repair gets a test:
       the stale lock, the crash, the fallback, the retry.
 
+    **Staying responsive is part of correctness** ([ADR 0094](./docs/adr/0094-staying-responsive.md)).
+    Every feature that starts work follows these recovery contracts:
+    - **Share the computer.** Long commands go through `ProcessService`, including
+      its bounded, cancellable queue and resource admission (`recovery/resources.ts`).
+      Do not evade the queue by spawning from another tool. A timeout includes time
+      waiting; stopped or expired work never starts later. Subprocess trees belong
+      to their command and die when their gateway goes away.
+    - **Keep the watcher outside the watched process.** The background and desktop
+      supervisors share `recovery/watchdog.ts` and the durable policy in
+      `recovery/supervisor-state.ts`. Heartbeats prove the actual HTTP listener is
+      responding. First reduce managed work, then request a bounded shutdown, and
+      only then force termination. A busy but responsive host is not a crash.
+    - **Restart without repeating effects.** Shutdown stops admission and saves
+      conversation checkpoints before closing services. Record uncertain actions
+      before dispatch, preserve them across a restart, and reconcile them before
+      repeating them. Use task operation receipts where available; a prompt asking
+      the model not to repeat something is not a substitute for durable evidence.
+      Never auto-approve a waiting permission or guess an opaque tool is read-only.
+    - **Recover gradually.** Deferred chats survive another restart and resume with
+      resource headroom, one at a time. Automatic tasks use the same admission
+      signal. Repeated crashes or rapid requested restarts share a persisted budget;
+      recovery mode keeps the UI available while background work is paused. Only a
+      healthy repair releases its latch. Intentional Quit stays quit.
+    - **Leave useful, bounded evidence.** `recovery/` contains only allowlisted
+      timestamps, reasons and numeric resource measurements, never commands, tool
+      arguments, transcripts or credentials. It is protected from agent tools and
+      excluded from backups. Add checks to the existing Health report and quiet
+      repairs to `healed`; no second health dashboard or recurring error toast.
+    - **Exercise real failures in isolation.** Test a blocked child event loop,
+      stalled shutdown, parent death and descendant cleanup, sustained pressure,
+      queue cancellation, repeated restart budgets and uncertain action recovery.
+      Use temporary homes and bounded subprocesses; never fault-inject into a
+      person's running Conch. Run repository checks with bounded concurrency too.
+
 12. **Every new part joins the features that cover all of Conch.** Some features
     are about everything Conch is: **Repair everything** looks at every part,
     **backups** carry every file you’d miss, **updates** watch every program

@@ -8,8 +8,9 @@ import { loadConfig, portIsExplicit } from './config';
 import { runningAs, waitForTurn } from './background/service';
 import { askUrl } from './background/tray';
 import { theApp } from './desktop/app';
-import { setRestartHandler, setStopHandler, stopSoon } from './lib/lifecycle';
+import { BOOT_ID, setRestartHandler, setStopHandler, stopSoon } from './lib/lifecycle';
 import { openInBrowser } from './lib/open';
+import { shutdownHandler } from './lib/shutdown';
 import {
   choosePort,
   forgetGateway,
@@ -37,6 +38,10 @@ const desktop = theApp();
 desktop?.onGone(() => {
   if (!stopSoon()) process.exit(0);
 });
+if (!desktop && process.env.CONCH_SUPERVISED === '1')
+  process.once('disconnect', () => {
+    if (!stopSoon()) process.exit(0);
+  });
 // Before anything starts: is the port free, already a Conch, or another program's?
 const choose = async () =>
   choosePort({
@@ -91,6 +96,28 @@ if (restored.kind === 'failed')
 const services = new Services(config);
 services.homeProblems = await secureHome(config.CONCH_HOME);
 const app = await buildApp(services);
+const shutdown = shutdownHandler({
+  begin: () => {
+    services.recovery.stop();
+    services.routines.stop();
+    services.tasks.close();
+  },
+  drain: () => services.conversations.drain(),
+  close: () => app.close(),
+  exit: (code) => process.exit(code),
+  warn: (message) => console.warn(`[shutdown] ${message}`),
+});
+setRestartHandler(() => shutdown(RESTART_CODE));
+setStopHandler(async (farewell) => {
+  if (farewell) console.warn(`\n  ${farewell.replaceAll('\n', '\n  ')}\n`);
+  await shutdown(0);
+});
+for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => void shutdown(0));
+const recoveryMessage = (message: unknown) => services.recovery.receive(message);
+process.on('message', recoveryMessage);
+app.addHook('onClose', async () => {
+  process.off('message', recoveryMessage);
+});
 await services.gate.hosts.discover();
 // Whether `tailscale serve` reaches Conch: phones are only offered an address that works.
 void services.tailscale.status().catch(() => undefined);
@@ -106,6 +133,20 @@ try {
   );
   process.exit(1);
 }
+// A real loopback request proves HTTP is serving, not just that a timer can run.
+const probeHost =
+  config.CONCH_HOST === '0.0.0.0'
+    ? '127.0.0.1'
+    : config.CONCH_HOST === '::'
+      ? '::1'
+      : config.CONCH_HOST;
+const probeUrl = `http://${probeHost.includes(':') ? `[${probeHost}]` : probeHost}:${config.CONCH_PORT}/api/health`;
+await services.recovery.start(async () => {
+  const response = await fetch(probeUrl, { signal: AbortSignal.timeout(2_000), redirect: 'error' });
+  if (!response.ok) return false;
+  const body: unknown = await response.json();
+  return typeof body === 'object' && body !== null && 'bootId' in body && body.bootId === BOOT_ID;
+});
 // The app's window opens on it now, by number (`askUrl`: `localhost` tries ::1 first).
 void desktop?.send({ type: 'listening', url: askUrl(config.CONCH_HOST, config.CONCH_PORT) });
 await recordGateway(config.CONCH_HOME, {
@@ -154,7 +195,8 @@ if (desktop) {
 process.on('exit', () => forgetGateway(config.CONCH_HOME));
 
 // Routines only run while Conch is running; start the clock once we're listening.
-await services.routines.start();
+// Bookkeeping remembers due work even in recovery mode; network watchers wait.
+await services.routines.start({ watch: !services.recovery.recoveryMode });
 
 const url = addressOf(config.CONCH_PORT);
 if (choice.busy !== undefined) {
@@ -218,29 +260,3 @@ if (config.CONCH_OPEN && !process.env.CONCH_STARTED_BECAUSE?.match(/restart|cras
     .link({ port: config.CONCH_PORT, file: true })
     .then((link) => openInBrowser(link.file ?? url))
     .catch(() => openInBrowser(url));
-
-// An update or a restore can ask to start again; the supervisor does it.
-setRestartHandler(async () => {
-  services.routines.stop();
-  setTimeout(() => process.exit(RESTART_CODE), 1500).unref();
-  await app.close().catch(() => undefined);
-  process.exit(RESTART_CODE);
-});
-
-// Quit Conch, or hand over to the Conch the computer started (Always on).
-setStopHandler(async (farewell) => {
-  services.routines.stop();
-  setTimeout(() => process.exit(0), 1500).unref();
-  await app.close().catch(() => undefined);
-  if (farewell) console.warn(`\n  ${farewell.replaceAll('\n', '\n  ')}\n`);
-  process.exit(0);
-});
-
-for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  process.on(signal, () => {
-    // Open WebSockets can hold close() up; never hang on the way out.
-    services.routines.stop();
-    setTimeout(() => process.exit(0), 1500).unref();
-    void app.close().then(() => process.exit(0));
-  });
-}

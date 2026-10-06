@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 
 import { z } from 'zod';
 
+import { sampleResources, type ResourceSnapshot } from '../recovery/resources';
+
 import type { DoctorCheck } from '../doctor/service';
 import type { ToolContext } from '../conversations/manager';
 import { hostEnvironment } from '../engines/host';
@@ -18,11 +20,14 @@ interface Session {
   id: string;
   owner: string;
   command: string;
-  child: ChildProcessWithoutNullStreams;
+  child?: ChildProcessWithoutNullStreams;
+  launch: () => void;
+  cancel: () => void;
+  reason?: string;
   output: string;
   start: number;
   end: number;
-  status: 'running' | 'exited' | 'stopped' | 'timed-out';
+  status: 'queued' | 'running' | 'exited' | 'stopped' | 'timed-out';
   exitCode: number | null;
   timer: NodeJS.Timeout;
   at: number;
@@ -32,13 +37,129 @@ interface Session {
 
 export class ProcessService {
   readonly #sessions = new Map<string, Session>();
+  #monitor?: NodeJS.Timeout;
+  #pumping = false;
+  #closed = false;
+  #criticalSince?: number;
+  #pausedUntil = 0;
+  #lastOwner?: string;
+  #admissionPaused?: string;
+  #sampling?: Promise<ResourceSnapshot>;
   constructor(
     private readonly deps: {
       protectedPaths: string[];
       sealed: () => Promise<boolean>;
       now?: () => number;
+      resources?: () => Promise<ResourceSnapshot>;
+      healed?: (message: string) => void;
     },
   ) {}
+  pauseAdmission(reason = 'Waiting while Conch recovers.') {
+    this.#admissionPaused = reason;
+    for (const session of this.#sessions.values())
+      if (session.status === 'queued') session.reason = reason;
+  }
+  resumeAdmission() {
+    this.#admissionPaused = undefined;
+    return this.#pump();
+  }
+  close() {
+    this.#closed = true;
+    this.pauseAdmission('Conch is closing.');
+    this.stopAll();
+    clearInterval(this.#monitor);
+    this.#monitor = undefined;
+  }
+  resourceSnapshot(): Promise<ResourceSnapshot> {
+    this.#sampling ??= Promise.resolve()
+      .then(this.deps.resources ?? sampleResources)
+      .finally(() => {
+        this.#sampling = undefined;
+      });
+    return this.#sampling;
+  }
+  /** Shed only a managed job, never arbitrary host processes. Never replay its command. */
+  relievePressure() {
+    const now = (this.deps.now ?? Date.now)();
+    if (now < this.#pausedUntil)
+      return {
+        stopped: 0,
+        queued: [...this.#sessions.values()].filter((s) => s.status === 'queued').length,
+      };
+    this.#pausedUntil = now + 30_000;
+    for (const queued of this.#sessions.values())
+      if (queued.status === 'queued')
+        queued.reason = this.#admissionPaused ?? 'Waiting briefly for this computer to recover.';
+    const running = [...this.#sessions.values()].filter((s) => s.status === 'running');
+    const session = running.at(-1);
+    if (session) {
+      session.reason =
+        'Stopped to keep Conch responsive. Check its output before deciding whether to run it again.';
+      this.#stop(session);
+      this.deps.healed?.(
+        'Stopped a managed command to keep Conch responsive. Its output is still available.',
+      );
+    }
+    return {
+      stopped: session ? 1 : 0,
+      queued: [...this.#sessions.values()].filter((s) => s.status === 'queued').length,
+    };
+  }
+  #watch() {
+    if (!this.#monitor)
+      this.#monitor = setInterval(() => {
+        void this.#pump();
+      }, 5000).unref();
+  }
+  async #pump() {
+    if (this.#pumping || this.#closed) return;
+    this.#pumping = true;
+    try {
+      const active = [...this.#sessions.values()].filter(
+        (s) => s.status === 'running' || s.status === 'queued',
+      );
+      if (!active.length) {
+        clearInterval(this.#monitor);
+        this.#monitor = undefined;
+        this.#criticalSince = undefined;
+        return;
+      }
+      const resources = await this.resourceSnapshot();
+      if (this.#closed) return;
+      const now = (this.deps.now ?? Date.now)();
+      if (resources.level === 'critical') {
+        this.#criticalSince ??= now;
+        if (now - this.#criticalSince >= 15_000 && now >= this.#pausedUntil) this.relievePressure();
+      } else this.#criticalSince = undefined;
+      const running = [...this.#sessions.values()].filter((s) => s.status === 'running');
+      const queued = [...this.#sessions.values()].filter((s) => s.status === 'queued');
+      for (const s of queued)
+        s.reason =
+          this.#admissionPaused ??
+          (now < this.#pausedUntil
+            ? 'Waiting briefly for this computer to recover.'
+            : resources.concurrency === 0
+              ? resources.reason
+              : 'Waiting for another managed command to finish.');
+      if (this.#admissionPaused || now < this.#pausedUntil) return;
+      while (running.length < resources.concurrency) {
+        const eligible = queued.filter(
+          (s) => s.status === 'queued' && running.filter((r) => r.owner === s.owner).length < 2,
+        );
+        const next = eligible.find((s) => s.owner !== this.#lastOwner) ?? eligible[0];
+        if (!next) break;
+        this.#lastOwner = next.owner;
+        next.launch();
+        if (next.status === 'running') running.push(next);
+      }
+    } catch {
+      // A failed sample must not admit more work. Existing deadlines still apply.
+      for (const s of this.#sessions.values())
+        if (s.status === 'queued') s.reason = 'Checking available resources before starting.';
+    } finally {
+      this.#pumping = false;
+    }
+  }
   doctorCheck(): DoctorCheck {
     return {
       id: 'processes',
@@ -47,23 +168,31 @@ export class ProcessService {
       run: async ({ repair }) => {
         const now = (this.deps.now ?? Date.now)();
         const overdue = [...this.#sessions.values()].filter(
-          (s) => s.status === 'running' && s.deadline <= now,
+          (s) => (s.status === 'running' || s.status === 'queued') && s.deadline <= now,
         );
         if (repair) for (const session of overdue) this.#stop(session, 'timed-out');
         const running = [...this.#sessions.values()].filter((s) => s.status === 'running').length;
+        const queued = [...this.#sessions.values()].filter((s) => s.status === 'queued').length;
+        const resources = await this.resourceSnapshot();
         return [
           {
             id: 'processes',
             group: 'Tasks',
             title: 'Managed commands',
-            state: overdue.length ? (repair ? 'fixed' : 'warning') : 'ok',
+            state: overdue.length
+              ? repair
+                ? 'fixed'
+                : 'warning'
+              : resources.level === 'healthy'
+                ? 'ok'
+                : 'warning',
             message: overdue.length
               ? repair
                 ? 'Stopped commands that had exceeded their time limit.'
                 : 'Some commands have exceeded their time limit. Repair stops them.'
-              : running
-                ? `${running} commands are running within their time limits.`
-                : 'No commands are running.',
+              : resources.level !== 'healthy'
+                ? resources.reason
+                : `${running} commands running; ${queued} waiting. Current limit: ${resources.concurrency} at a time.`,
           },
         ];
       },
@@ -76,9 +205,14 @@ export class ProcessService {
     return session;
   }
   #stop(session: Session, status: 'stopped' | 'timed-out' = 'stopped') {
-    if (session.status !== 'running') return;
+    if (session.status !== 'running' && session.status !== 'queued') return;
     session.status = status;
     clearTimeout(session.timer);
+    session.cancel();
+    if (!session.child) {
+      void this.#pump();
+      return;
+    }
     // The supervisor kills its shell tree. On POSIX, also signal the whole group directly.
     session.child.stdin.end(JSON.stringify({ stop: true }) + '\n');
     if (process.platform !== 'win32') {
@@ -106,6 +240,7 @@ export class ProcessService {
       nextOffset: from + text.length,
       discardedBefore: session.start,
       unsealed: session.unsealed,
+      ...(session.reason && { reason: session.reason }),
     };
   }
   tools(ctx: ToolContext): HostTool[] {
@@ -142,13 +277,15 @@ export class ProcessService {
         name: 'process_start',
         row: true,
         description:
-          'Start a managed shell command in this chat’s work folder and return its id immediately. Use for builds, tests and development servers. Logs can be read with process_read and it can be stopped with process_stop. A process lasts at most 30 minutes, belongs only to this chat, and stops when the chat is stopped or Conch closes. Network access needs dangerouslyDisableSandbox when commands are sealed. Never enter passwords or secrets through stdin.',
+          'Start or queue a managed shell command in this chat’s work folder and return its id immediately. Queued commands start when resources are available; read status and reason with process_read. The time limit includes queue time. Use for builds, tests and development servers. Logs can be read with process_read and it can be stopped with process_stop. A process lasts at most 30 minutes, belongs only to this chat, and stops when the chat is stopped or Conch closes. Network access needs dangerouslyDisableSandbox when commands are sealed. Never enter passwords or secrets through stdin.',
         input: {
           command: z.string().min(1).max(32_000),
           timeout_ms: z.number().int().min(1000).max(1_800_000).default(600_000),
           dangerouslyDisableSandbox: z.boolean().default(false),
         },
         run: async (args) => {
+          if (this.#closed)
+            throw new Error('Conch is closing. Start this command after it returns.');
           const command = String(args.command);
           if (
             touchesProtected({ command }, [
@@ -165,95 +302,128 @@ export class ProcessService {
           const cwd = await ctx.workspace?.();
           if (!cwd) throw new Error('This chat does not have a work folder.');
           ctx.signal.throwIfAborted();
-          // Expired results are removed on the next start. Running commands are never evicted.
+          if (this.#closed)
+            throw new Error('Conch is closing. Start this command after it returns.');
+          // Queued/running work is never evicted. Retained results and admission are bounded.
           for (const [id, s] of this.#sessions)
-            if (s.status !== 'running' && Date.now() - s.at > 3_600_000) this.#sessions.delete(id);
-          const running = [...this.#sessions.values()].filter((s) => s.status === 'running');
+            if (s.status !== 'running' && s.status !== 'queued' && Date.now() - s.at > 3_600_000)
+              this.#sessions.delete(id);
+          const queued = [...this.#sessions.values()].filter((s) => s.status === 'queued');
           if (
-            running.length >= 16 ||
-            running.filter((s) => s.owner === ctx.conversationId).length >= 4
+            queued.length >= 32 ||
+            queued.filter((s) => s.owner === ctx.conversationId).length >= 8
           )
-            throw new Error('Too many commands are running. Stop one before starting another.');
+            throw new Error(
+              'This chat or computer already has enough commands waiting. Let them finish or stop a queued command first.',
+            );
           if (this.#sessions.size >= 128) {
-            const old = [...this.#sessions.values()].find((s) => s.status !== 'running');
+            const old = [...this.#sessions.values()].find(
+              (s) => s.status !== 'running' && s.status !== 'queued',
+            );
             if (old) this.#sessions.delete(old.id);
           }
-          const child = spawn(
-            process.execPath,
-            [fileURLToPath(new URL('./worker.mjs', import.meta.url))],
-            {
-              cwd,
-              env: hostEnvironment(),
-              detached: process.platform !== 'win32',
-              windowsHide: true,
-              stdio: ['pipe', 'pipe', 'pipe'],
-            },
-          );
+          const onAbort = () => this.#stop(session);
           const session: Session = {
             id: randomUUID(),
             owner: ctx.conversationId,
             command,
-            child,
             output: '',
             start: 0,
             end: 0,
-            status: 'running',
+            status: 'queued',
             exitCode: null,
             at: Date.now(),
             deadline: (this.deps.now ?? Date.now)() + Number(args.timeout_ms),
             unsealed,
+            reason: 'Checking available resources before starting.',
+            cancel: () => ctx.signal.removeEventListener('abort', onAbort),
+            launch: () => {
+              if (session.status !== 'queued') return;
+              if (ctx.signal.aborted) {
+                this.#stop(session);
+                return;
+              }
+              if (session.deadline <= (this.deps.now ?? Date.now)()) {
+                this.#stop(session, 'timed-out');
+                return;
+              }
+              const child = spawn(
+                process.execPath,
+                [fileURLToPath(new URL('./worker.mjs', import.meta.url))],
+                {
+                  cwd,
+                  env: hostEnvironment(),
+                  detached: process.platform !== 'win32',
+                  windowsHide: true,
+                  stdio: ['pipe', 'pipe', 'pipe'],
+                },
+              );
+              session.child = child;
+              session.status = 'running';
+              session.reason = undefined;
+              const collect = (text: string) => {
+                session.end += text.length;
+                session.output = (session.output + text).slice(-64_000);
+                session.start = session.end - session.output.length;
+              };
+              for (const stream of [child.stdout, child.stderr]) {
+                const decoder = new StringDecoder('utf8');
+                stream.on('data', (chunk: Buffer) => collect(decoder.write(chunk)));
+                stream.on('end', () => collect(decoder.end()));
+              }
+              child.stdin.on('error', () => {});
+              child.once('error', () => {
+                collect('The command supervisor could not start.');
+                if (session.status === 'running') session.status = 'exited';
+                session.exitCode = 1;
+                clearTimeout(session.timer);
+                session.cancel();
+                void this.#pump();
+              });
+              child.once('close', (code) => {
+                if (session.status === 'running') session.status = 'exited';
+                session.exitCode = code ?? session.exitCode;
+                clearTimeout(session.timer);
+                session.cancel();
+                void this.#pump();
+                if (process.platform !== 'win32' && child.pid) {
+                  try {
+                    process.kill(-child.pid, 'SIGKILL');
+                  } catch {
+                    /* Gone. */
+                  }
+                }
+              });
+              child.stdin.write(
+                JSON.stringify({
+                  command,
+                  cwd,
+                  ...(!unsealed && {
+                    module: import.meta.resolve('@anthropic-ai/sandbox-runtime'),
+                    sandbox: {
+                      network: { allowedDomains: [], deniedDomains: [] },
+                      filesystem: {
+                        allowWrite: [cwd],
+                        denyWrite: [...this.deps.protectedPaths, resolve(cwd, '.git')],
+                        denyRead: [
+                          ...this.deps.protectedPaths,
+                          ...secretPlaces().map((p) => p.path),
+                        ],
+                      },
+                    },
+                  }),
+                }) + '\n',
+              );
+            },
             timer: setTimeout(
               () => this.#stop(session, 'timed-out'),
               Number(args.timeout_ms),
             ).unref(),
           };
           this.#sessions.set(session.id, session);
-          const collect = (text: string) => {
-            session.end += text.length;
-            session.output = (session.output + text).slice(-64_000);
-            session.start = session.end - session.output.length;
-          };
-          for (const stream of [child.stdout, child.stderr]) {
-            const decoder = new StringDecoder('utf8');
-            stream.on('data', (chunk: Buffer) => collect(decoder.write(chunk)));
-            stream.on('end', () => collect(decoder.end()));
-          }
-          child.stdin.on('error', () => {});
-          child.once('error', () => {
-            collect('The command supervisor could not start.');
-            session.status = 'exited';
-            session.exitCode = 1;
-            clearTimeout(session.timer);
-          });
-          child.once('close', (code) => {
-            if (session.status === 'running') session.status = 'exited';
-            session.exitCode = code;
-            clearTimeout(session.timer);
-            if (process.platform !== 'win32' && child.pid) {
-              try {
-                process.kill(-child.pid, 'SIGKILL');
-              } catch {
-                /* Gone. */
-              }
-            }
-          });
-          child.stdin.write(
-            JSON.stringify({
-              command,
-              cwd,
-              ...(!unsealed && {
-                module: import.meta.resolve('@anthropic-ai/sandbox-runtime'),
-                sandbox: {
-                  network: { allowedDomains: [], deniedDomains: [] },
-                  filesystem: {
-                    allowWrite: [cwd],
-                    denyWrite: [...this.deps.protectedPaths, resolve(cwd, '.git')],
-                    denyRead: [...this.deps.protectedPaths, ...secretPlaces().map((p) => p.path)],
-                  },
-                },
-              }),
-            }) + '\n',
-          );
+          ctx.signal.addEventListener('abort', onAbort, { once: true });
+          this.#watch();
+          await this.#pump();
           return JSON.stringify(this.#view(session));
         },
       },
@@ -272,7 +442,11 @@ export class ProcessService {
             const session = this.#own(ctx.conversationId, String(args.id));
             const offset = args.offset === undefined ? session.end : Number(args.offset);
             const until = Date.now() + Number(args.wait_ms);
-            while (session.status === 'running' && session.end <= offset && Date.now() < until)
+            while (
+              (session.status === 'running' || session.status === 'queued') &&
+              session.end <= offset &&
+              Date.now() < until
+            )
               await delay(Math.min(100, until - Date.now()), undefined, { signal: ctx.signal });
           }
           ctx.taint?.({ kind: 'download', label: 'command output' });
@@ -304,7 +478,12 @@ export class ProcessService {
           )
             throw new Error(PROTECTED_MESSAGE);
           await commandAccess('process_write', args, '', session.unsealed);
-          if (session.status !== 'running') throw new Error('This command has finished.');
+          if (session.status !== 'running' || !session.child)
+            throw new Error(
+              session.status === 'queued'
+                ? 'This command is waiting to start.'
+                : 'This command has finished.',
+            );
           session.child.stdin.write(JSON.stringify({ data: args.text }) + '\n');
           return 'Input sent.';
         },

@@ -22,6 +22,7 @@ async function setup() {
   services = new Services(
     loadConfig({ CONCH_HOME: home, CONCH_ENGINE: 'mock', CONCH_LOG_LEVEL: 'silent' }),
   );
+  vi.spyOn(services.recovery, 'allowsWork', 'get').mockReturnValue(true);
   return { s: services, home };
 }
 

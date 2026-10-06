@@ -33,6 +33,8 @@ async function setup() {
   );
   const app = onThisComputer(await buildApp(services), services);
   open.push(app);
+  await app.ready();
+  await services.recovery.start(async () => (await app.inject('/api/health')).statusCode === 200);
   // What each turn was given: its tools and its prompt.
   const engine = services.engines.get('mock');
   if (!engine) throw new Error('no mock engine');

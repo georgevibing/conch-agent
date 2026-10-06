@@ -19,6 +19,7 @@ async function setup(state = 'ready') {
   services = new Services(
     loadConfig({ CONCH_HOME: home, CONCH_ENGINE: 'mock', CONCH_LOG_LEVEL: 'silent' }),
   );
+  vi.spyOn(services.recovery, 'allowsWork', 'get').mockReturnValue(true);
   delete process.env.CONCH_MOCK_STATE;
   return services;
 }
@@ -45,6 +46,55 @@ const base = {
 afterEach(() => services?.routines.stop());
 
 describe('RoutineService', () => {
+  it('defers a one-off without spending a run and resumes it once resources recover', async () => {
+    const s = await setup();
+    const admission = vi.spyOn(s.recovery, 'allowsWork', 'get').mockReturnValue(false);
+    const realNow = Date.now;
+    const due = realNow() + HOUR;
+    const r = await s.routines.create(
+      { ...base, catchUp: false, schedule: { type: 'once', at: new Date(due).toISOString() } },
+      { createdBy: 'user' },
+    );
+    try {
+      Date.now = () => due + 1000;
+      await s.routines.checkNow();
+      expect((await s.routines.detail(r.id)).runs).toHaveLength(0);
+      expect((await s.routines.detail(r.id)).routine.status).toBe('active');
+      Date.now = () => due + HOUR;
+      admission.mockReturnValue(true);
+      await s.routines.checkNow();
+      expect((await settled(s, r.id)).status).toBe('succeeded');
+      await s.routines.checkNow();
+      expect((await s.routines.detail(r.id)).runs).toHaveLength(1);
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  it('keeps timed work while recovery mode holds external watchers, then starts them on repair', async () => {
+    const s = await setup();
+    const admission = vi.spyOn(s.recovery, 'allowsWork', 'get').mockReturnValue(false);
+    const realNow = Date.now;
+    const due = realNow() + HOUR;
+    const r = await s.routines.create(
+      { ...base, catchUp: false, schedule: { type: 'once', at: new Date(due).toISOString() } },
+      { createdBy: 'user' },
+    );
+    try {
+      Date.now = () => due + 1000;
+      await s.routines.start({ watch: false });
+      expect((await s.routines.detail(r.id)).runs).toHaveLength(0);
+      Date.now = () => due + HOUR;
+      admission.mockReturnValue(true);
+      await s.routines.start();
+      await s.routines.checkNow();
+      expect((await settled(s, r.id)).status).toBe('succeeded');
+    } finally {
+      Date.now = realNow;
+      s.routines.stop();
+    }
+  });
+
   it('creates routines with consistent text and a next run', async () => {
     const s = await setup();
     const r = await s.routines.create(

@@ -25,6 +25,12 @@ export interface EngineSession {
 }
 
 export interface ConversationRecord extends ConversationSummary {
+  /** Calls durably admitted but not yet observed finishing. */
+  pendingToolCalls?: string[];
+  /** Interrupted work waiting for resource-aware recovery. */
+  recoveryPending?: boolean;
+  /** Recovery announced, still waiting for admission (not a new crash attempt). */
+  recoveryQueued?: boolean;
   /** The provider that answered last. */
   engine: EngineId;
   /** Before ADR 0012: the session of `engine`. Read into `sessions` when loaded. */
@@ -53,6 +59,9 @@ const StoredRecord = z.object({
   seenAt: z.number().optional().catch(undefined),
   spend: ChatSpend.optional().catch(undefined),
   engine: EngineId.catch('claude-code'),
+  pendingToolCalls: z.array(z.string()).optional().catch(['unknown']),
+  recoveryPending: z.boolean().optional().catch(true),
+  recoveryQueued: z.boolean().optional().catch(undefined),
   resumeId: z.string().optional().catch(undefined),
   sessions: z
     .partialRecord(EngineId, z.object({ resumeId: z.string(), seq: z.number() }))
@@ -151,10 +160,20 @@ export class ConversationStore {
     }
     // A turn (or a title being written) can't survive a restart; don't show stale states.
     this.interrupted = records
-      .filter((r) => r.status === 'running' || r.status === 'awaiting-permission')
+      .filter(
+        (r) => r.recoveryPending || r.status === 'running' || r.status === 'awaiting-permission',
+      )
       .map((r) => r.id);
     return new Map(
-      records.map((r) => [r.id, { ...r, status: 'idle' as const, titling: undefined }]),
+      records.map((r) => [
+        r.id,
+        {
+          ...r,
+          status: 'idle' as const,
+          titling: undefined,
+          recoveryPending: this.interrupted.includes(r.id) || undefined,
+        },
+      ]),
     );
   }
 

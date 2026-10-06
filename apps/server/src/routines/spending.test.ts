@@ -22,6 +22,7 @@ async function setup(usage?: 'metered' | 'exhausted') {
   services = new Services(
     loadConfig({ CONCH_HOME: home, CONCH_ENGINE: 'mock', CONCH_LOG_LEVEL: 'silent' }),
   );
+  vi.spyOn(services.recovery, 'allowsWork', 'get').mockReturnValue(true);
   delete process.env.CONCH_MOCK_USAGE;
   return services;
 }
@@ -284,6 +285,7 @@ describe('routines and spending', () => {
 
       process.env.CONCH_MOCK_USAGE = 'exhausted';
       const again = new Services(s.config);
+      vi.spyOn(again.recovery, 'allowsWork', 'get').mockReturnValue(true);
       delete process.env.CONCH_MOCK_USAGE;
       services = again;
       await again.routines.start();

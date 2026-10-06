@@ -105,6 +105,7 @@ class Scripted implements Engine {
 async function setup(
   options: {
     background?: number;
+    allowed?: () => boolean;
     helpers?: number;
     overBudget?: boolean;
     tools?: ToolProvider;
@@ -138,6 +139,7 @@ async function setup(
       overBudget: async () => Boolean(options.overBudget),
       ready: async () => [...engines.values()],
       background: options.background,
+      allowed: options.allowed,
       helpers: options.helpers,
     });
   const tasks = make();
@@ -158,6 +160,25 @@ async function until<T>(get: () => Promise<T>, ok: (value: T) => boolean): Promi
 const status = (tasks: TaskService, id: string) => tasks.get(id).then((t) => t.status);
 
 describe('a task sent to the background', () => {
+  it('keeps queued work saved when resources are unavailable and refuses to pump after close', async () => {
+    let allowed = false;
+    const { tasks, engines } = await setup({ allowed: () => allowed });
+    const first = await tasks.create({ kind: 'background', text: 'first' });
+    await new Promise((r) => setTimeout(r, 30));
+    expect((await tasks.get(first.id)).status).toBe('queued');
+    expect(engines.get('mock')?.turns).toHaveLength(0);
+    allowed = true;
+    await tasks.create({ kind: 'background', text: 'second' });
+    await until(
+      () => tasks.get(first.id),
+      (task) => task.status === 'unverified',
+    );
+    tasks.close();
+    const last = await tasks.create({ kind: 'background', text: 'last' });
+    await new Promise((r) => setTimeout(r, 30));
+    expect((await tasks.get(last.id)).status).toBe('queued');
+  });
+
   it('runs on its own, and its result comes back to the chat it came from', async () => {
     const { tasks, conversations } = await setup();
     const chat = await conversations.send({ clientMessageId: 'u1', text: 'hello' });

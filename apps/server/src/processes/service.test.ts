@@ -1,22 +1,44 @@
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ToolContext } from '../conversations/manager';
 import { ProcessService } from './service';
+import { resourcePolicy, type ResourceSnapshot } from '../recovery/resources';
+
+const healthy = () =>
+  resourcePolicy({
+    at: Date.now(),
+    totalBytes: 16 * 1024 ** 3,
+    availableBytes: 8 * 1024 ** 3,
+    cpuCount: 8,
+    loadPerCpu: 0,
+    memoryPressure: 0,
+  });
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
   for (const clean of cleanups.splice(0)) await clean();
   vi.unstubAllEnvs();
 });
-async function setup(options: { now?: () => number; protectedPaths?: string[] } = {}) {
+async function setup(
+  options: {
+    now?: () => number;
+    protectedPaths?: string[];
+    resources?: () => Promise<ResourceSnapshot>;
+  } = {},
+) {
   const cwd = await mkdtemp(join(tmpdir(), 'conch-process-'));
-  const service = new ProcessService({ protectedPaths: [], sealed: async () => false, ...options });
+  const service = new ProcessService({
+    protectedPaths: [],
+    sealed: async () => false,
+    resources: async () => healthy(),
+    ...options,
+  });
   cleanups.push(async () => {
-    service.stopAll();
+    service.close();
     await new Promise((r) => setTimeout(r, 50));
     await rm(cwd, { recursive: true, force: true });
   });
@@ -58,6 +80,124 @@ async function until<T>(read: () => Promise<T>, matches: (value: T) => boolean) 
 }
 
 describe('managed commands', () => {
+  it('queues under pressure and starts approved work when resources recover', async () => {
+    let snapshot = { ...healthy(), concurrency: 0, level: 'busy' as const } as ResourceSnapshot;
+    const { service, start, read, ctx } = await setup({ resources: async () => snapshot });
+    const ask = vi.fn(async () => 'allow' as const);
+    const { id } = await start('echo recovered', { ...ctx, permissionMode: 'default', ask });
+    expect((await read(id)).status).toBe('queued');
+    expect(ask).toHaveBeenCalledOnce();
+    snapshot = healthy();
+    await service.resumeAdmission();
+    expect(
+      (
+        await until(
+          () => read(id),
+          (v) => v.status === 'exited',
+        )
+      ).output,
+    ).toContain('recovered');
+    expect(ask).toHaveBeenCalledOnce();
+  });
+  it('never executes cancelled or expired queued commands', async () => {
+    const { service, start, read, ctx } = await setup();
+    service.pauseAdmission();
+    const abort = new AbortController();
+    const cancelled = await start('echo must-not-run', { ...ctx, signal: abort.signal });
+    abort.abort();
+    const expired = await start('echo must-not-run', ctx, 30);
+    await until(
+      () => read(expired.id),
+      (v) => v.status === 'timed-out',
+    );
+    await service.resumeAdmission();
+    expect(await read(cancelled.id)).toMatchObject({ status: 'stopped', output: '' });
+    expect(await read(expired.id)).toMatchObject({ status: 'timed-out', output: '' });
+  });
+  it('bounds queue size and stops queued work on shutdown', async () => {
+    const { service, start, read } = await setup();
+    service.pauseAdmission('Conch is recovering.');
+    const jobs = [];
+    for (let i = 0; i < 8; i++) jobs.push(await start('echo queued'));
+    await expect(start('echo overflow')).rejects.toThrow('enough commands waiting');
+    service.close();
+    for (const job of jobs)
+      expect(await read(job.id)).toMatchObject({ status: 'stopped', output: '' });
+    await service.resumeAdmission();
+    for (const job of jobs) expect((await read(job.id)).status).toBe('stopped');
+  });
+  it('gives another chat the next slot and keeps cancellation scoped to its owner', async () => {
+    const { service, start, read, run, ctx } = await setup({
+      resources: async () => ({ ...healthy(), concurrency: 1 }),
+    });
+    const first = await start('node -e "setInterval(()=>{},1000)"');
+    const ownQueued = await start('echo own');
+    const other = { ...ctx, conversationId: 'two' };
+    const otherQueued = await start('node -e "setInterval(()=>{},1000)"', other);
+    expect((await read(ownQueued.id)).status).toBe('queued');
+    await run('process_stop', { id: first.id });
+    await until(
+      () => read(otherQueued.id, other),
+      (v) => v.status === 'running',
+    );
+    expect((await read(ownQueued.id)).status).toBe('queued');
+    service.stopAll('one');
+    expect((await read(otherQueued.id, other)).status).toBe('running');
+  });
+  it('sheds one managed tree only after sustained critical memory pressure', async () => {
+    let now = 1000;
+    let snapshot = healthy();
+    const { service, start, read } = await setup({
+      now: () => now,
+      resources: async () => snapshot,
+    });
+    const older = await start('node -e "setInterval(()=>{},1000)"');
+    const newer = await start('node -e "setInterval(()=>{},1000)"');
+    snapshot = { ...snapshot, level: 'critical', concurrency: 0 };
+    await service.resumeAdmission();
+    now += 14_000;
+    await service.resumeAdmission();
+    expect((await read(newer.id)).status).toBe('running');
+    now += 1001;
+    await service.resumeAdmission();
+    expect((await read(newer.id)).status).toBe('stopped');
+    expect((await read(older.id)).status).toBe('running');
+    await service.resumeAdmission();
+    expect((await read(older.id)).status).toBe('running');
+  });
+  it('fails closed if resource sampling fails and does not write to queued processes', async () => {
+    const { start, read, run } = await setup({
+      resources: async () => {
+        throw new Error('sample unavailable');
+      },
+    });
+    const { id } = await start('echo not-yet');
+    expect((await read(id)).status).toBe('queued');
+    await expect(run('process_write', { id, text: 'input' })).rejects.toThrow('waiting to start');
+  });
+
+  it('shares concurrent resource samples and keeps completed children paused during recovery', async () => {
+    const resources = vi.fn(async () => healthy());
+    const { service, start, read } = await setup({ resources });
+    const samples = await Promise.all([service.resourceSnapshot(), service.resourceSnapshot()]);
+    expect(samples[0]).toBe(samples[1]);
+    expect(resources).toHaveBeenCalledOnce();
+    await start('node -e "setTimeout(()=>{},100)"');
+    service.pauseAdmission();
+    const queued = await start('echo must-wait');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(await read(queued.id)).toMatchObject({ status: 'queued', output: '' });
+  });
+  it('shares the workload relief cooldown with the external watchdog', async () => {
+    const { service, start, read } = await setup();
+    const older = await start('node -e "setInterval(()=>{},1000)"');
+    const newer = await start('node -e "setInterval(()=>{},1000)"');
+    expect(service.relievePressure().stopped).toBe(1);
+    expect(service.relievePressure().stopped).toBe(0);
+    expect((await read(newer.id)).status).toBe('stopped');
+    expect((await read(older.id)).status).toBe('running');
+  });
+
   it('captures exit codes and logs, with no ambient credentials', async () => {
     const { start, read } = await setup();
     vi.stubEnv('CONCH_TEST_SECRET', 'private');
@@ -182,6 +322,81 @@ describe('managed commands', () => {
           if (child.pid) process.kill(-child.pid, 'SIGKILL');
         } catch {
           /* Already stopped. */
+        }
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'reaps a detached managed tree when its gateway is forcibly killed',
+    async () => {
+      const workerPath = fileURLToPath(new URL('./worker.mjs', import.meta.url));
+      const program =
+        "const {spawn}=require('node:child_process'); const c=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'}); console.log('descendant:'+c.pid); setInterval(()=>{},1000)";
+      const command = 'node -e ' + JSON.stringify(program);
+      const gateway = spawn(
+        process.execPath,
+        [
+          '-e',
+          `
+      const {spawn}=require('node:child_process');
+      const worker=spawn(process.execPath,[process.argv[1]],{detached:true,stdio:['pipe','pipe','pipe']});
+      console.log('worker:'+worker.pid);
+      worker.stdout.pipe(process.stdout); worker.stderr.pipe(process.stderr);
+      worker.stdin.write(JSON.stringify({command:process.argv[2],cwd:process.cwd()})+'\\n');
+      setInterval(()=>{},1000);
+    `,
+          workerPath,
+          command,
+        ],
+        { stdio: ['ignore', 'pipe', 'pipe'] },
+      );
+      let output = '';
+      gateway.stdout.on('data', (data: Buffer) => {
+        output += data.toString();
+      });
+      gateway.stderr.resume();
+      let workerPid: number | undefined;
+      let descendantPid: number | undefined;
+      const ended = new Promise((resolve) => gateway.once('close', resolve));
+      try {
+        await until(
+          async () => output,
+          (value) => value.includes('descendant:'),
+        );
+        workerPid = Number(/worker:(\d+)/.exec(output)?.[1]);
+        descendantPid = Number(/descendant:(\d+)/.exec(output)?.[1]);
+        expect(workerPid).toBeGreaterThan(1);
+        expect(descendantPid).toBeGreaterThan(1);
+        gateway.kill('SIGKILL');
+        await ended;
+        const dead = async (pid: number) => {
+          try {
+            process.kill(pid, 0);
+            // Minimal containers may not reap orphans promptly; zombies cannot run.
+            if (process.platform === 'linux')
+              return /\) Z /.test(await readFile(`/proc/${pid}/stat`, 'utf8'));
+            return false;
+          } catch (error) {
+            return ['ESRCH', 'ENOENT'].includes((error as NodeJS.ErrnoException).code ?? '');
+          }
+        };
+        for (const pid of [workerPid, descendantPid]) await until(() => dead(pid), Boolean);
+      } finally {
+        gateway.kill('SIGKILL');
+        if (workerPid) {
+          try {
+            process.kill(-workerPid, 'SIGKILL');
+          } catch {
+            /* Already gone. */
+          }
+        }
+        if (descendantPid) {
+          try {
+            process.kill(descendantPid, 'SIGKILL');
+          } catch {
+            /* Already gone. */
+          }
         }
       }
     },

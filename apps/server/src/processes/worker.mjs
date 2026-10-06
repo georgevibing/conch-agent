@@ -1,6 +1,15 @@
 /** The command dies with its stdin pipe if the gateway crashes. No inherited credentials. */
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
+import { setPriority } from 'node:os';
+
+// Inherited by the shell and its descendants: keep the gateway ahead of builds.
+// This is a scheduling preference, not a CPU or memory hard limit.
+try {
+  setPriority(0, 10);
+} catch {
+  /* Unsupported hosts retain their normal priority. */
+}
 
 const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
 let child;

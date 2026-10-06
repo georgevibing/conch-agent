@@ -45,6 +45,8 @@ import { AttachmentStore } from './attachments/store';
 import { fileTools } from './files/tools';
 import { researchTools, publicWebFetcher } from './research/tools';
 import { ProcessService } from './processes/service';
+import { GatewayRecovery } from './recovery/gateway';
+import { recoveryHistoryCheck } from './recovery/doctor';
 import { ImageService } from './images/service';
 import { documentTools } from './files/documents';
 import { publishTools } from './files/publish';
@@ -231,6 +233,7 @@ export class Services {
   readonly setup: Setup;
   /** Repair everything: every part's check, run at once (see `doctor/`). */
   readonly doctor: Doctor;
+  readonly recovery: GatewayRecovery;
   /** Whether Conch can reach the internet (ADR 0023). */
   readonly network: NetworkWatch;
   /** A model on this computer: Ollama, found, started and fed models (ADR 0022). */
@@ -437,7 +440,32 @@ export class Services {
     this.processes = new ProcessService({
       protectedPaths: protectedPaths(config.CONCH_HOME),
       sealed: async () => (await this.settings.get()).preferences.sealedCommands,
+      healed: (message) => void this.healed.note('gateway', message),
     });
+    this.recovery = new GatewayRecovery({
+      sample: () => this.processes.resourceSnapshot(),
+      relieve: () => this.processes.relievePressure(),
+      pause: (reason) => this.processes.pauseAdmission(reason),
+      resume: () => this.processes.resumeAdmission(),
+      note: (message) => void this.healed.note('gateway', message),
+      recoveryMode: process.env.CONCH_RECOVERY_MODE === '1',
+      send: (message) => {
+        if (process.send && process.connected) process.send(message, () => undefined);
+      },
+      recovered: async () => {
+        await this.routines.start();
+        this.tidy.stop();
+        this.tidy.start();
+        this.learning.stop();
+        this.learning.start();
+      },
+    });
+    this.doctor.register(this.recovery.doctorCheck());
+    this.doctor.register(recoveryHistoryCheck(config.CONCH_HOME));
+    if (this.recovery.recoveryMode)
+      this.processes.pauseAdmission(
+        'Conch is recovering. Open Settings → Health and choose Repair everything.',
+      );
     this.vault = new VaultService({
       home: config.CONCH_HOME,
       keystore: keystoreMode(config),
@@ -743,7 +771,7 @@ export class Services {
       busy: () => this.conversations.busy(),
       emit: () => this.broadcast.emit({ type: 'memory.changed' }),
     });
-    this.tidy.start();
+    if (!this.recovery.recoveryMode) this.tidy.start();
     this.suggester = new SkillSuggester({
       home: config.CONCH_HOME,
       asked: (since) => yourRequests(conversationStore, since),
@@ -984,6 +1012,7 @@ export class Services {
       offers: this.offers,
       attachments: this.attachments,
       stopProcesses: (id) => this.processes.stopAll(id),
+      recovery: { allowed: () => this.recovery.allowsWork },
       redact: this.vault.redactor(),
       protectedPaths: protectedPaths(config.CONCH_HOME),
       // The sealed box, only where this computer can do it (ADR 0028).
@@ -1041,6 +1070,7 @@ export class Services {
       },
     });
     this.routines = new RoutineService({
+      allowed: () => this.recovery.allowsWork,
       store: new RoutineStore(join(config.CONCH_HOME, 'routines'), heal),
       conversations: this.conversations,
       engine: (id) => this.providers.engineFor(id),
@@ -1051,6 +1081,7 @@ export class Services {
     });
     this.doctor.register(routinesWatchCheck(this.routines));
     this.tasks = new TaskService({
+      allowed: () => this.recovery.allowsWork,
       store: new TaskStore(config.CONCH_HOME, heal),
       conversations: this.conversations,
       engine: (id) => this.providers.engineFor(id),
@@ -1215,7 +1246,7 @@ export class Services {
           .catch(() => undefined);
       }
     });
-    this.learning.start();
+    if (!this.recovery.recoveryMode) this.learning.start();
     registerQuietLearningDoctor(this.doctor, this.learning);
     void (this.mockVendor?.start() ?? Promise.resolve()).then(() => this.integrations.start());
     this.googleApps.start();
@@ -2299,7 +2330,12 @@ export class Services {
   }
 
   async stop() {
-    this.processes.stopAll();
+    this.recovery.stop();
+    this.tasks.close();
+    await this.conversations
+      .drain()
+      .catch(() => console.warn('[shutdown] Could not save all chat checkpoints.'));
+    this.processes.close();
     void this.address.stop();
     this.googleApps.stop();
     void this.conchApps.stop();
