@@ -60,7 +60,7 @@ export const UpToDate: Story = {
   args: {
     state: 'current',
     title: 'Conch is up to date',
-    detail: '0.2.0 · Checked 2 hours ago',
+    detail: 'Dev · 4b4ebb4 · Checked 2 hours ago',
     whatsNew: [],
     action: undefined,
     footnote: undefined,
@@ -305,4 +305,14 @@ export const InSettings: Story = {
       />
     </Stack>
   ),
+};
+
+export const StableBuild: Story = {
+  args: { ...UpToDate.args, detail: 'v0.1.0 · Checked just now' },
+};
+export const BetaBuild: Story = {
+  args: { ...UpToDate.args, detail: 'v0.1.0-beta.2 · Checked just now' },
+};
+export const AlphaBuild: Story = {
+  args: { ...UpToDate.args, detail: 'v0.1.0-alpha.1 · Checked just now' },
 };

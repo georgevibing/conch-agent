@@ -144,7 +144,7 @@ export async function setup(argv: string[], deps: SetupDeps): Promise<number> {
 
   await banner(ui, {
     line: greeting(new Date(deps.now())),
-    sub: `v${deps.version} · ${deps.hostname}`,
+    sub: `${deps.version} · ${deps.hostname}`,
     shimmer: 900,
   });
 

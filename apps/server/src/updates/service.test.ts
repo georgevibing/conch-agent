@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { UpdatesStatus } from '@conch/protocol';
+import type { ConchBuild, UpdatesStatus } from '@conch/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { type LatestLookup, type NeedSpec, Setup } from '../setup/needs';
@@ -34,6 +34,7 @@ const lookup: LatestLookup = {
 async function world(
   options: {
     fail?: boolean;
+    build?: ConchBuild;
     conch?: Partial<ConchCheckout>;
     releases?: Partial<ReleaseFollower>;
   } = {},
@@ -88,6 +89,7 @@ async function world(
     releases: options.releases as ReleaseFollower | undefined,
     announce: (version) => announced.push(version),
     version: '0.2.0',
+    build: options.build,
     bootId: 'boot-1',
     emit: (status) => seen.push(status),
     heal: (message) => healed.push(message),
@@ -658,4 +660,15 @@ describe('following releases (ADR 0051)', () => {
     await w.service.check();
     expect((await w.service.status()).conch.notice).toBeUndefined();
   });
+});
+
+it('keeps the running build identity separate from the base version and update channel', async () => {
+  const build = { kind: 'release', version: '0.1.0-beta.2', channel: 'beta' } as const;
+  const { service } = await world({ build });
+  expect((await service.status()).conch).toMatchObject({
+    build,
+    channel: 'stable',
+    version: '0.2.0',
+  });
+  service.stop();
 });

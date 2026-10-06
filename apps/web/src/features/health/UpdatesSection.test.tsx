@@ -109,7 +109,7 @@ describe('Settings → Health → Updates', () => {
     mockFetch({ 'GET /api/updates': () => status() });
     renderApp(<UpdatesSection />);
     const card = await screen.findByRole('region', { name: 'Conch is up to date' });
-    expect(card).toHaveTextContent('0.2.0 · Checked 2 hours ago');
+    expect(card).toHaveTextContent('Dev · abc1234 · Checked 2 hours ago');
     expect(within(card).queryByRole('button')).toBeNull();
     const programs = screen.getByRole('list', { name: 'Programs Conch uses' });
     expect(programs.children[0]).toHaveTextContent('Claude Code2.1.284Up to date');
@@ -461,7 +461,7 @@ describe('Settings → Health → Updates', () => {
     });
     renderApp(<UpdatesSection />);
     const card = await screen.findByRole('region', { name: 'Conch is up to date' });
-    expect(card).toHaveTextContent('0.2.0 · Updated 1 minute ago');
+    expect(card).toHaveTextContent('Dev · abc1234 · Updated 1 minute ago');
     expect(
       within(card).getByRole('button', { name: 'What’s new in this update' }),
     ).toBeInTheDocument();
@@ -581,7 +581,7 @@ describe('Settings → Health → Updates', () => {
         ),
     });
     renderApp(<UpdatesSection />);
-    const card = await screen.findByRole('region', { name: 'Conch 0.2.0' });
+    const card = await screen.findByRole('region', { name: 'Conch Dev · abc1234' });
     expect(card).toHaveTextContent(/isn’t running from a folder it can update/);
     expect(screen.queryByRole('list', { name: 'Programs Conch uses' })).toBeNull();
   });
@@ -683,7 +683,7 @@ describe('Settings → Health → Updates, following releases', () => {
     });
     renderApp(<WithDialog />);
     const card = await screen.findByRole('region', { name: 'Conch 0.4 is ready' });
-    expect(card).toHaveTextContent('You have 0.2.0 · Checked 2 hours ago');
+    expect(card).toHaveTextContent('You have Dev · Checked 2 hours ago');
     await user.click(within(card).getByRole('button', { name: 'What’s new' }));
     expect(within(card).getByText('Edit pages by hand, with a live preview')).toBeVisible();
     expect(within(card).getByRole('note')).toHaveTextContent('Heads upSign in again on your phone');
@@ -780,6 +780,7 @@ describe('Settings → Health → Updates, following releases', () => {
       'GET /api/updates': () =>
         onReleases({
           version: '0.4.0',
+          build: { kind: 'release', version: '0.4.0', channel: 'stable' },
           outcome: {
             kind: 'updated',
             message: 'Conch was updated to 0.4.0.',
@@ -792,7 +793,7 @@ describe('Settings → Health → Updates, following releases', () => {
     const user = userEvent.setup();
     renderApp(<UpdatesSection />);
     const card = await screen.findByRole('region', { name: 'Conch is up to date' });
-    expect(card).toHaveTextContent('0.4.0 · Updated 1 minute ago');
+    expect(card).toHaveTextContent('v0.4.0 · Updated 1 minute ago');
     await user.click(within(card).getByRole('button', { name: 'What’s new in this update' }));
     expect(within(card).getByText('Edit pages by hand, with a live preview')).toBeVisible();
   });

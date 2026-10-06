@@ -34,7 +34,7 @@ import { createPrompts } from './cli/prompts';
 import { createUi } from './cli/ui';
 import { ago, plural, until } from './cli/words';
 import { Tailscale } from './network/tailscale';
-import { SERVER_VERSION } from './version';
+import { SERVER_VERSION, SERVER_LABEL } from './version';
 import { HostPolicy, exposure } from './auth/network';
 import { Devices } from './auth/devicesCli';
 import { CLI_COMMANDS, type CliCommand, type CliCommandName, type CliGroup } from './cliCommands';
@@ -426,7 +426,7 @@ async function status() {
   const urls = await addresses();
   await banner(ui, {
     line: 'Security checkup',
-    sub: [`v${SERVER_VERSION}`, urls[0]?.replace(/^https?:\/\//, '')].filter(Boolean).join(' · '),
+    sub: [SERVER_LABEL, urls[0]?.replace(/^https?:\/\//, '')].filter(Boolean).join(' · '),
   });
   const mark = {
     ok: ui.success(ui.sym.ok),
@@ -724,7 +724,7 @@ async function setup() {
     ui,
     prompts,
     conch,
-    version: SERVER_VERSION,
+    version: SERVER_LABEL,
     hostname: hostname(),
     // SSH_CONNECTION is "client port server port": the server address is what reached here.
     ...(process.env.SSH_CONNECTION?.split(' ')[2] && {
@@ -1044,7 +1044,7 @@ async function help() {
   if (process.argv[2] === 'help' && topic && helpFor(topic)) return;
   await banner(ui, {
     line: 'The AI agent that just works.',
-    sub: `v${SERVER_VERSION} · ${conch('help <command>')} for the details`,
+    sub: `${SERVER_LABEL} · ${conch('help <command>')} for the details`,
   });
   const width = Math.max(...commandList.map((c) => c.usage.length)) + 2;
   for (const group of GROUPS) {
@@ -1097,7 +1097,7 @@ try {
   const handler = handlers[word];
   if (handler) await handler();
   else if (word === '--help' || word === '-h') await help();
-  else if (word === '--version' || word === '-v') say(`Conch ${SERVER_VERSION} 🐚`);
+  else if (word === '--version' || word === '-v') say(`Conch ${SERVER_LABEL} 🐚`);
   else {
     const guess = closest(word);
     ui.error(`Hmm, “${word}” isn’t something Conch knows.`);

@@ -123,3 +123,36 @@ describe('getting a new version', () => {
     });
   });
 });
+
+it('lets a Dev package reach its first prerelease, still requiring the exact release selected by the gateway', async () => {
+  const updater = fakeUpdater('0.1.0-beta.1');
+  await new Updater({
+    development: true,
+    updater,
+    log: () => undefined,
+    send: () => undefined,
+    beforeInstall: async () => undefined,
+  }).get(
+    '0.1.0-beta.1',
+    'https://github.com/georgevibing/conch-agent/releases/download/v0.1.0-beta.1',
+  );
+  expect(updater.allowDowngrade).toBe(true);
+  expect(updater.quitAndInstall).toHaveBeenCalledOnce();
+});
+
+it('refuses a different downloaded version even when leaving a Dev build', async () => {
+  const updater = fakeUpdater('0.0.1');
+  const sent: AppToGateway[] = [];
+  await new Updater({
+    development: true,
+    updater,
+    log: () => undefined,
+    send: (message) => sent.push(message),
+    beforeInstall: async () => undefined,
+  }).get(
+    '0.1.0-beta.1',
+    'https://github.com/georgevibing/conch-agent/releases/download/v0.1.0-beta.1',
+  );
+  expect(updater.quitAndInstall).not.toHaveBeenCalled();
+  expect(sent.at(-1)).toMatchObject({ type: 'update.failed', version: '0.1.0-beta.1' });
+});

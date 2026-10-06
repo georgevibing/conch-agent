@@ -153,3 +153,27 @@ georgevibing/conch-agent`).
   has none.
 - **On your own computer**, `pnpm desktop:build` makes that computer's installers in
   `apps/desktop/out`. Each platform's app is built on that platform.
+
+## The version shown in Conch
+
+Development checkouts show **Dev · commit**. The root package version starts at
+`0.1.0`; it is a release-planning number, not evidence that anything was published.
+Only a clean detached checkout at its matching release tag, or a desktop payload
+built from that checkout, displays **v0.1.0**, **v0.1.0-alpha.1** or **v0.1.0-beta.2**.
+A branch stays Dev even if it happens to point at a release commit. Without Git or
+packaged build metadata, Conch says Dev without inventing a commit.
+
+The displayed build is captured at startup. Updating the folder leaves the running
+identity alone until restart. The channel picker controls future updates; choosing
+stable does not relabel a running beta as stable. Desktop builds carry their identity
+in `conch-build.json`, so local and manually dispatched builds also remain Dev.
+Dev desktop installers use an internal `0.0.0-dev.<commit>` package number so
+Electron can replace them with the first real release, including `0.1.0`.
+Release installers use their full release version. Build metadata does not
+replace release signatures or installer verification.
+
+Before the first stable release, release planning uses that written base: `0.1.0`,
+`0.1.0-alpha.1`, then `0.1.0-beta.1`, and promotion to `0.1.0`. It does not bump an
+unpublished version as though it had already shipped. A Dev build can move to the
+first release in its selected channel even when its package number sorts above
+that prerelease. Actual release installs keep the existing no-downgrade rule.

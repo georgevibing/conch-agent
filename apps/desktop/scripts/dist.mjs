@@ -19,6 +19,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import builder from 'electron-builder';
+import { desktopPackageVersion, readBuild } from '../../server/src/build.ts';
 
 const here = dirname(dirname(fileURLToPath(import.meta.url)));
 const repo = join(here, '..', '..');
@@ -73,7 +74,7 @@ const config = {
   files: ['dist/**/*', '!dist/**/*.map', 'package.json'],
   extraMetadata: {
     name: 'conch',
-    version: root.version,
+    version: desktopPackageVersion(readBuild(join(payload, 'conch'))),
     description: root.description,
     // The .deb wants one; the Linux desktop links the window to its entry by desktopName.
     homepage: root.homepage,

@@ -27,12 +27,24 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 
-import { ReleaseChannel, type ConchUpdateStep, type ReleaseNotes } from '@conch/protocol';
+import {
+  ReleaseChannel,
+  type ConchBuild,
+  type ConchUpdateStep,
+  type ReleaseNotes,
+} from '@conch/protocol';
 
 import { findExecutable, type Launch } from '../lib/proc';
 import { SERVER_VERSION } from '../version';
 import { changelogFor, emptyNotes, parseNotes } from '../release/notes';
-import { channelOf, offered, parseRelease, releaseOfTag, type Release } from '../release/semver';
+import {
+  channelOf,
+  inChannel,
+  offered,
+  parseRelease,
+  releaseOfTag,
+  type Release,
+} from '../release/semver';
 import { SIGNERS_FILE, signerKeys, verifyTag, type Verdict } from '../release/signing';
 import {
   BUILD,
@@ -111,6 +123,7 @@ export type StagedResult =
 
 export interface ReleasesDeps {
   home: string;
+  build?: ConchBuild;
   git?: () => Promise<string | undefined>;
   sshKeygen?: () => Promise<string | undefined>;
   pnpm?: () => Promise<Launch | undefined>;
@@ -339,8 +352,11 @@ export class ReleaseFollower {
     const all = await this.#found(git);
     const installedChannel = await this.installedChannel();
     const anyReleases = all.some(({ release }) => !release.pre);
-    // A copy of main switches with the first stable release, not with a beta.
-    const { source, why } = await this.source(git, { everyChange, anyReleases });
+    // Stable waits for stable; an explicitly chosen prerelease channel may migrate earlier.
+    const { source, why } = await this.source(git, {
+      everyChange,
+      anyReleases: all.some(({ release }) => inChannel(release, channel)),
+    });
     const base = {
       ...none,
       ...(installedChannel && { installedChannel }),
@@ -352,7 +368,11 @@ export class ReleaseFollower {
     };
     if (source === 'branch') return base;
 
-    const waiting = offered(all, { channel, current, failed });
+    const waiting = offered(all, {
+      channel,
+      current: this.deps.build?.kind === 'dev' ? '0.0.0' : current,
+      failed,
+    });
     const offers: Offer[] = [];
     let refused: string | undefined;
     let firstTrust: string | undefined;
@@ -378,7 +398,7 @@ export class ReleaseFollower {
 
   /** Back to a steadier channel waits for a release newer than this one. */
   waiting(channel: ReleaseChannel): string | undefined {
-    return waitingFor(this.version(), channel);
+    return this.deps.build?.kind === 'dev' ? undefined : waitingFor(this.version(), channel);
   }
 
   /**

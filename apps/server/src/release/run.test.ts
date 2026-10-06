@@ -43,7 +43,7 @@ async function world({ signers = HEADER }: { signers?: string } = {}) {
   // The tests' own git: no global configuration, so no signing key until one is set up.
   git(repo, 'config', 'user.email', 'ada@example.com');
   git(repo, 'config', 'user.name', 'Ada');
-  commit(repo, conchFiles('0.2.0', signers), 'chore: the start');
+  commit(repo, conchFiles('0.1.0', signers), 'chore: the start');
   commit(repo, { 'a.txt': '1' }, 'feat(protocol): artifacts edited by hand');
   commit(repo, { 'b.txt': '1' }, 'feat(server): edit artifacts by hand, and live data');
   commit(repo, { 'c.txt': '1' }, 'feat(web): edit pages by hand, with a live preview');
@@ -107,7 +107,7 @@ describe('pnpm release, end to end, against a local origin and a pretend gh', ()
     const head = git(w.repo, 'rev-parse', 'HEAD');
     expect(await w.go({ dryRun: true })).toBe(0);
     const out = text(w.said);
-    expect(out).toContain('Conch 0.3.0');
+    expect(out).toContain('Conch 0.1.0');
     expect(out).toContain('Edit pages by hand, with a live preview');
     expect(out).toContain('The composer keeps your draft after a restart');
     expect(out).not.toContain('Editing by hand');
@@ -126,13 +126,13 @@ describe('pnpm release, end to end, against a local origin and a pretend gh', ()
     expect(await w.go()).toBe(0);
     expect(w.asked).toEqual([
       `Sign releases with ${join(w.home, '.ssh', 'id_ed25519.pub')} (this repository only)? (y/N) `,
-      'Release v0.3.0? (y/N) ',
+      'Release v0.1.0? (y/N) ',
     ]);
     // Committed and tagged here…
-    expect(git(w.repo, 'log', '-1', '--format=%s')).toBe('release: v0.3.0');
-    expect(JSON.parse(readFileSync(join(w.repo, 'package.json'), 'utf8')).version).toBe('0.3.0');
+    expect(git(w.repo, 'log', '-1', '--format=%s')).toBe('release: v0.1.0');
+    expect(JSON.parse(readFileSync(join(w.repo, 'package.json'), 'utf8')).version).toBe('0.1.0');
     const changelog = readFileSync(join(w.repo, 'CHANGELOG.md'), 'utf8');
-    expect(changelog).toContain('## 0.3.0 — 2026-10-02');
+    expect(changelog).toContain('## 0.1.0 — 2026-10-02');
     expect(changelog).toContain('### New\n\n- Edit pages by hand, with a live preview');
     expect(changelog).toContain('### Fixed\n\n- The composer keeps your draft after a restart');
     const signers = readFileSync(join(w.repo, 'release/allowed_signers'), 'utf8');
@@ -141,51 +141,51 @@ describe('pnpm release, end to end, against a local origin and a pretend gh', ()
     );
     // …and on origin, as every install would see it: signed, and checked as they check it.
     expect(git(w.origin, 'rev-parse', 'main')).toBe(git(w.repo, 'rev-parse', 'HEAD'));
-    const object = git(w.origin, 'rev-parse', 'refs/tags/v0.3.0');
+    const object = git(w.origin, 'rev-parse', 'refs/tags/v0.1.0');
     const verdict = await verifyTag(gitIn(w.origin, 'git'), {
       object,
-      name: 'v0.3.0',
+      name: 'v0.1.0',
       signers,
       sshKeygen: await findExecutable('ssh-keygen'),
     });
     expect(verdict).toMatchObject({
       ok: true,
-      message: expect.stringContaining('Conch 0.3.0\n\nNew\n- Edit pages by hand'),
+      message: expect.stringContaining('Conch 0.1.0\n\nNew\n- Edit pages by hand'),
     });
     const gh = readFileSync(w.ghLog, 'utf8')
       .trim()
       .split('\n')
       .map((l) => JSON.parse(l) as string[]);
     expect(gh).toHaveLength(1);
-    expect(gh[0]?.slice(0, 4)).toEqual(['release', 'create', 'v0.3.0', '--title']);
+    expect(gh[0]?.slice(0, 4)).toEqual(['release', 'create', 'v0.1.0', '--title']);
     expect(gh[0]).not.toContain('--prerelease');
-    expect(text(w.said)).toContain('Released v0.3.0.');
+    expect(text(w.said)).toContain('Released v0.1.0.');
   });
 
   it('betas count up, and promoting one to stable is just pnpm release', async () => {
     const w = await world();
     w.answers.push('y', 'y');
     expect(await w.go({ kind: 'beta' })).toBe(0);
-    expect(git(w.origin, 'tag', '-l')).toBe('v0.3.0-beta.1');
+    expect(git(w.origin, 'tag', '-l')).toBe('v0.1.0-beta.1');
     commit(w.repo, { 'f.txt': '1' }, 'fix(server): a page reads again after a restart');
     git(w.repo, 'push', '--quiet', 'origin', 'main');
     w.answers.push('y');
     expect(await w.go({ kind: 'beta' })).toBe(0);
-    expect(git(w.origin, 'tag', '-l').split('\n')).toEqual(['v0.3.0-beta.1', 'v0.3.0-beta.2']);
+    expect(git(w.origin, 'tag', '-l').split('\n')).toEqual(['v0.1.0-beta.1', 'v0.1.0-beta.2']);
     const gh = readFileSync(w.ghLog, 'utf8')
       .trim()
       .split('\n')
       .map((l) => JSON.parse(l) as string[]);
     expect(gh.every((args) => args.includes('--prerelease'))).toBe(true);
     // beta.2's notes are what's new since beta.1.
-    const beta2 = git(w.origin, 'cat-file', 'tag', 'v0.3.0-beta.2');
+    const beta2 = git(w.origin, 'cat-file', 'tag', 'v0.1.0-beta.2');
     expect(beta2).toContain('A page reads again after a restart');
     expect(beta2).not.toContain('Edit pages by hand');
     w.answers.push('y');
     expect(await w.go()).toBe(0);
-    expect(git(w.origin, 'tag', '-l', 'v0.3.0')).toBe('v0.3.0');
+    expect(git(w.origin, 'tag', '-l', 'v0.1.0')).toBe('v0.1.0');
     // The stable release tells everything since the last stable one.
-    expect(git(w.origin, 'cat-file', 'tag', 'v0.3.0')).toContain('Edit pages by hand');
+    expect(git(w.origin, 'cat-file', 'tag', 'v0.1.0')).toContain('Edit pages by hand');
   });
 
   it('a breaking change is a heads-up, and a new minor before 1.0', async () => {
@@ -202,7 +202,7 @@ describe('pnpm release, end to end, against a local origin and a pretend gh', ()
     );
     git(w.repo, 'push', '--quiet', 'origin', 'main');
     expect(await w.go({ dryRun: true })).toBe(0);
-    expect(text(w.said)).toContain('Conch 0.3.0');
+    expect(text(w.said)).toContain('Conch 0.1.0');
     expect(text(w.said)).toMatch(/Heads up\n\s+• Sign in again after updating/);
   });
 
@@ -258,10 +258,10 @@ describe('pnpm release, end to end, against a local origin and a pretend gh', ()
     w.answers.push('y', 'y');
     await w.go();
     expect(await w.go()).toBe(1);
-    expect(w.said.at(-1)).toBe('Nothing to release: no commits since v0.3.0.');
-    expect(await w.go({ version: '0.3.0' })).toBe(1);
-    expect(w.said.at(-1)).toBe('v0.3.0 already exists.');
-    expect(await w.go({ version: '0.2.9' })).toBe(1);
-    expect(w.said.at(-1)).toBe('0.2.9 isn’t newer than 0.3.0, the newest release.');
+    expect(w.said.at(-1)).toBe('Nothing to release: no commits since v0.1.0.');
+    expect(await w.go({ version: '0.1.0' })).toBe(1);
+    expect(w.said.at(-1)).toBe('v0.1.0 already exists.');
+    expect(await w.go({ version: '0.0.9' })).toBe(1);
+    expect(w.said.at(-1)).toBe('0.0.9 isn’t newer than 0.1.0, the newest release.');
   });
 });

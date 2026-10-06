@@ -1,6 +1,6 @@
 {
   "name": "conch",
-  "version": "0.2.0",
+  "version": "0.1.0",
   "private": true,
   "description": "The AI agent that just works, and fixes itself: the subscriptions and API keys you already have, on your own computer.",
   "license": "MIT",

@@ -10,6 +10,8 @@ Conch looks for a new version of itself quietly and often: every quarter of an h
 
 Open **Settings → Health** and find **Updates**.
 
+The card shows the build running now: **Dev · commit** for development copies, or the full release version, such as **v0.1.0-beta.2**. Choosing a different release channel changes future updates, not the name of the build you have.
+
 - **Conch itself.** The card says **Conch is up to date**, or **Conch 0.4 is ready**. **What's new** shows each waiting release in a few plain lines (**New**, **Better**, **Fixed**), the newest open. A **Heads up** line says when you need to do something after updating.
 - **Programs Conch uses.** Each one shows the version you have, and a button when a newer one is out.
 

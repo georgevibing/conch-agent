@@ -39,6 +39,8 @@ question. See [docs/RELEASING.md](../RELEASING.md).
    `pnpm release beta` and `pnpm release alpha` make `v0.4.0-beta.1`, then
    `-beta.2`. Promoting a beta is just `pnpm release`: the same version, stable.
    `--version x.y.z` overrides it. A version must be newer than every release.
+   Before the first stable release, the version written in `package.json` is
+   the target base, not an already-shipped version to bump.
 
 3. **It writes the notes** (below), and shows them with the commits they came
    from.
@@ -57,7 +59,12 @@ question. See [docs/RELEASING.md](../RELEASING.md).
 
 **One version.** The root `package.json` `version` is the only place a version
 is written. `SERVER_VERSION` reads it, and so do the installer and the
-updater. The workspace packages are private and no longer carry versions.
+updater. The workspace packages are private and no longer carry versions. Development
+builds display **Dev · commit**, independently of this base number and the
+selected update channel. A clean detached checkout at its matching release tag
+displays the full version, including alpha or beta suffixes. Desktop payloads
+carry that build identity; it is display metadata, not installation authority.
+The running identity is captured at startup and changes only after restart.
 
 **Signing.** Releases are SSH-signed annotated tags. If git has no SSH signing
 key, `pnpm release` explains in one sentence and offers a key from `~/.ssh`.
@@ -130,16 +137,20 @@ and **every change on its branch** (ADR 0019, unchanged):
 - a detached HEAD (installed at a tag, or a version folder): releases;
 - a branch other than `main`: branch;
 - `main` with commits or edits of its own: branch (a developer's copy);
-- `main` before the first **stable** release exists: branch. A beta alone
-  doesn't move anyone;
+- `main` before the first release in the selected channel exists: branch.
+  Stable waits for stable; choosing beta or alpha explicitly may move earlier;
 - otherwise: releases.
 
 **Moving over.** A clone of `main` keeps updating as before until the first
 stable tag exists. Its next look then switches it to the stable channel. Conch
 says so once, until it's put away: "Conch now follows its releases instead of
 every change: you get each stable release, with a few words on what's new." A
-copy already ahead of the newest stable release, by version, is offered
-nothing until a newer one comes.
+release copy already ahead of the newest stable release, by version, is offered
+nothing until a newer one comes. A Dev build has no installed release version:
+its package baseline does not block the first release in its selected channel.
+The desktop updater permits this initial transition, while still requiring the
+exact version offered and the existing platform verification. Release builds
+keep the no-downgrade rule.
 
 ### Finding releases
 

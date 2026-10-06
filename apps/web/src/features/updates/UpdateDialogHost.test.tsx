@@ -86,7 +86,7 @@ describe('the update dialog', () => {
     renderApp(<App />);
     await user.click(await screen.findByRole('button', { name: 'Update Conch: 16 improvements' }));
     const dialog = await screen.findByRole('dialog', { name: '16 improvements are ready' });
-    expect(dialog).toHaveAccessibleDescription('You have 0.4.2 · main a1b2c3d → f00ba12');
+    expect(dialog).toHaveAccessibleDescription('You have Dev · a1b2c3d → f00ba12');
     expect(within(dialog).getByText('Attach files to a message')).toBeVisible();
     expect(within(dialog).getByText('and 14 more changes')).toBeVisible();
 
@@ -235,7 +235,7 @@ describe('updateView', () => {
     expect(view).toMatchObject({
       stage: 'ready',
       title: 'Conch 0.5 is ready',
-      detail: 'You have 0.4.2',
+      detail: 'You have Dev · a1b2c3d',
       offers: ['later', 'update'],
     });
     expect(view.releases).toHaveLength(1);
@@ -269,4 +269,36 @@ describe('chipView', () => {
     ).toBeUndefined();
     expect(chipView(status({ restartNeeded: true }))).toMatchObject({ state: 'restart' });
   });
+});
+
+describe('installed build and future channel are independent', () => {
+  it('keeps a Dev build labelled Dev while following releases', () => {
+    expect(
+      updateView(
+        status({ source: 'releases', channel: 'beta', build: { kind: 'dev', commit: 'abcdef0' } }),
+      ).detail,
+    ).toBe('You have Dev · abcdef0');
+  });
+  it.each(['0.1.0', '0.1.0-alpha.1', '0.1.0-beta.2'])(
+    'shows the actual release %s after choosing another channel',
+    (version) => {
+      expect(
+        updateView(
+          status({
+            source: 'releases',
+            channel: 'stable',
+            build: {
+              kind: 'release',
+              version,
+              channel: version.includes('alpha')
+                ? 'alpha'
+                : version.includes('beta')
+                  ? 'beta'
+                  : 'stable',
+            },
+          }),
+        ).detail,
+      ).toBe(`You have v${version}`);
+    },
+  );
 });

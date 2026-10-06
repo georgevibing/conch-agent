@@ -296,3 +296,25 @@ afterEach(async () => {
   for (const home of homes.splice(0))
     await rm(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 });
+
+it('does not let an unpublished desktop base version hide its first release', async () => {
+  const { fake } = github([release('0.1.0'), release('0.1.0-beta.1')]);
+  const { proc } = appChannel();
+  const app = desktopApp({ CONCH_APP: 'C:\\Conch\\Conch.exe' }, proc);
+  if (!app) throw new Error('no app');
+  const releases = new AppReleases({
+    app,
+    repository: REPO,
+    version: '0.1.0',
+    development: true,
+    platform: 'win32',
+    fetch: fake,
+  });
+  expect((await releases.check({ channel: 'stable' })).offers.map((o) => o.version)).toEqual([
+    '0.1.0',
+  ]);
+  expect((await releases.check({ channel: 'beta' })).offers.map((o) => o.version)).toEqual([
+    '0.1.0',
+    '0.1.0-beta.1',
+  ]);
+});

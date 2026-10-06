@@ -1,3 +1,4 @@
+import { conchBuildLabel } from '@conch/protocol';
 import type { ConchUpdate, ReleaseNotes as Notes, UpdatesStatus } from '@conch/protocol';
 import type {
   ReleaseNoteItem,
@@ -13,6 +14,10 @@ export const ARRIVED = 'conch.updateArrived';
 
 /** "0.160.0" reads as "0.160" in a sentence. */
 export const short = (version: string) => version.replace(/^(\d+\.\d+)\.0$/, '$1');
+
+/** Source selection is not proof that the installed build is a release. */
+export const installedLabel = (conch: ConchUpdate) =>
+  conchBuildLabel(conch.build ?? { kind: 'dev', commit: conch.commit });
 
 /** A release's notes as Nacre draws them, with its date in words. */
 export function noteItems(releases: Notes[]): ReleaseNoteItem[] {
@@ -160,7 +165,7 @@ export function updateView(
         stage: 'done',
         title: 'You’re on the new Conch',
         detail: [
-          releases || !count ? `Conch ${short(conch.version)}` : plural(count, 'improvement'),
+          releases || !count ? `Conch ${installedLabel(conch)}` : plural(count, 'improvement'),
           `Updated ${relativeTime(outcome.at, now)}`,
         ].join(' · '),
         changes: outcome.whatsNew,
@@ -232,11 +237,7 @@ export function updateView(
   };
 }
 
-/** "You have 0.4.2 · main a1b2c3d → f00ba12". */
+/** The installed build, with a target commit only while a branch update waits. */
 function here(conch: ConchUpdate): string {
-  const where =
-    conch.source === 'branch' && conch.branch && conch.commit
-      ? `${conch.branch} ${conch.commit}${conch.target ? ` → ${conch.target}` : ''}`
-      : undefined;
-  return [`You have ${conch.version}`, where].filter(Boolean).join(' · ');
+  return `You have ${installedLabel(conch)}${conch.source === 'branch' && conch.target && conch.behind > 0 ? ` → ${conch.target}` : ''}`;
 }

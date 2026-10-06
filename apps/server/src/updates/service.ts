@@ -13,6 +13,7 @@ import { join, resolve } from 'node:path';
 
 import {
   ConchUpdate,
+  type ConchBuild,
   ReleaseChannel,
   ReleaseNotes,
   type ProgramUpdate,
@@ -159,6 +160,7 @@ export interface UpdatesDeps {
   keep?: string[];
   /** `SERVER_VERSION`. */
   version: string;
+  build?: ConchBuild;
   bootId: string;
   emit: (status: UpdatesStatus) => void;
   /** A "fixed on its own"-style note, for an automatic update. */
@@ -312,6 +314,7 @@ export class UpdatesService {
       return {
         checkable: false,
         version,
+        build: this.deps.build ?? { kind: 'dev' },
         behind: 0,
         improvements: 0,
         whatsNew: [],
@@ -340,6 +343,10 @@ export class UpdatesService {
     return {
       checkable: true,
       version,
+      build: this.deps.build ?? {
+        kind: 'dev',
+        ...(this.#bootHead && { commit: this.#bootHead.slice(0, 7) }),
+      },
       ...(known.head && { commit: known.head.slice(0, 7) }),
       ...(!releases && known.target && known.behind > 0 && { target: known.target.slice(0, 7) }),
       ...(known.branch && { branch: known.branch }),
@@ -383,6 +390,7 @@ export class UpdatesService {
     return {
       checkable: true,
       version: this.#version(),
+      build: this.deps.build ?? { kind: 'dev' },
       behind: known.offers.length,
       improvements: notes.reduce((n, r) => n + lines(r).length, 0),
       whatsNew: newest ? lines(newest.notes) : [],

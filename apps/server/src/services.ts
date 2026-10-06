@@ -193,7 +193,7 @@ import { UpdatesService } from './updates/service';
 import { UsageService } from './usage/service';
 import { Billings, turnCost } from './usage/billing';
 import { ChatSpendDesk } from './usage/desk';
-import { REPOSITORY, SERVER_VERSION } from './version';
+import { REPOSITORY, SERVER_VERSION, SERVER_BUILD } from './version';
 import { theApp } from './desktop/app';
 import { AppReleases } from './updates/app';
 import { cliName } from './cli/command';
@@ -1601,17 +1601,24 @@ export class Services {
       releases: root
         ? new ReleaseFollower(root, {
             home: config.CONCH_HOME,
+            build: SERVER_BUILD,
             // Your things are backed up before a new version is swapped in (ADR 0020).
             backup: async () => void (await this.backups.backupNow()),
           })
         : undefined,
       app:
         app && REPOSITORY
-          ? new AppReleases({ app, repository: REPOSITORY, version: SERVER_VERSION })
+          ? new AppReleases({
+              app,
+              repository: REPOSITORY,
+              version: SERVER_VERSION,
+              development: SERVER_BUILD.kind === 'dev',
+            })
           : undefined,
       announce: (version) => void this.push.releaseReady(version).catch(() => undefined),
       keep: [process.env.CONCH_SUPERVISOR_ROOT].filter((f): f is string => Boolean(f)),
       version: SERVER_VERSION,
+      build: SERVER_BUILD,
       bootId: BOOT_ID,
       emit: (status) => this.broadcast.emit({ type: 'updates.changed', status }),
       // Apps from GitHub with an update waiting, beside the programs (ADR 0061).

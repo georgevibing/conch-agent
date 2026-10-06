@@ -136,15 +136,20 @@ export function nextVersion({
   commits,
   kind,
   existing,
+  first = false,
 }: {
   /** The newest stable release, or the version written down before the first. */
   lastStable: string;
+  /** Before the first stable release, the written version is the target, not a released baseline. */
+  first?: boolean;
   commits: Commit[];
   kind: ReleaseChannel;
   /** Every release tagged so far, as versions. */
   existing: string[];
 }): string {
-  const base = nextStable(lastStable, bumpFor(commits));
+  const base = first
+    ? lastStable.replace(/-(?:alpha|beta)\.\d+$/, '')
+    : nextStable(lastStable, bumpFor(commits));
   if (kind === 'stable') return base;
   const taken = existing
     .map(parseRelease)

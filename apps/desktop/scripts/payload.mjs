@@ -28,6 +28,7 @@ import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 
 import { pnpmCommand } from './app-code.mjs';
+import { readBuild } from '../../server/src/build.ts';
 
 const here = dirname(dirname(fileURLToPath(import.meta.url)));
 const repo = join(here, '..', '..');
@@ -126,6 +127,7 @@ writeFileSync(
     2,
   )}\n`,
 );
+writeFileSync(join(conch, 'conch-build.json'), `${JSON.stringify(readBuild(repo), null, 2)}\n`);
 mkdirSync(join(conch, 'release'), { recursive: true });
 cpSync(join(repo, 'release', 'allowed_signers'), join(conch, 'release', 'allowed_signers'));
 cpSync(join(repo, 'apps', 'web', 'dist'), join(conch, 'apps', 'web', 'dist'), { recursive: true });

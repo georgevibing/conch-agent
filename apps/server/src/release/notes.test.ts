@@ -312,3 +312,31 @@ describe('writing the notes down, and reading them back', () => {
     expect(parseNotes(`New\n${'- a\n'.repeat(40)}`).new).toHaveLength(12);
   });
 });
+
+it('starts at the written base version and promotes its alpha and beta without a phantom release', () => {
+  const commits = [{ sha: 'abc1234', subject: 'feat(web): first feature', body: '' }];
+  expect(
+    nextVersion({ lastStable: '0.1.0', first: true, commits, kind: 'stable', existing: [] }),
+  ).toBe('0.1.0');
+  expect(
+    nextVersion({ lastStable: '0.1.0', first: true, commits, kind: 'alpha', existing: [] }),
+  ).toBe('0.1.0-alpha.1');
+  expect(
+    nextVersion({
+      lastStable: '0.1.0-beta.1',
+      first: true,
+      commits,
+      kind: 'beta',
+      existing: ['0.1.0-beta.1'],
+    }),
+  ).toBe('0.1.0-beta.2');
+  expect(
+    nextVersion({
+      lastStable: '0.1.0-beta.2',
+      first: true,
+      commits,
+      kind: 'stable',
+      existing: ['0.1.0-beta.2'],
+    }),
+  ).toBe('0.1.0');
+});

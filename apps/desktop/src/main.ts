@@ -17,6 +17,8 @@ import { dirname, join } from 'node:path';
 
 import { app, type BrowserWindow, Notification, screen, shell } from 'electron';
 
+import { conchBuildLabel } from '@conch/protocol';
+import { readBuild } from '../../server/src/build';
 import { gatewayEnv, loginShellPath } from './environment';
 import { Gateway } from './gateway';
 import { asThisComputer } from './here';
@@ -44,6 +46,13 @@ function main(): void {
     appPath: app.getAppPath(),
   });
   const dev = at.kind === 'dev';
+  const build = readBuild(at.conch);
+  const buildLabel = conchBuildLabel(build);
+  app.setAboutPanelOptions({
+    applicationName: 'Conch',
+    applicationVersion: buildLabel,
+    version: '',
+  });
 
   // ── The log: what the gateway says, kept beside Conch's own ────────────
   const logPath = join(at.home, 'logs', 'app.log');
@@ -59,7 +68,7 @@ function main(): void {
     if (dev) process.stdout.write(text);
   };
   log(
-    `--- ${new Date().toISOString()} Conch ${app.getVersion()} is starting${background ? ' in the background' : ''}\n`,
+    `--- ${new Date().toISOString()} Conch ${buildLabel} is starting${background ? ' in the background' : ''}\n`,
   );
   process.on('uncaughtException', (error) => log(`[app] ${error.stack ?? error.message}\n`));
 
@@ -232,6 +241,7 @@ function main(): void {
   };
   const tray = new ConchTray(resources, actions);
   const updater = new Updater({
+    development: build.kind === 'dev',
     send: (message) => void gateway.send(message),
     beforeInstall: async () => {
       quitting = true;

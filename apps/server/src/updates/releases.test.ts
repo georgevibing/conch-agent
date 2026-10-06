@@ -319,3 +319,18 @@ describe('updating beside the running version', () => {
     expect(existsSync(w.conch)).toBe(true);
   });
 });
+
+it('lets Dev reach the first signed prerelease only in the selected channel, despite its package baseline', async () => {
+  const w = await world();
+  git(w.maker, 'push', '--quiet', 'origin', ':refs/tags/v0.1.0');
+  git(w.conch, 'tag', '-d', 'v0.1.0');
+  git(w.conch, 'checkout', '--quiet', 'main');
+  w.release('0.1.0-beta.1', 'First beta');
+  const f = new ReleaseFollower(w.conch, { home: w.home, build: { kind: 'dev' } });
+  const stable = await w.look(f, 'stable');
+  expect(stable).toMatchObject({ source: 'branch', offers: [] });
+  const beta = await w.look(f, 'beta');
+  expect(beta.source).toBe('releases');
+  expect(beta.offers.map((o) => o.version)).toEqual(['0.1.0-beta.1']);
+  expect(f.waiting('stable')).toBeUndefined();
+});

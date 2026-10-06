@@ -48,6 +48,8 @@ export function plainUpdateError(message: string): string {
 }
 
 export interface UpdaterDeps {
+  /** A development build's package number is not an installed release. */
+  development?: boolean;
   send: (message: AppToGateway) => void;
   /** Just before the installer takes over: stop the gateway cleanly. */
   beforeInstall: () => Promise<void>;
@@ -83,7 +85,7 @@ export class Updater {
     updater.autoDownload = false;
     updater.autoInstallOnAppQuit = false;
     updater.allowPrerelease = true;
-    updater.allowDowngrade = false;
+    updater.allowDowngrade = this.deps.development === true;
     updater.logger = {
       info: (m: unknown) => log(`[update] ${String(m)}`),
       warn: (m: unknown) => log(`[update] ${String(m)}`),

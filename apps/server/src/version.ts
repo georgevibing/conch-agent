@@ -5,6 +5,8 @@
  * names Conch's repository, where the desktop app finds its releases
  * (ADR 0054).
  */
+import { conchBuildLabel } from '@conch/protocol';
+import { readBuild } from './build';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -19,6 +21,10 @@ function root(): { version?: unknown; repository?: unknown } {
 }
 
 const written = root();
+
+/** The running build, frozen at startup even if its checkout moves on. */
+export const SERVER_BUILD = readBuild(join(import.meta.dirname, '..', '..', '..'));
+export const SERVER_LABEL = conchBuildLabel(SERVER_BUILD);
 
 export const SERVER_VERSION = typeof written.version === 'string' ? written.version : '0.0.0';
 

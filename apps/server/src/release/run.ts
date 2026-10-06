@@ -216,6 +216,7 @@ export async function release(options: ReleaseOptions, deps: ReleaseDeps): Promi
       options.version ??
       nextVersion({
         lastStable: lastStable?.version ?? written,
+        first: !lastStable,
         commits: sinceStable,
         kind: options.kind,
         existing: releases.map((r) => r.version),

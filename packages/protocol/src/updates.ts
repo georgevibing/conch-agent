@@ -67,11 +67,41 @@ export type ReleaseNotes = z.infer<typeof ReleaseNotes>;
 export const UpdateSource = z.enum(['releases', 'branch']);
 export type UpdateSource = z.infer<typeof UpdateSource>;
 
+/** What is running, independently of the channel followed for future updates. */
+export const ConchBuild = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('dev'),
+    commit: z
+      .string()
+      .regex(/^[a-f0-9]{7,40}$/)
+      .optional(),
+  }),
+  z.object({
+    kind: z.literal('release'),
+    version: z.string(),
+    channel: ReleaseChannel,
+    commit: z
+      .string()
+      .regex(/^[a-f0-9]{7,40}$/)
+      .optional(),
+  }),
+]);
+export type ConchBuild = z.infer<typeof ConchBuild>;
+
+/** A compact, honest identity; prerelease suffixes are never shortened away. */
+export function conchBuildLabel(build?: ConchBuild): string {
+  return build?.kind === 'release'
+    ? `v${build.version}`
+    : ['Dev', build?.commit?.slice(0, 7)].filter(Boolean).join(' · ');
+}
+
 export const ConchUpdate = z.object({
   /** Conch runs from a git checkout it can look after; `problem` says why not. */
   checkable: z.boolean(),
-  /** `SERVER_VERSION`, for the quiet line under the title. */
+  /** Base semantic version for update comparisons, not a display label. */
   version: z.string(),
+  /** Identity captured when this gateway started; absent on older gateways. */
+  build: ConchBuild.optional(),
   /** The commit Conch's folder is on (short). */
   commit: z.string().optional(),
   /** The commit an update moves it to (short), for a copy following its branch. */

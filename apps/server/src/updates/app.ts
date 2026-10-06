@@ -65,6 +65,7 @@ export interface AppReleasesDeps {
   repository: { owner: string; repo: string };
   /** This app's version (`SERVER_VERSION`). */
   version: string;
+  development?: boolean;
   platform?: NodeJS.Platform;
   arch?: string;
   fetch?: typeof fetch;
@@ -154,7 +155,11 @@ export class AppReleases {
         },
       ];
     });
-    const offers = offered(releases, { channel, current: this.deps.version, failed });
+    const offers = offered(releases, {
+      channel,
+      current: this.deps.development ? '0.0.0' : this.deps.version,
+      failed,
+    });
     return { offers: offers.slice(0, 6).map((r) => r.offer) };
   }
 
