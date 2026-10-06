@@ -66,7 +66,10 @@ import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import type { z } from 'zod';
 
 import { registerAttachmentRoutes } from './attachments/routes';
-import { registerPickRoutes } from './pick/routes';
+import { secretPlaces } from './conversations/sandbox';
+import { protectedPaths } from './lib/protect';
+import { folderRules } from './pick/folders';
+import { registerFolderRoutes, registerPickRoutes } from './pick/routes';
 import { registerVaultRoutes } from './vault/routes';
 import { AttachmentError } from './attachments/store';
 import { isLoopbackAddress } from './auth/network';
@@ -232,6 +235,17 @@ export async function buildApp(services: Services) {
   registerAttachmentRoutes(app, services.attachments);
   registerVaultRoutes(app, services.vault, gate);
   registerPickRoutes(app);
+  // Choosing a folder from any device: names only, never Conch's own or where keys are kept.
+  registerFolderRoutes(app, () =>
+    folderRules({
+      conchHome: services.config.CONCH_HOME,
+      workspace: services.settings.workspaceDefault,
+      denied: [
+        ...protectedPaths(services.config.CONCH_HOME),
+        ...secretPlaces().map((place) => place.path),
+      ],
+    }),
+  );
   registerBackupRoutes(app, services.backups, gate);
   registerImportRoutes(app, services.imports, gate);
   registerBackgroundRoutes(

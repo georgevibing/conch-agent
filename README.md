@@ -219,7 +219,7 @@ pnpm start        # builds and opens http://localhost:4317
 > an SSH server. Out of the box only this computer can open it, in a browser Conch opened itself. Read
 > [docs/SECURITY.md](./docs/SECURITY.md) before you put it on a network.
 
-**On your phone:** in **Settings → Security**, press **Add a device** and scan the
+**On your phone:** in **Settings → Devices**, press **Add a device** and scan the
 QR code. Conch sets up the private address for you.
 
 ## Questions

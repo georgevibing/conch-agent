@@ -1,4 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { join } from 'node:path';
+
+import { expect, test, type Page } from '@playwright/test';
 
 import { openConch } from './app';
 
@@ -70,7 +72,11 @@ test('notifications and voice have their own place in Settings', async ({ page }
   await expect(
     settings.getByRole('switch', { name: 'Notifications on this device' }),
   ).toBeVisible();
-  await expect(settings.getByText('None yet. Turn them on above, or on your phone.')).toBeVisible();
+  // Which devices get them is in Settings → Devices, beside each device.
+  await expect(settings.getByText('No other device gets them yet.')).toBeVisible();
+  await settings.getByRole('button', { name: 'Your devices' }).click();
+  await expect(settings.getByRole('tab', { name: 'Devices', selected: true })).toBeVisible();
+  await expect(settings.getByRole('button', { name: 'Add your phone' })).toBeVisible();
 
   await settings.getByRole('tab', { name: 'Voice' }).click();
   await expect(settings.getByRole('heading', { name: 'How Conch hears you' })).toBeVisible();
@@ -111,6 +117,98 @@ test('tapping the message box on a phone doesn’t zoom the page', async ({ brow
   await expect(composer).toHaveCSS('font-size', '16px');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await phone.close();
+});
+
+/** Light and dark, desktop or phone, kept beside the test's own results (or `CONCH_SHOTS`). */
+async function shot(page: Page, name: string) {
+  const dir = process.env.CONCH_SHOTS ?? test.info().outputDir;
+  await page.waitForTimeout(500);
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.screenshot({ path: join(dir, name) });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: join(dir, name.replace('.png', '-dark.png')) });
+  await page.emulateMedia({ colorScheme: 'light' });
+}
+
+test('choosing the working folder from a phone: walk the computer’s folders, make one, choose it', async ({
+  browser,
+  request,
+}, info) => {
+  const { workspace } = (await (await request.get('/api/state')).json()) as { workspace: string };
+  for (const name of ['garden-planner', 'notes', 'website'])
+    await request.post('/api/pick/folder', { data: { parent: workspace, name } });
+  const phone = await browser.newContext({
+    baseURL: info.project.use.baseURL,
+    storageState: info.project.use.storageState,
+    locale: 'en-US',
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  const page = await phone.newPage();
+  await page.goto('/');
+  // A phone keeps the folder off the message box: `/folder` (or Settings → General) has it.
+  const box = page.getByRole('textbox', { name: 'Message Conch' });
+  await box.fill('/folder');
+  await box.press('Enter');
+  const chooser = page.getByRole('dialog', { name: 'Choose a working folder' });
+  await expect(chooser).toBeVisible();
+  // The places people start from; Conch's own folder is never among the folders.
+  const places = chooser.getByRole('navigation', { name: 'Places' });
+  await expect(places.getByRole('button', { name: 'Home' })).toBeVisible();
+  await places.getByRole('button', { name: 'Conch’s workspace' }).click();
+  await expect(chooser.getByRole('option', { name: /garden-planner/ })).toBeVisible();
+  await shot(page, 'folders-1-phone.png');
+
+  // A new folder where you are, then go in and choose it.
+  await chooser.getByRole('button', { name: 'New folder' }).click();
+  await chooser.getByRole('textbox', { name: 'New folder’s name' }).fill('weekend-robot');
+  await chooser.getByRole('button', { name: 'Make' }).click();
+  await expect(chooser.getByRole('button', { name: 'Choose “weekend-robot”' })).toBeVisible();
+  await chooser.getByRole('button', { name: 'Choose “weekend-robot”' }).tap();
+  await expect(chooser).toBeHidden();
+  await expect(page.getByText('Working in weekend-robot')).toBeVisible();
+  const state = (await (await request.get('/api/state')).json()) as {
+    preferences: { workspace?: string };
+  };
+  expect(state.preferences.workspace).toMatch(/weekend-robot$/);
+  await phone.close();
+  await request.patch('/api/settings', { data: { preferences: { workspace: '' } } });
+});
+
+test('choosing a folder on a computer: filter, the trail, and a typed path for the few', async ({
+  page,
+  request,
+}) => {
+  const { workspace } = (await (await request.get('/api/state')).json()) as { workspace: string };
+  for (const name of ['garden-planner', 'notes', 'website'])
+    await request.post('/api/pick/folder', { data: { parent: workspace, name } });
+  await openConch(page);
+  await page.keyboard.press(`${mod}+,`);
+  const settings = page.getByRole('dialog', { name: /Settings/ });
+  await settings.getByRole('tab', { name: 'General' }).click();
+  await settings.getByRole('button', { name: /Choose (another|a) folder/ }).click();
+  const chooser = page.getByRole('dialog', { name: 'Choose a working folder' });
+  // It starts in the folder in use now: Conch's own workspace.
+  await expect(chooser.getByRole('option', { name: /garden-planner/ })).toBeVisible();
+  await chooser.getByRole('combobox', { name: 'Filter folders' }).fill('web');
+  await expect(chooser.getByRole('option')).toHaveCount(1);
+  await shot(page, 'folders-2-desktop.png');
+  await page.keyboard.press('Enter');
+  await expect(
+    chooser.getByRole('navigation', { name: 'Where you are' }).getByText('website'),
+  ).toHaveAttribute('aria-current', 'page');
+  // Typing a path, tucked away: suggestions as you go, and words for what isn't there.
+  await chooser.getByRole('button', { name: 'Type a path' }).click();
+  const path = chooser.getByRole('combobox', { name: 'Path' });
+  await path.fill(`${workspace}/no`);
+  await expect(chooser.getByRole('option', { name: /notes/ })).toBeVisible();
+  await path.fill(`${workspace}/nowhere-at-all`);
+  await expect(chooser.getByRole('status')).toHaveText('There’s no folder there.');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await expect(chooser).toBeHidden();
 });
 
 // Last: it turns sign-in on, which the others don't expect.

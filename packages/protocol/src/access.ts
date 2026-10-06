@@ -406,13 +406,13 @@ export const CheckupPlace = z.enum([
   'sign-in',
   /** Settings › Security › the access keys (making one, or revoking old ones). */
   'keys',
-  /** Settings › Security › Use Conch on your phone (Tailscale). */
+  /** Settings › Devices › Use Conch on your phone (Tailscale). */
   'reach',
   /** Settings › Models, where new chats' mode is chosen. */
   'models',
   /** The Channels page: who may talk to your assistant from each chat app. */
   'channels',
-  /** Settings › Security › Devices: what's signed in, what's waiting, and approving new ones. */
+  /** Settings › Devices: what's signed in, what's waiting, and approving new ones. */
   'devices',
   /** Settings › Security › Live data in pages: the sites pages may read (ADR 0046). */
   'live-data',

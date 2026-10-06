@@ -443,7 +443,7 @@ describe('Palette search', () => {
     );
   });
 
-  it('finds devices and approving them, straight into Settings → Security → Devices', async () => {
+  it('finds devices and approving them, straight into Settings → Devices', async () => {
     const user = userEvent.setup();
     mockFetch({
       'GET /api/state': () => appState(),
@@ -452,15 +452,18 @@ describe('Palette search', () => {
     });
     const { where } = renderApp(<Palette />);
     act(() => useUi.getState().setPalette(true));
-    for (const words of ['approve', 'devices', 'pending', 'trusted']) {
+    for (const words of ['approve', 'devices', 'pending', 'trusted', 'lost phone']) {
       await user.clear(await screen.findByRole('combobox'));
       await user.type(screen.getByRole('combobox'), words);
       expect(await screen.findByRole('option', { name: /Settings: Devices/ })).toBeInTheDocument();
     }
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'approve');
+    await screen.findByRole('option', { name: /Settings: Devices/ });
     await user.keyboard('{Enter}');
     await waitFor(() =>
       expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
-        at: '/settings/security',
+        at: '/settings/devices',
         focus: 'devices',
       }),
     );
@@ -1300,7 +1303,13 @@ describe('Palette search', () => {
         await screen.findByRole('option', { name: /Settings: Notifications/ }),
       ).toBeInTheDocument();
     }
-    for (const words of ['iphone', 'add phone', 'tailscale']) {
+    // Reaching Conch from a phone has its own row, in Settings → Devices too.
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'tailscale');
+    expect(
+      await screen.findByRole('option', { name: /Use Conch on your phone/ }),
+    ).toBeInTheDocument();
+    for (const words of ['iphone', 'tailscale', 'add phone']) {
       await user.clear(screen.getByRole('combobox'));
       await user.type(screen.getByRole('combobox'), words);
       expect(await screen.findByRole('option', { name: /Add your phone/ })).toBeInTheDocument();
@@ -1308,7 +1317,7 @@ describe('Palette search', () => {
     await user.keyboard('{Enter}');
     await waitFor(() =>
       expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
-        at: '/settings/security',
+        at: '/settings/devices',
         focus: 'add-device',
       }),
     );

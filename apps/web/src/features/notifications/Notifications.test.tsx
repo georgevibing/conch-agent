@@ -3,7 +3,9 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useUi } from '../../app/ui';
 import { mockFetch, renderApp } from '../../test/harness';
+import { DevicesTab } from '../auth/DevicesTab';
 import { NotificationsTab } from './NotificationsTab';
 import { PushKeeper } from './PushKeeper';
 
@@ -202,10 +204,56 @@ describe('Settings → Notifications', () => {
     expect(screen.queryByText(/Registration failed/)).toBeNull();
   });
 
-  it('lists every device, with a way to stop each', async () => {
+  it('says how many other devices get them, and leaves them to Settings → Devices', async () => {
+    const user = userEvent.setup();
+    pushableBrowser();
+    const others = status({
+      devices: [
+        device({
+          id: 'ps_2',
+          name: 'Safari on iPhone',
+          current: false,
+          problem: 'It didn’t arrive.',
+        }),
+      ],
+    });
+    mockFetch({ 'GET /api/push': () => others });
+    const real = useUi.getState().openSettings;
+    const openSettings = vi.fn();
+    useUi.setState({ openSettings });
+    try {
+      renderApp(<NotificationsTab />);
+      expect(await screen.findByText('1 other device gets them too.')).toBeVisible();
+      // No list of devices here any more: one place for them.
+      expect(screen.queryByRole('list', { name: 'Devices that get notifications' })).toBeNull();
+      await user.click(screen.getByRole('button', { name: 'Your devices' }));
+      expect(openSettings).toHaveBeenCalledWith('devices');
+    } finally {
+      useUi.setState({ openSettings: real });
+    }
+  });
+
+  it('in Settings → Devices, stops one a sign-in doesn’t cover, and says when one didn’t arrive', async () => {
     const user = userEvent.setup();
     pushableBrowser();
     const calls = mockFetch({
+      'GET /api/access': () => ({
+        method: 'none',
+        username: undefined,
+        suggestedUsername: 'ada',
+        keys: [],
+        passkeys: [],
+        passkeysHere: false,
+        sessions: [],
+        devices: [],
+        requests: [],
+        approval: { on: false, here: true, canApprove: true },
+        checkup: [],
+        exposure: 'local',
+        port: 4317,
+        urls: [],
+        verified: true,
+      }),
       'GET /api/push': () =>
         status({
           devices: [
@@ -219,7 +267,7 @@ describe('Settings → Notifications', () => {
         }),
       'DELETE /api/push/subscriptions/ps_2': () => status(),
     });
-    renderApp(<NotificationsTab />);
+    renderApp(<DevicesTab />);
     expect(await screen.findByText('It didn’t arrive.')).toBeVisible();
     await user.click(
       screen.getByRole('button', { name: 'Stop notifications on Safari on iPhone' }),

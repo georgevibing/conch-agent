@@ -5,9 +5,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { mockFetch, renderApp } from '../../test/harness';
 import { AuthGate } from './AuthGate';
-import { SecurityTab } from './SecurityTab';
+import { useUi } from '../../app/ui';
+import { DevicesTab } from './DevicesTab';
 
-/** Approving new devices: what a waiting device sees, and Settings → Security → Devices. */
+/** Approving new devices: what a waiting device sees, and Settings → Devices. */
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -144,7 +145,7 @@ describe('a device waiting for approval', () => {
   });
 });
 
-describe('Settings → Security → Devices', () => {
+describe('Settings → Devices', () => {
   it('turns approval on, after confirming it’s you', async () => {
     const user = userEvent.setup();
     const calls = mockFetch({
@@ -153,7 +154,7 @@ describe('Settings → Security → Devices', () => {
       'PUT /api/access/approval': () =>
         settings({ approval: { on: true, here: true, canApprove: true } }),
     });
-    renderApp(<SecurityTab />);
+    renderApp(<DevicesTab />);
     const toggle = await screen.findByRole('switch', { name: 'Approve new devices' });
     expect(toggle).not.toBeChecked();
     await user.click(toggle);
@@ -170,7 +171,7 @@ describe('Settings → Security → Devices', () => {
       'GET /api/auth': () => status({ signedIn: true }),
       'PUT /api/access/approval': () => settings(),
     });
-    const { unmount } = renderApp(<SecurityTab />);
+    const { unmount } = renderApp(<DevicesTab />);
     await user.click(await screen.findByRole('switch', { name: 'Approve new devices' }));
     const dialog = await screen.findByRole('alertdialog', { name: 'Stop approving new devices?' });
     await user.click(within(dialog).getByRole('button', { name: 'Turn off' }));
@@ -183,7 +184,7 @@ describe('Settings → Security → Devices', () => {
       'GET /api/access': () => settings({ approval: { on: true, here: false, canApprove: false } }),
       'GET /api/auth': () => status({ signedIn: true }),
     });
-    renderApp(<SecurityTab />);
+    renderApp(<DevicesTab />);
     expect(await screen.findByRole('switch', { name: 'Approve new devices' })).toBeDisabled();
     expect(screen.getByText('conch devices off')).toBeInTheDocument();
   });
@@ -227,7 +228,7 @@ describe('Settings → Security → Devices', () => {
         });
       },
     });
-    renderApp(<SecurityTab />);
+    renderApp(<DevicesTab />);
     const waitingList = await screen.findByRole('list', { name: 'Waiting for your approval' });
     expect(
       within(waitingList).getByText(/From 100.64.0.7 · with your password/),
@@ -255,7 +256,7 @@ describe('Settings → Security → Devices', () => {
           requests: [request({ rejected: true })],
         }),
     });
-    renderApp(<SecurityTab />);
+    renderApp(<DevicesTab />);
     const list = await screen.findByRole('list', { name: 'Waiting for your approval' });
     expect(within(list).queryByRole('button', { name: /^Approve/ })).toBeNull();
     expect(within(list).getByText('conch devices approve K7M-Q2X')).toBeInTheDocument();
@@ -292,7 +293,7 @@ describe('Settings → Security → Devices', () => {
       'DELETE /api/access/devices/dev_phone': () =>
         settings({ approval: { on: true, here: true, canApprove: true }, devices: [device()] }),
     });
-    renderApp(<SecurityTab />);
+    renderApp(<DevicesTab />);
     const list = await screen.findByRole('list', { name: 'Devices' });
     await user.click(within(list).getByRole('button', { name: 'Sign out Safari on iPhone' }));
     await waitFor(() =>
@@ -308,5 +309,70 @@ describe('Settings → Security → Devices', () => {
       ).toBe(true),
     );
     await waitFor(() => expect(within(list).queryByText('Safari on iPhone')).toBeNull());
+  });
+
+  it('says which devices get notifications, and stops them without signing out', async () => {
+    const user = userEvent.setup();
+    const phone = device({
+      id: 'dev_phone',
+      name: 'Safari on iPhone',
+      kind: 'phone',
+      current: false,
+    });
+    const told = {
+      id: 'push_phone',
+      name: 'Safari on iPhone',
+      current: false,
+      deviceId: 'dev_phone',
+      createdAt: Date.now() - 60_000,
+      prefs: {
+        approvals: true,
+        replies: true,
+        routines: true,
+        tasks: true,
+        devices: true,
+        updates: true,
+        previews: true,
+      },
+    };
+    let stopped = false;
+    const calls = mockFetch({
+      'GET /api/access': () => settings({ devices: [device(), phone] }),
+      'GET /api/auth': () => status({ signedIn: true }),
+      'GET /api/push': () => ({ publicKey: 'k', devices: stopped ? [] : [told] }),
+      'DELETE /api/push/subscriptions/push_phone': () => {
+        stopped = true;
+        return { publicKey: 'k', devices: [] };
+      },
+    });
+    renderApp(<DevicesTab />);
+    const list = await screen.findByRole('list', { name: 'Devices' });
+    expect(await within(list).findByText('Gets notifications')).toBeInTheDocument();
+    await user.click(
+      within(list).getByRole('button', { name: 'Stop notifications on Safari on iPhone' }),
+    );
+    await waitFor(() =>
+      expect(
+        calls.some((c) => c.method === 'DELETE' && c.path === '/api/push/subscriptions/push_phone'),
+      ).toBe(true),
+    );
+    await waitFor(() => expect(within(list).queryByText('Gets notifications')).toBeNull());
+    // Still signed in: only its notifications stopped.
+    expect(calls.some((c) => c.path.includes('/sign-out'))).toBe(false);
+    expect(
+      within(list).getByRole('button', { name: 'Sign out Safari on iPhone' }),
+    ).toBeInTheDocument();
+  });
+
+  it('with no sign-in yet, adding your phone starts with one', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/access': () => settings({ method: 'none', devices: [] }),
+      'GET /api/auth': () => status({ method: 'none', signedIn: true }),
+    });
+    renderApp(<DevicesTab />);
+    expect(await screen.findByText(/Only this computer can open Conch/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Add your phone' }));
+    expect(useUi.getState().settingsFocus).toBe('add-device');
   });
 });

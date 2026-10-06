@@ -2,7 +2,7 @@ import { Button, PathPicker, SettingsAdvanced, Stack } from '@conch/nacre';
 import { useState } from 'react';
 
 import { useAppState, useUpdateSettings } from '../../api/queries';
-import { canPickHere, pickPath } from '../../lib/pick';
+import { chooseOnComputer } from '../folders/FolderChooser';
 import { SaveStatus, Section } from './Section';
 import { useAdvanced } from './useAdvanced';
 import { useAutosave } from './useAutosave';
@@ -49,8 +49,9 @@ export function GeneralTab({
             },
           ]}
           onChange={(path) => setFolder(path === workspace ? '' : path)}
-          onChoose={canPickHere() ? () => pickPath('workspace') : undefined}
-          placeholder="~/Projects"
+          // The desktop app's Open dialog, or Conch's folder browser from any other device.
+          onChoose={() => chooseOnComputer({ purpose: 'workspace', current: folder || workspace })}
+          canType={false}
         />
       </Section>
       <SettingsAdvanced open={advanced} onOpenChange={setAdvanced}>

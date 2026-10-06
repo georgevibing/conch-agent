@@ -8,7 +8,7 @@ order: 3
 
 1. Install [Tailscale](https://tailscale.com/download) on your computer and your phone, and sign in to both. It's free, and nothing is opened to the internet.
 2. In Conch, choose how you sign in, in **Settings → Security**: a passkey (Touch ID, Windows Hello) or a password.
-3. Press **Add a device**. Conch turns on its secure address with one press, then shows a QR code.
+3. In **Settings → Devices**, press **Add a device**. Conch turns on its secure address with one press, then shows a QR code.
 4. Point your phone's camera at it. Your phone is signed in.
 
 The code works once, for ten minutes. Whoever opens it is signed in, so don't share it.
@@ -21,11 +21,13 @@ In your phone's browser, add Conch to the Home Screen (in Safari: **Share → Ad
 
 ## Made for the small screen
 
-On a phone, Conch keeps the chat's name in view and folds the rest away. The header shows your provider's mark and how much of its limit is left as a ring; **⋯** holds **Find in chat**, the browser and the terminal. The message box keeps to one line: the model by name, the mode as its icon (tap it to see which), and **Talk** in Send's place until you type. The working folder is in **Settings → General**. Filters that don't fit (in **Apps**, **Activity** and elsewhere) slide sideways, and the page itself never does.
+On a phone, Conch keeps the chat's name in view and folds the rest away. The header shows your provider's mark and how much of its limit is left as a ring; **⋯** holds **Find in chat**, the browser and the terminal. The message box keeps to one line: the model by name, the mode as its icon (tap it to see which), and **Talk** in Send's place until you type. To choose the working folder, type `/folder` or open **Settings → General**: your phone walks through the computer's folders, the same as at the computer. Filters that don't fit (in **Apps**, **Activity** and elsewhere) slide sideways, and the page itself never does.
 
 ## Let it reach you
 
 Turn on notifications in **Settings → Notifications**. Conch tells you when it needs your OK (with **Deny** right there) or has a question for you, when an answer is ready while you're away, and when a routine has run. It never notifies you while you're looking at it.
+
+**Settings → Devices** lists every phone, tablet and browser signed in to Conch. A bell beside one means it gets notifications; press **Stop notifications** to quiet it and leave it signed in, or **Sign out** to send it away.
 
 ## Talk to it
 

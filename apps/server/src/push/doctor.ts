@@ -34,7 +34,7 @@ export function pushCheck(push: PushService, tailscale: Tailscale): DoctorCheck 
           title: 'Your phone’s address',
           state: 'off',
           message: 'Conch has no secure address for your phone yet.',
-          action: { kind: 'open', label: 'Set it up', place: 'security', focus: 'add-device' },
+          action: { kind: 'open', label: 'Set it up', place: 'devices', focus: 'add-device' },
         });
 
       const { devices } = await push.status(undefined);

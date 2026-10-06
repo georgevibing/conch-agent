@@ -83,6 +83,19 @@ export const ApprovedDevices: Story = {
   ),
 };
 
+/** Settings → Devices: a bell for each device that gets notifications, and a way to stop them. */
+export const NotifiedDevices: Story = {
+  render: () => (
+    <DeviceList
+      label="Devices"
+      devices={approvedDevices.map((d, i) => ({ ...d, notified: i < 2 }))}
+      onSignOut={() => undefined}
+      onRemove={() => undefined}
+      onStopNotifications={() => undefined}
+    />
+  ),
+};
+
 /** On the computer running Conch: approve or turn down, right here. */
 export const WaitingHere: Story = {
   render: () => (

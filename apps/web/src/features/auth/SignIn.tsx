@@ -357,14 +357,14 @@ export function SignIn({ status, notice }: { status: AuthStatus; notice?: string
           <Collapsible.Content>
             {onlyPasskeys ? (
               <Text size="sm" tone="muted" className={styles.helpBody}>
-                On a device that’s already signed in, open Settings → Security → Add a device. Or,
-                on the computer running Conch, run <code>conch reset</code>, then{' '}
+                On a device that’s already signed in, open Settings → Devices → Add a device. Or, on
+                the computer running Conch, run <code>conch reset</code>, then{' '}
                 <code>conch hello</code> for a fresh link that makes it yours again.
               </Text>
             ) : (
               <Text size="sm" tone="muted" className={styles.helpBody}>
                 {usesKey
-                  ? 'On a device that’s already signed in, open Settings → Security → Add a device. Or, on the computer running Conch, run '
+                  ? 'On a device that’s already signed in, open Settings → Devices → Add a device. Or, on the computer running Conch, run '
                   : 'On the computer running Conch, open a terminal in the Conch folder and run '}
                 <code>{usesKey ? 'pnpm conch key' : 'pnpm conch reset'}</code>
                 {usesKey

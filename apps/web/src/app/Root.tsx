@@ -10,6 +10,7 @@ import { Onboarding } from '../features/onboarding/Onboarding';
 import { behindOf, settingsAt } from '../features/settings/paths';
 import { Settings } from '../features/settings/Settings';
 import { UpdateDialogHost } from '../features/updates/UpdateDialogHost';
+import { FolderChooserHost } from '../features/folders/FolderChooser';
 import { Shell } from './Shell';
 import styles from './Root.module.css';
 
@@ -87,6 +88,8 @@ export function Root() {
       <Settings />
       {/* Conch's own update, from anywhere: over Settings too. */}
       <UpdateDialogHost />
+      {/* Choosing a folder on this computer, from any device: over Settings and dialogs too. */}
+      <FolderChooserHost />
     </>
   );
 }

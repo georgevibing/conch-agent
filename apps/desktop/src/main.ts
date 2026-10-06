@@ -15,9 +15,17 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import { app, type BrowserWindow, Notification, screen, shell } from 'electron';
+import {
+  app,
+  type BrowserWindow,
+  dialog,
+  Notification,
+  type OpenDialogOptions,
+  screen,
+  shell,
+} from 'electron';
 
-import { conchBuildLabel } from '@conch/protocol';
+import { conchBuildLabel, type GatewayToApp } from '@conch/protocol';
 import { readBuild } from '../../server/src/build';
 import { gatewayEnv, loginShellPath } from './environment';
 import { Gateway } from './gateway';
@@ -283,8 +291,39 @@ function main(): void {
       showStatus(window, { state: 'starting', message: state.message });
     }
   });
+  /**
+   * The system's Open dialog, over the window (`POST /api/pick` from it): what
+   * a person in an app expects, rather than one raised in front of it. The
+   * gateway wrote the words and the file types; the answer is a path or none.
+   */
+  const pickFor = async (asked: Extract<GatewayToApp, { type: 'pick' }>) => {
+    try {
+      const folder = asked.kind === 'folder';
+      const options: OpenDialogOptions = {
+        title: asked.prompt,
+        message: asked.prompt,
+        buttonLabel: 'Choose',
+        properties: folder ? ['openDirectory', 'createDirectory', 'promptToCreate'] : ['openFile'],
+        ...(!folder &&
+          asked.extensions.length > 0 && {
+            filters: [{ name: asked.prompt, extensions: asked.extensions }],
+          }),
+      };
+      const parent = window && !window.isDestroyed() && window.isVisible() ? window : undefined;
+      if (!parent) app.focus({ steal: true });
+      const result = parent
+        ? await dialog.showOpenDialog(parent, options)
+        : await dialog.showOpenDialog(options);
+      const path = result.canceled ? undefined : result.filePaths[0];
+      gateway.send({ type: 'picked', id: asked.id, ...(path && { path }) });
+    } catch {
+      gateway.send({ type: 'picked', id: asked.id, failed: true });
+    }
+  };
+
   gateway.on('message', (message) => {
     if (message.type === 'tray') tray.show(message.on);
+    else if (message.type === 'pick') void pickFor(message);
     else if (message.type === 'wake') {
       // "Hey Conch" (ADR 0078): the tray says it's listening, and the hidden window keeps running.
       tray.listening(message.on, () => void gateway.send({ type: 'wake.stop' }));

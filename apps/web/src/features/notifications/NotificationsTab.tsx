@@ -2,7 +2,6 @@ import type { PushPrefs, PushStatus } from '@conch/protocol';
 import {
   AddToHomeScreen,
   Button,
-  NotifiedDevices,
   NotifyThisDevice,
   Stack,
   Switch,
@@ -11,13 +10,13 @@ import {
   type NotifyState,
 } from '@conch/nacre';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { QrCode } from 'lucide-react';
+import { MonitorSmartphone } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { ApiError } from '../../api/client';
 import { useUi } from '../../app/ui';
-import { relativeTime } from '../../lib/time';
 import { Section } from '../settings/Section';
+import styles from './Notifications.module.css';
 import { pushApi, pushKeys } from './api';
 import {
   current,
@@ -58,7 +57,8 @@ function stateOf(status: PushStatus | undefined, subscribed: boolean): NotifySta
 
 /**
  * Settings → Notifications (ADR 0027): this device, one switch and what it's
- * told about; every device that gets them, with a way to stop each.
+ * told about. Which other devices get them, and stopping one, is in
+ * Settings → Devices, beside each device.
  */
 export function NotificationsTab() {
   const client = useQueryClient();
@@ -172,38 +172,23 @@ export function NotificationsTab() {
         </NotifyThisDevice>
       </Section>
 
-      <Section title="Your devices" description="Signing one out stops its notifications too.">
-        <Stack gap={3}>
-          {others.length || mine ? (
-            <NotifiedDevices
-              devices={(status?.devices ?? []).map((d) => ({
-                id: d.id,
-                name: d.name,
-                current: d.current,
-                problem: d.problem,
-                detail: d.lastSentAt
-                  ? `Last told ${relativeTime(d.lastSentAt)}`
-                  : 'Not told anything yet',
-              }))}
-              onRemove={(id) => void pushApi.remove(id).then(put)}
-            />
-          ) : (
-            <Text size="sm" tone="muted">
-              None yet. Turn them on above, or on your phone.
-            </Text>
-          )}
-          <div>
-            <Button
-              size="sm"
-              variant="surface"
-              leadingIcon={<QrCode />}
-              onClick={() => openSettings('security', 'add-device')}
-            >
-              Add your phone
-            </Button>
-          </div>
-        </Stack>
-      </Section>
+      <div className={styles.elsewhere}>
+        <Text size="sm" tone="muted">
+          {others.length === 0
+            ? 'No other device gets them yet.'
+            : others.length === 1
+              ? '1 other device gets them too.'
+              : `${others.length} other devices get them too.`}
+        </Text>
+        <Button
+          size="sm"
+          variant="surface"
+          leadingIcon={<MonitorSmartphone />}
+          onClick={() => openSettings('devices')}
+        >
+          Your devices
+        </Button>
+      </div>
     </Stack>
   );
 }

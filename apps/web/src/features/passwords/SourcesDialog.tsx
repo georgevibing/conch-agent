@@ -17,7 +17,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
 
 import { errorText } from '../integrations/queries';
-import { canPickHere, pickPath } from '../../lib/pick';
+import { chooseOnComputer } from '../folders/FolderChooser';
 import { GetIt } from '../setup/GetIt';
 import { vaultApi } from './api';
 import { ago } from './filter';
@@ -312,8 +312,13 @@ export function SourcesDialog({
                             .filter(Boolean)
                             .join(' · '),
                         }))}
-                        onChoose={canPickHere() ? () => pickPath('keepassxc-database') : undefined}
-                        placeholder="~/Documents/Passwords.kdbx"
+                        onChoose={() =>
+                          chooseOnComputer({
+                            purpose: 'keepassxc-database',
+                            ...(database && { current: database }),
+                          })
+                        }
+                        canType={false}
                         hint={
                           found.length === 0 && !database
                             ? 'Conch didn’t find a .kdbx file in your usual folders. Choose yours.'
@@ -334,9 +339,14 @@ export function SourcesDialog({
                           setKeyFile(path);
                           setAskKey(true);
                         }}
-                        onChoose={canPickHere() ? () => pickPath('keepassxc-keyfile') : undefined}
+                        onChoose={() =>
+                          chooseOnComputer({
+                            purpose: 'keepassxc-keyfile',
+                            ...(keyFile && { current: keyFile }),
+                          })
+                        }
+                        canType={false}
                         chooseLabel={keyFile ? 'Choose another key file…' : 'Choose the key file…'}
-                        placeholder="~/Documents/Passwords.keyx"
                         hint="Only if your database also needs one. Conch keeps where it is, never what’s in it."
                       />
                     </Field>

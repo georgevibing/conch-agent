@@ -1,0 +1,483 @@
+@layer nacre.components {
+  /* One size whatever's in the folder: walking through never makes it jump. */
+  .dialog {
+    --fb-row: 2.25rem;
+    block-size: min(36rem, calc(var(--nc-visible-height, 100dvh) * 0.92 - 3rem));
+  }
+
+  @media (pointer: coarse) {
+    .dialog {
+      --fb-row: 2.75rem;
+    }
+  }
+
+  .quiet {
+    color: var(--nc-text-subtle);
+  }
+
+  .frame {
+    flex: 1;
+    min-block-size: 0;
+    display: grid;
+    grid-template-columns: 10.5rem minmax(0, 1fr);
+    margin-block-start: var(--nc-space-4);
+    border-block: 1px solid var(--nc-border-subtle);
+  }
+
+  /* ── Places ─────────────────────────────────────────────────────────── */
+  .places {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    min-block-size: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--nc-space-2);
+    border-inline-end: 1px solid var(--nc-border-subtle);
+    background: var(--nc-wash-1);
+  }
+
+  .placesLabel {
+    padding: var(--nc-space-2) var(--nc-space-2) var(--nc-space-1);
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-medium);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--nc-text-subtle);
+  }
+
+  .placeList {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-px);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .place {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    inline-size: 100%;
+    min-block-size: var(--fb-row);
+    padding: 0 var(--nc-space-2);
+    border: 0;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: var(--nc-text-muted);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    text-align: start;
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      scale var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  @media (hover: hover) {
+    .place:hover {
+      background: var(--nc-wash-2);
+      color: var(--nc-text);
+    }
+  }
+
+  .place:active {
+    scale: 0.975;
+    transition-duration: var(--nc-duration-instant);
+  }
+
+  .place:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+
+  .place[aria-current] {
+    background: var(--nc-wash-2);
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .placeIcon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    color: var(--nc-text-subtle);
+  }
+
+  .place[aria-current] .placeIcon {
+    color: var(--nc-text-accent);
+  }
+
+  .placeIcon > svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    stroke-width: 1.85;
+  }
+
+  .placeName {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── Where you are, and what's in it ─────────────────────────────────── */
+  .main {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    min-block-size: 0;
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-block-size: calc(var(--nc-space-10) + var(--nc-space-1));
+    padding: var(--nc-space-1) var(--nc-space-2) var(--nc-space-1) var(--nc-space-4);
+    border-block-end: 1px solid var(--nc-border-subtle);
+  }
+
+  .trail {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .top {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+  }
+
+  .top > svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    stroke-width: 1.85;
+  }
+
+  .tools {
+    display: flex;
+    flex-shrink: 0;
+    gap: var(--nc-space-0-5);
+  }
+
+  .newFolder {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    padding: var(--nc-space-2) var(--nc-space-3);
+    border-block-end: 1px solid var(--nc-border-subtle);
+    background: var(--nc-wash-1);
+  }
+
+  .newFolder > :first-child {
+    flex: 1;
+    min-inline-size: 10rem;
+  }
+
+  .command {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-block-size: 0;
+  }
+
+  .inputRow {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+    flex-shrink: 0;
+    padding: 0 var(--nc-space-4);
+    block-size: var(--nc-control-lg);
+    border-block-end: 1px solid var(--nc-border-subtle);
+  }
+
+  .inputRow[data-typing] {
+    background: var(--nc-surface-sunken);
+  }
+
+  .inputIcon {
+    display: grid;
+    place-items: center;
+    color: var(--nc-text-subtle);
+  }
+
+  .inputIcon > svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    stroke-width: 1.85;
+  }
+
+  .input {
+    flex: 1;
+    min-inline-size: 0;
+    block-size: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-text-md);
+    outline: none;
+  }
+
+  .inputRow[data-typing] .input {
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-sm);
+  }
+
+  .input::placeholder {
+    color: var(--nc-text-subtle);
+  }
+
+  .inputRow:focus-within {
+    box-shadow: inset 0 -2px 0 var(--nc-ring);
+  }
+
+  .typedNote {
+    flex-shrink: 0;
+    margin: 0;
+    padding: var(--nc-space-2) var(--nc-space-4);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+    border-block-end: 1px solid var(--nc-border-subtle);
+  }
+
+  .list {
+    flex: 1;
+    min-block-size: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-padding-block: var(--nc-space-1);
+  }
+
+  .list > [cmdk-list-sizer] {
+    padding: var(--nc-space-1-5);
+  }
+
+  .list[data-loading] > [cmdk-list-sizer] {
+    opacity: 0.6;
+    transition: opacity var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+    min-block-size: var(--fb-row);
+    padding-inline: var(--nc-space-2-5);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    font-size: var(--nc-text-md);
+    color: var(--nc-text);
+    cursor: pointer;
+    user-select: none;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      scale var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .row[data-selected='true'] {
+    background: var(--nc-wash-2);
+  }
+
+  .row:active {
+    scale: 0.985;
+    transition-duration: var(--nc-duration-instant);
+  }
+
+  .row[data-chosen] {
+    background: color-mix(in oklch, var(--nc-accent-9) 14%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--nc-accent-9) 40%, transparent);
+  }
+
+  .row[data-hidden] .rowName {
+    color: var(--nc-text-muted);
+  }
+
+  .rowIcon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    color: var(--nc-accent-9);
+  }
+
+  .rowIcon > svg {
+    inline-size: 1.0625rem;
+    block-size: 1.0625rem;
+    stroke-width: 1.75;
+  }
+
+  .rowName {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .rowTag {
+    flex-shrink: 0;
+    font-size: var(--nc-text-2xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .rowGo {
+    flex-shrink: 0;
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
+    color: var(--nc-text-subtle);
+    opacity: 0;
+    transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .row[data-selected='true'] .rowGo {
+    opacity: 1;
+  }
+
+  @media (pointer: coarse) {
+    .rowGo {
+      opacity: 1;
+    }
+  }
+
+  .skeletons {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-3) var(--nc-space-2-5);
+  }
+
+  .empty {
+    margin: 0;
+    padding: var(--nc-space-8) var(--nc-space-4);
+    text-align: center;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  .problem {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-8) var(--nc-space-5);
+    text-align: center;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  .problem > p {
+    margin: 0;
+    max-inline-size: 26rem;
+    text-wrap: pretty;
+  }
+
+  .foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+    flex-shrink: 0;
+    padding: var(--nc-space-1) var(--nc-space-2) var(--nc-space-1) var(--nc-space-4);
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .note {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .newFolder .note {
+    flex-basis: 100%;
+    color: var(--nc-text-muted);
+  }
+
+  .footer {
+    padding-block-start: var(--nc-space-4);
+  }
+
+  .choose {
+    min-inline-size: 0;
+    max-inline-size: 60%;
+  }
+
+  .choose > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* A phone: as tall as there's room for, the places a row to swipe through above the folder. */
+  @media (max-width: 40rem) {
+    .dialog {
+      block-size: calc(var(--nc-visible-height, 100dvh) * 0.92 - 3rem);
+    }
+
+    .frame {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .places {
+      flex-direction: row;
+      align-items: center;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: none;
+      padding: var(--nc-space-2);
+      border-inline-end: 0;
+      border-block-end: 1px solid var(--nc-border-subtle);
+    }
+
+    .placesLabel {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    .placeList {
+      flex-direction: row;
+      flex-shrink: 0;
+      gap: var(--nc-space-1);
+    }
+
+    .placeList > li {
+      flex-shrink: 0;
+    }
+
+    .placeName {
+      overflow: visible;
+    }
+
+    .place {
+      inline-size: auto;
+      padding-inline: var(--nc-space-3);
+      border-radius: var(--nc-radius-full);
+      background: var(--nc-surface);
+      box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+      white-space: nowrap;
+    }
+
+    .place[aria-current] {
+      box-shadow: inset 0 0 0 1px var(--nc-border);
+    }
+
+    .toolbar {
+      padding-inline-start: var(--nc-space-3);
+    }
+
+    .inputRow {
+      padding-inline: var(--nc-space-3);
+    }
+  }
+}

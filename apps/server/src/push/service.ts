@@ -119,6 +119,7 @@ export class PushService {
         id: s.id,
         name: s.name,
         current: s.owner === owner,
+        ...(s.owner.startsWith('device:') && { deviceId: s.owner.slice('device:'.length) }),
         createdAt: s.createdAt,
         lastSentAt: s.lastSentAt,
         problem: s.problem,
@@ -442,7 +443,7 @@ export class PushService {
       'devices',
       {
         title: 'A new device wants to sign in',
-        body: `${request.device}, code ${request.code}. Approve it in Settings → Security, or ignore it.`,
+        body: `${request.device}, code ${request.code}. Approve it in Settings → Devices, or ignore it.`,
         quiet: 'Open Conch to see who it is.',
         url: '/?open=devices',
         tag: `device-${request.code}`,

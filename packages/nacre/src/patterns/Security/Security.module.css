@@ -308,6 +308,27 @@
     flex-wrap: wrap;
   }
 
+  .deviceNotified {
+    display: inline-grid;
+    place-items: center;
+    color: var(--nc-text-subtle);
+  }
+
+  .deviceNotified > svg {
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+    stroke-width: 2;
+  }
+
+  .srOnly {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
   .deviceActions {
     display: flex;
     flex-shrink: 0;

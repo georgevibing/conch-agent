@@ -63,7 +63,7 @@ interface UiState {
   updateDialog?: { start?: boolean; arrived?: boolean };
   openUpdate(how?: { start?: boolean; arrived?: boolean }): void;
   closeUpdate(): void;
-  /** Something in a settings place to bring into view, once (Settings → Security → Devices). */
+  /** Something in a settings place to bring into view, once (Settings → Devices, what's waiting). */
   settingsFocus?: string;
   paletteOpen: boolean;
   /** Undo's preview is open for these change sets (ADR 0030). */
