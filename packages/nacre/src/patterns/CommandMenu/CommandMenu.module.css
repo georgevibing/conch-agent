@@ -1,9 +1,15 @@
 @layer nacre.components {
   .menu {
+    /* How tall the list may grow: under half of what's visible, keyboard or not. */
+    --cm-list-max: min(20rem, calc(var(--nc-visible-height, 100dvh) * 0.45));
+    --cm-row: 2.25rem;
+
     position: absolute;
     inset-inline: var(--nc-space-2);
     inset-block-end: calc(100% + var(--nc-space-2));
     z-index: var(--nc-z-popover);
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
     border-radius: var(--nc-radius-lg);
     corner-shape: var(--nc-corner-shape);
@@ -16,8 +22,68 @@
     animation: nc-surface-in var(--nc-duration-base) var(--nc-ease-out);
   }
 
+  /* ── Header: the command whose value is chosen, back, and close on touch ── */
+
+  .header {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--nc-space-1);
+    min-block-size: 2.5rem;
+    padding: var(--nc-space-1) var(--nc-space-1-5) var(--nc-space-1) var(--nc-space-2);
+    box-shadow: inset 0 -1px 0 var(--nc-border-subtle);
+  }
+
+  /* With a pointer and a keyboard, the header only says which command; Escape closes. */
+  .header:not([data-heading]) {
+    display: none;
+  }
+
+  .close {
+    display: none;
+    margin-inline-start: auto;
+  }
+
+  .headerButton {
+    flex-shrink: 0;
+  }
+
+  .headerTitle {
+    flex: 1;
+    padding-inline-start: var(--nc-space-1);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text-subtle);
+  }
+
+  .heading {
+    display: flex;
+    flex: 1;
+    align-items: baseline;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .headingName {
+    flex-shrink: 0;
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  .headingDescription {
+    overflow: hidden;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  /* ── The list ── */
+
   .list {
-    max-block-size: min(20rem, 45vh);
+    max-block-size: var(--cm-list-max);
     padding: var(--nc-space-1-5);
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -41,27 +107,41 @@
     color: var(--nc-text-subtle);
   }
 
+  /* One list of values: the heading already names it (still read out). */
+  .groupLabel[data-hidden] {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
   .option {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: var(--nc-space-2);
-    min-block-size: 2.25rem;
-    padding: var(--nc-space-2) var(--nc-space-2-5);
+    min-block-size: var(--cm-row);
+    padding: var(--nc-space-1-5) var(--nc-space-2-5);
     border-radius: var(--nc-radius-sm);
     corner-shape: var(--nc-corner-shape);
     cursor: pointer;
     transition: background-color var(--nc-duration-instant) var(--nc-ease-out);
+    -webkit-tap-highlight-color: transparent;
   }
 
   .option[data-active] {
     background: var(--nc-wash-2);
   }
 
+  .option:active {
+    background: var(--nc-wash-3);
+  }
+
   .icon {
     display: inline-grid;
     flex-shrink: 0;
     place-items: center;
-    align-self: center;
     inline-size: 1.25rem;
     color: var(--nc-text-muted);
   }
@@ -79,14 +159,32 @@
     opacity: 0.5;
   }
 
-  .option[data-active] .icon {
+  .option[data-active] .icon,
+  .option[data-current] .icon {
     color: var(--nc-text-accent);
   }
 
-  .name {
+  .main {
+    display: flex;
+    flex: 1;
+    align-items: baseline;
+    gap: var(--nc-space-3);
+    min-inline-size: 0;
+  }
+
+  .line {
+    display: flex;
     /* The name is what you're looking for: it shrinks last, and only when very long. */
     flex-shrink: 0;
+    align-items: baseline;
+    gap: var(--nc-space-2);
     max-inline-size: 62%;
+    min-inline-size: 0;
+  }
+
+  .name {
+    flex-shrink: 0;
+    max-inline-size: 100%;
     overflow: hidden;
     font-family: var(--nc-font-mono);
     white-space: nowrap;
@@ -94,6 +192,11 @@
     font-size: var(--nc-text-sm);
     font-weight: var(--nc-weight-medium);
     color: var(--nc-text);
+  }
+
+  /* A value people read rather than type (a model's name). */
+  .title {
+    font-family: var(--nc-font-sans);
   }
 
   .hit {
@@ -113,11 +216,21 @@
     color: var(--nc-text-subtle);
   }
 
+  .current {
+    flex-shrink: 0;
+    padding: 0 var(--nc-space-1-5);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-wash-2);
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-medium);
+    line-height: 1.6;
+    color: var(--nc-text-muted);
+  }
+
   .description {
     flex-shrink: 2;
     min-inline-size: 0;
     margin-inline-start: auto;
-    padding-inline-start: var(--nc-space-3);
     overflow: hidden;
     font-size: var(--nc-text-sm);
     color: var(--nc-text-muted);
@@ -136,15 +249,94 @@
     color: var(--nc-text);
   }
 
-  @media (max-width: 480px) {
-    .option {
+  /* ── The keys, for those who have them ── */
+
+  .footer {
+    display: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .footer {
+      display: flex;
+      flex-shrink: 0;
       flex-wrap: wrap;
+      gap: var(--nc-space-1) var(--nc-space-4);
+      padding: var(--nc-space-1-5) var(--nc-space-3);
+      box-shadow: inset 0 1px 0 var(--nc-border-subtle);
+      font-size: var(--nc-text-2xs);
+      color: var(--nc-text-subtle);
+    }
+
+    .footer > span {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--nc-space-1);
+    }
+  }
+
+  /* ── Narrow: the description gets its own line ── */
+
+  @media (max-width: 480px) {
+    .main {
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--nc-space-0-5);
+    }
+
+    .line {
+      max-inline-size: 100%;
     }
 
     .description {
-      flex-basis: 100%;
-      margin-inline-start: calc(1.25rem + var(--nc-space-2));
-      padding-inline-start: 0;
+      margin-inline-start: 0;
+      font-size: var(--nc-text-xs);
+    }
+  }
+
+  /* ── Touch: a sheet above the keyboard, rows for a thumb, a way to close ── */
+
+  @media (hover: none) and (pointer: coarse) {
+    .menu {
+      --cm-list-max: min(24rem, calc(var(--nc-visible-height, 100dvh) * 0.5));
+      --cm-row: 2.75rem;
+
+      inset-inline: 0;
+    }
+
+    .header:not([data-heading]) {
+      display: flex;
+    }
+
+    .close {
+      display: inline-flex;
+    }
+
+    .headerButton {
+      min-inline-size: 2.5rem;
+      min-block-size: 2.5rem;
+    }
+
+    .main {
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--nc-space-0-5);
+    }
+
+    .line {
+      max-inline-size: 100%;
+    }
+
+    .name {
+      font-size: var(--nc-text-md);
+    }
+
+    .description {
+      margin-inline-start: 0;
+      white-space: normal;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      font-size: var(--nc-text-xs);
     }
   }
 }

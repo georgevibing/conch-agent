@@ -18,8 +18,8 @@ import {
   Handset,
   HealedNotes,
   IntegrationLogo,
-  MemoryItem,
-  MemoryList,
+  MemoryCell,
+  MemoryCells,
   Message,
   OfferAlsoTry,
   OfferCard,
@@ -748,18 +748,18 @@ const MEMORIES = [
 
 function Memories({ shown }: { shown: number }) {
   return (
-    <MemoryList>
+    <MemoryCells>
       {MEMORIES.slice(0, shown).map((memory, i) => (
-        <MemoryItem
+        <MemoryCell
           key={memory.text}
-          source="agent"
           kind={memory.kind}
-          time={i === shown - 1 ? 'Just now' : 'Earlier'}
+          label={memory.text}
+          meta={`Learned in a chat · ${i === shown - 1 ? 'just now' : 'earlier'}`}
         >
           {memory.text}
-        </MemoryItem>
+        </MemoryCell>
       ))}
-    </MemoryList>
+    </MemoryCells>
   );
 }
 

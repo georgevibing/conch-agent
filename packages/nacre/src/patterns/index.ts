@@ -67,4 +67,5 @@ export * from './Learning';
 export * from './Docs';
 export * from './Site';
 export * from './Welcome';
+export * from './ChatGoal';
 export * from './ChatList';

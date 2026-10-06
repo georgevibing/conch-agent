@@ -514,6 +514,35 @@ describe('Palette search', () => {
     act(() => useUi.setState({ settingsFocus: undefined }));
   });
 
+  it('starts a new chat in a folder by its name', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/folders': () => [
+        { id: 'f_trips1', name: 'Trips', glyph: 'folder', color: 'green', order: 1, createdAt: 0 },
+      ],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    const seen: unknown[] = [];
+    function State() {
+      seen.push(useLocation().state);
+      return null;
+    }
+    const { where } = renderApp(
+      <>
+        <Palette />
+        <State />
+      </>,
+      { route: '/c/c1' },
+    );
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'new chat trips');
+    await user.click(await screen.findByRole('option', { name: /New chat in Trips/ }));
+    await waitFor(() => expect(where()).toBe('/'));
+    expect(seen.at(-1)).toEqual({ folder: 'f_trips1' });
+  });
+
   it('finds the working folder in General by the words people use', async () => {
     const user = userEvent.setup();
     mockFetch({
@@ -660,6 +689,42 @@ describe('Palette search', () => {
         calls.some((c) => c.method === 'POST' && c.path === '/api/conversations/c7/compact'),
       ).toBe(true),
     );
+  });
+
+  it('starts the open chat afresh, and puts /plan and /goal in the message box (ADR 0098)', async () => {
+    const user = userEvent.setup();
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'POST /api/conversations/c7/clear': () => ({ changed: true, message: 'Cleared.' }),
+    });
+    renderApp(
+      <Routes>
+        <Route path="/c/:conversationId" element={<Palette />} />
+      </Routes>,
+      { route: '/c/c7' },
+    );
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'forget conversation');
+    await user.click(await screen.findByRole('option', { name: /Start afresh in this chat/ }));
+    await waitFor(() =>
+      expect(
+        calls.some((c) => c.method === 'POST' && c.path === '/api/conversations/c7/clear'),
+      ).toBe(true),
+    );
+
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'plan first');
+    await user.click(await screen.findByRole('option', { name: /Plan first, then act/ }));
+    expect(useUi.getState().composerText).toBe('/plan ');
+
+    act(() => useUi.setState({ composerText: null }));
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'goal');
+    await user.click(await screen.findByRole('option', { name: /Set a goal for this chat/ }));
+    expect(useUi.getState().composerText).toBe('/goal ');
+    act(() => useUi.setState({ composerText: null }));
   });
 
   it('edits a thing made in a chat by hand, and finds what pages may read (ADR 0046)', async () => {
@@ -822,7 +887,7 @@ describe('Palette search', () => {
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/memory'));
   });
 
-  it('finds what Conch learned, what it won’t learn again and what learning may spend (ADR 0088)', async () => {
+  it('finds what Conch knows, what it won’t learn again and what learning may spend (ADR 0088)', async () => {
     const user = userEvent.setup();
     mockFetch({
       'GET /api/state': () => appState(),
@@ -836,10 +901,13 @@ describe('Palette search', () => {
       </>,
     );
     act(() => useUi.getState().setPalette(true));
-    for (const words of ['learned', 'recap', 'self improving']) {
+    // What Conch learned is simply what it knows now (ADR 0097).
+    for (const words of ['learned', 'picked up', 'self improving']) {
       await user.clear(await screen.findByRole('combobox'));
       await user.type(screen.getByRole('combobox'), words);
-      expect(await screen.findByRole('option', { name: /What Conch learned/ })).toBeInTheDocument();
+      expect(
+        await screen.findByRole('option', { name: /What Conch knows about you/ }),
+      ).toBeInTheDocument();
     }
     for (const words of ['never learn', 'taken back']) {
       await user.clear(screen.getByRole('combobox'));
@@ -854,10 +922,10 @@ describe('Palette search', () => {
       await screen.findByRole('option', { name: /What learning may spend/ }),
     ).toBeInTheDocument();
     await user.clear(screen.getByRole('combobox'));
-    await user.type(screen.getByRole('combobox'), 'what conch learned');
-    await user.click(await screen.findByRole('option', { name: /What Conch learned/ }));
+    await user.type(screen.getByRole('combobox'), 'never learn');
+    await user.click(await screen.findByRole('option', { name: /won’t learn again/ }));
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/memory'));
-    expect(useUi.getState().memoryIntent).toBe('learned');
+    expect(useUi.getState().memoryIntent).toBe('never');
   });
 
   it('marks the chat you’re reading not to learn from, and back (ADR 0088)', async () => {

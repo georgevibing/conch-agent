@@ -485,6 +485,12 @@ export interface Engine {
    * engine can use Conch's tools.
    */
   readonly plans?: 'native';
+  /**
+   * In plan mode it asks to start by itself (Claude Code's `ExitPlanMode`), and
+   * the chat draws that question as the plan to approve. Absent: Conch gives it
+   * `exit_plan_mode` instead (`plans/mode.ts`), when it can use Conch's tools.
+   */
+  readonly planApproval?: 'native';
   /** Commands are always sealed by Conch, independent of the native-provider toggle. */
   readonly commandSandbox?: 'conch';
   /** Conch fits long chats for it by summarising their start (ADR 0055). Absent: the provider does. */

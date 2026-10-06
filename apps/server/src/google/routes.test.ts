@@ -32,6 +32,8 @@ function setup(verified = true) {
     cancel: vi.fn(),
     check: vi.fn(),
     disconnect: vi.fn(),
+    raises: vi.fn(async (_id: string, body: { level?: string }) => body.level === 'write'),
+    setAccess: vi.fn(async (): Promise<unknown> => ({ configured: true, accounts: [] })),
   };
   const app = Fastify();
   apps.push(app);
@@ -233,5 +235,43 @@ describe('Google HTTP boundary', () => {
     });
     expect(service.cancel).toHaveBeenCalledWith(state, '', 'http://localhost:80', 'access_denied');
     expect(response.headers.location).toBe('/apps?google=denied');
+  });
+});
+
+describe('what an account may do, over HTTP', () => {
+  it('lets anyone signed in take access away, but a raise needs a confirmed session', async () => {
+    const { app, service } = setup(false);
+    const lower = await app.inject({
+      method: 'POST',
+      url: '/api/google/accounts/work1/access',
+      payload: { product: 'gmail', level: 'read' },
+    });
+    expect(lower.statusCode).toBe(200);
+    const raise = await app.inject({
+      method: 'POST',
+      url: '/api/google/accounts/work1/access',
+      payload: { product: 'gmail', level: 'write' },
+    });
+    expect(raise.statusCode).toBe(403);
+    expect(service.setAccess).toHaveBeenCalledTimes(1);
+    const bad = await app.inject({
+      method: 'POST',
+      url: '/api/google/accounts/..%2Fx/access',
+      payload: { product: 'gmail', level: 'read' },
+    });
+    expect(bad.statusCode).toBe(400);
+  });
+
+  it('answers 409 when Google has to be asked first', async () => {
+    const { app, service } = setup();
+    const { GoogleError } = await import('./service');
+    service.setAccess.mockRejectedValueOnce(new GoogleError('consent', 'Sign in to Google again.'));
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/google/accounts/work1/access',
+      payload: { product: 'calendar', level: 'write' },
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({ error: 'consent', message: 'Sign in to Google again.' });
   });
 });

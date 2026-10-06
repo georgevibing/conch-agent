@@ -8,6 +8,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  SquarePen,
   Trash2,
 } from 'lucide-react';
 import { useState, type CSSProperties, type ReactNode } from 'react';
@@ -42,7 +43,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The pieces of the chat list in the sidebar. **Rows** keep today’s calm look (muted text, the open chat lifted onto the surface, ⋯ on hover) and add where each chat is: a breathing pearl while Conch works, an amber dot that softly calls when it needs you, an accent dot and a firmer title for something new, a hollow ring when a turn didn’t finish — each also said aloud, never colour alone. **Groups** hold Pinned, light folders (a glyph on a wash of its colour, folding away with a count) and stretches of time. Pinned pages sit above as a **dock of app icons**, so they read as apps, not chats. Choosing several brings up a **bar**; chats drag onto a folder or Pinned on a computer and swipe on a phone. A quiet **tidy-up** offer sits at the very end, never a warning.',
+          'The pieces of the chat list in the sidebar. **Rows** keep today’s calm look (muted text, the open chat lifted onto the surface, ⋯ on hover) and add where each chat is: a breathing pearl while Conch works, an amber dot that softly calls when it needs you, an accent dot and a firmer title for something new, a hollow ring when a turn didn’t finish — each also said aloud, never colour alone. **Groups** hold Pinned and stretches of time under quiet labels, and **folders**, named like rows (a glyph on a wash of its colour, the name at a chat’s size, folding away with a count, with a button to start a chat inside). Pinned pages sit above as a **dock of app icons**, so they read as apps, not chats. Choosing several brings up a **bar**; chats drag onto a folder or Pinned on a computer; on a phone they swipe, and a hold lifts one to be dragged. A quiet **tidy-up** offer sits at the very end, never a warning.',
       },
     },
   },
@@ -151,9 +152,14 @@ function Row({ chat }: { chat: Chat }) {
 
 function FolderActions({ name }: { name: string }) {
   return (
-    <IconButton size="sm" label={`Options for ${name}`} tooltip={false}>
-      <MoreHorizontal />
-    </IconButton>
+    <>
+      <IconButton size="sm" label={`New chat in ${name}`} onClick={fn()}>
+        <SquarePen />
+      </IconButton>
+      <IconButton size="sm" label={`Options for ${name}`} tooltip={false}>
+        <MoreHorizontal />
+      </IconButton>
+    </>
   );
 }
 
@@ -288,14 +294,20 @@ export const Swipe: Story = {
 };
 
 /**
- * Folders are light: a glyph on a soft wash of its colour, never a solid
- * tile (those are apps). The label folds a folder away and keeps how many
- * chats are inside beside it.
+ * Folders are places of your own, so they read like rows, not labels: the
+ * name as large as a chat's, in full colour and a touch heavier, beside a
+ * mark you can make out (a glyph on a soft wash of its colour, never a solid
+ * tile — those are apps). The whole line folds it away, keeping how many
+ * chats are inside at its end. Its chats sit in under its name. At the
+ * line's end, under the pointer (always on touch): **New chat in Work**
+ * starts a chat already inside it, and ⋯ edits or removes it. A folder
+ * with nothing in it says how to fill it.
  */
 export const Folders: Story = {
   render: () => (
     <>
       <ChatListSection
+        kind="folder"
         label="Work"
         icon={<FolderMark glyph="briefcase" color="blue" />}
         collapsible
@@ -307,6 +319,7 @@ export const Folders: Story = {
         <Row chat={{ id: 'w3', title: 'Summarise the board deck' }} />
       </ChatListSection>
       <ChatListSection
+        kind="folder"
         label="Home"
         icon={<FolderMark glyph="house" color="green" />}
         collapsible
@@ -316,7 +329,95 @@ export const Folders: Story = {
       >
         <Row chat={{ id: 'h1', title: 'Boiler service quotes' }} />
       </ChatListSection>
+      <ChatListSection
+        kind="folder"
+        label="Side projects"
+        icon={<FolderMark glyph="lightbulb" color="amber" />}
+        collapsible
+        count={0}
+        actions={<FolderActions name="Side projects" />}
+        empty="Drag chats here, or choose Move to."
+      />
     </>
+  ),
+};
+
+function HoldDemo() {
+  const [where, setWhere] = useState<Record<string, 'work' | 'home' | 'today'>>({
+    a: 'today',
+    b: 'today',
+    c: 'today',
+    d: 'work',
+  });
+  const titles: Record<string, string> = {
+    a: 'Plan a week in Lisbon',
+    b: 'Groceries for Sunday',
+    c: 'Testing OpenRouter connectivity',
+    d: 'Quarterly planning offsite agenda',
+  };
+  const move = (to: 'work' | 'home' | 'today') => (ids: string[]) =>
+    setWhere((w) => ({ ...w, ...Object.fromEntries(ids.map((id) => [id, to])) }));
+  const rows = (place: 'work' | 'home' | 'today') =>
+    Object.entries(where)
+      .filter(([, at]) => at === place)
+      .map(([id]) => <Row key={id} chat={{ id, title: titles[id] ?? id }} />);
+  return (
+    <>
+      {(['work', 'home'] as const).map((place) => (
+        <ChatListSection
+          key={place}
+          kind="folder"
+          label={place === 'work' ? 'Work' : 'Home'}
+          icon={
+            <FolderMark
+              glyph={place === 'work' ? 'briefcase' : 'house'}
+              color={place === 'work' ? 'blue' : 'green'}
+            />
+          }
+          collapsible
+          count={rows(place).length}
+          actions={<FolderActions name={place === 'work' ? 'Work' : 'Home'} />}
+          onDropChats={move(place)}
+          dropHint={`Drop to move to ${place === 'work' ? 'Work' : 'Home'}`}
+          empty="Hold a chat to drag it here, or choose Move to."
+        >
+          {rows(place)}
+        </ChatListSection>
+      ))}
+      <ChatListSection
+        label="Today"
+        onDropChats={move('today')}
+        dropHint="Drop to take out of a folder"
+      >
+        {rows('today')}
+      </ChatListSection>
+    </>
+  );
+}
+
+/**
+ * On a phone, hold a chat for a moment and it lifts off the list, with a
+ * light tap of haptics where the phone has them. Move the finger and it
+ * comes along: every place that takes chats shows a faint ring, the one
+ * under the finger fills and says what letting go does, and the list
+ * scrolls by itself near its top and bottom. Let go on a folder and the chat
+ * moves there; anywhere else and it glides back. Let go without moving and
+ * the row's menu opens, as a hold always did. A finger that moves first is
+ * scrolling or swiping, and is left alone. Try it in a phone simulator or
+ * the browser's device mode.
+ */
+export const HoldToDrag: Story = { render: () => <HoldDemo /> };
+
+/** A held row, lifted under the finger before it moves (forced on here). */
+export const Lifted: Story = {
+  render: () => (
+    <ChatListSection label="Today">
+      <Row chat={{ id: 'a', title: 'Plan a week in Lisbon' }} />
+      <ChatRow data-held="lifted" dragIds={['b']}>
+        <a href="#b">Groceries for Sunday</a>
+      </ChatRow>
+      <Row chat={{ id: 'c', title: 'Testing OpenRouter connectivity' }} />
+    </ChatListSection>
   ),
 };
 
@@ -347,6 +448,7 @@ export const DropTarget: Story = {
         <Row chat={{ id: 'r3', title: 'Sourdough starter schedule', pinned: true }} />
       </ChatListSection>
       <ChatListSection
+        kind="folder"
         label="Work"
         icon={<FolderMark glyph="briefcase" color="blue" />}
         collapsible
@@ -493,6 +595,7 @@ export const Sidebar: Story = {
         />
       </ChatListSection>
       <ChatListSection
+        kind="folder"
         label="Work"
         icon={<FolderMark glyph="briefcase" color="blue" />}
         collapsible
@@ -505,6 +608,7 @@ export const Sidebar: Story = {
         <Row chat={{ id: 'w2', title: 'Draft the hiring post' }} />
       </ChatListSection>
       <ChatListSection
+        kind="folder"
         label="Home"
         icon={<FolderMark glyph="house" color="green" />}
         collapsible

@@ -27,3 +27,11 @@ export type {
   ToolPermission,
   ToolPermissionListProps,
 } from './ToolPermissionList';
+export { AccessLevels, AccountAccessCard } from './AccountAccess';
+export type {
+  AccessLevel,
+  AccessLevelsProps,
+  AccessService,
+  AccountAccessCardProps,
+  AccountState,
+} from './AccountAccess';

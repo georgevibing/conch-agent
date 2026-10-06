@@ -1,4 +1,34 @@
 @layer nacre.components {
+  /* ── The scale ──────────────────────────────────────────────────────────
+     One row height and one text size for everything a person reads as an
+     item (a chat, a folder), and a quieter label for groups. A computer
+     gets a comfortable 36px row and 14px text; a finger gets 44px rows
+     (the touch target guidance) and 16px text, the size a phone reads. */
+
+  .section,
+  .item,
+  .skeleton,
+  .ghost {
+    --cl-row-h: var(--nc-control-md);
+    --cl-row-font: var(--nc-text-md);
+    --cl-label-font: var(--nc-text-xs);
+    /* A folder's mark, and how far its chats sit in: under the folder's name. */
+    --cl-mark: 1.125rem;
+    --cl-nest: calc(var(--cl-mark) + var(--nc-space-2));
+  }
+
+  @media (pointer: coarse) {
+    .section,
+    .item,
+    .skeleton,
+    .ghost {
+      --cl-row-h: var(--nc-control-lg);
+      --cl-row-font: var(--nc-text-lg);
+      --cl-label-font: var(--nc-text-sm);
+      --cl-mark: 1.3125rem;
+    }
+  }
+
   /* ── A group ─────────────────────────────────────────────────────────── */
 
   .section {
@@ -53,7 +83,7 @@
     gap: var(--nc-space-1-5);
     min-inline-size: 0;
     color: var(--nc-text-subtle);
-    font-size: var(--nc-text-xs);
+    font-size: var(--cl-label-font);
     font-weight: var(--nc-weight-medium);
     line-height: var(--nc-leading-snug);
   }
@@ -154,7 +184,7 @@
     margin-inline-start: auto;
     padding-inline-end: var(--nc-space-2);
     color: var(--nc-text-accent);
-    font-size: var(--nc-text-xs);
+    font-size: var(--cl-label-font);
     font-weight: var(--nc-weight-medium);
     animation: nc-fade-in var(--nc-duration-fast) var(--nc-ease-out);
   }
@@ -174,6 +204,127 @@
     margin: 0;
     padding: 0;
     list-style: none;
+  }
+
+  .sectionEmpty {
+    padding: var(--nc-space-1-5) var(--nc-space-3);
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-snug);
+    text-wrap: pretty;
+  }
+
+  /* ── A folder ─────────────────────────────────────────────────────────
+     Named like a row, not a label: as large as the chats, in full colour
+     and a touch heavier, with its mark at a size that reads. The whole line
+     folds it. Its chats sit in under its name, so what's inside is plain. */
+
+  .section[data-kind='folder'] {
+    padding-block: 0 var(--nc-space-1);
+  }
+
+  .section[data-kind='folder'] .sectionHead {
+    gap: 0;
+    min-block-size: var(--cl-row-h);
+    margin-block-end: 1px;
+    padding-inline: 0;
+  }
+
+  .section[data-kind='folder'] .sectionToggle,
+  .section[data-kind='folder'] .sectionTitle {
+    flex: 1;
+    align-self: stretch;
+    gap: var(--nc-space-2);
+    margin: 0;
+    padding: 0 var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    color: var(--nc-text);
+    font-size: var(--cl-row-font);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  @media (hover: hover) {
+    .section[data-kind='folder'] .sectionToggle:hover {
+      color: var(--nc-text);
+    }
+  }
+
+  .section[data-kind='folder'] .sectionToggle:focus-visible {
+    outline-offset: -2px;
+  }
+
+  /* Whatever mark the app gives, at the folder's size. */
+  .section[data-kind='folder'] .sectionIcon > span {
+    --fm-size: var(--cl-mark);
+  }
+
+  .section[data-kind='folder'] .sectionChevron {
+    color: var(--nc-text-subtle);
+  }
+
+  /* How many are inside, while it's folded: at the line's end, before the
+     buttons' room, like a count on a row. */
+  .section[data-kind='folder'] .sectionCount {
+    order: 3;
+    margin-inline-start: auto;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+  }
+
+  /* Its buttons (New chat here, ⋯) sit over the line's end, like a row's ⋯:
+     room is kept for them so nothing moves, and they fade in under the
+     pointer, on the keyboard, and always on touch. They stay in the tab
+     order either way. */
+  .section[data-kind='folder'] .sectionToggle {
+    padding-inline-end: calc(2 * var(--nc-control-sm) + var(--nc-space-1-5));
+  }
+
+  .section[data-kind='folder'] .sectionActions {
+    position: absolute;
+    inset-inline-end: var(--nc-space-1);
+    gap: var(--nc-space-0-5);
+    margin-block: 0;
+    opacity: 0;
+  }
+
+  @media (hover: hover) {
+    .section[data-kind='folder'] .sectionHead:hover .sectionActions {
+      opacity: 1;
+    }
+
+    .section[data-kind='folder'] .sectionHead:hover .sectionToggle {
+      background: var(--nc-wash-2);
+    }
+  }
+
+  .section[data-kind='folder'] .sectionHead:focus-within .sectionActions,
+  .section[data-kind='folder'] .sectionActions:has([data-state='open']) {
+    opacity: 1;
+  }
+
+  @media (hover: none) {
+    .section[data-kind='folder'] .sectionActions {
+      opacity: 1;
+    }
+  }
+
+  /* Its chats, set in under the folder's name. */
+  .section[data-kind='folder'] .sectionList .link {
+    padding-inline-start: calc(var(--nc-space-3) + var(--cl-nest));
+  }
+
+  .section[data-kind='folder'] .sectionList .check {
+    inset-inline-start: calc(var(--nc-space-3) + var(--cl-nest));
+  }
+
+  .section[data-kind='folder'] .sectionList .item[data-selecting] .link {
+    padding-inline-start: calc(
+      var(--nc-space-3) + var(--cl-nest) + var(--cl-check) + var(--nc-space-2-5)
+    );
+  }
+
+  .section[data-kind='folder'] .sectionEmpty {
+    padding-inline-start: calc(var(--nc-space-3) + var(--cl-nest));
   }
 
   /* Folding: the rows' height eases away; a little room past the edge so a
@@ -253,12 +404,12 @@
     align-items: center;
     gap: var(--nc-space-2);
     min-inline-size: 0;
-    block-size: 2.125rem;
+    block-size: var(--cl-row-h);
     padding-inline: var(--nc-space-3) var(--cl-end-room, var(--nc-space-3));
     border-radius: var(--nc-radius-md);
     corner-shape: var(--nc-corner-shape);
     color: var(--nc-text-muted);
-    font-size: var(--nc-text-md);
+    font-size: var(--cl-row-font);
     text-decoration: none;
     -webkit-user-drag: element;
     transition:
@@ -307,14 +458,14 @@
     align-items: center;
   }
 
-  /* A chat app's logo, as small as the text beside it. */
+  /* A chat app's logo, as tall as the text beside it. */
   .leading > span[data-size] {
-    --il-size: 0.9rem;
+    --il-size: 1.05em;
   }
 
   .leading > svg {
-    inline-size: 0.95rem;
-    block-size: 0.95rem;
+    inline-size: 1.1em;
+    block-size: 1.1em;
   }
 
   .trailing {
@@ -336,7 +487,7 @@
   /* Quieter than any chat: the way into the archive. */
   .item[data-quiet] .link {
     color: var(--nc-text-subtle);
-    font-size: var(--nc-text-sm);
+    font-size: calc(var(--cl-row-font) - 1px);
   }
 
   .editing {
@@ -506,6 +657,111 @@
     animation: nc-fade-in var(--nc-duration-fast) var(--nc-ease-out);
   }
 
+  /* ── Holding and dragging with a finger ── */
+
+  /* A row that can be held keeps the phone's own long-press (selecting
+     text, a link's preview) out of the way. */
+  .item[data-holdable] {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .row {
+    transition:
+      scale var(--nc-spring-snappy-duration) var(--nc-spring-snappy),
+      box-shadow var(--nc-duration-fast) var(--nc-ease-out),
+      background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  /* Held long enough: the row rises off the list under the finger. */
+  .item[data-held='lifted'] {
+    z-index: 2;
+  }
+
+  .item[data-held='lifted'] .row {
+    scale: 1.03;
+    background: var(--nc-surface);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-3);
+    transition:
+      scale var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy),
+      box-shadow var(--nc-duration-fast) var(--nc-ease-out),
+      background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  /* Carried off: where it was stays, faintly, until it lands or comes home. */
+  .item[data-held='dragging'],
+  .item[data-held='dropped'] {
+    opacity: 0.35;
+  }
+
+  /* The row on the finger. Drawn over everything (a phone's sidebar is a sheet). */
+  .ghost {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: var(--nc-z-tooltip);
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    box-sizing: border-box;
+    padding-inline: var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    color: var(--nc-text);
+    font-family: var(--nc-font-sans);
+    font-size: var(--cl-row-font);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-4);
+    translate: var(--cl-ghost-x, 0px) var(--cl-ghost-y, 0px);
+    scale: 1.03;
+    pointer-events: none;
+    touch-action: none;
+  }
+
+  .ghostTitle {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ghostCount {
+    flex-shrink: 0;
+    min-inline-size: 1.5em;
+    padding: 0 var(--nc-space-1-5);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-9);
+    color: var(--nc-accent-contrast);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.6;
+    text-align: center;
+  }
+
+  /* Let go somewhere that takes nothing: it glides back to its place. */
+  .ghost[data-leaving='returning'] {
+    scale: 1;
+    transition:
+      translate var(--nc-spring-snappy-duration) var(--nc-spring-snappy),
+      scale var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  /* Let go on a folder: it settles in and is gone. */
+  .ghost[data-leaving='dropped'] {
+    scale: 0.85;
+    opacity: 0;
+    transition:
+      scale var(--nc-duration-base) var(--nc-ease-out),
+      opacity var(--nc-duration-base) var(--nc-ease-out);
+  }
+
   .dragImage {
     position: fixed;
     inset-block-start: -100px;
@@ -605,7 +861,7 @@
   .skeleton {
     display: flex;
     align-items: center;
-    block-size: 2.125rem;
+    block-size: var(--cl-row-h);
     padding-inline: var(--nc-space-3);
   }
 

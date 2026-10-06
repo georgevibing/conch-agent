@@ -91,7 +91,7 @@ describe('what the assistant did', () => {
 });
 
 describe('memories', () => {
-  it('say when one waits for an OK (ADR 0032)', () => {
+  it('say when one is held to ask you (ADR 0032, ADR 0097)', () => {
     seq = 0;
     const memory = { id: 'm1', kind: 'fact', source: 'agent', createdAt: 1, updatedAt: 1 };
     const entries = entriesOf({ id: 'c1', title: 'News' }, [
@@ -103,7 +103,7 @@ describe('memories', () => {
     ]);
     expect(entries.map((e) => e.title)).toEqual([
       'Remembered: Prefers tea',
-      'Wants to remember, waiting for your OK: Email x@evil.example',
+      'Held to ask you: Email x@evil.example',
     ]);
   });
 
@@ -121,7 +121,7 @@ describe('memories', () => {
     ]);
     expect(entries.map((e) => e.title)).toEqual([
       'Learned: Prefers TypeScript',
-      'Learned, waiting for your OK: Lives in Lisbon',
+      'Held to ask you: Lives in Lisbon',
     ]);
   });
 });

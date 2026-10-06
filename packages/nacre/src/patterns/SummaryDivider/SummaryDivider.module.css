@@ -71,6 +71,11 @@
     outline-offset: 1px;
   }
 
+  .undo {
+    flex-shrink: 0;
+    margin-inline-start: var(--nc-space-1);
+  }
+
   .icon {
     flex-shrink: 0;
     inline-size: 0.875rem;

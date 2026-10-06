@@ -140,25 +140,34 @@ export function EffortList() {
   );
 }
 
-/** Conch's own slash commands. */
+/** Conch's own slash commands, grouped by what each acts on. */
 export function SlashReference() {
+  const sections = [...new Set(reference.slash.map((command) => command.section))];
   return (
-    <Definitions label="Commands">
-      {reference.slash.map((command) => (
-        <Definitions.Item
-          key={command.name}
-          id={`slash-${command.name}`}
-          term={`/${command.name}${command.argumentHint ? ` ${command.argumentHint}` : ''}`}
-          meta={
-            command.aliases.length
-              ? `Also: ${command.aliases.map((alias) => `/${alias}`).join(', ')}`
-              : undefined
-          }
-        >
-          {command.description}.
-        </Definitions.Item>
+    <div className={styles.stack}>
+      {sections.map((section) => (
+        <Group key={section} title={section}>
+          <Definitions label={section}>
+            {reference.slash
+              .filter((command) => command.section === section)
+              .map((command) => (
+                <Definitions.Item
+                  key={command.name}
+                  id={`slash-${command.name}`}
+                  term={`/${command.name}${command.argumentHint ? ` ${command.argumentHint}` : ''}`}
+                  meta={
+                    command.aliases.length
+                      ? `Also: ${command.aliases.map((alias) => `/${alias}`).join(', ')}`
+                      : undefined
+                  }
+                >
+                  {command.description}.
+                </Definitions.Item>
+              ))}
+          </Definitions>
+        </Group>
       ))}
-    </Definitions>
+    </div>
   );
 }
 

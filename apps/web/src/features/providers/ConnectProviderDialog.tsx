@@ -23,7 +23,7 @@ import {
   type HandshakePhase,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, ExternalLink, Trash2 } from 'lucide-react';
+import { ExternalLink, Trash2 } from 'lucide-react';
 import { useEffect, useEffectEvent, useId, useRef, useState, type FormEvent } from 'react';
 
 import { api } from '../../api/client';
@@ -807,32 +807,21 @@ function ProviderBody({
 export function ProviderDetail({
   provider,
   onePassword,
-  onBack,
 }: {
   provider: Provider;
   onePassword: ProvidersList['onePassword'];
-  onBack: () => void;
 }) {
   useProviderWatch(provider);
   const signingIn = useSigningIn(provider);
   const titleId = useId();
-  const backRef = useRef<HTMLButtonElement>(null);
-  // Arriving here was your own click: focus lands where going back is.
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  // Arriving here was your own click: focus lands on what the page is. The way
+  // back is Settings' trail above it (Providers › Mistral).
   useEffect(() => {
-    backRef.current?.focus({ preventScroll: true, focusVisible: false } as FocusOptions);
+    titleRef.current?.focus({ preventScroll: true, focusVisible: false } as FocusOptions);
   }, []);
   return (
     <section aria-labelledby={titleId} className={styles.detail}>
-      <Button
-        ref={backRef}
-        variant="ghost"
-        size="sm"
-        leadingIcon={<ArrowLeft />}
-        onClick={onBack}
-        className={styles.back}
-      >
-        Providers
-      </Button>
       <Stack gap={3} className={styles.detailHeader}>
         <IntegrationHandshake
           name={provider.name}
@@ -840,7 +829,7 @@ export function ProviderDetail({
           color={provider.color}
           phase={phaseOf(provider, signingIn)}
         />
-        <Heading level={3} size="xl" id={titleId}>
+        <Heading level={3} size="xl" id={titleId} ref={titleRef} tabIndex={-1}>
           {titleOf(provider)}
         </Heading>
         <Text tone="muted">{provider.description}</Text>

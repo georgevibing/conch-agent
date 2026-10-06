@@ -11,7 +11,7 @@ import {
   Text,
   toast,
 } from '@conch/nacre';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 
 import { providersApi } from './api';
@@ -56,7 +56,6 @@ export interface AddServerProps {
   presets: ServerPreset[];
   /** Servers already running on this computer, to add in one press. */
   found: Found[];
-  onBack: () => void;
   /** Added: open its page. */
   onAdded: (id: string) => void;
   /** Open another provider's page (Ollama and LM Studio have their own). */
@@ -71,9 +70,9 @@ const OWN_CARDS: Record<string, string> = { Ollama: 'ollama', 'LM Studio': 'lm-s
  * address. Conch looks at the address as you type it and says what it found —
  * "llama.cpp, with 3 models" — so "Add" only appears once it will work.
  */
-export function AddServer({ presets, found, onBack, onAdded, onOpen }: AddServerProps) {
+export function AddServer({ presets, found, onAdded, onOpen }: AddServerProps) {
   const titleId = useId();
-  const backRef = useRef<HTMLButtonElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
   const [url, setUrl] = useState('');
   const [name, setName] = useState('');
   const [key, setKey] = useState('');
@@ -94,8 +93,9 @@ export function AddServer({ presets, found, onBack, onAdded, onOpen }: AddServer
   const probe = lookable && answer?.ask === ask ? answer.probe : undefined;
   const looking = lookable && !probe;
 
+  // Focus lands on what the page is; the way back is Settings' trail above it.
   useEffect(() => {
-    backRef.current?.focus({ preventScroll: true, focusVisible: false } as FocusOptions);
+    titleRef.current?.focus({ preventScroll: true, focusVisible: false } as FocusOptions);
   }, []);
 
   // Look at the address as it's typed, once typing stops; only the latest question is answered.
@@ -155,23 +155,13 @@ export function AddServer({ presets, found, onBack, onAdded, onOpen }: AddServer
 
   return (
     <section aria-labelledby={titleId} className={styles.detail}>
-      <Button
-        ref={backRef}
-        variant="ghost"
-        size="sm"
-        leadingIcon={<ArrowLeft />}
-        onClick={onBack}
-        className={styles.back}
-      >
-        Providers
-      </Button>
       <Stack gap={3} className={styles.detailHeader}>
         <IntegrationHandshake
           name={SERVER_TILE.name}
           brand="server"
           phase={probe?.ok ? 'connected' : looking ? 'waiting' : 'idle'}
         />
-        <Heading level={3} size="xl" id={titleId}>
+        <Heading level={3} size="xl" id={titleId} ref={titleRef} tabIndex={-1}>
           Add a server
         </Heading>
         <Text tone="muted">{SERVER_TILE.description}</Text>

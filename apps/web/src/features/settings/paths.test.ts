@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { behindOf, behindPath, settingsAt, settingsPath } from './paths';
+import { behindName, behindOf, behindPath, settingsAt, settingsPath } from './paths';
 
 describe('Settings addresses', () => {
   it('names every place, and a page inside one', () => {
@@ -37,5 +37,20 @@ describe('Settings addresses', () => {
     expect(behindPath(42)).toBeUndefined();
     expect(behindOf({ state: { behind: '/apps' } })).toBe('/apps');
     expect(behindOf({ state: null })).toBeUndefined();
+  });
+});
+
+describe('Leaving Settings', () => {
+  it('names the page it goes back to', () => {
+    expect(behindName(undefined)).toBe('Chats');
+    expect(behindName('/')).toBe('Chats');
+    expect(behindName('/c/c1?x=1')).toBe('Chats');
+    expect(behindName('/routines/r_1')).toBe('Routines');
+    expect(behindName('/apps')).toBe('Apps');
+    expect(behindName('/channels/ch_1')).toBe('Apps');
+    expect(behindName('/archived')).toBe('Archived chats');
+    // Something pinned has a name only its page knows.
+    expect(behindName('/apps/a_123')).toBe('Back');
+    expect(behindName('/somewhere-new')).toBe('Back');
   });
 });

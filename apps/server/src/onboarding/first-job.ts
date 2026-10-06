@@ -167,7 +167,9 @@ export class FirstJobService {
         )
           throw new FirstJobError(
             'connect',
-            'Reconnect the selected Google account with the access this job needs.',
+            account && account.state === 'ready'
+              ? 'This job needs more than that Google account may do. Open Apps and give it the access it needs.'
+              : 'Reconnect the selected Google account with the access this job needs.',
           );
       }
       return this.deps.tasks.create(create);

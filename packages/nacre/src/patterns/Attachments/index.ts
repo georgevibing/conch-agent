@@ -6,3 +6,5 @@ export { DropOverlay, useFileDrop } from './DropOverlay';
 export type { DropOverlayProps, FileDrop, UseFileDropOptions } from './DropOverlay';
 export { badgeOf, extensionOf, familyOf, formatBytes, metaOf, previewModeOf } from './fileType';
 export type { AttachmentInfo, AttachmentKind, FileFamily, PreviewMode } from './fileType';
+export { FileDropZone } from './FileDropZone';
+export type { FileDropState, FileDropZoneProps } from './FileDropZone';

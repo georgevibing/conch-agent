@@ -255,35 +255,6 @@
     color: var(--nc-text);
   }
 
-  /* Waits for an OK: the words get room, the icon sits by the first line,
-     and the two answers go underneath. Calm, like the line it becomes. */
-  .memory[data-waiting] {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    align-items: start;
-    column-gap: var(--nc-space-2-5);
-    row-gap: var(--nc-space-2);
-    align-self: stretch;
-    padding: var(--nc-space-2-5) var(--nc-space-3);
-    border-radius: var(--nc-radius-lg);
-    font-size: var(--nc-text-sm);
-  }
-
-  .memory[data-waiting] > svg {
-    margin-block-start: 0.2rem;
-  }
-
-  .memory[data-waiting] .memoryText {
-    white-space: normal;
-  }
-
-  .memoryActions {
-    grid-column: 2;
-    display: flex;
-    gap: var(--nc-space-1);
-    margin-inline-start: calc(var(--nc-space-2) * -1);
-  }
-
   /* Where a reply ended because you stopped it: a hairline across the column
      with a small mark in the middle, so it reads as an end, not as a message. */
   .stopped {

@@ -34,6 +34,13 @@ export {
 } from './MarkPicker';
 export { SelectionBar, type SelectionBarProps } from './SelectionBar';
 export {
+  edgeScroll,
+  HOLD_MS,
+  registerTouchDrop,
+  useTouchDrag,
+  type TouchDragSession,
+} from './touchDrag';
+export {
   SWIPE_COMMIT_SHARE,
   SWIPE_FLICK_MIN,
   SWIPE_FLICK_SPEED,

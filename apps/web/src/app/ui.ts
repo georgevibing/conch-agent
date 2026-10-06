@@ -11,7 +11,7 @@ export type { SettingsTab };
 export type Picker = 'model' | 'mode' | null;
 
 /** Where the memories open to, once (⌘K). */
-export type MemoryIntent = 'tidy' | 'meaning' | 'learned' | 'never';
+export type MemoryIntent = 'tidy' | 'meaning' | 'never';
 
 /** A Conch app's page open beside a chat (ADR 0061): a draft's while it's being made, or an app's. */
 export interface AppPageOpen {
@@ -87,6 +87,9 @@ interface UiState {
   picker: Picker;
   /** Model/effort/mode chosen for a new chat before its first message. */
   draftOptions: TurnOptions;
+  /** A goal set (`/goal`) for a new chat before its first message; it goes with that message. */
+  draftGoal: string | null;
+  setDraftGoal(goal: string | null): void;
   /** Words to put in the open chat's composer (e.g. `/weekly-review ` from ⌘K). */
   composerText: string | null;
   setComposerText(text: string | null): void;
@@ -150,7 +153,7 @@ interface UiState {
   terminalNew: number;
   /**
    * What to do as the memories open, once: ⌘K → Tidy up, Search by meaning,
-   * What Conch learned, Things Conch won't learn again (ADR 0088).
+   * Things Conch won't learn again (ADR 0088).
    */
   memoryIntent: MemoryIntent | null;
   setMemoryIntent(intent: MemoryIntent | null): void;
@@ -201,6 +204,8 @@ export const useUi = create<UiState>((set) => ({
   chatSpendOpen: null,
   picker: null,
   draftOptions: {},
+  draftGoal: null,
+  setDraftGoal: (draftGoal) => set({ draftGoal }),
   composerText: null,
   setComposerText: (composerText) => set({ composerText }),
   attachRequest: 0,
@@ -233,7 +238,13 @@ export const useUi = create<UiState>((set) => ({
       (tab === 'memory' && (focus === MEMORY_ALL || Boolean(focus?.startsWith('from-'))))
         ? focus
         : undefined;
-    set({ settingsFocus: item ? undefined : focus, paletteOpen: false });
+    // Settings has places of its own, floating in on a phone: the chats' sidebar
+    // steps out of the way rather than waiting underneath it.
+    set({
+      settingsFocus: item ? undefined : focus,
+      paletteOpen: false,
+      mobileSidebarOpen: false,
+    });
     showSettings(tab, item, move);
   },
   // The whole page rests while Conch starts again: nothing stays open over the calm

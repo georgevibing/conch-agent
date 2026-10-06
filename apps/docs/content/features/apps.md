@@ -35,7 +35,7 @@ Setting up one part offers the other when it can. After you connect Slack, the d
 When your assistant looks in Google Calendar, Gmail, Google Drive or Slack, the step says so in plain words beside the app's logo, like **Looked at your calendar** or **Read #design**. What it found shows under that step, the way the app itself would show it:
 
 - **Google Calendar**: the days you asked about, Today first. Each event has its time, a line in its calendar's colour, a camera for a video call and the place. A day with nothing on says **Free**, and today shows where now is.
-- **Gmail**: who each email is from, the subject, its first line and when it came, with a dot for unread and a clip for attachments. **Reply** puts "Draft a reply to …" in the box you type in. Nothing is sent: you read it, change it and send it.
+- **Gmail**: who each email is from, the subject, its first line and when it came, with a dot for unread and a clip for attachments. **Reply** puts "Draft a reply to …" in the box you type in. Nothing leaves without you: a draft waits in Gmail, and sending asks you with the finished email in front of you.
 - **Google Drive**: each file with its kind, whose it is and when it changed.
 - **Slack**: the channel, then who said what and when. A long message folds; **More** opens it.
 
@@ -83,15 +83,17 @@ When a model asks for a tool almost right, Conch reads what it meant: a number w
 
 ## Decide what it may do
 
-Choose how your assistant uses each app. Saving a Gmail draft always asks, whatever you choose, so it only offers **Ask** or **Off**:
+Choose how your assistant uses each app. Anything that changes something in Google — a draft, a sent email, a calendar event, a new Doc — always asks, whatever you choose, so those only offer **Ask** or **Off**:
 
 - **Ask every time.** It asks before every action.
 - **Ask before changes.** It looks things up on its own, and asks before it creates, sends, changes or deletes anything. Apps from the gallery start here.
 - **Don't ask.** It acts without asking. Something it reads could try to trick it, so Conch asks you to confirm it's you first.
 
-Under **Each tool**, every tool the app offers has its own **Allow**, **Ask** or **Off**, for when the switches under **What it does** aren't fine enough. Turn off what you don't need: your assistant stays more focused with fewer tools. Sending a Slack message, like saving a Gmail draft, only offers **Ask** or **Off**.
+Under **Each tool**, every tool the app offers has its own **Allow**, **Ask** or **Off**, for when the switches under **What it does** aren't fine enough. Turn off what you don't need: your assistant stays more focused with fewer tools. Sending a Slack message, like anything that changes something in Google, only offers **Ask** or **Off**.
 
-**Full trust** in a chat takes precedence over **Ask every time**, **Ask before changes** and a tool's **Ask** setting. Enabled app tools run without those questions, with every provider. Choosing Full trust also answers an ordinary app question already waiting. The saved app settings stay as they are and apply again when you leave Full trust. Tools turned **Off** stay off. Saving a Gmail draft, sending a Slack message and other mandatory confirmations still ask.
+A Google app only offers the tools its accounts can do: when every account is read only, **Draft & send** (or **Change events**, or **Make files**) says so and offers **Allow**, which takes you to **Google accounts**.
+
+**Full trust** in a chat takes precedence over **Ask every time**, **Ask before changes** and a tool's **Ask** setting. Enabled app tools run without those questions, with every provider. Choosing Full trust also answers an ordinary app question already waiting. The saved app settings stay as they are and apply again when you leave Full trust. Tools turned **Off** stay off. Saving a Gmail draft, sending an email, changing a calendar event, sending a Slack message and other mandatory confirmations still ask.
 
 If an app later changes what one of its tools does, Conch stops allowing that tool by itself and tells you.
 
@@ -152,28 +154,39 @@ An app made before Slack worked this way can't read for you yet. The dialog says
 
 To message your assistant in Slack as well, turn on **Talk to me here** on Slack's page and press **Set up**. It uses the same Slack app, but needs two more keys from it, the bot token and an app-level token: they're separate from the one that reads as you, so Conch asks for them on purpose. See [Slack](../channels/slack.md).
 
-## Connect Gmail with an app password
+## Your Google accounts
 
-The simple way, for Gmail only. It takes about two minutes.
+Gmail, Google Calendar and Google Drive share one list of accounts. Add as many as you like — your own and your work one, or two of each — and say for every account what your assistant may do in each app:
 
-1. In **Apps**, press **Gmail**. Type your Gmail address and press **Next**.
+- **Off.** It isn't used there at all.
+- **Read.** It can look: search and read your mail, see your events, find your files.
+- **Read & write.** It can also make changes — save a draft or send an email, add, move or delete an event, make a new Doc. **Every change asks you first**, with the exact email or event in front of you, whatever else you've chosen.
+
+The list is the same on all three pages (**Apps → Gmail**, **Google Calendar** or **Google Drive**), under **Google accounts**, with the app you opened marked. Each account says how it's signed in, whether it's working, and what it may do in each app. Turning something down is one tap. Turning it up is one tap too, unless Google hasn't allowed Conch that much yet: then the row says **Read & write asks Google once**, and choosing it opens one Google sign-in for that account, right there. Nothing else about the account changes.
+
+**Check now** looks at an account again. **Remove** forgets it: with Google sign-in, Conch asks Google to take its access back first; with an app password, Conch forgets the password, and Google’s app passwords page is where you remove it at Google too. To stop one app using an account but keep the account, set that app to **Off** on it instead.
+
+## Add a Google account
+
+Press **Add an account** under **Google accounts**, or press an app's tile in the gallery. Three short steps:
+
+1. **What should it help with?** Choose Off, Read or Read & write for Gmail, Calendar and Drive. You can change this any time.
+2. **How to connect.** Conch marks the simplest way for what you chose and says the trade-off in one line. An **app password** takes about two minutes and reaches Gmail only. **Google sign-in** reaches all three, and needs your own free Google Cloud app once — unless you've already set that up, when it's one press.
+3. **Connect.** The steps for whichever way you picked.
+
+### With an app password (Gmail only)
+
+1. Type your Gmail address and press **Next**.
 2. Press **Open Google’s app passwords page**. Google only offers app passwords once [2-Step Verification](https://myaccount.google.com/signinoptions/two-step-verification) is on; its page says how. Name the password “Conch” and press **Create**.
 3. Paste the 16 letters into **App password**. Conch checks them by signing in to Gmail as they land, and says so if Google refuses them.
 
-If you already talk to your assistant by email from Gmail, Conch asks whether Gmail may use the same app password: press **Use it for Gmail**. The other way round, turning on **Talk to me here** on Gmail's page uses Gmail's app password for writing to `you+conch@gmail.com`. It's never shared without asking.
+An app password reaches Gmail, over IMAP for reading and SMTP for sending, and nothing else: on such an account, Calendar and Drive say so and offer **Use Google sign-in**. If you already talk to your assistant by email from Gmail, Conch asks whether Gmail may use the same app password: press **Use it for Gmail**. The other way round, turning on **Talk to me here** on Gmail's page uses Gmail's app password for writing to `you+conch@gmail.com`. It's never shared without asking.
 
-With an app password, your assistant can search Gmail, read emails and save drafts in your **Drafts** folder. It can't send: Conch only reads mail and adds drafts (IMAP), and asks you before every draft. Google Calendar and Google Drive can't use an app password; they need the Google Cloud way below.
+If Google stops taking the password (you removed it, or changed your Google password), the account says **Needs you** with the field to paste a new one, and Gmail moves to the top of **Connected** with **Sign in again**. What that account may do stays as you set it.
 
-If Google stops taking the password (you removed it, or changed your Google password), Gmail moves to the top of **Connected** with **Sign in again**. Its page has the field to paste a new one. **Disconnect** forgets the password; to stop it working at Google too, remove it on Google’s app passwords page.
+### With Google sign-in
 
-## Connect with your own Google Cloud app
-
-The way for Google Calendar and Google Drive, and the advanced way for Gmail (press **Use your own Google Cloud app instead (advanced)** in its dialog). One Google account can serve all three apps; each asks Google only for what it needs, and a later one adds its permission to the same account.
-
-Google accounts belong to **Conch**, not your model provider. Choose the personal
-or work account you want; Conch shows its email address and the access actually
-granted. Reconnecting an account keeps its existing access and requests the
-additional permissions.
+Google accounts belong to **Conch**, not your model provider. Choose the personal or work account you want; Conch shows its address and what it may actually do. Signing in again keeps everything the account already has and adds the one thing you asked for.
 
 ### One-time setup, with no hosted connection service
 
@@ -184,8 +197,8 @@ There is no Conch cloud account, public callback address, or extra service to ru
 1. Follow the setup guide to create or choose a Google Cloud project. An optional **Project ID** makes subsequent links open the right project.
 2. Open each API linked for your job and press **Enable**. You do not need to enable unrelated Google apps.
 3. Open **Branding** in Google Auth Platform and complete the app details. In **Audience**, add your email under **Test users** while the app is in Testing. Personal Google accounts use **External**; **Internal** is for eligible Workspace organizations.
-4. Open **Clients**, press **Create client**, choose **Desktop app**, and download the JSON. Choose that file under **Google credential JSON**, or paste its contents into **Or paste credential JSON**. Conch checks the file before you save it.
-5. Press **Save and connect Google**. Choose your account on Google’s own sign-in page and review its permissions.
+4. Open **Clients**, press **Create client**, choose **Desktop app**, and download the JSON. Drop that file onto **Drop the file you downloaded**, press **Choose the file**, or press **Paste what’s in it instead** and paste its contents. Conch checks it here and says what kind of client it is before you save it.
+5. Press **Save and continue with Google**. Choose your account on Google’s own sign-in page and review its permissions.
 
 Already have the file? Press **I already have a credential file**. No need to
 copy individual IDs or secrets. Credentials are encrypted on your Conch
@@ -208,42 +221,52 @@ need a registered callback.
 Your current job stays open. If a popup is blocked, press **Open Google sign-in**.
 Reloading Conch resumes the pending flow in the same tab. A sign-in expires after
 ten minutes; if Conch restarts, start a new sign-in without repeating app setup.
-Conch checks the account and actual API access before continuing your job.
-Use **Reconnect** to restore revoked access or add permissions for a new job.
-Use **Connect Google · another account** to add work and personal separately.
-Changing accounts during a reconnect is refused so a job cannot silently move
-to another mailbox.
+Conch checks the account and actual API access before continuing. **Add an
+account** adds work and personal separately. Signing in again for an account
+refuses a different one, so nothing can quietly move to another mailbox.
 
 ### If Google needs something changed
 
-Open **Sign-in help** for links to the correct project settings:
+Open **If Google says no** for links to the right project settings:
 
-- **API not enabled:** enable the named API, wait briefly, then press **Check connection**. Conch keeps your sign-in and does not ask you to grant access again unnecessarily.
+- **API not enabled:** enable the named API, wait briefly, then press **Check now** on the account. Conch keeps your sign-in and does not ask you to grant access again unnecessarily.
 - **Test user missing or access blocked:** add the exact Google email under **Audience → Test users**. Workspace administrators may need to allow the app.
 - **Unverified app:** check that it is your own app in your own project before using Google's available personal-testing option. A policy block may need an administrator, not another sign-in attempt.
 - **Access expires every week:** Google Testing mode can expire refresh tokens after seven days. Review **Audience** before leaving Testing; sensitive access or public distribution may require verification. Conch does not publish your app for you.
 - **Wrong file or callback:** import a current Desktop app OAuth JSON, not a service-account key. Web clients must contain the callback displayed by this Conch installation.
 
-### What Google access allows
+### What read and write cover
 
-Gmail supports search, reading and saving **drafts only**. Conch asks before
-saving and verifies the saved content. Replies use the original message’s verified
-thread, reply address and subject; sent-email followups go to the original recipients.
-Mail is decoded into readable text with a source link that opens the correct account. It never sends messages. Google’s own
-draft scope also includes sending; Conch explains this before consent, but does
-not expose a send action. If Google does not confirm a save, Conch checks for the
-existing draft rather than automatically creating a duplicate. Check the draft
-in Gmail if the result remains uncertain.
+With **Read**, Gmail is searched and read, Calendar’s events are read, and
+Drive’s file names and details are read — not what’s inside a document.
 
-Calendar is read-only. Drive currently searches files and reads their metadata
-and description; it does **not** read document bodies or change files. The
-Google APIs must be enabled in the registered project. Google Workspace admins
-can restrict access. Public applications using Gmail or Drive scopes may require
-Google verification; a testing app’s refresh tokens can expire after seven days.
-Conch does not claim that a public OAuth application has been verified for you.
+With **Read & write**, each app can also do exactly this, and asks you every
+single time, showing what will happen:
 
-**Disconnect** on one app keeps a Google account the other Google apps still use.
-When no app uses it any more, Conch revokes Google access before removing its local sign-in. If Google
-is offline, Conch keeps the entry so you can retry deliberately; you can also
-remove access in your Google account’s third-party connections. **Repair everything**
-checks connected accounts and refreshes access when it safely can.
+- **Gmail:** save a draft in your **Drafts**, or send an email or a reply.
+  Replies use the original message’s verified thread, reply address and subject;
+  sent-email follow-ups go to the original recipients. Nothing else about your
+  mailbox is touched: no labels, no deleting, no settings.
+- **Google Calendar:** add an event, change its title, time, place or
+  description, or delete it. Guests are only emailed when you say so.
+- **Google Drive:** make a new Google Doc or text file. Conch can only touch
+  files it made itself: your other files can’t be changed or deleted, because
+  Google never gives Conch access to them.
+
+If Google doesn’t confirm a change, Conch looks for it rather than doing it
+again: an event Conch adds carries an id of its own, an email it sends carries
+its own Message-ID, and a file it makes carries a mark. A result that stays
+uncertain is said plainly, with where to look — it is never repeated.
+
+The Google APIs must be enabled in the registered project. Google Workspace
+admins can restrict access. Public applications using Gmail or Drive scopes may
+require Google verification; a testing app’s refresh tokens can expire after
+seven days. Conch does not claim that a public OAuth application has been
+verified for you.
+
+**Disconnect** on one app keeps a Google account the other Google apps still
+use. When no app uses it any more, Conch revokes Google access before removing
+its local sign-in. If Google is offline, Conch keeps the entry so you can retry
+deliberately; you can also remove access in your Google account’s third-party
+connections. **Repair everything** checks connected accounts and refreshes
+access when it safely can.

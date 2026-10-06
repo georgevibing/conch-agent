@@ -95,7 +95,7 @@ import { ADDRESS_FOCUS, DEVICES_FOCUS, PASSKEYS_FOCUS } from '../auth/focus';
 import { FALLBACK_FOCUS } from '../settings/FallbackSection';
 import { PLAN_ROOM_FOCUS, ROUTINES_SPEND_FOCUS } from '../routines/SpendingSection';
 import { LEARNING_SPEND_FOCUS } from '../learning/LearningSpendSection';
-import { LEARNED_INTENT, NEVER_INTENT } from '../learning/LearningSections';
+import { NEVER_INTENT } from '../learning/LearningSections';
 import { useQuietChat } from '../learning/useQuietChat';
 import { TURN_LIMITS_FOCUS } from '../usage/TurnLimitsSection';
 import { APP_WORDS, APPS } from '../channels/describe';
@@ -645,6 +645,20 @@ export function useFindables(query: string, conversationId: string | undefined):
     icon: <FolderMark glyph={item.glyph} color={item.color} size="xs" />,
     run: () => showFolder(item.id, narrow),
   }));
+  // A new chat straight into a folder, as its ✎ in the sidebar starts one.
+  const newInItems = find(
+    /\b(?:new|start|begin)\b/i.test(q) ? (folders ?? []) : [],
+    q,
+    (f) => `New chat in ${f.name}`,
+    (f) => `new start begin chat conversation in folder ${f.name}`,
+    3,
+  ).map(({ item, match }): Findable => ({
+    id: `new-in:${item.id}`,
+    label: `New chat in ${item.name}`,
+    ranges: match.ranges,
+    icon: <FolderMark glyph={item.glyph} color={item.color} size="xs" />,
+    run: () => void navigate('/', { state: { folder: item.id } }),
+  }));
   const moveItems = find(
     here && isChat(here) && /\b(?:move|file|folder|put)\b/i.test(q)
       ? (folders ?? []).filter((f) => f.id !== here.folderId)
@@ -860,7 +874,7 @@ export function useFindables(query: string, conversationId: string | undefined):
       id: 'memory-page',
       label: 'What Conch knows about you',
       keywords:
-        'what do you know remember about me memory memories remembered profile forget learned learnings',
+        'what do you know remember about me memory memories remembered profile forget learned learnings recently lately picked up noticed corrections self improving improve automatically',
       icon: <Brain />,
       run: () => openSettings('memory', MEMORY_ALL),
     },
@@ -885,18 +899,7 @@ export function useFindables(query: string, conversationId: string | undefined):
         openSettings('memory', MEMORY_ALL);
       },
     },
-    // Quiet learning (ADR 0088): what it learned by itself, and what it won't learn again.
-    {
-      id: 'learned',
-      label: 'What Conch learned',
-      keywords:
-        'learned learning learnt recently lately recap week picked up noticed corrections undo why self improving improve automatically',
-      icon: <Sparkles />,
-      run: () => {
-        useUi.getState().setMemoryIntent(LEARNED_INTENT);
-        openSettings('memory', MEMORY_ALL);
-      },
-    },
+    // Quiet learning (ADR 0088, ADR 0097): what it learned is the Memory page itself.
     {
       id: 'never-learn',
       label: 'Things Conch won’t learn again',
@@ -1098,7 +1101,7 @@ export function useFindables(query: string, conversationId: string | undefined):
       id: 'apps',
       label: 'Apps',
       keywords:
-        'integrations integration connect mcp Google Gmail calendar Drive Slack 1Password personal work account app password',
+        'integrations integration connect mcp Google Gmail calendar Drive Slack 1Password personal work account app password accounts read write access permissions send',
       icon: <Blocks />,
       run: () => void navigate('/apps'),
     },
@@ -1230,7 +1233,7 @@ export function useFindables(query: string, conversationId: string | undefined):
     { heading: 'Models', items: modelItems },
     { heading: 'Apps', items: [...appItems, ...pageItems] },
     { heading: 'Talk to me here', items: channelItems },
-    { heading: 'Folders', items: [...folderItems, ...moveItems] },
+    { heading: 'Folders', items: [...folderItems, ...newInItems, ...moveItems] },
     { heading: 'Routines', items: routineItems },
     { heading: 'Made for you', items: [...artifactItems, ...editItems] },
     { heading: 'Tasks', items: taskItems },

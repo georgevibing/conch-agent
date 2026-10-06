@@ -97,6 +97,32 @@ describe('handoff', () => {
   });
 });
 
+describe('after /clear', () => {
+  it('hands over nothing from before where the model’s memory starts, nor its summary', () => {
+    seq = 0;
+    const events: ConversationEvent[] = [
+      user('the old question'), // 0
+      ...reply('a1', 'the old answer'), // 1
+      {
+        ...base(),
+        type: 'context.compacted',
+        summary: 'Old news.',
+        engine: 'openrouter',
+        turns: 1,
+      }, // 2
+      { ...base(), type: 'context.cleared' }, // 3
+      user('a fresh start'), // 4
+      ...reply('a2', 'hello again'), // 5
+      user('now you'), // 6
+    ];
+    const text = handoff(events, { afterSeq: -1, beforeSeq: 6, startSeq: 3, maxChars: 200 }) ?? '';
+    expect(text).toContain('User: a fresh start');
+    expect(text).not.toContain('the old');
+    expect(text).not.toContain('Old news');
+    expect(handoff(events, { afterSeq: -1, beforeSeq: 4, startSeq: 3 })).toBeUndefined();
+  });
+});
+
 describe('what was done, handed over too', () => {
   const at = () => base();
   const tool = (

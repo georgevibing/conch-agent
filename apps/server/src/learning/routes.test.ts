@@ -52,7 +52,7 @@ function send(services: Services, text: string, conversationId?: string) {
 }
 
 describe('quiet learning through the gateway (ADR 0088)', () => {
-  it('learns a correction, says so in the chat, and Undo takes it back for good', async () => {
+  it('learns a correction silently, and Undo takes it back for good', async () => {
     const { services, app } = await setup();
     const id = await send(services, 'Write me a script to rename photos');
     await send(services, 'No, I meant TypeScript.', id);
@@ -70,7 +70,8 @@ describe('quiet learning through the gateway (ADR 0088)', () => {
       (e): e is Extract<ConversationEvent, { type: 'learning.noted' }> =>
         e.type === 'learning.noted',
     );
-    expect(noted?.items[0]).toMatchObject({ text: 'Prefers TypeScript', state: 'applied' });
+    // Routine learning says nothing in the chat (ADR 0097): the Memory page has it.
+    expect(noted).toBeUndefined();
 
     const undo = await app.inject({
       method: 'POST',

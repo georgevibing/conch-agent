@@ -80,3 +80,26 @@ export function behindOf(location: Pick<Location, 'state'>): string | undefined 
   const state = location.state as SettingsState | null | undefined;
   return behindPath(state?.behind);
 }
+
+/** The pages Settings can open over, by what their addresses start with. */
+const BEHIND_NAMES: [prefix: string, name: string][] = [
+  ['/routines', 'Routines'],
+  ['/skills', 'Skills'],
+  ['/apps/a_', 'Back'],
+  ['/apps', 'Apps'],
+  ['/channels', 'Apps'],
+  ['/tasks', 'Tasks'],
+  ['/passwords', 'Passwords'],
+  ['/activity', 'Activity'],
+  ['/archived', 'Archived chats'],
+];
+
+/**
+ * What leaving Settings goes back to, in a word for its button: Chats from a
+ * chat (or when it was opened by its address), the page's name from another.
+ */
+export function behindName(behind: string | undefined): string {
+  const pathname = behind?.split(/[?#]/)[0] ?? '/';
+  if (pathname === '/' || pathname.startsWith('/c/')) return 'Chats';
+  return BEHIND_NAMES.find(([prefix]) => pathname.startsWith(prefix))?.[1] ?? 'Back';
+}

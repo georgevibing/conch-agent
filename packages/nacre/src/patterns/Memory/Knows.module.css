@@ -1,0 +1,501 @@
+@layer nacre.components {
+  /* ── Kind colours: one per kind, never only colour (each has its name) ── */
+  :is(.segment, .kind, .dot, .cell)[data-kind='preference'] {
+    --kg-color: var(--nc-chart-1);
+  }
+
+  :is(.segment, .kind, .dot, .cell)[data-kind='person'] {
+    --kg-color: var(--nc-chart-5);
+  }
+
+  :is(.segment, .kind, .dot, .cell)[data-kind='project'] {
+    --kg-color: var(--nc-chart-3);
+  }
+
+  :is(.segment, .kind, .dot, .cell)[data-kind='fact'] {
+    --kg-color: var(--nc-chart-4);
+  }
+
+  /* ── The glance ── */
+  .glance {
+    --nc-rim-hover: 0.5;
+    --nc-sheen-hover: 0.18;
+    --nc-sheen-size: 220px;
+    /* How long one ripple of the learning dot takes: slow, like breathing. */
+    --kg-ripple: 2.8s;
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-4);
+    padding: var(--nc-space-5);
+    border: 1px solid var(--nc-border-subtle);
+    border-radius: var(--nc-radius-xl);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow: var(--nc-glaze-edge), var(--nc-elevation-1);
+    animation: nc-surface-in var(--nc-duration-slow) var(--nc-ease-out) both;
+  }
+
+  .glanceTop {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--nc-space-2) var(--nc-space-4);
+  }
+
+  .total {
+    display: flex;
+    align-items: baseline;
+    gap: var(--nc-space-2);
+    margin: 0;
+  }
+
+  .number {
+    color: var(--nc-text);
+    font-family: var(--nc-font-display);
+    font-size: var(--nc-text-4xl);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .noun {
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+  }
+
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+  }
+
+  .pulse {
+    position: relative;
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-gray-8);
+  }
+
+  .status[data-learning] .pulse {
+    background: light-dark(
+      oklch(0.62 0.15 var(--nc-success-h)),
+      oklch(0.7 0.14 var(--nc-success-h))
+    );
+  }
+
+  .status[data-learning] .pulse::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: inherit;
+    animation: kg-ripple var(--kg-ripple) var(--nc-ease-out) infinite;
+  }
+
+  @keyframes kg-ripple {
+    from {
+      scale: 1;
+      opacity: 0.55;
+    }
+    70%,
+    to {
+      scale: 2.6;
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .status[data-learning] .pulse::after {
+      animation: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .status[data-learning] .pulse::after {
+    animation: none;
+  }
+
+  /* One bar, a share per kind: how much of what it knows is what. */
+  .bar {
+    display: flex;
+    gap: var(--nc-space-0-5);
+    block-size: 0.625rem;
+    overflow: hidden;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface-sunken);
+    transform-origin: left center;
+    animation: kg-grow var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  .bar:dir(rtl) {
+    transform-origin: right center;
+  }
+
+  @keyframes kg-grow {
+    from {
+      scale: 0 1;
+    }
+  }
+
+  /* Nothing known yet: no empty bar to look at. */
+  .glance[data-empty] .bar {
+    display: none;
+  }
+
+  .segment {
+    flex: var(--kg-share) 1 0;
+    min-inline-size: 0.375rem;
+    background: var(--kg-color);
+    transition:
+      flex-grow var(--nc-spring-soft-duration) var(--nc-spring-soft),
+      opacity var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .segment[data-dim] {
+    opacity: 0.22;
+  }
+
+  .kinds {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1-5);
+  }
+
+  .kind {
+    all: unset;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    min-block-size: 2rem;
+    padding-inline: var(--nc-space-2-5);
+    border: 1px solid var(--nc-border-subtle);
+    border-radius: var(--nc-radius-full);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      border-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      scale var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .kind:active:not(:disabled) {
+    scale: 0.96;
+  }
+
+  .kind:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .kind:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+
+  .kind[aria-pressed='true'] {
+    border-color: color-mix(in oklab, var(--kg-color) 55%, transparent);
+    background: color-mix(in oklab, var(--kg-color) 14%, transparent);
+    color: var(--nc-text);
+  }
+
+  @media (hover: hover) {
+    .kind:hover:not(:disabled, [aria-pressed='true']) {
+      background: var(--nc-gray-2);
+      color: var(--nc-text);
+    }
+  }
+
+  .count {
+    color: var(--nc-text-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dot {
+    flex-shrink: 0;
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--kg-color, var(--nc-gray-8));
+  }
+
+  /* ── The list ── */
+  .cells {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--nc-border-subtle);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    overflow: clip;
+  }
+
+  .cell {
+    position: relative;
+    display: grid;
+    grid-template-rows: 1fr;
+    animation: nc-surface-in var(--nc-duration-slow) var(--nc-ease-out) both;
+    animation-delay: calc(var(--kc-i, 0) * 28ms);
+    transition:
+      grid-template-rows var(--nc-duration-slow) var(--nc-ease-in-out),
+      opacity var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  /* A hairline between cells, starting after the dot, the way a list reads. */
+  .cell + .cell::before,
+  .add + .cell::before {
+    content: '';
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline: calc(var(--nc-space-4) + 0.5rem + var(--nc-space-3)) 0;
+    z-index: 1;
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .cell[data-leaving] {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+
+  .cell[data-leaving]::before {
+    display: none;
+  }
+
+  .cellFold {
+    min-block-size: 0;
+    overflow: hidden;
+    background: var(--nc-surface);
+    translate: var(--kc-swipe-x, 0px) 0;
+  }
+
+  .cell[data-swiping='settling'] .cellFold {
+    transition: translate var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .cell[data-swipeable] {
+    touch-action: pan-y;
+  }
+
+  .cellRow {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-3) var(--nc-space-3) var(--nc-space-3) var(--nc-space-4);
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .cellRow > .dot {
+    margin-block-start: 0.4rem;
+  }
+
+  @media (hover: hover) {
+    .cell:not([data-editing]):hover .cellRow {
+      background: var(--nc-gray-2);
+    }
+  }
+
+  .cellBody {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    min-inline-size: 0;
+  }
+
+  .words {
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    text-wrap: pretty;
+    overflow-wrap: anywhere;
+  }
+
+  .wordsButton {
+    all: unset;
+    display: block;
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    text-wrap: pretty;
+    overflow-wrap: anywhere;
+    cursor: text;
+    border-radius: var(--nc-radius-xs);
+  }
+
+  .wordsButton:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .meta {
+    margin: 0;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-snug);
+  }
+
+  /* Edit and Forget: there when you reach for them. */
+  .cellActions {
+    display: flex;
+    flex-shrink: 0;
+    gap: var(--nc-space-0-5);
+    margin-block: calc(var(--nc-space-1) * -1);
+    opacity: 0;
+    transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .cell:focus-within .cellActions {
+    opacity: 1;
+  }
+
+  @media (hover: hover) {
+    .cell:hover .cellActions {
+      opacity: 1;
+    }
+  }
+
+  /* On a phone the words are the button, and a swipe forgets: no buttons to hunt for. */
+  @media (hover: none) {
+    .cellActions {
+      display: none;
+    }
+  }
+
+  .swipeBack {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--nc-space-1-5);
+    padding-inline: var(--nc-space-5);
+    background: light-dark(
+      oklch(0.58 0.19 var(--nc-danger-h)),
+      oklch(0.56 0.17 var(--nc-danger-h))
+    );
+    color: oklch(1 0 0);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    opacity: 0;
+  }
+
+  .cell[data-swiping] .swipeBack,
+  .cell[data-leaving] .swipeBack {
+    opacity: 1;
+  }
+
+  .swipeBack > svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    transition: scale var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  .swipeBack[data-armed] > svg {
+    scale: 1.2;
+  }
+
+  /* ── Remember what you typed ── */
+  .add {
+    position: relative;
+    animation: nc-surface-in var(--nc-duration-base) var(--nc-ease-out) both;
+  }
+
+  .addButton {
+    all: unset;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    inline-size: 100%;
+    padding: var(--nc-space-3) var(--nc-space-4);
+    color: var(--nc-text-accent);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    cursor: pointer;
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .addButton:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+
+  @media (hover: hover) {
+    .addButton:hover {
+      background: var(--nc-gray-2);
+    }
+  }
+
+  .addIcon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    margin-inline-start: -0.375rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-9);
+    color: var(--nc-accent-contrast);
+  }
+
+  .addIcon > svg {
+    inline-size: 0.8rem;
+    block-size: 0.8rem;
+  }
+
+  .addWords {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .addWords > q {
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-regular);
+  }
+
+  /* ── Search by meaning, in one line ── */
+  .hint {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-block-size: 2rem;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+  }
+
+  .hintIcon {
+    flex-shrink: 0;
+    inline-size: 0.9rem;
+    block-size: 0.9rem;
+    color: var(--nc-text-accent);
+  }
+
+  .hint[data-state='problem'] .hintIcon {
+    color: var(--nc-text-subtle);
+  }
+
+  .hintWords {
+    min-inline-size: 0;
+  }
+
+  .hintProgress {
+    flex: 1 1 8rem;
+    max-inline-size: 12rem;
+  }
+
+  .hintAction {
+    margin-inline-start: auto;
+  }
+}

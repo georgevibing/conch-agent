@@ -432,13 +432,19 @@ export function TaintItem({ item, first }: { item: Of<'taint'>; first: boolean }
 }
 
 export function MemoryPill({ item }: { item: Of<'memory'> }) {
-  // Held by the memory check (ADR 0087): a card that says why, and asks.
-  if (item.held && item.action === 'saved')
+  // Anything not remembered yet is the memory check asking (ADR 0087, ADR 0097):
+  // one card, saying why. Nothing routine ever waits here.
+  if (item.action === 'saved' && (item.held || item.pending))
     return (
       <HeldMemory
         memoryId={item.memoryId}
         content={item.content}
-        held={item.held}
+        held={
+          item.held ?? {
+            verdict: 'ask',
+            reasons: [{ code: 'outside', words: 'Conch wasn’t sure about this one.' }],
+          }
+        }
         {...(item.decided && { decided: item.decided })}
       />
     );
@@ -465,63 +471,47 @@ function MemoryLine({ item }: { item: Of<'memory'> }) {
       toast.error((e as Error).message);
     }
   };
-  // Learned where nobody could undo it at once (a routine, a chat app): it waits for an OK.
-  const waiting = item.action === 'saved' && item.pending && !answer;
   // One it forgot, that you put back: remembered again.
   const putBack = item.action === 'forgotten' && answer === 'kept';
   const label = putBack
     ? 'Put back'
     : answer === 'undone' || item.action === 'forgotten'
       ? 'Forgot'
-      : waiting
-        ? 'Wants to remember'
-        : 'Remembered';
+      : 'Remembered';
   return (
     <div
       className={styles.memory}
       data-action={answer === 'undone' ? 'undone' : putBack ? 'saved' : item.action}
-      data-waiting={waiting || undefined}
     >
       <Brain aria-hidden />
       <span className={styles.memoryText}>
         <span className={styles.memoryLabel}>{label}</span> {item.content}
       </span>
-      {waiting ? (
-        <div className={styles.memoryActions}>
-          <Button variant="soft" size="sm" onClick={() => void act(true)}>
-            Keep
-          </Button>
-          <Button variant="ghost" tone="neutral" size="sm" onClick={() => void act(false)}>
-            Forget
-          </Button>
-        </div>
-      ) : item.action === 'forgotten' ? (
-        // It forgot something: Undo puts it back, exactly as it was.
-        item.memory &&
-        !putBack && (
-          <Button
-            variant="ghost"
-            tone="neutral"
-            size="sm"
-            leadingIcon={<Undo2 />}
-            onClick={() => void act(true)}
-          >
-            Undo
-          </Button>
-        )
-      ) : (
-        answer !== 'undone' && (
-          <Button
-            variant="ghost"
-            tone="neutral"
-            size="sm"
-            leadingIcon={<Undo2 />}
-            onClick={() => void act(false)}
-          >
-            Undo
-          </Button>
-        )
-      )}
+      {item.action === 'forgotten'
+        ? // It forgot something: Undo puts it back, exactly as it was.
+          item.memory &&
+          !putBack && (
+            <Button
+              variant="ghost"
+              tone="neutral"
+              size="sm"
+              leadingIcon={<Undo2 />}
+              onClick={() => void act(true)}
+            >
+              Undo
+            </Button>
+          )
+        : answer !== 'undone' && (
+            <Button
+              variant="ghost"
+              tone="neutral"
+              size="sm"
+              leadingIcon={<Undo2 />}
+              onClick={() => void act(false)}
+            >
+              Undo
+            </Button>
+          )}
     </div>
   );
 }

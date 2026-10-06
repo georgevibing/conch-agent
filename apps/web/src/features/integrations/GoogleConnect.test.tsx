@@ -8,7 +8,23 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
-describe('Google connection', () => {
+const client = {
+  installed: {
+    client_id: 'client.apps.googleusercontent.com',
+    client_secret: 'not-a-real-secret',
+    project_id: 'my-conch-project',
+  },
+};
+const fileOf = (content: unknown, name = 'client_secret.json') => {
+  const text = typeof content === 'string' ? content : JSON.stringify(content);
+  const file = new File([text], name, { type: 'application/json' });
+  // jsdom does not yet implement Blob.text; the actual browser file API is used in production.
+  Object.defineProperty(file, 'text', { value: async () => text });
+  return file;
+};
+const picker = () => document.querySelector('input[type="file"]') as HTMLInputElement;
+
+describe('Google sign-in', () => {
   it('clears recovery state before continuing a finished job, even when that continuation unmounts the view', async () => {
     sessionStorage.setItem('conch-google-flow:new:mail-read', 'completed-flow');
     const account = {
@@ -28,30 +44,26 @@ describe('Google connection', () => {
     renderApp(<GoogleConnect capabilities={['mail-read']} onReady={onReady} />);
     await waitFor(() => expect(onReady).toHaveBeenCalledExactlyOnceWith('personal'));
   });
-  it('guides personal setup, skips to credential import, and keeps Web credentials advanced', async () => {
+
+  it('guides setup, skips to the file, and keeps Web credentials advanced', async () => {
     mockFetch({ 'GET /api/google': () => ({ configured: false, accounts: [] }) });
     renderApp(<GoogleConnect capabilities={['mail-read']} onReady={() => {}} />);
     await userEvent.click(
       await screen.findByRole('button', { name: 'I already have a credential file' }),
     );
-    expect(screen.getByRole('button', { name: 'Save and connect Google' })).toBeDisabled();
-    expect(screen.getByLabelText('Google credential JSON')).toHaveAttribute('type', 'file');
+    expect(screen.getByRole('group', { name: 'Drop the file you downloaded' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Choose the file' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Save and continue with Google' })).toBeDisabled();
     expect(screen.queryByLabelText('Google client secret')).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Advanced: existing Web client' }));
     expect(screen.getByLabelText('Callback address to register')).toHaveValue(
       `${window.location.origin}/oauth/google/callback`,
     );
     expect(screen.getByText(/Desktop app works for a self-hosted server/)).toBeVisible();
-    expect(screen.queryByRole('button', { name: 'Connect Google' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Continue with Google' })).not.toBeInTheDocument();
   });
-  it('imports a downloaded credential file and starts consent without asking for manual IDs or callback setup', async () => {
-    const client = {
-      installed: {
-        client_id: 'client.apps.googleusercontent.com',
-        client_secret: 'not-a-real-secret',
-        project_id: 'my-conch-project',
-      },
-    };
+
+  it('checks a chosen file here, says what it is, and starts consent without manual IDs', async () => {
     let configured = false;
     let received: unknown;
     const opened = { closed: false, close: vi.fn(), location: { href: '' } };
@@ -74,18 +86,37 @@ describe('Google connection', () => {
     await userEvent.click(
       await screen.findByRole('button', { name: 'I already have a credential file' }),
     );
-    const file = new File([JSON.stringify(client)], 'client_secret.json', {
-      type: 'application/json',
-    });
-    // jsdom does not yet implement Blob.text; the actual browser file API is used in production.
-    Object.defineProperty(file, 'text', { value: async () => JSON.stringify(client) });
-    await userEvent.upload(screen.getByLabelText('Google credential JSON'), file);
-    expect(await screen.findByRole('status')).toHaveTextContent('Desktop app · my-conch-project');
-    await userEvent.click(screen.getByRole('button', { name: 'Save and connect Google' }));
+    // The wrong kind of file is turned down here, in words, before anything is sent.
+    await userEvent.upload(picker(), fileOf({ type: 'service_account' }, 'key.json'));
+    expect(await screen.findByText(/This is a service-account key/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Save and continue with Google' })).toBeDisabled();
+    await userEvent.upload(picker(), fileOf(client));
+    expect(
+      await screen.findByText('Desktop app · my-conch-project. Ready to connect.'),
+    ).toBeVisible();
+    expect(screen.getByText('client_secret.json')).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: 'Save and continue with Google' }));
     await waitFor(() => expect(opened.location.href).toBe('https://accounts.google.com/auth'));
     expect(received).toEqual({ credentials: JSON.stringify(client) });
     expect(JSON.stringify(sessionStorage)).not.toMatch(/not-a-real-secret|client_secret|installed/);
   });
+
+  it('takes the file’s contents pasted instead', async () => {
+    mockFetch({ 'GET /api/google': () => ({ configured: false, accounts: [] }) });
+    renderApp(<GoogleConnect capabilities={['calendar-read']} onReady={() => {}} />);
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'I already have a credential file' }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Paste what’s in it instead' }));
+    const field = screen.getByLabelText('What’s in the file');
+    await userEvent.click(field);
+    await userEvent.paste(JSON.stringify(client));
+    expect(
+      await screen.findByText('Desktop app · my-conch-project. Ready to connect.'),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Save and continue with Google' })).toBeEnabled();
+  });
+
   it('keeps popup-blocked sign-in usable with an explicit browser link and remote paste-back', async () => {
     vi.spyOn(window, 'open').mockReturnValue(null);
     let returned: unknown;
@@ -103,7 +134,7 @@ describe('Google connection', () => {
       },
     });
     renderApp(<GoogleConnect capabilities={['mail-read']} onReady={() => {}} />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Connect Google' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Continue with Google' }));
     expect(await screen.findByRole('link', { name: 'Open Google sign-in' })).toHaveAttribute(
       'href',
       'https://accounts.google.com/auth',
@@ -115,6 +146,7 @@ describe('Google connection', () => {
     expect(JSON.stringify(sessionStorage)).not.toContain('do-not-store-code');
     expect(screen.getByLabelText('Return address from Google')).toHaveValue('');
   });
+
   it('recovers the same pending flow after reload and reports the server’s actionable failure', async () => {
     sessionStorage.setItem('conch-google-flow:new:mail-read', 'saved-flow');
     mockFetch({
@@ -130,50 +162,35 @@ describe('Google connection', () => {
       expect(sessionStorage.getItem('conch-google-flow:new:mail-read')).toBeNull(),
     );
   });
-  it('rechecks API access without repeating consent and continues only after verification', async () => {
-    let ready = false;
-    const account = () => ({
-      id: 'personal',
-      email: 'personal@example.com',
-      name: 'Personal',
-      capabilities: ['mail-read'],
-      state: ready ? 'ready' : 'unavailable',
-      message: ready ? undefined : 'Enable Gmail API.',
+
+  it('asks Google for exactly what was chosen, as the account it is for', async () => {
+    vi.spyOn(window, 'open').mockReturnValue(null);
+    const calls = mockFetch({
+      'GET /api/google': () => ({ configured: true, accounts: [] }),
+      'POST /api/google/connect': () => ({
+        url: 'https://accounts.google.com/auth',
+        flowId: 'more',
+        mode: 'automatic',
+      }),
+      'GET /api/google/flows/more': () => ({ state: 'pending', mode: 'automatic' }),
     });
-    const onReady = vi.fn();
-    mockFetch({
-      'GET /api/google': () => ({ configured: true, accounts: [account()] }),
-      'POST /api/google/accounts/personal/check': () => {
-        ready = true;
-        return { configured: true, accounts: [account()] };
-      },
-    });
-    renderApp(<GoogleConnect capabilities={['mail-read']} onReady={onReady} />);
-    await userEvent.click(
-      await screen.findByRole('button', { name: 'Check connection for personal@example.com' }),
+    renderApp(
+      <GoogleConnect
+        accountId="work"
+        capabilities={['mail-read', 'calendar-read', 'calendar-write']}
+        label="Allow on Google"
+        onReady={() => {}}
+      />,
     );
-    expect(onReady).toHaveBeenCalledWith('personal');
+    await userEvent.click(await screen.findByRole('button', { name: 'Allow on Google' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/api/google/connect')?.body).toEqual({
+        capabilities: ['mail-read', 'calendar-read', 'calendar-write'],
+        accountId: 'work',
+      }),
+    );
   });
-  it('verifies the explicitly selected account and discloses draft scope', async () => {
-    const account = {
-      id: 'account1',
-      email: 'personal@example.com',
-      name: 'Person',
-      capabilities: ['mail-read', 'mail-draft'],
-      state: 'ready',
-    };
-    const onReady = vi.fn();
-    mockFetch({
-      'GET /api/google': () => ({ configured: true, accounts: [account] }),
-      'POST /api/google/accounts/account1/check': () => ({ configured: true, accounts: [account] }),
-    });
-    renderApp(<GoogleConnect capabilities={['mail-draft']} onReady={onReady} />);
-    expect(
-      await screen.findByText(/Google’s draft permission also includes sending/),
-    ).toBeVisible();
-    await userEvent.click(await screen.findByRole('button', { name: 'Use personal@example.com' }));
-    expect(onReady).toHaveBeenCalledWith('account1');
-  });
+
   it('opens the existing password verification flow without discarding the Google popup or current job', async () => {
     const close = vi.fn();
     vi.spyOn(window, 'open').mockReturnValue({
@@ -195,13 +212,15 @@ describe('Google connection', () => {
         }),
     });
     renderApp(<GoogleConnect capabilities={['mail-read']} onReady={() => {}} />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Connect Google' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Continue with Google' }));
     expect(await screen.findByRole('dialog', { name: 'Confirm it’s you' })).toBeVisible();
     expect(close).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(close).toHaveBeenCalled();
   });
-  it('never silently uses a different account when selected account is unavailable', async () => {
+
+  it('never carries on with a different account than the one it signed in again for', async () => {
+    sessionStorage.setItem('conch-google-flow:personal:calendar-read', 'other-flow');
     mockFetch({
       'GET /api/google': () => ({
         configured: true,
@@ -215,15 +234,13 @@ describe('Google connection', () => {
           },
         ],
       }),
+      'GET /api/google/flows/other-flow': () => ({ state: 'ready', accountId: 'work' }),
     });
     const onReady = vi.fn();
     renderApp(
       <GoogleConnect accountId="personal" capabilities={['calendar-read']} onReady={onReady} />,
     );
-    expect(
-      await screen.findByRole('button', { name: 'Connect Google · another account' }),
-    ).toBeVisible();
-    expect(screen.queryByRole('button', { name: 'Use work@example.com' })).not.toBeInTheDocument();
+    expect(await screen.findByText(/doesn’t have what was asked for/)).toBeVisible();
     expect(onReady).not.toHaveBeenCalled();
   });
 });

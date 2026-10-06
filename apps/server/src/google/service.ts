@@ -1,12 +1,22 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
+  accessOf,
+  capabilitiesFor,
+  GoogleAccessChange,
   GoogleConfigure,
   GoogleImport,
   GoogleComplete,
   GoogleConnect,
+  GoogleProduct,
   GmailPasswordConnect,
+  levelRank,
+  lowerLevel,
   parseGoogleCredentials,
+  productOf,
+  type GoogleAccessMap,
+  type GoogleAccount,
   type GoogleCapability,
+  type GoogleLevel,
   type GoogleStatus,
 } from '@conch/protocol';
 import { CodeChallengeMethod, OAuth2Client } from 'google-auth-library';
@@ -14,20 +24,120 @@ import { z } from 'zod';
 import { safeEqual } from '../auth/secrets';
 import { ChannelError } from '../channels/types';
 import { GmailImap, type GmailLogin } from './imap';
-import { type GoogleStore, type Credential, type GoogleData } from './store';
+import { type GoogleStore, type Credential, type GoogleData, type GoogleLimits } from './store';
 
+const AUTH = 'https://www.googleapis.com/auth/';
+/**
+ * What Conch asks Google for, per capability: the narrowest scopes that do
+ * the job. Write asks for Gmail's compose (drafts and sending), Calendar's
+ * events and Drive's per-file access (only files Conch makes), never a whole
+ * Drive or a whole mailbox's settings.
+ */
 export const SCOPES: Record<GoogleCapability, string[]> = {
-  'mail-read': ['https://www.googleapis.com/auth/gmail.readonly'],
+  'mail-read': [`${AUTH}gmail.readonly`],
+  'mail-draft': [`${AUTH}gmail.readonly`, `${AUTH}gmail.compose`],
+  'mail-send': [`${AUTH}gmail.readonly`, `${AUTH}gmail.compose`],
+  'calendar-read': [`${AUTH}calendar.events.readonly`],
+  'calendar-write': [`${AUTH}calendar.events`],
+  'drive-read': [`${AUTH}drive.metadata.readonly`],
+  'drive-write': [`${AUTH}drive.metadata.readonly`, `${AUTH}drive.file`],
+};
+/**
+ * Every set of scopes that already does a job: a broader scope Google
+ * granted (to this app, earlier) counts, so nobody is asked twice.
+ */
+const SATISFIED_BY: Record<GoogleCapability, string[][]> = {
+  'mail-read': [[`${AUTH}gmail.readonly`], [`${AUTH}gmail.modify`], ['https://mail.google.com/']],
   'mail-draft': [
-    'https://www.googleapis.com/auth/gmail.readonly',
-    'https://www.googleapis.com/auth/gmail.compose',
+    [`${AUTH}gmail.readonly`, `${AUTH}gmail.compose`],
+    [`${AUTH}gmail.modify`],
+    ['https://mail.google.com/'],
   ],
-  'calendar-read': ['https://www.googleapis.com/auth/calendar.events.readonly'],
-  'drive-read': ['https://www.googleapis.com/auth/drive.metadata.readonly'],
+  'mail-send': [
+    [`${AUTH}gmail.readonly`, `${AUTH}gmail.compose`],
+    [`${AUTH}gmail.modify`],
+    ['https://mail.google.com/'],
+  ],
+  'calendar-read': [
+    [`${AUTH}calendar.events.readonly`],
+    [`${AUTH}calendar.events`],
+    [`${AUTH}calendar.readonly`],
+    [`${AUTH}calendar`],
+  ],
+  'calendar-write': [[`${AUTH}calendar.events`], [`${AUTH}calendar`]],
+  'drive-read': [
+    [`${AUTH}drive.metadata.readonly`],
+    [`${AUTH}drive.metadata`],
+    [`${AUTH}drive.readonly`],
+    [`${AUTH}drive`],
+  ],
+  'drive-write': [[`${AUTH}drive.metadata.readonly`, `${AUTH}drive.file`], [`${AUTH}drive`]],
 };
 const ALL_CAPABILITIES = Object.keys(SCOPES) as GoogleCapability[];
+/** Whether these scopes do this job. */
+export const satisfies = (scopes: readonly string[], capability: GoogleCapability) =>
+  SATISFIED_BY[capability].some((set) => set.every((s) => scopes.includes(s)));
 export const APP_PASSWORD_ONLY_MAIL =
-  'This account is signed in with a Gmail app password, which only reaches Gmail. Google Calendar and Google Drive need your own Google Cloud app: connect them from Apps.';
+  'This account is signed in with a Gmail app password, which only reaches Gmail. Google Calendar and Google Drive need Google sign-in: add the same address with Google sign-in in Apps.';
+/** A product's name, for messages. */
+export const PRODUCT_NAMES: Record<GoogleProduct, string> = {
+  gmail: 'Gmail',
+  calendar: 'Google Calendar',
+  drive: 'Google Drive',
+};
+/** What each capability lets Conch do, in a person's words (and a model's). */
+export const DOING: Record<GoogleCapability, string> = {
+  'mail-read': 'read Gmail',
+  'mail-draft': 'save Gmail drafts',
+  'mail-send': 'send email',
+  'calendar-read': 'read Google Calendar',
+  'calendar-write': 'change Google Calendar',
+  'drive-read': 'look in Google Drive',
+  'drive-write': 'make files in Google Drive',
+};
+/** Everything an app password reaches: Gmail, all of it (IMAP and SMTP). */
+const PASSWORD_GRANTS: GoogleAccessMap = { gmail: 'write' };
+
+/**
+ * Each account as the rest of Conch sees it: what the sign-in allows
+ * (`granted`), held to what the person chose (`access`, and `capabilities`
+ * from it). Never a credential.
+ */
+export function accountsOf(data: GoogleData): GoogleAccount[] {
+  const shape = (profile: GoogleAccount, granted: GoogleAccessMap): GoogleAccount => {
+    const limit: GoogleLimits = Object.hasOwn(data.limits, profile.id)
+      ? (data.limits[profile.id] ?? {})
+      : {};
+    const access: GoogleAccessMap = {};
+    for (const product of GoogleProduct.options) {
+      const level = lowerLevel(granted[product], limit[product]);
+      if (level !== 'off') access[product] = level;
+    }
+    return { ...profile, capabilities: capabilitiesFor(access), access, granted };
+  };
+  return [
+    ...Object.values(data.accounts).map((a) =>
+      shape(a.profile, accessOf(capabilities(a.credential.scopes))),
+    ),
+    ...Object.values(data.passwords).map((p) => shape(p.profile, PASSWORD_GRANTS)),
+  ];
+}
+/** One account as `accountsOf` describes it. */
+const accountOf = (data: GoogleData, id: string) => accountsOf(data).find((a) => a.id === id);
+/** Why an account can't do this job in Conch, in words for the person and the model. */
+export function notAllowed(account: GoogleAccount, capability: GoogleCapability): GoogleError {
+  const product = productOf(capability);
+  if (account.via === 'app-password' && product !== 'gmail')
+    return new GoogleError('scope', APP_PASSWORD_ONLY_MAIL);
+  const granted = levelRank(account.granted?.[product]);
+  const needed = capability.endsWith('-read') ? 1 : 2;
+  return new GoogleError(
+    'scope',
+    granted >= needed
+      ? `${account.email} is set so Conch can’t ${DOING[capability]}. The person can change that in Apps → ${PRODUCT_NAMES[product]} → Accounts.`
+      : `Google hasn’t allowed Conch to ${DOING[capability]} for ${account.email} yet. The person can allow it in Apps → ${PRODUCT_NAMES[product]} → Accounts.`,
+  );
+}
 /** An app-password account's id: the same address is the same account. */
 export const passwordId = (address: string) =>
   `pw-${createHash('sha256').update(address.trim().toLowerCase()).digest('base64url').slice(0, 24)}`;
@@ -52,7 +162,14 @@ export function toGoogleError(error: unknown): GoogleError {
 export class GoogleError extends Error {
   constructor(
     readonly kind:
-      'setup' | 'expired' | 'scope' | 'unavailable' | 'invalid' | 'ambiguous' | 'not-executed',
+      | 'setup'
+      | 'expired'
+      | 'scope'
+      | 'consent'
+      | 'unavailable'
+      | 'invalid'
+      | 'ambiguous'
+      | 'not-executed',
     message: string,
   ) {
     super(message);
@@ -77,8 +194,9 @@ interface Pending {
   expiresAt: number;
   capabilities: GoogleCapability[];
 }
-const capabilities = (scopes: string[]) =>
-  ALL_CAPABILITIES.filter((c) => SCOPES[c].every((s) => scopes.includes(s)));
+function capabilities(scopes: readonly string[]): GoogleCapability[] {
+  return ALL_CAPABILITIES.filter((c) => satisfies(scopes, c));
+}
 const fail = () =>
   new GoogleError(
     'unavailable',
@@ -117,11 +235,13 @@ async function forbiddenMessage(
   response: Response,
   capability: GoogleCapability,
 ): Promise<{ kind: 'setup' | 'scope'; message: string }> {
-  const service = capability.startsWith('mail-')
-    ? 'Gmail API'
-    : capability === 'calendar-read'
-      ? 'Google Calendar API'
-      : 'Google Drive API';
+  const product = productOf(capability);
+  const service =
+    product === 'gmail'
+      ? 'Gmail API'
+      : product === 'calendar'
+        ? 'Google Calendar API'
+        : 'Google Drive API';
   const reader = response.body?.getReader();
   let text = '';
   try {
@@ -173,6 +293,43 @@ async function forbiddenMessage(
   };
 }
 
+export interface ApiOptions {
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  body?: unknown;
+  /** A body that isn't JSON (a Drive upload): its exact bytes and type. */
+  raw?: { contentType: string; body: string };
+  query?: Record<string, string>;
+  authorization?: string;
+  signal?: AbortSignal;
+  /** Statuses that are an answer, not a failure (409: it exists already; 410: it's gone). */
+  expect?: number[];
+}
+/** What may be read: Gmail's messages and drafts, calendars' events, Drive's files. */
+const READS =
+  /^\/(gmail\/v1\/users\/me\/(messages|drafts)(\/|$)|calendar\/v3\/calendars\/|drive\/v3\/files)/;
+const SEGMENT = '[A-Za-z0-9_.%@-]{1,1100}';
+/** Every change Conch can make at Google, and the one capability each needs. */
+const WRITES: { method: ApiOptions['method']; path: RegExp; capability: GoogleCapability }[] = [
+  { method: 'POST', path: /^\/gmail\/v1\/users\/me\/drafts$/, capability: 'mail-draft' },
+  { method: 'POST', path: /^\/gmail\/v1\/users\/me\/messages\/send$/, capability: 'mail-send' },
+  {
+    method: 'POST',
+    path: new RegExp(`^/calendar/v3/calendars/${SEGMENT}/events$`),
+    capability: 'calendar-write',
+  },
+  {
+    method: 'PATCH',
+    path: new RegExp(`^/calendar/v3/calendars/${SEGMENT}/events/[a-z0-9_]{1,1024}$`, 'i'),
+    capability: 'calendar-write',
+  },
+  {
+    method: 'DELETE',
+    path: new RegExp(`^/calendar/v3/calendars/${SEGMENT}/events/[a-z0-9_]{1,1024}$`, 'i'),
+    capability: 'calendar-write',
+  },
+  { method: 'POST', path: /^\/upload\/drive\/v3\/files$/, capability: 'drive-write' },
+];
+
 /** Native Google account connection. Credentials never enter a provider, model, tool result or URL. */
 export class GoogleService {
   #pending = new Map<string, Pending>();
@@ -204,7 +361,11 @@ export class GoogleService {
   async gmailLogin(): Promise<{ address: string; password: string } | undefined> {
     const data = await this.store.read();
     if (data.apps.gmail?.hidden) return undefined;
-    const login = Object.values(data.passwords).find((p) => p.profile.state === 'ready');
+    const login = Object.values(data.passwords).find(
+      (p) =>
+        p.profile.state === 'ready' &&
+        accountOf(data, p.profile.id)?.capabilities.includes('mail-read'),
+    );
     return login && { address: login.address, password: login.password };
   }
 
@@ -215,11 +376,47 @@ export class GoogleService {
       clientType: data.config?.clientType,
       projectId: data.config?.projectId,
       callbackUrl: data.config?.redirectUrl,
-      accounts: [
-        ...Object.values(data.accounts).map((a) => a.profile),
-        ...Object.values(data.passwords).map((p) => p.profile),
-      ],
+      accounts: accountsOf(data),
     };
+  }
+
+  /**
+   * One product's level for one account, as the person chose it. Lower is
+   * always possible; higher only as far as the sign-in allows. Beyond that
+   * Google must be asked (`consent`): the web app starts that sign-in.
+   */
+  async setAccess(id: string, raw: unknown): Promise<GoogleStatus> {
+    const change = GoogleAccessChange.parse(raw);
+    let raised = false;
+    await this.store.update((data) => {
+      const account = accountOf(data, id);
+      if (!account)
+        throw new GoogleError('invalid', 'That Google account isn’t connected any more.');
+      const product = change.product;
+      if (levelRank(change.level) > levelRank(account.granted?.[product]))
+        throw new GoogleError(
+          'consent',
+          account.via === 'app-password' && product !== 'gmail'
+            ? APP_PASSWORD_ONLY_MAIL
+            : `Google needs to allow this first. Sign in to Google again for ${account.email} to give Conch ${change.level === 'write' ? 'read and write' : 'read'} access to ${PRODUCT_NAMES[product]}.`,
+        );
+      raised = levelRank(change.level) > levelRank(account.access?.[product]);
+      data.limits[id] = { ...(data.limits[id] ?? {}), [product]: change.level };
+    });
+    const status = await this.status();
+    if (raised) {
+      const account = status.accounts.find((a) => a.id === id);
+      if (account) await this.onConnected?.(account.capabilities).catch(() => undefined);
+    }
+    return status;
+  }
+
+  /** Whether this change would let Conch do more than it can now (a person confirms it's them). */
+  async raises(id: string, raw: unknown): Promise<boolean> {
+    const change = GoogleAccessChange.safeParse(raw);
+    if (!change.success) return true;
+    const account = accountOf(await this.store.read(), id);
+    return levelRank(change.data.level) > levelRank(account?.access?.[change.data.product]);
   }
 
   // ── Gmail with an app password (ADR 0048) ───────────────────────────────
@@ -262,13 +459,19 @@ export class GoogleService {
     } catch (error) {
       throw toGoogleError(error);
     }
+    let level = (input.access ?? 'read') as GoogleLevel;
     await this.store.update((data) => {
+      const known = Object.hasOwn(data.limits, id) ? data.limits[id] : undefined;
+      // A new password for an account keeps what it was allowed; a new account gets what was chosen.
+      level =
+        input.access ?? (Object.hasOwn(data.passwords, id) ? known?.gmail : undefined) ?? 'read';
+      data.limits[id] = { ...known, gmail: level };
       data.passwords[id] = {
         profile: {
           id,
           email: input.address,
           name: input.address,
-          capabilities: ['mail-read', 'mail-draft'],
+          capabilities: capabilitiesFor(PASSWORD_GRANTS),
           state: 'ready',
           checkedAt: Date.now(),
           via: 'app-password',
@@ -278,14 +481,22 @@ export class GoogleService {
         generation: randomBytes(24).toString('base64url'),
       };
     });
-    await this.onConnected?.(['mail-read', 'mail-draft']).catch(() => undefined);
+    if (level !== 'off')
+      await this.onConnected?.(capabilitiesFor({ gmail: level })).catch(() => undefined);
     return this.status();
   }
 
-  /** The sign-in a Gmail tool uses. Never leaves the gateway. */
-  async passwordLogin(id: string): Promise<GmailLogin & { generation: string }> {
-    const login = (await this.store.read()).passwords[id];
+  /** The sign-in a Gmail tool uses, for one job the person allows. Never leaves the gateway. */
+  async passwordLogin(
+    id: string,
+    capability: GoogleCapability = 'mail-read',
+  ): Promise<GmailLogin & { generation: string }> {
+    const data = await this.store.read();
+    const login = Object.hasOwn(data.passwords, id) ? data.passwords[id] : undefined;
     if (!login) throw new GoogleError('expired', 'That Gmail account isn’t connected any more.');
+    const account = accountOf(data, id);
+    if (account && !account.capabilities.includes(capability))
+      throw notAllowed(account, capability);
     if (login.profile.state === 'needs-auth')
       throw new GoogleError(
         'expired',
@@ -608,6 +819,32 @@ export class GoogleService {
             generation: randomBytes(24).toString('base64url'),
           },
         };
+        // What was asked for is what the person chose: raised to it, never past it. Google may
+        // say yes to more (scopes granted to this app before); that stays unused until chosen.
+        const limit: GoogleLimits = { ...(previous ? data.limits[profile.sub] : undefined) };
+        for (const [product, level] of Object.entries(accessOf(flow.capabilities)))
+          if (levelRank(level) > levelRank(limit[product as GoogleProduct]))
+            limit[product as GoogleProduct] = level;
+        // The same address with an app password is replaced by Google's sign-in when it can do
+        // at least as much in Gmail: one entry per address.
+        const gmail = accessOf(granted).gmail;
+        const replaced = new Set<string>();
+        for (const [id, login] of Object.entries(data.passwords)) {
+          if (login.address.toLowerCase() !== profile.email.toLowerCase()) continue;
+          const held = Object.hasOwn(data.limits, id) ? data.limits[id]?.gmail : undefined;
+          if (levelRank(gmail) < levelRank(held)) continue;
+          if (levelRank(held) > levelRank(limit.gmail)) limit.gmail = held;
+          replaced.add(id);
+        }
+        if (replaced.size) {
+          data.passwords = Object.fromEntries(
+            Object.entries(data.passwords).filter(([id]) => !replaced.has(id)),
+          );
+          data.limits = Object.fromEntries(
+            Object.entries(data.limits).filter(([id]) => !replaced.has(id)),
+          );
+        }
+        data.limits[profile.sub] = limit;
       });
       await this.onConnected?.(flow.capabilities).catch(() => undefined);
       const checked = await this.check(profile.sub);
@@ -635,11 +872,16 @@ export class GoogleService {
       throw new GoogleError('scope', APP_PASSWORD_ONLY_MAIL);
     if (!account || !data.config || account.profile.state === 'needs-auth')
       throw new GoogleError('expired', 'Reconnect this Google account in Apps.');
-    if (!SCOPES[required].every((s) => account.credential.scopes.includes(s)))
-      throw new GoogleError('scope', `Allow ${required} for this Google account in Apps first.`);
+    const shown = accountOf(data, id);
+    if (shown && !shown.capabilities.includes(required)) throw notAllowed(shown, required);
+    if (!satisfies(account.credential.scopes, required))
+      throw new GoogleError(
+        'scope',
+        `Google hasn’t allowed Conch to ${DOING[required]} for ${account.profile.email}. Sign in again in Apps to allow it.`,
+      );
     if (!force && account.credential.expiresAt > Date.now() + 120_000) return account.credential;
     const ensure = (c: Credential) => {
-      if (!SCOPES[required].every((scope) => c.scopes.includes(scope)))
+      if (!satisfies(c.scopes, required))
         throw new GoogleError(
           'scope',
           'Google no longer allows access for this job. Reconnect in Apps.',
@@ -706,30 +948,50 @@ export class GoogleService {
       }
     });
   }
-  /** Only fixed, Google-owned API endpoints. No caller-provided origin or redirects. Writes never retry. */
+  /**
+   * Only fixed, Google-owned API endpoints. No caller-provided origin or
+   * redirects. Reads are the paths below; each write is one row of `WRITES`,
+   * with the one capability it needs. Writes never retry.
+   */
   async api(
     id: string,
     capability: GoogleCapability,
     path: string,
-    options: {
-      method?: 'GET' | 'POST';
-      body?: unknown;
-      query?: Record<string, string>;
-      authorization?: string;
-      signal?: AbortSignal;
-    } = {},
+    options: ApiOptions = {},
   ): Promise<unknown> {
+    return (await this.request(id, capability, path, options)).data;
+  }
+
+  /**
+   * `api`, with the status too, for the few answers a write expects that
+   * aren't a success (`expect`: an event that already exists, one that's gone).
+   */
+  async request(
+    id: string,
+    capability: GoogleCapability,
+    path: string,
+    options: ApiOptions = {},
+  ): Promise<{ status: number; data: unknown }> {
+    const method = options.method ?? 'GET';
+    const write = method !== 'GET';
     if (
-      !/^\/(gmail\/v1\/users\/me\/(messages|drafts)(\/|$)|calendar\/v3\/calendars\/|drive\/v3\/files)/.test(
-        path,
-      ) ||
       path.includes('..') ||
       path.includes('?') ||
-      path.includes('#')
+      path.includes('#') ||
+      (!write && !READS.test(path))
     )
       throw new GoogleError('invalid', 'Unsupported Google action.');
-    if (options.method === 'POST' && path !== '/gmail/v1/users/me/drafts')
-      throw new GoogleError('invalid', 'Conch can only create drafts; it cannot send mail.');
+    if (write) {
+      const row = WRITES.find((w) => w.method === method && w.path.test(path));
+      if (!row) throw new GoogleError('invalid', 'Unsupported Google action.');
+      if (row.capability !== capability)
+        throw new GoogleError(
+          'invalid',
+          row.capability === 'mail-send'
+            ? 'Conch cannot send mail with draft access.'
+            : 'Conch cannot make that change with this access.',
+        );
+    }
     const url = new URL(`https://www.googleapis.com${path}`);
     for (const [k, v] of Object.entries(options.query ?? {})) url.searchParams.set(k, v);
     let credential = await this.credential(id, capability);
@@ -742,22 +1004,33 @@ export class GoogleService {
       if (options.signal?.aborted)
         throw new GoogleError('not-executed', 'Stopped before the Google request was dispatched.');
       return this.fetcher(url, {
-        method: options.method ?? 'GET',
+        method,
         redirect: 'error',
         signal: options.signal
           ? AbortSignal.any([options.signal, AbortSignal.timeout(20_000)])
           : AbortSignal.timeout(20_000),
         headers: {
           Authorization: `Bearer ${credential.accessToken}`,
-          'Content-Type': 'application/json',
+          'Content-Type': options.raw?.contentType ?? 'application/json',
         },
-        ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+        ...(options.raw
+          ? { body: options.raw.body }
+          : options.body !== undefined
+            ? { body: JSON.stringify(options.body) }
+            : {}),
       });
     };
+    const uncertain = () =>
+      new GoogleError(
+        'ambiguous',
+        capability === 'mail-draft'
+          ? 'Google may have saved this draft. Check its receipt before trying again.'
+          : 'Google may have done this already. Check before trying again.',
+      );
     let response: Response;
     try {
       response = await perform();
-      if (response.status === 401 && options.method !== 'POST') {
+      if (response.status === 401 && !write) {
         credential = await this.credential(id, capability, true);
         if (options.authorization && options.authorization !== this.#authorization(credential))
           throw new GoogleError(
@@ -768,28 +1041,37 @@ export class GoogleService {
       }
     } catch (error) {
       if (error instanceof GoogleError) throw error;
-      throw options.method === 'POST'
-        ? new GoogleError(
-            'ambiguous',
-            'Google may have saved this draft. Check its receipt before trying again.',
-          )
-        : fail();
+      throw write ? uncertain() : fail();
     }
     if (response.status === 401) {
       await this.#needsAuth(id, credential.generation);
-      throw new GoogleError('expired', 'Reconnect Google to continue.');
+      throw new GoogleError(
+        'expired',
+        write
+          ? 'Google asked to sign in again, so nothing was changed. Reconnect this account in Apps.'
+          : 'Reconnect Google to continue.',
+      );
     }
     if (response.status === 403) {
       const error = await forbiddenMessage(response, capability);
       throw new GoogleError(error.kind, error.message);
     }
-    if (!response.ok)
-      throw options.method === 'POST'
-        ? new GoogleError(
-            'ambiguous',
-            'Google did not confirm the draft. Check its receipt before trying again.',
-          )
-        : fail();
+    if (options.expect?.includes(response.status)) {
+      await response.body?.cancel().catch(() => undefined);
+      return { status: response.status, data: {} };
+    }
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
+      // Google turned the request down: nothing happened. A server error might have, after all.
+      if (write && response.status >= 400 && response.status < 500)
+        throw new GoogleError(
+          'not-executed',
+          response.status === 404
+            ? 'Google couldn’t find that. Nothing was changed.'
+            : 'Google turned this change down, so nothing was changed. Check what was asked for and try once more.',
+        );
+      throw write ? uncertain() : fail();
+    }
     const reader = response.body?.getReader();
     const chunks: Uint8Array[] = [];
     let bytes = 0;
@@ -813,9 +1095,12 @@ export class GoogleService {
       }
     }
     const text = Buffer.concat(chunks).toString('utf8');
+    // A deletion answers with nothing at all.
+    if (!text.trim()) return { status: response.status, data: {} };
     try {
-      return JSON.parse(text) as unknown;
+      return { status: response.status, data: JSON.parse(text) as unknown };
     } catch {
+      if (write) throw uncertain();
       throw fail();
     }
   }
@@ -825,18 +1110,20 @@ export class GoogleService {
     if (!a && data.passwords[id]) return this.#checkPassword(id);
     if (!a) throw new GoogleError('invalid', 'That Google account is not connected.');
     try {
-      for (const c of a.profile.capabilities) {
-        if (c === 'mail-read' || c === 'mail-draft')
-          await this.api(id, c, '/gmail/v1/users/me/messages', { query: { maxResults: '1' } });
-        if (c === 'calendar-read')
-          await this.api(id, c, '/calendar/v3/calendars/primary/events', {
-            query: { maxResults: '1' },
-          });
-        if (c === 'drive-read')
-          await this.api(id, c, '/drive/v3/files', {
-            query: { pageSize: '1', fields: 'files(id)' },
-          });
-      }
+      // One small read per product the person uses it for: proof the API answers.
+      const uses = accountOf(data, id)?.capabilities ?? [];
+      if (uses.includes('mail-read'))
+        await this.api(id, 'mail-read', '/gmail/v1/users/me/messages', {
+          query: { maxResults: '1' },
+        });
+      if (uses.includes('calendar-read'))
+        await this.api(id, 'calendar-read', '/calendar/v3/calendars/primary/events', {
+          query: { maxResults: '1' },
+        });
+      if (uses.includes('drive-read'))
+        await this.api(id, 'drive-read', '/drive/v3/files', {
+          query: { pageSize: '1', fields: 'files(id)' },
+        });
       await this.store.update((d) => {
         const item = d.accounts[id];
         if (item?.credential.generation === a.credential.generation) {
@@ -868,6 +1155,7 @@ export class GoogleService {
     if (!account && data.passwords[id]) {
       await this.store.update((d) => {
         d.passwords = Object.fromEntries(Object.entries(d.passwords).filter(([key]) => key !== id));
+        d.limits = Object.fromEntries(Object.entries(d.limits).filter(([key]) => key !== id));
       });
       return;
     }
@@ -891,8 +1179,10 @@ export class GoogleService {
       );
     }
     await this.store.update((d) => {
-      if (d.accounts[id]?.credential.generation === account.credential.generation)
+      if (d.accounts[id]?.credential.generation === account.credential.generation) {
         d.accounts = Object.fromEntries(Object.entries(d.accounts).filter(([key]) => key !== id));
+        d.limits = Object.fromEntries(Object.entries(d.limits).filter(([key]) => key !== id));
+      }
     });
   }
   #authorization(c: Credential) {
@@ -902,9 +1192,8 @@ export class GoogleService {
   }
   async verificationScope(id: string, required: GoogleCapability) {
     if (await this.viaPassword(id)) {
-      if (required !== 'mail-read' && required !== 'mail-draft')
-        throw new GoogleError('scope', APP_PASSWORD_ONLY_MAIL);
-      const login = await this.passwordLogin(id);
+      if (productOf(required) !== 'gmail') throw new GoogleError('scope', APP_PASSWORD_ONLY_MAIL);
+      const login = await this.passwordLogin(id, required);
       return {
         account: id,
         authorization: createHash('sha256').update(`${login.generation}\nimap`).digest('hex'),

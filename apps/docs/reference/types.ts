@@ -110,6 +110,8 @@ export interface SlashRef {
   description: string;
   argumentHint?: string;
   aliases: string[];
+  /** What it acts on: the chat, how it answers, or Conch. */
+  section: string;
 }
 
 export interface FileRef {

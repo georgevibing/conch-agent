@@ -16,9 +16,14 @@ export const GoogleToolName = z.enum([
   'google_mail_search',
   'google_mail_read',
   'google_mail_create_draft',
+  'google_mail_send',
   'google_calendar_briefing',
+  'google_calendar_create_event',
+  'google_calendar_update_event',
+  'google_calendar_delete_event',
   'google_drive_search',
   'google_drive_read',
+  'google_drive_create_file',
 ]);
 export type GoogleToolName = z.infer<typeof GoogleToolName>;
 
@@ -39,12 +44,33 @@ export const APP_TOOL_WORDS: Record<AppToolName, AppToolWords> = {
   google_mail_search: { app: 'gmail', doing: 'Searching your mail', done: 'Searched your mail' },
   google_mail_read: { app: 'gmail', doing: 'Reading an email', done: 'Read an email' },
   google_mail_create_draft: { app: 'gmail', doing: 'Saving a draft', done: 'Saved a draft' },
+  google_mail_send: { app: 'gmail', doing: 'Sending an email', done: 'Sent an email' },
   google_calendar_briefing: {
     app: 'google-calendar',
     doing: 'Looking at your calendar',
     done: 'Looked at your calendar',
   },
+  google_calendar_create_event: {
+    app: 'google-calendar',
+    doing: 'Adding an event',
+    done: 'Added an event',
+  },
+  google_calendar_update_event: {
+    app: 'google-calendar',
+    doing: 'Changing an event',
+    done: 'Changed an event',
+  },
+  google_calendar_delete_event: {
+    app: 'google-calendar',
+    doing: 'Deleting an event',
+    done: 'Deleted an event',
+  },
   google_drive_search: { app: 'google-drive', doing: 'Searching Drive', done: 'Searched Drive' },
+  google_drive_create_file: {
+    app: 'google-drive',
+    doing: 'Making a file in Drive',
+    done: 'Made a file in Drive',
+  },
   google_drive_read: {
     app: 'google-drive',
     doing: 'Reading a file’s details',

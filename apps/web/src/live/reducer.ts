@@ -38,6 +38,7 @@ import type {
   Usage,
   LearnedItem,
   MemoryHold,
+  PermissionMode,
 } from '@conch/protocol';
 
 import { latestReplies, type LatestReplies } from '../features/replies/latest';
@@ -327,6 +328,21 @@ export type TranscriptItem =
       turns: number;
     }
   | {
+      /**
+       * `/clear`: from here the model reads nothing said above, whichever
+       * provider answers. Gone again if it was undone (`context.restored`).
+       */
+      kind: 'cleared';
+      id: string;
+      seq: number;
+    }
+  | {
+      /** Where the chat's goal (`/goal`) was set, or cleared (no `goal`). */
+      kind: 'goal-note';
+      id: string;
+      goal?: string;
+    }
+  | {
       /** Another provider answered for this chat's own: offline, or at a usage limit. */
       kind: 'routed';
       id: string;
@@ -383,6 +399,12 @@ export interface ConversationView {
   context?: ContextFill;
   /** The whole log so far is here (the gateway said so), not just what happened while watching. */
   loaded?: boolean;
+  /** What the chat is for (`/goal`), as the gateway reads it from the same log. */
+  goal?: string;
+  /** The `/clear`s still in force (their seqs), oldest first: Undo takes back the newest. */
+  clears?: readonly number[];
+  /** In plan mode: the mode it had before (`null`: it followed your default), for `/plan off`. */
+  beforePlan?: PermissionMode | null;
 }
 
 export const emptyView: ConversationView = { lastSeq: -1, items: [], status: 'idle' };
@@ -782,6 +804,36 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         items: at === -1 ? [...kept, line] : [...kept.slice(0, at), line, ...kept.slice(at)],
       };
     }
+    case 'context.cleared':
+      return {
+        ...base,
+        // A fresh start: the old reading is gone; the next request says how full it is now.
+        context: undefined,
+        clears: [...(view.clears ?? []), event.seq],
+        items: [...items, { kind: 'cleared', id: `cleared-${event.seq}`, seq: event.seq }],
+      };
+    case 'context.restored': {
+      const clears = view.clears ?? [];
+      if (clears.at(-1) !== event.clearedSeq) return base;
+      return {
+        ...base,
+        clears: clears.slice(0, -1),
+        items: items.filter((i) => !(i.kind === 'cleared' && i.seq === event.clearedSeq)),
+      };
+    }
+    case 'goal':
+      return {
+        ...base,
+        goal: event.goal ?? undefined,
+        items: [
+          ...items,
+          {
+            kind: 'goal-note',
+            id: `goal-${event.seq}`,
+            ...(event.goal && { goal: event.goal }),
+          },
+        ],
+      };
     case 'turn.routed': {
       // The routed line says what happened: no waiting card, no failure card before it.
       const kept = items.filter(
@@ -878,8 +930,16 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
       return { ...base, title: event.title };
     case 'notice':
       return { ...base, notice: { code: event.code, message: event.message } };
-    case 'options':
-      return { ...base, options: event.options };
+    case 'options': {
+      const was = view.options?.permissionMode;
+      const now = event.options.permissionMode;
+      return {
+        ...base,
+        options: event.options,
+        // Into plan mode: what to go back to (`null`: your default). Out of it: forgotten.
+        beforePlan: now !== 'plan' ? undefined : was === 'plan' ? view.beforePlan : (was ?? null),
+      };
+    }
     case 'integration.issue': {
       // One card per integration per turn is plenty.
       const turnStart = items.findLastIndex((i) => i.kind === 'user');
@@ -1233,6 +1293,18 @@ export function lastUserMessage(
     if (item?.kind === 'user') return { text: item.text, attachments: item.attachments ?? [] };
   }
   return undefined;
+}
+
+/**
+ * The `/clear` that Undo can still take back: the newest one in force, while
+ * nothing has been sent since (the gateway's `undoableClear`, on the view).
+ */
+export function undoableClear(view: ConversationView): number | undefined {
+  const at = view.clears?.at(-1);
+  if (at === undefined) return undefined;
+  const index = view.items.findIndex((i) => i.kind === 'cleared' && i.seq === at);
+  if (index === -1) return undefined;
+  return view.items.slice(index + 1).some((i) => i.kind === 'user') ? undefined : at;
 }
 
 /** A question waiting for your answer (ADR 0060), if the chat has one. */

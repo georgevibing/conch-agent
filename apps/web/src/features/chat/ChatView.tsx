@@ -4,11 +4,13 @@ import {
   type Attachment,
   type EngineId,
   type EngineStatus,
+  type TurnOptions,
 } from '@conch/protocol';
 import {
   AttachmentCard,
   Button,
   Callout,
+  ChatGoal,
   CommandMenu,
   Composer,
   ComposerChip,
@@ -43,6 +45,7 @@ import {
   type ConversationView,
 } from '../../live/reducer';
 import { NEW, useLiveStore } from '../../live/store';
+import { setChatGoal } from '../commands/context';
 import { useSlashCommands } from '../commands/useSlashCommands';
 import { ArchivedBanner } from '../archive/ArchivedBanner';
 import { ChannelBanner } from '../channels/ChannelBanner';
@@ -81,6 +84,7 @@ import { BrowserDock } from '../browser/BrowserDock';
 import { Dictate } from '../voice/Dictate';
 import { canSpeak } from '../voice/speak';
 import { Talk } from '../voice/Talk';
+import { NewChatPlace, useNewChatFolder } from '../chatlist/newChat';
 import { useSeen } from '../chatlist/useSeen';
 
 const suggestions = [
@@ -330,6 +334,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
   const openSettings = useUi((s) => s.openSettings);
   // "Try asking…" from an integration arrives as a ready-to-send draft.
   const location = useLocation();
+  const startIn = useNewChatFolder();
   // Otherwise, what you were writing here before you went elsewhere.
   const [draft, setDraft] = useState(
     () => (location.state as { draft?: string } | null)?.draft ?? loadDraft(key),
@@ -417,7 +422,8 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
   }, [conversationId]);
 
   const turn = useTurnOptions(conversationId);
-  const origin = useConversations().data?.find((c) => c.id === conversationId)?.origin;
+  const record = useConversations().data?.find((c) => c.id === conversationId);
+  const origin = record?.origin;
   const isRoutineRun = origin?.kind === 'routine';
   const continuingTask = useRef(false);
 
@@ -428,7 +434,11 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
   const send = (
     text: string,
     attached: Attachment[] = attachments.ready,
-    { keepDraft = false, steer = false }: { keepDraft?: boolean; steer?: boolean } = {},
+    {
+      keepDraft = false,
+      steer = false,
+      options: extra,
+    }: { keepDraft?: boolean; steer?: boolean; options?: TurnOptions } = {},
   ) => {
     const trimmed = text.trim();
     if (!trimmed && !attached.length) return;
@@ -469,7 +479,22 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
       return;
     }
     rememberSent(trimmed);
-    const id = live.send(trimmed, conversationId, turn.takeDraft(), attached, { steer });
+    const drafted = turn.takeDraft();
+    // A goal set before the first message (`/goal`) goes with it.
+    const goal = conversationId ? undefined : (useUi.getState().draftGoal ?? undefined);
+    if (goal) useUi.getState().setDraftGoal(null);
+    const id = live.send(
+      trimmed,
+      conversationId,
+      extra ? { ...drafted, ...extra } : drafted,
+      attached,
+      {
+        steer,
+        // Started from a folder in the chat list: it goes there from the start.
+        ...(!conversationId && startIn && { folder: startIn.id }),
+        ...(goal && { goal }),
+      },
+    );
     if (!conversationId) setSentId(id);
     if (!keepDraft) setDraft('');
     if (attached === attachments.ready) attachments.clear();
@@ -590,8 +615,8 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
 
   /** Send the draft off to be done in the background (ADR 0033); you keep chatting here. */
   const startTask = useStartTask();
-  const sendAway = () => {
-    const text = draft.trim();
+  const sendAway = (words?: string) => {
+    const text = (words ?? draft).trim();
     if (!text) {
       toast('Write what you’d like done, then send it to the background.');
       composerRef.current?.focus();
@@ -606,7 +631,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
     startTask.mutate(
       { text, ...(conversationId && { conversationId }), options: turn.options },
       {
-        onError: () => setDraft((d) => d || text),
+        onError: () => setDraft((d) => d || (words === undefined ? text : `/background ${text}`)),
         onSuccess: (task) => {
           toast(`Working on “${task.title}” in the background`, {
             description: conversationId
@@ -619,7 +644,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
     );
   };
   // ⌘K "Do it in the background" sends what's written here.
-  const onBackground = useEffectEvent(sendAway);
+  const onBackground = useEffectEvent(() => sendAway());
   useEffect(
     () =>
       useUi.subscribe((state, before) => {
@@ -645,9 +670,19 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
   const slash = useSlashCommands({
     draft,
     setDraft,
-    send,
+    send: (text, how) => send(text, attachments.ready, how),
     turn,
     ...(conversationId && { conversationId }),
+    view,
+    busy,
+    title: record?.title ?? '',
+    name,
+    retry: () => {
+      const last = lastUserMessage(view);
+      if (last) send(last.text, last.attachments);
+    },
+    background: (text) => sendAway(text),
+    chooseFolder: () => chooseFolder(),
   });
   const recover = useTurnRecovery(view, turn, send);
   const chosenReady = Boolean(
@@ -786,6 +821,19 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
       {conversationId && (
         <ChatHolds conversationId={conversationId} holds={view.holds ?? []} running={busy} />
       )}
+      {/* What this chat is for (`/goal`): quiet, one press to change or clear. */}
+      <ChatGoal
+        goal={slash.goal}
+        onEdit={() => {
+          setDraft(`/goal ${slash.goal ?? ''}`);
+          composerRef.current?.focus();
+        }}
+        onClear={() =>
+          conversationId
+            ? void setChatGoal(conversationId, null, slash.goal)
+            : useUi.getState().setDraftGoal(null)
+        }
+      />
       <Composer
         ref={composerRef}
         value={draft}
@@ -889,7 +937,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
                 shortcut="mod+shift+enter"
                 shape="circle"
                 loading={startTask.isPending}
-                onClick={sendAway}
+                onClick={() => sendAway()}
               >
                 <ListPlus />
               </IconButton>
@@ -974,6 +1022,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
           <Text size="lg" tone="muted" align="center">
             What’s on your mind?
           </Text>
+          <NewChatPlace />
         </Stack>
         <div className={styles.emptyComposer}>{composer}</div>
         <div className={styles.suggestions} role="list" aria-label="Suggestions">

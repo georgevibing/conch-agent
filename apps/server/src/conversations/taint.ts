@@ -157,6 +157,11 @@ export function sinkReason(
 ): string | undefined {
   const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
   if (/^(?:mcp__conch__)?google_mail_create_draft$/.test(toolName)) return 'save a Gmail draft';
+  if (/^(?:mcp__conch__)?google_mail_send$/.test(toolName)) return 'send an email';
+  if (/^(?:mcp__conch__)?google_calendar_(?:create|update|delete)_event$/.test(toolName))
+    return 'change your Google Calendar';
+  if (/^(?:mcp__conch__)?google_drive_create_file$/.test(toolName))
+    return 'make a file in your Google Drive';
   if (/^(?:mcp__conch__)?slack_send_message$/.test(toolName)) return 'send a Slack message';
   if (/^(?:mcp__conch__)?image_generate$/.test(toolName))
     return 'send a prompt or source picture to an image service';

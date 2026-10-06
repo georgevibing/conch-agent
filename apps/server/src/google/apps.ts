@@ -9,12 +9,18 @@
  * Its tools are Conch's own host tools, so what a person chose is held here,
  * on every engine: a tool that's off isn't offered at all, and one set to Ask
  * asks before it runs. Saving a Gmail draft asks every time whatever the
- * policy says (ADR 0037's approval binding), so it can be Ask or Off only.
+ * policy says (ADR 0037's approval binding), so it can be Ask or Off only;
+ * so can every other change Conch makes in Google (sending, calendar events,
+ * Drive files). Which accounts each app uses, and whether an account may
+ * only read or also write there, is the person's choice per account
+ * (`limits` in the store), held by the service under what Google allows.
  */
 import {
   type GoogleAccount,
   type GoogleAppId,
   GOOGLE_APP_CAPABILITIES,
+  GOOGLE_APP_PRODUCT,
+  type GoogleProduct,
   GoogleAppId as AppId,
   type GoogleToolName,
   type GoogleCapability,
@@ -31,10 +37,9 @@ import type { ToolContext } from '../conversations/manager';
 import type { HostTool } from '../engines/types';
 import { CATALOG } from '../integrations/catalog';
 import { IntegrationError } from '../integrations/service';
-import type { GoogleService } from './service';
+import { accountsOf, type GoogleService } from './service';
 import type { AppSettings, GoogleData } from './store';
 
-const DRAFT = 'google_mail_create_draft';
 const ACCOUNTS = 'google_accounts';
 
 interface AppTool extends IntegrationTool {
@@ -65,32 +70,68 @@ const TOOLS: Record<GoogleAppId, AppTool[]> = {
       needs: 'mail-read',
     },
     {
-      name: DRAFT,
+      name: 'google_mail_create_draft',
       title: 'Save a draft',
       description:
-        'Saves a new email or a reply in your Drafts, for you to send yourself. It never sends, and asks you every time.',
+        'Saves a new email or a reply in your Drafts, for you to send yourself. Asks you every time.',
       access: 'write',
       destructive: false,
       alwaysAsks: true,
       needs: 'mail-draft',
+    },
+    {
+      name: 'google_mail_send',
+      title: 'Send an email',
+      description:
+        'Sends an email or a reply from your account. Shows you the exact email and asks every time.',
+      access: 'write',
+      destructive: false,
+      alwaysAsks: true,
+      needs: 'mail-send',
     },
   ],
   'google-calendar': [
     {
       name: 'google_calendar_briefing',
       title: 'Read your calendar',
-      description:
-        'Reads the events in a window of up to a month. It never creates or changes events.',
+      description: 'Reads the events in a window of up to a month.',
       access: 'read',
       destructive: false,
       needs: 'calendar-read',
+    },
+    {
+      name: 'google_calendar_create_event',
+      title: 'Add an event',
+      description: 'Adds an event, and invites people only if you say so. Asks every time.',
+      access: 'write',
+      destructive: false,
+      alwaysAsks: true,
+      needs: 'calendar-write',
+    },
+    {
+      name: 'google_calendar_update_event',
+      title: 'Change an event',
+      description: 'Renames or moves an event, or changes its details. Asks every time.',
+      access: 'write',
+      destructive: false,
+      alwaysAsks: true,
+      needs: 'calendar-write',
+    },
+    {
+      name: 'google_calendar_delete_event',
+      title: 'Delete an event',
+      description: 'Removes an event from your calendar. Asks every time.',
+      access: 'write',
+      destructive: true,
+      alwaysAsks: true,
+      needs: 'calendar-write',
     },
   ],
   'google-drive': [
     {
       name: 'google_drive_search',
       title: 'Find files',
-      description: 'Searches the names of the files in your Drive. It never changes them.',
+      description: 'Searches the names of the files in your Drive.',
       access: 'read',
       destructive: false,
       needs: 'drive-read',
@@ -103,8 +144,23 @@ const TOOLS: Record<GoogleAppId, AppTool[]> = {
       destructive: false,
       needs: 'drive-read',
     },
+    {
+      name: 'google_drive_create_file',
+      title: 'Make a file',
+      description:
+        'Makes a new Google Doc or text file. It can’t change or delete your other files. Asks every time.',
+      access: 'write',
+      destructive: false,
+      alwaysAsks: true,
+      needs: 'drive-write',
+    },
   ],
 };
+
+/** Every tool that asks inside itself, each time, whatever the policy says. */
+const ALWAYS_ASKS = new Set<string>(
+  Object.values(TOOLS).flatMap((tools) => tools.filter((t) => t.alwaysAsks).map((t) => t.name)),
+);
 
 const APP_OF = new Map<string, GoogleAppId>(
   Object.entries(TOOLS).flatMap(([app, tools]) => tools.map((t) => [t.name, app as GoogleAppId])),
@@ -141,6 +197,16 @@ function summary(name: string, args: Record<string, unknown>): string {
       return `search your Google Drive for ${q}`;
     case 'google_drive_read':
       return 'read a file’s details in Google Drive';
+    case 'google_mail_send':
+      return 'send an email';
+    case 'google_calendar_create_event':
+      return 'add an event to your calendar';
+    case 'google_calendar_update_event':
+      return 'change an event in your calendar';
+    case 'google_calendar_delete_event':
+      return 'delete an event from your calendar';
+    case 'google_drive_create_file':
+      return 'make a file in Google Drive';
     default:
       return 'use Google';
   }
@@ -214,7 +280,7 @@ export class GoogleApps {
       if (known.alwaysAsks && policy === 'allow')
         throw new IntegrationError(
           'invalid',
-          'Saving a Gmail draft always asks you first. You can turn it off instead.',
+          `“${known.title}” always asks you first. You can turn it off instead.`,
         );
     }
     await this.google.store.update((data) => {
@@ -367,8 +433,8 @@ export class GoogleApps {
     const item = this.#build(data).find((i) => i.id === app);
     if (!item?.enabled || !item.tools.some((t) => t.name === name)) return 'off';
     const decision = toolDecision(item, name);
-    // The draft tool asks inside itself, with the real account and the whole draft.
-    return name === DRAFT && decision !== 'off' ? 'allow' : decision;
+    // Every change asks inside itself, with the real account and exactly what it will do.
+    return ALWAYS_ASKS.has(name) && decision !== 'off' ? 'allow' : decision;
   }
 
   /**
@@ -422,17 +488,32 @@ export class GoogleApps {
     };
   }
 
-  /** The accounts as the model may see them: only for apps that are on, never a credential. */
+  /**
+   * The accounts as the model may see them: only for apps that are on, what
+   * each may do there (read, or read & write), never a credential.
+   */
   async #accounts(): Promise<string> {
     const data = await this.#read();
     const live = this.#live(data);
     const status = await this.google.status();
     const allowed = new Set<GoogleCapability>(live.flatMap((app) => GOOGLE_APP_CAPABILITIES[app]));
+    const products = new Set(live.map((app) => GOOGLE_APP_PRODUCT[app]));
     return JSON.stringify({
       accounts: status.accounts
-        .map((a) => ({ ...a, capabilities: a.capabilities.filter((c) => allowed.has(c)) }))
+        .map((a) => ({
+          id: a.id,
+          email: a.email,
+          name: a.name,
+          state: a.state,
+          ...(a.message && { message: a.message }),
+          via: a.via,
+          access: Object.fromEntries(
+            Object.entries(a.access ?? {}).filter(([p]) => products.has(p as GoogleProduct)),
+          ),
+          capabilities: a.capabilities.filter((c) => allowed.has(c)),
+        }))
         .filter((a) => a.capabilities.length),
-      note: 'An account signed in with an app password reaches Gmail only. Choose the account explicitly; ask if personal or work is unclear.',
+      note: 'Pass accountId as one of these emails (or leave it out when only one can do the job). "read" can only look; "write" can also change things, and every change asks the person first. To do more than an account allows, ask the person to change it in Apps. Ask if personal or work is unclear.',
     });
   }
 
@@ -467,8 +548,12 @@ export class GoogleApps {
       }
       const tools = item.tools.filter((t) => t.policy !== 'off').map((t) => `\`${t.name}\``);
       const entry = CATALOG.get(item.id);
+      const product = GOOGLE_APP_PRODUCT[item.id as GoogleAppId];
+      const who = accountsFor(await this.#read(), item.id as GoogleAppId)
+        .map((a) => `${a.email}: ${a.access?.[product] === 'write' ? 'read & write' : 'read only'}`)
+        .join('; ');
       working.push(
-        `- ${item.name} (Conch’s own tools ${tools.join(', ')}; ${item.account ?? ''})${entry ? `: ${entry.tagline}` : ''} — ${POLICY_LABELS[item.policy].toLowerCase()}${item.id === 'gmail' ? '; saving a draft always asks, and nothing is ever sent' : ''}.`,
+        `- ${item.name} (Conch’s own tools ${tools.join(', ')}; ${who})${entry ? `: ${entry.tagline}` : ''} — ${POLICY_LABELS[item.policy].toLowerCase()}; every change asks first.`,
       );
     }
     return { working, broken };
@@ -490,12 +575,17 @@ export class GoogleApps {
           return policy ? { ...tool, policy } : tool;
         });
       const passwords = accounts.filter((a) => a.via === 'app-password').length;
-      const how =
+      const product = GOOGLE_APP_PRODUCT[id];
+      const writes = accounts.filter((a) => a.access?.[product] === 'write').length;
+      const how = `${accounts.length === 1 ? 'One account' : `${accounts.length} accounts`}, ${
+        writes === accounts.length ? 'read & write' : writes ? 'some read & write' : 'read only'
+      }, ${
         passwords === accounts.length
-          ? 'With an app password (Gmail only, can’t send)'
+          ? 'with an app password'
           : passwords
-            ? 'With Google sign-in and an app password'
-            : 'With Google sign-in, through your own Google Cloud app';
+            ? 'with Google sign-in and an app password'
+            : 'with Google sign-in'
+      }`;
       const checked = accounts.map((a) => a.checkedAt ?? 0);
       out.push({
         id,
@@ -559,12 +649,8 @@ function settingsOf(data: GoogleData, id: GoogleAppId): AppSettings {
   };
 }
 
-function allAccounts(data: GoogleData): GoogleAccount[] {
-  return [
-    ...Object.values(data.accounts).map((a) => a.profile),
-    ...Object.values(data.passwords).map((p) => p.profile),
-  ];
-}
+/** Every account, with what the person lets it do (`accountsOf`). */
+const allAccounts = (data: GoogleData): GoogleAccount[] => accountsOf(data);
 
 const usable = (account: GoogleAccount, app: GoogleAppId) =>
   GOOGLE_APP_CAPABILITIES[app].some((c) => account.capabilities.includes(c));

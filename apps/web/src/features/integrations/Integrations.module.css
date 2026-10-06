@@ -381,10 +381,34 @@
   .accounts {
     display: flex;
     flex-direction: column;
-    gap: var(--nc-space-4);
+    gap: var(--nc-space-3);
     margin: 0;
     padding: 0;
     list-style: none;
+  }
+
+  /* A section's heading with its one action beside it, wrapping under it when narrow. */
+  .sectionHead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--nc-space-3);
+  }
+
+  /* A choice's name with its badge (“Simplest”). */
+  .choiceLabel {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  /* A field and its button, submitted by Enter. */
+  .inlineForm {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
   }
 
   /* A button that keeps its own width in a column (the connect dialog's other ways). */

@@ -16,6 +16,7 @@ import {
   type PasskeyRegistration,
   type SignInBody,
   Capabilities,
+  ClearResult,
   CompactResult,
   ConversationSummary,
   ChatFolder,
@@ -308,6 +309,24 @@ export const api = {
     request(CompactResult, `/api/conversations/${encodeURIComponent(id)}/compact`, {
       method: 'POST',
       body: focus ? { focus } : {},
+    }),
+  /** `/clear`: the model forgets the conversation so far, with every provider. */
+  clearConversation: (id: string) =>
+    request(ClearResult, `/api/conversations/${encodeURIComponent(id)}/clear`, {
+      method: 'POST',
+      body: {},
+    }),
+  /** Undo on `/clear`, while nothing new was sent. */
+  restoreConversation: (id: string) =>
+    request(ClearResult, `/api/conversations/${encodeURIComponent(id)}/clear/undo`, {
+      method: 'POST',
+      body: {},
+    }),
+  /** `/goal`: what the chat is for; `null` takes it away. */
+  setGoal: (id: string, goal: string | null) =>
+    request(Ok, `/api/conversations/${encodeURIComponent(id)}/goal`, {
+      method: 'PUT',
+      body: { goal },
     }),
   /** “Not now” on an offer to connect an app, for the rest of this conversation. */
   dismissSuggestion: (id: string, catalogId: string) =>

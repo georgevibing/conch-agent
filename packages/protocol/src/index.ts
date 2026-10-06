@@ -25,6 +25,7 @@ import {
 import { BrowserHandoff, BrowserPermission, BrowserStatus, BrowserStep } from './browser';
 import { Channel, ChannelDoor, ChannelOrigin } from './channels';
 import { ChatChange, ChatFolder, FolderId } from './chat-list';
+import { ChatGoal, MAX_GOAL_LENGTH } from './chat-context';
 import { ConchAppOffer, ConchAppShareCard } from './conch-apps';
 import { ChannelLink } from './linking';
 import {
@@ -64,6 +65,7 @@ export * from './apps';
 export * from './artifacts';
 export * from './chat-cards';
 export * from './chat-list';
+export * from './chat-context';
 export * from './conch-apps';
 export * from './conch-apps-words';
 export * from './questions';
@@ -787,6 +789,28 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     /** You asked for it (`/compact`), rather than the chat growing past the window. */
     asked: z.boolean().optional(),
   }),
+  /**
+   * `/clear`: from here on, the model reads nothing said before. Every message
+   * is still there for the person, every provider starts afresh, and the
+   * chat's goal stays. A later `context.restored` takes it back.
+   */
+  z.object({ ...logged, type: z.literal('context.cleared') }),
+  /** Undo on a `/clear`, before anything new was sent: the model remembers again. */
+  z.object({
+    ...logged,
+    type: z.literal('context.restored'),
+    /** The `context.cleared` this takes back. */
+    clearedSeq: z.number().int().nonnegative(),
+  }),
+  /**
+   * The chat's goal (`/goal`): kept in every turn's context, whichever provider
+   * answers, until it changes. `null`: it was taken away.
+   */
+  z.object({
+    ...logged,
+    type: z.literal('goal'),
+    goal: z.string().max(MAX_GOAL_LENGTH).nullable(),
+  }),
   /** This turn was answered by another provider than the chat's, and why. */
   z.object({
     ...logged,
@@ -915,10 +939,18 @@ export const ClientCommand = z.discriminatedUnion('type', [
       /** Model/effort/mode for this and later turns of the conversation. */
       options: TurnOptions.optional(),
       /**
+       * A new chat starts in this folder of the chat list (ADR 0089): started
+       * from the folder itself. Ignored when sending to a chat that exists, and
+       * when the folder has gone meanwhile (the chat then starts in the list).
+       */
+      folder: FolderId.optional(),
+      /**
        * Steer: stop the reply that's running, then send this, as one step, so
        * nothing lands in between. The same with every provider.
        */
       steer: z.boolean().optional(),
+      /** A goal for the chat (`/goal` before its first message), kept from this message on. */
+      goal: ChatGoal.optional(),
     })
     .refine((command) => command.text.length > 0 || Boolean(command.attachments?.length), {
       message: 'Write a message or attach something.',

@@ -73,8 +73,8 @@ export function registerLearningDoctor(
           state: 'needs-you',
           message:
             waiting === 1
-              ? 'One memory waits for your OK: it was learned in a chat that read something from outside.'
-              : `${waiting} memories wait for your OK: they were learned in chats that read something from outside.`,
+              ? 'One memory looked off, so Conch isn’t using it until you say.'
+              : `${waiting} memories looked off, so Conch isn’t using them until you say.`,
           action: { kind: 'open', label: 'Look at them', place: 'memory' },
         });
       const last = (await deps.tidy.status()).runs[0];

@@ -90,6 +90,16 @@ inside the space between them. The large palette leaves room for both panes,
 while narrow screens show results alone. Its height fits the visible viewport,
 including the space above a phone’s keyboard.
 
+### Where you are
+
+A page inside a page (Settings → Memory → What Conch knows, a provider's own
+page) says where it is with one `Breadcrumb` above it: each place above is a
+step back to it, the last is the page you're on. Never a stack of back buttons,
+and never a trail for a page with nothing above it: its heading is enough. Short
+of room, the places above give way to an ellipsis first. On a phone, a page's
+own places float in from the side as a `Sheet`, like the chats do, opened from
+the menu button beside the trail; the way out (‹ Chats) is at their top.
+
 ## Elevation
 
 `--nc-elevation-0…4`: stacked tight + ambient shadows tinted with the neutral hue,

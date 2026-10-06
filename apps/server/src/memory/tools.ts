@@ -12,6 +12,14 @@ import type { MemoryStore } from './store';
 const HELD =
   'Not remembered yet: it waits for the user to look at it in Conch (the chat shows them why). Don’t save it again in other words; carry on with what they asked.';
 
+/** Not kept, nobody asked: unattended after reading, and not the person's own words. */
+const UNSEEN =
+  'Not saved: with nobody here to check it, Conch only remembers what the user said themselves after reading something from outside. Carry on with what they asked.';
+
+/** Not kept, nobody asked: the person took it back once. */
+const REFUSED =
+  'Not saved: the user took this back before. Don’t save it again in other words; carry on with what they asked.';
+
 /** The memory tools every engine exposes to the agent, bound to one conversation. */
 export function memoryTools(options: {
   store: MemoryStore;
@@ -23,16 +31,16 @@ export function memoryTools(options: {
   /** The chat read something untrusted: why. Kept with what it remembers, as where it came from. */
   untrusted?: () => string | undefined;
   /**
-   * What it remembers after reading waits for an OK: nobody is there to see it
-   * and undo it (a routine, a chat app). In a chat you're in, it's remembered
-   * at once and the chat says so, with Undo.
+   * Nobody is there to see it and undo it (a routine, a chat app): after reading
+   * something untrusted, only the person's own words are remembered. In a chat
+   * you're in, it's remembered at once and the chat says so, with Undo.
    */
   waits?: () => boolean;
   /** Memories that stopped being true, for questions about before (ADR 0088). */
   searchPast?: (query: string) => Promise<Memory[]>;
   /**
-   * The person took this back once (ADR 0088 § 6): what the assistant tries to
-   * remember again waits for their OK.
+   * The person took this back once (ADR 0088 § 6): the assistant can't
+   * remember it again unless the person said it again themselves.
    */
   never?: (content: string) => Promise<boolean>;
   /**
@@ -58,29 +66,33 @@ export function memoryTools(options: {
     async run({ content, kind }) {
       if (taskPermission(content))
         return 'Not saved: permission for this task belongs to this chat, not long-term memory. Carry on with the task.';
-      // After reading something untrusted, a page could be the one asking (ADR 0032): it's
-      // provenance stays attached. Owner evidence avoids a blanket housekeeping hold.
+      // After reading something untrusted, a page could be the one asking (ADR 0032): its
+      // provenance stays attached. Owner evidence avoids any housekeeping hold (ADR 0097).
       const untrusted = options.untrusted?.();
-      const own = checkMemory({
-        content,
-        via: 'chat',
-        read: options.check?.read(),
-        said: options.check?.said(),
-      });
-      const waits = Boolean(untrusted) && (options.waits?.() ?? true) && !own.yours;
-      // Something the person took back once waits for them, wherever it comes from (ADR 0088).
-      const original = content;
-      let refused = await options.never?.(content).catch(() => true);
-      // And it's looked at first (ADR 0087): one that looks planted is held and asked about.
       const check = options.check;
-      const read = check?.read() ?? [];
+      // What the chat read; when only the taint is known, that it read something.
+      const read: readonly ReadThing[] =
+        check?.read() ?? (untrusted ? [{ kind: 'web', label: 'something this chat read' }] : []);
+      const own = checkMemory({ content, via: 'chat', read, said: check?.said() });
+      // Nobody is there to see it and undo it (a routine, a chat app, someone else's words):
+      // only what the person said themselves is kept. Anything else harmless is left out
+      // quietly rather than queued as a question (ADR 0097); what looks planted still goes
+      // on to the check, which holds it and tells the person.
+      if (untrusted && (options.waits?.() ?? true) && !own.yours && own.verdict === 'ok')
+        return UNSEEN;
+      // Something the person took back once: kept again only when they said it again.
+      const original = content;
+      const refused = !own.yours && (await options.never?.(content).catch(() => true));
+      if (refused) return REFUSED;
+      // And it's looked at first (ADR 0087): one that looks planted is held and asked about.
       const recent = check?.recent() ?? [];
       content = await compactMemory(
         content,
         { via: 'chat', read, said: check?.said() ?? [] },
         check?.look,
       );
-      if (content !== original) refused ||= await options.never?.(content).catch(() => true);
+      if (content !== original && !own.yours && (await options.never?.(content).catch(() => true)))
+        return REFUSED;
       // The store runs the check where it writes (ADR 0087); this says what's behind it.
       const { memory, verdict } = await store.write(
         {
@@ -89,12 +101,7 @@ export function memoryTools(options: {
           source: 'agent',
           conversationId,
           ...(untrusted && {
-            ...(waits && { pending: true }),
             untrusted: `Learned in a chat that ${untrusted.replace(/^This chat /, '').replace(/, which could be trying to steer me\.$/, '')}.`,
-          }),
-          ...(refused && {
-            pending: true,
-            untrusted: 'You took this back once, so it waits for your OK.',
           }),
           provenance: {
             via: 'chat',
@@ -122,12 +129,8 @@ export function memoryTools(options: {
           }
         }
       options.onSaved(memory);
-      if (memory.held) return HELD;
-      if (refused && memory.pending)
-        return `Noted as ${memory.id}, waiting for the user's OK: they took this back once before.`;
-      return memory.pending
-        ? `Noted as ${memory.id}, waiting for the user's OK before it's remembered (this chat read something from outside).`
-        : `Saved to memory as ${memory.id}.`;
+      if (memory.held || memory.pending) return HELD;
+      return `Saved to memory as ${memory.id}.`;
     },
   };
   const forget: HostTool<{ id: z.ZodString }> = {

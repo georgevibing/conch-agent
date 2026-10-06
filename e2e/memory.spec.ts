@@ -5,11 +5,12 @@ import { say } from './app';
 const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
 
 /**
- * It learns you, end to end (ADR 0032): a memory a page planted is held and
- * asked about (ADR 0087), an ordinary one learned after reading is remembered
- * where you can see it, with Undo; the tidy-up merges repeats and updates what changed, with
- * Undo; what Conch knows is searchable and exportable; something asked for in
- * three chats is offered as a skill, never saved by itself.
+ * It learns you, end to end (ADR 0032, ADR 0097): a memory a page planted is
+ * held and asked about (ADR 0087), an ordinary one learned after reading is
+ * remembered where you can see it, with Undo; the tidy-up quietly merges
+ * repeats and updates what changed, and the last one can be undone; what
+ * Conch knows is searchable and exportable; something asked for in three
+ * chats is offered as a skill, never saved by itself.
  */
 test.beforeEach(async ({ request }) => {
   await request.patch('/api/settings', { data: { onboarded: true, profile: { name: 'Ada' } } });
@@ -38,9 +39,9 @@ test('a memory a page planted is held and asked about, never used until you say 
   // Held, not saved: recall doesn't find it.
   expect(await recall()).toBe(0);
 
-  // The same question waits on What Conch knows.
+  // The same question comes first on What Conch knows.
   await page.goto('/memory');
-  const waiting = page.getByRole('list', { name: 'Waiting for your OK' });
+  const waiting = page.getByRole('region', { name: 'Needs you' });
   await expect(waiting).toContainText('it would change where invoices go');
   await page.goBack();
 
@@ -78,7 +79,7 @@ test('an ordinary memory after reading is remembered at once, and Undo forgets i
   await expect(page.getByText('Forgot', { exact: true })).toBeVisible();
 });
 
-test('the tidy-up merges repeats and updates what changed, every change with Undo', async ({
+test('the tidy-up quietly merges repeats and updates what changed, and can be undone', async ({
   page,
   request,
 }) => {
@@ -91,34 +92,28 @@ test('the tidy-up merges repeats and updates what changed, every change with Und
   await page.keyboard.press(`${mod}+k`);
   await page.getByRole('combobox').fill('tidy');
   await page.getByRole('option', { name: /Tidy up memories/ }).click();
-  const report = page.getByRole('region', { name: 'Conch tidied 2 memories' });
-  await expect(report).toBeVisible({ timeout: 20_000 });
-  await expect(report).toContainText('Was: Lives in Berlin');
-  await expect(report).toContainText('Now: Lives in Lisbon');
-  await expect(report).toContainText('They said the same thing.');
-  await expect(report.getByText('Saved automatically', { exact: true })).toHaveCount(2);
-  await expect(report.getByRole('button', { name: 'Keep', exact: true })).toHaveCount(0);
 
+  // No report, no Keep: what it knows is simply up to date.
   const memories = page.getByRole('list', { name: 'Memories' });
-  await expect(memories).toContainText('Lives in Lisbon');
+  await expect(memories).toContainText('Lives in Lisbon', { timeout: 20_000 });
   await expect(memories.getByText(/coffee/)).toHaveCount(1);
+  await expect(memories).not.toContainText('Lives in Berlin');
+  await expect(page.getByRole('button', { name: 'Keep', exact: true })).toHaveCount(0);
 
-  // Undo the merge: both come back, as they were.
-  const merged = report.getByRole('listitem').filter({ hasText: 'Merged' });
-  await merged.getByRole('button', { name: 'Undo' }).click();
-  await expect(merged).toContainText('Undone');
+  // The last tidy-up is one press from undone: both come back, as they were.
+  await page.getByRole('button', { name: 'More' }).click();
+  await page.getByRole('menuitem', { name: 'Undo the last tidy-up' }).click();
   await expect(memories.getByText(/coffee/)).toHaveCount(2);
+  await expect(memories).toContainText('Lives in Berlin');
 
-  // Search forgives the typo; the switch for every night is right here.
-  await page.getByRole('textbox', { name: 'Search memories' }).fill('lisbn');
-  await expect(memories.getByRole('listitem')).toHaveCount(1);
-  await expect(memories).toContainText('Lives in Lisbon');
-  await expect(page.getByRole('switch', { name: /Tidy up every night/ })).not.toBeChecked();
+  // Search forgives the typo.
+  await page.getByRole('textbox', { name: 'Search, or remember something new' }).fill('berln');
+  await expect(memories.getByRole('listitem').filter({ hasText: 'Lives in' })).toHaveCount(1);
 
   // Yours to take: a document of everything kept.
   const exported = await request.get('/api/memories/export');
   expect(exported.headers()['content-disposition']).toMatch(/conch-memories-.*\.md/);
-  expect(await exported.text()).toContain('- Lives in Lisbon');
+  expect(await exported.text()).toContain('- Lives in Berlin');
 });
 
 test('asked for in three chats, it’s offered as a skill — a draft to read, never saved by itself', async ({

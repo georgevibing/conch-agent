@@ -22,8 +22,10 @@ import {
   Archive,
   Brain,
   CornerDownRight,
+  Eraser,
   FoldVertical,
   Gauge,
+  ListTodo,
   MessageSquare,
   Moon,
   PanelLeft,
@@ -31,6 +33,7 @@ import {
   Settings,
   SquarePen,
   Sun,
+  Target,
   TextSearch,
   WandSparkles,
   Wrench,
@@ -44,6 +47,7 @@ import { MEMORY_ALL } from '../settings/paths';
 import { relativeTime } from '../../lib/time';
 import { isChat } from '../archive/useArchive';
 import { compactChat } from '../chat/compact';
+import { clearChat } from '../commands/context';
 import { useSearchPreview, useSearchResults } from '../search/useSearch';
 import { useFindables } from './findables';
 import styles from './Palette.module.css';
@@ -184,6 +188,12 @@ export function Palette() {
   const theme = useNacreTheme();
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const assistant = useAppState().data?.persona.name ?? 'Conch';
+  /** Words for the open chat's message box; a new chat's, from anywhere else. */
+  const intoComposer = (text: string) => {
+    useUi.getState().setComposerText(text);
+    if (pathname !== '/' && !pathname.startsWith('/c/')) void navigate('/');
+  };
   const { conversationId: currentId } = useParams();
   const { data: conversations } = useConversations();
   const [query, setQuery] = useState('');
@@ -273,8 +283,31 @@ export function Palette() {
             keywords: 'compact summarize shorten long chat context window forget',
             run: () => void compactChat(currentId),
           },
+          // As `/clear` does: the model forgets the conversation; Undo puts it back.
+          {
+            id: 'clear-context',
+            label: 'Start afresh in this chat',
+            icon: <Eraser />,
+            keywords: 'clear reset context forget conversation fresh start new memory wipe',
+            run: () => void clearChat(currentId, assistant),
+          },
         ]
       : []),
+    // Into the message box, where the menu offers what comes next.
+    {
+      id: 'plan-mode',
+      label: 'Plan first, then act',
+      icon: <ListTodo />,
+      keywords: 'plan mode planning propose approve before acting read only think first',
+      run: () => intoComposer('/plan '),
+    },
+    {
+      id: 'chat-goal',
+      label: 'Set a goal for this chat',
+      icon: <Target />,
+      keywords: 'goal objective aim purpose task focus keep in mind',
+      run: () => intoComposer('/goal '),
+    },
   ];
 
   const titles = useMemo(

@@ -1,44 +1,40 @@
-import type { MemoryKind, TidyRun, TidyStatus } from '@conch/protocol';
+import type { Memory, MemoryKind } from '@conch/protocol';
 import {
   Button,
   DropdownMenu,
   EmptyState,
   formatBytes,
   Heading,
+  IconButton,
   Input,
-  MeaningSearch,
-  MemoryList,
+  MeaningHint,
+  MemoryAdd,
+  MemoryCells,
+  MemoryGlance,
+  memoryKindOrder,
   Page,
-  SegmentedControl,
   Skeleton,
   Stack,
-  Switch,
-  Text,
-  TidyChangeItem,
-  TidyReport,
   toast,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { Brain, Download, Plus, Search, Sparkles } from 'lucide-react';
+import { Brain, MoreHorizontal, Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { api } from '../../api/client';
-import { keys, useAppState, useMemories, useUpdateSettings } from '../../api/queries';
+import { keys, useAppState, useMemories } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { relativeTime } from '../../lib/time';
-import { EarlierSection, LearnedSection, NeverSection } from '../learning/LearningSections';
+import { useLearning } from '../learning/api';
+import { EarlierDialog, NEVER_INTENT, NeverDialog } from '../learning/LearningSections';
 import { downloadMemories, memoryApi } from './api';
+import { HeldMemory } from './HeldMemory';
 import styles from './Memory.module.css';
-import { MemoryRow } from './MemoryRow';
+import { holdOf, MemoryRow } from './MemoryRow';
 import { browserLanguages, memoryKeys, useMemoryIndex, useMemorySearch, useTidy } from './queries';
 
-const KINDS: { value: MemoryKind | 'all'; label: string }[] = [
-  { value: 'all', label: 'Everything' },
-  { value: 'preference', label: 'Preferences' },
-  { value: 'person', label: 'People' },
-  { value: 'project', label: 'Projects' },
-  { value: 'fact', label: 'Facts' },
-];
+/** A page of the list at a time: long lists stay quick to scan. */
+const PAGE = 60;
 
 function useDebounced<T>(value: T, ms: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -49,151 +45,23 @@ function useDebounced<T>(value: T, ms: number): T {
   return debounced;
 }
 
-function when(run: TidyRun) {
-  const date = new Date(run.at);
-  const time = date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-  const today = date.toDateString() === new Date().toDateString();
-  if (run.trigger === 'nightly') return `${today ? 'Last night' : relativeTime(run.at)} at ${time}`;
-  return `${today ? 'Today' : relativeTime(run.at)} at ${time}`;
+const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/** “Learning quietly · tidied last night”: the one line about what it's doing. */
+function useStatus(learning: boolean): string {
+  const tidy = useTidy().data;
+  if (tidy?.running) return 'Tidying…';
+  const head = learning ? 'Learning quietly' : 'Remembers only what you ask';
+  if (!tidy?.lastAt) return head;
+  const at = new Date(tidy.lastAt);
+  const today = at.toDateString() === new Date().toDateString();
+  const night = at.getHours() < 6;
+  const when = today ? (night ? 'last night' : 'today') : relativeTime(tidy.lastAt);
+  return `${head} · tidied ${when}`;
 }
 
-function title(run: TidyRun) {
-  const n = run.changes.length;
-  if (!n) return 'Nothing needed tidying';
-  const memories = n === 1 ? '1 memory' : `${n} memories`;
-  // Learned from a long chat just before its start was summarised (ADR 0055).
-  if (run.chat) return `Conch learned ${memories} from a long chat before summarising it`;
-  return run.trigger === 'nightly'
-    ? `Conch tidied ${memories} while you slept`
-    : `Conch tidied ${memories}`;
-}
-
-/** Tidying up: the tidy-up's runs, each change with Keep and Undo. */
-function Tidying({ autoMemory }: { autoMemory: boolean }) {
-  const tidy = useTidy();
-  const client = useQueryClient();
-  const update = useUpdateSettings();
-  const intent = useUi((s) => s.memoryIntent);
-  const setIntent = useUi((s) => s.setMemoryIntent);
-  const asked = useRef(false);
-
-  const now = async () => {
-    try {
-      client.setQueryData(memoryKeys.tidy, await memoryApi.tidyNow());
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  };
-  // ⌘K → Tidy up memories: start as the page opens.
-  useEffect(() => {
-    if (asked.current || intent !== 'tidy') return;
-    asked.current = true;
-    setIntent(null);
-    void now();
-    // Once, on arrival.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const answer = async (run: TidyRun, changeId: string, a: 'keep' | 'undo' | 'dismiss') => {
-    try {
-      client.setQueryData<TidyStatus>(memoryKeys.tidy, await memoryApi.answer(run.id, changeId, a));
-      void client.invalidateQueries({ queryKey: keys.memories });
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  };
-
-  const status = tidy.data;
-  const runs = (status?.runs ?? []).filter((r, i) => i === 0 || r.changes.length > 0).slice(0, 3);
-  return (
-    <section className={styles.section} aria-labelledby="memory-learnings">
-      <div className={styles.sectionHead}>
-        <Heading level={2} size="lg" id="memory-learnings">
-          Tidying up
-        </Heading>
-        <Button
-          size="sm"
-          variant="surface"
-          leadingIcon={<Sparkles />}
-          loading={status?.running}
-          onClick={() => void now()}
-        >
-          {status?.running ? 'Tidying…' : 'Tidy up now'}
-        </Button>
-      </div>
-      <Switch
-        checked={status?.nightly ?? false}
-        onCheckedChange={(checked) =>
-          void update
-            .mutateAsync({ preferences: { tidyMemory: checked } })
-            .then(() => client.invalidateQueries({ queryKey: memoryKeys.tidy }))
-        }
-        label="Tidy up every night"
-        description={`While you sleep, Conch merges repeats and updates what’s changed — with the cheapest model you have. Routine changes are saved automatically, with Undo. Conch asks only when a memory needs your attention.${autoMemory ? '' : ' Learn from your chats is off, so anything new waits for your OK.'}`}
-      />
-      {tidy.isPending ? (
-        <Skeleton shape="block" height="5rem" />
-      ) : runs.length === 0 ? (
-        <Text size="sm" tone="muted">
-          No tidy-ups yet. Conch saves routine changes for you and shows what changed, with Undo.
-        </Text>
-      ) : (
-        runs.map((run) => (
-          <TidyReport
-            key={run.id}
-            title={title(run)}
-            when={when(run)}
-            note={
-              run.problem ??
-              (!run.model && !run.changes.length
-                ? 'With no model to ask, Conch only looked for exact repeats.'
-                : undefined)
-            }
-          >
-            {run.changes.length > 0 &&
-              run.changes.map((c) => (
-                <TidyChangeItem
-                  key={c.id}
-                  kind={c.kind}
-                  state={c.state}
-                  before={c.before.map((m) => m.content)}
-                  after={c.after?.content}
-                  why={c.why}
-                  untrusted={c.untrusted}
-                  actions={
-                    <>
-                      {c.state === 'pending' && (
-                        <Button
-                          size="sm"
-                          variant="soft"
-                          onClick={() => void answer(run, c.id, 'keep')}
-                        >
-                          Keep
-                        </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        tone="neutral"
-                        onClick={() =>
-                          void answer(run, c.id, c.state === 'pending' ? 'dismiss' : 'undo')
-                        }
-                      >
-                        {c.state === 'pending' ? 'Don’t keep' : 'Undo'}
-                      </Button>
-                    </>
-                  }
-                />
-              ))}
-          </TidyReport>
-        ))
-      )}
-    </section>
-  );
-}
-
-/** How search works now, and the one thing that would make it better (ADR 0041). */
-function SearchMode() {
+/** Search by meaning, offered in one line until it's there (ADR 0041). */
+function MeaningLine() {
   const index = useMemoryIndex();
   const client = useQueryClient();
   const intent = useUi((s) => s.memoryIntent);
@@ -201,13 +69,12 @@ function SearchMode() {
   const button = useRef<HTMLButtonElement>(null);
   const status = index.data;
   // ⌘K → Search memories by meaning: the offer, ready to press.
-  const asked = intent === 'meaning';
   useEffect(() => {
-    if (!asked || !status) return;
+    if (intent !== 'meaning' || !status) return;
     setIntent(null);
     button.current?.scrollIntoView({ block: 'center' });
     button.current?.focus();
-  }, [asked, status, setIntent]);
+  }, [intent, status, setIntent]);
   if (!status) return null;
   const get = async () => {
     try {
@@ -217,225 +84,227 @@ function SearchMode() {
     }
   };
   const press = (label: string) => (
-    <Button ref={button} size="sm" variant="surface" onClick={() => void get()}>
+    <Button ref={button} size="sm" variant="ghost" onClick={() => void get()}>
       {label}
     </Button>
   );
   if (status.getting !== undefined)
-    return <MeaningSearch state="getting" progress={status.getting} />;
+    return <MeaningHint state="getting" progress={status.getting} />;
   if (status.mode === 'meaning')
     return status.indexed < status.total ? (
-      <MeaningSearch state="indexing" indexed={status.indexed} total={status.total} />
-    ) : (
-      <MeaningSearch state="meaning" model={status.model} source={status.source} />
-    );
+      <MeaningHint state="indexing" indexed={status.indexed} total={status.total} />
+    ) : null;
   if (status.problem && status.offer)
-    return <MeaningSearch state="problem" problem={status.problem} action={press('Try again')} />;
+    return <MeaningHint state="problem" problem={status.problem} action={press('Try again')} />;
   if (status.offer)
     return (
-      <MeaningSearch
-        state="offer"
-        size={formatBytes(status.offer.bytes)}
-        multilingual={status.offer.multilingual}
-        action={press('Get it')}
-      />
+      <MeaningHint state="offer" size={formatBytes(status.offer.bytes)} action={press('Get it')} />
     );
-  return <MeaningSearch state="words" problem={status.problem} />;
+  return null;
 }
 
 /**
- * What Conch knows about you (ADR 0032): who you are, what it remembers by
- * kind, what's waiting for your OK, and what it learned lately — searchable,
- * editable, forgettable and yours to export.
+ * What Conch knows about you (ADR 0032, ADR 0097). It learns and tidies
+ * quietly, so the page is what it knows, not a report: a security question
+ * first if there is one, then one calm summary and one list to search, add
+ * to, change and forget.
  */
 export function MemoryView({ inSettings = false }: { inSettings?: boolean } = {}) {
   const app = useAppState();
   const memories = useMemories();
+  const learningStatus = useLearning().data;
   const client = useQueryClient();
   const openSettings = useUi((s) => s.openSettings);
+  const intent = useUi((s) => s.memoryIntent);
+  const setIntent = useUi((s) => s.setMemoryIntent);
   const [query, setQuery] = useState('');
-  const [kind, setKind] = useState<MemoryKind | 'all'>('all');
-  const [draft, setDraft] = useState('');
+  const [kind, setKind] = useState<MemoryKind | null>(null);
+  const [shownCount, setShownCount] = useState(PAGE);
+  const [adding, setAdding] = useState(false);
+  // ⌘K → Things Conch won't learn again: open as the page opens.
+  const [never, setNever] = useState(() => useUi.getState().memoryIntent === NEVER_INTENT);
+  const [earlier, setEarlier] = useState(false);
   const q = useDebounced(query.trim(), 200);
   const search = useMemorySearch(q);
+  const learning = app.data?.preferences.autoMemory ?? true;
+  const status = useStatus(learning);
 
   const all = memories.data ?? [];
   const waiting = all.filter((m) => m.pending);
-  const kept = all.filter((m) => !m.pending);
-  const shown = (q ? (search.data?.results ?? []) : kept).filter(
-    (m) => kind === 'all' || m.kind === kind,
+  const kept = all.filter((m) => !m.pending).sort((a, b) => b.updatedAt - a.updatedAt);
+  const results: Memory[] = q ? (search.data?.results ?? []).filter((m) => !m.pending) : kept;
+  const shown = results.filter((m) => !kind || m.kind === kind);
+  const counts = Object.fromEntries(
+    memoryKindOrder.map((k) => [k, kept.filter((m) => m.kind === k).length]),
   );
-  const profile = app.data?.profile;
+  const typed = query.trim();
+  const offerAdd = typed.length > 0 && !all.some((m) => same(m.content, typed));
+  const pastCount = learningStatus?.past.length ?? 0;
+  const neverCount = learningStatus?.never.length ?? 0;
   // A page of its own, or a place inside Settings (its column is already the page).
   const Shell = inSettings ? Stack : Page;
 
-  const add = async () => {
-    const content = draft.trim();
-    if (!content) return;
+  // The last tidy-up's changes stay reversible, one press away (ADR 0097).
+  const lastRun = useTidy().data?.runs[0];
+  const undoable = lastRun?.changes.filter((c) => c.state === 'applied') ?? [];
+  const undoTidy = async () => {
+    if (!lastRun) return;
     try {
-      await api.addMemory(content, kind === 'all' ? 'fact' : kind);
-      setDraft('');
+      let next;
+      for (const c of undoable) next = await memoryApi.answer(lastRun.id, c.id, 'undo');
+      if (next) client.setQueryData(memoryKeys.tidy, next);
       void client.invalidateQueries({ queryKey: keys.memories });
+      toast(undoable.length === 1 ? 'Put back 1 change' : `Put back ${undoable.length} changes`);
     } catch (e) {
       toast.error((e as Error).message);
     }
   };
 
+  const tidyNow = async () => {
+    try {
+      // What it changes arrives as `memory.changed`, like any other change.
+      client.setQueryData(memoryKeys.tidy, await memoryApi.tidyNow());
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  // ⌘K → Tidy up memories: as the page opens.
+  const arrived = useRef(false);
+  useEffect(() => {
+    if (arrived.current) return;
+    arrived.current = true;
+    if (intent === 'tidy') void tidyNow();
+    if (intent === 'tidy' || intent === NEVER_INTENT) setIntent(null);
+    // Once, on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const add = async () => {
+    if (!offerAdd || adding) return;
+    setAdding(true);
+    try {
+      await api.addMemory(typed, kind ?? 'fact');
+      setQuery('');
+      void client.invalidateQueries({ queryKey: keys.memories });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setAdding(false);
+    }
+  };
+
   return (
-    <Shell gap={8}>
+    <Shell gap={5}>
       <header className={styles.header}>
-        <Stack gap={1}>
-          <Heading level={1} display={!inSettings} size={inSettings ? 'xl' : '3xl'}>
-            What Conch knows about you
-          </Heading>
-          <Text tone="muted">
-            Everything your assistant remembers, and where it learned it. Plain files on this
-            computer — read, change or forget any of it.
-          </Text>
-        </Stack>
+        <Heading level={1} display={!inSettings} size={inSettings ? 'xl' : '3xl'}>
+          What Conch knows about you
+        </Heading>
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
-            <Button variant="surface" leadingIcon={<Download />}>
-              Export
-            </Button>
+            <IconButton label="More" variant="ghost">
+              <MoreHorizontal />
+            </IconButton>
           </DropdownMenu.Trigger>
           <DropdownMenu.Content align="end">
+            <DropdownMenu.Item onSelect={() => void tidyNow()}>Tidy up now</DropdownMenu.Item>
+            {undoable.length > 0 && (
+              <DropdownMenu.Item onSelect={() => void undoTidy()}>
+                Undo the last tidy-up
+              </DropdownMenu.Item>
+            )}
+            <DropdownMenu.Item onSelect={() => openSettings('about')}>
+              Edit About you
+            </DropdownMenu.Item>
+            <DropdownMenu.Separator />
+            <DropdownMenu.Item onSelect={() => setEarlier(true)} disabled={!pastCount}>
+              What used to be true{pastCount ? ` (${pastCount})` : ''}
+            </DropdownMenu.Item>
+            <DropdownMenu.Item onSelect={() => setNever(true)}>
+              Won’t learn again{neverCount ? ` (${neverCount})` : ''}
+            </DropdownMenu.Item>
+            <DropdownMenu.Separator />
             <DropdownMenu.Item onSelect={() => downloadMemories('md')}>
-              As a document (Markdown)
+              Export as a document
             </DropdownMenu.Item>
             <DropdownMenu.Item onSelect={() => downloadMemories('json')}>
-              As data (JSON)
+              Export as data
             </DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Root>
       </header>
 
-      <section className={styles.section} aria-labelledby="memory-about">
-        <div className={styles.sectionHead}>
-          <Heading level={2} size="lg" id="memory-about">
-            About you
-          </Heading>
-          <Button size="sm" variant="ghost" onClick={() => openSettings('about')}>
-            Edit
-          </Button>
-        </div>
-        <div className={styles.profile}>
-          {profile?.name || profile?.about ? (
-            <>
-              {profile.name && <Text weight="medium">{profile.name}</Text>}
-              {profile.about && (
-                <Text size="sm" tone="muted" className={styles.about}>
-                  {profile.about}
-                </Text>
-              )}
-            </>
-          ) : (
-            <Text size="sm" tone="muted">
-              Nothing yet. A few lines about you are always in context, so you never repeat
-              yourself.
-            </Text>
-          )}
-        </div>
-      </section>
-
+      {/* Only a security concern ever asks (ADR 0087, ADR 0097). */}
       {waiting.length > 0 && (
-        <section className={styles.section} aria-labelledby="memory-waiting">
-          <Heading level={2} size="lg" id="memory-waiting">
-            Waiting for your OK
-          </Heading>
-          <Text size="sm" tone="muted">
-            Learned where something from outside could have been steering it, or held because it
-            looked off. Conch doesn’t use them until you say.
-          </Text>
-          <MemoryList aria-label="Waiting for your OK">
-            {waiting.map((m) => (
-              <MemoryRow key={m.id} memory={m} showKind />
-            ))}
-          </MemoryList>
+        <section className={styles.attention} aria-label="Needs you">
+          {waiting.map((m) => (
+            <HeldMemory key={m.id} memoryId={m.id} content={m.content} held={holdOf(m)} />
+          ))}
         </section>
       )}
 
-      <LearnedSection />
+      {memories.isPending ? (
+        <Skeleton shape="block" height="9rem" />
+      ) : (
+        <MemoryGlance
+          counts={counts}
+          filter={kind}
+          onFilterChange={setKind}
+          learning={learning}
+          status={status}
+        />
+      )}
 
-      <Tidying autoMemory={app.data?.preferences.autoMemory ?? true} />
-
-      <section className={styles.section} aria-labelledby="memory-all">
-        <Heading level={2} size="lg" id="memory-all">
-          Memories
-        </Heading>
-        <div className={styles.tools}>
-          <Input
-            rootClassName={styles.search}
-            leading={<Search />}
-            aria-label="Search memories"
-            placeholder="Search memories…"
-            value={query}
-            clearable
-            onClear={() => setQuery('')}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <SegmentedControl
-            aria-label="Show"
-            size="sm"
-            value={kind}
-            onValueChange={(v) => v && setKind(v as MemoryKind | 'all')}
-          >
-            {KINDS.map((k) => (
-              <SegmentedControl.Item key={k.value} value={k.value}>
-                {k.label}
-              </SegmentedControl.Item>
-            ))}
-          </SegmentedControl>
-        </div>
+      <Stack gap={2}>
         <form
-          className={styles.add}
+          role="search"
           onSubmit={(e) => {
             e.preventDefault();
             void add();
           }}
         >
           <Input
-            aria-label="Add a memory"
-            placeholder="Add something for me to remember…"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            leading={<Search />}
+            aria-label="Search, or remember something new"
+            placeholder="Search, or remember something new"
+            value={query}
+            clearable
+            onClear={() => setQuery('')}
+            onChange={(e) => setQuery(e.target.value)}
           />
-          <Button type="submit" variant="surface" leadingIcon={<Plus />} disabled={!draft.trim()}>
-            Add
-          </Button>
         </form>
-        {memories.isPending ? (
-          <Skeleton lines={4} />
-        ) : shown.length === 0 ? (
-          <EmptyState
-            size="sm"
-            icon={<Brain />}
-            title={
-              q
-                ? 'Nothing matches'
-                : kept.length
-                  ? 'Nothing of this kind yet'
-                  : 'Nothing remembered yet'
-            }
-            description={
-              q
-                ? 'Try other words: search forgives typos and other forms of a word.'
-                : 'Tell me things like “remember I’m vegetarian” in a chat, or add them here.'
-            }
-          />
-        ) : (
-          <MemoryList aria-label="Memories">
-            {shown.map((m) => (
-              <MemoryRow key={m.id} memory={m} showKind={kind === 'all'} />
+        <MeaningLine />
+      </Stack>
+
+      {memories.isPending ? (
+        <Skeleton lines={4} />
+      ) : shown.length === 0 && !offerAdd ? (
+        <EmptyState
+          size="sm"
+          icon={<Brain />}
+          title={kept.length ? 'Nothing of this kind yet' : 'Nothing remembered yet'}
+          description="Tell me something in a chat, or type it above."
+        />
+      ) : (
+        <Stack gap={3}>
+          <MemoryCells aria-label="Memories">
+            {offerAdd && <MemoryAdd text={typed} onAdd={() => void add()} busy={adding} />}
+            {shown.slice(0, shownCount).map((m, i) => (
+              <MemoryRow key={m.id} memory={m} index={i} />
             ))}
-          </MemoryList>
-        )}
-        <SearchMode />
-      </section>
+          </MemoryCells>
+          {shown.length > shownCount && (
+            <div>
+              <Button size="sm" variant="ghost" onClick={() => setShownCount((n) => n + PAGE)}>
+                Show more
+              </Button>
+            </div>
+          )}
+        </Stack>
+      )}
 
-      <EarlierSection />
-
-      <NeverSection />
+      <NeverDialog open={never} onOpenChange={setNever} />
+      <EarlierDialog open={earlier} onOpenChange={setEarlier} />
     </Shell>
   );
 }

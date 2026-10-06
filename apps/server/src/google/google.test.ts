@@ -531,7 +531,12 @@ describe('Google consent and credentials', () => {
     );
     await expect(
       service.api('account1', 'mail-draft', '/gmail/v1/users/me/messages/send', { method: 'POST' }),
-    ).rejects.toThrow('cannot send');
+    ).rejects.toThrow('cannot send mail with draft access');
+    await expect(
+      service.api('account1', 'mail-send', '/gmail/v1/users/me/settings/filters', {
+        method: 'POST',
+      }),
+    ).rejects.toThrow('Unsupported');
     expect(fetcher).not.toHaveBeenCalled();
     fetcher.mockRejectedValue(new Error('timeout'));
     await expect(
@@ -587,6 +592,7 @@ describe('draft receipts and injection guard', () => {
     });
   });
   it('requires durable operation identity and approval; rejects header injection', async () => {
+    await connect();
     const ctx = {
       ask: vi.fn(async () => 'deny'),
       signal: new AbortController().signal,
@@ -605,6 +611,14 @@ describe('draft receipts and injection guard', () => {
       expect(sinkReason(`${prefix}google_mail_create_draft`, {}, { workspace: '/work' })).toBe(
         'save a Gmail draft',
       );
+      for (const [name, reason] of [
+        ['google_mail_send', 'send an email'],
+        ['google_calendar_create_event', 'change your Google Calendar'],
+        ['google_calendar_update_event', 'change your Google Calendar'],
+        ['google_calendar_delete_event', 'change your Google Calendar'],
+        ['google_drive_create_file', 'make a file in your Google Drive'],
+      ])
+        expect(sinkReason(`${prefix}${name}`, {}, { workspace: '/work' })).toBe(reason);
       expect(needs(`${prefix}google_mail_create_draft`, {}, { workspace: '/work' })).toEqual({
         capability: 'apps',
         detail: 'google',

@@ -113,6 +113,8 @@ export class ClaudeCodeEngine implements Engine {
   readonly skillSources = ['claude'] as const;
   /** It keeps its own plan (its todos or tasks), translated into Conch's checklist. */
   readonly plans = 'native' as const;
+  /** Plan mode ends with its own `ExitPlanMode` question. */
+  readonly planApproval = 'native' as const;
   /**
    * Its program runs the loop and paces long work itself (compaction, its own
    * limits); Conch doesn't second-guess a coding session from outside (ADR 0085).

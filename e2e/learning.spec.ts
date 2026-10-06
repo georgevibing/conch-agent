@@ -3,11 +3,11 @@ import { expect, test, type APIRequestContext } from '@playwright/test';
 import { say } from './app';
 
 /**
- * Quiet learning, end to end (ADR 0088): once a chat you were in goes quiet,
- * a correction in it is learned and said at its end, in one quiet line. Why?
- * shows your words; Undo takes it back, a reload still says so, and the same
- * correction in another chat isn't learned again. The mock engine's chats go
- * quiet after a few seconds.
+ * Quiet learning, end to end (ADR 0088, ADR 0097): once a chat you were in
+ * goes quiet, a correction in it is learned silently — nothing in the chat
+ * asks or announces it. What Conch knows lists it; Forget there takes it back,
+ * and the same correction in another chat isn't learned again. The mock
+ * engine's chats go quiet after a few seconds.
  */
 test.beforeEach(async ({ request }) => {
   await request.patch('/api/settings', { data: { onboarded: true, profile: { name: 'Ada' } } });
@@ -18,7 +18,7 @@ const remembers = async (request: APIRequestContext, content: string) =>
     (m) => m.content === content,
   );
 
-test('a correction is learned once the chat goes quiet, with Why? and Undo, and never again', async ({
+test('a correction is learned silently once the chat goes quiet, forgotten for good from Memory', async ({
   page,
   request,
 }) => {
@@ -26,30 +26,19 @@ test('a correction is learned once the chat goes quiet, with Why? and Undo, and 
   await say(page, 'Write me a script to rename my photos', /Ask me to/);
   await say(page, 'No, I meant TypeScript.', /Ask me to/);
 
-  // Nothing asks for attention while the chat goes on; once it's quiet, one line says so.
-  const line = page.getByRole('group', { name: 'What Conch learned from this chat' });
-  await expect(line).toBeVisible({ timeout: 40_000 });
-  await expect(line).toContainText('Learned 1 thing');
-  await expect.poll(() => remembers(request, 'Prefers TypeScript')).toBe(true);
+  // Learned once the chat is quiet, and nothing in the chat says so.
+  await expect.poll(() => remembers(request, 'Prefers TypeScript'), { timeout: 40_000 }).toBe(true);
+  await expect(page.getByRole('group', { name: 'What Conch learned from this chat' })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole('region', { name: 'Remember this?' })).toHaveCount(0);
 
-  await line.getByRole('button', { name: /Learned 1 thing/ }).click();
-  await expect(line).toContainText('Prefers TypeScript');
-  await line.getByRole('button', { name: 'Why?' }).click();
-  const why = page.getByRole('dialog');
-  await expect(why).toContainText('No, I meant TypeScript');
-  await expect(why).toContainText('You corrected it');
-  await page.keyboard.press('Escape');
-
-  await line.getByRole('button', { name: 'Undo' }).click();
-  await expect(line).toContainText('Undone · won’t learn this again');
+  // What Conch knows lists it; Forget takes it back.
+  await page.goto('/memory');
+  const memories = page.getByRole('list', { name: 'Memories' });
+  await expect(memories).toContainText('Prefers TypeScript');
+  await memories.getByRole('button', { name: 'Forget: Prefers TypeScript' }).click();
   await expect.poll(() => remembers(request, 'Prefers TypeScript')).toBe(false);
-  // What you pressed is written into the chat: a reload says it again.
-  await page.reload();
-  const again = page.getByRole('group', { name: 'What Conch learned from this chat' });
-  await again.getByRole('button', { name: /Learned 1 thing/ }).click();
-  await expect(again).toContainText('Undone · won’t learn this again');
-
-  // The Memory page lists it among what Conch won't learn again.
   const status = await (await request.get('/api/learning')).json();
   expect(status.never.map((n: { text: string }) => n.text)).toContain('Prefers TypeScript');
 
@@ -59,9 +48,6 @@ test('a correction is learned once the chat goes quiet, with Why? and Undo, and 
   await say(page, 'No, I meant TypeScript.', /Ask me to/);
   // Quiet for long enough to have been read, twice over.
   await page.waitForTimeout(20_000);
-  await expect(page.getByRole('group', { name: 'What Conch learned from this chat' })).toHaveCount(
-    0,
-  );
   expect(await remembers(request, 'Prefers TypeScript')).toBe(false);
 });
 

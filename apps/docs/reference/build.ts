@@ -34,7 +34,7 @@ import { SettingsStore } from '../../server/src/settings/store';
 import { KNOWN_NEEDS } from '../../server/src/setup/known';
 import type { InstallRecipe, Platform } from '../../server/src/setup/needs';
 import { SERVER_VERSION } from '../../server/src/version';
-import { builtins } from '../../web/src/features/commands/slash';
+import { builtins, sectionLabels } from '../../web/src/features/commands/slash';
 import { effortLabels, modeWords } from '../../web/src/features/models/words';
 import type {
   EnvRef,
@@ -349,11 +349,12 @@ export function buildReference(): Reference {
       tone,
     })),
     efforts: Object.entries(effortLabels).map(([value, words]) => ({ value, ...words })),
-    slash: builtins.map(({ name, description, argumentHint, aliases }) => ({
+    slash: builtins.map(({ name, description, argumentHint, aliases, section }) => ({
       name,
       description,
       argumentHint,
       aliases: aliases ?? [],
+      section: sectionLabels[section],
     })),
     files: files(),
     needs: needs(),

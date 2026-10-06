@@ -42,6 +42,7 @@ export * from './components/TimePicker';
 
 // Navigation & disclosure
 export * from './components/Tabs';
+export * from './components/Breadcrumb';
 export * from './components/Accordion';
 export * from './components/Collapsible';
 

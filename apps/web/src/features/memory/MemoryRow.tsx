@@ -1,29 +1,23 @@
-import type { Memory } from '@conch/protocol';
-import { Button, IconButton, MemoryItem, Textarea, toast } from '@conch/nacre';
+import type { Memory, MemoryHold } from '@conch/protocol';
+import { MemoryCell, memorySourceLabels, Textarea, toast } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { Pencil, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { api } from '../../api/client';
 import { keys } from '../../api/queries';
 import { relativeTime } from '../../lib/time';
 import { useAutoFocus } from '../../lib/useAutoFocus';
-import { memoryApi } from './api';
-import styles from './Memory.module.css';
 
 function Editor({
   value,
   onChange,
   onSave,
   onCancel,
-  saveOnBlur = true,
 }: {
   value: string;
   onChange: (value: string) => void;
   onSave: () => void;
   onCancel: () => void;
-  /** A held memory is kept only by Enter, never by looking away. */
-  saveOnBlur?: boolean;
 }) {
   const ref = useAutoFocus<HTMLTextAreaElement>();
   return (
@@ -35,7 +29,7 @@ function Editor({
       aria-label="Edit memory"
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      onBlur={saveOnBlur ? onSave : undefined}
+      onBlur={onSave}
       onKeyDown={(e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
@@ -47,8 +41,34 @@ function Editor({
   );
 }
 
-/** One memory: click to edit, Forget to remove; Keep or Forget while it waits for an OK. */
-export function MemoryRow({ memory, showKind = false }: { memory: Memory; showKind?: boolean }) {
+/** Where it came from and when, in a few words. */
+export function metaOf(memory: Memory): string {
+  const from =
+    memory.about === 'environment' ? 'About this computer' : memorySourceLabels[memory.source];
+  return `${from} · ${relativeTime(memory.updatedAt)}`;
+}
+
+/**
+ * What a memory that waits shows on the page (ADR 0087): the check's own
+ * reasons, or, for one held before the check said why, the sentence it was
+ * kept with.
+ */
+export function holdOf(memory: Memory): MemoryHold {
+  return (
+    memory.held ?? {
+      verdict: 'ask',
+      reasons: [
+        { code: 'outside', words: memory.untrusted ?? 'Conch wasn’t sure about this one.' },
+      ],
+    }
+  );
+}
+
+/**
+ * One memory on the page: press the words to change them; Forget (or a
+ * swipe on a phone) folds it away, with Undo.
+ */
+export function MemoryRow({ memory, index }: { memory: Memory; index?: number }) {
   const client = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(memory.content);
@@ -61,22 +81,15 @@ export function MemoryRow({ memory, showKind = false }: { memory: Memory; showKi
       toast.error((e as Error).message);
     }
   };
-  const held = memory.pending ? memory.held : undefined;
   const save = () => {
     setEditing(false);
     const next = value.trim();
-    // Edit first on a held memory (ADR 0087): your words are what's kept.
-    if (held) {
-      if (next) void run(() => memoryApi.keep(memory.id, { content: next }));
-      return;
-    }
     if (!next || next === memory.content) return setValue(memory.content);
     void run(() => api.updateMemory(memory.id, { content: next }));
   };
   const forget = () =>
     void run(async () => {
       await api.deleteMemory(memory.id);
-      if (memory.pending) return;
       toast('Forgotten', {
         description: memory.content,
         action: {
@@ -87,93 +100,28 @@ export function MemoryRow({ memory, showKind = false }: { memory: Memory; showKi
     });
 
   return (
-    <MemoryItem
-      source={memory.source}
-      time={relativeTime(memory.updatedAt)}
-      {...(showKind && { kind: memory.kind })}
-      {...(memory.pending && !held && { waiting: memory.untrusted ?? 'It waits for your OK.' })}
-      {...(held && {
-        held: {
-          reasons: held.reasons.map((r) => r.words),
-          ...(held.from && { from: held.from }),
-          refused: held.verdict === 'refuse',
-        },
-      })}
-      actions={
-        held ? (
-          <>
-            <Button
-              size="sm"
-              variant={held.verdict === 'refuse' ? 'surface' : 'soft'}
-              {...(held.verdict === 'refuse' && { tone: 'danger' as const })}
-              onClick={() =>
-                void run(() =>
-                  memoryApi.keep(memory.id, {
-                    seen: memory.content,
-                    ...(held.verdict === 'refuse' && { anyway: true }),
-                  }),
-                )
-              }
-            >
-              {held.verdict === 'refuse' ? 'Remember anyway' : 'Remember it'}
-            </Button>
-            <Button size="sm" variant="ghost" tone="neutral" onClick={forget}>
-              Don’t remember
-            </Button>
-            {!editing && (
-              <Button size="sm" variant="ghost" tone="neutral" onClick={() => setEditing(true)}>
-                Edit first
-              </Button>
-            )}
-          </>
-        ) : memory.pending ? (
-          <>
-            <Button
-              size="sm"
-              variant="soft"
-              onClick={() => void run(() => memoryApi.keep(memory.id, { seen: memory.content }))}
-            >
-              Keep
-            </Button>
-            <Button size="sm" variant="ghost" tone="neutral" onClick={forget}>
-              Forget
-            </Button>
-          </>
-        ) : (
-          <>
-            <IconButton size="sm" label="Edit" onClick={() => setEditing(true)}>
-              <Pencil />
-            </IconButton>
-            <IconButton size="sm" label="Forget" onClick={forget}>
-              <Trash2 />
-            </IconButton>
-          </>
-        )
-      }
+    <MemoryCell
+      kind={memory.kind}
+      label={memory.content}
+      meta={metaOf(memory)}
+      editing={editing}
+      onEdit={() => setEditing(true)}
+      onForget={forget}
+      {...(index !== undefined && { index })}
     >
       {editing ? (
         <Editor
           value={value}
           onChange={setValue}
           onSave={save}
-          saveOnBlur={!held}
           onCancel={() => {
             setValue(memory.content);
             setEditing(false);
           }}
         />
-      ) : memory.pending ? (
-        memory.content
       ) : (
-        <button
-          type="button"
-          className={styles.memoryText}
-          onClick={() => setEditing(true)}
-          aria-label={`Edit: ${memory.content}`}
-        >
-          {memory.content}
-        </button>
+        memory.content
       )}
-    </MemoryItem>
+    </MemoryCell>
   );
 }

@@ -3,7 +3,7 @@ import type { CommandItem } from './CommandMenu';
 export interface CommandMatch {
   item: CommandItem;
   score: number;
-  /** Indices in `item.name` to highlight. */
+  /** Indices to highlight in what's shown: `item.title` when it has one, else `item.name`. */
   hits: number[];
 }
 
@@ -11,28 +11,45 @@ function range(start: number, length: number) {
   return Array.from({ length }, (_, i) => start + i);
 }
 
+/** Each letter of `q` in order in `text` ("cmt" → commit), or undefined. */
+function subsequence(text: string, q: string): number[] | undefined {
+  const hits: number[] = [];
+  let i = 0;
+  for (const ch of q) {
+    i = text.indexOf(ch, i);
+    if (i === -1) return undefined;
+    hits.push(i++);
+  }
+  return hits;
+}
+
 /**
- * Ranks a command against what's been typed after "/":
- * name prefix → name substring → keyword/description substring → name
- * subsequence ("cmt" → commit). Lower scores are better; `null` = no match.
+ * Ranks a command (or one of its values) against what's been typed:
+ * prefix → substring → keyword/description substring → loose letters ("cmt"
+ * → commit). What's shown (`title`, else `name`) is matched first, then what's
+ * typed (`name`, a model's id). Lower scores are better; `null` = no match.
  */
 export function matchCommand(item: CommandItem, query: string): CommandMatch | null {
   const q = query.trim().toLowerCase();
   if (!q) return { item, score: 0, hits: [] };
-  const name = item.name.toLowerCase();
-  if (name.startsWith(q)) return { item, score: 0, hits: range(0, q.length) };
-  const at = name.indexOf(q);
+  const shown = (item.title ?? item.name).toLowerCase();
+  const typed = item.name.toLowerCase();
+  if (shown.startsWith(q)) return { item, score: 0, hits: range(0, q.length) };
+  if (typed !== shown && typed.startsWith(q)) return { item, score: 0, hits: [] };
+  // A word inside the name ("opus" in "Claude Opus 4") is nearly as good as its start.
+  const word = shown.search(new RegExp(`(?:^|[\\s\\-_.:/])${escapeRegExp(q)}`));
+  if (word > 0) return { item, score: 0.5, hits: range(word + 1, q.length) };
+  const at = shown.indexOf(q);
   if (at !== -1) return { item, score: 1, hits: range(at, q.length) };
+  if (typed !== shown && typed.includes(q)) return { item, score: 1, hits: [] };
   const haystack = [...(item.keywords ?? []), item.description ?? ''].join(' ').toLowerCase();
   if (haystack.includes(q)) return { item, score: 2, hits: [] };
-  const hits: number[] = [];
-  let i = 0;
-  for (const ch of q) {
-    i = name.indexOf(ch, i);
-    if (i === -1) return null;
-    hits.push(i++);
-  }
-  return { item, score: 3, hits };
+  const hits = subsequence(shown, q);
+  return hits ? { item, score: 3, hits } : null;
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /** Filter and order: groups keep their given order, matches rank within a group. */

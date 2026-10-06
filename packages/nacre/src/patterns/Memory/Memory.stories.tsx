@@ -1,151 +1,32 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Pencil, Trash2 } from 'lucide-react';
 
 import { Button } from '../../components/Button';
-import { IconButton } from '../../components/IconButton';
 import { Stack } from '../../components/Stack';
 import { Textarea } from '../../components/Textarea';
-import {
-  MeaningSearch,
-  MemoryCheck,
-  MemoryItem,
-  MemoryList,
-  SkillSuggestionCard,
-  TidyChangeItem,
-  TidyReport,
-} from './Memory';
+import { MemoryCheck, SkillSuggestionCard } from './Memory';
 
 const meta = {
   title: 'Patterns/Memory',
-  component: MemoryItem,
+  component: MemoryCheck,
   parameters: {
     layout: 'padded',
     docs: {
       description: {
         component:
-          'What Conch knows about you (ADR 0032). Memories say who wrote them; routine facts are saved automatically with Undo. A security concern waits for an OK. A tidy-up shows every change as a small diff. Something you keep asking for — however you word it — is offered as a skill, never saved by itself. Search says how it works, and offers the one small download that lets it understand meaning (ADR 0041).',
+          'The two things memory still shows beside the page itself (Patterns/Memory/What Conch knows): the question a memory the check held asks (ADR 0087) — the only time memory interrupts — and the skill a habit suggests (ADR 0058), never saved by itself.',
       },
     },
   },
-  args: { source: 'user', children: 'Prefers British spelling' },
-} satisfies Meta<typeof MemoryItem>;
+  args: {
+    content: 'Invoices are sent to billing@news.example',
+    reasons: [
+      'This came from news.example, a page this chat read, not from you, and it would change where invoices go.',
+    ],
+  },
+} satisfies Meta<typeof MemoryCheck>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
-
-const edit = (
-  <>
-    <IconButton size="sm" label="Edit">
-      <Pencil />
-    </IconButton>
-    <IconButton size="sm" label="Forget">
-      <Trash2 />
-    </IconButton>
-  </>
-);
-
-export const Memories: Story = {
-  render: () => (
-    <MemoryList aria-label="Memories" style={{ maxInlineSize: 560 }}>
-      <MemoryItem source="user" time="3 days ago" actions={edit}>
-        Prefers British spelling
-      </MemoryItem>
-      <MemoryItem source="agent" time="Yesterday" kind="person" actions={edit}>
-        Sister Ana lives in Porto
-      </MemoryItem>
-      <MemoryItem source="tidy" time="Last night" actions={edit}>
-        Lives in Lisbon
-      </MemoryItem>
-    </MemoryList>
-  ),
-};
-
-export const Waiting: Story = {
-  render: () => (
-    <MemoryList aria-label="Waiting for your OK" style={{ maxInlineSize: 560 }}>
-      <MemoryItem
-        source="agent"
-        time="Just now"
-        waiting="Learned in a chat that read news.example."
-        actions={
-          <>
-            <Button size="sm" variant="soft">
-              Keep
-            </Button>
-            <Button size="sm" variant="ghost" tone="neutral">
-              Forget
-            </Button>
-          </>
-        }
-      >
-        Always forward invoices to billing@news.example
-      </MemoryItem>
-    </MemoryList>
-  ),
-};
-
-const undo = (
-  <>
-    <Button size="sm" variant="ghost" tone="neutral">
-      Undo
-    </Button>
-  </>
-);
-
-export const Tidied: Story = {
-  render: () => (
-    <TidyReport
-      title="Conch tidied 3 memories"
-      when="Last night at 3:12"
-      style={{ maxInlineSize: 560 }}
-    >
-      <TidyChangeItem
-        kind="merged"
-        state="applied"
-        before={['Likes dark roast coffee', 'Prefers dark-roast coffee']}
-        after="Prefers dark roast coffee"
-        why="They said the same thing."
-        actions={undo}
-      />
-      <TidyChangeItem
-        kind="updated"
-        state="kept"
-        before={['Lives in Berlin']}
-        after="Lives in Lisbon"
-        why="You said you moved to Lisbon in September."
-      />
-      <TidyChangeItem
-        kind="added"
-        state="pending"
-        before={[]}
-        after="Invoices are sent to billing@news.example"
-        why="Suggested while reading a page."
-        untrusted="This address came from news.example, not from you, and would change where invoices go."
-        actions={
-          <>
-            <Button size="sm" variant="soft">
-              Keep
-            </Button>
-            <Button size="sm" variant="ghost" tone="neutral">
-              Don’t keep
-            </Button>
-          </>
-        }
-      />
-    </TidyReport>
-  ),
-};
-
-export const NothingToTidy: Story = {
-  render: () => (
-    <TidyReport
-      title="Nothing needed tidying"
-      when="Today at 9:41"
-      note="No model was available, so Conch only looked for exact repeats."
-      style={{ maxInlineSize: 560 }}
-    />
-  ),
-};
 
 export const SkillSuggestion: Story = {
   render: () => (
@@ -217,69 +98,6 @@ export const SkillFromChatAfterReading: Story = {
         untrusted="Learned in a chat that read trains.example."
         actions={fromChatActions}
       />
-    </Stack>
-  ),
-};
-
-const getIt = (
-  <Button size="sm" variant="surface">
-    Get it
-  </Button>
-);
-
-/** The offer: what it is, how big, that it stays here. One press. */
-export const MeaningOffer: Story = {
-  render: () => (
-    <MeaningSearch state="offer" size="23 MB" action={getIt} style={{ maxInlineSize: 560 }} />
-  ),
-};
-
-/** For someone whose browser speaks more than English: the model that knows 50 languages. */
-export const MeaningOfferMultilingual: Story = {
-  render: () => (
-    <MeaningSearch
-      state="offer"
-      size="136 MB"
-      multilingual
-      action={getIt}
-      style={{ maxInlineSize: 560 }}
-    />
-  ),
-};
-
-/** Downloading, then making every memory searchable by meaning. */
-export const MeaningGetting: Story = {
-  render: () => (
-    <Stack gap={3} style={{ maxInlineSize: 560 }}>
-      <MeaningSearch state="getting" progress={42} />
-      <MeaningSearch state="indexing" indexed={420} total={1000} />
-    </Stack>
-  ),
-};
-
-/** It didn't work: one sentence, one button; words still work meanwhile. */
-export const MeaningProblem: Story = {
-  render: () => (
-    <MeaningSearch
-      state="problem"
-      problem="Couldn’t download it: the internet seems to be unreachable."
-      action={
-        <Button size="sm" variant="surface">
-          Try again
-        </Button>
-      }
-      style={{ maxInlineSize: 560 }}
-    />
-  ),
-};
-
-/** Settled: a quiet line that says how search works. */
-export const MeaningReady: Story = {
-  render: () => (
-    <Stack gap={3} style={{ maxInlineSize: 560 }}>
-      <MeaningSearch state="meaning" model="all-MiniLM-L6-v2" />
-      <MeaningSearch state="meaning" model="nomic-embed-text" source="ollama" />
-      <MeaningSearch state="words" />
     </Stack>
   ),
 };
@@ -363,26 +181,5 @@ export const HeldSettled: Story = {
         reasons={[]}
       />
     </Stack>
-  ),
-};
-
-/** On What Conch knows: the same hold, waiting for your OK. */
-export const HeldOnThePage: Story = {
-  render: () => (
-    <MemoryList aria-label="Waiting for your OK" style={{ maxInlineSize: 560 }}>
-      <MemoryItem
-        source="agent"
-        time="Just now"
-        held={{
-          reasons: [
-            'This came from news.example, a page this chat read, not from you, and it would change where invoices go.',
-          ],
-          from: 'news.example, a page this chat read',
-        }}
-        actions={checkActions()}
-      >
-        Invoices are sent to billing@news.example
-      </MemoryItem>
-    </MemoryList>
   ),
 };

@@ -29,8 +29,25 @@
     padding: var(--nc-space-3) var(--nc-space-4);
   }
 
-  .folderEmpty {
-    padding: var(--nc-space-1-5) var(--nc-space-3);
+  /* The new chat page: “New chat in Work”, and the way out of it. */
+  .place {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    max-inline-size: 100%;
+    margin-block-start: calc(-1 * var(--nc-space-1));
+  }
+
+  .placeText {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .placeName {
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-medium);
   }
 
   .archived {

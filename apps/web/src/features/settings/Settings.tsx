@@ -1,12 +1,15 @@
 import { ImportSourceId, type Persona } from '@conch/protocol';
 import {
+  Breadcrumb,
   Button,
   Dialog,
   Field,
   Heading,
+  IconButton,
   Input,
   RadioGroup,
   SegmentedControl,
+  Sheet,
   Slider,
   Stack,
   Switch,
@@ -28,6 +31,7 @@ import {
   ChevronLeft,
   Cpu,
   Gauge,
+  Menu,
   Mic,
   Globe,
   HeartPulse,
@@ -42,7 +46,7 @@ import {
   Sun,
   User,
 } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router';
 
 import { useAppState, useMemories, useUpdateSettings } from '../../api/queries';
@@ -64,10 +68,18 @@ import { ProvidersTab } from '../providers/ProvidersTab';
 import { UsageTab } from '../usage/UsageTab';
 import styles from './Settings.module.css';
 import { CommandsTab } from './CommandsTab';
-import { MEMORY_ALL, settingsAt, type SettingsTab } from './paths';
+import {
+  MEMORY_ALL,
+  SETTINGS_TABS,
+  behindName,
+  behindOf,
+  settingsAt,
+  type SettingsTab,
+} from './paths';
 import { GeneralTab } from './GeneralTab';
 import { ModelsTab } from './ModelsTab';
 import { SaveStatus, Section } from './Section';
+import { usePageInside } from './trail';
 import { useAutosave } from './useAutosave';
 
 function PersonalityTab({ initial }: { initial: Persona }) {
@@ -145,22 +157,8 @@ function MemoryTab({
   // Bringing your things from another assistant: a place inside Memory.
   const from = item?.startsWith('from-') ? ImportSourceId.safeParse(item.slice(5)) : undefined;
   if (from?.success) return <ComeHomePage source={from.data} />;
-  if (item === MEMORY_ALL)
-    return (
-      <Stack gap={5}>
-        <div>
-          <Button
-            variant="ghost"
-            size="sm"
-            leadingIcon={<ChevronLeft />}
-            onClick={() => openSettings('memory')}
-          >
-            Memory
-          </Button>
-        </div>
-        <MemoryView inSettings />
-      </Stack>
-    );
+  // Its way back is the trail above it (Memory › What Conch knows).
+  if (item === MEMORY_ALL) return <MemoryView inSettings />;
   const all = memories.data ?? [];
   const waiting = all.filter((m) => m.pending).length;
   const kept = all.length - waiting;
@@ -177,7 +175,7 @@ function MemoryTab({
               void update.mutateAsync({ preferences: { autoMemory: checked } })
             }
             label="Learn from your chats"
-            description="I’ll keep what lasts — how you like things, what changed — as we talk and once a chat goes quiet, and say so at the end of it, with Undo. Off, I remember only what you ask me to."
+            description="I’ll quietly keep what lasts — how you like things, what changed. I only ask when something looks unsafe. Off, I remember only what you ask me to."
           />
           <Switch
             checked={tidyMemory}
@@ -185,7 +183,7 @@ function MemoryTab({
               void update.mutateAsync({ preferences: { tidyMemory: checked } })
             }
             label="Tidy up every night"
-            description="Merge repeats and update what’s changed while you sleep. Every change is shown, with Undo."
+            description="Merge repeats and update what’s changed while you sleep, quietly. The last tidy-up can always be undone."
           />
           <div className={styles.memoryDoor}>
             <Brain aria-hidden />
@@ -199,7 +197,7 @@ function MemoryTab({
                   : kept === 1
                     ? '1 memory'
                     : `${kept} memories`}
-                {waiting > 0 && ` · ${waiting} waiting for your OK`}
+                {waiting > 0 && ` · ${waiting} to look at`}
               </Text>
             </Stack>
             <Button size="sm" variant="surface" onClick={() => openSettings('memory', MEMORY_ALL)}>
@@ -350,26 +348,171 @@ const groups: { label: string; hidden?: boolean; places: Place[] }[] = [
   },
 ];
 
+/** What each place is called, as its tab and its step in the trail say it. */
+const placeNames = Object.fromEntries(
+  groups.flatMap((group) => group.places.map((place) => [place.value, place.label])),
+) as Record<SettingsTab, string>;
+
 /**
  * Settings is a page of its own: it takes the whole window, its places where
- * the app's sidebar was, with Back (and Escape) to return. On a phone it's a
- * list, then the place you chose, with ‹ Settings to go back to the list.
+ * the app's sidebar was, with a way back to where it opened over (and Escape).
+ * On a phone its places float in from the side, like the chats do: the menu
+ * button opens them, and Settings itself (`/settings`) opens with them out.
+ *
+ * Where you are reads as one trail, never a stack of back buttons: a page
+ * inside a place (a provider's, what Conch remembers) says Memory › What
+ * Conch knows above it, and the place is a step back to it. On a phone the
+ * trail is the header, beside the menu.
  *
  * Each place has its address (`/settings/providers`, and a provider's own page
  * under it), so a reload, a link or the browser's Back lands where you were.
  * The page it opened over stays behind it, as it was.
  */
 export function Settings() {
-  const address = settingsAt(useLocation().pathname);
+  const location = useLocation();
+  const address = settingsAt(location.pathname);
   const tab = address ? (address.tab ?? 'general') : null;
-  const browsing = !address?.tab;
+  const home = address !== null && !address.tab;
   const restarting = useUi((s) => Boolean(s.restarting));
   const open = useUi((s) => s.openSettings);
   const close = useUi((s) => s.closeSettings);
   const { data: app } = useAppState();
   const narrow = useMediaQuery('(max-width: 720px)');
   const updates = updatesWaiting(useUpdates().data);
-  const view = narrow ? (browsing ? 'list' : 'place') : undefined;
+  const inside = usePageInside(tab, address?.item);
+  const leave = behindName(behindOf(location));
+  const [menu, setMenu] = useState(false);
+  const panelTitle = useId();
+
+  // On a phone, Settings itself (`/settings`) *is* its places, out over the page
+  // — as the chats' sidebar is. Putting them away is going to the place behind
+  // them, so the address always says where you are.
+  const menuOut = narrow && (home || menu);
+  const showMenu = (out: boolean) => {
+    if (out) setMenu(true);
+    else if (home) open(tab ?? 'general', undefined, { replace: true });
+    else setMenu(false);
+  };
+
+  const trail = tab && (
+    <Breadcrumb className={styles.trail}>
+      {inside ? (
+        <>
+          <Breadcrumb.Item onClick={() => open(tab)}>{placeNames[tab]}</Breadcrumb.Item>
+          <Breadcrumb.Item current id={panelTitle}>
+            {inside}
+          </Breadcrumb.Item>
+        </>
+      ) : (
+        <Breadcrumb.Item current id={panelTitle}>
+          {placeNames[tab]}
+        </Breadcrumb.Item>
+      )}
+    </Breadcrumb>
+  );
+
+  // The places, beside the page or floating over it on a phone.
+  const places = (
+    <div className={styles.nav}>
+      <div className={styles.bar}>
+        <Button variant="ghost" size="sm" leadingIcon={<ChevronLeft />} onClick={() => close()}>
+          {leave}
+        </Button>
+      </div>
+      <Dialog.Title asChild>
+        <Heading level={2} size="2xl" weight="regular" display className={styles.title}>
+          Settings
+        </Heading>
+      </Dialog.Title>
+      <div className={styles.groups}>
+        {groups.map((group) => (
+          <div key={group.label} className={styles.group}>
+            {!group.hidden && (
+              <Text
+                as="span"
+                size="xs"
+                weight="medium"
+                tone="subtle"
+                id={`settings-${group.label.toLowerCase().replaceAll(' ', '-')}`}
+                className={styles.groupLabel}
+              >
+                {group.label}
+              </Text>
+            )}
+            <Tabs.List
+              className={styles.list}
+              {...(group.hidden
+                ? { 'aria-label': group.label }
+                : {
+                    'aria-labelledby': `settings-${group.label.toLowerCase().replaceAll(' ', '-')}`,
+                  })}
+            >
+              {group.places.map((t) => (
+                <Tabs.Trigger
+                  key={t.value}
+                  value={t.value}
+                  icon={t.icon}
+                  dot={t.value === 'health' && updates ? 'Update available' : undefined}
+                  // The place already chosen still opens it: from Settings itself,
+                  // or from a page inside it (a provider's) to the place.
+                  onClick={() => {
+                    if (t.value === tab && (home || address?.item)) open(t.value);
+                    setMenu(false);
+                  }}
+                >
+                  {t.label}
+                </Tabs.Trigger>
+              ))}
+            </Tabs.List>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const place = (value: SettingsTab): ReactNode => {
+    if (!app) return null;
+    switch (value) {
+      case 'general':
+        return <GeneralTab workspace={app.workspace} workspacePref={app.preferences.workspace} />;
+      case 'personality':
+        return <PersonalityTab initial={app.persona} />;
+      case 'about':
+        return <AboutYou initial={app.profile} />;
+      case 'memory':
+        return (
+          <MemoryTab
+            autoMemory={app.preferences.autoMemory}
+            tidyMemory={app.preferences.tidyMemory}
+            item={tab === 'memory' ? address?.item : undefined}
+          />
+        );
+      case 'models':
+        return <ModelsTab />;
+      case 'commands':
+        return <CommandsTab />;
+      case 'usage':
+        return <UsageTab />;
+      case 'health':
+        return <HealthTab />;
+      case 'security':
+        return <SecurityTab />;
+      case 'notifications':
+        return <NotificationsTab />;
+      case 'voice':
+        return <VoiceTab />;
+      case 'providers':
+        return <ProvidersTab />;
+      case 'browser':
+        return <BrowserSettings />;
+      case 'terminal':
+        return <TerminalSettings />;
+      case 'other-apps':
+        return <OtherAppsTab />;
+      case 'appearance':
+        return <AppearanceTab />;
+    }
+  };
 
   return (
     <Dialog.Root open={tab !== null && !restarting} onOpenChange={(o) => !o && close()}>
@@ -379,11 +522,13 @@ export function Settings() {
         className={styles.page}
         aria-describedby={undefined}
         onOpenAutoFocus={(event) => {
+          // On a phone its places are out: they take the focus themselves.
+          if (menuOut) return event.preventDefault();
           // Straight onto the place it opened at, so the arrow keys move from there.
           const here = (event.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>(
             '[role="tab"][data-state="active"]',
           );
-          if (here && !here.closest('[hidden]')) {
+          if (here) {
             event.preventDefault();
             here.focus();
           }
@@ -394,136 +539,60 @@ export function Settings() {
             value={tab}
             onValueChange={(v) => open(v as SettingsTab)}
             orientation="vertical"
-            // On a phone, moving through the list mustn't leave it.
+            // On a phone, moving through the menu mustn't leave it.
             activationMode={narrow ? 'manual' : 'automatic'}
             variant="pill"
             className={styles.tabs}
-            data-view={view}
           >
-            {/* On a phone one half shows at a time; the other stays, hidden, so the
-                tabs and their panel still name each other. */}
-            <div className={styles.nav} hidden={view === 'place'}>
-              <div className={styles.bar}>
-                <Dialog.Close asChild>
-                  <Button variant="ghost" size="sm" leadingIcon={<ChevronLeft />}>
-                    Back
-                  </Button>
-                </Dialog.Close>
-              </div>
-              <Dialog.Title asChild>
-                <Heading level={2} size="2xl" weight="regular" display className={styles.title}>
-                  Settings
-                </Heading>
-              </Dialog.Title>
-              <div className={styles.groups}>
-                {groups.map((group) => (
-                  <div key={group.label} className={styles.group}>
-                    {!group.hidden && (
-                      <Text
-                        as="span"
-                        size="xs"
-                        weight="medium"
-                        tone="subtle"
-                        id={`settings-${group.label.toLowerCase().replaceAll(' ', '-')}`}
-                        className={styles.groupLabel}
-                      >
-                        {group.label}
-                      </Text>
-                    )}
-                    <Tabs.List
-                      className={styles.list}
-                      {...(group.hidden
-                        ? { 'aria-label': group.label }
-                        : {
-                            'aria-labelledby': `settings-${group.label.toLowerCase().replaceAll(' ', '-')}`,
-                          })}
-                    >
-                      {group.places.map((t) => (
-                        <Tabs.Trigger
-                          key={t.value}
-                          value={t.value}
-                          icon={t.icon}
-                          dot={t.value === 'health' && updates ? 'Update available' : undefined}
-                          // The place already chosen still opens it: from the list on a
-                          // phone, or from a page inside it (a provider's) to the place.
-                          onClick={() => {
-                            if (t.value === tab && (browsing || address?.item)) open(t.value);
-                          }}
-                        >
-                          {t.label}
-                        </Tabs.Trigger>
-                      ))}
-                    </Tabs.List>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className={styles.panel} hidden={view === 'list'}>
-              {narrow && (
-                <div className={styles.bar}>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    leadingIcon={<ChevronLeft />}
-                    onClick={() => open()}
-                  >
-                    Settings
-                  </Button>
-                </div>
+            {narrow ? (
+              <Sheet.Root open={menuOut} onOpenChange={showMenu}>
+                <Sheet.Content
+                  side="left"
+                  size="sm"
+                  hideClose
+                  aria-describedby={undefined}
+                  className={styles.sheet}
+                  onOpenAutoFocus={(event) => {
+                    const here = (
+                      event.currentTarget as HTMLElement | null
+                    )?.querySelector<HTMLElement>('[role="tab"][data-state="active"]');
+                    if (here) {
+                      event.preventDefault();
+                      here.focus();
+                    }
+                  }}
+                >
+                  {places}
+                </Sheet.Content>
+              </Sheet.Root>
+            ) : (
+              places
+            )}
+            <div className={styles.panel}>
+              {narrow ? (
+                <header className={styles.header}>
+                  <IconButton label="Open settings menu" onClick={() => showMenu(true)}>
+                    <Menu />
+                  </IconButton>
+                  {/* The menu has Settings' visible name; the page is named for screen readers. */}
+                  <Dialog.Title className="nc-visually-hidden">Settings</Dialog.Title>
+                  {trail}
+                </header>
+              ) : (
+                <div className={styles.crumbs}>{inside && trail}</div>
               )}
               <div className={styles.column}>
-                <Tabs.Content value="general">
-                  <GeneralTab workspace={app.workspace} workspacePref={app.preferences.workspace} />
-                </Tabs.Content>
-                <Tabs.Content value="personality">
-                  <PersonalityTab initial={app.persona} />
-                </Tabs.Content>
-                <Tabs.Content value="about">
-                  <AboutYou initial={app.profile} />
-                </Tabs.Content>
-                <Tabs.Content value="memory">
-                  <MemoryTab
-                    autoMemory={app.preferences.autoMemory}
-                    tidyMemory={app.preferences.tidyMemory}
-                    item={tab === 'memory' ? address?.item : undefined}
-                  />
-                </Tabs.Content>
-                <Tabs.Content value="models">
-                  <ModelsTab />
-                </Tabs.Content>
-                <Tabs.Content value="commands">
-                  <CommandsTab />
-                </Tabs.Content>
-                <Tabs.Content value="usage">
-                  <UsageTab />
-                </Tabs.Content>
-                <Tabs.Content value="health">
-                  <HealthTab />
-                </Tabs.Content>
-                <Tabs.Content value="security">
-                  <SecurityTab />
-                </Tabs.Content>
-                <Tabs.Content value="notifications">
-                  <NotificationsTab />
-                </Tabs.Content>
-                <Tabs.Content value="voice">
-                  <VoiceTab />
-                </Tabs.Content>
-                <Tabs.Content value="providers">
-                  <ProvidersTab />
-                </Tabs.Content>
-                <Tabs.Content value="browser">
-                  <BrowserSettings />
-                </Tabs.Content>
-                <Tabs.Content value="terminal">
-                  <TerminalSettings />
-                </Tabs.Content>
-                <Tabs.Content value="other-apps">
-                  <OtherAppsTab />
-                </Tabs.Content>
-                <Tabs.Content value="appearance">
-                  <AppearanceTab />
-                </Tabs.Content>
+                {SETTINGS_TABS.map((value) => (
+                  <Tabs.Content
+                    key={value}
+                    value={value}
+                    // On a phone its tab is in the menu, gone while the menu is
+                    // away: the header names the place instead.
+                    {...(narrow && { 'aria-labelledby': panelTitle })}
+                  >
+                    {place(value)}
+                  </Tabs.Content>
+                ))}
               </div>
             </div>
           </Tabs>

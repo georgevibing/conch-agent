@@ -10,6 +10,7 @@ import {
   provider,
   renderApp,
 } from '../../test/harness';
+import { useUi } from '../../app/ui';
 import { ProvidersTab } from './ProvidersTab';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -280,7 +281,9 @@ describe('Providers settings', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     await new Promise((resolve) => setTimeout(resolve, 1800));
     expect(screen.getByRole('heading', { name: 'OpenRouter is connected' })).toBeVisible();
-    await userEvent.click(screen.getByRole('button', { name: 'Providers' }));
+    // Going back is Settings' trail (Providers › OpenRouter), not a button of its own.
+    expect(screen.queryByRole('button', { name: 'Providers' })).toBeNull();
+    act(() => useUi.getState().openSettings('providers'));
     expect(await screen.findByRole('article', { name: 'OpenRouter' })).toBeInTheDocument();
   });
 

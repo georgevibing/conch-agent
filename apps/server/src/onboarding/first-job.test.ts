@@ -111,10 +111,11 @@ describe('first useful job', () => {
     );
     const account = f.accounts[0];
     if (!account) throw new Error('Fixture account missing');
+    // Connected, but not allowed to do everything this job needs: Apps is where that changes.
     account.capabilities = ['mail-read'];
     await expect(
       f.jobs.start({ ...input(), kind: 'today', accountId: 'google_personal' }),
-    ).rejects.toThrow('Reconnect');
+    ).rejects.toThrow('give it the access it needs');
     expect(f.create).not.toHaveBeenCalled();
   });
 

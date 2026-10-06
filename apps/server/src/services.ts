@@ -404,7 +404,13 @@ export class Services {
       undefined,
       // Gmail with an app password: imap.gmail.com, or the pretend mail service with the mock engine.
       new GmailImap(() =>
-        this.mockMail ? { imap: this.mockMail.endpoints.imap, insecure: true } : GMAIL_IMAP,
+        this.mockMail
+          ? {
+              imap: this.mockMail.endpoints.imap,
+              smtp: this.mockMail.endpoints.smtp,
+              insecure: true,
+            }
+          : GMAIL_IMAP,
       ),
     );
     this.googleApps = new GoogleApps(this.google, {

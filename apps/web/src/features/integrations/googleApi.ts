@@ -1,4 +1,5 @@
 import {
+  GoogleAccessChange,
   GoogleFlowStatus,
   GoogleConfigure,
   GoogleImport,
@@ -43,6 +44,12 @@ export const googleApi = {
     request(GoogleStatus, `/api/google/accounts/${encodeURIComponent(id)}/check`, {
       method: 'POST',
       body: {},
+    }),
+  /** One product's level for one account. A 409 (`consent`) means Google must be asked first. */
+  setAccess: (id: string, body: GoogleAccessChange) =>
+    request(GoogleStatus, `/api/google/accounts/${encodeURIComponent(id)}/access`, {
+      method: 'POST',
+      body: GoogleAccessChange.parse(body),
     }),
   /** Gmail with an app password: checked by signing in before it's kept (ADR 0048). */
   connectPassword: (body: z.input<typeof GmailPasswordConnect>) =>

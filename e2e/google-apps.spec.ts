@@ -37,6 +37,17 @@ test('connect Gmail with an app password, use it in a chat, turn a tool off, fix
     .getByRole('button', { name: 'Gmail', exact: true })
     .click();
   const dialog = page.getByRole('dialog', { name: 'Connect Gmail' });
+  // What it should help with: Gmail, read & write, so it can draft and send when asked.
+  await dialog
+    .getByRole('radiogroup', { name: 'Gmail' })
+    .getByRole('radio', { name: 'Read & write' })
+    .click();
+  await dialog.getByRole('button', { name: 'Next' }).click();
+  // How: an app password is simplest for Gmail on its own, and says what it can't do.
+  const how = dialog.getByRole('radiogroup', { name: 'How to connect' });
+  await expect(how.getByRole('radio', { name: /App password.*Simplest/ })).toBeChecked();
+  await expect(how.getByText(/Gmail only/)).toBeVisible();
+  await dialog.getByRole('button', { name: 'Next' }).click();
   await dialog.getByLabel('Gmail address').fill('ada@gmail.com');
   await dialog.getByRole('button', { name: 'Next' }).click();
   await expect(dialog.getByRole('link', { name: /Google’s app passwords page/ })).toHaveAttribute(
@@ -89,15 +100,29 @@ test('connect Gmail with an app password, use it in a chat, turn a tool off, fix
   await ask(page, 'search my gmail for lunch');
   await expect(page.getByText('Searching Gmail is turned off for me')).toBeVisible();
 
-  // The app password is revoked at Google: one fix, right on its page.
-  await request.post(`${MAIL}/__control/revoke`);
+  // Its account is on the page, with what it may do in each Google app.
   await page.goto('/apps/gmail');
-  await page.getByRole('button', { name: 'Check now' }).click();
+  const card = page.getByRole('article', { name: 'ada@gmail.com' });
+  await expect(card.getByText('App password', { exact: true })).toBeVisible();
+  await expect(card.getByText('Working', { exact: true })).toBeVisible();
+  const mailLevel = card.getByRole('radiogroup', { name: 'Gmail' });
+  await expect(mailLevel.getByRole('radio', { checked: true })).toHaveText('Read & write');
+  // An app password reaches Gmail only, and says the way to the others.
+  await expect(card.getByRole('button', { name: 'Use Google sign-in' })).toHaveCount(2);
+  // Taking write access away is one tap, and sending stops being offered.
+  await mailLevel.getByRole('radio', { name: 'Read', exact: true }).click();
+  await expect(page.getByRole('radiogroup', { name: 'Send an email' })).toHaveCount(0);
+  await mailLevel.getByRole('radio', { name: 'Read & write' }).click();
+  await expect(page.getByRole('radiogroup', { name: 'Send an email' })).toBeVisible();
+
+  // The app password is revoked at Google: one fix, right on the account.
+  await request.post(`${MAIL}/__control/revoke`);
+  await card.getByRole('button', { name: 'Check now' }).click();
   await expect(page.getByRole('button', { name: 'Sign in again' })).toBeVisible();
   await request.post(`${MAIL}/__control/reset`);
-  await page.getByRole('textbox', { name: 'App password' }).fill('abcd efgh ijkl mnop');
+  await card.getByRole('textbox', { name: 'App password' }).fill('abcd efgh ijkl mnop');
   await expect(page.getByRole('button', { name: 'Sign in again' })).toHaveCount(0);
-  await expect(page.getByText('App password · Working')).toBeVisible();
+  await expect(card.getByText('Working', { exact: true })).toBeVisible();
 
   // Disconnecting forgets it and puts the tile back.
   await page.getByRole('button', { name: 'Disconnect Gmail' }).click();
@@ -107,15 +132,23 @@ test('connect Gmail with an app password, use it in a chat, turn a tool off, fix
   expect((await (await request.get('/api/google')).json()).accounts).toEqual([]);
 });
 
-test('Calendar says plainly it needs your own Google Cloud app', async ({ page }) => {
+test('Calendar says plainly it needs Google sign-in, and offers no app password', async ({
+  page,
+}) => {
   await page.goto('/apps');
   await page.getByRole('button', { name: 'Google Calendar', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Connect Google Calendar' });
-  await expect(dialog.getByText('This needs a Google Cloud app of your own')).toBeVisible();
-  await expect(dialog.getByRole('textbox', { name: 'App password' })).toHaveCount(0);
-  // Said once: no second heading about Google under the dialog's own.
+  await expect(
+    dialog.getByRole('radiogroup', { name: 'Google Calendar' }).getByRole('radio', {
+      checked: true,
+    }),
+  ).toHaveText('Read');
+  await dialog.getByRole('button', { name: 'Next' }).click();
+  await expect(dialog.getByRole('radiogroup', { name: 'How to connect' })).toHaveCount(0);
+  await expect(dialog.getByText(/only open to Google’s own sign-in/)).toBeVisible();
+  await dialog.getByRole('button', { name: 'Next' }).click();
   await expect(
     dialog.getByRole('button', { name: 'I already have a credential file' }),
   ).toBeVisible();
-  await expect(dialog.getByRole('heading', { name: 'Google, connected to Conch' })).toHaveCount(0);
+  await expect(dialog.getByRole('textbox', { name: 'App password' })).toHaveCount(0);
 });

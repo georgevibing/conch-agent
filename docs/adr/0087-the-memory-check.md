@@ -1,6 +1,6 @@
 # 0087 — The memory check: a memory that looks planted is asked about
 
-> Amended by [ADR 0097](./0097-proactive-memory-maintenance.md): routine owner-backed memories apply with Undo; length and outside reading alone no longer require approval. Security holds remain protected.
+> Amended by [ADR 0097](./0097-proactive-memory-maintenance.md): routine owner-backed memories apply with Undo; length and outside reading alone no longer require approval. Security holds remain protected, and are now the only thing memory ever asks about; on What Conch knows they come first, as the same card the chat shows.
 
 - Status: accepted
 - Date: 2026-10-04

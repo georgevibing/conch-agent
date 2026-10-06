@@ -111,11 +111,6 @@
     animation: nc-surface-in var(--nc-duration-base) var(--nc-ease-out) both;
   }
 
-  .back {
-    align-self: flex-start;
-    margin-inline-start: calc(var(--nc-space-2) * -1);
-  }
-
   .detailHeader {
     align-items: flex-start;
   }

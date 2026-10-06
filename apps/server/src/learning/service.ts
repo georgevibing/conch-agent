@@ -1,10 +1,10 @@
 /**
- * Quiet learning (ADR 0088): once a chat you were in goes quiet, Conch reads
- * your words in it, keeps what's worth keeping, and says so at the end of
- * that chat — one quiet line, Undo on each thing, Why? on where it came
- * from. What came after reading something from outside, or with nobody
- * watching, waits for your OK. Nothing learned deletes a memory, and what you
- * take back is never learned again.
+ * Quiet learning (ADR 0088, ADR 0097): once a chat you were in goes quiet,
+ * Conch reads your words in it and keeps what's worth keeping, silently. The
+ * Memory page shows everything it knows, each with Undo. Only a memory the
+ * check holds for a security reason (ADR 0087) is said at the end of the
+ * chat, and asked about. Nothing learned deletes a memory, and what you take
+ * back is never learned again.
  *
  * - `sweep()` looks every few minutes for chats that went quiet with new
  *   words from you, two at a time at most;
@@ -444,7 +444,7 @@ export class QuietLearning {
    * Apply or keep waiting one change, by the gate; the record says how it
    * went. Every write goes through the memory check where the store writes
    * (ADR 0087), told what the chat read and what the person said: one it
-   * holds waits for the person, with its reasons, like one the gate held.
+   * holds waits for the person, with its reasons; nothing else does.
    */
   async #keep(
     change: Change,
@@ -465,7 +465,6 @@ export class QuietLearning {
     }
     const id = newId('le');
     const conversationId = source.conversationId;
-    const waits = verdict.verdict === 'wait' ? verdict.waits : undefined;
     const kind = change.op === 'add' ? change.kind : (ctx.memories.get(change.id)?.kind ?? 'fact');
     const labels = [...new Set(look.read.map((r) => r.label))].slice(0, 12);
     const input = {
@@ -475,8 +474,6 @@ export class QuietLearning {
       ...(conversationId && { conversationId }),
       ...(about && { about }),
       learned: id,
-      // Something that waits is a memory waiting for your OK, like any other (ADR 0032).
-      ...(waits && { pending: true, untrusted: waits }),
       provenance: { via: 'chat' as const, ...(labels.length > 0 && { read: labels }) },
     };
     const write: WriteContext = { via: 'chat', read: look.read, said: look.said };
@@ -496,7 +493,7 @@ export class QuietLearning {
     if (after.learned !== id) return undefined;
     // The memory check held it: it waits for you, saying why in its own words.
     const held = after.held?.reasons[0]?.words;
-    const waiting = after.pending ? (waits ?? held ?? after.untrusted) : undefined;
+    const waiting = after.pending ? (held ?? after.untrusted) : undefined;
     return this.store.record({
       id,
       at: this.#now,
@@ -527,10 +524,11 @@ export class QuietLearning {
   }
 
   /**
-   * The look is over: the chat says what it learned (where someone can see
-   * it), and it's counted. While a turn runs (a long chat's start learned
-   * mid-reply), the line waits for the chat's next quiet look, so it lands at
-   * the end and never beside a question.
+   * The look is over, and it's counted. Routine learning is silent (ADR 0097):
+   * the chat only says something when the memory check held one for a
+   * security reason, where someone can see it and answer. While a turn runs (a
+   * long chat's start learned mid-reply), that line waits for the chat's next
+   * quiet look, so it lands at the end and never beside a question.
    */
   async #close(
     id: string,
@@ -545,14 +543,15 @@ export class QuietLearning {
     if (learned.length)
       await this.store.countApplied(learned.filter((e) => e.state === 'applied').length);
     if (!chat.origin) {
-      const all = [...unsaid, ...items].slice(-5);
+      // Only what needs the person: a security hold. Everything else is just known.
+      const all = [...unsaid, ...items].filter((i) => i.state === 'waiting').slice(-5);
       if (trigger === 'compaction') await this.store.setChat(id, { unsaid: all });
       else if (all.length) {
         await this.deps
           .note(id, { type: 'learning.noted', reviewId: newId('lr'), items: all })
           .catch(() => undefined);
         if (unsaid.length) await this.store.setChat(id, { unsaid: [] });
-      }
+      } else if (unsaid.length) await this.store.setChat(id, { unsaid: [] });
     }
     this.deps.changed?.();
   }

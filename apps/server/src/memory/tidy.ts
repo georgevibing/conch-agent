@@ -371,21 +371,9 @@ export class MemoryTidy {
         ...(read.length > 0 && { read: read.slice(0, 12) }),
         ...(live.every((m) => m.provenance?.yours) && { yours: true }),
       };
-      const proposed = { ...keep, content, provenance, updatedAt: this.#now };
-      const held = holdOf(checkMemory({ content, ...context }));
-      if (held) {
-        // Never applied by itself: it waits on the card, with why.
-        changes.push({
-          id: newId('tc'),
-          kind: 'merged',
-          why: why || 'They said the same thing.',
-          before: live,
-          after: proposed,
-          state: 'pending',
-          untrusted: held.reasons[0]?.words ?? 'It looks off, so it waits for your OK.',
-        });
-        return;
-      }
+      // A merge that would look planted is simply not made: the memories stay as they
+      // were, and nobody is asked about housekeeping (ADR 0097).
+      if (holdOf(checkMemory({ content, ...context }))) return;
       const after = (await store.update(keep.id, { content, provenance }, context)) ?? keep;
       if (after.pending) {
         changes.push({
@@ -395,7 +383,8 @@ export class MemoryTidy {
           before: live,
           after,
           state: 'pending',
-          untrusted: after.held?.reasons[0]?.words ?? 'It looks off, so it waits for your OK.',
+          // The store's own check held it: the memory itself asks, on the page.
+          untrusted: after.held?.reasons[0]?.words ?? 'It looks off, so Conch asked you.',
         });
         return;
       }
@@ -508,26 +497,9 @@ export class MemoryTidy {
           : chats,
         check,
       );
-      const held = holdOf(checkMemory({ content: u.content.trim(), ...context }));
-      const untrusted = held?.reasons[0]?.words;
-      const proposed = {
-        ...current,
-        content: u.content.trim(),
-        source: 'tidy' as const,
-        updatedAt: this.#now,
-      };
-      if (untrusted) {
-        changes.push({
-          id: newId('tc'),
-          kind: 'updated',
-          why: u.why || 'Something you said more recently replaces it.',
-          before: [current],
-          after: proposed,
-          state: 'pending',
-          untrusted,
-        });
-        continue;
-      }
+      // An update that would look planted isn't made: what's there stays (ADR 0097).
+      if (holdOf(checkMemory({ content: u.content.trim(), ...context }))) continue;
+      const proposed = { content: u.content.trim() };
       // Checked again where it's written (ADR 0087), with the same chats behind it:
       // if the store holds it, the card waits for you rather than saying it's done.
       const after = await store.update(
@@ -559,11 +531,13 @@ export class MemoryTidy {
           ? said[0]
           : undefined;
       const chats = chat ? said.filter((s) => s.conversationId === chat.conversationId) : said;
+      // Learn from your chats is off: a tidy-up only tidies what's there.
+      if (!autoMemory) continue;
       const verdict = verdictFor(content, chats, check);
       const held = holdOf(verdict);
       if (!learnable(content, chats)) continue;
+      // Looks planted: held by the check, and the person is told why (ADR 0087).
       const untrusted = held?.reasons[0]?.words;
-      const waits = Boolean(untrusted) || !autoMemory;
       const read = [...new Set(chats.flatMap((s) => s.read ?? []).map((r) => r.label))];
       const after = await store.add(
         {
@@ -571,10 +545,7 @@ export class MemoryTidy {
           kind: a.kind,
           source: 'tidy',
           ...(chat && { conversationId: chat.conversationId }),
-          ...(waits && {
-            pending: true,
-            untrusted: untrusted ?? 'Learn from your chats is off, so this waits for your OK.',
-          }),
+          ...(untrusted && { pending: true, untrusted }),
           provenance: {
             via: 'tidy',
             ...(read.length > 0 && { read: read.slice(0, 12) }),

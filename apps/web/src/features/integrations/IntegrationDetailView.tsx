@@ -281,11 +281,7 @@ function Detail({
           onReconnect={setReconnect}
         />
       ) : integration.transport.type === 'host' ? (
-        <GoogleAppConnection
-          integration={integration}
-          onCheck={() => check.mutate(integration.id)}
-          checking={check.isPending}
-        />
+        <GoogleAppConnection integration={integration} />
       ) : (
         <Connection
           integration={integration}
@@ -317,8 +313,8 @@ function Detail({
                 </>
               ) : integration.transport.type === 'host' ? (
                 <>
-                  {assistant} won’t be able to use it any more. A Google account that no other
-                  Google app uses is disconnected too
+                  {assistant} won’t be able to use {integration.name} any more. A Google account
+                  that no other Google app uses is removed too
                   {integration.auth === 'token' ? (
                     <>
                       , and Conch forgets its app password. To stop that password working at Google
@@ -330,7 +326,9 @@ function Detail({
                     </>
                   ) : (
                     ', and its access is taken back at Google.'
-                  )}
+                  )}{' '}
+                  To keep an account but stop it here, set {integration.name} to Off on it under
+                  Google accounts instead.
                 </>
               ) : (
                 <>

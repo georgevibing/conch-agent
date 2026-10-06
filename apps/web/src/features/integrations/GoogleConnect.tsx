@@ -8,22 +8,17 @@ import {
   Field,
   GOOGLE_APIS,
   googleConsoleUrl,
-  Heading,
   PasswordInput,
   Stack,
   Text,
 } from '@conch/nacre';
 import { useQuery } from '@tanstack/react-query';
+import { SquareArrowOutUpRight } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { googleApi } from './googleApi';
 import { GoogleSetup, googleServices } from './GoogleSetup';
+import styles from './Integrations.module.css';
 
-export const GOOGLE_ACCESS: Record<GoogleCapability, string> = {
-  'mail-read': 'Read and search Gmail',
-  'mail-draft': 'Read Gmail and save drafts — never send',
-  'calendar-read': 'Read calendar events',
-  'drive-read': 'Find Drive files and read their metadata',
-};
 function savedFlow(key: string) {
   try {
     return sessionStorage.getItem(key) ?? '';
@@ -31,16 +26,23 @@ function savedFlow(key: string) {
     return '';
   }
 }
-/** Shared by the Google apps in Integrations. Credential/code entry never enters chat. */
+/**
+ * Google's own sign-in, for one account and the access it should have.
+ * Credentials, codes and return addresses never enter the chat or browser
+ * storage; only the expiring flow id is kept, so a reload picks up where it
+ * was (ADR 0040). Sets up the Google app first when there isn't one.
+ */
 interface GoogleConnectProps {
   capabilities: GoogleCapability[];
   onReady: (accountId: string) => void;
+  /** Sign in again as this account (more access, or a revoked sign-in). */
   accountId?: string;
-  /**
-   * Its own heading and the sentence about Google under it. Off inside an
-   * app's connect dialog, which already says what's being connected.
-   */
-  intro?: boolean;
+  /** What the button says: “Continue with Google”, “Sign in again”, “Allow on Google”. */
+  label?: string;
+  /** One line under the button, in place of the usual one. */
+  lead?: string;
+  /** Changed their mind: the caller goes back. */
+  onCancel?: () => void;
 }
 export function GoogleConnect(props: GoogleConnectProps) {
   return (
@@ -50,7 +52,14 @@ export function GoogleConnect(props: GoogleConnectProps) {
     />
   );
 }
-function GoogleConnection({ capabilities, onReady, accountId, intro = true }: GoogleConnectProps) {
+function GoogleConnection({
+  capabilities,
+  onReady,
+  accountId,
+  label = 'Continue with Google',
+  lead,
+  onCancel,
+}: GoogleConnectProps) {
   const auth = useAuth();
   const { guard, dialog } = useVerify(auth.data?.method ?? 'none');
   const capabilityKey = [...capabilities].sort().join(',');
@@ -129,7 +138,7 @@ function GoogleConnection({ capabilities, onReady, accountId, intro = true }: Go
             setReturnUrl('');
             setSignInUrl('');
             setError(
-              'The connected account does not have the access this job needs. Choose the intended account below or reconnect it.',
+              'That account doesn’t have what was asked for. Sign in again and leave every box Google shows ticked.',
             );
           }
         }
@@ -164,9 +173,9 @@ function GoogleConnection({ capabilities, onReady, accountId, intro = true }: Go
       setBusy(false);
     }
   };
-  const start = async (id?: string) => {
+  const start = async () => {
     stopping.current = '';
-    const result = await googleApi.connect({ capabilities, accountId: id });
+    const result = await googleApi.connect({ capabilities, accountId });
     const url = new URL(result.url);
     if (url.origin !== 'https://accounts.google.com' || url.username || url.password)
       throw new Error('Google returned an unexpected sign-in address.');
@@ -180,74 +189,52 @@ function GoogleConnection({ capabilities, onReady, accountId, intro = true }: Go
   const openPopup = () => {
     popup.current = window.open('about:blank', 'conch-google', 'popup,width=560,height=720');
   };
-  const connect = (id?: string) => {
+  const connect = () => {
     openPopup();
-    void act(() => start(id));
+    void act(start);
   };
   const saveAndConnect = (save: () => Promise<unknown>) => {
     openPopup();
     return act(async () => {
       await save();
       setEditingSetup(false);
-      await start(accountId);
+      await start();
     });
   };
-  const choose = (id: string) =>
-    act(async () => {
-      const checked = await googleApi.check(id);
-      const account = checked.accounts.find((a) => a.id === id);
-      if (
-        account?.state !== 'ready' ||
-        !capabilities.every((c) => account.capabilities.includes(c))
-      )
-        throw new Error(account?.message ?? 'Reconnect Google and allow access for this job.');
-      onReady(id);
-    });
   const data = status.data;
   const local =
     window.location.protocol === 'http:' &&
     ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
   const remoteDesktop = data?.clientType === 'desktop' && !local;
+  const settingUp = data && (!data.configured || editingSetup) && !waiting;
   return (
-    <Stack gap={3}>
+    <Stack gap={4}>
       {dialog}
-      {intro && (
-        <>
-          <Heading level={2}>Google, connected to Conch</Heading>
-          <Text tone="muted">
-            Use your personal or work account with every model. Google content stays in the account
-            you choose; Conch shares requested results with the model answering your job.
-          </Text>
-        </>
-      )}
-      <ul>
-        {capabilities.map((c) => (
-          <li key={c}>{GOOGLE_ACCESS[c]}</li>
-        ))}
-      </ul>
-      {capabilities.includes('mail-draft') && (
-        <Callout tone="info">
-          Google’s draft permission also includes sending. Conch only exposes draft creation, asks
-          before saving, and never calls Gmail’s send endpoint.
+      {(error || status.error) && (
+        <Callout tone="danger" live="polite">
+          {error || status.error?.message}
         </Callout>
       )}
-      {(error || status.error) && <Callout tone="danger">{error || status.error?.message}</Callout>}
       {offline && (
-        <Callout tone="info">
-          Waiting for Conch to reconnect. Keep the Google window open; your sign-in will resume
-          here.
+        <Callout tone="info" live="polite">
+          Waiting for Conch to reconnect. Keep the Google window open; your sign-in picks up here.
         </Callout>
       )}
-      {status.isPending && <Text>Checking your Google connection…</Text>}
+      {status.isPending && <Text tone="muted">Checking your Google setup…</Text>}
       {waiting && (
         <Stack gap={3}>
-          <Text role="status">
+          <Callout tone="info" live="polite" title="Finish in the Google window">
             {mode === 'manual'
-              ? 'Finish Google sign-in, then bring the return address back here.'
-              : 'Finish signing in in the Google window. Your job will continue here.'}
-          </Text>
+              ? 'Choose the account and allow access. Then bring the address Google ends on back here.'
+              : 'Choose the account and allow access. This picks up by itself when you’re done.'}
+          </Callout>
           {signInUrl && (
-            <Button asChild variant="surface">
+            <Button
+              asChild
+              variant="surface"
+              trailingIcon={<SquareArrowOutUpRight />}
+              className={styles.fit}
+            >
               <a href={signInUrl} target="_blank" rel="noopener noreferrer">
                 Open Google sign-in
               </a>
@@ -255,11 +242,11 @@ function GoogleConnection({ capabilities, onReady, accountId, intro = true }: Go
           )}
           {mode === 'manual' && (
             <>
-              <Callout tone="info">
-                After you approve access, your browser may say it cannot open 127.0.0.1. That is
-                expected for a remote Conch. Copy the full address from that window’s address bar
-                and paste it below. Do not paste it into chat.
-              </Callout>
+              <Text size="sm" tone="muted">
+                After you allow access, the window may say it can’t open 127.0.0.1. That’s expected
+                for a Conch that isn’t on this computer. Copy the whole address from that window’s
+                address bar and paste it here — never into a chat.
+              </Text>
               <Field>
                 <Field.Label>Return address from Google</Field.Label>
                 <PasswordInput
@@ -270,11 +257,12 @@ function GoogleConnection({ capabilities, onReady, accountId, intro = true }: Go
                   disabled={busy}
                 />
                 <Field.Description>
-                  Include the whole address, including the question mark and everything after it.
-                  Conch checks it locally and never opens that address.
+                  Everything, including the question mark and what follows. Conch checks it here and
+                  never opens it.
                 </Field.Description>
               </Field>
               <Button
+                className={styles.fit}
                 disabled={busy || !returnUrl}
                 loading={busy}
                 onClick={() =>
@@ -290,6 +278,7 @@ function GoogleConnection({ capabilities, onReady, accountId, intro = true }: Go
           )}
           <Button
             variant="ghost"
+            className={styles.fit}
             disabled={busy}
             onClick={() => {
               stopping.current = flowId;
@@ -308,112 +297,51 @@ function GoogleConnection({ capabilities, onReady, accountId, intro = true }: Go
           </Button>
         </Stack>
       )}
-      {data && (!data.configured || editingSetup) && !waiting && (
-        <GoogleSetup capabilities={capabilities} busy={busy} onSave={saveAndConnect} />
-      )}
-      {data?.configured && (
-        <Stack gap={3}>
-          <Button
-            variant="ghost"
-            disabled={busy || waiting}
-            onClick={() => setEditingSetup(!editingSetup)}
-          >
-            {editingSetup ? 'Close Google app setup' : 'Change Google app setup'}
-          </Button>
-          {data.accounts
-            .filter((a) => !accountId || a.id === accountId)
-            .map((account) => (
-              <Stack key={account.id} gap={2}>
-                <Text>
-                  <strong>{account.email}</strong> ·{' '}
-                  {account.state === 'ready'
-                    ? 'Connected'
-                    : (account.message ?? 'Reconnect needed')}
-                </Text>
-                <Text tone="muted">
-                  {account.capabilities.map((c) => GOOGLE_ACCESS[c]).join(' · ')}
-                </Text>
-                {account.state === 'ready' &&
-                capabilities.every((c) => account.capabilities.includes(c)) ? (
-                  <Button
-                    aria-label={'Use ' + account.email}
-                    disabled={busy || waiting}
-                    onClick={() => void choose(account.id)}
-                  >
-                    Use this account
-                  </Button>
-                ) : (
-                  <>
-                    {account.state === 'unavailable' && (
-                      <Button
-                        aria-label={'Check connection for ' + account.email}
-                        disabled={busy || waiting}
-                        onClick={() => void choose(account.id)}
-                      >
-                        Check connection
-                      </Button>
-                    )}
-                    <Button
-                      aria-label={'Reconnect ' + account.email + ' for this job'}
-                      variant={account.state === 'unavailable' ? 'ghost' : 'solid'}
-                      disabled={busy || waiting}
-                      onClick={() => connect(account.id)}
-                    >
-                      Reconnect for this job
-                    </Button>
-                  </>
-                )}
-                <Button
-                  aria-label={'Disconnect ' + account.email}
-                  variant="ghost"
-                  disabled={busy || waiting}
-                  onClick={() => void act(() => googleApi.disconnect(account.id))}
-                >
-                  Disconnect
-                </Button>
-              </Stack>
-            ))}
-          {remoteDesktop && !waiting && (
-            <Text tone="muted">
-              This Conch uses a Desktop app client on a remote address. After Google consent, paste
-              the return address here. No public callback or port forwarding is needed.
-            </Text>
-          )}
-          <Button variant="surface" disabled={busy || waiting} onClick={() => connect()}>
-            Connect Google{data.accounts.length ? ' · another account' : ''}
-          </Button>
-          <Text tone="muted">
-            Google will ask which account to use and what to allow. Reconnecting retains existing
-            access and adds the permissions for this job. No access to your other accounts.
+      {settingUp && <GoogleSetup capabilities={capabilities} busy={busy} onSave={saveAndConnect} />}
+      {data?.configured && !waiting && !editingSetup && (
+        <Stack gap={2}>
+          <Stack direction="row" gap={2} wrap>
+            <Button loading={busy} onClick={connect}>
+              {label}
+            </Button>
+            {onCancel && (
+              <Button variant="ghost" disabled={busy} onClick={onCancel}>
+                Not now
+              </Button>
+            )}
+          </Stack>
+          <Text size="sm" tone="muted">
+            {lead ??
+              (remoteDesktop
+                ? 'Google asks which account and what to allow. At the end you paste one address back here; nothing else to set up.'
+                : 'Google asks which account and what to allow. Leave every box it shows ticked.')}
           </Text>
         </Stack>
       )}
       <Accordion type="single" collapsible>
         <Accordion.Item value="help">
-          <Accordion.Trigger>Sign-in help</Accordion.Trigger>
+          <Accordion.Trigger>If Google says no</Accordion.Trigger>
           <Accordion.Content>
             <Stack gap={3}>
-              <Text>
-                <strong>Access blocked or test user missing:</strong> add the exact email you are
-                signing in with under Audience → Test users. Work accounts can also need
-                administrator approval.
+              <Text size="sm">
+                <strong>Access blocked, or “not a test user”:</strong> add the exact address you
+                sign in with under Audience → Test users. A work account may need its
+                administrator’s approval.
               </Text>
               <a
                 href={googleConsoleUrl('/auth/audience', data?.projectId)}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Open Google Audience settings
+                Open Google’s Audience settings
               </a>
-              <Text>
-                <strong>Google hasn’t verified this app:</strong> check that it is the app you
-                created in your own project. Follow Google’s available personal-testing option only
-                if you recognize the app. If Google blocks access, check Audience or ask your
-                Workspace administrator.
+              <Text size="sm">
+                <strong>“Google hasn’t verified this app”:</strong> that’s your own app, in your own
+                project. Continue only if you recognise its name.
               </Text>
-              <Text>
-                <strong>API not enabled:</strong> enable it below, wait briefly for Google to apply
-                the change, then press Check connection. Your saved sign-in can be reused.
+              <Text size="sm">
+                <strong>An API isn’t enabled:</strong> enable it below, wait a minute, then press
+                Check now on the account. You won’t be asked to sign in again.
               </Text>
               {googleServices([
                 ...capabilities,
@@ -431,23 +359,25 @@ function GoogleConnection({ capabilities, onReady, accountId, intro = true }: Go
                   Enable {GOOGLE_APIS[id].name}
                 </a>
               ))}
-              <Text>
-                <strong>Signing in every week:</strong> Google’s Testing mode can expire access
-                after seven days. Review Audience when you are ready to leave Testing; publication
-                or restricted access may require verification.
+              <Text size="sm">
+                <strong>Signing in every week:</strong> while your Google app is in Testing, Google
+                can end its access after seven days. Publishing it in Audience lifts that.
               </Text>
-              <Text>
-                <strong>Callback or client error:</strong> import a current Desktop app credential
-                JSON, or register this exact Conch address in your Web client. Keep using the same
-                browser and Conch address until sign-in finishes.
+              <Text size="sm">
+                <strong>A callback or client error:</strong> use a current Desktop app file, or
+                register this exact Conch address in your Web client.
               </Text>
-              <a
-                href={googleConsoleUrl('/auth/clients', data?.projectId)}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Open Google Clients settings
-              </a>
+              {data?.configured && !waiting && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={styles.fit}
+                  disabled={busy}
+                  onClick={() => setEditingSetup(!editingSetup)}
+                >
+                  {editingSetup ? 'Keep the Google app as it is' : 'Use a different Google app'}
+                </Button>
+              )}
             </Stack>
           </Accordion.Content>
         </Accordion.Item>

@@ -360,7 +360,7 @@ export function Landing() {
             <Bento.Tile
               span={3}
               title="It remembers, in the open"
-              text="Memories are small Markdown files you can read, edit or delete. It learns from how you correct it, by itself, and every save shows in the chat, with Undo."
+              text="Memories are small Markdown files you can read, edit or delete. It learns from how you correct it, quietly, and asks only when something looks unsafe."
               picture="Three things Conch remembered, each a short note"
             >
               <MemoryDemo />

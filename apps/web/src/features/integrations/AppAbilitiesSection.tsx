@@ -20,7 +20,7 @@ import { channelMessage, isLinkedKind, needsYou, whoOf } from '../channels/descr
 import { errorText, putChannel } from '../channels/queries';
 import { vaultApi } from '../passwords/api';
 import { vaultKeys } from '../passwords/queries';
-import { groupOn, groupPatch, TALKS_AS, toolGroups, type AppItem } from './apps';
+import { groupOn, groupPatch, TALKS_AS, toolGroups, unsetGroups, type AppItem } from './apps';
 import { ConnectDialog } from './ConnectDialog';
 import styles from './Integrations.module.css';
 import { useAssistantName, useUpdateIntegration } from './queries';
@@ -119,6 +119,25 @@ export function AppAbilitiesSection({
         onChange: (on: boolean) =>
           update.mutate({ id: integration.id, patch: { tools: groupPatch(group, on) } }),
       });
+    // A Google app whose accounts only read: making changes is one choice away, on an account.
+    if (integration.transport.type === 'host')
+      for (const group of unsetGroups(integration))
+        rows.push({
+          id: group.id,
+          title: group.title,
+          description: group.description,
+          icon: ICONS[group.id] ?? <Wrench />,
+          on: false,
+          note: 'Your accounts only read here. Choose Read & write on one under Google accounts.',
+          setup: {
+            label: 'Allow',
+            onClick: () => {
+              const accounts = document.getElementById('google-accounts');
+              accounts?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              accounts?.focus({ preventScroll: true });
+            },
+          },
+        });
   } else if (entry) {
     rows.push({
       id: 'use',

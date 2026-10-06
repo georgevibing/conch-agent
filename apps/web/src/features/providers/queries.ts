@@ -40,11 +40,12 @@ export function putProvider(client: QueryClient, provider: Provider) {
 }
 
 /** Every provider and its live state. */
-export function useProviders() {
+export function useProviders(enabled = true) {
   return useQuery({
     queryKey: providerKeys.list,
     queryFn: () => providersApi.list(),
     staleTime: 15_000,
+    enabled,
   });
 }
 

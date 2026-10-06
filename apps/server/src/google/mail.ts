@@ -1,7 +1,8 @@
 import PostalMime, { type Address, type Email } from 'postal-mime';
 import { convert } from 'html-to-text';
 import { z } from 'zod';
-import { DraftUncertain, type GmailLogin } from './imap';
+import type { GoogleCapability } from '@conch/protocol';
+import { DraftUncertain, SendUncertain, type GmailLogin } from './imap';
 import { GoogleError, type GoogleService } from './service';
 
 export const Mail = z.object({
@@ -43,12 +44,13 @@ export async function viaImap<T>(
   service: GoogleService,
   accountId: string,
   run: (login: GmailLogin) => Promise<T>,
+  capability: GoogleCapability = 'mail-read',
 ): Promise<T> {
-  const login = await service.passwordLogin(accountId);
+  const login = await service.passwordLogin(accountId, capability);
   try {
     return await run(login);
   } catch (error) {
-    if (error instanceof DraftUncertain) throw error;
+    if (error instanceof DraftUncertain || error instanceof SendUncertain) throw error;
     throw await service.passwordFailed(accountId, login.generation, error);
   }
 }

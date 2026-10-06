@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -272,7 +272,7 @@ describe('what Conch remembers', () => {
     expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
   });
 
-  it('waits for an OK only where nobody could undo it, with Keep and Forget', async () => {
+  it('asks with the memory check’s card when something isn’t remembered yet (ADR 0097)', async () => {
     const calls = mockFetch({
       'GET /api/state': () => appState(),
       'POST /api/memories/m_1/keep': () => ({
@@ -284,13 +284,20 @@ describe('what Conch remembers', () => {
         updatedAt: 1,
       }),
     });
-    render(saved({ pending: true }));
-    expect(screen.getByText(/Forward invoices/).closest('div')).toHaveTextContent(
-      'Wants to remember',
+    render(
+      saved({
+        pending: true,
+        held: {
+          verdict: 'ask',
+          reasons: [{ code: 'redirect', words: 'It would change where invoices go.' }],
+        },
+      }),
     );
-    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
-    await userEvent.click(screen.getByRole('button', { name: 'Keep' }));
-    expect(await screen.findByText('Remembered')).toBeInTheDocument();
+    const card = screen.getByRole('region', { name: 'Remember this?' });
+    expect(card).toHaveTextContent('It would change where invoices go.');
+    expect(screen.queryByText('Remembered')).toBeNull();
+    await userEvent.click(within(card).getByRole('button', { name: 'Remember it' }));
+    expect(await screen.findByText(/Remembered: Forward invoices/)).toBeInTheDocument();
     expect(calls.some((c) => c.path === '/api/memories/m_1/keep')).toBe(true);
   });
 

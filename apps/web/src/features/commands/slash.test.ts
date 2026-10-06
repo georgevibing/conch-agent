@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
-import { expandCustom, parseEffortArg, parseSlash, resolveSlash, slashQuery } from './slash';
+import {
+  builtins,
+  expandCustom,
+  findBuiltin,
+  parseEffortArg,
+  parseGoalArg,
+  parseSlash,
+  parseSwitch,
+  parseThemeArg,
+  resolveSlash,
+  reviewPrompt,
+  slashQuery,
+  slashValueQuery,
+} from './slash';
 
 const custom = [
   {
@@ -13,7 +26,7 @@ const custom = [
 ];
 const engine = [
   { name: 'compact', description: 'Summarise', argumentHint: '' },
-  { name: 'review', description: 'Review the diff', argumentHint: '' },
+  { name: 'pr-comments', description: 'Read the PR comments', argumentHint: '' },
 ];
 
 describe('slash commands', () => {
@@ -41,7 +54,7 @@ describe('slash commands', () => {
       args: 'high',
     });
     expect(resolveSlash('/explain monads', custom, engine)).toMatchObject({ kind: 'custom' });
-    expect(resolveSlash('/review', custom, engine)).toMatchObject({ kind: 'engine' });
+    expect(resolveSlash('/pr-comments', custom, engine)).toMatchObject({ kind: 'engine' });
     expect(resolveSlash('/nope', custom, engine)).toEqual({ kind: 'unknown', name: 'nope' });
   });
 
@@ -88,11 +101,141 @@ describe('slash commands', () => {
       skill: { name: 'review' },
       args: 'tighter',
     });
-    expect(resolveSlash('/review', custom, engine, [])).toMatchObject({ kind: 'engine' });
+    // Without the skill, Conch's own /review (which hands over to the provider's, if it has one).
+    expect(resolveSlash('/review', custom, engine, [])).toMatchObject({
+      kind: 'builtin',
+      builtin: { action: 'review' },
+    });
     expect(resolveSlash('/explain', custom, engine, [{ ...skill, name: 'explain' }])).toMatchObject(
       {
         kind: 'custom',
       },
     );
+  });
+});
+
+describe('the commands people expect', () => {
+  it('has the commands other agents have, each with words for the reference', () => {
+    for (const name of [
+      'help',
+      'clear',
+      'new',
+      'compact',
+      'model',
+      'effort',
+      'plan',
+      'goal',
+      'resume',
+      'rename',
+      'export',
+      'copy',
+      'undo',
+      'retry',
+      'usage',
+      'status',
+      'memory',
+      'init',
+      'review',
+      'settings',
+      'theme',
+      'mode',
+      'apps',
+      'providers',
+      'doctor',
+      'background',
+      'folder',
+    ])
+      expect(findBuiltin(name), name).toBeDefined();
+    for (const b of builtins) {
+      expect(b.description.length, b.name).toBeGreaterThan(8);
+      // The reference adds the full stop.
+      expect(b.description.endsWith('.'), b.name).toBe(false);
+    }
+  });
+
+  it('answers to the names other agents use', () => {
+    expect(findBuiltin('reset')?.action).toBe('clear');
+    expect(findBuiltin('rewind')?.action).toBe('undo');
+    expect(findBuiltin('cost')?.action).toBe('usage');
+    expect(findBuiltin('mcp')?.action).toBe('apps');
+    expect(findBuiltin('login')?.action).toBe('providers');
+    expect(findBuiltin('compress')?.action).toBe('compact');
+    expect(findBuiltin('config')?.action).toBe('settings');
+    expect(findBuiltin('cwd')?.action).toBe('folder');
+  });
+
+  it('keeps /clear apart from /new now that it clears the chat', () => {
+    expect(resolveSlash('/clear', custom, engine)).toMatchObject({ builtin: { action: 'clear' } });
+    expect(resolveSlash('/new', custom, engine)).toMatchObject({ builtin: { action: 'new' } });
+  });
+
+  it('never gives two commands the same name', () => {
+    const names = builtins.flatMap((b) => [b.name, ...(b.aliases ?? [])]);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it('gives its newer commands up to yours of the same name, never its older ones', () => {
+    const mine = [
+      { name: 'export', description: '', prompt: 'Export it', createdAt: 0, updatedAt: 0 },
+    ];
+    expect(resolveSlash('/export', mine, [])).toMatchObject({ kind: 'custom' });
+    expect(resolveSlash('/export', [], [])).toMatchObject({ kind: 'builtin' });
+    const model = [{ ...mine[0], name: 'model' }] as typeof mine;
+    expect(resolveSlash('/model', model, [])).toMatchObject({ kind: 'builtin' });
+  });
+
+  it('wins over a provider’s command of the same name', () => {
+    const theirs = [{ name: 'clear', description: 'Clear', argumentHint: '' }];
+    expect(resolveSlash('/clear', [], theirs)).toMatchObject({ kind: 'builtin' });
+  });
+});
+
+describe('values after a command', () => {
+  it('reads the command and the value typed so far, on one line', () => {
+    expect(slashValueQuery('/effort ')).toEqual({ name: 'effort', value: '' });
+    expect(slashValueQuery('/model gpt 5')).toEqual({ name: 'model', value: 'gpt 5' });
+    expect(slashValueQuery('/Think hi')).toEqual({ name: 'think', value: 'hi' });
+    expect(slashValueQuery('/goal ship it\nand more')).toBeNull();
+    expect(slashValueQuery('/effort')).toBeNull();
+    expect(slashValueQuery('hello /effort high')).toBeNull();
+  });
+
+  it('marks which commands go on to values, and which only suggest', () => {
+    expect(findBuiltin('effort')?.values).toBe('choose');
+    expect(findBuiltin('model')?.values).toBe('choose');
+    expect(findBuiltin('goal')?.values).toBe('suggest');
+    expect(findBuiltin('plan')?.values).toBe('suggest');
+    expect(findBuiltin('clear')?.values).toBeUndefined();
+  });
+});
+
+describe('arguments', () => {
+  it('understands on, off and a toggle', () => {
+    expect(parseSwitch('')).toBe('toggle');
+    expect(parseSwitch('ON')).toBe('on');
+    expect(parseSwitch('off')).toBe('off');
+    expect(parseSwitch('refactor the parser')).toBeUndefined();
+  });
+
+  it('shows, clears or sets a goal', () => {
+    expect(parseGoalArg('')).toEqual({ kind: 'show' });
+    expect(parseGoalArg('clear')).toEqual({ kind: 'clear' });
+    expect(parseGoalArg(' Ship the release notes ')).toEqual({
+      kind: 'set',
+      goal: 'Ship the release notes',
+    });
+    // A goal that only starts with a word like clear is still a goal.
+    expect(parseGoalArg('clear out the garage')).toMatchObject({ kind: 'set' });
+  });
+
+  it('picks a theme, or toggles', () => {
+    expect(parseThemeArg('dark')).toBe('dark');
+    expect(parseThemeArg('auto')).toBe('system');
+    expect(parseThemeArg('')).toBe('toggle');
+  });
+
+  it('writes a review any provider can do, with what to look at', () => {
+    expect(reviewPrompt('')).toContain('Don’t change any files');
+    expect(reviewPrompt('the parser')).toContain('Look especially at: the parser');
   });
 });

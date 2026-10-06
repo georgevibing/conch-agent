@@ -68,11 +68,15 @@ From the top:
 3. **Pinned.** Chats you pinned, in an order you set: drag one, or use **Move
    up** and **Move down**. There's no cap.
 4. **Folders.** Each has a name and a mark: one of Nacre's glyphs in one of the
-   app colours, so a folder reads like the rest of Conch. A folder folds away
-   (this device remembers which), shows how many chats it holds, and takes a
-   drop. Folders only sort. They don't change how the assistant answers, and
-   they hold no files or instructions. That's what projects are, and
-   people asked for something lighter.
+   app colours, so a folder reads like the rest of Conch. A folder is a place
+   of your own, so it's drawn as a row, not as a group label: the name at a
+   chat's size, in full colour and a touch heavier, with its chats set in
+   under it (`ChatListSection kind="folder"`). A folder folds away (this
+   device remembers which), shows how many chats it holds, and takes a drop.
+   At the end of its line, under the pointer and always on touch, sit **New
+   chat in <name>** (§4) and **⋯**. Folders only sort. They don't change how
+   the assistant answers, and they hold no files or instructions. That's what
+   projects are, and people asked for something lighter.
 5. **The rest, by when:** Today, Yesterday, Previous 7 days, Previous 30 days,
    then one group per month ("September", or "August 2025" for another year).
    There is no Earlier any more.
@@ -114,11 +118,37 @@ it all (`POST /api/conversations/bulk`). Archive and Move to each offer
 - **Drag:** on a computer, drag a chat onto a folder, onto **Pinned**, or among
   the pinned. Every drag has a menu equivalent (**Pin**, **Move to**), so a
   keyboard and a screen reader can do the same.
+- **Hold to drag:** on a phone there is no drag and drop, so a row held still
+  for 450 ms lifts under the finger (a light `navigator.vibrate` where the
+  phone has one), and from then on Nacre carries it: a copy of the row follows
+  the finger over everything (the sidebar is a sheet), each place that takes
+  chats shows the same ring and hint as a mouse drag, the list scrolls by
+  itself within 56 px of its top and bottom, and letting go anywhere else
+  glides the copy home and changes nothing. Places register themselves
+  (`touchDrag`, `registerTouchDrop`), so a folder takes a finger and a mouse
+  the same way. A finger that moves first is scrolling or swiping and is left
+  alone; letting go without moving opens the row's menu, as a long press
+  always did. `pointerdown` is never cancelled — that would stop a tap from
+  opening the chat — so the menu's own long press is let go of with a
+  synthetic `pointermove` the moment the row lifts.
 - **Swipe:** on a phone, swipe a row to the right to pin it and to the left to
-  archive it, with Undo.
+  archive it, with Undo. A hold that lifts takes the finger from the swipe.
 - **Menus:** right-click or long-press a row for the same menu as **⋯**.
 - **Rename:** double-click a title.
 - **Keyboard:** ⌥↑ and ⌥↓ go to the chat above or below in the list.
+
+### 4a. A chat that starts in a folder
+
+Dragging a new chat into a folder is a second step nobody should need, so a
+folder's **✎** starts one there: the new chat page (`/`) carries the folder in
+its history entry, says "New chat in <name>" above the message box with a way
+to start it outside, and keeps a place for it at the top of the folder. The
+first message carries `folder` on `conversation.send`, so the gateway files the
+chat as it creates it and `conversation.created` already says `folderId` — no
+window ever shows the chat outside the folder, and nothing is moved afterwards.
+The gateway ignores the folder for a chat that exists, and when the folder has
+gone meanwhile the chat simply starts in the list; a message is never refused
+for it. Plain **New chat** (and ⌘⇧O) is a chat outside every folder, as before.
 
 ### 5. Tidying, offered, never done for you
 
@@ -148,8 +178,9 @@ list stays arranged as above, with the empty groups gone.
 
 ### 8. ⌘K
 
-⌘K finds folders by name and opens them in the sidebar. It also offers **Pin
-this chat**, **Move this chat to…** for each folder, and **New folder**.
+⌘K finds folders by name and opens them in the sidebar. It also offers **New
+chat in <folder>**, **Pin this chat**, **Move this chat to…** for each folder,
+and **New folder**.
 **Recent** in ⌘K now leaves out routine runs and tasks, as the sidebar does.
 
 ## Consequences

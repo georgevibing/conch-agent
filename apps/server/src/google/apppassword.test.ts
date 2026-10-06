@@ -149,11 +149,14 @@ describe('Gmail as an app', () => {
     );
 
     const status = await google.connectPassword({ address: ADDRESS, password: PASSWORD });
+    // Read only unless the person chose more; the password itself could do everything in Gmail.
     expect(status.accounts).toEqual([
       expect.objectContaining({
         email: ADDRESS,
         via: 'app-password',
-        capabilities: ['mail-read', 'mail-draft'],
+        capabilities: ['mail-read'],
+        access: { gmail: 'read' },
+        granted: { gmail: 'write' },
         state: 'ready',
       }),
     ]);
@@ -187,7 +190,7 @@ describe('Gmail as an app', () => {
   });
 
   it('is an ordinary integration: listed with its tools, Calendar and Drive only with Google sign-in', async () => {
-    await google.connectPassword({ address: ADDRESS, password: PASSWORD });
+    await google.connectPassword({ address: ADDRESS, password: PASSWORD, access: 'write' });
     await apps.refresh();
     const list = await apps.list();
     expect(list.map((i) => i.id)).toEqual(['gmail']);
@@ -205,6 +208,7 @@ describe('Gmail as an app', () => {
       ['google_mail_search', 'read', false],
       ['google_mail_read', 'read', false],
       ['google_mail_create_draft', 'write', true],
+      ['google_mail_send', 'write', true],
     ]);
     expect(events).toContainEqual(
       expect.objectContaining({
@@ -219,7 +223,7 @@ describe('Gmail as an app', () => {
   });
 
   it('gives the model the same Gmail tools, and saves a verified draft only after asking', async () => {
-    await google.connectPassword({ address: ADDRESS, password: PASSWORD });
+    await google.connectPassword({ address: ADDRESS, password: PASSWORD, access: 'write' });
     await apps.refresh();
     mail.deliver({ from: 'sam@example.org', subject: 'Lunch', text: 'Friday at noon?' });
     const { ctx, ask } = context('allow');
@@ -229,6 +233,7 @@ describe('Gmail as an app', () => {
       'google_mail_search',
       'google_mail_read',
       'google_mail_create_draft',
+      'google_mail_send',
     ]);
     const accounts = JSON.parse(textOf(await tool(tools, 'google_accounts').run({})));
     expect(accounts.accounts[0]).toMatchObject({ email: ADDRESS, via: 'app-password' });
@@ -276,7 +281,7 @@ describe('Gmail as an app', () => {
   });
 
   it('refuses header injection in a draft before anything is asked or saved', async () => {
-    await google.connectPassword({ address: ADDRESS, password: PASSWORD });
+    await google.connectPassword({ address: ADDRESS, password: PASSWORD, access: 'write' });
     await apps.refresh();
     const { ctx, ask } = context('allow');
     const draft = tool(apps.tools(googleTools(google, ctx), ctx), 'google_mail_create_draft');
@@ -294,7 +299,7 @@ describe('Gmail as an app', () => {
   });
 
   it('holds Off and Ask on every engine: off isn’t offered, ask asks first, a draft can’t be Allow', async () => {
-    await google.connectPassword({ address: ADDRESS, password: PASSWORD });
+    await google.connectPassword({ address: ADDRESS, password: PASSWORD, access: 'write' });
     await apps.refresh();
     await apps.update('gmail', { tools: { google_mail_read: 'off', google_mail_search: 'ask' } });
     await expect(
@@ -411,7 +416,8 @@ describe('Gmail as an app', () => {
     expect(await integrations.get('gmail')).toMatchObject({ name: 'Gmail' });
     const prompt = await integrations.promptSection();
     expect(prompt).toContain('- Gmail (Conch’s own tools `google_mail_search`');
-    expect(prompt).toContain('saving a draft always asks, and nothing is ever sent');
+    expect(prompt).toContain(`${ADDRESS}: read only`);
+    expect(prompt).toContain('every change asks first');
     await integrations.update('gmail', { tools: { google_mail_search: 'off' } });
     expect(await integrations.decide('mcp__conch__google_mail_search')).toBe('off');
     // Allowed tools are held by the tools themselves: nothing here asks a second time.

@@ -1,0 +1,154 @@
+@layer nacre.components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+  }
+
+  /* A soft well with a dashed edge: it says “put something here” without shouting. */
+  .zone {
+    --fdz-edge: var(--nc-border);
+    --fdz-wash: var(--nc-surface-sunken);
+    --fdz-icon: var(--nc-text-muted);
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    padding: var(--nc-space-6) var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--fdz-wash);
+    outline: 1.5px dashed var(--fdz-edge);
+    outline-offset: -1.5px;
+    text-align: center;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      outline-color var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .zone[data-dragging] {
+    --fdz-edge: var(--nc-accent-9);
+    --fdz-wash: var(--nc-accent-2);
+    --fdz-icon: var(--nc-text-accent);
+
+    transform: scale(1.01);
+  }
+
+  .zone[data-state='ok'] {
+    --fdz-edge: color-mix(in oklch, oklch(0.62 0.14 var(--nc-success-h)) 55%, transparent);
+    --fdz-icon: light-dark(
+      oklch(0.5 0.13 var(--nc-success-h)),
+      oklch(0.8 0.13 var(--nc-success-h))
+    );
+  }
+
+  .zone[data-state='error'] {
+    --fdz-edge: color-mix(in oklch, oklch(0.6 0.18 var(--nc-danger-h)) 55%, transparent);
+    --fdz-icon: light-dark(
+      oklch(0.52 0.18 var(--nc-danger-h)),
+      oklch(0.78 0.14 var(--nc-danger-h))
+    );
+  }
+
+  .zone[data-disabled] {
+    opacity: 0.6;
+  }
+
+  .icon {
+    display: inline-grid;
+    place-items: center;
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+    margin-block-end: var(--nc-space-1);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--fdz-icon);
+    transition: color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .icon svg {
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+  }
+
+  .title {
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .hint {
+    max-inline-size: 34ch;
+    margin-block-end: var(--nc-space-2);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+  }
+
+  /* The picker itself stays out of sight and out of the tab order: the button opens it. */
+  .input {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .result {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+  }
+
+  .result:empty {
+    display: none;
+  }
+
+  .file {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+  }
+
+  .fileName {
+    overflow: hidden;
+    font-family: var(--nc-font-mono);
+    color: var(--nc-text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .result[data-state='error'] .message {
+    font-weight: var(--nc-weight-medium);
+    color: light-dark(oklch(0.5 0.18 var(--nc-danger-h)), oklch(0.8 0.13 var(--nc-danger-h)));
+  }
+
+  .result[data-state='ok'] .message {
+    color: light-dark(oklch(0.45 0.12 var(--nc-success-h)), oklch(0.82 0.12 var(--nc-success-h)));
+  }
+
+  .pasteToggle {
+    align-self: flex-start;
+    margin-inline-start: calc(-1 * var(--nc-space-2-5));
+  }
+
+  .paste {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .zone[data-dragging] {
+      transform: none;
+    }
+  }
+}

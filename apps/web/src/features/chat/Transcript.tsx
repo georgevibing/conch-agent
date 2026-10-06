@@ -1,7 +1,12 @@
 import { MessageList, SkillHoldEnded, SummaryDivider } from '@conch/nacre';
 import { memo, useState, type ReactNode, type Ref } from 'react';
 
-import { isTurnStart, type ConversationView, type TranscriptItem } from '../../live/reducer';
+import {
+  isTurnStart,
+  undoableClear,
+  type ConversationView,
+  type TranscriptItem,
+} from '../../live/reducer';
 import { familyOf, verbsFor, type ToolFamily } from './verbs';
 import {
   AssistantMessage,
@@ -35,6 +40,7 @@ import { TaskChatCard } from '../tasks/TaskChatCard';
 import { RoutineInstruction } from '../routines/RunBanner';
 import { NextReplies } from '../replies/NextReplies';
 import { endedPlans } from '../plans/fold';
+import { ClearedItem, GoalItem } from '../commands/ContextItems';
 import { PlanApprovalItem, PlanItem, isPlanApproval } from '../plans/PlanItems';
 import styles from './Transcript.module.css';
 import { VaultApprovalItem, VaultRequestItem } from './VaultItems';
@@ -150,6 +156,13 @@ function placeSuggestions(items: TranscriptItem[], holdLast: boolean): Transcrip
   return holdLast ? out : [...out, ...held];
 }
 
+/**
+ * A line about what the model reads (a summary, `/clear`) or the chat's goal:
+ * a note on the chat, not a reply's part, and not news.
+ */
+const isContextLine = (item: TranscriptItem) =>
+  item.kind === 'summary' || item.kind === 'cleared' || item.kind === 'goal-note';
+
 /** Plan mode's question is its own card: the row of the tool that asked would say it twice. */
 function withoutPlanTools(items: TranscriptItem[]): TranscriptItem[] {
   return items.filter((i) => !(i.kind === 'tool' && i.name === 'ExitPlanMode'));
@@ -182,7 +195,7 @@ function replies(all: Block[]): (Block | Reply)[] {
     const item = block.item;
     // A turn that ended well says nothing, so the reply goes on to what comes after it (chips).
     const ended = item?.kind === 'turn-end' && item.outcome !== 'success';
-    if (item && (isTurnStart(item) || ended || item.kind === 'summary')) {
+    if (item && (isTurnStart(item) || ended || isContextLine(item))) {
       open = undefined;
     } else if (item?.kind === 'assistant' && !item.continuation) {
       // A reply with nothing to show yet (hidden reasoning) has no column to hold its parts.
@@ -204,7 +217,7 @@ const isPart = (block: Block) =>
   !(
     block.item.kind === 'user' ||
     block.item.kind === 'turn-end' ||
-    block.item.kind === 'summary' ||
+    isContextLine(block.item) ||
     (block.item.kind === 'assistant' && !block.item.continuation)
   );
 
@@ -285,7 +298,7 @@ export const Transcript = memo(function Transcript({
         !(i.kind === 'assistant' && !i.text && !i.thinking) &&
         !heldOffer(i) &&
         // The line where the model's memory starts is a note on history, not news.
-        i.kind !== 'summary',
+        !isContextLine(i),
     )
     .at(-1);
   const lastErrorId = [...items].reverse().find((i) => i.kind === 'turn-end')?.id;
@@ -345,6 +358,8 @@ export const Transcript = memo(function Transcript({
   const lastFilesId = items.findLast((i) => i.kind === 'files')?.id;
   // A plan folds to one line once its turn ends (ADR 0060).
   const ended = endedPlans(items);
+  // `/clear` can be undone from its line until something new is sent.
+  const undoSeq = pending.length ? undefined : undoableClear(view);
   // Between steps (a tool finished, a reply paused): a quieter wait that appears only if it lingers.
   const between =
     busy &&
@@ -528,6 +543,18 @@ export const Transcript = memo(function Transcript({
         <HeldItem item={block.item} conversationId={conversationId} />
       )}
       {block.item?.kind === 'routed' && <RoutedItem item={block.item} />}
+      {block.item?.kind === 'cleared' && (
+        <ClearedItem
+          item={block.item}
+          name={name}
+          conversationId={conversationId}
+          undoable={block.item.seq === undoSeq}
+          className={styles.summary}
+        />
+      )}
+      {block.item?.kind === 'goal-note' && (
+        <GoalItem item={block.item} className={styles.summary} />
+      )}
       {block.item?.kind === 'summary' && (
         <SummaryDivider
           model={block.item.model}

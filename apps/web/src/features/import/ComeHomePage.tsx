@@ -12,7 +12,6 @@ import {
   Text,
   type ImportView,
 } from '@conch/nacre';
-import { ChevronLeft } from 'lucide-react';
 import { useState } from 'react';
 
 import { useUi } from '../../app/ui';
@@ -43,11 +42,6 @@ export function ComeHomePage({ source }: { source: ImportSourceId }) {
 
   return (
     <Stack gap={5} className={styles.page}>
-      <div>
-        <Button variant="ghost" size="sm" leadingIcon={<ChevronLeft />} onClick={back}>
-          Memory
-        </Button>
-      </div>
       <ComeHomeHero
         from={label}
         path={plan?.source.path ?? FOLDERS[source]}

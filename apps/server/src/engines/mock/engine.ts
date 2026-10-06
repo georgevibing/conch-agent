@@ -105,6 +105,8 @@ export class MockEngine implements Engine {
   };
   /** Sees images, can't open files: the degraded file path gets exercised too. */
   readonly attachments = { images: true, files: false };
+  /** In plan mode it asks to start as Claude Code does (`ExitPlanMode`), scripted below. */
+  readonly planApproval = 'native' as const;
   /**
    * Long chats are fitted by Conch, as for a model API (ADR 0055): `/compact`
    * gives a scripted summary, so the divider and its words can be seen and tested.

@@ -1604,7 +1604,7 @@ export class IntegrationService {
     }
     if (hosted.working.length)
       lines.push(
-        'These apps are connected too, and Conch runs their tools itself (call `google_accounts` first to choose the account):',
+        'These apps are connected too, and Conch runs their tools itself (call `google_accounts` when several accounts could answer, or when a job needs more than one may do):',
         ...hosted.working,
       );
     if (broken.length || hosted.broken.length) {

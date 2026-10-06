@@ -1,0 +1,139 @@
+@layer nacre.components {
+  /* One quiet line, the same family as a skill's hold: there, not loud. */
+  .goal {
+    display: flex;
+    min-inline-size: 0;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-wash-1);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    animation: nc-surface-in var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .label {
+    appearance: none;
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+    min-block-size: var(--nc-control-sm);
+    padding: var(--nc-space-1) var(--nc-space-2-5);
+    border: 0;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  @media (hover: hover) {
+    .label:hover {
+      background: var(--nc-wash-2);
+    }
+  }
+
+  .label:active {
+    background: var(--nc-wash-3);
+  }
+
+  .label:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 0;
+  }
+
+  @media (pointer: coarse) {
+    .label {
+      min-block-size: var(--nc-control-md);
+    }
+  }
+
+  .icon {
+    flex-shrink: 0;
+    inline-size: 0.95rem;
+    block-size: 0.95rem;
+    color: var(--nc-accent-11);
+  }
+
+  .kicker {
+    flex-shrink: 0;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: 0.02em;
+  }
+
+  .text {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--nc-text);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .popover {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    max-inline-size: min(24rem, calc(100vw - var(--nc-space-6)));
+  }
+
+  .full {
+    margin: 0;
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .fine {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-snug);
+    text-wrap: pretty;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-2);
+  }
+
+  /* In the transcript: where the goal changed. */
+  .note {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    text-align: center;
+    text-wrap: balance;
+  }
+
+  .noteIcon {
+    flex-shrink: 0;
+    inline-size: 0.8rem;
+    block-size: 0.8rem;
+  }
+
+  .noteGoal {
+    color: var(--nc-text-muted);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .goal {
+      animation: none;
+    }
+  }
+}

@@ -1,6 +1,6 @@
 ---
 title: Your chats
-description: Pin, file and tidy your chats, see which need you, write and queue messages, answer its questions with a tap, and keep a long chat going.
+description: Pin, file and tidy your chats, see which need you, write and queue messages, use / commands, set a goal, and keep a long chat going.
 order: 12
 ---
 
@@ -38,8 +38,9 @@ Choose **Pin** to keep a chat at the top. There's no limit. Drag pinned chats to
 
 Choose **Move to → New folder…**. Give the folder a name, and pick a mark and a colour. Then:
 
-- Drag chats onto a folder, or choose **Move to** and the folder.
+- Drag chats onto a folder, or choose **Move to** and the folder. On a phone, hold a chat until it lifts, then drag it onto the folder.
 - Press a folder's name to fold or unfold it.
+- Press **✎** beside a folder's name to start a chat already inside it. The new chat page says where it's going, and the chat shows in the folder from the moment you send it. **✕** starts it outside the folder instead.
 - Press **⋯** beside a folder to **Edit** or **Remove** it. Removing a folder puts its chats back in your list. It deletes nothing.
 
 Folders only sort your chats. They don't change how your assistant answers.
@@ -51,6 +52,8 @@ Hold <kbd>mod</kbd> or <kbd>shift</kbd> and click chats to select them, or choos
 ### On a phone
 
 Swipe a chat to the right to pin it, or to the left to archive it. **Undo** puts it back.
+
+Hold a chat for a moment and it lifts off the list. Keep your finger down and drag it onto a folder: folders light up as you pass over them and say what letting go will do, and the list scrolls by itself near its top and bottom. Let go on a folder and the chat moves there. Let go anywhere else and nothing changes. Let go without moving and you get the chat's menu, as before.
 
 ### Tidy up
 
@@ -71,6 +74,7 @@ separately; the search box stays in place. On a narrow screen, only results are 
 - <kbd>↑</kbd> in the empty box brings back what you sent, newest first: this chat's messages, then what you sent lately in other chats. <kbd>↓</kbd> walks forward again. Change it and send, or keep going.
 - What you were writing stays in each chat when you go to another, and after a restart. Signing out on this device clears it.
 - Point at a message of yours and press **Copy** to take its words.
+- Type `/` for commands: change the model or how hard it thinks, start afresh, set a goal, plan first, copy the last reply, save the chat as a file and more. The list offers each command's choices, with the one in use ticked. [Every command](../reference/slash-commands.md).
 
 ## While it works
 
@@ -169,10 +173,20 @@ Claude Code and Codex keep a plan of their own, and Conch draws it. Other provid
 
 ### Plan only
 
-In **Plan only** mode, your assistant looks around and plans, but changes nothing. With Claude Code, when the plan is ready it's shown to you in full, with two buttons:
+In **Plan only** mode, your assistant looks around and plans, but changes nothing. Type `/plan` to turn it on or off, or `/plan` and what you'd like done to plan it straight away. When the plan is ready it's shown to you in full, with two buttons:
 
-- **Start** begins the work.
+- **Start** ends plan mode and begins the work, in the mode the chat had before.
 - **Keep planning** stays in plan mode, and puts you back in the message box to say what to change.
+
+This works with every provider that can use Conch's tools: Claude Code asks with its own plan, and the others ask through Conch, with the same card.
+
+## A goal for the chat
+
+Type `/goal` and what the chat is for: `/goal move the photos into the family library`. Your assistant keeps it in mind in every reply, whichever model answers, and the goal stays when you clear the chat. It shows as one quiet line above the message box. Press it to see it whole, **Edit** it or **Clear goal**. A line in the chat marks where it was set.
+
+## Start afresh
+
+Type `/clear` when a chat has wandered and you'd like your assistant to start over in the same place. A line marks where: **Context cleared**. From there on it reads nothing said above, with every provider. Every message stays for you, and so does the goal. **Undo**, on the line or in the note, puts it back until you send something new. In <kbd>mod+k</kbd>, **Start afresh in this chat** does the same.
 
 ## Long chats
 
@@ -192,4 +206,4 @@ Type `/compact`, or press **Compact now**, to summarise the start now. Add what 
 - Chats from your [chat apps](../channels/index.md) archive the same way. A new message from there brings the chat back.
 - Routines, tasks and pinned apps keep their runs on their own pages, so they're never in this list or the archive.
 - Archiving, pins and folders are kept with your chats, so they're in your [backups](../care/backups.md) too.
-- In <kbd>mod+k</kbd>, type a folder's name to open it, or **Pin this chat**, **Move this chat to…** or **New folder**.
+- In <kbd>mod+k</kbd>, type a folder's name to open it, or **New chat in** and its name to start one inside it; or **Pin this chat**, **Move this chat to…** or **New folder**.

@@ -35,7 +35,9 @@ import {
   NewFolderBody,
   UpdateFolderBody,
   CompactBody,
+  type ClearResult,
   type CompactResult,
+  SetGoalBody,
   ServerId,
   ReleaseTurnBody,
   CappedChoiceBody,
@@ -1305,6 +1307,38 @@ export async function buildApp(services: Services) {
       return sendError(reply, error);
     }
   });
+  /** `/clear`: the model forgets the conversation so far, with every provider. */
+  app.post<{ Params: { id: string } }>('/api/conversations/:id/clear', async (request, reply) => {
+    try {
+      const result: ClearResult = await services.conversations.clear(request.params.id);
+      return result;
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+  /** Undo on `/clear`, while nothing new was sent. */
+  app.post<{ Params: { id: string } }>(
+    '/api/conversations/:id/clear/undo',
+    async (request, reply) => {
+      try {
+        const result: ClearResult = await services.conversations.restoreContext(request.params.id);
+        return result;
+      } catch (error) {
+        return sendError(reply, error);
+      }
+    },
+  );
+  /** `/goal`: what the chat is for, kept in every turn's context; `null` takes it away. */
+  app.put<{ Params: { id: string } }>('/api/conversations/:id/goal', async (request, reply) => {
+    const body = parse(SetGoalBody, request.body ?? {}, reply);
+    if (!body) return;
+    try {
+      await services.conversations.setGoal(request.params.id, body.goal);
+      return { ok: true };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
   // Tests and demos (mock mode only): pretend the internet is gone, or back.
   if (services.config.CONCH_ENGINE === 'mock')
     app.post<{ Body: { online?: unknown } }>('/api/mock/network', (request) => {
@@ -1462,7 +1496,14 @@ export async function buildApp(services: Services) {
               }
             });
             try {
-              await services.conversations.send(command);
+              // Started from a folder (ADR 0089): filed there from its first moment,
+              // unless the folder went meanwhile; then it starts in the list, as any chat.
+              const { folder, ...rest } = command;
+              const filed =
+                folder && !command.conversationId && (await services.folders.has(folder))
+                  ? folder
+                  : undefined;
+              await services.conversations.send({ ...rest, ...(filed && { folder: filed }) });
             } finally {
               unsubscribeCreated();
             }

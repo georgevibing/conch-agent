@@ -57,18 +57,7 @@ export function registerQuietLearningDoctor(
             ? 'Conch learns from your chats once they go quiet. Nothing yet.'
             : `Conch learns from your chats once they go quiet: ${learned === 1 ? 'one thing' : `${learned} things`} so far, each with Undo.`,
       });
-      if (status.waiting)
-        items.push({
-          id: 'learning:waiting',
-          group: GROUP,
-          title: 'Learned, waiting for your OK',
-          state: 'needs-you',
-          message:
-            status.waiting === 1
-              ? 'One thing Conch learned waits for your OK.'
-              : `${status.waiting} things Conch learned wait for your OK.`,
-          action: { kind: 'open', label: 'Look at them', place: 'memory' },
-        });
+      // What waits is a memory the check held: Memory's own check says so, once.
       if (status.paused?.reason === 'cap')
         items.push({
           id: 'learning:paused',

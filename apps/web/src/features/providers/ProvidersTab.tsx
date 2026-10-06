@@ -93,7 +93,6 @@ export function ProvidersTab() {
       <AddServer
         presets={data.serverPresets}
         found={data.found.filter((f) => f.kind === 'server')}
-        onBack={() => setConnecting(undefined)}
         onAdded={(id) => setConnecting(id)}
         onOpen={(id) => setConnecting(id)}
       />
@@ -105,7 +104,6 @@ export function ProvidersTab() {
         key={open.id}
         provider={open}
         onePassword={data?.onePassword ?? { available: false }}
-        onBack={() => setConnecting(undefined)}
       />
     );
   }

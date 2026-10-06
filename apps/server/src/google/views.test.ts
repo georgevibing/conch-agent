@@ -249,7 +249,12 @@ describe('Drive as files', () => {
 });
 
 describe('the tools give the model text and the person a view', () => {
-  const profile = { id: 'account1', email: 'me@example.org', state: 'ready' };
+  const profile = {
+    id: 'account1',
+    email: 'me@example.org',
+    state: 'ready',
+    capabilities: ['mail-read', 'calendar-read', 'drive-read'],
+  };
   function service(api: (path: string, query?: Record<string, string>) => unknown) {
     return {
       api: vi.fn(

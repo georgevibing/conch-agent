@@ -1,0 +1,113 @@
+@layer nacre.components {
+  .root {
+    --bc-text: var(--nc-text-md);
+    --bc-step: 1.75rem;
+
+    display: flex;
+    min-inline-size: 0;
+    font-size: var(--bc-text);
+    line-height: var(--bc-step);
+  }
+
+  .root[data-size='sm'] {
+    --bc-text: var(--nc-text-sm);
+    --bc-step: 1.5rem;
+  }
+
+  /* One line, always: what still doesn't fit is cut, never wrapped. */
+  .list {
+    display: flex;
+    align-items: center;
+    min-inline-size: 0;
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /*
+   * Short of room, the places above give way first: they shrink three times as
+   * fast as the page you’re on, each to an ellipsis, and never take more than a
+   * share of what there is — so the page you’re on always keeps most of it.
+   */
+  .item {
+    display: flex;
+    align-items: center;
+    flex: 0 3 auto;
+    min-inline-size: min(4.25rem, 28%);
+  }
+
+  .item[data-current] {
+    flex-shrink: 1;
+    min-inline-size: 0;
+  }
+
+  .separator {
+    flex-shrink: 0;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    margin-inline: var(--nc-space-0-5);
+    color: var(--nc-text-subtle);
+  }
+
+  .item:first-child > .separator {
+    display: none;
+  }
+
+  .link,
+  .current {
+    display: block;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .link {
+    margin: 0;
+    padding-inline: var(--nc-space-1-5);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    color: var(--nc-text-muted);
+    background: transparent;
+    font: inherit;
+    line-height: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  /* The first step sits flush with what's above and below it. */
+  .item:first-child > .link {
+    margin-inline-start: calc(-1 * var(--nc-space-1-5));
+  }
+
+  @media (hover: hover) {
+    .link:hover {
+      color: var(--nc-text);
+      background: var(--nc-wash-2);
+    }
+  }
+
+  .link:active {
+    background: var(--nc-wash-3);
+  }
+
+  .link:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 1px;
+  }
+
+  .current {
+    padding-inline: var(--nc-space-1-5);
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .item:first-child > .current {
+    padding-inline-start: 0;
+  }
+}

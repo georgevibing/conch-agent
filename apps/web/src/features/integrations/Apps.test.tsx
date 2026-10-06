@@ -24,6 +24,7 @@ import {
   joinApps,
   managerItem,
   toolGroups,
+  unsetGroups,
 } from './apps';
 import { AppsView } from './AppsView';
 import { newHome } from './paths';
@@ -241,8 +242,14 @@ describe('one app, one card (ADR 0052)', () => {
     ]);
     expect(toolGroups(hosted('gmail')).map((g) => [g.title, g.note])).toEqual([
       ['Read & search', undefined],
-      ['Draft', 'Asks every time. Never sends.'],
+      ['Draft & send', 'Asks every time, with the exact email.'],
     ]);
+    // Accounts that only read: no write half to switch, so it's said, with the way to allow it.
+    const reading = hosted('gmail', {
+      tools: hosted('gmail').tools.filter((t) => t.access === 'read'),
+    });
+    expect(toolGroups(reading).map((g) => g.title)).toEqual(['Read & search']);
+    expect(unsetGroups(reading).map((g) => g.title)).toEqual(['Draft & send']);
   });
 
   it('the gallery has one tile per app: Slack’s chat tile is Slack’s, and nothing you have is offered again', () => {

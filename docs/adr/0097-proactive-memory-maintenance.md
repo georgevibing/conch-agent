@@ -37,6 +37,42 @@ owner evidence, values and security again under its write lock. The existing led
 and chat card are settled quietly, preserving Undo. Unknown evidence stays pending.
 No new setting, provider-specific path or protocol enum is added.
 
+## Silent by default
+
+Even with routine facts applied, the page still read as a report (Recent learnings,
+Tidying up, a weekly recap, Earlier, Never) and every quiet look left a "Learned 2
+things" line in the chat. People read that as being asked. Memory now learns and
+tidies silently, and asks only about a security concern:
+
+- **The gate never waits.** `gate()` returns apply, seen or drop. Something only
+  close to the never-list is applied, because it rests on fresh owner words (usually
+  the correction that came next); the exact thing is dropped. Replacing a memory the
+  check holds is dropped, not queued.
+- **The remember tool never queues housekeeping.** Unattended (a routine, a chat app,
+  someone else's words) after reading, a memory that isn't the owner's own and that
+  the guard finds harmless is not saved, and the model is told so; one the guard
+  flags still goes to the store and is held, with a push. Something taken back once
+  is refused unless the owner said it again.
+- **Tidying never proposes.** A merge or update that would look planted isn't made;
+  with learning off it only tidies what exists. Only an addition the store holds can
+  wait, and then as a held memory.
+- **The chat says only security.** `learning.noted` carries only held items; the web
+  draws them as the Memory check card. Older logs' routine lines stay quiet.
+- **The page is what it knows.** Held memories first (the same card), then
+  `MemoryGlance` (a count, one bar by kind that is also the filter, a breathing dot
+  for learning) and `MemoryCell`s to search, add (the search box remembers what you
+  typed), edit, or forget with a fold and Undo (swipe on touch). Tidy up now, Undo the
+  last tidy-up, What used to be true, Won't learn again and Export sit in one menu.
+- **Health asks once.** Only the memory check's "Memories to look at" is a
+  needs-you item; learning's duplicate is gone.
+
+Dropping instead of asking loses some harmless unattended facts; that is the
+trade for not interrupting. It weakens nothing: everything the guard flags is still
+held, provenance and datamarking stay, and memories still grant no authority.
+Regression tests cover each rule (`policy.test.ts`, `tools.test.ts`,
+`check.test.ts`, `learning.test.ts`, `service.test.ts`), including planted
+destinations, typed secrets and lookalike names still being held.
+
 ## Threat model and boundaries
 
 An attacker controls pages, mail, tool output, imported data or a generated memory

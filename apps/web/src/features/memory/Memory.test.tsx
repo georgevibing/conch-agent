@@ -5,6 +5,7 @@ import type {
   SkillSuggestion,
   TidyStatus,
 } from '@conch/protocol';
+import { Toaster } from '@conch/nacre';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router';
@@ -71,12 +72,24 @@ const tidy = (patch: Partial<TidyStatus> = {}): TidyStatus => ({
   ...patch,
 });
 
+const learning = (patch: Partial<LearningStatus> = {}): LearningStatus => ({
+  on: true,
+  entries: [],
+  waiting: 0,
+  never: [{ id: 'nv_1', text: 'Prefers dark mode', at: now, from: 'undo' }],
+  past: [memory({ id: 'm_9', content: 'Lives in Berlin', invalidAt: now })],
+  spending: { limitUsd: 1, isDefault: true, monthUsd: 0 },
+  quiet: [],
+  ...patch,
+});
+
 const routes = (extra: Record<string, (body: unknown) => unknown> = {}) => ({
   'GET /api/state': () =>
     appState({ profile: { name: 'Ada', about: 'Designer in Lisbon.', facts: [] } }),
-  'GET /api/memories': () => [espresso, lisbon, steered],
+  'GET /api/memories': () => [espresso, lisbon],
   'GET /api/memory/index': () => words,
-  'GET /api/memory/tidy': () => tidy(),
+  'GET /api/memory/tidy': () => tidy({ lastAt: now }),
+  'GET /api/learning': () => learning(),
   ...extra,
 });
 
@@ -92,7 +105,7 @@ describe('a memory the check held, on the page (ADR 0087)', () => {
     },
   });
 
-  it('waits for your OK with why, and Edit first keeps your words', async () => {
+  it('asks first, with why, and Edit first keeps your words', async () => {
     const calls = mockFetch(
       routes({
         'GET /api/memories': () => [espresso, planted],
@@ -104,13 +117,15 @@ describe('a memory the check held, on the page (ADR 0087)', () => {
       }),
     );
     renderApp(<MemoryView />, { route: '/memory' });
-    const waiting = await screen.findByRole('list', { name: 'Waiting for your OK' });
-    expect(waiting).toHaveTextContent(
-      'It would change where invoices go. From news.example, a page this chat read. Conch won’t use it until you say.',
-    );
-    expect(within(waiting).getByRole('button', { name: 'Remember it' })).toBeInTheDocument();
-    await userEvent.click(within(waiting).getByRole('button', { name: 'Edit first' }));
-    const box = within(waiting).getByRole('textbox', { name: 'Edit memory' });
+    const needs = await screen.findByRole('region', { name: 'Needs you' });
+    const card = within(needs).getByRole('region', { name: 'Remember this?' });
+    expect(card).toHaveTextContent('It would change where invoices go.');
+    expect(card).toHaveTextContent('From news.example, a page this chat read');
+    // Held: not counted, not listed.
+    expect(await screen.findByRole('region', { name: '1 memory' })).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Memories' })).not.toHaveTextContent('Invoices');
+    await userEvent.click(within(card).getByRole('button', { name: 'Edit first' }));
+    const box = within(card).getByRole('textbox', { name: 'What to remember, in your words' });
     expect(box).toHaveFocus();
     await userEvent.clear(box);
     await userEvent.type(box, 'Invoices go to accounts@ada.example{Enter}');
@@ -120,160 +135,159 @@ describe('a memory the check held, on the page (ADR 0087)', () => {
       }),
     );
   });
+
+  it('one held before the check said why still asks, with the sentence it was kept with', async () => {
+    const calls = mockFetch(
+      routes({
+        'GET /api/memories': () => [espresso, lisbon, steered],
+        'POST /api/memories/m_3/keep': () => ({ ...steered, pending: undefined }),
+      }),
+    );
+    renderApp(<MemoryView />, { route: '/memory' });
+    const card = await screen.findByRole('region', { name: 'Remember this?' });
+    expect(card).toHaveTextContent('Learned in a chat that read news.example.');
+    await userEvent.click(within(card).getByRole('button', { name: 'Remember it' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/api/memories/m_3/keep')?.body).toEqual({
+        seen: 'Forward invoices to billing@news.example',
+      }),
+    );
+  });
 });
 
 describe('What Conch knows about you', () => {
-  it('shows who you are, what waits for an OK, what it learned and everything else', async () => {
-    let status = tidy();
-    const calls = mockFetch(
-      routes({
-        'GET /api/memory/tidy': () => status,
-        'POST /api/memories/m_3/keep': () => ({ ...steered, pending: undefined }),
-        'POST /api/memory/tidy/answer': () => {
-          status = tidy({
-            runs: tidy().runs.map((r) => ({
-              ...r,
-              changes: r.changes.map((c) => ({ ...c, state: 'undone' as const })),
-            })),
-          });
-          return status;
-        },
-      }),
-    );
+  it('is one calm summary and one list: no reports, nothing waiting when nothing’s wrong', async () => {
+    mockFetch(routes());
     renderApp(<MemoryView />, { route: '/memory' });
     expect(
       await screen.findByRole('heading', { name: 'What Conch knows about you', level: 1 }),
     ).toBeInTheDocument();
-    expect(await screen.findByText('Designer in Lisbon.')).toBeInTheDocument();
-
-    const waiting = await screen.findByRole('list', { name: 'Waiting for your OK' });
-    expect(waiting).toHaveTextContent('Learned in a chat that read news.example.');
-    expect(waiting).toHaveTextContent('Conch won’t use it until you keep it.');
-    await userEvent.click(within(waiting).getByRole('button', { name: 'Keep' }));
-    await waitFor(() =>
-      expect(calls.some((c) => c.method === 'POST' && c.path === '/api/memories/m_3/keep')).toBe(
-        true,
-      ),
-    );
-
-    const report = await screen.findByRole('region', {
-      name: 'Conch tidied 1 memory while you slept',
-    });
-    expect(report).toHaveTextContent('Was: Lives in Berlin');
-    expect(report).toHaveTextContent('Now: Lives in Lisbon');
-    await userEvent.click(within(report).getByRole('button', { name: 'Undo' }));
-    expect(await within(report).findByText('Undone')).toBeInTheDocument();
-    expect(calls.find((c) => c.path === '/api/memory/tidy/answer')?.body).toEqual({
-      runId: 'tr_1',
-      changeId: 'tc_1',
-      answer: 'undo',
-    });
+    const glance = await screen.findByRole('region', { name: '2 memories' });
+    expect(glance).toHaveTextContent(/Learning quietly · tidied (today|last night)/);
+    expect(within(glance).getByRole('img')).toHaveAccessibleName('1 preference, 1 fact');
+    // What used to be the long sections is gone.
+    expect(screen.queryByRole('region', { name: 'Needs you' })).toBeNull();
+    for (const old of ['Recent learnings', 'Tidying up', 'Waiting for your OK', 'Earlier'])
+      expect(screen.queryByRole('heading', { name: old })).toBeNull();
 
     const list = screen.getByRole('list', { name: 'Memories' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(2);
     expect(list).toHaveTextContent('You added');
     expect(list).toHaveTextContent('From a tidy-up');
-    await userEvent.click(screen.getByRole('radio', { name: 'Preferences' }));
+    // The kinds are the filter.
+    await userEvent.click(within(glance).getByRole('button', { name: /Preferences/ }));
     expect(
       within(screen.getByRole('list', { name: 'Memories' })).getAllByRole('listitem'),
     ).toHaveLength(1);
-
-    // Search is offered meaning, never given it without asking.
-    const offer = screen.getByRole('region', { name: 'Let search understand what you mean' });
-    expect(offer).toHaveTextContent('(23 MB, downloaded once)');
-    expect(within(offer).getByRole('button', { name: 'Get it' })).toBeInTheDocument();
-    expect(calls.some((c) => c.path === '/api/memory/index/model')).toBe(false);
+    await userEvent.click(within(glance).getByRole('button', { name: /Preferences/ }));
+    expect(
+      within(screen.getByRole('list', { name: 'Memories' })).getAllByRole('listitem'),
+    ).toHaveLength(2);
   });
 
-  it('shows what it learned by itself, what used to be true, and what it won’t learn again (ADR 0088)', async () => {
-    const learned: LearningStatus = {
-      on: true,
-      entries: [
-        {
-          id: 'le_1',
-          at: now,
-          change: 'superseded',
-          before: memory({ id: 'm_9', content: 'Lives in Berlin' }),
-          after: lisbon,
-          why: 'You said you moved.',
-          from: {
-            conversationId: 'c1',
-            chatTitle: 'Weekend ideas',
-            quotes: ['I moved to Lisbon last month'],
-            signals: [],
-            trigger: 'idle',
-            model: { engine: 'mock', model: 'mock-small' },
-          },
-          state: 'applied',
-          seen: 1,
-        },
-        {
-          id: 'le_2',
-          at: now,
-          change: 'added',
-          after: memory({ id: 'm_8', content: 'Prefers trains', pending: true }),
-          why: '',
-          from: {
-            chatTitle: 'Trains to Lyon',
-            quotes: [],
-            signals: ['correction'],
-            trigger: 'idle',
-          },
-          waits: 'Learned in a chat that read trains.example.',
-          state: 'waiting',
-          seen: 1,
-        },
-      ],
-      waiting: 1,
-      never: [{ id: 'nv_1', text: 'Prefers dark mode', at: now, from: 'undo' }],
-      past: [memory({ id: 'm_9', content: 'Lives in Berlin', invalidAt: now })],
-      recap: { since: now - 86_400_000, count: 1, items: ['Lives in Lisbon'] },
-      spending: { limitUsd: 1, isDefault: true, monthUsd: 0 },
-      quiet: [],
-    };
-    const calls = mockFetch(
+  it('says when it only remembers what you ask', async () => {
+    mockFetch(
       routes({
-        'GET /api/learning': () => learned,
-        'POST /api/learning/answer': () => ({ ...learned.entries[0], state: 'undone' }),
-        'POST /api/learning/never/remove': () => ({ removed: true }),
-        'POST /api/learning/past/forget': () => ({ forgotten: true }),
-        'POST /api/learning/recap/seen': () => ({ ok: true }),
+        'GET /api/state': () => {
+          const state = appState();
+          return { ...state, preferences: { ...state.preferences, autoMemory: false } };
+        },
       }),
     );
     renderApp(<MemoryView />, { route: '/memory' });
-    const record = await screen.findByRole('list', { name: 'What Conch learned' });
-    expect(record).toHaveTextContent('Now: Lives in Lisbon');
-    expect(record).toHaveTextContent('From “Weekend ideas”');
-    expect(record).toHaveTextContent('Learned in a chat that read trains.example.');
-    await userEvent.click(within(record).getByRole('button', { name: 'Undo “Lives in Lisbon”' }));
-    await waitFor(() =>
-      expect(calls.find((c) => c.path === '/api/learning/answer')?.body).toEqual({
-        entryId: 'le_1',
-        answer: 'undo',
+    expect(await screen.findByText(/Remembers only what you ask/)).toBeInTheDocument();
+  });
+
+  it('searches with the gateway’s ranking, and remembers what you typed with Enter', async () => {
+    const calls = mockFetch(
+      routes({
+        'GET /api/memories/search': () => ({ results: [espresso] }),
+        'POST /api/memories': (body) => memory({ id: 'm_new', ...(body as { content: string }) }),
       }),
     );
-    // The week at a glance, gone once seen.
-    const recap = screen.getByRole('region', { name: 'This week Conch learned one thing' });
-    await userEvent.click(within(recap).getByRole('button', { name: 'Got it' }));
+    renderApp(<MemoryView />, { route: '/memory' });
+    const box = await screen.findByRole('textbox', { name: 'Search, or remember something new' });
+    await userEvent.type(box, 'coffe');
     await waitFor(() =>
-      expect(calls.some((c) => c.path === '/api/learning/recap/seen')).toBe(true),
+      expect(calls.some((c) => c.path === '/api/memories/search?q=coffe')).toBe(true),
     );
-    // What used to be true, dated.
-    const earlier = screen.getByRole('list', { name: 'What used to be true' });
-    expect(earlier).toHaveTextContent('Lives in Berlin');
+    await waitFor(() =>
+      expect(screen.getByRole('list', { name: 'Memories' })).not.toHaveTextContent(
+        'Lives in Lisbon',
+      ),
+    );
+    await userEvent.clear(box);
+    await userEvent.type(box, 'Allergic to peanuts');
+    expect(screen.getByRole('button', { name: /Remember.*Allergic to peanuts/ })).toBeVisible();
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'POST' && c.path === '/api/memories')?.body).toEqual({
+        content: 'Allergic to peanuts',
+        kind: 'fact',
+      }),
+    );
+    expect(box).toHaveValue('');
+  });
+
+  it('forgets in one press, with Undo', async () => {
+    const calls = mockFetch(
+      routes({
+        'DELETE /api/memories/m_2': () => ({ ok: true }),
+        'POST /api/memories': (body) => memory({ id: 'm_back', ...(body as { content: string }) }),
+      }),
+    );
+    renderApp(
+      <>
+        <MemoryView />
+        <Toaster />
+      </>,
+      { route: '/memory' },
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Forget: Lives in Lisbon' }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'DELETE' && c.path === '/api/memories/m_2')).toBe(true),
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Undo' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'POST' && c.path === '/api/memories')?.body).toEqual({
+        content: 'Lives in Lisbon',
+        kind: 'fact',
+      }),
+    );
+  });
+
+  it('keeps the rest one press away: tidy, what used to be true, what it won’t learn again', async () => {
+    const calls = mockFetch(
+      routes({
+        'POST /api/memory/tidy': () => tidy({ running: true }),
+        'POST /api/learning/never/remove': () => ({ removed: true }),
+        'POST /api/learning/past/forget': () => ({ forgotten: true }),
+      }),
+    );
+    renderApp(<MemoryView />, { route: '/memory' });
+    const more = await screen.findByRole('button', { name: 'More' });
+    await userEvent.click(more);
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Tidy up now' }));
+    expect(await screen.findByText('Tidying…')).toBeInTheDocument();
+    expect(calls.some((c) => c.method === 'POST' && c.path === '/api/memory/tidy')).toBe(true);
+
+    await userEvent.click(more);
+    await userEvent.click(await screen.findByRole('menuitem', { name: /What used to be true/ }));
+    const earlier = await screen.findByRole('dialog', { name: 'What used to be true' });
     expect(earlier).toHaveTextContent(/Until \w+ \d{4}/);
-    // Yours to forget too.
-    await userEvent.click(
-      within(earlier).getByRole('button', { name: 'Forget “Lives in Berlin”' }),
-    );
+    await userEvent.click(within(earlier).getByRole('button', { name: 'Forget: Lives in Berlin' }));
     await waitFor(() =>
       expect(calls.find((c) => c.path === '/api/learning/past/forget')?.body).toEqual({
         id: 'm_9',
       }),
     );
-    // What it won't learn again, with Remove.
+    await userEvent.keyboard('{Escape}');
+
+    await userEvent.click(more);
+    await userEvent.click(await screen.findByRole('menuitem', { name: /Won’t learn again/ }));
+    const never = await screen.findByRole('dialog', { name: 'Won’t learn again' });
     await userEvent.click(
-      screen.getByRole('button', { name: 'Let Conch learn “Prefers dark mode” again' }),
+      within(never).getByRole('button', { name: 'Let Conch learn “Prefers dark mode” again' }),
     );
     await waitFor(() =>
       expect(calls.find((c) => c.path === '/api/learning/never/remove')?.body).toEqual({
@@ -282,22 +296,7 @@ describe('What Conch knows about you', () => {
     );
   });
 
-  it('says when it learned from a long chat before summarising it (ADR 0055)', async () => {
-    mockFetch(
-      routes({
-        'GET /api/memory/tidy': () =>
-          tidy({ runs: tidy().runs.map((r) => ({ ...r, trigger: 'now', chat: 'c_long' })) }),
-      }),
-    );
-    renderApp(<MemoryView />);
-    expect(
-      await screen.findByRole('region', {
-        name: 'Conch learned 1 memory from a long chat before summarising it',
-      }),
-    ).toHaveTextContent('Now: Lives in Lisbon');
-  });
-
-  it('gets the model for meaning on one press, shows progress, then says it understands', async () => {
+  it('offers search by meaning in one line, gets it on one press, then says nothing more', async () => {
     let status: MemoryIndexStatus = words;
     const calls = mockFetch(
       routes({
@@ -309,16 +308,14 @@ describe('What Conch knows about you', () => {
       }),
     );
     renderApp(<MemoryView />, { route: '/memory' });
-    const offer = await screen.findByRole('region', {
-      name: 'Let search understand what you mean',
-    });
-    await userEvent.click(within(offer).getByRole('button', { name: 'Get it' }));
+    expect(await screen.findByText(/Search by meaning, too · [\d.]+ MB/)).toBeInTheDocument();
+    // Never downloaded without asking.
+    expect(calls.some((c) => c.path === '/api/memory/index/model')).toBe(false);
+    await userEvent.click(screen.getByRole('button', { name: 'Get it' }));
     expect(await screen.findByRole('progressbar', { name: /Downloaded/ })).toBeInTheDocument();
-    // The browser's languages choose the model: English here.
     expect(calls.find((c) => c.path === '/api/memory/index/model')?.body).toEqual({
       languages: ['en-US', 'en'],
     });
-    expect(calls.some((c) => c.path === '/api/memory/index?lang=en-US%2Cen')).toBe(true);
     status = {
       mode: 'meaning',
       model: 'all-MiniLM-L6-v2',
@@ -330,14 +327,11 @@ describe('What Conch knows about you', () => {
       await screen.findByRole('progressbar', { name: /Memories ready/ }, { timeout: 4000 }),
     ).toBeInTheDocument();
     status = { ...status, indexed: 2 };
-    expect(
-      await screen.findByText(/Search understands meaning, with all-MiniLM-L6-v2/, undefined, {
-        timeout: 4000,
-      }),
-    ).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('progressbar')).toBeNull(), { timeout: 4000 });
+    expect(screen.queryByText(/Search by meaning/)).toBeNull();
   });
 
-  it('says why a download didn’t work, with Try again; words still work meanwhile', async () => {
+  it('says why a download didn’t work, with Try again', async () => {
     mockFetch(
       routes({
         'GET /api/memory/index': () => ({
@@ -347,31 +341,8 @@ describe('What Conch knows about you', () => {
       }),
     );
     renderApp(<MemoryView />, { route: '/memory' });
-    const card = await screen.findByRole('region', { name: 'Couldn’t get the model for meaning' });
-    expect(card).toHaveTextContent('the internet seems to be unreachable');
-    expect(within(card).getByRole('button', { name: 'Try again' })).toBeInTheDocument();
-  });
-
-  it('searches with the gateway’s ranking, and tidies on request', async () => {
-    const calls = mockFetch(
-      routes({
-        'GET /api/memories/search': () => ({ results: [espresso] }),
-        'POST /api/memory/tidy': () => tidy({ running: true }),
-      }),
-    );
-    renderApp(<MemoryView />, { route: '/memory' });
-    await userEvent.type(await screen.findByRole('textbox', { name: 'Search memories' }), 'coffe');
-    await waitFor(() =>
-      expect(
-        within(screen.getByRole('list', { name: 'Memories' })).getAllByRole('listitem'),
-      ).toHaveLength(1),
-    );
-    // Under load a part of the word can be searched (and listed) first; the whole word follows.
-    await waitFor(() =>
-      expect(calls.some((c) => c.path === '/api/memories/search?q=coffe')).toBe(true),
-    );
-    await userEvent.click(screen.getByRole('button', { name: 'Tidy up now' }));
-    expect(await screen.findByRole('button', { name: /Tidying/ })).toBeInTheDocument();
+    expect(await screen.findByText(/the internet seems to be unreachable/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 });
 

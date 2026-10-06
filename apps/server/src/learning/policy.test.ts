@@ -66,9 +66,11 @@ describe('the gate (ADR 0088 § 4), row by row', () => {
     expect(
       gate(supersede('m_mine', 'Works at Globex', 'I work at Globex now'), ctx()).verdict,
     ).toBe('apply');
-    expect(gate(supersede('m_wait', 'Has a cat', 'I got a cat last week'), ctx()).verdict).toBe(
-      'wait',
-    );
+    // Replacing one the check is holding is the person's call: left alone, nobody asked.
+    expect(gate(supersede('m_wait', 'Has a cat', 'I got a cat last week'), ctx())).toEqual({
+      verdict: 'drop',
+      why: 'it would replace something the check is holding',
+    });
   });
 
   it('routine quotas do not create approval chores', () => {
@@ -134,12 +136,21 @@ describe('the gate (ADR 0088 § 4), row by row', () => {
     });
   });
 
-  it('only close to something you took back (maybe the correction after it): waits, saying so', () => {
+  it('only close to something you took back, in your own new words (the correction): applied', () => {
     const refused = { exact: false, text: 'Prefers Python' };
     expect(gate(add('Prefers TypeScript over Python'), ctx({ refused }))).toEqual({
-      verdict: 'wait',
-      waits: 'You took back “Prefers Python” before, so this waits for your OK.',
+      verdict: 'apply',
     });
+  });
+
+  it('routine learning never asks: every verdict is apply, seen or drop (ADR 0097)', () => {
+    const cases = [
+      gate(add('Prefers TypeScript over Python'), ctx()),
+      gate(add('Prefers TypeScript over Python'), ctx({ watched: false })),
+      gate(add('Prefers TypeScript over Python'), ctx({ refused: { exact: false, text: 'x' } })),
+      gate(supersede('m_wait', 'Has a cat', 'I got a cat last week'), ctx()),
+    ];
+    for (const v of cases) expect(['apply', 'seen', 'drop']).toContain(v.verdict);
   });
 
   it('already known: seen again, nothing new', () => {

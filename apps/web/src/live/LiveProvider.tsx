@@ -40,8 +40,12 @@ interface LiveApi {
     conversationId?: string,
     options?: TurnOptions,
     attachments?: Attachment[],
-    /** `steer`: stop the running reply first, then send this, as one step. */
-    how?: { steer?: boolean },
+    /**
+     * `steer`: stop the running reply first, then send this, as one step.
+     * `folder`: a new chat starts in this folder of the chat list.
+     * `goal`: the chat's goal (`/goal` before its first message).
+     */
+    how?: { steer?: boolean; folder?: string; goal?: string },
   ): string;
   /** Change a conversation's model/effort/mode. */
   configure(conversationId: string, options: TurnOptions): void;
@@ -386,6 +390,8 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           ...(attachments?.length && { attachments: attachments.map((a) => a.id) }),
           ...(options && { options }),
           ...(how?.steer && { steer: true }),
+          ...(!conversationId && how?.folder && { folder: how.folder }),
+          ...(how?.goal && { goal: how.goal }),
         });
         if (!conversationId)
           startedNew.current = [...startedNew.current.slice(-9), clientMessageId];

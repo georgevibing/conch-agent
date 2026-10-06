@@ -68,10 +68,16 @@
     justify-content: flex-start;
   }
 
-  /* A phone shows one half at a time. */
-  .nav[hidden],
-  .panel[hidden] {
-    display: none;
+  /* On a phone the places float in from the side, as the chats do (Shell). */
+  .sheet {
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .sheet .nav {
+    flex: 1;
+    background: transparent;
+    border-inline-end: 0;
   }
 
   /* Scrolls from edge to edge, like every page (Nacre Page). */
@@ -88,7 +94,40 @@
     inline-size: 100%;
     max-inline-size: var(--nc-page-width);
     margin-inline: auto;
-    padding: calc(3.25rem + var(--nc-space-1)) var(--nc-space-6) var(--nc-space-16);
+    padding: var(--nc-space-1) var(--nc-space-6) var(--nc-space-16);
+  }
+
+  /*
+   * Above the page, level with the places' way back: where you are, when it's
+   * a page inside a place (Memory › What Conch knows). Empty above a place.
+   */
+  .crumbs {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    inline-size: 100%;
+    max-inline-size: var(--nc-page-width);
+    block-size: 3.25rem;
+    margin-inline: auto;
+    padding-inline: var(--nc-space-6);
+  }
+
+  .trail {
+    flex: 1;
+  }
+
+  /* A phone's header, as the app's own: the menu, then where you are. It stays. */
+  .header {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    flex-shrink: 0;
+    block-size: 3.25rem;
+    padding-inline: var(--nc-space-3) var(--nc-space-4);
+    background: var(--nc-canvas);
   }
 
   .section {
@@ -218,14 +257,10 @@
     outline-offset: 3px;
   }
 
-  /* A phone: the list, then the place you chose. */
+  /* A phone: the page you chose, its places a menu away. */
   @media (max-width: 720px) {
     .tabs {
       grid-template-columns: minmax(0, 1fr);
-    }
-
-    .nav {
-      border-inline-end: 0;
     }
 
     /* Rows a thumb can hit. */

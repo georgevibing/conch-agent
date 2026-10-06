@@ -19,9 +19,8 @@ test.beforeEach(async ({ request }) => {
 test('on a phone, the offer fits and its button is in reach', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/memory');
-  const offer = page.getByRole('region', { name: 'Let search understand what you mean' });
-  await expect(offer).toBeVisible();
-  const button = offer.getByRole('button', { name: 'Get it' });
+  await expect(page.getByText(/Search by meaning, too/)).toBeVisible();
+  const button = page.getByRole('button', { name: 'Get it' });
   await button.scrollIntoViewIfNeeded();
   const box = await button.boundingBox();
   expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(390);
@@ -43,37 +42,37 @@ test('before any download, a few everyday ideas match; the offer asks first, the
   await page.keyboard.press(`${mod}+k`);
   await page.getByRole('combobox').fill('meaning');
   await page.getByRole('option', { name: /Search memories by meaning/ }).click();
-  const offer = page.getByRole('region', { name: 'Let search understand what you mean' });
-  await expect(offer).toContainText('downloaded once');
-  await expect(offer).toContainText('nothing you’ve told Conch leaves it');
+  const get = page.getByRole('button', { name: 'Get it' });
+  await expect(page.getByText(/Search by meaning, too · .*stays on this computer/)).toBeVisible();
   // ⌘K brought you to the one button, without pressing it for you.
-  await expect(offer.getByRole('button', { name: 'Get it' })).toBeFocused();
+  await expect(get).toBeFocused();
   expect((await (await request.get('/api/memory/index')).json()).mode).toBe('words');
 
   // Words, spellings and a few concepts: "car" finds the vehicle already.
-  const search = page.getByRole('textbox', { name: 'Search memories' });
+  const search = page.getByRole('textbox', { name: 'Search, or remember something new' });
   const memories = page.getByRole('list', { name: 'Memories' });
+  const found = () => memories.getByRole('listitem').filter({ hasNotText: 'Remember' });
   await search.fill('my car');
-  await expect(memories.getByRole('listitem')).toHaveCount(1);
+  await expect(found()).toHaveCount(1);
   await expect(memories).toContainText('Drives a red vehicle to work');
   // What only a model knows isn't found yet.
   await search.fill('when did we tie the knot');
-  await expect(page.getByText('Nothing matches')).toBeVisible();
+  await expect(found()).toHaveCount(0);
 
-  await offer.getByRole('button', { name: 'Get it' }).click();
+  await get.click();
   await expect(page.getByRole('progressbar', { name: /Downloaded/ })).toBeVisible();
-  await expect(
-    page.getByText(/Search understands meaning, with pretend-MiniLM on this computer/),
-  ).toBeVisible({ timeout: 20_000 });
+  // Once it's there, the offer has nothing more to say.
+  await expect(page.getByText(/Search by meaning/)).toHaveCount(0, { timeout: 20_000 });
+  await expect(page.getByRole('progressbar')).toHaveCount(0, { timeout: 20_000 });
 
   // Now the same words find what you meant.
   await search.fill('');
   await search.fill('when did we tie the knot');
-  await expect(memories.getByRole('listitem').first()).toContainText('Got married');
-  const found = await (
+  await expect(found().first()).toContainText('Got married');
+  const results = await (
     await request.get(`/api/memories/search?q=${encodeURIComponent('when did we tie the knot')}`)
   ).json();
-  expect(found.results[0].content).toMatch(/married/);
+  expect(results.results[0].content).toMatch(/married/);
 
   // Repair everything sees it, and it's fine.
   await request.post('/api/doctor/check');

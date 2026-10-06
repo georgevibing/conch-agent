@@ -28,7 +28,15 @@ import type {
   ChatChange,
 } from '@conch/protocol';
 
-import { honouredMode, skillHolds, type PermissionMode, type SkillHold } from '@conch/protocol';
+import {
+  chatGoal,
+  contextStart,
+  honouredMode,
+  skillHolds,
+  undoableClear,
+  type PermissionMode,
+  type SkillHold,
+} from '@conch/protocol';
 
 import type {
   BridgedTool,
@@ -66,6 +74,8 @@ import { TurnReplies } from '../replies/turn';
 import { turnBudget } from '../engines/budget';
 import { guardTurn } from './turn-guard';
 import { TurnPlan } from '../plans/turn';
+import { PLAN_APPROVAL, PLAN_MODE_PROMPT, exitPlanModeTool, needsPlanTool } from '../plans/mode';
+import { goalPrompt } from './goal';
 
 type SkillNeed = ReturnType<typeof needs>;
 import { generateTitle } from './title';
@@ -1019,6 +1029,10 @@ export class ConversationManager {
     untrusted?: TaintSource;
     /** Steer: stop the running reply first, then send this, in order. */
     steer?: boolean;
+    /** The chat's goal (`/goal` before the first message), from this message on. */
+    goal?: string;
+    /** A new conversation starts filed in this folder (ADR 0089); the caller checked it exists. */
+    folder?: string;
   }) {
     this.#admit();
     const began = Date.now();
@@ -1110,6 +1124,7 @@ export class ConversationManager {
         options: clean(input.options ?? {}),
         engine: engine.id,
         ...(input.origin && { origin: input.origin }),
+        ...(input.folder && { folderId: input.folder }),
         ...(autoTitle && { titling: true }),
       };
       live = {
@@ -1138,6 +1153,7 @@ export class ConversationManager {
     for (const offerId of openOffers(live.events))
       if (!this.#carrying.has(offerId))
         this.#append(live, { type: 'offer.resolved', offerId, outcome: 'expired' });
+    if (input.goal) this.#setGoal(live, input.goal);
     this.#append(live, {
       type: 'user.message',
       messageId: input.clientMessageId,
@@ -1462,6 +1478,9 @@ export class ConversationManager {
       if (pending.waive) live.waived.add(pending.waive);
     }
     this.#append(live, { type: 'permission.resolved', permissionId, decision });
+    // Start on a plan (`/plan`): plan mode is over, from this step on, for every provider.
+    if (pending.toolName === PLAN_APPROVAL && (decision === 'allow' || decision === 'allow-always'))
+      await this.#leavePlan(live).catch(() => undefined);
     if (live.permissions.size === 0 && !this.deps.questions?.waiting(live.record.id))
       this.#setStatus(live, 'running');
     if (
@@ -1479,6 +1498,72 @@ export class ConversationManager {
         pending.resolve(decision);
       }
     } else pending.resolve(decision);
+  }
+
+  /**
+   * Out of plan mode, back to the mode the chat had before it (or your
+   * default): the plan was approved. A default that is itself plan mode
+   * becomes Ask first, or the work could never start.
+   */
+  async #leavePlan(live: Live) {
+    const { preferences } = await this.deps.settings.get();
+    if ((live.record.options.permissionMode ?? preferences.permissionMode) !== 'plan') return;
+    const before = modeBeforePlan(live.events);
+    const next: PermissionMode | undefined =
+      (before ?? preferences.permissionMode) === 'plan' ? 'default' : before;
+    this.#applyOptions(live, { permissionMode: next });
+    live.setTurnMode?.(next ?? preferences.permissionMode);
+    await this.deps.store.upsert(live.record);
+    this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
+  }
+
+  /**
+   * `/clear`: the model forgets the conversation from here on, with every
+   * provider (each starts a new session when it next answers, and is handed
+   * nothing from before). The person keeps every message, the goal stays,
+   * and so do what the chat is held to and what it has read (ADR 0028,
+   * ADR 0047): clearing is about memory, never about safety.
+   */
+  async clear(id: string): Promise<{ changed: boolean; message: string }> {
+    const live = await this.#get(id);
+    if (live.abort)
+      throw new ConversationError('busy', 'Wait for this answer to finish, then clear.');
+    const start = contextStart(live.events);
+    const said = live.events.some((e) => e.type === 'user.message' && e.seq > start);
+    if (!said) return { changed: false, message: 'There’s nothing to clear yet.' };
+    this.#append(live, { type: 'context.cleared' });
+    await this.#persist(live);
+    return { changed: true, message: 'The conversation so far is out of the model’s memory.' };
+  }
+
+  /** Undo on `/clear`, while nothing new was sent: each provider picks up where it was. */
+  async restoreContext(id: string): Promise<{ changed: boolean; message: string }> {
+    const live = await this.#get(id);
+    if (live.abort)
+      throw new ConversationError('busy', 'Wait for this answer to finish, then try again.');
+    const clearedSeq = undoableClear(live.events);
+    if (clearedSeq === undefined)
+      return {
+        changed: false,
+        message: 'Something was sent since, so the chat can’t go back to before the clear.',
+      };
+    this.#append(live, { type: 'context.restored', clearedSeq });
+    await this.#persist(live);
+    return { changed: true, message: 'The model remembers the conversation again.' };
+  }
+
+  /** `/goal`: what the chat is for, in every later turn's context; `null` takes it away. */
+  async setGoal(id: string, goal: string | null): Promise<void> {
+    const live = await this.#get(id);
+    this.#setGoal(live, goal);
+    // A running turn saves the log when it ends; writing it now as well could race.
+    if (!live.abort) await this.#persist(live);
+  }
+
+  #setGoal(live: Live, goal: string | null) {
+    const next = goal?.trim() || null;
+    if ((chatGoal(live.events) ?? null) === next) return;
+    this.#append(live, { type: 'goal', goal: next });
   }
 
   /**
@@ -2112,6 +2197,28 @@ export class ConversationManager {
       return askUser({ ...request, remember: true, waive }, abort.signal);
     };
 
+    // Plan mode (`/plan`) for an engine that can't ask to start by itself: Conch's
+    // `exit_plan_mode` asks instead, as the same card. Only where someone can press Start.
+    const planning = watched && resolved.permissionMode === 'plan' && needsPlanTool(engine);
+    const planTools = planning
+      ? [
+          exitPlanModeTool(async (plan) => {
+            // Plan mode was turned off while it planned: nothing to ask.
+            if (resolved.permissionMode !== 'plan') return 'allow';
+            const decision = await askUser(
+              {
+                toolName: PLAN_APPROVAL,
+                input: { plan },
+                summary: 'Start on the plan',
+                remember: false,
+              },
+              abort.signal,
+            );
+            return decision === 'deny' ? 'deny' : 'allow';
+          }),
+        ]
+      : [];
+
     const tools = memoryTools({
       store: this.deps.memory,
       conversationId,
@@ -2186,6 +2293,7 @@ export class ConversationManager {
       ...(extras?.tools ?? []),
       ...replies.tools,
       ...plan.tools,
+      ...planTools,
     );
     // A guest gets no tools at all; the guard refuses any the provider brings itself.
     if (guest) tools.length = 0;
@@ -2213,13 +2321,27 @@ export class ConversationManager {
       };
     }
     if (extras?.wrapTool) for (const [i, tool] of tools.entries()) tools[i] = extras.wrapTool(tool);
+    // Where the model's memory of the chat starts (`/clear`): nothing before it is handed over.
+    const startSeq = contextStart(live.events);
     // This provider's own session, and whatever it missed while others answered.
-    const session = live.record.sessions?.[engine.id];
+    let session = live.record.sessions?.[engine.id];
+    if (session && session.seq < startSeq) {
+      // Cleared since it last answered: it forgets the chat and starts afresh.
+      const sessions = Object.fromEntries(
+        Object.entries(live.record.sessions ?? {}).filter(([id]) => id !== engine.id),
+      ) as ConversationRecord['sessions'];
+      live.record = { ...live.record, sessions };
+      session = undefined;
+    }
     const asked = askedSeq(live.events) ?? live.seq;
-    const missed = handoff(live.events, { afterSeq: session?.seq ?? -1, beforeSeq: asked });
+    const missed = handoff(live.events, {
+      afterSeq: session?.seq ?? -1,
+      beforeSeq: asked,
+      startSeq,
+    });
     // Everything, for when that session can't be continued and the engine starts a new one.
     const everything = session?.resumeId
-      ? handoff(live.events, { afterSeq: -1, beforeSeq: asked, restart: true })
+      ? handoff(live.events, { afterSeq: -1, beforeSeq: asked, restart: true, startSeq })
       : undefined;
     let answeredWith: string | undefined;
     /** How full the context is, as the engine last said; and when the chat last heard the count. */
@@ -2321,7 +2443,7 @@ export class ConversationManager {
       // That one card also carries taint and skill restrictions; a generic
       // preflight would ask twice.
       if (
-        /^(?:mcp__conch__)?(?:google_mail_create_draft|slack_send_message|process_start|process_write|image_generate|task_control)$/.test(
+        /^(?:mcp__conch__)?(?:google_mail_create_draft|google_mail_send|google_calendar_(?:create|update|delete)_event|google_drive_create_file|slack_send_message|process_start|process_write|image_generate|task_control)$/.test(
           request.toolName,
         )
       )
@@ -2555,6 +2677,9 @@ export class ConversationManager {
                   system.identity,
                   await this.deps.context?.(engine, conversationId),
                   system.memory,
+                  // What the chat is for (`/goal`), whichever provider answers.
+                  goalPrompt(chatGoal(live.events)),
+                  planning && PLAN_MODE_PROMPT,
                   notConnectedPrompt(
                     apps.unseen,
                     apps.offers.map((o) => o.name),
@@ -2971,6 +3096,11 @@ export class ConversationManager {
       };
     if (!session?.resumeId)
       return { compacted: false, message: 'This chat is short: there’s nothing to summarise yet.' };
+    if (session.seq < contextStart(live.events))
+      return {
+        compacted: false,
+        message: 'The chat was just cleared: there’s nothing to summarise.',
+      };
     const abort = this.#claim(live);
     try {
       const model = await this.#modelFor(live.record.options, engine.id);
@@ -3560,6 +3690,21 @@ const BETWEEN_WAITING = new Set<ConversationEvent['type']>([
   'options',
   'title',
 ]);
+
+/**
+ * The mode a chat had before it went into plan mode, read from its log:
+ * `undefined` when it had none of its own (it followed your default).
+ */
+export function modeBeforePlan(events: readonly ConversationEvent[]): PermissionMode | undefined {
+  const options = events.filter((e) => e.type === 'options');
+  const into = options.findLastIndex(
+    (e, i) =>
+      e.options.permissionMode === 'plan' && options[i - 1]?.options.permissionMode !== 'plan',
+  );
+  if (into === -1) return undefined;
+  const before = options[into - 1]?.options.permissionMode;
+  return before === 'plan' ? undefined : before;
+}
 
 /**
  * Where the message(s) this turn answers begin: usually the last one you sent;

@@ -12,6 +12,7 @@ import {
   SelectionBar,
   Text,
   TidyCard,
+  useMediaQuery,
 } from '@conch/nacre';
 import {
   Archive,
@@ -23,6 +24,7 @@ import {
   MoreHorizontal,
   Pencil,
   Pin,
+  SquarePen,
   Trash2,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
@@ -36,6 +38,7 @@ import { ARCHIVE_PATH, archivedChats } from '../archive/useArchive';
 import { arrange, staleChats, TIDY_AFTER_DAYS, type ChatFilter } from './arrange';
 import { ChatRowItem, type Selection } from './ChatRowItem';
 import styles from './ChatList.module.css';
+import { useNewChatFolder, useNewChatIn, type NewChatState } from './newChat';
 import { PinnedAppsDock } from './PinnedAppsDock';
 import { useOrganise } from './useOrganise';
 
@@ -107,6 +110,9 @@ export function ChatList({ onNavigate }: { onNavigate?: () => void }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const anchor = useRef<string | undefined>(undefined);
   const scroller = useRef<HTMLDivElement>(null);
+  const newChatIn = useNewChatIn();
+  const startingIn = useNewChatFolder();
+  const finger = useMediaQuery('(pointer: coarse)');
 
   const hasChannelChats = (conversations ?? []).some(
     (c) => c.origin?.kind === 'channel' && !c.archivedAt,
@@ -293,22 +299,46 @@ export function ChatList({ onNavigate }: { onNavigate?: () => void }) {
   );
 
   const folderActions = (folder: ChatFolder) => (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>
-        <IconButton size="sm" label={`Options for the folder ${folder.name}`} tooltip={false}>
-          <MoreHorizontal />
-        </IconButton>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Content align="start">
-        <DropdownMenu.Item icon={<Pencil />} onSelect={() => setEditing(folder)}>
-          Edit
-        </DropdownMenu.Item>
-        <DropdownMenu.Separator />
-        <DropdownMenu.Item icon={<Trash2 />} tone="danger" onSelect={() => setRemoving(folder)}>
-          Remove folder
-        </DropdownMenu.Item>
-      </DropdownMenu.Content>
-    </DropdownMenu.Root>
+    <>
+      <IconButton
+        size="sm"
+        label={`New chat in ${folder.name}`}
+        tooltip={`New chat in ${folder.name}`}
+        onClick={() => {
+          // Unfolded, so the new chat shows where it's going.
+          setClosed(folder.id, false);
+          newChatIn(folder);
+          onNavigate?.();
+        }}
+      >
+        <SquarePen />
+      </IconButton>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <IconButton size="sm" label={`Options for the folder ${folder.name}`} tooltip={false}>
+            <MoreHorizontal />
+          </IconButton>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content align="start">
+          <DropdownMenu.Item icon={<Pencil />} onSelect={() => setEditing(folder)}>
+            Edit
+          </DropdownMenu.Item>
+          <DropdownMenu.Separator />
+          <DropdownMenu.Item icon={<Trash2 />} tone="danger" onSelect={() => setRemoving(folder)}>
+            Remove folder
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
+    </>
+  );
+
+  // The chat being started in a folder: its place, at the top of the folder, until it exists.
+  const startingRow = (folder: ChatFolder) => (
+    <ChatRow key="new" active leading={<SquarePen aria-hidden />}>
+      <NavLink to="/" end state={{ folder: folder.id } satisfies NewChatState} onClick={onNavigate}>
+        New chat
+      </NavLink>
+    </ChatRow>
   );
 
   const nothingShown =
@@ -357,8 +387,9 @@ export function ChatList({ onNavigate }: { onNavigate?: () => void }) {
         {list.folders.map(({ folder, chats }) => (
           <div key={folder.id} data-folder={folder.id}>
             <ChatListSection
+              kind="folder"
               label={folder.name}
-              icon={<FolderMark glyph={folder.glyph} color={folder.color} size="xs" />}
+              icon={<FolderMark glyph={folder.glyph} color={folder.color} />}
               count={chats.length}
               collapsible
               open={isOpen(folder.id)}
@@ -369,16 +400,14 @@ export function ChatList({ onNavigate }: { onNavigate?: () => void }) {
               actions={folderActions(folder)}
               onDropChats={dropInFolder(folder)}
               dropHint={`Drop to move to ${folder.name}`}
+              empty={
+                finger
+                  ? 'Hold a chat to drag it here, or choose Move to.'
+                  : 'Drag chats here, or choose Move to.'
+              }
             >
-              {chats.length ? (
-                chats.map((c) => row(c))
-              ) : (
-                <li className={styles.folderEmpty}>
-                  <Text size="xs" tone="subtle">
-                    Drag chats here, or choose Move to.
-                  </Text>
-                </li>
-              )}
+              {startingIn?.id === folder.id && startingRow(folder)}
+              {chats.map((c) => row(c))}
             </ChatListSection>
           </div>
         ))}

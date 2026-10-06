@@ -1,70 +1,5 @@
 @layer nacre.components {
-  /* A list of memories */
-  .list {
-    display: flex;
-    flex-direction: column;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    border: 1px solid var(--nc-border-subtle);
-    border-radius: var(--nc-radius-lg);
-    corner-shape: var(--nc-corner-shape);
-    background: var(--nc-surface);
-  }
-
-  .item {
-    display: flex;
-    flex-direction: column;
-    gap: var(--nc-space-1-5);
-    padding: var(--nc-space-3) var(--nc-space-4);
-  }
-
-  .item + .item {
-    border-block-start: 1px solid var(--nc-border-subtle);
-  }
-
-  .item[data-waiting] {
-    background: light-dark(
-      oklch(0.98 0.02 var(--nc-warning-h)),
-      oklch(0.25 0.03 var(--nc-warning-h))
-    );
-  }
-
-  .item:first-child {
-    border-start-start-radius: inherit;
-    border-start-end-radius: inherit;
-  }
-
-  .item:last-child {
-    border-end-start-radius: inherit;
-    border-end-end-radius: inherit;
-  }
-
-  .content {
-    color: var(--nc-text);
-    font-size: var(--nc-text-sm);
-    line-height: var(--nc-leading-normal);
-    text-wrap: pretty;
-    overflow-wrap: anywhere;
-  }
-
-  .meta {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--nc-space-1-5) var(--nc-space-2);
-    min-block-size: 1.75rem;
-    color: var(--nc-text-subtle);
-    font-size: var(--nc-text-xs);
-  }
-
-  .actions {
-    display: flex;
-    align-items: center;
-    gap: var(--nc-space-1);
-    margin-inline-start: auto;
-  }
-
+  /* A skill offer's note about where it was learned: warm, never alarming. */
   .waiting {
     display: flex;
     align-items: flex-start;
@@ -75,31 +10,14 @@
     line-height: var(--nc-leading-snug);
   }
 
-  .waiting > svg,
-  .why > svg {
+  .waiting > svg {
     flex-shrink: 0;
     inline-size: 0.85rem;
     block-size: 0.85rem;
     margin-block-start: 0.1rem;
   }
 
-  /* The tidy-up's report */
-  .report {
-    display: flex;
-    flex-direction: column;
-    border: 1px solid var(--nc-border-subtle);
-    border-radius: var(--nc-radius-lg);
-    corner-shape: var(--nc-corner-shape);
-    background: var(--nc-surface);
-  }
-
-  .reportHead {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--nc-space-2-5);
-    padding: var(--nc-space-3) var(--nc-space-4);
-  }
-
+  /* Shared by the skill offer: its icon and its quiet second line. */
   .reportIcon {
     flex-shrink: 0;
     inline-size: 1.1rem;
@@ -108,115 +26,11 @@
     color: var(--nc-text-accent);
   }
 
-  .reportTitle {
-    margin: 0;
-    color: var(--nc-text);
-    font-size: var(--nc-text-sm);
-    font-weight: var(--nc-weight-semibold);
-  }
-
-  .reportWhen,
   .reportNote {
     margin: 0;
     color: var(--nc-text-subtle);
     font-size: var(--nc-text-xs);
     text-wrap: pretty;
-  }
-
-  .changes {
-    display: flex;
-    flex-direction: column;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .change {
-    display: flex;
-    flex-direction: column;
-    gap: var(--nc-space-1-5);
-    padding: var(--nc-space-3) var(--nc-space-4);
-    border-block-start: 1px solid var(--nc-border-subtle);
-  }
-
-  .change[data-state='undone'],
-  .change[data-state='dismissed'] {
-    opacity: 0.6;
-  }
-
-  .changeHead {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--nc-space-2);
-  }
-
-  .diff {
-    display: flex;
-    flex-direction: column;
-    gap: var(--nc-space-0-5);
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    font-size: var(--nc-text-sm);
-    line-height: var(--nc-leading-snug);
-    overflow-wrap: anywhere;
-  }
-
-  .diff > li {
-    display: flex;
-    gap: var(--nc-space-2);
-  }
-
-  .sign {
-    flex-shrink: 0;
-    inline-size: 0.75rem;
-    font-family: var(--nc-font-mono);
-    text-align: center;
-  }
-
-  .removed {
-    color: var(--nc-text-subtle);
-  }
-
-  .removed .text {
-    text-decoration: line-through;
-    text-decoration-color: light-dark(
-      oklch(0.6 0.12 var(--nc-danger-h)),
-      oklch(0.7 0.12 var(--nc-danger-h))
-    );
-  }
-
-  .added {
-    color: var(--nc-text);
-  }
-
-  .added .sign {
-    color: light-dark(oklch(0.5 0.13 var(--nc-success-h)), oklch(0.8 0.11 var(--nc-success-h)));
-  }
-
-  .why {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--nc-space-1-5);
-    margin: 0;
-    color: var(--nc-text-muted);
-    font-size: var(--nc-text-xs);
-    line-height: var(--nc-leading-snug);
-    text-wrap: pretty;
-  }
-
-  .changeFoot {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--nc-space-2);
-    min-block-size: 1.75rem;
-  }
-
-  .state {
-    color: var(--nc-text-subtle);
-    font-size: var(--nc-text-xs);
   }
 
   /* Skills you keep asking for */
@@ -288,88 +102,6 @@
   /* Learned in a chat that read something from outside: said under what you asked. */
   .suggestionNote {
     padding-inline-start: var(--nc-space-6);
-  }
-
-  /* How search works, and getting the model that understands meaning */
-  .meaning {
-    display: flex;
-    flex-direction: column;
-    gap: var(--nc-space-3);
-    padding: var(--nc-space-4);
-    border: 1px solid var(--nc-border-subtle);
-    border-radius: var(--nc-radius-lg);
-    corner-shape: var(--nc-corner-shape);
-    background: var(--nc-surface);
-  }
-
-  .meaning[data-state='problem'] {
-    border-color: light-dark(
-      oklch(0.85 0.06 var(--nc-warning-h)),
-      oklch(0.4 0.06 var(--nc-warning-h))
-    );
-  }
-
-  .meaningHead {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--nc-space-2-5);
-  }
-
-  .meaningIcon {
-    flex-shrink: 0;
-    inline-size: 1.1rem;
-    block-size: 1.1rem;
-    margin-block-start: 0.1rem;
-    color: var(--nc-text-accent);
-  }
-
-  .meaning[data-state='problem'] .meaningIcon {
-    color: light-dark(oklch(0.5 0.12 var(--nc-warning-h)), oklch(0.82 0.1 var(--nc-warning-h)));
-  }
-
-  .meaningBody {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: var(--nc-space-2);
-    min-inline-size: 0;
-  }
-
-  .meaningTitle {
-    margin: 0;
-    color: var(--nc-text);
-    font-size: var(--nc-text-sm);
-    font-weight: var(--nc-weight-semibold);
-    text-wrap: pretty;
-  }
-
-  .meaningText {
-    margin: 0;
-    color: var(--nc-text-muted);
-    font-size: var(--nc-text-sm);
-    line-height: var(--nc-leading-normal);
-    text-wrap: pretty;
-  }
-
-  .meaningActions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--nc-space-2);
-    padding-inline-start: var(--nc-space-6);
-  }
-
-  .meaningLine {
-    display: flex;
-    flex-direction: column;
-    gap: var(--nc-space-1);
-  }
-
-  .meaningLine > p {
-    margin: 0;
-    color: var(--nc-text-muted);
-    font-size: var(--nc-text-sm);
-    line-height: var(--nc-leading-normal);
-    text-wrap: pretty;
   }
 
   /* A memory the check held (ADR 0087): calm but clear. What it wants to

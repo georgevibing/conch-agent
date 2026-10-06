@@ -28,7 +28,7 @@ afterEach(() => {
 });
 
 describe('Settings', () => {
-  it('is a page of its own: its places in a few groups, General first, Back to return', async () => {
+  it('is a page of its own: its places in a few groups, General first, ‹ Chats to return', async () => {
     narrowScreen(false);
     mockFetch({ 'GET /api/state': () => appState() });
     const { where } = renderApp(<Settings />, { route: '/c/c1' });
@@ -56,8 +56,11 @@ describe('Settings', () => {
     expect(within(page).getByRole('heading', { name: 'Appearance' })).toBeVisible();
     expect(where()).toBe('/settings/appearance');
 
-    // Back returns to the page it opened over.
-    await userEvent.click(within(page).getByRole('button', { name: 'Back' }));
+    // A place has no trail of its own: its name is its heading.
+    expect(within(page).queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull();
+
+    // ‹ Chats returns to the page it opened over.
+    await userEvent.click(within(page).getByRole('button', { name: 'Chats' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(where()).toBe('/c/c1');
   });
@@ -111,18 +114,20 @@ describe('Settings', () => {
     expect(where()).toBe('/settings/providers');
     expect(await within(page).findByRole('heading', { name: 'Your providers' })).toBeVisible();
 
-    // Opening one again is an address too; its own ← Providers goes back the same way.
+    // Opening one again is an address too; Providers in the trail above it goes back the same way.
     await userEvent.click(
       within(within(page).getByRole('article', { name: 'Codex' })).getByRole('button', {
         name: 'Codex',
       }),
     );
     expect(where()).toBe('/settings/providers/codex-cli');
-    await userEvent.click(await within(page).findByRole('button', { name: 'Providers' }));
+    const trail = await within(page).findByRole('navigation', { name: 'Breadcrumb' });
+    expect(within(trail).getByText('Codex')).toHaveAttribute('aria-current', 'page');
+    await userEvent.click(within(trail).getByRole('button', { name: 'Providers' }));
     expect(where()).toBe('/settings/providers');
   });
 
-  it('opens what Conch remembers inside Memory, with ‹ Memory back', async () => {
+  it('opens what Conch remembers inside Memory, with Memory › What Conch knows above it', async () => {
     narrowScreen(false);
     mockFetch({
       'GET /api/state': () => appState(),
@@ -147,37 +152,79 @@ describe('Settings', () => {
     ).toBeVisible();
     expect(within(page).getByRole('tab', { name: 'Memory' })).toBeInTheDocument();
     expect(await within(page).findByText('Projects live in ~/projects')).toBeVisible();
-    await userEvent.click(within(page).getByRole('button', { name: 'Memory' }));
+    // One way back, in the trail: never a stack of back buttons.
+    const trail = within(page).getByRole('navigation', { name: 'Breadcrumb' });
+    expect(within(trail).getByText('What Conch knows')).toHaveAttribute('aria-current', 'page');
+    expect(within(page).getAllByRole('button', { name: 'Memory' })).toHaveLength(1);
+    await userEvent.click(within(trail).getByRole('button', { name: 'Memory' }));
     expect(where()).toBe('/settings/memory');
+    expect(within(page).queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull();
   });
 
-  it('on a phone, is a list and then the place you chose, with ‹ Settings back to the list', async () => {
+  it('on a phone, opens with its places floating in from the side, like the chats', async () => {
     narrowScreen(true);
     mockFetch({ 'GET /api/state': () => appState() });
-    const { where } = renderApp(<Settings />);
+    const { where } = renderApp(<Settings />, { route: '/c/c1' });
     await loaded();
     act(() => useUi.getState().openSettings());
 
-    const page = await screen.findByRole('dialog', { name: 'Settings' });
-    expect(within(page).queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
-    // The place already chosen opens too.
-    await userEvent.click(within(page).getByRole('tab', { name: 'General' }));
-    expect(await within(page).findByRole('heading', { name: 'Working folder' })).toBeVisible();
+    // Settings itself: its places, out over the page.
+    const menu = (
+      await screen.findByRole('tablist', { name: 'Intelligence' })
+    ).closest<HTMLElement>('[role="dialog"]') as HTMLElement;
+    expect(menu).toHaveAccessibleName('Settings');
+    expect(within(menu).getByRole('button', { name: 'Chats' })).toBeInTheDocument();
+    await waitFor(() => expect(within(menu).getByRole('tab', { name: 'General' })).toHaveFocus());
 
-    expect(where()).toBe('/settings/general');
+    // Choosing a place puts the menu away, and the header says where you are.
+    await userEvent.click(within(menu).getByRole('tab', { name: 'Providers' }));
+    expect(where()).toBe('/settings/providers');
+    await waitFor(() => expect(screen.queryByRole('tablist', { name: 'Intelligence' })).toBeNull());
+    const page = screen.getByRole('dialog', { name: 'Settings' });
+    const trail = within(page).getByRole('navigation', { name: 'Breadcrumb' });
+    expect(within(trail).getByText('Providers')).toHaveAttribute('aria-current', 'page');
+    expect(within(page).getByRole('tabpanel', { name: 'Providers' })).toBeInTheDocument();
 
-    await userEvent.click(within(page).getByRole('button', { name: 'Settings' }));
+    // Settings itself is its places: putting them away is going to the place
+    // behind them, so the address still says where you are.
+    act(() => useUi.getState().openSettings());
+    await screen.findByRole('tablist', { name: 'Intelligence' });
     expect(where()).toBe('/settings');
-    expect(within(page).queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('tablist', { name: 'Intelligence' })).toBeNull());
+    expect(where()).toBe('/settings/general');
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+
+    // The menu is a press away, and in it the way back to the chats.
+    await userEvent.click(within(page).getByRole('button', { name: 'Open settings menu' }));
+    const again = (
+      await screen.findByRole('tablist', { name: 'Intelligence' })
+    ).closest<HTMLElement>('[role="dialog"]') as HTMLElement;
+    await userEvent.click(within(again).getByRole('button', { name: 'Chats' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(where()).toBe('/c/c1');
   });
 
-  it('on a phone, opens straight at a place it was asked for', async () => {
+  it('on a phone, opens straight at a place it was asked for, its trail the header', async () => {
     narrowScreen(true);
-    mockFetch({ 'GET /api/state': () => appState() });
-    renderApp(<Settings />, { route: '/settings/general' });
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/memories': () => [],
+    });
+    const { where } = renderApp(<Settings />, { route: '/settings/memory/everything' });
     await loaded();
 
     const page = await screen.findByRole('dialog', { name: 'Settings' });
-    expect(within(page).getByRole('button', { name: 'Settings' })).toBeInTheDocument();
+    // No menu over it, and one way back: the place, in the trail.
+    expect(screen.queryByRole('tablist', { name: 'Intelligence' })).toBeNull();
+    expect(within(page).getByRole('button', { name: 'Open settings menu' })).toBeInTheDocument();
+    const trail = within(page).getByRole('navigation', { name: 'Breadcrumb' });
+    expect(within(trail).getByText('What Conch knows')).toHaveAttribute('aria-current', 'page');
+    expect(within(page).getAllByRole('button', { name: 'Memory' })).toHaveLength(1);
+    await userEvent.click(within(trail).getByRole('button', { name: 'Memory' }));
+    expect(where()).toBe('/settings/memory');
+    expect(within(page).getByRole('navigation', { name: 'Breadcrumb' })).toHaveTextContent(
+      /^Memory$/,
+    );
   });
 });

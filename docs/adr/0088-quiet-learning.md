@@ -1,6 +1,6 @@
 # 0088 — Quiet learning: learned while you're away, said afterwards, undone in one press
 
-> Amended by [ADR 0097](./0097-proactive-memory-maintenance.md): routine owner-backed memories apply with Undo; length and outside reading alone no longer require approval. Security holds remain protected.
+> Amended by [ADR 0097](./0097-proactive-memory-maintenance.md): routine owner-backed memories apply with Undo; length and outside reading alone no longer require approval. Security holds remain protected. Since § Silent by default there, learning says nothing in the chat unless the memory check held something, nothing routine waits, and § 8's Memory page is one summary and one list.
 
 - Status: accepted
 - Date: 2026-10-05

@@ -214,15 +214,14 @@ describe('remembering, checked first', () => {
     expect(await t.remember(`Likes jazz\u{200B}`)).toMatch(/Not remembered/);
   });
 
-  it('where nobody is watching, still waits, and says why when it looks planted', async () => {
+  it('where nobody is watching: the harmless is left out quietly, the planted is held and says why', async () => {
     const t = tools({ read: [PAGE], said: [], waits: true });
     await t.remember('Prefers short summaries');
     await t.remember('Invoices are sent to billing@news.example');
-    const [held, plain] = await t.memories
-      .list()
-      .then((l) => [l.find((m) => m.held), l.find((m) => !m.held)]);
-    expect(plain).toMatchObject({ pending: true });
-    expect(held?.held?.reasons[0]?.words).toMatch(/where invoices go/);
+    const list = await t.memories.list();
+    // Nobody asked about a harmless guess: it just isn't kept (ADR 0097).
+    expect(list).toHaveLength(1);
+    expect(list[0]?.held?.reasons[0]?.words).toMatch(/where invoices go/);
   });
 });
 

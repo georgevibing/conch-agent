@@ -208,7 +208,11 @@ function transcript(events: readonly ConversationEvent[], afterSeq: number, befo
  * waiting, work handed off that's still running. What a model needs to carry
  * on rather than start again.
  */
-function current(events: readonly ConversationEvent[], beforeSeq: number): string[] {
+function current(
+  events: readonly ConversationEvent[],
+  beforeSeq: number,
+  startSeq: number,
+): string[] {
   let page: { url: string; title: string } | undefined;
   let plan: { title: string; status: string }[] | undefined;
   const asked = new Map<string, string>();
@@ -216,7 +220,8 @@ function current(events: readonly ConversationEvent[], beforeSeq: number): strin
   for (const event of events) {
     if (event.seq >= beforeSeq) break;
     if (event.type === 'browser.step' && event.step.url) page = event.step;
-    else if (event.type === 'plan') plan = event.steps;
+    // A plan from before `/clear` is part of what was forgotten.
+    else if (event.type === 'plan' && event.seq > startSeq) plan = event.steps;
     // A plan is for one reply: the one before the new message is the one that counts.
     else if (event.type === 'user.message') plan = undefined;
     else if (event.type === 'question')
@@ -270,14 +275,24 @@ function clip(text: string): string {
  *
  * `restart`: the provider took part, but its own session couldn't be
  * continued (it was lost, or what it may use changed), so this is everything.
+ *
+ * `startSeq`: where the model's memory of the chat starts (`/clear`,
+ * `contextStart`). Nothing at or before it is handed over, by any provider.
  */
 export function handoff(
   events: readonly ConversationEvent[],
-  options: { afterSeq: number; beforeSeq: number; maxChars?: number; restart?: boolean },
+  options: {
+    afterSeq: number;
+    beforeSeq: number;
+    maxChars?: number;
+    restart?: boolean;
+    startSeq?: number;
+  },
 ): string | undefined {
-  const lines = transcript(events, options.afterSeq, options.beforeSeq);
+  const startSeq = options.startSeq ?? -1;
+  const lines = transcript(events, Math.max(options.afterSeq, startSeq), options.beforeSeq);
   if (!lines.length) return undefined;
-  const state = current(events, options.beforeSeq);
+  const state = current(events, options.beforeSeq, startSeq);
   const budget =
     (options.maxChars ?? HANDOFF_MAX_CHARS) - state.reduce((n, line) => n + line.length + 1, 0);
   const kept: string[] = [];
@@ -307,7 +322,11 @@ export function handoff(
   // What's left out may already have been summarised for another model (ADR 0055).
   const summary = dropped
     ? events.findLast(
-        (e) => e.type === 'context.compacted' && e.seq < options.beforeSeq && e.summary.trim(),
+        (e) =>
+          e.type === 'context.compacted' &&
+          e.seq > startSeq &&
+          e.seq < options.beforeSeq &&
+          e.summary.trim(),
       )
     : undefined;
   return [

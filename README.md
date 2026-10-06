@@ -66,8 +66,9 @@
   from OpenRouter, Anthropic, OpenAI, Google, Mistral, DeepSeek and more.
 - **A chat list that keeps itself tidy.** Pin chats, sort them into folders, and
   see at a glance which are working, which need you and which have news. Pinned
-  apps sit on top as tiles. Select many at once, drag, swipe on a phone, and
-  archive month-old chats in one press.
+  apps sit on top as tiles. Select many at once, drag, start a chat inside a
+  folder, hold a chat on a phone to drag it into one, swipe, and archive
+  month-old chats in one press.
 - **Long chats on any model.** When a chat outgrows what a model reads at once,
   its start becomes a summary you can open, and what you said there is learned first.
 - **Long jobs that finish, and cost less.** Big tasks run as long as they need,
@@ -75,6 +76,10 @@
   have them check in at limits of their own (Settings → Usage). Conch asks every
   provider that caches to keep what it has already read, so long tasks cost less, and
   a small model on this computer gets a lean setup that fits it.
+- **Commands that work with every model.** Type `/` for a list that completes
+  as you type, with each command's choices and the one in use ticked, on a phone
+  too: `/clear` to start afresh (with Undo), `/goal` to keep the chat on track,
+  `/plan` to see the plan before anything changes, and the rest you'd expect.
 - **Questions you answer with a tap.** When the assistant needs your choice, it
   asks with options, days or a number to tap, and the reply carries on.
 - **Offline and at a limit.** A message waits until you're back, or the model on

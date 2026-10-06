@@ -26,6 +26,8 @@ for (const viewport of [
       name: 'Ada',
       email: 'ada@example.com',
       capabilities: ['calendar-read'],
+      access: { calendar: 'read' },
+      granted: { calendar: 'read' },
       state: 'ready',
     };
     const status = () => ({
@@ -66,8 +68,14 @@ for (const viewport of [
     });
     await page.goto('/apps');
     // Calendar's own tile opens its connect dialog, which only asks for the calendar.
-    const openCalendar = () =>
-      page.getByRole('button', { name: 'Google Calendar', exact: true }).click();
+    const openCalendar = async () => {
+      await page.getByRole('button', { name: 'Google Calendar', exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: 'Connect Google Calendar' });
+      // What it should help with, then how: Calendar only takes Google's own sign-in. A
+      // reload while Google is signing in picks up at the connect step by itself.
+      const next = dialog.getByRole('button', { name: 'Next' });
+      for (let i = 0; i < 2 && (await next.count()); i++) await next.first().click();
+    };
     await openCalendar();
     const google = page.getByRole('dialog', { name: 'Connect Google Calendar' });
     await google.getByLabel('Project ID (optional)').fill('personal-conch');
@@ -80,25 +88,30 @@ for (const viewport of [
     await google.getByRole('button', { name: 'I enabled these APIs' }).click();
     await expect(google.getByText(/seven days/).first()).toBeVisible();
     await google.getByRole('button', { name: 'My account is allowed' }).click();
-    const file = google.getByLabel('Google credential JSON');
+    // One place for the file: drop it, choose it, or paste what's in it.
+    await expect(google.getByRole('group', { name: 'Drop the file you downloaded' })).toBeVisible();
+    const file = google.locator('input[type="file"]');
     await file.setInputFiles({
       name: 'service-account.json',
       mimeType: 'application/json',
       buffer: Buffer.from('{"type":"service_account","private_key":"fake"}'),
     });
     await expect(google.getByText(/This is a service-account key/)).toBeVisible();
-    await expect(google.getByRole('button', { name: 'Save and connect Google' })).toBeDisabled();
+    await expect(
+      google.getByRole('button', { name: 'Save and continue with Google' }),
+    ).toBeDisabled();
     await file.setInputFiles({
       name: 'conch-client.json',
       mimeType: 'application/json',
       buffer: Buffer.from(credentials),
     });
     await expect(google.getByText(/Desktop app · personal-conch/)).toBeVisible();
-    await google.getByRole('button', { name: 'Save and connect Google' }).click();
+    await google.getByRole('button', { name: 'Save and continue with Google' }).click();
     await expect(google.getByRole('link', { name: 'Open Google sign-in' })).toBeVisible();
     // Reload recovery retains only the flow ID, not the credential file or return URL.
     await page.reload();
     await openCalendar();
+    await expect(google.getByLabel('Return address from Google')).toBeVisible();
     await google
       .getByLabel('Return address from Google')
       .fill('http://127.0.0.1:1/?state=flow&code=private-test-code');

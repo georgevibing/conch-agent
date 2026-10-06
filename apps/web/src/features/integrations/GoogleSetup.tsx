@@ -1,22 +1,25 @@
 import {
   GOOGLE_CREDENTIAL_LIMIT,
   parseGoogleCredentials,
+  productOf,
   type GoogleCapability,
 } from '@conch/protocol';
 import {
   Accordion,
   Button,
-  Callout,
   CopyButton,
   Field,
+  FileDropZone,
   GoogleSetupGuide,
   Input,
   PasswordInput,
   Stack,
   Text,
+  type FileDropState,
 } from '@conch/nacre';
 import { useRef, useState } from 'react';
 import { googleApi } from './googleApi';
+import styles from './Integrations.module.css';
 
 /** Browser-only draft state is a step number, never credentials or pasted return URLs. */
 const stepKey = 'conch-google-setup-step';
@@ -31,17 +34,7 @@ function initialStep() {
 export function googleServices(
   capabilities: GoogleCapability[],
 ): ('gmail' | 'calendar' | 'drive')[] {
-  return [
-    ...new Set(
-      capabilities.map((c) =>
-        c.startsWith('mail-')
-          ? ('gmail' as const)
-          : c === 'calendar-read'
-            ? ('calendar' as const)
-            : ('drive' as const),
-      ),
-    ),
-  ];
+  return [...new Set(capabilities.map(productOf))];
 }
 export function GoogleSetup({
   capabilities,
@@ -57,6 +50,8 @@ export function GoogleSetup({
   const [credentials, setCredentials] = useState('');
   const [summary, setSummary] = useState('');
   const [error, setError] = useState('');
+  const [fileName, setFileName] = useState<string>();
+  const [reading, setReading] = useState(false);
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const upload = useRef(0);
@@ -69,10 +64,19 @@ export function GoogleSetup({
       /* Private browsing. */
     }
   };
+  const clear = () => {
+    ++upload.current;
+    setCredentials('');
+    setSummary('');
+    setError('');
+    setFileName(undefined);
+  };
+  /** Checked here before anything is sent: what kind of client it is, and that it's one. */
   const accept = (text: string) => {
     setCredentials('');
     setSummary('');
     setError('');
+    if (!text.trim()) return;
     try {
       const parsed = parseGoogleCredentials(text, callbackUrl);
       setCredentials(text);
@@ -84,9 +88,35 @@ export function GoogleSetup({
       setError(e instanceof Error ? e.message : 'Choose the OAuth client JSON from Google.');
     }
   };
+  const take = (file: File) => {
+    const selection = ++upload.current;
+    clear();
+    upload.current = selection;
+    setFileName(file.name);
+    if (file.size > GOOGLE_CREDENTIAL_LIMIT) {
+      setError(
+        'That’s too big to be the file Google gave you. Choose the small client_secret….json.',
+      );
+      return;
+    }
+    setReading(true);
+    void file
+      .text()
+      .then((text) => {
+        if (selection === upload.current) accept(text);
+      })
+      .catch(() => {
+        if (selection === upload.current)
+          setError('That file couldn’t be read. Download it again, or paste what’s in it.');
+      })
+      .finally(() => {
+        if (selection === upload.current) setReading(false);
+      });
+  };
+  const state: FileDropState = reading ? 'checking' : error ? 'error' : credentials ? 'ok' : 'idle';
   const save = async (operation: () => Promise<unknown>) => {
     if (await onSave(operation)) {
-      setCredentials('');
+      clear();
       setClientId('');
       setClientSecret('');
       try {
@@ -105,64 +135,50 @@ export function GoogleSetup({
       services={googleServices(capabilities)}
       importControl={
         <Stack gap={3}>
-          <Field>
-            <Field.Label>Google credential JSON</Field.Label>
-            <Input
-              type="file"
-              accept=".json,application/json"
-              disabled={busy}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                e.target.value = '';
-                const selection = ++upload.current;
-                setCredentials('');
-                setSummary('');
-                setError('');
-                if (!file) return;
-                if (file.size > GOOGLE_CREDENTIAL_LIMIT) {
-                  setError(
-                    'Choose the small OAuth client JSON from Google, not an export or backup.',
-                  );
-                  return;
-                }
-                void file
-                  .text()
-                  .then((text) => {
-                    if (selection === upload.current) accept(text);
-                  })
-                  .catch(() => {
-                    if (selection === upload.current)
-                      setError(
-                        'That file could not be read. Download it again or paste its JSON below.',
-                      );
-                  });
-              }}
-            />
-            <Field.Description>
-              Choose the downloaded file. Conch reads it here and encrypts the credentials on your
-              Conch computer. It never sends them to your assistant.
-            </Field.Description>
-          </Field>
-          <Field>
-            <Field.Label>Or paste credential JSON</Field.Label>
-            <PasswordInput
-              autoComplete="off"
-              value={credentials}
-              disabled={busy}
-              onChange={(e) => {
-                ++upload.current;
-                accept(e.target.value);
-              }}
-            />
-          </Field>
-          {error && <Callout tone="danger">{error}</Callout>}
-          {summary && <Text role="status">{summary}</Text>}
+          <FileDropZone
+            title="Drop the file you downloaded"
+            hint="It’s a small .json file, usually in Downloads, named client_secret_….json."
+            accept=".json,application/json"
+            chooseLabel="Choose the file"
+            disabled={busy}
+            state={state}
+            fileName={fileName}
+            message={error || summary || undefined}
+            onFile={take}
+            onClear={clear}
+            paste={{
+              label: 'Paste what’s in it instead',
+              content: (
+                <Field>
+                  <Field.Label>What’s in the file</Field.Label>
+                  <PasswordInput
+                    autoComplete="off"
+                    spellCheck={false}
+                    disabled={busy}
+                    onChange={(e) => {
+                      ++upload.current;
+                      setFileName(undefined);
+                      accept(e.target.value);
+                    }}
+                  />
+                  <Field.Description>
+                    Open the file in any text editor, copy everything, and paste it here.
+                  </Field.Description>
+                </Field>
+              ),
+            }}
+          />
+          <Text size="sm" tone="muted">
+            Conch reads it here and keeps it locked on your Conch computer. Your assistant never
+            sees it.
+          </Text>
           <Button
+            className={styles.fit}
             disabled={busy || !credentials}
             loading={busy}
             onClick={() => void save(() => googleApi.importCredentials(credentials))}
           >
-            Save and connect Google
+            Save and continue with Google
           </Button>
           <Accordion type="single" collapsible>
             <Accordion.Item value="manual">
@@ -201,6 +217,7 @@ export function GoogleSetup({
                     />
                   </Field>
                   <Button
+                    className={styles.fit}
                     disabled={busy || !clientId || !clientSecret}
                     onClick={() =>
                       void save(() =>

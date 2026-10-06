@@ -2,18 +2,13 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import {
-  isUnread,
-  type ChatFolder,
-  type ConversationSummary,
-  type ServerEvent,
-} from '@conch/protocol';
+import { isUnread, ServerEvent, type ChatFolder, type ConversationSummary } from '@conch/protocol';
 import { describe, expect, it } from 'vitest';
 
 import { buildApp } from '../app';
 import { loadConfig } from '../config';
 import { Services } from '../services';
-import { onThisComputer } from '../test/here';
+import { hereInit, onThisComputer } from '../test/here';
 
 async function setup() {
   process.env.CONCH_MOCK_SPEED = '0.02';
@@ -167,6 +162,64 @@ describe('what’s new since you looked', () => {
     await writeFile(index, JSON.stringify(records));
     const fresh = new Services(services.config);
     expect(isUnread((await fresh.conversations.detail(a.id)).conversation)).toBe(false);
+  });
+});
+
+describe('a chat started in a folder', () => {
+  it('is filed there from its first moment; a folder that went starts it in the list', async () => {
+    const { services } = await setup();
+    const app = onThisComputer(await buildApp(services), services);
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    try {
+      const folder = (
+        await app.inject({ method: 'POST', url: '/api/folders', payload: { name: 'Trips' } })
+      ).json<ChatFolder>();
+      const port = (app.server.address() as { port: number }).port;
+      const ws = new WebSocket(`ws://localhost:${port}/ws`, hereInit(app));
+      const created = new Map<string, ConversationSummary>();
+      ws.onmessage = (msg) => {
+        const event = ServerEvent.parse(JSON.parse(String(msg.data)));
+        if (event.type === 'conversation.created')
+          created.set(event.clientMessageId, event.conversation);
+      };
+      await new Promise((r) => (ws.onopen = r));
+      const start = async (clientMessageId: string, extra: Record<string, unknown>) => {
+        ws.send(
+          JSON.stringify({ type: 'conversation.send', clientMessageId, text: 'Plan it', ...extra }),
+        );
+        for (let i = 0; i < 300 && !created.has(clientMessageId); i++)
+          await new Promise((r) => setTimeout(r, 10));
+        const made = created.get(clientMessageId);
+        if (!made) throw new Error('never created');
+        return made;
+      };
+
+      // Announced already in the folder, so no window ever shows it outside first.
+      const filed = await start('u-in', { folder: folder.id });
+      expect(filed.folderId).toBe(folder.id);
+      expect((await until(services, filed.id, 'idle')).folderId).toBe(folder.id);
+
+      // Gone meanwhile: the message isn't lost, the chat just starts in the list.
+      const loose = await start('u-gone', { folder: 'f_missing1' });
+      expect(loose.folderId).toBeUndefined();
+
+      // Sending on in an existing chat never refiles it.
+      await until(services, loose.id, 'idle');
+      ws.send(
+        JSON.stringify({
+          type: 'conversation.send',
+          conversationId: loose.id,
+          clientMessageId: 'u-again',
+          text: 'And again',
+          folder: folder.id,
+        }),
+      );
+      await new Promise((r) => setTimeout(r, 50));
+      expect((await until(services, loose.id, 'idle')).folderId).toBeUndefined();
+      ws.close();
+    } finally {
+      await app.close();
+    }
   });
 });
 

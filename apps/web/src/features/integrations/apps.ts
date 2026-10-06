@@ -335,10 +335,10 @@ const GROUPS: Record<
     },
     {
       id: 'draft',
-      title: 'Draft',
-      description: 'Save a new email or a reply in your Drafts, for you to send.',
-      tools: ['google_mail_create_draft'],
-      note: 'Asks every time. Never sends.',
+      title: 'Draft & send',
+      description: 'Save a new email or a reply in your Drafts, or send it from your account.',
+      tools: ['google_mail_create_draft', 'google_mail_send'],
+      note: 'Asks every time, with the exact email.',
     },
   ],
   slack: [
@@ -359,8 +359,19 @@ const GROUPS: Record<
     {
       id: 'read',
       title: 'Read your calendar',
-      description: 'See your events, up to a month at a time. It never changes them.',
+      description: 'See your events, up to a month at a time.',
       tools: ['google_calendar_briefing'],
+    },
+    {
+      id: 'write',
+      title: 'Change events',
+      description: 'Add, move or delete events, and invite people only when you say so.',
+      tools: [
+        'google_calendar_create_event',
+        'google_calendar_update_event',
+        'google_calendar_delete_event',
+      ],
+      note: 'Asks every time.',
     },
   ],
   'google-drive': [
@@ -369,6 +380,13 @@ const GROUPS: Record<
       title: 'Find files',
       description: 'Search your Drive and read a file’s details, not what’s in it.',
       tools: ['google_drive_search', 'google_drive_read'],
+    },
+    {
+      id: 'write',
+      title: 'Make files',
+      description: 'Make new Docs and text files. It never changes or deletes your other files.',
+      tools: ['google_drive_create_file'],
+      note: 'Asks every time.',
     },
   ],
 };
@@ -408,6 +426,19 @@ export function toolGroups(integration: Integration): ToolGroup[] {
       tools: writes,
     });
   return groups;
+}
+
+/**
+ * The halves of one of Conch's own apps that no connected account can do
+ * yet (Gmail's sending when every account reads only): said, with the way
+ * to allow them, rather than left out.
+ */
+export function unsetGroups(integration: Integration): Omit<ToolGroup, 'tools'>[] {
+  const known = integration.catalogId ? GROUPS[integration.catalogId] : undefined;
+  if (!known) return [];
+  return known
+    .filter((g) => !integration.tools.some((t) => g.tools.includes(t.name)))
+    .map(({ tools: _tools, ...group }) => group);
 }
 
 /** On while any of its tools isn't turned off. */

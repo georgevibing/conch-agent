@@ -49,7 +49,13 @@ export function googleRoutes(
       return await run();
     } catch (error) {
       return reply
-        .code(error instanceof GoogleError && error.kind === 'unavailable' ? 503 : 400)
+        .code(
+          error instanceof GoogleError && error.kind === 'unavailable'
+            ? 503
+            : error instanceof GoogleError && error.kind === 'consent'
+              ? 409
+              : 400,
+        )
         .send({
           error: error instanceof GoogleError ? error.kind : 'invalid',
           message:
@@ -124,6 +130,20 @@ export function googleRoutes(
   });
   app.post<{ Params: { id: string } }>('/api/google/accounts/:id/check', (request, reply) =>
     guarded(reply, () => service.check(request.params.id)),
+  );
+  // What one account may do in one product. Letting it do more is a person's choice: they
+  // confirm it's them. Going past what Google allows answers 409, and the web app asks Google.
+  app.post<{ Params: { id: string } }>(
+    '/api/google/accounts/:id/access',
+    { bodyLimit: 1_000 },
+    async (request, reply) => {
+      const params = FlowParams.safeParse(request.params);
+      if (!params.success)
+        return reply.code(400).send({ error: 'invalid', message: 'That isn’t a Google account.' });
+      const { id } = params.data;
+      if ((await service.raises(id, request.body)) && !verified(request, reply)) return;
+      return guarded(reply, () => service.setAccess(id, request.body));
+    },
   );
   app.delete<{ Params: { id: string } }>('/api/google/accounts/:id', async (request, reply) => {
     if (!verified(request, reply)) return;

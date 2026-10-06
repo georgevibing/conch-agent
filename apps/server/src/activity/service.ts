@@ -215,7 +215,7 @@ export function entriesOf(
           // Held by the memory check (ADR 0087), with why; or waiting for an OK (ADR 0032).
           title: e.memory.held
             ? `${e.memory.held.verdict === 'refuse' ? 'Refused to remember' : 'Held to ask you'}: ${e.memory.content.slice(0, 120)}. ${e.memory.held.reasons[0]?.words ?? ''}`.trim()
-            : `${e.memory.pending ? 'Wants to remember, waiting for your OK' : 'Remembered'}: ${e.memory.content.slice(0, 120)}`,
+            : `${e.memory.pending ? 'Held to ask you' : 'Remembered'}: ${e.memory.content.slice(0, 120)}`,
           status: e.memory.held && !answeredMemories.has(e.memory.id) ? 'waiting' : 'done',
           memory: { id: e.memory.id, content: e.memory.content, action: 'saved' },
         });
@@ -275,7 +275,7 @@ export function entriesOf(
             id: `${chat.id}:${e.seq}:${i}`,
             at: e.at,
             kind: 'memory',
-            title: `${item.state === 'waiting' ? 'Learned, waiting for your OK' : 'Learned'}: ${item.text.slice(0, 120)}`,
+            title: `${item.state === 'waiting' ? 'Held to ask you' : 'Learned'}: ${item.text.slice(0, 120)}`,
             status: 'done',
           }),
         );

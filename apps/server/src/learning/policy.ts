@@ -1,7 +1,8 @@
 /**
- * The gate (ADR 0088 § 4): each change the review proposes is applied by
- * itself, waits for the person's OK, or is dropped. Dropped first, so nothing
- * unsafe even waits:
+ * The gate (ADR 0088 § 4, ADR 0097): each change the review proposes is
+ * applied by itself or dropped. Nothing routine waits for the person; only the
+ * store's memory check (ADR 0087) can hold a write, and only for a security
+ * concern. Dropped:
  *
  * - not resting on words the person wrote (a model's guess, or a page's);
  * - a secret, a health or money detail;
@@ -9,9 +10,12 @@
  * - a power: acting without asking, trust;
  * - something the person took back once.
  *
- * Only a previous refusal or replacing a waiting memory needs review. Owner
- * evidence survives reading outside material; the store still checks every
- * write for instructions, new destinations and other security signals.
+ * - replacing a memory the check is holding (that's the person's call).
+ *
+ * Close to something taken back, but said again in the person's own words, is
+ * applied: it's usually the correction that came next, and Undo still works.
+ * Owner evidence survives reading outside material; the store still checks
+ * every write for instructions, new destinations and other security signals.
  */
 import type { Memory } from '@conch/protocol';
 
@@ -41,7 +45,6 @@ export function taskPermission(text: string): boolean {
 
 export type Verdict =
   | { verdict: 'apply' }
-  | { verdict: 'wait'; waits: string }
   | { verdict: 'drop'; why: string }
   /** Already known: nothing new, counted as seen again. */
   | { verdict: 'seen'; memory: Memory };
@@ -57,7 +60,7 @@ export interface GateContext {
   memories: ReadonlyMap<string, Memory>;
   /**
    * It's on the never-list: the very same thing (`exact`, dropped), or only
-   * close to something there (it waits, saying what).
+   * close to something there (applied: the person said it again).
    */
   refused?: { exact: boolean; text: string };
   /** A live or waiting memory that already says it. */
@@ -136,12 +139,13 @@ export function dropWhy(
   if (change.op === 'supersede') {
     const target = ctx.memories.get(change.id);
     if (!target) return 'nothing to replace';
+    if (target.pending) return 'it would replace something the check is holding';
     if (target.content.trim().toLowerCase() === text.trim().toLowerCase()) return 'nothing changed';
   }
   return undefined;
 }
 
-/** Apply, wait or drop one change (ADR 0088 § 4). */
+/** Apply or drop one change (ADR 0088 § 4, ADR 0097): routine learning never asks. */
 export function gate(
   change: Change,
   ctx: GateContext,
@@ -150,16 +154,5 @@ export function gate(
   const why = dropWhy(change, ctx, options);
   if (why) return { verdict: 'drop', why };
   if (change.op === 'add' && ctx.duplicate) return { verdict: 'seen', memory: ctx.duplicate };
-  // Close to something you took back: maybe the correction that came next, so you say.
-  if (ctx.refused)
-    return {
-      verdict: 'wait',
-      waits: `You took back “${ctx.refused.text.slice(0, 120)}” before, so this waits for your OK.`,
-    };
-  if (change.op === 'supersede') {
-    const target = ctx.memories.get(change.id);
-    if (target?.pending)
-      return { verdict: 'wait', waits: 'It would replace something still waiting for your OK.' };
-  }
   return { verdict: 'apply' };
 }

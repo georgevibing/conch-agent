@@ -64,7 +64,7 @@ function provider(
         quote: meant[1],
         basis: 'corrected',
       });
-    const moved = /<said[^>]*>[^<]*?(I moved to (\w+))/i.exec(input.prompt);
+    const moved = /<said[^>]*>[^<]*?(I moved to ([\p{L}]+))/iu.exec(input.prompt);
     const home = /^\[(m_\w+)\] \(\w+\) Lives in /m.exec(input.prompt);
     if (moved && home)
       changes.push({
@@ -143,7 +143,7 @@ async function setup(
 }
 
 describe('QuietLearning (ADR 0088)', () => {
-  it('a correction in a chat you were in is learned, and the chat says so', async () => {
+  it('a correction in a chat you were in is learned silently: the chat says nothing', async () => {
     const { learning, memory, notes } = await setup([
       {
         summary: { id: 'c1' },
@@ -160,11 +160,8 @@ describe('QuietLearning (ADR 0088)', () => {
       conversationId: 'c1',
     });
     expect(kept?.learned).toMatch(/^le_/);
-    expect(notes).toHaveLength(1);
-    expect(notes[0]?.event).toMatchObject({
-      type: 'learning.noted',
-      items: [{ text: 'Prefers TypeScript', change: 'added', state: 'applied' }],
-    });
+    // Routine learning interrupts nobody (ADR 0097): the Memory page has it, with Undo.
+    expect(notes).toHaveLength(0);
     const [entry] = await learning.store.entries();
     expect(entry?.from).toMatchObject({
       quotes: ['No, I meant TypeScript'],
@@ -205,7 +202,7 @@ describe('QuietLearning (ADR 0088)', () => {
       provenance: { via: 'chat', yours: true, read: ['recipes.example'] },
     });
     expect((await memory.list())[0]?.pending).toBeUndefined();
-    expect(notes[0]?.event).toMatchObject({ items: [{ state: 'applied' }] });
+    expect(notes).toHaveLength(0);
     await learning.answer(entry?.id ?? '', 'undo');
     expect(await memory.list()).toEqual([]);
   });
@@ -552,8 +549,8 @@ describe('QuietLearning (ADR 0088)', () => {
     expect(await memory.list()).toEqual([]);
   });
 
-  it('what a compaction learned is said with the rest, once the chat goes quiet', async () => {
-    const { learning, notes } = await setup([
+  it('what a compaction learned stays silent too, once the chat goes quiet', async () => {
+    const { learning, memory, notes } = await setup([
       {
         summary: { id: 'c1' },
         events: [
@@ -566,16 +563,42 @@ describe('QuietLearning (ADR 0088)', () => {
         ],
       },
     ]);
-    // Mid-chat: nothing is said yet, so nothing lands in the middle of a reply.
+    // Mid-chat: nothing is said, so nothing lands in the middle of a reply.
     await learning.review('c1', { trigger: 'compaction', beforeSeq: 7 });
     expect(notes).toHaveLength(0);
     await learning.review('c1', { trigger: 'idle' });
+    expect(notes).toHaveLength(0);
+    expect((await memory.list()).map((m) => m.content).sort()).toEqual([
+      'Prefers Rust',
+      'Prefers TypeScript',
+    ]);
+    expect((await learning.store.chat('c1')).unsaid ?? []).toEqual([]);
+  });
+
+  it('only a security hold is said in the chat, and waits for the person (ADR 0097)', async () => {
+    const { learning, memory, notes } = await setup([
+      {
+        summary: { id: 'c1' },
+        events: [
+          you('Which site?'),
+          ...reply(),
+          // A Cyrillic “а”: a name made to look like another.
+          you('No, I meant p\u0430ypal.'),
+          ...reply(),
+        ],
+      },
+    ]);
+    const result = await learning.review('c1', { trigger: 'idle' });
+    expect('learned' in result && result.learned.map((e) => e.state)).toEqual(['waiting']);
     expect(notes).toHaveLength(1);
     expect(notes[0]?.event).toMatchObject({
       type: 'learning.noted',
-      items: [{ text: 'Prefers TypeScript' }, { text: 'Prefers Rust' }],
+      items: [{ text: 'Prefers p\u0430ypal', state: 'waiting' }],
     });
-    expect((await learning.store.chat('c1')).unsaid).toEqual([]);
+    const held = (await memory.list()).find((m) => m.pending);
+    expect(held?.held?.reasons.map((r) => r.code)).toContain('lookalike');
+    // Held: never in the assistant's prompt until the person says.
+    expect(await memory.usable()).toEqual([]);
   });
 
   it('forgetting what replaced something leaves it gone, not undone', async () => {
@@ -597,21 +620,14 @@ describe('QuietLearning (ADR 0088)', () => {
     const { learning, memory } = await setup([
       {
         summary: { id: 'c1' },
-        events: [
-          you('Find me a recipe'),
-          taint({ kind: 'web', label: 'recipes.example' }),
-          ...reply(),
-          you('No, I meant vegetarian.'),
-          ...reply(),
-        ],
+        events: [you('Which site?'), ...reply(), you('No, I meant p\u0430ypal.'), ...reply()],
       },
     ]);
-    await learning.store.addNever('Prefers vegetarian meals', 'undo');
     const result = await learning.review('c1', { trigger: 'idle' });
     const id = ('learned' in result && result.learned[0]?.id) || '';
     expect(await keep(learning, id, 'Prefers steak')).toBe('changed');
     expect((await memory.list())[0]?.pending).toBe(true);
-    const kept = await keep(learning, id, 'Prefers vegetarian');
+    const kept = await keep(learning, id, 'Prefers p\u0430ypal');
     expect(typeof kept === 'object' && kept.state).toBe('kept');
   });
 
@@ -656,13 +672,13 @@ describe('QuietLearning (ADR 0088)', () => {
         events: [
           you('Weekend ideas?'),
           ...reply(),
-          you('I moved to Porto, by the way.'),
+          // A Cyrillic “о”: held by the check, so it waits for Keep.
+          you('I moved to P\u043erto, by the way.'),
           ...reply(),
         ],
       },
     ]);
     const mine = await memory.add({ content: 'Lives in Berlin', source: 'user' });
-    await learning.store.addNever('Lives in Porto now', 'undo');
     const result = await learning.review('c1', { trigger: 'idle' });
     const entry = 'learned' in result ? result.learned[0] : undefined;
     expect(entry?.state).toBe('waiting');
@@ -671,7 +687,7 @@ describe('QuietLearning (ADR 0088)', () => {
     await keep(learning, entry?.id ?? '');
     expect((await memory.list()).map((m) => m.content).sort()).toEqual([
       'Lives in Berlin and Porto',
-      'Lives in Porto',
+      'Lives in P\u043erto',
     ]);
     expect(await memory.listPast()).toEqual([]);
   });

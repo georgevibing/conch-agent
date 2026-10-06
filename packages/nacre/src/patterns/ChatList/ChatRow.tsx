@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type ComponentProps,
+  type CSSProperties,
   type DragEvent,
   type KeyboardEvent,
   type MouseEvent,
@@ -15,6 +16,7 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react';
+import { createPortal } from 'react-dom';
 
 import { Checkbox } from '../../components/Checkbox';
 import { ContextMenu } from '../../components/ContextMenu';
@@ -24,6 +26,7 @@ import { cx } from '../../utils/cx';
 import { useMediaQuery } from '../../utils/useMediaQuery';
 import styles from './ChatList.module.css';
 import { CHAT_DRAG_TYPE } from './drag';
+import { useHold } from './hold';
 import { SWIPE_COMMIT_SHARE, SWIPE_SLOP, swipeOffset, swipeOutcome, type SwipeSide } from './swipe';
 
 /**
@@ -91,8 +94,9 @@ export interface ChatRowProps extends Omit<ComponentProps<'li'>, 'children' | 'c
   onSelectRequest?: (event: MouseEvent<HTMLElement>) => void;
   /**
    * The chats that move when this row is dragged (this one, or every ticked
-   * one). Given, the row can be dragged onto a folder or Pinned, with a mouse
-   * or trackpad.
+   * one). Given, the row can be dragged onto a folder or Pinned: with a mouse
+   * or trackpad, or on a phone by holding it until it lifts and then moving
+   * the finger (letting go without moving opens `contextMenu`).
    */
   dragIds?: string[];
   /** On touch, swiping towards the line's end (right, in English) reveals and does this: Pin. */
@@ -114,7 +118,7 @@ export interface ChatRowProps extends Omit<ComponentProps<'li'>, 'children' | 'c
  * (working, needs you, new, didn't finish). A press opens it; its ⋯ (and a
  * right-click) has the rest. While the list is choosing several it becomes a
  * tick box. On a computer it drags onto a folder or Pinned; on a phone a
- * swipe pins or archives it.
+ * swipe pins or archives it, and a hold lifts it to be dragged there.
  */
 export function ChatRow({
   children,
@@ -143,6 +147,8 @@ export function ChatRow({
   onPointerMove,
   onPointerUp,
   onPointerCancel,
+  onContextMenu,
+  ref,
   ...props
 }: ChatRowProps) {
   const titleId = useId();
@@ -151,11 +157,41 @@ export function ChatRow({
   const finePointer = useMediaQuery('(pointer: fine)');
   const [dragging, setDragging] = useState(false);
   const rowRef = useRef<HTMLDivElement>(null);
+  const itemRef = useRef<HTMLLIElement>(null);
+  const ghostRef = useRef<HTMLDivElement>(null);
+  const menuFromHold = useRef(false);
+  const [lift, setLift] = useState<{ label: string; rect: DOMRect; host: Element }>();
   const swipe = useSwipe({
     rowRef,
     start: swipeStart,
     end: swipeEnd,
     enabled: Boolean(swipeStart || swipeEnd) && !selecting && !editing,
+  });
+  const hold = useHold({
+    itemRef,
+    ghostRef,
+    ids: dragIds,
+    enabled: Boolean(dragIds?.length) && !editing,
+    onLift: () => {
+      swipe.abandon();
+      const item = itemRef.current;
+      if (item)
+        setLift({
+          label: titleRef.current?.textContent ?? '',
+          rect: item.getBoundingClientRect(),
+          host: item.closest('[data-nacre-theme]:not(:root)') ?? document.body,
+        });
+    },
+    // Let go without moving: the menu a hold has always opened, where the finger is.
+    onMenu: (x, y) => {
+      const item = itemRef.current;
+      if (!contextMenu || selecting || !item) return;
+      menuFromHold.current = true;
+      item.dispatchEvent(
+        new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y }),
+      );
+      menuFromHold.current = false;
+    },
   });
 
   const canDrag = Boolean(dragIds?.length) && finePointer && !editing;
@@ -172,7 +208,9 @@ export function ChatRow({
     const target = e.target as Node;
     // Clicks inside a menu's portal bubble here through React; they aren't the row's.
     if (!e.currentTarget.contains(target) || moreRef.current?.contains(target)) return;
-    if (swipe.consumeClick()) {
+    const swiped = swipe.consumeClick();
+    const held = hold.consumeClick();
+    if (swiped || held) {
       e.preventDefault();
       e.stopPropagation();
       return;
@@ -250,31 +288,48 @@ export function ChatRow({
       data-selecting={selecting || undefined}
       data-selected={(selecting && selected) || undefined}
       data-dragging={dragging || undefined}
+      data-held={hold.phase === 'idle' ? undefined : hold.phase}
+      data-holdable={(Boolean(dragIds?.length) && !editing) || undefined}
       data-swiping={swipe.phase === 'idle' ? undefined : swipe.phase}
       data-swipeable={swipe.enabled || undefined}
       data-has-menu={showMenu || undefined}
       data-drop-before={dropBefore || undefined}
       draggable={canDrag || undefined}
+      ref={(el) => {
+        itemRef.current = el;
+        if (typeof ref === 'function') return ref(el);
+        if (ref) ref.current = el;
+      }}
       className={cx(styles.item, className)}
       onClickCapture={handleClickCapture}
+      onContextMenu={(e) => {
+        onContextMenu?.(e);
+        // A phone's own long-press menu waits for the hold to end (it opens it then).
+        if (!menuFromHold.current && hold.blocksMenu()) e.preventDefault();
+      }}
       onKeyDown={handleKeyDown}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onPointerDown={(e) => {
         onPointerDown?.(e);
         swipe.down(e);
+        // Not from the ⋯: that's a button of its own.
+        if (!moreRef.current?.contains(e.target as Node)) hold.down(e);
       }}
       onPointerMove={(e) => {
         onPointerMove?.(e);
         swipe.move(e);
+        hold.move(e);
       }}
       onPointerUp={(e) => {
         onPointerUp?.(e);
         swipe.up(e);
+        hold.up(e);
       }}
       onPointerCancel={(e) => {
         onPointerCancel?.(e);
         swipe.cancel(e);
+        hold.cancel(e);
       }}
       {...props}
     >
@@ -321,6 +376,16 @@ export function ChatRow({
           </span>
         )}
       </div>
+      {lift && hold.phase !== 'idle' && hold.phase !== 'lifted' && (
+        <DragGhost
+          ref={ghostRef}
+          host={lift.host}
+          label={lift.label}
+          rect={lift.rect}
+          count={dragIds?.length ?? 1}
+          leaving={hold.phase === 'dragging' ? undefined : hold.phase}
+        />
+      )}
     </li>
   );
 
@@ -330,6 +395,48 @@ export function ChatRow({
       <ContextMenu.Trigger asChild>{item}</ContextMenu.Trigger>
       <ContextMenu.Content>{contextMenu}</ContextMenu.Content>
     </ContextMenu.Root>
+  );
+}
+
+/**
+ * What follows the finger while a row is dragged on a phone: the row itself,
+ * lifted off the list, with how many come along when there are several.
+ * Placed by `useHold` without re-rendering; drawn over everything, sheets too.
+ */
+function DragGhost({
+  ref,
+  host,
+  label,
+  rect,
+  count,
+  leaving,
+}: {
+  ref: RefObject<HTMLDivElement | null>;
+  host: Element;
+  label: string;
+  rect: DOMRect;
+  count: number;
+  leaving?: 'returning' | 'dropped';
+}) {
+  return createPortal(
+    <div
+      ref={ref}
+      aria-hidden
+      className={styles.ghost}
+      data-leaving={leaving}
+      style={
+        {
+          '--cl-ghost-x': `${rect.left}px`,
+          '--cl-ghost-y': `${rect.top}px`,
+          inlineSize: `${rect.width}px`,
+          blockSize: `${rect.height}px`,
+        } as CSSProperties
+      }
+    >
+      <span className={styles.ghostTitle}>{label}</span>
+      {count > 1 && <span className={styles.ghostCount}>{count}</span>}
+    </div>,
+    host,
   );
 }
 
@@ -521,6 +628,12 @@ function useSwipe({
       if (!t || e.pointerId !== t.id) return;
       track.current = null;
       if (t.tracking) settle(0, t.rtl, reset);
+    },
+    /** Something else took the finger (a hold lifted the row): let go, and slide home if it moved. */
+    abandon() {
+      const t = track.current;
+      track.current = null;
+      if (t?.tracking) settle(0, t.rtl, reset);
     },
   };
 }
