@@ -174,6 +174,7 @@ test('settings show the browser it found, and changes stick', async ({ page, req
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('tab', { name: 'Browser' }).click();
   await expect(page.getByRole('heading', { name: 'Browser', level: 3 })).toBeVisible();
+  await page.getByRole('button', { name: 'Advanced' }).click();
   const cookies = page.getByRole('switch', { name: 'Decline cookie banners for you' });
   await expect(cookies).toBeChecked();
   await cookies.click();

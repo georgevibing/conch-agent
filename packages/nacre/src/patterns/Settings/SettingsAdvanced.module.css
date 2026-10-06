@@ -1,0 +1,20 @@
+@layer nacre.components {
+  /* Set off from the page by a hairline, so the page reads as finished above it. */
+  .advanced {
+    padding-block-start: var(--nc-space-5);
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .advanced .trigger {
+    margin-inline-start: calc(-1 * var(--nc-space-1-5));
+    color: var(--nc-text-muted);
+  }
+
+  /* What's inside is the page's own sections, spaced as they are above. */
+  .body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-8);
+    padding-block-start: var(--nc-space-5);
+  }
+}

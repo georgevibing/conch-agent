@@ -32,6 +32,7 @@ import {
   SecretReveal,
   SecurityCheckup,
   Select,
+  SettingsAdvanced,
   Skeleton,
   Stack,
   StrengthMeter,
@@ -62,6 +63,7 @@ import { keys } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { relativeTime } from '../../lib/time';
 import { Section } from '../settings/Section';
+import { useAdvanced } from '../settings/useAdvanced';
 import { AddressSection } from './AddressSection';
 import { ADDRESS_FOCUS, DEVICES_FOCUS, PASSKEYS_FOCUS } from './focus';
 import styles from './Security.module.css';
@@ -116,19 +118,19 @@ const methods: { value: AccessMethod; label: string; description: string; icon: 
   {
     value: 'passkey',
     label: 'Passkeys only',
-    description: 'Touch ID, Windows Hello or Face ID. Nothing to remember, nothing to type.',
+    description: 'Touch ID, Windows Hello or Face ID. Nothing to type.',
     icon: <FingerprintPattern />,
   },
   {
     value: 'password',
     label: 'Password',
-    description: 'Easiest on your own devices. Your browser can remember it for you.',
+    description: 'Easiest on your own devices.',
     icon: <LockKeyhole />,
   },
   {
     value: 'key',
     label: 'Access key',
-    description: 'A long key you paste once per device. Good for scripts, too.',
+    description: 'Pasted once per device. Good for scripts, too.',
     icon: <KeyRound />,
   },
   {
@@ -447,10 +449,10 @@ function SignInSection({
       title="How you sign in"
       description={
         access.method === 'none'
-          ? 'Right now anyone using this computer can open Conch. Choose a way to sign in — you’ll need it to use Conch on your phone, too.'
+          ? 'Anyone using this computer can open Conch. A sign-in is also what your phone needs.'
           : access.passkeys.length && access.method !== 'passkey'
-            ? 'Every device, including this one, has to sign in. Your passkeys work too.'
-            : 'Every device, including this one, has to sign in.'
+            ? 'Every device signs in. Your passkeys work too.'
+            : 'Every device, including this one, signs in.'
       }
     >
       <Stack gap={5}>
@@ -511,8 +513,7 @@ function SignInSection({
 
         {choice === 'passkey' && (
           <Text size="sm" tone="muted">
-            Your passkeys are the way in. Add one for each device in Passkeys, or choose a password
-            here to have both.
+            Your passkeys are the way in. Add a password here to have both.
           </Text>
         )}
 
@@ -590,8 +591,8 @@ function PasskeysSection({
       title="Passkeys"
       description={
         access.passkeysHere
-          ? 'Sign in with the fingerprint, face or PIN you already use on each device. Nothing to remember, and nothing a fake page can steal.'
-          : 'Passkeys work at Conch’s secure address (https://…) or on this computer. Open Conch there to add one.'
+          ? undefined
+          : 'Passkeys need Conch’s secure address (https://…) or this computer. Open Conch there to add one.'
       }
     >
       <PasskeyList
@@ -852,8 +853,8 @@ function ApprovalSwitch({ access, guard }: { access: AccessSettings; guard: Guar
         label="Approve new devices"
         description={
           on
-            ? 'A new device has to be approved after it signs in, even with the right password or key: on a device you’re already signed in on, or on this computer. A passkey lets its own device in.'
-            : 'Extra protection: someone who learns your password or key still can’t get in until you approve their device from one of yours.'
+            ? 'A new device waits for your approval, from a device you’re signed in on or this computer. A passkey lets its own device in.'
+            : 'Someone who learns your password still can’t get in until you approve their device.'
         }
       />
       {on && !here && (
@@ -936,8 +937,8 @@ function DevicesSection({
       title="Devices"
       description={
         approval
-          ? 'What has used Conch. A device you don’t approve can’t get in, even with your password.'
-          : 'What has used Conch. Sign out or remove anything you don’t recognise.'
+          ? 'A device you don’t approve can’t get in, even with your password.'
+          : 'Sign out or remove anything you don’t recognise.'
       }
     >
       <Stack gap={5}>
@@ -1194,6 +1195,13 @@ export function SecurityTab() {
   const access = useAccess();
   const { guard, dialog } = useVerify(access.data?.method ?? 'none');
   const fix = useCheckupFix(guard);
+  // The checks that are already right, and the two ways out of this computer,
+  // wait under Advanced — and open by themselves when ⌘K or a fix points there.
+  const [advanced, setAdvanced] = useAdvanced(LIVE_DATA_FOCUS, ADDRESS_FOCUS);
+  const asked = fix.focus?.place;
+  useEffect(() => {
+    if (asked === 'live-data' || asked === 'address') setAdvanced(true);
+  }, [asked, setAdvanced]);
   // Opened to a part of the tab (a device asking, or ⌘K's "Devices").
   const settingsFocus = useUi((s) => s.settingsFocus);
   const loaded = Boolean(access.data);
@@ -1269,13 +1277,15 @@ export function SecurityTab() {
       <Section title="Security" description="Keep Conch — and this computer — safe.">
         <SecurityCheckup items={items} />
       </Section>
-      <SafetySection />
-      <LiveDataSection focus={fix.focus} />
       <PasskeysSection access={data} guard={guard} focus={fix.focus} />
       <SignInSection access={data} guard={guard} focus={fix.focus} />
       {data.method !== 'none' && <DevicesSection access={data} guard={guard} focus={fix.focus} />}
-      <AddressSection guard={guard} focus={fix.focus} />
       <ReachSection access={data} focus={fix.focus} />
+      <SettingsAdvanced open={advanced} onOpenChange={setAdvanced}>
+        <SafetySection />
+        <LiveDataSection focus={fix.focus} />
+        <AddressSection guard={guard} focus={fix.focus} />
+      </SettingsAdvanced>
       {dialog}
       <Text size="xs" tone="subtle" className={styles.footnote}>
         <Laptop aria-hidden /> Locked out? On the computer running Conch, run{' '}

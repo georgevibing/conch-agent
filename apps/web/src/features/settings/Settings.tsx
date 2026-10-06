@@ -9,6 +9,7 @@ import {
   RadioGroup,
   SegmentedControl,
   Sheet,
+  SettingsAdvanced,
   Slider,
   Stack,
   Switch,
@@ -83,6 +84,7 @@ import { GeneralTab } from './GeneralTab';
 import { ModelsTab } from './ModelsTab';
 import { SaveStatus, Section } from './Section';
 import { usePageInside } from './trail';
+import { useAdvanced } from './useAdvanced';
 import { useAutosave } from './useAutosave';
 
 function PersonalityTab({ initial }: { initial: Persona }) {
@@ -218,6 +220,7 @@ const accentSwatches = Object.keys(accents) as AccentName[];
 
 function AppearanceTab() {
   const theme = useNacreTheme();
+  const [advanced, setAdvanced] = useAdvanced();
   return (
     <Stack gap={8}>
       <Section title="Appearance">
@@ -268,30 +271,25 @@ function AppearanceTab() {
               })}
             </div>
           </Stack>
-          <Stack gap={2}>
-            <Text as="span" size="sm" weight="medium" id="lustre-label">
-              Lustre
-            </Text>
-            <Slider
-              aria-labelledby="lustre-label"
-              min={0}
-              max={1}
-              step={0.05}
-              value={[theme.lustre]}
-              onValueChange={([v]) => theme.setTheme({ lustre: v ?? 1 })}
-            />
-            <Text size="xs" tone="subtle">
-              The pearl shimmer on surfaces as your pointer moves.
-            </Text>
-          </Stack>
           <Switch
             checked={theme.motion === 'reduced'}
             onCheckedChange={(on) => theme.setTheme({ motion: on ? 'reduced' : 'system' })}
             label="Reduce motion"
-            description="Calmer transitions throughout Conch."
           />
         </Stack>
       </Section>
+      <SettingsAdvanced open={advanced} onOpenChange={setAdvanced}>
+        <Section title="Lustre" description="The pearl shimmer under your pointer.">
+          <Slider
+            aria-label="Lustre"
+            min={0}
+            max={1}
+            step={0.05}
+            value={[theme.lustre]}
+            onValueChange={([v]) => theme.setTheme({ lustre: v ?? 1 })}
+          />
+        </Section>
+      </SettingsAdvanced>
     </Stack>
   );
 }

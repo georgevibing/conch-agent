@@ -12,7 +12,7 @@ Press the microphone in the message box and talk. Conch hears you in the most pr
 2. **On the computer Conch runs on.** whisper.cpp turns what you say into words there, even when you're speaking into your phone. It works offline.
 3. **Your browser's speech service.** Only after you say yes: it sends what you say to Google (Chrome, Edge) or Apple (Safari).
 
-Choose in **Settings → Voice**. To set up the private way, press **Get it**: Conch installs whisper.cpp and downloads its speech model (about 150 MB, once), with nothing else to do.
+Conch picks the most private way it can. To choose one yourself, open **Settings → Voice → Advanced → Where your voice is heard**. To set up the private way, press **Get it**: Conch installs whisper.cpp and downloads its speech model (about 150 MB, once), with nothing else to do.
 
 ## Hear the answers
 

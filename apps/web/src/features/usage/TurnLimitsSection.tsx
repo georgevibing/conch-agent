@@ -150,7 +150,7 @@ export function TurnLimitsSection() {
     <Section
       ref={ref}
       title="Long turns"
-      description="Nothing stops a message while it works, so a big job finishes in one go. Turn this on to have it pause and ask first, on your terms."
+      description="A message runs until it’s done. Turn this on to have it check in first."
     >
       <Body initial={initial} />
     </Section>

@@ -115,7 +115,7 @@ export function ProvidersTab() {
     <Stack gap={8}>
       <Section
         title="Providers"
-        description={`Where ${assistant}’s intelligence comes from. Connect as many as you like: every one shows up in the model picker, so you can switch per chat — new chats start with your default.`}
+        description={`Where ${assistant}’s intelligence comes from. Connect as many as you like — every one joins the model picker.`}
       >
         <Stack gap={6}>
           {data?.pinned && (
@@ -218,8 +218,7 @@ export function ProvidersTab() {
           )}
 
           <Text size="xs" tone="subtle">
-            Keys stay on this computer (or in 1Password) and are never shown again. Changing the
-            model or provider in a chat carries the conversation over — nothing is lost.
+            Keys stay on this computer, or in 1Password, and are never shown again.
           </Text>
         </Stack>
       </Section>

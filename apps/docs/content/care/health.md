@@ -32,7 +32,7 @@ What Conch couldn't fix opens by itself, first in its group. Each has one senten
 
 ## Fixed on its own
 
-Further down the same page, **Fixed on its own** lists what Conch repaired by itself lately, one sentence each. It's there to reassure you. Nothing in it needs you.
+At the foot of the same page, under **Advanced**, **Fixed on its own** lists what Conch repaired by itself lately, one sentence each. It's there to reassure you. Nothing in it needs you.
 
 Without asking, Conch:
 

@@ -7,6 +7,7 @@ import {
   ModelPicker,
   RadioGroup,
   SegmentedControl,
+  SettingsAdvanced,
   Skeleton,
   SkillIcon,
   Stack,
@@ -21,9 +22,10 @@ import { useProviders } from '../providers/queries';
 import { useSkills } from '../skills/queries';
 import { availableModes, effortOptions, pickerProviders } from '../models/catalog';
 import { findModel, modelKey, parseModelKey } from '../models/useTurnOptions';
-import { FallbackSection } from './FallbackSection';
+import { FallbackSection, FALLBACK_FOCUS } from './FallbackSection';
 import { Section } from './Section';
 import styles from './Settings.module.css';
+import { useAdvanced } from './useAdvanced';
 
 /** Defaults for every new chat. Each chat can still change them from the composer. */
 export function ModelsTab() {
@@ -32,6 +34,7 @@ export function ModelsTab() {
   const update = useUpdateSettings();
   const [confirmTrust, setConfirmTrust] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [advanced, setAdvanced] = useAdvanced(FALLBACK_FOCUS);
 
   const prefs = app?.preferences;
   const assistant = app?.persona.name ?? 'Conch';
@@ -46,10 +49,8 @@ export function ModelsTab() {
 
   if (!ready && !isLoading) {
     return (
-      <Section title="Models & modes" description="Connect a provider to choose models.">
-        <Text tone="muted">
-          Once a provider is connected (Settings → Providers), its models appear here.
-        </Text>
+      <Section title="Models" description="Connect a provider to choose models.">
+        <Text tone="muted">Its models appear here as soon as one is connected.</Text>
       </Section>
     );
   }
@@ -57,8 +58,8 @@ export function ModelsTab() {
   return (
     <Stack gap={8}>
       <Section
-        title="Models & modes"
-        description="What every new chat starts with. Any chat can switch to another model — from any connected provider — from the message box, or with /model."
+        title="Models"
+        description="What every new chat starts with. Any chat can change its own, from the message box or with /model."
       >
         {isLoading || !caps ? (
           <Stack gap={3}>
@@ -93,8 +94,7 @@ export function ModelsTab() {
                 />
               </div>
               <Field.Description>
-                Every connected provider’s models, searchable. Choosing one from another provider
-                makes that provider the default too.
+                Every connected provider’s models. Choosing one makes its provider your default.
               </Field.Description>
             </Field>
 
@@ -116,38 +116,17 @@ export function ModelsTab() {
                   ))}
                 </SegmentedControl>
                 <Text size="xs" tone="subtle">
-                  More thinking gives better answers to hard problems, but takes longer.
+                  More thinking answers harder questions, and takes longer.
                 </Text>
               </Stack>
             )}
-
-            <Switch
-              checked={Boolean(prefs?.fastMode) && Boolean(model?.supportsFastMode)}
-              disabled={!model?.supportsFastMode}
-              onCheckedChange={(fastMode) => save({ fastMode })}
-              label="Fast mode"
-              description={
-                model?.supportsFastMode
-                  ? 'Faster replies. Uses more of your plan.'
-                  : 'Not available for this model or account.'
-              }
-            />
-
-            <Switch
-              checked={prefs?.autoTitle ?? true}
-              onCheckedChange={(autoTitle) => save({ autoTitle })}
-              label="Name new chats automatically"
-              description="A small, fast model from the chat’s own provider titles each new chat from its first message — usually a fraction of a cent."
-            />
           </Stack>
         )}
       </Section>
 
-      <FallbackSection />
-
       <Section
         title={`How much ${assistant} can do on its own`}
-        description={`${assistant} always shows what it’s doing. This decides when it stops to ask you first.`}
+        description="When it stops to ask you first."
       >
         <RadioGroup
           variant="card"
@@ -170,11 +149,37 @@ export function ModelsTab() {
         </RadioGroup>
       </Section>
 
-      <MutedSuggestions
-        assistant={assistant}
-        muted={prefs?.mutedSuggestions ?? []}
-        onChange={(mutedSuggestions) => save({ mutedSuggestions })}
-      />
+      <SettingsAdvanced open={advanced} onOpenChange={setAdvanced}>
+        <Section title="Every new chat">
+          <Stack gap={5}>
+            <Switch
+              checked={Boolean(prefs?.fastMode) && Boolean(model?.supportsFastMode)}
+              disabled={!model?.supportsFastMode}
+              onCheckedChange={(fastMode) => save({ fastMode })}
+              label="Fast mode"
+              description={
+                model?.supportsFastMode
+                  ? 'Faster replies. Uses more of your plan.'
+                  : 'Not available for this model or account.'
+              }
+            />
+            <Switch
+              checked={prefs?.autoTitle ?? true}
+              onCheckedChange={(autoTitle) => save({ autoTitle })}
+              label="Name new chats automatically"
+              description="From its first message, for a fraction of a cent."
+            />
+          </Stack>
+        </Section>
+
+        <FallbackSection />
+
+        <MutedSuggestions
+          assistant={assistant}
+          muted={prefs?.mutedSuggestions ?? []}
+          onChange={(mutedSuggestions) => save({ mutedSuggestions })}
+        />
+      </SettingsAdvanced>
 
       <AlertDialog.Root open={confirmTrust} onOpenChange={setConfirmTrust}>
         <AlertDialog.Content tone="danger">
@@ -226,7 +231,7 @@ function MutedSuggestions({
   return (
     <Section
       title="Offers in the chat"
-      description={`When an app that isn’t connected or a skill that’s off would help, ${assistant} offers it right in the chat.`}
+      description={`${assistant} offers an app or skill that would help, right in the chat.`}
     >
       {muted.length ? (
         <ul className={styles.commandList} aria-label="Not suggested">
@@ -280,7 +285,7 @@ function MutedSuggestions({
         </ul>
       ) : (
         <Text size="sm" tone="muted">
-          On for every app and skill. Choose “Don’t suggest” on one in a chat, and it shows up here.
+          On for everything. Say “Don’t suggest” to one in a chat, and it’s listed here.
         </Text>
       )}
     </Section>

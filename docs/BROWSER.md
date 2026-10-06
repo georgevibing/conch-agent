@@ -117,7 +117,7 @@ types your secrets.
 
 ## Where it runs
 
-Settings → Browser → **Where it runs**:
+Settings → Browser → Advanced → **Where it runs**:
 
 - **Its own browser** (the default): separate from yours, on this computer.
 - **Your Chrome**, where you're already signed in. In Chrome, open
@@ -144,8 +144,9 @@ meanwhile and Settings says why.
   above mean a page can't make it buy or send anything without you.
 - The browser can't reach Conch itself, or other things on your computer and home
   network (like your router), unless you turn on **Open local apps** in Settings →
-  Browser. That asks for your password first, and the security checkup mentions it.
-- **Sign out of every site** (Settings → Browser) wipes the browser's cookies and
+  Browser → Advanced. That asks for your password first, and the security checkup
+  mentions it.
+- **Sign out of every site** (Settings → Browser → Advanced) wipes the browser's cookies and
   sign-ins in one go.
 
 ## When something goes wrong
@@ -182,7 +183,7 @@ only an administrator can install; Conch then shows the one command to run.
   records are [ADR 0014](./adr/0014-browser.md) and
   [ADR 0080](./adr/0080-the-browser-does-what-you-do.md) (tabs, uploads, clicking by
   position, your own Chrome and the cloud).
-- Testing your own app on `localhost`? Turn on **Open local apps**. Conch's own port
+- Testing your own app on `localhost`? Turn on **Open local apps** (under Advanced). Conch's own port
   stays blocked either way.
 - `pnpm dev:mock` has a scripted assistant that browses: try _"Open example.com and
   click “Learn more”"_, or _"… and sign in"_ to see a handoff. Attach a file and say

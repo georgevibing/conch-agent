@@ -560,9 +560,7 @@ describe('Settings → Health → Updates', () => {
     const toggle = await screen.findByRole('switch', {
       name: /Keep the programs Conch uses up to date/,
     });
-    expect(
-      screen.getByText(/Conch itself always asks first, since it restarts/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Conch itself always asks first/)).toBeInTheDocument();
     await user.click(toggle);
     await waitFor(() => expect(toggle).toBeChecked());
     expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({ auto: true });

@@ -61,9 +61,11 @@ Settings → Terminal:
 - **Let me open terminals in Conch.** Turn it off, and the button, the shortcut and
   every open terminal go away. Pressing the shortcut again explains why, with a
   **Turn it on** button.
-- **Shell:** your usual one, or another installed shell.
-- **Text size**, **Blinking cursor**, and **Screen reader support**, which makes
-  what the terminal prints readable to screen readers.
+- **Text size.**
+
+Under **Advanced**: the **Shell** (your usual one, or another installed shell), a
+**Blinking cursor**, **Screen reader support**, which makes what the terminal prints
+readable to screen readers, and **From other devices** below.
 
 ## Staying safe
 
@@ -71,7 +73,7 @@ A terminal can run anything as you, so Conch is careful with it:
 
 - **Only on this computer, unless you say otherwise.** On your phone or another
   computer, terminals are off. To use one there, turn on **From other devices** in
-  Settings → Terminal. That asks for your password first, and the security checkup
+  Settings → Terminal → Advanced. That asks for your password first, and the security checkup
   reminds you while it's on.
 - **Even then, it checks it's you.** Every time another device opens a terminal, or
   reconnects to one, it asks for your password or key if you haven't entered it in

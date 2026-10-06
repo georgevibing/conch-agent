@@ -35,6 +35,7 @@ export * from './SearchPreview';
 export * from './Usage';
 export * from './Voice';
 export * from './Security';
+export * from './Settings';
 export * from './Integrations';
 export * from './Channels';
 export * from './Providers';

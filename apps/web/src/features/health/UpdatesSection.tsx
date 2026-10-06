@@ -365,7 +365,7 @@ export function UpdatesSection() {
     <Section
       ref={ref}
       title="Updates"
-      description="Conch looks for a new version of itself every few minutes, and for its programs once a day, and tells you here."
+      description="Conch watches for new versions of itself and of the programs it uses."
       status={
         <Button
           size="sm"
@@ -496,7 +496,7 @@ export function UpdatesSection() {
           disabled={actions.pending === 'auto'}
           onCheckedChange={(on) => void actions.setAuto(on)}
           label="Keep the programs Conch uses up to date"
-          description="Updates install by themselves overnight, when nothing is running. Conch itself always asks first, since it restarts."
+          description="Overnight, when nothing is running. Conch itself always asks first."
         />
         {developer && (
           <Switch

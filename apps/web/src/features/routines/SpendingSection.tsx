@@ -128,7 +128,7 @@ export function SpendingSection() {
     <Section
       ref={ref}
       title="Routines"
-      description="What runs while you’re away may spend with pay-as-you-go providers. Plans and models on this computer don’t count."
+      description="What runs while you’re away, on pay-as-you-go providers."
     >
       <SpendingBody spending={spending} />
     </Section>

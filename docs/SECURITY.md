@@ -583,6 +583,6 @@ site for that page:
   this computer only when you said so for that page.
 - A page can't spell your things into the address: the site is fixed, and the
   page can only choose from values it declared.
-- A different address asks again. **Settings → Security → Live data in pages**
+- A different address asks again. **Settings → Security → Advanced → Live data in pages**
   lists every site, and **Take back** removes one.
   ([ADR 0046](./adr/0046-edit-by-hand-and-live-data.md))

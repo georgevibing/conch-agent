@@ -13,7 +13,18 @@
     block-size: 100%;
   }
 
+  /*
+   * The places, as the chats' sidebar is: one left edge for everything (the
+   * way back, the page's name and every row's mark), with the group labels
+   * over the names they gather. `--nav-edge` is that edge; `--nav-row` is the
+   * padding inside a row, which puts its mark on the edge.
+   */
   .nav {
+    --nav-edge: var(--nc-space-3);
+    --nav-row: var(--nc-space-3);
+    /* Where a row's name starts: past its mark and the gap after it. */
+    --nav-text: calc(var(--nav-row) + 1rem + var(--nc-space-2));
+
     display: flex;
     flex-direction: column;
     min-block-size: 0;
@@ -21,18 +32,19 @@
     border-inline-end: 1px solid var(--nc-border-subtle);
   }
 
-  /* Back, level with the app's own top bar. */
+  /* Back, level with the app's own top bar and on the same edge as the rows. */
   .bar {
     display: flex;
     align-items: center;
     flex-shrink: 0;
     block-size: 3.25rem;
-    padding-inline: var(--nc-space-2);
+    padding-inline: var(--nav-edge);
   }
 
   /* The page's name, as large as a page's (not a dialog's) title. */
   .nav .title {
     padding: var(--nc-space-1) var(--nc-space-5) var(--nc-space-4);
+    padding-inline-start: calc(var(--nav-edge) + var(--nav-row));
     font-size: var(--nc-text-3xl);
     line-height: var(--nc-leading-tight);
   }
@@ -41,10 +53,10 @@
     display: flex;
     flex: 1;
     flex-direction: column;
-    gap: var(--nc-space-4);
+    gap: var(--nc-space-5);
     min-block-size: 0;
     overflow-y: auto;
-    padding: 0 var(--nc-space-3) var(--nc-space-6);
+    padding: 0 var(--nav-edge) var(--nc-space-6);
     overscroll-behavior: contain;
   }
 
@@ -54,8 +66,10 @@
     gap: var(--nc-space-0-5);
   }
 
+  /* A quiet label over the names it gathers, never over their marks. */
   .groupLabel {
-    padding: var(--nc-space-1) var(--nc-space-3);
+    padding: var(--nc-space-1-5) var(--nav-row) var(--nc-space-1);
+    padding-inline-start: var(--nav-text);
   }
 
   .list {
@@ -64,8 +78,32 @@
     overflow: visible;
   }
 
+  /* A row reads as the sidebar's own: its mark, its name, nothing else. */
   .list > button {
+    --tab-px: var(--nav-row);
     justify-content: flex-start;
+    block-size: var(--nc-control-md);
+    color: var(--nc-text-muted);
+    font-weight: var(--nc-weight-regular);
+  }
+
+  .list > button[data-state='active'] {
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .list > button:focus-visible {
+    outline-offset: -2px;
+  }
+
+  /*
+   * Where you are: the soft wash the sidebar gives the page you're on, gliding
+   * from place to place — never a card lifted off the list, which at a row's
+   * height reads as a box to type in.
+   */
+  .nav .list [data-variant='pill'] {
+    background: var(--nc-gray-3);
+    box-shadow: none;
   }
 
   /* On a phone the places float in from the side, as the chats do (Shell). */
@@ -263,9 +301,23 @@
       grid-template-columns: minmax(0, 1fr);
     }
 
-    /* Rows a thumb can hit. */
+    /* A drawer a thumb uses: wider rows, the size a phone reads, room at its feet. */
+    .nav {
+      --nav-edge: var(--nc-space-2);
+      --nav-row: var(--nc-space-3);
+    }
+
     .list > button {
-      block-size: 2.75rem;
+      block-size: var(--nc-control-lg);
+      --tab-font: var(--nc-text-lg);
+    }
+
+    .groupLabel {
+      font-size: var(--nc-text-sm);
+    }
+
+    .groups {
+      padding-block-end: max(var(--nc-space-8), env(safe-area-inset-bottom));
     }
 
     .column {

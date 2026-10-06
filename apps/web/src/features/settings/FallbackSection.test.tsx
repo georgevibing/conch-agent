@@ -25,9 +25,7 @@ describe('When a provider can’t answer', () => {
       'PATCH /api/settings': (body) => ({ ...appState(), ...(body as object) }),
     });
     renderApp(<FallbackSection />);
-    expect(
-      await screen.findByText(/let another connected provider answer while Claude Code/),
-    ).toBeVisible();
+    expect(await screen.findByText(/let another provider answer while Claude Code/)).toBeVisible();
 
     await userEvent.click(screen.getByRole('combobox', { name: 'At a usage limit' }));
     await userEvent.click(await screen.findByRole('option', { name: 'Continue with OpenRouter' }));
@@ -53,11 +51,7 @@ describe('When a provider can’t answer', () => {
       'PATCH /api/settings': () => appState(),
     });
     renderApp(<FallbackSection />);
-    expect(
-      await screen.findByText(
-        /When Claude Code reaches a limit, OpenRouter answers the same message/,
-      ),
-    ).toBeVisible();
+    expect(await screen.findByText(/OpenRouter answers the same message/)).toBeVisible();
 
     await userEvent.click(screen.getByRole('combobox', { name: 'At a usage limit' }));
     await userEvent.click(await screen.findByRole('option', { name: 'Wait until it resets' }));
@@ -74,9 +68,7 @@ describe('When a provider can’t answer', () => {
       'GET /api/providers': () => baseProviders,
     });
     renderApp(<FallbackSection />);
-    expect(
-      await screen.findByText(/No model on this computer yet, so messages wait/),
-    ).toBeVisible();
+    expect(await screen.findByText(/No model here yet, so messages wait/)).toBeVisible();
     expect(screen.getByRole('switch', { name: /Answer offline/ })).toBeChecked();
   });
 });

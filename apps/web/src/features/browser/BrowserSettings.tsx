@@ -6,6 +6,7 @@ import {
   Field,
   IconButton,
   Select,
+  SettingsAdvanced,
   Skeleton,
   Stack,
   Switch,
@@ -18,6 +19,7 @@ import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
 import { useAssistantName } from '../integrations/queries';
 import { Section } from '../settings/Section';
+import { useAdvanced } from '../settings/useAdvanced';
 import { browserApi } from './api';
 import { WhereItRuns } from './WhereItRuns';
 import styles from './BrowserSettings.module.css';
@@ -43,6 +45,7 @@ export function BrowserSettings() {
   const client = useQueryClient();
   const { guard, dialog } = useVerify(auth.data?.method ?? 'none');
   const [confirmWipe, setConfirmWipe] = useState(false);
+  const [advanced, setAdvanced] = useAdvanced();
 
   if (isPending || !status) {
     return (
@@ -60,7 +63,7 @@ export function BrowserSettings() {
     <Stack gap={8}>
       <Section
         title="Browser"
-        description={`${name} has a browser of its own. You can watch it in the chat and take over any time. Nothing to set up: it uses a browser you already have, or fetches one the first time.`}
+        description="A browser of its own: watch it in the chat, and take over any time."
       >
         <BrowserStatusCard
           phase={status.phase}
@@ -95,98 +98,104 @@ export function BrowserSettings() {
         </BrowserStatusCard>
       </Section>
 
-      <Section
-        title="Where it runs"
-        description={`${name} can browse in a browser of its own, in your own Chrome where you’re signed in, or in a browser in the cloud. If the one you choose can’t be reached, it uses its own meanwhile.`}
-      >
-        <WhereItRuns status={status} name={name} guard={guard} />
-      </Section>
-
       <Section title="While it browses">
         <Stack gap={4}>
           <Switch
             checked={settings.enabled}
             onCheckedChange={(enabled) => save({ enabled })}
             label={`Let ${name} use the browser`}
-            description="Off: it won’t browse, and says so when a task needs it."
+            description="Off: it says so when a task needs it."
           />
           <Switch
             checked={settings.autoOpen}
             disabled={!settings.enabled}
             onCheckedChange={(autoOpen) => save({ autoOpen })}
-            label="Show the browser when it starts browsing"
-            description="The panel slides in beside the chat. It always opens when you’re needed."
-          />
-          <Switch
-            checked={settings.declineCookies}
-            disabled={!settings.enabled}
-            onCheckedChange={(declineCookies) => save({ declineCookies })}
-            label="Decline cookie banners for you"
-            description="Picks “reject” or “necessary only” wherever it can, so banners don’t get in the way."
-          />
-          <Switch
-            checked={settings.allowLocal}
-            disabled={!settings.enabled}
-            onCheckedChange={(allowLocal) =>
-              void guard(async () => {
-                client.setQueryData(
-                  browserKeys.status,
-                  await browserApi.updateSettings({ allowLocal }),
-                );
-              })
-            }
-            label="Open local apps"
-            description="Pages on this computer and your network, like a dev server on localhost or your router. A page it visits could then reach them too, so only turn this on if you need it. Conch itself always stays out of reach."
+            label="Show the browser when it starts"
+            description="It always opens when you’re needed."
           />
         </Stack>
       </Section>
 
-      <Section
-        title="How it keeps you safe"
-        description={`${name} never types passwords, codes or card numbers: when a site needs one, it hands the browser to you and never sees what you type. It asks before acting on a new site, and every time before anything that buys, sends, posts or deletes. Instructions on web pages are treated as information, never as orders.`}
-      >
-        {status.sites.length === 0 ? (
-          <Text size="sm" tone="subtle">
-            When you choose “Always” for a site, it’s listed here, and you can take it back.
-          </Text>
-        ) : (
-          <ul className={styles.sites} aria-label="Sites you always allow">
-            {status.sites.map((site) => (
-              <li key={site.site} className={styles.site}>
-                <Globe aria-hidden className={styles.siteIcon} />
-                <span className={styles.siteName}>{site.site}</span>
-                <Text as="span" size="xs" tone="subtle">
-                  Always allowed
-                </Text>
-                <IconButton
-                  size="sm"
-                  label={`Stop always allowing ${site.site}`}
-                  onClick={() => revoke.mutate(site.site)}
-                >
-                  <X />
-                </IconButton>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
+      <SettingsAdvanced open={advanced} onOpenChange={setAdvanced}>
+        <Section
+          title="Where it runs"
+          description="Its own browser, your Chrome where you’re signed in, or one in the cloud."
+        >
+          <WhereItRuns status={status} name={name} guard={guard} />
+        </Section>
 
-      <Section
-        title="Your sign-ins"
-        description={`Sites you sign in to in ${name}’s browser stay signed in, so you only do it once. Your own browser is never touched.`}
-      >
-        <div>
-          <Button
-            variant="surface"
-            tone="danger"
-            leadingIcon={<LogOut />}
-            loading={wipe.isPending}
-            onClick={() => setConfirmWipe(true)}
-          >
-            Sign out of every site
-          </Button>
-        </div>
-      </Section>
+        <Section title="On the pages it opens">
+          <Stack gap={4}>
+            <Switch
+              checked={settings.declineCookies}
+              disabled={!settings.enabled}
+              onCheckedChange={(declineCookies) => save({ declineCookies })}
+              label="Decline cookie banners for you"
+            />
+            <Switch
+              checked={settings.allowLocal}
+              disabled={!settings.enabled}
+              onCheckedChange={(allowLocal) =>
+                void guard(async () => {
+                  client.setQueryData(
+                    browserKeys.status,
+                    await browserApi.updateSettings({ allowLocal }),
+                  );
+                })
+              }
+              label="Open local apps"
+              description="A dev server or your router. A page it visits could reach them too, so only turn this on if you need it. Conch itself stays out of reach."
+            />
+          </Stack>
+        </Section>
+
+        <Section
+          title="Sites you always allow"
+          description={`${name} asks before acting on a new site, and never types passwords or card numbers.`}
+        >
+          {status.sites.length === 0 ? (
+            <Text size="sm" tone="subtle">
+              Choose “Always” for a site and it’s listed here, to take back any time.
+            </Text>
+          ) : (
+            <ul className={styles.sites} aria-label="Sites you always allow">
+              {status.sites.map((site) => (
+                <li key={site.site} className={styles.site}>
+                  <Globe aria-hidden className={styles.siteIcon} />
+                  <span className={styles.siteName}>{site.site}</span>
+                  <Text as="span" size="xs" tone="subtle">
+                    Always allowed
+                  </Text>
+                  <IconButton
+                    size="sm"
+                    label={`Stop always allowing ${site.site}`}
+                    onClick={() => revoke.mutate(site.site)}
+                  >
+                    <X />
+                  </IconButton>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+
+        <Section
+          title="Your sign-ins"
+          description="Sites stay signed in here, so you only do it once. Your own browser isn’t touched."
+        >
+          <div>
+            <Button
+              variant="surface"
+              tone="danger"
+              leadingIcon={<LogOut />}
+              loading={wipe.isPending}
+              onClick={() => setConfirmWipe(true)}
+            >
+              Sign out of every site
+            </Button>
+          </div>
+        </Section>
+      </SettingsAdvanced>
 
       <AlertDialog.Root open={confirmWipe} onOpenChange={setConfirmWipe}>
         <AlertDialog.Content tone="danger">

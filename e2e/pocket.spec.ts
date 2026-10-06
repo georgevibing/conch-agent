@@ -70,13 +70,18 @@ test('notifications and voice have their own place in Settings', async ({ page }
   await expect(
     settings.getByRole('switch', { name: 'Notifications on this device' }),
   ).toBeVisible();
-  await expect(settings.getByText('No device gets notifications yet.')).toBeVisible();
+  await expect(settings.getByText('None yet. Turn them on above, or on your phone.')).toBeVisible();
 
   await settings.getByRole('tab', { name: 'Voice' }).click();
-  await expect(settings.getByRole('radiogroup', { name: 'How Conch hears you' })).toBeVisible();
+  await expect(settings.getByRole('heading', { name: 'How Conch hears you' })).toBeVisible();
   await expect(settings.getByRole('list', { name: 'What private dictation needs' })).toContainText(
     'whisper.cpp',
   );
+  // Where it's heard is a sensible default, under Advanced.
+  await settings.getByRole('button', { name: 'Advanced' }).click();
+  await expect(
+    settings.getByRole('radiogroup', { name: 'Where your voice is heard' }),
+  ).toBeVisible();
   await page.keyboard.press('Escape');
 
   // The composer has dictation, and talking hands free.

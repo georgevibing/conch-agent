@@ -45,7 +45,7 @@ A page can show live numbers, like the weather, a price or whether a build passe
 - You're asked once per page and site. If a new version reads a different address, you're asked again.
 - A site on this computer, like a program you're running, needs a second yes: **Let it read from this computer**.
 - Above the page, the bar says when it last read: **Live · Updated 2 min ago**. **Update now** reads again. If a site doesn't answer, the bar says so and the page keeps what it had.
-- **Reads from** lists the sites, and **Stop** takes one back. All of them are in **Settings → Security → Live data in pages**.
+- **Reads from** lists the sites, and **Stop** takes one back. All of them are in **Settings → Security → Advanced → Live data in pages**.
 
 A pinned app keeps showing live data.
 
