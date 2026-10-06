@@ -342,6 +342,17 @@ form.
   glaze and status dot. White on most colours, a deep glyph of the same hue on
   amber, yellow and lime. Nothing is fetched. `IntegrationCard` takes `app`
   for it and `badge` for **Made by you** (`AppMadeBadge`).
+- **The shelf** (`AppDock`, `AppFolder`). Pinned pages sit at the top of the
+  chat list under a quiet **Apps** heading, set exactly as the list's own group
+  labels (`Pinned`, `Today`), so the sidebar reads as one list of parts. Four
+  tiles to a row, two rows; the ones a person opens most are the ones in it.
+  Past that the last place is **All apps**, a folder holding the rest in
+  miniature on one glazed tile, wearing the most pressing dot inside it. It
+  opens the way a folder opens on a phone: it grows out of that tile into a
+  grid with a search at its head, and folds back into it. The search has the
+  focus on a computer (a phone's keyboard waits for a tap), ↓ goes into the
+  grid, the arrows move by tile and by row, a letter goes back to the search
+  and lands in it, and choosing an app opens it and closes the folder.
 - **What it can do** (`AppAbilityList`). One plain line each, in the
   protocol's own words (`appAbilities`), so the card, the app's page, the
   preview and the assistant's prompt say the same thing. What it reaches wears

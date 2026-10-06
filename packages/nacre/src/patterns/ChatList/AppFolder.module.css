@@ -1,0 +1,134 @@
+@layer nacre.components {
+  /* ── The folder ────────────────────────────────────────────────────────
+     A dialog that holds its size while a search narrows it, so nothing
+     jumps; the grid scrolls inside it. */
+
+  .folder {
+    --dialog-w: 38rem;
+    block-size: min(36rem, calc(var(--nc-visible-height, 100dvh) * 0.92 - 3rem));
+  }
+
+  /* It grows out of the tile that opened it and folds back into it: the
+     distance from the dialog's middle to the tile's, at a fraction of its
+     size. The dialog's own centring (`translate`) is left alone. */
+  .folder[data-from] {
+    --af-dx: calc(var(--af-x) - 50vw);
+    --af-dy: calc(
+      var(--af-y) - var(--nc-visible-top, 0px) - var(--nc-visible-height, 100dvh) * 0.46
+    );
+  }
+
+  .folder[data-from][data-state='open'] {
+    animation:
+      af-grow var(--nc-spring-soft-duration) var(--nc-spring-soft),
+      nc-fade-in var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .folder[data-from][data-state='closed'] {
+    animation: af-fold var(--nc-duration-base) var(--nc-ease-in) forwards;
+  }
+
+  @keyframes af-grow {
+    from {
+      transform: translate(var(--af-dx), var(--af-dy)) scale(0.12);
+    }
+  }
+
+  @keyframes af-fold {
+    to {
+      opacity: 0;
+      transform: translate(var(--af-dx), var(--af-dy)) scale(0.12);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .folder[data-from][data-state] {
+      animation-name: nc-fade-in;
+    }
+
+    .folder[data-from][data-state='closed'] {
+      animation-name: nc-fade-out;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .folder[data-from][data-state='open'] {
+    animation-name: nc-fade-in;
+  }
+
+  [data-nacre-motion='reduced'] .folder[data-from][data-state='closed'] {
+    animation-name: nc-fade-out;
+  }
+
+  /* ── Its head: the name, how many, and the search ──────────────────── */
+
+  .head {
+    flex-direction: row;
+    align-items: baseline;
+    gap: var(--nc-space-2);
+  }
+
+  .title {
+    font-size: var(--nc-text-xl);
+    letter-spacing: -0.018em;
+  }
+
+  .count {
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-sm);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .search {
+    padding: var(--nc-space-3) var(--nc-space-5) var(--nc-space-1);
+  }
+
+  /* ── The apps ──────────────────────────────────────────────────────── */
+
+  .body {
+    flex: 1;
+    min-block-size: 0;
+    overflow-y: auto;
+    padding: var(--nc-space-2) var(--nc-space-3) var(--nc-space-4);
+    overscroll-behavior: contain;
+  }
+
+  /* As many columns as fit, each wide enough for a name; a phone gets four. */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(5.25rem, 1fr));
+    gap: var(--nc-space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  @media (max-width: 30rem) {
+    .grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: var(--nc-space-0-5);
+    }
+  }
+
+  .cell {
+    display: flex;
+    min-inline-size: 0;
+    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .empty {
+    margin: 0;
+    padding: var(--nc-space-8) var(--nc-space-4);
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-sm);
+    text-align: center;
+    text-wrap: balance;
+  }
+
+  .foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-3) var(--nc-space-5) var(--nc-space-4);
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+}

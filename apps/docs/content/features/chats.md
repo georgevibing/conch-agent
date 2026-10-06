@@ -10,7 +10,8 @@ Your chats are in the sidebar. Point at one and press **⋯**, or right-click it
 
 From the top, the sidebar shows:
 
-- **Pinned apps.** App pages you pinned, as a row of app tiles. Each tile has its app's icon. Point at one to see where it's from, like "Page of the Tally app". Right-click a tile, or press and hold it, for **Unpin** and the app's details.
+- **Apps.** App pages you pinned, as a row of app tiles under a quiet **Apps** heading. Each tile has its app's icon. Point at one to see where it's from, like "Page of the Tally app". Right-click a tile, or press and hold it, for **Unpin** and the app's details. The ones you open most are the ones in the row.
+  With more apps than fit, the last tile is **All apps**: press it and every app opens as a folder, with a search. Type a few letters to find one, use the arrow keys to move between them, Enter to open, and Escape to close. **Open Apps** at its foot goes to the [Apps](apps.md) page.
 - **Needs you.** Chats waiting for you to allow or answer something stay here until you do.
 - **Pinned.** Chats you keep at the top.
 - **Folders.** Your own groups of chats.

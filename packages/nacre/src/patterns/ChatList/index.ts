@@ -7,6 +7,7 @@ export {
   type AppDockTileProps,
   type DockGlyphProps,
 } from './AppDock';
+export { AppFolder, findApps, type AppFolderOrigin, type AppFolderProps } from './AppFolder';
 export { ChatListSection, type ChatListSectionProps } from './ChatListSection';
 export {
   CHAT_STATUS_WORDS,

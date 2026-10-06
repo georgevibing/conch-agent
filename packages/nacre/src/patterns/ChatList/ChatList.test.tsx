@@ -8,7 +8,8 @@ import { IconButton } from '../../components/IconButton';
 import { expectAccessible, renderNacre } from '../../test/render';
 import { AppIcon } from '../ConchApps/AppIcon';
 import { IntegrationLogo } from '../Integrations/IntegrationLogo';
-import { AppDock, DockGlyph } from './AppDock';
+import { AppDock, DockGlyph, type AppDockItem } from './AppDock';
+import { AppFolder, findApps } from './AppFolder';
 import { ChatListSection } from './ChatListSection';
 import { ChatRow } from './ChatRow';
 import { CHAT_DRAG_TYPE } from './drag';
@@ -24,6 +25,18 @@ const more = (title: string) => (
     <MoreHorizontal />
   </IconButton>
 );
+
+/** `n` pinned apps: App 1…App n, the 13th waiting for an answer. */
+function apps(n: number): AppDockItem[] {
+  return Array.from({ length: n }, (_, i) => ({
+    key: `app-${i}`,
+    label: `App ${i + 1}`,
+    icon: <AppIcon glyph="sparkles" color="blue" />,
+    source: `The App ${i + 1} app`,
+    status: i === 12 ? ('waiting' as const) : undefined,
+    onOpen: () => undefined,
+  }));
+}
 
 function chatDrop(ids: string[]) {
   return {
@@ -390,6 +403,113 @@ describe('ChatList', () => {
     await user.tab();
     await user.keyboard('{Enter}');
     expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('names the apps, and keeps every one inline while they fit', async () => {
+    const { container } = renderNacre(<AppDock items={apps(3)} />);
+    const dock = screen.getByRole('region', { name: 'Pinned apps' });
+    expect(within(dock).getByText('Apps')).toBeInTheDocument();
+    expect(within(dock).getAllByRole('button')).toHaveLength(3);
+    expect(screen.queryByRole('button', { name: /All apps/ })).not.toBeInTheDocument();
+    await expectAccessible(container);
+  });
+
+  it('with many apps, keeps a few inline and opens the rest as a folder', async () => {
+    const user = userEvent.setup();
+    const items = apps(50);
+    const { container } = renderNacre(<AppDock items={items} />);
+    const dock = screen.getByRole('region', { name: 'Pinned apps' });
+    // Two rows of four: seven apps, then the folder.
+    expect(within(dock).getAllByRole('button')).toHaveLength(8);
+    expect(within(dock).getByRole('button', { name: 'App 7' })).toBeInTheDocument();
+    expect(within(dock).queryByRole('button', { name: 'App 8' })).not.toBeInTheDocument();
+
+    const all = within(dock).getByRole('button', { name: /All apps/ });
+    // It says how many are behind it, and the most pressing dot inside it.
+    expect(all).toHaveAccessibleDescription('43 more, 50 in all, Needs you');
+    expect(all).toHaveAttribute('aria-expanded', 'false');
+    await expectAccessible(container);
+
+    await user.click(all);
+    const folder = await screen.findByRole('dialog', { name: 'Apps' });
+    expect(folder).toHaveAccessibleDescription('50 apps');
+    expect(within(folder).getAllByRole('button', { name: /^App \d+$/ })).toHaveLength(50);
+    await expectAccessible(folder);
+  });
+
+  it('finds an app in the folder, ignoring accents, and opens it with the keyboard', async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
+    const items = [
+      ...apps(12),
+      {
+        key: 'cafe',
+        label: 'Café finder',
+        icon: <AppIcon glyph="coffee" color="amber" />,
+        source: 'The Café finder app',
+        onOpen,
+      },
+    ];
+    renderNacre(<AppFolder open onOpenChange={() => undefined} items={items} />);
+    const folder = screen.getByRole('dialog', { name: 'Apps' });
+    const search = within(folder).getByRole('searchbox', { name: 'Search apps' });
+    expect(search).toHaveFocus();
+
+    await user.keyboard('cafe');
+    expect(within(folder).queryAllByRole('button', { name: /^App \d+$/ })).toHaveLength(0);
+    expect(folder).toHaveAccessibleDescription('1 app');
+    // Down into the grid, then Enter opens what's focused.
+    await user.keyboard('{ArrowDown}');
+    expect(within(folder).getByRole('button', { name: 'Café finder' })).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('says when nothing matches, and moves by tile and by row', async () => {
+    const user = userEvent.setup();
+    renderNacre(<AppFolder open onOpenChange={() => undefined} items={apps(12)} />);
+    const folder = screen.getByRole('dialog', { name: 'Apps' });
+    await user.keyboard('{ArrowDown}');
+    expect(within(folder).getByRole('button', { name: 'App 1' })).toHaveFocus();
+    await user.keyboard('{ArrowRight}');
+    expect(within(folder).getByRole('button', { name: 'App 2' })).toHaveFocus();
+    await user.keyboard('{End}');
+    expect(within(folder).getByRole('button', { name: 'App 12' })).toHaveFocus();
+    await user.keyboard('{Home}');
+    expect(within(folder).getByRole('button', { name: 'App 1' })).toHaveFocus();
+    // A letter goes back to the search, and lands in it, so typing always finds.
+    await user.keyboard('z');
+    const search = within(folder).getByRole('searchbox', { name: 'Search apps' });
+    expect(search).toHaveFocus();
+    expect(search).toHaveValue('z');
+    await user.clear(search);
+    await user.type(search, 'nothing here');
+    expect(within(folder).getByText('Nothing called “nothing here”.')).toBeInTheDocument();
+    expect(folder).toHaveAccessibleDescription('No apps');
+  });
+
+  it('ranks what a search finds: the name first, then a word in it, then where it is from', () => {
+    const items = apps(0).concat(
+      {
+        key: 'a',
+        label: 'Reading list',
+        icon: null,
+        source: 'Made in a chat',
+        onOpen: () => undefined,
+      },
+      { key: 'b', label: 'Lists', icon: null, source: 'Made in a chat', onOpen: () => undefined },
+      {
+        key: 'c',
+        label: 'Allotment',
+        icon: null,
+        source: 'The Listing app',
+        onOpen: () => undefined,
+      },
+      { key: 'd', label: 'Enlist', icon: null, source: 'Made in a chat', onOpen: () => undefined },
+    );
+    expect(findApps(items, 'list').map((i) => i.key)).toEqual(['b', 'a', 'd', 'c']);
+    expect(findApps(items, '  ').map((i) => i.key)).toEqual(['a', 'b', 'c', 'd']);
+    expect(findApps(items, 'zzz')).toEqual([]);
   });
 
   it('offers to tidy up, in a month or in days', () => {
