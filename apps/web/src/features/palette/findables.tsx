@@ -159,7 +159,6 @@ const settingsPlaces: {
   },
   {
     tab: 'general',
-    focus: ADVANCED_FOCUS,
     label: 'Start over',
     keywords: 'start over replay welcome onboarding setup again first run',
     icon: <RefreshCw />,
@@ -271,7 +270,6 @@ const settingsPlaces: {
   },
   {
     tab: 'voice',
-    focus: ADVANCED_FOCUS,
     label: 'Where your voice is heard',
     keywords:
       'private on this computer whisper browser speech service google apple hears reading speed rate',
@@ -345,7 +343,6 @@ const settingsPlaces: {
   },
   {
     tab: 'browser',
-    focus: ADVANCED_FOCUS,
     label: 'Where the browser runs',
     keywords:
       'where it runs my chrome own browser cloud browserbase steel cdp remote debugging devtools cookies banners local localhost sites always allowed sign out of every site',
@@ -354,15 +351,14 @@ const settingsPlaces: {
   {
     tab: 'terminal',
     label: 'Terminal',
-    keywords: 'shell console command line text size',
+    keywords:
+      'shell powershell bash zsh console command line text size font cursor blinking screen reader looks',
     icon: <SquareTerminal />,
   },
   {
     tab: 'terminal',
-    focus: ADVANCED_FOCUS,
     label: 'Terminals from other devices',
-    keywords:
-      'remote devices phone other computers shell powershell bash zsh blinking cursor screen reader',
+    keywords: 'remote devices phone other computers allow open terminals elsewhere',
     icon: <SquareTerminal />,
   },
   {
@@ -380,7 +376,6 @@ const settingsPlaces: {
   },
   {
     tab: 'appearance',
-    focus: ADVANCED_FOCUS,
     label: 'Lustre',
     keywords: 'lustre shimmer pearl sheen iridescence shine effects',
     icon: <Sparkles />,
@@ -1263,7 +1258,7 @@ export function useFindables(query: string, conversationId: string | undefined):
       icon: <CircleArrowUp />,
       run: () => openSettings('health', 'updates'),
     },
-    // One id per row, even where a place has several ways in (its Advanced).
+    // One id per row, even where a place has several ways in (Start over, Lustre).
     ...settingsPlaces.map((p) => ({
       id: `settings-${p.tab}-${p.label.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-')}`,
       label: `Settings: ${p.label}`,

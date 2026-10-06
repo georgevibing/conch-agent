@@ -1,13 +1,5 @@
 import type { EngineId, UsageSnapshot } from '@conch/protocol';
-import {
-  Field,
-  Input,
-  ProviderLogo,
-  SettingsAdvanced,
-  Stack,
-  Text,
-  UsagePanel,
-} from '@conch/nacre';
+import { Field, Input, ProviderLogo, Stack, Text, UsagePanel } from '@conch/nacre';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
@@ -19,10 +11,7 @@ import { LearningSpendSection } from '../learning/LearningSpendSection';
 import { SpendingSection } from '../routines/SpendingSection';
 import { Section, SaveStatus } from '../settings/Section';
 import { useAutosave } from '../settings/useAutosave';
-import { TURN_LIMITS_FOCUS, TurnLimitsSection } from './TurnLimitsSection';
-import { useAdvanced } from '../settings/useAdvanced';
-import { LEARNING_SPEND_FOCUS } from '../learning/LearningSpendSection';
-import { PLAN_ROOM_FOCUS, ROUTINES_SPEND_FOCUS } from '../routines/SpendingSection';
+import { TurnLimitsSection } from './TurnLimitsSection';
 import styles from './Usage.module.css';
 import { useUsageRefresh } from './useUsageRefresh';
 
@@ -107,12 +96,6 @@ const limitsOf = (u: UsageSnapshot) =>
  */
 export function UsageTab() {
   const { data: list } = useProviders();
-  const [advanced, setAdvanced] = useAdvanced(
-    ROUTINES_SPEND_FOCUS,
-    PLAN_ROOM_FOCUS,
-    LEARNING_SPEND_FOCUS,
-    TURN_LIMITS_FOCUS,
-  );
   const ready = (list?.providers ?? []).filter((p) => p.ready);
   const usages = useQueries({
     queries: ready.map((p) => ({
@@ -145,11 +128,9 @@ export function UsageTab() {
       </Section>
       {/* Every chat on a key you pay as you go counts, whichever provider answers it (ADR 0079). */}
       {spend && <BudgetField initial={spend.budget} />}
-      <SettingsAdvanced open={advanced} onOpenChange={setAdvanced}>
-        <SpendingSection />
-        <LearningSpendSection />
-        <TurnLimitsSection />
-      </SettingsAdvanced>
+      <SpendingSection />
+      <LearningSpendSection />
+      <TurnLimitsSection />
     </Stack>
   );
 }

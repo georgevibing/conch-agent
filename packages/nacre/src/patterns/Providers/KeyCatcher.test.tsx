@@ -34,10 +34,39 @@ function paste(target: Element | Document, text: string) {
 }
 
 describe('KeyCatcher', () => {
+  it('waits as one quiet line, and opens to a field that takes the focus', async () => {
+    const user = userEvent.setup();
+    const { container } = renderNacre(
+      <KeyCatcher recognise={recognise} onConnect={async () => {}} />,
+    );
+    const open = screen.getByRole('button', { name: 'Use an API key instead' });
+    expect(open).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByLabelText('Paste a key')).toBeNull();
+    await expectAccessible(container);
+
+    await user.click(open);
+    expect(screen.getByLabelText('Paste a key')).toHaveFocus();
+    expect(screen.getByText(/anywhere on this page/)).toBeInTheDocument();
+  });
+
+  it('opens by itself when a key is pasted on the page', async () => {
+    const onConnect = vi.fn(async () => {});
+    renderNacre(<KeyCatcher recognise={recognise} onConnect={onConnect} />);
+    paste(document.body, GROQ_KEY);
+    expect(onConnect).toHaveBeenCalledWith('groq', GROQ_KEY);
+    expect(screen.getByRole('button', { name: 'Use an API key instead' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(await screen.findByText(/Groq is connected/)).toBeInTheDocument();
+  });
+
   it('knows a key by its shape and checks it with that provider straight away', async () => {
     let finish!: () => void;
     const onConnect = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
-    const { container } = renderNacre(<KeyCatcher recognise={recognise} onConnect={onConnect} />);
+    const { container } = renderNacre(
+      <KeyCatcher recognise={recognise} onConnect={onConnect} defaultOpen />,
+    );
 
     paste(screen.getByLabelText('Paste a key'), GROQ_KEY);
 
@@ -54,7 +83,7 @@ describe('KeyCatcher', () => {
   it('asks whose it is when keys like it come from more than one place', async () => {
     const user = userEvent.setup();
     const onConnect = vi.fn(async () => {});
-    renderNacre(<KeyCatcher recognise={recognise} onConnect={onConnect} />);
+    renderNacre(<KeyCatcher recognise={recognise} onConnect={onConnect} defaultOpen />);
 
     paste(screen.getByLabelText('Paste a key'), 'sk-0123456789abcdefghijklmnop');
 
@@ -68,7 +97,12 @@ describe('KeyCatcher', () => {
     const user = userEvent.setup();
     const onConnect = vi.fn(async () => {});
     renderNacre(
-      <KeyCatcher recognise={recognise} all={[OPENAI, GROQ, MISTRAL]} onConnect={onConnect} />,
+      <KeyCatcher
+        recognise={recognise}
+        all={[OPENAI, GROQ, MISTRAL]}
+        onConnect={onConnect}
+        defaultOpen
+      />,
     );
     const key = 'abcdefghijklmnopqrstuvwxyz012345';
 
@@ -86,7 +120,9 @@ describe('KeyCatcher', () => {
   it('offers everyone when it doesn’t know the key at all', async () => {
     const user = userEvent.setup();
     const onConnect = vi.fn(async () => {});
-    renderNacre(<KeyCatcher recognise={recognise} all={[OPENAI, GROQ]} onConnect={onConnect} />);
+    renderNacre(
+      <KeyCatcher recognise={recognise} all={[OPENAI, GROQ]} onConnect={onConnect} defaultOpen />,
+    );
 
     await user.type(screen.getByLabelText('Paste a key'), 'abcdefghijklmnopqrstuvwxyz0123');
     await user.click(screen.getByRole('button', { name: 'Connect' }));
@@ -100,7 +136,7 @@ describe('KeyCatcher', () => {
     const onConnect = vi.fn(async () => {
       throw new Error('Groq refused your key. Check that you copied all of it.');
     });
-    renderNacre(<KeyCatcher recognise={recognise} onConnect={onConnect} />);
+    renderNacre(<KeyCatcher recognise={recognise} onConnect={onConnect} defaultOpen />);
 
     paste(screen.getByLabelText('Paste a key'), GROQ_KEY);
 
@@ -116,6 +152,7 @@ describe('KeyCatcher', () => {
         onConnect={async () => {
           throw new Error('');
         }}
+        defaultOpen
       />,
     );
     paste(screen.getByLabelText('Paste a key'), GROQ_KEY);
@@ -147,7 +184,7 @@ describe('KeyCatcher', () => {
 
   it('says a key is one word when something else was typed', async () => {
     const user = userEvent.setup();
-    renderNacre(<KeyCatcher recognise={recognise} onConnect={async () => {}} />);
+    renderNacre(<KeyCatcher recognise={recognise} onConnect={async () => {}} defaultOpen />);
     await user.type(screen.getByLabelText('Paste a key'), 'my key is');
     expect(screen.getByText('A key is one long word, with no spaces in it.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Connect' })).toBeDisabled();

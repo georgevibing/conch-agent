@@ -207,7 +207,9 @@ const recogniseKey = (value: string): KeyMatch =>
           : { candidates: [], sure: false };
 
 /**
- * Have a key? Paste it here, or anywhere on the page — Conch knows a key by its
+ * Use an API key instead: one quiet line under the ways to sign in, and a
+ * field a press away. Paste a key there, or anywhere on the page (it opens by
+ * itself) — Conch knows a key by its
  * prefix and checks it with its provider straight away. Try `gsk_` and 26 more
  * characters (one company's prefix), `sk-` and 26 more (shared by several: it
  * asks), 32 letters and digits (only Mistral's shape, but no prefix: it asks
@@ -218,6 +220,7 @@ export const PasteAKey: Story = {
   render: () => (
     <div style={{ maxInlineSize: '40rem' }}>
       <KeyCatcher
+        defaultOpen
         recognise={recogniseKey}
         all={[gemini, groq, deepseek, kimi, mistral, qwen]}
         onConnect={(id, value) =>
@@ -231,6 +234,19 @@ export const PasteAKey: Story = {
             ),
           )
         }
+      />
+    </div>
+  ),
+};
+
+/** As it waits on the page: one quiet line, the field a press (or a paste) away. */
+export const PasteAKeyFolded: Story = {
+  render: () => (
+    <div style={{ maxInlineSize: '40rem' }}>
+      <KeyCatcher
+        recognise={recogniseKey}
+        all={[gemini, groq, deepseek, kimi, mistral, qwen]}
+        onConnect={() => new Promise((resolve) => setTimeout(resolve, 1200))}
       />
     </div>
   ),

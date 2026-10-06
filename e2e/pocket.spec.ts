@@ -77,8 +77,7 @@ test('notifications and voice have their own place in Settings', async ({ page }
   await expect(settings.getByRole('list', { name: 'What private dictation needs' })).toContainText(
     'whisper.cpp',
   );
-  // Where it's heard is a sensible default, under Advanced.
-  await settings.getByRole('button', { name: 'Advanced' }).click();
+  // Where it's heard is chosen on the same page, a sensible default already picked.
   await expect(
     settings.getByRole('radiogroup', { name: 'Where your voice is heard' }),
   ).toBeVisible();

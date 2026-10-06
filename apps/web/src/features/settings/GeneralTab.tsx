@@ -1,16 +1,14 @@
-import { Button, PathPicker, SettingsAdvanced, Stack } from '@conch/nacre';
+import { Button, PathPicker, Stack } from '@conch/nacre';
 import { useState } from 'react';
 
 import { useAppState, useUpdateSettings } from '../../api/queries';
 import { canPickHere, pickPath } from '../../lib/pick';
 import { SaveStatus, Section } from './Section';
-import { useAdvanced } from './useAdvanced';
 import { useAutosave } from './useAutosave';
 
 /**
  * Settings → General: what belongs to Conch as a whole rather than to one
- * provider or feature — the folder every provider works in, and, under
- * Advanced, starting over.
+ * provider or feature — the folder every provider works in, and starting over.
  */
 export function GeneralTab({
   workspace,
@@ -28,7 +26,6 @@ export function GeneralTab({
     900,
   );
   const assistant = app?.persona.name ?? 'Conch';
-  const [advanced, setAdvanced] = useAdvanced();
 
   return (
     <Stack gap={8}>
@@ -53,19 +50,20 @@ export function GeneralTab({
           placeholder="~/Projects"
         />
       </Section>
-      <SettingsAdvanced open={advanced} onOpenChange={setAdvanced}>
-        <Section title="Start over" description="Your conversations and memories stay.">
-          <div>
-            <Button
-              variant="surface"
-              size="sm"
-              onClick={() => void update.mutateAsync({ onboarded: false })}
-            >
-              Replay welcome
-            </Button>
-          </div>
-        </Section>
-      </SettingsAdvanced>
+      {/* One row: what it does, and the button beside it. */}
+      <Section
+        title="Start over"
+        description="See the welcome again. Your conversations and memories stay."
+        status={
+          <Button
+            variant="surface"
+            size="sm"
+            onClick={() => void update.mutateAsync({ onboarded: false })}
+          >
+            Replay welcome
+          </Button>
+        }
+      />
     </Stack>
   );
 }

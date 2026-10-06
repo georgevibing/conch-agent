@@ -69,7 +69,8 @@ const candidate = (p: Provider): KeyCandidate => ({
 });
 
 /**
- * Have a key? Paste it — here or anywhere on the page. Conch knows whose it is
+ * Use an API key instead: a quiet line under the ways in. Paste a key there or
+ * anywhere on the page, and Conch knows whose it is
  * from its prefix, or asks when its shape alone could be more than one
  * company's, and checks it with that provider before keeping it.
  */

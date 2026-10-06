@@ -123,8 +123,6 @@ export function ProvidersTab() {
               {data.pinned}
             </Callout>
           )}
-          {!pinned && !isPending && <KeyPaste providers={providers} />}
-
           <section aria-labelledby={yoursId} className={styles.section}>
             {!pinned && yours.length > 0 && (
               <Heading level={3} size="sm" tone="muted" id={yoursId}>
@@ -216,6 +214,9 @@ export function ProvidersTab() {
               onAddServer={() => setConnecting(SERVER_TILE.id)}
             />
           )}
+
+          {/* Last: a key is for the few who have one, a quiet line under the ways in. */}
+          {!pinned && !isPending && <KeyPaste providers={providers} />}
 
           <Text size="xs" tone="subtle">
             Keys stay on this computer, or in 1Password, and are never shown again.

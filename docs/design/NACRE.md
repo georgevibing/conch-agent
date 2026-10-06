@@ -119,18 +119,24 @@ place in a glance and never change a thing.
   `Field`, or one row that leads to a page of its own. Never a paragraph where a
   line will do, and never the same thing said twice (a Nacre pattern that
   explains itself keeps its words; the section above it stays quiet).
-- **Sensible defaults, then `SettingsAdvanced`.** What almost nobody changes
-  waits at the foot of the page, under a hairline, behind the word **Advanced**:
-  a default that is already right, a switch for one person in a thousand, the
-  rare thing a page can't be without. Inside it are the page's own sections,
+- **Everything in sight, unless the page is dense.** A short page shows all it
+  holds, compact: a rare switch is one more row, a rare action one line with its
+  button beside it — never a fold that hides one or two things and leaves the
+  page emptier. Only a place with a lot in it (Models, Security) keeps what
+  almost nobody changes at its foot, under a hairline, behind the word
+  **Advanced** (`SettingsAdvanced`). Inside it are the page's own sections,
   spaced as they are above, so opening it only makes the page longer — never a
-  second page, never a dialog. Nothing is lost: ⌘K finds what moved in there by
-  name (`ADVANCED_FOCUS`, `useAdvanced`), and the place opens with its Advanced
-  already open, as a repair's fix does.
+  second page, never a dialog. What people come to a place for (how a terminal
+  looks, which voice) is never folded. Nothing is lost: ⌘K finds what's in
+  there by name (`ADVANCED_FOCUS`, `useAdvanced`), and the place opens with its
+  Advanced already open, as a repair's fix does.
+- **The other way in, quietly.** A page whose main way is a press (Providers:
+  sign in) keeps the way for the few — an API key — as one muted line at its
+  foot, **Use an API key instead**, that opens to a single field in place.
 - **The places, as the chats are.** The list beside the page (a `Sheet` on a
   phone, like the chat list) reads like the sidebar: one left edge for the way
-  back, the page's name and every row's mark, with the group labels over the
-  names they gather. The place you're on wears the sidebar's soft wash, gliding
+  back, the page's name, every group's label and every row's mark — a label sits
+  flush over its rows, never indented to their names. The place you're on wears the sidebar's soft wash, gliding
   from row to row — not a card lifted off the list, which at a row's height
   reads as a box to type in. A thumb gets 44 px rows and the size a phone
   reads, and the list keeps room at its feet for the phone's home bar.

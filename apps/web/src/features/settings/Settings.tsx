@@ -9,7 +9,6 @@ import {
   RadioGroup,
   SegmentedControl,
   Sheet,
-  SettingsAdvanced,
   Slider,
   Stack,
   Switch,
@@ -84,7 +83,6 @@ import { GeneralTab } from './GeneralTab';
 import { ModelsTab } from './ModelsTab';
 import { SaveStatus, Section } from './Section';
 import { usePageInside } from './trail';
-import { useAdvanced } from './useAdvanced';
 import { useAutosave } from './useAutosave';
 
 function PersonalityTab({ initial }: { initial: Persona }) {
@@ -220,7 +218,6 @@ const accentSwatches = Object.keys(accents) as AccentName[];
 
 function AppearanceTab() {
   const theme = useNacreTheme();
-  const [advanced, setAdvanced] = useAdvanced();
   return (
     <Stack gap={8}>
       <Section title="Appearance">
@@ -271,6 +268,17 @@ function AppearanceTab() {
               })}
             </div>
           </Stack>
+          <Field>
+            <Field.Label>Lustre</Field.Label>
+            <Slider
+              min={0}
+              max={1}
+              step={0.05}
+              value={[theme.lustre]}
+              onValueChange={([v]) => theme.setTheme({ lustre: v ?? 1 })}
+            />
+            <Field.Description>The pearl shimmer under your pointer.</Field.Description>
+          </Field>
           <Switch
             checked={theme.motion === 'reduced'}
             onCheckedChange={(on) => theme.setTheme({ motion: on ? 'reduced' : 'system' })}
@@ -278,18 +286,6 @@ function AppearanceTab() {
           />
         </Stack>
       </Section>
-      <SettingsAdvanced open={advanced} onOpenChange={setAdvanced}>
-        <Section title="Lustre" description="The pearl shimmer under your pointer.">
-          <Slider
-            aria-label="Lustre"
-            min={0}
-            max={1}
-            step={0.05}
-            value={[theme.lustre]}
-            onValueChange={([v]) => theme.setTheme({ lustre: v ?? 1 })}
-          />
-        </Section>
-      </SettingsAdvanced>
     </Stack>
   );
 }

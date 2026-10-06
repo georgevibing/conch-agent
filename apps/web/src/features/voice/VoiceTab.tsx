@@ -5,10 +5,10 @@ import {
   Field,
   RadioGroup,
   Select,
-  SettingsAdvanced,
   Slider,
   Stack,
   Switch,
+  Text,
   toast,
   VoiceLibrary,
 } from '@conch/nacre';
@@ -21,7 +21,6 @@ import { GetIt } from '../setup/GetIt';
 import { voiceApi, voiceKeys } from './api';
 
 import { Section } from '../settings/Section';
-import { useAdvanced } from '../settings/useAdvanced';
 import { recognitionClass } from './listen';
 import { languageOf, setVoicePrefs, useVoicePrefs } from './prefs';
 import { PrivateDictation } from './PrivateDictation';
@@ -81,7 +80,6 @@ export function VoiceTab() {
   const speech = useSpeech();
   const updateSettings = useUpdateSettings();
   const [trying, setTrying] = useState<string>();
-  const [advanced, setAdvanced] = useAdvanced();
   const ready = speech.data?.voices.filter((v) => v.state === 'ready') ?? [];
   const cloud = speech.data?.cloud ?? [];
   const chosen = conch ? prefs.voice : voice?.voiceURI;
@@ -111,10 +109,39 @@ export function VoiceTab() {
         description={
           choice?.kind === 'ready'
             ? `Dictation and talking hands free — ${HOW[choice.engine]}`
-            : 'Dictation and talking hands free, the most private way available.'
+            : 'Dictation and talking hands free.'
         }
       >
         <Stack gap={4}>
+          {/* A default that's already right: compact choices, not a wall of cards. */}
+          <Stack gap={2}>
+            <Text as="span" size="sm" weight="medium" aria-hidden>
+              Where it’s heard
+            </Text>
+            <RadioGroup
+              aria-label="Where your voice is heard"
+              value={prefs.engine}
+              onValueChange={(engine) => setVoicePrefs({ engine: engine as typeof prefs.engine })}
+            >
+              <RadioGroup.Item
+                value="auto"
+                label="The most private way available"
+                description="On this device when it can, then on the computer Conch runs on."
+              />
+              <RadioGroup.Item
+                value="private"
+                label="On the computer Conch runs on"
+                description="Private everywhere, even on a phone. Works offline."
+              />
+              {recognitionClass() && (
+                <RadioGroup.Item
+                  value="browser"
+                  label="Your browser’s speech service"
+                  description="Google for Chrome and Edge, Apple for Safari: they hear what you say."
+                />
+              )}
+            </RadioGroup>
+          </Stack>
           <PrivateDictation />
           <Field>
             <Field.Label>Language</Field.Label>
@@ -192,6 +219,17 @@ export function VoiceTab() {
               onChoose={choose}
               onTry={tryVoice}
             />
+            <Field>
+              <Field.Label>Reading speed</Field.Label>
+              <Slider
+                thumbLabels={['Reading speed']}
+                min={0.7}
+                max={1.5}
+                step={0.05}
+                value={[prefs.rate]}
+                onValueChange={([rate]) => setVoicePrefs({ rate: rate ?? 1 })}
+              />
+            </Field>
             <div>
               <Button
                 variant="surface"
@@ -205,49 +243,6 @@ export function VoiceTab() {
           </Stack>
         </Section>
       )}
-
-      <SettingsAdvanced open={advanced} onOpenChange={setAdvanced}>
-        <Section title="Where your voice is heard">
-          <RadioGroup
-            variant="card"
-            aria-label="Where your voice is heard"
-            value={prefs.engine}
-            onValueChange={(engine) => setVoicePrefs({ engine: engine as typeof prefs.engine })}
-          >
-            <RadioGroup.Item
-              value="auto"
-              label="The most private way available"
-              description="On this device when it can, then on the computer Conch runs on."
-            />
-            <RadioGroup.Item
-              value="private"
-              label="On the computer Conch runs on"
-              description="Private everywhere, even on a phone. Works offline."
-            />
-            {recognitionClass() && (
-              <RadioGroup.Item
-                value="browser"
-                label="Your browser’s speech service"
-                description="Google for Chrome and Edge, Apple for Safari: they hear what you say."
-              />
-            )}
-          </RadioGroup>
-        </Section>
-
-        {(canSpeak() || canSpeak('piper:x')) && (
-          <Section title="Reading speed">
-            <Slider
-              aria-label="Reading speed"
-              thumbLabels={['Speed']}
-              min={0.7}
-              max={1.5}
-              step={0.05}
-              value={[prefs.rate]}
-              onValueChange={([rate]) => setVoicePrefs({ rate: rate ?? 1 })}
-            />
-          </Section>
-        )}
-      </SettingsAdvanced>
     </Stack>
   );
 }

@@ -107,7 +107,6 @@ export function ProviderSetup({ onReady }: ProviderSetupProps) {
         )
       )}
 
-      {!data?.pinned && !isPending && <KeyPaste providers={providers} />}
       {!data?.pinned && <FoundHere found={data?.found ?? []} />}
       {!data?.pinned && !isPending && rest.length > 0 && (
         <ProviderGallery
@@ -117,6 +116,7 @@ export function ProviderSetup({ onReady }: ProviderSetupProps) {
           onOpen={setConnecting}
         />
       )}
+      {!data?.pinned && !isPending && <KeyPaste providers={providers} />}
 
       {ready && onReady && (
         <div className={styles.waiting}>

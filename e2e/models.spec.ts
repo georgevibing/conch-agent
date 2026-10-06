@@ -95,8 +95,7 @@ test('Settings opens on General: the working folder and starting over, not under
   );
   await expect(settings.getByRole('heading', { name: 'Working folder' })).toBeVisible();
   await expect(settings.getByRole('radio', { name: /Conch’s own workspace/ })).toBeChecked();
-  // Starting over is Advanced: one press, and it's there.
-  await settings.getByRole('button', { name: 'Advanced' }).click();
+  // Starting over is one row on the same page, its button beside it.
   await expect(settings.getByRole('button', { name: 'Replay welcome' })).toBeVisible();
 
   await settings.getByRole('tab', { name: 'Providers' }).click();

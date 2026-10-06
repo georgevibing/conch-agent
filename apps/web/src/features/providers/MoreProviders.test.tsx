@@ -90,7 +90,7 @@ describe('more providers', () => {
         }),
     });
     renderApp(<ProvidersTab />, { route: '/' });
-    await screen.findByText('Have a key?');
+    await screen.findByRole('button', { name: 'Use an API key instead' });
     paste('gsk_0123456789abcdefghijklmn');
     expect(await screen.findByText(/Groq is connected/)).toBeInTheDocument();
     expect(calls.find((c) => c.method === 'PUT')).toMatchObject({
@@ -106,11 +106,11 @@ describe('more providers', () => {
       'PUT /api/providers/qwen/key': () => list(),
     });
     renderApp(<ProvidersTab />, { route: '/' });
-    await screen.findByText('Have a key?');
+    await screen.findByRole('button', { name: 'Use an API key instead' });
     paste('sk-0123456789abcdef0123456789abcdef');
     expect(await screen.findByText(/more than one place/)).toBeInTheDocument();
     expect(calls.some((c) => c.method === 'PUT')).toBe(false);
-    const catcher = screen.getByRole('region', { name: 'Have a key?' });
+    const catcher = screen.getByRole('region', { name: 'Use an API key instead' });
     await userEvent.click(within(catcher).getByRole('button', { name: 'Qwen' }));
     expect(calls.find((c) => c.method === 'PUT')?.path).toBe('/api/providers/qwen/key');
   });

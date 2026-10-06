@@ -379,8 +379,7 @@ describe('Palette search', () => {
       await screen.findByRole('option', { name: 'Settings: Offers in the chat' }),
     ).toBeInTheDocument();
 
-    // The browser's settings answer to the words people use for it, including
-    // what moved into its Advanced.
+    // The browser's settings answer to the words people use for it.
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'cookies');
     expect(
@@ -389,13 +388,22 @@ describe('Palette search', () => {
     await user.keyboard('{Enter}');
     await waitFor(() => expect(where()).toBe('/settings/browser'));
 
-    // A setting that lives under a page's Advanced is still found by name, and
-    // asks for that place with its Advanced open.
+    // A setting on a simple page is found by its own name, and opens its place.
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'replay welcome');
     expect(await screen.findByRole('option', { name: 'Settings: Start over' })).toBeInTheDocument();
     await user.keyboard('{Enter}');
     await waitFor(() => expect(where()).toBe('/settings/general'));
+    expect(useUi.getState().settingsFocus).toBeUndefined();
+
+    // One under a dense page's Advanced asks for that place with its Advanced open.
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'fast mode');
+    expect(
+      await screen.findByRole('option', { name: 'Settings: Fast mode and chat names' }),
+    ).toBeInTheDocument();
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(where()).toBe('/settings/models'));
     expect(useUi.getState().settingsFocus).toBe('advanced');
   });
 

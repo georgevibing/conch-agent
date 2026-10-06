@@ -6,7 +6,6 @@ import {
   Field,
   IconButton,
   Input,
-  SettingsAdvanced,
   Stack,
   Text,
   Textarea,
@@ -21,7 +20,6 @@ import { keys, useAppState, useCapabilities, useCommands } from '../../api/queri
 import { builtins } from '../commands/slash';
 import { Section } from './Section';
 import styles from './Settings.module.css';
-import { useAdvanced } from './useAdvanced';
 
 interface Draft {
   name: string;
@@ -164,7 +162,6 @@ export function CommandsTab() {
   const { data: app } = useAppState();
   const { data: caps } = useCapabilities(app?.engine.state === 'ready');
   const [editing, setEditing] = useState<Draft | null>(null);
-  const [advanced, setAdvanced] = useAdvanced();
 
   return (
     <Stack gap={8}>
@@ -204,42 +201,40 @@ export function CommandsTab() {
         </Stack>
       </Section>
 
-      <SettingsAdvanced open={advanced} onOpenChange={setAdvanced}>
-        <Section title="Built in" description="Conch’s own commands. They never go to the model.">
-          <ul className={styles.commandList}>
-            {builtins.map((b) => (
-              <li key={b.name} className={styles.commandRow}>
-                <Stack gap={0.5} className={styles.commandText}>
-                  <Text as="span" weight="medium" className={styles.commandName}>
-                    /{b.name}
-                    {b.argumentHint && (
-                      <Text as="span" tone="subtle" weight="regular">
-                        {' '}
-                        {b.argumentHint}
-                      </Text>
-                    )}
-                  </Text>
-                  <Text as="span" size="sm" tone="muted">
-                    {b.description}
-                  </Text>
-                </Stack>
-              </li>
-            ))}
-          </ul>
-        </Section>
+      <Section title="Built in" description="Conch’s own commands. They never go to the model.">
+        <ul className={styles.commandList}>
+          {builtins.map((b) => (
+            <li key={b.name} className={styles.commandRow}>
+              <Stack gap={0.5} className={styles.commandText}>
+                <Text as="span" weight="medium" className={styles.commandName}>
+                  /{b.name}
+                  {b.argumentHint && (
+                    <Text as="span" tone="subtle" weight="regular">
+                      {' '}
+                      {b.argumentHint}
+                    </Text>
+                  )}
+                </Text>
+                <Text as="span" size="sm" tone="muted">
+                  {b.description}
+                </Text>
+              </Stack>
+            </li>
+          ))}
+        </ul>
+      </Section>
 
-        {caps && caps.commands.length > 0 && (
-          <Section
-            title="From your provider"
-            description="What your own setup adds, plugins included."
-          >
-            <Text size="sm" tone="muted">
-              <Badge tone="neutral">{caps.commands.length}</Badge> available — type / in a chat to
-              find them.
-            </Text>
-          </Section>
-        )}
-      </SettingsAdvanced>
+      {caps && caps.commands.length > 0 && (
+        <Section
+          title="From your provider"
+          description="What your own setup adds, plugins included."
+        >
+          <Text size="sm" tone="muted">
+            <Badge tone="neutral">{caps.commands.length}</Badge> available — type / in a chat to
+            find them.
+          </Text>
+        </Section>
+      )}
     </Stack>
   );
 }

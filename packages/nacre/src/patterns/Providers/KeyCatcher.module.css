@@ -1,85 +1,37 @@
 @layer nacre.components {
-  /* An open hand rather than a form: a quiet, recessed strip that takes a key. */
+  /*
+   * One quiet line under the ways to sign in, and a field a press away: a key
+   * is for the few who have one, so it never dresses as the way in.
+   * `--kc-indent` puts what opens under the words, past the chevron.
+   */
   .root {
-    --nc-rim-rest: 0.22;
-    --nc-rim-hover: 0.7;
-    --nc-sheen-size: 260px;
-    --nc-sheen-hover: 0.14;
+    --kc-indent: calc(0.875rem + var(--nc-space-1-5));
 
     position: relative;
     display: flex;
-    align-items: flex-start;
-    gap: var(--nc-space-3-5);
+    flex-direction: column;
     min-inline-size: 0;
-    padding: var(--nc-space-4);
-    border-radius: var(--nc-radius-lg);
-    corner-shape: var(--nc-corner-shape);
-    background: var(--nc-surface-sunken);
-    box-shadow:
-      inset 0 0 0 1px var(--nc-border-subtle),
-      inset 0 1px 2px color-mix(in oklch, var(--nc-text) 5%, transparent);
-    transition: box-shadow var(--nc-duration-slow) var(--nc-ease-out);
   }
 
-  .root[data-phase='connected'] {
-    box-shadow:
-      inset 0 0 0 1px
-        light-dark(
-          oklch(0.72 0.12 var(--nc-success-h) / 0.5),
-          oklch(0.7 0.12 var(--nc-success-h) / 0.5)
-        ),
-      inset 0 1px 2px color-mix(in oklch, var(--nc-text) 5%, transparent);
-  }
-
-  .icon {
-    display: grid;
-    flex-shrink: 0;
-    place-items: center;
-    inline-size: 2.5rem;
-    block-size: 2.5rem;
-    border-radius: var(--nc-radius-md);
-    corner-shape: var(--nc-corner-shape);
-    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
-    box-shadow:
-      inset 0 0 0 1px var(--nc-border-subtle),
-      var(--nc-glaze-edge);
-    color: var(--nc-accent-11);
-  }
-
-  .icon svg {
-    inline-size: 1.125rem;
-    block-size: 1.125rem;
-    stroke-width: 1.9;
+  /* The disclosure's own words, on the page's edge (its chevron hangs outside). */
+  .trigger {
+    margin-inline-start: calc(-1 * var(--nc-space-1-5));
   }
 
   .body {
     display: flex;
-    flex: 1;
     flex-direction: column;
-    gap: var(--nc-space-3);
-    min-inline-size: 0;
+    gap: var(--nc-space-2);
+    max-inline-size: 34rem;
+    padding-block-start: var(--nc-space-2-5);
+    padding-inline-start: var(--kc-indent);
   }
 
-  .heading {
-    display: flex;
-    flex-direction: column;
-    gap: 0.125rem;
-  }
-
-  .title {
+  .hint {
     margin: 0;
-    font-size: var(--nc-text-md);
-    font-weight: var(--nc-weight-semibold);
+    font-size: var(--nc-text-xs);
     line-height: var(--nc-leading-snug);
-    letter-spacing: -0.008em;
-    color: var(--nc-text);
-  }
-
-  .lead {
-    margin: 0;
-    font-size: var(--nc-text-sm);
-    line-height: var(--nc-leading-snug);
-    color: var(--nc-text-muted);
+    color: var(--nc-text-subtle);
     text-wrap: pretty;
   }
 
@@ -98,6 +50,9 @@
   /* What happened. */
   .outcome {
     min-block-size: 0;
+    max-inline-size: 34rem;
+    padding-block-start: var(--nc-space-2);
+    padding-inline-start: var(--kc-indent);
   }
 
   /*

@@ -18,7 +18,6 @@ import {
   OtherAppTargets,
   PairedAppList,
   SecretReveal,
-  SettingsAdvanced,
   Stack,
   Switch,
   Text,
@@ -35,7 +34,6 @@ import { keys } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { useVerify } from '../auth/useVerify';
 import { Section } from '../settings/Section';
-import { useAdvanced } from '../settings/useAdvanced';
 import { otherAppsApi, otherAppsKeys, useOtherApps } from './api';
 import { APP_LOOK, pairedWords, scopeChoices, usesWords } from './words';
 
@@ -65,7 +63,6 @@ export function OtherAppsTab() {
   const closeSettings = useUi((s) => s.closeSettings);
   const [editing, setEditing] = useState<Editing>();
   const [removing, setRemoving] = useState<string>();
-  const [advanced, setAdvanced] = useAdvanced();
   const data = overview.data;
   const refresh = () => void client.invalidateQueries({ queryKey: otherAppsKeys.overview });
 
@@ -175,19 +172,17 @@ export function OtherAppsTab() {
       )}
 
       {data.address && (
-        <SettingsAdvanced open={advanced} onOpenChange={setAdvanced}>
-          <Section
-            title="From your own address"
-            description="An app on another computer, reaching Conch over the internet."
-          >
-            <Switch
-              checked={data.remote}
-              onCheckedChange={(on) => void setRemote(on)}
-              label="Let apps you mark in through your address"
-              description={`They connect to ${data.address} with their key. Whoever has that key can use what you let the app use.`}
-            />
-          </Section>
-        </SettingsAdvanced>
+        <Section
+          title="From your own address"
+          description="An app on another computer, reaching Conch over the internet."
+        >
+          <Switch
+            checked={data.remote}
+            onCheckedChange={(on) => void setRemote(on)}
+            label="Let apps you mark in through your address"
+            description={`They connect to ${data.address} with their key. Whoever has that key can use what you let the app use.`}
+          />
+        </Section>
       )}
 
       <PairDialog

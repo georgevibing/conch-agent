@@ -35,7 +35,8 @@ export function Section({
   title: string;
   description?: ReactNode;
   status?: ReactNode;
-  children: ReactNode;
+  /** Nothing, for a section that's one line and the button beside it. */
+  children?: ReactNode;
   /** To bring the section into view (e.g. from a checkup fix). */
   ref?: Ref<HTMLElement>;
 }) {

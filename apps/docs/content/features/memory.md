@@ -143,7 +143,7 @@ Older questions about routine memories are checked again against your recent mes
 
 ## What it costs
 
-Reading a chat once it goes quiet uses a small model, at most once per stretch of a chat, and often not at all. A plan, or a model on this computer, costs nothing. Pay-as-you-go spending is capped at $1 a month until you change it in **Settings → Usage → Advanced → Learning from your chats**. At the cap, learning rests until the 1st, and **Settings → Health** says so. Your chats aren't affected.
+Reading a chat once it goes quiet uses a small model, at most once per stretch of a chat, and often not at all. A plan, or a model on this computer, costs nothing. Pay-as-you-go spending is capped at $1 a month until you change it in **Settings → Usage → Learning from your chats**. At the cap, learning rests until the 1st, and **Settings → Health** says so. Your chats aren't affected.
 
 ## Good to know
 

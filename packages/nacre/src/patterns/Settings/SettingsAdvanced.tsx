@@ -17,11 +17,12 @@ export interface SettingsAdvancedProps {
 }
 
 /**
- * The end of a settings page: what almost nobody needs, one press away.
+ * The end of a dense settings page: what almost nobody needs, one press away.
  *
- * A settings page shows what a person came for and nothing else. Everything
- * else — a sensible default they'll never change, a switch for one person in a
- * thousand — waits here, under a hairline, behind the word **Advanced**. It is
+ * A short page shows everything it holds; only a page with a lot in it folds
+ * the rest — a sensible default they'll never change, a switch for one person
+ * in a thousand — here, under a hairline, behind the word **Advanced**. Never
+ * for one or two things, and never for what people come to the page for. It is
  * never a second page: what's inside is the page's own sections, with the same
  * spacing, so opening it only makes the page longer.
  */

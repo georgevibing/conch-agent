@@ -164,8 +164,7 @@ describe('Other apps', () => {
       'GET /api/access': () => access,
     });
     renderApp(<OtherAppsTab />);
-    // Your own address is Advanced: off unless someone goes looking for it.
-    await userEvent.click(await screen.findByRole('button', { name: 'Advanced' }));
+    // Your own address: there, and off until you turn it on.
     expect(
       await screen.findByRole('switch', { name: /Let apps you mark in through your address/ }),
     ).not.toBeChecked();

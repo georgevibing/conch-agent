@@ -15,15 +15,13 @@
 
   /*
    * The places, as the chats' sidebar is: one left edge for everything (the
-   * way back, the page's name and every row's mark), with the group labels
-   * over the names they gather. `--nav-edge` is that edge; `--nav-row` is the
-   * padding inside a row, which puts its mark on the edge.
+   * way back, the page's name, every group's label and every row's mark).
+   * `--nav-edge` is the list's inset; `--nav-row` is the padding inside a row,
+   * which puts its mark — and the label above it — on the edge.
    */
   .nav {
     --nav-edge: var(--nc-space-3);
     --nav-row: var(--nc-space-3);
-    /* Where a row's name starts: past its mark and the gap after it. */
-    --nav-text: calc(var(--nav-row) + 1rem + var(--nc-space-2));
 
     display: flex;
     flex-direction: column;
@@ -66,10 +64,9 @@
     gap: var(--nc-space-0-5);
   }
 
-  /* A quiet label over the names it gathers, never over their marks. */
+  /* A quiet label over the rows it gathers, flush with their marks. */
   .groupLabel {
     padding: var(--nc-space-1-5) var(--nav-row) var(--nc-space-1);
-    padding-inline-start: var(--nav-text);
   }
 
   .list {
@@ -116,6 +113,11 @@
     flex: 1;
     background: transparent;
     border-inline-end: 0;
+  }
+
+  /* On the drawer's raised surface a solid gray vanishes in the dark: a wash shows on both. */
+  .sheet .nav .list [data-variant='pill'] {
+    background: var(--nc-wash-3);
   }
 
   /* Scrolls from edge to edge, like every page (Nacre Page). */
