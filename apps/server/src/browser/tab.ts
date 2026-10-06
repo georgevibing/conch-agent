@@ -682,15 +682,21 @@ export class Tab {
     }
   }
 
-  async close(): Promise<void> {
+  async close({ confirm = false } = {}): Promise<void> {
     this.#closed = true;
     for (const wake of this.#waiters) wake();
     this.#waiters.clear();
-    await this.refresh();
     const pages = this.#tabs.map((t) => t.page);
     this.#tabs = [];
     this.#active = undefined;
-    await Promise.all(pages.map((p) => p.close().catch(() => undefined)));
+    // Send page closure before screencast cleanup, which can itself be stalled.
+    const closing = pages.map((p) =>
+      p.close({ runBeforeUnload: false }).catch((error: unknown) => {
+        if (confirm) throw error;
+      }),
+    );
+    void this.refresh().catch(() => undefined);
+    await Promise.all(closing);
   }
 }
 

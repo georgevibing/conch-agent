@@ -34,6 +34,55 @@ type Story = StoryObj<typeof meta>;
 
 export const Trail: Story = {};
 
+export const WaitingForApproval: Story = {
+  args: {
+    steps: [
+      ...trailSteps.slice(0, 2),
+      {
+        id: 'waiting',
+        status: 'waiting',
+        label: 'Waiting for your approval',
+        url: 'https://www.staylight.example/lisbon',
+      },
+    ],
+  },
+};
+
+export const WaitingForYou: Story = {
+  args: {
+    steps: [
+      {
+        id: 'waiting',
+        status: 'waiting',
+        label: 'Waiting for you to hand the browser back',
+        url: 'https://www.staylight.example/lisbon',
+      },
+    ],
+  },
+};
+
+export const WaitingForPreviousStep: Story = {
+  args: {
+    steps: [
+      { id: 'waiting', status: 'waiting', label: 'Waiting for the previous browser step', url: '' },
+    ],
+  },
+};
+
+export const StepTimedOut: Story = {
+  args: {
+    steps: [
+      {
+        id: 'timeout',
+        status: 'error',
+        label:
+          'The browser took too long and this step was stopped. Check the page before repeating the action.',
+        url: 'https://www.staylight.example/lisbon',
+      },
+    ],
+  },
+};
+
 export const TrailDone: Story = {
   args: {
     steps: trailSteps.map((s) =>

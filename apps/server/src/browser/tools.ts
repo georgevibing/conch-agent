@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 import type {
   BrowserActionKind,
   BrowserBox,
@@ -21,6 +23,7 @@ import { markSecrets, readChanges, readPage } from './snapshot';
 import { MAX_TABS, type Tab } from './tab';
 import { resolveUploads, UploadRefused, type UploadFile } from './uploads';
 import { watchHandoff } from './handoff';
+import { BrowserStepBudget, BrowserStepStopped } from './step-budget';
 
 /** The page's host, for a fill: https only, or this computer itself. */
 function hostOf(url: string): string | undefined {
@@ -107,7 +110,25 @@ function explain(error: unknown): string {
   return message.split('\n')[0]?.slice(0, 240) ?? 'That didn’t work.';
 }
 
-export function browserTools(service: BrowserService, ctx: ToolContext): HostTool[] {
+export function browserTools(
+  service: BrowserService,
+  context: ToolContext,
+  { timeoutMs = 120_000 } = {},
+): HostTool[] {
+  const active = new AsyncLocalStorage<BrowserStepBudget>();
+  const waiting = <T>(label: string, work: () => Promise<T>): Promise<T> =>
+    active.getStore()?.wait(label, work) ?? work();
+  const ctx: ToolContext = {
+    ...context,
+    get signal() {
+      return active.getStore()?.signal ?? context.signal;
+    },
+    ask: (request) => waiting('Waiting for your approval', () => context.ask(request)),
+  };
+  const check = () => {
+    active.getStore()?.check();
+    ctx.signal.throwIfAborted();
+  };
   const { conversationId } = ctx;
 
   const locate = (tab: Tab, ref: string): Locator => tab.page.locator(`aria-ref=${ref}`);
@@ -119,40 +140,28 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
     label: string,
     box?: BrowserBox,
   ): Promise<void> => {
+    check();
     tab.announce({ type: 'action', action, label, box });
     if (tab.watched) await new Promise((r) => setTimeout(r, WATCHED_PAUSE_MS));
+    check();
   };
 
-  /** The one door every browser action goes through. */
+  /** The one door every browser action goes through, on every provider. */
   const step = async (
     action: BrowserActionKind,
     labels: { running: string; done: string },
     work: (tab: Tab) => Promise<Outcome>,
-    attempt = 0,
   ): Promise<string | HostToolResult> => {
-    let tab: Tab;
-    try {
-      tab = await service.tabFor(conversationId);
-    } catch (error) {
-      const problem = error instanceof BrowserProblemError ? error.problem : undefined;
-      return [
-        `The browser isn’t available: ${problem?.message ?? explain(error)}`,
-        problem?.command
-          ? `Tell the user; it’s fixed by running this once: ${problem.command}`
-          : 'Tell the user; Settings › Browser shows what’s wrong and has a Repair button.',
-      ].join(' ');
-    }
-    try {
-      await tab.whenFree(ctx.signal);
-    } catch {
-      return 'Stopped.';
-    }
-    const touched = tab.touched;
-    tab.touched = false;
-    tab.setControl('agent');
-    tab.lastUsed = Date.now();
+    let tab: Tab | undefined;
+    let ended = false;
     const stepId = newId('step');
-    const log = (status: 'running' | 'done' | 'error', label: string, shot?: string) =>
+    const log = (
+      status: 'running' | 'waiting' | 'done' | 'error',
+      label: string,
+      shot?: string,
+      title = '',
+    ) => {
+      if (ended) return;
       ctx.append({
         type: 'browser.step',
         step: {
@@ -160,71 +169,109 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
           status,
           action,
           label,
-          url: tab.page.url(),
-          title: '',
-          shot,
-          by: 'agent',
-        },
-      });
-    log('running', labels.running);
-    // Tabs that came and went before this step were heard about already.
-    tab.opened.length = 0;
-    tab.evicted.length = 0;
-    try {
-      const outcome = await work(tab);
-      const shot = await service.saveShot(conversationId, (await tab.thumbnail())?.jpeg);
-      const title = await tab.page.title().catch(() => '');
-      ctx.append({
-        type: 'browser.step',
-        step: {
-          stepId,
-          status: 'done',
-          action,
-          label: outcome.label ?? labels.done,
-          url: tab.page.url(),
+          url: tab?.current?.url() ?? '',
           title,
           shot,
           by: 'agent',
         },
       });
-      const notes: string[] = [];
-      if (touched)
-        notes.push(
-          '(The user used the browser themselves since your last step, so the page may have changed.)',
-        );
-      // A link or a popup opened a tab: it's in view now, and the agent should know.
-      const opened = tab.opened.splice(0).filter((id) => tab.entry(id));
-      if (opened.length)
-        notes.push(
-          `(That opened a new tab, ${opened.join(', ')}, which is in view now. browser_tabs switches back.)`,
-        );
-      const evicted = tab.evicted.splice(0);
-      if (evicted.length)
-        notes.push(
-          `(A chat keeps ${MAX_TABS} tabs, so Conch closed the one unused longest: ${evicted.join(', ')}.)`,
-        );
-      const note = notes.length ? `${notes.join('\n')}\n` : '';
-      return outcome.images
-        ? { text: note + outcome.text, images: outcome.images }
-        : note + outcome.text;
+      ended = status === 'done' || status === 'error';
+    };
+    log('running', 'Starting the browser');
+    try {
+      return await service.steps.run(
+        conversationId,
+        context.signal,
+        () => log('waiting', 'Waiting for the previous browser step'),
+        async () => {
+          const budget = new BrowserStepBudget(context.signal, {
+            timeoutMs,
+            state: (label) => log(label ? 'waiting' : 'running', label ?? labels.running),
+            cancel: (humanWait) => {
+              if (tab && !humanWait) service.cancelStep(tab);
+            },
+          });
+          const execute = async (attempt = 0): Promise<string | HostToolResult> => {
+            try {
+              tab = await service.tabFor(conversationId);
+              // Opening the browser may finish after a cancellation. Close that late tab too.
+              if (ctx.signal.aborted) service.cancelStep(tab);
+              check();
+              const current = tab;
+              if (current.control === 'user')
+                await waiting('Waiting for you to hand the browser back', () =>
+                  current.whenFree(ctx.signal),
+                );
+              else await current.whenFree(ctx.signal);
+              check();
+              const touched = current.touched;
+              current.touched = false;
+              current.setControl('agent');
+              current.lastUsed = Date.now();
+              log('running', labels.running);
+              current.opened.length = 0;
+              current.evicted.length = 0;
+              const outcome = await work(current);
+              check();
+              const shot = current.closed
+                ? undefined
+                : await service.saveShot(conversationId, (await current.thumbnail())?.jpeg);
+              const title = current.closed ? '' : await current.page.title().catch(() => '');
+              check();
+              log('done', outcome.label ?? labels.done, shot, title);
+              const notes: string[] = [];
+              if (touched)
+                notes.push(
+                  '(The user used the browser themselves since your last step, so the page may have changed.)',
+                );
+              const opened = current.opened.splice(0).filter((id) => current.entry(id));
+              if (opened.length)
+                notes.push(
+                  `(That opened a new tab, ${opened.join(', ')}, which is in view now. browser_tabs switches back.)`,
+                );
+              const evicted = current.evicted.splice(0);
+              if (evicted.length)
+                notes.push(
+                  `(A chat keeps ${MAX_TABS} tabs, so Conch closed the one unused longest: ${evicted.join(', ')}.)`,
+                );
+              const note = notes.length ? `${notes.join('\n')}\n` : '';
+              return outcome.images
+                ? { text: note + outcome.text, images: outcome.images }
+                : note + outcome.text;
+            } catch (error) {
+              check(); // A timeout or Stop must never enter automatic crash recovery.
+              if (
+                !(error instanceof Refusal) &&
+                CLOSED.test(String((error as Error)?.message)) &&
+                attempt === 0
+              ) {
+                log('running', 'The browser restarted; opening the page again');
+                service.runtime.heal(
+                  'The browser closed mid-step; Conch restarted it and carried on.',
+                );
+                await service.forgetTab(conversationId);
+                check();
+                return execute(1);
+              }
+              throw error;
+            } finally {
+              if (tab?.control === 'agent') tab.setControl('idle');
+            }
+          };
+          return active.run(budget, () => budget.run(() => execute()));
+        },
+      );
     } catch (error) {
-      if (
-        !(error instanceof Refusal) &&
-        CLOSED.test(String((error as Error)?.message)) &&
-        attempt === 0
-      ) {
-        // The browser went away (crash, closed): it restarts and restores the page.
-        log('error', `${labels.running}: the browser restarted, trying again`);
-        service.runtime.heal('The browser closed mid-step; Conch restarted it and carried on.');
-        await service.forgetTab(conversationId);
-        return step(action, labels, work, attempt + 1);
-      }
-      const message = error instanceof Refusal ? error.message : explain(error);
-      log('error', `${labels.running}: ${message}`);
+      const message = context.signal.aborted
+        ? 'Stopped.'
+        : error instanceof BrowserStepStopped || error instanceof Refusal
+          ? error.message
+          : error instanceof BrowserProblemError
+            ? `The browser isn’t available: ${error.problem.message}`
+            : explain(error);
+      log('error', message);
+      if (error instanceof BrowserStepStopped && error.timedOut) throw error;
       return message;
-    } finally {
-      if (tab.control === 'agent') tab.setControl('idle');
-      tab.lastUsed = Date.now();
     }
   };
 
@@ -238,6 +285,7 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
       kind?: 'download' | 'upload';
     },
   ): Promise<void> => {
+    check();
     const url = tab.page.url();
     const site = siteOf(url) ?? displayHost(url);
     if (ctx.permissionMode === 'plan') {
@@ -349,7 +397,11 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
           : 'password';
     // Locked: the person unlocks it from the chat, and this carries on.
     const show = (request: VaultRequest) => ctx.append({ type: 'vault.request', request });
-    if (!(await passwords.ensureOpen(show, ctx.signal)))
+    if (
+      !(await waiting('Waiting for you to unlock Passwords', () =>
+        passwords.ensureOpen(show, ctx.signal),
+      ))
+    )
       return {
         label: `Passwords stayed locked`,
         text: 'The user’s Passwords is locked and wasn’t unlocked. Ask them to unlock it, or hand the field to them.',
@@ -414,12 +466,14 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
         };
       if (decision === 'allow-always') await passwords.allowAgent(chosen).catch(() => undefined);
     }
+    check();
     const value = await passwords.fillValue({ itemId: chosen, host, want }).catch((e: Error) => e);
     if (value instanceof Error)
       return {
         label: `Couldn’t fill “${element}”`,
         text: `${value.message} Hand the field to the user instead.`,
       };
+    check();
     await target.fill(value);
     // The account name goes in the same form, if that box is empty.
     if (want === 'password') {
@@ -437,6 +491,7 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
         const user = await passwords
           .fillValue({ itemId: chosen, host, want: 'username' })
           .catch(() => undefined);
+        check();
         if (user) await username.fill(user).catch(() => undefined);
       }
     }
@@ -450,21 +505,25 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
   const handoff = async (tab: Tab, reason: string): Promise<'done' | 'auto' | 'cancelled'> => {
     const handoffId = newId('handoff');
     const url = tab.page.url();
-    tab.handoff = { handoffId, state: 'waiting', reason, url };
-    ctx.append({ type: 'browser.handoff', handoff: tab.handoff });
-    tab.setControl('user');
-    tab.lastInput = Date.now();
     // A sign-in or a captcha: it carries on by itself once that's behind you.
     let auto = false;
     const unwatch = await watchHandoff(tab, () => {
       auto = true;
       tab.setControl('idle');
     }).catch(() => () => undefined);
+    if (ctx.signal.aborted) {
+      unwatch();
+      check();
+    }
+    tab.handoff = { handoffId, state: 'waiting', reason, url };
+    ctx.append({ type: 'browser.handoff', handoff: tab.handoff });
+    tab.setControl('user');
+    tab.lastInput = Date.now();
     const timeout = AbortSignal.timeout(HANDOFF_WAIT_MS);
     const either = AbortSignal.any([ctx.signal, timeout]);
     let outcome: 'done' | 'auto' | 'cancelled' = 'done';
     try {
-      await tab.whenFree(either);
+      await waiting('Waiting for you in the browser', () => tab.whenFree(either));
       if (auto) outcome = 'auto';
     } catch {
       outcome = 'cancelled';
@@ -482,7 +541,7 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
         ...(outcome === 'auto' && { auto: true }),
       },
     });
-    if (tab.control === 'user') tab.setControl('idle');
+    if (tab.control === 'user' && !context.signal.aborted) tab.setControl('idle');
     return outcome;
   };
 
@@ -1096,7 +1155,11 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
           if (!host)
             throw new Refusal('Passkeys only work on a secure (https) page. Open the site first.');
           const show = (request: VaultRequest) => ctx.append({ type: 'vault.request', request });
-          if (!(await passwords.ensureOpen(show, ctx.signal)))
+          if (
+            !(await waiting('Waiting for you to unlock Passwords', () =>
+              passwords.ensureOpen(show, ctx.signal),
+            ))
+          )
             return {
               label: 'Passwords stayed locked',
               text: 'The user’s Passwords is locked and wasn’t unlocked. Ask them to unlock it, or to sign in themselves.',
@@ -1143,6 +1206,7 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
                   by: 'agent',
                 },
               });
+            check();
             await armCreate(tab.page, (credential) => {
               void passwords.savePasskey?.(credential, host).then(
                 (saved) =>
@@ -1203,6 +1267,7 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
             .catch((e: Error) => e);
           if (credential instanceof Error)
             return { label: 'Couldn’t use the passkey', text: credential.message };
+          check();
           await armSignIn(tab.page, credential, (signCount) => {
             void passwords
               .passkeyUsed?.(pick.itemId, credential.credentialId, signCount)
@@ -1273,6 +1338,7 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
               const verdict = await service.guard.navigation(url);
               if (!verdict.ok) throw new Refusal(verdict.message);
             }
+            check();
             const opened = await service.openTab(tab);
             if (!opened)
               throw new Refusal(
@@ -1552,6 +1618,7 @@ export function browserTools(service: BrowserService, ctx: ToolContext): HostToo
               );
             if (files.length > 1 && !picker.isMultiple())
               throw new Refusal('That box takes one file at a time. Upload them one by one.');
+            check();
             await picker.setFiles(payload, { timeout: 10_000 });
           }
           await settle(tab.page);

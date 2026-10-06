@@ -3,7 +3,7 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { reduceAll, type ConversationView } from '../../live/reducer';
+import { reduceAll, stoppedView, type ConversationView } from '../../live/reducer';
 import { appState, mockFetch, renderApp } from '../../test/harness';
 import { Transcript } from '../chat/Transcript';
 
@@ -15,7 +15,7 @@ function log(...inputs: ConversationEventInput[]): ConversationEvent[] {
   );
 }
 
-const step = (stepId: string, status: 'running' | 'done', label: string) =>
+const step = (stepId: string, status: 'running' | 'waiting' | 'done', label: string) =>
   ({
     type: 'browser.step',
     step: {
@@ -31,6 +31,22 @@ const step = (stepId: string, status: 'running' | 'done', label: string) =>
   }) as const;
 
 describe('browser events in the transcript reducer', () => {
+  it('shows a wait in place, and settles it on Stop and a restored interrupted turn', () => {
+    const events = log(
+      step('s1', 'running', 'Opening the browser'),
+      step('s1', 'waiting', 'Waiting for you'),
+    );
+    const view = reduceAll(events);
+    expect(view.items.filter((i) => i.kind === 'browser')).toHaveLength(1);
+    expect(stoppedView(view, 2000).items.find((i) => i.kind === 'browser')).toMatchObject({
+      step: { status: 'error', label: 'Stopped.' },
+    });
+    const ended = reduceAll(log(...events, { type: 'turn.completed', outcome: 'interrupted' }));
+    expect(ended.items.find((i) => i.kind === 'browser')).toMatchObject({
+      step: { status: 'error' },
+    });
+  });
+
   it('settles a step in place and groups a trail', () => {
     const view = reduceAll(
       log(

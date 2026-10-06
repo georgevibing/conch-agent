@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Globe, PanelRight, X } from 'lucide-react';
+import { Check, ChevronDown, Globe, PanelRight, Pause, X } from 'lucide-react';
 import { Collapsible as CollapsiblePrimitive } from 'radix-ui';
 import { useState, type ComponentProps } from 'react';
 
@@ -9,7 +9,7 @@ import styles from './Browser.module.css';
 
 export interface BrowserTrailStep {
   id: string;
-  status: 'running' | 'done' | 'error';
+  status: 'running' | 'waiting' | 'done' | 'error';
   /** "Clicked “Sign in”". */
   label: string;
   url: string;
@@ -71,10 +71,15 @@ export function BrowserTrail({
   const running = steps.some((s) => s.status === 'running');
   const last = steps.at(-1);
   const count = steps.length;
-  const title = running
-    ? `Browsing ${sitesLabel(steps)}`
-    : `Browsed ${sitesLabel(steps)} · ${count} ${count === 1 ? 'step' : 'steps'}`;
-  const film = steps.filter((s) => s.shot || s.status === 'running').slice(-8);
+  const title =
+    last?.status === 'waiting'
+      ? last.label
+      : running
+        ? `Browsing ${sitesLabel(steps)}`
+        : `Browsed ${sitesLabel(steps)} · ${count} ${count === 1 ? 'step' : 'steps'}`;
+  const film = steps
+    .filter((s) => s.shot || s.status === 'running' || s.status === 'waiting')
+    .slice(-8);
 
   return (
     <CollapsiblePrimitive.Root open={open} onOpenChange={setOpen} asChild>
@@ -136,7 +141,15 @@ export function BrowserTrail({
             {steps.map((step) => (
               <li key={step.id} className={styles.step} data-status={step.status}>
                 <span className={styles.stepGlyph} aria-hidden>
-                  {step.status === 'done' ? <Check /> : step.status === 'error' ? <X /> : <i />}
+                  {step.status === 'done' ? (
+                    <Check />
+                  ) : step.status === 'error' ? (
+                    <X />
+                  ) : step.status === 'waiting' ? (
+                    <Pause />
+                  ) : (
+                    <i />
+                  )}
                 </span>
                 <span className={styles.stepLabel}>{step.label}</span>
                 <span className={styles.stepHost}>

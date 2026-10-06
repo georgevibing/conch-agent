@@ -6,7 +6,7 @@ import { join } from 'node:path';
 
 import type { BrowserLiveEvent } from '@conch/protocol';
 import { chromium } from 'playwright-core';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { findBrowsers } from './locate';
 import { SavedTabs } from './saved';
@@ -143,6 +143,71 @@ describe('the panel’s shape', () => {
 });
 
 describe.skipIf(!hasBrowser)('tabs, for real', () => {
+  it(
+    'waits for confirmed cancellation before reopening, without touching another chat',
+    { timeout: 60_000 },
+    async () => {
+      const service = await serviceAt(await newHome());
+      const first = await service.tabFor('cancel_one');
+      const second = await service.tabFor('cancel_two');
+      const close = first.close.bind(first);
+      let finish!: () => void;
+      const held = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      const intercepted = vi.spyOn(first, 'close').mockImplementation(() => held);
+      try {
+        service.cancelStep(first);
+        expect(intercepted).toHaveBeenCalledWith({ confirm: true });
+        await expect(service.tabFor('cancel_one')).rejects.toThrow(
+          'previous browser action is still stopping',
+        );
+        expect(await service.tabFor('cancel_two')).toBe(second);
+        await close({ confirm: true });
+        finish();
+        await held;
+        const replacement = await service.tabFor('cancel_one');
+        expect(replacement).not.toBe(first);
+        expect(second.closed).toBe(false);
+      } finally {
+        intercepted.mockRestore();
+        finish();
+        await close();
+      }
+    },
+  );
+
+  it(
+    'does not treat a failed close as permission to start another browser action',
+    { timeout: 60_000 },
+    async () => {
+      const service = await serviceAt(await newHome());
+      const tab = await service.tabFor('failed_close');
+      const page = tab.page;
+      const intercepted = vi
+        .spyOn(page, 'close')
+        .mockRejectedValue(new Error('No acknowledgement'));
+      try {
+        service.cancelStep(tab);
+        await new Promise((resolve) => setImmediate(resolve));
+        await expect(service.tabFor('failed_close')).rejects.toThrow(
+          'previous browser action is still stopping',
+        );
+        expect(page.isClosed()).toBe(false);
+        expect(await service.status()).toMatchObject({
+          phase: 'problem',
+          problem: { message: expect.stringContaining('previous browser step is still stopping') },
+        });
+      } finally {
+        intercepted.mockRestore();
+      }
+      await service.repair();
+      expect((await service.status()).phase).not.toBe('problem');
+      const replacement = await service.tabFor('failed_close');
+      expect(replacement).not.toBe(tab);
+    },
+  );
+
   it(
     'opens the first page in the panel’s shape, measured before there was a tab',
     { timeout: 60_000 },

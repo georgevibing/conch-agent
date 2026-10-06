@@ -345,6 +345,36 @@ describe('BrowserWindow', () => {
 });
 
 describe('BrowserTrail', () => {
+  it('names a human wait, stays accessible, and resumes browsing in place', async () => {
+    const { container, rerender } = renderNacre(
+      <BrowserTrail
+        onShow={() => undefined}
+        steps={[
+          {
+            id: 'one',
+            status: 'waiting',
+            label: 'Waiting for your approval',
+            url: 'https://example.com',
+          },
+        ]}
+      />,
+    );
+    expect(screen.getAllByRole('button', { name: 'Waiting for your approval' })).not.toHaveLength(
+      0,
+    );
+    expect(screen.getByRole('button', { name: 'Show browser' })).toBeInTheDocument();
+    expect(container.querySelector('[data-status="running"]')).not.toBeInTheDocument();
+    await expectAccessible(container);
+    rerender(
+      <BrowserTrail
+        steps={[
+          { id: 'one', status: 'running', label: 'Reading the page', url: 'https://example.com' },
+        ]}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Browsing example.com' })).toBeInTheDocument();
+  });
+
   it('summarises the browsing and opens every step', async () => {
     const user = userEvent.setup();
     const onShow = vi.fn();

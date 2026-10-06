@@ -34,6 +34,7 @@ import { restorable, SavedTabs } from './saved';
 import { BrowserSecrets, BrowserStore } from './store';
 import { fitViewport, MAX_TABS, Tab, type Watcher } from './tab';
 import { browserTools } from './tools';
+import { BrowserStepQueue } from './step-queue';
 import type { UploadSources } from './uploads';
 
 /** The browser shuts down after this long with nobody using or watching it. */
@@ -99,6 +100,8 @@ export interface FillRequest {
 }
 
 export class BrowserService {
+  readonly steps = new BrowserStepQueue();
+  #stoppingSteps = new Map<string, Tab>();
   /** Set by `Services` once Passwords exist. */
   passwords?: PasswordFiller;
   readonly store: BrowserStore;
@@ -158,13 +161,19 @@ export class BrowserService {
     const candidates = this.runtime.candidates();
     const planned = candidates.find((c) => c.id === settings.preferred) ?? candidates[0];
     return {
-      phase: this.runtime.phase,
+      phase: this.#stoppingSteps.size ? 'problem' : this.runtime.phase,
       settings,
       browser:
         this.runtime.running ?? (planned ? { name: planned.name, id: planned.id } : undefined),
       candidates,
       install: this.runtime.install,
-      problem: this.runtime.problem,
+      problem: this.#stoppingSteps.size
+        ? {
+            message:
+              'A previous browser step is still stopping. Repair starts a fresh browser session.',
+            action: 'settings',
+          }
+        : this.runtime.problem,
       healed: this.runtime.healed,
       tabs: [...this.#tabs.keys()],
       sites: await this.store.sites(),
@@ -288,6 +297,8 @@ export class BrowserService {
 
   async repair(): Promise<BrowserStatus> {
     await this.runtime.repair();
+    this.#stoppingSteps.clear();
+    this.#changed();
     return this.status();
   }
 
@@ -319,6 +330,12 @@ export class BrowserService {
 
   /** The conversation's tab, starting the browser and restoring its last page if needed. */
   async tabFor(conversationId: string): Promise<Tab> {
+    if (this.#stoppingSteps.has(conversationId))
+      throw new BrowserProblemError({
+        message:
+          'The previous browser action is still stopping. Settings → Browser has a Repair button if it does not finish.',
+        action: 'settings',
+      });
     const open = this.tabIfOpen(conversationId);
     if (open) return open;
     if (!(await this.enabled())) {
@@ -490,6 +507,10 @@ export class BrowserService {
     if (tab.tabs.length >= MAX_TABS) return undefined;
     const context = await this.runtime.context();
     const page = await this.runtime.newPage(context);
+    if (tab.closed) {
+      await page.close();
+      return undefined;
+    }
     return tab.add(page, tab.activeId).id;
   }
 
@@ -500,6 +521,25 @@ export class BrowserService {
     if (earlier) return earlier;
     if (!(await this.store.settings()).declineCookies) return undefined;
     return declineCookies(page).catch(() => undefined);
+  }
+
+  /** Cancel only this chat's active step; replacement tabs wait for confirmed closure. */
+  cancelStep(tab: Tab): void {
+    const id = tab.conversationId;
+    if (this.#tabs.get(id) !== tab || this.#stoppingSteps.get(id) === tab) return;
+    this.#stoppingSteps.set(id, tab);
+    this.#changed();
+    void tab.close({ confirm: true }).then(
+      () => {
+        if (this.#tabs.get(id) === tab) this.#tabs.delete(id);
+        if (this.#stoppingSteps.get(id) === tab) this.#stoppingSteps.delete(id);
+        this.#changed();
+      },
+      () => {
+        // Keep the gate closed: a rejected close is not proof the action stopped.
+        // Explicit browser repair releases it; no action is replayed here.
+      },
+    );
   }
 
   /** Drop a tab that died (its page is gone); the next use opens it again at its last address. */

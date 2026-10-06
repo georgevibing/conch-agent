@@ -195,7 +195,7 @@ export type BrowserBox = z.infer<typeof BrowserBox>;
  */
 export const BrowserStep = z.object({
   stepId: z.string(),
-  status: z.enum(['running', 'done', 'error']).default('done'),
+  status: z.enum(['running', 'waiting', 'done', 'error']).default('done'),
   action: BrowserActionKind,
   /** "Clicked “Sign in”", "Opened booking.com". */
   label: z.string(),

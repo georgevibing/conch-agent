@@ -806,9 +806,16 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
     }
     case 'turn.completed': {
       // Any assistant message still open is finished now.
-      const closed = items.map((i) =>
-        i.kind === 'assistant' && !i.done ? { ...i, done: true, endedAt: event.at } : i,
-      );
+      const closed = items.map((item) => {
+        const i =
+          event.outcome === 'success'
+            ? item
+            : stopBrowser(
+                item,
+                event.outcome === 'interrupted' ? 'Stopped.' : 'The browser step did not finish.',
+              );
+        return i.kind === 'assistant' && !i.done ? { ...i, done: true, endedAt: event.at } : i;
+      });
       return {
         ...base,
         turnStartedAt: undefined,
@@ -1152,6 +1159,14 @@ export function decided(
     : next;
 }
 
+function stopBrowser(item: TranscriptItem, label: string): TranscriptItem {
+  if (item.kind === 'browser' && (item.step.status === 'running' || item.step.status === 'waiting'))
+    return { ...item, step: { ...item.step, status: 'error', label } };
+  if (item.kind === 'handoff' && item.handoff.state === 'waiting')
+    return { ...item, handoff: { ...item.handoff, state: 'cancelled' } };
+  return item;
+}
+
 /**
  * The chat as it will be once a Stop pressed at `at` lands, drawn straight
  * away: the reply ends where it is, a running tool says it stopped, a waiting
@@ -1159,6 +1174,7 @@ export function decided(
  * yet confirmed are part of it. The gateway's own events replace it as they
  * come, and say the same.
  */
+
 export function stoppedView(
   view: ConversationView,
   at: number,
@@ -1176,7 +1192,7 @@ export function stoppedView(
         return { ...item, status: 'error', output: 'Stopped.', durationMs: at - item.startedAt };
       if (item.kind === 'permission' && !item.decision) return { ...item, decision: 'expired' };
       if (item.kind === 'question' && item.answer === undefined) return { ...item, answer: null };
-      return item;
+      return stopBrowser(item, 'Stopped.');
     }),
     ...pending.map((p) => ({
       kind: 'user' as const,

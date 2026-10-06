@@ -150,6 +150,16 @@ meanwhile and Settings says why.
 
 ## When something goes wrong
 
+The chat says when the browser is waiting for your approval, for you to hand it back,
+or for a previous step. Time spent signing in or answering an approval does not
+count toward a page's execution limit.
+
+If a browser step stays stuck for two minutes of active work, Conch stops the step
+and closes that chat's tabs. An action may already have reached the site, so check
+what happened before repeating it. Conch does not repeat a timed-out action on its
+own. If the tabs cannot be closed, the browser stays blocked until **Repair** in
+Settings → Browser reconnects it. Other chats' tabs stay open.
+
 Mostly, you won't notice: Conch fixes the browser by itself. It uses the Chrome,
 Edge or Brave you already have, or downloads Chromium the first time if there's none.
 It restarts a browser that crashed and reopens your page. It clears a browser left

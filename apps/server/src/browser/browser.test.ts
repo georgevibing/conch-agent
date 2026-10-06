@@ -105,9 +105,10 @@ describe.skipIf(!hasBrowser)('the browser, for real', () => {
     const steps = events.filter((e) => e.type === 'browser.step');
     expect(steps.map((e) => e.type === 'browser.step' && e.step.status)).toEqual([
       'running',
+      'running',
       'done',
     ]);
-    const done = steps[1];
+    const done = steps.at(-1);
     expect(done?.type === 'browser.step' && done.step.shot).toBeTruthy();
   });
 
