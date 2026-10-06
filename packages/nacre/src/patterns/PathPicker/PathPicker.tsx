@@ -35,6 +35,12 @@ export interface PathPickerProps {
   chooseLabel?: string;
   /** A line under it. */
   hint?: ReactNode;
+  /**
+   * Offer **Type a path** beside Choose (the default). Leave it off when the
+   * chooser has its own way to type one (Nacre `FolderBrowser`); a chooser that
+   * fails still falls back to typing.
+   */
+  canType?: boolean;
   className?: string;
 }
 
@@ -66,6 +72,7 @@ export function PathPicker({
   placeholder,
   chooseLabel,
   hint,
+  canType = true,
   className,
 }: PathPickerProps) {
   const [typing, setTyping] = useState(!onChoose && suggestions.length === 0);
@@ -149,7 +156,7 @@ export function PathPicker({
                   : 'Choose a file…')}
           </Button>
         )}
-        {!typing && (
+        {!typing && canType && (
           <Button size="sm" variant="ghost" onClick={() => setTyping(true)}>
             Type a path
           </Button>

@@ -1,0 +1,10 @@
+@layer nacre.components {
+  /* The other devices: a line, and the way to them. */
+  .elsewhere {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-3);
+  }
+}

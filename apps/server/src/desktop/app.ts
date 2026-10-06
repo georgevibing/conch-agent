@@ -6,6 +6,8 @@
  * over that channel only, checked against `@conch/protocol` on both sides: a
  * message that doesn't parse is dropped, never acted on.
  */
+import { randomUUID } from 'node:crypto';
+
 import {
   AppToGateway,
   AppUpdates,
@@ -54,6 +56,47 @@ export class DesktopApp {
     };
     this.proc.on('message', listener);
     return () => void this.proc.off('message', listener);
+  }
+
+  /**
+   * The system's Open dialog, over the app's own window: what a person in the
+   * app expects, rather than one an AppleScript raises in front of it.
+   * Resolves the path, or undefined when cancelled; rejects when the app
+   * couldn't show it (the caller falls back to the gateway's own dialog).
+   */
+  pick(
+    options: { prompt: string; kind?: 'file' | 'folder'; extensions?: string[] },
+    timeoutMs = 10 * 60_000,
+  ): Promise<string | undefined> {
+    const id = randomUUID();
+    return new Promise((resolve, reject) => {
+      const stop = this.listen((message) => {
+        if (message.type !== 'picked' || message.id !== id) return;
+        finish();
+        if (message.failed) reject(new Error('The app couldn’t show the Open dialog.'));
+        else resolve(message.path);
+      });
+      const timer = setTimeout(() => {
+        finish();
+        resolve(undefined);
+      }, timeoutMs);
+      timer.unref?.();
+      const finish = () => {
+        clearTimeout(timer);
+        stop();
+      };
+      void this.send({
+        type: 'pick',
+        id,
+        prompt: options.prompt.slice(0, 200),
+        kind: options.kind ?? 'file',
+        extensions: (options.extensions ?? []).filter((e) => /^[A-Za-z0-9]{1,10}$/.test(e)),
+      }).then((sent) => {
+        if (sent) return;
+        finish();
+        reject(new Error('The app has gone.'));
+      });
+    });
   }
 
   /** The app went away (it crashed, or it was killed): the gateway shouldn't outlive it. */

@@ -54,6 +54,16 @@ Your assistant is told that attachments are material to work with, not instructi
 - They are in your [backups](../care/backups.md), with your chats.
 - A [background task](./tasks.md) can't take attachments yet. Send those as a message.
 
+## Choose the working folder
+
+Your assistant reads and writes in one folder. Press the folder at the foot of the message box (or **Settings → General**, or type `/folder`), and choose another:
+
+- **In the Conch app**, it's your computer's own Open dialog.
+- **Anywhere else**, a phone or a browser, Conch shows the computer's folders. Start from **Home**, **Desktop**, **Documents**, a projects folder or one you chose lately; press a folder to go into it, and the trail above to go back. Type to filter what's there, make a **New folder** where you are, then press **Choose**.
+- **Prefer typing?** Press **Type a path**. Conch suggests folders as you type, <kbd>tab</kbd> finishes a name, and it says when nothing's there.
+
+It shows folders, never what's in your files, and never Conch's own folder or where your keys and sign-ins are kept. The same chooser picks a folder for a [routine](./routines.md) to watch, and your KeePassXC database in [Passwords](./passwords.md).
+
 ## Find and read work files
 
 Ask for a filename or words inside a file. Conch searches without needing a

@@ -122,7 +122,7 @@ internet.
 
 1. Install [Tailscale](https://tailscale.com/download) on your computer and phone,
    and sign in to both.
-2. In **Settings → Security**, press **Add a device**. Conch turns on its secure
+2. In **Settings → Devices**, press **Add a device**. Conch turns on its secure
    address for you (one press: **Turn on**), then shows a QR code. Point your
    phone's camera at it. That's it: your phone is signed in.
 
@@ -167,7 +167,7 @@ the right password or key:
 1. On the new device, sign in as usual. It shows a short code, like
    **K7M-Q2X**, and waits.
 2. Approve it from a device you're already signed in on: a notice appears there,
-   and **Settings → Security → Devices** shows who is asking and from where.
+   and **Settings → Devices** shows who is asking and from where.
    Check the code matches, then confirm it's you (Touch ID or your password).
    Or, in a terminal on the computer running Conch:
 
@@ -225,7 +225,7 @@ On a server, `conch hello` after a reset gives you a new link that makes it
 yours again. Only someone at that computer's terminal can do this. That's what
 keeps it safe.
 
-Lost a phone? **Settings → Security → Devices → Remove** (or
+Lost a phone? **Settings → Devices → Remove** (or
 `conch devices remove`). It's disconnected instantly and, with approval on,
 can't get back in without your OK. Removing a passkey in **Settings → Security
 → Passkeys** signs out every device that signed in with it.

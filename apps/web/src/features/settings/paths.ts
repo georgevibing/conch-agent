@@ -20,6 +20,7 @@ export const SETTINGS_TABS = [
   'terminal',
   'other-apps',
   'security',
+  'devices',
   'health',
   'computer',
 ] as const;

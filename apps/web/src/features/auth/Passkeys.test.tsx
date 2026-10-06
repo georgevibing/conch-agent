@@ -15,6 +15,7 @@ import { mockFetch, renderApp } from '../../test/harness';
 import { HelloScreen } from './HelloScreen';
 import type * as PasskeyModule from './passkey';
 import { askPasskey, createPasskey, passkeySupport } from './passkey';
+import { DevicesTab } from './DevicesTab';
 import { SecurityTab } from './SecurityTab';
 import { SignIn } from './SignIn';
 import { useVerify } from './useVerify';
@@ -406,7 +407,7 @@ describe('Settings → Security → Passkeys', () => {
           ],
         }),
     });
-    renderApp(<SecurityTab />);
+    renderApp(<DevicesTab />);
     const list = await screen.findByRole('list', { name: 'Waiting for your approval' });
     expect(within(list).getByRole('button', { name: /^Approve/ })).toBeInTheDocument();
   });

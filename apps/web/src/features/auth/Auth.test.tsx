@@ -5,6 +5,8 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { appState, mockFetch, renderApp } from '../../test/harness';
+import { useUi } from '../../app/ui';
+import { DevicesTab } from './DevicesTab';
 import { SecurityTab } from './SecurityTab';
 import { SignIn } from './SignIn';
 
@@ -175,7 +177,7 @@ describe('SecurityTab', () => {
           ? { code: 'pair-code', expiresAt: Date.now() + 600_000 }
           : json({ error: 'verify-required', message: 'Confirm it’s you.' }, 403),
     });
-    renderApp(<SecurityTab />);
+    renderApp(<DevicesTab />);
     await user.click(await screen.findByRole('button', { name: 'Add a device' }));
     const dialog = await screen.findByRole('dialog', { name: 'Confirm it’s you' });
     await user.type(
@@ -352,7 +354,12 @@ describe('SecurityTab', () => {
       expect(screen.getByLabelText('Password', { selector: 'input' })).toHaveFocus(),
     );
 
+    // Reaching Conch from a phone is Settings → Devices: the fix goes there, to Tailscale.
     await user.click(screen.getByRole('button', { name: /Show me how/ }));
+    expect(useUi.getState().settingsFocus).toBe('reach');
+    cleanup();
+    mockFetch({ 'GET /api/access': () => settings({ checkup }) });
+    renderApp(<DevicesTab />);
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /Tailscale — anywhere/ })).toHaveFocus(),
     );

@@ -32,7 +32,7 @@ import type { z } from 'zod';
 
 import { ApiError } from '../../api/client';
 import { useAppState, useModels } from '../../api/queries';
-import { canPickHere, pickPath } from '../../lib/pick';
+import { chooseOnComputer } from '../folders/FolderChooser';
 import { pickerProviders } from '../models/catalog';
 import { findModel, modelKey, parseModelKey } from '../models/useTurnOptions';
 import { browserTimezone, routinesApi } from './api';
@@ -359,7 +359,7 @@ export function RoutineEditor({
                   routines={(routines ?? [])
                     .filter((r) => r.id !== routine?.id && r.status !== 'completed')
                     .map((r) => ({ id: r.id, title: r.title }))}
-                  {...(canPickHere() && { onChooseFolder: () => pickPath('watch-folder') })}
+                  onChooseFolder={() => chooseOnComputer({ purpose: 'watch-folder' })}
                 />
               )}
             </Stack>

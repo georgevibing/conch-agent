@@ -32,7 +32,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router';
 
 import { useAppState, useConversations, useUpdateSettings } from '../../api/queries';
-import { canPickHere, pickPath } from '../../lib/pick';
+import { chooseOnComputer } from '../folders/FolderChooser';
 import { useStable } from '../../lib/useStable';
 import { useUi } from '../../app/ui';
 import { greeting } from '../../lib/time';
@@ -751,10 +751,12 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
     : undefined;
 
   const saveSettings = useUpdateSettings();
-  /** The folder chip: the system's Open dialog right here, or Settings from another device. */
+  /** The folder chip: the desktop app's Open dialog, or Conch's folder browser from anywhere else. */
   const chooseFolder = () => {
-    if (!canPickHere()) return openSettings('general');
-    void pickPath('workspace').then(
+    void chooseOnComputer({
+      purpose: 'workspace',
+      ...(app?.workspace && { current: app.workspace }),
+    }).then(
       async (path) => {
         if (!path) return;
         // The chip shows the new folder at once; it goes back if it can't be used.
@@ -960,7 +962,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
             <Tooltip content={app?.workspace ?? ''}>
               <ComposerChip
                 icon={<Folder />}
-                // A phone can't choose a folder on this computer: Settings → General has it.
+                // From any device: the folder browser walks the computer Conch runs on.
                 tuck
                 onClick={chooseFolder}
                 aria-label={`Working folder: ${workspaceName}. Choose another`}

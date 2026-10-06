@@ -43,6 +43,7 @@ import {
   Gauge,
   MessagesSquare,
   MonitorSmartphone,
+  Smartphone,
   Globe,
   HeartPulse,
   Laptop,
@@ -92,7 +93,13 @@ import { useOrganise } from '../chatlist/useOrganise';
 import { COME_HOME_FOCUS } from '../import/api';
 import { doctorApi } from '../health/api';
 import { LIVE_DATA_FOCUS } from '../artifacts/LiveDataSection';
-import { ADDRESS_FOCUS, DEVICES_FOCUS, PASSKEYS_FOCUS } from '../auth/focus';
+import {
+  ADD_DEVICE_FOCUS,
+  ADDRESS_FOCUS,
+  DEVICES_FOCUS,
+  PASSKEYS_FOCUS,
+  REACH_FOCUS,
+} from '../auth/focus';
 import { FALLBACK_FOCUS } from '../settings/FallbackSection';
 import { ADVANCED_FOCUS } from '../settings/useAdvanced';
 import { PLAN_ROOM_FOCUS, ROUTINES_SPEND_FOCUS } from '../routines/SpendingSection';
@@ -123,7 +130,6 @@ import { useLiveStore } from '../../live/store';
 import { useTerminalStatus } from '../terminal/queries';
 import { undoLast } from '../undo/UndoHost';
 import { useUpdates } from '../updates/queries';
-import { ADD_DEVICE_FOCUS } from '../auth/SecurityTab';
 import { BACKGROUND_FOCUS } from '../background/AlwaysOnSection';
 
 /** Something ⌘K can find and act on that isn't a chat or a message. */
@@ -276,7 +282,7 @@ const settingsPlaces: {
     icon: <Mic />,
   },
   {
-    tab: 'security',
+    tab: 'devices',
     focus: ADD_DEVICE_FOCUS,
     label: 'Add your phone',
     keywords:
@@ -294,7 +300,7 @@ const settingsPlaces: {
   {
     tab: 'security',
     label: 'Security',
-    keywords: 'password keys devices sign in checkup',
+    keywords: 'password keys sign in checkup safe',
     icon: <ShieldCheck />,
   },
   {
@@ -322,12 +328,20 @@ const settingsPlaces: {
     icon: <GlobeLock />,
   },
   {
-    tab: 'security',
+    tab: 'devices',
     focus: DEVICES_FOCUS,
     label: 'Devices',
     keywords:
-      'approve new devices approval waiting pending phone laptop signed in sign out remove trusted allow',
+      'approve new devices approval waiting pending phone laptop tablet browser signed in sign out remove trusted allow lost stolen which devices get notifications stop',
     icon: <MonitorSmartphone />,
+  },
+  {
+    tab: 'devices',
+    focus: REACH_FOCUS,
+    label: 'Use Conch on your phone',
+    keywords:
+      'reach phone from anywhere tailscale wi-fi wifi network ssh tunnel remote away from home encrypted',
+    icon: <Smartphone />,
   },
   {
     tab: 'providers',

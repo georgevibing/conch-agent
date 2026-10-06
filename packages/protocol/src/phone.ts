@@ -99,6 +99,8 @@ export const PushDevice = z.object({
   name: z.string(),
   /** It's the device asking. */
   current: z.boolean(),
+  /** The signed-in device it belongs to (Settings → Devices shows them together). */
+  deviceId: z.string().optional(),
   createdAt: z.number(),
   lastSentAt: z.number().optional(),
   /** The last push didn't arrive: one sentence. */

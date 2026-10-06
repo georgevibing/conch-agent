@@ -242,6 +242,37 @@ describe('gateway HTTP', () => {
     expect(bearer.statusCode).toBe(200);
   });
 
+  it('walks folders only for a person, never for a key, and never into Conch’s own', async () => {
+    const { app, home } = await setup({ CONCH_TOKEN: 'a-very-long-secret-token' });
+    close = () => app.close();
+    // Nobody signed in: nothing listed, from anywhere.
+    expect((await app.inject('/api/pick/list?path=~')).statusCode).toBe(401);
+    expect((await app.inject('/api/pick/places')).statusCode).toBe(401);
+    // An access key is a script (or the assistant's own shell): not a person choosing.
+    const key = { authorization: 'Bearer a-very-long-secret-token' };
+    const asKey = await app.inject({ url: '/api/pick/list?path=~', headers: key });
+    expect(asKey.statusCode).toBe(403);
+    expect(asKey.json()).toMatchObject({ error: 'person-only' });
+    const made = await app.inject({
+      method: 'POST',
+      url: '/api/pick/folder',
+      headers: key,
+      payload: { parent: home, name: 'planted' },
+    });
+    expect(made.statusCode).toBe(403);
+    await app.close();
+
+    // On this computer: folders, but never Conch's own, beyond its workspace.
+    const here = await setup();
+    close = () => here.app.close();
+    await here.services.settings.workspace();
+    const list = (path: string) =>
+      here.app.inject(`/api/pick/list?${new URLSearchParams({ path })}`);
+    expect((await list(here.home)).statusCode).toBe(403);
+    expect((await list(join(here.home, 'vault'))).statusCode).toBe(403);
+    expect((await list(join(here.home, 'workspace'))).statusCode).toBe(200);
+  });
+
   it('never turns a URL into a path outside its folder', async () => {
     const { app, home } = await setup();
     close = () => app.close();

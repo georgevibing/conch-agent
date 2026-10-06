@@ -67,7 +67,7 @@ does **not** sign it in. Instead:
 3. The person approves it on the computer running Conch, either:
    - in the terminal (`pnpm conch devices approve`); with no code it shows who
      is waiting and asks, or waits for the device to ask; or
-   - in **Settings → Security → Devices**, after confirming it's them.
+   - in **Settings → Devices** (once Settings → Security → Devices), after confirming it's them.
 
    The waiting session becomes a normal one, so the device is let in where it
    waits without signing in again.

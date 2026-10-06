@@ -181,6 +181,19 @@ should flow, never stutter.
   to the text colour, like wet ink. Half-arrived Markdown is closed so raw `**` never
   flashes. The wait holds its place and the reply replaces it in place, with no jump.
 
+### Choosing a folder
+
+A browser can't hand a page a real path, and a phone can't see a dialog on the
+computer across the room, so a folder (or a file) on the computer is chosen in
+`FolderBrowser`: a dialog that holds its size while you walk, the places people
+start from beside it (a row to swipe on a phone), the trail to where you are
+above the folders, filtered as you type. A folder is one press to go into;
+**Choose** takes the one you're in, as a Mac's Open dialog does. A new folder is
+made where you are, in the list, never a second dialog. Typing a path is one
+press away and never the first thing offered, with suggestions as you type and
+a sentence for what's wrong. In the desktop app the system's own Open dialog
+does all of this instead.
+
 ### Passwords
 
 Secrets are dots until you ask, and go back to dots by themselves
@@ -447,6 +460,7 @@ every platform, and ignore Lustre. Every form value goes through a Nacre control
 | Time of day    | `TimePicker`  | Typeable spin-button segments + a chip clock face; value `HH:MM`       |
 | Calendar date  | `DatePicker`  | Speech-like trigger, keyboard grid, quick picks; value `YYYY-MM-DD`    |
 | Range / amount | `Slider`      |                                                                        |
+| A folder, file | `PathPicker`  | What Conch found; `FolderBrowser` for the rest, from any device        |
 
 If a screen needs a value none of these cover, build the control in Nacre first (with
 stories and an axe test). `<input type="date|time|number|range|color">` and bare

@@ -359,6 +359,8 @@ function Details({
           value={value.path || undefined}
           onChange={(path) => onChange({ ...value, path })}
           {...(onChooseFolder && { onChoose: onChooseFolder })}
+          // A chooser brings its own way to type a path (Nacre `FolderBrowser`).
+          canType={!onChooseFolder}
           chooseLabel="Choose a folder…"
           placeholder="~/Downloads"
           hint="Never where keys are kept. Conch ignores its own changes."

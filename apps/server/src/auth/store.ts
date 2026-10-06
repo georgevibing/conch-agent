@@ -1058,7 +1058,7 @@ export class AccessStore {
       if (!keep && waiting.length >= MAX_WAITING)
         throw new AccessError(
           'busy',
-          `Too many devices are waiting to be approved. Approve or turn them down first: in Settings → Security on a device you’ve let in, or ${cliName()} devices on the computer running Conch.`,
+          `Too many devices are waiting to be approved. Approve or turn them down first: in Settings → Devices on a device you’ve let in, or ${cliName()} devices on the computer running Conch.`,
         );
       const expiresAt = now + APPROVAL_TTL_MS;
       const session: SessionRecord = {

@@ -39,7 +39,7 @@ Whoever opens the link first owns this Conch, so keep it to yourself. It works o
 
 - **With a passkey** that syncs (iCloud Keychain, Google Password Manager), your other devices sign in with it and come straight in.
 - **With a password**, a new device waits for your OK. Approve it in **Settings → Security** on a device you've already signed in on. You'll be asked to confirm it's you first.
-- **Your phone:** in **Settings → Security**, press **Add a device** and scan the code.
+- **Your phone:** in **Settings → Devices**, press **Add a device** and scan the code.
 
 New devices need your approval from the start, so a password someone learns gets them nowhere.
 

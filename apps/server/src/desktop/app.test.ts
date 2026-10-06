@@ -84,4 +84,28 @@ describe('the desktop app, from the gateway', () => {
     proc.emit('disconnect');
     expect(gone).toBe(true);
   });
+
+  it('asks the app for the Open dialog and hears only its own answer', async () => {
+    const { proc, sent } = channel();
+    const app = desktopApp({ CONCH_APP: '/x/Conch' }, proc);
+    const chosen = app?.pick({
+      prompt: 'Choose the folder your assistant works in',
+      kind: 'folder',
+      extensions: ['ok', '../bad'],
+    });
+    await Promise.resolve();
+    const asked = sent[0] as { type: string; id: string; extensions: string[] };
+    expect(asked).toMatchObject({ type: 'pick', kind: 'folder', extensions: ['ok'] });
+    // Someone else's answer, or one that doesn't parse, isn't this one.
+    proc.emit('message', { type: 'picked', id: 'another', path: '/elsewhere' });
+    proc.emit('message', { type: 'picked', id: asked.id, path: '' });
+    proc.emit('message', { type: 'picked', id: asked.id, path: '/Users/ada/Projects' });
+    await expect(chosen).resolves.toBe('/Users/ada/Projects');
+
+    const failing = app?.pick({ prompt: 'x' });
+    await Promise.resolve();
+    const second = sent[1] as { id: string };
+    proc.emit('message', { type: 'picked', id: second.id, failed: true });
+    await expect(failing).rejects.toThrow('Open dialog');
+  });
 });

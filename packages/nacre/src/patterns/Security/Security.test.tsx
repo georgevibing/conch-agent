@@ -137,6 +137,28 @@ describe('DeviceList with remembered devices', () => {
   });
 });
 
+describe('DeviceList with notifications', () => {
+  it('says which devices get them, and stops them without signing out', async () => {
+    const user = userEvent.setup();
+    const onStop = vi.fn();
+    const onSignOut = vi.fn();
+    const { container } = renderNacre(
+      <DeviceList
+        label="Devices"
+        devices={approvedDevices.map((d) => ({ ...d, notified: d.id === 'dev_phone' }))}
+        onSignOut={onSignOut}
+        onStopNotifications={onStop}
+      />,
+    );
+    expect(screen.getAllByText('Gets notifications')).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /^Stop notifications/ })).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: 'Stop notifications on Ada’s iPhone' }));
+    expect(onStop).toHaveBeenCalledWith(expect.objectContaining({ id: 'dev_phone' }));
+    expect(onSignOut).not.toHaveBeenCalled();
+    await expectAccessible(container);
+  });
+});
+
 describe('DeviceRequests', () => {
   it('approves and turns down on the computer running Conch', async () => {
     const user = userEvent.setup();

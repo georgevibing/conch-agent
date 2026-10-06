@@ -60,6 +60,18 @@ export const GatewayToApp = z.discriminatedUnion('type', [
   z.object({ type: z.literal('wake'), on: z.boolean() }),
   /** "Hey Conch" was heard: bring the window to the front. */
   z.object({ type: z.literal('show') }),
+  /**
+   * Show the system's Open dialog over the window (`POST /api/pick` from this
+   * computer). The gateway writes the words and the file types; the app
+   * answers with `picked` and the same `id`.
+   */
+  z.object({
+    type: z.literal('pick'),
+    id: z.string().min(1).max(64),
+    prompt: z.string().max(200),
+    kind: z.enum(['file', 'folder']),
+    extensions: z.array(z.string().regex(/^[A-Za-z0-9]{1,10}$/)).max(10),
+  }),
   /** Download this release and replace the app with it (Settings → Health → Updates). */
   z.object({
     type: z.literal('update'),
@@ -73,6 +85,13 @@ export type GatewayToApp = z.infer<typeof GatewayToApp>;
 export const AppToGateway = z.discriminatedUnion('type', [
   /** "Stop listening for Hey Conch", pressed in the tray (ADR 0078). */
   z.object({ type: z.literal('wake.stop') }),
+  /** What the Open dialog chose. No path: cancelled. `failed`: it couldn't show. */
+  z.object({
+    type: z.literal('picked'),
+    id: z.string().min(1).max(64),
+    path: z.string().min(1).max(4096).optional(),
+    failed: z.boolean().optional(),
+  }),
   z.object({
     type: z.literal('update.progress'),
     version: z.string().max(40),

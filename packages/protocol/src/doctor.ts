@@ -33,6 +33,8 @@ export const DoctorPlace = z.enum([
   'providers',
   'integrations',
   'security',
+  /** Settings → Devices: what's signed in, approving new ones, adding your phone. */
+  'devices',
   'browser',
   'terminal',
   'models',

@@ -109,7 +109,7 @@ Each device chooses its topics and whether previews show:
 | approvals | `permission.requested`, a Passwords request, the browser handing over to you                              | the chat; **Deny** answers right there |
 | replies   | `turn.completed` for a chat you started (not routines, not chat apps), with the first lines of the answer | the chat                               |
 | routines  | a run that succeeded with something to say, or failed ("nothing to do" stays quiet)                       | the run                                |
-| devices   | a new device asking to sign in (ADR 0024), sent to every device except the one asking                     | Settings → Security → Devices          |
+| devices   | a new device asking to sign in (ADR 0024), sent to every device except the one asking                     | Settings → Devices                     |
 
 **Quiet by design.**
 

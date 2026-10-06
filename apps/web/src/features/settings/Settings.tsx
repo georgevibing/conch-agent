@@ -32,6 +32,7 @@ import {
   Gauge,
   Menu,
   Mic,
+  MonitorSmartphone,
   Globe,
   HeartPulse,
   Laptop,
@@ -53,6 +54,7 @@ import { useAppState, useMemories, useUpdateSettings } from '../../api/queries';
 import { Trail } from '../../app/trail';
 import { useUi } from '../../app/ui';
 import { NARROW } from '../../app/widths';
+import { DevicesTab } from '../auth/DevicesTab';
 import { SecurityTab } from '../auth/SecurityTab';
 import { updatesWaiting, useUpdates } from '../updates/queries';
 import { BrowserSettings } from '../browser/BrowserSettings';
@@ -297,7 +299,7 @@ interface Place {
 }
 
 /**
- * Seventeen places, read as five: the everyday basics, then who your assistant
+ * Eighteen places, read as five: the everyday basics, then who your assistant
  * is, where its intelligence comes from, what it can use, and keeping it safe.
  */
 const groups: { label: string; hidden?: boolean; places: Place[] }[] = [
@@ -340,6 +342,7 @@ const groups: { label: string; hidden?: boolean; places: Place[] }[] = [
     label: 'Safe and sound',
     places: [
       { value: 'security', label: 'Security', icon: <ShieldCheck /> },
+      { value: 'devices', label: 'Devices', icon: <MonitorSmartphone /> },
       { value: 'health', label: 'Health', icon: <HeartPulse /> },
       { value: 'computer', label: 'This computer', icon: <Laptop /> },
     ],
@@ -544,6 +547,8 @@ export function Settings() {
         return <HealthTab />;
       case 'security':
         return <SecurityTab />;
+      case 'devices':
+        return <DevicesTab />;
       case 'notifications':
         return <NotificationsTab />;
       case 'voice':
