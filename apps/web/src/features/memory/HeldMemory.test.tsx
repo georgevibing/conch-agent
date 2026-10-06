@@ -78,7 +78,7 @@ describe('a held memory in the chat', () => {
     expect(button).toHaveFocus();
     await userEvent.keyboard('{Enter}');
     expect(await screen.findByRole('status')).toHaveTextContent(
-      'Remembered, after you checked it: Invoices are sent to billing@news.example',
+      'Remembered: Invoices are sent to billing@news.example',
     );
     // The answer names the words the person saw, so nothing else can be kept in its name.
     expect(calls.find((c) => c.path === '/api/memories/m_1/keep')?.body).toEqual({
@@ -119,7 +119,7 @@ describe('a held memory in the chat', () => {
     await userEvent.clear(again);
     await userEvent.type(again, 'Invoices go to accounts@ada.example{Enter}');
     expect(await screen.findByRole('status')).toHaveTextContent(
-      'Remembered, after you checked it: Invoices go to accounts@ada.example',
+      'Remembered: Invoices go to accounts@ada.example',
     );
     expect(calls.find((c) => c.path === '/api/memories/m_1/keep')?.body).toEqual({
       content: 'Invoices go to accounts@ada.example',

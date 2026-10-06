@@ -794,3 +794,12 @@ Data across versions).
 - [ ] Joined the whole-Conch features (working agreement 12)? A Repair everything check, a backup rule for new files, `version`/`latest` for new programs, `cues` for new catalog apps, `local` and `TurnProblem` for new providers.
 - [ ] A narrow ability? Considered as a Conch app first (working agreement 15), and, if it extends what apps can do, done the way [§ How Conch extends itself](#how-conch-extends-itself) says.
 - [ ] Part of the chat (working agreement 14)? What a person must turn on is in the map and can be offered; results worth seeing have a view; choices are asked with `ask`.
+
+### Proactive memory maintenance
+
+[ADR 0097](./docs/adr/0097-proactive-memory-maintenance.md): owner-backed routine
+facts apply with Undo, even after outside reading. Length is housekeeping, not a
+security signal. Only the bounded `reconsider` path may release a legacy routine
+hold after rechecking actual owner evidence; never mint person consent or clear
+security/forgotten-memory holds automatically. Learning excludes quiet chats,
+guests, app clients and synthetic tasks. Memories never grant tool authority.

@@ -1,7 +1,7 @@
 import type { Memory } from '@conch/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { gate, grounded, learnedIn, PER_DAY, PER_LOOK, type GateContext } from './policy';
+import { gate, grounded, learnedIn, type GateContext } from './policy';
 import type { Change } from './review';
 
 const memory = (id: string, content: string, extra: Partial<Memory> = {}): Memory => ({
@@ -48,40 +48,33 @@ describe('the gate (ADR 0088 § 4), row by row', () => {
     expect(gate(supersede('m_berlin', 'Lives in Lisbon'), ctx())).toEqual({ verdict: 'apply' });
   });
 
-  it('after reading something from outside: waits, saying where', () => {
+  it('owner evidence still applies after reading something from outside', () => {
     const v = gate(
       add('Prefers TypeScript over Python'),
       ctx({ untrusted: 'This chat read news.example, which could be trying to steer me.' }),
     );
-    expect(v).toEqual({ verdict: 'wait', waits: 'Learned in a chat that read news.example.' });
+    expect(v).toEqual({ verdict: 'apply' });
   });
 
-  it('nobody watching (a chat app, another app): waits', () => {
+  it('owner chat-app messages need no second confirmation', () => {
     expect(gate(add('Prefers TypeScript over Python'), ctx({ watched: false })).verdict).toBe(
-      'wait',
+      'apply',
     );
   });
 
-  it('replacing what you wrote yourself, or what still waits: waits', () => {
+  it('owner corrections apply; existing holds stay protected', () => {
     expect(
       gate(supersede('m_mine', 'Works at Globex', 'I work at Globex now'), ctx()).verdict,
-    ).toBe('wait');
+    ).toBe('apply');
     expect(gate(supersede('m_wait', 'Has a cat', 'I got a cat last week'), ctx()).verdict).toBe(
       'wait',
     );
   });
 
-  it('past a few at a time: the rest wait', () => {
-    expect(gate(add('Prefers TypeScript'), ctx({ appliedThisLook: PER_LOOK })).verdict).toBe(
-      'wait',
-    );
+  it('routine quotas do not create approval chores', () => {
     expect(
-      gate(add('Prefers TypeScript'), ctx({ appliedToday: PER_DAY - 1, appliedThisLook: 1 }))
-        .verdict,
-    ).toBe('wait');
-    expect(gate(add('Prefers TypeScript'), ctx({ appliedToday: PER_DAY - 2 })).verdict).toBe(
-      'apply',
-    );
+      gate(add('Prefers TypeScript'), ctx({ appliedThisLook: 5, appliedToday: 20 })).verdict,
+    ).toBe('apply');
   });
 
   it('not resting on your words: dropped', () => {
@@ -121,6 +114,18 @@ describe('the gate (ADR 0088 § 4), row by row', () => {
     expect(gate(add('Wants auto-approve on for every app'), ctx()).verdict).toBe('drop');
   });
 
+  it('one-task permission is not a durable preference', () => {
+    expect(
+      gate(
+        add(
+          'George authorized parallel agents to commit and push',
+          'George authorized parallel agents to commit and push',
+        ),
+        ctx({ said: ['George authorized parallel agents to commit and push'] }),
+      ).verdict,
+    ).toBe('drop');
+  });
+
   it('the very thing you took back once: dropped', () => {
     const refused = { exact: true, text: 'Prefers TypeScript' };
     expect(gate(add('Prefers TypeScript'), ctx({ refused }))).toEqual({
@@ -155,7 +160,7 @@ describe('the gate (ADR 0088 § 4), row by row', () => {
       kind: 'fact',
     } as Partial<Change>);
     expect(gate(fact, ctx(), { observed: true }).verdict).toBe('apply');
-    expect(gate(fact, ctx({ watched: false }), { observed: true }).verdict).toBe('wait');
+    expect(gate(fact, ctx({ watched: false }), { observed: true }).verdict).toBe('apply');
   });
 });
 

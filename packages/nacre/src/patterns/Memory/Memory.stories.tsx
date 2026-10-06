@@ -23,7 +23,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'What Conch knows about you (ADR 0032). Memories say who wrote them; one learned in a chat that read something from outside waits for an OK. A tidy-up shows every change as a small diff with Keep and Undo. Something you keep asking for — however you word it — is offered as a skill, never saved by itself. Search says how it works, and offers the one small download that lets it understand meaning (ADR 0041).',
+          'What Conch knows about you (ADR 0032). Memories say who wrote them; routine facts are saved automatically with Undo. A security concern waits for an OK. A tidy-up shows every change as a small diff. Something you keep asking for — however you word it — is offered as a skill, never saved by itself. Search says how it works, and offers the one small download that lets it understand meaning (ADR 0041).',
       },
     },
   },
@@ -84,11 +84,8 @@ export const Waiting: Story = {
   ),
 };
 
-const keepUndo = (
+const undo = (
   <>
-    <Button size="sm" variant="soft">
-      Keep
-    </Button>
     <Button size="sm" variant="ghost" tone="neutral">
       Undo
     </Button>
@@ -108,7 +105,7 @@ export const Tidied: Story = {
         before={['Likes dark roast coffee', 'Prefers dark-roast coffee']}
         after="Prefers dark roast coffee"
         why="They said the same thing."
-        actions={keepUndo}
+        actions={undo}
       />
       <TidyChangeItem
         kind="updated"
@@ -121,9 +118,9 @@ export const Tidied: Story = {
         kind="added"
         state="pending"
         before={[]}
-        after="Has a sister called Ana"
-        why="You mentioned her."
-        untrusted="Learned in a chat that read news.example."
+        after="Invoices are sent to billing@news.example"
+        why="Suggested while reading a page."
+        untrusted="This address came from news.example, not from you, and would change where invoices go."
         actions={
           <>
             <Button size="sm" variant="soft">

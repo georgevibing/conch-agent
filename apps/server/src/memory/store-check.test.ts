@@ -69,6 +69,7 @@ const PREPARE: Record<string, (s: MemoryStore, id: string) => Promise<string>> =
 const MUTATING: Record<string, (s: MemoryStore, id: string, ready: string) => Promise<unknown>> = {
   add: (s) => s.add({ content: PLANT, source: 'agent' }, page),
   write: (s) => s.write({ content: PLANT, source: 'agent' }, page),
+  reconsider: (s, id) => s.reconsider(id, PLANT, page),
   update: (s, id) => s.update(id, { content: PLANT }, page),
   restore: async (s, id) => {
     const was = await s.get(id);
@@ -466,5 +467,71 @@ describe('it fails closed', () => {
     if (after?.content === PLANT) expect(after).toMatchObject({ pending: true, held: {} });
     // Whatever won, once a plant was written the memory never quietly comes back out of its hold.
     expect(after?.pending).toBe(true);
+  });
+});
+
+describe('evidence-backed routine rechecks', () => {
+  it('releases only a legacy housekeeping hold with owner evidence, also after restart', async () => {
+    const s = store();
+    const m = await s.add({
+      content: 'George prefers TypeScript',
+      source: 'agent',
+      conversationId: 'c1',
+      pending: true,
+      untrusted: 'Learned in a chat that read github.com.',
+      provenance: { via: 'chat', read: ['github.com'] },
+    });
+    expect((await s.reconsider(m.id, m.content, { via: 'tidy', said: ['hello'] }))?.pending).toBe(
+      true,
+    );
+    const result = await s.reconsider(m.id, m.content, {
+      via: 'tidy',
+      said: ['I prefer TypeScript'],
+      read: [{ kind: 'web', label: 'github.com' }],
+    });
+    expect(result?.pending).toBeUndefined();
+    expect(result?.held).toBeUndefined();
+    expect(result?.provenance).toMatchObject({ yours: true, read: ['github.com'] });
+    expect(await new MemoryStore(join(home, 'memory')).usable()).toHaveLength(1);
+  });
+  it('never clears a security hold, a prior refusal, or an off-setting proposal', async () => {
+    const s = store();
+    for (const extra of [
+      {
+        held: {
+          verdict: 'ask' as const,
+          reasons: [{ code: 'instruction' as const, words: 'An instruction' }],
+        },
+      },
+      { untrusted: 'You took this back once, so it waits for your OK.' },
+      { untrusted: 'Learn from your chats is off, so this waits for your OK.' },
+    ]) {
+      const m = await s.add({
+        content: 'George prefers TypeScript',
+        source: 'agent',
+        pending: true,
+        provenance: { via: 'chat' },
+        ...extra,
+      });
+      expect(
+        (await s.reconsider(m.id, m.content, { via: 'tidy', said: [m.content] }))?.pending,
+      ).toBe(true);
+    }
+  });
+  it('does not release changed words or overwrite a newer edit', async () => {
+    const s = store();
+    const m = await s.add({
+      content: 'George prefers TypeScript',
+      source: 'agent',
+      pending: true,
+      untrusted: 'Learned in a chat that read github.com.',
+      provenance: { via: 'chat' },
+    });
+    await s.update(m.id, { content: 'George prefers Rust' });
+    expect((await s.reconsider(m.id, m.content, { via: 'tidy', said: [m.content] }))?.pending).toBe(
+      true,
+    );
+    await s.update(m.id, { content: 'George prefers Python', expected: m.content });
+    expect((await s.get(m.id))?.content).toBe('George prefers Rust');
   });
 });

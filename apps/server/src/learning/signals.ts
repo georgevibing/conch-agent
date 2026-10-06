@@ -24,7 +24,7 @@ const FRUSTRATION =
  */
 const ABOUT_ME = /\b(?:i|i'm|im|i've|i'd|me|my|mine|we|our)\b/i;
 const LASTING =
-  /\b(?:always|never|usually|prefer\w*|rather|favou?rite|hate|love|can'?t stand|don'?t like|allergic|vegetarian|vegan|live|living|moved|move to|work(?:ing)? (?:at|for|on|as)|my (?:job|name|wife|husband|partner|son|daughter|kids?|boss|team|manager|dog|cat|birthday|time ?zone)|call me|i'?m (?:based|from)|in the future|from now on|going forward|next time)\b/i;
+  /\b(?:always|never|usually|prefer\w*|rather|favou?rite|hate|love|can'?t stand|don'?t like|allergic|vegetarian|vegan|live|living|moved|move to|work(?:ing)? (?:at|for|on|as)|my (?:project|repo(?:sitory)?|workspace|company|business|app|language|job|name|wife|husband|partner|son|daughter|kids?|boss|team|manager|dog|cat|birthday|time ?zone)|call me|i'?m (?:based|from)|in the future|from now on|going forward|next time)\b/i;
 
 /**
  * Why a command failed, when this computer lacks the program itself. A file

@@ -19,8 +19,7 @@
  *    themselves are theirs: nothing they said is questioned.
  * 2. What it says, by the patterns the agent-security literature names:
  *    orders to the assistant, sending money or messages elsewhere, secrets,
- *    tool directives, claims of authority, exfiltration, hidden text, and
- *    length. Most of these count only where something from outside could be
+ *    tool directives, claims of authority, exfiltration, and hidden text. Most of these count only where something from outside could be
  *    behind it; a few (secrets, hidden characters, lookalike names, encoded
  *    blobs, image beacons, a download piped into a shell) count everywhere.
  * 3. A second look by a cheap model, as a second opinion only (`secondLook`):
@@ -77,9 +76,6 @@ export interface Verdict {
   /** Its words, and every value in it, are the person's own. */
   yours?: boolean;
 }
-
-/** Longer than this, and a memory isn't the one fact the tool asks for. */
-const LONG = 300;
 
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 const sentence = (s: string) =>
@@ -665,7 +661,6 @@ function signalsOf(text: string): Signals {
   if ((STANDING.test(seen) && ACT.test(seen)) || IMPERATIVE.test(seen)) context.add('directive');
   if (AUTHORITY.some((p) => p.test(seen))) context.add('authority');
   if (LEAK.some((p) => p.test(seen))) context.add('exfiltration');
-  if (seen.length > LONG) context.add('long');
   return { strong, context, ...(lookalike && { lookalike }), ...(secret && { secret }) };
 }
 

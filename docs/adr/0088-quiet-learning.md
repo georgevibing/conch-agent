@@ -1,5 +1,7 @@
 # 0088 — Quiet learning: learned while you're away, said afterwards, undone in one press
 
+> Amended by [ADR 0097](./0097-proactive-memory-maintenance.md): routine owner-backed memories apply with Undo; length and outside reading alone no longer require approval. Security holds remain protected.
+
 - Status: accepted
 - Date: 2026-10-05
 - Builds on: [ADR 0003](./0003-memory.md) (memory in the open),

@@ -87,9 +87,9 @@ Say "like last time", "the Lisbon plan" or "what did we decide about the venue?"
 
 Memories pile up. **Tidy up now** merges repeats, updates what has changed, and picks up lasting things you said in recent chats. Turn on **Tidy up every night** and it happens once a night, between 2 and 5 in the morning, when nothing else is running.
 
-Each tidy-up is a card under **Tidying up**. Every change shows what a memory said before, what it says now, and why, with **Keep** and **Undo**. Undo puts back exactly what was there. It never makes a merge that would lose a number or a name.
+Each tidy-up is a card under **Tidying up**. Routine changes are **Saved automatically**, with **Undo**. Every change shows what a memory said before, what it says now, and why. Only a change that needs your decision shows **Keep**. Undo puts back exactly what was there. It never makes a merge that would lose a number or a name.
 
-A tidy-up asks the cheapest model you have. With no model to ask, it only merges exact repeats.
+Long wording is compacted when the details can be preserved. Length alone never creates an approval request. If shortening would lose something, Conch keeps the longer wording. A tidy-up asks the cheapest model you have. With no model to ask, it still merges exact repeats.
 
 When a long chat is [summarised](./chats.md#long-chats), Conch first reads what you said in the part being summarised, the way it reads a chat that went quiet.
 
@@ -127,11 +127,13 @@ To turn the check down, go to **Settings → Security → Safety** and turn off 
 
 ## Waiting for your OK
 
-When nobody is there to see it — a routine running by itself, or a chat where someone else is talking to your assistant on a chat app — a memory from a chat that read something from outside is set aside instead. It shows **Wants to remember** with **Keep** and **Forget**, and sits under **Waiting for your OK** on the page. Your assistant doesn't use a waiting memory, and it isn't in an export, until you keep it. One that also looks off says why.
+Your own preferences and corrections save automatically, including in your private chat apps and in chats that read websites or other apps. Reading a page does not turn everything you subsequently say into an approval request. Corrections can update a memory you added yourself, with Undo.
+
+A security concern, or something close to a memory you previously rejected, still waits with the reason and the relevant choice. Unsupported instructions proposed during background learning are discarded. A memory is context about you; it cannot grant permission to run commands, send messages or change security settings.
+
+Conch also rechecks older routine approvals against your recent chat messages. Those it can safely resolve become saved automatically; genuine security holds and uncertain cases stay protected. This works without asking a model. Chats marked **Don't learn from this chat**, other people's messages, delegated tasks and messages from other apps using Conch are excluded.
 
 What you choose stays in the chat: open it again and it shows what you kept or undid.
-
-What Conch learns by itself waits the same way when the chat read something from outside, when nobody was watching it, or when it would replace something you wrote yourself. It goes through the same memory check as everything else, too: one that looks planted waits, saying why. The chat's **Learned** line opens by itself to show it, with **Keep** and **Forget**. Until you keep a replacement, what it would replace stays true.
 
 With **Learn from your chats** off, anything new a tidy-up learns waits the same way.
 

@@ -159,7 +159,12 @@ interface Look {
 /** Not a chat a person had: a routine's run, a task, a page fetching its data, a guest (ADR 0075). */
 function notYours(origin: Origin): boolean {
   if (!origin) return false;
-  if (origin.kind === 'routine' || origin.kind === 'task' || origin.kind === 'artifact')
+  if (
+    origin.kind === 'routine' ||
+    origin.kind === 'task' ||
+    origin.kind === 'artifact' ||
+    origin.kind === 'client'
+  )
     return true;
   return origin.kind === 'channel' && origin.guest === true;
 }
@@ -755,6 +760,34 @@ export class QuietLearning {
           entryId: entry.id,
           state: 'kept',
         })
+        .catch(() => undefined);
+    this.deps.changed?.();
+  }
+
+  /** Housekeeping resolved an old routine hold; update its existing record and chat quietly. */
+  async settled(memory: Memory): Promise<void> {
+    const entry = await this.store.byMemory(memory.id);
+    if (
+      !entry ||
+      entry.state !== 'waiting' ||
+      entry.after.content !== memory.content ||
+      memory.pending
+    )
+      return;
+    await this.#retireFor(entry, memory);
+    await this.store.update(entry.id, ({ waits: _waits, ...e }) => ({
+      ...e,
+      state: 'applied',
+      after: memory,
+    }));
+    if (entry.from.conversationId)
+      await this.deps
+        .note(
+          entry.from.conversationId,
+          entry.from.trigger === 'tool'
+            ? { type: 'memory.decided', memoryId: memory.id, kept: true }
+            : { type: 'learning.decided', entryId: entry.id, state: 'kept' },
+        )
         .catch(() => undefined);
     this.deps.changed?.();
   }

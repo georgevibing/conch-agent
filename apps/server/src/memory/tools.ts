@@ -2,7 +2,9 @@ import { MemoryKind, type Memory } from '@conch/protocol';
 import { z } from 'zod';
 
 import type { HostTool } from '../engines/types';
-import { datamark, type LookModel, type ReadThing } from './guard';
+import { taskPermission } from '../learning/policy';
+import { checkMemory, datamark, type LookModel, type ReadThing } from './guard';
+import { compactMemory } from './compact';
 import { outsideOf } from './prompt';
 import type { MemoryStore } from './store';
 
@@ -51,19 +53,34 @@ export function memoryTools(options: {
   const remember: HostTool<{ content: z.ZodString; kind: z.ZodOptional<typeof MemoryKind> }> = {
     name: 'remember',
     description:
-      'Save one durable fact about the user to long-term memory so you know it in future conversations. One concise, self-contained, third-person statement per call.',
-    input: { content: z.string().min(1).max(500), kind: MemoryKind.optional() },
+      'Save one durable fact about the user to long-term memory so you know it in future conversations. Save useful preferences and lasting facts proactively, without asking for routine confirmation. One concise, self-contained, third-person statement per call; long wording is compacted automatically.',
+    input: { content: z.string().min(1).max(2000), kind: MemoryKind.optional() },
     async run({ content, kind }) {
+      if (taskPermission(content))
+        return 'Not saved: permission for this task belongs to this chat, not long-term memory. Carry on with the task.';
       // After reading something untrusted, a page could be the one asking (ADR 0032): it's
-      // remembered with where it came from, and waits for an OK only when nobody can undo it.
+      // provenance stays attached. Owner evidence avoids a blanket housekeeping hold.
       const untrusted = options.untrusted?.();
-      const waits = Boolean(untrusted) && (options.waits?.() ?? true);
+      const own = checkMemory({
+        content,
+        via: 'chat',
+        read: options.check?.read(),
+        said: options.check?.said(),
+      });
+      const waits = Boolean(untrusted) && (options.waits?.() ?? true) && !own.yours;
       // Something the person took back once waits for them, wherever it comes from (ADR 0088).
-      const refused = await options.never?.(content).catch(() => false);
+      const original = content;
+      let refused = await options.never?.(content).catch(() => true);
       // And it's looked at first (ADR 0087): one that looks planted is held and asked about.
       const check = options.check;
       const read = check?.read() ?? [];
       const recent = check?.recent() ?? [];
+      content = await compactMemory(
+        content,
+        { via: 'chat', read, said: check?.said() ?? [] },
+        check?.look,
+      );
+      if (content !== original) refused ||= await options.never?.(content).catch(() => true);
       // The store runs the check where it writes (ADR 0087); this says what's behind it.
       const { memory, verdict } = await store.write(
         {

@@ -15,7 +15,7 @@ import { findMeaningModel } from './index';
 import type { Said } from './tidy';
 
 export interface ChatSource {
-  list(): Promise<{ id: string; updatedAt: number; origin?: { kind: string } }[]>;
+  list(): Promise<{ id: string; updatedAt: number; origin?: { kind: string; guest?: boolean } }[]>;
   events(id: string): Promise<ConversationEvent[]>;
 }
 
@@ -23,15 +23,19 @@ export interface ChatSource {
  * What you said in one chat, from `since` and before `beforeSeq`, by the
  * rules every learning pass keeps: never a routine's run (it starts with its
  * own instruction, not something you just said), never a chat with someone
- * else in it on a chat app (their words aren't yours), and a chat that read
- * something untrusted says so, so what's learned there waits for your OK.
+ * else in it on a chat app (their words aren't yours), nor an app or delegated
+ * task. Outside reading keeps its provenance; actual owner evidence may apply.
  */
 export function chatWords(
-  chat: { id: string; origin?: { kind: string } },
+  chat: { id: string; origin?: { kind: string; guest?: boolean } },
   events: readonly ConversationEvent[],
   options: { since: number; beforeSeq?: number },
 ): Said[] {
-  if (chat.origin?.kind === 'routine') return [];
+  if (
+    chat.origin &&
+    (['routine', 'task', 'artifact', 'client'].includes(chat.origin.kind) || chat.origin.guest)
+  )
+    return [];
   const taint: TaintSource[] = heldTaints(events);
   if (taint.some((t) => t.kind === 'person')) return [];
   const untrusted = taint.length ? describeTaint(taint) : undefined;

@@ -759,7 +759,17 @@ export class Services {
       home: config.CONCH_HOME,
       store: this.memory,
       model: () => cheapModel(this.providers.engine()),
-      said: (since) => yourWords(conversationStore, since),
+      said: async (since) => {
+        // A quiet chat stays private from nightly learning and legacy rechecks too.
+        if (!this.learning) return [];
+        const quiet = new Set(await this.learning.store.quiet());
+        return (await yourWords(conversationStore, since)).filter(
+          (s) => !quiet.has(s.conversationId),
+        );
+      },
+      never: (content) => this.learning?.refuses(content) ?? Promise.resolve(true),
+      settled: (memory) => this.learning?.settled(memory) ?? Promise.resolve(),
+      healed: (message) => void this.healed.note('settings', message),
       settings: async () => {
         const { preferences } = await this.settings.get();
         return {

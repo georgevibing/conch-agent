@@ -194,6 +194,11 @@ export function TidyChangeItem({
         <Badge size="sm" tone={kind === 'added' ? 'success' : 'accent'} variant="soft">
           {KIND_LABELS[kind]}
         </Badge>
+        {state === 'applied' && (
+          <Badge size="sm" tone="neutral" variant="soft">
+            Saved automatically
+          </Badge>
+        )}
         {state === 'pending' && (
           <Badge size="sm" tone="warning" variant="soft">
             Waiting for your OK
@@ -498,7 +503,7 @@ export function MemoryCheck({
       <p className={cx(styles.checkSettled, className)} data-settled={settled} role="status">
         <Brain aria-hidden />
         <span>
-          {settled === 'kept' ? 'Remembered, after you checked it: ' : 'Not remembered: '}
+          {settled === 'kept' ? 'Remembered: ' : 'Not remembered: '}
           {content}
         </span>
       </p>

@@ -9,19 +9,16 @@
  * - a power: acting without asking, trust;
  * - something the person took back once.
  *
- * Then waits: after reading something from outside, with nobody watching,
- * replacing something the person wrote or something still waiting, or past
- * a few at a time. The rest is applied, and the chat says so.
+ * Only a previous refusal or replacing a waiting memory needs review. Owner
+ * evidence survives reading outside material; the store still checks every
+ * write for instructions, new destinations and other security signals.
  */
 import type { Memory } from '@conch/protocol';
 
 import { tokens } from '../memory/embed';
+import { gistIn } from '../memory/guard';
 import { SECRET } from '../skills/learn';
 import type { Change } from './review';
-
-/** Applied by themselves in one look, and in a day; the rest wait. */
-export const PER_LOOK = 3;
-export const PER_DAY = 8;
 
 const HEALTH_OR_MONEY =
   /\b(?:diagnos\w*|medication\w*|prescri\w*|therap(?:y|ist)\w*|depress\w*|anxiety|disorder|illness|disease|pregnan\w*|hiv|cancer|surgery|salary|salaries|income|debt\w*|loan\w*|mortgage|bank account|account number|credit card|card number|iban|ssn|social security|net worth|password\w*|passcode|pin code)\b/i;
@@ -34,6 +31,13 @@ const ORDER =
 /** A power: what would let something act without the person. */
 const POWER =
   /\b(?:without asking|don'?t ask|no need to ask|never ask|skip (?:the )?(?:confirm\w*|approval|asking|check\w*)|auto[- ]?approve\w*|full trust|trust(?:ed)? (?:this|the|all|every)|allowed to|permission to|grant\w*|bypass\w*|disable (?:the )?(?:guard|safety|check\w*|sandbox))\b/i;
+
+/** Permission for the current job belongs to that job, never future chats. */
+export function taskPermission(text: string): boolean {
+  return /\b(?:authoriz\w*|approv\w*|permission)\b.{0,120}\b(?:push|commit|merge|send|delete|install|run|agents?)\b/i.test(
+    text,
+  );
+}
 
 export type Verdict =
   | { verdict: 'apply' }
@@ -119,12 +123,15 @@ export function dropWhy(
 ): string | undefined {
   const text = change.text;
   // Facts about this computer are written by code from a template, not quoted.
-  if (!options.observed && !grounded(change.quote, ctx.said, text))
+  if (
+    !options.observed &&
+    (!grounded(change.quote, ctx.said, text) || gistIn(text, ctx.said) < 0.5)
+  )
     return 'it doesn’t rest on words you wrote';
   if (SECRET.test(text) || (ctx.redact && ctx.redact(text) !== text)) return 'something secret';
   if (HEALTH_OR_MONEY.test(text)) return 'health or money';
   if (ABOUT_ASSISTANT.test(text) || ORDER.test(text)) return 'about the assistant, or an order';
-  if (POWER.test(text)) return 'a power';
+  if (POWER.test(text) || taskPermission(text)) return 'a power';
   if (ctx.refused?.exact) return 'you took it back once';
   if (change.op === 'supersede') {
     const target = ctx.memories.get(change.id);
@@ -143,32 +150,16 @@ export function gate(
   const why = dropWhy(change, ctx, options);
   if (why) return { verdict: 'drop', why };
   if (change.op === 'add' && ctx.duplicate) return { verdict: 'seen', memory: ctx.duplicate };
-  if (ctx.untrusted) return { verdict: 'wait', waits: learnedIn(ctx.untrusted) };
   // Close to something you took back: maybe the correction that came next, so you say.
   if (ctx.refused)
     return {
       verdict: 'wait',
       waits: `You took back “${ctx.refused.text.slice(0, 120)}” before, so this waits for your OK.`,
     };
-  if (!ctx.watched)
-    return {
-      verdict: 'wait',
-      waits: 'Learned in a chat you weren’t looking at, so it waits for your OK.',
-    };
   if (change.op === 'supersede') {
     const target = ctx.memories.get(change.id);
     if (target?.pending)
       return { verdict: 'wait', waits: 'It would replace something still waiting for your OK.' };
-    if (target?.source === 'user')
-      return {
-        verdict: 'wait',
-        waits: 'It would replace something you wrote yourself, so it waits for your OK.',
-      };
   }
-  if (ctx.appliedThisLook >= PER_LOOK || ctx.appliedToday + ctx.appliedThisLook >= PER_DAY)
-    return {
-      verdict: 'wait',
-      waits: 'Conch keeps only a few changes at a time by itself; this one waits for your OK.',
-    };
   return { verdict: 'apply' };
 }

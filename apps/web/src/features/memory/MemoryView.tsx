@@ -129,13 +129,13 @@ function Tidying({ autoMemory }: { autoMemory: boolean }) {
             .then(() => client.invalidateQueries({ queryKey: memoryKeys.tidy }))
         }
         label="Tidy up every night"
-        description={`While you sleep, Conch merges repeats and updates what’s changed — with the cheapest model you have. Every change shows up here, with Undo, and what used to be true is kept under Earlier.${autoMemory ? '' : ' Learn from your chats is off, so anything new waits for your OK.'}`}
+        description={`While you sleep, Conch merges repeats and updates what’s changed — with the cheapest model you have. Routine changes are saved automatically, with Undo. Conch asks only when a memory needs your attention.${autoMemory ? '' : ' Learn from your chats is off, so anything new waits for your OK.'}`}
       />
       {tidy.isPending ? (
         <Skeleton shape="block" height="5rem" />
       ) : runs.length === 0 ? (
         <Text size="sm" tone="muted">
-          No tidy-ups yet. Try one now: nothing changes without showing you.
+          No tidy-ups yet. Conch saves routine changes for you and shows what changed, with Undo.
         </Text>
       ) : (
         runs.map((run) => (
@@ -162,13 +162,15 @@ function Tidying({ autoMemory }: { autoMemory: boolean }) {
                   untrusted={c.untrusted}
                   actions={
                     <>
-                      <Button
-                        size="sm"
-                        variant="soft"
-                        onClick={() => void answer(run, c.id, 'keep')}
-                      >
-                        Keep
-                      </Button>
+                      {c.state === 'pending' && (
+                        <Button
+                          size="sm"
+                          variant="soft"
+                          onClick={() => void answer(run, c.id, 'keep')}
+                        >
+                          Keep
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="ghost"

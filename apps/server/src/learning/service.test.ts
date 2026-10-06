@@ -184,7 +184,7 @@ describe('QuietLearning (ADR 0088)', () => {
     expect(await learning.review('c1', { trigger: 'idle' })).toEqual({ why: 'nothing-new' });
   });
 
-  it('after reading something from outside: it waits, as a memory waiting for your OK', async () => {
+  it('owner preferences apply after outside reading, with provenance and Undo', async () => {
     const { learning, memory, notes } = await setup([
       {
         summary: { id: 'c1' },
@@ -198,33 +198,27 @@ describe('QuietLearning (ADR 0088)', () => {
       },
     ]);
     const result = await learning.review('c1', { trigger: 'idle' });
-    expect('learned' in result && result.learned[0]?.state).toBe('waiting');
-    const [waiting] = await memory.list();
-    expect(waiting).toMatchObject({
-      pending: true,
-      untrusted: 'Learned in a chat that read recipes.example.',
+    const entry = 'learned' in result ? result.learned[0] : undefined;
+    expect(entry?.state).toBe('applied');
+    expect((await memory.list())[0]).toMatchObject({
+      content: 'Prefers vegetarian',
+      provenance: { via: 'chat', yours: true, read: ['recipes.example'] },
     });
-    expect(notes[0]?.event).toMatchObject({
-      items: [{ state: 'waiting', waits: 'Learned in a chat that read recipes.example.' }],
-    });
-    // Keep: it's remembered, and the chat says so.
-    await keep(learning, ('learned' in result && result.learned[0]?.id) || '');
     expect((await memory.list())[0]?.pending).toBeUndefined();
-    expect(notes.at(-1)?.event).toMatchObject({ type: 'learning.decided', state: 'kept' });
+    expect(notes[0]?.event).toMatchObject({ items: [{ state: 'applied' }] });
+    await learning.answer(entry?.id ?? '', 'undo');
+    expect(await memory.list()).toEqual([]);
   });
 
-  it('nobody watching (a chat app): it waits, and the chat gets no line', async () => {
+  it('owner chat-app messages apply without an extra chat interruption', async () => {
     const { learning, notes } = await setup([
       {
-        summary: {
-          id: 'c1',
-          origin: { kind: 'channel', channelId: 'tg', channel: 'telegram' },
-        },
+        summary: { id: 'c1', origin: { kind: 'channel', channelId: 'tg', channel: 'telegram' } },
         events: [you('Summarise it'), ...reply(), you('No, I meant in bullet points.'), ...reply()],
       },
     ]);
     const result = await learning.review('c1', { trigger: 'idle' });
-    expect('learned' in result && result.learned[0]?.state).toBe('waiting');
+    expect('learned' in result && result.learned[0]?.state).toBe('applied');
     expect(notes).toHaveLength(0);
   });
 
@@ -338,7 +332,7 @@ describe('QuietLearning (ADR 0088)', () => {
     expect((await learning.store.never()).map((n) => n.text)).toEqual(['Lives in Lisbon']);
   });
 
-  it('replacing something you wrote yourself waits; Keep makes it so', async () => {
+  it('a newer owner statement updates a manual memory, with Undo', async () => {
     const { learning, memory } = await setup([
       {
         summary: { id: 'c1' },
@@ -353,13 +347,11 @@ describe('QuietLearning (ADR 0088)', () => {
     await memory.add({ content: 'Lives in Berlin', source: 'user' });
     const result = await learning.review('c1', { trigger: 'idle' });
     const entry = 'learned' in result ? result.learned[0] : undefined;
-    expect(entry?.state).toBe('waiting');
-    // It waits as a memory waiting for your OK; Berlin is still what's true.
-    expect((await memory.usable()).map((m) => m.content)).toEqual(['Lives in Berlin']);
-    const kept = await keep(learning, entry?.id ?? '');
-    expect(typeof kept === 'object' && kept.state).toBe('kept');
+    expect(entry?.state).toBe('applied');
     expect((await memory.list()).map((m) => m.content)).toEqual(['Lives in Porto']);
     expect((await memory.listPast()).map((m) => m.content)).toEqual(['Lives in Berlin']);
+    await learning.answer(entry?.id ?? '', 'undo');
+    expect((await memory.usable()).map((m) => m.content)).toEqual(['Lives in Berlin']);
   });
 
   it('what you undid is never learned again', async () => {
@@ -614,6 +606,7 @@ describe('QuietLearning (ADR 0088)', () => {
         ],
       },
     ]);
+    await learning.store.addNever('Prefers vegetarian meals', 'undo');
     const result = await learning.review('c1', { trigger: 'idle' });
     const id = ('learned' in result && result.learned[0]?.id) || '';
     expect(await keep(learning, id, 'Prefers steak')).toBe('changed');
@@ -669,6 +662,7 @@ describe('QuietLearning (ADR 0088)', () => {
       },
     ]);
     const mine = await memory.add({ content: 'Lives in Berlin', source: 'user' });
+    await learning.store.addNever('Lives in Porto now', 'undo');
     const result = await learning.review('c1', { trigger: 'idle' });
     const entry = 'learned' in result ? result.learned[0] : undefined;
     expect(entry?.state).toBe('waiting');
@@ -696,6 +690,31 @@ describe('QuietLearning (ADR 0088)', () => {
       id: 'c1',
       event: { type: 'memory.decided', memoryId: saved.id, kept: false },
     });
+  });
+
+  it('settles an old routine hold in its existing ledger and chat, retaining Undo', async () => {
+    const { learning, memory, notes } = await setup([]);
+    const m = await memory.add({
+      content: 'George prefers tea',
+      source: 'agent',
+      conversationId: 'c1',
+      pending: true,
+      untrusted: 'Learned in a chat that read recipes.example.',
+      provenance: { via: 'chat' },
+    });
+    await learning.remembered(m, { id: 'c1' });
+    const resolved = await memory.reconsider(m.id, m.content, { via: 'tidy', said: [m.content] });
+    if (!resolved) throw new Error('missing memory');
+    await learning.settled(resolved);
+    await learning.settled(resolved);
+    const entries = await learning.store.entries();
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.state).toBe('applied');
+    expect(entries[0]?.waits).toBeUndefined();
+    expect(notes).toHaveLength(1);
+    expect(notes[0]?.event).toMatchObject({ type: 'memory.decided' });
+    await learning.answer(entries[0]?.id ?? '', 'undo');
+    expect(await memory.usable()).toEqual([]);
   });
 
   it('survives a restart: how far it read is kept', async () => {

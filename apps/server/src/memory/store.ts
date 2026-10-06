@@ -65,7 +65,7 @@ export const PAST_DIR = 'superseded';
 const PAST_MAX = 500;
 
 /** How a write is let through: checked, a person's answer, or only ever stricter. */
-type Gate = 'check' | 'person' | 'stricter';
+type Gate = 'check' | 'person' | 'stricter' | 'routine';
 
 /** Every way a memory changes, as `#commit` sees it (tests hold each method to it). */
 export type CommitMethod =
@@ -77,7 +77,8 @@ export type CommitMethod =
   | 'unforget'
   | 'remove'
   | 'supersede'
-  | 'unsupersede';
+  | 'unsupersede'
+  | 'reconsider';
 
 const OK: Verdict = { verdict: 'ok', reasons: [] };
 
@@ -271,7 +272,7 @@ export class MemoryStore {
         if (!spendConsent(how, about, content))
           throw new Error('Only a person can do that, for the words they saw.');
         yours = true;
-      } else if (gate === 'check') {
+      } else if (gate === 'check' || gate === 'routine') {
         if (spendConsent(how, about, content)) yours = true;
         else {
           verdict = guarded(await this.#input(next.content, how));
@@ -279,6 +280,13 @@ export class MemoryStore {
           if (verdict.verdict === 'ok' && raised?.content === content) verdict = raised.verdict;
         }
       }
+      // A routine hold is released only on fresh owner evidence; a model cannot lift it.
+      const routine =
+        gate === 'routine' &&
+        current &&
+        routineHold(current) &&
+        verdict.verdict === 'ok' &&
+        verdict.yours;
       const held = holdOf(verdict);
       const provenance = cleanProvenance(next.provenance);
       const { pending: _p, held: _h, untrusted, provenance: _v, ...rest } = next;
@@ -308,8 +316,8 @@ export class MemoryStore {
           if (waiting.held) committed.held = waiting.held;
         }
       } else {
-        // Without a person, nothing gets less strict than it was or was asked to be.
-        if (held || current?.pending || next.pending) committed.pending = true;
+        // Only evidence-backed routine rechecks can release a housekeeping hold.
+        if (held || (!routine && (current?.pending || next.pending))) committed.pending = true;
         const was = current?.pending ? current.held : undefined;
         const stricter = held
           ? { ...held, ...(verdict.pieces && { pieces: verdict.pieces }) }
@@ -318,7 +326,7 @@ export class MemoryStore {
         // Put back from Conch's own sealed copy, it keeps where it came from.
         if (method === 'unforget') {
           if (provenance) committed.provenance = provenance;
-        } else if (gate === 'check' && verdict.yours && provenance && !committed.held)
+        } else if ((gate === 'check' || routine) && verdict.yours && provenance && !committed.held)
           committed.provenance = { ...provenance, yours: true };
         else if (provenance?.yours) committed.provenance = { ...provenance, yours: false };
       }
@@ -393,7 +401,12 @@ export class MemoryStore {
    */
   async update(
     id: string,
-    patch: { content?: string; kind?: MemoryKind; provenance?: MemoryProvenance },
+    patch: {
+      content?: string;
+      kind?: MemoryKind;
+      provenance?: MemoryProvenance;
+      expected?: string;
+    },
     how?: MemoryWrite,
   ): Promise<Memory | undefined> {
     return (
@@ -401,13 +414,15 @@ export class MemoryStore {
         'update',
         id,
         (current) =>
-          current && {
-            ...current,
-            ...(patch.content !== undefined && { content: patch.content }),
-            ...(patch.kind !== undefined && { kind: patch.kind }),
-            ...(patch.provenance !== undefined && { provenance: patch.provenance }),
-            updatedAt: Date.now(),
-          },
+          current && (patch.expected === undefined || current.content === patch.expected)
+            ? {
+                ...current,
+                ...(patch.content !== undefined && { content: patch.content }),
+                ...(patch.kind !== undefined && { kind: patch.kind }),
+                ...(patch.provenance !== undefined && { provenance: patch.provenance }),
+                updatedAt: Date.now(),
+              }
+            : undefined,
         how,
         'check',
       )
@@ -443,6 +458,22 @@ export class MemoryStore {
         },
         consent,
         'person',
+      )
+    ).memory;
+  }
+
+  /** Recheck legacy housekeeping holds against actual owner messages, never model-supplied consent. */
+  async reconsider(id: string, expected: string, how: WriteContext): Promise<Memory | undefined> {
+    return (
+      await this.#commit(
+        'reconsider',
+        id,
+        (current) => {
+          if (!current || current.content !== expected || !routineHold(current)) return undefined;
+          return { ...current, updatedAt: Date.now() };
+        },
+        how,
+        'routine',
       )
     ).memory;
   }
@@ -893,4 +924,19 @@ export function parse(text: string): Memory | undefined {
     content: normalise(match[2] ?? ''),
   });
   return result.success ? result.data : undefined;
+}
+
+/** Only obsolete housekeeping reasons qualify; security and deliberate refusals never do. */
+export function routineHold(memory: Memory): boolean {
+  if (
+    !memory.pending ||
+    memory.source === 'user' ||
+    !['chat', 'tidy'].includes(memory.provenance?.via ?? '')
+  )
+    return false;
+  if (memory.held)
+    return memory.held.verdict === 'ask' && memory.held.reasons.every((r) => r.code === 'long');
+  return /^(?:Learned in a chat that |Learned in a chat you weren’t looking at|Conch keeps only a few changes)/.test(
+    memory.untrusted ?? '',
+  );
 }

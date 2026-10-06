@@ -1,5 +1,7 @@
 # 0087 — The memory check: a memory that looks planted is asked about
 
+> Amended by [ADR 0097](./0097-proactive-memory-maintenance.md): routine owner-backed memories apply with Undo; length and outside reading alone no longer require approval. Security holds remain protected.
+
 - Status: accepted
 - Date: 2026-10-04
 - Builds on: [ADR 0028](./0028-safe-hands.md) (what a chat read, the guard),

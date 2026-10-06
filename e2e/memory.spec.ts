@@ -96,6 +96,8 @@ test('the tidy-up merges repeats and updates what changed, every change with Und
   await expect(report).toContainText('Was: Lives in Berlin');
   await expect(report).toContainText('Now: Lives in Lisbon');
   await expect(report).toContainText('They said the same thing.');
+  await expect(report.getByText('Saved automatically', { exact: true })).toHaveCount(2);
+  await expect(report.getByRole('button', { name: 'Keep', exact: true })).toHaveCount(0);
 
   const memories = page.getByRole('list', { name: 'Memories' });
   await expect(memories).toContainText('Lives in Lisbon');

@@ -286,7 +286,13 @@ describe('remembering in a chat that read something untrusted', () => {
 
 describe('the tidy-up', () => {
   const tidy = (
-    options: { reply?: object; said?: Said[]; autoMemory?: boolean; model?: boolean } = {},
+    options: {
+      reply?: object;
+      said?: Said[];
+      autoMemory?: boolean;
+      model?: boolean;
+      never?: (content: string) => Promise<boolean>;
+    } = {},
   ) => {
     const memories = store();
     const complete = vi.fn(async () => ({ text: JSON.stringify(options.reply ?? {}) }));
@@ -297,11 +303,101 @@ describe('the tidy-up', () => {
       said: async () => options.said ?? [],
       settings: async () => ({ autoMemory: options.autoMemory ?? true, tidyMemory: true }),
       busy: () => false,
+      never: options.never,
     });
     return { memories, run, complete };
   };
 
-  it('holds what looks planted, and says why (ADR 0087)', async () => {
+  it('clears old routine holds from owner evidence without a model or Keep press', async () => {
+    const text = 'George prefers TypeScript';
+    const { memories, run, complete } = tidy({
+      model: false,
+      said: [{ conversationId: 'c1', text: 'I prefer TypeScript', at: Date.now() }],
+    });
+    const m = await memories.add({
+      content: text,
+      source: 'agent',
+      conversationId: 'c1',
+      pending: true,
+      untrusted: 'Learned in a chat that read github.com.',
+      provenance: { via: 'chat', read: ['github.com'] },
+    });
+    await Promise.all([run.repairPending(), run.repairPending()]);
+    expect((await memories.get(m.id))?.pending).toBeUndefined();
+    expect(complete).not.toHaveBeenCalled();
+  });
+
+  it('repairs an older tidy update and preserves Undo without replaying stale edits', async () => {
+    const memories = store();
+    const before = await memories.add({ content: 'George prefers Python', source: 'agent' });
+    const after = { ...before, content: 'George prefers TypeScript' };
+    writeFileSync(
+      join(home, 'memory-tidy.json'),
+      JSON.stringify({
+        runs: [
+          {
+            id: 'tr_old',
+            at: Date.now(),
+            trigger: 'now',
+            model: true,
+            changes: [
+              {
+                id: 'tc_old',
+                kind: 'updated',
+                why: 'New preference',
+                before: [before],
+                after,
+                state: 'pending',
+                untrusted: 'Learned in a chat that read github.com.',
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    const run = new MemoryTidy({
+      home,
+      store: memories,
+      model: async () => undefined,
+      said: async () => [{ conversationId: 'c1', text: 'I prefer TypeScript', at: Date.now() }],
+      settings: async () => ({ autoMemory: true, tidyMemory: false }),
+      busy: () => false,
+    });
+    await run.repairPending();
+    expect((await memories.get(before.id))?.content).toBe(after.content);
+    expect((await run.status()).runs[0]?.changes[0]?.state).toBe('applied');
+    await run.answer('tr_old', 'tc_old', 'undo');
+    expect((await memories.get(before.id))?.content).toBe(before.content);
+    await run.repairPending();
+    expect((await memories.get(before.id))?.content).toBe(before.content);
+  });
+
+  it.each(['off', 'forgotten', 'unavailable', 'other-chat'])(
+    'keeps legacy holds protected when %s',
+    async (condition) => {
+      const text = 'George prefers TypeScript';
+      const { memories, run } = tidy({
+        autoMemory: condition !== 'off',
+        said: [{ conversationId: condition === 'other-chat' ? 'c2' : 'c1', text, at: Date.now() }],
+        never: async () => {
+          if (condition === 'unavailable') throw new Error('offline');
+          return condition === 'forgotten';
+        },
+      });
+      const m = await memories.add({
+        content: text,
+        source: 'agent',
+        conversationId: 'c1',
+        pending: true,
+        untrusted: 'Learned in a chat that read github.com.',
+        provenance: { via: 'chat' },
+      });
+      await run.repairPending().catch(() => undefined);
+      expect((await memories.get(m.id))?.pending).toBe(true);
+    },
+  );
+
+  it('drops unsupported planted facts without adding an approval chore', async () => {
     const said: Said[] = [
       {
         conversationId: 'c1',
@@ -316,10 +412,8 @@ describe('the tidy-up', () => {
     };
     const { memories, run } = tidy({ reply, said });
     const result = await run.run('now');
-    const [added] = await memories.list();
-    expect(added).toMatchObject({ pending: true, held: { verdict: 'ask' } });
-    expect(result.changes[0]).toMatchObject({ kind: 'added', state: 'pending' });
-    expect(result.changes[0]?.untrusted).toMatch(/where invoices go/);
+    expect(await memories.list()).toEqual([]);
+    expect(result.changes).toEqual([]);
   });
 
   it('doesn’t merge memories into words that look planted (ADR 0087)', async () => {
@@ -389,7 +483,7 @@ describe('the tidy-up', () => {
     ]);
   });
 
-  it('an update that rewrites a memory into an order waits, and nothing changes meanwhile (ADR 0087)', async () => {
+  it('drops an unsupported order proposed as an update', async () => {
     const said: Said[] = [{ conversationId: 'c1', text: 'I like tea', at: Date.now() }];
     const reply = { update: [{ id: '', content: '', why: '', from: 'c1' }] };
     const { memories, run } = tidy({ reply, said });
@@ -401,7 +495,7 @@ describe('the tidy-up', () => {
       from: 'c1',
     };
     const result = await run.run('now');
-    expect(result.changes[0]).toMatchObject({ kind: 'updated', state: 'pending' });
+    expect(result.changes).toEqual([]);
     expect(await memories.get(tea.id)).toMatchObject({ content: 'Likes tea' });
     expect((await memories.get(tea.id))?.pending).toBeUndefined();
     // Keep without a person's answer does nothing.
@@ -422,7 +516,7 @@ describe('the tidy-up', () => {
     expect((await run.status()).runs[0]?.changes[0]?.state).toBe('undone');
   });
 
-  it('updates and learns what you said; what came from an untrusted chat waits', async () => {
+  it('updates and learns owner facts even when the chat read outside material', async () => {
     const said: Said[] = [
       { conversationId: 'c1', text: 'I moved to Lisbon last month', at: Date.now() },
       {
@@ -449,24 +543,14 @@ describe('the tidy-up', () => {
     const result = await t.run.run('now');
     expect(result.changes.map((c) => [c.kind, c.state])).toEqual([
       ['updated', 'applied'],
-      ['added', 'pending'],
+      ['added', 'applied'],
     ]);
-    expect(result.changes[1]?.untrusted).toBe('Learned in a chat that read evil.example.');
+    expect(result.changes[1]?.untrusted).toBeUndefined();
     const list = await t.memories.list();
     expect(list.find((m) => m.id === berlin.id)?.content).toBe('Lives in Lisbon');
-    expect(list.find((m) => /Ana/.test(m.content))?.pending).toBe(true);
-    await t.run.answer(
-      result.id,
-      result.changes[1]?.id ?? '',
-      'keep',
-      [result.changes[1]?.after].map((m) =>
-        mintConsent({ method: 'POST', url: '/api/memory/tidy/answer' }, 'tidy', {
-          id: m?.id ?? '',
-          content: m?.content ?? '',
-        }),
-      ),
-    );
-    expect((await t.memories.list()).find((m) => /Ana/.test(m.content))?.pending).toBeUndefined();
+    expect(list.find((m) => /Ana/.test(m.content))?.pending).toBeUndefined();
+    await t.run.answer(result.id, result.changes[1]?.id ?? '', 'undo');
+    expect((await t.memories.list()).some((m) => /Ana/.test(m.content))).toBe(false);
   });
 
   it('with Remember automatically off, anything new waits', async () => {
@@ -779,4 +863,25 @@ describe('skills you keep asking for', () => {
     });
     expect(await suggester.list()).toEqual([]);
   });
+});
+
+describe('owner evidence boundaries for all learning passes', () => {
+  it.each(['task', 'routine', 'artifact', 'client', 'channel'])(
+    'does not learn synthetic or guest messages from %s',
+    (kind) => {
+      const events = [
+        {
+          type: 'user.message' as const,
+          conversationId: 'c1',
+          seq: 1,
+          at: Date.now(),
+          messageId: 'u1',
+          text: 'George prefers TypeScript',
+        },
+      ];
+      expect(
+        chatWords({ id: 'c1', origin: { kind, guest: kind === 'channel' } }, events, { since: 0 }),
+      ).toEqual([]);
+    },
+  );
 });

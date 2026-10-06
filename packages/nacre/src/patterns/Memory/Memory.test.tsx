@@ -52,6 +52,8 @@ describe('Memory patterns', () => {
     const [updated, merged] = within(report)
       .getAllByRole('listitem', { name: undefined })
       .filter((li) => li.dataset.state);
+    expect(updated).toHaveTextContent('Saved automatically');
+    expect(within(report).queryByRole('button', { name: 'Keep' })).not.toBeInTheDocument();
     expect(updated).toHaveTextContent('Was: Lives in Berlin');
     expect(updated).toHaveTextContent('Now: Lives in Lisbon');
     expect(
