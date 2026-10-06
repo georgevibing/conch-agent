@@ -85,13 +85,6 @@
     padding: var(--nc-space-2) var(--nc-space-4) var(--nc-space-4);
   }
 
-  .pageBar {
-    display: flex;
-    align-items: center;
-    gap: var(--nc-space-2);
-    min-inline-size: 0;
-  }
-
   .pageTitle {
     display: flex;
     flex: 1;

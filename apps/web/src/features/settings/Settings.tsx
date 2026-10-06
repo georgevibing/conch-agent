@@ -1,6 +1,5 @@
 import { ImportSourceId, type Persona } from '@conch/protocol';
 import {
-  Breadcrumb,
   Button,
   Dialog,
   Field,
@@ -50,6 +49,7 @@ import { useId, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router';
 
 import { useAppState, useMemories, useUpdateSettings } from '../../api/queries';
+import { Trail } from '../../app/trail';
 import { useUi } from '../../app/ui';
 import { SecurityTab } from '../auth/SecurityTab';
 import { updatesWaiting, useUpdates } from '../updates/queries';
@@ -395,20 +395,15 @@ export function Settings() {
   };
 
   const trail = tab && (
-    <Breadcrumb className={styles.trail}>
-      {inside ? (
-        <>
-          <Breadcrumb.Item onClick={() => open(tab)}>{placeNames[tab]}</Breadcrumb.Item>
-          <Breadcrumb.Item current id={panelTitle}>
-            {inside}
-          </Breadcrumb.Item>
-        </>
-      ) : (
-        <Breadcrumb.Item current id={panelTitle}>
-          {placeNames[tab]}
-        </Breadcrumb.Item>
-      )}
-    </Breadcrumb>
+    <Trail
+      className={styles.trail}
+      currentId={panelTitle}
+      crumbs={
+        inside
+          ? [{ label: placeNames[tab], onSelect: () => open(tab) }, { label: inside }]
+          : [{ label: placeNames[tab] }]
+      }
+    />
   );
 
   // The places, beside the page or floating over it on a phone.

@@ -27,19 +27,12 @@ import {
   Textarea,
   toast,
 } from '@conch/nacre';
-import {
-  ArrowLeft,
-  Copy,
-  MessageSquare,
-  SearchX,
-  ShieldAlert,
-  Sparkles,
-  Trash2,
-} from 'lucide-react';
+import { Copy, MessageSquare, SearchX, ShieldAlert, Sparkles, Trash2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
+import { usePageTrail } from '../../app/trail';
 import { SaveStatus } from '../settings/Section';
 import { useAutosaveState } from '../settings/useAutosave';
 import { skillsApi } from './api';
@@ -97,6 +90,7 @@ function SkillPage({ skill }: { skill: SkillDetail }) {
   const [name, setName] = useState(skill.name);
   const [rewriting, setRewriting] = useState(false);
   const nameCheck = SkillName.safeParse(name);
+  usePageTrail([{ label: 'Skills', to: '/skills' }, { label: fields.title || skill.title }]);
 
   const { status, settle } = useAutosaveState(
     fields,
@@ -187,16 +181,6 @@ function SkillPage({ skill }: { skill: SkillDetail }) {
 
   return (
     <Page gap={6}>
-      <Button
-        variant="ghost"
-        size="sm"
-        leadingIcon={<ArrowLeft />}
-        className={styles.back}
-        onClick={() => void navigate('/skills')}
-      >
-        Skills
-      </Button>
-
       <header className={styles.hero}>
         <SkillIcon
           name={skill.name}
@@ -421,7 +405,7 @@ function SkillPage({ skill }: { skill: SkillDetail }) {
             leadingIcon={<Sparkles />}
             loading={rewriting}
             onClick={() => void rewrite()}
-            className={styles.back}
+            className={styles.flush}
           >
             Write the title and description again
           </Button>

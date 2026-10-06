@@ -92,6 +92,22 @@ test('Slack: connect it as an app, turn on Talk to me here with the same Slack a
   await expect(does.getByRole('switch', { name: 'Read & search' })).toBeChecked();
   await expect(does.getByRole('switch', { name: 'Send (asks first)' })).toBeChecked();
   await expect(does.getByRole('switch', { name: 'Talk to me here' })).toBeChecked();
+
+  // Where you are: Apps › Slack in the header, the page's name focused, Apps the way back.
+  const trail = page.getByRole('navigation', { name: 'Breadcrumb' });
+  await expect(trail.getByText('Slack')).toBeFocused();
+  await expect(trail.getByText('Slack')).toHaveAttribute('aria-current', 'page');
+  // Its talking half sits under it, on a phone too.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/channels/${bot?.id ?? ''}`);
+  await expect(trail.getByRole('link')).toHaveText(['Apps', 'Slack']);
+  await expect(page.getByRole('button', { name: 'Open conversations' })).toBeVisible();
+  await trail.getByRole('link', { name: 'Slack' }).click();
+  await expect(page).toHaveURL(/\/apps\/slack$/);
+  await trail.getByRole('link', { name: 'Apps' }).click();
+  await expect(page).toHaveURL(/\/apps$/);
+  await expect(trail).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Apps', level: 1 })).toBeFocused();
 });
 
 test('Gmail: talk to it by email in one press, with the app password Gmail already has', async ({

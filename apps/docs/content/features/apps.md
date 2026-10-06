@@ -26,6 +26,8 @@ Every app in the gallery is one Conch can really connect: before an app goes in,
 
 ## What it does
 
+An app's page says where it is at the top of the window, **Apps › Gmail**: press **Apps** to go back to them all. The page where you talk to your assistant in an app sits under that app, as **Apps › Slack ›** and the bot's name.
+
 An app's page starts with **What it does**: a plain switch for each thing, such as **Read & search**, **Draft**, **Send (asks first)** and **Talk to me here**. Turn off what you don't want. A part that isn't set up yet has a **Set up** button instead of a switch, so nothing looks on when it isn't.
 
 Setting up one part offers the other when it can. After you connect Slack, the dialog asks **Talk to Conch in Slack too?**. After you connect Gmail with an app password, it asks **Talk to Conch by email too?**, and one press uses the same password. Nothing is shared until you press it.

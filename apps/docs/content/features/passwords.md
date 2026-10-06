@@ -42,6 +42,8 @@ Each item's tile has a small mark on its corner that says where it lives: Conch'
 
 The row under the search shows one place at a press: **All**, **Conch**, or one manager, each with how many items it holds. The filter below it narrows the list further, to one kind, one tag, **Favourites** or **One-time codes**. Passwords remembers where you left them. A long list has a heading over each group: **Favourites**, then each letter, or how long ago when you sort by **Recently edited** or **Recently used**.
 
+On a phone, an item opens on a page of its own, with **Passwords ›** and its name at the top: press **Passwords** to go back to the list.
+
 Drag the line between the list and the item to make the list as wide as you like; Passwords remembers it, and a double-click puts it back. The list stays quick however many items it holds. An item's name shows the moment you choose it. Its fields follow, which can take a second when they come from another manager.
 
 **More → Check for breaches** looks for your passwords among known data breaches. No password leaves your computer for it, only a short piece of a scrambled copy. What needs attention shows at the top of the list, worst first: **In a data breach**, **Reused**, **Weak**, **Expired**, **Not secure**. Press one to see those items.

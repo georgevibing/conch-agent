@@ -70,6 +70,12 @@ test('make Tally, add it, use it, count on its page, save it, remove it and add 
   await tally(page).getByRole('button', { name: 'Count one more' }).click();
   await expect(tally(page).locator('#total')).toHaveText('2');
   await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  // Its page says where it is, Apps › Tally › its name, and Tally goes back to the app.
+  const trail = page.getByRole('navigation', { name: 'Breadcrumb' });
+  await expect(trail.getByRole('link')).toHaveText(['Apps', 'Tally']);
+  await trail.getByRole('link', { name: 'Tally' }).click();
+  await expect(page).toHaveURL(/\/apps\/capp_tally$/);
+  await expect(trail.getByText('Tally')).toHaveAttribute('aria-current', 'page');
 
   // 5. Save as a file.
   await page.goto('/apps/capp_tally');

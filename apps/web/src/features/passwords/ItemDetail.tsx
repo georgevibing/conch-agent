@@ -23,11 +23,12 @@ import {
   vaultSourceName,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, History, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import { History, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { useNavigate } from 'react-router';
 
+import { usePageTrail } from '../../app/trail';
 import { useUi, type SettingsTab } from '../../app/ui';
 import { errorText } from '../integrations/queries';
 import { vaultApi } from './api';
@@ -59,7 +60,7 @@ export function ItemDetail({
   settle,
   guard,
   onEdit,
-  onBack,
+  page = false,
   onDeleted,
   actions,
   targets = [],
@@ -84,7 +85,11 @@ export function ItemDetail({
   /** Runs a request through "Confirm it's you" when the gateway asks. */
   guard: <T>(task: () => Promise<T>) => Promise<T | undefined>;
   onEdit: () => void;
-  onBack?: () => void;
+  /**
+   * A page of its own, the list out of sight (a narrow screen): the header
+   * says Passwords › its name, and Passwords is the way back.
+   */
+  page?: boolean;
   onDeleted: () => void;
 }) {
   const client = useQueryClient();
@@ -97,6 +102,9 @@ export function ItemDetail({
 
   const loading = !full && isPending && !error;
   const item: VaultItemSummary | undefined = full ?? (loading ? summary : undefined);
+  usePageTrail(
+    page && item ? [{ label: 'Passwords', to: '/passwords' }, { label: item.title }] : null,
+  );
   if (loading && !item)
     return (
       <div className={styles.detail} aria-busy="true">
@@ -158,11 +166,6 @@ export function ItemDetail({
   return (
     <div className={styles.detail} aria-busy={loading || undefined}>
       <div className={styles.detailHead}>
-        {onBack && (
-          <IconButton label="Back to the list" onClick={onBack}>
-            <ArrowLeft />
-          </IconButton>
-        )}
         <VaultItemIcon kind={item.type} domain={site} title={item.title} size="lg" />
         <div className={styles.detailTitle}>
           <Heading level={2} size="xl">

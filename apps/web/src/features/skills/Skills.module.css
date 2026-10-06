@@ -46,7 +46,8 @@
     gap: var(--nc-space-2);
   }
 
-  .back {
+  /* A quiet button that sits flush with the text above it. */
+  .flush {
     align-self: flex-start;
     margin-inline-start: calc(var(--nc-space-2) * -1);
   }

@@ -19,11 +19,12 @@ import {
   toast,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, MessageCircle, RotateCw, Send, Unplug } from 'lucide-react';
+import { MessageCircle, RotateCw, Send, Unplug } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 
 import { useAppState, useConversations } from '../../api/queries';
+import { usePageTrail } from '../../app/trail';
 import { relativeTime } from '../../lib/time';
 import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
@@ -126,6 +127,13 @@ function Detail({ channel }: { channel: Channel }) {
     (c) => c.origin?.kind === 'channel' && c.origin.channelId === channel.id,
   );
   const owner = channel.people[0];
+  // Under the app it's a half of (Slack, Gmail), or under Apps as you'd find it: unfiltered.
+  const half = channel.app && CATALOG_NAMES[channel.app];
+  usePageTrail([
+    { label: 'Apps', to: APPS_PATH },
+    ...(channel.app && half ? [{ label: half, to: appPath(channel.app) }] : []),
+    { label: channel.bot.name },
+  ]);
 
   const test = async () => {
     setTesting(true);
@@ -154,20 +162,6 @@ function Detail({ channel }: { channel: Channel }) {
 
   return (
     <Page gap={8}>
-      <Button
-        asChild
-        variant="ghost"
-        tone="neutral"
-        size="sm"
-        leadingIcon={<ArrowLeft />}
-        className={styles.back}
-      >
-        {/* Back to the app it's a half of (Slack, Gmail), or to Apps as you'd find it: unfiltered. */}
-        <Link to={channel.app ? appPath(channel.app) : APPS_PATH}>
-          {channel.app ? (CATALOG_NAMES[channel.app] ?? 'Apps') : 'Apps'}
-        </Link>
-      </Button>
-
       <header className={styles.detailHeader}>
         {channel.bot.avatar ? (
           <img src={channel.bot.avatar} alt="" className={styles.avatar} />

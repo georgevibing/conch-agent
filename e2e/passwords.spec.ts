@@ -309,3 +309,31 @@ test('Esc or a click on empty space puts an item away, back to the start screen'
     .evaluate((el: HTMLElement) => el.click());
   await expect(start).toBeVisible();
 });
+
+test('on a phone, an item is a page of its own: Passwords › its name above it, the way back', async ({
+  page,
+  request,
+}) => {
+  await request.post('/api/vault/items', {
+    data: {
+      type: 'login',
+      title: 'Pixelfed',
+      fields: [{ label: 'Username', kind: 'text', role: 'username', value: 'ada' }],
+      urls: ['https://pixelfed.social'],
+    },
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/passwords');
+  await page.getByRole('button', { name: /^Pixelfed,/ }).click();
+  await expect(page.getByRole('heading', { name: 'Pixelfed', level: 2 })).toBeVisible();
+  // One trail, in the header beside the menu; no back button of the page's own.
+  const trail = page.getByRole('navigation', { name: 'Breadcrumb' });
+  await expect(trail.getByText('Pixelfed')).toHaveAttribute('aria-current', 'page');
+  await expect(trail.getByText('Pixelfed')).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Back to the list' })).toHaveCount(0);
+  await snap(page, 'phone-detail');
+  await trail.getByRole('link', { name: 'Passwords' }).click();
+  await expect(page).toHaveURL(/\/passwords$/);
+  await expect(trail).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Pixelfed,/ })).toBeVisible();
+});

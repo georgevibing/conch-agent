@@ -21,10 +21,11 @@ import {
   toast,
   WatchStatus,
 } from '@conch/nacre';
-import { ArrowLeft, Copy, MessageSquare, MoreHorizontal, Pencil, Play, Trash2 } from 'lucide-react';
+import { Copy, MessageSquare, MoreHorizontal, Pencil, Play, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { useNavigate } from 'react-router';
 
+import { usePageTrail } from '../../app/trail';
 import { useUi, type SettingsTab } from '../../app/ui';
 import { routinesApi } from './api';
 import { routineIcon } from './icon';
@@ -124,6 +125,9 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [now] = useState(Date.now);
+  usePageTrail(
+    data ? [{ label: 'Routines', to: '/routines' }, { label: data.routine.title }] : null,
+  );
 
   if (isPending) {
     return (
@@ -188,10 +192,6 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
 
   return (
     <Page gap={6}>
-      <Link to="/routines" className={styles.back}>
-        <ArrowLeft aria-hidden size={14} /> Routines
-      </Link>
-
       <header className={styles.detailHeader}>
         <span className={styles.detailIcon} aria-hidden>
           {routineIcon(routine.schedule, routine.when)}

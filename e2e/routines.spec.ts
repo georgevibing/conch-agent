@@ -23,6 +23,11 @@ test('create from an idea, run it, and read the result', async ({ page }) => {
   await expect(page).toHaveURL(/\/routines\/r_/);
   await expect(page.getByRole('heading', { name: 'Morning briefing', level: 1 })).toBeVisible();
   await expect(page.getByText(/Next run /).first()).toBeVisible();
+  // Where you are: one trail in the header, Routines a step back to them all.
+  const trail = page.getByRole('navigation', { name: 'Breadcrumb' });
+  await expect(trail.getByText('Morning briefing')).toHaveAttribute('aria-current', 'page');
+  await expect(trail.getByRole('link', { name: 'Routines' })).toHaveAttribute('href', '/routines');
+  await expect(page.getByRole('main').getByRole('link', { name: 'Routines' })).toHaveCount(1);
 
   await page.getByRole('button', { name: 'Run now' }).click();
   await expect(

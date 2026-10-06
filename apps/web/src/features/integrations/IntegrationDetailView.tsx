@@ -21,10 +21,11 @@ import {
   ToolPermissionList,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, KeyRound, RotateCw, Unplug } from 'lucide-react';
+import { KeyRound, RotateCw, Unplug } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 
+import { usePageTrail } from '../../app/trail';
 import { relativeTime } from '../../lib/time';
 import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
@@ -141,23 +142,13 @@ function Detail({
   useEffect(() => {
     document.title = `${integration.name} · Conch`;
   }, [integration.name]);
+  usePageTrail([{ label: 'Apps', to: APPS_PATH }, { label: integration.name }]);
 
   const setPolicy = (policy: IntegrationPolicy) =>
     void guard(() => integrationsApi.update(integration.id, { policy })).then(() => update.reset());
 
   return (
     <Page gap={8}>
-      <div>
-        <Button
-          variant="ghost"
-          size="sm"
-          leadingIcon={<ArrowLeft />}
-          onClick={() => void navigate(APPS_PATH)}
-        >
-          Apps
-        </Button>
-      </div>
-
       <header className={styles.detailHeader}>
         <IntegrationLogo
           brand={integration.catalogId ?? integration.brand ?? 'custom'}
