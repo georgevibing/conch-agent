@@ -304,6 +304,9 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
       Never auto-approve a waiting permission or guess an opaque tool is read-only.
       Tool failures must remain failures across adapters, not successful text.
       A result received after Stop cannot clear an uncertain action.
+      Save closing events before broadcasting them, and hold later events behind
+      that save: a title or another turn must never overtake an earlier sequence
+      number and hide its completion or approval request from the browser.
     - **Recover gradually.** Deferred chats survive another restart and resume with
       resource headroom, one at a time. Automatic tasks use the same admission
       signal. Repeated crashes or rapid requested restarts share a persisted budget;

@@ -444,6 +444,8 @@ interface Live {
   checkpoint?: NodeJS.Timeout;
   /** Saves go one at a time, so an older log never lands over a newer one. */
   saving?: Promise<void>;
+  /** Later events cannot overtake a turn's closing events while they are saved. */
+  broadcasts?: { event: ConversationEvent; deferred: boolean }[];
 }
 
 /** How often a running turn's log is saved: a crash loses this much, not the whole turn. */
@@ -2899,7 +2901,7 @@ export class ConversationManager {
       };
       this.#append(live, { type: 'status', status }, tail);
       await this.#persist(live);
-      for (const event of tail) this.events.emit({ type: 'conversation.event', event });
+      this.#broadcast(live, tail.at(-1)?.seq);
       this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
       live.extras?.onStatus?.(status);
       live.extras = undefined;
@@ -3156,8 +3158,26 @@ export class ConversationManager {
       }, CHECKPOINT_MS);
       live.checkpoint.unref();
     }
-    if (defer) defer.push(event);
-    else this.events.emit({ type: 'conversation.event', event });
+    if (defer || live.broadcasts) {
+      (live.broadcasts ??= []).push({ event, deferred: Boolean(defer) });
+      defer?.push(event);
+      this.#broadcast(live);
+    } else this.events.emit({ type: 'conversation.event', event });
+  }
+
+  /** Preserve sequence order across async saves, title generation and subsequent turns. */
+  #broadcast(live: Live, savedThrough?: number) {
+    const pending = live.broadcasts;
+    if (!pending) return;
+    // A successful closing save also covers any older closing save that failed.
+    // Keep newer closing events held until their own turn has finished saving.
+    if (savedThrough !== undefined)
+      for (const item of pending) if (item.event.seq <= savedThrough) item.deferred = false;
+    while (pending[0] && !pending[0].deferred) {
+      const item = pending.shift();
+      if (item) this.events.emit({ type: 'conversation.event', event: item.event });
+    }
+    if (live.broadcasts === pending && !pending.length) live.broadcasts = undefined;
   }
 
   #setStatus(live: Live, status: ConversationStatus) {
