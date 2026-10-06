@@ -319,6 +319,8 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
       queue cancellation, repeated restart budgets and uncertain action recovery.
       Use temporary homes and bounded subprocesses; never fault-inject into a
       person's running Conch. Run repository checks with bounded concurrency too.
+      Scripted browser journeys preload `e2e/resources.ts` for predictable resource
+      samples; never weaken production admission to accommodate a busy CI runner.
 
 12. **Every new part joins the features that cover all of Conch.** Some features
     are about everything Conch is: **Repair everything** looks at every part,

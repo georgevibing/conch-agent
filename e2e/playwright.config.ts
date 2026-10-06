@@ -318,7 +318,9 @@ export default defineConfig({
     // Node itself (not pnpm or tsx's CLI) so Playwright's shutdown signal reaches the
     // server; Windows runs this through cmd.exe, which can't start `./node_modules/.bin/tsx`.
     command:
-      'command' in s ? s.command : `node --import tsx src/${'entry' in s ? s.entry : 'main'}.ts`,
+      'command' in s
+        ? s.command
+        : `node --import tsx --import ../../e2e/resources.ts src/${'entry' in s ? s.entry : 'main'}.ts`,
     cwd: join(root, 'apps/server'),
     url: `http://localhost:${s.port}/api/health`,
     reuseExistingServer: false,

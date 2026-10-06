@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
 import { commit, git, makeKey, tag, type Key } from '../apps/server/src/release/testing';
+import { SERVER_BUILD, SERVER_LABEL } from '../apps/server/src/version';
 import { brokenConch, notes, pretendConch } from './releases-world';
 
 /**
@@ -33,10 +34,12 @@ async function status(request: APIRequestContext) {
   return (await (await request.get('/api/updates')).json()) as {
     conch: {
       version: string;
+      build?: typeof SERVER_BUILD;
       source: string;
       latest?: { version: string };
       refused?: string;
       previous?: string;
+      failed?: string[];
       running?: unknown;
     };
   };
@@ -71,6 +74,7 @@ test('a new release: noticed once, its notes, a forged one refused, the channel,
   await look(request);
   expect((await status(request)).conch).toMatchObject({
     version: '0.1.0',
+    build: SERVER_BUILD,
     source: 'releases',
     latest: { version: '0.2.0' },
   });
@@ -100,7 +104,9 @@ test('a new release: noticed once, its notes, a forged one refused, the channel,
   await settings.getByRole('tab', { name: 'Health' }).click();
   const card = settings.getByRole('region', { name: 'Conch 0.2 is ready' });
   await expect(card).toBeVisible();
-  await expect(card).toContainText('You have 0.1.0');
+  // The fixture swaps pretend checkouts but runs this workspace's gateway. Its
+  // installed-build label must stay truthful, independently of the release offered.
+  await expect(card).toContainText(`You have ${SERVER_LABEL}`);
   await card.getByRole('button', { name: 'What’s new' }).click();
   await expect(settings.getByRole('button', { name: /^Conch 0\.2/ })).toHaveAttribute(
     'aria-expanded',
@@ -171,7 +177,7 @@ test('a new release: noticed once, its notes, a forged one refused, the channel,
     .toBe('0.2.0');
 
   const after = (await status(request)).conch;
-  expect(after).toMatchObject({ version: '0.2.0', previous: '0.1.0' });
+  expect(after).toMatchObject({ version: '0.2.0', build: SERVER_BUILD, previous: '0.1.0' });
   // The running copy was never touched; the new one is its own folder, installed there.
   expect(git(conch, 'rev-parse', 'HEAD')).toBe(head);
   const home = readFileSync(join(world, 'pnpm.log'), 'utf8');
@@ -179,10 +185,10 @@ test('a new release: noticed once, its notes, a forged one refused, the channel,
   expect(home).toMatch(/build .*versions[\\/]0\.2\.0/);
   expect(git(conch, 'status', '--porcelain', '--untracked-files=no')).toBe('');
 
-  // The page came back by itself, on the new version, with what it brought.
+  // The page came back by itself, with the new release's notes and the real build identity.
   const updated = page.getByRole('dialog', { name: 'You’re on the new Conch' });
   await expect(updated).toBeVisible({ timeout: 60_000 });
-  await expect(updated).toContainText(/Conch 0\.2 · Updated/);
+  await expect(updated).toContainText(`Conch ${SERVER_LABEL} · Updated`);
   await updated.getByRole('button', { name: 'Done', exact: true }).click();
   await page.getByRole('button', { name: /^Settings(?:,|$)/ }).click({ timeout: 10_000 });
   await settings.getByRole('tab', { name: 'Health' }).click();
@@ -231,8 +237,11 @@ test('a release that doesn’t start: Conch goes back by itself, says so once, a
       { exact: false },
     ),
   ).toBeVisible({ timeout: 30_000 });
-  const after = (await status(request)).conch as { latest?: unknown; failed?: string[] };
-  expect(after.latest).toBeUndefined();
+  const after = (await status(request)).conch;
+  expect(after).toMatchObject({ version: '0.2.0', build: SERVER_BUILD });
+  // A Dev gateway can still offer its first real release; the failed release
+  // must never be offered again, whatever build this workspace is running.
+  expect(after.latest?.version).toBe(SERVER_BUILD.kind === 'dev' ? '0.2.0' : undefined);
   expect(after.failed).toContain('0.3.0');
   await expect(page.getByRole('region', { name: 'Conch 0.3 is ready' })).toHaveCount(0);
 });
