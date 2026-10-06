@@ -150,8 +150,16 @@ A page is served exactly like an artifact's (ADR 0034): its own route
   (`@conch/nacre/pagekit`, built from `tokens.css` so it can't drift): type,
   colour, buttons, fields, lists, tables, cards and empty states look like Conch
   with no CSS written, in the person's light or dark and accent. A handful of
-  classes (`nc-card`, `nc-row`, `nc-stack`, `nc-muted`, `nc-badge`, `nc-empty`,
-  `primary`, `danger`) cover the rest.
+  classes (`nc-page-head` for the icon, title and buttons at the top; `nc-card`,
+  `nc-row`, `nc-stack`, `nc-muted`, `nc-badge`, `nc-empty`, `primary`, `danger`)
+  cover the rest. The kit is the _whole_ of a page's look: a page has no React
+  and no Nacre components, so every control it can hold is drawn by the kit,
+  including the chrome the system would otherwise draw (a select's chevron, the
+  button inside a file field, a colour's swatch, a meter's bar).
+  `packages/nacre/src/pagekit/pagekit.test.ts` lists every control and fails
+  when the kit stops drawing one; `check.ts` warns when a page restyles a
+  control the kit draws or builds one out of `<div>`s, and the maker's guide
+  says the same in the words a model reads.
 - **A page talks to its own tools, and nothing else.** `await conch.call(tool,
 input)` goes from the frame to the panel (checked with `event.source`), to the
   gateway, to that app's tools. A read goes by itself. A change goes by itself

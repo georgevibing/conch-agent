@@ -19,8 +19,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const SOURCES = ['packages/nacre/src/styles/tokens.css', 'packages/nacre/src/pagekit/pagekit.css'];
 export const OUTPUT = 'apps/server/src/conchapps/pagekit.generated.ts';
-/** Tokens and kit together stay well under 20 KB. */
-export const BUDGET = 19 * 1024;
+/**
+ * Tokens and kit together, inlined in every page: they stay small enough to
+ * cost nothing beside the page itself. The kit draws every control a page can
+ * hold — a select's chevron, a file's button, a colour's swatch, a range's
+ * track — so it's bigger than a classless base, and still a few KB.
+ */
+export const BUDGET = 21 * 1024;
 /**
  * Tokens no page needs: Conch's terminal, its Lustre, its stacking order, and
  * the deep shadows and slow springs of its own surfaces.

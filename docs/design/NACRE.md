@@ -372,6 +372,25 @@ form.
   classless base in a layer of their own, so plain HTML looks like Conch, and
   the page's own styles still win. Squircle corners, the accent and light or
   dark follow the person; nothing else is assumed.
+  - A page has no React and no Nacre components: it is HTML in a sealed frame
+    (ADR 0034), so the kit is the whole of its look. Every control the page
+    can hold is drawn by the kit, the chrome the system would draw included —
+    a select's chevron (two strokes in `--nc-text-subtle`, a `--nc-space-3`
+    from the edge, with `--nc-space-8` of room so the words never reach it),
+    the button inside `input[type="file"]`, a colour's swatch, a meter's bar.
+    Nothing may be left to the platform: that is what makes one control in a
+    page look foreign. `pagekit.test.ts` lists every control and fails when
+    the kit stops drawing one.
+  - `.nc-page-head` is a page's title: an icon that keeps its shape beside an
+    `<h1>` and one quiet line, with the page's buttons at the end. Words
+    inside a row (`.nc-row`, `.nc-toolbar`, `.nc-page-head`, `.nc-list > li`)
+    drop the stacking margins they carry in a column, however deeply they're
+    wrapped — a title in a `<div>` beside an icon used to sit a few pixels
+    low, and no model could see it.
+  - A page's own styles are for its own classes. `conchapps/check.ts` warns
+    when a page restyles `button`, `select` or `input`, writes
+    `appearance: none`, or builds a control out of `<div>`s; the maker's guide
+    (`conchapps/guide.ts`) says the same in the words a model reads.
 
 ## Interaction checklist (every interactive component)
 
@@ -400,3 +419,11 @@ every platform, and ignore Lustre. Every form value goes through a Nacre control
 If a screen needs a value none of these cover, build the control in Nacre first (with
 stories and an axe test). `<input type="date|time|number|range|color">` and bare
 `<select>` never ship.
+
+**One exception, and only one: a Conch app's page.** It is HTML in a sealed frame with
+no React in it, so there is no Nacre component to reach for, and a hand-rolled listbox
+inside a page loses the keyboard, the screen reader and a phone's own wheel. There, the
+native control _is_ the right answer — and the page kit dresses it to match the Nacre
+component beside it (`Select`'s field, radius, chevron and focus halo). So: Conch's own
+screens, never a native control; an app's page, always a native control and never a
+hand-rolled one.

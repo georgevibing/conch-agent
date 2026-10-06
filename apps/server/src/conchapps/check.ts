@@ -12,7 +12,8 @@
  * - **Quality** (what Conch makes): every tool has a title, a description
  *   that says when to use it, an object input schema, an honest `changes`,
  *   and has been tried; pages have a language, a title, a viewport, labels,
- *   the page kit's colours and fit a phone.
+ *   the page kit's colours, controls the kit draws (never one built out of
+ *   divs, and never one restyled over the kit) and fit a phone.
  *
  * Every message names the file (and the line where it can) and says what to
  * change, so the model that wrote the app can fix it.
@@ -151,6 +152,74 @@ function withoutVars(css: string): string {
 
 const DECLARATION = /([a-z-]+)\s*:\s*([^;{}]*)(?=[;}])/gi;
 
+/**
+ * Controls the page kit draws for a page, and what a model reaches for
+ * instead when it doesn't know that. A control built out of divs, or one
+ * restyled over the kit, is the one way a page stops looking like Conch —
+ * and it loses the keyboard, the screen reader and a phone's own pickers
+ * with it.
+ */
+/** An element selector in the page's own CSS that the kit already dresses. */
+const RESTYLED =
+  /(?:^|[{}])\s*((?:[a-z][a-z0-9]*(?:\[[^\]]*\])?\s*,\s*)*(?:button|select|textarea|input|table|progress|meter|summary)(?:\[[^\]]*\])?)\s*(?:,[^{}]*)?\{/gi;
+
+/** `appearance: none` in a page: the kit has already taken the system's chrome off. */
+const APPEARANCE = /\b(?:-webkit-)?appearance\s*:\s*none/i;
+
+/** A control made of something that isn't one: a div that listens, or wears a control's role. */
+const FAKE_CONTROL =
+  /<\s*(?:div|span|a|p|li|td)\b(?:[^>"']|"[^"]*"|'[^']*')*\b(?:onclick|role\s*=\s*["']?(?:button|checkbox|radio|switch|listbox|combobox|option|slider|textbox|menuitem))/gi;
+
+/** A control the kit can't draw, and what to write instead. */
+const UNKITTED: [RegExp, string][] = [
+  [
+    /<\s*input\b[^>]*\btype\s*=\s*["']?image/i,
+    'uses <input type="image">, which the page kit can’t draw. Use <button class="primary">, with the words of what it does.',
+  ],
+  [
+    /<\s*(?:marquee|blink|font|center)\b/i,
+    'uses a tag the page kit can’t draw. Write plain HTML and let the kit style it.',
+  ],
+];
+
+/**
+ * A page's controls: every one the page kit draws, and nothing hand-made.
+ * Warnings, not problems: the page still works, it just doesn't look like
+ * Conch, so the model is told exactly what to write instead.
+ */
+function controlProblems(file: string, html: string, warnings: AppCheckItem[]) {
+  const at = (index: number) => ({ file, line: lineAt(html, index) });
+  const fake = FAKE_CONTROL.exec(html);
+  if (fake)
+    warnings.push({
+      message: `${file} builds a control out of something that isn’t one. Use <button>, <select>, <input type="checkbox"> or <input type="range">: the page kit draws each of them like Conch, with the keyboard and a screen reader for nothing.`,
+      ...at(fake.index),
+    });
+  for (const [pattern, words] of UNKITTED) {
+    const found = pattern.exec(html);
+    if (found) warnings.push({ message: `${file} ${words}`, ...at(found.index) });
+  }
+  let restyled = false;
+  for (const { css, start } of cssOf(html)) {
+    const appearance = APPEARANCE.exec(css);
+    if (appearance)
+      warnings.push({
+        message: `${file} takes the system’s look off a control itself (appearance: none). The page kit already draws every field, button, select and slider: take the rule out.`,
+        ...at(start + appearance.index),
+      });
+    if (restyled) continue;
+    for (const rule of css.matchAll(RESTYLED)) {
+      const selector = (rule[1] ?? '').trim();
+      restyled = true;
+      warnings.push({
+        message: `${file} styles ${quote(selector)} itself. The page kit already draws it in the person’s light or dark and accent: take the rule out, or give the one element a class of its own.`,
+        ...at(start + rule.index + rule[0].indexOf(selector)),
+      });
+      break;
+    }
+  }
+}
+
 function pageProblems(
   file: string,
   html: string,
@@ -257,6 +326,8 @@ function pageProblems(
         ...at(field.index),
       });
   }
+
+  controlProblems(file, html, warnings);
 
   let colour = false;
   let wide = false;

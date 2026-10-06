@@ -65,9 +65,27 @@ export function tallyFiles(version = '1.0.0'): Record<string, string> {
   <style>.big { font-size: 4rem; font-weight: 600; text-align: center; }</style>
 </head>
 <body>
+  <header class="nc-page-head">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+      <rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 13h3M8 17h3M15 13v4"/>
+    </svg>
+    <div>
+      <h1>Tally</h1>
+      <p class="nc-muted">What you’ve counted so far</p>
+    </div>
+  </header>
   <main class="nc-stack">
     <p class="big" id="total" aria-live="polite">0</p>
-    <button class="primary" id="add" type="button">Count one more</button>
+    <div class="nc-row">
+      <label>Count by
+        <select id="by">
+          <option value="1">1</option>
+          <option value="5">5</option>
+          <option value="10">10</option>
+        </select>
+      </label>
+      <button class="primary" id="add" type="button">Count one more</button>
+    </div>
     <p class="nc-muted" id="status" role="status"></p>
   </main>
   <script>
@@ -79,10 +97,11 @@ export function tallyFiles(version = '1.0.0'): Record<string, string> {
     }
     const view = conch.observe('read_count', {}, { every: 30 }, show);
     const add = document.getElementById('add');
+    const by = document.getElementById('by');
     add.addEventListener('click', async () => {
       add.disabled = true;
       let r;
-      try { r = await conch.call('count', { by: 1 }); }
+      try { r = await conch.call('count', { by: Number(by.value) || 1 }); }
       finally { add.disabled = false; }
       status.textContent = r.ok ? '' : r.message;
       if (r.ok) view.refresh();

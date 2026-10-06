@@ -31,7 +31,7 @@ describe('the page kit for Conch apps’ pages (ADR 0061)', () => {
   it('stays small, layered, and safe inside a <style>', async () => {
     const { BUDGET } = await script();
     expect(Buffer.byteLength(PAGE_KIT_CSS)).toBeLessThanOrEqual(BUDGET);
-    expect(BUDGET).toBeLessThan(20 * 1024);
+    expect(BUDGET).toBeLessThan(24 * 1024);
     expect(PAGE_KIT_CSS).toContain('@layer nacre.tokens,nacre.pagekit;');
     expect(PAGE_KIT_CSS).not.toMatch(/<\/|<!--/);
     expect(PAGE_KIT_CSS).not.toMatch(/\/\*/);

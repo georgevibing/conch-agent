@@ -9,7 +9,11 @@
  * Buttons    <button> · <button class="primary"> · class="danger" · class="quiet"
  * Fields     <label>Name <input></label> · <textarea> · <select>
  *            <label><input type="checkbox"> Done</label>
- * Layout     .nc-card     a raised surface for a group of things
+ *            Every kind of field is drawn by Conch, the system's own
+ *            chrome included: a select's chevron, a file's button, a
+ *            colour's swatch, a range's track and thumb.
+ * Layout     .nc-page-head the page's icon, its title and its buttons, on one line
+ *            .nc-card     a raised surface for a group of things
  *            .nc-stack    a column with even gaps
  *            .nc-row      a row that wraps, centred
  *            .nc-grid     tiles that fill the width
@@ -58,7 +62,8 @@
 
   h1,
   h2,
-  h3 {
+  h3,
+  h4 {
     margin: 0 0 var(--nc-space-2);
     font-weight: var(--nc-weight-semibold);
     line-height: var(--nc-leading-tight);
@@ -82,18 +87,40 @@
     letter-spacing: -0.01em;
   }
 
+  h4 {
+    margin-block-start: var(--nc-space-4);
+    font-size: var(--nc-text-md);
+  }
+
   p,
   ul,
   ol,
+  dl,
   table,
   pre,
   details,
-  fieldset {
+  fieldset,
+  figure,
+  blockquote {
     margin: 0 0 var(--nc-space-3);
   }
 
   p {
     text-wrap: pretty;
+  }
+
+  /*
+   * Nothing carries its margin outside the box it's in: a title and its line
+   * inside a <div> begin and end where the words do, so that <div> lines up on
+   * its middle beside an icon however the page laid the two out — not a few
+   * pixels low, which is what a wrapped title used to do.
+   */
+  :is(h1, h2, h3, h4, p, ul, ol, dl, table, pre, details, blockquote):first-child {
+    margin-block-start: 0;
+  }
+
+  :is(h1, h2, h3, h4, p, ul, ol, dl, table, pre, details, blockquote):last-child {
+    margin-block-end: 0;
   }
 
   small {
@@ -134,6 +161,58 @@
   canvas {
     max-inline-size: 100%;
     block-size: auto;
+  }
+
+  /*
+   * An icon inside words — a title, a button, a badge, a summary — is as tall
+   * as those words and keeps its shape, whatever width and height its <svg>
+   * was written with, so a title never sits off the middle of its icon.
+   * Everywhere else (a paragraph, a list row) an <svg> may be a drawing of
+   * its own: it keeps its size, and only its alignment is settled.
+   */
+  :is(h1, h2, h3, h4, summary, .nc-badge, button) > svg {
+    flex: none;
+    inline-size: auto;
+    block-size: 1.15em;
+    vertical-align: -0.15em;
+  }
+
+  :is(p, li, label, .nc-row, .nc-toolbar) > svg {
+    flex: none;
+    vertical-align: -0.125em;
+  }
+
+  blockquote {
+    padding-inline-start: var(--nc-space-3);
+    border-inline-start: 2px solid var(--nc-border);
+    color: var(--nc-text-muted);
+  }
+
+  figcaption,
+  caption {
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    text-align: start;
+  }
+
+  caption {
+    margin-block-end: var(--nc-space-2);
+  }
+
+  dt {
+    font-weight: var(--nc-weight-medium);
+  }
+
+  dd {
+    margin: 0 0 var(--nc-space-2);
+    color: var(--nc-text-muted);
+  }
+
+  mark {
+    padding: 0 0.15em;
+    border-radius: var(--nc-radius-xs);
+    background: var(--nc-selection);
+    color: inherit;
   }
 
   code,
@@ -257,7 +336,13 @@
   }
 
   /* A label around its field stacks above it; around a checkbox, sits beside it. */
-  label:has(> input:not([type='checkbox'], [type='radio']), > select, > textarea) {
+  label:has(
+    > input:not([type='checkbox'], [type='radio']),
+    > select,
+    > textarea,
+    > progress,
+    > meter
+  ) {
     display: grid;
     gap: var(--nc-space-1-5);
     margin-block-end: var(--nc-space-3);
@@ -302,6 +387,111 @@
     min-block-size: 5.5rem;
     line-height: var(--nc-leading-normal);
     resize: vertical;
+  }
+
+  /*
+   * A select is Conch's own, like Nacre's Select: the field, and a chevron
+   * drawn by the kit — two thin strokes in --nc-text-subtle — that keeps the
+   * same distance from the edge as the text does from the other side. The
+   * system's arrow sat against the edge and never followed the theme.
+   */
+  select {
+    appearance: none;
+    padding-inline-end: var(--nc-space-8);
+    background-color: var(--nc-surface-sunken);
+    background-image:
+      linear-gradient(45deg, transparent 42%, var(--nc-text-subtle) 42% 58%, transparent 58%),
+      linear-gradient(135deg, transparent 42%, var(--nc-text-subtle) 42% 58%, transparent 58%);
+    background-repeat: no-repeat;
+    background-position:
+      right calc(var(--nc-space-3) + 0.3125rem) center,
+      right var(--nc-space-3) center;
+    background-size: 0.3125rem 0.3125rem;
+    cursor: pointer;
+  }
+
+  /* Open and unfolded (multiple, or more than one row): a list, with no chevron. */
+  select[multiple],
+  select[size]:not([size='1']) {
+    padding-inline-end: var(--nc-space-3);
+    background-image: none;
+    cursor: default;
+  }
+
+  /* A file: the field, with a quiet button of its own inside it. */
+  input[type='file'] {
+    inline-size: 100%;
+    min-block-size: var(--nc-control-md);
+    padding: var(--nc-space-1) var(--nc-space-2);
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    color: var(--nc-text-muted);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    cursor: pointer;
+  }
+
+  input[type='file']::file-selector-button {
+    min-block-size: var(--nc-control-sm);
+    margin-inline-end: var(--nc-space-2);
+    padding: 0 var(--nc-space-3);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border),
+      var(--nc-elevation-1);
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    cursor: pointer;
+  }
+
+  /* A colour: a swatch in the same tile as every other field. */
+  input[type='color'] {
+    inline-size: var(--nc-control-lg);
+    min-block-size: var(--nc-control-md);
+    padding: 0.1875rem;
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    cursor: pointer;
+  }
+
+  input[type='color']::-webkit-color-swatch-wrapper {
+    padding: 0;
+  }
+
+  input[type='color']::-webkit-color-swatch {
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+  }
+
+  input[type='color']::-moz-color-swatch {
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+  }
+
+  /*
+   * A range keeps the browser's own slider, wearing the accent
+   * (`accent-color` below): it fills as it fills in Nacre, and the thumb
+   * stays the size the system knows a finger needs.
+   */
+  input[type='range'] {
+    inline-size: 100%;
+    cursor: pointer;
+  }
+
+  /* A date or a time: the system's little picker button, as quiet as the chevron. */
+  ::-webkit-calendar-picker-indicator {
+    border-radius: var(--nc-radius-xs);
+    opacity: 0.6;
+    cursor: pointer;
   }
 
   input:focus-visible,
@@ -374,6 +564,30 @@
     background: var(--nc-accent-9);
   }
 
+  /* A meter the same way: the system draws it green and glossy otherwise. */
+  meter {
+    appearance: none;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-wash-2);
+  }
+
+  meter::-webkit-meter-bar {
+    border: 0;
+    background: transparent;
+  }
+
+  meter::-webkit-meter-optimum-value {
+    border-radius: inherit;
+    background: var(--nc-accent-9);
+  }
+
+  meter::-moz-meter-bar {
+    border-radius: inherit;
+    background: var(--nc-accent-9);
+  }
+
   /* ── Tables ───────────────────────────────────────────────────────── */
   table {
     inline-size: 100%;
@@ -424,6 +638,54 @@
   }
 
   /* ── The few classes ──────────────────────────────────────────────── */
+  /*
+   * The top of a page: its icon, its title (with a line under it, if it has
+   * one), and its buttons at the end. The icon is a tile that never shrinks
+   * or stretches, and the title block sits on its middle — the stacking
+   * margins of a title and its line are taken out, so nothing sits low
+   * beside the icon.
+   */
+  .nc-page-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-1) var(--nc-space-3);
+    margin-block-end: var(--nc-space-5);
+  }
+
+  .nc-page-head > :is(img, svg, picture, .nc-page-icon) {
+    flex: none;
+    inline-size: var(--nc-page-icon, 2.5rem);
+    block-size: var(--nc-page-icon, 2.5rem);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    object-fit: cover;
+  }
+
+  /* The title, and its line under it, as one block that takes the room left. */
+  .nc-page-head > :is(div, hgroup, header) {
+    display: flex;
+    flex: 1 1 10rem;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    min-inline-size: 0;
+  }
+
+  .nc-page-head > :is(h1, h2, h3) {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+  }
+
+  /*
+   * Inside a row, a list row or the page's head, words don't carry the
+   * margins they use in a column: the gap is the only space, so everything
+   * lines up on one middle however deeply it's wrapped.
+   */
+  :is(.nc-row, .nc-toolbar, .nc-page-head, .nc-stat, .nc-empty, .nc-list > li)
+    :is(h1, h2, h3, h4, p, ul, ol, dl, table) {
+    margin-block: 0;
+  }
+
   .nc-card {
     margin-block-end: var(--nc-space-3);
     padding: var(--nc-space-4);
@@ -586,6 +848,25 @@
 
     h1 {
       font-size: var(--nc-text-xl);
+    }
+
+    .nc-page-head {
+      --nc-page-icon: 2rem;
+
+      gap: var(--nc-space-2) var(--nc-space-2-5);
+      margin-block-end: var(--nc-space-4);
+    }
+
+    /*
+     * On a phone the icon and the title keep the first line to themselves, and
+     * the buttons wrap under them and share the width.
+     */
+    .nc-page-head > :is(div, hgroup, header) {
+      flex: 1 1 auto;
+    }
+
+    .nc-page-head > button {
+      flex: 1 1 auto;
     }
   }
 

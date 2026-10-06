@@ -11,6 +11,9 @@ import { PAGE_KIT_CSS } from './pagekit.generated';
 
 /** What each of the page kit's classes is for. `guide.test.ts` holds this to the kit itself. */
 export const PAGE_KIT_CLASSES: Record<string, string> = {
+  'nc-page-head':
+    'the top of the page: its icon, its title (with one quiet line under it) and its buttons, all on one middle',
+  'nc-page-icon': 'the class for a page head’s icon when it isn’t an `<svg>` or an `<img>`',
   'nc-card': 'a raised surface for a group of things',
   'nc-stack': 'a column with even gaps',
   'nc-row': 'a row that wraps, centred',
@@ -132,13 +135,29 @@ const EXAMPLE_PAGE = `<!doctype html>
   <title>Plants</title>
 </head>
 <body>
+  <header class="nc-page-head">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+      <path d="M12 21v-7M12 14c0-4 3-7 7-7 0 4-3 7-7 7ZM12 14c0-4-3-7-7-7 0 4 3 7 7 7Z"/>
+    </svg>
+    <div>
+      <h1>Plants</h1>
+      <p class="nc-muted">Who needs water, and when you last watered</p>
+    </div>
+    <button class="quiet" id="refresh" type="button">Refresh</button>
+  </header>
   <main class="nc-stack">
-    <div class="nc-toolbar"><h1>Plants</h1></div>
     <div class="nc-stat"><b id="count">–</b> due for water</div>
     <section class="nc-card nc-stack" aria-labelledby="log-title">
       <h2 id="log-title">Watered one?</h2>
       <div class="nc-row">
         <label>Plant <input id="plant" autocomplete="off"></label>
+        <label>Every
+          <select id="every">
+            <option value="3">3 days</option>
+            <option value="7" selected>7 days</option>
+            <option value="14">14 days</option>
+          </select>
+        </label>
         <button class="primary" id="log" type="button">Log watering</button>
       </div>
     </section>
@@ -160,11 +179,12 @@ const EXAMPLE_PAGE = `<!doctype html>
       }));
       $('empty').hidden = due.length > 0;
     }
+    $('refresh').addEventListener('click', show);
     $('log').addEventListener('click', async () => {
       const plant = $('plant').value.trim();
       if (!plant) return ($('status').textContent = 'Type the plant’s name first.');
       $('log').disabled = true;
-      const r = await conch.call('log_watering', { plant });
+      const r = await conch.call('log_watering', { plant, every: Number($('every').value) });
       $('log').disabled = false;
       $('status').textContent = r.ok ? r.text : r.message;
       if (r.ok) $('plant').value = '';
@@ -253,11 +273,41 @@ Tools run sealed off: no files of the person's, no programs, no network of their
 
 ## Pages
 
-A page is HTML that runs in a sealed frame, already styled by the Nacre page kit: type, colour, buttons, fields, checkboxes, tables, lists, code, details and progress look like Conch in the person's light or dark and accent, with no CSS of your own. Write plain, semantic HTML and add these where they help:
+A page is HTML that runs in a sealed frame, already drawn by the Nacre page kit: type, colour, links, buttons, every kind of field, tables, lists, code, details, progress — all of it looks like Conch in the person's light or dark and accent, **with no CSS of your own**. Write plain, semantic HTML; the kit does the rest. Pages people like all have the same shape, and it's the shape below. Follow it, and the app looks like Conch made it.
+
+### The shape of a page
+
+1. **Its head**: \`<header class="nc-page-head">\` — an \`<svg>\` icon, then a \`<div>\` with an \`<h1>\` and one quiet line (\`<p class="nc-muted">\`), then the one main button. The kit lines the icon up with the title, on phones too. Never lay a head out by hand.
+2. **The number that matters**, right under it: \`.nc-stat\` tiles in a \`.nc-grid\`.
+3. **What there is**: a \`.nc-list\` of rows, or a \`<table>\`, inside a \`.nc-card\`. Nothing yet? \`.nc-empty\` with a sentence and what to do.
+4. **The thing to do**: a \`.nc-card\` with a \`.nc-stack\`, its fields in a \`.nc-row\`, and one \`<button class="primary">\`.
+5. **What just happened**: one \`<p class="nc-muted" role="status">\`, at the end.
+
+Sections live in one \`<main class="nc-stack">\`: one column, top to bottom, at any width.
+
+### What the kit gives you
 
 ${kit}
 - buttons: \`<button class="primary">\` for the one main action, \`class="danger"\` to delete, \`class="quiet"\` for the rest.
+- fields: write the plain element and the kit draws it — \`<input>\` (text, number, date, time, search, email), \`<textarea>\`, \`<select>\`, \`<input type="checkbox">\`, \`type="radio"\`, \`type="range"\`, \`type="color"\`, \`type="file"\`, \`<progress>\`, \`<meter>\`, \`<fieldset>\`. A select's chevron, a file's button, a colour's swatch, a slider's track: Conch draws each one. Label every field: \`<label>Minutes <input type="number"></label>\` stacks the words above it; \`<label><input type="checkbox"> Done</label>\` sits them side by side.
+- spacing: the gaps come from \`.nc-stack\`, \`.nc-row\` and \`.nc-grid\`, and headings and paragraphs bring their own. Don't write margins or padding of your own.
 - colours, when you truly need one: \`var(--nc-text)\`, \`--nc-text-muted\`, \`--nc-text-accent\`, \`--nc-surface\`, \`--nc-canvas\`, \`--nc-border\`, \`--nc-accent-9\`. Never type a colour.
+
+### Don't, and do instead
+
+| Don't | Do |
+| --- | --- |
+| \`<div class="dropdown" onclick="…">\` or \`role="listbox"\` | \`<select>\`: the kit draws it, and the keyboard, a screen reader and a phone's wheel come free |
+| \`<style>select{appearance:none;background:#222}\` | nothing: the kit already took the system's look off and drew Conch's |
+| \`<style>button{border-radius:6px;padding:8px}\` | nothing; \`class="primary"\`, \`"danger"\` or \`"quiet"\` when it's not the plain one |
+| \`<div style="display:flex;gap:12px">\` | \`<div class="nc-row">\` (or \`.nc-stack\`, \`.nc-grid\`) |
+| \`<img src="…" width="700">\` or \`width: 700px\` | nothing fixed: a width in % or nothing at all, so it fits a phone |
+| \`<h1><svg width="48" height="48">…</svg> Fitness diary</h1>\` | \`<header class="nc-page-head">\` with the icon beside the title |
+| \`<span class="pill" style="background:#e5ffe5">Done</span>\` | \`<span class="nc-badge ok">Done</span>\` |
+| \`<p>No workouts.</p>\` | \`<div class="nc-empty"><strong>Nothing logged yet</strong><p>Log a workout above, or tell your assistant.</p></div>\` |
+| \`<form>\` with a submit | a \`<button type="button">\` with a click handler: a sealed page has nowhere to send a form |
+
+### Calling your tools
 
 \`await conch.call(tool, input)\` → \`{ ok: true, text, json }\` or \`{ ok: false, reason, message }\`. It reaches only this app's own tools. A change goes through when the person pressed something in the page; otherwise Conch asks them first. Show \`message\` when \`ok\` is false.
 
@@ -278,7 +328,7 @@ Write \`fixtures.json\`: \`{ "fixtures": { "today": { "settings": { "api_key": "
 
 ## The quality bar
 
-app_check refuses until: the manifest reads; the tools module loads sealed off, and every tool has a title, a description that says when to use it, an input schema and an honest \`changes\`; nothing reaches a host outside \`reaches\` or imports anything; pages don't fetch anything or navigate; skills pass the skill check; nothing secret is written in; and every tool was tried. It warns about descriptions without "Use when", missing examples or instructions, pages without \`lang\`, a title, a viewport or labels, typed colours, and fixed widths.
+app_check refuses until: the manifest reads; the tools module loads sealed off, and every tool has a title, a description that says when to use it, an input schema and an honest \`changes\`; nothing reaches a host outside \`reaches\` or imports anything; pages don't fetch anything or navigate; skills pass the skill check; nothing secret is written in; and every tool was tried. It warns about descriptions without "Use when", missing examples or instructions, pages without \`lang\`, a title, a viewport or labels, typed colours, fixed widths, controls built out of divs, and a page styling a button, a field or a select the kit already draws. Fix the warnings too: they're what makes a page look like Conch rather than like a web page from 2009.
 
 ## Make it feel like Conch
 

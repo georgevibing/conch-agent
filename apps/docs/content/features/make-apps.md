@@ -39,6 +39,19 @@ An app with a page has it at the top of the sidebar, as a tile with the app's ic
 
 Switched an app off? Ask for something it does, and the chat offers it back with **Turn on**, then carries on.
 
+## Why its page looks like Conch
+
+An app's page isn't styled by whoever wrote it. Conch hands every page the same look it uses itself — the same type, the same cards, the same light, dark and colour you chose — and the page can't opt out. So an app made by one model, on one day, looks like an app made by another.
+
+That goes down to the small things, the ones that usually give a made-up page away:
+
+- The page starts with its icon, its name and one line saying what it's for, all on one line, whatever the length of the name.
+- Every box you type in, choose from, tick or slide is drawn by Conch: a list to choose from has Conch's own arrow, with room beside it; **Choose a file** is a Conch button; a colour is a Conch swatch.
+- One column, so it reads the same on a phone as on a desk.
+- Nothing is left to your browser to draw, and nothing is a picture of a control that isn't one — so the keyboard, VoiceOver and your phone's own pickers all work.
+
+If a page ever does look out of place, say so in the chat: "the heading on its page sits oddly". Conch checks the page against these rules when it makes one, and fixes what it finds.
+
 ## Give it a logo or a picture
 
 Every app starts with a small symbol on a colour as its icon. To use a logo or a picture instead, ask in the chat: "use the Strava logo as its icon", or attach a picture and say "make this its icon". Conch finds the logo on the web or takes the picture you attached, and shows the app with it on a new card. Press **Update** to keep it.

@@ -224,7 +224,12 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
       }
       if (content === undefined) return 'Give the whole file as content, or delete: true.';
       await service.write(info.id, path, content);
-      return `Wrote ${path} (${Buffer.byteLength(content)} bytes). Write the rest, then app_check.`;
+      // A page is where a model is most tempted to style things itself: say the
+      // house rules again, right where it just wrote one.
+      const page = /^pages\/.+\.html$/i.test(path)
+        ? ' A page carries no CSS of its own: the page kit draws it — `<header class="nc-page-head">` at the top, `.nc-card`, `.nc-stack`, `.nc-row` and `.nc-grid` for layout, plain labelled fields for everything a person types or chooses. app_guide § Pages has the shape and the don’ts.'
+        : '';
+      return `Wrote ${path} (${Buffer.byteLength(content)} bytes).${page} Write the rest, then app_check.`;
     }),
   };
 

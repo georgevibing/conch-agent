@@ -8,7 +8,9 @@ import { openConch, say } from './app';
  * Apps you make, share and add (ADR 0061), end to end on the real parts: the
  * mock engine makes Tally the real way (the maker's tools, the check, the
  * card), the person adds it, a message uses its tool, its page counts with a
- * press, it's saved as a file, removed, and added back from that file. Then
+ * press, that page is drawn by the page kit (its head lines up with its icon,
+ * its select is Conch's own), it's saved as a file, removed, and added back
+ * from that file. Then
  * the attacks from inside its page: no network, no other app's tools, and
  * no change without a press.
  *
@@ -70,12 +72,53 @@ test('make Tally, add it, use it, count on its page, save it, remove it and add 
   await tally(page).getByRole('button', { name: 'Count one more' }).click();
   await expect(tally(page).locator('#total')).toHaveText('2');
   await expect(page.getByRole('alertdialog')).toHaveCount(0);
+
+  // 4a. The page is drawn by the page kit, not by the system (ADR 0061).
+  // Its head: the icon and the title block share one middle, at any width.
+  const offMiddle = () =>
+    tally(page)
+      .locator('.nc-page-head')
+      .evaluate((head) => {
+        const icon = head.querySelector('svg')?.getBoundingClientRect();
+        const titles = head.querySelector('div')?.getBoundingClientRect();
+        if (!icon || !titles) throw new Error('Tally’s page has no head');
+        return Math.abs(icon.y + icon.height / 2 - (titles.y + titles.height / 2));
+      });
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect.poll(offMiddle, { message: `the head at ${width}px` }).toBeLessThan(1.5);
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+  // Its select: the system's arrow is gone, Conch's chevron is drawn, and the
+  // words stop well before it — which a bare <select> never did.
+  const select = tally(page).locator('#by');
+  await expect(select).toHaveCSS('appearance', 'none');
+  const look = await select.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return {
+      room: Number.parseFloat(style.paddingInlineEnd),
+      chevrons: style.backgroundImage.split('linear-gradient').length - 1,
+      height: node.getBoundingClientRect().height,
+    };
+  });
+  expect(look.room).toBeGreaterThanOrEqual(28);
+  expect(look.chevrons).toBe(2);
+  // The same height as the button beside it: one row, not two sizes.
+  const button = await tally(page).getByRole('button', { name: 'Count one more' }).boundingBox();
+  expect(Math.abs(look.height - (button?.height ?? 0))).toBeLessThan(1.5);
+  // And it is a real select: choosing works with the keyboard and the pointer.
+  await select.selectOption('5');
+  await expect(select).toHaveValue('5');
+  await select.selectOption('1');
+
   // Its page says where it is, Apps › Tally › its name, and Tally goes back to the app.
   const trail = page.getByRole('navigation', { name: 'Breadcrumb' });
   await expect(trail.getByRole('link')).toHaveText(['Apps', 'Tally']);
   await trail.getByRole('link', { name: 'Tally' }).click();
   await expect(page).toHaveURL(/\/apps\/capp_tally$/);
-  await expect(trail.getByText('Tally')).toHaveAttribute('aria-current', 'page');
+  // Where it is now, whichever trail the route has settled on (the page's own
+  // trail says Apps › Tally › Tally until the app's page takes over).
+  await expect(trail.locator('[aria-current="page"]')).toHaveText('Tally');
 
   // 5. Save as a file.
   await page.goto('/apps/capp_tally');

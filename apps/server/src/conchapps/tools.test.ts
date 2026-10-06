@@ -75,8 +75,13 @@ describe('the maker’s tools (ADR 0061 §4)', () => {
     expect(started).toContain('--- conch-app.json ---');
     expect(started).toMatch(/Next: change them with app_write/);
     expect(await run('app_new', { name: 'Tally', id: 'Bad Id' })).toMatch(/That id won’t do/);
-    for (const [path, content] of Object.entries(tallyFiles()))
-      expect(await run('app_write', { path, content })).toMatch(/^Wrote /);
+    for (const [path, content] of Object.entries(tallyFiles())) {
+      const wrote = await run('app_write', { path, content });
+      expect(wrote).toMatch(/^Wrote /);
+      // Writing a page says the house rules again, where they're easiest to forget.
+      if (path.endsWith('.html')) expect(wrote).toContain('nc-page-head');
+      else expect(wrote).not.toContain('nc-page-head');
+    }
     expect(await run('app_write', { path: '../x.md', content: 'x' })).toMatch(
       /isn’t a path inside/,
     );
