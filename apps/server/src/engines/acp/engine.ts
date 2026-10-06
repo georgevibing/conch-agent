@@ -1050,7 +1050,7 @@ export class AcpEngine implements Engine {
 /** Where Conch's tools are, said to the program with its instructions. */
 function toolsNote(door: boolean): string {
   return door
-    ? `Use the tools from the "${DOOR_NAME}" server for files, commands, memory, the browser and the user's apps: they are sealed and can be put back. Your own built-in tools that change files or run commands are turned off here and will be declined.`
+    ? `Use the tools from the "${DOOR_NAME}" server for files, commands, memory, the browser and the user's apps: they are sealed and can be put back. Your own built-in tools that change files or run commands are turned off here and will be declined. Don't start sub-agents or tasks of your own: to hand off part of the work, use that server's \`delegate\` or \`start_background_task\` where you have them, so the person can see, answer and stop it.`
     : 'You have no tools in this conversation: say so plainly if something needs one.';
 }
 

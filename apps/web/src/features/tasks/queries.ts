@@ -51,15 +51,17 @@ export function applyTaskEvent(
   if (task.kind !== 'background' || !before || before.status === task.status) return;
   const where = task.parentConversationId ?? task.conversationId;
   const open = where ? { label: 'Open', onClick: () => navigate?.(`/c/${where}`) } : undefined;
-  // Already looking at it: the card in the chat says so.
-  const here = where && window.location.pathname === `/c/${where}`;
+  // Already looking at it (its chat, or the one it came from): the card says so.
+  const at = window.location.pathname;
+  const here =
+    (where && at === `/c/${where}`) || (task.conversationId && at === `/c/${task.conversationId}`);
   if (task.status === 'done' && !here)
     toast.success(`Done: ${task.title}`, { description: task.summary, action: open });
   else if (task.status === 'unverified' && !here)
     toast(`Result needs checking: ${task.title}`, { description: task.error, action: open });
   else if (task.status === 'failed')
     toast.error(`Didn’t finish: ${task.title}`, { description: task.error, action: open });
-  else if (task.status === 'needs-you' && task.conversationId)
+  else if (task.status === 'needs-you' && task.conversationId && !here)
     toast(`${task.title} needs your OK`, {
       action: { label: 'See', onClick: () => navigate?.(`/c/${task.conversationId}`) },
     });

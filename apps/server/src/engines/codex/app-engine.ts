@@ -177,7 +177,10 @@ const SHARED_CONFIG = [
   'features.hooks=false',
   'features.skill_mcp_dependency_install=false',
   'project_doc_max_bytes=0',
+  // Its own sub-agents (spawn_agent and the rest, both generations): work is handed
+  // off as Conch's tasks instead (ADR 0033), seen, stopped and answered in Conch.
   'features.multi_agent=false',
+  'features.multi_agent_v2=false',
   'features.apps=false',
   'features.browser_use=false',
   'features.computer_use=false',

@@ -3,7 +3,14 @@ import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { Capabilities, EngineId, EngineStatus, ServerEvent, Task } from '@conch/protocol';
+import type {
+  Capabilities,
+  EngineId,
+  EngineStatus,
+  PermissionMode,
+  ServerEvent,
+  Task,
+} from '@conch/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ConversationManager, type ToolProvider } from '../conversations/manager';
@@ -11,7 +18,7 @@ import { ConversationStore } from '../conversations/store';
 import type { Engine, EngineEvent, TurnInput } from '../engines/types';
 import { MemoryStore } from '../memory/store';
 import { SettingsStore } from '../settings/store';
-import { merged, TaskService } from './service';
+import { merged, noMoreThan, TASKS_PROMPT, TaskService } from './service';
 import { TaskStore } from './store';
 
 /**
@@ -25,6 +32,8 @@ class Scripted implements Engine {
   readonly smallModel = 'small-model';
   readonly turns: TurnInput[] = [];
   release?: () => void;
+  /** The modes it honours (a test that needs Full trust widens it). */
+  modes: PermissionMode[] = ['default'];
 
   constructor(readonly id: EngineId) {
     this.label = id === 'mock' ? 'Scripted' : 'Other';
@@ -46,7 +55,7 @@ class Scripted implements Engine {
       label: this.label,
       models: [],
       commands: [],
-      permissionModes: ['default'],
+      permissionModes: this.modes,
     };
   }
   async *runTurn(input: TurnInput): AsyncIterable<EngineEvent> {
@@ -1060,5 +1069,225 @@ describe('task controls in the originating chat', () => {
       prompt: 'New instruction',
       parentConversationId: chat.id,
     });
+  });
+});
+
+describe('a task has exactly its chat’s powers (ADR 0033)', () => {
+  const ALL: PermissionMode[] = ['default', 'auto', 'acceptEdits', 'plan', 'bypassPermissions'];
+
+  /** A chat someone is in, in this mode, with its first turn started. */
+  const chatIn = (
+    conversations: ConversationManager,
+    permissionMode: PermissionMode,
+    text = 'hello',
+  ) =>
+    conversations.send({
+      clientMessageId: `u-${permissionMode}-${text}`,
+      text,
+      options: { permissionMode },
+    });
+  const idle = (conversations: ConversationManager, id: string) =>
+    until(
+      () => conversations.detail(id),
+      (d) => d.conversation.status === 'idle',
+    );
+  const asked = async (conversations: ConversationManager, id?: string) =>
+    (await conversations.detail(id ?? '')).events.filter((e) => e.type === 'permission.requested');
+
+  it('never more than its chat: a mode asked for above the chat’s becomes the chat’s', () => {
+    expect(noMoreThan('bypassPermissions', 'default')).toBe('default');
+    expect(noMoreThan('acceptEdits', 'plan')).toBe('plan');
+    expect(noMoreThan(undefined, 'acceptEdits')).toBe('acceptEdits');
+    expect(noMoreThan('plan', 'bypassPermissions')).toBe('plan');
+    expect(noMoreThan('default', 'acceptEdits')).toBe('default');
+    // Auto and Edit freely let different things through: neither is less than the other.
+    expect(noMoreThan('auto', 'acceptEdits')).toBe('acceptEdits');
+    expect(noMoreThan('acceptEdits', 'auto')).toBe('auto');
+  });
+
+  it('a task sent with more than its chat may do runs in the chat’s mode, and asks', async () => {
+    const { tasks, conversations, engines } = await setup();
+    (engines.get('mock') as Scripted).modes = ALL;
+    const chat = await chatIn(conversations, 'default');
+    await idle(conversations, chat.id);
+    const task = await tasks.create({
+      kind: 'background',
+      text: 'ask before testing',
+      parentConversationId: chat.id,
+      options: { permissionMode: 'bypassPermissions' },
+    });
+    expect(task.options.permissionMode).toBe('default');
+    const waiting = await until(
+      () => tasks.get(task.id),
+      (t) => t.status === 'needs-you' && t.asking !== undefined,
+    );
+    // What it asks is on its card, to be answered from the chat it came from.
+    expect(waiting.asking).toMatchObject({ toolName: 'Bash', here: true, command: 'npm test' });
+    await conversations.respond(
+      waiting.conversationId ?? '',
+      waiting.asking?.permissionId ?? '',
+      'allow',
+    );
+    const done = await until(
+      () => tasks.get(task.id),
+      (t) => t.status === 'unverified',
+    );
+    expect(done.asking).toBeUndefined();
+  });
+
+  it('Full trust in a chat you’re in is the task’s too: what the chat read doesn’t stop it', async () => {
+    const { tasks, conversations, engines } = await setup();
+    (engines.get('mock') as Scripted).modes = ALL;
+    const chat = await chatIn(conversations, 'bypassPermissions');
+    await idle(conversations, chat.id);
+    await conversations.addTaint(chat.id, [{ kind: 'web', label: 'evil.example' }]);
+    const task = await tasks.create({
+      kind: 'background',
+      text: 'ask before testing',
+      parentConversationId: chat.id,
+    });
+    const done = await until(
+      () => tasks.get(task.id),
+      (t) => !['queued', 'running'].includes(t.status),
+    );
+    expect(done.status).toBe('unverified');
+    expect(done.options.permissionMode).toBe('bypassPermissions');
+    expect(await asked(conversations, done.conversationId)).toHaveLength(0);
+    // It still started as wary as its chat.
+    expect(await conversations.taintOf(done.conversationId ?? '')).toEqual([
+      { kind: 'web', label: 'evil.example' },
+    ]);
+  });
+
+  it('a helper runs in the mode of the turn that started it', async () => {
+    const { tasks, conversations, engines } = await setup();
+    (engines.get('mock') as Scripted).modes = ALL;
+    const chat = await chatIn(conversations, 'acceptEdits');
+    await idle(conversations, chat.id);
+    const delegate = tasks
+      .tools({
+        conversationId: chat.id,
+        append: () => undefined,
+        engine: engines.get('mock') as Engine,
+        permissionMode: 'acceptEdits',
+        ask: async () => 'deny',
+        signal: new AbortController().signal,
+      })
+      .find((t) => t.name === 'delegate');
+    await delegate?.run({
+      parts: [{ title: 'Look', instructions: 'look around', model: 'same', worktree: false }],
+    } as never);
+    const [helper] = (await tasks.list()).tasks;
+    expect(helper?.options.permissionMode).toBe('acceptEdits');
+    expect(engines.get('mock')?.turns.at(-1)?.options.permissionMode).toBe('acceptEdits');
+  });
+
+  it('“Always allow” said in the chat holds in its task, and nothing more', async () => {
+    const { tasks, conversations } = await setup();
+    const chat = await chatIn(conversations, 'default', 'ask first');
+    const question = await until(
+      () => asked(conversations, chat.id),
+      (found) => found.length > 0,
+    );
+    const first = question[0];
+    if (first?.type !== 'permission.requested') throw new Error('no question');
+    await conversations.respond(chat.id, first.permissionId, 'allow-always');
+    await idle(conversations, chat.id);
+    const task = await tasks.create({
+      kind: 'background',
+      text: 'ask before testing',
+      parentConversationId: chat.id,
+    });
+    const done = await until(
+      () => tasks.get(task.id),
+      (t) => !['queued', 'running'].includes(t.status),
+    );
+    expect(done.status).toBe('unverified');
+    expect(await asked(conversations, done.conversationId)).toHaveLength(0);
+    // A task sent from another chat hasn't been told yes.
+    const other = await chatIn(conversations, 'default', 'other');
+    await idle(conversations, other.id);
+    const elsewhere = await tasks.create({
+      kind: 'background',
+      text: 'ask before testing',
+      parentConversationId: other.id,
+    });
+    await until(
+      () => tasks.get(elsewhere.id),
+      (t) => t.status === 'needs-you',
+    );
+    await tasks.stop(elsewhere.id);
+  });
+
+  it('follows its chat: Full trust picked there lets a waiting task carry on', async () => {
+    const { tasks, conversations, engines } = await setup();
+    (engines.get('mock') as Scripted).modes = ALL;
+    const chat = await chatIn(conversations, 'default');
+    await idle(conversations, chat.id);
+    const task = await tasks.create({
+      kind: 'background',
+      text: 'ask before testing',
+      parentConversationId: chat.id,
+    });
+    await until(
+      () => tasks.get(task.id),
+      (t) => t.status === 'needs-you',
+    );
+    await conversations.configure(chat.id, { permissionMode: 'bypassPermissions' });
+    const done = await until(
+      () => tasks.get(task.id),
+      (t) => t.status === 'unverified',
+    );
+    expect(done.options.permissionMode).toBe('bypassPermissions');
+    const resolved = (await conversations.detail(done.conversationId ?? '')).events.find(
+      (e) => e.type === 'permission.resolved',
+    );
+    expect(resolved).toMatchObject({ decision: 'allow' });
+  });
+
+  it('gets Conch’s own tools, as its chat has them, but never hands work on itself', async () => {
+    const probe = {
+      name: 'probe',
+      description: 'A tool of Conch’s own.',
+      input: {},
+      run: async () => 'ok',
+    };
+    const made: { tasks?: TaskService } = {};
+    const { tasks, conversations, engines } = await setup({
+      tools: (ctx) => [probe, ...(made.tasks?.tools(ctx) ?? [])],
+    });
+    made.tasks = tasks;
+    const chat = await chatIn(conversations, 'default');
+    await idle(conversations, chat.id);
+    const inChat =
+      engines
+        .get('mock')
+        ?.turns.at(-1)
+        ?.tools.map((t) => t.name) ?? [];
+    expect(inChat).toEqual(expect.arrayContaining(['probe', 'delegate', 'start_background_task']));
+    const task = await tasks.create({
+      kind: 'background',
+      text: 'look around',
+      parentConversationId: chat.id,
+    });
+    await until(
+      () => tasks.get(task.id),
+      (t) => t.status === 'unverified',
+    );
+    const inTask =
+      engines
+        .get('mock')
+        ?.turns.at(-1)
+        ?.tools.map((t) => t.name) ?? [];
+    expect(inTask).toEqual(expect.arrayContaining(['probe', 'report_result']));
+    expect(inTask).not.toContain('delegate');
+    expect(inTask).not.toContain('start_background_task');
+    expect(engines.get('mock')?.turns.at(-1)?.systemAppend).toMatch(
+      /don’t start sub-agents or tasks of your own/,
+    );
+  });
+
+  it('tells every provider to hand work off as Conch’s tasks, never its own sub-agents', () => {
+    expect(TASKS_PROMPT).toMatch(/Never use a sub-agent or task tool of your own provider/);
   });
 });

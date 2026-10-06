@@ -11,6 +11,7 @@ import { sampleResources, type ResourceSnapshot } from '../recovery/resources';
 
 import type { DoctorCheck } from '../doctor/service';
 import type { ToolContext } from '../conversations/manager';
+import { trustsFully } from '../engines/trust';
 import { hostEnvironment } from '../engines/host';
 import type { HostTool } from '../engines/types';
 import { sandboxSupport, secretPlaces } from '../conversations/sandbox';
@@ -253,12 +254,7 @@ export class ProcessService {
       if (ctx.permissionMode === 'plan')
         throw new Error('Leave plan mode before running or sending input to a command.');
       const restricted = await ctx.restricted?.('commands', command);
-      if (
-        ctx.permissionMode !== 'bypassPermissions' ||
-        ctx.unattended ||
-        ctx.untrusted?.() ||
-        restricted
-      ) {
+      if (!trustsFully(ctx) || ctx.untrusted?.() || restricted) {
         const answer = await ctx.ask({
           toolName,
           input: args,

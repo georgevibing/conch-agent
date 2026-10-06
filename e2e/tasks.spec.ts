@@ -1,8 +1,19 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import { say } from './app';
 
 const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
+
+/** The sidebar's Tasks entry, whose badge counts what's working. */
+const tasksLink = (page: Page) =>
+  page.getByRole('navigation', { name: 'Conversations' }).getByRole('button', { name: /^Tasks/ });
+
+/** The chat open right now, in the list, with whatever sits under it. */
+const openChatRow = (page: Page) =>
+  page
+    .getByRole('navigation', { name: 'Conversations' })
+    .getByRole('listitem')
+    .filter({ has: page.locator('[aria-current="page"]') });
 
 /**
  * Hand it off, end to end (ADR 0033): send something to the background and
@@ -27,7 +38,7 @@ test('sent to the background, it works while you chat, and its result comes back
   const card = page.getByRole('article', { name: 'Run the checks slowly' });
   // The sidebar says something's working, while it is: the task is a short one.
   await expect(card).toContainText('Working');
-  await expect(page.getByLabel('1 working')).toBeVisible();
+  await expect(tasksLink(page).getByLabel('1 working')).toBeVisible();
   await expect(card).toContainText(/Running|Ran/);
 
   // The chat is still yours meanwhile.
@@ -38,12 +49,17 @@ test('sent to the background, it works while you chat, and its result comes back
   await expect(card).toContainText('Result not verified', { timeout: 15_000 });
   await expect(card).toContainText('Finished: Run the checks slowly');
 
-  // Its own chat stays out of the list, and opens from the card.
+  // Its own chat is no chat of the list's: it sits under the chat that sent it,
+  // and opens from the card.
   await expect(
-    page.getByRole('navigation', { name: 'Conversations' }).getByRole('link', {
-      name: 'Run the checks slowly',
-    }),
+    page
+      .getByRole('navigation', { name: 'Conversations' })
+      .locator('[data-chat-link]')
+      .filter({ hasText: 'Run the checks slowly' }),
   ).toHaveCount(0);
+  await expect(openChatRow(page).getByRole('list', { name: /^Tasks from/ })).toContainText(
+    'Run the checks slowly',
+  );
   await card.getByRole('button', { name: 'Open' }).click();
   await expect(page.getByRole('note')).toContainText('Working in the background.');
   await page.getByRole('link', { name: 'Back to the chat' }).click();
@@ -113,14 +129,30 @@ test('a task that needs your OK says so, and waits only for you', async ({ page 
   await page.getByRole('option', { name: /Do it in the background/ }).click();
   const card = page.getByRole('article', { name: 'Ship it, but ask first' });
   await expect(card).toContainText('Needs your OK');
-  await expect(page.getByLabel('1 need your OK')).toBeVisible();
-  await card.getByRole('button', { name: 'See what it’s asking' }).click();
-  const ask = page.getByRole('group', { name: 'Permission request' });
+  await expect(tasksLink(page).getByLabel('1 need your OK')).toBeVisible();
+  // Answered on its card, in the chat it came from: no need to go to its own chat.
+  const ask = card.getByRole('group', { name: 'It’s asking' });
   await expect(ask).toContainText('git push');
-  await ask
-    .getByRole('button', { name: /^Allow/ })
-    .first()
-    .click();
-  await page.getByRole('link', { name: 'Back to the chat' }).click();
+  await ask.getByRole('button', { name: 'Allow' }).click();
   await expect(card).toContainText('Result not verified', { timeout: 15_000 });
+});
+
+test('a chat’s tasks sit under it in the sidebar, and open from there', async ({ page }) => {
+  await page.goto('/');
+  const composer = page.getByRole('textbox', { name: 'Message Conch' });
+  await say(page, 'hello', /Ask me to/);
+  await composer.fill('Keep checking for a while');
+  await composer.press(`${mod}+Shift+Enter`);
+  const row = openChatRow(page);
+  const toggle = row.getByRole('button', { name: /tasks from/ });
+  await expect(toggle).toContainText('1 task · 1 working');
+  const tasks = row.getByRole('list', { name: /^Tasks from/ });
+  await expect(tasks).toContainText('Keep checking for a while');
+  await expect(tasks).toContainText('npm run watch');
+  // Stopped from the list, and its own chat opens from there.
+  await tasks.getByRole('button', { name: 'Stop' }).click();
+  await expect(tasks).toContainText('Stopped');
+  await tasks.getByRole('link', { name: /Keep checking for a while/ }).click();
+  await expect(page.getByRole('note')).toContainText('Working in the background.');
+  await expect(page.getByRole('note')).toContainText('never more than the chat it came from');
 });

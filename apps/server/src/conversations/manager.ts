@@ -197,6 +197,18 @@ export interface TurnExtras {
   onConversation?: (id: string) => Promise<void>;
   /** Overrides the conversation's permission mode for this turn. */
   permissionMode?: PermissionMode;
+  /**
+   * Sent from a chat a person is in (a task, ADR 0033): Full trust there is
+   * theirs here too, so what it read alone doesn't stop it and a command may
+   * leave the sealed box as the chat's would. Nobody is here to answer, so
+   * nothing else about being watched applies.
+   */
+  attended?: boolean;
+  /**
+   * What the person already said "Always allow" to in the chat this came from
+   * (ADR 0033): the same answer holds here, and nothing more.
+   */
+  grants?: { tools: readonly string[]; waived: readonly string[] };
   onStatus?: (status: ConversationStatus) => void;
   /** Works in this folder instead of the usual one (a helper's own git worktree, ADR 0033). */
   cwd?: string;
@@ -373,8 +385,13 @@ export interface ToolContext {
   append: (event: ConversationEventInput) => void;
   /** The provider answering this turn. */
   engine: Engine;
-  /** How much the agent may do without asking, for this turn. */
+  /** How much the agent may do without asking, for this turn (read it when it's needed: it follows a mode picked mid-turn). */
   permissionMode: PermissionMode;
+  /**
+   * Full trust is the person's for this turn: the chat they're in, or a task
+   * sent from it (ADR 0033). Unset, Full trust in an unattended run still asks.
+   */
+  fullTrust?: () => boolean;
   /** Ask the user (a permission prompt in the chat). Resolves `deny` if the turn stops first. */
   ask: (request: AskRequest) => Promise<PermissionDecision>;
   /** Aborts when the turn is stopped or ends. */
@@ -620,6 +637,12 @@ function onlyApps<T extends { servers: Record<string, EngineMcpServer> }>(
       Object.entries(loaded.servers).filter(([name]) => wanted.has(name)),
     ),
   };
+}
+
+/** "Always allow" said in the chat a task came from holds in the task too (ADR 0033). */
+function grant(live: Live, grants: TurnExtras['grants']) {
+  for (const tool of grants?.tools ?? []) live.alwaysAllow.add(tool);
+  for (const key of grants?.waived ?? []) live.waived.add(key);
 }
 
 /**
@@ -1308,6 +1331,8 @@ export class ConversationManager {
       live.alwaysAllow.clear();
       live.waived.clear();
       live.permissions.clear();
+      // What the chat it came from allows now, as for a new one (never this one's old answers).
+      grant(live, input.extras.grants);
       this.#applyOptions(live, input.options ?? {});
       const engine = input.engine ?? this.deps.engine(live.record.options.engine);
       this.#append(live, { type: 'user.message', messageId: newId('u'), text: input.text });
@@ -1350,6 +1375,7 @@ export class ConversationManager {
     if (expanded?.skill) this.#append(live, { type: 'skill.used', ...expanded.skill, by: 'user' });
     for (const source of input.extras.taint ?? []) this.#taint(live, source);
     this.#carry(live, input.extras.skills ?? []);
+    grant(live, input.extras.grants);
     this.#claim(live);
     live.extras = input.extras;
     this.#setStatus(live, 'running');
@@ -2107,6 +2133,8 @@ export class ConversationManager {
     resolved.permissionMode = honouredMode(resolved.permissionMode, modes);
     /** Someone is in this chat to answer: not a routine's run, not a message from a chat app. */
     const watched = !extras && !live.record.origin;
+    /** Full trust here is a person's: this chat's, or the one a task came from (ADR 0033). */
+    const personTrusts = watched || Boolean(extras?.attended);
     // A mode picked mid-turn holds from the next step, not the next message
     // (a routine keeps its own). What's waiting that it would have let through, goes.
     const modeListeners: ((mode: PermissionMode) => void)[] = [];
@@ -2116,7 +2144,11 @@ export class ConversationManager {
       resolved.permissionMode = mode;
       for (const listener of modeListeners) listener(mode);
       for (const [permissionId, pending] of live.permissions)
-        if (pending.remember && (!pending.waive || watched) && trustAllows(mode, pending.toolName))
+        if (
+          pending.remember &&
+          (!pending.waive || personTrusts) &&
+          trustAllows(mode, pending.toolName)
+        )
           void this.#resolvePermission(live, permissionId, 'allow');
     };
     if (!extras?.permissionMode) live.setTurnMode = setTurnMode;
@@ -2169,7 +2201,7 @@ export class ConversationManager {
     };
 
     /** Full trust is yours to give (ADR 0028): a chat you're in doesn't stop to check. */
-    const trusting = () => watched && resolved.permissionMode === 'bypassPermissions';
+    const trusting = () => personTrusts && resolved.permissionMode === 'bypassPermissions';
     /** What a skill's list said this turn: "always" can't lift those (ADR 0031). */
     const limitsSaid = new Set<string>();
     /**
@@ -2270,7 +2302,11 @@ export class ConversationManager {
             conversationId,
             append: (event) => this.#append(live, event),
             engine,
-            permissionMode: resolved.permissionMode,
+            // Read when it's needed: a mode picked mid-turn holds from the next step.
+            get permissionMode() {
+              return resolved.permissionMode;
+            },
+            fullTrust: trusting,
             ask: hostAsk,
             signal: abort.signal,
             restricted: async (capability, detail) => {
@@ -3388,6 +3424,24 @@ export class ConversationManager {
     if (known.length >= 12 || known.some((t) => t.kind === source.kind && t.label === source.label))
       return;
     this.#append(live, { type: 'taint', source, ...(toolUseId && { toolUseId }) });
+  }
+
+  /**
+   * What the person said "Always allow" to in this chat, so far: a task sent
+   * from it starts with the same answers (ADR 0033), and no more.
+   */
+  async grantsOf(id: string): Promise<{ tools: string[]; waived: string[] }> {
+    const live = await this.#get(id);
+    return { tools: [...live.alwaysAllow], waived: [...live.waived] };
+  }
+
+  /**
+   * Whether a person is in this chat (not a routine's run, a task, a chat
+   * app's or another app's): a task sent from it takes their Full trust.
+   */
+  async attended(id: string): Promise<boolean> {
+    const live = await this.#get(id);
+    return !live.record.origin;
   }
 
   /** What untrusted things a chat has read (ADR 0028), for work handed on from it (ADR 0033). */

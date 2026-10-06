@@ -21,7 +21,9 @@ import { createHash } from 'node:crypto';
 
 import type {
   ConversationEvent,
+  ConversationSummary,
   EngineId,
+  PermissionMode,
   ServerEvent,
   Task,
   TaskKind,
@@ -52,6 +54,31 @@ export const MAX_PARTS = 6;
 const STEPS_KEPT = 12;
 
 const RUNNING: readonly TaskStatus[] = ['running', 'needs-you'];
+const GOING: readonly TaskStatus[] = ['queued', ...RUNNING];
+
+/**
+ * How much each mode lets happen without asking. Auto and Edit freely let
+ * different things through, so neither counts as less than the other.
+ */
+const POWER: Record<PermissionMode, number> = {
+  plan: 0,
+  default: 1,
+  auto: 2,
+  acceptEdits: 2,
+  bypassPermissions: 3,
+};
+
+/**
+ * The mode a task runs in (ADR 0033): what it asked for when that is less
+ * than its chat's, otherwise its chat's. Never more than the chat it came from.
+ */
+export function noMoreThan(
+  wanted: PermissionMode | undefined,
+  chat: PermissionMode,
+): PermissionMode {
+  if (!wanted || wanted === chat) return chat;
+  return POWER[wanted] < POWER[chat] ? wanted : chat;
+}
 const FINISHED: readonly TaskStatus[] = ['done', 'unverified', 'failed', 'stopped', 'interrupted'];
 
 export class TaskError extends Error {
@@ -179,6 +206,11 @@ export class TaskService {
     toolScope?: Task['toolScope'];
     /** Another provider does it, by name (shown on its card). */
     by?: string;
+    /**
+     * The most it may do without asking: the mode of the turn that started it
+     * (a tool's). Unset, the mode its chat is in.
+     */
+    ceiling?: PermissionMode;
   }): Promise<Task> {
     return this.#creation.run(async () => {
       const requestHash = createHash('sha256')
@@ -199,7 +231,11 @@ export class TaskService {
       }
       const text = input.text.trim();
       if (!text) throw new TaskError('invalid', 'Say what the task is.');
-      const options = await this.#optionsFor(input.parentConversationId, input.options);
+      const options = await this.#optionsFor(
+        input.parentConversationId,
+        input.options,
+        input.ceiling,
+      );
       const task: Task = {
         id: newId('task'),
         kind: input.kind,
@@ -284,7 +320,11 @@ export class TaskService {
   }
 
   /** The chat's own provider and mode, unless asked for something else. */
-  async #optionsFor(parent: string | undefined, given?: TurnOptions): Promise<TurnOptions> {
+  async #optionsFor(
+    parent: string | undefined,
+    given?: TurnOptions,
+    turn?: PermissionMode,
+  ): Promise<TurnOptions> {
     const { preferences } = await this.deps.settings.get();
     const chat = parent
       ? await this.deps.conversations.detail(parent).catch(() => undefined)
@@ -295,11 +335,17 @@ export class TaskService {
       given?.engine !== undefined && given.engine !== (own.engine ?? this.deps.engine().id);
     const { model: _model, ...rest } = own;
     const inherited = elsewhere ? rest : own;
-    return {
+    const options = {
       ...(preferences.permissionMode && { permissionMode: preferences.permissionMode }),
       ...inherited,
       ...given,
     };
+    // Its chat's mode is the most it gets, whoever asked (ADR 0033): the chat's own, or
+    // the default for chats where it never chose one.
+    const ceiling = turn ?? own.permissionMode ?? preferences.permissionMode ?? 'default';
+    return chat || turn
+      ? { ...options, permissionMode: noMoreThan(given?.permissionMode, ceiling) }
+      : options;
   }
 
   async stop(id: string): Promise<Task> {
@@ -506,6 +552,13 @@ export class TaskService {
           from: parent,
         }))
       : [];
+    // Sent from a chat someone is in: its Full trust and its "Always allow" answers are theirs.
+    const attended = parent
+      ? await this.deps.conversations.attended(parent).catch(() => false)
+      : false;
+    const grants = parent
+      ? await this.deps.conversations.grantsOf(parent).catch(() => undefined)
+      : undefined;
     const wt = this.#worktrees.get(task.id);
     const operations = new TaskOperations(
       () => this.get(id),
@@ -567,6 +620,11 @@ export class TaskService {
             return operations.beforeNative(name, args, invocationId, phase);
           },
           tools: [finishTool as HostTool],
+          // Conch's own tools, as its chat has them: for providers whose hands are Conch's
+          // (a model API, Copilot, Gemini CLI, Grok), they're the only ones it has.
+          hostTools: true,
+          ...(attended && { attended }),
+          ...(grants && !task.toolScope && { grants }),
           taint,
           skills,
           ...((wt?.path ?? (task.worktree?.changed ? task.worktree.path : undefined)) && {
@@ -636,9 +694,11 @@ export class TaskService {
       this.#worktrees.delete(task.id);
       worktree = { path: wt.path, branch: wt.branch, changed };
     }
+    this.#asks.delete(task.id);
     const done = await this.#mutate(task.id, () => ({
       ...patch,
       current: undefined,
+      asking: undefined,
       finishedAt: this.#now,
       ...(worktree && { worktree }),
     }));
@@ -719,10 +779,46 @@ export class TaskService {
 
   /** Each task's own chat, followed: what it's doing, what it did. */
   onEvent(event: ServerEvent): void {
+    if (event.type === 'conversation.updated') {
+      void this.#follow(event.conversation).catch(() => undefined);
+      return;
+    }
     if (event.type !== 'conversation.event') return;
     const e: ConversationEvent = event.event;
     const id = this.#byConversation.get(e.conversationId);
     if (!id) return;
+    // What it's asking, so the chat it came from can answer it there (ADR 0033).
+    if (e.type === 'permission.requested') {
+      const asks = this.#asks.get(id) ?? [];
+      asks.push({
+        permissionId: e.permissionId,
+        summary: tidy(e.summary, 240),
+        toolName: e.toolName,
+        // Sites, Passwords and a draft to read have their own card: answered in the task's chat.
+        here: !e.browser && !e.vault && !/google_mail_create_draft$/.test(e.toolName),
+        ...(typeof (e.input as { command?: unknown } | undefined)?.command === 'string' && {
+          command: tidy(String((e.input as { command: string }).command), 500),
+        }),
+        ...(e.once && { once: true }),
+        ...(e.taint && { taint: tidy(e.taint, 300) }),
+      });
+      this.#asks.set(id, asks);
+      void this.#mutate(id, (task) =>
+        FINISHED.includes(task.status) ? undefined : { asking: asks[0] },
+      ).catch(() => undefined);
+      return;
+    }
+    if (e.type === 'permission.resolved') {
+      const asks = (this.#asks.get(id) ?? []).filter((a) => a.permissionId !== e.permissionId);
+      if (asks.length) this.#asks.set(id, asks);
+      else this.#asks.delete(id);
+      void this.#mutate(id, (task) =>
+        task.asking?.permissionId === e.permissionId || (task.asking && !asks.length)
+          ? { asking: asks[0] }
+          : undefined,
+      ).catch(() => undefined);
+      return;
+    }
     if (e.type === 'tool.started') {
       const input = (e.input && typeof e.input === 'object' ? e.input : {}) as Record<
         string,
@@ -758,6 +854,35 @@ export class TaskService {
   }
 
   readonly #calls = new Map<string, { name: string; input: Record<string, unknown> }>();
+  readonly #asks = new Map<string, NonNullable<Task['asking']>[]>();
+
+  /**
+   * The chat a task came from changed its mode: the task follows (ADR 0033).
+   * Full trust there lets a stuck task carry on; Ask first there makes it ask
+   * from its next step. A scoped task keeps the mode its contract set.
+   */
+  async #follow(chat: ConversationSummary): Promise<void> {
+    const mode = chat.options.permissionMode;
+    if (!mode) return;
+    const tasks = (await this.deps.store.list()).filter(
+      (t) =>
+        t.parentConversationId === chat.id &&
+        GOING.includes(t.status) &&
+        !t.toolScope &&
+        t.options.permissionMode !== mode,
+    );
+    for (const task of tasks) {
+      const saved = await this.#mutate(task.id, (current) =>
+        GOING.includes(current.status) && current.options.permissionMode !== mode
+          ? { options: { ...current.options, permissionMode: mode } }
+          : undefined,
+      );
+      if (saved.conversationId && RUNNING.includes(saved.status))
+        await this.deps.conversations
+          .configure(saved.conversationId, { permissionMode: mode })
+          .catch(() => undefined);
+    }
+  }
 
   // ── Tools for the assistant ─────────────────────────────────────────────
 
@@ -849,6 +974,8 @@ export class TaskService {
 
   /** `delegate` and `start_background_task`, in chats you're in (never inside a task). */
   tools(ctx: ToolContext): HostTool[] {
+    // A task hands nothing on: one level, so nothing multiplies out of sight.
+    if (ctx.origin?.kind === 'task') return [];
     const delegate: HostTool<{
       parts: z.ZodArray<
         z.ZodObject<{
@@ -903,6 +1030,7 @@ export class TaskService {
               worktree: part.worktree,
               options: handed[i]?.options,
               by: handed[i]?.by,
+              ceiling: ctx.permissionMode,
             }),
           );
         const done = await this.waitFor(
@@ -943,6 +1071,7 @@ export class TaskService {
           parentConversationId: ctx.conversationId,
           options: handed.options,
           by: handed.by,
+          ceiling: ctx.permissionMode,
         });
         return `Started “${task.title}” in the background${task.by ? ` with ${task.by}` : ''}. Its result will come back to this chat, and the user will be told when it’s done. Task id: ${task.id}.`;
       },
@@ -1057,6 +1186,7 @@ export const TASKS_PROMPT = [
   '## Handing work off',
   '- When a job splits into independent parts (look into several things, check several files, draft alternatives), use `delegate` to run them side by side instead of one after another. Keep each part’s instructions complete on their own.',
   '- When the user wants something done in the background, or agrees to it for a long job, use `start_background_task`; its result comes back to this chat.',
+  '- Never use a sub-agent or task tool of your own provider for this (yours are turned off where Conch can): Conch’s helpers and tasks are the ones the user can see, stop and answer, and they run with exactly this chat’s permissions.',
 ].join('\n');
 
 /** What a task is told about its situation. */
@@ -1065,6 +1195,7 @@ function brief(task: Task): string {
     task.kind === 'helper'
       ? 'You are a helper working on one part of a bigger job, in the background. Nobody is watching this conversation, and you can’t ask the user anything: do the part as well as you can with what you have.'
       : 'You are working on a task the user sent to the background. They aren’t watching this conversation; they’ll read your result later.',
+    'Do the work yourself: don’t start sub-agents or tasks of your own.',
     'When you’re done, call report_result once with the result in a few short lines: what you found or did, and anything the user must know.',
   ].join(' ');
 }

@@ -956,10 +956,15 @@ export class RoutineService {
     /** The provider answering the chat, and its model: a routine made there runs there. */
     engine?: Engine;
     model?: string;
-    /** A routine's own run never gets these (a run that read something hostile can't reschedule itself). */
+    /**
+     * A run of its own never gets these (a run that read something hostile can't
+     * reschedule itself), and nor does a background task or helper (ADR 0033):
+     * nobody is watching it either, and a task's powers may be fewer than its
+     * chat's, never more.
+     */
     origin?: { kind: string };
   }): HostTool[] {
-    if (ctx.origin?.kind === 'routine') return [];
+    if (ctx.origin?.kind === 'routine' || ctx.origin?.kind === 'task') return [];
     const card = (routine: Routine, action: 'proposed' | 'updated' | 'paused' | 'deleted') =>
       ctx.append({ type: 'routine', routineId: routine.id, action, title: routine.title });
 

@@ -746,7 +746,8 @@ export function useFindables(query: string, conversationId: string | undefined):
     },
   }));
   const taskItems = find(
-    (tasks?.tasks ?? []).filter((t) => t.kind === 'background' && t.conversationId),
+    // Helpers too: each is a chat of its own, under the chat that started it.
+    (tasks?.tasks ?? []).filter((t) => t.conversationId),
     q,
     (t) => t.title,
     (t) => t.summary ?? '',

@@ -117,6 +117,25 @@ export const Task = z.object({
   finishedAt: z.number().optional(),
   /** What it's doing right now, when it says: "Running `npm test`". */
   current: z.string().max(240).optional(),
+  /**
+   * What it's waiting for your OK on (`needs-you`), so the chat it came from
+   * can answer it right there. `here` is false for what has its own card (a
+   * site, Passwords): that one is answered in the task's own chat.
+   */
+  asking: z
+    .object({
+      permissionId: z.string(),
+      summary: z.string().max(240),
+      toolName: z.string().max(200),
+      here: z.boolean(),
+      /** The command it wants to run, when it's one. */
+      command: z.string().max(500).optional(),
+      /** Shows what goes to other people: asked every time, never "Always allow". */
+      once: z.boolean().optional(),
+      /** Asked because of something it read (ADR 0028): why. */
+      taint: z.string().max(300).optional(),
+    })
+    .optional(),
   /** The last few things it did, newest last. */
   steps: z.array(TaskStep).max(12).default([]),
   /** Its result, in a few lines (the assistant's own summary). */

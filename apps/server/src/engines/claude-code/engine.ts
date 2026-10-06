@@ -102,6 +102,16 @@ function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
+/**
+ * Claude Code's own ways of handing work to sub-agents, turned off in every
+ * turn (ADR 0033): its `Agent` tool (`Task` before it was renamed) and its
+ * multi-agent `Workflow`. Their work would run out of sight, outside the
+ * chat's cards, Stop and spending. Conch's `delegate` and
+ * `start_background_task` do the same, as chats a person can see and answer,
+ * with exactly the chat's permissions. Its to-do tools (`TaskCreate`…) stay.
+ */
+export const OWN_SUBAGENTS = ['Agent', 'Task', 'Workflow'] as const;
+
 export class ClaudeCodeEngine implements Engine {
   readonly id = 'claude-code' as const;
   readonly label = 'Claude Code';
@@ -582,17 +592,17 @@ export class ClaudeCodeEngine implements Engine {
           }),
           mcpServers: { conch },
           // Deny rules hold in every mode, Full trust included (`//` is an absolute path).
-          ...((input.disallowedTools?.length || input.protectedPaths?.length || asksItself) && {
-            disallowedTools: [
-              ...(input.disallowedTools ?? []),
-              // Conch's `ask` shows answers to tap (ADR 0060); Claude Code's own would be a bare prompt.
-              ...(asksItself ? ['AskUserQuestion'] : []),
-              ...(input.protectedPaths ?? []).flatMap((p) => {
-                const rule = `/${p.replaceAll('\\', '/')}${/\.json$/.test(p) ? '' : '/**'}`;
-                return [`Read(${rule})`, `Edit(${rule})`, `Write(${rule})`];
-              }),
-            ],
-          }),
+          disallowedTools: [
+            // Work is handed off as Conch's tasks (ADR 0033): seen, stopped and answered.
+            ...OWN_SUBAGENTS,
+            ...(input.disallowedTools ?? []),
+            // Conch's `ask` shows answers to tap (ADR 0060); Claude Code's own would be a bare prompt.
+            ...(asksItself ? ['AskUserQuestion'] : []),
+            ...(input.protectedPaths ?? []).flatMap((p) => {
+              const rule = `/${p.replaceAll('\\', '/')}${/\.json$/.test(p) ? '' : '/**'}`;
+              return [`Read(${rule})`, `Edit(${rule})`, `Write(${rule})`];
+            }),
+          ],
           // The sealed box (ADR 0028): commands write only to the work folder, temp and
           // caches, and can't read where keys live. Escaping it asks (the guard below).
           ...(input.sandbox && {

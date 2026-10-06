@@ -111,6 +111,11 @@ export interface ChatRowProps extends Omit<ComponentProps<'li'>, 'children' | 'c
    * `onDragOver` and `onDrop` to the row itself); the row only draws it.
    */
   dropBefore?: boolean;
+  /**
+   * Under the row, inside its item: what belongs to this chat and opens on its
+   * own (its tasks, `ChatTasks`). Not part of the link, so it has its own controls.
+   */
+  below?: ReactNode;
 }
 
 /**
@@ -138,6 +143,7 @@ export function ChatRow({
   swipeEnd,
   editing,
   dropBefore,
+  below,
   className,
   onClickCapture,
   onKeyDown,
@@ -154,6 +160,10 @@ export function ChatRow({
   const titleId = useId();
   const titleRef = useRef<HTMLSpanElement>(null);
   const moreRef = useRef<HTMLSpanElement>(null);
+  /** What's under the row has its own controls: the row's gestures leave it alone. */
+  const belowRef = useRef<HTMLDivElement>(null);
+  const inBelow = (target: EventTarget | null) =>
+    Boolean(belowRef.current?.contains(target as Node));
   const finePointer = useMediaQuery('(pointer: fine)');
   const [dragging, setDragging] = useState(false);
   const rowRef = useRef<HTMLDivElement>(null);
@@ -207,7 +217,8 @@ export function ChatRow({
     onClickCapture?.(e);
     const target = e.target as Node;
     // Clicks inside a menu's portal bubble here through React; they aren't the row's.
-    if (!e.currentTarget.contains(target) || moreRef.current?.contains(target)) return;
+    if (!e.currentTarget.contains(target) || moreRef.current?.contains(target) || inBelow(target))
+      return;
     const swiped = swipe.consumeClick();
     const held = hold.consumeClick();
     if (swiped || held) {
@@ -241,6 +252,10 @@ export function ChatRow({
 
   const handleDragStart = (e: DragEvent<HTMLLIElement>) => {
     onDragStart?.(e);
+    if (inBelow(e.target)) {
+      e.preventDefault();
+      return;
+    }
     if (!dragIds?.length || e.defaultPrevented) return;
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData(CHAT_DRAG_TYPE, JSON.stringify(dragIds));
@@ -294,6 +309,7 @@ export function ChatRow({
       data-swipeable={swipe.enabled || undefined}
       data-has-menu={showMenu || undefined}
       data-drop-before={dropBefore || undefined}
+      data-below={below ? '' : undefined}
       draggable={canDrag || undefined}
       ref={(el) => {
         itemRef.current = el;
@@ -312,6 +328,7 @@ export function ChatRow({
       onDragEnd={handleDragEnd}
       onPointerDown={(e) => {
         onPointerDown?.(e);
+        if (inBelow(e.target)) return;
         swipe.down(e);
         // Not from the ⋯: that's a button of its own.
         if (!moreRef.current?.contains(e.target as Node)) hold.down(e);
@@ -376,6 +393,13 @@ export function ChatRow({
           </span>
         )}
       </div>
+      {below && (
+        // Its own right-click: the chat's menu is for the chat's row.
+        // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+        <div ref={belowRef} className={styles.below} onContextMenu={(e) => e.stopPropagation()}>
+          {below}
+        </div>
+      )}
       {lift && hold.phase !== 'idle' && hold.phase !== 'lifted' && (
         <DragGhost
           ref={ghostRef}

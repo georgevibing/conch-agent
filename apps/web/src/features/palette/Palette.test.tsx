@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useUi } from '../../app/ui';
 import { useLiveStore } from '../../live/store';
 import { appState, mockFetch, renderApp } from '../../test/harness';
+import { taskKeys } from '../tasks/queries';
 import { Palette } from './Palette';
 
 // Search waits on a debounce and a round trip; under a full parallel run that takes longer than 1 s.
@@ -1368,6 +1369,41 @@ describe('Palette search', () => {
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'tasks');
     expect(await screen.findByRole('option', { name: /^Tasks/ })).toBeInTheDocument();
+  });
+
+  it('finds a task by name, helpers included', async () => {
+    const user = userEvent.setup();
+    const made = (patch: Record<string, unknown>) => ({
+      id: 'x',
+      kind: 'background',
+      title: 'Tidy the README',
+      prompt: 'Tidy the README',
+      status: 'running',
+      options: {},
+      createdAt: 1,
+      steps: [],
+      rev: 1,
+      conversationId: 'c-task',
+      ...patch,
+    });
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    const { where, client } = renderApp(<Palette />);
+    // The sidebar keeps the list loaded; here it's put in by hand.
+    client.setQueryData(taskKeys.all, {
+      concurrent: 3,
+      tasks: [
+        made({}),
+        made({ id: 'h', kind: 'helper', title: 'Tidy the tests', conversationId: 'c-helper' }),
+      ],
+    });
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'tidy the tests');
+    await user.click(await screen.findByRole('option', { name: /Tidy the tests/ }));
+    await waitFor(() => expect(where()).toBe('/c/c-helper'));
   });
 
   it('finds the model on this computer by the words people use for it', async () => {
