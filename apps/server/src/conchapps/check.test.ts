@@ -442,6 +442,48 @@ describe('the quality half', () => {
       expect.stringMatching(/fixed at 900px wide/),
     ]);
   });
+
+  it('warns about a control made out of divs, one the kit can’t draw, and a page restyling the kit’s own', async () => {
+    const page = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Plants</title>
+<style>
+  select { appearance: none; background: var(--nc-surface); }
+  button, .quiet { border-radius: var(--nc-radius-xs); }
+</style></head>
+<body>
+  <div class="dropdown" role="listbox" tabindex="0">Kitchen</div>
+  <input type="image" src="go.png" alt="Water it">
+</body></html>`;
+    const result = await check(pkg({ 'pages/main.html': page }));
+    // Advice, not a refusal: the page works, it just doesn't look like Conch.
+    expect(result.ok).toBe(true);
+    expect(result.warnings).toEqual([
+      {
+        message: expect.stringMatching(/builds a control out of something that isn’t one/),
+        file: 'pages/main.html',
+        line: 9,
+      },
+      {
+        message: expect.stringMatching(/uses <input type="image">/),
+        file: 'pages/main.html',
+        line: 10,
+      },
+      {
+        message: expect.stringMatching(/takes the system’s look off a control itself/),
+        file: 'pages/main.html',
+        line: 5,
+      },
+      {
+        message: expect.stringMatching(/styles “select” itself/),
+        file: 'pages/main.html',
+        line: 5,
+      },
+    ]);
+    // A page that writes plain, labelled controls and keeps its own styles to
+    // its own classes (PAGE) has nothing to answer for.
+    expect(messages((await check(pkg())).warnings)).toEqual([]);
+  });
 });
 
 describe('with the real sealed runtime', () => {

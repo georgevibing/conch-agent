@@ -10,11 +10,17 @@ import kit from './pagekit.css?raw';
  * a sealed page has nowhere to send one.)
  */
 const PLANT_DIARY = `
-<div class="nc-toolbar">
-  <h1>My plants</h1>
+<header class="nc-page-head">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+    <path d="M12 21v-7M12 14c0-4 3-7 7-7 0 4-3 7-7 7ZM12 14c0-4-3-7-7-7 0 4 3 7 7 7Z"/>
+  </svg>
+  <div>
+    <h1>My plants</h1>
+    <p class="nc-muted">Who needs water, and when you last watered</p>
+  </div>
   <button class="quiet">Refresh</button>
   <button class="primary">Log watering</button>
-</div>
+</header>
 
 <div class="nc-grid">
   <div class="nc-card nc-stat"><b>12</b> plants</div>
@@ -41,6 +47,11 @@ const PLANT_DIARY = `
     <label>When <input type="text" value="Today, 9:10"></label>
   </div>
   <label>Note <textarea placeholder="Repotted, fed, moved to the window…"></textarea></label>
+  <div class="nc-row">
+    <label>How much water <input type="range" min="1" max="10" value="7"></label>
+    <label>Its label’s colour <input type="color" value="#4f8a3d"></label>
+    <label>A photo <input type="file"></label>
+  </div>
   <label><input type="checkbox" checked> Fed it too</label>
   <div class="nc-row" style="margin-top: 12px">
     <button class="primary">Log it</button>
@@ -58,7 +69,10 @@ const PLANT_DIARY = `
   </tbody>
 </table>
 
-<label>Rain barrel <progress value="0.62">62%</progress></label>
+<div class="nc-row">
+  <label>Rain barrel <progress value="0.62">62%</progress></label>
+  <label>Watered this week <meter min="0" max="7" value="4">4 of 7</meter></label>
+</div>
 
 <h2>Cuttings</h2>
 <div class="nc-empty">
@@ -90,13 +104,13 @@ interface Args {
 
 const meta = {
   title: 'Foundations/Page kit',
-  args: { width: 720, height: 1320 },
+  args: { width: 720, height: 1560 },
   parameters: {
     layout: 'padded',
     docs: {
       description: {
         component:
-          'The page kit (ADR 0061): Nacre’s tokens and a classless base, given to every page a Conch app ships, so plain HTML an assistant writes looks like Conch — type, buttons, fields, lists, tables, cards, empty states — in the person’s light or dark and accent, with no CSS of its own. A handful of classes (`nc-card`, `nc-stack`, `nc-row`, `nc-grid`, `nc-toolbar`, `nc-list`, `nc-stat`, `nc-badge`, `nc-muted`, `nc-empty`; `primary`, `danger`, `quiet` on buttons) cover the rest. It sits in a layer, so a page’s own styles always win. This sample is a plant diary’s page, in a sealed frame as Conch shows it.',
+          'The page kit (ADR 0061): Nacre’s tokens and a classless base, given to every page a Conch app ships, so plain HTML an assistant writes looks like Conch — type, buttons, every kind of field, lists, tables, cards, empty states — in the person’s light or dark and accent, with no CSS of its own. Conch draws what the system usually does: a select’s chevron (with room beside it), the button inside a file field, a colour’s swatch, a meter’s bar. A handful of classes (`nc-page-head` for the icon, title and buttons at the top; `nc-card`, `nc-stack`, `nc-row`, `nc-grid`, `nc-toolbar`, `nc-list`, `nc-stat`, `nc-badge`, `nc-muted`, `nc-empty`; `primary`, `danger`, `quiet` on buttons) cover the rest. It sits in a layer, so a page’s own styles always win. This sample is a plant diary’s page, in a sealed frame as Conch shows it.',
       },
     },
   },
@@ -133,13 +147,13 @@ export const PlantDiary: Story = {
 
 /** At phone width. */
 export const Phone: Story = {
-  args: { width: 390, height: 1420 },
+  args: { width: 390, height: 1980 },
   render: PlantDiary.render,
 };
 
 /** Light and dark, side by side, in another accent. */
 export const LightAndDark: Story = {
-  args: { width: 520, height: 1320 },
+  args: { width: 520, height: 1680 },
   render: ({ width, height }) => (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24 }}>
       <iframe
