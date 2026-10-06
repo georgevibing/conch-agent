@@ -108,6 +108,7 @@ test('Safety says what sealing means for each provider, honestly', async ({ page
   await page.getByRole('combobox').fill('security');
   await page.getByRole('option', { name: /Settings: Security/ }).click();
   const settings = page.getByRole('dialog', { name: /Settings/ });
+  await settings.getByRole('button', { name: 'Advanced' }).click();
   // The test gateway runs the pretend provider, which runs no commands of its own.
   await expect(settings.getByRole('region', { name: 'For the providers you use' })).toContainText(
     'No commands',

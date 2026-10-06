@@ -70,10 +70,10 @@ export function FallbackSection() {
           </Select>
           <Field.Description>
             {picked && picked.id !== active?.id
-              ? `When ${name} reaches a limit, ${picked.name} answers the same message — nothing to retype. Back to ${name} once it resets.`
+              ? `${picked.name} answers the same message, then back to ${name} once it resets.`
               : others.length
-                ? `Or let another connected provider answer while ${name} is at its limit.`
-                : 'Connect another provider to carry on when this one reaches a limit.'}
+                ? `Or let another provider answer while ${name} is at its limit.`
+                : 'Connect another provider to carry on at a limit.'}
           </Field.Description>
         </Field>
 
@@ -83,8 +83,8 @@ export function FallbackSection() {
           label="Answer offline with the model on this computer"
           description={
             local
-              ? `With no internet, ${local.name} answers right here. Otherwise, messages wait and go by themselves when you’re back.`
-              : 'No model on this computer yet, so messages wait and go by themselves when you’re back.'
+              ? `${local.name} answers with no internet.`
+              : 'No model here yet, so messages wait and go by themselves.'
           }
         />
       </Stack>

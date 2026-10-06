@@ -68,6 +68,8 @@ test('Safety in Settings: turning a check off says what could happen, and the ch
   await page.getByRole('combobox').fill('security');
   await page.getByRole('option', { name: /Settings: Security/ }).click();
   const settings = page.getByRole('dialog', { name: /Settings/ });
+  // The checks are on and stay on: they wait under Advanced.
+  await settings.getByRole('button', { name: 'Advanced' }).click();
   const check = settings.getByRole('switch', { name: 'Check before acting on what it read' });
   await expect(check).toBeChecked();
   await check.click();

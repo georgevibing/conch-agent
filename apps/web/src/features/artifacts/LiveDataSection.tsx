@@ -45,7 +45,7 @@ export function LiveDataSection({ focus }: { focus?: { place: string; done: () =
     <Section
       ref={ref}
       title="Live data in pages"
-      description="Sites the pages your assistant made may read fresh data from. They read only the addresses you saw, never with your cookies or sign-ins."
+      description="Sites a page your assistant made may read from — never with your cookies."
     >
       {isPending ? (
         <Skeleton shape="block" height={64} />

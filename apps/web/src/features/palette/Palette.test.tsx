@@ -363,17 +363,31 @@ describe('Palette search', () => {
       expect(screen.queryByRole('option', { name: /Settings: Memory/ })).toBeNull(),
     );
 
-    // Where apps you muted in a chat can be suggested again.
+    // Where apps you muted in a chat can be suggested again (under Models → Advanced).
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'suggestions');
-    expect(await screen.findByRole('option', { name: /Settings: Models/ })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('option', { name: 'Settings: Offers in the chat' }),
+    ).toBeInTheDocument();
 
-    // The browser's settings answer to the words people use for it.
+    // The browser's settings answer to the words people use for it, including
+    // what moved into its Advanced.
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'cookies');
-    expect(await screen.findByRole('option', { name: /Settings: Browser/ })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('option', { name: 'Settings: Where the browser runs' }),
+    ).toBeInTheDocument();
     await user.keyboard('{Enter}');
     await waitFor(() => expect(where()).toBe('/settings/browser'));
+
+    // A setting that lives under a page's Advanced is still found by name, and
+    // asks for that place with its Advanced open.
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'replay welcome');
+    expect(await screen.findByRole('option', { name: 'Settings: Start over' })).toBeInTheDocument();
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(where()).toBe('/settings/general'));
+    expect(useUi.getState().settingsFocus).toBe('advanced');
   });
 
   it('finds Discover and skills people share by name, and opens one to read (ADR 0074)', async () => {
@@ -1322,7 +1336,7 @@ describe('Palette search', () => {
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'shell');
     expect(await screen.findByRole('option', { name: /Show the terminal/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Settings: Terminal/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Settings: Terminal' })).toBeInTheDocument();
     await user.click(screen.getByRole('option', { name: /Show the terminal/ }));
     expect(useUi.getState().terminalOpen).toBe(true);
 
@@ -1331,7 +1345,7 @@ describe('Palette search', () => {
     await act(() => client.invalidateQueries({ queryKey: ['terminal'] }));
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'terminal');
-    expect(await screen.findByRole('option', { name: /Settings: Terminal/ })).toBeInTheDocument();
+    expect(await screen.findByRole('option', { name: 'Settings: Terminal' })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /Show the terminal/ })).toBeNull();
     expect(screen.queryByRole('option', { name: /New terminal/ })).toBeNull();
   });

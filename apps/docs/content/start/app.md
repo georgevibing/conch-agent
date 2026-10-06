@@ -32,13 +32,13 @@ Each file on the release page also has a record of the build that made it, from 
 
 Closing the window doesn't stop Conch. It keeps running in the menu bar on a Mac, the tray on Windows and the panel on Linux, so your routines run and your phone and chat apps can reach it. Open the app again, or choose **Open Conch** there, and the window comes back where it was.
 
-**Quit Conch** in that menu stops it. So does **Quit Conch** in **Settings → Health → Always on**.
+**Quit Conch** in that menu stops it. So does **Quit Conch** in **Settings → Health → Advanced → Always on**.
 
 If Conch is already running on this computer, from the one-line install or a checkout, the app shows that one instead of starting a second. When that one stops, the app starts its own.
 
 ## Starting when you log in
 
-Turn on **Always on** in **Settings → Health**. The app then starts when you log in, with no window, and waits in the menu bar. See [Always on](../care/always-on.md).
+Turn on **Always on** in **Settings → Health → Advanced**. The app then starts when you log in, with no window, and waits in the menu bar. See [Always on](../care/always-on.md).
 
 ## Updates
 

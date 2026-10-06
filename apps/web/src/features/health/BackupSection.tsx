@@ -151,7 +151,7 @@ export function BackupSection() {
     <Section
       ref={section}
       title="Backups"
-      description="Your Conch, kept safe every day on this computer. Restore a backup to go back in time, or to move to a new computer."
+      description="Kept safe every day. Restore one to go back in time, or to a new computer."
     >
       <Stack gap={4}>
         {status?.pending && (

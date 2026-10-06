@@ -106,6 +106,32 @@ Arriving there by a press puts the focus on the page's name in the trail, so
 the way back is one Shift+Tab away; stepping back out puts it on the place's
 heading.
 
+### Settings
+
+Settings is the calmest part of Conch: most people should be able to read a
+place in a glance and never change a thing.
+
+- **One place, one page.** A place opens as a heading, a line of plain words
+  under it, and a short list of rows — a switch with the few words it needs, a
+  `Field`, or one row that leads to a page of its own. Never a paragraph where a
+  line will do, and never the same thing said twice (a Nacre pattern that
+  explains itself keeps its words; the section above it stays quiet).
+- **Sensible defaults, then `SettingsAdvanced`.** What almost nobody changes
+  waits at the foot of the page, under a hairline, behind the word **Advanced**:
+  a default that is already right, a switch for one person in a thousand, the
+  rare thing a page can't be without. Inside it are the page's own sections,
+  spaced as they are above, so opening it only makes the page longer — never a
+  second page, never a dialog. Nothing is lost: ⌘K finds what moved in there by
+  name (`ADVANCED_FOCUS`, `useAdvanced`), and the place opens with its Advanced
+  already open, as a repair's fix does.
+- **The places, as the chats are.** The list beside the page (a `Sheet` on a
+  phone, like the chat list) reads like the sidebar: one left edge for the way
+  back, the page's name and every row's mark, with the group labels over the
+  names they gather. The place you're on wears the sidebar's soft wash, gliding
+  from row to row — not a card lifted off the list, which at a row's height
+  reads as a box to type in. A thumb gets 44 px rows and the size a phone
+  reads, and the list keeps room at its feet for the phone's home bar.
+
 ## Elevation
 
 `--nc-elevation-0…4`: stacked tight + ambient shadows tinted with the neutral hue,

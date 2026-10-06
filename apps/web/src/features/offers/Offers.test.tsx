@@ -665,6 +665,8 @@ describe('Settings → Models', () => {
       },
     });
     renderApp(<ModelsTab />);
+    // What you muted waits under Advanced, with the rest nobody needs to touch.
+    await userEvent.click(await screen.findByRole('button', { name: 'Advanced' }));
     const list = await screen.findByRole('list', { name: 'Not suggested' });
     expect(within(list).getByText('Linear')).toBeInTheDocument();
     // An app only a provider's account reaches may not be in this catalog: still named.

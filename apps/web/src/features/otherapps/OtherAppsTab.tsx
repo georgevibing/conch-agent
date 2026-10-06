@@ -18,6 +18,7 @@ import {
   OtherAppTargets,
   PairedAppList,
   SecretReveal,
+  SettingsAdvanced,
   Stack,
   Switch,
   Text,
@@ -34,6 +35,7 @@ import { keys } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { useVerify } from '../auth/useVerify';
 import { Section } from '../settings/Section';
+import { useAdvanced } from '../settings/useAdvanced';
 import { otherAppsApi, otherAppsKeys, useOtherApps } from './api';
 import { APP_LOOK, pairedWords, scopeChoices, usesWords } from './words';
 
@@ -63,6 +65,7 @@ export function OtherAppsTab() {
   const closeSettings = useUi((s) => s.closeSettings);
   const [editing, setEditing] = useState<Editing>();
   const [removing, setRemoving] = useState<string>();
+  const [advanced, setAdvanced] = useAdvanced();
   const data = overview.data;
   const refresh = () => void client.invalidateQueries({ queryKey: otherAppsKeys.overview });
 
@@ -113,7 +116,7 @@ export function OtherAppsTab() {
     <Stack gap={8}>
       <Section
         title="Use Conch from other apps"
-        description="Claude Desktop, Cursor and VS Code can use your memory, your skills, your apps and Conch’s browser, through Conch. Each uses only what you tick, and anything that changes something asks you first, here."
+        description="They use your memory, skills, apps and browser — only what you tick, and anything that changes something asks you first."
       >
         <OtherAppTargets
           targets={targets}
@@ -144,45 +147,47 @@ export function OtherAppsTab() {
         </div>
       </Section>
 
-      <Section title="Paired with Conch" description="What each may use, and what it did.">
-        <PairedAppList
-          apps={data.clients.map((c) => ({
-            id: c.id,
-            name: c.name,
-            uses: usesWords(c.scopes, data.choices),
-            meta: pairedWords(c),
-            remote: data.remote && c.remote,
-            ...APP_LOOK[c.app],
-          }))}
-          busy={removing}
-          onOpen={(app) => {
-            const chat = clientsById.get(app.id)?.conversationId;
-            if (!chat) return toast('It hasn’t used anything that needs a chat yet.');
-            closeSettings();
-            void navigate(`/c/${chat}`);
-          }}
-          onEdit={(app) => {
-            const found = clientsById.get(app.id);
-            if (found) setEditing({ kind: 'change', client: found });
-          }}
-          onRemove={(app) => void remove(app.id)}
-        />
-      </Section>
+      {data.clients.length > 0 && (
+        <Section title="Paired with Conch" description="What each may use.">
+          <PairedAppList
+            apps={data.clients.map((c) => ({
+              id: c.id,
+              name: c.name,
+              uses: usesWords(c.scopes, data.choices),
+              meta: pairedWords(c),
+              remote: data.remote && c.remote,
+              ...APP_LOOK[c.app],
+            }))}
+            busy={removing}
+            onOpen={(app) => {
+              const chat = clientsById.get(app.id)?.conversationId;
+              if (!chat) return toast('It hasn’t used anything that needs a chat yet.');
+              closeSettings();
+              void navigate(`/c/${chat}`);
+            }}
+            onEdit={(app) => {
+              const found = clientsById.get(app.id);
+              if (found) setEditing({ kind: 'change', client: found });
+            }}
+            onRemove={(app) => void remove(app.id)}
+          />
+        </Section>
+      )}
 
       {data.address && (
-        <Section
-          title="From your own address"
-          description="Off unless you need it: an app on another computer reaching Conch over the internet."
-        >
-          <Stack gap={3}>
+        <SettingsAdvanced open={advanced} onOpenChange={setAdvanced}>
+          <Section
+            title="From your own address"
+            description="An app on another computer, reaching Conch over the internet."
+          >
             <Switch
               checked={data.remote}
               onCheckedChange={(on) => void setRemote(on)}
               label="Let apps you mark in through your address"
-              description={`They connect to ${data.address} with their key. Whoever has that key can use what you let the app use, from anywhere.`}
+              description={`They connect to ${data.address} with their key. Whoever has that key can use what you let the app use.`}
             />
-          </Stack>
-        </Section>
+          </Section>
+        </SettingsAdvanced>
       )}
 
       <PairDialog

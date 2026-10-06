@@ -125,7 +125,7 @@ A held memory isn't used, isn't found by search and isn't in an export. The same
 
 Most memories never see the card. Where something from outside was read, Conch may also ask a cheap model for a second opinion; it can only hold a memory, never let one through.
 
-To turn the check down, go to **Settings → Security → Safety** and turn off **Check what it remembers**. Conch says what could happen and asks that it's you. Passwords, keys and hidden characters are still held.
+To turn the check down, go to **Settings → Security → Advanced → Safety** and turn off **Check what it remembers**. Conch says what could happen and asks that it's you. Passwords, keys and hidden characters are still held.
 
 ## Only security asks
 
@@ -143,7 +143,7 @@ Older questions about routine memories are checked again against your recent mes
 
 ## What it costs
 
-Reading a chat once it goes quiet uses a small model, at most once per stretch of a chat, and often not at all. A plan, or a model on this computer, costs nothing. Pay-as-you-go spending is capped at $1 a month until you change it in **Settings → Usage → Learning from your chats**. At the cap, learning rests until the 1st, and **Settings → Health** says so. Your chats aren't affected.
+Reading a chat once it goes quiet uses a small model, at most once per stretch of a chat, and often not at all. A plan, or a model on this computer, costs nothing. Pay-as-you-go spending is capped at $1 a month until you change it in **Settings → Usage → Advanced → Learning from your chats**. At the cap, learning rests until the 1st, and **Settings → Health** says so. Your chats aren't affected.
 
 ## Good to know
 

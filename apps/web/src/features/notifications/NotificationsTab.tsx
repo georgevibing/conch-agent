@@ -34,32 +34,12 @@ export function usePush() {
 }
 
 const TOPICS: { key: keyof PushPrefs; label: string; description?: string }[] = [
-  {
-    key: 'approvals',
-    label: 'When it needs you',
-    description: 'An OK to give, with Deny right on the notification, or a question to answer.',
-  },
-  {
-    key: 'replies',
-    label: 'When an answer is ready',
-    description: 'For chats you started and left.',
-  },
-  {
-    key: 'routines',
-    label: 'When a routine runs',
-    description: 'What it found, or that it didn’t finish.',
-  },
-  {
-    key: 'tasks',
-    label: 'When a background task finishes',
-    description: 'With its result, or why it didn’t finish.',
-  },
+  { key: 'approvals', label: 'When it needs you' },
+  { key: 'replies', label: 'When an answer is ready' },
+  { key: 'routines', label: 'When a routine runs' },
+  { key: 'tasks', label: 'When a background task finishes' },
   { key: 'devices', label: 'When a new device wants to sign in' },
-  {
-    key: 'updates',
-    label: 'New versions of Conch',
-    description: 'Once for each release, with what’s new. Off unless you turn it on.',
-  },
+  { key: 'updates', label: 'New versions of Conch' },
   {
     key: 'previews',
     label: 'Say what it’s about',
@@ -157,7 +137,7 @@ export function NotificationsTab() {
     <Stack gap={8}>
       <Section
         title="This device"
-        description="Conch tells you when something needs you, and stays quiet while you’re looking at it."
+        description="Told when something needs you, quiet while you’re looking."
       >
         <NotifyThisDevice
           state={state}
@@ -167,7 +147,7 @@ export function NotificationsTab() {
           testing={testing}
           detail={
             pushSupport() === 'insecure'
-              ? 'Notifications need Conch’s secure (https) address. Use Add a device to open Conch on its secure address.'
+              ? 'Notifications need Conch’s secure (https) address. Add your phone to turn it on.'
               : state === 'off'
                 ? problem
                 : undefined
@@ -192,10 +172,7 @@ export function NotificationsTab() {
         </NotifyThisDevice>
       </Section>
 
-      <Section
-        title="Your devices"
-        description="Each device that gets notifications. Signing one out stops them there too."
-      >
+      <Section title="Your devices" description="Signing one out stops its notifications too.">
         <Stack gap={3}>
           {others.length || mine ? (
             <NotifiedDevices
@@ -212,7 +189,7 @@ export function NotificationsTab() {
             />
           ) : (
             <Text size="sm" tone="muted">
-              No device gets notifications yet. Turn them on above, or on your phone.
+              None yet. Turn them on above, or on your phone.
             </Text>
           )}
           <div>

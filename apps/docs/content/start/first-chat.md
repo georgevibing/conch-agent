@@ -31,7 +31,7 @@ If Conch finds another assistant on your computer, it offers to [bring your thin
 
 Conch ends with three things you could ask first, made from what you picked. Choose one and a chat opens with it typed in, ready to send or change. Or press **Open Conch** and start with anything.
 
-To see the welcome again, use **Replay welcome** in **Settings → General**.
+To see the welcome again, use **Replay welcome** in **Settings → General → Advanced**.
 
 ## Say hello
 
@@ -48,6 +48,14 @@ When it wants to do something that matters, it asks, right in the chat, with one
 **Find anything**, with <kbd>mod+k</kbd>. One box for chats, messages, models, skills, apps and settings. Typos are fine.
 
 Type `/` to see every command, or read the [whole list](../reference/slash-commands.md).
+
+## Settings, kept short
+
+<kbd>mod+,</kbd> opens **Settings**. Each place shows what people actually change, in a
+line or two. Everything else — a sensible default, a switch for one person in a
+thousand — waits at the foot of the page under **Advanced**. Nothing is hidden: ⌘K
+finds a setting by name wherever it lives, and opens its place with **Advanced**
+already open.
 
 ## Where next
 

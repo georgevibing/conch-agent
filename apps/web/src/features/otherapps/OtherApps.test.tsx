@@ -152,7 +152,10 @@ describe('Other apps', () => {
     expect(paired).toHaveTextContent('not used yet');
     await user.click(within(paired).getByRole('button', { name: 'Remove Claude Desktop' }));
     await waitFor(() => expect(calls.some((c) => c.method === 'DELETE')).toBe(true));
-    expect(await screen.findByText(/No other apps use Conch yet/)).toBeVisible();
+    // Nothing paired, nothing said: the whole list goes.
+    await waitFor(() =>
+      expect(screen.queryByRole('list', { name: 'Apps paired with Conch' })).toBeNull(),
+    );
   });
 
   it('offers your address for apps only when you have one', async () => {
@@ -161,6 +164,8 @@ describe('Other apps', () => {
       'GET /api/access': () => access,
     });
     renderApp(<OtherAppsTab />);
+    // Your own address is Advanced: off unless someone goes looking for it.
+    await userEvent.click(await screen.findByRole('button', { name: 'Advanced' }));
     expect(
       await screen.findByRole('switch', { name: /Let apps you mark in through your address/ }),
     ).not.toBeChecked();

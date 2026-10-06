@@ -93,6 +93,7 @@ import { doctorApi } from '../health/api';
 import { LIVE_DATA_FOCUS } from '../artifacts/LiveDataSection';
 import { ADDRESS_FOCUS, DEVICES_FOCUS, PASSKEYS_FOCUS } from '../auth/focus';
 import { FALLBACK_FOCUS } from '../settings/FallbackSection';
+import { ADVANCED_FOCUS } from '../settings/useAdvanced';
 import { PLAN_ROOM_FOCUS, ROUTINES_SPEND_FOCUS } from '../routines/SpendingSection';
 import { LEARNING_SPEND_FOCUS } from '../learning/LearningSpendSection';
 import { NEVER_INTENT } from '../learning/LearningSections';
@@ -152,8 +153,15 @@ const settingsPlaces: {
   {
     tab: 'general',
     label: 'General',
-    keywords: 'general replay welcome start over onboarding setup',
+    keywords: 'general settings',
     icon: <Settings2 />,
+  },
+  {
+    tab: 'general',
+    focus: ADVANCED_FOCUS,
+    label: 'Start over',
+    keywords: 'start over replay welcome onboarding setup again first run',
+    icon: <RefreshCw />,
   },
   {
     tab: 'general',
@@ -167,9 +175,22 @@ const settingsPlaces: {
   {
     tab: 'models',
     label: 'Models',
-    keywords:
-      'default model modes thinking effort permissions suggestions suggest connect apps offers muted',
+    keywords: 'default model modes thinking effort permissions trust ask first',
     icon: <Gauge />,
+  },
+  {
+    tab: 'models',
+    focus: ADVANCED_FOCUS,
+    label: 'Fast mode and chat names',
+    keywords: 'fast mode faster replies name new chats automatically title titles',
+    icon: <Zap />,
+  },
+  {
+    tab: 'models',
+    focus: ADVANCED_FOCUS,
+    label: 'Offers in the chat',
+    keywords: 'offers suggestions suggest again muted don’t suggest apps skills',
+    icon: <Blocks />,
   },
   {
     tab: 'models',
@@ -237,7 +258,15 @@ const settingsPlaces: {
     tab: 'voice',
     label: 'Voice',
     keywords:
-      'voice dictation dictate speak talk microphone mic speech whisper read aloud language accent tts stt natural voices piper hey conch wake word voice notes',
+      'voice dictation dictate speak talk microphone mic speech read aloud language accent tts stt natural voices piper hey conch wake word voice notes',
+    icon: <Mic />,
+  },
+  {
+    tab: 'voice',
+    focus: ADVANCED_FOCUS,
+    label: 'Where your voice is heard',
+    keywords:
+      'private on this computer whisper browser speech service google apple hears reading speed rate',
     icon: <Mic />,
   },
   {
@@ -303,14 +332,29 @@ const settingsPlaces: {
   {
     tab: 'browser',
     label: 'Browser',
+    keywords: 'web browse chrome edge repair show panel',
+    icon: <Globe />,
+  },
+  {
+    tab: 'browser',
+    focus: ADVANCED_FOCUS,
+    label: 'Where the browser runs',
     keywords:
-      'web browse chrome edge sites cookies sign out local localhost repair my chrome remote debugging cloud browserbase steel cdp devtools where it runs',
+      'where it runs my chrome own browser cloud browserbase steel cdp remote debugging devtools cookies banners local localhost sites always allowed sign out of every site',
     icon: <Globe />,
   },
   {
     tab: 'terminal',
     label: 'Terminal',
-    keywords: 'shell console command line powershell bash zsh remote devices',
+    keywords: 'shell console command line text size',
+    icon: <SquareTerminal />,
+  },
+  {
+    tab: 'terminal',
+    focus: ADVANCED_FOCUS,
+    label: 'Terminals from other devices',
+    keywords:
+      'remote devices phone other computers shell powershell bash zsh blinking cursor screen reader',
     icon: <SquareTerminal />,
   },
   {
@@ -323,8 +367,15 @@ const settingsPlaces: {
   {
     tab: 'appearance',
     label: 'Appearance',
-    keywords: 'theme dark light colour',
+    keywords: 'theme dark light colour accent reduce motion',
     icon: <PaletteIcon />,
+  },
+  {
+    tab: 'appearance',
+    focus: ADVANCED_FOCUS,
+    label: 'Lustre',
+    keywords: 'lustre shimmer pearl sheen iridescence shine effects',
+    icon: <Sparkles />,
   },
 ];
 
@@ -1203,8 +1254,9 @@ export function useFindables(query: string, conversationId: string | undefined):
       icon: <CircleArrowUp />,
       run: () => openSettings('health', 'updates'),
     },
+    // One id per row, even where a place has several ways in (its Advanced).
     ...settingsPlaces.map((p) => ({
-      id: `settings-${p.tab}${p.focus ? `-${p.focus}` : ''}`,
+      id: `settings-${p.tab}-${p.label.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-')}`,
       label: `Settings: ${p.label}`,
       keywords: p.keywords,
       icon: p.icon,

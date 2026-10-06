@@ -5,10 +5,10 @@ import {
   Field,
   RadioGroup,
   Select,
+  SettingsAdvanced,
   Slider,
   Stack,
   Switch,
-  Text,
   toast,
   VoiceLibrary,
 } from '@conch/nacre';
@@ -21,6 +21,7 @@ import { GetIt } from '../setup/GetIt';
 import { voiceApi, voiceKeys } from './api';
 
 import { Section } from '../settings/Section';
+import { useAdvanced } from '../settings/useAdvanced';
 import { recognitionClass } from './listen';
 import { languageOf, setVoicePrefs, useVoicePrefs } from './prefs';
 import { PrivateDictation } from './PrivateDictation';
@@ -46,10 +47,11 @@ const LANGUAGES: [string, string][] = [
 /** The language Select's "same as the browser" choice (an item can't be empty). */
 const SAME = 'browser';
 
+/** Where your voice is heard right now, as the page says it in one clause. */
 const HOW: Record<string, string> = {
-  device: 'right now: on this device itself, privately.',
-  private: 'right now: on the computer Conch runs on, privately.',
-  browser: 'right now: your browser’s speech service.',
+  device: 'heard on this device itself, privately.',
+  private: 'heard on the computer Conch runs on, privately.',
+  browser: 'heard by your browser’s speech service.',
 };
 
 function useVoices(): SpeechSynthesisVoice[] {
@@ -79,6 +81,7 @@ export function VoiceTab() {
   const speech = useSpeech();
   const updateSettings = useUpdateSettings();
   const [trying, setTrying] = useState<string>();
+  const [advanced, setAdvanced] = useAdvanced();
   const ready = speech.data?.voices.filter((v) => v.state === 'ready') ?? [];
   const cloud = speech.data?.cloud ?? [];
   const chosen = conch ? prefs.voice : voice?.voiceURI;
@@ -105,35 +108,13 @@ export function VoiceTab() {
     <Stack gap={8}>
       <Section
         title="How Conch hears you"
-        description="For dictation in the message box, and for talking hands free. Kept on this device."
+        description={
+          choice?.kind === 'ready'
+            ? `Dictation and talking hands free — ${HOW[choice.engine]}`
+            : 'Dictation and talking hands free, the most private way available.'
+        }
       >
         <Stack gap={4}>
-          <RadioGroup
-            variant="card"
-            aria-label="How Conch hears you"
-            value={prefs.engine}
-            onValueChange={(engine) => setVoicePrefs({ engine: engine as typeof prefs.engine })}
-          >
-            <RadioGroup.Item
-              value="auto"
-              label="The most private way available"
-              description={`On this device when it can, then on the computer Conch runs on${
-                choice?.kind === 'ready' ? `; ${HOW[choice.engine]}` : '.'
-              }`}
-            />
-            <RadioGroup.Item
-              value="private"
-              label="On the computer Conch runs on"
-              description="Private everywhere, even on a phone. Works offline."
-            />
-            {recognitionClass() && (
-              <RadioGroup.Item
-                value="browser"
-                label="Your browser’s speech service"
-                description="Google for Chrome and Edge, Apple for Safari: they hear what you say."
-              />
-            )}
-          </RadioGroup>
           <PrivateDictation />
           <Field>
             <Field.Label>Language</Field.Label>
@@ -158,10 +139,7 @@ export function VoiceTab() {
       <HeyConch />
 
       {(canSpeak() || canSpeak('piper:x')) && (
-        <Section
-          title="How Conch sounds"
-          description="Reading answers aloud, talking back, and the voice notes chat apps get back."
-        >
+        <Section title="How Conch sounds" description="Reading aloud, talking, and voice notes.">
           <Stack gap={4}>
             <Field>
               <Field.Label>Voice</Field.Label>
@@ -196,15 +174,13 @@ export function VoiceTab() {
               </Select>
               {prefs.voice?.startsWith('openai:') ? (
                 <Field.Description>
-                  What’s read aloud goes to OpenAI, with your key, and counts toward what you pay
-                  there.
+                  What’s read aloud goes to OpenAI with your key, and counts there.
                 </Field.Description>
               ) : (
                 !forLanguage.length &&
                 !conch && (
                   <Field.Description>
-                    This device has no voice for this language yet. Add one in its system settings
-                    (Accessibility → Spoken content), or get a natural voice below.
+                    No voice for this language on this device yet. Get a natural voice below.
                   </Field.Description>
                 )
               )}
@@ -216,20 +192,6 @@ export function VoiceTab() {
               onChoose={choose}
               onTry={tryVoice}
             />
-            <Stack gap={2}>
-              <Text as="span" size="sm" weight="medium" id="voice-rate">
-                Speed
-              </Text>
-              <Slider
-                aria-labelledby="voice-rate"
-                thumbLabels={['Speed']}
-                min={0.7}
-                max={1.5}
-                step={0.05}
-                value={[prefs.rate]}
-                onValueChange={([rate]) => setVoicePrefs({ rate: rate ?? 1 })}
-              />
-            </Stack>
             <div>
               <Button
                 variant="surface"
@@ -243,6 +205,49 @@ export function VoiceTab() {
           </Stack>
         </Section>
       )}
+
+      <SettingsAdvanced open={advanced} onOpenChange={setAdvanced}>
+        <Section title="Where your voice is heard">
+          <RadioGroup
+            variant="card"
+            aria-label="Where your voice is heard"
+            value={prefs.engine}
+            onValueChange={(engine) => setVoicePrefs({ engine: engine as typeof prefs.engine })}
+          >
+            <RadioGroup.Item
+              value="auto"
+              label="The most private way available"
+              description="On this device when it can, then on the computer Conch runs on."
+            />
+            <RadioGroup.Item
+              value="private"
+              label="On the computer Conch runs on"
+              description="Private everywhere, even on a phone. Works offline."
+            />
+            {recognitionClass() && (
+              <RadioGroup.Item
+                value="browser"
+                label="Your browser’s speech service"
+                description="Google for Chrome and Edge, Apple for Safari: they hear what you say."
+              />
+            )}
+          </RadioGroup>
+        </Section>
+
+        {(canSpeak() || canSpeak('piper:x')) && (
+          <Section title="Reading speed">
+            <Slider
+              aria-label="Reading speed"
+              thumbLabels={['Speed']}
+              min={0.7}
+              max={1.5}
+              step={0.05}
+              value={[prefs.rate]}
+              onValueChange={([rate]) => setVoicePrefs({ rate: rate ?? 1 })}
+            />
+          </Section>
+        )}
+      </SettingsAdvanced>
     </Stack>
   );
 }
@@ -327,17 +332,14 @@ function HeyConch() {
   if (!status?.wake?.available) return null;
   const ready = status.private.state === 'ready';
   return (
-    <Section
-      title="Hey Conch"
-      description="Say “Hey Conch” to start talking, without touching anything."
-    >
+    <Section title="Hey Conch" description="Start talking without touching anything.">
       <Stack gap={4}>
         <Switch
           labelPosition="start"
           checked={Boolean(prefs.wake)}
           onCheckedChange={(wake) => setVoicePrefs({ wake })}
           label="Listen for “Hey Conch”"
-          description="Off until you turn it on. While it’s on, the microphone listens on this computer only: short bursts of speech are checked here and thrown away, and nothing is recorded or sent anywhere. “Listening for Hey Conch” shows at the top of the window and in the tray the whole time, with Stop."
+          description="The microphone listens on this computer only: speech is checked here and thrown away, nothing is recorded or sent. While it’s on, the window and the tray say so, with Stop."
         />
         {prefs.wake && !ready && <PrivateDictation />}
       </Stack>

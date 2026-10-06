@@ -9,8 +9,8 @@ import {
 } from '@conch/protocol';
 import {
   Button,
-  Collapsible,
   Portrait,
+  SettingsAdvanced,
   Stack,
   Text,
   Textarea,
@@ -170,7 +170,7 @@ export function AboutYou({ initial }: { initial: Profile }) {
 
       <Section
         title="In your own words"
-        description="Anything the cards don’t hold, the way you’d say it. I read this too."
+        description="Anything the cards don’t hold, the way you’d say it."
       >
         <Stack gap={3}>
           <Textarea
@@ -197,35 +197,30 @@ export function AboutYou({ initial }: { initial: Profile }) {
         </Stack>
       </Section>
 
-      <Collapsible className={styles.starts}>
-        <Collapsible.Trigger chevron className={styles.startsTrigger}>
-          What every chat starts with
-        </Collapsible.Trigger>
-        <Collapsible.Content>
-          <Stack gap={3} className={styles.startsBody}>
-            <Text size="xs" tone="muted">
-              Exactly what your assistant reads about you, word for word, before anything you say.
+      <SettingsAdvanced label="What every chat starts with">
+        <Stack gap={3}>
+          <Text size="xs" tone="muted">
+            Word for word, what your assistant reads before anything you say.
+          </Text>
+          <pre className={styles.prompt}>
+            {['# About the user', ...describeProfile(profile)].join('\n')}
+          </pre>
+          {remembered > 0 && (
+            <Text size="sm" tone="muted">
+              It also remembers {remembered === 1 ? 'one thing' : `${remembered} things`} from your
+              chats.{' '}
+              <Button
+                variant="ghost"
+                size="sm"
+                trailingIcon={<ChevronRight />}
+                onClick={() => openSettings('memory', MEMORY_ALL)}
+              >
+                See them
+              </Button>
             </Text>
-            <pre className={styles.prompt}>
-              {['# About the user', ...describeProfile(profile)].join('\n')}
-            </pre>
-            {remembered > 0 && (
-              <Text size="sm" tone="muted">
-                It also remembers {remembered === 1 ? 'one thing' : `${remembered} things`} from
-                your chats.{' '}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  trailingIcon={<ChevronRight />}
-                  onClick={() => openSettings('memory', MEMORY_ALL)}
-                >
-                  See them
-                </Button>
-              </Text>
-            )}
-          </Stack>
-        </Collapsible.Content>
-      </Collapsible>
+          )}
+        </Stack>
+      </SettingsAdvanced>
     </Stack>
   );
 }

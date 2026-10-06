@@ -12,10 +12,7 @@ export function HealedSection() {
   const { data } = useHealed();
   const notes = data?.notes ?? [];
   return (
-    <Section
-      title="Fixed on its own"
-      description="What Conch noticed and repaired by itself, so you didn’t have to."
-    >
+    <Section title="Fixed on its own" description="What Conch repaired by itself.">
       {notes.length ? (
         <HealedNotes notes={notes} limit={8} bare formatTime={(at) => relativeTime(at)} />
       ) : (

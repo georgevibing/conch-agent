@@ -1,19 +1,4 @@
 @layer nacre.components {
-  .starts {
-    border-block-start: 1px solid var(--nc-border-subtle);
-    padding-block-start: var(--nc-space-4);
-  }
-
-  .startsTrigger {
-    font-size: var(--nc-text-sm);
-    font-weight: var(--nc-weight-medium);
-    color: var(--nc-text-muted);
-  }
-
-  .startsBody {
-    padding-block-start: var(--nc-space-3);
-  }
-
   .prompt {
     margin: 0;
     padding: var(--nc-space-3) var(--nc-space-4);

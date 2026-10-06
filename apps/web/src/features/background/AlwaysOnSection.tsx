@@ -125,7 +125,7 @@ export function AlwaysOnSection() {
     <Section
       ref={root}
       title="Always on"
-      description="Keep Conch running by itself, so routines run on time and your phone and chat apps can always reach it."
+      description="So routines run on time and your phone can always reach it."
     >
       <AlwaysOn
         on={status.on}

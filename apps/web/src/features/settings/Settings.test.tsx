@@ -65,6 +65,24 @@ describe('Settings', () => {
     expect(where()).toBe('/c/c1');
   });
 
+  it('keeps what almost nobody needs under Advanced, and opens it when ⌘K asks', async () => {
+    narrowScreen(false);
+    mockFetch({ 'GET /api/state': () => appState() });
+    renderApp(<Settings />, { route: '/settings/general' });
+    const page = await screen.findByRole('dialog', { name: 'Settings' });
+    expect(await within(page).findByRole('heading', { name: 'Working folder' })).toBeVisible();
+    // Starting over waits behind one word.
+    expect(within(page).queryByRole('button', { name: 'Replay welcome' })).toBeNull();
+    await userEvent.click(within(page).getByRole('button', { name: 'Advanced' }));
+    expect(within(page).getByRole('button', { name: 'Replay welcome' })).toBeVisible();
+
+    // ⌘K points straight at it: the place opens with its Advanced already open.
+    act(() => useUi.getState().openSettings('appearance'));
+    await waitFor(() => expect(within(page).queryByRole('slider')).toBeNull());
+    act(() => useUi.getState().openSettings('appearance', 'advanced'));
+    expect(await within(page).findByRole('slider', { name: 'Lustre' })).toBeVisible();
+  });
+
   it('opens at the place its address names, and steps aside while Conch restarts', async () => {
     narrowScreen(false);
     mockFetch({ 'GET /api/state': () => appState() });

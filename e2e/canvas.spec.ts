@@ -304,6 +304,7 @@ test('live data: asked once, read through Conch, updated, failing calmly, taken 
   const settings = page.getByRole('dialog', { name: 'Settings' });
   await settings.getByRole('tab', { name: 'Security' }).click();
   await expect(settings.getByText(`A page can read from ${site} on this computer`)).toBeVisible();
+  await settings.getByRole('button', { name: 'Advanced' }).click();
   const list = settings.getByRole('list', { name: 'Sites pages may read from' });
   await expect(list.getByText(site)).toBeVisible();
   await list.getByRole('button', { name: `Take back ${site} from Weather now` }).click();

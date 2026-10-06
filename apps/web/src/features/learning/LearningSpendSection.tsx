@@ -116,7 +116,7 @@ export function LearningSpendSection() {
     <Section
       ref={ref}
       title="Learning from your chats"
-      description="Once a chat goes quiet, Conch may ask a small model what it taught. Plans and models on this computer don’t count."
+      description="What a quiet chat costs to learn from, on pay-as-you-go providers."
     >
       <SpendingBody spending={data.spending} />
     </Section>

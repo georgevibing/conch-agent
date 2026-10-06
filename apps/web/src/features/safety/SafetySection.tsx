@@ -76,24 +76,21 @@ export function SafetySection() {
 
   const sandbox = safety?.sandbox;
   return (
-    <Section
-      title="Safety"
-      description="Checks that hold in every mode, Full trust included. They’re on unless you turn them off."
-    >
+    <Section title="Safety" description="Checks that hold in every mode, Full trust included.">
       <Stack gap={5}>
         <Switch
           labelPosition="start"
           checked={prefs.checkAfterReading}
           onCheckedChange={(on) => change('checkAfterReading', on)}
           label="Check before acting on what it read"
-          description="Once a chat has read a web page, an email or someone else’s message, anything that could send your things somewhere or change this computer asks you first, with why."
+          description="After a chat reads a web page, an email or a message, anything that could send your things somewhere asks you first."
         />
         <Switch
           labelPosition="start"
           checked={prefs.checkMemories}
           onCheckedChange={(on) => change('checkMemories', on)}
           label="Check what it remembers"
-          description="A memory that looks planted — where invoices go, an order to follow, a password — isn’t saved. The chat shows it, says why, and asks you."
+          description="A memory that looks planted isn’t saved: the chat shows it, says why, and asks you."
         />
         <Stack gap={2}>
           <Switch
@@ -102,7 +99,7 @@ export function SafetySection() {
             disabled={sandbox ? !sandbox.available : true}
             onCheckedChange={(on) => change('sealedCommands', on)}
             label="Seal commands"
-            description="Commands can change your work folder and the caches installs use, and can’t read where your keys and passwords live. A command that needs out asks first."
+            description="A command reaches your work folder, never your keys and passwords. One that needs out asks first."
           />
           {sandbox && !sandbox.available && (
             <Callout tone="info">

@@ -174,7 +174,7 @@ describe('“Hey Conch” in the desktop app', () => {
     renderApp(<VoiceTab />, { route: '/settings/voice' });
     const wake = await screen.findByRole('switch', { name: /Listen for “Hey Conch”/ });
     expect(wake).not.toBeChecked();
-    expect(screen.getByText(/nothing is recorded or sent anywhere/)).toBeInTheDocument();
+    expect(screen.getByText(/nothing is recorded or sent/)).toBeInTheDocument();
     await userEvent.click(wake);
     expect(voicePrefs().wake).toBe(true);
   });

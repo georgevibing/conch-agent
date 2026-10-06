@@ -88,7 +88,7 @@ Your assistant can take as many steps as a job needs: booking something across a
 
 The reply then ends with one sentence saying why it paused. Press **Carry on** and it picks up exactly where it stopped, with everything it had done. Or say what to do differently.
 
-Want it to check in sooner? In **Settings → Usage → Long turns**, turn on **Pause long turns to check in** and set your own limits: steps (starts at 100), minutes (30) and fresh tokens in millions (2), meaning what a message reads and writes that the provider hadn't already cached. A chat then pauses at the first one it reaches, with **Carry on**. Over your [monthly budget](../care/offline.md), it checks in sooner still, but it never stops you.
+Want it to check in sooner? In **Settings → Usage → Advanced → Long turns**, turn on **Pause long turns to check in** and set your own limits: steps (starts at 100), minutes (30) and fresh tokens in millions (2), meaning what a message reads and writes that the provider hadn't already cached. A chat then pauses at the first one it reaches, with **Carry on**. Over your [monthly budget](../care/offline.md), it checks in sooner still, but it never stops you.
 
 Routines and background tasks have their own room (200 steps, an hour), since nobody is there to press **Carry on**. That doesn't change with the switch.
 
