@@ -460,11 +460,21 @@ people shows you its words each time.
 **Full trust** is the one mode that doesn't stop to ask: you chose to let the
 assistant act, and a web page it reads could trick it (the mode picker says so).
 It overrides ordinary app and tool **Ask** settings, including **Ask before changes**,
-with every provider. Those saved settings apply again when you leave Full trust.
-Tools turned **Off**, protected paths and mandatory confirmations such as Gmail
-drafts and Slack messages still hold. The chat still notes what it read. Some things hold even then: a routine running
+and the previews of Gmail drafts and Slack messages, with every provider. Those saved
+settings apply again when you leave Full trust. Tools turned **Off** and protected
+paths still hold, and deleting a whole folder like your home or the work folder
+still asks. The chat still notes what it read. Some things hold even then: a routine running
 by itself, or a chat where someone else is talking to the assistant (a chat
-app), still asks, and so does a step a skill's list doesn't cover.
+app), still asks, and so does a step a skill's list doesn't cover
+([ADR 0100](./adr/0100-permission-modes-every-provider.md) lists them all).
+
+**Auto** gets on with routine work without asking and stops only for something
+serious: running downloaded code, reading your keys, deleting outside the work
+folder, force-pushing a shared branch, running as administrator, production
+infrastructure, publishing. Once the chat reads something from outside it also
+asks before the usual ways out (a push, a new package, data sent out, an app's
+change). It is a careful reader, not a wall: the sealed box and protected paths are
+what hold.
 
 Your assistant can look through your earlier chats. When what it finds comes
 from a chat that read something from outside, or has someone else's words, this

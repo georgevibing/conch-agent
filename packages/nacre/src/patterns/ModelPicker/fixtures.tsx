@@ -1,5 +1,5 @@
 /* Story/test fixtures — not exported from the package. */
-import { Eye, FileEdit, ListChecks, ShieldCheck, Sparkles } from 'lucide-react';
+import { Eye, FilePen, Hand, ShieldCheck, Zap } from 'lucide-react';
 import { useState } from 'react';
 
 import type { ModeOption } from '../ModePicker/ModePicker';
@@ -145,37 +145,41 @@ export const efforts: EffortOption[] = [
   { value: 'max', label: 'Max', description: 'As much thinking as it takes' },
 ];
 
+/** The app's modes, in its words and icons (`@conch/protocol` `MODE_WORDS`), Plan only to Full trust. */
 export const modes: ModeOption[] = [
+  {
+    value: 'plan',
+    label: 'Plan only',
+    description: 'Looks around and plans. Changes nothing until you say go.',
+    icon: <Eye />,
+  },
   {
     value: 'default',
     label: 'Ask first',
-    description: 'Asks before editing files or running commands',
-    icon: <ShieldCheck />,
-  },
-  {
-    value: 'auto',
-    label: 'Auto',
-    description: 'Runs safe actions itself, asks about risky ones',
-    icon: <Sparkles />,
+    description: 'Asks before it changes a file, runs a command or acts in an app.',
+    icon: <Hand />,
   },
   {
     value: 'acceptEdits',
     label: 'Edit freely',
-    description: 'Edits files without asking; asks before commands',
-    icon: <FileEdit />,
+    description: 'Changes files in this folder without asking. Anything more needs your OK.',
+    icon: <FilePen />,
     tone: 'caution',
   },
   {
-    value: 'plan',
-    label: 'Plan only',
-    description: 'Reads and plans, never changes anything',
-    icon: <ListChecks />,
+    value: 'auto',
+    label: 'Auto',
+    description:
+      'Gets on with the work. Stops to ask only before something serious, like deleting, publishing or reaching your keys.',
+    icon: <ShieldCheck />,
+    tone: 'caution',
   },
   {
     value: 'bypassPermissions',
     label: 'Full trust',
-    description: 'Does anything without asking — use with care',
-    icon: <Eye />,
+    description:
+      'Never stops to ask. A page or file it reads could trick it, so only in a folder you can afford to lose.',
+    icon: <Zap />,
     tone: 'danger',
   },
 ];

@@ -49,6 +49,7 @@ import type {
   HostTool,
   PermissionDecision,
   ResolvedOptions,
+  TurnInput,
 } from '../engines/types';
 import { hostToolText } from '../engines/types';
 import { forTurn as attachmentsForTurn } from '../attachments/prompt';
@@ -65,6 +66,7 @@ import type { ConversationRecord, ConversationStore } from './store';
 import { summarizeToolUse, titleFrom } from './summarize';
 import { allows, missing, needs } from '../skills/permissions';
 import { sandboxSupport } from './sandbox';
+import { assessRisk, breaksCircuit, riskAsks, riskWords } from './risk';
 import { describeTaint, heldTaints, leavesSandbox, sinkReason, taintFrom } from './taint';
 import { CONCH_POWER_MESSAGE, runsConchPower } from '../lib/protect';
 import { didWhat } from '../activity/service';
@@ -133,6 +135,8 @@ interface PendingPermission {
    * on, it's asking only because of the mode.
    */
   remember: boolean;
+  /** The person set this tool to Ask in Apps: switching to Auto doesn't answer it (ADR 0100). */
+  explicit?: boolean;
   /**
    * Asked for a reason "Always allow" can lift for the rest of the chat (ADR
    * 0028): `read:<tool>` after reading something from outside, `box:<tool>`
@@ -148,6 +152,15 @@ interface PendingPermission {
  */
 function trustAllows(mode: PermissionMode, toolName: string): boolean {
   return mode === 'bypassPermissions' && toolName !== 'ExitPlanMode';
+}
+
+/**
+ * Would Auto have let this through (ADR 0100)? Everything ordinary: the risk
+ * policy, the guard after reading and the mandatory checks have already had
+ * their say, before this. A tool the person set to Ask in Apps keeps asking.
+ */
+function autoAllows(mode: PermissionMode, toolName: string, explicit = false): boolean {
+  return mode === 'auto' && toolName !== 'ExitPlanMode' && !explicit;
 }
 
 /** A question a host tool puts to the user, through the same prompt as any permission. */
@@ -167,10 +180,12 @@ export interface AskRequest {
    */
   once?: boolean;
   /**
-   * An ordinary Ask policy in Apps: Full trust skips it, and "Always allow"
-   * lets it through for the rest of the chat. Mandatory reasons still hold.
+   * An ordinary Ask policy in Apps: Full trust and Auto skip it, and "Always
+   * allow" lets it through for the rest of the chat. Mandatory reasons still hold.
    */
   chosen?: boolean;
+  /** The person set this one tool to Ask in Apps: Auto keeps asking (Full trust doesn't). */
+  explicit?: boolean;
 }
 
 /** Per-turn additions used by routines (and future automations). */
@@ -372,9 +387,16 @@ export interface TurnIntegrationsProvider {
   }>;
   /** `undefined` for tools that don't belong to an integration. */
   decide(toolName: string): Promise<'allow' | 'ask' | 'off' | undefined>;
-  describeTool(
-    toolName: string,
-  ): Promise<{ integration: string; tool: string; access?: 'read' | 'write' } | undefined>;
+  describeTool(toolName: string): Promise<
+    | {
+        integration: string;
+        tool: string;
+        access?: 'read' | 'write';
+        destructive?: boolean;
+        asks?: boolean;
+      }
+    | undefined
+  >;
   markUsed(toolName: string): Promise<void>;
 }
 
@@ -2146,8 +2168,8 @@ export class ConversationManager {
       for (const [permissionId, pending] of live.permissions)
         if (
           pending.remember &&
-          (!pending.waive || personTrusts) &&
-          trustAllows(mode, pending.toolName)
+          ((trustAllows(mode, pending.toolName) && (!pending.waive || personTrusts)) ||
+            (autoAllows(mode, pending.toolName, pending.explicit) && !pending.waive))
         )
           void this.#resolvePermission(live, permissionId, 'allow');
     };
@@ -2155,7 +2177,12 @@ export class ConversationManager {
 
     /** Puts a question to the user and waits; expires (deny) if the turn stops first. */
     const askUser = (
-      request: AskRequest & { toolUseId?: string; remember: boolean; waive?: string },
+      request: AskRequest & {
+        toolUseId?: string;
+        remember: boolean;
+        waive?: string;
+        explicit?: boolean;
+      },
       signal: AbortSignal,
     ): Promise<PermissionDecision> => {
       const permissionId = newId('perm');
@@ -2166,6 +2193,7 @@ export class ConversationManager {
           ...(request.toolUseId && { toolUseId: request.toolUseId }),
           remember: request.remember,
           ...(request.waive && { waive: request.waive }),
+          ...(request.explicit && { explicit: true }),
         });
         const expire = () => {
           if (!live.permissions.delete(permissionId)) return;
@@ -2211,13 +2239,29 @@ export class ConversationManager {
      * keep their own, words going to other people are shown each time, and
      * someone else's words in the chat or a skill's list ask every time.
      */
-    const hostAsk = (request: AskRequest): Promise<PermissionDecision> => {
-      if (request.browser || request.vault || request.once)
+    const hostAsk = async (request: AskRequest): Promise<PermissionDecision> => {
+      if (request.browser || request.vault)
+        return askUser({ ...request, remember: false }, abort.signal);
+      // Words going to other people, after reading or with someone else's words in the chat:
+      // shown each time, in every mode.
+      if (
+        request.once &&
+        (request.taint || this.#tainted(live).some((source) => source.kind === 'person'))
+      )
         return askUser({ ...request, remember: false }, abort.signal);
       if (!request.taint) {
-        if (request.chosen && trustAllows(resolved.permissionMode, request.toolName))
-          return Promise.resolve('allow');
-        if (live.alwaysAllow.has(request.toolName)) return Promise.resolve('allow');
+        const mode = resolved.permissionMode;
+        // Full trust: an app's Ask, and the words going to other people, go ahead (ADR 0100).
+        if ((request.chosen || request.once) && trustAllows(mode, request.toolName)) return 'allow';
+        if (mode === 'auto') {
+          // Auto stops only for something serious, and says what (ADR 0100).
+          const risk = assessRisk(request.toolName, request.input, { workspace });
+          if (riskAsks(risk, false))
+            return askUser({ ...request, taint: riskWords(risk), remember: false }, abort.signal);
+          if (autoAllows(mode, request.toolName, request.explicit)) return 'allow';
+        }
+        if (request.once) return askUser({ ...request, remember: false }, abort.signal);
+        if (live.alwaysAllow.has(request.toolName)) return 'allow';
         return askUser({ ...request, remember: true }, abort.signal);
       }
       const lifts =
@@ -2465,9 +2509,33 @@ export class ConversationManager {
       // One that runs by itself (a routine, a chat app) still checks, and so
       // does one where someone else is talking to the assistant.
       const trusted = trusting();
+      const mode = resolved.permissionMode;
+      // The circuit breaker (ADR 0100): a whole folder or disk gone asks in every mode.
+      const critical = breaksCircuit(request.toolName, request.input, { workspace });
+      if (critical) return { reason: riskWords(critical) };
+      // Something serious asks in every mode but Full trust, whatever was allowed before
+      // (an app's tool that deletes, unless you set that tool to Allow in Apps).
+      if (mode !== 'bypassPermissions') {
+        const app = request.toolName.startsWith('mcp__')
+          ? await integrations?.describeTool(request.toolName).catch(() => undefined)
+          : undefined;
+        const risk = assessRisk(request.toolName, request.input, {
+          workspace,
+          ...(app?.destructive && { destructive: true }),
+        });
+        const allowed =
+          risk?.kind === 'app-delete' &&
+          (await integrations?.decide(request.toolName).catch(() => undefined)) === 'allow';
+        if (riskAsks(risk, false) && !allowed) return { reason: riskWords(risk) };
+      }
+      /** Auto, with only things read in the chat (no one else's words), and a person here. */
+      const readOnly = this.#tainted(live).every((source) => source.kind !== 'person');
+      const autoHere = mode === 'auto' && personTrusts && readOnly;
       if (leavesSandbox(request.toolName, request.input)) {
         const key = `box:${request.toolName}`;
-        if (!trusted && !live.waived.has(key))
+        // Auto leaves the box for routine work (an install, a push) until the chat reads something.
+        const autoOut = autoHere && !(guardOn && this.#tainted(live).length);
+        if (!trusted && !autoOut && !live.waived.has(key))
           return {
             reason: !sandboxSupport().available
               ? 'This computer can’t seal commands, so this one runs with your access to this computer and the internet.'
@@ -2502,11 +2570,25 @@ export class ConversationManager {
       const described = request.toolName.startsWith('mcp__')
         ? await integrations?.describeTool(request.toolName).catch(() => undefined)
         : undefined;
-      const sink = sinkReason(request.toolName, request.input, {
+      let sink = sinkReason(request.toolName, request.input, {
         workspace,
         access: described?.access,
         app: described?.integration,
       });
+      // Auto after reading (ADR 0100): the risk policy decides, not every way out. Routine
+      // commands stay sealed, files changed anywhere can be put back, a short search is research.
+      if (autoHere && !tainted.some((source) => source.kind === 'person')) {
+        const risk = assessRisk(request.toolName, request.input, {
+          workspace,
+          ...(described?.destructive && { destructive: true }),
+        });
+        const routine =
+          request.toolName === 'Bash' ||
+          ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(request.toolName) ||
+          (/(?:WebSearch|web_search)$/.test(request.toolName) &&
+            String(request.input.query ?? '').length <= 120);
+        sink = riskAsks(risk, true) ? risk?.reason : routine ? undefined : sink;
+      }
       return sink
         ? {
             reason: `${describeTaint(tainted)} So I’m checking before I ${sink}.`,
@@ -2517,7 +2599,12 @@ export class ConversationManager {
     };
 
     const requestPermission = async (
-      request: { toolName: string; toolUseId?: string; input: Record<string, unknown> },
+      request: {
+        toolName: string;
+        toolUseId?: string;
+        input: Record<string, unknown>;
+        escalated?: boolean;
+      },
       signal: AbortSignal,
     ): Promise<PermissionDecision> => {
       if (guest) return 'deny';
@@ -2531,15 +2618,21 @@ export class ConversationManager {
       // Off is absolute. Full trust overrides ordinary Ask policies, after the guards.
       const policy = await integrations?.decide(request.toolName).catch(() => undefined);
       if (policy === 'off') return 'deny';
+      const described = await integrations?.describeTool(request.toolName).catch(() => undefined);
       const asked = await mustAsk(request);
       const taint = asked?.reason;
       if (!asked) {
         if (policy === 'allow') return 'allow';
         // Full trust picked mid-turn, for an engine still running the mode it started in.
         if (trustAllows(resolved.permissionMode, request.toolName)) return 'allow';
+        // Auto: an ordinary step goes ahead; a tool you set to Ask in Apps still asks.
+        if (
+          !request.escalated &&
+          autoAllows(resolved.permissionMode, request.toolName, described?.asks)
+        )
+          return 'allow';
         if (live.alwaysAllow.has(request.toolName)) return 'allow';
       }
-      const described = await integrations?.describeTool(request.toolName).catch(() => undefined);
       return askUser(
         {
           toolName: request.toolName,
@@ -2553,6 +2646,7 @@ export class ConversationManager {
           remember: !asked || Boolean(asked.waive),
           ...(asked?.waive && { waive: asked.waive }),
           ...(taint && { taint }),
+          ...((described?.asks || request.escalated) && { explicit: true }),
         },
         signal,
       );
@@ -2684,6 +2778,17 @@ export class ConversationManager {
         tools,
         signal: abort.signal,
       });
+      // How far a provider's own sandbox reaches (ADR 0100): Full trust opens it, Auto adds
+      // the network until the chat reads something, a skill's list or reading seals it.
+      const tightened = await skillTightens();
+      const read = guardOn && this.#tainted(live).length > 0;
+      const reach: TurnInput['reach'] = tightened
+        ? 'sealed'
+        : resolved.permissionMode === 'bypassPermissions' && (trusting() || !read)
+          ? 'open'
+          : resolved.permissionMode === 'auto' && !read
+            ? 'network'
+            : 'sealed';
       const stream = abort.signal.aborted
         ? nothing()
         : engine.runTurn({
@@ -2741,7 +2846,8 @@ export class ConversationManager {
             signal: pace.signal,
             requestPermission,
             guard,
-            tainted: (guardOn && this.#tainted(live).length > 0) || (await skillTightens()),
+            tainted: guardOn && this.#tainted(live).length > 0 ? true : tightened,
+            reach,
             ...(settings.preferences.sealedCommands && { sandbox: this.deps.sandbox?.(workspace) }),
           });
 

@@ -86,6 +86,14 @@ Anthropic API card says it's pay as you go.
 
 Both Codex providers carry a chat on in the same thread while its tools are the same ([ADR 0069](./0069-carrying-a-chat-on.md)). Every resume asks with `approvalPolicy: "untrusted"` in the `conch` profile, exactly as a new thread does.
 
+### Later: the sandbox follows the mode (ADR 0100)
+
+Codex CLI's profile is set per turn from `TurnInput.reach`: sealed as above in Ask first,
+Edit freely and Plan only; with the network in Auto until the chat reads something; and in
+Full trust writing anywhere in your folders, with the network, and reading your keys, with
+only Conch's own keys and Codex's home denied. Auto and Full trust accept each approval
+request the guard lets through. A request to leave the profile is still declined.
+
 ## Consequences
 
 - People who want Codex as they know it get it, without giving up asking first. Codex's own

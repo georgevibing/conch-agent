@@ -89,6 +89,7 @@ export * from './computer';
 export * from './memory';
 export * from './mcp';
 export * from './common';
+export * from './modes';
 export * from './desktop';
 export * from './doctor';
 export * from './phone';

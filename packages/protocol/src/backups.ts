@@ -109,6 +109,8 @@ export const BackupPower = z.discriminatedUnion('kind', [
   }),
   /** New chats start in a mode that never asks (“Full trust”). */
   z.object({ kind: z.literal('chats-never-ask') }),
+  /** New chats start in Auto: routine steps go ahead without asking (ADR 0100). */
+  z.object({ kind: z.literal('chats-go-ahead') }),
   /** Safety checks turned off (ADR 0028, ADR 0087): what they'd stop doesn't stop. */
   z.object({ kind: z.literal('safety-off'), checks: z.array(PowerText).min(1).max(5) }),
   /** A routine that runs by itself, and never asks. */

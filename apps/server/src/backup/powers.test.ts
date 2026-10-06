@@ -20,6 +20,25 @@ describe('what in a backup can act for you', () => {
     ).toContainEqual({ kind: 'chats-never-ask' });
   });
 
+  it('discloses Auto as the default, and from a channel (ADR 0100)', () => {
+    expect(
+      powersOf(
+        ['settings.json'],
+        reader({ 'settings.json': { preferences: { permissionMode: 'auto' } } }),
+      ),
+    ).toContainEqual({ kind: 'chats-go-ahead' });
+    expect(
+      powersOf(
+        ['channels.json'],
+        reader({
+          'channels.json': {
+            channels: [{ enabled: true, chatOptions: { permissionMode: 'auto' } }],
+          },
+        }),
+      ),
+    ).toContainEqual({ kind: 'chats-go-ahead' });
+  });
+
   it('reads only the few files that can say so', () => {
     expect(
       [

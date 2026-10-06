@@ -62,9 +62,11 @@ export const EffortChoice = z.enum(['auto', 'low', 'medium', 'high', 'xhigh', 'm
 export type EffortChoice = z.infer<typeof EffortChoice>;
 
 /**
- * How much the agent may do without asking — mirrors Claude Code's permission
- * modes: ask first, auto (a classifier approves safe actions), edit files
- * freely, plan only (read-only), or full trust (never asks).
+ * How much the agent may do without asking (ADR 0100), named as Claude Code
+ * names its modes and meaning the same with every provider: plan only
+ * (changes nothing), ask first, edit files freely, auto (stops only for
+ * something serious: Conch's risk policy), or full trust (never asks, but for
+ * the few checks no mode lifts). The words are in `modes.ts`.
  */
 export const PermissionMode = z.enum([
   'default',

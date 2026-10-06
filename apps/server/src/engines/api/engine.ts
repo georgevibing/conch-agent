@@ -10,6 +10,7 @@
  * Conch supplies guarded work-folder tools and sandboxed commands. Model
  * support is checked separately: chat-only models never receive tools.
  */
+import { ALL_MODES } from '@conch/protocol';
 import type {
   Capabilities,
   EngineStatus,
@@ -679,7 +680,8 @@ export class ApiEngine implements Engine {
       models: capModels(models, chosen),
       // No provider-native slash commands. Conch owns the permission modes.
       commands: [],
-      permissionModes: ['default', 'plan', 'acceptEdits', 'bypassPermissions'],
+      // Every mode, Auto through Conch's risk policy (ADR 0100).
+      permissionModes: [...ALL_MODES],
       tools: { host: true, files: true, shell: true, approvals: true },
     };
     this.#capabilities = { value, at: Date.now() };

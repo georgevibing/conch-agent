@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 
 import {
   honouredMode,
+  MODE_WORDS,
   parseEffortArg,
   parseSwitch,
   EffortChoice,
@@ -16,20 +17,10 @@ import {
 import type { Settings } from '../settings/store';
 import { ChannelError, type ChannelButton } from './types';
 
-const MODES: Record<PermissionMode, { label: string; detail: string }> = {
-  default: { label: 'Ask first', detail: 'Asks before editing files or running commands.' },
-  auto: { label: 'Auto', detail: 'Safe actions go ahead; risky ones still ask.' },
-  acceptEdits: {
-    label: 'Edit freely',
-    detail: 'May change files in the work folder without asking.',
-  },
-  plan: { label: 'Plan only', detail: 'Reads and plans without changing anything.' },
-  bypassPermissions: {
-    label: 'Full trust',
-    detail:
-      'Can change anything on your computer without asking. A web page or file could trick it. Only use a folder you can afford to lose.',
-  },
-};
+/** The modes in the words the app uses (one definition, ADR 0100). */
+const MODES = Object.fromEntries(
+  MODE_WORDS.map((m) => [m.value, { label: m.label, detail: m.description }]),
+) as Record<PermissionMode, { label: string; detail: string }>;
 /** A permission mode as the menus name it ("Ask first"). */
 export const modeLabel = (mode: PermissionMode) => MODES[mode].label;
 
@@ -406,11 +397,7 @@ export class ChannelSettingsMenu {
         );
       if (patch.fastMode && !model?.supportsFastMode)
         throw new ChannelError('refused', 'This model does not offer fast mode.');
-      if (
-        patch.permissionMode &&
-        (!provider?.permissionModes.includes(patch.permissionMode) ||
-          (patch.permissionMode === 'auto' && !model?.supportsAutoMode))
-      )
+      if (patch.permissionMode && !provider?.permissionModes.includes(patch.permissionMode))
         throw new ChannelError(
           'refused',
           `That permission mode is no longer offered. Send ${slashOf(c)('mode')} to refresh.`,
@@ -453,7 +440,7 @@ export class ChannelSettingsMenu {
         fastMode: false,
         permissionMode: honouredMode(
           this.#options(ctx, scope).permissionMode,
-          provider.permissionModes.filter((mode) => mode !== 'auto' || model.supportsAutoMode),
+          provider.permissionModes,
         ),
       },
       `Use ${provider.label} · ${model.label}. Effort returns to Auto and fast mode turns off.`,
@@ -634,13 +621,14 @@ export class ChannelSettingsMenu {
     scope: Scope,
     back: Action | null = (c) => this.#chat(c, scope),
   ) {
-    const { provider, model, options } = await this.#selected(ctx, scope);
+    const { provider, options } = await this.#selected(ctx, scope);
     const now = honouredMode(options.permissionMode, provider?.permissionModes);
     await this.#page(
       ctx,
       'Choose what Conch may do. Safety checks and skill restrictions still apply.',
-      (provider?.permissionModes ?? [])
-        .filter((m) => m !== 'auto' || model?.supportsAutoMode)
+      // In the app's order, from Plan only to Full trust.
+      MODE_WORDS.map((m) => m.value)
+        .filter((m) => provider?.permissionModes.includes(m))
         .map((permissionMode) => ({
           label: mark(MODES[permissionMode].label, permissionMode === now),
           ...(permissionMode === 'bypassPermissions' && { style: 'danger' as const }),

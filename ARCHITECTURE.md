@@ -1002,8 +1002,9 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   message with find-in-chat (⌘F, ⌘G / ⇧⌘G) already showing every match.
 - The composer toolbar carries a `ModelPicker` (every connected provider's models,
   grouped and searchable — type anywhere in the list — plus thinking effort, fast
-  mode, "make default") and a `ModePicker` (Ask first · Auto · Edit freely ·
-  Plan only · Full trust). A `UsageMeter` in the header shows what's left of your
+  mode, "make default") and a `ModePicker` (Plan only · Ask first · Edit freely ·
+  Auto · Full trust, one definition in `@conch/protocol` `modes.ts`, ADR 0100; Settings →
+  Models shows the same as `ModeChoice`). A `UsageMeter` in the header shows what's left of your
   tightest limit, and a `UsageNotice` appears above the composer when it runs low.
   Typing `/` opens a `CommandMenu`; `/model` and `/mode` open the
   pickers. Defaults live in Settings → Models; your commands in Settings →

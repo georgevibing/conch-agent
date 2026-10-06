@@ -1564,9 +1564,18 @@ export class IntegrationService {
   }
 
   /** Friendly name for an integration's tool, for permission prompts. */
-  async describeTool(
-    toolName: string,
-  ): Promise<{ integration: string; tool: string; access: 'read' | 'write' } | undefined> {
+  async describeTool(toolName: string): Promise<
+    | {
+        integration: string;
+        tool: string;
+        access: 'read' | 'write';
+        /** The app says this tool deletes or can't be undone (ADR 0100: Auto asks). */
+        destructive?: boolean;
+        /** The person set this one tool to Ask in Apps: Auto keeps asking (ADR 0100). */
+        asks?: boolean;
+      }
+    | undefined
+  > {
     const parsed = parseToolName(toolName);
     if (!parsed) return undefined;
     const item = (await this.store.all()).find((i) => i.server === parsed.server);
@@ -1577,6 +1586,8 @@ export class IntegrationService {
       tool: tool?.title ?? parsed.tool.replaceAll('_', ' '),
       // Only what the server says only reads counts as reading (ADR 0028).
       access: tool?.access === 'read' && !tool.destructive ? 'read' : 'write',
+      ...(tool?.destructive && { destructive: true }),
+      ...(tool?.policy === 'ask' && { asks: true }),
     };
   }
 

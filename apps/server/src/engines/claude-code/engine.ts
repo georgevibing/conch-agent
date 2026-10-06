@@ -5,6 +5,7 @@ import {
   type McpServerConfig,
   type SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
+import { ALL_MODES } from '@conch/protocol';
 import type {
   Capabilities,
   EngineStatus,
@@ -224,6 +225,22 @@ export class ClaudeCodeEngine implements Engine {
     return this.#probing;
   }
 
+  /**
+   * The mode Claude Code itself runs in. Auto is its own classifier where the
+   * model has one (`supportsAutoMode`), on top of Conch's risk policy in the
+   * PreToolUse hook; for a model without it, Claude Code asks as in Ask first
+   * and Conch answers every question itself (`requestPermission`), so the
+   * person sees only what the risk policy stops (ADR 0100).
+   */
+  #sdkMode(mode: PermissionMode, model: string | undefined): PermissionMode {
+    if (mode !== 'auto') return mode;
+    const models = this.#capabilities?.value.models ?? [];
+    const chosen =
+      models.find((m) => m.id === (model ?? 'default')) ??
+      (!model || model === 'default' ? models[0] : undefined);
+    return chosen?.supportsAutoMode ? 'auto' : 'default';
+  }
+
   async #probe(): Promise<Capabilities> {
     const status = await this.detect();
     const empty: Capabilities = {
@@ -232,7 +249,8 @@ export class ClaudeCodeEngine implements Engine {
       models: [],
       tools: { host: true, files: true, shell: true, approvals: true },
       commands: [],
-      permissionModes: ['default', 'acceptEdits', 'plan', 'bypassPermissions'],
+      // Every mode: Auto is Claude Code's own where the model has it, Conch's otherwise (ADR 0100).
+      permissionModes: [...ALL_MODES],
     };
     if (status.state !== 'ready') return empty;
     const q = await this.#idleSession(status);
@@ -241,7 +259,6 @@ export class ClaudeCodeEngine implements Engine {
         Promise.all([q.supportedModels(), q.supportedCommands()]),
         'Timed out asking Claude Code for its models.',
       );
-      const autoMode = models.some((m) => m.supportsAutoMode);
       const value: Capabilities = {
         ...empty,
         models: models.map((m) => ({
@@ -258,9 +275,6 @@ export class ClaudeCodeEngine implements Engine {
           description: c.description,
           argumentHint: c.argumentHint,
         })),
-        permissionModes: (autoMode
-          ? ['default', 'auto', 'acceptEdits', 'plan', 'bypassPermissions']
-          : empty.permissionModes) as PermissionMode[],
       };
       this.#capabilities = { value, at: Date.now() };
       return value;
@@ -562,6 +576,8 @@ export class ClaudeCodeEngine implements Engine {
     }
 
     const translator = new Translator();
+    /** The mode Claude Code runs in right now (it follows a mode picked mid-turn). */
+    let sdkMode = this.#sdkMode(input.options.permissionMode, input.options.model);
     const asksItself = input.tools.some((t) => t.name === 'ask');
     let finished = false;
     try {
@@ -586,7 +602,7 @@ export class ClaudeCodeEngine implements Engine {
             input.options.model !== 'default' && { model: input.options.model }),
           ...(input.options.effort !== 'auto' && { effort: input.options.effort }),
           ...(input.options.fastMode && { settings: { fastMode: true } }),
-          permissionMode: input.options.permissionMode,
+          permissionMode: sdkMode,
           ...(input.options.permissionMode === 'bypassPermissions' && {
             allowDangerouslySkipPermissions: true,
           }),
@@ -666,7 +682,13 @@ export class ClaudeCodeEngine implements Engine {
             if (touchesProtected(toolInput, input.protectedPaths ?? []))
               return { behavior: 'deny', message: PROTECTED_MESSAGE };
             const decision = await input.requestPermission(
-              { toolName, toolUseId: toolUseID, input: toolInput },
+              {
+                toolName,
+                toolUseId: toolUseID,
+                input: toolInput,
+                // In its own auto mode Claude Code asks only when its classifier wants a person.
+                ...(sdkMode === 'auto' && { escalated: true }),
+              },
               signal,
             );
             if (decision === 'deny') {
@@ -693,7 +715,11 @@ export class ClaudeCodeEngine implements Engine {
       // itself (the manager), so what must still ask (ADR 0028) still does.
       const startedTrusted = input.options.permissionMode === 'bypassPermissions';
       input.onModeChange?.((mode) => {
-        const next = mode === 'bypassPermissions' && !startedTrusted ? 'default' : mode;
+        const next =
+          mode === 'bypassPermissions' && !startedTrusted
+            ? 'default'
+            : this.#sdkMode(mode, input.options.model);
+        sdkMode = next;
         void q.setPermissionMode(next).catch(() => undefined);
       });
 

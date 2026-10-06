@@ -1,5 +1,5 @@
 import { mkdtemp, readFile, readdir } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -681,6 +681,58 @@ describe('Codex CLI: Codex with its own tools, asking through Conch (ADR 0066)',
       decision: 'decline',
       asked: true,
     });
+  });
+
+  it('Auto runs what the guard lets through without asking, and asks what it stops (ADR 0100)', async () => {
+    const decided = async (verdict: undefined | { decision: 'ask'; reason: string }) => {
+      const { engine, fake, turn } = await agent({ native: { command: 'npm test' } });
+      const ask = vi.fn(async () => 'deny' as const);
+      await collect(
+        engine.runTurn(
+          turn({ guard: async () => verdict, requestPermission: ask, options: mode('auto') }),
+        ),
+      );
+      return { decision: await decisionOf(fake), asked: ask.mock.calls.length > 0 };
+    };
+    expect(await decided(undefined)).toEqual({ decision: 'accept', asked: false });
+    expect(await decided({ decision: 'ask', reason: 'This would force-push.' })).toEqual({
+      decision: 'decline',
+      asked: true,
+    });
+  });
+
+  it('reaches as far as the mode: sealed, the network for Auto, your folders for Full trust', async () => {
+    const configFor = async (reach: TurnInput['reach']) => {
+      const { engine, fake, turn, home } = await agent({});
+      await collect(
+        engine.runTurn(
+          turn({
+            ...(reach && { reach }),
+            protectedPaths: [join(home, 'vault')],
+            sandbox: {
+              allowWrite: [join(home, 'cache')],
+              denyRead: [join(homedir(), '.ssh'), join(home, 'browser', 'profile')],
+            },
+          }),
+        ),
+      );
+      return { config: await configOf(fake), home };
+    };
+    const sealed = await configFor(undefined);
+    expect(sealed.config).toContain('permissions.conch.network={enabled=false}');
+    expect(sealed.config).not.toContain(`${JSON.stringify(homedir())}="write"`);
+    const auto = await configFor('network');
+    expect(auto.config).toContain('permissions.conch.network={enabled=true}');
+    expect(auto.config).toContain(`${JSON.stringify(join(homedir(), '.ssh'))}="deny"`);
+    const full = await configFor('open');
+    expect(full.config).toContain('permissions.conch.network={enabled=true}');
+    expect(full.config).toContain(`${JSON.stringify(homedir())}="write"`);
+    // Your keys are yours to use in Full trust (a push over SSH); Conch's own never are.
+    expect(full.config).not.toContain(`${JSON.stringify(join(homedir(), '.ssh'))}="deny"`);
+    expect(full.config).toContain(`${JSON.stringify(join(full.home, 'vault'))}="deny"`);
+    expect(full.config).toContain(
+      `${JSON.stringify(join(full.home, 'browser', 'profile'))}="deny"`,
+    );
   });
 
   it('asks when the guard says so, even in full trust; a change names every file it touches', async () => {

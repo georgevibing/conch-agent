@@ -29,6 +29,7 @@ import {
   type PlanStep,
   type TurnProblem,
   type Usage,
+  ALL_MODES,
 } from '@conch/protocol';
 import { z } from 'zod';
 
@@ -613,7 +614,8 @@ export class AcpEngine implements Engine {
       label: this.label,
       models: offer?.models ?? [],
       commands: [],
-      permissionModes: ['default', 'plan', 'acceptEdits', 'bypassPermissions'],
+      // Every mode, Auto through Conch's risk policy (ADR 0100).
+      permissionModes: [...ALL_MODES],
       tools: { host: true, files: true, shell: true, approvals: true },
       attachments: this.attachments,
     };

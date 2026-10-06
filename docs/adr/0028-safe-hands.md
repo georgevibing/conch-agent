@@ -187,6 +187,12 @@ stand. The verdict is `clean`, `caution` or `danger`.
 
 ## Later changes
 
+- **2026-10-07: modes mean the same with every provider ([ADR 0100](./0100-permission-modes-every-provider.md)).**
+  Full trust no longer keeps the preview cards for what goes to other people, or asks
+  about a browser upload; Auto asks after reading only for what its risk policy marks,
+  plus an app's write and an address that could carry what was read. The irreducible
+  list, and the circuit breaker that asks in Full trust too, are in ADR 0100.
+
 - **2026-10-04: `git fetch` isn't a download.** It matched `fetch` and marked
   coding chats as "downloaded something", so in Full trust every command asked.
   `git fetch` and `npm`/`pnpm`/`yarn fetch` are taken out before the rule looks,

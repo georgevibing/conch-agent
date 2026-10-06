@@ -160,6 +160,12 @@ export interface PermissionRequest {
   toolName: string;
   toolUseId?: string;
   input: Record<string, unknown>;
+  /**
+   * The provider's own safety check wants a person for this (Claude Code's
+   * auto-mode classifier giving up after its blocks): Auto doesn't answer it
+   * by itself, the person does (ADR 0100).
+   */
+  escalated?: boolean;
 }
 
 export type PermissionDecision = 'allow' | 'allow-always' | 'deny';
@@ -270,6 +276,15 @@ export interface TurnInput {
    * may run any command (ADR 0031): engines that can't ask (Codex) run tighter.
    */
   tainted?: boolean;
+  /**
+   * How far a provider's own sandbox may reach this turn (ADR 0100), for
+   * engines whose sandbox is set once per turn (Codex CLI): `sealed` writes
+   * only in the work folder with no network; `network` adds the network
+   * (Auto, before the chat read anything); `open` writes anywhere in your
+   * folders, with the network (Full trust). Conch's own keys stay out of
+   * reach in every one. Unset: `sealed`.
+   */
+  reach?: 'sealed' | 'network' | 'open';
   /**
    * Run commands in the computer's own sandbox (ADR 0028), for engines that
    * can: writes only to these folders, no reading these.

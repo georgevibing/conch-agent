@@ -31,6 +31,7 @@ import type {
   TaskStatus,
   TurnOptions,
 } from '@conch/protocol';
+import { MODE_POWER } from '@conch/protocol';
 import { z } from 'zod';
 
 import type { ConversationManager, ToolContext } from '../conversations/manager';
@@ -56,17 +57,8 @@ const STEPS_KEPT = 12;
 const RUNNING: readonly TaskStatus[] = ['running', 'needs-you'];
 const GOING: readonly TaskStatus[] = ['queued', ...RUNNING];
 
-/**
- * How much each mode lets happen without asking. Auto and Edit freely let
- * different things through, so neither counts as less than the other.
- */
-const POWER: Record<PermissionMode, number> = {
-  plan: 0,
-  default: 1,
-  auto: 2,
-  acceptEdits: 2,
-  bypassPermissions: 3,
-};
+/** How much each mode lets happen without asking: a ladder, from Plan only to Full trust (ADR 0100). */
+const POWER = MODE_POWER;
 
 /**
  * The mode a task runs in (ADR 0033): what it asked for when that is less

@@ -103,3 +103,72 @@ test('Settings opens on General: the working folder and starting over, not under
   await expect(settings.getByRole('heading', { name: 'Providers' })).toBeVisible();
   await expect(settings.getByRole('heading', { name: 'Working folder' })).toBeHidden();
 });
+
+test('every mode in the chat and in Settings, and Auto stops only for something serious (ADR 0100)', async ({
+  page,
+  request,
+}, testInfo) => {
+  await page.goto('/');
+  const composer = page.getByRole('textbox', { name: /Message/ });
+  // Earlier journeys here changed the default model: any model will do.
+  await expect(page.getByRole('button', { name: /^Model:/ })).toBeVisible();
+
+  // The chat offers the full ladder, Auto included, whichever provider answers.
+  await page.getByRole('button', { name: 'Mode: Ask first', exact: true }).click();
+  await expect(page.getByRole('radio')).toHaveText([
+    /^Plan only/,
+    /^Ask first/,
+    /^Edit freely/,
+    /^Auto/,
+    /^Full trust/,
+  ]);
+  await page.getByRole('radio', { name: /^Auto/ }).click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Mode: Auto', exact: true })).toBeVisible();
+
+  // Routine work goes ahead without a word.
+  await composer.fill('run the tests');
+  await composer.press('Enter');
+  await expect(page.getByText('npm test').first()).toBeVisible();
+  // Something serious stops, says why, and offers no “always”.
+  await composer.fill('force-push it');
+  await composer.press('Enter');
+  await expect(
+    page.getByText(/force-push over main, which rewrites history others share/),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: /Always allow/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Deny', exact: true }).click();
+  await expect(page.getByText('I left main as it was.')).toBeVisible();
+  const [chat] = await (await request.get('/api/conversations')).json();
+  const { events } = await (await request.get(`/api/conversations/${chat.id}`)).json();
+  expect(
+    events
+      .filter((e: { type: string }) => e.type === 'permission.requested')
+      .map((e: { input: { command?: string } }) => e.input.command),
+  ).toEqual(['git push --force origin main']);
+
+  // Settings → Models: the same choice, with the same icons and words.
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const settings = page.getByRole('dialog');
+  await settings.getByRole('tab', { name: 'Models' }).click();
+  const choice = settings.getByRole('radiogroup', { name: 'Default mode' });
+  await expect(choice.getByRole('radio')).toHaveText([
+    /^Plan only/,
+    /^Ask first/,
+    /^Edit freely/,
+    /^Auto/,
+    /^Full trust/,
+  ]);
+  await choice.getByRole('radio', { name: /^Auto/ }).click();
+  await expect
+    .poll(async () => (await (await request.get('/api/state')).json()).preferences.permissionMode)
+    .toBe('auto');
+  await choice.getByRole('radio', { name: /^Full trust/ }).click();
+  await expect(settings.getByRole('alertdialog')).toContainText('run anything without asking');
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await page.screenshot({ path: testInfo.outputPath(`modes-${colorScheme}.png`) });
+  }
+  await settings.getByRole('button', { name: 'Keep asking' }).click();
+  expect((await (await request.get('/api/state')).json()).preferences.permissionMode).toBe('auto');
+});

@@ -102,7 +102,7 @@ describe('Settings in every chat app', () => {
     await menu.command(ctx, 'effort', 'invalid');
     expect(last().text).toContain('Choose an effort');
     await menu.command(ctx, 'mode', 'Full trust');
-    expect(last().text).toContain('A web page or file could trick it');
+    expect(last().text).toContain('A page or file it reads could trick it');
   });
 
   it('shows current choices without running a model, ticks the one in use, and applies a pick at once', async () => {
@@ -212,9 +212,9 @@ describe('Settings in every chat app', () => {
     const { menu, ctx, choose, last } = setup();
     await menu.command(ctx, 'mode');
     expect(last().buttons.map((b) => b.label)).toEqual([
+      'Plan only',
       '✓ Ask first',
       'Auto',
-      'Plan only',
       'Full trust',
     ]);
     await choose('Plan only');
@@ -232,7 +232,7 @@ describe('Settings in every chat app', () => {
     await menu.command(ctx, 'mode');
     expect(last().buttons.find((b) => b.label === 'Full trust')?.style).toBe('danger');
     await choose('Full trust');
-    expect(last().text).toContain('A web page or file could trick it');
+    expect(last().text).toContain('A page or file it reads could trick it');
     ctx.busy = true;
     await expect(choose('Save change')).rejects.toThrow('An answer is running');
     expect(ctx.saveOptions).not.toHaveBeenCalled();

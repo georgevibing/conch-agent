@@ -1475,6 +1475,40 @@ export class MockEngine implements Engine {
         return;
       }
 
+      // Something serious (ADR 0100): the guard before it, as Claude Code's hook does, so
+      // every mode but Full trust stops to ask, and says why.
+      if (!chatOnly && /\bforce-push\b/.test(text)) {
+        const toolUseId = newId('tool');
+        const request = {
+          toolName: 'Bash',
+          toolUseId,
+          input: { command: 'git push --force origin main' },
+        };
+        const verdict = await input.guard?.(request);
+        const decision =
+          verdict?.decision === 'deny'
+            ? 'deny'
+            : verdict?.decision === 'ask' || input.options.permissionMode !== 'bypassPermissions'
+              ? await input.requestPermission(request, input.signal)
+              : 'allow';
+        yield { type: 'tool-start', toolUseId, name: 'Bash', input: request.input };
+        yield decision === 'deny'
+          ? {
+              type: 'tool-end',
+              toolUseId,
+              status: 'error',
+              output: 'The user declined this action.',
+            }
+          : {
+              type: 'tool-end',
+              toolUseId,
+              status: 'success',
+              output: 'main -> main (forced update)',
+            };
+        yield* speak(decision === 'deny' ? 'I left main as it was.' : 'Force-pushed main.');
+        return;
+      }
+
       if (!chatOnly && /\b(run|list|files?|test)\b/.test(text)) {
         const toolUseId = newId('tool');
         const command = /test/.test(text) ? 'npm test' : 'ls -la';
