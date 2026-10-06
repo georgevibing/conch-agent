@@ -128,6 +128,7 @@ import { NetworkWatch } from './network/watch';
 import { Healed } from './lib/healed';
 import type { Heal } from './lib/recover';
 import { LocalService } from './local/service';
+import { ComputerSampler } from './computer/sampler';
 import { KNOWN_NEEDS } from './setup/known';
 import { Setup } from './setup/needs';
 import { setToolsHome } from './setup/release';
@@ -238,6 +239,8 @@ export class Services {
   readonly network: NetworkWatch;
   /** A model on this computer: Ollama, found, started and fed models (ADR 0022). */
   readonly local: LocalService;
+  /** This computer, looked at only while someone has Settings → This computer open. */
+  readonly computer: ComputerSampler;
   readonly settings: SettingsStore;
   /** Who may sign in (`~/.conch/access.json`). */
   readonly access: AccessStore;
@@ -491,6 +494,7 @@ export class Services {
       deviceSealer(() => this.vault.deviceKey()),
     );
     this.keys = new ProviderKeys(this.settings, new SecretVault());
+    this.computer = new ComputerSampler({ home: config.CONCH_HOME });
     this.local = new LocalService({
       home: config.CONCH_HOME,
       setup: this.setup,
@@ -2364,6 +2368,7 @@ export class Services {
 
   async stop() {
     this.recovery.stop();
+    this.computer.stop();
     this.tasks.close();
     await this.conversations
       .drain()

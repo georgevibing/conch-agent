@@ -1,0 +1,216 @@
+@layer nacre.components {
+  .chart {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    margin: 0;
+    min-inline-size: 0;
+  }
+
+  .head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--nc-space-3);
+    flex-wrap: wrap;
+  }
+
+  .title {
+    display: flex;
+    align-items: baseline;
+    gap: var(--nc-space-2);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .detail {
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-regular);
+    color: var(--nc-text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .value {
+    font-size: var(--nc-text-lg);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: -0.01em;
+    color: var(--nc-text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1) var(--nc-space-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--nc-text-xs);
+  }
+
+  .legend li {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+  }
+
+  /* A short stroke, like the line it names. */
+  .key {
+    inline-size: 0.75rem;
+    block-size: 2px;
+    border-radius: var(--nc-radius-full);
+  }
+
+  .legendLabel {
+    color: var(--nc-text-muted);
+  }
+
+  .legendValue {
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-semibold);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .plot {
+    position: relative;
+    block-size: var(--lc-height);
+    /* Vertical scrolling still works on a phone; a horizontal drag reads the chart. */
+    touch-action: pan-y;
+  }
+
+  .svg {
+    display: block;
+    overflow: visible;
+  }
+
+  .grid {
+    stroke: var(--nc-gray-4);
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+  }
+
+  .base {
+    stroke: var(--nc-gray-6);
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+  }
+
+  .tick {
+    font-size: var(--nc-text-2xs);
+    fill: var(--nc-text-subtle);
+    font-variant-numeric: tabular-nums;
+    /* A halo of the surface keeps the number readable over a fill. */
+    stroke: var(--nc-surface);
+    stroke-width: 3px;
+    paint-order: stroke;
+  }
+
+  .glide {
+    will-change: transform;
+  }
+
+  .line {
+    fill: none;
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+
+  .dot {
+    stroke: var(--nc-surface);
+    stroke-width: 2;
+    paint-order: stroke;
+  }
+
+  .cross {
+    stroke: var(--nc-gray-8);
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+  }
+
+  .tip {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: var(--lc-x);
+    z-index: var(--nc-z-tooltip);
+    display: grid;
+    gap: var(--nc-space-1);
+    padding: var(--nc-space-2) var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-surface-overlay);
+    box-shadow:
+      var(--nc-glaze-edge),
+      0 0 0 1px var(--nc-border),
+      var(--nc-elevation-2);
+    font-size: var(--nc-text-xs);
+    white-space: nowrap;
+    pointer-events: none;
+    transform: translateX(var(--nc-space-3));
+  }
+
+  .tip[data-side='left'] {
+    transform: translateX(calc(-100% - var(--nc-space-3)));
+  }
+
+  .tipRow {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    color: var(--nc-text-muted);
+  }
+
+  .tipRow strong {
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-semibold);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tipKey {
+    inline-size: 0.625rem;
+    block-size: 2px;
+    border-radius: var(--nc-radius-full);
+  }
+
+  .tipWhen {
+    color: var(--nc-text-subtle);
+  }
+
+  .axis {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--nc-text-2xs);
+    color: var(--nc-text-subtle);
+    padding-inline-end: 6px;
+  }
+
+  /* ── Sparkline ─────────────────────────────────────────────────────── */
+
+  .spark {
+    display: block;
+    inline-size: 100%;
+    overflow: visible;
+  }
+
+  .sparkLine {
+    fill: none;
+    stroke: var(--lc-spark);
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .sparkEnd path {
+    fill: none;
+    stroke: var(--lc-spark);
+    stroke-width: 6;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .sparkEnd path[data-ring] {
+    stroke: var(--nc-surface);
+    stroke-width: 10;
+  }
+}

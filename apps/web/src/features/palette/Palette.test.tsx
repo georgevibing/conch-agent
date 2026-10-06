@@ -327,6 +327,14 @@ describe('Palette search', () => {
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'backup');
     expect(await screen.findByRole('option', { name: /Settings: Health/ })).toBeInTheDocument();
+    // How the computer is doing: by the words of the system's own monitors.
+    for (const words of ['cpu', 'activity monitor', 'disk space']) {
+      await user.clear(screen.getByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(
+        await screen.findByRole('option', { name: /Settings: This computer/ }),
+      ).toBeInTheDocument();
+    }
     // Offline, or at a limit: "offline" finds where to choose what happens.
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'offline');

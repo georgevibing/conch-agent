@@ -160,6 +160,8 @@
   of it as you type, and **Undo** puts back the files it changed.
 - **Repair everything.** One button checks every part of Conch and fixes what it
   can. Daily backups, and signed updates that go back if something fails.
+- **This computer, live.** Settings → This computer shows the processor, memory,
+  disk, network and battery as calm live charts, and what each provider is using.
 
 ### 🏡 Make yourself at home
 

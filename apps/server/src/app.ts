@@ -107,6 +107,7 @@ import { registerChannelLinkRoutes } from './channels/link-routes';
 import { registerChannelRoutes } from './channels/routes';
 import { registerTerminalRoutes } from './terminal/routes';
 import { registerLocalRoutes } from './local/routes';
+import { registerComputerRoutes } from './computer/routes';
 import { ProviderError } from './providers/service';
 import { SkillError } from './skills/store';
 import { UpdatesError } from './updates/service';
@@ -227,6 +228,7 @@ export async function buildApp(services: Services) {
   registerBrowserRoutes(app, services, gate);
   registerTerminalRoutes(app, services, gate);
   registerLocalRoutes(app, services, gate);
+  registerComputerRoutes(app, services.computer);
   registerAttachmentRoutes(app, services.attachments);
   registerVaultRoutes(app, services.vault, gate);
   registerPickRoutes(app);

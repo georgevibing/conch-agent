@@ -112,6 +112,8 @@ const releasesWorld = (process.env.CONCH_E2E_RELEASES_WORLD ??= mkdtempSync(
 
 const scenarios = {
   ready: { port: 4391, env: { CONCH_MOCK_STATE: 'ready' } },
+  // Settings → This computer: live readings of the real machine, only while it's open.
+  computer: { port: 4337, env: { CONCH_MOCK_STATE: 'ready' } },
   models: { port: 4394, env: { CONCH_MOCK_STATE: 'ready' } },
   search: { port: 4396, env: { CONCH_MOCK_STATE: 'ready' } },
   routines: { port: 4395, env: { CONCH_MOCK_STATE: 'ready' } },

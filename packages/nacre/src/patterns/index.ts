@@ -69,3 +69,4 @@ export * from './Site';
 export * from './Welcome';
 export * from './ChatGoal';
 export * from './ChatList';
+export * from './Computer';
