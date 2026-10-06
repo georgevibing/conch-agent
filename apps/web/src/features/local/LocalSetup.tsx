@@ -14,7 +14,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowUpRight, Download, Pause, Play, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
-import { keys as appKeys } from '../../api/queries';
+import { refreshCapabilities } from '../../api/queries';
 import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
 import { errorText, providerKeys } from '../providers/queries';
@@ -195,7 +195,7 @@ export function LocalSetup({ provider }: { provider: Provider }) {
   };
   const refreshElsewhere = () => {
     void client.invalidateQueries({ queryKey: providerKeys.list });
-    void client.invalidateQueries({ queryKey: appKeys.capabilities });
+    void refreshCapabilities(client);
   };
 
   const pull = async (name: string) => {

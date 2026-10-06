@@ -239,9 +239,13 @@ test('a release that doesn’t start: Conch goes back by itself, says so once, a
   ).toBeVisible({ timeout: 30_000 });
   const after = (await status(request)).conch;
   expect(after).toMatchObject({ version: '0.2.0', build: SERVER_BUILD });
-  // A Dev gateway can still offer its first real release; the failed release
-  // must never be offered again, whatever build this workspace is running.
-  expect(after.latest?.version).toBe(SERVER_BUILD.kind === 'dev' ? '0.2.0' : undefined);
   expect(after.failed).toContain('0.3.0');
+  // A Dev gateway can still offer its first real release; the failed release
+  // must never be offered again, whatever build this workspace is running. The
+  // gateway that just came back looks for releases again by itself, so what it
+  // offers settles a moment after the dialog — wait for that, don't race it.
+  await expect
+    .poll(async () => (await status(request)).conch.latest?.version ?? null, { timeout: 30_000 })
+    .toBe(SERVER_BUILD.kind === 'dev' ? '0.2.0' : null);
   await expect(page.getByRole('region', { name: 'Conch 0.3 is ready' })).toHaveCount(0);
 });

@@ -101,6 +101,18 @@ test('Gmail: talk to it by email in one press, with the app password Gmail alrea
   await page.goto('/apps');
   await page.getByRole('button', { name: 'Gmail', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Connect Gmail' });
+  // A new Google account (ADR 0099): Gmail at Read to begin with, and an app
+  // password is the simplest way for Gmail on its own — both already chosen.
+  await expect(
+    dialog.getByRole('radiogroup', { name: 'Gmail' }).getByRole('radio', { checked: true }),
+  ).toHaveText('Read');
+  await dialog.getByRole('button', { name: 'Next' }).click();
+  await expect(
+    dialog
+      .getByRole('radiogroup', { name: 'How to connect' })
+      .getByRole('radio', { name: /App password.*Simplest/ }),
+  ).toBeChecked();
+  await dialog.getByRole('button', { name: 'Next' }).click();
   await dialog.getByLabel('Gmail address').fill('ada@gmail.com');
   await dialog.getByRole('button', { name: 'Next' }).click();
   await dialog.getByRole('textbox', { name: 'App password' }).fill('abcd efgh ijkl mnop');

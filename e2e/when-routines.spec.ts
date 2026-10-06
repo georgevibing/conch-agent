@@ -30,6 +30,10 @@ test('tell me when Anna replies: drafted in a chat, turned on, and it tells you'
     .getByRole('button', { name: 'Gmail', exact: true })
     .click();
   const dialog = page.getByRole('dialog', { name: 'Connect Gmail' });
+  // What it should help with, then how (ADR 0099): Gmail at Read and an app
+  // password are what it starts on, so connecting is two presses and the address.
+  await dialog.getByRole('button', { name: 'Next' }).click();
+  await dialog.getByRole('button', { name: 'Next' }).click();
   await dialog.getByLabel('Gmail address').fill('ada@gmail.com');
   await dialog.getByRole('button', { name: 'Next' }).click();
   await dialog.getByRole('textbox', { name: 'App password' }).fill('abcd efgh ijkl mnop');

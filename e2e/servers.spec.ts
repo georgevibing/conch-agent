@@ -19,6 +19,9 @@ test.beforeEach(async ({ request }) => {
 });
 
 test('adds a server by its address, then chats with its model', async ({ page }) => {
+  // Not pinned to the mock: the real providers on this computer are asked what
+  // they offer, which is slow the first time and slower on a busy machine.
+  test.setTimeout(120_000);
   await page.goto('/');
   await expect(page.getByRole('textbox', { name: /Message/ })).toBeVisible();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
@@ -40,7 +43,9 @@ test('adds a server by its address, then chats with its model', async ({ page })
   await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: /^Model:/ }).click();
-  await expect(page.getByRole('group', { name: 'llama.cpp' })).toBeVisible();
+  // The picker's list is every provider on this computer saying what it offers:
+  // the first one of a session asks the real programs, which can take a while.
+  await expect(page.getByRole('group', { name: 'llama.cpp' })).toBeVisible({ timeout: 45_000 });
   await page.getByRole('group', { name: 'llama.cpp' }).getByRole('radio').first().click();
   await page.keyboard.press('Escape');
 

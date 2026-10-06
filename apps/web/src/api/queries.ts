@@ -33,6 +33,20 @@ export function useAppState() {
   return useQuery({ queryKey: keys.state, queryFn: api.state, staleTime: 30_000 });
 }
 
+/**
+ * The models and capabilities again, from the providers as they are now (a
+ * server added, a provider signed in). The first catalog of a page can take
+ * seconds, while every provider lists its models: an answer asked for before
+ * the change describes the providers as they were, and React Query keeps that
+ * first answer instead of asking again — so a server just added would be
+ * missing from the model picker. Stopping it first means the answer that lands
+ * is the one that knows about the change.
+ */
+export async function refreshCapabilities(client: ReturnType<typeof useQueryClient>) {
+  await client.cancelQueries({ queryKey: keys.capabilities });
+  await client.invalidateQueries({ queryKey: keys.capabilities });
+}
+
 /** Put a fresh engine status everywhere it's displayed. */
 export function setEngineStatus(client: ReturnType<typeof useQueryClient>, status: EngineStatus) {
   client.setQueryData(keys.engine, status);

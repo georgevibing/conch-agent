@@ -9,7 +9,7 @@ import { toast } from '@conch/nacre';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
 import { ApiError } from '../../api/client';
-import { keys as appKeys, setEngineStatus } from '../../api/queries';
+import { keys as appKeys, refreshCapabilities, setEngineStatus } from '../../api/queries';
 import { providersApi } from './api';
 
 export const providerKeys = {
@@ -26,7 +26,7 @@ function applyList(client: QueryClient, list: ProvidersList) {
   client.setQueryData(providerKeys.list, list);
   const active = list.providers.find((provider) => provider.active);
   if (active) setEngineStatus(client, active.status);
-  void client.invalidateQueries({ queryKey: appKeys.capabilities });
+  void refreshCapabilities(client);
   void client.invalidateQueries({ queryKey: appKeys.usage });
 }
 

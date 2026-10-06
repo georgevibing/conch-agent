@@ -10,7 +10,7 @@ import { toast } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
 
-import { keys, setEngineStatus } from '../api/queries';
+import { keys, refreshCapabilities, setEngineStatus } from '../api/queries';
 import { useUi } from '../app/ui';
 import { DEVICES_FOCUS } from '../features/auth/focus';
 import { browserKeys } from '../features/browser/queries';
@@ -210,7 +210,7 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         case 'engine.status':
           setEngineStatus(client, event.status);
           // Signing in or switching accounts changes which models (and providers) exist.
-          void client.invalidateQueries({ queryKey: keys.capabilities });
+          void refreshCapabilities(client);
           if (event.status.state === 'ready') live.setEngineIssue(undefined);
           break;
         case 'engine.login':
