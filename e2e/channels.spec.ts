@@ -189,24 +189,27 @@ test('Telegram settings choose the model before a chat and the web shows the sam
     await expect
       .poll(async () => {
         const sent = await telegramSent(request);
-        return sent.length > count && Boolean(sent.at(-1)?.buttons.length);
+        return sent.length > count;
       })
       .toBe(true);
   };
+  // /model opens on the provider in use, and a tap on a model is the choice.
   await say('/model');
   await expect
     .poll(async () => (await telegramSent(request)).at(-1)?.text)
-    .toContain('Choose a connected provider');
-  await choose('Claude Code');
+    .toContain('Choose a model from Claude Code');
   await choose('Sonnet 5.5');
-  await choose('Save change');
+  await expect
+    .poll(async () => (await telegramSent(request)).at(-1)?.text)
+    .toContain('Now using Sonnet 5.5');
   await say('/effort');
   await expect
     .poll(async () => (await telegramSent(request)).at(-1)?.text)
     .toContain('Choose how hard');
-  await choose('More');
   await choose('High');
-  await choose('Save change');
+  await expect
+    .poll(async () => (await telegramSent(request)).at(-1)?.text)
+    .toContain('Thinking effort: High');
   await say('Hello from my configured Telegram chat');
   let conversationId = '';
   await expect
