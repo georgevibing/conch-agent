@@ -10,6 +10,8 @@
  */
 import { crc32, deflateSync } from 'node:zlib';
 
+import { nativeMenu } from './commands';
+
 /** A PNG of `size`×`size` pixels, from `paint(x, y)` → RGBA. */
 function png(
   size: number,
@@ -141,11 +143,11 @@ export function teamsManifest(options: {
         commandLists: [
           {
             scopes: ['personal'],
-            commands: [
-              { title: 'new', description: 'Start a fresh conversation' },
-              { title: 'stop', description: 'Stop what I’m doing' },
-              { title: 'help', description: 'What I can do here' },
-            ],
+            // Conch's commands (ADR 0098): Teams lists ten, and writes the title when one is chosen.
+            commands: nativeMenu({ max: 10, words: 128 }).map((c) => ({
+              title: `/${c.command}`,
+              description: c.description,
+            })),
           },
         ],
       },

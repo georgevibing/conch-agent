@@ -98,6 +98,15 @@ export function slackManifest(assistant: string) {
             .slice(0, 80) || 'conch',
         always_online: true,
       },
+      // Slack keeps messages that start with / for its own commands: Conch's go after this one.
+      slash_commands: [
+        {
+          command: '/conch',
+          description: `Conch’s commands: model, clear, goal, plan, help…`,
+          usage_hint: '[model | effort | clear | goal | plan | help]',
+          should_escape: false,
+        },
+      ],
     },
     oauth_config: {
       scopes: {

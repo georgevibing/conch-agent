@@ -820,14 +820,15 @@ describe('ChannelService — which app a channel belongs to (ADR 0052)', () => {
 });
 
 describe('Channel settings through Telegram', () => {
-  async function choose(telegram: MockTelegram, label: string) {
+  /** Press a button on the newest message; `page`: the answer is another page of buttons. */
+  async function choose(telegram: MockTelegram, label: string, page = true) {
     const message = telegram.last();
     const button = message?.buttons.find((b) => b.text === label);
     if (!button || !message) throw new Error(`Missing ${label}: ${JSON.stringify(message)}`);
     const before = telegram.sent.length;
     telegram.press(button.callback_data, message.message_id);
     await until(
-      () => telegram.sent.length > before && telegram.last()?.buttons.length,
+      () => telegram.sent.length > before && (!page || telegram.last()?.buttons.length),
       'next settings page',
     );
   }
@@ -835,15 +836,15 @@ describe('Channel settings through Telegram', () => {
   it('selects a model and effort before the first message, persists it, and reads web changes back', async () => {
     const { s, telegram, channel } = await paired();
     telegram.say('/model');
-    await until(() => telegram.last()?.text.includes('Choose a connected provider'), 'providers');
-    await choose(telegram, 'Claude Code');
-    await choose(telegram, 'Opus 5.5');
-    await choose(telegram, 'Save change');
+    await until(() => telegram.last()?.text.includes('Choose a model from Claude Code'), 'models');
+    // The models are buttons under one message, the one in use ticked.
+    expect(telegram.last()?.buttons[0]?.text).toBe('✓ Default');
+    await choose(telegram, 'Opus 5.5', false);
+    await until(() => telegram.last()?.text.includes('Now using Opus 5.5'), 'model chosen');
     telegram.say('/effort');
     await until(() => telegram.last()?.text.includes('Choose how hard'), 'effort');
-    await choose(telegram, 'More');
-    await choose(telegram, 'High');
-    await choose(telegram, 'Save change');
+    await choose(telegram, 'High', false);
+    await until(() => telegram.last()?.text.includes('Thinking effort: High'), 'effort chosen');
     expect(await s.conversations.list()).toEqual([]);
     telegram.say('Hello there');
     const chat = await until(
@@ -887,7 +888,6 @@ describe('Channel settings through Telegram', () => {
     telegram.say('/settings');
     await until(() => telegram.last()?.buttons.some((b) => b.text === 'This chat'), 'settings');
     await choose(telegram, 'This chat');
-    await choose(telegram, 'More');
     await choose(telegram, 'Use Conch defaults');
     await choose(telegram, 'Save change');
     expect((await s.conversations.detail(next.id)).conversation.options).toEqual({});

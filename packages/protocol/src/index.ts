@@ -66,6 +66,7 @@ export * from './artifacts';
 export * from './chat-cards';
 export * from './chat-list';
 export * from './chat-context';
+export * from './commands';
 export * from './conch-apps';
 export * from './conch-apps-words';
 export * from './questions';

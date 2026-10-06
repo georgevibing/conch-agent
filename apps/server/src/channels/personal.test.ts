@@ -72,13 +72,14 @@ describe('Email through Conch', () => {
       'effort menu',
     );
     expect(menu.text).toContain('Reply with a number');
+    // The one in use is ticked; a number picks another, done at once.
+    expect(menu.text).toContain('✓ Auto');
     mail.deliver({ subject: 'Re: Settings', text: '2', inReplyTo: menu.messageId });
-    const confirmation = await until(
-      () => mail.sent.find((m) => m.text.includes('Save this change?')),
-      'confirmation',
+    await until(
+      () => mail.sent.find((m) => m.text.includes('Thinking effort: Low')),
+      'saved low effort',
     );
-    mail.deliver({ subject: 'Re: Settings', text: '1', inReplyTo: confirmation.messageId });
-    await until(() => mail.sent.find((m) => m.text.includes('Effort: Low')), 'saved low effort');
+    expect(mail.sent.some((m) => m.text.includes('Save this change?'))).toBe(false);
     expect(await channelChats(s)).toEqual([]);
   });
 

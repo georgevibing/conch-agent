@@ -555,6 +555,8 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
           void this.#event(envelope.payload, events);
         } else if (envelope.type === 'interactive') {
           void this.#interactive(envelope.payload, events);
+        } else if (envelope.type === 'slash_commands') {
+          void this.#slash(envelope.payload, events);
         }
       });
       socket.addEventListener('close', () => finish('dropped'));
@@ -639,6 +641,30 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
     const name = info?.channel?.name ? `#${info.channel.name}` : 'A Slack channel';
     if (info?.channel?.name) this.#places.set(channel, name);
     return name;
+  }
+
+  /**
+   * `/conch model opus` (ADR 0098). Slack keeps every message that starts
+   * with `/` for its own commands, so Conch's go after its one, `/conch`, and
+   * reach Conch as the words they stand for (`/model opus`), from whoever
+   * typed them. The envelope was already acknowledged; the answer is a message.
+   */
+  async #slash(payload: Record<string, unknown> | undefined, events: ChannelEvents) {
+    const user = typeof payload?.user_id === 'string' ? payload.user_id : undefined;
+    const channel = typeof payload?.channel_id === 'string' ? payload.channel_id : undefined;
+    if (!user || !channel || payload?.command !== '/conch') return;
+    const words = (typeof payload.text === 'string' ? payload.text : '').trim().slice(0, 4000);
+    const text = `/${words.replace(/^\//, '') || 'help'}`;
+    const direct = channel.startsWith('D') || payload.channel_name === 'directmessage';
+    events.message({
+      chatId: channel,
+      messageId: typeof payload.trigger_id === 'string' ? payload.trigger_id : `${Date.now()}`,
+      user: await this.#person(user),
+      text,
+      files: [],
+      direct,
+      ...(!direct && { mentioned: true, group: await this.#place(channel) }),
+    });
   }
 
   async #interactive(payload: Record<string, unknown> | undefined, events: ChannelEvents) {

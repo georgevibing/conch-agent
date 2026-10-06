@@ -90,46 +90,83 @@ function setup() {
 }
 
 describe('Settings in every chat app', () => {
-  it('searches a large catalog without requiring the person to page through it', async () => {
+  it('finds a model by name: one exact match is chosen at once, several are listed', async () => {
     const { menu, ctx, choose, last } = setup();
     await menu.command(ctx, 'model', 'model 11');
-    expect(last().buttons.map((b) => b.label)).toContain('Model 11 · Provider A');
-    await choose('Model 11 · Provider A');
-    await choose('Save change');
     expect(ctx.saveOptions).toHaveBeenCalledWith(expect.objectContaining({ model: 'm11' }));
+    expect(last().text).toBe('✓ Now using Model 11 · Provider A.');
+    await menu.command(ctx, 'model', 'provider a model 1');
+    expect(last().buttons.map((b) => b.label)).toContain('Model 10 · Provider A');
+    await choose('Model 10 · Provider A');
+    expect(ctx.saveOptions).toHaveBeenLastCalledWith(expect.objectContaining({ model: 'm10' }));
     await menu.command(ctx, 'effort', 'invalid');
     expect(last().text).toContain('Choose an effort');
     await menu.command(ctx, 'mode', 'Full trust');
     expect(last().text).toContain('A web page or file could trick it');
   });
 
-  it('shows current choices without running a model, and offers capability-matched effort', async () => {
+  it('shows current choices without running a model, ticks the one in use, and applies a pick at once', async () => {
     const { menu, ctx, last, choose } = setup();
     await menu.command(ctx, 'status');
     expect(last().text).toContain('Model: Deep');
     await menu.command(ctx, 'effort');
-    expect(last().buttons.map((b) => b.label)).toEqual(['Auto', 'Low', 'High', 'More', 'Back']);
+    // A command's own list: everything fits, nothing to go back to.
+    expect(last().buttons.map((b) => b.label)).toEqual(['✓ Auto', 'Low', 'High', 'Max']);
     await choose('High');
-    expect(ctx.saveOptions).not.toHaveBeenCalled();
-    expect(last().text).toContain('this conversation and fresh conversations in this channel');
-    await choose('Save change');
     expect(ctx.saveOptions).toHaveBeenCalledWith({ effort: 'high' });
-    expect(last().text).toContain('Effort: High');
+    expect(last().text).toBe('✓ Thinking effort: High.');
+    await menu.command(ctx, 'effort');
+    expect(last().buttons.map((b) => b.label)).toContain('✓ High');
   });
 
-  it('paginates every model within each adapter’s button limit, and resets incompatible effort and speed', async () => {
+  it('turns fast mode on and off by name, by toggle and from its buttons', async () => {
+    const { menu, ctx, last, choose } = setup();
+    await menu.command(ctx, 'fast', 'on');
+    expect(ctx.saveOptions).toHaveBeenLastCalledWith({ fastMode: true });
+    await menu.command(ctx, 'fast', 'toggle');
+    expect(ctx.saveOptions).toHaveBeenLastCalledWith({ fastMode: false });
+    await menu.command(ctx, 'fast');
+    expect(last().buttons.map((b) => b.label)).toEqual(['On', '✓ Off']);
+    await choose('On');
+    expect(last().text).toBe('✓ Fast mode: on.');
+    await menu.command(ctx, 'fast', 'sideways');
+    expect(last().text).toContain('/fast on');
+    ctx.options.model = 'small';
+    await menu.command(ctx, 'fast');
+    expect(last().text).toContain('does not offer fast mode');
+  });
+
+  it('shows the model in use first, ticked, with the other providers a step away', async () => {
+    const { menu, ctx, last, choose } = setup();
+    ctx.buttons = 8;
+    await menu.command(ctx, 'model');
+    expect(last().text).toContain('**Model:** Deep · Provider A');
+    expect(
+      last()
+        .buttons.slice(0, 2)
+        .map((b) => b.label),
+    ).toEqual(['✓ Deep', 'Small']);
+    // Six models, then More: no Back on a list a command opened.
+    expect(last().buttons).toHaveLength(7);
+    await choose('More');
+    await choose('More');
+    await choose('Other providers');
+    expect(last().buttons.map((b) => b.label)).toContain('✓ Provider A');
+    await choose('Provider B');
+    await choose('B');
+    expect(ctx.saveOptions).toHaveBeenCalledWith(
+      expect.objectContaining({ engine: 'openrouter', model: 'b', permissionMode: 'default' }),
+    );
+  });
+
+  it('pages every model within each adapter’s button limit, and resets incompatible effort and speed', async () => {
     const { menu, ctx, choose, last, sent } = setup();
     ctx.options.effort = 'max';
     ctx.options.fastMode = true;
     await menu.command(ctx, 'model');
-    await choose('Provider A');
-    await choose('More');
-    await choose('More');
-    await choose('More');
-    await choose('More');
+    for (let i = 0; i < 4; i++) await choose('More');
     expect(last().buttons.some((b) => b.label === 'Model 11')).toBe(true);
     await choose('Model 11');
-    await choose('Save change');
     expect(ctx.saveOptions).toHaveBeenCalledWith(
       expect.objectContaining({
         model: 'm11',
@@ -145,10 +182,10 @@ describe('Settings in every chat app', () => {
     ).toBe(true);
     await menu.command(ctx, 'effort');
     expect(last().text).toContain('does not offer');
-    expect(last().buttons).toHaveLength(1);
+    expect(last().buttons).toHaveLength(0);
   });
 
-  it('sets global defaults separately, never as a chat override', async () => {
+  it('sets global defaults separately, never as a chat override, and asks first', async () => {
     const { menu, ctx, choose, last } = setup();
     await menu.command(ctx, 'settings');
     await choose('Defaults across Conch');
@@ -171,24 +208,45 @@ describe('Settings in every chat app', () => {
     expect(ctx.saveOptions).not.toHaveBeenCalled();
   });
 
+  it('asks before letting it do more, but not before asking first or planning', async () => {
+    const { menu, ctx, choose, last } = setup();
+    await menu.command(ctx, 'mode');
+    expect(last().buttons.map((b) => b.label)).toEqual([
+      '✓ Ask first',
+      'Auto',
+      'Plan only',
+      'Full trust',
+    ]);
+    await choose('Plan only');
+    expect(ctx.saveOptions).toHaveBeenLastCalledWith({ permissionMode: 'plan' });
+    await menu.command(ctx, 'mode');
+    await choose('Auto');
+    expect(last().text).toContain('Save this change?');
+    expect(ctx.saveOptions).toHaveBeenCalledOnce();
+    await choose('Save change');
+    expect(ctx.saveOptions).toHaveBeenLastCalledWith({ permissionMode: 'auto' });
+  });
+
   it('warns before Full trust and rejects changes during a running answer', async () => {
     const { menu, ctx, choose, last } = setup();
     await menu.command(ctx, 'mode');
-    await choose('More');
+    expect(last().buttons.find((b) => b.label === 'Full trust')?.style).toBe('danger');
     await choose('Full trust');
     expect(last().text).toContain('A web page or file could trick it');
     ctx.busy = true;
     await expect(choose('Save change')).rejects.toThrow('An answer is running');
+    expect(ctx.saveOptions).not.toHaveBeenCalled();
+    await menu.command(ctx, 'effort');
+    await expect(choose('High')).rejects.toThrow('/stop');
     expect(ctx.saveOptions).not.toHaveBeenCalled();
   });
 
   it.each(['ownerId', 'chatId', 'channelId', 'revision'] as const)(
     'binds each choice to %s',
     async (field) => {
-      const { menu, ctx, choose, last } = setup();
+      const { menu, ctx, last } = setup();
       await menu.command(ctx, 'effort');
-      await choose('High');
-      const token = last().buttons[0]?.data ?? 'missing';
+      const token = last().buttons.find((b) => b.label === 'High')?.data ?? 'missing';
       await menu.press({ ...ctx, [field]: 'someone-else' }, token);
       expect(ctx.saveOptions).not.toHaveBeenCalled();
       await menu.press(ctx, token);
@@ -199,16 +257,16 @@ describe('Settings in every chat app', () => {
   );
 
   it('expires choices and rejects replay even while a save is waiting', async () => {
-    const { menu, ctx, choose, last, expire } = setup();
+    const { menu, ctx, last, expire } = setup();
+    const high = () => last().buttons.find((b) => b.label === 'High')?.data ?? 'missing';
     await menu.command(ctx, 'effort');
-    await choose('High');
-    const stale = last().buttons[0]?.data ?? 'missing';
+    const stale = high();
     expire();
     await menu.press(ctx, stale);
     expect(ctx.saveOptions).not.toHaveBeenCalled();
+    expect(last().text).toContain('expired');
     await menu.command(ctx, 'effort');
-    await choose('High');
-    const token = last().buttons[0]?.data ?? 'missing';
+    const token = high();
     let release = () => {};
     vi.mocked(ctx.saveOptions).mockImplementationOnce(
       () =>
@@ -227,12 +285,23 @@ describe('Settings in every chat app', () => {
   it('rechecks model capabilities before saving an old selection', async () => {
     const { menu, ctx, choose, catalog } = setup();
     await menu.command(ctx, 'effort');
-    await choose('High');
     const model = catalog.providers[0]?.models[0];
     if (!model) throw new Error('Missing test model');
     model.efforts = [];
-    await expect(choose('Save change')).rejects.toThrow('no longer offered');
+    await expect(choose('High')).rejects.toThrow('no longer offered');
     expect(ctx.saveOptions).not.toHaveBeenCalled();
+  });
+
+  it('writes commands the way the app needs them, and shows the goal and a waiting plan', async () => {
+    const { menu, ctx, last } = setup();
+    ctx.slash = (name, args) => `/conch ${name}${args ? ` ${args}` : ''}`;
+    await menu.command(ctx, 'effort', 'loud');
+    expect(last().text).toContain('/conch effort high');
+    ctx.goal = 'Ship 2.4';
+    ctx.planning = true;
+    await menu.command(ctx, 'status');
+    expect(last().text).toContain('Goal: Ship 2.4');
+    expect(last().text).toContain('Plan mode: on, from your next message');
   });
 
   it('configures channel notifications and voice separately from global preferences', async () => {

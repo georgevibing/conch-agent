@@ -230,6 +230,18 @@ export class MockSlack {
     });
   }
 
+  /** `/conch <text>` typed in the private chat with the app (Socket Mode's `slash_commands`). */
+  slash(text: string, from = MockSlack.OWNER.id, channel = `D${from}`) {
+    this.#envelopeOut('slash_commands', {
+      command: '/conch',
+      text,
+      user_id: from,
+      channel_id: channel,
+      channel_name: channel.startsWith('D') ? 'directmessage' : 'general',
+      trigger_id: `trigger${Date.now()}`,
+    });
+  }
+
   press(value: string, ts: string, from = MockSlack.OWNER.id) {
     this.#envelopeOut('interactive', {
       type: 'block_actions',

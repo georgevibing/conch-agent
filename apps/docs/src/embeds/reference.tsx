@@ -156,9 +156,53 @@ export function SlashReference() {
                   id={`slash-${command.name}`}
                   term={`/${command.name}${command.argumentHint ? ` ${command.argumentHint}` : ''}`}
                   meta={
-                    command.aliases.length
-                      ? `Also: ${command.aliases.map((alias) => `/${alias}`).join(', ')}`
-                      : undefined
+                    [
+                      command.aliases.length
+                        ? `Also: ${command.aliases.map((alias) => `/${alias}`).join(', ')}`
+                        : '',
+                      command.chat ? 'In chat apps too' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') || undefined
+                  }
+                >
+                  {command.description}.
+                </Definitions.Item>
+              ))}
+          </Definitions>
+        </Group>
+      ))}
+    </div>
+  );
+}
+
+/** The commands chat apps take (ADR 0098): the same list, with who may use each. */
+export function ChatCommandsReference() {
+  const groups = [
+    { title: 'Anyone you let in', who: 'people' },
+    { title: 'You, in your private chat', who: 'owner' },
+  ] as const;
+  return (
+    <div className={styles.stack}>
+      {groups.map((group) => (
+        <Group key={group.who} title={group.title}>
+          <Definitions label={group.title}>
+            {reference.chatCommands
+              .filter((command) => command.who === group.who)
+              .map((command) => (
+                <Definitions.Item
+                  key={command.name}
+                  id={`chat-${command.name}`}
+                  term={`/${command.name}${command.argumentHint ? ` ${command.argumentHint}` : ''}`}
+                  meta={
+                    [
+                      command.aliases.length
+                        ? `Also: ${command.aliases.map((alias) => `/${alias}`).join(', ')}`
+                        : '',
+                      command.groups ? 'In groups too' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') || undefined
                   }
                 >
                   {command.description}.

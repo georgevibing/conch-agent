@@ -23,14 +23,31 @@ import {
   type ServerEvent,
   type UpdateChannelBody,
   ChannelSecrets as ChannelSecretsSchema,
+  ChatGoal,
+  type CustomCommand,
   DISCORD_TOKEN,
+  chatGoal,
+  contextStart,
+  expandCustom,
+  findCommand,
+  MAX_GOAL_LENGTH,
+  parseChatCommand,
+  parseGoalArg,
+  parseSwitch,
+  type PermissionMode,
+  type TurnOptions,
   SLACK_APP_TOKEN,
   SLACK_BOT_TOKEN,
   TELEGRAM_TOKEN,
 } from '@conch/protocol';
 
 import type { AttachmentStore } from '../attachments/store';
-import { ConversationError, type ConversationManager } from '../conversations/manager';
+import {
+  ConversationError,
+  type ConversationManager,
+  modeBeforePlan,
+} from '../conversations/manager';
+import { PLAN_APPROVAL } from '../plans/mode';
 import type { PermissionDecision } from '../engines/types';
 import { newId } from '../lib/ids';
 import { pausedWords } from '../routines/spend';
@@ -44,6 +61,7 @@ import { MAX_NOTE_BYTES, type NoteFormat } from '../voice/audio';
 import { normalizeTeams } from './teams';
 import {
   type ChannelAdapter,
+  type ChannelButton,
   type ChannelConnection,
   ChannelError,
   type ChannelMessage,
@@ -74,7 +92,8 @@ import {
   type WaitingNote,
 } from './voice-notes';
 import { normalizeWeChat } from './wechat';
-import { ChannelSettingsMenu, type SettingsContext } from './settings';
+import { ChannelSettingsMenu, modeLabel, type SettingsContext } from './settings';
+import { ChatActions, helpWords, onlyInConch, slashIn, unknownWords } from './commands';
 
 /** What hearing one voice note came to: its words, or why not (yet). */
 interface Heard {
@@ -189,6 +208,15 @@ interface Ask {
   permissionId: string;
   summary: string;
   refs: SentRef[];
+  /** It asks to start on a plan (`/plan`): Start and Keep planning. */
+  plan?: boolean;
+}
+
+/** The plan in a plan-mode question (`ExitPlanMode`), when it is one. */
+function planOf(e: { toolName: string; input: unknown }): string | undefined {
+  if (e.toolName !== PLAN_APPROVAL) return undefined;
+  const plan = (e.input as { plan?: unknown } | undefined)?.plan;
+  return typeof plan === 'string' && plan.trim() ? plan.trim() : '';
 }
 
 const hash = (code: string) => createHash('sha256').update(code).digest();
@@ -298,6 +326,13 @@ export class ChannelService {
   #hearingAgain?: Promise<void>;
 
   #settingsMenu = new ChannelSettingsMenu();
+  /** One-tap answers that aren't settings: Undo after `/clear`, "did you mean". */
+  #actions = new ChatActions(() => this.#now);
+  /**
+   * Before a conversation exists: the goal and plan mode it starts with
+   * (`/goal`, `/plan` before the first message), per person. Gone with `/new`.
+   */
+  #upcoming = new Map<string, { goal?: string; plan?: boolean }>();
 
   constructor(
     private readonly deps: {
@@ -327,6 +362,14 @@ export class ChannelService {
       /** Speaking an answer as a voice note (ADR 0077). */
       speech?: {
         voiceNote(markdown: string, format: NoteFormat): Promise<VoiceNote | undefined>;
+      };
+      /**
+       * Your own commands and skills, so `/name` in a chat app runs yours
+       * (and a mistyped one is told what it probably meant).
+       */
+      commands?: {
+        custom(): Promise<CustomCommand[]>;
+        skills(): Promise<string[]>;
       };
       now?: () => number;
       log?: (message: string) => void;
@@ -1561,13 +1604,10 @@ export class ChannelService {
     }));
     void this.#emit(id);
 
-    if (await this.#settingsMessage(stored, live, message)) return;
-    const command = /^\/(start|new|stop|help)(?:@\w+)?\s*$/i.exec(text)?.[1]?.toLowerCase();
+    if (await this.#settingsInput(stored, live, message)) return;
     const seat = seatOf(message.user);
-    if (command) {
-      await this.#command(stored, live, message, command, seat);
-      return;
-    }
+    const parsed = parseChatCommand(text);
+    if (parsed && (await this.#chatCommand(stored, live, message, seat, parsed))) return;
     // A new email thread is a new conversation, as /new would start.
     if (message.fresh && !this.#inflight.has(`${id}:${person.id}`)) {
       this.#fresh(id, person.id);
@@ -1650,20 +1690,8 @@ export class ChannelService {
       name: isOwner ? owner.name : message.user.name,
       group: { id: group.id, name: group.name, owner: isOwner },
     };
-    if (
-      /^\/(settings|status|model|effort|mode|cancel)(?:@\w+)?(?:\s|$)/i.test(message.text.trim())
-    ) {
-      await live.connection.send(
-        message.chatId,
-        'Open settings in your private chat with me. Settings belong to the channel owner.',
-      );
-      return;
-    }
-    const command = /^\/(start|new|stop|help)(?:@\w+)?\s*$/i.exec(message.text.trim())?.[1];
-    if (command) {
-      await this.#command(stored, live, message, command.toLowerCase(), seat);
-      return;
-    }
+    const parsed = parseChatCommand(message.text);
+    if (parsed && (await this.#chatCommand(stored, live, message, seat, parsed))) return;
     if (!isOwner && !this.#guestMay(stored.id, group.id)) {
       if (this.#mayAnswer(`${stored.id}:busy:${group.id}`))
         await live.connection
@@ -1756,43 +1784,22 @@ export class ChannelService {
     }
   }
 
-  /** Settings are direct human input. They never reach the assistant. */
-  async #settingsMessage(stored: StoredChannel, live: LiveChannel, message: ChannelMessage) {
-    const match = /^\/(settings|status|model|effort|mode|cancel)(?:@\w+)?(?:\s.*)?$/i.exec(
-      message.text.trim(),
-    );
-    const command = match?.[1]?.toLowerCase();
+  /**
+   * Words for a settings question that's waiting (a name, a model to find):
+   * direct human input, never for the assistant. A command instead leaves
+   * the question, and is handled as itself.
+   */
+  async #settingsInput(stored: StoredChannel, live: LiveChannel, message: ChannelMessage) {
+    const text = message.text.trim();
+    if (text.startsWith('/')) {
+      this.#settingsMenu.clear(stored.id);
+      return false;
+    }
     const owner = stored.people[0]?.id === message.user.id;
-    if (!owner || message.outside || message.quote || message.files.length) {
-      if (command)
-        await live.connection.send(
-          message.chatId,
-          'Settings need a message typed by the channel owner in this private chat.',
-        );
-      return Boolean(command);
-    }
-    if (command === 'cancel') {
-      this.#settingsMenu.clear(stored.id);
-      await live.connection.send(message.chatId, 'Settings closed.');
-      return true;
-    }
-    // Other commands abandon a free-text setting before normal command/skill handling.
-    if (!command && message.text.trim().startsWith('/')) {
-      this.#settingsMenu.clear(stored.id);
-      return false;
-    }
-    if (!command && !this.#settingsMenu.waiting(stored.id, message.chatId, message.user.id))
-      return false;
+    if (!owner || message.outside || message.quote || message.files.length) return false;
+    if (!this.#settingsMenu.waiting(stored.id, message.chatId, message.user.id)) return false;
     try {
       const ctx = await this.#settingsContext(stored.id, message.chatId, message.user.id);
-      if (command) {
-        await this.#settingsMenu.command(
-          ctx,
-          command,
-          message.text.trim().replace(/^\/[^\s]+\s*/, ''),
-        );
-        return true;
-      }
       return await this.#settingsMenu.input(ctx, message.text);
     } catch (error) {
       await live.connection.send(message.chatId, explain(error));
@@ -1812,10 +1819,13 @@ export class ChannelService {
       throw new ChannelServiceError('unavailable', 'Only the channel owner can change settings.');
     const conversationId = stored.chats[userId];
     let conversation;
+    let events: ConversationEvent[] = [];
     try {
-      conversation = conversationId
-        ? (await this.deps.conversations.detail(conversationId)).conversation
+      const detail = conversationId
+        ? await this.deps.conversations.detail(conversationId)
         : undefined;
+      conversation = detail?.conversation;
+      events = detail?.events ?? [];
     } catch (error) {
       if (!(error instanceof ConversationError) || error.code !== 'not-found') throw error;
       this.#fresh(id, userId);
@@ -1826,6 +1836,8 @@ export class ChannelService {
       return this.#settingsContext(id, chatId, userId);
     }
     const settings = await this.deps.settings.get();
+    const upcoming = this.#upcoming.get(`${id}:${userId}`);
+    const goal = conversation ? chatGoal(events) : upcoming?.goal;
     const revision = (
       options: SettingsContext['options'],
       current: SettingsContext['settings'],
@@ -1858,6 +1870,10 @@ export class ChannelService {
       send: async (text, buttons) => {
         await live.connection.send(chatId, text, { buttons });
       },
+      ...(live.connection.buttonLimit && { buttons: live.connection.buttonLimit }),
+      slash: (name, args) => slashIn(stored.kind, name, args),
+      ...(goal && { goal }),
+      planning: !conversation && Boolean(upcoming?.plan),
       saveOptions: async (options) => {
         await verify();
         const current = await this.#require(id);
@@ -1880,9 +1896,16 @@ export class ChannelService {
             'This conversation has changed or is busy. Open /settings again.',
           );
         if (conversationId) await this.deps.conversations.configure(conversationId, options);
-        const merged = Object.fromEntries(
+        const merged: TurnOptions = Object.fromEntries(
           Object.entries({ ...ctx.options, ...options }).filter(([, value]) => value !== undefined),
         );
+        // `/plan` is for this conversation: a model picked while planning doesn't make every new chat plan.
+        if (
+          merged.permissionMode === 'plan' &&
+          options.permissionMode !== 'plan' &&
+          current.chatOptions.permissionMode !== 'plan'
+        )
+          delete merged.permissionMode;
         await this.deps.store.update(id, (c) => ({ ...c, chatOptions: merged }));
         ctx.options = merged;
         ctx.revision = revision(ctx.options, ctx.settings, ctx.channel);
@@ -1908,48 +1931,448 @@ export class ChannelService {
     return ctx;
   }
 
-  async #command(
+  /** Your own command or skill by this name, or the provider's own, for `/name` in a chat app. */
+  async #yours(name: string) {
+    const [custom, skills, catalog] = await Promise.all([
+      this.deps.commands?.custom().catch(() => []) ?? Promise.resolve([] as CustomCommand[]),
+      this.deps.commands?.skills().catch(() => []) ?? Promise.resolve([] as string[]),
+      this.deps.models?.().catch(() => undefined) ?? Promise.resolve(undefined),
+    ]);
+    const q = name.toLowerCase();
+    const command = custom.find((c) => c.name === q);
+    const skill = skills.some((s) => s.toLowerCase() === q);
+    return {
+      command,
+      mine: Boolean(command) || skill,
+      provider: (catalog?.providers ?? []).some((p) =>
+        p.commands.some((c) => c.name.toLowerCase() === q),
+      ),
+      names: [...custom.map((c) => c.name), ...skills],
+    };
+  }
+
+  /**
+   * A `/command` in a chat app (ADR 0098). Conch's own come from the one list
+   * the web app uses too, and are done here through the same gateway methods,
+   * so they mean the same with every provider; they never reach the model as
+   * typed. A command of yours is filled in and sent; a skill of yours, or the
+   * provider's own command, goes on as it is (false); a name nobody knows
+   * hears what it probably meant.
+   */
+  async #chatCommand(
     stored: StoredChannel,
     live: LiveChannel,
     message: ChannelMessage,
-    command: string,
     seat: Seat,
-  ) {
-    const say = (text: string) => live.connection.send(message.chatId, text);
-    const conversationId = stored.chats[seat.key];
-    const assistant = (await this.deps.settings.get()).persona.name;
-    if (command === 'new') {
-      this.#fresh(stored.id, seat.key);
-      await this.deps.store.update(stored.id, (c) => {
-        const { [seat.key]: _, ...chats } = c.chats;
-        return { ...c, chats };
+    parsed: { name: string; args: string },
+  ): Promise<boolean> {
+    const kind = stored.kind;
+    const slash = (name: string, args?: string) => slashIn(kind, name, args);
+    const say = (text: string, buttons?: ChannelButton[]) =>
+      live.connection.send(message.chatId, text, buttons?.length ? { buttons } : undefined);
+    const isOwner = stored.people[0]?.id === message.user.id;
+    const bound = { channelId: stored.id, chatId: message.chatId, userId: seat.key };
+    let command = findCommand(parsed.name, 'chat');
+    const yours = !command || command.yields ? await this.#yours(parsed.name) : undefined;
+    if (command?.yields && yours?.mine) command = undefined;
+
+    if (!command) {
+      if (yours?.command && !message.outside) {
+        this.#gather(
+          stored.id,
+          { ...message, text: expandCustom(yours.command, parsed.args) },
+          seat,
+        );
+        return true;
+      }
+      // A skill of yours is expanded by the gateway; a provider knows its own commands.
+      if (yours?.mine || yours?.provider || seat.group || message.outside) return false;
+      const unknown = unknownWords({
+        typed: parsed.name,
+        kind,
+        who: isOwner ? 'owner' : 'people',
+        ...(yours && { yours: yours.names }),
       });
-      await say('Fresh start. What’s next?');
-    } else if (command === 'stop') {
-      const relay = this.#inflight.get(`${stored.id}:${seat.key}`);
-      this.#dropGathered(stored.id, seat.key);
-      if (relay) {
-        relay.queued.length = 0;
-        const running = relay.conversationId ?? conversationId;
-        if (running) await this.deps.conversations.interrupt(running).catch(() => undefined);
-        await say('Stopped.');
-      } else await say('I’m not doing anything right now.');
-    } else if (seat.group && !seat.group.owner) {
-      await say(
-        `I’m **${assistant}**. Mention me with a question and I’ll answer here, in words. ` +
-          'I can’t do things for you from this group.',
+      const buttons = this.#actions.offer(
+        bound,
+        unknown.meant.map((name, i) => ({
+          label: slash(name),
+          ...(i === 0 && { style: 'primary' as const }),
+          run: async () => {
+            const fresh = await this.deps.store.get(stored.id);
+            const now = this.#live.get(stored.id);
+            if (!fresh || !now || !this.#seated(fresh, seat)) return;
+            const typed = { ...message, text: `/${name}${parsed.args ? ` ${parsed.args}` : ''}` };
+            if (!(await this.#chatCommand(fresh, now, typed, seat, { name, args: parsed.args })))
+              this.#gather(stored.id, typed, seat);
+          },
+        })),
       );
-    } else if (command === 'help' || command === 'start') {
-      await say(
-        `I’m **${assistant}**, your assistant on Conch. Ask me anything, or send a photo or a file.\n\n` +
-          '• /new — start a fresh conversation\n' +
-          '• /stop — stop what I’m doing\n' +
-          '• /settings — model, effort, permissions and preferences\n' +
-          '• /status — see this chat’s settings\n' +
-          '• /your-skill — use one of your skills by name\n\n' +
-          'Everything we say here is also in Conch on your computer.',
-      );
+      await say(unknown.text, buttons);
+      return true;
     }
+
+    const use = command.chat;
+    if (!use) {
+      // Only in Conch itself, unless the provider has its own (`/review`, `/init`): that goes on.
+      if (yours?.provider || seat.group || message.outside) return false;
+      await say(onlyInConch(kind, command));
+      return true;
+    }
+    if (
+      use.who === 'owner' &&
+      !seat.group &&
+      (!isOwner || message.outside || message.quote || message.files.length)
+    ) {
+      await say('Settings need a message typed by the channel owner in this private chat.');
+      return true;
+    }
+    // Someone else's words (a forward, a quote) never run a command.
+    if (message.outside || message.quote) {
+      await say('Commands need a message you typed yourself, in this chat.');
+      return true;
+    }
+    if (seat.group && !use.groups) {
+      await say(`${slash(command.name)} works in our private chat with me, not in a group.`);
+      return true;
+    }
+
+    const key = `${stored.id}:${seat.key}`;
+    const conversationId = stored.chats[seat.key];
+    const busy = this.#inflight.has(key) || this.#gathering.has(key);
+    const stillAnswering = (then: string) =>
+      say(`I’m still answering. Send ${slash('stop')} or wait, then ${then}.`);
+    try {
+      switch (command.name) {
+        case 'start':
+        case 'help': {
+          const assistant = (await this.deps.settings.get()).persona.name;
+          await say(
+            helpWords({
+              assistant,
+              kind,
+              who: seat.group && !seat.group.owner ? 'guest' : isOwner ? 'owner' : 'people',
+            }),
+          );
+          return true;
+        }
+        case 'new':
+          this.#fresh(stored.id, seat.key);
+          await this.deps.store.update(stored.id, (c) => {
+            const { [seat.key]: _, ...chats } = c.chats;
+            return { ...c, chats };
+          });
+          await say('Fresh start. What’s next?');
+          return true;
+        case 'stop': {
+          const relay = this.#inflight.get(key);
+          this.#dropGathered(stored.id, seat.key);
+          if (relay) {
+            relay.queued.length = 0;
+            const running = relay.conversationId ?? conversationId;
+            if (running) await this.deps.conversations.interrupt(running).catch(() => undefined);
+            await say('Stopped.');
+          } else await say('I’m not doing anything right now.');
+          return true;
+        }
+        case 'clear': {
+          if (busy) {
+            await stillAnswering(slash('clear'));
+            return true;
+          }
+          if (!conversationId) {
+            await say('There’s nothing to clear yet: our conversation hasn’t started.');
+            return true;
+          }
+          const result = await this.deps.conversations.clear(conversationId);
+          if (!result.changed) {
+            await say(result.message);
+            return true;
+          }
+          await say(
+            `🧹 Cleared. From here I start afresh and won’t read anything said before. It’s all still in Conch, and ${slash('undo')} brings it back until you send something.`,
+            this.#actions.offer(bound, [
+              { label: 'Undo', run: () => this.#restore(stored.id, message.chatId, seat) },
+            ]),
+          );
+          return true;
+        }
+        case 'undo':
+          await this.#restore(stored.id, message.chatId, seat);
+          return true;
+        case 'compact': {
+          if (busy) {
+            await stillAnswering(slash('compact'));
+            return true;
+          }
+          if (!conversationId) {
+            await say('There’s nothing to summarise yet.');
+            return true;
+          }
+          void live.connection.typing(message.chatId).catch(() => undefined);
+          const result = await this.deps.conversations.compact(
+            conversationId,
+            parsed.args || undefined,
+          );
+          await say(result.compacted ? `🗜️ Done. ${result.message}` : result.message);
+          return true;
+        }
+        case 'retry': {
+          if (busy) {
+            await stillAnswering(slash('retry'));
+            return true;
+          }
+          const events = conversationId
+            ? (await this.deps.conversations.detail(conversationId)).events
+            : [];
+          const start = contextStart(events);
+          const last = events.findLast((e) => e.type === 'user.message' && e.seq > start);
+          if (last?.type !== 'user.message' || (!last.text.trim() && !last.attachments?.length)) {
+            await say('There’s nothing to send again yet.');
+            return true;
+          }
+          await this.#send(
+            stored,
+            message.chatId,
+            seat,
+            last.text,
+            (last.attachments ?? []).map((a) => a.id),
+          );
+          return true;
+        }
+        case 'goal':
+          await this.#goal(stored, live, message, seat, parsed.args);
+          return true;
+        case 'plan':
+          await this.#plan(stored, live, message, seat, parsed.args);
+          return true;
+        case 'cancel':
+          this.#settingsMenu.clear(stored.id);
+          await say('Settings closed.');
+          return true;
+        default: {
+          // /model, /effort, /fast, /mode, /status, /settings: the settings menu (ADR 0091).
+          const ctx = await this.#settingsContext(stored.id, message.chatId, message.user.id);
+          await this.#settingsMenu.command(ctx, command.name, parsed.args);
+          return true;
+        }
+      }
+    } catch (error) {
+      if (error instanceof ConversationError && error.code === 'not-found') {
+        this.#fresh(stored.id, seat.key);
+        await this.deps.store.update(stored.id, (c) => {
+          const { [seat.key]: _, ...chats } = c.chats;
+          return { ...c, chats };
+        });
+        await say('That conversation is gone from Conch, so your next message starts a fresh one.');
+      } else await say(explain(error));
+      return true;
+    }
+  }
+
+  /** Send to a chat on a channel that may have reconnected since; failures are only logged. */
+  async #sayTo(channelId: string, chatId: string, text: string, buttons?: ChannelButton[]) {
+    await this.#live
+      .get(channelId)
+      ?.connection.send(chatId, text, buttons?.length ? { buttons } : undefined)
+      .catch((error: unknown) => this.#log(`send: ${explain(error)}`));
+  }
+
+  /** Undo on `/clear` (the button, or `/undo`): the model remembers again, while nothing was sent since. */
+  async #restore(channelId: string, chatId: string, seat: Seat) {
+    const stored = await this.deps.store.get(channelId);
+    if (!stored || !this.#seated(stored, seat)) return;
+    const slash = (name: string) => slashIn(stored.kind, name);
+    const key = `${channelId}:${seat.key}`;
+    if (this.#inflight.has(key) || this.#gathering.has(key)) {
+      await this.#sayTo(
+        channelId,
+        chatId,
+        `I’m still answering. Send ${slash('stop')} or wait, then ${slash('undo')}.`,
+      );
+      return;
+    }
+    const conversationId = stored.chats[seat.key];
+    const events = conversationId
+      ? (await this.deps.conversations.detail(conversationId)).events
+      : [];
+    if (!conversationId || contextStart(events) < 0) {
+      await this.#sayTo(
+        channelId,
+        chatId,
+        `There’s no ${slash('clear')} to take back here. To put back files I changed, open this chat in Conch.`,
+      );
+      return;
+    }
+    const result = await this.deps.conversations.restoreContext(conversationId);
+    await this.#sayTo(
+      channelId,
+      chatId,
+      result.changed ? '↩️ Undone. I remember our conversation again.' : result.message,
+    );
+  }
+
+  /** `/goal`: show it, set it, or take it away (ADR 0098), before the first message too. */
+  async #goal(
+    stored: StoredChannel,
+    live: LiveChannel,
+    message: ChannelMessage,
+    seat: Seat,
+    args: string,
+  ) {
+    const slash = (name: string, a?: string) => slashIn(stored.kind, name, a);
+    const say = (text: string, buttons?: ChannelButton[]) =>
+      live.connection.send(message.chatId, text, buttons?.length ? { buttons } : undefined);
+    const key = `${stored.id}:${seat.key}`;
+    const conversationId = stored.chats[seat.key];
+    const current = conversationId
+      ? chatGoal((await this.deps.conversations.detail(conversationId)).events)
+      : this.#upcoming.get(key)?.goal;
+    /** In the conversation, or kept for the one the next message starts. True when it's in one. */
+    const set = async (goal: string | null) => {
+      const now = (await this.deps.store.get(stored.id))?.chats[seat.key];
+      if (now) await this.deps.conversations.setGoal(now, goal);
+      else {
+        const { goal: _, ...rest } = this.#upcoming.get(key) ?? {};
+        this.#upcoming.set(key, { ...rest, ...(goal && { goal }) });
+      }
+      return Boolean(now);
+    };
+    const clearButton = () =>
+      this.#actions.offer({ channelId: stored.id, chatId: message.chatId, userId: seat.key }, [
+        {
+          label: 'Clear goal',
+          run: async () => {
+            await set(null);
+            await this.#sayTo(stored.id, message.chatId, '🎯 Goal cleared.');
+          },
+        },
+      ]);
+    const said = parseGoalArg(args);
+    if (said.kind === 'clear') {
+      if (!current) await say('This chat has no goal.');
+      else {
+        await set(null);
+        await say('🎯 Goal cleared.');
+      }
+      return;
+    }
+    if (said.kind === 'set') {
+      const goal = ChatGoal.safeParse(said.goal);
+      if (!goal.success) {
+        await say(`Keep the goal to ${MAX_GOAL_LENGTH} characters: a sentence or two.`);
+        return;
+      }
+      const inChat = await set(goal.data);
+      await say(
+        `🎯 Goal set: “${goal.data}”\nI’ll keep it in mind in every reply${inChat ? '' : ', starting with your next message'}.`,
+        clearButton(),
+      );
+      return;
+    }
+    if (current)
+      await say(
+        `🎯 **Goal:** ${current}\nChange it with ${slash('goal', '<new goal>')}.`,
+        clearButton(),
+      );
+    else
+      await say(
+        `This chat has no goal yet. Write ${slash('goal', '<what this chat is for>')}, and I’ll keep it in mind in every reply, whichever model answers.`,
+      );
+  }
+
+  /** Where this seat's chat stands on plan mode, and where `/plan off` goes back to. */
+  async #planState(stored: StoredChannel, seat: Seat) {
+    const conversationId = stored.chats[seat.key];
+    const { preferences } = await this.deps.settings.get();
+    let options = stored.chatOptions;
+    let before: PermissionMode | undefined;
+    if (conversationId) {
+      const detail = await this.deps.conversations.detail(conversationId);
+      options = detail.conversation.options;
+      before = modeBeforePlan(detail.events);
+    }
+    const catalog = await this.deps.models?.().catch(() => undefined);
+    const engine = options.engine ?? catalog?.default ?? preferences.engine;
+    const provider = catalog?.providers.find((p) => p.engine === engine);
+    const planning =
+      (options.permissionMode ?? preferences.permissionMode) === 'plan' ||
+      Boolean(!conversationId && this.#upcoming.get(`${stored.id}:${seat.key}`)?.plan);
+    const backTo = (before ?? preferences.permissionMode) === 'plan' ? 'default' : before;
+    return {
+      conversationId,
+      planning,
+      can: !provider?.permissionModes.length || provider.permissionModes.includes('plan'),
+      label: provider?.label ?? 'This provider',
+      backTo,
+      back: backTo ?? preferences.permissionMode,
+    };
+  }
+
+  /** Plan mode on or off for this seat's chat, now or for the one the next message starts. */
+  async #setPlan(channelId: string, seat: Seat, on: boolean): Promise<string> {
+    const stored = await this.#require(channelId);
+    const state = await this.#planState(stored, seat);
+    const key = `${channelId}:${seat.key}`;
+    if (state.conversationId)
+      await this.deps.conversations.configure(state.conversationId, {
+        permissionMode: on ? 'plan' : state.backTo,
+      });
+    else {
+      const { plan: _, ...rest } = this.#upcoming.get(key) ?? {};
+      this.#upcoming.set(key, { ...rest, ...(on && { plan: true }) });
+    }
+    // Plan mode chosen in /mode for every new chat here ends with /plan off too.
+    if (!on && stored.chatOptions.permissionMode === 'plan')
+      await this.deps.store.update(channelId, (c) => {
+        const { permissionMode: _, ...chatOptions } = c.chatOptions;
+        return { ...c, chatOptions };
+      });
+    return on
+      ? '📋 Plan mode on. I’ll look around and plan first, change nothing, and show you the plan to Start.'
+      : `Plan mode off. Back to ${modeLabel(state.back)}.`;
+  }
+
+  /** `/plan`: on, off, or plan these words (ADR 0098), approved with Start right here. */
+  async #plan(
+    stored: StoredChannel,
+    live: LiveChannel,
+    message: ChannelMessage,
+    seat: Seat,
+    args: string,
+  ) {
+    const say = (text: string, buttons?: ChannelButton[]) =>
+      live.connection.send(message.chatId, text, buttons?.length ? { buttons } : undefined);
+    const state = await this.#planState(stored, seat);
+    if (!state.can) {
+      await say(
+        `${state.label} can’t plan first. Choose another model with ${slashIn(stored.kind, 'model')}.`,
+      );
+      return;
+    }
+    const want = parseSwitch(args);
+    if (want === undefined) {
+      // `/plan tidy up the folder`: plan mode, with this as the message, in one go.
+      if (!state.planning) await this.#setPlan(stored.id, seat, true);
+      this.#gather(stored.id, { ...message, text: args }, seat);
+      return;
+    }
+    const on = want === 'toggle' ? !state.planning : want === 'on';
+    if (on === state.planning) {
+      await say(on ? 'Plan mode is already on.' : 'Plan mode is already off.');
+      return;
+    }
+    const flip = (to: boolean) =>
+      this.#actions.offer({ channelId: stored.id, chatId: message.chatId, userId: seat.key }, [
+        {
+          label: to ? 'Plan first' : 'Act as usual',
+          run: async () => {
+            const words = await this.#setPlan(stored.id, seat, to);
+            await this.#sayTo(stored.id, message.chatId, words, flip(!to));
+          },
+        },
+      ]);
+    await say(await this.#setPlan(stored.id, seat, on), flip(!on));
   }
 
   /**
@@ -1974,6 +2397,8 @@ export class ChannelService {
 
   #fresh(id: string, personId: string) {
     this.#settingsMenu.clear(id);
+    this.#actions.clear(id, personId);
+    this.#upcoming.delete(`${id}:${personId}`);
     this.#epochs.set(`${id}:${personId}`, this.#epoch(id, personId) + 1);
   }
 
@@ -2248,11 +2673,24 @@ export class ChannelService {
         const fromOwner = seat.group ? seat.group.owner : current.people[0]?.id === seat.userId;
         // Anyone but you, in a group: words only, in a conversation that stays that way (ADR 0075).
         const guest = Boolean(seat.group && !seat.group.owner);
+        // `/goal` and `/plan` before the first message: they start the conversation (ADR 0098).
+        const upcoming =
+          !conversationId && fromOwner && !seat.group
+            ? this.#upcoming.get(`${stored.id}:${seat.key}`)
+            : undefined;
         const summary = await this.deps.conversations.send({
           ...(conversationId && { conversationId }),
           clientMessageId,
           text,
-          ...(!conversationId && fromOwner && !seat.group && { options: current.chatOptions }),
+          ...(!conversationId &&
+            fromOwner &&
+            !seat.group && {
+              options: {
+                ...current.chatOptions,
+                ...(upcoming?.plan && { permissionMode: 'plan' as const }),
+              },
+            }),
+          ...(upcoming?.goal && { goal: upcoming.goal }),
           ...(attachments.length && { attachments }),
           ...(!fromOwner && {
             untrusted: {
@@ -2287,6 +2725,7 @@ export class ChannelService {
           }),
         });
         this.#pending.delete(clientMessageId);
+        if (upcoming) this.#upcoming.delete(`${stored.id}:${seat.key}`);
         relay.conversationId = summary.id;
         this.#relays.set(summary.id, relay);
         // Remember it as their current conversation, unless they asked for a fresh one meanwhile.
@@ -2569,7 +3008,7 @@ export class ChannelService {
         e.permissionId,
         e.summary,
         `In **${relay.seat.group.name}**, ${assistant} would like to:`,
-        { always: !e.taint && !e.once },
+        { always: !e.taint && !e.once, plan: planOf(e) },
       );
     }
     if (e.taint) {
@@ -2590,9 +3029,7 @@ export class ChannelService {
       e.permissionId,
       e.summary,
       undefined,
-      {
-        always: !e.taint && !e.once,
-      },
+      { always: !e.taint && !e.once, plan: planOf(e) },
     );
   }
 
@@ -2603,13 +3040,23 @@ export class ChannelService {
     permissionId: string,
     summary: string,
     heading?: string,
-    options: { always?: boolean } = {},
+    /** `plan`: it asks to start on this plan (`/plan`), with Start and Keep planning. */
+    options: { always?: boolean; plan?: string | undefined } = {},
   ) {
     const live = this.#live.get(channelId);
     const askKey = `${channelId}:${permissionId}`;
     if (!live || this.#asks.has(askKey)) return;
     const key = randomBytes(6).toString('base64url');
-    const ask: Ask = { channelId, chatId, conversationId, permissionId, summary, refs: [] };
+    const plan = options.plan !== undefined;
+    const ask: Ask = {
+      channelId,
+      chatId,
+      conversationId,
+      permissionId,
+      summary,
+      refs: [],
+      ...(plan && { plan }),
+    };
     this.#asks.set(askKey, ask);
     this.#buttons.set(key, askKey);
     const assistant = (await this.deps.settings.get()).persona.name;
@@ -2617,15 +3064,30 @@ export class ChannelService {
     // in your private chat, a routine's) on its own.
     const relay = this.#relays.get(conversationId);
     const inline = relay?.chatId === chatId && relay.channelId === channelId ? relay : undefined;
-    const text = `🔐 ${heading ?? `**${assistant} would like to:**`}\n${summary}`;
+    const text = plan
+      ? `${heading ? `${heading.replace(/would like to:$/, 'has a plan.')} ` : ''}Start on it?`
+      : `🔐 ${heading ?? `**${assistant} would like to:**`}\n${summary}`;
     const buttons = {
-      buttons: [
-        { label: 'Allow', data: `p:${key}:a`, style: 'primary' as const },
-        ...(options.always !== false ? [{ label: 'Always in this chat', data: `p:${key}:A` }] : []),
-        { label: 'Don’t allow', data: `p:${key}:d`, style: 'danger' as const },
-      ],
+      buttons: plan
+        ? [
+            { label: 'Start', data: `p:${key}:a`, style: 'primary' as const },
+            { label: 'Keep planning', data: `p:${key}:d`, style: 'danger' as const },
+          ]
+        : [
+            { label: 'Allow', data: `p:${key}:a`, style: 'primary' as const },
+            ...(options.always !== false
+              ? [{ label: 'Always in this chat', data: `p:${key}:A` }]
+              : []),
+            { label: 'Don’t allow', data: `p:${key}:d`, style: 'danger' as const },
+          ],
     };
     try {
+      // The plan goes first, as it was written; the question with its buttons right under it.
+      if (plan) {
+        const words = `📋 **The plan**\n\n${options.plan || summary}`;
+        if (inline) await this.#say(inline, words);
+        else await live.connection.send(chatId, words);
+      }
       ask.refs = inline
         ? await this.#say(inline, text, buttons)
         : await live.connection.send(chatId, text, buttons);
@@ -2658,6 +3120,16 @@ export class ChannelService {
     const live = this.#live.get(ask.channelId);
     const ref = ask.refs.at(-1);
     if (!live || !ref) return;
+    if (ask.plan) {
+      const words = {
+        allow: '▶️ Started on the plan.',
+        'allow-always': '▶️ Started on the plan.',
+        deny: '✏️ Kept planning. Tell me what to change.',
+        expired: '⌛ No answer in time, so I kept planning.',
+      }[decision];
+      await live.connection.edit(ref, words).catch(() => undefined);
+      return;
+    }
     const said = {
       allow: '✅ Allowed',
       'allow-always': '✅ Allowed for the rest of this chat',
@@ -2694,6 +3166,30 @@ export class ChannelService {
       await press.ack('Only people who were let in can answer.');
       return;
     }
+    // A command's own buttons (Undo after /clear, "did you mean"): only for whoever it answered.
+    if (press.data.startsWith('c:')) {
+      const run =
+        stored.enabled && !stored.blocked.includes(press.user.id)
+          ? this.#actions.take(press.data, {
+              channelId: id,
+              chatId: press.chatId,
+              userId: press.user.id,
+            })
+          : 'gone';
+      if (typeof run !== 'function') {
+        await press.ack(
+          run === 'not-yours' ? 'That button isn’t for you.' : 'That button has expired.',
+        );
+        return;
+      }
+      await press.ack();
+      try {
+        await run();
+      } catch (error) {
+        await this.#sayTo(id, press.chatId, explain(error));
+      }
+      return;
+    }
     const match = /^p:([\w-]+):([aAd])$/.exec(press.data);
     const askKey = match?.[1] ? this.#buttons.get(match[1]) : undefined;
     const ask = askKey ? this.#asks.get(askKey) : undefined;
@@ -2705,7 +3201,15 @@ export class ChannelService {
       match[2] as 'a' | 'A' | 'd'
     ];
     await this.deps.conversations.respond(ask.conversationId, ask.permissionId, decision);
-    await press.ack(decision === 'deny' ? 'Not allowed' : 'Allowed');
+    await press.ack(
+      ask.plan
+        ? decision === 'deny'
+          ? 'Keep planning'
+          : 'Starting'
+        : decision === 'deny'
+          ? 'Not allowed'
+          : 'Allowed',
+    );
   }
 
   // ── Messages Conch starts ──────────────────────────────────────────────
