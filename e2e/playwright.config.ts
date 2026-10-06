@@ -133,6 +133,8 @@ const scenarios = {
   offers: { port: 4354, env: { CONCH_MOCK_STATE: 'ready' } },
   // The plan, ticking itself off (ADR 0060): a plan that ticks and folds, and plan mode's Start.
   plans: { port: 4347, env: { CONCH_MOCK_STATE: 'ready' } },
+  // Conch's own chat commands (ADR 0098): `/clear` with its Undo, and `/goal`.
+  commands: { port: 4345, env: { CONCH_MOCK_STATE: 'ready' } },
   // A model that can only chat (ADR 0050): a message that needs an app offers one that can.
   'chat-only': { port: 4358, env: { CONCH_MOCK_STATE: 'ready' } },
   // Questions answered with a tap (ADR 0060): tapped, typed, skipped, and a reload while one waits.

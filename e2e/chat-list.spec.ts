@@ -65,7 +65,8 @@ test('pin, file, drag, select and archive, and it all stays after a reload', asy
   const messages = ['Plan a week in Lisbon', 'Groceries for Sunday', 'Birthday ideas for Maya'];
   for (const [index, text] of messages.entries()) {
     if (index > 0) {
-      await page.getByRole('button', { name: 'New chat' }).click();
+      // Exact: once a folder exists, ✎ beside it is "New chat in <folder>" too.
+      await page.getByRole('button', { name: 'New chat', exact: true }).click();
       // Wait for the new view and its focus effect before typing. The previous
       // chat's composer can still be present while navigation is settling.
       await expect(page).toHaveURL('/');

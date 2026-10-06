@@ -85,6 +85,26 @@ test('plan mode’s Start runs the plan', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Plan · 4 of 4 done' })).toBeVisible();
 });
 
+test('/plan plans first, and Start gives the mode back', async ({ page }) => {
+  await openConch(page);
+  const mode = page.getByRole('button', { name: /^Mode: / });
+  const before = await mode.getAttribute('aria-label');
+
+  // `/plan <what>`: in plan mode, with this as the message, in one step.
+  await composer(page).fill('/plan Tidy up this folder');
+  await composer(page).press('Enter');
+  await expect(mode).toHaveAttribute('aria-label', 'Mode: Plan only');
+
+  const asking = page.getByRole('region', { name: 'Conch has a plan' });
+  await expect(asking).toBeVisible({ timeout: 20_000 });
+  await asking.getByRole('button', { name: 'Start' }).click();
+
+  // Started: the chat is out of plan mode, back in the mode it had before.
+  await expect(page.getByRole('button', { name: 'Started on the plan' })).toBeVisible();
+  await expect(mode).toHaveAttribute('aria-label', before ?? 'Mode: Ask first');
+  await expect(page.getByText('All tidy.')).toBeVisible({ timeout: 30_000 });
+});
+
 test('a short answer has no plan', async ({ page }) => {
   await openConch(page);
   await say(page, 'What is a monad?', "Here's a thought on");
