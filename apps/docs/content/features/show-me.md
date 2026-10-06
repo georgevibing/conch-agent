@@ -53,7 +53,7 @@ At the top of the panel are **Copy**, **Download**, **Pin as an app** and **Full
 
 ## Pin it as an app
 
-**Pin as an app** puts it at the top of the sidebar as an app tile, on a page of its own, one press from anywhere. Right-click the tile, or press and hold it, to unpin it.
+**Pin as an app** puts it at the top of the sidebar under **Apps**, as an app tile on a page of its own, one press from anywhere. Right-click the tile, or press and hold it, to unpin it. Once you have more apps than fit, they're all behind **All apps** in the same place.
 
 When the numbers have moved on, press **Refresh**. Your assistant gets fresh data and makes a new version. It does that in a chat of its own, which can only update that one thing. **Watch it refresh** opens that chat.
 

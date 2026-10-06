@@ -2,24 +2,29 @@ import {
   AppDock,
   AppIcon,
   ARTIFACT_KINDS,
+  Button,
   ContextMenu,
   DockGlyph,
   toast,
   type AppDockItem,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { Info, MessageSquare, PinOff, SquareArrowOutUpRight } from 'lucide-react';
+import { Info, LayoutGrid, MessageSquare, PinOff, SquareArrowOutUpRight } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 
 import { usePinnedApps, useUpdateArtifact } from '../artifacts/queries';
 import { conchAppsApi } from '../conchapps/api';
 import { putConchApp, useConchApps } from '../conchapps/queries';
 import { appLook, conchAppPath, conchPagePath } from '../conchapps/words';
+import { APPS_PATH } from '../integrations/paths';
+import { favouritesFirst, useAppsOpened } from './appOrder';
 
 /**
  * Pinned apps at the top of the chat list (ADR 0089, after ADR 0034 and 0061):
- * a row of app tiles, so a page reads as an app, not as one more chat. Each
- * says where it came from, and a right-click or a long press unpins it.
+ * a row of app tiles under a quiet **Apps** heading, so a page reads as an
+ * app, not as one more chat. Each says where it came from, and a right-click
+ * or a long press unpins it. The ones you open most sit in the row; past two
+ * rows the last tile is **All apps**, a folder of every one, with a search.
  */
 export function PinnedAppsDock({ onNavigate }: { onNavigate?: () => void }) {
   const artifacts = usePinnedApps();
@@ -28,6 +33,7 @@ export function PinnedAppsDock({ onNavigate }: { onNavigate?: () => void }) {
   const client = useQueryClient();
   const navigate = useNavigate();
   const path = useLocation().pathname;
+  const { recent, opened } = useAppsOpened();
 
   const go = (to: string) => {
     void navigate(to);
@@ -120,7 +126,31 @@ export function PinnedAppsDock({ onNavigate }: { onNavigate?: () => void }) {
     };
   });
 
-  const items = [...pages, ...made];
+  // The row leads with what you reach for; the folder keeps every app in the
+  // order they were added, so nothing moves about inside it.
+  const items = [...pages, ...made].map((item) => ({
+    ...item,
+    onOpen: () => {
+      opened(item.key);
+      item.onOpen();
+    },
+  }));
   if (!items.length) return null;
-  return <AppDock items={items} label="Pinned apps" />;
+  return (
+    <AppDock
+      items={items}
+      label="Pinned apps"
+      order={favouritesFirst(items, recent)}
+      folderActions={
+        <Button
+          variant="ghost"
+          size="sm"
+          leadingIcon={<LayoutGrid />}
+          onClick={() => go(APPS_PATH)}
+        >
+          Open Apps
+        </Button>
+      }
+    />
+  );
 }

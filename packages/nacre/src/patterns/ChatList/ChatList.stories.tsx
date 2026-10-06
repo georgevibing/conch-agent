@@ -17,9 +17,12 @@ import { fn } from 'storybook/test';
 import { DropdownMenu } from '../../components/DropdownMenu';
 import { ContextMenu } from '../../components/ContextMenu';
 import { IconButton } from '../../components/IconButton';
+import { Button } from '../../components/Button';
 import { AppIcon } from '../ConchApps/AppIcon';
+import { APP_COLORS, APP_GLYPHS } from '../ConchApps/glyphs';
 import { IntegrationLogo } from '../Integrations/IntegrationLogo';
 import { AppDock, DockGlyph, type AppDockItem } from './AppDock';
+import { AppFolder } from './AppFolder';
 import { ChatListSection } from './ChatListSection';
 import { ChatRow, ChatRowSkeleton, type ChatStatus } from './ChatRow';
 import { FolderDialog } from './FolderDialog';
@@ -43,7 +46,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The pieces of the chat list in the sidebar. **Rows** keep today’s calm look (muted text, the open chat lifted onto the surface, ⋯ on hover) and add where each chat is: a breathing pearl while Conch works, an amber dot that softly calls when it needs you, an accent dot and a firmer title for something new, a hollow ring when a turn didn’t finish — each also said aloud, never colour alone. **Groups** hold Pinned and stretches of time under quiet labels, and **folders**, named like rows (a glyph on a wash of its colour, the name at a chat’s size, folding away with a count, with a button to start a chat inside). Pinned pages sit above as a **dock of app icons**, so they read as apps, not chats. Choosing several brings up a **bar**; chats drag onto a folder or Pinned on a computer; on a phone they swipe, and a hold lifts one to be dragged. A quiet **tidy-up** offer sits at the very end, never a warning.',
+          'The pieces of the chat list in the sidebar. **Rows** keep today’s calm look (muted text, the open chat lifted onto the surface, ⋯ on hover) and add where each chat is: a breathing pearl while Conch works, an amber dot that softly calls when it needs you, an accent dot and a firmer title for something new, a hollow ring when a turn didn’t finish — each also said aloud, never colour alone. **Groups** hold Pinned and stretches of time under quiet labels, and **folders**, named like rows (a glyph on a wash of its colour, the name at a chat’s size, folding away with a count, with a button to start a chat inside). Pinned pages sit above as a **dock of app icons** under a quiet **Apps** heading, so they read as apps, not chats; past two rows the last tile is **All apps**, an iOS-style **folder** of every app with a search and keyboard moves. Choosing several brings up a **bar**; chats drag onto a folder or Pinned on a computer; on a phone they swipe, and a hold lifts one to be dragged. A quiet **tidy-up** offer sits at the very end, never a warning.',
       },
     },
   },
@@ -531,6 +534,119 @@ export const Dock: Story = {
   render: () => <AppDock items={dockItems} />,
 };
 
+const APP_NAMES = [
+  'Tally',
+  'Plant diary',
+  'Running log',
+  'Recipes',
+  'Reading list',
+  'Habit streaks',
+  'Trip planner',
+  'Garden map',
+  'Budget',
+  'Café finder',
+  'Workouts',
+  'Film club',
+  'Bird log',
+  'Mood journal',
+  'Chores',
+  'Wine cellar',
+  'Sleep',
+  'Invoices',
+  'Flashcards',
+  'Guitar tabs',
+  'Meal plan',
+  'Water',
+  'Bike rides',
+  'Dog walks',
+  'Board games',
+  'Gift ideas',
+  'Car service',
+  'Tides',
+  'Star chart',
+  'Vinyl',
+  'Podcasts',
+  'Weather',
+  'Allotment',
+  'Knitting',
+  'Climbing',
+  'Pantry',
+  'Bills',
+  'Language',
+  'Photo diary',
+  'Birthdays',
+  'Moving house',
+  'Sourdough',
+  'Chess',
+  'Swim times',
+  'Packing',
+  'Coffee beans',
+  'Hikes',
+  'Book club',
+  'Piano practice',
+  'Wishlist',
+];
+
+/** Fifty apps, the way a busy sidebar fills up: a Conch app's icon each, a few with a dot. */
+const manyApps: AppDockItem[] = APP_NAMES.map((name, i) => ({
+  key: `app-${i}`,
+  label: name,
+  icon: (
+    <AppIcon
+      glyph={APP_GLYPHS[(i * 7) % APP_GLYPHS.length] ?? 'sparkles'}
+      color={APP_COLORS[i % APP_COLORS.length] ?? 'slate'}
+    />
+  ),
+  source: `The ${name} app`,
+  active: i === 0,
+  status: i === 2 ? 'unread' : i === 12 ? 'waiting' : undefined,
+  onOpen: fn(),
+  menu: <DockMenu />,
+}));
+
+const openApps = (
+  <Button variant="ghost" size="sm">
+    Open Apps
+  </Button>
+);
+
+/**
+ * Three pinned apps: the quiet **Apps** heading over one short row. Nothing
+ * else until there are more than fit.
+ */
+export const DockFew: Story = {
+  render: () => <AppDock items={dockItems.slice(0, 3)} />,
+};
+
+/**
+ * Fifty pinned apps. The sidebar keeps two rows: seven apps, then **All apps**,
+ * a folder of the rest in miniature, wearing the most pressing dot inside it
+ * (one is waiting for you). Press it for every app at once.
+ */
+export const DockMany: Story = {
+  render: () => <AppDock items={manyApps} folderActions={openApps} />,
+};
+
+/**
+ * All apps, open: it grows out of the tile that opened it into a grid with a
+ * search at the top, like a folder on a phone. Type to find (“cafe” finds
+ * Café finder), ↓ into the grid, the arrows by tile and by row, Enter opens,
+ * Escape folds it back.
+ */
+export const Folder: Story = {
+  render: () => <FolderDemo />,
+};
+
+function FolderDemo() {
+  const [open, setOpen] = useState(true);
+  return (
+    <>
+      <Button onClick={() => setOpen(true)}>All apps</Button>
+      <AppFolder open={open} onOpenChange={setOpen} items={manyApps} actions={openApps} />
+    </>
+  );
+}
+
 function FolderDialogDemo({ mode }: { mode: 'new' | 'edit' }) {
   const [open, setOpen] = useState(true);
   return (
@@ -584,7 +700,7 @@ export const Sidebar: Story = {
   parameters: { layout: 'centered' },
   render: () => (
     <>
-      <AppDock items={dockItems.slice(0, 4)} />
+      <AppDock items={dockItems} />
       <ChatListSection label="Needs you">
         <Row chat={{ id: 'n1', title: 'Book the dentist for Friday', status: 'waiting' }} />
       </ChatListSection>
