@@ -25,7 +25,9 @@
     align-items: center;
     inline-size: 100%;
     min-inline-size: 0;
-    overflow: hidden;
+    /* Clipped, not scrolled — with room for the ring on the page you're on. */
+    overflow: clip;
+    overflow-clip-margin: var(--nc-space-1);
     margin: 0;
     padding: 0;
     list-style: none;

@@ -156,9 +156,16 @@ describe('Settings', () => {
     const trail = within(page).getByRole('navigation', { name: 'Breadcrumb' });
     expect(within(trail).getByText('What Conch knows')).toHaveAttribute('aria-current', 'page');
     expect(within(page).getAllByRole('button', { name: 'Memory' })).toHaveLength(1);
+    // Arriving puts the focus on the page's name, so the way back is a Shift+Tab away.
+    await waitFor(() => expect(within(trail).getByText('What Conch knows')).toHaveFocus());
+
     await userEvent.click(within(trail).getByRole('button', { name: 'Memory' }));
     expect(where()).toBe('/settings/memory');
     expect(within(page).queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull();
+    // Stepping back out reads the place itself.
+    await waitFor(() =>
+      expect(within(page).getByRole('heading', { name: 'Memory', level: 3 })).toHaveFocus(),
+    );
   });
 
   it('on a phone, opens with its places floating in from the side, like the chats', async () => {
@@ -184,6 +191,8 @@ describe('Settings', () => {
     const trail = within(page).getByRole('navigation', { name: 'Breadcrumb' });
     expect(within(trail).getByText('Providers')).toHaveAttribute('aria-current', 'page');
     expect(within(page).getByRole('tabpanel', { name: 'Providers' })).toBeInTheDocument();
+    // The menu is gone with what was pressed in it: the focus lands on where you are.
+    await waitFor(() => expect(within(trail).getByText('Providers')).toHaveFocus());
 
     // Settings itself is its places: putting them away is going to the place
     // behind them, so the address still says where you are.
@@ -194,6 +203,11 @@ describe('Settings', () => {
     await waitFor(() => expect(screen.queryByRole('tablist', { name: 'Intelligence' })).toBeNull());
     expect(where()).toBe('/settings/general');
     expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        within(within(page).getByRole('navigation', { name: 'Breadcrumb' })).getByText('General'),
+      ).toHaveFocus(),
+    );
 
     // The menu is a press away, and in it the way back to the chats.
     await userEvent.click(within(page).getByRole('button', { name: 'Open settings menu' }));

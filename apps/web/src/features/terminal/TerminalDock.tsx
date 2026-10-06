@@ -21,6 +21,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 
 import { useUi } from '../../app/ui';
+import { NARROW } from '../../app/widths';
 import { useHotkey } from '../../app/useHotkey';
 import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
@@ -79,7 +80,7 @@ function Drawer() {
   const pasteInTerminal = useUi((s) => s.pasteInTerminal);
   const asked = useUi((s) => s.terminalNew);
   const setComposerText = useUi((s) => s.setComposerText);
-  const narrow = useMediaQuery('(max-width: 820px)');
+  const narrow = useMediaQuery(NARROW);
   const touch = useMediaQuery('(pointer: coarse)');
   const views = useRef(new Map<string, TerminalViewHandle>());
   const [sessionStates, setSessionStates] = useState<Record<string, SessionState['kind']>>({});

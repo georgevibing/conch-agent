@@ -257,8 +257,8 @@
     outline-offset: 3px;
   }
 
-  /* A phone: the page you chose, its places a menu away. */
-  @media (max-width: 720px) {
+  /* Narrow: the page you chose, its places a menu away (app/widths.ts). */
+  @media (max-width: 820px) {
     .tabs {
       grid-template-columns: minmax(0, 1fr);
     }

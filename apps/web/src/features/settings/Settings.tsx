@@ -45,12 +45,13 @@ import {
   Sun,
   User,
 } from 'lucide-react';
-import { useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router';
 
 import { useAppState, useMemories, useUpdateSettings } from '../../api/queries';
 import { Trail } from '../../app/trail';
 import { useUi } from '../../app/ui';
+import { NARROW } from '../../app/widths';
 import { SecurityTab } from '../auth/SecurityTab';
 import { updatesWaiting, useUpdates } from '../updates/queries';
 import { BrowserSettings } from '../browser/BrowserSettings';
@@ -377,7 +378,9 @@ export function Settings() {
   const open = useUi((s) => s.openSettings);
   const close = useUi((s) => s.closeSettings);
   const { data: app } = useAppState();
-  const narrow = useMediaQuery('(max-width: 720px)');
+  // The same width the window folds its own sidebar away at (app/widths.ts),
+  // so the places beside the page and the chats beside it go together.
+  const narrow = useMediaQuery(NARROW);
   const updates = updatesWaiting(useUpdates().data);
   const inside = usePageInside(tab, address?.item);
   const leave = behindName(behindOf(location));
@@ -388,11 +391,62 @@ export function Settings() {
   // — as the chats' sidebar is. Putting them away is going to the place behind
   // them, so the address always says where you are.
   const menuOut = narrow && (home || menu);
+  // Putting the places away by choosing one is arriving at it: the focus goes
+  // where you are, not back to the menu button (`chose`).
+  const chose = useRef(false);
   const showMenu = (out: boolean) => {
-    if (out) setMenu(true);
-    else if (home) open(tab ?? 'general', undefined, { replace: true });
-    else setMenu(false);
+    if (out) {
+      chose.current = false;
+      setMenu(true);
+    } else if (home) {
+      chose.current = true;
+      open(tab ?? 'general', undefined, { replace: true });
+    } else setMenu(false);
   };
+
+  // The row above the page: the trail, in a phone's header or beside the page.
+  const top = useRef<HTMLElement | null>(null);
+  const setTop = (el: HTMLElement | null) => {
+    top.current = el;
+  };
+  const columnRef = useRef<HTMLDivElement>(null);
+  const landed = useRef(false);
+
+  /**
+   * Where you are takes the focus (NACRE.md § Where you are): the page's name
+   * in the trail, so the way back is one Shift+Tab away, or — stepping back
+   * out of a page, or arriving at a place from the menu — the place's heading.
+   */
+  const focusHere = () => {
+    const here =
+      top.current?.querySelector<HTMLElement>('[aria-current="page"]') ??
+      columnRef.current?.querySelector<HTMLElement>('h3');
+    if (!here) return false;
+    if (!here.hasAttribute('tabindex')) here.setAttribute('tabindex', '-1');
+    here.focus({ preventScroll: true });
+    return true;
+  };
+
+  // Arriving anywhere in Settings by a press leaves the focus nowhere — what
+  // was pressed is gone with the page it was on. It goes to where you are now;
+  // focus something else took (a field, a page that places it itself) stays.
+  useEffect(() => {
+    // Arriving at Settings itself, its place takes the focus (`onOpenAutoFocus`);
+    // while the places are out on a phone, they do.
+    if (!tab) {
+      landed.current = false;
+      return;
+    }
+    const arriving = !landed.current;
+    landed.current = true;
+    if (arriving || menuOut) return;
+    const frame = requestAnimationFrame(() => {
+      const at = document.activeElement;
+      if (at && at !== document.body && at.getAttribute('role') !== 'dialog') return;
+      focusHere();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [tab, inside, menuOut, location.key]);
 
   const trail = tab && (
     <Trail
@@ -452,6 +506,7 @@ export function Settings() {
                   // or from a page inside it (a provider's) to the place.
                   onClick={() => {
                     if (t.value === tab && (home || address?.item)) open(t.value);
+                    if (narrow) chose.current = true;
                     setMenu(false);
                   }}
                 >
@@ -520,9 +575,12 @@ export function Settings() {
           // On a phone its places are out: they take the focus themselves.
           if (menuOut) return event.preventDefault();
           // Straight onto the place it opened at, so the arrow keys move from there.
-          const here = (event.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>(
-            '[role="tab"][data-state="active"]',
-          );
+          // Its places are beside it; on a phone they're away, and where you
+          // are is the trail in its header.
+          const content = event.currentTarget as HTMLElement | null;
+          const here =
+            content?.querySelector<HTMLElement>('[role="tab"][data-state="active"]') ??
+            content?.querySelector<HTMLElement>('[aria-current="page"]');
           if (here) {
             event.preventDefault();
             here.focus();
@@ -556,6 +614,13 @@ export function Settings() {
                       here.focus();
                     }
                   }}
+                  // Put away by choosing a place, the focus goes to that place
+                  // (the menu button it came from is no longer where you are).
+                  onCloseAutoFocus={(event) => {
+                    if (!chose.current) return;
+                    chose.current = false;
+                    if (focusHere()) event.preventDefault();
+                  }}
                 >
                   {places}
                 </Sheet.Content>
@@ -565,7 +630,7 @@ export function Settings() {
             )}
             <div className={styles.panel}>
               {narrow ? (
-                <header className={styles.header}>
+                <header ref={setTop} className={styles.header}>
                   <IconButton label="Open settings menu" onClick={() => showMenu(true)}>
                     <Menu />
                   </IconButton>
@@ -574,9 +639,11 @@ export function Settings() {
                   {trail}
                 </header>
               ) : (
-                <div className={styles.crumbs}>{inside && trail}</div>
+                <div ref={setTop} className={styles.crumbs}>
+                  {inside && trail}
+                </div>
               )}
-              <div className={styles.column}>
+              <div ref={columnRef} className={styles.column}>
                 {SETTINGS_TABS.map((value) => (
                   <Tabs.Content
                     key={value}

@@ -47,10 +47,8 @@ import { TerminalToggle } from '../features/terminal/TerminalToggle';
 import { useProviderSignInResult } from '../features/providers/useSignInResult';
 import { MEMORY_ALL } from '../features/settings/paths';
 import { useUi } from './ui';
+import { NARROW, PHONE } from './widths';
 import { useHotkey } from './useHotkey';
-
-/** A phone's width: the header folds what it can into one button. */
-export const PHONE = '(max-width: 560px)';
 
 function Reconnecting() {
   const connection = useLiveStore((s) => s.connection);
@@ -133,7 +131,7 @@ export function Shell() {
   // An edit by hand not saved yet: leaving the page asks first (ADR 0046).
   useUnsavedGuard();
   const { data: conversations } = useConversations();
-  const narrow = useMediaQuery('(max-width: 820px)');
+  const narrow = useMediaQuery(NARROW);
   // A phone: the header keeps the chat's name in view, and folds the rest away.
   const phone = useMediaQuery(PHONE);
   const { sidebarOpen, toggleSidebar, mobileSidebarOpen, setMobileSidebar, openSettings } = useUi();

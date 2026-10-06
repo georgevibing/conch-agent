@@ -85,6 +85,7 @@ import { useNavigate } from 'react-router';
 
 import { useConversations, useFolders } from '../../api/queries';
 import { useUi, type SettingsTab } from '../../app/ui';
+import { NARROW } from '../../app/widths';
 import { MEMORY_ALL } from '../settings/paths';
 import { ARCHIVE_PATH, isChat, useArchive } from '../archive/useArchive';
 import { useOrganise } from '../chatlist/useOrganise';
@@ -393,7 +394,7 @@ export function useFindables(query: string, conversationId: string | undefined):
   const { pin, fileIn } = useOrganise();
   const showFolder = useUi((s) => s.showFolder);
   const openFolderDialog = useUi((s) => s.openFolderDialog);
-  const narrow = useMediaQuery('(max-width: 820px)');
+  const narrow = useMediaQuery(NARROW);
   const { isQuiet, setQuiet } = useQuietChat();
   const here = conversations?.find((c) => c.id === conversationId);
   const offerHere = conversationId

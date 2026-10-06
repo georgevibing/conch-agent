@@ -96,14 +96,17 @@ A page inside a page (Settings → Memory → What Conch knows, a provider's own
 page) says where it is with one `Breadcrumb` above it: each place above is a
 step back to it, the last is the page you're on. Never a stack of back buttons,
 and never a trail for a page with nothing above it: its heading is enough. Short
-of room, the places above give way to an ellipsis first. On a phone, a page's
-own places float in from the side as a `Sheet`, like the chats do, opened from
-the menu button beside the trail; the way out (‹ Chats) is at their top.
-Everywhere else (an app's page, a skill's, a routine's, a password on a
-phone) the trail is the window's header, in place of the place's name and on
-every width (`usePageTrail` in `apps/web/src/app/trail.tsx`): Apps › Gmail.
-Arriving there by a press puts the focus on the page's name in the trail, so
-the way back is one Shift+Tab away; stepping back out puts it on the place's
+of room, the places above give way to an ellipsis first. In a narrow window, a
+page's own places float in from the side as a `Sheet`, like the chats do, opened
+from the menu button beside the trail; the way out (‹ Chats) is at their top.
+They fold away at the width the window's own sidebar does — one shared
+breakpoint (`apps/web/src/app/widths.ts`), so there's never a band where one
+has folded and the other hasn't. Everywhere else (an app's page, a skill's, a
+routine's, a password on a phone) the trail is the window's header, in place of
+the place's name and on every width (`usePageTrail` in
+`apps/web/src/app/trail.tsx`): Apps › Gmail. Arriving there by a press puts the
+focus on the page's name in the trail, so the way back is one Shift+Tab away;
+stepping back out — or choosing a place from the menu — puts it on the place's
 heading.
 
 ## Elevation
