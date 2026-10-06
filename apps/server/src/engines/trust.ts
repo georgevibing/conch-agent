@@ -1,4 +1,4 @@
-/** When a command may skip the seal because the person already said yes (Full trust). */
+/** When a command may skip the seal because the person already said yes (Full trust, Auto). */
 import { homedir, tmpdir } from 'node:os';
 import { join, relative, resolve, isAbsolute } from 'node:path';
 
@@ -23,10 +23,12 @@ const within = (root: string, path: string) => {
  * seal and the question.
  */
 export function runsUnsealedByTrust(
-  input: Pick<TurnInput, 'cwd' | 'options'>,
+  input: Pick<TurnInput, 'cwd' | 'options' | 'tainted'>,
   command: string,
 ): boolean {
-  if (input.options.permissionMode !== 'bypassPermissions') return false;
+  const mode = input.options.permissionMode;
+  // Auto too, until the chat reads something (ADR 0100): then routine commands stay sealed.
+  if (mode !== 'bypassPermissions' && !(mode === 'auto' && !input.tainted)) return false;
   if (NEEDS_OUTSIDE.test(command)) return true;
   const here = resolve(input.cwd);
   const home = homedir();
@@ -44,7 +46,7 @@ export function runsUnsealedByTrust(
 
 /** What a sealed command that failed is told, so it asks for what it needs rather than giving up. */
 export const SEALED_HINT =
-  '\n[Conch: this ran sealed: no network, and writes only in the work folder (not .git). If it failed for that reason, run it again with dangerouslyDisableSandbox: true. The person is asked first, unless they chose Full trust. Do not tell the person the session is read-only.]';
+  '\n[Conch: this ran sealed: no network, and writes only in the work folder (not .git). If it failed for that reason, run it again with dangerouslyDisableSandbox: true. The person is asked first, unless they chose Full trust or Auto. Do not tell the person the session is read-only.]';
 
 /**
  * A tool of Conch's own that asks unless Full trust is the person's (a command,

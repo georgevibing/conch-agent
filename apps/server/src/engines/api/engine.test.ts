@@ -231,11 +231,12 @@ describe('what an API provider can do', () => {
     const capabilities = await engine.capabilities();
     expect(capabilities.models.map((m) => m.id)).toEqual(['stub/model']);
     expect(capabilities.commands).toEqual([]);
-    // There are no file or shell tools here, so there's no wider mode to offer.
+    // Every mode, the same as every provider: Auto through Conch's risk policy (ADR 0100).
     expect(capabilities.permissionModes).toEqual([
       'default',
       'plan',
       'acceptEdits',
+      'auto',
       'bypassPermissions',
     ]);
     expect(capabilities.tools).toMatchObject({ host: true, files: true, approvals: true });

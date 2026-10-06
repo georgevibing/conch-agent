@@ -7,8 +7,11 @@ import { runsUnsealedByTrust } from './trust';
 import type { TurnInput } from './types';
 
 const cwd = join(homedir(), '.conch', 'workspace');
-const as = (permissionMode: string) =>
-  ({ cwd, options: { permissionMode } }) as unknown as Pick<TurnInput, 'cwd' | 'options'>;
+const as = (permissionMode: string, tainted = false) =>
+  ({ cwd, options: { permissionMode }, tainted }) as unknown as Pick<
+    TurnInput,
+    'cwd' | 'options' | 'tainted'
+  >;
 
 describe('Full trust runs what a seal would only break', () => {
   it('lets git and installs reach the network', () => {
@@ -30,6 +33,12 @@ describe('Full trust runs what a seal would only break', () => {
     expect(runsUnsealedByTrust(as('bypassPermissions'), 'cat /etc/hostname && ls /tmp/x')).toBe(
       false,
     );
+  });
+
+  it('Auto does the same until the chat reads something (ADR 0100)', () => {
+    expect(runsUnsealedByTrust(as('auto'), 'pnpm install')).toBe(true);
+    expect(runsUnsealedByTrust(as('auto'), `ls ${cwd}/src`)).toBe(false);
+    expect(runsUnsealedByTrust(as('auto', true), 'pnpm install')).toBe(false);
   });
 
   it('never skips the seal in any other mode', () => {

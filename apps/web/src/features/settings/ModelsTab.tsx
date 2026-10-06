@@ -1,11 +1,10 @@
 import { fuzzyMatch, type EffortChoice, type PermissionMode } from '@conch/protocol';
 import {
-  AlertDialog,
   Button,
   Field,
   IntegrationLogo,
+  ModeChoice,
   ModelPicker,
-  RadioGroup,
   SegmentedControl,
   SettingsAdvanced,
   Skeleton,
@@ -32,7 +31,6 @@ export function ModelsTab() {
   const { data: app } = useAppState();
   const { data: catalog, isLoading } = useModels(Boolean(app));
   const update = useUpdateSettings();
-  const [confirmTrust, setConfirmTrust] = useState(false);
   const [picking, setPicking] = useState(false);
   const [advanced, setAdvanced] = useAdvanced(FALLBACK_FOCUS);
 
@@ -126,27 +124,22 @@ export function ModelsTab() {
 
       <Section
         title={`How much ${assistant} can do on its own`}
-        description="When it stops to ask you first."
+        description="Where every new chat starts. Each chat can change its own from the message box."
       >
-        <RadioGroup
-          variant="card"
+        {/* The chat's picker and this list share one definition: the same icons, names and lines. */}
+        <ModeChoice
           aria-label="Default mode"
+          options={availableModes(caps?.permissionModes).map((m) => ({
+            value: m.value,
+            label: m.label,
+            description: m.description,
+            icon: m.icon,
+            tone: m.tone,
+          }))}
           value={prefs?.permissionMode ?? 'default'}
-          onValueChange={(v) => {
-            if (v === 'bypassPermissions') setConfirmTrust(true);
-            else save({ permissionMode: v as PermissionMode });
-          }}
-          className={styles.modes}
-        >
-          {availableModes(caps?.permissionModes).map((m) => (
-            <RadioGroup.Item
-              key={m.value}
-              value={m.value}
-              label={m.label}
-              description={m.description}
-            />
-          ))}
-        </RadioGroup>
+          onValueChange={(v) => save({ permissionMode: v as PermissionMode })}
+          name={assistant}
+        />
       </Section>
 
       <SettingsAdvanced open={advanced} onOpenChange={setAdvanced}>
@@ -180,27 +173,6 @@ export function ModelsTab() {
           onChange={(mutedSuggestions) => save({ mutedSuggestions })}
         />
       </SettingsAdvanced>
-
-      <AlertDialog.Root open={confirmTrust} onOpenChange={setConfirmTrust}>
-        <AlertDialog.Content tone="danger">
-          <AlertDialog.Title>Start every chat in Full trust?</AlertDialog.Title>
-          <AlertDialog.Description>
-            {assistant} will edit files and run commands on this computer without asking first. Only
-            choose this if you’re comfortable with that for every new chat.
-          </AlertDialog.Description>
-          <AlertDialog.Footer>
-            <AlertDialog.Cancel>Keep asking</AlertDialog.Cancel>
-            <AlertDialog.Action
-              onClick={() => {
-                save({ permissionMode: 'bypassPermissions' });
-                setConfirmTrust(false);
-              }}
-            >
-              Turn on Full trust
-            </AlertDialog.Action>
-          </AlertDialog.Footer>
-        </AlertDialog.Content>
-      </AlertDialog.Root>
     </Stack>
   );
 }

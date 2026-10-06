@@ -333,12 +333,6 @@
 }
 
 @layer nacre.components {
-  .modes {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-    gap: var(--nc-space-2);
-  }
-
   .commandEditor {
     padding: var(--nc-space-4);
     border-radius: var(--nc-radius-lg);

@@ -116,6 +116,7 @@ function harness(
   conversationId: string,
   answers: PermissionDecision[] = [],
   mode: PermissionMode = 'default',
+  untrusted?: string,
 ) {
   const asked: AskRequest[] = [];
   const events: ConversationEventInput[] = [];
@@ -130,6 +131,7 @@ function harness(
     },
     signal: new AbortController().signal,
     workspace: () => Promise.resolve(work),
+    ...(untrusted && { untrusted: () => untrusted }),
   };
   const tools = new Map(browser.tools(ctx).map((t) => [t.name, t]));
   const call = async (name: string, args: Record<string, unknown>) =>
@@ -408,12 +410,26 @@ describe.skipIf(!hasBrowser)('uploading, for real', () => {
     expect(await tab()?.page.title()).toBe('Upload');
   });
 
-  it('asks about an upload even in Full trust', { timeout: 60_000 }, async () => {
-    const { call, asked } = harness('conv_upload_trust', ['allow'], 'bypassPermissions');
-    const text = await call('browser_open', { url: `${origin}/upload` });
-    await call('browser_upload', { ref: refOf(text, /"CV"/), element: 'CV', files: ['cv.pdf'] });
-    expect(asked.map((a) => a.browser?.kind)).toEqual(['upload']);
-  });
+  it(
+    'uploads in Full trust and Auto without asking, until the chat reads something (ADR 0100)',
+    { timeout: 60_000 },
+    async () => {
+      for (const mode of ['bypassPermissions', 'auto'] as const) {
+        const { call, asked } = harness(`conv_upload_${mode}`, ['allow'], mode);
+        const text = await call('browser_open', { url: `${origin}/upload` });
+        await call('browser_upload', {
+          ref: refOf(text, /"CV"/),
+          element: 'CV',
+          files: ['cv.pdf'],
+        });
+        expect(asked).toEqual([]);
+      }
+      const { call, asked } = harness('conv_upload_read', ['allow'], 'auto', 'This chat read x.');
+      const text = await call('browser_open', { url: `${origin}/upload` });
+      await call('browser_upload', { ref: refOf(text, /"CV"/), element: 'CV', files: ['cv.pdf'] });
+      expect(asked.map((a) => a.browser?.kind)).toContain('upload');
+    },
+  );
 });
 
 describe.skipIf(!hasBrowser)('your turn, for real', () => {

@@ -311,16 +311,24 @@ export function browserTools(
     // doesn't, in a chat you're in: `untrusted` is empty there unless someone else spoke).
     // An upload sends the person's files out: it carries the same note when the chat read something.
     const untrusted =
-      kind === 'site' || kind === 'upload'
+      kind === 'site' || kind === 'upload' || kind === 'download'
         ? (ctx.untrusted?.() ?? (await ctx.restricted?.('browser')))
         : undefined;
     // Your own Chrome is signed in to your life (ADR 0080): each site asks once per chat, always.
     const own = service.runtime.backend.shared;
+    // Full trust and Auto use a site, and download or upload there, without asking until the
+    // chat reads something that could be steering them (ADR 0100). Paying, sending or deleting
+    // on a site (`high-stakes`) asks in every mode.
+    const goesAhead =
+      !untrusted &&
+      !own &&
+      (ctx.permissionMode === 'bypassPermissions' || ctx.permissionMode === 'auto');
     if (kind === 'site') {
       if (tab.sites.has(site)) return;
-      if (!untrusted && !own && ctx.permissionMode === 'bypassPermissions') return;
+      if (goesAhead) return;
       if (!untrusted && !own && (await service.store.trusts(site))) return;
     }
+    if ((kind === 'download' || kind === 'upload') && goesAhead) return;
     const picture = await tab.thumbnail(request.box);
     const shot = await service.saveShot(conversationId, picture?.jpeg);
     const title = await tab.page.title().catch(() => '');

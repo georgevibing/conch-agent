@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { LoginState } from '@conch/protocol';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 import { SettingsStore } from '../../settings/store';
@@ -100,6 +100,14 @@ describe('an ACP agent’s state', () => {
     expect(caps.models.map((m) => [m.id, m.label, m.efforts])).toEqual([
       ['gpt-5.1', 'GPT-5.1', ['low', 'medium', 'high']],
       ['claude-sonnet-5', 'Claude Sonnet 5', ['low', 'medium', 'high']],
+    ]);
+    // Every mode, Auto included: the door's tools run under Conch's risk policy (ADR 0100).
+    expect(caps.permissionModes).toEqual([
+      'default',
+      'plan',
+      'acceptEdits',
+      'auto',
+      'bypassPermissions',
     ]);
   });
 
@@ -274,6 +282,52 @@ describe('a turn with an ACP agent', () => {
       output: 'Saved to memory.',
     });
     expect(door?.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mcp$/);
+  });
+
+  it('in Auto, writes through the door without asking, and asks what the guard stops (ADR 0100)', async () => {
+    let door: { url: string; headers: { name: string; value: string }[] } | undefined;
+    const results: unknown[] = [];
+    const { engine } = await engineWith({
+      session: (params) => {
+        door = (params.mcpServers as (typeof door)[])[0];
+        return { sessionId: 'sess_auto' };
+      },
+      prompt: async () => {
+        if (!door) throw new Error('No door');
+        const client = new Client({ name: 'pretend-agent', version: '1' });
+        await client.connect(
+          new StreamableHTTPClientTransport(new URL(door.url), {
+            requestInit: {
+              headers: Object.fromEntries(door.headers.map((h) => [h.name, h.value])),
+            },
+          }),
+        );
+        for (const file_path of ['notes.txt', 'stopped.txt'])
+          results.push(
+            (await client.callTool({ name: 'Write', arguments: { file_path, content: 'hi' } }))
+              .isError,
+          );
+        await client.close();
+        return { stopReason: 'end_turn' };
+      },
+    });
+    const ask = vi.fn(async () => 'deny' as const);
+    const cwd = await mkdtemp(join(tmpdir(), 'conch-acp-auto-'));
+    await collect(
+      engine.runTurn(
+        turn({
+          cwd,
+          requestPermission: ask,
+          guard: async (request) =>
+            request.input.file_path === 'stopped.txt'
+              ? { decision: 'ask', reason: 'This would matter.' }
+              : undefined,
+          options: { effort: 'auto', fastMode: false, permissionMode: 'auto' },
+        }),
+      ),
+    );
+    expect(results).toEqual([false, true]);
+    expect(ask).toHaveBeenCalledOnce();
   });
 
   it('passes on what a tool behind the door found, and hands the agent only its text', async () => {

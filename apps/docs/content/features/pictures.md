@@ -14,7 +14,7 @@ you have not connected one, Conch offers a card in the chat. Press **Connect**,
 finish connecting, and the request carries on. Your chat model stays the same.
 
 Before sending a source picture or making a paid request, Conch asks unless
-you chose **Full trust**. The approval names the image model. The prompt and
+you chose **Full trust** or **Auto**. The approval names the image model. The prompt and
 any source picture are sent to OpenRouter and its image provider.
 
 Ask which image models are available if you want to choose one. Support for

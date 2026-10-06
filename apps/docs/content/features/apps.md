@@ -95,7 +95,9 @@ Under **Each tool**, every tool the app offers has its own **Allow**, **Ask** or
 
 A Google app only offers the tools its accounts can do: when every account is read only, **Draft & send** (or **Change events**, or **Make files**) says so and offers **Allow**, which takes you to **Google accounts**.
 
-**Full trust** in a chat takes precedence over **Ask every time**, **Ask before changes** and a tool's **Ask** setting. Enabled app tools run without those questions, with every provider. Choosing Full trust also answers an ordinary app question already waiting. The saved app settings stay as they are and apply again when you leave Full trust. Tools turned **Off** stay off. Saving a Gmail draft, sending an email, changing a calendar event, sending a Slack message and other mandatory confirmations still ask.
+**Full trust** in a chat takes precedence over **Ask every time**, **Ask before changes** and a tool's **Ask** setting. Enabled app tools run without those questions, with every provider, and so do saving a Gmail draft, sending an email, changing a calendar event and sending a Slack message. Choosing Full trust also answers an ordinary app question already waiting. The saved app settings stay as they are and apply again when you leave Full trust. Tools turned **Off** stay off.
+
+**Auto** does the same, with three exceptions: a tool you set to **Ask** still asks, a tool that deletes asks (unless you set it to **Allow**, or the app to **Don’t ask**), and once the chat has read something from outside (an email, a page), anything that sends or changes something in an app shows you first. With someone else's words in the chat, what goes to other people always shows you first, in every mode.
 
 If an app later changes what one of its tools does, Conch stops allowing that tool by itself and tells you.
 

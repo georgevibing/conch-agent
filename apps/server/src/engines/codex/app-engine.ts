@@ -4,6 +4,8 @@
  * tools doing the work (ADR 0036), and `agent` (Codex CLI) with Codex's own
  * shell and file edits on, every approval it asks for going through Conch.
  */
+import { existsSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 import {
@@ -17,6 +19,7 @@ import {
   type Usage,
   type TurnProblem,
   type ToolView,
+  ALL_MODES,
 } from '@conch/protocol';
 import { z } from 'zod';
 
@@ -28,6 +31,7 @@ import type { ProviderKeys } from '../../providers/keys';
 import type { SettingsStore } from '../../settings/store';
 import { buildTools } from '../api/engine';
 import { withSight } from '../api/sight';
+import { secretPlaces } from '../../conversations/sandbox';
 import { hostEnvironment } from '../host';
 import type {
   Engine,
@@ -205,6 +209,9 @@ const TOOL_CONFIG = [
 // Codex CLI (ADR 0066): its own shell and file edits, in a sandbox that writes
 // only where Conch allows, reads nowhere secrets live, and has no network.
 const AGENT_CONFIG = SHARED_CONFIG;
+
+/** Where installs put programs, writable in Full trust with your home folder (ADR 0100). */
+const OPEN_WRITES = ['/usr/local', '/opt/homebrew', '/opt/local'].filter((p) => existsSync(p));
 
 /**
  * Why an approval request asks for more than "do this, in the sandbox": the
@@ -571,7 +578,8 @@ export class CodexEngine implements Engine {
           argumentHint: '',
         },
       ],
-      permissionModes: ['default', 'plan', 'acceptEdits', 'bypassPermissions'],
+      // Every mode, Auto through Conch's risk policy (ADR 0100).
+      permissionModes: [...ALL_MODES],
       tools: { host: true, files: true, shell: true, approvals: true },
       attachments: this.attachments,
     };
@@ -663,11 +671,18 @@ export class CodexEngine implements Engine {
       // One entry per path: Codex reads this as a TOML table, and a path twice is an error that
       // stops it before it answers. Where a path is both written and denied, the deny stands.
       const modes = new Map<string, 'write' | 'deny'>();
+      // Codex CLI's sandbox for this turn's mode (ADR 0100). Full trust: your folders and the
+      // network, as you'd have them; Auto: the work folder and the network; otherwise sealed.
+      const reach = agent ? (input.reach ?? 'sealed') : 'sealed';
+      const secrets = new Set(secretPlaces().map((p) => p.path));
       if (agent) for (const p of input.sandbox?.allowWrite ?? []) modes.set(p, 'write');
+      if (reach === 'open')
+        for (const p of [homedir(), tmpdir(), '/tmp', ...OPEN_WRITES]) modes.set(p, 'write');
       for (const p of [
         ...(input.protectedPaths ?? []),
         this.#home.home,
-        ...(input.sandbox?.denyRead ?? []),
+        // Full trust reads your keys as you would (a push over SSH); Conch's own stay out.
+        ...(input.sandbox?.denyRead ?? []).filter((p) => reach !== 'open' || !secrets.has(p)),
       ])
         modes.set(p, 'deny');
       const profile = [...modes].map(([p, mode]) => `${JSON.stringify(p)}="${mode}"`).join(',');
@@ -709,7 +724,8 @@ export class CodexEngine implements Engine {
         const mode = input.options.permissionMode;
         if (verdict?.decision !== 'ask') {
           if (mode === 'plan') return 'decline';
-          if (mode === 'bypassPermissions') return 'accept';
+          // Full trust and Auto: the guard above already stopped anything serious (ADR 0100).
+          if (mode === 'bypassPermissions' || mode === 'auto') return 'accept';
           if (mode === 'acceptEdits' && change) return 'accept';
         }
         const decision = await input.requestPermission(request, signal);
@@ -1134,7 +1150,7 @@ export class CodexEngine implements Engine {
             ...(agent ? AGENT_CONFIG : TOOL_CONFIG),
             `permissions.conch.extends="${agent ? ':workspace' : ':read-only'}"`,
             `permissions.conch.filesystem={${profile}}`,
-            'permissions.conch.network={enabled=false}',
+            `permissions.conch.network={enabled=${reach !== 'sealed'}}`,
           ],
         },
       );

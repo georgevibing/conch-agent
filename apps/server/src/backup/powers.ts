@@ -150,8 +150,9 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
     });
 
   const settings = json(read, 'settings.json');
-  if (record(settings?.preferences)?.permissionMode === 'bypassPermissions')
-    powers.push({ kind: 'chats-never-ask' });
+  const mode = record(settings?.preferences)?.permissionMode;
+  if (mode === 'bypassPermissions') powers.push({ kind: 'chats-never-ask' });
+  if (mode === 'auto') powers.push({ kind: 'chats-go-ahead' });
   // A safety check off (ADR 0028, ADR 0087) isn't brought back quietly either.
   const prefs = record(settings?.preferences);
   const off = [
@@ -255,8 +256,9 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
   for (const raw of Array.isArray(channels) ? channels : []) {
     const channel = record(raw);
     if (!channel || !on(channel.enabled)) continue;
-    if (record(channel.chatOptions)?.permissionMode === 'bypassPermissions')
-      powers.push({ kind: 'chats-never-ask' });
+    const channelMode = record(channel.chatOptions)?.permissionMode;
+    if (channelMode === 'bypassPermissions') powers.push({ kind: 'chats-never-ask' });
+    if (channelMode === 'auto') powers.push({ kind: 'chats-go-ahead' });
     const people = [
       ...(Array.isArray(channel.people) ? channel.people : [])
         .map(record)

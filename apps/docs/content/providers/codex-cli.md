@@ -20,9 +20,10 @@ Codex can use Conch’s memory, browser, skills, routines and connected apps. Co
 - **Ask first:** reads are available; file changes and commands ask.
 - **Plan only:** file reads only; changes and commands are refused.
 - **Edit freely:** work-folder file edits need no extra question; commands ask.
-- **Full trust:** ordinary work-folder actions need no extra question. Protected paths, disabled tools and read-then-act checks still apply.
+- **Auto:** everything goes ahead, except [something serious](../reference/modes.md#auto), which asks.
+- **Full trust:** nothing asks but [the few things no mode lifts](../reference/modes.md#full-trust).
 
-Commands run in an operating-system sandbox where this computer can make one: no network access, and writes limited to this chat’s work folder. A command that needs more, like cloning a repository or installing something, asks to run with your access first (in Full trust it just runs). On Linux, sealing needs bubblewrap, a small sandbox program: the installer offers it, and **Settings → Health** has **Seal commands**, which types the one command into Conch's terminal for you. Until then, and on Windows, every command runs with your access and asks the same way. File tools reject links outside the workspace, hard links and protected credential locations.
+Commands run in an operating-system sandbox where this computer can make one: no network access, and writes limited to this chat’s work folder. A command that needs more, like cloning a repository or installing something, asks to run with your access first (in Full trust it just runs, and in Auto too until the chat reads something). On Linux, sealing needs bubblewrap, a small sandbox program: the installer offers it, and **Settings → Health** has **Seal commands**, which types the one command into Conch's terminal for you. Until then, and on Windows, every command runs with your access and asks the same way. File tools reject links outside the workspace, hard links and protected credential locations.
 
 ## Conversations and compatibility
 

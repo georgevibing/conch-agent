@@ -406,6 +406,8 @@ export async function authorizeTool(
     (HOST_NAMES.has(name) &&
       !['Read', 'LS'].includes(name) &&
       input.options.permissionMode !== 'bypassPermissions' &&
+      // Auto: the guard above already asked for anything serious (ADR 0100).
+      input.options.permissionMode !== 'auto' &&
       !(input.options.permissionMode === 'acceptEdits' && ['Write', 'Edit'].includes(name)));
   if (ask && (await input.requestPermission(request, input.signal)) === 'deny')
     return 'The user declined this action.';

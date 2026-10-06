@@ -262,6 +262,8 @@ export class ConchApps implements HostedApps {
         summary: `use ${plainLine(app.manifest.name, 40)} to ${inSentence(plainLine(tool.title || tool.name, 80))}${what ? `: ${what}` : ''}`,
         ...(why && { taint: why }),
         ...(decision === 'ask' && { chosen: true }),
+        // This one tool set to Ask by the person: Auto keeps asking (ADR 0100).
+        ...(decision === 'ask' && own(app.toolPolicies, tool.name) === 'ask' && { explicit: true }),
       });
       if (answer === 'deny')
         return {

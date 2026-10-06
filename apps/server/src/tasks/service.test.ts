@@ -1100,9 +1100,11 @@ describe('a task has exactly its chat’s powers (ADR 0033)', () => {
     expect(noMoreThan(undefined, 'acceptEdits')).toBe('acceptEdits');
     expect(noMoreThan('plan', 'bypassPermissions')).toBe('plan');
     expect(noMoreThan('default', 'acceptEdits')).toBe('default');
-    // Auto and Edit freely let different things through: neither is less than the other.
+    // A ladder (ADR 0100): Auto lets through everything Edit freely does, and more.
     expect(noMoreThan('auto', 'acceptEdits')).toBe('acceptEdits');
-    expect(noMoreThan('acceptEdits', 'auto')).toBe('auto');
+    expect(noMoreThan('acceptEdits', 'auto')).toBe('acceptEdits');
+    expect(noMoreThan('bypassPermissions', 'auto')).toBe('auto');
+    expect(noMoreThan('auto', 'bypassPermissions')).toBe('auto');
   });
 
   it('a task sent with more than its chat may do runs in the chat’s mode, and asks', async () => {

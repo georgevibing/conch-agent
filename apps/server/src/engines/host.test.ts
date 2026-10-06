@@ -84,6 +84,25 @@ describe('shared Conch host tools', () => {
       ),
     ).toBe('Protected');
   });
+  it('Auto runs what the guard lets through, and asks what it stops (ADR 0100)', async () => {
+    const ask = vi.fn(async () => 'deny' as const);
+    const input = await turn({
+      requestPermission: ask,
+      options: { permissionMode: 'auto', effort: 'auto', fastMode: false },
+    });
+    expect(await authorizeTool(input, 'Bash', { command: 'npm test' }, 'x')).toBeUndefined();
+    expect(await authorizeTool(input, 'Write', { file_path: 'a.txt' }, 'x')).toBeUndefined();
+    expect(ask).not.toHaveBeenCalled();
+    expect(
+      await authorizeTool(
+        { ...input, guard: async () => ({ decision: 'ask', reason: 'This would force-push.' }) },
+        'Bash',
+        { command: 'git push -f' },
+        'x',
+      ),
+    ).toContain('declined');
+    expect(ask).toHaveBeenCalledOnce();
+  });
   it('plan mode is read-only and cancellation after approval cannot run an action', async () => {
     const input = await turn({
       options: { permissionMode: 'plan', effort: 'auto', fastMode: false },

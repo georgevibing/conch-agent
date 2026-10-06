@@ -43,7 +43,8 @@ export function availableModes(supported: PermissionMode[] | undefined): ModeInf
 }
 
 export function modeInfo(value: PermissionMode): ModeInfo {
-  return modes.find((m) => m.value === value) ?? (modes[0] as ModeInfo);
+  return (modes.find((m) => m.value === value) ??
+    modes.find((m) => m.value === 'default')) as ModeInfo;
 }
 
 const recommended = /\s*\(recommended\)\s*$/i;

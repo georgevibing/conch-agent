@@ -21,7 +21,8 @@ Everything it wants to do asks through Conch first, in the chat's mode:
 - **Ask first:** each command and each change waits for your OK in the chat.
 - **Plan only:** it plans; commands and changes are turned down.
 - **Edit freely:** changes go ahead; commands ask.
-- **Full trust:** commands and changes go ahead.
+- **Auto:** commands and changes go ahead, except [something serious](../reference/modes.md#auto), which asks. Its sandbox has the network until the chat reads something.
+- **Full trust:** commands and changes go ahead, and its sandbox reaches your folders and the network. Conch's own keys stay out of reach.
 
 In every mode, Conch's own checks come first. Passwords and Conch's keys are out of reach. After the chat reads something from outside, it asks again before anything that could send it out. A skill in use holds the chat to its list. **Undo** puts back the files it changed.
 
