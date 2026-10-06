@@ -34,6 +34,7 @@ import {
   Mic,
   Globe,
   HeartPulse,
+  Laptop,
   Monitor,
   SquareTerminal,
   Moon,
@@ -58,6 +59,7 @@ import { BrowserSettings } from '../browser/BrowserSettings';
 import { HealthTab } from '../health/HealthTab';
 import { OtherAppsTab } from '../otherapps/OtherAppsTab';
 import { ComeHomeSection } from '../import/ComeHomeSection';
+import { ComputerTab } from '../computer/ComputerTab';
 import { ComeHomePage } from '../import/ComeHomePage';
 import { MemoryView } from '../memory/MemoryView';
 import { AboutYou } from './AboutYou';
@@ -301,7 +303,7 @@ interface Place {
 }
 
 /**
- * Sixteen places, read as five: the everyday basics, then who your assistant
+ * Seventeen places, read as five: the everyday basics, then who your assistant
  * is, where its intelligence comes from, what it can use, and keeping it safe.
  */
 const groups: { label: string; hidden?: boolean; places: Place[] }[] = [
@@ -345,6 +347,7 @@ const groups: { label: string; hidden?: boolean; places: Place[] }[] = [
     places: [
       { value: 'security', label: 'Security', icon: <ShieldCheck /> },
       { value: 'health', label: 'Health', icon: <HeartPulse /> },
+      { value: 'computer', label: 'This computer', icon: <Laptop /> },
     ],
   },
 ];
@@ -561,6 +564,8 @@ export function Settings() {
         return <OtherAppsTab />;
       case 'appearance':
         return <AppearanceTab />;
+      case 'computer':
+        return <ComputerTab />;
     }
   };
 

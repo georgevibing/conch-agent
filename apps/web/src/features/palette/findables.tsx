@@ -215,6 +215,13 @@ const settingsPlaces: {
     icon: <Timer />,
   },
   {
+    tab: 'computer',
+    label: 'This computer',
+    keywords:
+      'this computer machine system cpu processor cores memory ram disk storage space free network download upload gpu graphics battery temperature load uptime activity monitor task manager performance resources busy slow processes',
+    icon: <Laptop />,
+  },
+  {
     tab: 'health',
     label: 'Health',
     keywords:

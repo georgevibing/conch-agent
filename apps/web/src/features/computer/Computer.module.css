@@ -1,0 +1,24 @@
+/* Layout only: everything you see is Nacre's (StatTile, LiveChart, ComputerHeader). */
+.glance {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--nc-space-3);
+}
+
+.charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nc-space-8) var(--nc-space-6);
+}
+
+@media (max-width: 52rem) {
+  .glance {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 36rem) {
+  .charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

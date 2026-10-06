@@ -1,0 +1,210 @@
+@layer nacre.components {
+  /* ── Header ────────────────────────────────────────────────────────── */
+
+  .header {
+    --live: var(--nc-chart-3);
+    display: grid;
+    gap: var(--nc-space-1);
+  }
+
+  .header[data-tone='busy'] {
+    --live: light-dark(oklch(0.74 0.15 var(--nc-warning-h)), oklch(0.8 0.14 var(--nc-warning-h)));
+  }
+
+  .header[data-tone='critical'] {
+    --live: light-dark(oklch(0.58 0.2 var(--nc-danger-h)), oklch(0.68 0.18 var(--nc-danger-h)));
+  }
+
+  .name {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-muted);
+  }
+
+  .mark {
+    color: var(--nc-text);
+  }
+
+  .live {
+    inline-size: 0.4375rem;
+    block-size: 0.4375rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-gray-7);
+    transition: background-color var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .live[data-live] {
+    background: var(--live);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--live) 22%, transparent);
+    animation: nc-breathe 2.8s var(--nc-ease-in-out) infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .live[data-live] {
+      animation: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .live[data-live] {
+    animation: none;
+  }
+
+  .status {
+    margin: 0;
+    font-family: var(--nc-font-display);
+    font-size: var(--nc-text-4xl);
+    font-weight: var(--nc-weight-regular);
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    color: var(--nc-text);
+    text-wrap: balance;
+  }
+
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1) 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  .facts li + li::before {
+    content: '·';
+    padding-inline: var(--nc-space-2);
+    color: var(--nc-text-subtle);
+  }
+
+  /* ── Cores ─────────────────────────────────────────────────────────── */
+
+  .cores {
+    display: flex;
+    gap: 2px;
+    block-size: 1.25rem;
+  }
+
+  .core {
+    position: relative;
+    flex: 1 1 0;
+    min-inline-size: 2px;
+    max-inline-size: 0.625rem;
+    overflow: hidden;
+    border-radius: 2px;
+    background: var(--nc-gray-3);
+  }
+
+  .coreFill {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--nc-chart-1);
+    opacity: 0.85;
+    transform-origin: bottom;
+    transform: scaleY(var(--core));
+    transition: transform var(--nc-spring-soft);
+  }
+
+  /* ── What's running ────────────────────────────────────────────────── */
+
+  .helpers {
+    inline-size: 100%;
+    border-collapse: collapse;
+    font-size: var(--nc-text-sm);
+  }
+
+  .helpers thead th {
+    padding: 0 0 var(--nc-space-2);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-subtle);
+    text-align: end;
+  }
+
+  .helpers tbody tr {
+    border-block-start: 1px solid var(--nc-border);
+    animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .helpers tbody th,
+  .helpers tbody td {
+    padding: var(--nc-space-3) 0;
+    vertical-align: middle;
+  }
+
+  .helpers tbody th {
+    font-weight: var(--nc-weight-regular);
+    text-align: start;
+  }
+
+  .helper {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    min-inline-size: 0;
+  }
+
+  .helperIcon {
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-surface-sunken);
+    color: var(--nc-text-muted);
+  }
+
+  .helperIcon svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .helperText {
+    display: grid;
+    min-inline-size: 0;
+  }
+
+  .helperName {
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .helperDetail {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+  }
+
+  .trendCell {
+    inline-size: 28%;
+    padding-inline: var(--nc-space-4) !important;
+  }
+
+  .number {
+    inline-size: 5.5rem;
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text);
+    white-space: nowrap;
+  }
+
+  @container (max-width: 30rem) {
+    .trendCell {
+      display: none;
+    }
+  }
+
+  @media (max-width: 30rem) {
+    .trendCell {
+      display: none;
+    }
+
+    .number {
+      inline-size: 4.5rem;
+    }
+  }
+}

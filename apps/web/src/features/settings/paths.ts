@@ -21,6 +21,7 @@ export const SETTINGS_TABS = [
   'other-apps',
   'security',
   'health',
+  'computer',
 ] as const;
 
 export type SettingsTab = (typeof SETTINGS_TABS)[number];

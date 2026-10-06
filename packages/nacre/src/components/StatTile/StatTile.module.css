@@ -1,0 +1,70 @@
+@layer nacre.components {
+  .tile {
+    display: grid;
+    grid-template-rows: auto auto auto 1fr;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    background: var(--nc-surface);
+    box-shadow:
+      var(--nc-glaze-edge),
+      0 0 0 1px var(--nc-border),
+      var(--nc-elevation-1);
+  }
+
+  .label {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-muted);
+  }
+
+  .icon {
+    display: inline-flex;
+    color: var(--nc-text-subtle);
+  }
+
+  .icon svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  .value {
+    font-size: var(--nc-text-2xl);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    color: var(--nc-text);
+  }
+
+  .detail {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .tile[data-tone='warning'] .detail {
+    color: light-dark(oklch(0.5 0.12 60), oklch(0.85 0.12 var(--nc-warning-h)));
+  }
+
+  .tile[data-tone='critical'] .detail {
+    color: light-dark(oklch(0.5 0.18 var(--nc-danger-h)), oklch(0.8 0.13 var(--nc-danger-h)));
+  }
+
+  .foot {
+    display: flex;
+    align-items: flex-end;
+    min-block-size: 1.625rem;
+    padding-block-start: var(--nc-space-2);
+  }
+
+  .meter {
+    align-self: center;
+  }
+}

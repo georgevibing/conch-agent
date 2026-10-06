@@ -74,6 +74,8 @@ export * from './components/Badge';
 export * from './components/Avatar';
 export * from './components/EmptyState';
 export * from './components/QRCode';
+export * from './components/LiveChart';
+export * from './components/StatTile';
 
 // Chat patterns
 export * from './patterns';
