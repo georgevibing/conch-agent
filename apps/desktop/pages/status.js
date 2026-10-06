@@ -8,6 +8,9 @@ if (params.get('state') === 'stopped') {
     params.get('message') || 'Conch stopped unexpectedly.';
   document.getElementById('actions').hidden = false;
   document.querySelector('a.primary').focus();
+} else if (params.get('message')) {
+  document.getElementById('title').textContent = 'Helping Conch recover…';
+  document.getElementById('detail').textContent = params.get('message');
 }
 
 // A button is a fragment the app hears (`#retry`); it's cleared again so the

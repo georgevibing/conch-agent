@@ -1,7 +1,12 @@
 import type { spawn } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { EventEmitter } from 'node:events';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { readRecoveryState, saveRecoveryState } from '../../server/src/recovery/supervisor-state';
 
 import { Gateway, RESTART_CODE, type GatewayState } from './gateway';
 
@@ -49,7 +54,13 @@ class FakeChild extends EventEmitter {
   }
 }
 
-function world() {
+const homes: string[] = [];
+afterEach(() => {
+  for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true });
+});
+function world(existingHome?: string) {
+  const home = existingHome ?? mkdtempSync(join(tmpdir(), 'conch-desktop-watch-'));
+  if (!existingHome) homes.push(home);
   const children: FakeChild[] = [];
   const slept: number[] = [];
   const states: GatewayState[] = [];
@@ -62,7 +73,7 @@ function world() {
       command: 'node',
       args: ['--import', 'tsx', 'src/main.ts'],
       cwd: '/conch',
-      env: { A: '1' },
+      env: { A: '1', CONCH_HOME: home },
     }),
     {
       spawn: ((_command: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
@@ -72,7 +83,10 @@ function world() {
         return child;
       }) as unknown as typeof spawn,
       now: () => now,
-      sleep: async (ms) => void slept.push(ms),
+      sleep: async (ms) => {
+        slept.push(ms);
+        now += ms;
+      },
       log: (text) => void logged.push(text),
     },
   );
@@ -80,6 +94,7 @@ function world() {
   const latest = () => children.at(-1) as FakeChild;
   const settle = (ms = 10) => new Promise((resolve) => setTimeout(resolve, ms));
   return {
+    home,
     gateway,
     children,
     slept,
@@ -119,7 +134,7 @@ describe('the gateway, kept running by the app', () => {
     expect(latest().env.CONCH_STARTED_BECAUSE).toBe('restart');
   });
 
-  it('starts it again after a crash, waiting longer each time, then stops and says why', async () => {
+  it('backs off after crashes, then cools down and starts in recovery mode', async () => {
     const { gateway, children, slept, latest, settle, later } = world();
     gateway.start();
     for (let i = 0; i < 5; i++) {
@@ -131,17 +146,69 @@ describe('the gateway, kept running by the app', () => {
     expect(slept).toEqual([1_000, 3_000, 10_000, 30_000, 30_000]);
     expect(children).toHaveLength(6);
     expect(latest().env.CONCH_STARTED_BECAUSE).toBe('crash');
+    expect(latest().env.CONCH_RECOVERY_MODE).toBe('1');
     latest().stderr.emit('data', 'Error: EADDRNOTAVAIL\n');
     latest().exit(1);
     await settle();
-    expect(gateway.state).toEqual({
-      kind: 'stopped',
-      message: expect.stringMatching(/kept stopping.*It said: “Error: EADDRNOTAVAIL”/),
-    });
-    // Try again: a fresh start.
-    gateway.retry();
     expect(children).toHaveLength(7);
     expect(gateway.state.kind).toBe('starting');
+    expect(latest().env.CONCH_RECOVERY_MODE).toBe('1');
+    expect(slept.slice(6).every((ms) => ms <= 1_000)).toBe(true);
+    expect(slept.reduce((sum, ms) => sum + ms, 0)).toBeGreaterThan(500_000);
+    await gateway.stop();
+  });
+
+  it('explains cooldown and lets Quit cancel it before another child starts', async () => {
+    const test = world();
+    saveRecoveryState(test.home, {
+      recoveryMode: true,
+      failures: [999_995, 999_996, 999_997, 999_998, 999_999, 1_000_000],
+      incidents: [],
+    });
+    test.gateway.start();
+    expect(test.gateway.state).toMatchObject({
+      kind: 'starting',
+      message: expect.stringMatching(/few minutes to recover/),
+    });
+    await test.gateway.stop();
+    await test.settle();
+    expect(test.children).toHaveLength(0);
+  });
+
+  it('preserves the recovery latch through source-change restarts until healthy Repair', async () => {
+    const test = world();
+    saveRecoveryState(test.home, {
+      recoveryMode: true,
+      failures: [999_998, 999_999, 1_000_000],
+      incidents: [],
+    });
+    test.gateway.start();
+    await test.gateway.restart();
+    expect(test.latest().env.CONCH_RECOVERY_MODE).toBe('1');
+    expect(readRecoveryState(test.home).recoveryMode).toBe(true);
+    test.latest().emit('message', { type: 'conch.recovered' });
+    await test.gateway.restart();
+    expect(test.latest().env.CONCH_RECOVERY_MODE).toBe('0');
+    await test.gateway.stop();
+  });
+
+  it('retains recovery mode across desktop app launches', async () => {
+    const first = world();
+    first.gateway.start();
+    for (let i = 0; i < 3; i++) {
+      first.latest().exit(1);
+      await first.settle();
+    }
+    await first.gateway.stop();
+    const second = world(first.home);
+    second.gateway.start();
+    expect(second.latest().env.CONCH_RECOVERY_MODE).toBe('1');
+    second.latest().emit('message', { type: 'conch.recovered' });
+    await second.gateway.stop();
+    const third = world(first.home);
+    third.gateway.start();
+    expect(third.latest().env.CONCH_RECOVERY_MODE).toBe('0');
+    await third.gateway.stop();
   });
 
   it('when it says why it can’t start, shows that and doesn’t try again by itself', async () => {

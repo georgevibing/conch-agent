@@ -226,11 +226,11 @@ export function serveAppFiles(resources: string): void {
 /** The app's own page while Conch starts, or after it stopped: the pearl, a sentence, a button. */
 export function showStatus(
   window: BrowserWindow,
-  status: { state: 'starting' } | { state: 'stopped'; message: string },
+  status: { state: 'starting'; message?: string } | { state: 'stopped'; message: string },
 ): void {
   const query = new URLSearchParams({
     state: status.state,
-    ...(status.state === 'stopped' && { message: status.message }),
+    ...(status.message && { message: status.message }),
   });
   void window.loadURL(`${STATUS_PAGE}?${query.toString()}`).catch(() => undefined);
 }

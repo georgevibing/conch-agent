@@ -179,7 +179,11 @@ function main(): void {
     if (state.kind === 'running' && target) void showConch(made, target);
     else if (state.kind === 'stopped')
       showStatus(made, { state: 'stopped', message: state.message });
-    else showStatus(made, { state: 'starting' });
+    else
+      showStatus(made, {
+        state: 'starting',
+        ...(state.kind === 'starting' && { message: state.message }),
+      });
     return made;
   };
 
@@ -264,9 +268,9 @@ function main(): void {
     } else if (
       window &&
       !window.isDestroyed() &&
-      window.webContents.getURL().startsWith(STATUS_PAGE)
+      (window.webContents.getURL().startsWith(STATUS_PAGE) || state.message)
     ) {
-      showStatus(window, { state: 'starting' });
+      showStatus(window, { state: 'starting', message: state.message });
     }
   });
   gateway.on('message', (message) => {

@@ -67,6 +67,36 @@ export function toolSummary(name: string, raw: unknown): string | undefined {
   }
 }
 
+/** A tool invocation can finish while its managed command is still waiting.
+ * These are result snapshots, never a live spinner for a process we aren't watching. */
+export function managedProcessSummary(name: string, output: unknown): string | undefined {
+  if (!/^(?:mcp__conch__)?process_(?:start|read|stop)$/.test(name) || typeof output !== 'string')
+    return;
+  let value: unknown;
+  try {
+    value = JSON.parse(output);
+  } catch {
+    return;
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+  const result = value as Record<string, unknown>;
+  const command = typeof result.command === 'string' ? result.command.slice(0, 160) : undefined;
+  if (!command) return;
+  const reason = typeof result.reason === 'string' ? result.reason.slice(0, 240) : undefined;
+  switch (result.status) {
+    case 'queued':
+      return `Waiting to start · ${reason ?? command}`;
+    case 'running':
+      return `Running when checked · ${command}`;
+    case 'stopped':
+      return `Stopped · ${reason ?? command}`;
+    case 'timed-out':
+      return `Time limit reached · ${command}`;
+    default:
+      return;
+  }
+}
+
 /** Old/new strings from Edit/MultiEdit/Write become a readable diff. */
 export function toolDiff(name: string, raw: unknown): DiffLine[] | undefined {
   const input = (raw ?? {}) as Input;

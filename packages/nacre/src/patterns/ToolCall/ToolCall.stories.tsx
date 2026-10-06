@@ -53,6 +53,26 @@ type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {};
 
+/** The tool has accepted a command; the snapshot says why execution is waiting. */
+export const ManagedCommandQueued: Story = {
+  args: {
+    name: 'mcp__conch__process_start',
+    summary: 'Waiting to start · Waiting for memory to recover so Conch stays responsive.',
+    status: 'success',
+    duration: 20,
+    input: JSON.stringify({ command: 'pnpm test' }, null, 2),
+    output: JSON.stringify(
+      {
+        command: 'pnpm test',
+        status: 'queued',
+        reason: 'Waiting for memory to recover so Conch stays responsive.',
+      },
+      null,
+      2,
+    ),
+  },
+};
+
 export const Expanded: Story = { args: { defaultOpen: true } };
 
 export const States: Story = {

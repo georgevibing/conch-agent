@@ -33,7 +33,7 @@ import type { TranscriptItem } from '../../live/reducer';
 import { useAutoFocus } from '../../lib/useAutoFocus';
 import { SentAttachments } from './AttachmentViewer';
 import { StreamingMarkdown } from './Markdown';
-import { formatInput, toolDiff, toolSummary } from './tools';
+import { formatInput, managedProcessSummary, toolDiff, toolSummary } from './tools';
 import { ToolFound } from './ToolFound';
 import { memoryApi } from '../memory/api';
 import { HeldMemory } from '../memory/HeldMemory';
@@ -273,7 +273,11 @@ export const ToolItem = memo(function ToolItem({ item }: { item: Of<'tool'> }) {
       data-anchor={item.id}
       name={label ? label.title : item.name}
       leading={label?.leading}
-      summary={label?.summary ?? toolSummary(item.name, item.input)}
+      summary={
+        managedProcessSummary(item.name, item.output) ??
+        label?.summary ??
+        toolSummary(item.name, item.input)
+      }
       status={stopped ? 'cancelled' : toolStatus[item.status]}
       duration={item.durationMs}
       input={diff ? undefined : formatInput(item.input)}
