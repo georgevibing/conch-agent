@@ -155,6 +155,7 @@ export class MemoryStore {
   readonly changed = new Emitter<void>();
   #mutex = new Mutex();
   #cache?: Map<string, Memory>;
+  #loading?: Promise<Map<string, Memory>>;
   /** The hash of each memory's words as committed: recall uses only what still matches. */
   #hashes = new Map<string, string>();
   #key?: Buffer;
@@ -745,6 +746,14 @@ export class MemoryStore {
 
   async #load(): Promise<Map<string, Memory>> {
     if (this.#cache) return this.#cache;
+    this.#loading ??= this.#read().finally(() => {
+      this.#loading = undefined;
+    });
+    return this.#loading;
+  }
+
+  /** Every startup reader shares one snapshot; a late read cannot replace newer writes. */
+  async #read(): Promise<Map<string, Memory>> {
     const map = new Map<string, Memory>();
     let files: string[] = [];
     try {
