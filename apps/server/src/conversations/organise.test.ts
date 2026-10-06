@@ -158,6 +158,9 @@ describe('what’s new since you looked', () => {
   it('a chat from before Conch kept track is never new until something happens in it', async () => {
     const { services, home } = await setup();
     const a = await chat(services);
+    // Idle is visible before the final disk write finishes. Stop and flush the
+    // old manager before replacing its index with a pre-seenAt fixture.
+    await services.conversations.drain();
     const index = join(home, 'conversations', 'index.json');
     const records = JSON.parse(await readFile(index, 'utf8')) as Record<string, unknown>[];
     for (const r of records) delete r.seenAt;
