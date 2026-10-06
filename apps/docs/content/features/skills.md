@@ -48,7 +48,7 @@ Thousands of people share skills. **Discover**, the second tab on the Skills pag
 
 1. Open **Skills** and choose **Discover**. Search for what it should get better at, pick a kind such as **Writing** or **Design**, or start from one of the ideas.
 2. Each card says what the skill does, who published it and where, how many people use it, and what that place says about it: **Official**, **Verified publisher**, **Community** or **Flagged**.
-3. Open one. Conch downloads it and reads every file before you add anything. You see what it will be able to do, what Conch found, the version and the licence.
+3. Open one. Its page has **Skills › Discover ›** and its name at the top, and **Discover** goes back to what you'd searched. Conch downloads it and reads every file before you add anything. You see what it will be able to do, what Conch found, the version and the licence.
 4. Choose **When it fits** or **Only when I ask**, and press **Add skill**.
 
 It's yours from then on, under **Added from Discover**, and works with every model. Nothing in it runs when it's added.

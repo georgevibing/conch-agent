@@ -40,6 +40,7 @@ import { SkillsView } from '../features/skills/SkillsView';
 import { Sidebar } from '../features/sidebar/Sidebar';
 import { useLiveStore } from '../live/store';
 import styles from './Shell.module.css';
+import { PageTrailProvider, Trail, type PageTrail } from './trail';
 import { BrowserToggle } from '../features/browser/BrowserToggle';
 import { TerminalDock } from '../features/terminal/TerminalDock';
 import { TerminalToggle } from '../features/terminal/TerminalToggle';
@@ -177,6 +178,35 @@ export function Shell() {
     else setPalette(true);
   });
 
+  // A page inside a place says where it is (`usePageTrail`): the header shows
+  // it as the trail, Apps › Gmail, in place of the place's name.
+  const [trail, setTrail] = useState<PageTrail | null>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  const areaRef = useRef<HTMLDivElement>(null);
+  const firstKey = useRef(location.key);
+  const hadTrail = useRef(false);
+  const trailKey = trail?.map((c) => c.label).join(' › ') ?? '';
+  // Arriving at a page inside a place, or stepping back out of one, leaves the
+  // focus nowhere (what was pressed is gone): it goes to where you are now —
+  // the page's name in the trail, or the place's heading. Focus that something
+  // else took (a dialog, a field) stays where it is.
+  useEffect(() => {
+    const had = hadTrail.current;
+    hadTrail.current = trailKey !== '';
+    if (location.key === firstKey.current || (!trailKey && !had)) return;
+    const frame = requestAnimationFrame(() => {
+      const at = document.activeElement;
+      if (at && at !== document.body) return;
+      const here = trailKey
+        ? headerRef.current?.querySelector<HTMLElement>('[aria-current="page"]')
+        : areaRef.current?.querySelector<HTMLElement>('h1');
+      if (!here) return;
+      if (!here.hasAttribute('tabindex')) here.setAttribute('tabindex', '-1');
+      here.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [location.key, trailKey]);
+
   const showSidebar = !narrow && sidebarOpen;
   const asideRef = useRef<HTMLElement>(null);
   const showRef = useRef<HTMLButtonElement>(null);
@@ -222,7 +252,7 @@ export function Shell() {
         </Sheet.Root>
       )}
       <main className={styles.main}>
-        <header className={styles.header}>
+        <header ref={headerRef} className={styles.header}>
           {narrow ? (
             <IconButton label="Open conversations" onClick={() => setMobileSidebar(true)}>
               <Menu />
@@ -240,23 +270,27 @@ export function Shell() {
               </IconButton>
             )
           )}
-          <Text as="div" weight="medium" className={styles.title}>
-            <LiveTitle
-              pending={
-                !routinesArea &&
-                !appsArea &&
-                !skillsArea &&
-                !channelsArea &&
-                !passwordsArea &&
-                !pinnedArea &&
-                !tasksArea &&
-                !archiveArea &&
-                current?.titling
-              }
-            >
-              {title}
-            </LiveTitle>
-          </Text>
+          {trail ? (
+            <Trail crumbs={trail} className={styles.trail} />
+          ) : (
+            <Text as="div" weight="medium" className={styles.title}>
+              <LiveTitle
+                pending={
+                  !routinesArea &&
+                  !appsArea &&
+                  !skillsArea &&
+                  !channelsArea &&
+                  !passwordsArea &&
+                  !pinnedArea &&
+                  !tasksArea &&
+                  !archiveArea &&
+                  current?.titling
+                }
+              >
+                {title}
+              </LiveTitle>
+            </Text>
+          )}
           <WakeWord onChat={onChat} />
           {onChat && <ChatProvider conversationId={conversationId} compact={phone} />}
           {phone && conversationId ? (
@@ -280,58 +314,60 @@ export function Shell() {
         <Reconnecting />
         <UpdateNotice className={styles.notice} />
         {/* The page; it steps aside while the terminal fills the screen. */}
-        <div className={styles.area} data-covered={terminalMax || undefined}>
-          {pinnedArea && artifactId ? (
-            <AppView key={artifactId} artifactId={artifactId} />
-          ) : memoryArea ? (
-            <MemoryMoved />
-          ) : tasksArea ? (
-            <TasksView />
-          ) : archiveArea ? (
-            <ArchiveView />
-          ) : activityArea ? (
-            <ActivityView />
-          ) : passwordsArea ? (
-            <PasswordsView itemId={itemId} />
-          ) : channelsArea ? (
-            channelKind ? (
-              <ConnectChannel key={channelKind} kind={channelKind} />
+        <div ref={areaRef} className={styles.area} data-covered={terminalMax || undefined}>
+          <PageTrailProvider value={setTrail}>
+            {pinnedArea && artifactId ? (
+              <AppView key={artifactId} artifactId={artifactId} />
+            ) : memoryArea ? (
+              <MemoryMoved />
+            ) : tasksArea ? (
+              <TasksView />
+            ) : archiveArea ? (
+              <ArchiveView />
+            ) : activityArea ? (
+              <ActivityView />
+            ) : passwordsArea ? (
+              <PasswordsView itemId={itemId} />
+            ) : channelsArea ? (
+              channelKind ? (
+                <ConnectChannel key={channelKind} kind={channelKind} />
+              ) : (
+                channelId && <ChannelDetailView key={channelId} channelId={channelId} />
+              )
+            ) : skillsArea ? (
+              path === '/skills/new' ? (
+                <NewSkill />
+              ) : listingId && path.startsWith('/skills/discover/') ? (
+                <MarketSkillView key={listingId} listingId={listingId} />
+              ) : path === '/skills/discover' ? (
+                <SkillsView />
+              ) : skillId ? (
+                <SkillDetailView key={skillId} skillId={skillId} />
+              ) : (
+                <SkillsView />
+              )
+            ) : appsArea ? (
+              pageId && appIdOf(appId) ? (
+                <AppPageView
+                  key={`${appId}/${pageId}`}
+                  appId={appIdOf(appId) ?? ''}
+                  pageId={pageId}
+                />
+              ) : appId ? (
+                <AppDetailView key={appId} appId={appId} />
+              ) : (
+                <AppsView />
+              )
+            ) : routinesArea ? (
+              routineId ? (
+                <RoutineDetailView key={routineId} routineId={routineId} />
+              ) : (
+                <RoutinesView />
+              )
             ) : (
-              channelId && <ChannelDetailView key={channelId} channelId={channelId} />
-            )
-          ) : skillsArea ? (
-            path === '/skills/new' ? (
-              <NewSkill />
-            ) : listingId && path.startsWith('/skills/discover/') ? (
-              <MarketSkillView key={listingId} listingId={listingId} />
-            ) : path === '/skills/discover' ? (
-              <SkillsView />
-            ) : skillId ? (
-              <SkillDetailView key={skillId} skillId={skillId} />
-            ) : (
-              <SkillsView />
-            )
-          ) : appsArea ? (
-            pageId && appIdOf(appId) ? (
-              <AppPageView
-                key={`${appId}/${pageId}`}
-                appId={appIdOf(appId) ?? ''}
-                pageId={pageId}
-              />
-            ) : appId ? (
-              <AppDetailView key={appId} appId={appId} />
-            ) : (
-              <AppsView />
-            )
-          ) : routinesArea ? (
-            routineId ? (
-              <RoutineDetailView key={routineId} routineId={routineId} />
-            ) : (
-              <RoutinesView />
-            )
-          ) : (
-            <ChatView key={chat.key} conversationId={conversationId} />
-          )}
+              <ChatView key={chat.key} conversationId={conversationId} />
+            )}
+          </PageTrailProvider>
         </div>
         <TerminalDock />
       </main>

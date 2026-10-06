@@ -98,11 +98,6 @@
     margin-inline: auto;
   }
 
-  .back {
-    align-self: flex-start;
-    margin-inline-start: calc(var(--nc-space-2) * -1);
-  }
-
   .fit {
     align-self: flex-start;
   }

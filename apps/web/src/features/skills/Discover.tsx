@@ -29,19 +29,12 @@ import {
   toast,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import {
-  ArrowLeft,
-  ArrowUpCircle,
-  MessageSquare,
-  PenLine,
-  Search,
-  SearchX,
-  ShieldCheck,
-} from 'lucide-react';
+import { ArrowUpCircle, MessageSquare, PenLine, Search, SearchX, ShieldCheck } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
 
 import { ApiError } from '../../api/client';
+import { usePageTrail } from '../../app/trail';
 import { useAssistantName } from '../integrations/queries';
 import {
   marketApi,
@@ -68,7 +61,7 @@ const turnedOff = (error: unknown) => error instanceof ApiError && error.status 
  */
 export function DiscoverPanel() {
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const [params, setParams] = useSearchParams();
   const q = params.get('q')?.trim() ?? '';
   const asked = params.get('kind');
@@ -167,7 +160,7 @@ export function DiscoverPanel() {
           // A lazy route may take longer than the debounce to mount. Cancel now,
           // before navigation, so a pending search cannot take us back to the shelf.
           clearTimeout(searchTimer.current);
-          void navigate(listingPath(listing.id));
+          void navigate(listingPath(listing.id), { state: { shelf: search } });
         }}
         emptyAction={
           q ? (
@@ -212,22 +205,21 @@ export function MarketSkillView({ listingId }: { listingId: string }) {
   const [mode, setMode] = useState<'auto' | 'manual'>('auto');
   const [added, setAdded] = useState<SkillDetail>();
   const { add, adding } = useAddFromPreview();
-  const back = (
-    <Button
-      variant="ghost"
-      size="sm"
-      leadingIcon={<ArrowLeft />}
-      onClick={() => void navigate(-1)}
-      style={{ alignSelf: 'flex-start' }}
-    >
-      Discover
-    </Button>
+  // Discover is a step back to the shelf as you left it: what you'd typed and the kind you chose.
+  const shelf = (useLocation().state as { shelf?: string } | null)?.shelf;
+  usePageTrail(
+    listing.data
+      ? [
+          { label: 'Skills', to: '/skills' },
+          { label: 'Discover', to: `/skills/discover${shelf?.startsWith('?') ? shelf : ''}` },
+          { label: listing.data.title },
+        ]
+      : null,
   );
 
   if (listing.isError)
     return (
       <Page gap={4}>
-        {back}
         <EmptyState
           icon={<SearchX />}
           title="That skill isn’t there any more"
@@ -241,13 +233,12 @@ export function MarketSkillView({ listingId }: { listingId: string }) {
         />
       </Page>
     );
-  if (!listing.data) return <Page gap={4}>{back}</Page>;
+  if (!listing.data) return <Page gap={4} />;
 
   const tryIt = (name: string) => void navigate('/', { state: { draft: `/${name} ` } });
   const skillId = added?.id ?? have?.skillId;
   return (
     <Page gap={5}>
-      {back}
       <MarketSkillPreview
         listing={listing.data}
         {...(preview.data && { preview: preview.data })}

@@ -112,23 +112,6 @@
   }
 
   /* ── Detail ──────────────────────────────────────────────────────── */
-  .back {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--nc-space-1);
-    align-self: flex-start;
-    font-size: var(--nc-text-sm);
-    color: var(--nc-text-muted);
-    text-decoration: none;
-    border-radius: var(--nc-radius-sm);
-  }
-
-  @media (hover: hover) {
-    .back:hover {
-      color: var(--nc-text);
-    }
-  }
-
   .detailHeader {
     display: grid;
     grid-template-columns: auto 1fr auto;

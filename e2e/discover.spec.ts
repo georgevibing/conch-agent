@@ -26,7 +26,15 @@ test('find a skill people share, read it, and add it in one press', async ({ pag
     page.getByText('Downloads something from the internet and runs it straight away.'),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add anyway' })).toBeDisabled();
-  await page.goBack();
+  // Where you are, in one trail: Discover is a step back to the shelf as you left it.
+  const trail = page.getByRole('navigation', { name: 'Breadcrumb' });
+  await expect(trail.getByRole('link')).toHaveText(['Skills', 'Discover']);
+  await expect(trail.getByText('Wallet helper')).toHaveAttribute('aria-current', 'page');
+  await trail.getByRole('link', { name: 'Discover' }).click();
+  await expect(page).toHaveURL(/\/skills\/discover\?q=wallet$/);
+  await expect(page.getByRole('searchbox', { name: 'Search skills people share' })).toHaveValue(
+    'wallet',
+  );
 
   // A licence that forbids copying: no button, only why.
   await page.goto('/skills/discover?q=word');

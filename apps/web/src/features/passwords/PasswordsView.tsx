@@ -1173,7 +1173,7 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
               settle={settle}
               guard={guard}
               onEdit={() => setMode({ kind: 'edit' })}
-              onBack={narrow ? () => open(undefined) : undefined}
+              page={narrow}
               onDeleted={() => open(undefined)}
               actions={actions}
               targets={targets}

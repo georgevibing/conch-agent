@@ -29,11 +29,12 @@ import {
   Text,
 } from '@conch/nacre';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, SquareArrowOutUpRight } from 'lucide-react';
+import { SquareArrowOutUpRight } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 
 import { useAppState } from '../../api/queries';
+import { usePageTrail } from '../../app/trail';
 import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
 import { importApi } from '../import/api';
@@ -101,20 +102,11 @@ export function SetupPage({
   children: ReactNode;
 }) {
   const app = APPS[kind];
+  usePageTrail([{ label: 'Apps', to: APPS_PATH }, { label: `Connect ${app.name}` }]);
   return (
     <Page gap={8}>
       <div className={styles.setup}>
         <div className={styles.setupMain}>
-          <Button
-            asChild
-            variant="ghost"
-            tone="neutral"
-            size="sm"
-            leadingIcon={<ArrowLeft />}
-            className={styles.back}
-          >
-            <Link to={APPS_PATH}>Apps</Link>
-          </Button>
           <Stack gap={2}>
             <IntegrationLogo brand={kind} name={app.name} color={app.color} size="lg" decorative />
             <Heading level={1} display size="4xl">

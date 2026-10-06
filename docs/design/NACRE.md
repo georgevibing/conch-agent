@@ -99,6 +99,12 @@ and never a trail for a page with nothing above it: its heading is enough. Short
 of room, the places above give way to an ellipsis first. On a phone, a page's
 own places float in from the side as a `Sheet`, like the chats do, opened from
 the menu button beside the trail; the way out (‹ Chats) is at their top.
+Everywhere else (an app's page, a skill's, a routine's, a password on a
+phone) the trail is the window's header, in place of the place's name and on
+every width (`usePageTrail` in `apps/web/src/app/trail.tsx`): Apps › Gmail.
+Arriving there by a press puts the focus on the page's name in the trail, so
+the way back is one Shift+Tab away; stepping back out puts it on the place's
+heading.
 
 ## Elevation
 

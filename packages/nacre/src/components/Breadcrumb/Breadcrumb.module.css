@@ -14,10 +14,16 @@
     --bc-step: 1.5rem;
   }
 
-  /* One line, always: what still doesn't fit is cut, never wrapped. */
+  /*
+   * One line, always: what still doesn't fit is cut, never wrapped. It takes
+   * the room the trail has, rather than measuring its own steps: a name whose
+   * width isn't a whole number would otherwise lose its last letters to an
+   * ellipsis with the room to spare right beside it.
+   */
   .list {
     display: flex;
     align-items: center;
+    inline-size: 100%;
     min-inline-size: 0;
     overflow: hidden;
     margin: 0;
@@ -109,5 +115,20 @@
 
   .item:first-child > .current {
     padding-inline-start: 0;
+  }
+
+  /*
+   * Arriving at a page can put the focus on its name (`tabIndex={-1}`), so the
+   * way back is one Shift+Tab away. Shown only when the keyboard brought you.
+   */
+  .current:focus {
+    outline: none;
+  }
+
+  .current:focus-visible {
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 1px;
   }
 }

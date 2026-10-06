@@ -9,10 +9,10 @@ import {
   Stack,
   Text,
 } from '@conch/nacre';
-import { ArrowLeft } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 
+import { usePageTrail } from '../../app/trail';
 import { useChannels } from '../channels/queries';
 import { ConchAppDetail } from '../conchapps/ConchAppDetail';
 import { useVault } from '../passwords/queries';
@@ -127,7 +127,7 @@ export function AppDetailView({ appId }: { appId: string }) {
 
 /** An app with only one of its halves (or, for 1Password, none yet): its switches, and the steps. */
 function HalfDetail({ item, onSetUp }: { item: AppItem; onSetUp: () => void }) {
-  const navigate = useNavigate();
+  usePageTrail([{ label: 'Apps', to: APPS_PATH }, { label: item.name }]);
   const card = describeApp(item);
   useEffect(() => {
     document.title = `${item.name} · Conch`;
@@ -135,16 +135,6 @@ function HalfDetail({ item, onSetUp }: { item: AppItem; onSetUp: () => void }) {
   const anything = item.channels.length > 0 || Boolean(item.source);
   return (
     <Page gap={8}>
-      <div>
-        <Button
-          variant="ghost"
-          size="sm"
-          leadingIcon={<ArrowLeft />}
-          onClick={() => void navigate(APPS_PATH)}
-        >
-          Apps
-        </Button>
-      </div>
       <header className={styles.detailHeader}>
         <IntegrationLogo
           brand={item.brand}

@@ -26,7 +26,6 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import {
   AppWindow,
-  ArrowLeft,
   ExternalLink,
   KeyRound,
   MessageSquare,
@@ -38,6 +37,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 
 import { useConversations } from '../../api/queries';
+import { usePageTrail } from '../../app/trail';
 import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
 import { AppAbilitiesSection } from '../integrations/AppAbilitiesSection';
@@ -133,6 +133,7 @@ function Detail({
   useEffect(() => {
     document.title = `${manifest.name} · Conch`;
   }, [manifest.name]);
+  usePageTrail([{ label: 'Apps', to: APPS_PATH }, { label: manifest.name }]);
 
   // A card's "Change settings" (a setting missing) lands on the field.
   const focusSettings = () => {
@@ -231,17 +232,6 @@ function Detail({
 
   return (
     <Page gap={8}>
-      <div>
-        <Button
-          variant="ghost"
-          size="sm"
-          leadingIcon={<ArrowLeft />}
-          onClick={() => void navigate(APPS_PATH)}
-        >
-          Apps
-        </Button>
-      </div>
-
       <header className={intStyles.detailHeader}>
         <AppIcon {...appLook(app)} size="xl" status={enabled ? health.state : 'off'} />
         <Stack gap={1} className={intStyles.detailTitle}>

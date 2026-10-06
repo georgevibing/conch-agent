@@ -17,10 +17,11 @@ import {
   Textarea,
   toast,
 } from '@conch/nacre';
-import { ArrowLeft, Sparkles, Waypoints } from 'lucide-react';
+import { Sparkles, Waypoints } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 
+import { usePageTrail } from '../../app/trail';
 import { useAutoFocus } from '../../lib/useAutoFocus';
 import { useAssistantName } from '../integrations/queries';
 import { skillsApi } from './api';
@@ -243,19 +244,11 @@ export function NewSkill() {
   };
 
   const shownTitle = title.trim() || 'New skill';
+  usePageTrail([{ label: 'Skills', to: '/skills' }, { label: 'New skill' }]);
   const pending = writing && needsWords;
 
   return (
     <Page gap={6}>
-      <Button
-        variant="ghost"
-        size="sm"
-        leadingIcon={<ArrowLeft />}
-        className={styles.back}
-        onClick={() => void navigate('/skills')}
-      >
-        Skills
-      </Button>
       <Stack gap={1}>
         <Heading level={1} display size="4xl">
           Teach {assistant} a skill

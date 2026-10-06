@@ -381,6 +381,71 @@ describe('one app, one card (ADR 0052)', () => {
     }
   });
 
+  it('a page inside Apps says where it is with one trail in the header, never a back button', async () => {
+    mockFetch(routes({ integrations: [hosted('slack')], channels: [channel(), slackBot] }));
+    const shell = (route: string) =>
+      renderApp(
+        <Routes>
+          <Route path="/apps" element={<Shell />} />
+          <Route path="/apps/:appId" element={<Shell />} />
+          <Route path="/channels/new/:channelKind" element={<Shell />} />
+          <Route path="/channels/:channelId" element={<Shell />} />
+        </Routes>,
+        { route },
+      );
+    for (const [route, steps, here] of [
+      ['/apps/slack', ['Apps'], 'Slack'],
+      ['/channels/new/telegram', ['Apps'], 'Connect Telegram'],
+      ['/channels/ch_1', ['Apps'], 'Ada’s Conch'],
+      // A half of an app sits under it.
+      ['/channels/ch_slack', ['Apps', 'Slack'], 'Conch'],
+    ] as const) {
+      const { unmount } = shell(route);
+      const trail = await screen.findByRole('navigation', { name: 'Breadcrumb' });
+      expect(within(trail).getByText(here)).toHaveAttribute('aria-current', 'page');
+      expect(
+        within(trail)
+          .getAllByRole('link')
+          .map((l) => l.textContent),
+      ).toEqual(steps);
+      expect(within(trail).getByRole('link', { name: 'Apps' })).toHaveAttribute('href', '/apps');
+      // The trail is the only way back (the sidebar's Apps aside).
+      expect(within(screen.getByRole('main')).queryByRole('button', { name: 'Apps' })).toBeNull();
+      unmount();
+    }
+    // Apps itself has nothing above it: its name is enough.
+    const { unmount } = shell('/apps');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Apps' })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull();
+    unmount();
+  });
+
+  it('arriving at an app puts the focus on where you are, and stepping back on Apps', async () => {
+    mockFetch(routes({ integrations: [hosted('slack')] }));
+    const { where } = renderApp(
+      <Routes>
+        <Route path="/apps" element={<Shell />} />
+        <Route path="/apps/:appId" element={<Shell />} />
+      </Routes>,
+      { route: '/apps' },
+    );
+    const connected = await screen.findByRole('region', { name: 'Connected' });
+    await userEvent.click(within(connected).getByRole('button', { name: 'Slack' }));
+    const trail = await screen.findByRole('navigation', { name: 'Breadcrumb' });
+    await waitFor(() => expect(within(trail).getByText('Slack')).toHaveFocus());
+    expect(where()).toBe('/apps/slack');
+
+    // One step back, by keyboard: the way out is right before the page's name.
+    await userEvent.tab({ shift: true });
+    expect(within(trail).getByRole('link', { name: 'Apps' })).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    expect(where()).toBe('/apps');
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { level: 1, name: 'Apps' })).toHaveFocus(),
+    );
+    expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull();
+  });
+
   it('the sidebar’s Apps counts what needs you, chat apps included', async () => {
     mockFetch(
       routes({

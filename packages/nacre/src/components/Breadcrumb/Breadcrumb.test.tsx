@@ -63,6 +63,27 @@ describe('Breadcrumb', () => {
     await expectAccessible(container);
   });
 
+  it('lets the page you’re on take the focus on arrival, never a Tab stop', async () => {
+    const user = userEvent.setup();
+    const { container } = renderNacre(
+      <Breadcrumb>
+        <Breadcrumb.Item href="/apps">Apps</Breadcrumb.Item>
+        <Breadcrumb.Item current tabIndex={-1}>
+          Gmail
+        </Breadcrumb.Item>
+      </Breadcrumb>,
+    );
+    const here = screen.getByText('Gmail');
+    here.focus();
+    expect(here).toHaveFocus();
+    // One step back to the way out.
+    await user.tab({ shift: true });
+    expect(screen.getByRole('link', { name: 'Apps' })).toHaveFocus();
+    await user.tab();
+    expect(here).not.toHaveFocus();
+    await expectAccessible(container);
+  });
+
   it('keeps the whole name for a step that may be cut short', () => {
     renderNacre(
       <Breadcrumb>

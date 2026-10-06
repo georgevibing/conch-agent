@@ -13,11 +13,13 @@ import {
   useNacreTheme,
   type AppIconLook,
 } from '@conch/nacre';
-import { AppWindow, ArrowLeft, PencilLine, X } from 'lucide-react';
+import { AppWindow, PencilLine, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 
+import { usePageTrail } from '../../app/trail';
 import { useUi } from '../../app/ui';
+import { APPS_PATH } from '../integrations/paths';
 import { useLiveStore } from '../../live/store';
 import { conchAppsApi, pageFrameUrl, type PageOwner } from './api';
 import styles from './ConchApps.module.css';
@@ -172,11 +174,24 @@ export function AppPageFrame({
   );
 }
 
-/** `/apps/capp_<id>/<page>`: one of an app's pages, on a page of its own. */
+/**
+ * `/apps/capp_<id>/<page>`: one of an app's pages, on a page of its own. The
+ * window's header says where it is (Apps › Weather › Forecast), the app a
+ * step back to its page in Apps, where its switches and settings are.
+ */
 export function AppPageView({ appId, pageId }: { appId: string; pageId: string }) {
   const navigate = useNavigate();
   const { data: app, isPending, isError } = useConchApp(appId);
   const page = app?.manifest.pages.find((p) => p.id === pageId);
+  usePageTrail(
+    app && page
+      ? [
+          { label: 'Apps', to: APPS_PATH },
+          { label: app.manifest.name, to: conchAppPath(app.id) },
+          { label: page.title },
+        ]
+      : null,
+  );
   if (isPending) return <Skeleton className={styles.pageLoading} />;
   if (isError || !app || !page)
     return (
@@ -189,7 +204,7 @@ export function AppPageView({ appId, pageId }: { appId: string; pageId: string }
             : 'Its app may have been removed on another device.'
         }
         actions={
-          <Button onClick={() => void navigate(app ? conchAppPath(app.id) : '/apps')}>
+          <Button onClick={() => void navigate(app ? conchAppPath(app.id) : APPS_PATH)}>
             {app ? `Open ${app.manifest.name}` : 'See all apps'}
           </Button>
         }
@@ -199,18 +214,10 @@ export function AppPageView({ appId, pageId }: { appId: string; pageId: string }
     app.manifest.pages.length > 1 ? `${app.manifest.name} — ${page.title}` : page.title;
   return (
     <div className={styles.pageView}>
-      <header className={styles.pageBar}>
-        {/* Back to the app's page in Apps, where its switches and settings are. */}
-        <IconButton
-          label={`Back to ${app.manifest.name}`}
-          variant="ghost"
-          size="sm"
-          onClick={() => void navigate(conchAppPath(app.id))}
-        >
-          <ArrowLeft />
-        </IconButton>
-        <PageTitle icon={appLook(app)} title={titled} />
-      </header>
+      {/* The trail above names it; the page's heading is for screen readers. */}
+      <Heading level={1} className="nc-visually-hidden">
+        {titled}
+      </Heading>
       <AppPageFrame
         key={`${app.id}:${app.hash}:${page.id}`}
         owner={{ appId: app.id }}

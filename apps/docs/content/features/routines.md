@@ -67,7 +67,7 @@ Only you can turn a routine on or give it more room. If your assistant rewrites 
 
 ## Read what it did
 
-Open a routine to see its **History**: every run, with one line saying what happened. A run is a chat of its own, so you can open it, read each step, and reply to follow up.
+Open a routine to see its **History**: every run, with one line saying what happened. A run is a chat of its own, so you can open it, read each step, and reply to follow up. The page says **Routines ›** and the routine's name at the top: press **Routines** to go back to them all.
 
 - A run that is waiting for you, or didn't finish, puts its routine under **Needs you** at the top of the page. So does a **When…** routine that can't look, like when Gmail needs you to sign in again.
 - Turn on [notifications](../start/phone.md) and Conch tells you when a routine has run. A run with nothing to say stays quiet.
