@@ -1,4 +1,4 @@
-import { SETTINGS_COMMANDS } from './settings';
+import { nativeMenu } from './commands';
 import type { ChannelBot } from '@conch/protocol';
 
 import { botAvatar } from './assets';
@@ -210,13 +210,17 @@ export class TelegramAdapter implements ChannelAdapter {
   async prepare(profile: ChannelProfile): Promise<void> {
     const who = profile.owner ? `${profile.owner}’s` : 'your';
     await Promise.allSettled([
+      // Conch's commands in Telegram's own "/" menu, from the list the web app uses too (ADR 0098).
       this.call('setMyCommands', {
-        commands: [
-          { command: 'new', description: 'Start a fresh conversation' },
-          { command: 'stop', description: 'Stop what I’m doing' },
-          { command: 'help', description: 'What I can do here' },
-          ...SETTINGS_COMMANDS,
-        ],
+        commands: nativeMenu().map(({ command, description }) => ({ command, description })),
+      }),
+      // In groups, only what works there: everyone else's words go nowhere else.
+      this.call('setMyCommands', {
+        commands: nativeMenu({ groups: true }).map(({ command, description }) => ({
+          command,
+          description,
+        })),
+        scope: { type: 'all_group_chats' },
       }),
       this.call('setMyShortDescription', {
         short_description: `${profile.assistant}, ${who} assistant on Conch. Private.`.slice(
@@ -292,6 +296,8 @@ export class TelegramAdapter implements ChannelAdapter {
     // refuses them, typing… is used instead for the rest of the connection.
     let drafts = true;
     return {
+      // A list's buttons go one under the other: eight still fit on a phone without scrolling.
+      buttonLimit: 8,
       send: (chatId, markdown, options) => this.#send(chatId, markdown, options),
       voiceNotes: { format: 'ogg', send: (chatId, note) => this.#sendVoice(chatId, note) },
       draft: async (chatId, draftId, markdown) => {

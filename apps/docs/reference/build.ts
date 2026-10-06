@@ -13,8 +13,10 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import {
+  CHAT_COMMANDS,
   ClientCommand,
   ConversationEvent,
+  findCommand,
   PROTOCOL_VERSION,
   ServerEvent,
   VaultSourceId,
@@ -355,6 +357,16 @@ export function buildReference(): Reference {
       argumentHint,
       aliases: aliases ?? [],
       section: sectionLabels[section],
+      chat: Boolean(findCommand(name, 'chat')?.chat),
+    })),
+    // The same list, as chat apps take it (ADR 0098).
+    chatCommands: CHAT_COMMANDS.filter((c) => !c.chat.hidden).map((c) => ({
+      name: c.name,
+      description: c.chat.description ?? c.description,
+      argumentHint: c.chat.argumentHint ?? c.argumentHint,
+      aliases: c.aliases ?? [],
+      who: c.chat.who,
+      groups: Boolean(c.chat.groups),
     })),
     files: files(),
     needs: needs(),

@@ -2198,8 +2198,11 @@ export class ConversationManager {
     };
 
     // Plan mode (`/plan`) for an engine that can't ask to start by itself: Conch's
-    // `exit_plan_mode` asks instead, as the same card. Only where someone can press Start.
-    const planning = watched && resolved.permissionMode === 'plan' && needsPlanTool(engine);
+    // `exit_plan_mode` asks instead, as the same card. Only where someone can press Start:
+    // here, or in a chat app, where the question comes with Start and Keep planning (ADR 0098).
+    const origin = live.record.origin;
+    const answerable = watched || (!extras && origin?.kind === 'channel' && !origin.guest);
+    const planning = answerable && resolved.permissionMode === 'plan' && needsPlanTool(engine);
     const planTools = planning
       ? [
           exitPlanModeTool(async (plan) => {

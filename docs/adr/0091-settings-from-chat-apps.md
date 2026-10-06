@@ -1,6 +1,6 @@
 # 0091 — Settings from chat apps
 
-- Status: accepted
+- Status: accepted (amended by [ADR 0098](./0098-chat-commands-every-provider-understands.md#amendment-2026-10-06-the-same-commands-in-every-chat-app): a model, effort or speed picked for this chat is done at once; defaults, going back to them and modes that allow more still ask)
 - Date: 2026-10-05
 
 ## Decision

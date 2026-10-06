@@ -1,3 +1,4 @@
+import { COMMANDS } from '@conch/protocol';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -167,6 +168,14 @@ describe('the commands people expect', () => {
   it('keeps /clear apart from /new now that it clears the chat', () => {
     expect(resolveSlash('/clear', custom, engine)).toMatchObject({ builtin: { action: 'clear' } });
     expect(resolveSlash('/new', custom, engine)).toMatchObject({ builtin: { action: 'new' } });
+  });
+
+  it('is the same list chat apps use, without the ones only chat apps have', () => {
+    expect(builtins.map((b) => b.name)).toEqual(
+      COMMANDS.filter((c) => c.web !== false).map((c) => c.name),
+    );
+    for (const name of ['stop', 'start', 'cancel']) expect(findBuiltin(name), name).toBeUndefined();
+    for (const b of builtins) expect(b.action).toBe(b.name);
   });
 
   it('never gives two commands the same name', () => {

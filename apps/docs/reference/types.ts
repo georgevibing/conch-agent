@@ -112,6 +112,20 @@ export interface SlashRef {
   aliases: string[];
   /** What it acts on: the chat, how it answers, or Conch. */
   section: string;
+  /** It works from chat apps too (ADR 0098). */
+  chat: boolean;
+}
+
+/** A command as chat apps take it (Telegram, Slack, WhatsApp, email…). */
+export interface ChatCommandRef {
+  name: string;
+  description: string;
+  argumentHint?: string;
+  aliases: string[];
+  /** The channel owner in their private chat, or anyone let in. */
+  who: 'owner' | 'people';
+  /** It works in a group too. */
+  groups: boolean;
 }
 
 export interface FileRef {
@@ -179,6 +193,7 @@ export interface Reference {
   modes: ModeRef[];
   efforts: EffortRef[];
   slash: SlashRef[];
+  chatCommands: ChatCommandRef[];
   files: FileRef[];
   needs: NeedRef[];
   routes: RouteRef[];

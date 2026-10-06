@@ -29,6 +29,7 @@ Teams only delivers a bot's messages to a web address. Conch gives it one that l
 
 - **No Upload an app in Teams?** Your organisation turned custom apps off. Ask whoever runs Teams for you to allow it, or to upload the file for you.
 - **Approvals come as a card** with **Allow**, **Always in this chat** and **Don't allow**.
+- **Commands are in the app's menu.** Teams lists ten of Conch's: `/new`, `/stop`, `/model`, `/clear`, `/plan`, `/goal`, `/effort`, `/retry`, `/status` and `/help`. Every other one works when you type it. See [Slash commands](../reference/slash-commands.md#in-chat-apps).
 - **While it works** Teams shows "typing…".
 - **Files you send** in the chat come too: the app asks Teams for that.
 - **Turn the address off** under the channel's **Where Teams delivers** when you stop using Teams.

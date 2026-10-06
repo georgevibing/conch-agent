@@ -1,6 +1,6 @@
 ---
 title: Slash commands
-description: Type / in any chat. Conch's own commands act on the app and never reach the model.
+description: Type / in any chat, in Conch or a chat app. Conch's own commands act on the app and never reach the model.
 order: 3
 ---
 
@@ -33,6 +33,22 @@ Conch's commands work the same whichever model answers, because Conch does them 
 - **`/clear`** starts the chat afresh: from that line on, your assistant reads nothing said above it, with every provider, and each provider starts a new session. Every message stays for you. The chat's goal stays, and so does what the chat is held to and what it has read. **Undo**, on the line and in the note, puts it back until you send something. `/new` starts a new chat instead.
 - **`/goal`** says what the chat is for, like `/goal get the release notes for 2.4 written`. Your assistant keeps it in mind in every reply, through `/clear` and whichever model answers. It shows as one quiet line above the message box: press it for **Edit** or **Clear goal**. `/goal` alone shows it, `/goal clear` takes it away. In a new chat, it goes with your first message.
 - **`/plan`** turns plan mode on or off. Your assistant reads and plans, changes nothing, and shows you its plan with **Start** and **Keep planning**. **Start** ends plan mode and the work begins, in the mode you had before. `/plan tidy up this folder` turns it on and asks in one go. Claude Code asks with its own plan; every other provider that can use Conch's tools asks the same way through Conch.
+
+## In chat apps
+
+The same commands work when you write to your assistant from [a chat app](../channels/index.md): Telegram, Slack, WhatsApp, Signal, iMessage, email and the rest. They come from the same list as the web app's, so they mean the same, with every provider, and never reach the model as typed.
+
+<!-- conch:chat-commands -->
+
+- **Choices are buttons.** `/model` shows the models of the provider you use, the one in use ticked, and **Other providers** a step away; tap one and it's done. `/effort`, `/fast`, `/mode` and `/plan` work the same way. Where an app has no buttons (WhatsApp, Signal, iMessage, email, SMS), the choices are numbered: reply with the number.
+- **Words after the name work too:** `/model opus`, `/effort high`, `/fast off`, `/goal get the 2.4 notes out`, `/plan tidy up this folder`.
+- **`/clear` has an Undo** under it, and `/undo` does the same, until you send something. `/undo` in a chat app takes back a clear; to put back files, open the chat in Conch.
+- **`/plan`** turns plan mode on or off. When the plan is ready, it arrives as a message with **Start** and **Keep planning** (or reply `1` or `2`, `yes` or `no`).
+- **`/goal`** before your first message goes with it, as in Conch.
+- **A mistyped command** hears what you probably meant, with a button for it: `/modle` → **/model**.
+- **Commands only Conch has** (`/export`, `/folder`, `/theme`…) say so, and where to find them.
+- **Who may use which.** Anyone you let in can start afresh, clear, retry and stop in their own chat. What changes how Conch works (model, effort, mode, goal, plan, settings) is yours alone, typed in your private chat: someone else, a forward or a group can't. In a group, only `/new`, `/stop` and `/help` work.
+- **The app's own menu.** Telegram lists the commands when you type `/`, and Discord offers them as its own commands. Teams lists ten in its menu. Slack keeps `/` for itself, so there they go after `/conch`: `/conch model`.
 
 ## Thinking effort
 

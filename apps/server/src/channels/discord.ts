@@ -1,6 +1,7 @@
 import type { ChannelBot } from '@conch/protocol';
 
 import { botAvatar } from './assets';
+import { nativeMenu } from './commands';
 import { fit, toDiscordMarkdown } from './format';
 import {
   Backoff,
@@ -212,6 +213,13 @@ export class DiscordAdapter implements ChannelAdapter {
       // Presses must come over the Gateway; a leftover endpoint URL would take them away.
       ...(app?.interactions_endpoint_url && { interactions_endpoint_url: '' }),
     }).catch(() => undefined);
+    // Conch's commands in Discord's own "/" menu (ADR 0098), from the list the web app uses too.
+    if (app?.id)
+      await this.rest(
+        'PUT',
+        `/applications/${encodeURIComponent(app.id)}/commands`,
+        discordCommands(),
+      ).catch(() => undefined);
     // A bot without a picture gets Conch's pearl; one you chose is left alone.
     const me = await this.rest<DiscordUser>('GET', '/users/@me').catch(() => undefined);
     if (me && !me.avatar) {
@@ -674,6 +682,10 @@ export class DiscordAdapter implements ChannelAdapter {
         break;
       }
       case 'INTERACTION_CREATE': {
+        if (d.type === 2) {
+          this.#slash(d, events);
+          return;
+        }
         if (d.type !== 3) return;
         const user = (d.user ?? (d.member as { user?: DiscordUser } | undefined)?.user) as
           DiscordUser | undefined;
@@ -697,6 +709,69 @@ export class DiscordAdapter implements ChannelAdapter {
         break;
     }
   }
+
+  /**
+   * One of Conch's commands chosen from Discord's "/" menu: it reaches Conch
+   * as the words it stands for (`/model opus`), from the person who chose it.
+   * Discord wants an answer within three seconds, so the command is shown
+   * back at once, to them only.
+   */
+  #slash(d: Record<string, unknown>, events: ChannelEvents) {
+    const user = (d.user ?? (d.member as { user?: DiscordUser } | undefined)?.user) as
+      DiscordUser | undefined;
+    const data = d.data as
+      { name?: string; options?: { name: string; value?: unknown }[] } | undefined;
+    const channel = d.channel_id as string | undefined;
+    if (!user || user.bot || !channel || !data?.name || !/^[a-z0-9_-]{1,32}$/.test(data.name))
+      return;
+    const value = data.options?.find((o) => o.name === 'value')?.value;
+    const typed = typeof value === 'string' ? value.trim().slice(0, 4000) : '';
+    const text = `/${data.name}${typed ? ` ${typed}` : ''}`;
+    void this.rest('POST', `/interactions/${d.id as string}/${d.token as string}/callback`, {
+      type: 4,
+      data: { content: text, flags: 64, allowed_mentions: { parse: [] } },
+    }).catch(() => undefined);
+    const direct = !d.guild_id;
+    events.message({
+      chatId: channel,
+      messageId: d.id as string,
+      user: person(user),
+      text,
+      files: [],
+      direct,
+      // A command chosen for the bot is addressed to it, as a mention is.
+      ...(!direct && {
+        mentioned: true,
+        group: this.#places.get(channel) ?? 'A Discord channel',
+      }),
+    });
+  }
+}
+
+/**
+ * Conch's commands as Discord application commands: in private messages and
+ * servers, each with a `value` to type where it takes one (a model's name, a
+ * goal). Discord allows 100 characters of words.
+ */
+export function discordCommands() {
+  return nativeMenu({ words: 100 }).map((c) => ({
+    name: c.command,
+    type: 1,
+    description: c.description,
+    // In servers (0) and in private messages with the bot (1).
+    contexts: [0, 1],
+    integration_types: [0],
+    ...(c.takes && {
+      options: [
+        {
+          type: 3,
+          name: 'value',
+          description: (c.argumentHint ?? 'What to choose').slice(0, 100),
+          required: false,
+        },
+      ],
+    }),
+  }));
 }
 
 function components(options: SendOptions) {

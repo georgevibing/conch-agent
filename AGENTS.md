@@ -626,7 +626,7 @@ Bitwarden, KeePassXC, Proton Pass, Dashlane, Keeper and the macOS Keychain:
 
 ## Adding a channel
 
-Channel configuration uses `channels/settings.ts` (ADR 0091): owner-only private menus, capability-matched choices, confirmed changes, and the adapter’s existing buttons or numbered replies.
+Channel configuration uses `channels/settings.ts` (ADR 0091): owner-only private menus, capability-matched choices, confirmed changes, and the adapter’s existing buttons or numbered replies. Commands come from the protocol's one list (`COMMANDS`, ADR 0098), answered by `ChannelService.#chatCommand`: never add a command to one channel. Register the list with the app's own `/` menu in `prepare()` where it has one (`nativeMenu()`), say how many buttons fit (`buttonLimit`), and write commands with `slashIn()` where the app keeps `/` for itself (Slack's `/conch`).
 
 Channels are chat apps your assistant can be reached from (ADR 0018). More are
 coming, and each one follows the same shape:

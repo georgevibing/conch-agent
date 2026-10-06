@@ -249,6 +249,27 @@ describe('/plan', () => {
     expect((await manager.detail(id)).conversation.options.permissionMode).toBeUndefined();
   });
 
+  it('asks in a chat app too, where Start is a button, but never a guest in a group', async () => {
+    const { manager, api } = await setup();
+    const origin = { kind: 'channel' as const, channelId: 'ch_one', channel: 'telegram' as const };
+    const convo = await manager.send({
+      clientMessageId: 'u-chat-app',
+      text: 'hi',
+      origin,
+      options: { permissionMode: 'plan' },
+    });
+    await idle(manager, convo.id);
+    expect(api.turns.at(-1)?.tools?.some((t) => t.name === 'exit_plan_mode')).toBe(true);
+    const guest = await manager.send({
+      clientMessageId: 'u-guest',
+      text: 'hi',
+      origin: { ...origin, group: 'Family', guest: true },
+      options: { permissionMode: 'plan' },
+    });
+    await idle(manager, guest.id);
+    expect(api.turns.at(-1)?.tools?.some((t) => t.name === 'exit_plan_mode')).toBe(false);
+  });
+
   it('is not offered outside plan mode', async () => {
     const { manager, api } = await setup();
     await say(manager, 'hi');

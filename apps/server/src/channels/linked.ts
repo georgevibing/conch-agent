@@ -160,7 +160,12 @@ export class TextChoices {
     const button =
       (number ? buttons[Number(number) - 1] : undefined) ??
       buttons.find((b) => normal(b.label) === said) ??
-      (YES.has(said) ? (buttons.find((b) => b.style === 'primary') ?? buttons[0]) : undefined) ??
+      // A plain yes presses the answer marked as the yes, or a settings menu's first choice;
+      // never an Undo under "Cleared." that nobody asked a question with.
+      (YES.has(said)
+        ? (buttons.find((b) => b.style === 'primary') ??
+          (buttons[0]?.data.startsWith('s:') ? buttons[0] : undefined))
+        : undefined) ??
       (NO.has(said) ? buttons.find((b) => b.style === 'danger') : undefined);
     if (button?.data.startsWith('s:')) {
       // Consume settings choices once, including older pages. A later free-text

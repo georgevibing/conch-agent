@@ -54,21 +54,25 @@ Turn a group off, and your assistant goes quiet there at once. **Forget** takes 
 - **Voice notes** are turned into words on your computer and answered like anything you typed. See [Voice](../features/voice.md#voice-notes-from-your-chat-apps).
 - **Routine results**, and a routine's questions, come to you there when the channel has **Routine results** on.
 - **Messages your assistant starts.** Ask in any chat, here or in Conch, "text me on WhatsApp when it's done" or "send the weather to my Telegram", and your assistant writes to you there. A [routine](../features/routines.md) can do the same. It only ever writes to your own private chat with Conch, never to anyone else. Without an app named, it uses the one you wrote from last.
-- **Chat controls:** `/new` starts a fresh conversation, `/stop` stops the answer, `/help` explains. `/settings` opens configuration and `/status` shows the current choices. Other `/name` commands run your skill of that name.
+- **Conch's commands, the same as in Conch.** `/clear` (with **Undo**), `/goal`, `/plan` (approved with **Start**), `/retry`, `/model`, `/effort`, `/fast`, `/mode`, `/status`, `/new`, `/stop` and `/help`, from the same list the web app uses, so they work with every provider. A mistyped one hears what you probably meant. `/name` runs your own command or skill of that name. See [Slash commands](../reference/slash-commands.md#in-chat-apps).
 
 ## Choose how Conch works here
 
 Send `/settings` in your private chat. The menu shows the current provider, model,
 effort, fast mode and permissions. Telegram and other apps with buttons let you
 tap a choice; email, Signal, WhatsApp and other text-only apps show numbered
-answers. `/model`, `/effort` and `/mode` go straight to those choices. To find a
-model quickly, send `/model` followed by its name or a few words. You can also
-write `/effort high` or `/mode plan`; Conch still asks before saving.
+answers. `/model`, `/effort`, `/fast` and `/mode` go straight to those choices,
+the one in use ticked. To find a model quickly, send `/model` followed by its
+name or a few words. You can also write `/effort high`, `/fast on` or
+`/mode plan`.
 
 **This chat** changes the current conversation and saves your choices for fresh
 conversations in this channel. **Defaults across Conch** changes the defaults
 throughout Conch. Existing chats without their own choices follow those defaults
-on their next turn. Each change says which scope it affects and asks you to save it.
+on their next turn. A model, effort or speed you pick for this chat is done at
+once, and the reply says what changed. A change to the defaults, going back to
+them, and a mode that lets your assistant do more without asking (**Auto**,
+**Edit freely**, **Full trust**) say which scope they affect and ask you to save.
 Choose a provider and model from the connected providers; only the effort and
 speed controls that model supports are offered. If an answer is running, stop it
 or wait before changing this chat.

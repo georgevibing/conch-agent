@@ -20,7 +20,7 @@ The link opens your bot in Telegram with one button, **START**. Press it and the
 
 ## Choose a model and settings
 
-Open the bot’s command menu and choose `/settings`. You can inspect the current model, select another provider or model, and set effort and permissions without sending a message to the assistant. Tap a choice, then **Save change**. `/status` shows what is selected. See [Choose how Conch works here](index.md#choose-how-conch-works-here) for preferences, defaults and other settings.
+Type `/` and Telegram's own menu lists Conch's commands. `/model` shows your models as buttons, the one in use ticked: tap another and it's done. `/effort`, `/fast` and `/mode` work the same way, `/clear`, `/goal` and `/plan` do what they do in Conch, and `/status` shows what this chat uses. `/settings` has everything else. See [Slash commands](../reference/slash-commands.md#in-chat-apps) and [Choose how Conch works here](index.md#choose-how-conch-works-here).
 
 ## Good to know
 

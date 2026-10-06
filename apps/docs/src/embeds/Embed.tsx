@@ -7,6 +7,7 @@ import { DownloadApp } from './download';
 import { InstallCommand, ServerInstallCommand } from './install';
 import { ProviderFacts, ProviderGrid, ProviderMatrix, ServerFacts } from './providers';
 import {
+  ChatCommandsReference,
   CliReference,
   EffortList,
   EnvReference,
@@ -33,6 +34,7 @@ const EMBEDS: Record<string, EmbedView> = {
   channel: ({ args }) => <ChannelFacts id={args[0] ?? ''} />,
   'channel-scene': ({ args }) => <ChannelScene id={args[0] ?? ''} scene={args[1]} />,
   channels: ChannelGrid,
+  'chat-commands': ChatCommandsReference,
   cli: CliReference,
   decisions: DecisionList,
   download: DownloadApp,

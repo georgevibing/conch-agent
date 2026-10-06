@@ -58,6 +58,8 @@ export class MockDiscord {
   avatarSet = false;
   resumes = 0;
   guilds = 0;
+  /** The application commands the bot registered (`PUT /applications/:id/commands`). */
+  commands: { name: string; description: string; options?: unknown[] }[] = [];
   /** An Interactions Endpoint URL left in the app's settings. */
   endpoint = '';
   /** How often the gateway asks for heartbeats (ms). */
@@ -139,6 +141,11 @@ export class MockDiscord {
       },
     );
     app.post('/api/v10/channels/:id/typing', (_request, reply) => reply.code(204).send());
+    // The bot's application commands: Discord's own "/" menu.
+    app.put('/api/v10/applications/:id/commands', (request) => {
+      this.commands = (request.body as MockDiscord['commands'] | undefined) ?? [];
+      return this.commands;
+    });
     app.post('/api/v10/interactions/:id/:token/callback', (_request, reply) =>
       reply.code(204).send(),
     );
@@ -202,6 +209,22 @@ export class MockDiscord {
       user: from,
       message: { id: messageId },
       data: { custom_id: customId, component_type: 2 },
+    });
+  }
+
+  /** The person chose one of the bot's commands from Discord's "/" menu, with what they typed. */
+  command(name: string, value?: string, from: MockUser = MockDiscord.OWNER) {
+    this.#dispatch('INTERACTION_CREATE', {
+      id: String(this.#nextId++),
+      token: 'ctoken',
+      type: 2,
+      channel_id: `dm${from.id}`,
+      user: from,
+      data: {
+        name,
+        type: 1,
+        ...(value !== undefined && { options: [{ name: 'value', type: 3, value }] }),
+      },
     });
   }
 

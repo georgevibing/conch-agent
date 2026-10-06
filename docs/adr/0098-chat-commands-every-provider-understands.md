@@ -64,5 +64,59 @@ same with every provider.
 - A provider can't remember past a clear even if it keeps its own session: the session
   is never resumed.
 - The goal costs a few tokens on every turn; it is capped at 500 characters.
-- Chat apps (Telegram and the rest) keep their own command set; `/clear`, `/goal` and
-  `/plan` there would be a later change through the same gateway methods.
+- ~~Chat apps (Telegram and the rest) keep their own command set; `/clear`, `/goal` and
+  `/plan` there would be a later change through the same gateway methods.~~ Done: see the
+  amendment below.
+
+## Amendment (2026-10-06): the same commands in every chat app
+
+Chat apps had their own handful (`/new`, `/stop`, `/help`, and ADR 0091's settings
+shortcuts), written as regular expressions in the channel service, so they drifted from
+the web app's. Now there is one list.
+
+1. **One registry, in the protocol.** `COMMANDS` (`packages/protocol/src/commands.ts`)
+   holds every command's name, other names, section, words and values. The web app's
+   `builtins` is derived from it (`apps/web/src/features/commands/slash.ts`); a command
+   with `chat` works from chat apps, with `who` (`owner`: the channel owner in their
+   private chat; `people`: anyone let in, on their own conversation), `groups` (it works
+   in a group) and its chat-app words where they differ. `/stop`, `/start` and `/cancel`
+   are chat-app only (`web: false`). `parseChatCommand`, `similarCommands`,
+   `parseSwitch`, `parseEffortArg`, `parseGoalArg` and `expandCustom` are shared.
+2. **Done through the same gateway methods.** `ChannelService.#chatCommand` answers them:
+   `/clear` and `/undo` through `ConversationManager.clear` and `restoreContext`, `/goal`
+   through `setGoal`, `/plan` through `configure` (back to `modeBeforePlan` when it ends),
+   `/compact` through `compact`, `/retry` by sending the last message after the clear
+   again. Before a conversation exists, a goal and plan mode wait for the message that
+   starts it (`conversation.send.goal`, `options.permissionMode`), and `/new` drops them.
+   `/model`, `/effort`, `/fast`, `/mode`, `/status` and `/settings` stay with ADR 0091's
+   menu. Your own command is filled in and sent; a skill of yours or the provider's own
+   command goes on as typed; a command only Conch has says so; a name nobody knows hears
+   what it probably meant, with a button for it.
+3. **Approving a plan from a chat app.** A channel conversation (not a group guest's) is
+   one where someone can press Start, so an engine without its own question gets
+   `exit_plan_mode` there too. The question arrives as the plan, then **Start** and
+   **Keep planning**: buttons where the app has them, numbered replies (`1`, `yes`, `no`)
+   where it hasn't (`TextChoices`).
+4. **Values as buttons, the one in use ticked.** A command's own list has no Back, puts as
+   many choices under one message as the app shows comfortably
+   (`ChannelConnection.buttonLimit`: Telegram 8, Discord's five rows by default, one-digit
+   replies elsewhere), and `/model` opens on the provider in use. A model, effort or speed
+   picked for this chat is done at once (the pick was the confirmation); ADR 0091's
+   confirmation stays for defaults across Conch, for going back to them, and for a mode
+   that lets the assistant do more without asking (Auto, Edit freely, Full trust).
+5. **One-tap answers that aren't settings** (Undo, "did you mean", Clear goal, Plan
+   first) are `ChatActions`: single-use, bound to the channel, chat and person, ten
+   minutes, bounded in memory, rechecked against who is still let in on every press. A
+   plain "yes" in a text-only app presses only an answer marked as the yes, so it can't
+   undo a clear nobody asked about.
+6. **The app's own `/` menu**, from the same list (`nativeMenu`): Telegram's
+   `setMyCommands` (and only `/new`, `/stop` and `/help` for groups), Discord's
+   application commands (chosen ones arrive as interactions, shown back to the person
+   alone, then handled as the words they stand for), Teams' command list (ten, most wanted
+   first). Slack keeps every message starting with `/` for itself, so Conch's go after
+   one registered `/conch` command (Socket Mode `slash_commands`), and every reply writes
+   them that way (`slashIn`).
+
+Who may run what follows ADR 0091 and ADR 0075: anything that changes how Conch works is
+the owner's, typed in their private chat; forwards, quotes and files never run a command;
+in a group only `/new`, `/stop` and `/help` work, each on the sender's own conversation.

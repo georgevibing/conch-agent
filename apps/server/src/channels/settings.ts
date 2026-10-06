@@ -3,6 +3,8 @@ import { randomBytes } from 'node:crypto';
 
 import {
   honouredMode,
+  parseEffortArg,
+  parseSwitch,
   EffortChoice,
   PermissionMode,
   UpdateSettingsBody,
@@ -13,14 +15,6 @@ import {
 
 import type { Settings } from '../settings/store';
 import { ChannelError, type ChannelButton } from './types';
-
-export const SETTINGS_COMMANDS = [
-  { command: 'settings', description: 'Choose how Conch works here' },
-  { command: 'status', description: 'Show this chat’s model and settings' },
-  { command: 'model', description: 'Choose a provider and model' },
-  { command: 'effort', description: 'Choose how hard the model thinks' },
-  { command: 'mode', description: 'Choose what Conch may do' },
-] as const;
 
 const MODES: Record<PermissionMode, { label: string; detail: string }> = {
   default: { label: 'Ask first', detail: 'Asks before editing files or running commands.' },
@@ -36,6 +30,12 @@ const MODES: Record<PermissionMode, { label: string; detail: string }> = {
       'Can change anything on your computer without asking. A web page or file could trick it. Only use a folder you can afford to lose.',
   },
 };
+/** A permission mode as the menus name it ("Ask first"). */
+export const modeLabel = (mode: PermissionMode) => MODES[mode].label;
+
+/** Choosing one of these for this chat is a raise in what it may do: it asks first. */
+const RAISES: readonly PermissionMode[] = ['auto', 'acceptEdits', 'bypassPermissions'];
+
 const EFFORT = {
   auto: 'Auto',
   low: 'Low',
@@ -70,12 +70,28 @@ export interface SettingsContext {
   saveSettings(patch: UpdateSettingsBody): Promise<void>;
   saveChannel(patch: Partial<ChannelSettings>): Promise<void>;
   send(text: string, buttons?: ChannelButton[]): Promise<void>;
+  /** How many buttons fit under one message in this app (Discord: five rows). */
+  buttons?: number;
+  /** How a command is typed here (`/conch model` on Slack). */
+  slash?: (name: string, args?: string) => string;
+  /** The chat's goal (`/goal`) and plan mode (`/plan`), for the summary. */
+  goal?: string;
+  planning?: boolean;
 }
 type Action = (ctx: SettingsContext) => Promise<void>;
 interface Choice {
   label: string;
   run: Action;
+  style?: ChannelButton['style'];
 }
+
+/** The one in use, marked. */
+const mark = (label: string, current: boolean) => (current ? `✓ ${label}` : label);
+
+const slashOf =
+  (ctx: SettingsContext) =>
+  (name: string, args = ''): string =>
+    ctx.slash?.(name, args) ?? `/${name}${args ? ` ${args}` : ''}`;
 interface Menu {
   channelId: string;
   chatId: string;
@@ -137,7 +153,9 @@ export class ChannelSettingsMenu {
     const menu = id ? this.#menus.get(id) : undefined;
     const action = menu?.actions[Number(match?.[2])];
     if (!id || !menu || !action || !this.#valid(menu, ctx)) {
-      await ctx.send('That settings menu has expired. Send /settings to open it again.');
+      await ctx.send(
+        `That settings menu has expired. Send ${slashOf(ctx)('settings')} to open it again.`,
+      );
       return;
     }
     this.#menus.delete(id); // Claim synchronously, before the first await: no replay.
@@ -150,7 +168,9 @@ export class ChannelSettingsMenu {
     if (!pending) return false;
     this.#inputs.delete(key);
     if (!this.#valid(pending, ctx)) {
-      await ctx.send('That settings question expired. Send /settings to start again.');
+      await ctx.send(
+        `That settings question expired. Send ${slashOf(ctx)('settings')} to start again.`,
+      );
       return true;
     }
     await pending.accept(ctx, text);
@@ -158,13 +178,17 @@ export class ChannelSettingsMenu {
   }
   async command(ctx: SettingsContext, command: string, argument = '') {
     this.clear(ctx.channelId);
+    const slash = slashOf(ctx);
     if (command === 'status') return ctx.send(await this.#summary(ctx, 'chat'));
     if (command === 'model')
-      return argument ? this.#search(ctx, 'chat', argument) : this.#providers(ctx, 'chat');
+      return argument ? this.#search(ctx, 'chat', argument) : this.#models(ctx, 'chat', null);
     if (command === 'effort') {
-      if (!argument) return this.#effort(ctx, 'chat');
-      const effort = EffortChoice.safeParse(argument.toLowerCase());
-      if (!effort.success) return ctx.send('Choose an effort from /effort, or use /effort high.');
+      if (!argument) return this.#effort(ctx, 'chat', null);
+      const effort = EffortChoice.safeParse(parseEffortArg(argument) ?? argument.toLowerCase());
+      if (!effort.success)
+        return ctx.send(
+          `Choose an effort from ${slash('effort')}, or write ${slash('effort', 'high')}.`,
+        );
       return this.#change(
         ctx,
         'chat',
@@ -172,13 +196,23 @@ export class ChannelSettingsMenu {
         `Thinking effort: ${EFFORT[effort.data]}.`,
       );
     }
+    if (command === 'fast') {
+      if (!argument) return this.#fast(ctx, 'chat', null);
+      const want = parseSwitch(argument);
+      if (!want) return ctx.send(`Write ${slash('fast', 'on')} or ${slash('fast', 'off')}.`);
+      const on = want === 'toggle' ? !this.#options(ctx, 'chat').fastMode : want === 'on';
+      return this.#change(ctx, 'chat', { fastMode: on }, `Fast mode: ${on ? 'on' : 'off'}.`);
+    }
     if (command === 'mode') {
-      if (!argument) return this.#mode(ctx, 'chat');
+      if (!argument) return this.#mode(ctx, 'chat', null);
       const named = Object.entries(MODES).find(
         ([, words]) => words.label.toLowerCase() === argument.toLowerCase(),
       )?.[0];
       const mode = PermissionMode.safeParse(named ?? argument);
-      if (!mode.success) return ctx.send('Choose a mode from /mode, or use /mode plan.');
+      if (!mode.success)
+        return ctx.send(
+          `Choose a mode from ${slash('mode')}, or write ${slash('mode', 'ask first')}.`,
+        );
       return this.#change(
         ctx,
         'chat',
@@ -188,12 +222,17 @@ export class ChannelSettingsMenu {
     }
     return this.#home(ctx);
   }
+  /**
+   * A message with its choices as buttons (numbered where the app has none):
+   * as many as fit under one message in this app, then More. `back` null: a
+   * page a command opened, with nothing to go back to.
+   */
   async #page(
     ctx: SettingsContext,
     text: string,
     choices: Choice[],
     page = 0,
-    back: Action = (c) => this.#home(c),
+    back: Action | null = (c) => this.#home(c),
   ) {
     this.#prune();
     for (const [id, menu] of this.#menus)
@@ -204,19 +243,26 @@ export class ChannelSettingsMenu {
       )
         this.#menus.delete(id);
     // Discord allows five buttons in one row; text-only apps accept one-digit replies.
-    const start = page * 3;
-    const visible = choices.slice(start, start + 3);
-    if (start + 3 < choices.length)
+    const limit = Math.max(3, Math.min(ctx.buttons ?? 5, 9));
+    const nav = back || page ? 1 : 0;
+    const fits = page === 0 && choices.length + nav <= limit;
+    const per = limit - 2;
+    const start = page * per;
+    const visible = fits ? [...choices] : choices.slice(start, start + per);
+    if (!fits && start + per < choices.length)
       visible.push({ label: 'More', run: (c) => this.#page(c, text, choices, page + 1, back) });
-    visible.push({
-      label: page ? 'Previous' : 'Back',
-      run: page ? (c) => this.#page(c, text, choices, page - 1, back) : back,
-    });
+    if (page)
+      visible.push({ label: 'Previous', run: (c) => this.#page(c, text, choices, page - 1, back) });
+    else if (back) visible.push({ label: 'Back', run: back });
     const id = randomBytes(12).toString('base64url');
     this.#menus.set(id, { ...this.#bound(ctx), actions: visible.map((c) => c.run) });
     await ctx.send(
       text,
-      visible.map((c, i) => ({ label: c.label.slice(0, 60), data: `s:${id}:${i}` })),
+      visible.map((c, i) => ({
+        label: c.label.slice(0, 60),
+        data: `s:${id}:${i}`,
+        ...(c.style && { style: c.style }),
+      })),
     );
   }
   async #confirm(ctx: SettingsContext, text: string, apply: Action, back: Action) {
@@ -226,6 +272,7 @@ export class ChannelSettingsMenu {
       [
         {
           label: 'Save change',
+          style: 'primary',
           run: async (c) => {
             await apply(c);
             await c.send('Saved.');
@@ -245,7 +292,7 @@ export class ChannelSettingsMenu {
     this.#prune();
     this.#inputs.set(this.#key(ctx), { ...this.#bound(ctx), accept });
     await ctx.send(
-      `${text}\n\nSend /cancel to leave settings. Your next message is a setting, not a message to the assistant.`,
+      `${text}\n\nSend ${slashOf(ctx)('cancel')} to leave settings. Your next message is a setting, not a message to the assistant.`,
     );
   }
   async #home(ctx: SettingsContext) {
@@ -291,7 +338,7 @@ export class ChannelSettingsMenu {
   }
   async #summary(ctx: SettingsContext, scope: Scope) {
     const { options: o, provider, model } = await this.#selected(ctx, scope);
-    return `**${scope === 'chat' ? 'This chat' : 'Defaults across Conch'}**\nProvider: ${provider?.label ?? o.engine}\nModel: ${model?.label ?? o.model ?? 'Provider default'}\nEffort: ${model?.efforts.length ? EFFORT[o.effort] : 'Not offered by this model'}\nFast mode: ${model?.supportsFastMode ? (o.fastMode ? 'On' : 'Off') : 'Not offered by this model'}\nPermissions: ${MODES[honouredMode(o.permissionMode, provider?.permissionModes)].label}${ctx.busy ? '\nAn answer is running. Stop it or wait before changing this chat.' : ''}${!provider ? '\nThis provider is unavailable. Choose another model or open Providers in Conch.' : ''}`;
+    return `**${scope === 'chat' ? 'This chat' : 'Defaults across Conch'}**\nProvider: ${provider?.label ?? o.engine}\nModel: ${model?.label ?? o.model ?? 'Provider default'}\nEffort: ${model?.efforts.length ? EFFORT[o.effort] : 'Not offered by this model'}\nFast mode: ${model?.supportsFastMode ? (o.fastMode ? 'On' : 'Off') : 'Not offered by this model'}\nPermissions: ${MODES[honouredMode(o.permissionMode, provider?.permissionModes)].label}${scope === 'chat' && ctx.planning && o.permissionMode !== 'plan' ? '\nPlan mode: on, from your next message' : ''}${scope === 'chat' && ctx.goal ? `\nGoal: ${ctx.goal}` : ''}${ctx.busy ? '\nAn answer is running. Stop it or wait before changing this chat.' : ''}${!provider ? '\nThis provider is unavailable. Choose another model or open Providers in Conch.' : ''}`;
   }
   async #chat(ctx: SettingsContext, scope: Scope) {
     await this.#page(ctx, await this.#summary(ctx, scope), [
@@ -315,108 +362,209 @@ export class ChannelSettingsMenu {
                     permissionMode: undefined,
                   },
                   `Remove this channel’s overrides. Defaults use ${MODES[c.settings.preferences.permissionMode].label}: ${MODES[c.settings.preferences.permissionMode].detail}`,
+                  { confirm: true },
                 ),
             },
           ]
         : []),
     ]);
   }
-  async #change(ctx: SettingsContext, scope: Scope, patch: TurnOptions, description: string) {
+  /**
+   * Change how a chat answers. For this chat, a model, effort or speed picked
+   * from a list (or typed) is done at once, and says so: the choice was the
+   * confirmation. What lets it do more without asking, a change to Conch's
+   * defaults, and going back to them say what they change and ask first.
+   */
+  async #change(
+    ctx: SettingsContext,
+    scope: Scope,
+    patch: TurnOptions,
+    description: string,
+    options: { done?: string; confirm?: boolean } = {},
+  ) {
     const back = (c: SettingsContext) => this.#chat(c, scope);
+    const apply = async (c: SettingsContext) => {
+      if (scope === 'chat' && c.busy)
+        throw new ChannelError(
+          'refused',
+          `An answer is running. Send ${slashOf(c)('stop')} or wait, then change this chat’s settings.`,
+        );
+      let { provider, model } = await this.#selected(c, scope);
+      if (patch.engine) {
+        provider = (await c.catalog()).providers.find((p) => p.engine === patch.engine);
+        model = provider?.models.find((m) => m.id === patch.model);
+        if (!model)
+          throw new ChannelError(
+            'refused',
+            `That model is no longer available. Send ${slashOf(c)('model')} to refresh the list.`,
+          );
+      }
+      if (patch.effort && patch.effort !== 'auto' && !model?.efforts.includes(patch.effort))
+        throw new ChannelError(
+          'refused',
+          `That effort is no longer offered by this model. Send ${slashOf(c)('effort')} to refresh.`,
+        );
+      if (patch.fastMode && !model?.supportsFastMode)
+        throw new ChannelError('refused', 'This model does not offer fast mode.');
+      if (
+        patch.permissionMode &&
+        (!provider?.permissionModes.includes(patch.permissionMode) ||
+          (patch.permissionMode === 'auto' && !model?.supportsAutoMode))
+      )
+        throw new ChannelError(
+          'refused',
+          `That permission mode is no longer offered. Send ${slashOf(c)('mode')} to refresh.`,
+        );
+      const parsed = TurnOptions.parse(patch);
+      if (scope === 'chat') await c.saveOptions(parsed);
+      else await c.saveSettings({ preferences: parsed });
+    };
+    const raises =
+      patch.permissionMode !== undefined &&
+      patch.permissionMode !== this.#options(ctx, scope).permissionMode &&
+      RAISES.includes(patch.permissionMode);
+    if (scope === 'chat' && !raises && !options.confirm) {
+      await apply(ctx);
+      await ctx.send(`✓ ${options.done ?? description}`);
+      return;
+    }
     await this.#confirm(
       ctx,
       `${description}\nApplies to ${scope === 'chat' ? 'this conversation and fresh conversations in this channel' : 'Conch defaults, including existing chats without their own choice'}.`,
-      async (c) => {
-        if (scope === 'chat' && c.busy)
-          throw new ChannelError(
-            'refused',
-            'An answer is running. Send /stop or wait, then change this chat’s settings.',
-          );
-        let { provider, model } = await this.#selected(c, scope);
-        if (patch.engine) {
-          provider = (await c.catalog()).providers.find((p) => p.engine === patch.engine);
-          model = provider?.models.find((m) => m.id === patch.model);
-          if (!model)
-            throw new ChannelError(
-              'refused',
-              'That model is no longer available. Send /model to refresh the list.',
-            );
-        }
-        if (patch.effort && patch.effort !== 'auto' && !model?.efforts.includes(patch.effort))
-          throw new ChannelError(
-            'refused',
-            'That effort is no longer offered by this model. Send /effort to refresh.',
-          );
-        if (patch.fastMode && !model?.supportsFastMode)
-          throw new ChannelError('refused', 'This model does not offer fast mode.');
-        if (
-          patch.permissionMode &&
-          (!provider?.permissionModes.includes(patch.permissionMode) ||
-            (patch.permissionMode === 'auto' && !model?.supportsAutoMode))
-        )
-          throw new ChannelError(
-            'refused',
-            'That permission mode is no longer offered. Send /mode to refresh.',
-          );
-        patch = TurnOptions.parse(patch);
-        if (scope === 'chat') await c.saveOptions(patch);
-        else await c.saveSettings({ preferences: patch });
-      },
+      apply,
       back,
     );
   }
+
+  /** Choosing a model: what a pick changes besides it (effort, speed, a mode it can't do). */
+  #pick(
+    ctx: SettingsContext,
+    scope: Scope,
+    provider: ModelCatalog['providers'][number],
+    model: ModelCatalog['providers'][number]['models'][number],
+  ) {
+    return this.#change(
+      ctx,
+      scope,
+      {
+        engine: provider.engine,
+        model: model.id,
+        effort: 'auto',
+        fastMode: false,
+        permissionMode: honouredMode(
+          this.#options(ctx, scope).permissionMode,
+          provider.permissionModes.filter((mode) => mode !== 'auto' || model.supportsAutoMode),
+        ),
+      },
+      `Use ${provider.label} · ${model.label}. Effort returns to Auto and fast mode turns off.`,
+      { done: `Now using ${model.label} · ${provider.label}.` },
+    );
+  }
+
   async #search(ctx: SettingsContext, scope: Scope, query: string) {
+    const slash = slashOf(ctx);
     if (query.length > 200) {
       await ctx.send('Use a model name or a few words, up to 200 characters.');
       return;
     }
-    const words = query.trim().toLowerCase().split(/\s+/);
+    const wanted = query.trim().toLowerCase();
+    const words = wanted.split(/\s+/);
     const providers = (await ctx.catalog()).providers;
-    const choices: Choice[] = providers.flatMap((provider) =>
+    const { options } = await this.#selected(ctx, scope);
+    const found = providers.flatMap((provider) =>
       provider.models
         .filter((model) =>
           words.every((word) =>
             `${provider.label} ${model.label} ${model.id}`.toLowerCase().includes(word),
           ),
         )
-        .map((model) => ({
-          label: `${model.label} · ${provider.label}`,
-          run: (c: SettingsContext) =>
-            this.#change(
-              c,
-              scope,
-              {
-                engine: provider.engine,
-                model: model.id,
-                effort: 'auto',
-                fastMode: false,
-                permissionMode: honouredMode(
-                  this.#options(c, scope).permissionMode,
-                  provider.permissionModes.filter(
-                    (mode) => mode !== 'auto' || model.supportsAutoMode,
-                  ),
-                ),
-              },
-              `Use ${provider.label} · ${model.label} (${model.id}). Effort returns to Auto and fast mode turns off.`,
-            ),
-        })),
+        .map((model) => ({ provider, model })),
     );
+    // One model by its exact name or id: that's the one.
+    const exact = found.filter(
+      ({ model }) => model.id.toLowerCase() === wanted || model.label.toLowerCase() === wanted,
+    );
+    if (exact.length === 1 && exact[0]) {
+      await this.#pick(ctx, scope, exact[0].provider, exact[0].model);
+      return;
+    }
+    const choices: Choice[] = found.map(({ provider, model }) => ({
+      label: mark(
+        `${model.label} · ${provider.label}`,
+        provider.engine === options.engine && model.id === options.model,
+      ),
+      run: (c: SettingsContext) => this.#pick(c, scope, provider, model),
+    }));
     await this.#page(
       ctx,
       choices.length
         ? `Models matching “${query}”.`
-        : `No connected model matches “${query}”. Try another name with /model, or connect a provider in Conch.`,
+        : `No connected model matches “${query}”. Try another name with ${slash('model', '<name>')}, or connect a provider in Conch.`,
       choices,
       0,
-      (c) => this.#providers(c, scope),
+      (c) => this.#models(c, scope, null),
+    );
+  }
+
+  /**
+   * `/model`: the models of the provider in use, the current one ticked, so
+   * one tap changes it; the other providers a step away.
+   */
+  async #models(ctx: SettingsContext, scope: Scope, back: Action | null) {
+    const { providers } = await ctx.catalog();
+    const { provider, model } = await this.#selected(ctx, scope);
+    const shown = provider ?? providers[0];
+    if (!shown) {
+      await ctx.send('No provider is connected. Connect one in Conch, under Providers.');
+      return;
+    }
+    await this.#modelsOf(ctx, scope, shown.engine, back, {
+      intro:
+        provider && model
+          ? `**Model:** ${model.label} · ${provider.label}`
+          : `**Model:** ${shown.label}’s default`,
+      others: providers.length > 1,
+    });
+  }
+
+  async #modelsOf(
+    ctx: SettingsContext,
+    scope: Scope,
+    engine: string,
+    back: Action | null,
+    words: { intro?: string; others?: boolean } = {},
+  ) {
+    const slash = slashOf(ctx);
+    const provider = (await ctx.catalog()).providers.find((v) => v.engine === engine);
+    const { options, model: current } = await this.#selected(ctx, scope);
+    const models = provider?.models ?? [];
+    await this.#page(
+      ctx,
+      provider && models.length
+        ? `${words.intro ? `${words.intro}\n` : ''}Choose a model from ${provider.label}, or write ${slash('model', '<name>')} to find any.`
+        : 'This provider could not list its models. Open Providers in Conch to check its connection, or choose another provider.',
+      [
+        ...(provider
+          ? models.map((m) => ({
+              label: mark(m.label, options.engine === engine && current?.id === m.id),
+              run: (v: SettingsContext) => this.#pick(v, scope, provider, m),
+            }))
+          : []),
+        ...(words.others
+          ? [{ label: 'Other providers', run: (v: SettingsContext) => this.#providers(v, scope) }]
+          : []),
+      ],
+      0,
+      back,
     );
   }
 
   async #providers(ctx: SettingsContext, scope: Scope) {
     const { providers } = await ctx.catalog();
+    const { options } = await this.#selected(ctx, scope);
     await this.#page(
       ctx,
-      'Choose a connected provider, or search by name with /model followed by a few words.',
+      `Choose a connected provider, or search by name with ${slashOf(ctx)('model', '<name>')}.`,
       [
         {
           label: 'Find a model',
@@ -426,47 +574,22 @@ export class ChannelSettingsMenu {
             ),
         },
         ...providers.map((p) => ({
-          label: p.label,
-          run: async (c: SettingsContext) => {
-            const current = (await c.catalog()).providers.find((v) => v.engine === p.engine);
-            await this.#page(
-              c,
-              current?.models.length
-                ? `Choose a model from ${p.label}.`
-                : 'This provider could not list its models. Open Providers in Conch to check its connection, or choose another provider.',
-              (current?.models ?? []).map((m) => ({
-                label: m.label,
-                run: (v) =>
-                  this.#change(
-                    v,
-                    scope,
-                    {
-                      engine: p.engine,
-                      model: m.id,
-                      effort: 'auto',
-                      fastMode: false,
-                      permissionMode: honouredMode(
-                        this.#options(v, scope).permissionMode,
-                        current?.permissionModes.filter(
-                          (mode) => mode !== 'auto' || m.supportsAutoMode,
-                        ),
-                      ),
-                    },
-                    `Use ${p.label} · ${m.label}. Effort returns to Auto and fast mode turns off.`,
-                  ),
-              })),
-              0,
-              (v) => this.#providers(v, scope),
-            );
-          },
+          label: mark(p.label, p.engine === options.engine),
+          run: (c: SettingsContext) =>
+            this.#modelsOf(c, scope, p.engine, (v) => this.#providers(v, scope)),
         })),
       ],
       0,
       (c) => this.#chat(c, scope),
     );
   }
-  async #effort(ctx: SettingsContext, scope: Scope) {
-    const { model } = await this.#selected(ctx, scope);
+
+  async #effort(
+    ctx: SettingsContext,
+    scope: Scope,
+    back: Action | null = (c) => this.#chat(c, scope),
+  ) {
+    const { model, options } = await this.#selected(ctx, scope);
     await this.#page(
       ctx,
       model?.efforts.length
@@ -474,42 +597,54 @@ export class ChannelSettingsMenu {
         : 'This model does not offer an effort control.',
       model?.efforts.length
         ? (['auto', ...model.efforts] as const).map((effort) => ({
-            label: EFFORT[effort],
+            label: mark(EFFORT[effort], options.effort === effort),
             run: (c) => this.#change(c, scope, { effort }, `Thinking effort: ${EFFORT[effort]}.`),
           }))
         : [],
       0,
-      (c) => this.#chat(c, scope),
+      back,
     );
   }
-  async #fast(ctx: SettingsContext, scope: Scope) {
-    const { model } = await this.#selected(ctx, scope);
+
+  async #fast(
+    ctx: SettingsContext,
+    scope: Scope,
+    back: Action | null = (c) => this.#chat(c, scope),
+  ) {
+    const { model, options } = await this.#selected(ctx, scope);
     await this.#page(
       ctx,
       model?.supportsFastMode
-        ? 'Fast mode can cost more. Choose whether to use it.'
+        ? 'Fast mode answers sooner and can cost more. Choose whether to use it.'
         : 'This model does not offer fast mode.',
       model?.supportsFastMode
         ? [true, false].map((fastMode) => ({
-            label: fastMode ? 'On' : 'Off',
+            label: mark(fastMode ? 'On' : 'Off', Boolean(options.fastMode) === fastMode),
             run: (c) =>
               this.#change(c, scope, { fastMode }, `Fast mode: ${fastMode ? 'on' : 'off'}.`),
           }))
         : [],
       0,
-      (c) => this.#chat(c, scope),
+      back,
     );
   }
-  async #mode(ctx: SettingsContext, scope: Scope) {
-    const { provider, model } = await this.#selected(ctx, scope);
+
+  async #mode(
+    ctx: SettingsContext,
+    scope: Scope,
+    back: Action | null = (c) => this.#chat(c, scope),
+  ) {
+    const { provider, model, options } = await this.#selected(ctx, scope);
+    const now = honouredMode(options.permissionMode, provider?.permissionModes);
     await this.#page(
       ctx,
       'Choose what Conch may do. Safety checks and skill restrictions still apply.',
       (provider?.permissionModes ?? [])
         .filter((m) => m !== 'auto' || model?.supportsAutoMode)
         .map((permissionMode) => ({
-          label: MODES[permissionMode].label,
-          run: (c) =>
+          label: mark(MODES[permissionMode].label, permissionMode === now),
+          ...(permissionMode === 'bypassPermissions' && { style: 'danger' as const }),
+          run: (c: SettingsContext) =>
             this.#change(
               c,
               scope,
@@ -518,9 +653,10 @@ export class ChannelSettingsMenu {
             ),
         })),
       0,
-      (c) => this.#chat(c, scope),
+      back,
     );
   }
+
   async #channel(ctx: SettingsContext) {
     await this.#page(
       ctx,
@@ -618,7 +754,9 @@ export class ChannelSettingsMenu {
   async #save(ctx: SettingsContext, patch: UpdateSettingsBody, text: string, back: Action) {
     const parsed = UpdateSettingsBody.safeParse(patch);
     if (!parsed.success) {
-      await ctx.send('That value does not fit this setting. Open /settings and try again.');
+      await ctx.send(
+        `That value does not fit this setting. Open ${slashOf(ctx)('settings')} and try again.`,
+      );
       return;
     }
     await this.#confirm(

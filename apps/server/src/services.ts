@@ -1398,6 +1398,14 @@ export class Services {
       onHeal: (message) => void this.healed.note('channels', message),
       routineTitle: async (id) =>
         (await this.routines.detail(id).catch(() => undefined))?.routine.title,
+      // `/name` in a chat app runs your command or skill of that name, as in Conch (ADR 0098).
+      commands: {
+        custom: () => this.commands.list(),
+        skills: async () =>
+          (await this.skills.store.list()).skills
+            .filter((s) => s.mode !== 'off' && !s.problem)
+            .map((s) => s.name),
+      },
       // The pretend Messages works anywhere; the real one only on a Mac.
       platform: messages ? 'darwin' : process.platform,
       // Voice notes are heard on this computer (ADR 0077); `voice` is made just below.

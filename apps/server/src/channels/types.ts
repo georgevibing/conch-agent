@@ -140,6 +140,12 @@ export interface ConnectOptions {
 export interface ChannelConnection {
   /** Send Markdown; long answers go as several messages. Returns each one sent. */
   send(chatId: string, markdown: string, options?: SendOptions): Promise<SentRef[]>;
+  /**
+   * How many buttons a list (a command's values, a settings menu) may put
+   * under one message before it pages with More. Five when unset (Discord's
+   * rows); more where the app shows them comfortably (Telegram).
+   */
+  buttonLimit?: number;
   /** Replace a message's text (and buttons; none removes them). */
   edit(ref: SentRef, markdown: string, options?: SendOptions): Promise<void>;
   /** Show "typing…" for a few seconds. */
