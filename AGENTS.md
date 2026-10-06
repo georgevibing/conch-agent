@@ -297,6 +297,8 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
       repeating them. Use task operation receipts where available; a prompt asking
       the model not to repeat something is not a substitute for durable evidence.
       Never auto-approve a waiting permission or guess an opaque tool is read-only.
+      Tool failures must remain failures across adapters, not successful text.
+      A result received after Stop cannot clear an uncertain action.
     - **Recover gradually.** Deferred chats survive another restart and resume with
       resource headroom, one at a time. Automatic tasks use the same admission
       signal. Repeated crashes or rapid requested restarts share a persisted budget;

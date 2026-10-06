@@ -160,6 +160,11 @@ what happened before repeating it. Conch does not repeat a timed-out action on i
 own. If the tabs cannot be closed, the browser stays blocked until **Repair** in
 Settings → Browser reconnects it. Other chats' tabs stay open.
 
+The same caution applies after **Stop**, or if the browser closes after an action
+begins: check the page before repeating it. Conch keeps that result uncertain and
+does not automatically replay the action. If the browser closes before the action
+begins, Conch can reopen it and try safely.
+
 Mostly, you won't notice: Conch fixes the browser by itself. It uses the Chrome,
 Edge or Brave you already have, or downloads Chromium the first time if there's none.
 It restarts a browser that crashed and reopens your page. It clears a browser left

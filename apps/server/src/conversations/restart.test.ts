@@ -343,4 +343,50 @@ describe('Conch restarting under a running chat', () => {
     expect(await after.recoverInterrupted()).toBe(1);
     await after.drain();
   });
+  it.each([false, true])(
+    'only settles mutation success observed before Stop (before: %s)',
+    async (beforeStop) => {
+      const home = await mkdtemp(join(tmpdir(), 'conch-stop-admission-'));
+      const manager = await open(
+        home,
+        new Scripted(async function* (input) {
+          const call = { toolName: 'Bash', toolUseId: 'changing1', input: { command: 'send' } };
+          await input.guard?.(call);
+          yield {
+            type: 'tool-start',
+            toolUseId: call.toolUseId,
+            name: call.toolName,
+            input: call.input,
+          };
+          if (beforeStop)
+            yield {
+              type: 'tool-end',
+              toolUseId: call.toolUseId,
+              status: 'success',
+              output: 'Sent.',
+            };
+          const stopped = new Promise<void>((resolve) =>
+            input.signal.addEventListener('abort', () => resolve(), { once: true }),
+          );
+          yield { type: 'text', messageId: 'm1', delta: 'Waiting' };
+          await stopped;
+          if (!beforeStop)
+            yield {
+              type: 'tool-end',
+              toolUseId: call.toolUseId,
+              status: 'success',
+              output: 'Stopped.',
+            };
+          yield { type: 'done', outcome: 'interrupted' };
+        }),
+      );
+      const chat = await manager.send({ clientMessageId: 'u1', text: 'Send once' });
+      await until(manager, chat.id, (events) => events.some((e) => e.type === 'assistant.delta'));
+      await manager.interrupt(chat.id);
+      await until(manager, chat.id, (events) => events.some((e) => e.type === 'turn.completed'));
+      await manager.drain();
+      const record = await new ConversationStore(join(home, 'conversations')).get(chat.id);
+      expect(record?.pendingToolCalls?.includes('changing1') ?? false).toBe(!beforeStop);
+    },
+  );
 });

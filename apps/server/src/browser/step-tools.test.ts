@@ -34,6 +34,7 @@ function setup(timeoutMs = 100) {
   const page = {
     url: () => 'https://example.com',
     title: async () => 'Example',
+    goto: vi.fn(async () => undefined),
     locator: () => target,
     on: vi.fn(),
     off: vi.fn(),
@@ -64,6 +65,8 @@ function setup(timeoutMs = 100) {
     tabFor: vi.fn(async () => tab),
     cancelStep: vi.fn(),
     saveShot: vi.fn(async () => undefined),
+    guard: { navigation: vi.fn(async () => ({ ok: true })) },
+    declined: vi.fn(async () => undefined),
     store: { trusts: async () => false },
     runtime: { heal: vi.fn(), backend: { shared: false } },
     forgetTab: vi.fn(),
@@ -103,6 +106,89 @@ describe('browser step deadlines through the actual tools', () => {
     expect(h.events.at(-1)).toMatchObject({ type: 'browser.step', step: { status: 'error' } });
   });
 
+  it('keeps intentional refusals readable without turning them into execution failures', async () => {
+    const h = setup();
+    vi.mocked(h.ctx.ask).mockResolvedValue('deny');
+    expect(await h.call('browser_click', { ref: 'e1', element: 'Continue' })).toContain(
+      'doesn’t want you acting',
+    );
+    expect(h.target.click).not.toHaveBeenCalled();
+    expect(h.events.at(-1)).toMatchObject({ step: { status: 'error' } });
+  });
+
+  it('rejects an operational failure after an action rather than reporting successful execution', async () => {
+    const h = setup(1_000);
+    h.service.saveShot
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('Could not save the screenshot.'));
+    const result = h.call('browser_click', { ref: 'e1', element: 'Continue' });
+    const checked = expect(result).rejects.toThrow('Could not save the screenshot.');
+    await vi.advanceTimersByTimeAsync(300);
+    await checked;
+    expect(h.target.click).toHaveBeenCalledTimes(1);
+    expect(h.service.runtime.heal).not.toHaveBeenCalled();
+    expect(h.events.at(-1)).toMatchObject({
+      step: { status: 'error', label: 'Could not save the screenshot.' },
+    });
+  });
+
+  it('never repeats an action when the browser closes while reading its result', async () => {
+    const h = setup(1_000);
+    snapshots.changes.mockRejectedValue(
+      new Error('Target page, context or browser has been closed'),
+    );
+    const result = h.call('browser_click', { ref: 'e1', element: 'Continue' });
+    const checked = expect(result).rejects.toThrow('Check the page before repeating the action.');
+    await vi.advanceTimersByTimeAsync(300);
+    await checked;
+    expect(h.target.click).toHaveBeenCalledTimes(1);
+    expect(h.service.tabFor).toHaveBeenCalledTimes(1);
+    expect(h.service.forgetTab).not.toHaveBeenCalled();
+    expect(h.service.runtime.heal).not.toHaveBeenCalled();
+    expect(h.events.at(-1)).toMatchObject({ step: { status: 'error' } });
+  });
+
+  it('still reopens a closed browser before action work has begun', async () => {
+    const h = setup(1_000);
+    h.service.tabFor.mockRejectedValueOnce(
+      new Error('Target page, context or browser has been closed'),
+    );
+    const result = h.call('browser_click', { ref: 'e1', element: 'Continue' });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(await result).toContain('Changed page');
+    expect(h.target.click).toHaveBeenCalledTimes(1);
+    expect(h.service.tabFor).toHaveBeenCalledTimes(2);
+    expect(h.service.runtime.heal).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports navigation failures as tool errors with the plain helpful message', async () => {
+    const h = setup(1_000);
+    vi.mocked(h.tab.page.goto).mockRejectedValue(new Error('net::ERR_NAME_NOT_RESOLVED'));
+    await expect(h.call('browser_open', { url: 'https://example.com' })).rejects.toThrow(
+      'Couldn’t find that site. Check the address.',
+    );
+    expect(h.events.at(-1)).toMatchObject({ step: { status: 'error' } });
+    expect(h.tab.page.goto).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports Stop after a click as an error and ignores the late page result', async () => {
+    const h = setup(1_000);
+    const held = deferred<{ text: string }>();
+    snapshots.changes.mockReturnValue(held.promise);
+    const result = h.call('browser_click', { ref: 'e1', element: 'Continue' });
+    const checked = expect(result).rejects.toThrow('Stopped.');
+    await vi.advanceTimersByTimeAsync(300);
+    expect(h.target.click).toHaveBeenCalledTimes(1);
+    h.stop.abort();
+    await checked;
+    const count = h.events.length;
+    held.resolve({ text: 'Late result after the action' });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(h.events).toHaveLength(count);
+    expect(h.events.at(-1)).toMatchObject({ step: { status: 'error', label: 'Stopped.' } });
+    expect(h.target.click).toHaveBeenCalledTimes(1);
+  });
+
   it('shows an approval wait without using its execution budget', async () => {
     const h = setup(1_000);
     const answer = deferred<PermissionDecision>();
@@ -129,8 +215,9 @@ describe('browser step deadlines through the actual tools', () => {
     vi.mocked(h.ctx.ask).mockReturnValue(answer.promise);
     const result = h.call('browser_click', { ref: 'e1', element: 'Continue' });
     await vi.advanceTimersByTimeAsync(1);
+    const checked = expect(result).rejects.toThrow('Stopped.');
     h.stop.abort();
-    expect(await result).toBe('Stopped.');
+    await checked;
     answer.resolve('allow');
     await vi.advanceTimersByTimeAsync(500);
     expect(h.target.click).not.toHaveBeenCalled();
@@ -149,8 +236,9 @@ describe('browser step deadlines through the actual tools', () => {
     expect(h.events.at(-1)).toMatchObject({
       step: { status: 'waiting', label: 'Waiting for you to hand the browser back' },
     });
+    const checked = expect(result).rejects.toThrow('Stopped.');
     h.stop.abort();
-    expect(await result).toBe('Stopped.');
+    await checked;
     handedBack.resolve(undefined);
     await vi.advanceTimersByTimeAsync(500);
     expect(h.tab.setControl).not.toHaveBeenCalled();

@@ -84,7 +84,11 @@ successful save. Checkpointing does not manufacture successful completion.
 Ordinary conversation mutations have a durable pending-call marker before dispatch.
 Only a persisted successful outcome clears it. Logs are saved before the index so
 an index cannot clear uncertainty ahead of the evidence. Unknown tools are not
-assumed read-only. Task operations retain their existing reconciliation and receipt
+assumed read-only. Results received after cancellation cannot retire pending calls,
+and failed browser steps remain tool errors rather than successful error text.
+Browser recovery can reopen a page before an action starts; a lost page after an
+action starts cannot trigger a blind replay of that action.
+Task operations retain their existing reconciliation and receipt
 contract. Pending approvals, uncertain actions and scoped operations are not
 blindly resumed by a generic conversation restart.
 

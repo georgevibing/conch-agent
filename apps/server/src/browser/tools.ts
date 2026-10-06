@@ -46,7 +46,7 @@ function hostOf(url: string): string | undefined {
 /** A refusal the agent should hear as-is (the user said no, plan mode, a secret field). */
 class Refusal extends Error {}
 
-/** A tab that went away mid-step: the browser restarts, and the step runs once more. */
+/** A tab that went away before work began can be reopened without replaying an action. */
 const CLOSED =
   /Target page, context or browser has been closed|Target closed|Browser has been closed/i;
 
@@ -192,6 +192,7 @@ export function browserTools(
             },
           });
           const execute = async (attempt = 0): Promise<string | HostToolResult> => {
+            let workStarted = false;
             try {
               tab = await service.tabFor(conversationId);
               // Opening the browser may finish after a cancellation. Close that late tab too.
@@ -211,6 +212,9 @@ export function browserTools(
               log('running', labels.running);
               current.opened.length = 0;
               current.evicted.length = 0;
+              // Once work starts, its external effects may be uncertain even if reading
+              // the result or saving a thumbnail fails. Never replay the whole action.
+              workStarted = true;
               const outcome = await work(current);
               check();
               const shot = current.closed
@@ -240,11 +244,15 @@ export function browserTools(
                 : note + outcome.text;
             } catch (error) {
               check(); // A timeout or Stop must never enter automatic crash recovery.
-              if (
-                !(error instanceof Refusal) &&
-                CLOSED.test(String((error as Error)?.message)) &&
-                attempt === 0
-              ) {
+              const closed =
+                !(error instanceof Refusal) && CLOSED.test(String((error as Error)?.message));
+              if (closed && workStarted) {
+                throw new Error(
+                  'The browser closed during this step. It may have acted on the site before closing. Check the page before repeating the action.',
+                  { cause: error },
+                );
+              }
+              if (closed && attempt === 0) {
                 log('running', 'The browser restarted; opening the page again');
                 service.runtime.heal(
                   'The browser closed mid-step; Conch restarted it and carried on.',
@@ -270,8 +278,12 @@ export function browserTools(
             ? `The browser isn’t available: ${error.problem.message}`
             : explain(error);
       log('error', message);
-      if (error instanceof BrowserStepStopped && error.timedOut) throw error;
-      return message;
+      // A plain result is success to every provider. Only deliberate refusals are
+      // successful answers; cancellation and uncertain execution must stay errors.
+      if (context.signal.aborted) throw new BrowserStepStopped(false);
+      if (error instanceof Refusal) return message;
+      if (error instanceof BrowserStepStopped) throw error;
+      throw new Error(message, { cause: error });
     }
   };
 

@@ -2654,7 +2654,9 @@ export class ConversationManager {
             break;
           case 'tool-end': {
             const settle = async () => {
-              if (!live.record.pendingToolCalls?.length) return;
+              // A cancelled tool may return ordinary text while its remote action
+              // is still uncertain. Only results observed before Stop settle it.
+              if (abort.signal.aborted || !live.record.pendingToolCalls?.length) return;
               const settled = settledCalls(live.events, event.toolUseId);
               if (settled.size && live.record.pendingToolCalls?.some((id) => settled.has(id))) {
                 live.record = {
