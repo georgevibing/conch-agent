@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
+import { durations } from '../../tokens';
+
 /**
  * Dragging chats with a finger. A phone has no drag and drop of its own, so
  * a row held long enough lifts, and from then on this carries it: the places
@@ -16,6 +18,11 @@ export const HOLD_SLOP = 8;
 export const EDGE_ZONE = 56;
 /** The fastest it scrolls by itself, in px per frame, with the finger right at the edge. */
 export const EDGE_SPEED = 16;
+/**
+ * How long the copy takes to settle into the place that took it
+ * (`--nc-duration-base`, the ghost's own transition).
+ */
+export const SETTLE_MS = durations.base * 1000;
 
 export interface TouchDragSession {
   /** The chats on the finger. */
@@ -99,15 +106,28 @@ export const touchDrag = {
     }
     return over;
   },
-  /** The finger let go: the place under it takes the chats. True when one did. */
-  end(): boolean {
+  /**
+   * The finger let go: the place under it takes the chats. True when one did.
+   *
+   * The chats move once the copy has settled in (`settleMs`): moving them at
+   * once takes their row out of the list, and the copy — which the row draws —
+   * goes with it halfway through settling. `0` where nothing is animated.
+   */
+  end(settleMs = SETTLE_MS): boolean {
     const current = session;
     publish(null);
     if (!current?.over) return false;
-    const drop = targets.get(current.over);
+    const over = current.over;
+    const drop = targets.get(over);
     if (!drop) return false;
     buzz(12);
-    drop(current.ids);
+    const { ids } = current;
+    // Still the place it was dropped on by then, or it has gone: nothing moves.
+    const take = () => {
+      if (targets.get(over) === drop) drop(ids);
+    };
+    if (settleMs > 0) setTimeout(take, settleMs);
+    else take();
     return true;
   },
   /** Called off (the touch was taken away, the row went): nothing moves. */

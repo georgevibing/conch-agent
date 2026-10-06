@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent, type RefObject } from 'react';
 
-import { edgeScroll, HOLD_MS, HOLD_SLOP, scrollerOf, touchDrag } from './touchDrag';
+import { edgeScroll, HOLD_MS, HOLD_SLOP, scrollerOf, SETTLE_MS, touchDrag } from './touchDrag';
 
 /**
  * - `lifted`: held long enough; the row has risen under the finger.
@@ -269,7 +269,11 @@ export function useHold({
         onMenu?.(p.x, p.y);
         return;
       }
-      if (now === 'dragging') finish(touchDrag.end() ? 'dropped' : 'returning');
+      if (now === 'dragging') {
+        // Nothing to settle into when motion is reduced: the chats move at once.
+        const settle = prefersStill(itemRef.current) ? 0 : SETTLE_MS;
+        finish(touchDrag.end(settle) ? 'dropped' : 'returning');
+      }
     },
     cancel(e: PointerEvent<HTMLElement>) {
       const p = press.current;

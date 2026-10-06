@@ -6,7 +6,7 @@ import { expectAccessible, renderNacre } from '../../test/render';
 import { ChatListSection } from './ChatListSection';
 import { ChatRow } from './ChatRow';
 import { FolderMark } from './FolderMark';
-import { edgeScroll, EDGE_SPEED, HOLD_MS, HOLD_SLOP, touchDrag } from './touchDrag';
+import { edgeScroll, EDGE_SPEED, HOLD_MS, HOLD_SLOP, SETTLE_MS, touchDrag } from './touchDrag';
 
 const touch = { pointerType: 'touch', isPrimary: true, pointerId: 7 };
 
@@ -81,9 +81,14 @@ describe('holding a chat on a phone', () => {
     expect(within(folder).getByText('Drop to move to Work')).toBeInTheDocument();
 
     fireEvent.pointerUp(item, { ...touch, clientX: 60, clientY: 40 });
-    expect(onDrop).toHaveBeenCalledWith(['c1']);
     expect(folder).not.toHaveAttribute('data-drop-over');
     expect(folder).not.toHaveAttribute('data-drop-ready');
+    // The copy settles into the folder first: moving the chats at once would
+    // take their row (which draws the copy) out of the list mid-animation.
+    expect(item).toHaveAttribute('data-held', 'dropped');
+    expect(onDrop).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(SETTLE_MS));
+    expect(onDrop).toHaveBeenCalledWith(['c1']);
     act(() => vi.runOnlyPendingTimers());
     expect(item).not.toHaveAttribute('data-held');
   });
