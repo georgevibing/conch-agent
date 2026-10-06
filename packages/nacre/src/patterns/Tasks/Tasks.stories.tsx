@@ -117,3 +117,32 @@ export const Unverified: Story = {
       'The provider response was lost. Inspect your drafts; Conch will not create another one automatically.',
   },
 };
+
+/** Waiting for your OK, answered right on its card in the chat it came from. */
+export const AskingInAChat: Story = {
+  args: {
+    variant: 'compact',
+    kind: 'helper',
+    title: 'Check the tests',
+    status: 'needs-you',
+    mode: 'Ask first',
+    asking: {
+      summary: (
+        <>
+          run <InlineCode>npm test</InlineCode>
+        </>
+      ),
+      command: 'npm test -- --run src/parser',
+      onAllow: () => undefined,
+      onDeny: () => undefined,
+    },
+  },
+};
+
+/** On the Tasks page: where it came from, and the mode it runs in (its chat’s). */
+export const FromAChat: Story = {
+  args: {
+    mode: 'Full trust',
+    from: <a href="#chat">Fix the parser</a>,
+  },
+};

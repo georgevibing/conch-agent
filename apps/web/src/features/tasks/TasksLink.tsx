@@ -9,9 +9,10 @@ export function TasksLink({ onNavigate }: { onNavigate?: () => void }) {
   const { data } = useTasks();
   const navigate = useNavigate();
   const active = useLocation().pathname.startsWith('/tasks');
-  const background = data?.tasks.filter((t) => t.kind === 'background') ?? [];
-  const needs = background.filter((t) => t.status === 'needs-you').length;
-  const working = background.filter(going).length;
+  // Helpers too: one waiting for your OK holds up the chat that started it.
+  const tasks = data?.tasks ?? [];
+  const needs = tasks.filter((t) => t.status === 'needs-you').length;
+  const working = tasks.filter(going).length;
 
   return (
     <Button

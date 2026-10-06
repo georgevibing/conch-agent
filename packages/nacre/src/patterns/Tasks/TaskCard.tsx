@@ -7,6 +7,7 @@ import {
   Layers,
   MessageSquare,
   RotateCcw,
+  ShieldQuestion,
   Square,
   Trash2,
   X,
@@ -20,6 +21,23 @@ import styles from './Tasks.module.css';
 
 export type TaskCardStatus =
   'queued' | 'running' | 'needs-you' | 'done' | 'unverified' | 'failed' | 'stopped' | 'interrupted';
+
+/**
+ * What a task waiting for your OK is asking (ADR 0033), answered right on its
+ * card in the chat it came from: the same question its own chat shows.
+ */
+export interface TaskCardAsking {
+  /** What it wants to do, sentence case: "Run `npm test`". */
+  summary: ReactNode;
+  /** The command, when it's one, shown whole. */
+  command?: string;
+  /** Why it asks although the mode would allow it (something it read). */
+  why?: ReactNode;
+  onAllow: () => void;
+  onDeny: () => void;
+  /** Sent: the buttons wait for the answer to land. */
+  pending?: boolean;
+}
 
 export interface TaskCardProps extends Omit<ComponentProps<'article'>, 'title'> {
   title: string;
@@ -42,6 +60,12 @@ export interface TaskCardProps extends Omit<ComponentProps<'article'>, 'title'> 
   branch?: string;
   /** Another provider is doing it, by name ("Codex CLI"): said beside its status. */
   by?: ReactNode;
+  /** Answered here while it waits for your OK; without it, "See what it's asking" opens its chat. */
+  asking?: TaskCardAsking;
+  /** Where it came from, on the Tasks page: a link to that chat. */
+  from?: ReactNode;
+  /** The mode it runs in, in words ("Full trust"): its chat's, never more. */
+  mode?: ReactNode;
   /** `full` on the Tasks page; `compact` in a chat. */
   variant?: 'full' | 'compact';
   onOpen?: () => void;
@@ -75,7 +99,7 @@ export function elapsed(ms: number): string {
 }
 
 /** Ticks once a second while something is going, for the elapsed time. */
-function useTick(on: boolean, now?: number): number {
+export function useTick(on: boolean, now?: number): number {
   const [time, setTime] = useState(() => now ?? Date.now());
   useEffect(() => {
     if (!on || now !== undefined) return;
@@ -104,6 +128,9 @@ export function TaskCard({
   note,
   branch,
   by,
+  asking,
+  from,
+  mode,
   variant = 'full',
   onOpen,
   onStop,
@@ -160,11 +187,32 @@ export function TaskCard({
             </span>
             {took && status !== 'queued' && <span> · {took}</span>}
             {by && <span> · by {by}</span>}
+            {mode && <span> · {mode}</span>}
+            {from && <span> · from {from}</span>}
           </p>
         </div>
       </div>
 
-      {going(status) && current && <p className={styles.current}>{current}</p>}
+      {status === 'needs-you' && asking ? (
+        <div className={styles.asking} role="group" aria-label="It’s asking">
+          <p className={styles.askingLine}>
+            <ShieldQuestion aria-hidden />
+            <span>Wants to {asking.summary}</span>
+          </p>
+          {asking.why && <p className={styles.askingWhy}>{asking.why}</p>}
+          {asking.command && <pre className={styles.askingCommand}>{asking.command}</pre>}
+          <div className={styles.askingActions}>
+            <Button size="sm" variant="ghost" onClick={asking.onDeny} disabled={asking.pending}>
+              Deny
+            </Button>
+            <Button size="sm" onClick={asking.onAllow} loading={asking.pending}>
+              Allow
+            </Button>
+          </div>
+        </div>
+      ) : (
+        going(status) && current && <p className={styles.current}>{current}</p>
+      )}
       {shown.length > 0 && (
         <ol className={styles.steps} aria-label="What it did">
           {shown.map((step, i) => (
@@ -185,7 +233,7 @@ export function TaskCard({
 
       {(onOpen || onStop || onRetry || onRemove) && (
         <div className={styles.actions}>
-          {status === 'needs-you' && onOpen ? (
+          {status === 'needs-you' && onOpen && !asking ? (
             <Button size="sm" onClick={onOpen} leadingIcon={<Hand />}>
               See what it’s asking
             </Button>

@@ -3,6 +3,8 @@
 - Status: accepted
 - Date: 2026-10-01
 - Amended: 2026-10-04 (a part can go to another provider, below)
+- Amended: 2026-10-06 (every provider hands off through Conch's tasks; what a task
+  inherits; tasks under their chat, below)
 - Builds on: [ADR 0005](./0005-usage-limits.md) (budgets that never block),
   [ADR 0006](./0006-routines.md) (a run is a conversation),
   [ADR 0023](./0023-offline-and-limits.md) (carrying on at a limit),
@@ -210,3 +212,72 @@ workers; Conch's helpers could only use the chat's own provider.
 
 [ADR 0038 — Durable verified tasks](./0038-durable-verified-tasks.md) replaces the
 original retry-from-start, derived-backup and model-completion semantics.
+
+## Amended 2026-10-06: every provider hands off through Conch's tasks
+
+Providers grew sub-agents of their own: Claude Code's `Agent` tool (`Task` before it
+was renamed) and its multi-agent `Workflow`, Codex's `multi_agent` (and
+`multi_agent_v2`), and whatever the ACP programs offer. Work run that way is
+invisible to Conch: no card, no Stop, no approval in the open, no spending against
+the chat, and no record in Activity. Conch already has the right shape for it.
+
+- **Native sub-agents are off wherever Conch can turn them off.** Claude Code gets
+  them in `disallowedTools` in every mode, Full trust included (`OWN_SUBAGENTS` in
+  `engines/claude-code/engine.ts`); Codex gets `features.multi_agent=false` and
+  `features.multi_agent_v2=false` in both of its shapes. Its to-do tools
+  (`TaskCreate`…) and plan updates stay: those are a checklist, not a second agent.
+  A program Conch can only talk to over ACP is told in its instructions not to start
+  sub-agents or tasks of its own, beside Conch's own tools.
+- **Every chat is told how to hand work off** (`TASKS_PROMPT`): `delegate` for parts
+  side by side, `start_background_task` for a long job — never the provider's own.
+  Providers without Conch's host tools (chat-only models) simply can't hand off.
+- **One level.** A task gets Conch's own tools as its chat has them, but not
+  `delegate` or `start_background_task`: nothing multiplies out of sight, and its
+  brief says to do the work itself.
+- **What a task found comes back to the model too.** The chat's handover (`handoff.ts`)
+  carries a finished task's summary, not only its state, so the next turn can act on it.
+
+## Amended 2026-10-06: a task inherits its chat's powers, and never more
+
+A task that asks for an approval its chat would not have needed is stuck for nothing;
+one that may do more than its chat is an escalation. Both are bugs.
+
+- **The mode is the chat's**, through `noMoreThan`: a mode asked for that allows more
+  than the chat's becomes the chat's; one that allows less is honoured (a scoped
+  workflow task still runs in `default`). A helper takes the mode of the turn that
+  started it. Then `honouredMode` applies per provider, as before.
+- **Full trust is the person's**, wherever they gave it: `TurnExtras.attended` says
+  the task came from a chat someone is in, so what that chat read doesn't make it
+  stop, and a command may leave the sealed box exactly as the chat's would
+  (`trustsFully`, used by every Conch tool that asks). Nothing else about being
+  watched carries over: a task still can't put a question to somebody with `ask`,
+  and an unanswered permission still expires after an hour.
+- **"Always allow" carries, nothing more**: `TurnExtras.grants` copies the chat's
+  `alwaysAllow` and waived reasons at the moment the task starts
+  (`ConversationManager.grantsOf`). A task from another chat has been told nothing.
+  A scoped task (ADR 0038) takes no grants at all.
+- **It follows its chat.** Changing the mode in the chat changes its going tasks
+  (`TaskService.#follow` on `conversation.updated`): Full trust lets one waiting for
+  an OK carry on at once; Ask first makes it ask again from its next step. A scoped
+  task keeps the mode its contract set.
+- Taint, skill holds, the budget and Stop are unchanged (above, and ADR 0079).
+
+## Amended 2026-10-06: tasks are where their chat is
+
+- **Under their chat in the list.** A chat with tasks gets a quiet line saying how
+  many and how they're going — what needs you first — opening into a row per task
+  (Nacre `ChatTasks`): its status in words and a mark, what it's doing now, how long
+  it's been, a press to open its own chat, and Stop while it works. It opens itself
+  while something is going, and a person's press wins from then on. Finished tasks
+  stay under the chat for half a day, then only on Tasks and in the chat.
+- **Answered where you are.** `Task.asking` carries what a task is waiting for, so
+  its card in the chat it came from asks it with Allow and Deny
+  (`TaskCard.asking`), answered over the same socket message as any permission. A
+  question with a screen of its own (a site, Passwords, a draft to read) keeps
+  **See what it's asking** and opens the task's chat. Only one thing asks per task:
+  the toast is dropped when the chat is already in front of you.
+- **It says what it may do.** A card on the Tasks page names the mode it runs in and
+  the chat it came from; the banner in a task's own chat says it may do what that
+  mode allows and never more than its chat.
+- The sidebar's Tasks badge and ⌘K count helpers too: each is a chat of its own, and
+  one waiting for an OK holds up the chat that started it.

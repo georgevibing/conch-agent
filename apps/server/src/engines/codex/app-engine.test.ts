@@ -564,6 +564,9 @@ describe('Codex CLI: Codex with its own tools, asking through Conch (ADR 0066)',
     const config = await configOf(fake);
     // Its own shell and file edits: not switched off, not read-only.
     expect(config).not.toContain('features.shell_tool=false');
+    // Its own sub-agents are: work is handed off as Conch's tasks (ADR 0033).
+    expect(config).toContain('features.multi_agent=false');
+    expect(config).toContain('features.multi_agent_v2=false');
     expect(config).not.toContain('sandbox_mode="read-only"');
     // Still asking for anything not plainly read-only, writing only where Conch allows,
     // reading nowhere secrets live, and no network.

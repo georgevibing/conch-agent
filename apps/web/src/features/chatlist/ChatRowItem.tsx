@@ -26,6 +26,7 @@ import { DeleteChat } from '../archive/DeleteChat';
 import { useArchive } from '../archive/useArchive';
 import { APPS } from '../channels/describe';
 import { useQuietChat } from '../learning/useQuietChat';
+import { ChatTasksFor, useChatTasks } from '../tasks/ChatTasksFor';
 import { ChatMenuItems, type ChatMenuActions } from './ChatMenu';
 import { useOrganise } from './useOrganise';
 
@@ -130,6 +131,8 @@ export function ChatRowItem({
   const open = conversationId === chat.id;
   const quiet = isQuiet(chat.id);
   const pinned = chat.pinned !== undefined;
+  // What it sent off, under it (ADR 0033): live, each a press from its own chat.
+  const tasks = useChatTasks(chat.id, { open });
 
   const rename = async () => {
     const next = draft?.trim();
@@ -195,6 +198,16 @@ export function ChatRowItem({
       <ChatRow
         status={statusOf(chat, { stopped, open })}
         dropBefore={dropping}
+        below={
+          tasks && !selection.selecting ? (
+            <ChatTasksFor
+              chatId={chat.id}
+              chatTitle={chat.title}
+              tasks={tasks}
+              onNavigate={onNavigate}
+            />
+          ) : undefined
+        }
         leading={
           chat.origin?.kind === 'channel' ? (
             <IntegrationLogo

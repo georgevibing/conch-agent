@@ -167,6 +167,75 @@
     font-family: var(--nc-font-mono);
   }
 
+  /* What it's asking, answered here: the permission card's words, quieter. */
+  .asking {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    margin-inline-start: var(--tk-indent);
+    padding: var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .askingLine {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+    margin: 0;
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .askingLine > svg {
+    flex-shrink: 0;
+    inline-size: 1rem;
+    block-size: 1rem;
+    margin-block-start: 0.125rem;
+    color: light-dark(oklch(0.5 0.12 var(--nc-warning-h)), oklch(0.82 0.1 var(--nc-warning-h)));
+  }
+
+  .askingWhy {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+  }
+
+  .askingCommand {
+    margin: 0;
+    padding: var(--nc-space-2);
+    overflow-x: auto;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    color: var(--nc-text);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xs);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .askingActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--nc-space-2);
+  }
+
+  .meta a {
+    color: var(--nc-text-accent);
+    text-decoration: none;
+  }
+
+  @media (hover: hover) {
+    .meta a:hover {
+      text-decoration: underline;
+    }
+  }
+
   .actions {
     display: flex;
     flex-wrap: wrap;
@@ -175,6 +244,10 @@
   }
 
   @container (max-width: 24rem) {
+    .asking {
+      margin-inline-start: 0;
+    }
+
     .current,
     .steps,
     .note,

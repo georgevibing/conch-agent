@@ -387,6 +387,20 @@
     --cl-end-room: var(--cl-more-room);
   }
 
+  /* Something of the chat's own under it (its tasks): the row keeps its own line. */
+  .item[data-below] {
+    flex-wrap: wrap;
+  }
+
+  .item[data-below] > .row {
+    flex-basis: 100%;
+  }
+
+  .below {
+    flex-basis: 100%;
+    min-inline-size: 0;
+  }
+
   .row {
     position: relative;
     display: flex;

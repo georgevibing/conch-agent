@@ -2,6 +2,8 @@
 import { homedir, tmpdir } from 'node:os';
 import { join, relative, resolve, isAbsolute } from 'node:path';
 
+import type { PermissionMode } from '@conch/protocol';
+
 import type { TurnInput } from './types';
 
 /** Commands that need the network, or the person's other folders: sealed, they can only fail. */
@@ -43,3 +45,18 @@ export function runsUnsealedByTrust(
 /** What a sealed command that failed is told, so it asks for what it needs rather than giving up. */
 export const SEALED_HINT =
   '\n[Conch: this ran sealed: no network, and writes only in the work folder (not .git). If it failed for that reason, run it again with dangerouslyDisableSandbox: true. The person is asked first, unless they chose Full trust. Do not tell the person the session is read-only.]';
+
+/**
+ * A tool of Conch's own that asks unless Full trust is the person's (a command,
+ * a paid picture): the chat they're in, or a task sent from it (ADR 0033).
+ * Without `fullTrust`, Full trust in an unattended run still asks.
+ */
+export function trustsFully(ctx: {
+  permissionMode: PermissionMode;
+  unattended?: boolean;
+  fullTrust?: () => boolean;
+}): boolean {
+  return ctx.fullTrust
+    ? ctx.fullTrust()
+    : ctx.permissionMode === 'bypassPermissions' && !ctx.unattended;
+}

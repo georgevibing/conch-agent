@@ -1,0 +1,272 @@
+@layer nacre.components {
+  /* Under its chat, in from the chat's title: a line that opens into rows.
+     A computer gets 32px rows; a finger gets 44px (the touch target guidance). */
+  .root {
+    --ct-indent: var(--nc-space-3);
+    --ct-row-h: var(--nc-control-sm);
+    --ct-font: var(--nc-text-sm);
+    --ct-meta: var(--nc-text-xs);
+    --ct-icon: 1rem;
+
+    display: flex;
+    flex-direction: column;
+    padding-inline-start: var(--ct-indent);
+  }
+
+  @media (pointer: coarse) {
+    .root {
+      --ct-row-h: var(--nc-control-lg);
+      --ct-font: var(--nc-text-md);
+      --ct-meta: var(--nc-text-sm);
+      --ct-icon: 1.125rem;
+    }
+  }
+
+  /* ── The line ── */
+
+  .toggle {
+    appearance: none;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+    min-block-size: var(--nc-control-xs);
+    margin: 0;
+    padding: var(--nc-space-0-5) var(--nc-space-2);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: var(--nc-text-subtle);
+    font: inherit;
+    font-size: var(--ct-meta);
+    font-variant-numeric: tabular-nums;
+    text-align: start;
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (pointer: coarse) {
+    .toggle {
+      min-block-size: var(--nc-control-md);
+    }
+  }
+
+  @media (hover: hover) {
+    .toggle:hover {
+      background: var(--nc-wash-2);
+      color: var(--nc-text-muted);
+    }
+  }
+
+  .toggle:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+
+  .chevron {
+    flex-shrink: 0;
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    stroke-width: 2.4;
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .toggle[data-state='open'] .chevron {
+    transform: rotate(90deg);
+  }
+
+  .mark {
+    flex-shrink: 0;
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+  }
+
+  .mark[data-needs] {
+    color: light-dark(oklch(0.52 0.12 var(--nc-warning-h)), oklch(0.82 0.1 var(--nc-warning-h)));
+  }
+
+  .root[data-needs] .summary {
+    color: light-dark(oklch(0.48 0.12 var(--nc-warning-h)), oklch(0.84 0.1 var(--nc-warning-h)));
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .summary {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── The rows ── */
+
+  .list {
+    container-type: inline-size;
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    margin: 0;
+    padding: 0 0 var(--nc-space-1) var(--nc-space-2);
+    border-inline-start: 1px solid var(--nc-border-subtle);
+    margin-inline-start: calc(var(--nc-space-2) + 0.375rem);
+    list-style: none;
+  }
+
+  .row {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .link {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+    min-block-size: var(--ct-row-h);
+    padding: var(--nc-space-1) var(--nc-space-2);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    color: var(--nc-text-muted);
+    font-size: var(--ct-font);
+    text-decoration: none;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  /* Room for Stop at the end, while it can be stopped. */
+  .row:has(.stop) .link {
+    padding-inline-end: calc(var(--nc-control-sm) + var(--nc-space-2));
+  }
+
+  @media (hover: hover) {
+    .link:hover {
+      background: var(--nc-wash-2);
+      color: var(--nc-text);
+    }
+  }
+
+  .link:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+
+  /* The task whose chat is open. */
+  .link[aria-current='page'] {
+    background: var(--nc-surface);
+    color: var(--nc-text);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-1);
+  }
+
+  .icon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    inline-size: var(--ct-icon);
+    block-size: var(--ct-icon);
+    color: var(--nc-text-subtle);
+  }
+
+  .icon > svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  .icon[data-status='done'] {
+    color: light-dark(oklch(0.5 0.11 var(--nc-success-h)), oklch(0.8 0.1 var(--nc-success-h)));
+  }
+
+  .icon[data-status='needs-you'] {
+    color: light-dark(oklch(0.5 0.12 var(--nc-warning-h)), oklch(0.82 0.1 var(--nc-warning-h)));
+  }
+
+  .icon[data-status='failed'],
+  .icon[data-status='interrupted'] {
+    color: light-dark(oklch(0.52 0.15 var(--nc-danger-h)), oklch(0.8 0.12 var(--nc-danger-h)));
+  }
+
+  .text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+    line-height: var(--nc-leading-snug);
+  }
+
+  .title {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .meta {
+    display: flex;
+    min-inline-size: 0;
+    color: var(--nc-text-subtle);
+    font-size: var(--ct-meta);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .doing {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .took,
+  .by {
+    flex-shrink: 0;
+  }
+
+  /* A narrow sidebar: what it's doing matters more than who's doing it
+     (the card in the chat says that too). */
+  @container (max-width: 15rem) {
+    .by {
+      display: none;
+    }
+  }
+
+  .meta[data-status='needs-you'] .doing {
+    color: light-dark(oklch(0.48 0.12 var(--nc-warning-h)), oklch(0.84 0.1 var(--nc-warning-h)));
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .meta[data-status='running'] .doing {
+    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  /* Stop: under the pointer and on focus; always there on touch. */
+  .stop {
+    position: absolute;
+    inset-inline-end: var(--nc-space-1);
+    display: inline-flex;
+    opacity: 0;
+    transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .row:hover .stop {
+      opacity: 1;
+    }
+  }
+
+  .row:focus-within .stop {
+    opacity: 1;
+  }
+
+  @media (hover: none) {
+    .stop {
+      opacity: 1;
+    }
+  }
+}

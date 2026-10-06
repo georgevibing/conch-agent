@@ -14,13 +14,17 @@ A chat does one thing at a time, and some jobs take a while. Hand one off and it
 
 You can also ask in words: "do this in the background and tell me when it's done". Or press <kbd>mod+k</kbd> and choose **Do it in the background**.
 
-A task uses the same provider, model and [mode](../reference/modes.md) as the chat it came from. It can do nothing that chat couldn't.
+A task uses the same provider, model and [mode](../reference/modes.md) as the chat it came from. It can do nothing that chat couldn't: if you chose **Full trust** there, it won't stop to ask here either; if that chat asks first, so does the task. Anything you've already allowed in that chat ("Always allow") counts for its tasks too, and nothing more. Change the mode in the chat and its tasks follow, including one already waiting for your OK.
+
+Every provider hands work off this way. Your assistant's own sub-agents are turned off wherever Conch can turn them off, so work always runs as a task you can see, answer and stop.
 
 To have another provider do it, say so: "have Codex CLI do this in the background". Any provider you've connected can take it. Its card says who's doing it.
 
 ## Watch it work
 
-The card stays where it first appeared and keeps itself current: what the task is doing now, its last few steps, and how long it has been going. When the task finishes, the card shows its result.
+The card stays where it first appeared and keeps itself current: what the task is doing now, its last few steps, and how long it has been going. When the task finishes, the card shows its result, and the chat carries on with what it found.
+
+In the chat list, a chat with tasks has a line under it saying how many there are and how they're going. Open it for a row per task: what it's doing now, how long it's been, a press to open its own chat, and **Stop** while it works. It opens by itself while something is going.
 
 **Tasks** in the sidebar lists everything, with a count of what's working, or of what needs your OK. The page puts what needs you first, then what's working, then what's waiting, then what finished. Up to three tasks work at once. The rest wait their turn.
 
@@ -28,7 +32,7 @@ Every task is a chat of its own. **Open** shows it, and there you can read along
 
 ## When it needs you
 
-A task asks before it acts, as its chat would, and holds nothing else up. Its card says **Needs your OK**, and **See what it's asking** takes you to the question. Other tasks keep working. If nobody answers within an hour, the answer is no.
+A task asks before it acts, as its chat would, and holds nothing else up. Its card says **Needs your OK** and shows the question right there, with **Allow** and **Deny** — you don't have to leave the chat. A question with a screen of its own (a website, a password, a draft to read) says **See what it's asking** instead, and opens the task's chat. Other tasks keep working. If nobody answers within an hour, the answer is no.
 
 ## When it's done
 
@@ -59,7 +63,7 @@ When a job splits into parts that don't need each other, your assistant can run 
 ## Good to know
 
 - A background task can't take [attachments](./files.md) yet. Send those as a message.
-- Tasks stay out of your chat list. <kbd>mod+k</kbd> finds one by name. See [Find anything](./find.md).
+- Tasks stay out of your chat list; they sit under the chat that started them. <kbd>mod+k</kbd> finds one by name, helpers included. See [Find anything](./find.md).
 
 ## Control work from the chat
 

@@ -190,8 +190,13 @@ function transcript(events: readonly ConversationEvent[], afterSeq: number, befo
         break;
       }
       case 'task':
+        // What it found comes back to the model too, not only to the card (ADR 0033).
         if (['done', 'failed', 'stopped', 'unverified'].includes(event.state))
-          step(`Task “${oneLine(event.title, 80)}”: ${event.state}`);
+          step(
+            `Task “${oneLine(event.title, 80)}”: ${event.state}${
+              event.summary ? `. Its result: ${oneLine(event.summary, 600)}` : ''
+            }`,
+          );
         break;
       default:
         break;

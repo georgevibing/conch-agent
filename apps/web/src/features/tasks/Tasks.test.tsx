@@ -153,4 +153,112 @@ describe('Tasks', () => {
     act(() => FakeSocket.last?.push({ type: 'task.changed', task: task({ status: 'needs-you' }) }));
     expect(await screen.findByLabelText('1 need your OK')).toBeInTheDocument();
   });
+
+  const chat = (patch: Record<string, unknown> = {}) => ({
+    id: 'c1',
+    title: 'Fix the parser',
+    preview: '',
+    createdAt: 1,
+    updatedAt: Date.now(),
+    status: 'idle',
+    options: {},
+    ...patch,
+  });
+
+  it('a chat’s tasks are under it in the sidebar, open while they work, each opening its chat', async () => {
+    const user = userEvent.setup();
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [chat(), chat({ id: 'c2', title: 'Quiet one' })],
+      'GET /api/tasks': () => ({
+        concurrent: 3,
+        tasks: [
+          task({
+            id: 'h1',
+            kind: 'helper',
+            title: 'Check the tests',
+            parentConversationId: 'c1',
+            current: 'Running `npm test`',
+          }),
+          task({
+            id: 'h2',
+            kind: 'helper',
+            title: 'Read the README',
+            parentConversationId: 'c1',
+            status: 'done',
+            conversationId: 'c-h2',
+            finishedAt: Date.now() - 1000,
+          }),
+          // Long finished: only on Tasks and in its chat, not under the chat any more.
+          task({
+            id: 'old',
+            title: 'Old one',
+            parentConversationId: 'c2',
+            status: 'done',
+            createdAt: 1,
+            finishedAt: 2,
+          }),
+        ],
+      }),
+      'POST /api/tasks/h1/stop': () =>
+        task({ id: 'h1', kind: 'helper', parentConversationId: 'c1', status: 'stopped' }),
+    });
+    const { where } = renderApp(<Sidebar />);
+    const toggle = await screen.findByRole('button', {
+      name: 'Hide tasks from Fix the parser: 2 tasks · 1 working',
+    });
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    const list = screen.getByRole('list', { name: 'Tasks from Fix the parser' });
+    expect(within(list).getByText('npm test')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /tasks from Quiet one/ })).not.toBeInTheDocument();
+    await user.click(within(list).getAllByRole('button', { name: 'Stop' })[0] as HTMLElement);
+    expect(calls.map((c) => `${c.method} ${c.path}`)).toContain('POST /api/tasks/h1/stop');
+    await user.click(within(list).getByRole('link', { name: /Read the README/ }));
+    await waitFor(() => expect(where()).toBe('/c/c-h2'));
+    // Closed by hand, it stays closed.
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('what a task is asking is answered from the chat it came from', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [chat()],
+      'GET /api/tasks': () => ({
+        concurrent: 3,
+        tasks: [
+          task({
+            kind: 'helper',
+            title: 'Check the tests',
+            status: 'needs-you',
+            parentConversationId: 'c1',
+            options: { permissionMode: 'default' },
+            asking: {
+              permissionId: 'perm1',
+              summary: 'Run `npm test`',
+              toolName: 'Bash',
+              here: true,
+              command: 'npm test',
+            },
+          }),
+        ],
+      }),
+    });
+    renderApp(<TasksView />);
+    const card = await screen.findByRole('article', { name: /Check the tests/ });
+    expect(card).toHaveTextContent('Ask first');
+    await waitFor(() => expect(card).toHaveTextContent('from Fix the parser'));
+    expect(within(card).getByRole('group', { name: 'It’s asking' })).toHaveTextContent(
+      'Wants to run npm test',
+    );
+    await waitFor(() => expect(FakeSocket.last?.readyState).toBe(1));
+    await user.click(within(card).getByRole('button', { name: 'Allow' }));
+    expect(FakeSocket.last?.sent).toContainEqual({
+      type: 'permission.respond',
+      conversationId: 'c-task',
+      permissionId: 'perm1',
+      decision: 'allow',
+    });
+  });
 });

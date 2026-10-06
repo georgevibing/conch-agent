@@ -4,6 +4,7 @@ import type { Usage } from '@conch/protocol';
 import { sniff } from '../attachments/sniff';
 import type { AttachmentStore } from '../attachments/store';
 import type { ToolContext } from '../conversations/manager';
+import { trustsFully } from '../engines/trust';
 import type { FileAccess } from '../engines/host';
 import type { HostTool, HostToolResult, ToolImage } from '../engines/types';
 import { fileBytes } from '../files/read';
@@ -160,12 +161,7 @@ export class ImageService {
                 );
             }
             const restricted = await ctx.restricted?.('apps', 'openrouter');
-            if (
-              ctx.permissionMode !== 'bypassPermissions' ||
-              ctx.untrusted?.() ||
-              restricted ||
-              ctx.unattended
-            ) {
+            if (!trustsFully(ctx) || ctx.untrusted?.() || restricted) {
               const answer = await ctx.ask({
                 toolName: 'image_generate',
                 input: { ...args, model: model.id },

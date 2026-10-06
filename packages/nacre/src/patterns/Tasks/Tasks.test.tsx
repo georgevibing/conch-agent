@@ -103,6 +103,36 @@ describe('TaskCard', () => {
     await expectAccessible(container);
   });
 
+  it('answers what it’s asking right on the card, and says its mode and where it came from', async () => {
+    const user = userEvent.setup();
+    const onAllow = vi.fn();
+    const onDeny = vi.fn();
+    const { container } = renderNacre(
+      <TaskCard
+        title="Check the tests"
+        kind="helper"
+        status="needs-you"
+        mode="Ask first"
+        from={<a href="#chat">Fix the parser</a>}
+        current="Wants to run npm test"
+        asking={{ summary: 'run npm test', command: 'npm test -- --run', onAllow, onDeny }}
+        onOpen={() => undefined}
+      />,
+    );
+    const card = screen.getByRole('article', { name: /Check the tests/ });
+    expect(card).toHaveTextContent('Needs your OK · Ask first · from Fix the parser');
+    const asking = screen.getByRole('group', { name: 'It’s asking' });
+    expect(asking).toHaveTextContent('Wants to run npm test');
+    expect(asking).toHaveTextContent('npm test -- --run');
+    // Answered here, so the card doesn't also send you away to answer it.
+    expect(screen.queryByRole('button', { name: 'See what it’s asking' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Allow' }));
+    expect(onAllow).toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Deny' }));
+    expect(onDeny).toHaveBeenCalled();
+    await expectAccessible(container);
+  });
+
   it('reads elapsed time like a person would', () => {
     expect(elapsed(4_000)).toBe('4s');
     expect(elapsed(125_000)).toBe('2 min');
