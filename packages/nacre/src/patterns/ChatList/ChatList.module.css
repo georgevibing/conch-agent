@@ -309,6 +309,10 @@
   }
 
   /* Its chats, set in under the folder's name. */
+  .section[data-kind='folder'] .sectionList .item {
+    --cl-start: calc(var(--nc-space-3) + var(--cl-nest));
+  }
+
   .section[data-kind='folder'] .sectionList .link {
     padding-inline-start: calc(var(--nc-space-3) + var(--cl-nest));
   }
@@ -374,6 +378,10 @@
     /* What's behind a row as it slides: the sidebar's own colour. */
     --cl-row-bg: var(--nc-canvas-raised);
     --cl-check: 0.9375rem;
+    /* Where the row's own content starts: what's under it (its tasks) lines up with it. */
+    --cl-start: var(--nc-space-3);
+    /* A badge of the chat's own (its tasks), just before the ⋯. */
+    --cl-disclosure-w: 3rem;
 
     position: relative;
     display: flex;
@@ -615,6 +623,21 @@
     .more {
       opacity: 1;
     }
+  }
+
+  /* ── The chat's own badge (its tasks) ── just before the ⋯'s place, always
+     there: the title stops short of both, so nothing moves under the pointer. */
+
+  .item[data-disclosure] .link {
+    padding-inline-end: calc(var(--cl-end-room, var(--nc-space-3)) + var(--cl-disclosure-w));
+  }
+
+  .disclosure {
+    position: absolute;
+    inset-inline-end: calc(var(--cl-end-room, var(--nc-space-3)) - var(--nc-space-1-5));
+    display: inline-flex;
+    justify-content: flex-end;
+    inline-size: var(--cl-disclosure-w);
   }
 
   /* ── Choosing several ── */

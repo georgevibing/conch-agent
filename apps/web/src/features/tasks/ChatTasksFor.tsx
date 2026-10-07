@@ -1,6 +1,6 @@
 import { assessTask, type Task } from '@conch/protocol';
-import { ChatTasks, type ChatTask } from '@conch/nacre';
-import { useEffect, useState } from 'react';
+import { ChatTasks, ChatTasksToggle, type ChatTask } from '@conch/nacre';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { NavLink } from 'react-router';
 import { create } from 'zustand';
 
@@ -51,19 +51,24 @@ export function useChatTasks(chatId: string, { open }: { open: boolean }): Task[
     .slice(0, SHOWN);
 }
 
-/** A chat's tasks under its row in the sidebar: live, each opening its own chat. */
-export function ChatTasksFor({
+/**
+ * A chat's tasks in the sidebar (ADR 0033): a badge on the chat's own row
+ * that opens them, and the rows under it — live, each opening its own chat.
+ * Nothing when the chat has none to show.
+ */
+export function useChatTaskTree({
   chatId,
   chatTitle,
-  tasks,
+  tasks = [],
   onNavigate,
 }: {
   chatId: string;
   chatTitle: string;
-  tasks: Task[];
+  tasks?: Task[];
   onNavigate?: () => void;
-}) {
+}): { disclosure?: ReactNode; below?: ReactNode } {
   const stop = useStopTask();
+  const listId = useId();
   const chosen = useTree((s) => s.open[chatId]);
   const setOpen = useTree((s) => s.set);
   const working = tasks.some(going);
@@ -71,6 +76,7 @@ export function ChatTasksFor({
   useEffect(() => {
     if (working && chosen === undefined) setOpen(chatId, true);
   }, [working, chosen, chatId, setOpen]);
+  if (!tasks.length) return {};
   const items: ChatTask[] = tasks.map((task) => ({
     id: task.id,
     link: (
@@ -89,19 +95,27 @@ export function ChatTasksFor({
       task.status === 'needs-you' && task.asking
         ? withCode(`Wants to ${lower(task.asking.summary)}`)
         : task.current && withCode(task.current),
+    reason: task.error && withCode(firstLine(task.error)),
     startedAt: task.startedAt,
     finishedAt: task.finishedAt,
     by: task.by,
     onStop: () => stop.mutate(task.id),
   }));
-  return (
-    <ChatTasks
-      tasks={items}
-      open={open}
-      onOpenChange={(next) => setOpen(chatId, next)}
-      chat={chatTitle}
-    />
-  );
+  return {
+    disclosure: (
+      <ChatTasksToggle
+        tasks={items}
+        open={open}
+        onOpenChange={(next) => setOpen(chatId, next)}
+        chat={chatTitle}
+        aria-controls={listId}
+      />
+    ),
+    below: <ChatTasks id={listId} tasks={items} open={open} chat={chatTitle} />,
+  };
 }
 
 const lower = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
+
+/** Why it didn't finish, in the few words a row has room for: its first line. */
+const firstLine = (text: string) => text.trim().split('\n')[0]?.replace(/\.$/, '') ?? '';

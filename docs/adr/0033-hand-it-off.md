@@ -264,10 +264,13 @@ one that may do more than its chat is an escalation. Both are bugs.
 
 ## Amended 2026-10-06: tasks are where their chat is
 
-- **Under their chat in the list.** A chat with tasks gets a quiet line saying how
-  many and how they're going — what needs you first — opening into a row per task
-  (Nacre `ChatTasks`): its status in words and a mark, what it's doing now, how long
-  it's been, a press to open its own chat, and Stop while it works. It opens itself
+- **Under their chat in the list.** A chat with tasks keeps its one line: a badge on
+  it (Nacre `ChatTasksToggle`, `ChatRow`'s `disclosure`) says how many and how
+  they're going — a turning ring while one works, a hand when one needs you, a tint
+  when one didn't finish — and opens a row per task under it (`ChatTasks`), on the
+  chat's own grid (folders too): its status in a word and a mark, what it's doing
+  now or why it didn't finish, how long it took, a press to open its own chat, and
+  Stop while it works. It opens itself
   while something is going, and a person's press wins from then on. Finished tasks
   stay under the chat for half a day, then only on Tasks and in the chat.
 - **Answered where you are.** `Task.asking` carries what a task is waiting for, so
