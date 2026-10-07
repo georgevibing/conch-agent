@@ -776,7 +776,7 @@ export class ChannelService {
           enabled: true,
         }))) ?? relink;
       this.#connect(stored, secrets);
-      this.deps.onHeal(`${CHANNEL_NAMES[stored.kind]} is linked again.`);
+      this.deps.onHeal(`${CHANNEL_NAMES[stored.kind]} is linked again`);
       await this.#emit(stored.id);
       return this.#view(stored);
     }
@@ -1056,7 +1056,7 @@ export class ChannelService {
     const stored =
       (await this.deps.store.update(id, (c) => ({ ...c, bot, enabled: true }))) ?? current;
     this.#connect(stored, secrets);
-    this.deps.onHeal(`${CHANNEL_NAMES[stored.kind]} is connected again with the new key.`);
+    this.deps.onHeal(`${CHANNEL_NAMES[stored.kind]} is connected again`);
     await this.#emit(id);
     return this.#view(stored);
   }
@@ -1277,9 +1277,7 @@ export class ChannelService {
     if ('model' in hearing && hearing.model === 'missing' && !hearing.problem) {
       void this.deps.voice?.getModel().catch(() => undefined);
       if (!before || !('model' in before))
-        this.deps.onHeal(
-          'A voice note arrived and the speech model was missing, so Conch is getting it again.',
-        );
+        this.deps.onHeal('Fetching the speech model again. A voice note needed it.');
     }
   }
 
@@ -1425,7 +1423,7 @@ export class ChannelService {
           .then((c) => {
             if (c)
               this.deps.onHeal(
-                `${CHANNEL_NAMES[c.kind]} was out of reach for ${minutes <= 1 ? 'a minute' : `${minutes} minutes`}; Conch reconnected on its own.`,
+                `Reconnected ${CHANNEL_NAMES[c.kind]}. It was out of reach for ${minutes <= 1 ? 'a minute' : `${minutes} minutes`}.`,
               );
           });
       live.downSince = undefined;

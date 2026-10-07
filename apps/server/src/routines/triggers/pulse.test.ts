@@ -288,7 +288,7 @@ describe('the pulse', () => {
     polled.fail(undefined);
     await pulse.lookNow();
     expect((await pulse.state(mailRoutine)).state).toBe('watching');
-    expect(healed).toEqual(['“Anna replies” can look again, and is watching as before.']);
+    expect(healed).toEqual(['“Anna replies” is watching again']);
     pulse.stop();
   });
 

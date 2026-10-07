@@ -106,7 +106,7 @@ describe('SearchService', () => {
     expect(notes).toEqual([
       {
         area: 'search',
-        message: 'The search index couldn’t be read, so Conch rebuilt it from your chats.',
+        message: 'Rebuilt search from your chats',
       },
     ]);
   });
@@ -128,9 +128,7 @@ describe('SearchService', () => {
     await service.search('golden record', {});
     await service.settled();
     expect(await found(service)).toEqual(['c_voyager']);
-    expect(notes.map((n) => n.message)).toEqual([
-      'Search stopped working, so Conch rebuilt its index from your chats.',
-    ]);
+    expect(notes.map((n) => n.message)).toEqual(['Rebuilt search from your chats']);
 
     // Broken again in the same run: no second rebuild, just a calm "unavailable".
     breakIndex(path);

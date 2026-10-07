@@ -385,9 +385,7 @@ export class TelegramAdapter implements ChannelAdapter {
               () => false,
             );
             if (removed) {
-              events.healed(
-                'Telegram was sending your bot’s messages to another program, so Conch took them back.',
-              );
+              events.healed('Took your Telegram bot’s messages back');
               continue;
             }
           } else if (++conflicts >= CONFLICTS_BEFORE_TELLING) {

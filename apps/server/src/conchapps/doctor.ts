@@ -44,7 +44,7 @@ export function conchAppsCheck(service: ConchAppService): DoctorCheck {
               message: kept
                 ? 'Its files aren’t what was added. Repair puts them back.'
                 : 'Its files aren’t what was added, and there’s no copy to bring back. Remove it and add it again.',
-              ...(!kept && { action: open(app.id) }),
+              ...(kept ? { repairable: true } : { action: open(app.id) }),
             });
             continue;
           }
@@ -73,6 +73,7 @@ export function conchAppsCheck(service: ConchAppService): DoctorCheck {
               ...base,
               state: 'warning',
               message: 'Its data folder is missing. Repair makes it again.',
+              repairable: true,
             });
             continue;
           }
@@ -88,7 +89,10 @@ export function conchAppsCheck(service: ConchAppService): DoctorCheck {
             message:
               pageData === 'fixed'
                 ? 'Saved page data was reset; its damaged copy was kept. Open the page to reload it.'
-                : 'Saved page data does not read. Repair keeps a copy and resets it so the page can load again.',
+                : repair
+                  ? 'Saved page data does not read, and Conch couldn’t reset it. Remove the app and add it again.'
+                  : 'Saved page data does not read. Repair keeps a copy and resets it so the page can load again.',
+            ...(pageData !== 'fixed' && (repair ? { action: open(app.id) } : { repairable: true })),
           });
         }
         if (!app.enabled) {
@@ -114,11 +118,15 @@ export function conchAppsCheck(service: ConchAppService): DoctorCheck {
           id: 'conch-apps:workshop',
           group: GROUP,
           title: 'Apps being made',
-          state: after > WORKSHOP_BIG ? 'warning' : 'fixed',
+          // Repair tidies what it may; what's left goes by itself after 30 days: news.
+          state: after > WORKSHOP_BIG ? (repair ? 'info' : 'warning') : 'fixed',
           message:
             after > WORKSHOP_BIG
-              ? `Drafts of apps take ${mb(after)}. Delete chats you don’t need, and their drafts go after 30 days.`
+              ? repair
+                ? `Drafts of apps take ${mb(after)}. Drafts of chats you delete go after 30 days.`
+                : `Drafts of apps take ${mb(after)}. Repair tidies those whose chat is gone.`
               : `Tidied ${gone} old ${gone === 1 ? 'draft' : 'drafts'} of apps whose chat was gone.`,
+          ...(!repair && after > WORKSHOP_BIG && { repairable: true }),
         });
       }
       return items;

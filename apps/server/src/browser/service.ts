@@ -373,7 +373,7 @@ export class BrowserService {
           void this.#pushTab(conversationId);
         },
         loaded: (p) => void this.#afterLoad(p),
-        crashed: () => this.runtime.heal('A page crashed, so Conch reloaded it.'),
+        crashed: () => this.runtime.heal('Reloaded a crashed page'),
         // Popups and new tabs: contained like the first, and their downloads caught.
         adopted: async (p) => {
           await this.runtime.adopt(p);

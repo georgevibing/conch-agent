@@ -406,7 +406,7 @@ export class BackgroundService {
       const changed = await shortcut
         .install(this.#shortcutSpec(), shortcutDir(this.deps.home))
         .catch(() => false);
-      if (changed) this.deps.heal('The Conch app pointed at an old place, so Conch updated it.');
+      if (changed) this.deps.heal('Pointed the Conch app at the right place');
     }
     if (!backend) return 'off';
     if (!(await backend.registered().catch(() => false))) return 'off';
@@ -417,8 +417,8 @@ export class BackgroundService {
     if (before !== after || changed) {
       this.deps.heal(
         before === undefined
-          ? 'Always on was missing the file that starts Conch at login, so Conch wrote it again.'
-          : 'Something Conch uses to start at login had moved, so Conch updated how it starts.',
+          ? 'Fixed how Conch starts at login'
+          : 'Fixed how Conch starts at login',
       );
       return 'fixed';
     }

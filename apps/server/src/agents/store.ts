@@ -184,13 +184,10 @@ export class AgentStore {
           if (damaged || read.state === 'read')
             this.heal?.(
               'agents',
-              'Your agents couldn’t be read, so Conch kept a copy and made your assistant again from your settings.',
+              'Remade your assistant from your settings. A copy of your agents is kept.',
             );
         } else if (damaged)
-          this.heal?.(
-            'agents',
-            'Part of your agents file couldn’t be read, so Conch kept a copy and carried on with the rest.',
-          );
+          this.heal?.('agents', 'Set aside a damaged part of your agents. A copy is kept.');
         if (!file.agents.some((a) => a.id === file.defaultId)) {
           file.defaultId = sorted(file.agents)[0]?.id;
           fixed = true;

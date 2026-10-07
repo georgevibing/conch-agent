@@ -408,9 +408,7 @@ export class OnDeviceModel {
     if (!(await this.wanted())) return;
     if ((await this.check()) === 'ok') return;
     await this.get([], () => {
-      this.deps.heal?.(
-        'The model that lets memory search understand meaning was incomplete, so Conch got it again.',
-      );
+      this.deps.heal?.('Fetched memory search’s model again');
       onReady?.();
     }).catch(() => undefined);
   }

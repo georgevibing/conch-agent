@@ -13,15 +13,22 @@ import { z } from 'zod';
 export const DoctorState = z.enum([
   /** Being looked at right now. */
   'checking',
-  /** Working. */
+  /** Working, or only history now (it restarted by itself an hour ago, and all is well). */
   'ok',
   /** It was broken, and Conch just fixed it. */
   'fixed',
-  /** Nothing wrong, just news (a new release of Conch). */
+  /**
+   * News, never a problem: a new release, something Conch is already seeing to
+   * by itself. Never counted as worth a look; it may carry an action.
+   */
   'info',
-  /** Works, but worth knowing (an update, an old backup). */
+  /**
+   * Works, but worth a look, and there's something to do about it: always with
+   * an `action` (an old backup → Open backups), or `repairable` (Repair
+   * everything fixes it). Nothing anyone can do is `info`, not a warning.
+   */
   'warning',
-  /** Only a person can fix it; `action` says how. */
+  /** Only a person can fix it; `action` (always there) says how. */
   'needs-you',
   /** Turned off, or not set up: nothing wrong. */
   'off',
@@ -45,13 +52,14 @@ export const DoctorPlace = z.enum([
   /** Settings → Memory (Come home lives there, ADR 0035). */
   'memory',
   'notifications',
-  'memory',
   'tasks',
   'skills',
   /** Routines (and one routine, by `focus`): ADR 0056. */
   'routines',
   /** Settings → Other apps: apps paired with Conch (ADR 0073). */
   'other-apps',
+  /** Settings → Agents: their names and pictures (ADR 0101). */
+  'agents',
 ]);
 export type DoctorPlace = z.infer<typeof DoctorPlace>;
 
@@ -95,6 +103,11 @@ export const DoctorItem = z.object({
   /** One plain sentence: where it stands, or what Conch did. */
   message: z.string(),
   action: DoctorAction.optional(),
+  /**
+   * Only on a look: Repair everything fixes this, so pressing it is the action.
+   * After a repair the check says `fixed`, or what's left (and never this).
+   */
+  repairable: z.boolean().optional(),
 });
 export type DoctorItem = z.infer<typeof DoctorItem>;
 

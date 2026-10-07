@@ -60,7 +60,7 @@ export class SlackStore {
       onRepair: () =>
         this.heal?.(
           'integrations',
-          'Your Slack sign-in couldn’t be read, so Conch kept a copy. Connect Slack again to carry on.',
+          'Set aside a damaged Slack sign-in. Connect Slack again to carry on.',
         ),
     }).then(
       (read) => (this.#last = read.value),

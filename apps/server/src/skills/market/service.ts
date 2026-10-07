@@ -246,7 +246,7 @@ export class SkillMarket {
         onRepair: () =>
           this.deps.heal?.(
             'skills',
-            'The list of where your added skills came from couldn’t be read, so Conch kept a copy and started it again. The skills are still there.',
+            'Restarted the list of where your skills came from. The skills are still there.',
           ),
       }).catch(() => ({ value: Origins.parse({}) }));
       this.#installs = origins.value.installs;

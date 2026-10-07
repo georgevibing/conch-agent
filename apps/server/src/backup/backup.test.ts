@@ -1040,14 +1040,18 @@ describe('Repair everything', () => {
       message: expect.stringContaining('first backup'),
     });
     now += OVERDUE_MS + DAY;
-    expect(await run()).toMatchObject({ state: 'warning', message: 'Not backed up yet.' });
+    expect(await run()).toMatchObject({
+      state: 'warning',
+      message: 'Not backed up yet. Repair makes one now.',
+      repairable: true,
+    });
     now = Date.now();
     await g.services.backups.backupNow();
     expect(await run()).toMatchObject({ state: 'ok', message: 'Backed up today.' });
     now += 9 * DAY;
     expect(await run()).toMatchObject({
       state: 'warning',
-      message: 'No backup for 9 days.',
+      message: 'No backup for 9 days. Repair makes one now.',
       action: { kind: 'open', place: 'health' },
     });
     // A repair makes one now.

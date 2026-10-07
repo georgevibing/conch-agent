@@ -46,12 +46,13 @@ export function updatesCheck(updates: UpdatesService, home: string): DoctorCheck
           action: { kind: 'open', label: 'See what’s new', place: 'health' },
         });
       }
+      // A release that didn't check out isn't offered: news, and nothing to do about it.
       if (conch.refused)
         items.push({
           id: 'updates:refused',
           group: GROUP,
           title: 'Conch’s releases',
-          state: 'warning',
+          state: 'info',
           message: conch.refused,
         });
       // A pointer at a version that's gone: Conch starts from its checkout instead, and the pointer goes.
@@ -62,6 +63,7 @@ export function updatesCheck(updates: UpdatesService, home: string): DoctorCheck
           group: GROUP,
           title: 'Conch’s versions',
           state: repair ? 'fixed' : 'warning',
+          ...(!repair && { repairable: true }),
           message: repair
             ? 'Conch’s note of which version to run named one that’s gone, so Conch went back to running from its own folder.'
             : 'Conch’s note of which version to run names one that’s gone. Repair puts it right.',

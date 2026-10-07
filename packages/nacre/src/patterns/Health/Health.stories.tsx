@@ -8,14 +8,14 @@ const now = Date.now();
 const healthy: RepairItem[] = [
   {
     id: 'p1',
-    group: 'Providers',
+    group: 'Conch',
     title: 'Claude Code',
     state: 'ok',
     message: 'Ready · Claude Max',
   },
-  { id: 'p2', group: 'Providers', title: 'OpenRouter', state: 'ok', message: 'Ready.' },
-  { id: 'i1', group: 'Integrations', title: 'Notion', state: 'ok', message: 'Working.' },
-  { id: 'i2', group: 'Integrations', title: 'GitHub', state: 'ok', message: 'Working.' },
+  { id: 'p2', group: 'Conch', title: 'OpenRouter', state: 'ok', message: 'Ready.' },
+  { id: 'i1', group: 'Apps', title: 'Notion', state: 'ok', message: 'Working.' },
+  { id: 'i2', group: 'Apps', title: 'GitHub', state: 'ok', message: 'Working.' },
   {
     id: 'c1',
     group: 'This computer',
@@ -40,7 +40,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Repair everything: how every part of Conch is doing in one sentence, and one button that fixes what can be fixed. While all is well it’s a calm line; what needs you opens by itself, each with its one button.',
+          'Repair everything: how every part of Conch is doing in one sentence, and one button that fixes what can be fixed. Each group is one line with its name, how it’s doing and the mark that matters most: folded while all is well, open when something in it needs you. Only “warning” and “needs-you” count as something to fix; news and what’s off never do. Repair everything is the primary button only when there’s something to fix.',
       },
     },
   },
@@ -72,7 +72,7 @@ export const NeedsYou: Story = {
       healthy[0] as RepairItem,
       {
         id: 'p3',
-        group: 'Providers',
+        group: 'Conch',
         title: 'Codex',
         state: 'needs-you',
         message: 'Signed out.',
@@ -80,7 +80,7 @@ export const NeedsYou: Story = {
       },
       {
         id: 'i3',
-        group: 'Integrations',
+        group: 'Apps',
         title: 'Linear',
         state: 'needs-you',
         message: 'Sign in again to keep using it.',
@@ -93,6 +93,7 @@ export const NeedsYou: Story = {
         title: 'Disk space',
         state: 'warning',
         message: 'Almost full (0.8 GB free). Chats and backups may fail to save.',
+        action: sign('Open Storage'),
       },
     ],
   },
@@ -106,7 +107,7 @@ export const Repairing: Story = {
       ...healthy.slice(0, 3),
       {
         id: 'i2',
-        group: 'Integrations',
+        group: 'Apps',
         title: 'Your apps',
         state: 'checking',
         message: 'Repairing…',
@@ -129,7 +130,7 @@ export const Fixed: Story = {
       ...healthy.slice(0, 2),
       {
         id: 'i1',
-        group: 'Integrations',
+        group: 'Apps',
         title: 'Notion',
         state: 'fixed',
         message: 'Working again.',
@@ -160,6 +161,35 @@ export const News: Story = {
         message: 'Conch 0.3 is ready.',
         action: sign('See what’s new'),
       },
+    ],
+  },
+};
+
+/** A phone: the groups stay one line each; a row's button sits under its words. */
+export const Phone: Story = {
+  ...NeedsYou,
+  decorators: [
+    (Story) => (
+      <div style={{ maxInlineSize: '370px' }}>
+        <Story />
+      </div>
+    ),
+  ],
+};
+
+/** Off is a choice, not a problem: the group says so and stays folded. */
+export const SomethingOff: Story = {
+  args: {
+    items: [
+      ...healthy,
+      {
+        id: 't1',
+        group: 'Talk to me here',
+        title: 'Telegram',
+        state: 'off',
+        message: 'Not set up.',
+      },
+      { id: 't2', group: 'Talk to me here', title: 'Slack', state: 'off', message: 'Not set up.' },
     ],
   },
 };

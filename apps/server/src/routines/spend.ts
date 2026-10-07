@@ -550,10 +550,7 @@ export class RoutineSpend {
     if (this.#file) return this.#file;
     const read = await readStore(this.#path, SpendFile, {
       onRepair: () =>
-        this.deps.heal?.(
-          'routines',
-          'What your routines spent this month couldn’t be read, so Conch kept a copy and started the count again.',
-        ),
+        this.deps.heal?.('routines', 'Restarted this month’s routine spend. A copy is kept.'),
     });
     this.#file = read.value;
     return this.#file;

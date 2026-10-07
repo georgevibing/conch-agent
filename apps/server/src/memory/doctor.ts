@@ -32,26 +32,49 @@ export function registerLearningDoctor(
       if (model) items.push(model);
       const status = await deps.index.status().catch(() => undefined);
       if (!status) {
-        if (repair) await deps.index.rebuild().catch(() => undefined);
+        // Built again, then looked at again: fixed only if it reads now.
+        const rebuilt =
+          repair &&
+          (await deps.index
+            .rebuild()
+            .then(() => deps.index.status())
+            .catch(() => undefined));
         items.push({
           id: 'memory:index',
           group: GROUP,
           title: 'Memory search',
-          state: repair ? 'fixed' : 'warning',
-          message: repair ? 'Conch built memory search again.' : 'Memory search couldn’t be read.',
+          ...(rebuilt
+            ? { state: 'fixed', message: 'Conch built memory search again.' }
+            : repair
+              ? {
+                  state: 'info',
+                  message:
+                    'Conch couldn’t build memory search again just now. Your memories are all kept.',
+                }
+              : {
+                  state: 'warning',
+                  message: 'Memory search couldn’t be read. Repair builds it again.',
+                  repairable: true,
+                }),
         });
       } else if (status.mode === 'meaning' && status.indexed < status.total) {
-        if (repair) await deps.index.sync();
-        const after = repair ? await deps.index.status() : status;
+        if (repair) await deps.index.sync().catch(() => undefined);
+        const after = repair ? await deps.index.status().catch(() => status) : status;
+        const left = after.total - after.indexed;
+        // Looking starts it catching up by itself, and Repair waits for it: news, never a problem.
         items.push({
           id: 'memory:index',
           group: GROUP,
           title: 'Memory search',
-          state: after.indexed < after.total ? 'warning' : repair ? 'fixed' : 'ok',
-          message:
-            after.indexed < after.total
-              ? `${after.total - after.indexed} memories aren’t searchable by meaning yet.`
-              : 'Every memory is searchable by meaning.',
+          ...(left > 0
+            ? {
+                state: 'info',
+                message: `${left === 1 ? 'One memory isn’t' : `${left} memories aren’t`} searchable by meaning yet. Conch is catching up.`,
+              }
+            : {
+                state: repair ? 'fixed' : 'ok',
+                message: 'Every memory is searchable by meaning.',
+              }),
         });
       } else
         items.push({
@@ -110,7 +133,7 @@ async function modelItem(
   if (state === 'ok') {
     const problem = model.status().problem;
     if (!problem) return undefined;
-    if (!repair) return { ...base, state: 'warning', message: problem };
+    if (!repair) return { ...base, state: 'warning', message: problem, repairable: true };
     // It wouldn't run: try once more (an update may have fixed it).
     model.retryRun();
     try {
@@ -118,14 +141,21 @@ async function modelItem(
       await reindex?.().catch(() => undefined);
       return { ...base, state: 'fixed', message: 'The meaning model runs again.' };
     } catch {
-      return { ...base, state: 'warning', message: model.status().problem ?? problem };
+      return {
+        ...base,
+        state: 'warning',
+        message: model.status().problem ?? problem,
+        action: { kind: 'open', label: 'Open memory', place: 'memory' },
+      };
     }
   }
   if (!repair)
     return {
       ...base,
       state: 'warning',
-      message: 'Part of the model that lets search understand meaning is missing or damaged.',
+      message:
+        'Part of the model that lets search understand meaning is missing or damaged. Repair gets it again.',
+      repairable: true,
     };
   try {
     await model.get([]);

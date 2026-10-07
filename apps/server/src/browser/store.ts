@@ -55,8 +55,8 @@ export class BrowserStore {
         this.heal?.(
           'browser',
           state === 'salvaged'
-            ? 'Part of the browser settings couldn’t be read, so Conch kept a copy and reset just that part.'
-            : 'The browser settings couldn’t be read, so Conch kept a copy and went back to the defaults.',
+            ? 'Reset a damaged part of the browser settings. A copy is kept.'
+            : 'Reset the damaged browser settings to the defaults. A copy is kept.',
         ),
     }).then(
       (read) => read.value,
@@ -159,7 +159,7 @@ export class BrowserSecrets {
       onRepair: () =>
         this.heal?.(
           'browser',
-          'The keys for the cloud browser couldn’t be read, so Conch kept a copy. Add them again in Settings › Browser.',
+          'Set aside the cloud browser’s damaged keys. Add them again in Settings › Browser.',
         ),
     }).then(
       (read) => read.value,

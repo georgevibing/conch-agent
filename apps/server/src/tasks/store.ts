@@ -37,7 +37,7 @@ export class TaskStore {
       if (!parsed.success) {
         this.heal?.(
           'conversations',
-          'The task ledger needs recovery. Conch kept it unchanged and stopped background actions to avoid repeating them.',
+          'Paused task actions so none repeat. The task ledger needs recovery.',
         );
         throw new Error(
           'The task ledger is damaged. Restore a known-good backup before starting background actions; Conch will not discard operation receipts.',

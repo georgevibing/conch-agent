@@ -250,8 +250,9 @@ export class UndoService {
             'fixed',
             `Conch let ${swept === 1 ? 'one old change' : `${swept} old changes`} go to keep Undo small.`,
           );
+        // Full is how it's meant to work: the oldest go first. Nothing wrong.
         if (usage.bytes > (this.deps.maxBytes ?? 1024 * 1024 * 1024) * 0.9)
-          return item('warning', `Undo keeps ${mb} MB; the oldest changes go first as it fills.`);
+          return item('ok', `Undo keeps ${mb} MB; the oldest changes go first as it fills.`);
         return item(
           usage.undoable ? 'ok' : 'off',
           usage.undoable

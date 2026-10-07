@@ -191,7 +191,7 @@ describe('memory search', () => {
       heal,
     });
     expect((await index.search('coffee'))[0]?.memory.content).toBe('Prefers espresso');
-    expect(heal).toHaveBeenCalledWith(expect.stringMatching(/built it again/));
+    expect(heal).toHaveBeenCalledWith(expect.stringMatching(/Rebuilt memory search/));
     index.close();
   });
 

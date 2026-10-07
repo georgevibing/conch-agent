@@ -1080,7 +1080,7 @@ describe('healing', () => {
     const h = await harness();
     await writeFile(join(h.home, 'conch-apps.json'), '{ not json');
     expect(await h.service.list()).toEqual([]);
-    expect(h.heals.join(' ')).toMatch(/couldn’t be read, so Conch kept a copy/);
+    expect(h.heals.join(' ')).toMatch(/afresh\. A copy is kept/);
   });
 
   it('a missing files folder comes back from the kept copy', async () => {
@@ -1090,7 +1090,7 @@ describe('healing', () => {
     await rm(join(h.home, 'conch-apps', 'tally', 'current'), { recursive: true });
     const again = await harness({}, h.home);
     await again.service.load();
-    expect(again.heals).toContain('Tally’s files were missing; Conch put them back.');
+    expect(again.heals).toContain('Put back Tally’s missing files');
     expect(await again.service.intact('tally')).toBe(true);
   });
 
@@ -1105,7 +1105,7 @@ describe('healing', () => {
     });
     const again = await harness({}, h.home);
     await again.service.load();
-    expect(again.heals.join(' ')).toMatch(/tidied away/);
+    expect(again.heals.join(' ')).toMatch(/Tidied away/);
   });
 });
 

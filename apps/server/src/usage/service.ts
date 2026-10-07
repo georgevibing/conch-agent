@@ -262,8 +262,8 @@ export class UsageService {
         this.deps.heal?.(
           'usage',
           state === 'salvaged'
-            ? 'Part of your spending record couldn’t be read, so Conch kept a copy and filled it in from your chats.'
-            : 'Your spending record couldn’t be read, so Conch kept a copy and rebuilt it from your chats.',
+            ? 'Filled in your spending record from your chats. A copy is kept.'
+            : 'Rebuilt your spending record from your chats. A copy is kept.',
         ),
     });
     const ledger = read.value;

@@ -186,10 +186,7 @@ export class LocalService implements OllamaLink {
   async #settings(): Promise<LocalFile> {
     if (!this.#file) {
       const read = await readStore(this.#path, LocalFile, {
-        onRepair: () =>
-          this.deps.heal?.(
-            'The settings for the model on this computer couldn’t be read, so Conch kept a copy and started them afresh.',
-          ),
+        onRepair: () => this.deps.heal?.('Reset the local model’s settings. A copy is kept.'),
       }).catch(() => undefined);
       this.#file ??= read?.value ?? LocalFile.parse({});
     }
@@ -251,7 +248,7 @@ export class LocalService implements OllamaLink {
       started = await up(now() + timeout / 2);
     }
     if (!started) return false;
-    if (note) this.deps.heal?.('Ollama wasn’t running, so Conch started it.');
+    if (note) this.deps.heal?.('Started Ollama');
     this.deps.onChange?.();
     return true;
   }
@@ -683,9 +680,9 @@ export class LocalService implements OllamaLink {
       title: 'Model on this computer',
       state: 'warning',
       message: `Other computers on your network can reach Ollama: OLLAMA_HOST is set to “${wildcard}”, so anyone there could use your models, download more or delete them. Conch starts Ollama for this computer only. Set OLLAMA_HOST to 127.0.0.1, then quit Ollama and open it again.`,
-      ...(command && {
-        action: { kind: 'command', label: 'Run this, then restart Ollama', command },
-      }),
+      action: command
+        ? { kind: 'command', label: 'Run this, then restart Ollama', command }
+        : { kind: 'open', label: 'Open providers', place: 'providers', focus: 'ollama' },
     };
   }
 
@@ -708,13 +705,19 @@ export class LocalService implements OllamaLink {
   }
 
   async #look(repair: boolean): Promise<{ items: DoctorItem[]; installed: boolean }> {
-    const item = (state: DoctorItem['state'], message: string, action?: DoctorItem['action']) => ({
+    const item = (
+      state: DoctorItem['state'],
+      message: string,
+      action?: DoctorItem['action'],
+      repairable?: boolean,
+    ): DoctorItem => ({
       id: 'local-model:ollama',
       group: 'Providers',
       title: 'Model on this computer',
       state,
       message,
       ...(action && { action }),
+      ...(repairable && { repairable }),
     });
     const open = (label: string): DoctorItem['action'] => ({
       kind: 'open',
@@ -752,6 +755,7 @@ export class LocalService implements OllamaLink {
                 ? 'Ollama didn’t start. Open it once, then look again.'
                 : 'Ollama isn’t running. Repair starts it.',
               repair ? open('Open providers') : undefined,
+              !repair,
             ),
           )
         : one(item('off', 'Ollama is installed, with no model yet.', open('Get a model')));

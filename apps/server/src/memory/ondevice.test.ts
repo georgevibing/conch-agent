@@ -209,7 +209,7 @@ describe('getting the model', () => {
     expect(existsSync(part)).toBe(false);
     expect(m.status().ready).toBeDefined();
     expect(ready).toHaveBeenCalled();
-    expect(heal).toHaveBeenCalledWith(expect.stringMatching(/so Conch got it again/));
+    expect(heal).toHaveBeenCalledWith(expect.stringMatching(/model again/));
   });
 
   it('never downloads unasked', async () => {

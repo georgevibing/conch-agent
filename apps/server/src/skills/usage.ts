@@ -120,11 +120,7 @@ export class SkillUsage {
   async read(): Promise<UsageFile> {
     return (
       await readStore(this.#path, UsageFile, {
-        onRepair: () =>
-          this.heal?.(
-            'skills',
-            'When your skills were last used couldn’t be read, so Conch started counting again from today.',
-          ),
+        onRepair: () => this.heal?.('skills', 'Restarted counting skill use from today'),
       })
     ).value;
   }

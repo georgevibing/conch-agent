@@ -53,11 +53,7 @@ export class SavedTabs {
 
   #read(): Promise<SavedFile> {
     this.#data ??= readStore(this.#path, SavedFile, {
-      onRepair: () =>
-        this.heal?.(
-          'browser',
-          'The list of open tabs couldn’t be read, so Conch started it again.',
-        ),
+      onRepair: () => this.heal?.('browser', 'Started the list of open tabs afresh'),
     }).then(
       (read) => read.value,
       () => SavedFile.parse({}),

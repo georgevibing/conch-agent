@@ -154,8 +154,8 @@ export async function detectClaude(options: {
     if (fallback.ok && fallback.auth) {
       options.onHeal?.(
         probe.ok
-          ? 'The Claude Code on this computer is too old for Conch, so it’s using the one that comes with Conch.'
-          : 'The Claude Code on this computer wouldn’t start, so Conch is using the one that comes with it.',
+          ? 'Used the Claude Code that comes with Conch. Yours is too old.'
+          : 'Used the Claude Code that comes with Conch. Yours wouldn’t start.',
       );
       executablePath = bundled;
       probe = fallback;

@@ -357,7 +357,7 @@ export class SlackService {
         before.health.state === 'error' &&
         before.health.okAt
       )
-        this.deps.onHeal?.('Slack wasn’t answering for a while; it’s working again.');
+        this.deps.onHeal?.('Slack is working again');
       this.#stopRetrying();
     }
     return this.status();

@@ -637,7 +637,7 @@ export class MemoryTidy {
     }
     if (changed) {
       await this.#save(file);
-      this.deps.healed?.('Resolved routine memory approvals using your recent chats.');
+      this.deps.healed?.('Settled routine memory approvals from your chats');
     }
   }
 

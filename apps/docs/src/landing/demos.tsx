@@ -1069,9 +1069,9 @@ export function RoutineDemo() {
 
 /** Three things Conch really says after mending itself (the words are the server's own). */
 const HEALED = [
-  'Conch stopped unexpectedly, so it started itself again.',
-  'The browser closed mid-step; Conch restarted it and carried on.',
-  'There was no browser on this computer, so Conch downloaded Chromium.',
+  'Restarted after a crash',
+  'Restarted the browser mid-step',
+  'Downloaded a browser. There wasn’t one on this computer.',
 ];
 const WHEN = ['Just now', 'This morning', 'Yesterday'];
 

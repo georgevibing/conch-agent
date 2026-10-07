@@ -153,11 +153,7 @@ export class ConversationStore {
     if (read.state === 'salvaged' || read.state === 'reset') {
       records = [...records, ...(await this.#fromLogs(new Set(records.map((r) => r.id))))];
       await writeJson(join(this.dir, 'index.json'), records);
-      if (repaired)
-        this.heal?.(
-          'conversations',
-          'Your list of chats couldn’t be read, so Conch kept a copy and rebuilt it from the chats themselves.',
-        );
+      if (repaired) this.heal?.('conversations', 'Rebuilt your chat list from the chats');
     }
     // A turn (or a title being written) can't survive a restart; don't show stale states.
     this.interrupted = records

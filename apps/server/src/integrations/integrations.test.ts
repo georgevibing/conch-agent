@@ -173,7 +173,7 @@ describe('OAuth integrations', () => {
     vendor.expireAll();
     const checked = await service.check(notion.id);
     expect(checked?.health.state).toBe('ok');
-    expect(notes).toEqual(['Conch renewed your Notion sign-in.']);
+    expect(notes).toEqual(['Renewed your Notion sign-in']);
   });
 
   it('keeps the sign-in when renewing it fails only because the service is down', async () => {
@@ -197,9 +197,7 @@ describe('OAuth integrations', () => {
       timeout: 5_000,
     });
     // The note is written just after the health: wait for it, not for the state.
-    await vi.waitFor(() =>
-      expect(notes).toContain('Notion wasn’t answering for a while; it’s working again.'),
-    );
+    await vi.waitFor(() => expect(notes).toContain('Notion is working again'));
     service.stop();
   });
 
@@ -648,8 +646,8 @@ describe('Conch-owned apps and provider servers', () => {
     // The SSRF guard holds for what a provider set up too.
     expect(items.some((i) => JSON.stringify(i).includes('169.254'))).toBe(false);
     expect(notes).toEqual([
-      'Found Team wiki in Claude Code. It’s waiting in Apps: sign in once and it works with every model.',
-      'Found Notion in Claude Code. It’s waiting in Apps: sign in once and it works with every model.',
+      'Found Team wiki in Claude Code. Sign in once in Apps and it works with every model.',
+      'Found Notion in Claude Code. Sign in once in Apps and it works with every model.',
     ]);
     // Found, not connected: where it came from is kept, and it isn't a problem to fix.
     expect(items.map((i) => [i.from?.providerName, i.from?.source, awaitsSignIn(i)])).toEqual([
@@ -766,7 +764,7 @@ describe('Conch-owned apps and provider servers', () => {
     expect(events).toContainEqual({ type: 'integration.deleted', integrationId: asana?.id });
     expect(list.servers.map((s) => [s.name, s.adoptable])).toEqual([['asana', false]]);
     expect(notes.at(-1)).toBe(
-      'Asana only signs in through Claude Code, so Conch left it there. It’s under Settings → Providers.',
+      'Left Asana in Claude Code. It only signs in there; see Settings → Providers.',
     );
 
     // It isn't brought in again, and nothing is offered that would fail.

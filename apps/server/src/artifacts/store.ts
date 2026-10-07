@@ -61,11 +61,7 @@ export class ArtifactStore {
     if (!exists) return undefined;
     const read = await readStore(join(folder, 'artifact.json'), Artifact.nullable(), {
       fallback: () => null,
-      onRepair: () =>
-        this.heal?.(
-          'conversations',
-          'Something you made had a damaged description, so Conch rebuilt it from its versions.',
-        ),
+      onRepair: () => this.heal?.('conversations', 'Rebuilt a damaged page from its versions'),
     });
     if (read.value) return read.value;
     return this.#rebuild(id);

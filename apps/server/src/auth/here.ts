@@ -130,12 +130,12 @@ export class ThisComputer {
     }
     if (process.platform !== 'win32' && (stat.mode & 0o077) !== 0) {
       chmodSync(file, 0o600);
-      this.deps.heal?.('Made the key for this computer readable by only you again.');
+      this.deps.heal?.('Made this computer’s key private again');
     }
     const text = readFileSync(file, 'utf8').trim();
     if (!KEY.test(text)) {
       this.deps.heal?.(
-        'Made a new key for this computer, because the old one was damaged. Open Conch from your apps to use it in this browser again.',
+        'Made a new key for this computer. Open Conch from your apps to use it here again.',
       );
       return this.#make();
     }

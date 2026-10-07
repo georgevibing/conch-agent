@@ -254,9 +254,7 @@ export function browserTools(
               }
               if (closed && attempt === 0) {
                 log('running', 'The browser restarted; opening the page again');
-                service.runtime.heal(
-                  'The browser closed mid-step; Conch restarted it and carried on.',
-                );
+                service.runtime.heal('Restarted the browser mid-step');
                 await service.forgetTab(conversationId);
                 check();
                 return execute(1);

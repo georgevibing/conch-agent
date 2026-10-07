@@ -169,7 +169,7 @@ describe('finding Ollama', () => {
       ['serve'],
       expect.objectContaining({ detached: true, stdio: 'ignore', windowsHide: true }),
     );
-    expect(heal).toHaveBeenCalledWith('Ollama wasn’t running, so Conch started it.');
+    expect(heal).toHaveBeenCalledWith('Started Ollama');
     expect(onChange).toHaveBeenCalled();
     // For this computer only, whatever the environment says.
     const [, , options] = spawn.mock.calls[0] as unknown as [
@@ -268,7 +268,7 @@ describe('finding Ollama', () => {
       [join(dir, 'ollama app.exe'), ['--hide', '--fast-startup']],
       [join(dir, 'ollama.exe'), ['serve']],
     ]);
-    expect(heal).toHaveBeenCalledWith('Ollama wasn’t running, so Conch started it.');
+    expect(heal).toHaveBeenCalledWith('Started Ollama');
   });
 
   it('never starts Ollama while its installer is still running', async () => {

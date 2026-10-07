@@ -46,7 +46,7 @@ export class Healed {
     return this.#notes;
   }
 
-  /** Say what was fixed, in one plain sentence. */
+  /** Say what was fixed, in a few words (and one more sentence only if it matters). */
   async note(area: HealArea, message: string): Promise<HealNote> {
     await this.#load();
     const now = Date.now();

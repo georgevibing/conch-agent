@@ -226,7 +226,7 @@ export class McpPairing {
   async heal(): Promise<string[]> {
     const fixed: string[] = [];
     if (await this.installLauncher().catch(() => false))
-      fixed.push('Updated the launcher other apps use to reach Conch.');
+      fixed.push('Updated how other apps reach Conch');
     const clients = new Map((await this.#store.list()).map((c) => [c.id, c]));
     for (const app of TARGETS) {
       const place = this.#place(app);
@@ -235,7 +235,7 @@ export class McpPairing {
       const id = clientOf(seen.entry);
       if (!id || !clients.has(id)) {
         if (await disconnect(place, id).catch(() => false))
-          fixed.push(`Took Conch out of ${TARGET_NAMES[app]}’s settings: it was no longer paired.`);
+          fixed.push(`Took Conch out of ${TARGET_NAMES[app]}. It was no longer paired.`);
         continue;
       }
       const want = this.#launch(id);
@@ -245,7 +245,7 @@ export class McpPairing {
         !existsSync(seen.entry.command);
       if (!stale) continue;
       await connect(app, place, want).then(
-        () => fixed.push(`Updated ${TARGET_NAMES[app]}’s settings so it still finds Conch.`),
+        () => fixed.push(`Helped ${TARGET_NAMES[app]} find Conch again`),
         () => undefined,
       );
     }

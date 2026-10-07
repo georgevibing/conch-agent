@@ -269,7 +269,7 @@ describe('healing', () => {
     await bg.set(true);
     rmSync(backgroundDir(home), { recursive: true, force: true });
     expect(await bg.heal()).toBe('fixed');
-    expect(heal.mock.calls[0]?.[0]).toMatch(/missing/);
+    expect(heal.mock.calls[0]?.[0]).toMatch(/starts at login/);
   });
 
   it('leaves everything alone when it’s off', async () => {

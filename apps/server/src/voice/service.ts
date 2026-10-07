@@ -21,7 +21,7 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
-import type { VoiceStatus } from '@conch/protocol';
+import type { DoctorItem, VoiceStatus } from '@conch/protocol';
 
 import type { DoctorCheck } from '../doctor/service';
 import { run } from '../lib/proc';
@@ -381,8 +381,15 @@ export class VoiceService {
       title: 'Private dictation',
       run: async ({ repair }) => {
         const status = await this.status();
-        const item = (state: 'ok' | 'off' | 'fixed' | 'warning', message: string) => [
-          { id: 'voice', group: 'This computer', title: 'Private dictation', state, message },
+        const item = (state: 'ok' | 'off' | 'fixed' | 'warning', message: string): DoctorItem[] => [
+          {
+            id: 'voice',
+            group: 'This computer',
+            title: 'Private dictation',
+            state,
+            message,
+            ...(state === 'warning' && { repairable: true }),
+          },
         ];
         const p = status.private;
         if (p.state === 'missing')
@@ -395,7 +402,7 @@ export class VoiceService {
           await this.getModel();
           return item('fixed', 'The speech model was missing, so Conch is getting it again.');
         }
-        return item('warning', 'whisper.cpp is here, but its speech model isn’t.');
+        return item('warning', 'whisper.cpp is here, but its speech model isn’t. Repair gets it.');
       },
     };
   }

@@ -206,7 +206,7 @@ if (choice.busy !== undefined) {
   );
   void services.healed.note(
     'gateway',
-    `Port ${choice.busy} was busy, so Conch started on ${choice.port}.`,
+    `Moved to port ${choice.port}. Port ${choice.busy} was busy.`,
   );
 }
 console.warn(`\n  🐚  Conch is listening at ${url}\n`);
@@ -252,7 +252,7 @@ for (const item of findings) {
 if (findings.length) console.warn('\n  Settings → Security in Conch has the details.\n');
 // Started again by the supervisor after a crash: say so, quietly.
 if (process.env.CONCH_STARTED_BECAUSE === 'crash')
-  void services.healed.note('gateway', 'Conch stopped unexpectedly, so it started itself again.');
+  void services.healed.note('gateway', 'Restarted after a crash');
 // A restart (after an update or a restore) doesn't open another browser tab.
 // It opens as this computer (ADR 0063): a private file carries a one-time link.
 if (config.CONCH_OPEN && !process.env.CONCH_STARTED_BECAUSE?.match(/restart|crash/))

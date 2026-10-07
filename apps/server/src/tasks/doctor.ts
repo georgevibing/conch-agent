@@ -64,17 +64,18 @@ export function tasksCheck(tasks: TaskService): DoctorCheck {
               : `${waiting.length} tasks are waiting for your OK.`,
           action: open(waiting.length === 1 ? 'Open it' : 'Show them', waiting),
         });
+      // Checking one is the person's to do; removing its card once they have clears it here.
       if (uncertain.length)
         items.push({
           id: 'tasks:unverified',
           group: GROUP,
-          title: 'Worth a look',
+          title: 'Tasks to check',
           state: 'warning',
           message:
             uncertain.length === 1
-              ? `“${uncertain[0]?.title}” couldn’t confirm everything it did. What it confirmed is kept; Conch won’t repeat the rest by itself.`
-              : `${uncertain.length} tasks couldn’t confirm everything they did. What they confirmed is kept; Conch won’t repeat the rest by itself.`,
-          action: open('Have a look', uncertain),
+              ? `“${uncertain[0]?.title}” needs a quick check of what it did. Remove its card once you have.`
+              : `${uncertain.length} tasks need a quick check of what they did. Remove each card once you have.`,
+          action: open(uncertain.length === 1 ? 'Review it' : 'Review tasks', uncertain),
         });
       if (!items.length) {
         const working = all.filter((t) => t.status === 'running' || t.status === 'queued').length;

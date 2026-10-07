@@ -162,8 +162,8 @@ export class ChannelStore {
         this.heal?.(
           'channels',
           state === 'salvaged'
-            ? 'A channel’s settings couldn’t be read, so Conch kept a copy and carried on with the rest.'
-            : 'Your channels couldn’t be read, so Conch kept a copy and started a new list.',
+            ? 'Set aside a channel’s damaged settings. A copy is kept.'
+            : 'Started a new list of channels. A copy is kept.',
         ),
     }).then(
       (read) => new Map(read.value.channels.map((item) => [item.id, item])),
@@ -178,10 +178,7 @@ export class ChannelStore {
   #loadSecrets(): Promise<Record<string, ChannelSecrets>> {
     this.#secrets ??= readStore(this.#secretsPath, SecretsFile, {
       onRepair: () =>
-        this.heal?.(
-          'channels',
-          'A channel’s key couldn’t be read, so Conch kept a copy. Paste the key again to reconnect it.',
-        ),
+        this.heal?.('channels', 'Set aside a channel’s damaged key. Paste it again to reconnect.'),
     }).then(
       (read) => read.value,
       (error: unknown) => {

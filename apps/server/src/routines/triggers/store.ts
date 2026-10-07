@@ -92,7 +92,7 @@ export class WhenStore {
       onRepair: () =>
         this.heal?.(
           'routines',
-          'What starts one of your routines couldn’t be read, so Conch set it aside. Open the routine to choose again.',
+          'Set aside a damaged routine trigger. Open the routine to choose again.',
         ),
     });
     this.#when.set(id, read.value ?? null);

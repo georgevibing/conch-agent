@@ -78,7 +78,7 @@ describe('what learning may spend (ADR 0088 § 8)', () => {
     expect(await spend.allow(api)).toMatchObject({ ok: false, reason: 'cap' });
     expect((await spend.state()).paused).toBeDefined();
     expect(notes).toHaveLength(1);
-    expect(notes[0]).toMatch(/rests until the 1st/);
+    expect(notes[0]).toMatch(/until the 1st/);
     now.at = new Date(2026, 10, 1, 0, 1).getTime();
     expect(await spend.allow(api)).toEqual({ ok: true });
   });

@@ -189,8 +189,8 @@ export class IntegrationStore {
         this.heal?.(
           'integrations',
           state === 'salvaged'
-            ? 'An integration’s settings couldn’t be read, so Conch kept a copy and carried on with the rest.'
-            : 'Your list of integrations couldn’t be read, so Conch kept a copy and started a new one.',
+            ? 'Set aside an app’s damaged settings. A copy is kept.'
+            : 'Started a new list of apps. A copy of the old one is kept.',
         ),
     }).then(
       (read) => {
@@ -211,8 +211,8 @@ export class IntegrationStore {
         this.heal?.(
           'integrations',
           state === 'salvaged'
-            ? 'One integration’s sign-in couldn’t be read, so Conch kept a copy and carried on with the rest.'
-            : 'Your integrations’ sign-ins couldn’t be read, so Conch kept a copy and started a new file.',
+            ? 'Set aside an app’s damaged sign-in. A copy is kept.'
+            : 'Set aside your apps’ damaged sign-ins. A copy is kept.',
         ),
     }).then(
       (read) => read.value,

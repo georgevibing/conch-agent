@@ -97,9 +97,7 @@ export class ProcessService {
       session.reason =
         'Stopped to keep Conch responsive. Check its output before deciding whether to run it again.';
       this.#stop(session);
-      this.deps.healed?.(
-        'Stopped a managed command to keep Conch responsive. Its output is still available.',
-      );
+      this.deps.healed?.('Stopped a heavy command to stay responsive. Its output is kept.');
     }
     return {
       stopped: session ? 1 : 0,
@@ -180,13 +178,15 @@ export class ProcessService {
             id: 'processes',
             group: 'Tasks',
             title: 'Managed commands',
+            // Running fewer at once on a busy computer is Conch seeing to it: news.
             state: overdue.length
               ? repair
                 ? 'fixed'
                 : 'warning'
               : resources.level === 'healthy'
                 ? 'ok'
-                : 'warning',
+                : 'info',
+            ...(overdue.length && !repair && { repairable: true }),
             message: overdue.length
               ? repair
                 ? 'Stopped commands that had exceeded their time limit.'

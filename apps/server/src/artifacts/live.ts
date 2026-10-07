@@ -462,7 +462,7 @@ export class LiveDataAccess {
       onRepair: () =>
         this.heal?.(
           'conversations',
-          'The list of sites your pages may read from was damaged, so Conch set it aside. Pages will ask again.',
+          'Reset the sites your pages may read from. Pages will ask again.',
         ),
     });
     return read.value.approvals;

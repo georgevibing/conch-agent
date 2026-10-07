@@ -725,8 +725,8 @@ export class SkillStore {
         this.heal?.(
           'skills',
           state === 'salvaged'
-            ? 'Some of your choices of which skills are on couldn’t be read, so Conch kept a copy and reset just those.'
-            : 'Your choices of which skills are on couldn’t be read, so Conch kept a copy and went back to each skill’s default.',
+            ? 'Reset some damaged skill switches. A copy is kept.'
+            : 'Reset your skill switches to their defaults. A copy is kept.',
         ),
     });
     return read.value;

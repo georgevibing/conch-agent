@@ -17,8 +17,12 @@ export function registerAgentsDoctor(doctor: Doctor, agents: AgentStore) {
     async run({ repair }): Promise<DoctorItem[]> {
       const list = await agents.list();
       const before = await agents.check(false);
-      const item = (state: DoctorItem['state'], message: string): DoctorItem[] => [
-        { id: 'agents', group: 'Conch', title: 'Your agents', state, message },
+      const item = (
+        state: DoctorItem['state'],
+        message: string,
+        more?: Pick<DoctorItem, 'action' | 'repairable'>,
+      ): DoctorItem[] => [
+        { id: 'agents', group: 'Conch', title: 'Your agents', state, message, ...more },
       ];
       const count = list.agents.length;
       const fine = `${count === 1 ? 'Your agent is' : `All ${count} agents are`} ready.`;
@@ -29,11 +33,18 @@ export function registerAgentsDoctor(doctor: Doctor, agents: AgentStore) {
           before.missing.length
             ? `${before.missing.length === 1 ? 'An agent’s picture is' : 'Some agents’ pictures are'} missing. Repair gives ${before.missing.length === 1 ? 'it' : 'them'} one of Conch’s.`
             : 'Some pictures no agent uses are still kept. Repair lets them go.',
+          { repairable: true },
         );
       await agents.check(true);
       const after = await agents.check(false);
       return after.missing.length || after.strays.length
-        ? item('warning', 'Some agents’ pictures couldn’t be put right. Choose new ones in Agents.')
+        ? item(
+            'warning',
+            'Some agents’ pictures couldn’t be put right. Choose new ones in Agents.',
+            {
+              action: { kind: 'open', label: 'Open Agents', place: 'agents' },
+            },
+          )
         : item(
             'fixed',
             before.missing.length

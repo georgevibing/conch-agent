@@ -321,9 +321,7 @@ export class TwilioSmsAdapter implements ChannelAdapter {
       signal,
     );
     if (number.sms_url && !number.sms_url.includes('/hooks/'))
-      events.healed(
-        `Twilio was sending ${readableNumber(number.phone_number)}’s texts somewhere else, so Conch pointed them here.`,
-      );
+      events.healed(`Pointed ${readableNumber(number.phone_number)}’s texts back to Conch`);
     this.#number = { ...number, sms_url: url };
   }
 

@@ -384,7 +384,7 @@ describe('Gmail as an app', () => {
       await vi.waitFor(async () => expect((await retrying.get('gmail')).health.state).toBe('ok'), {
         timeout: 5_000,
       });
-      expect(notes).toEqual(['Gmail couldn’t reach Google for a while; it’s working again.']);
+      expect(notes).toEqual(['Gmail is working again']);
     } finally {
       retrying.stop();
     }

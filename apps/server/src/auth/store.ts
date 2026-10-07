@@ -388,10 +388,7 @@ export class AccessStore {
     // Saved with the next change; until then it's read (and salvaged) again, quietly.
     const aside = await setAside(this.path, { bytes }).catch(() => undefined);
     if (aside?.fresh)
-      this.heal?.(
-        'access',
-        'Some signed-in devices couldn’t be read, so Conch kept a copy and they’ll be asked to sign in again.',
-      );
+      this.heal?.('access', 'Set aside some damaged sign-ins. Those devices sign in again.');
     return salvaged;
   }
 
@@ -400,10 +397,7 @@ export class AccessStore {
     this.#locked = true;
     const aside = await setAside(this.path, { bytes }).catch(() => undefined);
     if (aside?.fresh)
-      this.heal?.(
-        'access',
-        'Conch couldn’t read who may sign in, so it kept a copy and locked sign-in until it’s reset on this computer.',
-      );
+      this.heal?.('access', 'Locked sign-in to keep you safe. Reset it on this computer.');
     return structuredClone(LOCKED);
   }
 

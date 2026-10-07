@@ -161,8 +161,8 @@ export class RoutineStore {
       this.heal?.(
         'routines',
         title
-          ? `The routine “${title}” couldn’t be read, so Conch set it aside instead of running it wrong.`
-          : 'A routine couldn’t be read, so Conch set it aside instead of running it wrong.',
+          ? `Set aside the damaged routine “${title}” rather than run it wrong`
+          : 'Set aside a damaged routine rather than run it wrong',
       );
     } catch {
       // Couldn't move it: it's skipped (never run) and tried again next start.

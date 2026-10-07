@@ -2977,9 +2977,7 @@ export class ConversationManager {
           case 'session':
             answeredWith = event.model ?? answeredWith;
             if (event.restarted === 'lost')
-              this.deps.heal?.(
-                `${engine.label} couldn’t pick up a chat where it left off, so Conch gave it the conversation so far and it carried on.`,
-              );
+              this.deps.heal?.(`Gave ${engine.label} the chat so far to carry on`);
             live.record = {
               ...live.record,
               engine: engine.id,
@@ -3340,9 +3338,7 @@ export class ConversationManager {
       ...(options.asked && { asked: true }),
     });
     if (options.healed)
-      this.deps.heal?.(
-        `A chat had grown longer than ${compacted.model ?? engine.label} reads at once, so Conch summarised its start and sent your message again.`,
-      );
+      this.deps.heal?.(`Summarised a long chat’s start and sent your message again`);
     void this.deps
       .learn?.({
         conversationId: live.record.id,

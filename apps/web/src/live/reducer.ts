@@ -982,6 +982,10 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
           },
         ],
       };
+    // Told by the activity layer (ADR 0103); folded in by the stories work.
+    case 'narration':
+    case 'story.titled':
+      return base;
     case 'title':
       return { ...base, title: event.title };
     case 'notice':

@@ -92,7 +92,9 @@ describe('settings.json', () => {
       preferences: { engine: 'claude-code', autoTitle: false },
     });
     expect(await copies(dir, 'settings')).toEqual([damaged]);
-    expect(told.map((n) => n.message)).toEqual([expect.stringMatching(/^Part of your settings/)]);
+    expect(told.map((n) => n.message)).toEqual([
+      expect.stringMatching(/damaged part of your settings/),
+    ]);
     expect(JSON.parse(await readFile(join(dir, 'settings.json'), 'utf8'))).toMatchObject({
       persona: { name: 'Ada' },
     });
@@ -139,7 +141,9 @@ describe('integrations', () => {
     const all = await new IntegrationStore(dir, heal).all();
     expect(all.map((i) => i.name)).toEqual(['Notion']);
     expect(await copies(dir, 'integrations')).toEqual([damaged]);
-    expect(told).toEqual([{ area: 'integrations', message: expect.stringMatching(/^An /) }]);
+    expect(told).toEqual([
+      { area: 'integrations', message: expect.stringMatching(/an app’s damaged settings/) },
+    ]);
   });
 
   it('starts new lists when the files won’t parse', async () => {
@@ -217,7 +221,7 @@ describe('usage.json', () => {
     const snapshot = await usage.refresh();
     expect(snapshot.spend?.today).toBeCloseTo(0.75);
     expect(await copies(dir, 'usage')).toEqual([GARBAGE]);
-    expect(told).toEqual([{ area: 'usage', message: expect.stringContaining('rebuilt') }]);
+    expect(told).toEqual([{ area: 'usage', message: expect.stringContaining('Rebuilt') }]);
   });
 });
 
@@ -254,7 +258,7 @@ describe('conversations/index.json', () => {
       ]),
     );
     expect(await copies(dir, 'index')).toEqual([GARBAGE]);
-    expect(told).toEqual([{ area: 'conversations', message: expect.stringContaining('rebuilt') }]);
+    expect(told).toEqual([{ area: 'conversations', message: expect.stringContaining('Rebuilt') }]);
     // Saved: the next start reads it straight away.
     const again = notes();
     expect(await new ConversationStore(dir, again.heal).list()).toHaveLength(2);
@@ -321,8 +325,8 @@ describe('routines', () => {
     expect(await copies(dir, 'r_bad')).toEqual([damaged]);
     expect(await copies(dir, 'r_worse')).toEqual([GARBAGE]);
     expect(told.map((n) => n.message).sort()).toEqual([
-      'A routine couldn’t be read, so Conch set it aside instead of running it wrong.',
-      'The routine “Pay rent” couldn’t be read, so Conch set it aside instead of running it wrong.',
+      'Set aside a damaged routine rather than run it wrong',
+      'Set aside the damaged routine “Pay rent” rather than run it wrong',
     ]);
     // The copies aren't read back as routines.
     const again = notes();

@@ -53,7 +53,7 @@ describe('the key', () => {
     const { here, healed } = computer(dir);
     expect(here.key()).toBe(key);
     expect(statSync(hereKeyFile(dir)).mode & 0o777).toBe(0o600);
-    expect(healed.join(' ')).toMatch(/readable by only you/);
+    expect(healed.join(' ')).toMatch(/private again/);
   });
 
   it('replaces a damaged key, and says that browsers need opening from Conch again', async () => {

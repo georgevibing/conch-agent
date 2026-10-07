@@ -7,6 +7,7 @@
  */
 import { z } from 'zod';
 
+import { NarrationSource, StoryTitle, ToolLabel } from './activity';
 import { AddressStatus } from './address';
 import { AgentId, AgentList, Tone } from './agents';
 import { AppNeed, AppsModel } from './apps';
@@ -60,6 +61,7 @@ import { UsageSnapshot } from './usage';
 import { CappedOutcome, ChatSpend, SpendLimitKind, SpendModel, TurnCost } from './spend';
 
 export * from './access';
+export * from './activity';
 export * from './agents';
 export * from './profile';
 export * from './address';
@@ -505,6 +507,8 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     toolUseId: z.string(),
     name: z.string(),
     input: z.unknown(),
+    /** It in plain words (ADR 0103); a chat logged before then works it out from `describeTool`. */
+    label: ToolLabel.optional(),
   }),
   z.object({
     ...logged,
@@ -515,7 +519,24 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     durationMs: z.number().nonnegative().optional(),
     /** What it found, drawn as it is (an agenda, emails, files): ADR 0060. */
     view: ToolView.optional(),
+    /** It in plain words now it's done, with what it found and changed (ADR 0103). */
+    label: ToolLabel.optional(),
   }),
+  /**
+   * The provider said, for the person watching, what it's doing (ADR 0103):
+   * a progress note between tool calls, never its reasoning. The chat's live
+   * line shows the latest; a new one replaces it.
+   */
+  z.object({
+    ...logged,
+    type: z.literal('narration'),
+    text: z.string().min(1).max(240),
+    /** The tool call it's about, when it's about one. */
+    toolUseId: z.string().optional(),
+    source: NarrationSource,
+  }),
+  /** A story of tool calls got its headline once it ended (ADR 0103). */
+  z.object({ ...logged, type: z.literal('story.titled'), ...StoryTitle.shape }),
   z.object({
     ...logged,
     type: z.literal('permission.requested'),

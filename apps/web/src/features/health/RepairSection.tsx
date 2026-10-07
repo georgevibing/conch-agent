@@ -1,6 +1,7 @@
 import type { DoctorAction, DoctorItem } from '@conch/protocol';
 import { Button, RepairPanel } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 
 import { useUi, type SettingsTab } from '../../app/ui';
 import { AdminCommand } from '../setup/AdminCommand';
@@ -63,21 +64,49 @@ function ActionButton({ action }: { action: DoctorAction }) {
   );
 }
 
+/** The groups a person opened or folded, kept while this tab is open. */
+const OPENED_KEY = 'conch:repair-groups';
+
+function readOpened(): Record<string, boolean> {
+  try {
+    const raw: unknown = JSON.parse(sessionStorage.getItem(OPENED_KEY) ?? '{}');
+    if (!raw || typeof raw !== 'object') return {};
+    return Object.fromEntries(
+      Object.entries(raw).filter((e): e is [string, boolean] => typeof e[1] === 'boolean'),
+    );
+  } catch {
+    return {};
+  }
+}
+
 /** Repair everything (idea 2): every part of Conch, and one button. */
 export function RepairSection() {
   const client = useQueryClient();
   const { data } = useDoctor();
+  const [opened, setOpened] = useState(readOpened);
+  const remember = (next: Record<string, boolean>) => {
+    setOpened(next);
+    try {
+      sessionStorage.setItem(OPENED_KEY, JSON.stringify(next));
+    } catch {
+      // Remembering is a nicety.
+    }
+  };
   const run = (repair: boolean) =>
     void (repair ? doctorApi.repair() : doctorApi.check()).then((report) =>
       client.setQueryData(healthKeys.doctor, report),
     );
   const items = (data?.items ?? []).map((item: DoctorItem) => ({
     ...item,
-    action:
-      // What needs you, and news (a new release), each get their one button.
-      item.action && (item.state === 'needs-you' || item.state === 'info') ? (
-        <ActionButton action={item.action} />
-      ) : undefined,
+    // Whatever carries an action shows its one button, beside it; what a repair
+    // fixes offers the repair itself.
+    action: item.action ? (
+      <ActionButton action={item.action} />
+    ) : item.repairable && !data?.running ? (
+      <Button size="sm" variant="surface" onClick={() => run(true)}>
+        Repair
+      </Button>
+    ) : undefined,
   }));
   return (
     <RepairPanel
@@ -87,6 +116,8 @@ export function RepairSection() {
       checkedAt={data?.checkedAt ?? 0}
       onRepair={() => run(true)}
       onCheck={() => run(false)}
+      opened={opened}
+      onOpenedChange={remember}
     />
   );
 }

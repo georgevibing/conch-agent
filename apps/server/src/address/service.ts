@@ -502,11 +502,7 @@ export class AddressService {
       this.deps.through ?? ((n, checks, target) => checkThrough(n, { checks, target }))
     )(name, this.checks, this.target());
     if (result.ok) {
-      if (this.#throughFailures > 0)
-        this.deps.heal?.(
-          'gateway',
-          `${name} reaches Conch through your tunnel or web server again.`,
-        );
+      if (this.#throughFailures > 0) this.deps.heal?.('gateway', `${name} reaches Conch again`);
       this.#throughFailures = 0;
       return this.#set({
         state: 'ready',
@@ -765,7 +761,7 @@ export class AddressService {
         problem: await this.#privilegeProblem(error.problem),
       });
     }
-    if (serving) this.deps.heal?.('gateway', `Conch renewed the certificate for ${name}.`);
+    if (serving) this.deps.heal?.('gateway', `Renewed the certificate for ${name}`);
     this.#set({
       state: 'ready',
       name,

@@ -16,7 +16,7 @@ From anywhere, press <kbd>mod+k</kbd> and choose **Repair everything**.
 
 ## What it looks at
 
-When all is well, it's one calm line. **Show details** opens the whole list, in groups:
+When all is well, it says **Everything's working**. Below it, each group is one line with how it's doing, like **5 working**. Press a group to open it. A group with something that needs you opens by itself, at the top. Conch remembers which groups you opened until you close the tab. The groups:
 
 - **Providers**: each one you use is installed, signed in and answering.
 - **Apps** and **Talk to me here**: every app and chat app you connected still works.
@@ -28,11 +28,13 @@ When all is well, it's one calm line. **Show details** opens the whole list, in 
 
 ## When it needs you
 
-What Conch couldn't fix opens by itself, first in its group. Each has one sentence and one button: sign in again, install or update a program, open the right page, or copy the one command only you can run.
+What Conch couldn't fix opens by itself, first in its group. Each has one sentence and one button: sign in again, install or update a program, open the right page, copy the one command only you can run, or **Repair** when a repair fixes it. **Repair everything** stands out only while there's something to fix.
+
+News, like a new version of Conch, never counts as a problem, and neither does something you turned off.
 
 ## Fixed on its own
 
-At the foot of the same page, **Fixed on its own** lists what Conch repaired by itself lately, one sentence each. It's there to reassure you. Nothing in it needs you.
+At the foot of the same page, **Fixed on its own** says how many things Conch fixed this week, then lists the latest few in a few words each, like **Restarted the browser**. The same fix again shows once, with how many times. **Show all** opens the rest. It's there to reassure you. Nothing in it needs you.
 
 Without asking, Conch:
 

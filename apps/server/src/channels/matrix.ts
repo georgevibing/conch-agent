@@ -636,9 +636,7 @@ class MatrixSession {
       await this.#outgoing();
     } catch (error) {
       this.#noCrypto = (error as Error).message;
-      this.events.healed?.(
-        'Matrix’s encryption couldn’t start on this computer, so encrypted rooms can’t be read. Conch says so in them.',
-      );
+      this.events.healed?.('Encrypted Matrix rooms can’t be read here. Conch says so in them.');
     }
   }
 

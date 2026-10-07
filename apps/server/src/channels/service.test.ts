@@ -380,9 +380,7 @@ describe('ChannelService — voice notes', () => {
       waiting: 1,
       model: 'missing',
     });
-    expect((await s.healed.list()).some((n) => /speech model was missing/.test(n.message))).toBe(
-      true,
-    );
+    expect((await s.healed.list()).some((n) => /speech model again/.test(n.message))).toBe(true);
     // The model arrived.
     ear.hearing = { ready: true };
     await s.channels.hearAgain();
@@ -702,7 +700,7 @@ describe('ChannelService — healing', () => {
     const channel = await s.channels.create({ kind: 'telegram', token: MockTelegram.TOKEN });
     await until(() => state(s, channel.id).then((st) => st === 'online'), 'online');
     expect(telegram.calls.some((c) => c.method === 'deleteWebhook')).toBe(true);
-    expect(events.some((e) => e.type === 'healed' && /took them back/.test(e.note.message))).toBe(
+    expect(events.some((e) => e.type === 'healed' && /messages back/.test(e.note.message))).toBe(
       true,
     );
   });

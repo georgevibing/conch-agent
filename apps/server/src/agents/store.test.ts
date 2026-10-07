@@ -66,7 +66,7 @@ describe('the first agent', () => {
     await writeFile(join(home, 'agents', 'agents.json'), '{ not json');
     const again = new AgentStore(home, settings, (_a, m) => heals.push(m));
     expect((await again.default()).name).toBe('Shelly');
-    expect(heals.join(' ')).toMatch(/couldn’t be read/);
+    expect(heals.join(' ')).toMatch(/Remade your assistant/);
     const kept = await readdir(join(home, 'agents'));
     expect(kept.some((n) => n.includes('.broken-'))).toBe(true);
   });

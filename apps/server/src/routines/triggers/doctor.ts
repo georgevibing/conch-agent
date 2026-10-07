@@ -28,11 +28,13 @@ export function routinesWatchCheck(routines: Routines): DoctorCheck {
           out.push({ ...base, state: 'fixed', message: `${r.scheduleText}: watching again.` });
         continue;
       }
+      // Conch keeps trying by itself; Repair only looks again now. After that, it's news.
       if (w.state === 'trouble') {
         out.push({
           ...base,
-          state: 'warning',
+          state: before ? 'info' : 'warning',
           message: `${w.message ?? 'It hasn’t been able to look for a while.'} Conch keeps trying.`,
+          ...(!before && { repairable: true }),
         });
         continue;
       }

@@ -283,7 +283,7 @@ export class Pulse {
         lasted >= Math.min(patience, PATIENCE_MS) ||
         before.count >= 3
       )
-        this.deps.onHeal?.(`“${live.routine.title}” can look again, and is watching as before.`);
+        this.deps.onHeal?.(`“${live.routine.title}” is watching again`);
     }
     if (Boolean(before) !== Boolean(after.failing) || before?.message !== after.failing?.message)
       this.deps.onChange?.(id);

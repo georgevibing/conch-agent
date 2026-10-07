@@ -47,10 +47,7 @@ export class SearchService {
     try {
       this.#attach(new SearchIndex(this.deps.path));
     } catch (error) {
-      this.#automatic(
-        error,
-        'The search index couldn’t be read, so Conch rebuilt it from your chats.',
-      );
+      this.#automatic(error, 'Rebuilt search from your chats');
     }
   }
 
@@ -170,7 +167,7 @@ export class SearchService {
     }
     // Whatever else the broken index reports now is this same failure.
     this.#generation++;
-    this.#automatic(error, 'Search stopped working, so Conch rebuilt its index from your chats.');
+    this.#automatic(error, 'Rebuilt search from your chats');
   }
 
   /** The one rebuild per run Conch does on its own; after that, `unavailable` until Repair. */
@@ -202,8 +199,7 @@ export class SearchService {
       // for this run, and try the file again next start.
       this.#attachOrGiveUp(
         ':memory:',
-        note &&
-          'The search index was in use by another program, so Conch rebuilt it in memory for now.',
+        note && 'Rebuilt search in memory for now. Another program had it open.',
       );
       return;
     }

@@ -659,7 +659,7 @@ export class Services {
     void this.skillTrust
       .lockIfClear()
       .then((locked) => {
-        if (locked) heal('skills', 'Locked your key for signing skills with this computer’s key.');
+        if (locked) heal('skills', 'Locked your skill-signing key to this computer');
       })
       .catch(() => undefined);
     this.doctor.register(signingKeyCheck(this.skillTrust));
@@ -1319,8 +1319,8 @@ export class Services {
           void this.healed.note(
             'gateway',
             sent === 1
-              ? 'You were offline for a while; your waiting message went when you were back.'
-              : `You were offline for a while; your ${sent} waiting messages went when you were back.`,
+              ? 'Sent your message once you were back online'
+              : `Sent ${sent} messages once you were back online`,
           );
       });
     });
@@ -2360,8 +2360,8 @@ export class Services {
           void this.healed.note(
             'gateway',
             sent === 1
-              ? 'Conch restarted while a chat was working; it picked the work up again.'
-              : `Conch restarted while ${sent} chats were working; they picked the work up again.`,
+              ? 'Picked up a chat after a restart'
+              : `Picked up ${sent} chats after a restart`,
           );
       })
       .catch((error: unknown) => console.error('[conversations]', error));

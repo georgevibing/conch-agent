@@ -132,7 +132,7 @@ export class WhatsAppSessions {
       onRepair: () =>
         this.heal?.(
           'channels',
-          'Conch couldn’t read its WhatsApp link, so it kept a copy. Link WhatsApp again to carry on.',
+          'Set aside a damaged WhatsApp link. Link WhatsApp again to carry on.',
         ),
     }).then(
       (read) => read.value,

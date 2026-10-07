@@ -508,9 +508,7 @@ export class SealedRuntime implements AppRuntime {
     this.#tools = tools;
     if (this.#healPending) {
       this.#healPending = false;
-      this.options.heal?.(
-        `${this.#name}’s tools stopped unexpectedly, so Conch started them again.`,
-      );
+      this.options.heal?.(`Restarted ${this.#name}’s tools`);
     }
     this.#touch();
     return tools;

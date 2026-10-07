@@ -62,10 +62,7 @@ export class ChatFolders {
   #load(): Promise<ChatFolder[]> {
     this.#folders ??= readStore(this.#path, FoldersFile, {
       onRepair: () =>
-        this.heal?.(
-          'conversations',
-          'Your chat folders couldn’t be read, so Conch kept a copy and started them again. Your chats are all still there.',
-        ),
+        this.heal?.('conversations', 'Reset your chat folders. Your chats are all still there.'),
     }).then(
       (read) => read.value.folders,
       () => [],

@@ -16,7 +16,14 @@ export function marketCheck(market: Pick<SkillMarket, 'health' | 'states'>): Doc
       const { missing, swept } = await market.health(repair);
       const items: DoctorItem[] = [];
       const item = (id: string, state: DoctorItem['state'], message: string) =>
-        items.push({ id: `skill-market:${id}`, group: GROUP, title: TITLE, state, message });
+        items.push({
+          id: `skill-market:${id}`,
+          group: GROUP,
+          title: TITLE,
+          state,
+          message,
+          ...(state === 'warning' && !repair && { repairable: true }),
+        });
       if (missing.length)
         item(
           'missing',

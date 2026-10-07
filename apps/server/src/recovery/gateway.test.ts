@@ -90,7 +90,8 @@ describe('gateway recovery', () => {
     const check = recovery.doctorCheck();
     const run = (repair: boolean) => check.run({ repair, signal: new AbortController().signal });
     expect(recovery.allowsWork).toBe(false);
-    expect((await run(true))[0]?.state).toBe('warning');
+    // Too soon to carry on: after a repair that's news, never left as a warning.
+    expect((await run(true))[0]?.state).toBe('info');
     await vi.advanceTimersByTimeAsync(15_000);
     expect((await run(false))[0]?.state).toBe('warning');
     expect(deps.resume).not.toHaveBeenCalled();

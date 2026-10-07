@@ -401,7 +401,7 @@ nohup /bin/sh ${shQuote(join(this.#dir, 'launch'))} >/dev/null 2>&1 &
       await new Promise((resolve) => setTimeout(resolve, this.deps.settle ?? 1_500));
       return alive(pid) ? 'started' : 'failed';
     } catch (error) {
-      this.deps.heal?.(`The menu bar helper couldn’t start: ${(error as Error).message}`);
+      this.deps.heal?.(`The menu bar helper didn’t start. ${(error as Error).message}`);
       return 'failed';
     }
   }
@@ -490,7 +490,11 @@ export function trayCheck(tray: TrayService): DoctorCheck {
     title: 'Menu bar',
     async run({ repair }) {
       const status = await tray.status();
-      const item = (state: DoctorItem['state'], message: string, action?: DoctorItem['action']) => [
+      const item = (
+        state: DoctorItem['state'],
+        message: string,
+        action?: DoctorItem['action'],
+      ): DoctorItem[] => [
         {
           id: 'tray',
           group: 'This computer',
@@ -498,6 +502,7 @@ export function trayCheck(tray: TrayService): DoctorCheck {
           state,
           message,
           ...(action && { action }),
+          ...(!repair && state === 'warning' && !action && { repairable: true }),
         },
       ];
       if (!status.on) return item('off', `Conch isn’t shown in the ${status.where}.`);
@@ -511,12 +516,16 @@ export function trayCheck(tray: TrayService): DoctorCheck {
             })
           : item('off', status.unavailable ?? 'It can’t be shown here.');
       if (status.running) return item('ok', `Conch is in the ${status.where}.`);
-      if (!repair) return item('warning', `Conch should be in the ${status.where}, but isn’t.`);
+      if (!repair)
+        return item(
+          'warning',
+          `Conch should be in the ${status.where}, but isn’t. Repair shows it.`,
+        );
       const result = await tray.ensure();
       return result === 'started' || result === 'running'
         ? item('fixed', `Conch is back in the ${status.where}.`)
         : item(
-            'warning',
+            'info',
             `Conch couldn’t show itself in the ${status.where}. It tries again by itself.`,
           );
     },

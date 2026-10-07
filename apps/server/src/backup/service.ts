@@ -152,7 +152,7 @@ export class BackupService {
       onRepair: () =>
         this.deps.heal?.(
           'backups',
-          'The backup settings couldn’t be read, so Conch kept a copy and turned daily backups back on.',
+          'Turned daily backups back on. The settings were damaged; a copy is kept.',
         ),
     }).then(
       async ({ value }) => {

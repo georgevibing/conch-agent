@@ -83,8 +83,8 @@ export class SettingsStore {
         this.heal?.(
           'settings',
           state === 'salvaged'
-            ? 'Part of your settings file couldn’t be read, so Conch kept a copy and reset just that part.'
-            : 'Your settings file couldn’t be read, so Conch kept a copy and went back to the defaults.',
+            ? 'Reset a damaged part of your settings. A copy is kept.'
+            : 'Reset your damaged settings to the defaults. A copy is kept.',
         ),
     }).then(
       (read) => read.value,
@@ -188,8 +188,8 @@ export class SettingsStore {
         this.heal?.(
           'secrets',
           state === 'salvaged'
-            ? 'One of your saved provider keys couldn’t be read, so Conch kept a copy and carried on with the rest.'
-            : 'Your saved provider keys couldn’t be read, so Conch kept a copy and started a new list.',
+            ? 'Set aside a damaged provider key. A copy is kept.'
+            : 'Set aside your damaged provider keys. A copy is kept; add them again in Providers.',
         ),
     });
     return read.value;

@@ -33,7 +33,11 @@ export const HealNote = z.object({
   id: z.string(),
   at: z.number(),
   area: HealArea,
-  /** One plain sentence: what was wrong and what Conch did. */
+  /**
+   * A few words of what Conch did ("Restarted the browser"), then, only when it
+   * matters, one short sentence more ("Its output is kept."). The same words
+   * again are shown as one line with a count.
+   */
   message: z.string(),
 });
 export type HealNote = z.infer<typeof HealNote>;

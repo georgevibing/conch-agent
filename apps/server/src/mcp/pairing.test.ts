@@ -210,7 +210,7 @@ describe('healing', () => {
         },
       }),
     );
-    expect(await pairing.heal()).toEqual(['Updated Cursor’s settings so it still finds Conch.']);
+    expect(await pairing.heal()).toEqual(['Helped Cursor find Conch again']);
     expect(read('cursor').mcpServers?.conch).toMatchObject({ command: process.execPath });
     expect(healed).toHaveLength(1);
     expect(await pairing.heal()).toEqual([]);
@@ -231,9 +231,7 @@ describe('healing', () => {
         },
       }),
     );
-    expect(await pairing.heal()).toEqual([
-      'Took Conch out of VS Code’s settings: it was no longer paired.',
-    ]);
+    expect(await pairing.heal()).toEqual(['Took Conch out of VS Code. It was no longer paired.']);
     expect(read('vscode').servers).toEqual({ other: { command: 'x' } });
   });
 
@@ -241,7 +239,7 @@ describe('healing', () => {
     const { pairing } = setup();
     await pairing.installLauncher();
     writeFileSync(pairing.launcher, 'tampered');
-    expect(await pairing.heal()).toContain('Updated the launcher other apps use to reach Conch.');
+    expect(await pairing.heal()).toContain('Updated how other apps reach Conch');
     expect(readFileSync(pairing.launcher, 'utf8')).toMatch(/conch-mcp-launcher v1/);
   });
 });

@@ -726,7 +726,15 @@ export class SpeechService {
             broken.push(spec);
         const name = broken[0]?.name ?? 'A voice';
         if (!broken.length) return item('ok', 'Answers can be read with a natural voice, offline.');
-        if (!repair) return item('warning', `${name} is damaged.`);
+        if (!repair)
+          return [
+            {
+              ...base,
+              state: 'warning',
+              message: `${name} is damaged. Repair gets it again.`,
+              repairable: true,
+            },
+          ];
         for (const spec of broken) {
           for (const file of spec.files) await rm(this.#file(file), { force: true });
           await this.getVoice(spec.id);

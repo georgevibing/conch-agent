@@ -329,9 +329,7 @@ export class ChannelDoorService {
         if (!port) return this.#noPort();
         funnel = await this.deps.tailscale.funnel(port, DOOR_PATH, target);
         if (funnel.state === 'on')
-          this.deps.onHeal?.(
-            'The public address for Teams and WeChat had stopped; Conch turned it back on.',
-          );
+          this.deps.onHeal?.('Turned the Teams and WeChat address back on');
       }
       return this.#fromFunnel(funnel);
     }
@@ -598,7 +596,8 @@ export function doorCheck(door: ChannelDoorService): DoctorCheck {
             ? 'Reachable from the internet.'
             : 'On. Not checked from the outside yet.',
         });
-      if (now.state === 'starting') return item({ state: 'warning', message: 'Turning on…' });
+      // On its way by itself: news.
+      if (now.state === 'starting') return item({ state: 'info', message: 'Turning on…' });
       if (now.state === 'off')
         return item({
           state: 'needs-you',

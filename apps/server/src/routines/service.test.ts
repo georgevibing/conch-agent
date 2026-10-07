@@ -226,7 +226,7 @@ describe('RoutineService', () => {
     await s.routines.checkNow();
     const run = await settled(s, r.id);
     expect(run).toMatchObject({ trigger: 'catch-up', status: 'succeeded' });
-    expect((await s.healed.list())[0]?.message).toMatch(/ran once .* was back/);
+    expect((await s.healed.list())[0]?.message).toMatch(/once .* was back/);
     // Once is enough.
     await s.routines.checkNow();
     expect((await s.routines.detail(r.id)).runs).toHaveLength(2);

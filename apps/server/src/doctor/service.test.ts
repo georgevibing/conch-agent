@@ -1,7 +1,7 @@
 import type { DoctorItem, DoctorReport } from '@conch/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
-import { Doctor, type DoctorCheck } from './service';
+import { Doctor, settle, type DoctorCheck } from './service';
 
 const item = (id: string, state: DoctorItem['state'], message = 'Fine.'): DoctorItem => ({
   id,
@@ -47,7 +47,9 @@ describe('Repair everything', () => {
     const doctor = new Doctor({ emit: () => undefined, onHeal: (m) => notes.push(m) });
     doctor.register(
       check('search', async ({ repair }) => [
-        repair ? item('search:index', 'fixed', 'Rebuilt it.') : item('search:index', 'warning'),
+        repair
+          ? item('search:index', 'fixed', 'Rebuilt it.')
+          : { ...item('search:index', 'warning'), repairable: true },
       ]),
     );
     expect((await doctor.run()).items[0]?.state).toBe('warning');
@@ -56,7 +58,7 @@ describe('Repair everything', () => {
   });
 
   it('says so when a part won’t answer, and carries on with the rest', async () => {
-    const doctor = new Doctor({ emit: () => undefined, timeoutMs: 50 });
+    const doctor = new Doctor({ emit: () => undefined, timeoutMs: 50, warn: () => undefined });
     doctor.register(check('stuck', () => new Promise(() => undefined)));
     doctor.register(
       check('broken', async () => {
@@ -66,8 +68,8 @@ describe('Repair everything', () => {
     doctor.register(check('fine', async () => [item('fine:1', 'ok')]));
     const report = await doctor.run();
     expect(report.items.map((i) => [i.id, i.state])).toEqual([
-      ['stuck:unchecked', 'warning'],
-      ['broken:unchecked', 'warning'],
+      ['stuck:unchecked', 'info'],
+      ['broken:unchecked', 'info'],
       ['fine:1', 'ok'],
     ]);
     expect(report.items[0]?.message).toMatch(/didn’t answer in time/);
@@ -85,6 +87,65 @@ describe('Repair everything', () => {
     );
     await Promise.all([doctor.run(), doctor.run(), doctor.run({ repair: true })]);
     expect(runs).toEqual([false, true]);
+  });
+});
+
+describe('nothing worth a look without something to do about it', () => {
+  const open = { kind: 'open', label: 'Open', place: 'health' } as const;
+
+  it('shows a warning or a needs-you with no action as news, and says so once', async () => {
+    const told: string[] = [];
+    const doctor = new Doctor({ emit: () => undefined, warn: (m) => told.push(m) });
+    doctor.register(
+      check('parts', async () => [
+        item('parts:bare', 'warning'),
+        item('parts:person', 'needs-you'),
+        { ...item('parts:open', 'warning'), action: open },
+        { ...item('parts:you', 'needs-you'), action: open },
+        { ...item('parts:repair', 'warning'), repairable: true },
+        item('parts:news', 'info'),
+        item('parts:fine', 'ok'),
+      ]),
+    );
+    const states = (r: DoctorReport) => r.items.map((i) => [i.id, i.state]);
+    expect(states(await doctor.run())).toEqual([
+      ['parts:bare', 'info'],
+      ['parts:person', 'info'],
+      ['parts:open', 'warning'],
+      ['parts:you', 'needs-you'],
+      ['parts:repair', 'warning'],
+      ['parts:news', 'info'],
+      ['parts:fine', 'ok'],
+    ]);
+    await doctor.run();
+    expect(told).toHaveLength(2);
+    expect(told[0]).toMatch(/parts:bare/);
+  });
+
+  it('leaves nothing for Repair to do after a repair: what it couldn’t fix is news', async () => {
+    const doctor = new Doctor({ emit: () => undefined, warn: () => undefined });
+    doctor.register(
+      check('parts', async () => [
+        { ...item('parts:repair', 'warning'), repairable: true },
+        { ...item('parts:open', 'warning'), action: open, repairable: true },
+      ]),
+    );
+    const report = await doctor.run({ repair: true });
+    expect(report.items.map((i) => [i.id, i.state, i.repairable])).toEqual([
+      ['parts:repair', 'info', undefined],
+      ['parts:open', 'warning', undefined],
+    ]);
+  });
+
+  it('settles one item by the same rule', () => {
+    expect(settle({ ...item('a', 'needs-you') }, false)).toMatchObject({
+      bug: true,
+      item: { state: 'info' },
+    });
+    expect(settle({ ...item('a', 'off'), repairable: true }, false)).toEqual({
+      bug: false,
+      item: item('a', 'off'),
+    });
   });
 });
 
@@ -107,6 +168,7 @@ describe('one check again', () => {
           title: 'KeePassXC',
           state: locked ? 'needs-you' : 'ok',
           message: '',
+          action: { kind: 'open', label: 'Open Passwords', place: 'passwords' },
         },
       ],
     } as never);

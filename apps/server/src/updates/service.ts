@@ -216,8 +216,7 @@ export class UpdatesService {
 
   #load(): Promise<void> {
     this.#loaded ??= readStore(this.#path(), Cache, {
-      onRepair: () =>
-        this.deps.heal('The list of updates couldn’t be read, so Conch started it again.'),
+      onRepair: () => this.deps.heal('Started the list of updates afresh'),
     })
       .then(({ value }) => void (this.#cache = value))
       .catch(() => undefined);
@@ -700,7 +699,7 @@ export class UpdatesService {
           checkedAt: now,
           updated: { at: now, from: before.installed },
         };
-        if (auto) this.deps.heal(`${spec.short} was updated to ${installed} overnight.`);
+        if (auto) this.deps.heal(`Updated ${spec.short} to ${installed} overnight`);
       } else
         this.#problems.set(
           spec.id,

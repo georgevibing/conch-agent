@@ -32,6 +32,29 @@ export interface DoctorDeps {
   onHeal?: (message: string) => void;
   /** Longest one check may take before it's reported as not answering. */
   timeoutMs?: number;
+  /**
+   * Told once per item a check got wrong (a warning with nothing to do about
+   * it). Defaults to the console, outside production.
+   */
+  warn?: (message: string) => void;
+}
+
+/**
+ * The rule every item keeps, whatever its check said: a warning always has
+ * something to do about it (an action, or — on a look — Repair everything
+ * itself), and what needs a person always says how. One that doesn't is a bug
+ * in its check; it's shown as news (`info`), so nobody is told about a problem
+ * they can't act on. After a repair, nothing is left for Repair to do.
+ */
+export function settle(item: DoctorItem, repair: boolean): { item: DoctorItem; bug: boolean } {
+  const { repairable, ...rest } = item;
+  const canRepair = Boolean(repairable) && !repair && item.state === 'warning';
+  const bug =
+    (item.state === 'warning' || item.state === 'needs-you') && !item.action && !canRepair;
+  return {
+    item: bug ? { ...rest, state: 'info' } : canRepair ? { ...rest, repairable: true } : rest,
+    bug,
+  };
 }
 
 const CHECK_TIMEOUT_MS = 30_000;
@@ -42,8 +65,27 @@ export class Doctor {
   #running?: { repair: boolean; done: Promise<DoctorReport> };
   /** A repair asked for while a look was running: it goes next. */
   #queued?: Promise<DoctorReport>;
+  /** Items already told about as a check's bug, so each is told once. */
+  #told = new Set<string>();
 
   constructor(private readonly deps: DoctorDeps) {}
+
+  /** Every item as the rule wants it (see `settle`), a check's bug told once. */
+  #settle(items: DoctorItem[], repair: boolean): DoctorItem[] {
+    return items.map((found) => {
+      const { item, bug } = settle(found, repair);
+      if (bug && !this.#told.has(found.id)) {
+        this.#told.add(found.id);
+        const warn =
+          this.deps.warn ??
+          (process.env.NODE_ENV === 'production' ? undefined : (m: string) => console.warn(m));
+        warn?.(
+          `[doctor] ${found.id} said ${found.state} with nothing to do about it; shown as info.`,
+        );
+      }
+      return item;
+    });
+  }
 
   /** Add a check. Ids are unique: registering one again replaces it. */
   register(check: DoctorCheck): void {
@@ -93,13 +135,14 @@ export class Doctor {
       .run({ repair: false, signal: AbortSignal.timeout(this.deps.timeoutMs ?? CHECK_TIMEOUT_MS) })
       .catch(() => undefined);
     if (!items || this.#running) return;
+    const settled = this.#settle(items, false);
     const before = this.#report.items;
     const ours = (item: DoctorItem) => item.id === checkId || item.id.startsWith(`${checkId}:`);
     const at = before.findIndex(ours);
     const rest = before.filter((item) => !ours(item));
     this.#report = {
       ...this.#report,
-      items: at < 0 ? [...rest, ...items] : [...rest.slice(0, at), ...items, ...rest.slice(at)],
+      items: at < 0 ? [...rest, ...settled] : [...rest.slice(0, at), ...settled, ...rest.slice(at)],
     };
     this.deps.emit(this.#report);
   }
@@ -142,15 +185,16 @@ export class Doctor {
             check.run({ repair, signal: controller.signal }),
             timeout,
           ]);
-          results.set(check.id, found);
+          results.set(check.id, this.#settle(found, repair));
         } catch (error) {
+          // Nothing anyone can do about it now: news, and the next look asks again.
           results.set(check.id, [
             {
               id: `${check.id}:unchecked`,
               group: check.group,
               title: check.title,
-              state: 'warning',
-              message: `Conch couldn’t check this: ${(error as Error).message}`,
+              state: 'info',
+              message: `Conch couldn’t check this just now: ${(error as Error).message}`,
             },
           ]);
         } finally {

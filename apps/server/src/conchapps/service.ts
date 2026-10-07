@@ -342,7 +342,7 @@ export class ConchAppService {
     this.#loaded ??= (async () => {
       await this.store.read().catch(() => undefined);
       if (await this.store.sweep().catch(() => false))
-        this.deps.heal?.('An app that was being added when Conch stopped was tidied away.');
+        this.deps.heal?.('Tidied away a half-added app');
       for (const app of this.store.peek()) await this.#heal(app).catch(() => undefined);
       await this.#refreshMissing();
     })();
@@ -480,7 +480,7 @@ export class ConchAppService {
       );
       return false;
     }
-    this.deps.heal?.(`${app.manifest.name}’s files were missing; Conch put them back.`);
+    this.deps.heal?.(`Put back ${app.manifest.name}’s missing files`);
     return true;
   }
 

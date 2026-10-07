@@ -85,7 +85,7 @@ export function ensureSpawnHelper(
     try {
       chmodSync(file, 0o755);
       accessSync(file, constants.X_OK);
-      heal('The terminal’s helper program had lost permission to run, so Conch gave it back.');
+      heal('Let the terminal’s helper run again');
     } catch {
       ok = false;
     }
@@ -306,14 +306,10 @@ export function loadBackend(
   if ((deps.platform ?? platform()) !== 'win32') {
     const python = (deps.python ?? findPython)();
     if (python) {
-      heal(
-        'The terminal library couldn’t load here, so Conch runs terminals through Python instead.',
-      );
+      heal('Ran terminals through Python. The usual library didn’t load.');
       return pythonBridge(python);
     }
   }
-  heal(
-    'Conch couldn’t start a full terminal here, so terminals run in basic mode: commands work, full-screen programs don’t.',
-  );
+  heal('Switched terminals to basic mode. Commands work; full-screen programs don’t.');
   return basicBackend();
 }

@@ -395,9 +395,7 @@ export class GoogleApps {
         .filter((app) => !settingsOf(after, app).hidden && usable(account, app))
         .map((app) => CATALOG.get(app)?.name ?? app);
       if (apps.length)
-        this.deps.onHeal?.(
-          `${apps.join(' and ')} couldn’t reach Google for a while; ${apps.length > 1 ? 'they’re' : 'it’s'} working again.`,
-        );
+        this.deps.onHeal?.(`${apps.join(' and ')} ${apps.length > 1 ? 'are' : 'is'} working again`);
     }
   }
 

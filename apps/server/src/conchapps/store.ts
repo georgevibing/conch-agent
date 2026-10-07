@@ -193,8 +193,8 @@ export class ConchAppStore {
         this.heal?.(
           'integrations',
           state === 'salvaged'
-            ? 'The list of apps you made or added was damaged; Conch kept what it could read.'
-            : 'The list of apps you made or added couldn’t be read, so Conch kept a copy and started it again.',
+            ? 'Kept what could be read of your apps list'
+            : 'Started your apps list afresh. A copy is kept.',
         ),
     }).then(
       (read) => {
@@ -379,7 +379,7 @@ export class ConchAppStore {
       onRepair: () =>
         this.heal?.(
           'secrets',
-          'The keys your apps use couldn’t be read, so Conch kept a copy. Type them again in each app’s settings.',
+          'Set aside your apps’ damaged keys. Type them again in each app’s settings.',
         ),
     }).then(
       (read) => read.value,

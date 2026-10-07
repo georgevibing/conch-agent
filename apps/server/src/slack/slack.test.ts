@@ -158,7 +158,7 @@ describe('health', () => {
     expect((await flaky.check()).health).toMatchObject({ state: 'error', action: 'retry' });
     down = false;
     expect((await flaky.check()).health.state).toBe('ok');
-    expect(notes).toEqual(['Slack wasn’t answering for a while; it’s working again.']);
+    expect(notes).toEqual(['Slack is working again']);
   });
 });
 

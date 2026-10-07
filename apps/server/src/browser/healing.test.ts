@@ -107,7 +107,7 @@ describe.skipIf(found.length === 0)('the browser heals itself', () => {
     expect(runtime.phase).toBe('running');
     expect(runtime.running?.name).toBe(real.name);
     expect(runtime.healed[0]?.message).toBe(
-      `Broken Chrome wouldn’t start, so Conch is using ${real.name}.`,
+      `Switched to ${real.name}. Broken Chrome wouldn’t start.`,
     );
   });
 
@@ -125,9 +125,7 @@ describe.skipIf(found.length === 0)('the browser heals itself', () => {
     };
     await runtime.context();
     expect(runtime.phase).toBe('running');
-    expect(runtime.healed[0]?.message).toBe(
-      'A browser left over from an earlier session was holding things up; Conch closed it.',
-    );
+    expect(runtime.healed[0]?.message).toBe('Closed a leftover browser');
   });
 
   it('comes back after a crash and reopens the chat’s page', { timeout: 90_000 }, async () => {
@@ -145,7 +143,7 @@ describe.skipIf(found.length === 0)('the browser heals itself', () => {
     // The browser dies under us.
     await tab.page.context().close();
     await expect.poll(() => service.runtime.alive).toBe(false);
-    expect(service.runtime.healed[0]?.message).toMatch(/closed unexpectedly/);
+    expect(service.runtime.healed[0]?.message).toMatch(/browser closed/);
     // The next use starts it again, on the same page.
     const back = await service.tabFor('conv_crash');
     expect(back.page.url()).toBe(`${origin}/where-i-was`);

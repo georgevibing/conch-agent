@@ -152,7 +152,7 @@ describe('LM Studio as a provider', () => {
       heal: (message) => healed.push(message),
     });
     expect(await variant.status?.()).toMatchObject({ state: 'ready' });
-    expect(healed).toEqual(['Started LM Studio’s server so its models could answer.']);
+    expect(healed).toEqual(['Started LM Studio’s server']);
   });
 
   it('says where to turn the server on when it can’t start it', async () => {

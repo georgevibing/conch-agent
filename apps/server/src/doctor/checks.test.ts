@@ -41,6 +41,26 @@ describe('Repair everything, on a real Conch', () => {
     expect(report.running).toBe(false);
   });
 
+  it('leaves nothing worth a look without something to do about it, before or after Repair', async () => {
+    const s = await setup();
+    const told = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      for (const repair of [false, true]) {
+        const report = await s.doctor.run({ repair });
+        for (const item of report.items) {
+          if (item.state === 'warning' && !repair)
+            expect(item.action ?? item.repairable).toBeTruthy();
+          if (item.state === 'warning' && repair) expect(item.action).toBeDefined();
+          if (item.state === 'needs-you') expect(item.action).toBeDefined();
+          if (repair) expect(item.repairable).toBeUndefined();
+        }
+      }
+      expect(told.mock.calls.filter(([m]) => String(m).startsWith('[doctor]'))).toEqual([]);
+    } finally {
+      told.mockRestore();
+    }
+  });
+
   it('makes this computer’s key again when it’s damaged, and says what that means', async () => {
     const s = await setup();
     const file = join(s.config.CONCH_HOME, 'here', 'key');

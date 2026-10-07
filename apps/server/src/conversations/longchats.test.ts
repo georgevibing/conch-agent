@@ -160,9 +160,7 @@ describe('a long chat, in the chat', () => {
     const id = await say(manager, 'first');
     api.fold = { healed: true };
     await say(manager, 'second', id);
-    expect(heal).toHaveBeenCalledWith(
-      'A chat had grown longer than Acme Large reads at once, so Conch summarised its start and sent your message again.',
-    );
+    expect(heal).toHaveBeenCalledWith('Summarised a long chat’s start and sent your message again');
     // With no place given, the line goes before the message being answered.
     expect(compacted((await manager.detail(id)).events)[0]?.before).toBe('u-second');
   });

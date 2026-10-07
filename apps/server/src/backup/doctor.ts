@@ -63,8 +63,9 @@ export function backupCheck(backups: BackupService, now = () => Date.now()): Doc
         return [
           item({
             state: 'warning',
-            message: status.problem ? `${behind} ${status.problem}` : behind,
+            message: `${status.problem ? `${behind} ${status.problem}` : behind} Repair makes one now.`,
             action: open,
+            repairable: true,
           }),
         ];
       try {

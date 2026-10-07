@@ -60,7 +60,7 @@ export function registerGoogleDoctor(doctor: Doctor, google: GoogleService, apps
             return {
               ...base,
               state: healed ? ('fixed' as const) : ('ok' as const),
-              message: fixed
+              message: healed
                 ? 'Working again.'
                 : `Working${item.account ? ` · ${item.account}` : ''}.`,
             };

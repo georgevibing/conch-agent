@@ -480,10 +480,7 @@ export class RoutineService {
       const routine = await this.deps.store.get(routineId).catch(() => undefined);
       if (!routine || routine.status !== 'active') continue;
       const run = await this.#execute(routine, 'catch-up', held.scheduledFor);
-      if (run)
-        this.deps.onHeal?.(
-          `“${routine.title}” didn’t run while ${engine.label} was signed out, so it ran once ${engine.label} was back.`,
-        );
+      if (run) this.deps.onHeal?.(`Ran “${routine.title}” once ${engine.label} was back`);
     }
     // Runs that waited for room on a plan go once there's room (ADR 0057).
     for (const [routineId, held] of this.#roomWait) {
@@ -593,9 +590,7 @@ export class RoutineService {
         continue;
       if (routine.status === 'completed') {
         await this.deps.store.save({ ...routine, status: 'active', updatedAt: now });
-        this.deps.onHeal?.(
-          `“${routine.title}” was marked done while it was still waiting to run, so it’s waiting again.`,
-        );
+        this.deps.onHeal?.(`Put “${routine.title}” back to waiting`);
       }
       const scheduledFor = last.scheduledFor;
       if (forRoom)

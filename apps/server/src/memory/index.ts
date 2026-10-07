@@ -127,7 +127,7 @@ export class MemoryIndex {
       // Derived data: a damaged file is simply made again.
       for (const suffix of ['', '-wal', '-shm']) rmSync(`${path}${suffix}`, { force: true });
       this.#db = create();
-      this.deps.heal?.('The memory search index was damaged, so Conch built it again.');
+      this.deps.heal?.('Rebuilt memory search');
     }
     return this.#db;
   }

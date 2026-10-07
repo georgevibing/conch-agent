@@ -364,7 +364,10 @@ describe('RoutineSpend: the month', () => {
     const heal = vi.fn();
     const spend = new RoutineSpend({ home, engine: () => api, now: () => OCT_10, heal });
     expect((await spend.state()).monthUsd).toBe(0);
-    expect(heal).toHaveBeenCalledWith('routines', expect.stringMatching(/started the count again/));
+    expect(heal).toHaveBeenCalledWith(
+      'routines',
+      expect.stringMatching(/Restarted this month’s routine spend/),
+    );
     await spend.record('r_1', { inputTokens: 0, outputTokens: 0, costUsd: 1 }, { engine: api });
     expect(JSON.parse(await readFile(join(home, 'routine-spend.json'), 'utf8'))).toMatchObject({
       months: { '2026-10': 1 },

@@ -240,7 +240,7 @@ export function lmStudioVariant(deps: LmStudioDeps = {}): ApiVariant {
       if (await (deps.startServer ?? startWithLms)(home).catch(() => false)) {
         port = await lmStudioPort(home);
         up = await greets();
-        if (up) deps.heal?.('Started LM Studio’s server so its models could answer.');
+        if (up) deps.heal?.('Started LM Studio’s server');
       }
       if (!up)
         return {

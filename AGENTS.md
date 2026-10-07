@@ -261,9 +261,12 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
       the next best thing — sign in (then resend by itself), another provider that
       is ready, or opening 1Password — from the turn's `problem`.
     - **Say what you fixed, quietly.** Record each repair with
-      `services.healed.note(area, message)`: one plain sentence, shown under
-      Settings → Health → “Fixed on its own” as reassurance, never as an error
-      or a toast that demands attention.
+      `services.healed.note(area, message)`: a few words of what Conch did
+      (“Restarted the browser”, no full stop), then one short sentence only when
+      the person should know more (“Its output is kept.”). It's shown under
+      Settings → Health → “Fixed on its own” as reassurance, the same words
+      again folded into one line with a count — never as an error or a toast
+      that demands attention.
     - **Ask only what matters.**
       - Ask about spending, sending, publishing or deleting; about changes that
         grant trust or reach; and about credentials, which the person types

@@ -163,7 +163,7 @@ describe('looking for updates', () => {
     const { service, home, healed } = await world();
     await writeFile(join(home, 'updates.json'), '{ not json');
     expect((await service.status()).programs).toEqual([]);
-    expect(healed).toEqual(['The list of updates couldn’t be read, so Conch started it again.']);
+    expect(healed).toEqual(['Started the list of updates afresh']);
   });
 
   it('looks once a day by itself, never in the first minute', async () => {
@@ -250,7 +250,7 @@ describe('updating programs', () => {
     await service.tick(night + 5 * MINUTE);
     await service.settled();
     expect((await service.status()).programs[0]?.installed).toBe('0.160.0');
-    expect(healed).toEqual(['Codex was updated to 0.160.0 overnight.']);
+    expect(healed).toEqual(['Updated Codex to 0.160.0 overnight']);
   });
 
   it('doesn’t retry a failing automatic update every night', async () => {
@@ -552,9 +552,7 @@ describe('following releases (ADR 0051)', () => {
       repair: false,
       signal: new AbortController().signal,
     });
-    expect(items).toContainEqual(
-      expect.objectContaining({ id: 'updates:refused', state: 'warning' }),
-    );
+    expect(items).toContainEqual(expect.objectContaining({ id: 'updates:refused', state: 'info' }));
   });
 
   it('a release made ready is swapped in with a restart, and says what it brought', async () => {

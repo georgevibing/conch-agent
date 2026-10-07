@@ -262,7 +262,7 @@ export class BrowserRuntime {
           const why =
             error instanceof BrowserProblemError ? error.problem.message : `${name} didn’t answer.`;
           this.fellBack = `${why} Until then, Conch uses its own browser.`;
-          this.heal(`${name} couldn’t be reached, so Conch used its own browser.`);
+          this.heal(`Used Conch’s own browser. ${name} couldn’t be reached.`);
         }
       } else {
         this.fellBack = undefined;
@@ -285,7 +285,7 @@ export class BrowserRuntime {
         try {
           const context = await this.#launchHealing(candidate);
           if (candidate !== first) {
-            this.heal(`${first.name} wouldn’t start, so Conch is using ${candidate.name}.`);
+            this.heal(`Switched to ${candidate.name}. ${first.name} wouldn’t start.`);
           }
           return this.#ready(context, candidate);
         } catch (error) {
@@ -302,7 +302,7 @@ export class BrowserRuntime {
         const downloaded = this.candidates().find((c) => c.id === 'downloaded');
         if (downloaded) {
           const context = await this.#launchHealing(downloaded);
-          this.heal('None of the installed browsers would start, so Conch downloaded Chromium.');
+          this.heal('Downloaded Chromium. No installed browser would start.');
           return this.#ready(context, downloaded);
         }
       }
@@ -342,8 +342,7 @@ export class BrowserRuntime {
       const expected = this.#stopping;
       this.#set('off');
       this.deps.onClosed();
-      if (!expected)
-        this.heal(`${attached.name} went away; Conch connects again when it’s needed.`);
+      if (!expected) this.heal(`Let go of ${attached.name}. It reconnects when needed.`);
     };
     context.on('close', gone);
     context.browser()?.on('disconnected', gone);
@@ -391,7 +390,7 @@ export class BrowserRuntime {
       const expected = this.#stopping;
       this.#set('off');
       this.deps.onClosed();
-      if (!expected) this.heal('The browser closed unexpectedly; it’ll start again when needed.');
+      if (!expected) this.heal('The browser closed. It starts again when needed.');
     });
     this.#set('running');
     return context;
@@ -405,7 +404,7 @@ export class BrowserRuntime {
       this.install = progress;
       this.deps.onChange();
     });
-    this.heal('There was no browser on this computer, so Conch downloaded Chromium.');
+    this.heal('Downloaded a browser. There wasn’t one on this computer.');
     this.#set('starting');
   }
 
@@ -420,9 +419,7 @@ export class BrowserRuntime {
       if (!killed && !profileInUse(String((error as Error).message))) throw error;
       await clearLocks(this.deps.store.profileDir);
       const context = await this.#launch(candidate);
-      this.heal(
-        'A browser left over from an earlier session was holding things up; Conch closed it.',
-      );
+      this.heal('Closed a leftover browser');
       return context;
     }
   }
@@ -517,7 +514,7 @@ export class BrowserRuntime {
     this.problem = undefined;
     try {
       await this.context();
-      this.heal('Repaired: the browser starts cleanly again.');
+      this.heal('Repaired the browser');
     } catch {
       // `problem` says what's left.
     }
@@ -528,6 +525,6 @@ export class BrowserRuntime {
     await this.stop();
     await killOrphans(this.deps.store.profileDir).catch(() => undefined);
     await rm(this.deps.store.profileDir, { recursive: true, force: true, maxRetries: 5 });
-    this.heal('Signed out of every site: the browser starts fresh next time.');
+    this.heal('Signed out of every site. The browser starts fresh next time.');
   }
 }

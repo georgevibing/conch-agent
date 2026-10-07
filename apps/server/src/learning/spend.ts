@@ -103,10 +103,7 @@ export class LearningSpend {
     this.#file ??= (
       await readStore(this.#path, SpendFile, {
         onRepair: () =>
-          this.deps.heal?.(
-            'usage',
-            'What learning spent this month couldn’t be read, so Conch kept a copy and started the count again.',
-          ),
+          this.deps.heal?.('usage', 'Restarted this month’s learning spend. A copy is kept.'),
       })
     ).value;
     return this.#file;
@@ -169,7 +166,7 @@ export class LearningSpend {
     if (crossed)
       this.deps.heal?.(
         'usage',
-        'Learning from your chats reached what it may spend this month, so it rests until the 1st. You can change that in Settings → Usage.',
+        'Paused learning until the 1st. It reached this month’s limit; change it in Settings → Usage.',
       );
     this.deps.changed?.(await this.state());
     return usd;

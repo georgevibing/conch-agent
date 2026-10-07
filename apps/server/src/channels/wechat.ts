@@ -1074,7 +1074,7 @@ class OfficialSession {
         if (code === 48001 || code === 48004) {
           this.#passive = true;
           this.events.healed(
-            'This WeChat account can’t send messages later (only verified accounts and test accounts can), so long answers wait for your next message.',
+            'Held long WeChat answers for your next message. This account can’t send later.',
           );
         }
         if (code === 48001 || code === 48004 || code === 45015 || code === 45047)

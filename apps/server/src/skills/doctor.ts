@@ -14,7 +14,11 @@ export function signingKeyCheck(trust: SkillTrust): DoctorCheck {
     title: TITLE,
     async run({ repair }) {
       const key = await trust.signingKey({ lock: repair });
-      const item = (state: DoctorItem['state'], message: string, action?: DoctorItem['action']) => [
+      const item = (
+        state: DoctorItem['state'],
+        message: string,
+        action?: DoctorItem['action'],
+      ): DoctorItem[] => [
         {
           id: 'skill-signing:key',
           group: GROUP,
@@ -22,19 +26,30 @@ export function signingKeyCheck(trust: SkillTrust): DoctorCheck {
           state,
           message,
           ...(action && { action }),
+          // On a look, Repair locks it (or, once the keychain is unlocked, opens it).
+          ...(!repair && !action && state === 'warning' && { repairable: true }),
         },
       ];
       // You've never signed a skill: nothing to say.
       if (key.state === 'none') return [];
       if (key.state === 'clear')
-        return item('warning', 'It’s in a file anyone who can read your files could copy.');
+        return repair
+          ? item(
+              'info',
+              'It’s in a file anyone who can read your files could copy, and Conch couldn’t lock it just now.',
+            )
+          : item(
+              'warning',
+              'It’s in a file anyone who can read your files could copy. Repair locks it.',
+            );
       if (key.state === 'locked')
         return key.migrated
           ? item('fixed', 'Locked it with this computer’s own key.')
           : item('ok', 'Locked with this computer’s own key.');
+      // Unlocking the keychain is the person's; then Repair everything is the button.
       if (key.reason === 'keychain')
         return item(
-          'needs-you',
+          repair ? 'info' : 'warning',
           `${key.problem} Unlock it (or sign in to this computer again), then repair.`,
         );
       return item(

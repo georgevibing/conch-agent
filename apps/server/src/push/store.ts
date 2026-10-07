@@ -61,10 +61,7 @@ export class PushStore {
   #read(): Promise<PushFile> {
     this.#file ??= readStore(this.#path, PushFile, {
       onRepair: () =>
-        this.heal?.(
-          'settings',
-          'The notifications file was damaged, so Conch started it again. Turn notifications on again on your devices.',
-        ),
+        this.heal?.('settings', 'Reset notifications. Turn them on again on your devices.'),
     }).then((read) => read.value);
     return this.#file;
   }

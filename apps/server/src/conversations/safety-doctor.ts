@@ -91,7 +91,7 @@ export function safetyCheck(
             p.note,
             p.id === 'codex-agent'
               ? { kind: 'need', label: 'Update Codex', need: 'codex', mode: 'update' }
-              : undefined,
+              : { kind: 'open', label: 'Open providers', place: 'providers', focus: p.id },
           );
       // Signed, and not what was signed: off, and worth a look (ADR 0031).
       for (const skill of (await more.skills?.().catch(() => [])) ?? [])

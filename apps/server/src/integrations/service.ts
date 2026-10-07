@@ -490,8 +490,8 @@ export class IntegrationService {
               : await this.#adoptAddress(f.status.name, portable.url, originOf(f));
           this.deps.onHeal?.(
             item.health.state === 'needs-auth'
-              ? `Found ${item.name} in ${f.engine.label}. It’s waiting in Apps: sign in once and it works with every model.`
-              : `${item.name} was set up in ${f.engine.label} only. Conch connected it itself, so it works with every model.`,
+              ? `Found ${item.name} in ${f.engine.label}. Sign in once in Apps and it works with every model.`
+              : `Brought ${item.name} over from ${f.engine.label}. It works with every model now.`,
           );
         } catch {
           // An address Conch would never call (the SSRF guard), or one that's gone: left where it is.
@@ -567,7 +567,7 @@ export class IntegrationService {
       await this.store.remove(item.id);
       this.deps.emit({ type: 'integration.deleted', integrationId: item.id });
       this.deps.onHeal?.(
-        `${item.name} only signs in through ${f.engine.label}, so Conch left it there. It’s under Settings → Providers.`,
+        `Left ${item.name} in ${f.engine.label}. It only signs in there; see Settings → Providers.`,
       );
     }
   }
@@ -1142,7 +1142,7 @@ export class IntegrationService {
       if (retrying) clearTimeout(retrying.timer);
       this.#retries.delete(after.id);
       if (before && transient(before.health) && before.health.okAt)
-        this.deps.onHeal?.(`${after.name} wasn’t answering for a while; it’s working again.`);
+        this.deps.onHeal?.(`${after.name} is working again`);
       return;
     }
     const delays = this.deps.retryAfterMs ?? (this.deps.manualChecks ? undefined : RETRY_AFTER_MS);
@@ -1199,7 +1199,7 @@ export class IntegrationService {
             await this.oauth.accessToken(id, item.transport.url, resolved.reach, { force: true });
             const again = await this.#check(id, true);
             if (again?.health.state === 'ok' || again?.health.state === 'warning')
-              this.deps.onHeal?.(`Conch renewed your ${item.name} sign-in.`);
+              this.deps.onHeal?.(`Renewed your ${item.name} sign-in`);
             return again;
           } catch (error) {
             if (error instanceof TransientAuthError)

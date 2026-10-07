@@ -121,11 +121,16 @@ export function integrationsCheck(services: Services): DoctorCheck {
           repair && broken ? ((await services.integrations.check(item.id)) ?? item) : item;
         const base = { id: `integrations:${item.id}`, group: INTEGRATIONS, title: now.name };
         const { health } = now;
+        // Its own warnings (a tool changed, so Conch asks again first) are news: it's seen to.
         if (health.state === 'ok' || health.state === 'warning' || health.state === 'checking')
           results.push({
             ...base,
-            state: broken ? 'fixed' : health.state === 'warning' ? 'warning' : 'ok',
+            state: broken ? 'fixed' : health.state === 'warning' ? 'info' : 'ok',
             message: broken ? 'Working again.' : (health.message ?? 'Working.'),
+            ...(!broken &&
+              health.state === 'warning' && {
+                action: { kind: 'open', label: 'Open', place: 'integrations', focus: now.id },
+              }),
           });
         else
           results.push({
@@ -175,11 +180,13 @@ export function channelsCheck(services: Services): DoctorCheck {
             state: broken ? 'fixed' : 'ok',
             message: broken ? 'Connected again.' : state === 'online' ? 'Online.' : 'Connecting…',
           });
+        // It reconnects by itself: Repair only asks again now. After that, it's news.
         else if (state === 'reconnecting')
           results.push({
             ...base,
-            state: 'warning',
+            state: repair ? 'info' : 'warning',
             message: message ?? 'Reconnecting by itself.',
+            ...(!repair && { repairable: true }),
           });
         else
           results.push({
@@ -308,11 +315,18 @@ export function searchCheck(services: Services): DoctorCheck {
       const state = repair && broken ? await services.search.repair() : services.search.state;
       if (state === 'unavailable')
         return [
-          {
-            ...base,
-            state: 'warning',
-            message: 'Search isn’t working. Repair builds it again from your chats.',
-          },
+          repair
+            ? {
+                ...base,
+                state: 'info',
+                message: 'Conch couldn’t build search again just now. Your chats are all kept.',
+              }
+            : {
+                ...base,
+                state: 'warning',
+                message: 'Search isn’t working. Repair builds it again from your chats.',
+                repairable: true,
+              },
         ];
       return [
         {
@@ -375,43 +389,57 @@ export function computerCheck(services: Services): DoctorCheck {
 
       // This computer's key (ADR 0063): what proves a browser or a launcher is you, here.
       const key = services.here.inspect();
-      if (key !== 'ok' && repair) services.here.heal();
+      if (key !== 'ok' && repair)
+        try {
+          services.here.heal();
+        } catch {
+          // Said below: it's looked at again.
+        }
+      // Looked at again after healing: fixed only if it really is.
+      const healed = key !== 'ok' && repair && services.here.inspect() === 'ok';
       items.push({
         id: 'computer:here',
         group: COMPUTER,
         title: 'This computer’s key',
         ...(key === 'ok'
           ? { state: 'ok' as const, message: 'Only you can read it.' }
-          : repair
+          : repair && !healed
             ? {
-                state: 'fixed' as const,
-                message:
-                  key === 'readable'
-                    ? 'Only you can read it now.'
-                    : 'Made a new one. Open Conch from your apps to use it in this browser again.',
+                state: 'info' as const,
+                message: 'Conch couldn’t put it right just now. It tries again by itself.',
               }
-            : {
-                state: 'warning' as const,
-                message:
-                  key === 'readable'
-                    ? 'Other people on this computer could read it.'
-                    : key === 'missing'
-                      ? 'It’s missing, so browsers on this computer can’t prove they’re here.'
-                      : 'It’s damaged, so browsers on this computer can’t prove they’re here.',
-              }),
+            : repair
+              ? {
+                  state: 'fixed' as const,
+                  message:
+                    key === 'readable'
+                      ? 'Only you can read it now.'
+                      : 'Made a new one. Open Conch from your apps to use it in this browser again.',
+                }
+              : {
+                  state: 'warning' as const,
+                  repairable: true,
+                  message:
+                    key === 'readable'
+                      ? 'Other people on this computer could read it.'
+                      : key === 'missing'
+                        ? 'It’s missing, so browsers on this computer can’t prove they’re here.'
+                        : 'It’s damaged, so browsers on this computer can’t prove they’re here.',
+                }),
       });
 
       try {
         const disk = await statfs(home);
         const free = Number(disk.bavail) * Number(disk.bsize);
+        // Only a person can free space, and Conch has no place to open for it: news, said plainly.
         items.push({
           id: 'computer:disk',
           group: COMPUTER,
           title: 'Disk space',
-          state: free < LOW_DISK_BYTES ? 'warning' : 'ok',
+          state: free < LOW_DISK_BYTES ? 'info' : 'ok',
           message:
             free < LOW_DISK_BYTES
-              ? `Almost full (${(free / 1024 ** 3).toFixed(1)} GB free). Chats and backups may fail to save.`
+              ? `Almost full (${(free / 1024 ** 3).toFixed(1)} GB free). Free some space so chats and backups keep saving.`
               : `${(free / 1024 ** 3).toFixed(0)} GB free.`,
         });
       } catch {
@@ -434,12 +462,13 @@ export function networkCheck(services: Services): DoctorCheck {
           { id: 'network', group: COMPUTER, title: 'Internet', state: 'ok', message: 'Online.' },
         ];
       const local = await services.localReady();
+      // Nothing to do: what waits goes by itself once it's back.
       return [
         {
           id: 'network',
           group: COMPUTER,
           title: 'Internet',
-          state: 'warning',
+          state: 'info',
           message: local
             ? `Offline. ${local.label} answers from this computer until you’re back.`
             : 'Offline. Messages wait, and go by themselves when you’re back.',
@@ -512,7 +541,12 @@ export function registerCoreChecks(services: Services) {
             id: 'command-sandbox:host',
             group: COMPUTER,
             title: 'Safe commands',
-            state: support.available ? ('ok' as const) : ('needs-you' as const),
+            // Not possible here, with nothing to run: off, as in Safety.
+            state: support.available
+              ? ('ok' as const)
+              : support.command
+                ? ('needs-you' as const)
+                : ('off' as const),
             message: support.available
               ? 'API and Codex commands run in an OS sandbox without network access.'
               : support.reason,

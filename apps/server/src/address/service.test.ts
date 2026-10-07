@@ -218,7 +218,7 @@ describe('AddressService', () => {
     expect(status.certificate?.notAfter).toBeGreaterThan(Date.now() + 80 * DAY);
     expect(acme.orders()).toBe(1);
     expect(acme.state.replaces).toBeUndefined(); // the pretend CA offers no renewal info
-    expect(heal).toHaveBeenCalledWith('gateway', `Conch renewed the certificate for ${NAME}.`);
+    expect(heal).toHaveBeenCalledWith('gateway', `Renewed the certificate for ${NAME}`);
   });
 
   it('keeps serving the old certificate while renewing fails', async () => {

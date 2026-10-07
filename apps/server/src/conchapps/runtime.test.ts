@@ -1027,9 +1027,7 @@ describe('the process’s life', () => {
     expect(await runtime.call('fine', {})).toEqual({ ok: true, text: 'fine' });
     expect(await runtime.call('fine', {})).toEqual({ ok: true, text: 'fine' });
     expect(heal).toHaveBeenCalledTimes(1);
-    expect(heal).toHaveBeenCalledWith(
-      'Plant diary’s tools stopped unexpectedly, so Conch started them again.',
-    );
+    expect(heal).toHaveBeenCalledWith('Restarted Plant diary’s tools');
   });
 
   it('stops after a while with nothing to do, and on stop()', async () => {

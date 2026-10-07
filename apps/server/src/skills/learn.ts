@@ -589,10 +589,7 @@ export class SkillLearner {
     return (
       await readStore(this.#path, LearnFile, {
         onRepair: () =>
-          this.deps.heal?.(
-            'skills',
-            'Skills Conch offered from your chats couldn’t be read, so it set them aside and started again.',
-          ),
+          this.deps.heal?.('skills', 'Set aside damaged skill offers and started afresh'),
       })
     ).value;
   }

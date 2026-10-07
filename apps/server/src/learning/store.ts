@@ -91,11 +91,7 @@ export class LearningStore {
   async #read<S extends z.ZodType>(name: string, schema: S, what: string): Promise<z.output<S>> {
     return (
       await readStore(join(this.dir, name), schema, {
-        onRepair: () =>
-          this.deps.heal?.(
-            'settings',
-            `${what} couldn’t be read, so Conch kept a copy and started again.`,
-          ),
+        onRepair: () => this.deps.heal?.('settings', `${what}: started afresh. A copy is kept.`),
       })
     ).value;
   }

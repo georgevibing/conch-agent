@@ -315,7 +315,7 @@ describe('Repair everything', () => {
     market = new SkillMarket({ home, store, sources: [pretend], heal: (_a, m) => notes.push(m) });
     await market.load();
     expect(market.origins().size).toBe(0);
-    expect(notes.join(' ')).toMatch(/couldn’t be read/);
+    expect(notes.join(' ')).toMatch(/Restarted the list/);
   });
 });
 

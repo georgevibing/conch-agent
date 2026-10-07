@@ -107,10 +107,10 @@ describe('SMS through Twilio (ADR 0076)', () => {
     expect(hook).toMatch(/\/conch\/hooks\/[\w-]{24}$/);
     expect(twilio.number.sms_url).toBe(hook);
     const healed = await until(
-      async () => (await s.healed.list()).find((h) => /pointed them here/.test(h.message)),
+      async () => (await s.healed.list()).find((h) => /texts back to Conch/.test(h.message)),
       'a fixed-on-its-own note',
     );
-    expect(healed.message).toMatch(/somewhere else/);
+    expect(healed.message).toMatch(/^Pointed /);
   });
 
   it('lets you in with That’s me, and answers in plain words', async () => {

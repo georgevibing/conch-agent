@@ -100,8 +100,8 @@ export class TerminalService {
           this.deps.heal?.(
             'terminal',
             state === 'salvaged'
-              ? 'Part of the terminal settings couldn’t be read, so Conch kept a copy and reset just that part.'
-              : 'The terminal settings couldn’t be read, so Conch kept a copy and went back to the defaults.',
+              ? 'Reset a damaged part of the terminal settings. A copy is kept.'
+              : 'Reset the damaged terminal settings to the defaults. A copy is kept.',
           ),
       }).catch(() => undefined);
       this.#settings ??= (read?.value ?? TerminalFile.parse({})).settings;
@@ -198,12 +198,11 @@ export class TerminalService {
     if (!shell)
       throw new TerminalError('unavailable', 'Conch couldn’t find a shell on this computer.');
     if (wanted !== 'auto' && shell.id !== wanted) {
-      this.heal(`${wanted} isn’t installed any more, so the terminal uses ${shell.name}.`);
+      this.heal(`Switched the terminal to ${shell.name}. ${wanted} isn’t installed any more.`);
     }
     let cwd = body.cwd ?? (await this.deps.workspace());
     if (!isDirectory(cwd)) {
-      if (body.cwd)
-        this.heal(`${cwd} doesn’t exist any more, so the terminal opened in your home folder.`);
+      if (body.cwd) this.heal(`Opened the terminal in your home folder. ${cwd} is gone.`);
       cwd = isDirectory(await this.deps.workspace()) ? await this.deps.workspace() : homedir();
     }
     const pty = this.#backendNow().spawn(shell.path, body.safeMode ? shell.safeArgs : shell.args, {

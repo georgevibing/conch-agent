@@ -58,9 +58,7 @@ export class GatewayRecovery {
     this.#probe = probe;
     if (this.#mode) {
       this.deps.pause('Conch is recovering. Open Settings → Health and choose Repair everything.');
-      this.deps.note(
-        'Conch kept having trouble, so it paused background work to stay available. Settings → Health can help it carry on.',
-      );
+      this.deps.note('Paused background work to stay responsive. Repair everything carries it on.');
     }
     await this.poll();
     if (!this.#stopping)
@@ -129,8 +127,8 @@ export class GatewayRecovery {
     const { stopped } = this.deps.relieve();
     this.deps.note(
       stopped
-        ? 'Conch stopped a managed command and held new commands briefly to keep responding.'
-        : 'Conch held new commands briefly while checking that it can respond.',
+        ? 'Stopped a heavy command to stay responsive. Its output is kept.'
+        : 'Held new commands a moment to stay responsive',
     );
     void this.poll();
   }
@@ -184,7 +182,16 @@ export class GatewayRecovery {
           id: 'recovery',
           group: 'This computer',
           title: 'Staying responsive',
-          state: fixed ? 'fixed' : this.#mode || !this.allowsWork ? 'warning' : 'ok',
+          // Paused after trouble is Repair's to carry on from; after a repair, or while
+          // Conch checks itself, there's nothing to do: news.
+          state: fixed
+            ? 'fixed'
+            : this.#mode && !repair
+              ? 'warning'
+              : this.#mode || !this.allowsWork
+                ? 'info'
+                : 'ok',
+          ...(!fixed && this.#mode && !repair && { repairable: true }),
           message: fixed
             ? 'Conch is responding again. Waiting work will carry on gradually.'
             : this.#mode

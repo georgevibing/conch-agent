@@ -241,7 +241,7 @@ describe('the menu bar helper', () => {
     expect((await service.status()).running).toBe(false);
     const signal = new AbortController().signal;
     expect((await trayCheck(service).run({ repair: true, signal }))[0]).toMatchObject({
-      state: 'warning',
+      state: 'info',
       message: 'Conch couldn’t show itself in the menu bar. It tries again by itself.',
     });
   });

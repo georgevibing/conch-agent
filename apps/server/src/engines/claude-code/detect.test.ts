@@ -66,9 +66,7 @@ describe('Claude Code detection', () => {
         onHeal: (message) => notes.push(message),
       });
       expect(status).toMatchObject({ state: 'ready', bundled: true, executablePath: bundled.bin });
-      expect(notes).toEqual([
-        'The Claude Code on this computer wouldn’t start, so Conch is using the one that comes with it.',
-      ]);
+      expect(notes).toEqual(['Used the Claude Code that comes with Conch. Yours wouldn’t start.']);
     });
 
     it('stands in for one too old to say who’s signed in', async () => {
