@@ -1,0 +1,195 @@
+@layer nacre.components {
+  /*
+   * A soft card in the chat's flow. It surfaces in; its lines follow one by
+   * one. Dismissed, it closes the gap it sat in as it goes.
+   */
+  .card {
+    --story-cutout: var(--nc-surface);
+
+    display: grid;
+    grid-template-rows: 1fr;
+    min-inline-size: 0;
+    max-inline-size: var(--nc-chat-card-width);
+    border-radius: var(--nc-chat-card-radius);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-chat-card-surface);
+    box-shadow: var(--nc-chat-card-shadow);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+    transition:
+      grid-template-rows var(--nc-duration-base) var(--nc-ease-in-out),
+      opacity var(--nc-duration-base) var(--nc-ease-out),
+      margin var(--nc-duration-base) var(--nc-ease-in-out);
+  }
+
+  .card[data-leaving] {
+    grid-template-rows: 0fr;
+    margin-block: calc(-0.5 * var(--nc-chat-step));
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .inner {
+    min-block-size: 0;
+    overflow: hidden;
+    padding: var(--nc-chat-card-pad);
+  }
+
+  .head {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+    margin-block-end: var(--nc-space-2);
+  }
+
+  .titles {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .title {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: -0.005em;
+    color: var(--nc-text);
+  }
+
+  .line {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-subtle);
+  }
+
+  .dismiss {
+    margin: calc(-1 * var(--nc-space-1)) calc(-1 * var(--nc-space-1-5)) 0 0;
+  }
+
+  .items {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .item,
+  .earlier {
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+    animation-delay: calc(180ms + var(--i, 0) * 70ms);
+  }
+
+  .earlier {
+    padding: var(--nc-space-1) 0 var(--nc-space-1) calc(1.375rem + var(--nc-space-2-5));
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .row {
+    appearance: none;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+    inline-size: calc(100% + 2 * var(--nc-space-2));
+    min-block-size: 2.25rem;
+    margin: 0 calc(-1 * var(--nc-space-2));
+    padding: 0 var(--nc-space-2);
+    border: 0;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    text-align: start;
+  }
+
+  button.row {
+    cursor: pointer;
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    button.row:hover {
+      background: var(--nc-wash-1);
+    }
+    button.row:hover .go {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  button.row:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+
+  button.row:focus-visible .go {
+    opacity: 1;
+    transform: none;
+  }
+
+  .text {
+    display: flex;
+    align-items: baseline;
+    gap: var(--nc-space-1-5);
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .headline {
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .dot {
+    color: var(--nc-text-subtle);
+  }
+
+  .outcome {
+    flex: 0 100 auto;
+    min-inline-size: 2.5rem;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--nc-text-muted);
+  }
+
+  .go {
+    flex-shrink: 0;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-subtle);
+    opacity: 0;
+    transform: translate(-2px, -2px);
+    transition:
+      opacity var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  @media (hover: none) {
+    .go {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card,
+    .item,
+    .earlier {
+      animation: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .card,
+  :global([data-nacre-motion='reduced']) .item,
+  :global([data-nacre-motion='reduced']) .earlier {
+    animation: none;
+  }
+}

@@ -1,0 +1,267 @@
+@layer nacre.components {
+  /* One card at the reply's end, folded to a row like a tool's until opened. */
+  .card {
+    min-inline-size: 0;
+    max-inline-size: var(--nc-chat-card-width);
+    border-radius: var(--nc-chat-row-radius);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-chat-card-surface);
+    box-shadow: var(--nc-chat-card-shadow);
+    transition: border-radius var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .card[data-state='open'] {
+    border-radius: var(--nc-chat-card-radius);
+  }
+
+  .header {
+    --nc-rim-hover: 0.6;
+    --nc-sheen-hover: 0.14;
+    --nc-sheen-size: 180px;
+
+    appearance: none;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+    inline-size: 100%;
+    min-block-size: var(--nc-chat-row-height);
+    margin: 0;
+    padding: 0 var(--nc-space-3);
+    border: 0;
+    border-radius: inherit;
+    corner-shape: inherit;
+    background: transparent;
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    text-align: start;
+    cursor: pointer;
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .header:hover {
+      background-color: var(--nc-wash-1);
+    }
+  }
+
+  .header:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .card[data-state='open'] > .header {
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+  }
+
+  /* The kinds of change, as small overlapping marks: the weighty ones carry the accent. */
+  .marks {
+    display: inline-flex;
+    flex-shrink: 0;
+  }
+
+  .mark {
+    display: inline-grid;
+    place-items: center;
+    position: relative;
+    z-index: calc(3 - var(--i, 0));
+    inline-size: 1.375rem;
+    block-size: 1.375rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-gray-3);
+    box-shadow:
+      0 0 0 1.5px var(--nc-surface),
+      inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text-muted);
+  }
+
+  .mark + .mark {
+    margin-inline-start: -0.375rem;
+  }
+
+  .mark[data-weighty] {
+    background: var(--nc-accent-3);
+    box-shadow:
+      0 0 0 1.5px var(--nc-surface),
+      inset 0 0 0 1px var(--nc-accent-5);
+    color: var(--nc-accent-11);
+  }
+
+  .mark > svg {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    stroke-width: 2.1;
+  }
+
+  .summary {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-weight: var(--nc-weight-medium);
+    letter-spacing: -0.003em;
+  }
+
+  .card[data-undone] .summary {
+    color: var(--nc-text-muted);
+    font-weight: var(--nc-weight-regular);
+  }
+
+  .undoneTag {
+    color: var(--nc-text-subtle);
+    font-weight: var(--nc-weight-regular);
+  }
+
+  .chevron {
+    flex-shrink: 0;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-subtle);
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .card[data-state='open'] .chevron {
+    transform: rotate(90deg);
+  }
+
+  .content {
+    overflow: hidden;
+  }
+
+  .content[data-state='open'] {
+    animation: wc-open var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .content[data-state='closed'] {
+    animation: wc-close var(--nc-duration-base) var(--nc-ease-in-out);
+  }
+
+  @keyframes wc-open {
+    from {
+      block-size: 0;
+      opacity: 0;
+    }
+    to {
+      block-size: var(--radix-collapsible-content-height);
+      opacity: 1;
+    }
+  }
+
+  @keyframes wc-close {
+    from {
+      block-size: var(--radix-collapsible-content-height);
+      opacity: 1;
+    }
+    to {
+      block-size: 0;
+      opacity: 0;
+    }
+  }
+
+  .body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-1) var(--nc-space-3) var(--nc-space-3);
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .list,
+  .sub {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .list > li + li {
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+    min-block-size: 2.25rem;
+  }
+
+  .row[data-sub] {
+    min-block-size: 2rem;
+    padding-inline-start: calc(0.875rem + var(--nc-space-2-5));
+  }
+
+  .rowIcon {
+    flex-shrink: 0;
+    align-self: flex-start;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    margin-block-start: calc(var(--nc-space-1-5) + 0.2rem);
+    color: var(--nc-text-subtle);
+  }
+
+  [data-weighty] > .rowIcon,
+  [data-weighty] > .row > .rowIcon {
+    color: var(--nc-accent-11);
+  }
+
+  .group {
+    display: flex;
+    flex-direction: column;
+    padding-block-end: var(--nc-space-1);
+  }
+
+  .itemText {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-inline-size: 0;
+    padding-block: var(--nc-space-1-5);
+  }
+
+  .row[data-sub] .itemText {
+    padding-block: var(--nc-space-1);
+  }
+
+  .itemWhat {
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text);
+    text-wrap: pretty;
+  }
+
+  .row[data-sub] .itemWhat {
+    color: var(--nc-text-muted);
+  }
+
+  .itemText[data-undone] .itemWhat {
+    color: var(--nc-text-muted);
+  }
+
+  .target {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-family: var(--nc-font-mono);
+    font-size: 0.72rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .itemText[data-undone] .target {
+    text-decoration: line-through;
+    text-decoration-color: var(--nc-border-strong);
+  }
+
+  .failed {
+    margin-block-start: var(--nc-space-0-5);
+    font-size: var(--nc-text-xs);
+    color: light-dark(oklch(0.47 0.1 var(--nc-warning-h)), oklch(0.84 0.09 var(--nc-warning-h)));
+  }
+
+  .foot {
+    display: flex;
+    justify-content: flex-end;
+    padding-block-start: var(--nc-space-1);
+  }
+}

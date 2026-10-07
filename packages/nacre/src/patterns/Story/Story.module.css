@@ -1,0 +1,1074 @@
+@layer nacre.components {
+  /*
+   * A story: one light row, no card. The glyph's well sits on the column's
+   * edge; the hover wash bleeds a little past it, like LineGroup's.
+   */
+  .root,
+  .well {
+    --st-well: 1.375rem;
+    --st-gap: var(--nc-space-2-5);
+    --st-bleed: var(--nc-space-2);
+    --st-indent: calc(var(--st-well) + var(--st-gap));
+    --st-success: light-dark(
+      oklch(0.56 0.12 var(--nc-success-h)),
+      oklch(0.76 0.12 var(--nc-success-h))
+    );
+    --st-warning: light-dark(
+      oklch(0.6 0.13 var(--nc-warning-h)),
+      oklch(0.8 0.12 var(--nc-warning-h))
+    );
+    --st-warning-text: light-dark(
+      oklch(0.47 0.1 var(--nc-warning-h)),
+      oklch(0.84 0.09 var(--nc-warning-h))
+    );
+    --st-warning-wash: light-dark(
+      oklch(0.96 0.035 var(--nc-warning-h)),
+      oklch(0.3 0.045 var(--nc-warning-h))
+    );
+    /* What the badge's rim cuts out of: the page under the row. A card that
+       holds stories sets `--story-cutout` to its own surface. */
+    --st-cutout: var(--story-cutout, var(--nc-canvas));
+  }
+
+  .root {
+    container: story / inline-size;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  /* ── The row ──────────────────────────────────────────────────────── */
+  .header {
+    --nc-rim-rest: 0;
+    --nc-rim-hover: 0.45;
+    --nc-sheen-hover: 0.12;
+    --nc-sheen-size: 180px;
+
+    appearance: none;
+    display: flex;
+    align-items: center;
+    gap: var(--st-gap);
+    inline-size: calc(100% + 2 * var(--st-bleed));
+    min-block-size: var(--nc-chat-row-height);
+    margin: 0 calc(-1 * var(--st-bleed));
+    padding: 0 var(--st-bleed);
+    border: 0;
+    border-radius: var(--nc-chat-row-radius);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    text-align: start;
+    cursor: pointer;
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .header:disabled {
+    cursor: default;
+  }
+
+  @media (hover: hover) {
+    .header:not(:disabled):hover {
+      background-color: var(--nc-wash-1);
+    }
+  }
+
+  .header:not(:disabled):active {
+    background-color: var(--nc-wash-2);
+  }
+
+  .header:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 0;
+  }
+
+  /* ── The well, its glyph, and the status badge ────────────────────── */
+  .well {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    flex-shrink: 0;
+    inline-size: var(--st-well);
+    block-size: var(--st-well);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-gray-3);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text-muted);
+    transition:
+      background-color var(--nc-duration-slow) var(--nc-ease-out),
+      color var(--nc-duration-slow) var(--nc-ease-out),
+      box-shadow var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .glyph {
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+    stroke-width: 2.1;
+  }
+
+  .well[data-status='running'] {
+    background: var(--nc-accent-3);
+    box-shadow: inset 0 0 0 1px var(--nc-accent-5);
+    color: var(--nc-accent-11);
+  }
+
+  .well[data-status='failed'] {
+    background: var(--st-warning-wash);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--st-warning) 30%, transparent);
+    color: var(--st-warning-text);
+  }
+
+  /* While it runs, a short arc of accent light orbits the well. */
+  .orbit {
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    background: conic-gradient(
+      from 0deg,
+      transparent 0 62%,
+      color-mix(in oklch, var(--nc-accent-9) 40%, transparent) 80%,
+      var(--nc-accent-9) 96%,
+      transparent 100%
+    );
+    mask: radial-gradient(farthest-side, transparent calc(100% - 1.5px), #000 calc(100% - 1px));
+    opacity: 0;
+    transition: opacity var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .well[data-status='running'] > .orbit {
+    opacity: 1;
+    animation: nc-spin 1.6s linear infinite;
+  }
+
+  .badge {
+    position: absolute;
+    inset-block-end: -3px;
+    inset-inline-end: -3px;
+    display: grid;
+    place-items: center;
+    inline-size: 0.625rem;
+    block-size: 0.625rem;
+    border-radius: var(--nc-radius-full);
+    color: var(--nc-canvas);
+    background: var(--st-success);
+    box-shadow: 0 0 0 1.5px var(--st-cutout);
+  }
+
+  .badge > svg {
+    inline-size: 100%;
+    block-size: 100%;
+    stroke-width: 1.9;
+  }
+
+  .badge[data-status='failed'] {
+    background: var(--st-warning);
+  }
+
+  .badge[data-status='failed'] > svg {
+    stroke-width: 2.1;
+  }
+
+  /* Arriving: the badge settles onto the well and its tick draws itself. */
+  .well[data-arriving] .badge {
+    animation: st-settle var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) both;
+  }
+
+  .well[data-arriving] .badge[data-status='done'] path {
+    stroke-dasharray: 1;
+    animation: st-draw var(--nc-duration-slower) var(--nc-ease-out) var(--nc-duration-fast) both;
+  }
+
+  .well[data-arriving][data-status='done'] > .glyph {
+    animation: st-pop var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  /* When checks pass, one band of pearl light crosses the well: a small, quiet "yes". */
+  .glint {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  .glint::before {
+    content: '';
+    position: absolute;
+    inset-block: -20%;
+    inline-size: 60%;
+    background: linear-gradient(
+      100deg,
+      transparent,
+      var(--nc-pearl-2) 35%,
+      var(--nc-pearl-4) 55%,
+      transparent
+    );
+    opacity: 0;
+    transform: translateX(-120%) skewX(-12deg);
+    animation: st-glint var(--nc-panel-glint-duration) var(--nc-ease-out) var(--nc-duration-base)
+      both;
+  }
+
+  @keyframes st-settle {
+    from {
+      transform: scale(0.2);
+      opacity: 0;
+    }
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
+
+  @keyframes st-draw {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @keyframes st-pop {
+    40% {
+      transform: scale(0.82);
+    }
+  }
+
+  @keyframes st-glint {
+    0% {
+      opacity: 0;
+      transform: translateX(-120%) skewX(-12deg);
+    }
+    35% {
+      opacity: calc(0.9 * var(--nc-lustre));
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(220%) skewX(-12deg);
+    }
+  }
+
+  /* ── Headline and outcome ─────────────────────────────────────────── */
+  .title {
+    display: flex;
+    align-items: baseline;
+    gap: var(--nc-space-1-5);
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
+  }
+
+  .headline {
+    flex: 0 1 auto;
+    font-weight: var(--nc-weight-medium);
+    letter-spacing: -0.003em;
+    color: var(--nc-text);
+  }
+
+  .root[data-status='running'] .headline {
+    color: var(--nc-text);
+  }
+
+  .times {
+    flex-shrink: 0;
+    font-size: var(--nc-text-2xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-subtle);
+  }
+
+  /* The outcome gives way first on a narrow screen: the headline is the point. */
+  .outcome {
+    display: flex;
+    align-items: baseline;
+    gap: var(--nc-space-1-5);
+    flex: 0 100 auto;
+    min-inline-size: 2.5rem;
+    color: var(--nc-text-muted);
+  }
+
+  .root[data-status='failed'] .outcome {
+    color: var(--st-warning-text);
+  }
+
+  .dot {
+    flex-shrink: 0;
+    color: var(--nc-text-subtle);
+  }
+
+  /* ── Words that change in place ───────────────────────────────────── */
+  .morph {
+    position: relative;
+    display: grid;
+    min-inline-size: 0;
+  }
+
+  .morphIn,
+  .morphOut {
+    grid-area: 1 / 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  /* The leaving words take no room: what's beside them moves with the change, not after it. */
+  .morphOut {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    overflow: visible;
+    pointer-events: none;
+    animation: st-words-out var(--nc-duration-slow) var(--nc-ease-in) both;
+  }
+
+  /* An outcome that arrives while you watch comes into focus like the words. */
+  .root[data-arriving] .outcome {
+    animation: st-word-in var(--nc-duration-slower) var(--nc-ease-out) both;
+  }
+
+  /* A word that's in both stays where it is; only the new one paints it. */
+  .morphOut > [data-same] {
+    visibility: hidden;
+  }
+
+  .morphIn > [data-fresh] {
+    animation: st-word-in var(--nc-duration-slower) var(--nc-ease-out)
+      calc(var(--nc-duration-instant) + var(--i, 0) * 45ms) both;
+  }
+
+  @keyframes st-word-in {
+    from {
+      opacity: 0;
+      filter: blur(0.22em);
+    }
+    to {
+      opacity: 1;
+      filter: blur(0);
+    }
+  }
+
+  @keyframes st-words-out {
+    to {
+      opacity: 0;
+      filter: blur(0.2em);
+    }
+  }
+
+  /* ── Trailing meta ────────────────────────────────────────────────── */
+  .meta {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+    margin-inline-start: auto;
+    flex-shrink: 0;
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-subtle);
+  }
+
+  .clock {
+    display: inline-flex;
+    min-inline-size: 2ch;
+    justify-content: flex-end;
+  }
+
+  .chevron {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-subtle);
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .root[data-state='open'] > .header .chevron {
+    transform: rotate(90deg);
+  }
+
+  @container story (inline-size < 26rem) {
+    .count {
+      display: none;
+    }
+  }
+
+  /*
+   * Narrow, the outcome is said whole or not at all: it wraps onto a second
+   * line the row never shows, rather than ending in a stub ("Popli…").
+   * Screen readers still hear it.
+   */
+  @container story (inline-size < 30rem) {
+    .title {
+      flex-wrap: wrap;
+      block-size: 1lh;
+      line-height: var(--nc-leading-normal);
+    }
+    .outcome {
+      flex-shrink: 0;
+      min-inline-size: 0;
+    }
+  }
+
+  @container story (inline-size < 20rem) {
+    .stack {
+      display: none;
+    }
+  }
+
+  /* ── Faces: the overlapping stack, and the pills when open ───────── */
+  .stack {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .stack > .face + .face,
+  .stack > .more {
+    margin-inline-start: -0.25rem;
+  }
+
+  /* The first lies on top: it's usually the site, and the rest are what was on it. */
+  .stack > :nth-child(1) {
+    z-index: 3;
+  }
+
+  .stack > :nth-child(2) {
+    z-index: 2;
+  }
+
+  .stack > :nth-child(3) {
+    z-index: 1;
+  }
+
+  .stack > * {
+    position: relative;
+  }
+
+  .face {
+    display: inline-grid;
+    place-items: center;
+    flex-shrink: 0;
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+    overflow: hidden;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface);
+    box-shadow:
+      0 0 0 1.5px var(--st-cutout),
+      inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text-muted);
+  }
+
+  .face[data-kind='image'],
+  .face[data-kind='file'] {
+    border-radius: var(--nc-radius-xs);
+    corner-shape: var(--nc-corner-shape);
+  }
+
+  .face > img {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  .face > svg {
+    inline-size: 0.625rem;
+    block-size: 0.625rem;
+  }
+
+  .more {
+    display: inline-grid;
+    place-items: center;
+    min-inline-size: 1.125rem;
+    block-size: 1.125rem;
+    padding: 0 0.25rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-gray-3);
+    box-shadow: 0 0 0 1.5px var(--st-cutout);
+    font-size: 0.625rem;
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-muted);
+  }
+
+  .chipList {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1-5);
+    margin: 0 0 var(--nc-space-2);
+    padding: 0 0 0 var(--st-indent);
+    list-style: none;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    max-inline-size: 16rem;
+    block-size: 1.625rem;
+    padding: 0 var(--nc-space-2-5) 0 var(--nc-space-1);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    text-decoration: none;
+    --st-cutout: transparent;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  a.chip:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 1px;
+  }
+
+  @media (hover: hover) {
+    a.chip:hover {
+      background: var(--nc-wash-2);
+      color: var(--nc-text);
+    }
+  }
+
+  .chipLabel {
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  /* ── The line beneath, while it runs ──────────────────────────────── */
+  .below {
+    display: grid;
+    grid-template-rows: 0fr;
+    padding-inline-start: var(--st-indent);
+    opacity: 0;
+    transition:
+      grid-template-rows var(--nc-spring-soft-duration) var(--nc-spring-soft),
+      margin var(--nc-spring-soft-duration) var(--nc-spring-soft),
+      opacity var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  /* Tucked up under the headline: the two read as one. */
+  .below[data-shown] {
+    grid-template-rows: 1fr;
+    margin-block-start: calc(-1 * var(--nc-space-1-5));
+    opacity: 1;
+  }
+
+  .belowInner {
+    min-block-size: 0;
+    overflow: hidden;
+  }
+
+  .live {
+    margin-block-end: var(--nc-space-1-5);
+  }
+
+  .stuck {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    margin: 0 0 var(--nc-space-1-5);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--st-warning-text);
+    text-wrap: pretty;
+  }
+
+  .stuck > svg {
+    flex-shrink: 0;
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+
+  /* ── Opened: the steps ────────────────────────────────────────────── */
+  .content {
+    overflow: hidden;
+  }
+
+  .content[data-state='open'] {
+    animation: st-open var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .content[data-state='closed'] {
+    animation: st-close var(--nc-duration-base) var(--nc-ease-in-out);
+  }
+
+  @keyframes st-open {
+    from {
+      block-size: 0;
+      opacity: 0;
+    }
+    to {
+      block-size: var(--radix-collapsible-content-height);
+      opacity: 1;
+    }
+  }
+
+  @keyframes st-close {
+    from {
+      block-size: var(--radix-collapsible-content-height);
+      opacity: 1;
+    }
+    to {
+      block-size: 0;
+      opacity: 0;
+    }
+  }
+
+  .panel {
+    padding: var(--nc-space-1) 0 var(--nc-space-2);
+  }
+
+  .timeline {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .step {
+    position: relative;
+    display: grid;
+    grid-template-columns: var(--st-well) minmax(0, 1fr);
+    column-gap: var(--st-gap);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+  }
+
+  /* The thread from one step to the next, through the middle of their dots. */
+  .step::before {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: calc(var(--st-well) / 2 - 0.5px);
+    inline-size: 1px;
+    background: var(--nc-border);
+  }
+
+  .step:first-child::before {
+    inset-block-start: calc(var(--nc-space-1) + 0.5lh);
+  }
+
+  .step[data-last]::before {
+    inset-block-end: auto;
+    block-size: calc(var(--nc-space-1) + 0.5lh);
+  }
+
+  .step:only-child::before {
+    display: none;
+  }
+
+  .stepDot {
+    position: relative;
+    z-index: 1;
+    justify-self: center;
+    inline-size: 7px;
+    block-size: 7px;
+    /* On the first line's middle. */
+    margin-block-start: calc(var(--nc-space-1) + 0.5lh * 1 - 3.5px);
+    border-radius: var(--nc-radius-full);
+    background: var(--st-cutout);
+    box-shadow: inset 0 0 0 1.5px var(--nc-gray-8);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    transition:
+      background-color var(--nc-duration-slow) var(--nc-ease-out),
+      box-shadow var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .step[data-status='success'] > .stepDot {
+    background: var(--nc-gray-8);
+    box-shadow: 0 0 0 2px var(--st-cutout);
+  }
+
+  .step[data-status='running'] > .stepDot {
+    background: var(--nc-accent-9);
+    box-shadow:
+      0 0 0 2px var(--st-cutout),
+      0 0 0 4px color-mix(in oklch, var(--nc-accent-9) 22%, transparent);
+    animation: st-beat 1.8s var(--nc-ease-in-out) infinite;
+  }
+
+  .step[data-failed] > .stepDot {
+    background: var(--st-warning);
+    box-shadow: 0 0 0 2px var(--st-cutout);
+  }
+
+  .step[data-arriving][data-status='success'] > .stepDot,
+  .step[data-arriving][data-failed] > .stepDot {
+    animation: st-settle var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  @keyframes st-beat {
+    50% {
+      box-shadow:
+        0 0 0 2px var(--st-cutout),
+        0 0 0 6px color-mix(in oklch, var(--nc-accent-9) 0%, transparent);
+    }
+  }
+
+  .stepMain {
+    min-inline-size: 0;
+  }
+
+  .stepHead {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-1);
+  }
+
+  .stepToggle {
+    appearance: none;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+    flex: 1;
+    min-inline-size: 0;
+    margin: 0 calc(-1 * var(--nc-space-1-5));
+    padding: var(--nc-space-1) var(--nc-space-1-5);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    text-align: start;
+  }
+
+  button.stepToggle {
+    cursor: pointer;
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    button.stepToggle:hover {
+      background: var(--nc-wash-1);
+    }
+  }
+
+  /* Inset: the step's wash bleeds to the panel's edge, which clips. */
+  button.stepToggle:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+
+  .stepBody {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .stepLine {
+    display: flex;
+    align-items: baseline;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+  }
+
+  .stepText {
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--nc-text);
+  }
+
+  .step[data-status='pending'] .stepText {
+    color: var(--nc-text-subtle);
+  }
+
+  .step[data-status='running'] .stepText {
+    color: transparent;
+    background: linear-gradient(
+        100deg,
+        var(--nc-text-muted) 0 40%,
+        var(--nc-text) 50%,
+        var(--nc-text-muted) 60% 100%
+      )
+      0 0 / 250% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    animation: st-sweep 2.2s var(--nc-ease-in-out) infinite;
+  }
+
+  @keyframes st-sweep {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: 0% 0;
+    }
+  }
+
+  .stepOutcome {
+    flex: 0 100 auto;
+    min-inline-size: 2rem;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--nc-text-muted);
+  }
+
+  .step[data-failed] .stepOutcome {
+    color: var(--st-warning-text);
+  }
+
+  .subject {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-family: var(--nc-font-mono);
+    font-size: 0.72rem;
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-subtle);
+  }
+
+  .stepTime {
+    flex-shrink: 0;
+    font-size: var(--nc-text-xs);
+    line-height: calc(var(--nc-text-sm) * var(--nc-leading-normal));
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-subtle);
+  }
+
+  .stepChevron {
+    flex-shrink: 0;
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    margin-block-start: 0.25rem;
+    color: var(--nc-text-subtle);
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .step[data-state='open'] .stepChevron {
+    transform: rotate(90deg);
+  }
+
+  /*
+   * "Why?" waits for the pointer or the keyboard, in the place the step's
+   * duration holds: the duration steps aside while it's there. On a touch
+   * screen it's always there.
+   */
+  .stepHead {
+    position: relative;
+  }
+
+  .why {
+    appearance: none;
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-end: calc(-1 * var(--nc-space-1-5));
+    margin: 0;
+    padding: var(--nc-space-1) var(--nc-space-1-5);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: var(--nc-text-muted);
+    font: inherit;
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    line-height: calc(var(--nc-text-sm) * var(--nc-leading-normal));
+    cursor: pointer;
+    transition:
+      opacity var(--nc-duration-fast) var(--nc-ease-out),
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  /* Past the raw call's chevron, its right edge on the duration's. */
+  .step[data-raw] .why {
+    inset-inline-end: calc(0.75rem + var(--nc-space-2) - var(--nc-space-1-5));
+  }
+
+  .stepTime {
+    min-inline-size: 2.75rem;
+    text-align: end;
+    transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .stepHead:has(> .why) .stepTime {
+    opacity: 0;
+  }
+
+  @media (hover: hover) {
+    .stepHead:has(> .why) .stepTime {
+      opacity: 1;
+    }
+    .why:not([data-open]) {
+      opacity: 0;
+    }
+    .stepHead:hover > .why,
+    .why:focus-visible {
+      opacity: 1;
+    }
+    .stepHead:has(> .why):hover .stepTime,
+    .stepHead:has(> .why:focus-visible, > .why[data-open]) .stepTime {
+      opacity: 0;
+    }
+    .why:hover {
+      background: var(--nc-wash-2);
+      color: var(--nc-text);
+    }
+  }
+
+  .why[data-open] {
+    color: var(--nc-text-accent);
+  }
+
+  .why:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+
+  /* The answer: a small bubble that points back up at its question. */
+  .whyBox {
+    position: relative;
+    margin: var(--nc-space-1) 0 var(--nc-space-1-5);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+    --nc-enter-y: -3px;
+  }
+
+  .whyBox[data-phase='loading'],
+  .whyBox[data-phase='answer'] {
+    padding: var(--nc-space-2) var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .whyBox[data-phase='loading']::before,
+  .whyBox[data-phase='answer']::before {
+    content: '';
+    position: absolute;
+    inset-block-start: -4px;
+    inset-inline-end: 1.1rem;
+    inline-size: 8px;
+    block-size: 8px;
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 1px 1px 0 0 var(--nc-border-subtle);
+    transform: rotate(45deg);
+    border-start-start-radius: 2px;
+  }
+
+  .answer,
+  .asking,
+  .unavailable {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-relaxed);
+    text-wrap: pretty;
+  }
+
+  .answer {
+    color: var(--nc-text-muted);
+  }
+
+  .word {
+    animation: nc-settle 640ms var(--nc-ease-out) calc(var(--i, 0) * 32ms) both;
+  }
+
+  .asking {
+    color: transparent;
+    background: linear-gradient(
+        100deg,
+        var(--nc-text-subtle) 0 40%,
+        var(--nc-text) 50%,
+        var(--nc-text-subtle) 60% 100%
+      )
+      0 0 / 250% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    animation: st-sweep 1.8s var(--nc-ease-in-out) infinite;
+  }
+
+  .unavailable {
+    color: var(--nc-text-subtle);
+  }
+
+  .found {
+    margin: var(--nc-space-1) 0 var(--nc-space-2);
+  }
+
+  .rawContent {
+    overflow: hidden;
+  }
+
+  .rawContent[data-state='open'] {
+    animation: st-open var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .rawContent[data-state='closed'] {
+    animation: st-close var(--nc-duration-base) var(--nc-ease-in-out);
+  }
+
+  .raw {
+    margin: var(--nc-space-1) 0 var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .repeats {
+    margin: var(--nc-space-1) 0 0;
+    padding-inline-start: var(--st-indent);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  /* ── Reduced motion: everything is simply there ───────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    .well[data-status='running'] > .orbit {
+      animation: none;
+    }
+    .glint,
+    .morphOut {
+      display: none;
+    }
+    .root[data-arriving] .outcome,
+    .morphIn > [data-fresh],
+    .word,
+    .well[data-arriving] .badge,
+    .well[data-arriving] .badge path,
+    .well[data-arriving] > .glyph,
+    .step > .stepDot,
+    .whyBox {
+      animation: none;
+    }
+    .step[data-status='running'] .stepText,
+    .asking {
+      animation: none;
+      background: none;
+      color: var(--nc-text-muted);
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .well[data-status='running'] > .orbit {
+    animation: none;
+  }
+
+  :global([data-nacre-motion='reduced']) .glint,
+  :global([data-nacre-motion='reduced']) .morphOut {
+    display: none;
+  }
+
+  :global([data-nacre-motion='reduced']) .root[data-arriving] .outcome,
+  :global([data-nacre-motion='reduced']) .morphIn > [data-fresh],
+  :global([data-nacre-motion='reduced']) .word,
+  :global([data-nacre-motion='reduced']) .well[data-arriving] .badge,
+  :global([data-nacre-motion='reduced']) .well[data-arriving] .badge path,
+  :global([data-nacre-motion='reduced']) .well[data-arriving] > .glyph,
+  :global([data-nacre-motion='reduced']) .step > .stepDot,
+  :global([data-nacre-motion='reduced']) .whyBox {
+    animation: none;
+  }
+
+  :global([data-nacre-motion='reduced']) .step[data-status='running'] .stepText,
+  :global([data-nacre-motion='reduced']) .asking {
+    animation: none;
+    background: none;
+    color: var(--nc-text-muted);
+  }
+}

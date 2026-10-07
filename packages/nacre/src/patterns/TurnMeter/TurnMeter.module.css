@@ -1,0 +1,63 @@
+@layer nacre.components {
+  .meter {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-subtle);
+    white-space: nowrap;
+  }
+
+  /* While the turn runs, one small pearl breathes before the numbers. */
+  .pulse {
+    display: none;
+    flex-shrink: 0;
+    inline-size: 6px;
+    block-size: 6px;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-9);
+  }
+
+  .meter[data-running] .pulse {
+    display: block;
+    animation: nc-breathe 2.4s var(--nc-ease-in-out) infinite;
+  }
+
+  .parts {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+    overflow: hidden;
+    block-size: 1lh;
+  }
+
+  .slot {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+  }
+
+  .part {
+    display: inline-block;
+  }
+
+  .sep {
+    opacity: 0.7;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .meter[data-running] .pulse {
+      animation: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .meter[data-running] .pulse {
+    animation: none;
+  }
+}

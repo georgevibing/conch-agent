@@ -1,0 +1,132 @@
+@layer nacre.components {
+  .stack {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  /* Stories stack closer than the parts of a reply: they're one run. */
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    min-inline-size: 0;
+  }
+
+  .earlier {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .fold {
+    --sk-bleed: var(--nc-space-2);
+
+    appearance: none;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+    inline-size: calc(100% + 2 * var(--sk-bleed));
+    min-block-size: 2rem;
+    margin: 0 calc(-1 * var(--sk-bleed));
+    padding: 0 var(--sk-bleed);
+    border: 0;
+    border-radius: var(--nc-chat-row-radius);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: var(--nc-text-subtle);
+    font: inherit;
+    font-size: var(--nc-text-xs);
+    text-align: start;
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .fold:hover {
+      background: var(--nc-wash-1);
+      color: var(--nc-text-muted);
+    }
+  }
+
+  .fold:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 0;
+  }
+
+  /* In the wells' column: a quiet stack, for what's folded under it. */
+  .fwell {
+    display: inline-grid;
+    place-items: center;
+    flex-shrink: 0;
+    inline-size: 1.375rem;
+    block-size: 1.375rem;
+    border-radius: var(--nc-radius-full);
+    box-shadow: inset 0 0 0 1px var(--nc-border);
+    color: var(--nc-text-subtle);
+  }
+
+  .fwell > svg {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+
+  .foldText {
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .foldNote {
+    color: light-dark(oklch(0.5 0.1 var(--nc-warning-h)), oklch(0.82 0.09 var(--nc-warning-h)));
+  }
+
+  .chevron {
+    flex-shrink: 0;
+    inline-size: 0.8rem;
+    block-size: 0.8rem;
+    opacity: 0.8;
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .earlier[data-state='open'] > .fold .chevron {
+    transform: rotate(90deg);
+  }
+
+  .content {
+    overflow: hidden;
+  }
+
+  .content[data-state='open'] {
+    animation: sk-open var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .content[data-state='closed'] {
+    animation: sk-close var(--nc-duration-base) var(--nc-ease-in-out);
+  }
+
+  @keyframes sk-open {
+    from {
+      block-size: 0;
+      opacity: 0;
+    }
+    to {
+      block-size: var(--radix-collapsible-content-height);
+      opacity: 1;
+    }
+  }
+
+  @keyframes sk-close {
+    from {
+      block-size: var(--radix-collapsible-content-height);
+      opacity: 1;
+    }
+    to {
+      block-size: 0;
+      opacity: 0;
+    }
+  }
+}

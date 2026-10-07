@@ -1,0 +1,138 @@
+@layer nacre.components {
+  .line {
+    --ll-color: var(--nc-text-muted);
+    --ll-bright: var(--nc-text);
+    --ll-rise: 0.55em;
+
+    position: relative;
+    display: grid;
+    min-inline-size: 0;
+    /* The line's height is held, whatever it says, so nothing below it moves. */
+    block-size: 1lh;
+    overflow: clip;
+    overflow-clip-margin: 2px;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--ll-color);
+  }
+
+  .line[data-tone='quiet'] {
+    --ll-color: var(--nc-text-subtle);
+    --ll-bright: var(--nc-text-muted);
+  }
+
+  .line[data-tone='warning'] {
+    --ll-color: light-dark(oklch(0.5 0.1 var(--nc-warning-h)), oklch(0.8 0.09 var(--nc-warning-h)));
+    --ll-bright: light-dark(
+      oklch(0.36 0.1 var(--nc-warning-h)),
+      oklch(0.92 0.06 var(--nc-warning-h))
+    );
+  }
+
+  /* The assistant's own words wear the reasoning trail's serif italic. */
+  .line[data-source='provider'] {
+    font-family: var(--nc-font-display);
+    font-size: calc(var(--nc-text-xs) * 1.14);
+    font-style: italic;
+    letter-spacing: 0.005em;
+  }
+
+  .text {
+    grid-area: 1 / 1;
+    display: block;
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .text[data-entering] {
+    animation: ll-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  .text[data-leaving] {
+    animation: ll-out var(--nc-duration-slow) var(--nc-ease-in) both;
+  }
+
+  /* While the work goes on, a band of light moves along the words. */
+  .line[data-active] .text:not([data-leaving]) {
+    color: transparent;
+    background: linear-gradient(
+        100deg,
+        var(--ll-color) 0 38%,
+        var(--ll-bright) 50%,
+        var(--ll-color) 62% 100%
+      )
+      0 0 / 260% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    animation-name: ll-in, ll-sweep;
+    animation-duration: var(--nc-spring-soft-duration), 2.4s;
+    animation-timing-function: var(--nc-spring-soft), var(--nc-ease-in-out);
+    animation-iteration-count: 1, infinite;
+    animation-fill-mode: both, none;
+  }
+
+  /* A line that hasn't changed yet doesn't rise in: it's simply there. */
+  .line[data-active] .text:not([data-leaving], [data-entering]) {
+    animation-name: none, ll-sweep;
+  }
+
+  @keyframes ll-in {
+    from {
+      opacity: 0;
+      transform: translateY(var(--ll-rise));
+      filter: blur(3px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+      filter: blur(0);
+    }
+  }
+
+  @keyframes ll-out {
+    from {
+      opacity: 1;
+      transform: none;
+      filter: blur(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(calc(var(--ll-rise) * -0.8));
+      filter: blur(3px);
+    }
+  }
+
+  @keyframes ll-sweep {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: 0% 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .text[data-entering],
+    .line[data-active] .text:not([data-leaving]) {
+      animation: none;
+      color: var(--ll-color);
+      background: none;
+    }
+    .text[data-leaving] {
+      display: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .text[data-entering],
+  :global([data-nacre-motion='reduced']) .line[data-active] .text:not([data-leaving]) {
+    animation: none;
+    color: var(--ll-color);
+    background: none;
+  }
+
+  :global([data-nacre-motion='reduced']) .text[data-leaving] {
+    display: none;
+  }
+}
