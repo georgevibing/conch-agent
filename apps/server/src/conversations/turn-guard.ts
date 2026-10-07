@@ -71,7 +71,18 @@ export function guardTurn(
       const before = watch.call(name, args);
       stop(before);
       if (paused) return NOT_RUN;
-      const result = await tool.run(args);
+      let result: Awaited<ReturnType<HostTool['run']>>;
+      try {
+        result = await tool.run(args);
+      } catch (error) {
+        // A failure is an answer too: failures in a row earn the model a word (ADR 0101),
+        // carried in the error it reads, since that's all it will see of this call.
+        const said = error instanceof Error ? error.message : String(error);
+        const after = watch.result(name, args, said, true);
+        stop(after);
+        if (after.kind !== 'nudge' || input.signal.aborted) throw error;
+        throw Object.assign(new Error(withNote(said, after.note)), { cause: error });
+      }
       const after = watch.result(name, args, hostToolText(result), false);
       stop(after);
       const notes = [before, after].flatMap((v) => (v.kind === 'nudge' ? [v.note] : []));

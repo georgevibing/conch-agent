@@ -16,7 +16,16 @@ export const SITE = {
   login: { username: 'ada.eval', password: 'shells-' + 'and-tides-42' },
   meter: '4729',
   cheapestHotel: { name: 'Casa Azul', perNight: 78 },
+  /** On the price list page; its CSV export is always down (ADR 0101). */
+  kettle: { name: 'Copper Kettle', price: 64.9 },
 } as const;
+
+const PRICES: [string, number][] = [
+  ['Steel Kettle', 39.5],
+  [SITE.kettle.name, SITE.kettle.price],
+  ['Copper Pan', 54.0],
+  ['Bread Tin', 12.75],
+];
 
 export interface Submissions {
   signup: Record<string, string>[];
@@ -139,7 +148,7 @@ export async function startSite(): Promise<FixtureSite> {
         page(
           'Eval site',
           '<h1>Eval site</h1><ul>' +
-            ['signup', 'shop', 'account', 'meter', 'upload', 'list', 'trips']
+            ['signup', 'shop', 'account', 'meter', 'upload', 'list', 'trips', 'prices']
               .map((p) => `<li><a href="/${p}">${p}</a></li>`)
               .join('') +
             '</ul>',
@@ -253,6 +262,21 @@ export async function startSite(): Promise<FixtureSite> {
             `i.value='';document.getElementById('qty').value='1';});` +
             `document.getElementById('save').addEventListener('click',async()=>{await fetch('/list/save',{method:'POST',body:JSON.stringify({items})});` +
             `document.getElementById('saved').textContent='Saved '+items.length+' items.';});`,
+        ),
+      );
+    // The export a person names first is down; the same prices are on the page (ADR 0101).
+    if (path === '/prices.csv')
+      return send(
+        page('Export unavailable', '<h1>503</h1><p>The export service is unavailable.</p>'),
+        503,
+      );
+    if (path === '/prices')
+      return send(
+        page(
+          'Price list',
+          '<h1>Price list</h1><table><thead><tr><th>Item</th><th>Price (EUR)</th></tr></thead><tbody>' +
+            PRICES.map(([n, p]) => `<tr><td>${n}</td><td>${p.toFixed(2)}</td></tr>`).join('') +
+            '</tbody></table><p><a href="/prices.csv">Download as CSV</a></p>',
         ),
       );
     if (path === '/trips')

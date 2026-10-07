@@ -76,6 +76,9 @@
   have them check in at limits of their own (Settings → Usage). Conch asks every
   provider that caches to keep what it has already read, so long tasks cost less, and
   a small model on this computer gets a lean setup that fits it.
+- **It doesn't give up at the first error.** Every model, whatever its persona,
+  reads what went wrong, tries another way and checks its work before it says
+  done. When it's stuck, it says what it tried and the one thing you can do.
 - **Commands that work with every model.** Type `/` for a list that completes
   as you type, with each command's choices and the one in use ticked, on a phone
   too: `/clear` to start afresh (with Undo), `/goal` to keep the chat on track,

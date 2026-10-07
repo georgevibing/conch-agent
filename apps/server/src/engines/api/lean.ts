@@ -18,6 +18,7 @@
  *
  * Pure: the engine decides when, this file says what.
  */
+import { withResilience } from '../../conversations/resilience';
 import { estimateTokens } from './context';
 import type { ToolSpec } from './types';
 
@@ -43,6 +44,8 @@ const KEEP: readonly { heading: RegExp; max: number }[] = [
   { heading: /^# Who you are\b/, max: 1_600 },
   { heading: /^# About the user\b/, max: 800 },
   { heading: /^# Memory\b/, max: 1_800 },
+  // How it works on a problem (ADR 0101), in its compact form by then.
+  { heading: /^# How you work on a problem\b/, max: 700 },
   { heading: /^# What you can do in this conversation\b/, max: 1_200 },
 ];
 
@@ -57,7 +60,8 @@ const PREAMBLE_MAX = 1_200;
 export function leanSystem(system: string, options: { tools: boolean }): string {
   const blocks: string[] = [];
   let current: string[] = [];
-  for (const line of system.split('\n')) {
+  const fitted = withResilience(system, options.tools ? 'compact' : 'words');
+  for (const line of fitted.split('\n')) {
     if (/^#{1,2} /.test(line) && current.length) {
       blocks.push(current.join('\n'));
       current = [];

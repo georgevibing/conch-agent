@@ -1188,7 +1188,9 @@ function brief(task: Task): string {
       ? 'You are a helper working on one part of a bigger job, in the background. Nobody is watching this conversation, and you can’t ask the user anything: do the part as well as you can with what you have.'
       : 'You are working on a task the user sent to the background. They aren’t watching this conversation; they’ll read your result later.',
     'Do the work yourself: don’t start sub-agents or tasks of your own.',
-    'When you’re done, call report_result once with the result in a few short lines: what you found or did, and anything the user must know.',
+    // Nobody to ask, so a blocker is worked around where it safely can be, and reported where it can’t (ADR 0101).
+    'When a step fails, work through it as you would with them watching: find the cause, try another way, check the result. What only they can do (a sign-in, a key, a choice that’s theirs) you name instead of guessing.',
+    'When you’re done, call report_result once with the result in a few short lines: what you found or did, and anything the user must know. If you couldn’t finish, say what you tried, what’s in the way, and the one thing they can do.',
   ].join(' ');
 }
 

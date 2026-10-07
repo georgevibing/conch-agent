@@ -165,6 +165,11 @@ describe('the fixture site', () => {
       expect(convert(meter)).not.toContain(SITE.meter);
       const product = await (await fetch(`${site.url}/shop/garden/blue-watering-can`)).text();
       expect(product).toContain(SITE.orderCode);
+      // The export is always down; the page has the same prices (ADR 0101).
+      expect((await fetch(`${site.url}/prices.csv`)).status).toBe(503);
+      expect(await (await fetch(`${site.url}/prices`)).text()).toContain(
+        SITE.kettle.price.toFixed(2),
+      );
     } finally {
       await site.close();
     }
