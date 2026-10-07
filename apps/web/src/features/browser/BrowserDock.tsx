@@ -1,4 +1,4 @@
-import { ResizeHandle, Sheet, toast, useMediaQuery } from '@conch/nacre';
+import { PanelPresence, ResizeHandle, Sheet, toast, useMediaQuery } from '@conch/nacre';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 
@@ -137,23 +137,21 @@ export function BrowserDock({
   return (
     <div ref={row} className={styles.row}>
       <div className={styles.chat}>{children}</div>
-      {open && (
-        <>
-          <ResizeHandle
-            label="Resize the browser"
-            value={size}
-            min={MIN_WIDTH}
-            max={max}
-            onValueChange={setWidth}
-            className={styles.handle}
-          />
-          <aside className={styles.pane} style={{ inlineSize: size }} aria-label="Browser panel">
-            {conversationId && (
-              <BrowserPanel conversationId={conversationId} onClose={closeBrowser} />
-            )}
-          </aside>
-        </>
-      )}
+      <PanelPresence open={open} side="right" className={styles.presence}>
+        <ResizeHandle
+          label="Resize the browser"
+          value={size}
+          min={MIN_WIDTH}
+          max={max}
+          onValueChange={setWidth}
+          className={styles.handle}
+        />
+        <aside className={styles.pane} style={{ inlineSize: size }} aria-label="Browser panel">
+          {conversationId && (
+            <BrowserPanel conversationId={conversationId} onClose={closeBrowser} />
+          )}
+        </aside>
+      </PanelPresence>
     </div>
   );
 }

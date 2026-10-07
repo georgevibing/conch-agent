@@ -10,19 +10,9 @@
     background: var(--nc-term-bg);
     border-block-start: 1px solid var(--nc-border-subtle);
     box-shadow: 0 -1px 0 color-mix(in oklch, var(--nc-surface-hi) 60%, transparent) inset;
-    animation: term-surface var(--nc-spring-soft-duration) var(--nc-spring-soft);
   }
 
-  @keyframes term-surface {
-    from {
-      opacity: 0;
-      transform: translateY(12px);
-    }
-    to {
-      opacity: 1;
-      transform: none;
-    }
-  }
+  /* It arrives and leaves inside a PanelPresence (side="bottom"), like every panel. */
 
   .tabsRoot {
     display: flex;

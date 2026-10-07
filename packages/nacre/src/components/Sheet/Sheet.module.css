@@ -72,12 +72,14 @@
     --sheet-size: 85dvh;
   }
 
+  /* The panel timing every panel shares; it slides all the way from the edge,
+     the glint (motion.css) crosses it on the way. */
   .content[data-state='open'] {
-    animation: sheet-in var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+    animation: sheet-in var(--nc-panel-in-duration) var(--nc-spring-snappy);
   }
 
   .content[data-state='closed'] {
-    animation: sheet-out var(--nc-duration-base) var(--nc-ease-in) forwards;
+    animation: sheet-out var(--nc-panel-out-duration) var(--nc-ease-in) forwards;
   }
 
   @keyframes sheet-in {

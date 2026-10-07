@@ -37,6 +37,15 @@ Each component lives in `src/components/<Name>/` (patterns in `src/patterns/<Nam
   _barely_ there. Lustre should be felt more than seen.
 - **Do** use the spring tokens for transform transitions and `--nc-ease-out` for colour.
 - **Do** test in light + dark and at `lustre=0`, `motion=reduced` (Storybook toolbar).
+- **Do** bring every panel in and out with **glint**, the one panel motion: wrap a
+  docked panel (browser, terminal, artifacts, sidebar…) in
+  `<PanelPresence open side="right|left|bottom|top">`. It plays the exit before
+  unmounting and keeps the panel's last content during it. Use `keepMounted` +
+  `appear={false}` for a panel that stays in the page (the sidebar). Overlays use
+  `Sheet`, which already carries the glint. Timing: `--nc-panel-{in,out,glint}-duration`.
+  See [NACRE.md § Panels](../../docs/design/NACRE.md#panels-one-motion-glint).
+- **Don't** hand-roll a panel's entrance or exit (its own keyframes, `nc-surface-in`,
+  a `motion` animation): every panel moves the same way.
 - **Don't** use `backdrop-filter` blur. Nacre is opaque.
 - **Don't** encode meaning only in colour or iridescence.
 - **Don't** import from `src/components/**` in apps — use the barrel.

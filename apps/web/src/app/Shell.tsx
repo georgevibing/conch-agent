@@ -1,4 +1,12 @@
-import { IconButton, LiveTitle, Sheet, Spinner, Text, useMediaQuery } from '@conch/nacre';
+import {
+  IconButton,
+  LiveTitle,
+  PanelPresence,
+  Sheet,
+  Spinner,
+  Text,
+  useMediaQuery,
+} from '@conch/nacre';
 import { Menu, PanelLeftOpen, TextSearch } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
@@ -231,9 +239,15 @@ export function Shell() {
           inert={!showSidebar}
           aria-hidden={!showSidebar || undefined}
         >
-          <div className={styles.sidebarInner}>
+          <PanelPresence
+            open={showSidebar}
+            side="left"
+            keepMounted
+            appear={false}
+            className={styles.sidebarInner}
+          >
             <Sidebar />
-          </div>
+          </PanelPresence>
         </aside>
       )}
       {narrow && (

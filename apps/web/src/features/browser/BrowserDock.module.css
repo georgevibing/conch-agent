@@ -17,14 +17,19 @@
     align-self: stretch;
   }
 
-  /* The panel surfaces from the right edge. */
+  /* The handle and the panel, arriving from the right edge together (PanelPresence). */
+  .presence {
+    --nc-glint-inset: 0 var(--nc-space-3) var(--nc-space-3) var(--nc-space-3);
+    --nc-glint-radius: var(--nc-radius-xl);
+    display: flex;
+    flex-shrink: 0;
+    min-inline-size: 0;
+  }
+
   .pane {
-    --nc-enter-x: 24px;
-    --nc-enter-y: 0px;
     flex-shrink: 0;
     min-inline-size: 0;
     padding: 0 var(--nc-space-3) var(--nc-space-3) 0;
-    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
   }
 
   .sheet {

@@ -4,6 +4,7 @@ import {
   DropdownMenu,
   FindBar,
   IconButton,
+  PanelPresence,
   ResizeHandle,
   TerminalKeys,
   TerminalNotice,
@@ -54,11 +55,21 @@ export function tabTitle(info: TerminalInfo): string {
  */
 export function TerminalDock() {
   const open = useUi((s) => s.terminalOpen);
+  const max = useUi((s) => s.terminalMax);
   const toggle = useUi((s) => s.toggleTerminal);
   const newTerminal = useUi((s) => s.newTerminal);
   useHotkey('mod+`', () => toggle());
   useHotkey('mod+shift+`', () => newTerminal());
-  return open ? <Drawer /> : null;
+  return (
+    <PanelPresence
+      open={open}
+      side="bottom"
+      className={styles.presence}
+      data-max={max || undefined}
+    >
+      <Drawer />
+    </PanelPresence>
+  );
 }
 
 function Drawer() {
