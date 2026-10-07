@@ -540,7 +540,10 @@ export class ClaudeCodeEngine implements Engine {
             const id = toolUseIdOf(extra);
             if (id && typeof result !== 'string' && result.view) views.set(id, result.view);
             // The model gets the text (and pictures); the view is never sent to it.
-            return { content: sdkContent(result) };
+            return {
+              content: sdkContent(result),
+              isError: typeof result !== 'string' && result.isError === true,
+            };
           },
           { alwaysLoad: t.alwaysLoad, searchHint: t.searchHint },
         ),

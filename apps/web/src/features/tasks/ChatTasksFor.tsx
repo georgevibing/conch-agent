@@ -1,4 +1,4 @@
-import type { Task } from '@conch/protocol';
+import { assessTask, type Task } from '@conch/protocol';
 import { ChatTasks, type ChatTask } from '@conch/nacre';
 import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router';
@@ -83,6 +83,7 @@ export function ChatTasksFor({
       </NavLink>
     ),
     status: task.status,
+    unchecked: task.status === 'unverified' && assessTask(task).verdict === 'unchecked',
     kind: task.kind,
     current:
       task.status === 'needs-you' && task.asking

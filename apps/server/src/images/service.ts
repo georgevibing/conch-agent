@@ -208,6 +208,7 @@ export class ImageService {
     return [
       {
         name: 'image_models',
+        effect: 'read',
         row: true,
         description:
           'List available image-generation models and supported settings from OpenRouter. Works independently of the model answering this chat. Image generation needs an OpenRouter API key and is billed separately; image_generate offers connection when missing.',

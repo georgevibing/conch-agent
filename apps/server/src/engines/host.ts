@@ -14,6 +14,17 @@ import { SEALED_HINT } from './trust';
 import type { HostTool, TurnInput } from './types';
 
 const MAX_FILE = 1024 * 1024;
+/** Serialize Conch edits to one canonical file across tasks; external changes still face the precondition. */
+const mutations = new Map<string, Promise<unknown>>();
+async function mutateFile<T>(path: string, run: () => Promise<T>): Promise<T> {
+  const next = (mutations.get(path) ?? Promise.resolve()).catch(() => undefined).then(run);
+  mutations.set(path, next);
+  try {
+    return await next;
+  } finally {
+    if (mutations.get(path) === next) mutations.delete(path);
+  }
+}
 const within = (root: string, path: string) => {
   const rel = relative(root, path);
   return !rel || (!isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`));
@@ -244,6 +255,45 @@ export function hostComputerTools(input: TurnInput): HostTool[] {
     }
     return `Saved ${raw}.`;
   };
+  const digest = (content: string) => createHash('sha256').update(content).digest('hex');
+  const contents = async (path: string) => {
+    try {
+      return await read(path);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+      throw error;
+    }
+  };
+  const edited = (content: string, args: Record<string, unknown>) => {
+    const old = String(args.old_string);
+    if (!content.includes(old) || content.indexOf(old) !== content.lastIndexOf(old))
+      throw new Error('The text must match exactly once. Read the file and try again.');
+    return content.replace(old, String(args.new_string));
+  };
+  const mutation = async (
+    args: Record<string, unknown>,
+    checkpoint: Record<string, string> | undefined,
+    edit: boolean,
+  ) => {
+    const path = String(args.file_path);
+    return mutateFile(await hostPath(input, path, true), async () => {
+      const before = await contents(path);
+      if (checkpoint && (before === undefined ? 'absent' : digest(before)) !== checkpoint.before)
+        return {
+          text: 'The file changed before this edit. Read its current contents and try again.',
+          isError: true,
+          effect: 'not-executed' as const,
+        };
+      const after = edit ? edited(before ?? '', args) : String(args.content);
+      if (checkpoint && digest(after) !== checkpoint.after)
+        return {
+          text: 'The prepared edit no longer matches this file. Read it again.',
+          isError: true,
+          effect: 'not-executed' as const,
+        };
+      return write(path, after);
+    });
+  };
   const tools: HostTool[] = [
     {
       name: 'Read',
@@ -273,7 +323,7 @@ export function hostComputerTools(input: TurnInput): HostTool[] {
       description:
         'Create or replace a text file in an existing work-folder directory. Changes are undoable.',
       input: { file_path: file, content: z.string().max(MAX_FILE) },
-      run: async (args) => write(String(args.file_path), String(args.content)),
+      run: async (args, context) => mutation(args, context?.checkpoint, false),
     },
     {
       name: 'Edit',
@@ -283,13 +333,7 @@ export function hostComputerTools(input: TurnInput): HostTool[] {
         old_string: z.string().min(1).max(MAX_FILE),
         new_string: z.string().max(MAX_FILE),
       },
-      run: async (args) => {
-        const content = await read(String(args.file_path));
-        const old = String(args.old_string);
-        if (!content.includes(old) || content.indexOf(old) !== content.lastIndexOf(old))
-          throw new Error('The text must match exactly once. Read the file and try again.');
-        return write(String(args.file_path), content.replace(old, String(args.new_string)));
-      },
+      run: async (args, context) => mutation(args, context?.checkpoint, true),
     },
     {
       name: 'Bash',
@@ -308,11 +352,12 @@ export function hostComputerTools(input: TurnInput): HostTool[] {
     },
   ];
   for (const tool of tools) {
-    if (!['Read', 'LS', 'Write'].includes(tool.name)) continue;
-    const effect = tool.name === 'Write' ? 'write' : 'read';
+    if (!['Read', 'LS', 'Write', 'Edit'].includes(tool.name)) continue;
+    const effect = ['Write', 'Edit'].includes(tool.name) ? 'write' : 'read';
     const observations = new Map<string, string>();
     const originalRun = tool.run;
     tool.run = async (args, context) => {
+      if (context) observations.delete(context.operationId);
       const result = await originalRun(args, context);
       if (effect === 'read' && context)
         observations.set(
@@ -325,6 +370,20 @@ export function hostComputerTools(input: TurnInput): HostTool[] {
     };
     tool.verification = {
       effect,
+      ...(effect === 'write'
+        ? {
+            sequential: true,
+            prepare: async (args: Record<string, unknown>) => {
+              const before = await contents(String(args.file_path));
+              const after =
+                tool.name === 'Edit' ? edited(before ?? '', args) : String(args.content);
+              return {
+                before: before === undefined ? 'absent' : digest(before),
+                after: digest(after),
+              };
+            },
+          }
+        : {}),
       identity: (args) =>
         `${tool.name}:${resolve(input.cwd, String(args.file_path ?? args.path ?? '.'))}`,
       scope: async (args) => {
@@ -341,9 +400,10 @@ export function hostComputerTools(input: TurnInput): HostTool[] {
           expiresAt: Date.now() + 10 * 60_000,
         };
       },
-      reconcile: async (args, operationId) => {
+      reconcile: async (args, operationId, checkpoint) => {
         if (effect === 'read') {
           const digest = observations.get(operationId);
+          observations.delete(operationId);
           return digest
             ? {
                 state: 'confirmed',
@@ -357,13 +417,18 @@ export function hostComputerTools(input: TurnInput): HostTool[] {
         }
         try {
           const actual = await read(String(args.file_path));
-          if (actual !== args.content) return { state: 'unknown' };
-          const digest = createHash('sha256').update(actual).digest('hex');
+          if (
+            checkpoint
+              ? digest(actual) !== checkpoint.after
+              : tool.name !== 'Write' || actual !== args.content
+          )
+            return { state: 'unknown' };
+          const proof = digest(actual);
           return {
             state: 'confirmed',
             receipt: {
               provider: 'conch-files',
-              id: digest,
+              id: proof,
               label: `Verified ${String(args.file_path)}`,
             },
           };

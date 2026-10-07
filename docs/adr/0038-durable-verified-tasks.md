@@ -97,3 +97,62 @@ normal approvals, and cannot change accounts, recipients or content. The queued
 handoff is not evidence that a draft was saved. Oversized handoffs fail before
 persistence. Scoped workflows skip MCP initialization as well as filtering tools:
 untrusted source notes cannot start unrelated integration processes.
+
+## Amended 2026-10-07: execution, evidence and outcomes
+
+A completed turn and a verified goal are different facts. `assessTask` in the
+protocol is the single assessment used by task finalization, tool diagnostics,
+health and the UI. General tasks without trusted criteria finish with no error
+and say **Finished — outcome not checked**. They retain the existing `unverified`
+storage status for compatibility. Their model summary does not become proof.
+Guided workflows still require server-defined criteria; optional input hashes
+and receipt identities bind those criteria to a target, not merely a tool count.
+Criteria cannot grant tools or permissions.
+
+Read attempts append distinct observations. The latest attempt for each read
+identity must succeed to satisfy a required read; a failed attempt cannot reuse
+an older cached receipt. Conditional empty-source rules also retain every earlier
+nonempty observation in the goal revision. Optional failed reads do not block
+unrelated effects or a completed goal. Native reads are settled by actual engine
+result events, awaited before task finalization; late results after Stop do not
+settle evidence. Trusted host effect declarations are independent of receipt
+support. Remote tool descriptions and annotations do not establish these declarations.
+
+Local Write and Edit operations persist before/after content hashes before
+dispatch, check the precondition, and read back the resulting bytes. Edits to a
+canonical file are serialized across Conch tasks. A confirmed local predecessor
+may be followed by a new mutation; this does not apply to external writes. Artifact
+updates similarly persist a base version and verify the exact following version.
+Restored tasks remain constrained by the historical-backup rules above.
+
+There are two different reasons a write may have no receipt. If a declared
+reconciler fails, or execution fails/loses its response, the operation is uncertain
+and still blocks other writes and replay. If an opaque tool returns successfully
+but has no reconciler, Conch records successful execution and unavailable outcome
+verification. Distinct subsequent work can proceed; the same opaque operation
+cannot replay. This does not certify its outcome or allow changing a payload to
+bypass a failed declared reconciler. It is not possible to independently prove
+arbitrary shell or third-party effects from their success text. Such work is
+explicitly shown without outcome assurance. This is a change from globally
+blocking all subsequent work after every unsupported successful tool.
+
+Structured `isError` and trusted `not-executed` results survive every adapter.
+Health does not warn about missing optional criteria or proven no-dispatch.
+Task status includes bounded operation evidence and reason codes, without copying
+arguments, checkpoints or credentials. New optional ledger fields preserve the
+previous release's ability to read the file; older releases may conservatively
+require inspection of newer evidence.
+
+Threat model: models and remote tool content cannot fabricate host contracts,
+operation checkpoints or receipts. A model changing write arguments cannot evade
+an uncertain declared write. Sequential mutation is explicitly limited to local
+versioned tools and remains behind the same permission/path guards. Read evidence
+is scoped to an actual invocation and goal revision. General tasks never gain
+verification merely because the model says it finished. Tests cover stale and
+erased read evidence, precondition conflicts, duplicate writes, native result
+ordering, cancellation, account/consent changes and all four diagnostic flows.
+
+Sources reviewed: [RFC 9110 §9.2.2](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.2.2)
+(idempotence is a property of an operation, not its result text), and
+[OWASP Transaction Authorization](https://cheatsheetseries.owasp.org/cheatsheets/Transaction_Authorization_Cheat_Sheet.html)
+(server-controlled authorization, bound transaction data, and ordered transitions).

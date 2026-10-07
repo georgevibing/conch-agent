@@ -34,6 +34,7 @@ export function vaultTools(vault: VaultService, ctx: ToolContext): HostTool[] {
 
   const find: HostTool<{ query: z.ZodOptional<z.ZodString> }> = {
     name: 'passwords_find',
+    effect: 'read',
     description:
       'List the user’s saved passwords, cards, notes and keys by name and website (never their values). Use it to pick the item to fill with browser_type, or to read with passwords_read.',
     searchHint: 'password login sign in credentials saved account card note key secret',

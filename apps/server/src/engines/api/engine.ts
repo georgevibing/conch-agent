@@ -329,7 +329,7 @@ export function buildTools(
           input.signal.throwIfAborted();
           return { text: failureText(error), isError: true };
         }
-        return { ...result, text: withNotes(result.text, checked.notes), isError: false };
+        return { ...result, text: withNotes(result.text, checked.notes) };
       },
     }));
   }
@@ -357,7 +357,7 @@ export function buildTools(
 async function run(
   tool: HostTool,
   args: Record<string, unknown>,
-): Promise<{ text: string; view?: ToolView; images?: ToolImage[] }> {
+): Promise<{ text: string; isError: boolean; view?: ToolView; images?: ToolImage[] }> {
   // A HostTool validates its own arguments; the cast is the seam between an
   // untyped wire and a typed shape. A view is for the person, passed on beside
   // the text, never to the model; pictures go to a model that can see them
@@ -365,7 +365,12 @@ async function run(
   const result = await tool.run(args as never);
   const view = typeof result === 'string' ? undefined : result.view;
   const images = hostToolImages(result);
-  return { text: hostToolText(result), ...(view && { view }), ...(images && { images }) };
+  return {
+    text: hostToolText(result),
+    isError: typeof result !== 'string' && result.isError === true,
+    ...(view && { view }),
+    ...(images && { images }),
+  };
 }
 
 /** What a call the turn paused before gets, so every call has an answer. */

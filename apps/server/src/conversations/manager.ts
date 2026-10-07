@@ -197,6 +197,7 @@ export interface TurnExtras {
   tools?: HostTool[];
   /** Durable task ledger: invoked outside every host tool, independent of engine. */
   wrapTool?: (tool: HostTool) => HostTool;
+  afterTool?: (id: string, status: 'success' | 'error', output?: string) => Promise<void>;
   beforeTool?: (
     name: string,
     input: Record<string, unknown>,
@@ -3040,6 +3041,8 @@ export class ConversationManager {
             });
             break;
           case 'tool-end': {
+            if (!abort.signal.aborted && (event.status === 'success' || event.status === 'error'))
+              await extras?.afterTool?.(event.toolUseId, event.status, event.output);
             const settle = async () => {
               // A cancelled tool may return ordinary text while its remote action
               // is still uncertain. Only results observed before Stop settle it.

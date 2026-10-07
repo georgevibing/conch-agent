@@ -9,6 +9,7 @@ export function fileTools(ctx: ToolContext, access: () => Promise<FileAccess>): 
   return [
     {
       name: 'read_file',
+      effect: 'read',
       row: true,
       description:
         'Read a UTF-8 text file in the work folder or this chat’s attachments, up to 30 MB. Returns numbered lines and nextOffset; repeat with offset to continue. Binary PDF and Office files use read_document. Long lines are explicitly shortened.',
@@ -30,6 +31,7 @@ export function fileTools(ctx: ToolContext, access: () => Promise<FileAccess>): 
     },
     {
       name: 'search_files',
+      effect: 'read',
       row: true,
       description:
         'Search filenames and UTF-8 file contents in the work folder. Both filters are literal text, not regex. Returns paths, line numbers, matching text and continuation. No shell needed. Skips links, secrets, dependencies and build output.',

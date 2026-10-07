@@ -1,7 +1,7 @@
 /** Write-ahead, fail-closed effect ledger. Model text is never evidence. */
 import { createHash } from 'node:crypto';
 
-import { TaskReceipt, type Task, type TaskOperation } from '@conch/protocol';
+import { assessTask, TaskReceipt, type Task, type TaskOperation } from '@conch/protocol';
 
 import type { HostTool } from '../engines/types';
 
@@ -43,15 +43,63 @@ export class TaskOperations {
   }
 
   async #save(operation: TaskOperation): Promise<void> {
-    await this.update((task) => ({
-      operations: [
-        ...(task.operations ?? []).filter((entry) => entry.id !== operation.id),
-        operation,
-      ],
-    }));
+    await this.update((task) => {
+      // Stop wins even if it arrives while reconciliation or persistence is awaiting I/O.
+      if (
+        this.stopped() &&
+        (operation.state === 'confirmed' || operation.execution === 'succeeded')
+      )
+        return {};
+      // Completion can arrive out of order. Preserve invocation order so an older
+      // read cannot become the latest evidence just by finishing last.
+      const operations = [...(task.operations ?? [])];
+      const at = operations.findIndex((entry) => entry.id === operation.id);
+      if (at < 0) operations.push(operation);
+      else operations[at] = operation;
+      return { operations };
+    });
   }
 
-  wrap(tool: HostTool): HostTool {
+  wrap(original: HostTool): HostTool {
+    // A trusted host read needs an observation, not an external-effect reconciler.
+    const observations = new Map<string, string>();
+    const tool: HostTool =
+      original.effect === 'read' && !original.verification
+        ? {
+            ...original,
+            run: async (args, context) => {
+              const result = await original.run(args, context);
+              if (context && (typeof result === 'string' || !result.isError))
+                observations.set(
+                  context.operationId,
+                  hash(typeof result === 'string' ? result : result.text),
+                );
+              return result;
+            },
+            verification: {
+              effect: 'read',
+              scope: async () => ({
+                account: 'conch-host',
+                authorization: 'read',
+                expiresAt: Number.MAX_SAFE_INTEGER,
+              }),
+              reconcile: async (_args, id) => {
+                const digest = observations.get(id);
+                observations.delete(id);
+                return digest
+                  ? {
+                      state: 'confirmed',
+                      receipt: {
+                        provider: 'conch-host',
+                        id: digest,
+                        label: `Read with ${original.name}`,
+                      },
+                    }
+                  : { state: 'absent' };
+              },
+            },
+          }
+        : original;
     if (tool.name === 'report_result') return tool;
     return {
       ...tool,
@@ -83,7 +131,16 @@ export class TaskOperations {
             identity: contract?.identity?.(args) ?? args,
             goalRevision: task.goalRevision ?? 0,
           });
-          let operation = task.operations?.find((entry) => entry.key === key);
+          const history = (task.operations ?? []).filter((entry) => entry.key === key);
+          // Reads are observations, not deduplicated effects. Preserve nonempty and failed attempts.
+          let operation = contract?.effect === 'read' ? undefined : history.at(-1);
+          if (operation?.state === 'confirmed' && contract?.sequential && !task.restored) {
+            const current =
+              operation.inputHash === inputHash
+                ? await contract.reconcile(args, operation.id, operation.checkpoint)
+                : undefined;
+            if (current?.state !== 'confirmed') operation = undefined;
+          }
           const limit = task.toolScope?.limits?.[tool.name];
           if (
             !operation &&
@@ -97,9 +154,10 @@ export class TaskOperations {
               'This task reached the approved number of actions for this tool. Review its results before adding a new instruction.',
             );
           // Old versions used an input-only key: preserve their evidence on upgrade.
-          operation ??= task.operations?.find(
-            (entry) => entry.key === hash({ tool: tool.name, args }),
-          );
+          if (contract?.effect !== 'read')
+            operation ??= task.operations?.find(
+              (entry) => entry.key === hash({ tool: tool.name, args }),
+            );
           if (
             task.operations?.some(
               (entry) => entry.tool === tool.name && entry.account !== scope.account,
@@ -121,7 +179,10 @@ export class TaskOperations {
             contract?.effect !== 'read' &&
             task.operations?.some(
               (entry) =>
-                entry.effect !== 'read' && entry.state !== 'confirmed' && entry.state !== 'not-run',
+                entry.effect !== 'read' &&
+                entry.state !== 'confirmed' &&
+                entry.state !== 'not-run' &&
+                (entry.execution !== 'succeeded' || entry.receiptExpected === true),
             )
           )
             throw new Error(unresolved);
@@ -155,31 +216,34 @@ export class TaskOperations {
             );
           const previous = operation !== undefined;
           operation ??= {
-            id: `op_${hash({ task: task.id, key, account: scope.account, authorization: scope.authorization }).slice(0, 40)}`,
+            id: `op_${hash({ task: task.id, key, account: scope.account, authorization: scope.authorization, ...(contract?.effect === 'read' || contract?.sequential ? { attempt: history.length } : {}) }).slice(0, 40)}`,
             key,
             tool: tool.name,
             inputHash,
-            effect: contract?.effect ?? 'unknown',
+            effect: contract?.effect ?? tool.effect ?? 'unknown',
+            receiptExpected: contract !== undefined,
             ...scope,
             state: 'running',
             startedAt: this.now(),
           };
           const confirm = async () => {
-            if (!contract) return 'unknown' as const;
+            if (!contract || this.stopped()) return 'unknown' as const;
             const pending = operation;
             if (!pending) throw new Error('No durable operation record.');
-            const checked = await contract.reconcile(args, pending.id);
+            const checked = await contract.reconcile(args, pending.id, pending.checkpoint);
+            if (this.stopped()) return 'unknown' as const;
             if (checked.state === 'confirmed') {
               const receipt = TaskReceipt.parse(checked.receipt);
               await this.#save({
                 ...pending,
                 state: 'confirmed',
+                execution: 'succeeded',
                 confirmedAt: this.now(),
                 receipt,
                 error: undefined,
               });
             }
-            return checked.state;
+            return this.stopped() ? ('unknown' as const) : checked.state;
           };
           if (previous && operation.state !== 'not-run' && contract?.effect !== 'read') {
             let recovered: 'confirmed' | 'absent' | 'unknown';
@@ -196,6 +260,9 @@ export class TaskOperations {
           }
           operation = {
             ...operation,
+            ...((!previous || operation.state === 'not-run') && contract?.prepare
+              ? { checkpoint: await contract.prepare(args) }
+              : {}),
             expiresAt: scope.expiresAt,
             goalRevision: task.goalRevision ?? 0,
           };
@@ -209,11 +276,15 @@ export class TaskOperations {
             throw new Error('This task was stopped.');
           }
           try {
-            const result = await tool.run(args, { operationId: operation.id });
+            const result = await tool.run(args, {
+              operationId: operation.id,
+              checkpoint: operation.checkpoint,
+            });
+            if (this.stopped()) throw new Error('This task was stopped.');
             if (
               typeof result !== 'string' &&
               result.effect === 'not-executed' &&
-              contract?.effect === 'write'
+              contract?.effect !== 'read'
             ) {
               await this.#save({
                 ...operation,
@@ -223,20 +294,48 @@ export class TaskOperations {
               });
               return result;
             }
+            if (typeof result !== 'string' && result.isError) {
+              // Structured errors are failures too. Reads have no uncertain side effects.
+              await this.#save({
+                ...operation,
+                state: 'unresolved',
+                execution: 'failed',
+                receipt: undefined,
+                error:
+                  contract?.effect === 'read'
+                    ? 'This read failed; it provides no evidence for this attempt.'
+                    : unresolved,
+              });
+              return result;
+            }
             const checked = await confirm();
             if (checked !== 'confirmed')
-              await this.#save({ ...operation, state: 'unresolved', error: unresolved });
+              await this.#save({
+                ...operation,
+                state: 'unresolved',
+                execution: 'succeeded',
+                error: 'The tool returned, but no independent receipt is available.',
+              });
             return result;
           } catch (error) {
             // The provider may have accepted a write before the response was lost.
             let recovered = false;
             try {
-              recovered = (await confirm()) === 'confirmed';
+              recovered = contract?.effect !== 'read' && (await confirm()) === 'confirmed';
             } catch {
               /* keep uncertainty */
             }
             if (!recovered)
-              await this.#save({ ...operation, state: 'unresolved', error: unresolved });
+              await this.#save({
+                ...operation,
+                state: 'unresolved',
+                execution: 'failed',
+                receipt: undefined,
+                error:
+                  contract?.effect === 'read'
+                    ? 'This read failed; it provides no evidence for this attempt.'
+                    : unresolved,
+              });
             throw error;
           }
         });
@@ -251,6 +350,7 @@ export class TaskOperations {
     invocationId?: string,
     phase = 'guard',
   ): Promise<string | undefined> {
+    const read = ['Read', 'Glob', 'Grep', 'LS', 'WebFetch', 'WebSearch'].includes(name);
     const key = hash({ tool: name, args });
     return this.#serial('host-effects', async () => {
       if (this.stopped()) return 'This task was stopped.';
@@ -258,12 +358,12 @@ export class TaskOperations {
       if (task.restored && !['Read', 'Glob', 'Grep', 'LS', 'WebFetch', 'WebSearch'].includes(name))
         return 'This restored task cannot issue unverified native writes.';
       const identity = `${invocationId ?? 'unknown'}:${key}`;
-      const seen = this.#nativeChecks.get(identity);
+      const seen = invocationId ? this.#nativeChecks.get(identity) : undefined;
       if (seen && !seen.has(phase)) {
         seen.add(phase);
         return undefined;
       }
-      if (task.operations?.some((entry) => entry.key === key))
+      if (!read && task.operations?.some((entry) => entry.key === key))
         return ['Read', 'Glob', 'Grep', 'LS', 'WebFetch', 'WebSearch'].includes(name)
           ? undefined
           : unresolved;
@@ -271,14 +371,19 @@ export class TaskOperations {
         !['Read', 'Glob', 'Grep', 'LS', 'WebFetch', 'WebSearch'].includes(name) &&
         task.operations?.some(
           (entry) =>
-            entry.effect !== 'read' && entry.state !== 'confirmed' && entry.state !== 'not-run',
+            entry.effect !== 'read' &&
+            entry.state !== 'confirmed' &&
+            entry.state !== 'not-run' &&
+            (entry.execution !== 'succeeded' || entry.receiptExpected === true),
         )
       )
         return unresolved;
-      this.#nativeChecks.set(identity, new Set([phase]));
+      if (invocationId) this.#nativeChecks.set(identity, new Set([phase]));
       await this.#save({
-        id: `op_${hash({ task: task.id, key }).slice(0, 40)}`,
+        id: `op_${hash({ task: task.id, key, ...(read ? { attempt: task.operations?.length ?? 0 } : {}) }).slice(0, 40)}`,
         key,
+        invocationId,
+        inputHash: hash(args),
         tool: name,
         effect: ['Read', 'Glob', 'Grep', 'LS', 'WebFetch', 'WebSearch'].includes(name)
           ? 'read'
@@ -294,29 +399,49 @@ export class TaskOperations {
       return undefined;
     });
   }
+  /** Native read evidence comes from the engine's actual result event, never summary prose. */
+  async afterNative(
+    invocationId: string,
+    status: 'success' | 'error',
+    output?: string,
+  ): Promise<void> {
+    await this.#serial('host-effects', async () => {
+      if (this.stopped()) return;
+      const task = await this.get();
+      const op = task.operations?.findLast(
+        (entry) => entry.account === 'native' && entry.invocationId === invocationId,
+      );
+      if (!op) return;
+      if (op.effect !== 'read') {
+        await this.#save({ ...op, execution: status === 'success' ? 'succeeded' : 'failed' });
+        return;
+      }
+      await this.#save(
+        status === 'success'
+          ? {
+              ...op,
+              state: 'confirmed',
+              execution: 'succeeded',
+              confirmedAt: this.now(),
+              error: undefined,
+              receipt: {
+                provider: 'native-read',
+                id: hash(output ?? ''),
+                label: `Read with ${op.tool}`,
+              },
+            }
+          : {
+              ...op,
+              state: 'unresolved',
+              execution: 'failed',
+              receipt: undefined,
+              error: 'The native read failed.',
+            },
+      );
+    });
+  }
 }
 
 export function verifiedOutcome(task: Task): boolean {
-  const ops = task.operations ?? [];
-  const expectations = task.expectations ?? [];
-  return (
-    expectations.length > 0 &&
-    ops.every(
-      (op) =>
-        op.state === 'confirmed' ||
-        // Proven no-dispatch is resolved, but cannot satisfy a receipt expectation.
-        op.state === 'not-run' ||
-        ((op.goalRevision ?? 0) !== (task.goalRevision ?? 0) && op.effect === 'read'),
-    ) &&
-    expectations.every((expected) => {
-      const current = ops.filter(
-        (op) => op.state === 'confirmed' && (op.goalRevision ?? 0) === (task.goalRevision ?? 0),
-      );
-      if (current.filter((op) => op.tool === expected.tool).length >= expected.minimum) return true;
-      const sources = current.filter(
-        (op) => op.tool === expected.unlessEmpty && op.effect === 'read',
-      );
-      return sources.length > 0 && sources.every((op) => op.receipt?.empty === true);
-    })
-  );
+  return assessTask(task).verdict === 'verified';
 }

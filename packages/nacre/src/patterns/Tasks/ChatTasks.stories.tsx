@@ -142,3 +142,18 @@ export const InTheChatList: Story = {
     );
   },
 };
+
+export const FinishedUnchecked: Story = {
+  args: {
+    tasks: [
+      {
+        id: 'finished',
+        link: <a href="#finished">Read the source</a>,
+        status: 'unverified',
+        unchecked: true,
+        startedAt: NOW - 60_000,
+        finishedAt: NOW,
+      },
+    ],
+  },
+};

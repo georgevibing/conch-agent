@@ -425,6 +425,7 @@ export class ProcessService {
       },
       {
         name: 'process_read',
+        effect: 'read',
         row: true,
         description:
           'Read the status and incremental logs of a command started in this chat. Use nextOffset from the previous result. With id and wait_ms (up to 30000), wait for new output or completion. Output older than discardedBefore has been dropped. Without id, list this chat’s managed processes.',

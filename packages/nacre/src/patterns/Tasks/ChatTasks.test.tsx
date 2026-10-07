@@ -60,6 +60,27 @@ function Controlled({ items, initial = false }: { items: ChatTask[]; initial?: b
 }
 
 describe('ChatTasks', () => {
+  it('labels finished work without criteria consistently in the sidebar', async () => {
+    const { container } = renderNacre(
+      <Controlled
+        initial
+        items={[
+          {
+            id: 'finished',
+            link: <a href="#finished">Read the source</a>,
+            status: 'unverified',
+            unchecked: true,
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByRole('list', { name: 'Tasks from Fix the parser' })).toHaveTextContent(
+      'Finished — outcome not checked',
+    );
+    expect(screen.queryByRole('button', { name: 'Stop' })).not.toBeInTheDocument();
+    await expectAccessible(container);
+  });
+
   it('says how many, and what needs you first, in words', () => {
     expect(tasksSummary(tasks())).toBe('3 tasks · 1 needs you, 1 working');
     expect(tasksSummary([{ status: 'queued' }])).toBe('1 task · 1 waiting');

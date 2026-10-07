@@ -1,3 +1,4 @@
+import { assessTask } from '@conch/protocol';
 /**
  * Notifications (ADR 0027): Conch tells your phone and your other devices
  * what needs you while you're away — an OK it's waiting for, an answer that
@@ -289,14 +290,15 @@ export class PushService {
           task.status === 'done'
             ? `Verified complete: ${clip(task.title, 60)}`
             : task.status === 'unverified'
-              ? `Result needs checking: ${clip(task.title, 60)}`
+              ? `${assessTask(task).verdict === 'unchecked' ? 'Finished' : 'Result needs checking'}: ${clip(task.title, 60)}`
               : `Didn’t finish: ${clip(task.title, 60)}`,
         body: clip(
-          task.status === 'done'
+          task.status === 'done' ||
+            (task.status === 'unverified' && assessTask(task).verdict === 'unchecked')
             ? (task.summary ?? 'It’s ready.')
             : (task.error ?? 'Something went wrong.'),
         ),
-        quiet: task.status === 'done' ? 'Your task is done.' : 'Your task didn’t finish.',
+        quiet: task.status === 'failed' ? 'Your task didn’t finish.' : 'Your task finished.',
         url: task.parentConversationId ? `/c/${task.parentConversationId}` : `/tasks`,
         tag: `task-${task.id}`,
       });

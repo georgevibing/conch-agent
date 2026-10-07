@@ -64,6 +64,7 @@ export function marketTools(
 ): HostTool[] {
   const find: HostTool<{ words: z.ZodString }> = {
     name: 'find_skills',
+    effect: 'read',
     description:
       'Search skills people share (Anthropic, ClawHub, skills.sh) for one that would help with what the person asked. Give a few plain words for the kind of task ("meeting notes", "presentation slides"). Returns ids to `offer` with kind `market`; the person reads the skill and decides. Never adds anything.',
     input: { words: z.string().min(1).max(200) },

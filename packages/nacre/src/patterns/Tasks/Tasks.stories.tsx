@@ -146,3 +146,14 @@ export const FromAChat: Story = {
     from: <a href="#chat">Fix the parser</a>,
   },
 };
+
+export const FinishedUnchecked: Story = {
+  args: {
+    status: 'unverified',
+    unchecked: true,
+    finishedAt: NOW,
+    summary:
+      'Read the source files and wrote the report. No automatic completion criteria were set.',
+    error: undefined,
+  },
+};
