@@ -46,6 +46,9 @@ const KEEP: readonly { heading: RegExp; max: number }[] = [
   { heading: /^# Memory\b/, max: 1_800 },
   // How it works on a problem (ADR 0102), in its compact form by then.
   { heading: /^# How you work on a problem\b/, max: 700 },
+  // The agent answering (ADR 0101): its persona, and what it was asked always to do.
+  { heading: /^# Your persona\b/, max: 1_000 },
+  { heading: /^# Your instructions\b/, max: 1_500 },
   { heading: /^# What you can do in this conversation\b/, max: 1_200 },
 ];
 

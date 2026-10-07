@@ -32,6 +32,7 @@ import {
   Sun,
   Target,
   Undo2,
+  UserRound,
   WandSparkles,
   Zap,
   CircleHelp,
@@ -39,9 +40,12 @@ import {
 import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 
+import { findAgent, type Agent } from '@conch/protocol';
+
+import { agentsApi, useAgents } from '../agents/api';
 import { api } from '../../api/client';
 import { compactChat } from '../chat/compact';
-import { keys, useCommands } from '../../api/queries';
+import { keys, useCommands, useConversations } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import type { ConversationView } from '../../live/reducer';
 import { MEMORY_ALL } from '../settings/paths';
@@ -90,6 +94,7 @@ const builtinIcons: Partial<Record<BuiltinAction, ReactNode>> = {
   export: <Download />,
   resume: <History />,
   model: <Sparkles />,
+  agent: <UserRound />,
   effort: <Gauge />,
   fast: <Zap />,
   mode: <Shield />,
@@ -180,6 +185,30 @@ export function useSlashCommands(options: {
   const providerLabel = turn.capabilities?.label ?? 'This provider';
   const hasOwn = (command: string) => engineCommands.some((c) => c.name.toLowerCase() === command);
   const modelName = turn.model ? modelLabel(turn.model.label).label : 'This model';
+
+  // Who answers (ADR 0101): this chat's agent, or the one a new chat will start with.
+  const { data: agentList } = useAgents();
+  const { data: chats } = useConversations();
+  const draftAgent = useUi((s) => s.draftAgent);
+  const chatAgent = conversationId
+    ? chats?.find((c) => c.id === conversationId)?.agentId
+    : (draftAgent ?? undefined);
+  const currentAgent = agentList
+    ? (agentList.agents.find((a) => a.id === chatAgent) ??
+      agentList.agents.find((a) => a.id === agentList.defaultId))
+    : undefined;
+  const chooseAgent = async (agent: Agent) => {
+    if (!conversationId) {
+      ui.setDraftAgent(agent.isDefault ? null : agent.id);
+      return void toast.success(`${agent.name} answers this chat`);
+    }
+    try {
+      await agentsApi.setChatAgent(conversationId, agent.id);
+      toast.success(`${agent.name} answers from your next message`);
+    } catch (error) {
+      toast.error((error as Error).message || 'That didn’t change who answers. Try again.');
+    }
+  };
 
   /** Make room in the chat now: `/compact`, and the context meter's Compact now. */
   const compact = async (args?: string) => {
@@ -280,6 +309,23 @@ export function useSlashCommands(options: {
   const runBuiltin = (action: BuiltinAction, args: string) => {
     const { options: current, model } = turn;
     switch (action) {
+      case 'agent': {
+        const all = agentList?.agents ?? [];
+        if (!args)
+          return void toast(`${currentAgent?.name ?? name} answers this chat`, {
+            description:
+              all.length > 1
+                ? 'Type /agent and a name to choose another.'
+                : 'Make another agent in Settings → Agents.',
+          });
+        const found = findAgent(all, args);
+        if (!found)
+          return void toast(`No agent called “${args.slice(0, 40)}”`, {
+            description: all.map((a) => a.name).join(', '),
+          });
+        if (found.id === currentAgent?.id) return void toast(`${found.name} is already answering`);
+        return void chooseAgent(found);
+      }
       case 'model': {
         if (!args) return ui.setPicker('model');
         const q = args.toLowerCase();
@@ -532,6 +578,22 @@ export function useSlashCommands(options: {
     const heading: CommandMenuHeading = { name: builtin.name, description: builtin.description };
     let empty: ReactNode | undefined;
     switch (builtin.action) {
+      case 'agent': {
+        for (const agent of agentList?.agents ?? [])
+          add(
+            {
+              id: `agent:${agent.id}`,
+              name: agent.name.toLowerCase(),
+              title: agent.name,
+              ...(agent.role && { description: agent.role }),
+              icon: <UserRound />,
+              current: agent.id === currentAgent?.id,
+            },
+            () => void chooseAgent(agent),
+          );
+        empty = 'No agent by that name.';
+        break;
+      }
       case 'effort': {
         for (const level of effortOptions(turn.model))
           add(

@@ -1,6 +1,7 @@
 import type { Memory, Persona, Profile } from '@conch/protocol';
-import { TONES, describeProfile } from '@conch/protocol';
+import { describeProfile } from '@conch/protocol';
 
+import { agentLayers, type PromptAgent } from '../agents/prompt';
 import { DATAMARK, datamark } from './guard';
 
 /** Budget for memories inlined into every turn; the rest is reachable via `recall`. */
@@ -35,7 +36,12 @@ function label(m: Memory): string {
 
 /** What the system prompt is built from. */
 export interface SystemInput {
-  persona: Persona;
+  /** The agent answering (ADR 0101): its persona and instructions. */
+  agent?: PromptAgent;
+  /** Before agents: the one personality. Read when there's no `agent`. */
+  persona?: Persona;
+  /** Other agents who answered earlier in this chat. */
+  before?: readonly string[];
   profile: Profile;
   memories: Memory[];
   /** How many memories there are in all (the prompt may carry only the relevant ones). */
@@ -51,7 +57,8 @@ export interface SystemInput {
 
 /**
  * Builds the text appended to the engine's system prompt for every turn:
- * identity, then the user, then memory and how to use the memory tools.
+ * Conch's rules, resilience, the agent's persona and instructions
+ * (`agentLayers`), then the user, then memory and how to use the memory tools.
  */
 export function buildSystemAppend(input: SystemInput): string {
   const { identity, memory } = systemParts(input);
@@ -66,25 +73,17 @@ export function buildSystemAppend(input: SystemInput): string {
  * the whole prefix before it (ADR 0085).
  */
 export function systemParts(input: SystemInput): { identity: string; memory: string } {
-  const { persona, profile, memories, autoMemory } = input;
+  const { profile, memories, autoMemory } = input;
   const total = Math.max(input.total ?? memories.length, memories.length);
   const tools = input.tools ?? true;
   const sections: string[] = [];
+  const agent: PromptAgent = input.agent ?? {
+    name: input.persona?.name ?? 'Conch',
+    persona: { tone: input.persona?.tone ?? 'warm', personality: '' },
+    instructions: input.persona?.instructions ?? '',
+  };
 
-  sections.push(
-    [
-      `# Who you are`,
-      // What the provider can actually do (files, commands) is the provider's
-      // own business: each engine states it, because it differs.
-      `You are ${persona.name}, a personal AI assistant the user talks to through Conch, an app on their own computer that sets itself up and fixes what breaks, so they don't have to.`,
-      ``,
-      `Voice: ${TONES[persona.tone].prompt}`,
-      `Write for a chat window: short paragraphs, Markdown when it aids clarity, code in fenced blocks.`,
-      ...(persona.instructions.trim()
-        ? [``, `The user asked you to follow these instructions:`, persona.instructions.trim()]
-        : []),
-    ].join('\n'),
-  );
+  sections.push(agentLayers({ agent, tools, ...(input.before && { before: input.before }) }));
 
   // The same words Settings → About you shows as "What every chat starts with".
   const about = describeProfile(profile);

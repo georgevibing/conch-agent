@@ -551,6 +551,10 @@ export class TaskService {
     const grants = parent
       ? await this.deps.conversations.grantsOf(parent).catch(() => undefined)
       : undefined;
+    // The agent of the chat it came from does it, in its voice (ADR 0101): a persona, never a power.
+    const agentId = parent
+      ? (await this.deps.conversations.agentOf(parent).catch(() => undefined))?.id
+      : undefined;
     const wt = this.#worktrees.get(task.id);
     const operations = new TaskOperations(
       () => this.get(id),
@@ -572,6 +576,7 @@ export class TaskService {
           : task.prompt,
         options,
         origin: { kind: 'task', taskId: task.id },
+        ...(agentId && { agentId }),
         extras: {
           systemExtra: brief(task),
           toolAllowed: task.toolScope ? permitted : undefined,

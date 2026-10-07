@@ -39,11 +39,41 @@ describe('what in a backup can act for you', () => {
     ).toContainEqual({ kind: 'chats-go-ahead' });
   });
 
+  it('discloses an agent whose chats start in Auto, once (ADR 0101)', () => {
+    const found = powersOf(
+      ['settings.json', 'agents/agents.json'],
+      reader({
+        'settings.json': { preferences: { permissionMode: 'auto' } },
+        'agents/agents.json': {
+          agents: [{ id: 'ag_sage01', defaults: { permissionMode: 'auto' } }],
+        },
+      }),
+    );
+    expect(found.filter((p) => p.kind === 'chats-go-ahead')).toHaveLength(1);
+    expect(
+      powersOf(
+        ['agents/agents.json'],
+        reader({
+          'agents/agents.json': {
+            agents: [{ id: 'ag_sage01', defaults: { permissionMode: 'auto' } }],
+          },
+        }),
+      ),
+    ).toContainEqual({ kind: 'chats-go-ahead' });
+    expect(
+      powersOf(
+        ['agents/agents.json'],
+        reader({ 'agents/agents.json': { agents: [{ id: 'ag_sage01' }] } }),
+      ),
+    ).not.toContainEqual({ kind: 'chats-go-ahead' });
+  });
+
   it('reads only the few files that can say so', () => {
     expect(
       [
         'integrations.json',
         'settings.json',
+        'agents/agents.json',
         'browser.json',
         'terminal.json',
         'channels.json',
@@ -61,6 +91,7 @@ describe('what in a backup can act for you', () => {
     ).toEqual([
       'integrations.json',
       'settings.json',
+      'agents/agents.json',
       'browser.json',
       'terminal.json',
       'channels.json',

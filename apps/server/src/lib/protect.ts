@@ -15,6 +15,9 @@ export function protectedPaths(home: string): string[] {
     join(home, 'memory.seal'),
     // What a tidy-up changed: its Undo puts those words back.
     join(home, 'memory-tidy.json'),
+    // Each agent's persona and instructions are read into every turn it answers (ADR 0101):
+    // only a person changes them, in Conch, never the assistant's own file tools.
+    join(home, 'agents'),
     join(home, 'vault'),
     join(home, 'codex.secrets.json'),
     join(home, 'codex-runtime'),

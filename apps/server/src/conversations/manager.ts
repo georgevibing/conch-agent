@@ -78,7 +78,6 @@ import { TurnReplies } from '../replies/turn';
 import { turnBudget } from '../engines/budget';
 import { guardTurn } from './turn-guard';
 import { TurnPlan } from '../plans/turn';
-import { resiliencePrompt } from './resilience';
 import { PLAN_APPROVAL, PLAN_MODE_PROMPT, exitPlanModeTool, needsPlanTool } from '../plans/mode';
 import { goalPrompt } from './goal';
 
@@ -713,6 +712,20 @@ const GUEST_DISALLOWED = [
   'KillShell',
   'BashOutput',
 ];
+
+/**
+ * The names of the agents who answered this chat before the one answering
+ * now (ADR 0101), from its `agent` events: their replies are in its history.
+ */
+export function agentsBefore(events: readonly ConversationEvent[], now?: string): string[] {
+  const names = new Set<string>();
+  for (const event of events) {
+    if (event.type !== 'agent') continue;
+    if (event.from && event.from.agentId !== now) names.add(event.from.name);
+    if (event.agentId !== now) names.add(event.name);
+  }
+  return [...names];
+}
 
 /** What a guest's turn is told about where it is and who's asking. */
 function guestPrompt(origin: ConversationRecord['origin']): string {
@@ -2852,8 +2865,12 @@ export class ConversationManager {
 
       // How much this turn may do before it checks in, watched from outside for
       // agents that run their own loop (ADR 0085).
+      // Who answers (ADR 0101): the chat's agent now, and who answered before it.
+      const agent = await this.deps.agents?.forChat(live.record).catch(() => undefined);
+      const before = agentsBefore(live.events, agent?.id);
       const system = systemParts({
-        persona: settings.persona,
+        ...(agent ? { agent } : { persona: settings.persona }),
+        ...(before.length && { before }),
         profile: settings.profile,
         memories,
         total: memoryTotal,
@@ -2898,23 +2915,25 @@ export class ConversationManager {
             systemAppend: (guest
               ? [
                   buildSystemAppend({
-                    persona: { ...settings.persona, instructions: '' },
+                    // Your instructions to it stay yours: a guest meets only its persona.
+                    ...(agent
+                      ? { agent: { ...agent, instructions: '' } }
+                      : { persona: { ...settings.persona, instructions: '' } }),
                     profile: { name: '', about: '', facts: [] },
                     memories: [],
                     total: 0,
                     autoMemory: false,
                     tools: false,
                   }),
+                  // A guest's turn has no tools: its resilience is thinking it through (ADR 0102).
                   guestPrompt(live.record.origin),
-                  // A guest's turn has no tools: thinking it through, and honesty.
-                  resiliencePrompt({ tools: false }),
                 ]
               : // What stays the same turn after turn first, the memories this message
                 // brought up after it, so the provider's prompt cache keeps the prefix (ADR 0085).
                 [
+                  // Conch's rules, how it works on a problem, the agent's persona and
+                  // instructions, then the person (ADR 0101, ADR 0102).
                   system.identity,
-                  // How it works on a problem, whichever provider and persona (ADR 0102).
-                  resiliencePrompt({ tools: engine.hostTools !== false }),
                   await this.deps.context?.(engine, conversationId),
                   system.memory,
                   // What the chat is for (`/goal`), whichever provider answers.

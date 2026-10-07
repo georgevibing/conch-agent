@@ -1,7 +1,7 @@
 import { Persona, Profile } from '@conch/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { buildSystemAppend, MEMORY_IS_NOT_EVIDENCE } from './prompt';
+import { buildSystemAppend, MEMORY_IS_NOT_EVIDENCE, systemParts } from './prompt';
 
 describe('buildSystemAppend', () => {
   it('includes persona, profile, memories and tool guidance', () => {
@@ -62,13 +62,15 @@ describe('buildSystemAppend', () => {
       createdAt: i,
       updatedAt: i,
     }));
-    const text = buildSystemAppend({
+    const input = {
       persona: Persona.parse({}),
       profile: Profile.parse({}),
       memories,
       autoMemory: false,
-    });
-    expect(text.length).toBeLessThan(9000);
+    };
+    const text = buildSystemAppend(input);
+    // The memories' part, whatever the layers before it (ADR 0101, ADR 0102) say.
+    expect(systemParts(input).memory.length).toBeLessThan(7500);
     expect(text).toMatch(/more memories than these — use the recall tool/);
     expect(text).toContain('Only use the remember tool when the user explicitly asks');
   });

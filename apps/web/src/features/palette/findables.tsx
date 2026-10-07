@@ -5,6 +5,7 @@ import {
   generatePassword,
   type TaskList,
   type TextRange,
+  chatAgentId,
 } from '@conch/protocol';
 import {
   AppIcon,
@@ -22,6 +23,7 @@ import {
 } from '@conch/nacre';
 import {
   Cable,
+  UserRound,
   Archive,
   ArchiveRestore,
   CirclePause,
@@ -131,6 +133,7 @@ import { useTerminalStatus } from '../terminal/queries';
 import { undoLast } from '../undo/UndoHost';
 import { useUpdates } from '../updates/queries';
 import { BACKGROUND_FOCUS } from '../background/AlwaysOnSection';
+import { agentsApi, useAgents } from '../agents/api';
 
 /** Something ⌘K can find and act on that isn't a chat or a message. */
 export interface Findable {
@@ -455,6 +458,9 @@ export function useFindables(query: string, conversationId: string | undefined):
   // What the open chat is held to (ADR 0047): each can be let go of by name.
   const holds = useLiveStore((s) => (conversationId ? s.views[conversationId]?.holds : undefined));
   const { data: conversations } = useConversations();
+  // Your agents (ADR 0101): a new chat with one, or this chat answered by one.
+  const { data: agents } = useAgents();
+  const setDraftAgent = useUi((s) => s.setDraftAgent);
   const { archive, unarchive } = useArchive();
   // The chat list, organised (ADR 0089): folders by name, pinning and filing the open chat.
   const { data: folders } = useFolders();
@@ -1295,8 +1301,38 @@ export function useFindables(query: string, conversationId: string | undefined):
     run: item.run,
   }));
 
+  const answering = agents && here ? chatAgentId(here, agents) : undefined;
+  const agentItems = find(
+    agents?.agents ?? [],
+    q,
+    (a) => a.name,
+    (a) => `${a.role} agent persona assistant`,
+    4,
+  ).map(({ item, match }): Findable => ({
+    id: `agent:${item.id}`,
+    label: item.name,
+    ranges: match.ranges,
+    ...(item.role && { description: item.role }),
+    hint: !here ? 'New chat' : item.id === answering ? 'Answering' : 'Answer this chat',
+    icon: <UserRound />,
+    run: () => {
+      if (here) {
+        if (item.id === answering) return;
+        void agentsApi.setChatAgent(here.id, item.id).then(
+          () => toast.success(`${item.name} answers from your next message`),
+          (error: unknown) =>
+            toast.error((error as Error).message || 'That didn’t change who answers. Try again.'),
+        );
+        return;
+      }
+      setDraftAgent(item.isDefault ? null : item.id);
+      void navigate('/');
+    },
+  }));
+
   return [
     { heading: 'Go to', items: placeItems },
+    { heading: 'Agents', items: agentItems },
     { heading: 'Passwords', items: passwordItems },
     { heading: 'Skills', items: skillItems },
     { heading: 'Skills people share', items: sharedItems },

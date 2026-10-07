@@ -577,6 +577,53 @@ describe('Palette search', () => {
     expect(seen.at(-1)).toEqual({ folder: 'f_trips1' });
   });
 
+  it('finds your agents by name: a new chat with one, or this chat answered by one (ADR 0101)', async () => {
+    const user = userEvent.setup();
+    const agent = (id: string, name: string, order: number, role = '') => ({
+      id,
+      name,
+      role,
+      avatar: { kind: 'preset', id: 'shell' },
+      persona: { tone: 'warm', personality: '' },
+      instructions: '',
+      isDefault: order === 0,
+      order,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [conversation('c1', 'Plan my week')],
+      'GET /api/agents': () => ({
+        agents: [agent('ag_conch', 'Conch', 0), agent('ag_sage01', 'Sage', 1, 'Plans trips')],
+        defaultId: 'ag_conch',
+      }),
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+      'PATCH /api/conversations/c1': () => ({ ok: true }),
+    });
+    const page = (
+      <>
+        <Palette />
+        <Where />
+      </>
+    );
+    renderApp(
+      <Routes>
+        <Route path="/c/:conversationId" element={page} />
+        <Route path="*" element={page} />
+      </Routes>,
+      { route: '/c/c1' },
+    );
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'trips');
+    await user.click(await screen.findByRole('option', { name: /Sage.*Answer this chat/ }));
+    await waitFor(() =>
+      expect(calls).toContainEqual(
+        expect.objectContaining({ path: '/api/conversations/c1', body: { agentId: 'ag_sage01' } }),
+      ),
+    );
+  });
+
   it('finds the working folder in General by the words people use', async () => {
     const user = userEvent.setup();
     mockFetch({

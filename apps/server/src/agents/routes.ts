@@ -124,12 +124,10 @@ export function registerAgentRoutes(
       // Read and cleaned like an upload: what comes back is only a picture.
       const clean = cleanPicture(made.bytes, AGENT_LIMITS.generatedBytes);
       if (!clean.ok)
-        return reply
-          .code(502)
-          .send({
-            error: 'not-made',
-            message: 'The picture that came back can’t be used. Try again.',
-          });
+        return reply.code(502).send({
+          error: 'not-made',
+          message: 'The picture that came back can’t be used. Try again.',
+        });
       return {
         data: clean.bytes.toString('base64'),
         type: clean.type,

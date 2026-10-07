@@ -1,5 +1,5 @@
 /**
- * A Conch that's been used for a while, in a temp home: settings, a memory
+ * A Conch that's been used for a while, in a temp home: settings, a second agent with its picture, a memory
  * (searchable by meaning, with its model), a command, a routine that ran, a skill, an integration with its token, a
  * chat with an attachment, a model API's transcript, the browser's and
  * terminal's settings, a note the assistant wrote (and Undo's copy), a budget, a limit on what routines spend, a password, a provider key,
@@ -25,6 +25,7 @@ import { MockTelegram } from '../channels/mock/telegram';
 import { recordGateway } from '../port';
 import { Services } from '../services';
 import { fakePack, fakeParts, fakeSign, textFiles } from './conchapps';
+import { png } from './faces';
 
 export const PASSWORD = 'purple otters juggle at dawn';
 const GITHUB_TOKEN = 'github_pat_mock_0123456789abcdefghij';
@@ -125,6 +126,21 @@ export async function useConch(g: Gateway) {
       method: 'PATCH',
       url: '/api/settings',
       payload: { onboarded: true, persona: { name: 'Shelly' }, profile: { name: 'Ada' } },
+    }),
+  );
+  // A second agent, with a picture of its own (ADR 0101).
+  const sage = await ok(
+    await app.inject({
+      method: 'POST',
+      url: '/api/agents',
+      payload: { name: 'Sage', role: 'Plans trips', instructions: 'Give two options.' },
+    }),
+  );
+  await ok(
+    await app.inject({
+      method: 'PUT',
+      url: `/api/agents/${String(sage.id)}/avatar`,
+      payload: { data: png(64).toString('base64') },
     }),
   );
   // A folder in the chat list (ADR 0089).
