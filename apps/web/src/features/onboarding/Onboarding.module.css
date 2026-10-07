@@ -45,6 +45,11 @@
     margin-block-end: var(--nc-space-2);
   }
 
+  /* Who it is: its face, its name under it, and the dice for another. */
+  .agent {
+    gap: var(--nc-space-3);
+  }
+
   .lead {
     max-inline-size: 30rem;
     text-wrap: pretty;

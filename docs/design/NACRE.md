@@ -266,6 +266,25 @@ words get every pixel the column has.
   there's a pointer and room, its time and Copy wait beside it, not under it, so
   your message is only as tall as its words.
 
+### Who you talk to (agents)
+
+Agents are people you meet, so they're shown as faces, never as rows of settings.
+
+- **The wall** (`AgentGallery`). Every agent large, its name under it and what it's
+  for in a quiet line, the default marked, and a **+** for another. A press opens it.
+  Drag to change the order every picker shows (on a phone, hold first; Alt and an
+  arrow from the keyboard); the others glide out of the way. Each face's ⋯ (or a
+  right-click) holds the rest: make it the default, move it, delete it, with Undo.
+- **Making one** (`AgentCard`, `AgentFacePicker`, `ToneChips`). One screen: the agent
+  on one side as it's made — its name writing itself in, its face landing, its hello in
+  its voice — and the three choices on the other. Everything else waits for its page.
+- **Faces in even rows.** The cast is nine across where there's room and six where
+  there isn't, never a straggler; the thirteen colours one row, or seven and six.
+- **Saved where it changed.** An agent's page saves itself; "Saved" shows beside the
+  part just changed, not at the top of a long page.
+- **Undo is in reach.** Toasts sit on the top layer, over every dialog, and pressing one
+  never closes the dialog under it.
+
 ### A reply and what belongs to it (chat)
 
 A reply is one piece: its words, then everything that belongs to it (tool

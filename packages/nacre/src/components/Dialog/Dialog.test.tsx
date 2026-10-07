@@ -96,4 +96,23 @@ describe('Dialog', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     await expectAccessible(document.body);
   });
+
+  it('stays open when a toast is pressed: its Undo acts on what is open', async () => {
+    renderNacre(
+      <>
+        <Example />
+        <div data-sonner-toaster="">
+          <button type="button">Undo</button>
+        </div>
+      </>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Open' }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    const press = userEvent.setup({ pointerEventsCheck: 0 });
+    await press.click(screen.getByRole('button', { name: 'Undo', hidden: true }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    // Anywhere else outside still closes it.
+    await press.click(document.body);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
 });

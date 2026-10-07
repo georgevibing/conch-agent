@@ -60,23 +60,6 @@ export const VOICES: readonly { value: Tone; label: string }[] = [
   { value: 'precise', label: 'Precise' },
 ];
 
-/** How the assistant says hello in each voice, to the person by name. */
-export function hello(tone: Tone, name: string): string {
-  const you = name.trim();
-  switch (tone) {
-    case 'concise':
-      return you ? `Hi ${you}. Ready when you are.` : 'Hi. Ready when you are.';
-    case 'playful':
-      return you
-        ? `${you}! Finally. I’ve been polishing my pearl for this moment.`
-        : 'Finally, someone to talk to. I’ve been polishing my pearl for this moment.';
-    case 'precise':
-      return `Hello${you ? `, ${you}` : ''}. Tell me the goal and anything I should keep to, and I’ll say what I’m assuming before I act.`;
-    default:
-      return `Lovely to meet you${you ? `, ${you}` : ''}. Whatever you’re working on, we’ll figure it out together.`;
-  }
-}
-
 /**
  * Apps that connect in a press or two (a sign-in, or Gmail's app password), in
  * the order that suits what the person picked. Google Calendar and Drive need a

@@ -1,4 +1,5 @@
 import { CircleAlert, CircleCheck, Info, TriangleAlert, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { Toaster as SonnerToaster, toast, type ToasterProps as SonnerToasterProps } from 'sonner';
 
 import { useNacreTheme } from '../../theme';
@@ -17,6 +18,10 @@ export type ToasterProps = Omit<SonnerToasterProps, 'theme' | 'icons'>;
  *
  * Toasts announce politely to screen readers, pause while hovered or focused,
  * and can be swiped away. Keyboard users jump to them with Alt+T.
+ *
+ * They live on the page's top layer, where dialogs do, so a toast's Undo can be
+ * pressed over an open dialog (Settings is one) — and pressing it leaves the
+ * dialog open.
  */
 export function Toaster({
   position = 'bottom-right',
@@ -27,7 +32,7 @@ export function Toaster({
   ...props
 }: ToasterProps) {
   const { resolvedMode } = useNacreTheme();
-  return (
+  const toaster = (
     <SonnerToaster
       theme={resolvedMode}
       position={position}
@@ -62,6 +67,7 @@ export function Toaster({
       {...props}
     />
   );
+  return typeof document === 'undefined' ? toaster : createPortal(toaster, document.body);
 }
 
 export { toast };

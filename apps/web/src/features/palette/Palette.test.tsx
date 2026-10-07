@@ -622,6 +622,28 @@ describe('Palette search', () => {
         expect.objectContaining({ path: '/api/conversations/c1', body: { agentId: 'ag_sage01' } }),
       ),
     );
+
+    // Beside it: a new chat with Sage, and Sage's own page.
+    act(() => useUi.getState().setPalette(true));
+    await user.clear(await screen.findByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'sage');
+    expect(await screen.findByRole('option', { name: /New chat with Sage/ })).toBeVisible();
+    await user.click(screen.getByRole('option', { name: /Edit Sage/ }));
+    await waitFor(() =>
+      expect(screen.getByTestId('where')).toHaveTextContent('/settings/agents/ag_sage01'),
+    );
+
+    // Making one, and the place they all live, by the words people use.
+    act(() => useUi.getState().setPalette(true));
+    await user.clear(await screen.findByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'new agent');
+    await user.click(await screen.findByRole('option', { name: /^New agent/ }));
+    expect(useUi.getState().newAgent).toEqual({});
+    act(() => useUi.getState().closeNewAgent());
+    act(() => useUi.getState().setPalette(true));
+    await user.clear(await screen.findByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'persona');
+    expect(await screen.findByRole('option', { name: /Settings: Agents/ })).toBeVisible();
   });
 
   it('finds the working folder in General by the words people use', async () => {

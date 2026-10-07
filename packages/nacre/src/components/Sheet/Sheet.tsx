@@ -3,6 +3,7 @@ import { Dialog as DialogPrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
 
 import { cx } from '../../utils/cx';
+import { keepOpenForToasts } from '../../utils/toasts';
 import { Dialog, dialogStyles } from '../Dialog/Dialog';
 import { IconButton } from '../IconButton';
 import styles from './Sheet.module.css';
@@ -30,6 +31,7 @@ function SheetContent({
   className,
   children,
   container,
+  onInteractOutside,
   ...props
 }: SheetContentProps) {
   return (
@@ -40,6 +42,7 @@ function SheetContent({
         data-size={size}
         data-floating={floating || undefined}
         className={cx(styles.content, className)}
+        onInteractOutside={keepOpenForToasts(onInteractOutside)}
         {...props}
       >
         {side === 'bottom' && <span className={styles.grabber} aria-hidden />}

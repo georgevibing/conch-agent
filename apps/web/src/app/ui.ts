@@ -42,6 +42,13 @@ interface UiState {
   openFolderDialog(file?: string[]): void;
   closeFolderDialog(): void;
   /**
+   * Making a new agent (ADR 0101), from anywhere: Settings → Agents, the
+   * chat's picker, ⌘K. `chat`: started from a new chat, which is then with it.
+   */
+  newAgent?: { chat?: boolean };
+  openNewAgent(how?: { chat?: boolean }): void;
+  closeNewAgent(): void;
+  /**
    * Conch is starting itself again (an update, a restore): the page rests
    * until it's back. `reopen`: the settings tab to show again after the reload.
    */
@@ -238,11 +245,14 @@ export const useUi = create<UiState>((set) => ({
     }),
   openFolderDialog: (file) => set({ folderDialog: { ...(file?.length && { file }) } }),
   closeFolderDialog: () => set({ folderDialog: undefined }),
+  openNewAgent: (how) => set({ newAgent: { ...how } }),
+  closeNewAgent: () => set({ newAgent: undefined }),
   openSettings: (tab, focus, move) => {
-    // A provider's page, and every memory, are places of their own; any other focus is
-    // brought into view.
+    // A provider's page, an agent's and every memory are places of their own; any other
+    // focus is brought into view.
     const item =
       tab === 'providers' ||
+      (tab === 'agents' && Boolean(focus?.startsWith('ag_'))) ||
       (tab === 'memory' && (focus === MEMORY_ALL || Boolean(focus?.startsWith('from-'))))
         ? focus
         : undefined;

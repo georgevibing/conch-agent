@@ -1,11 +1,13 @@
 import type { ImportSourceId, ImportStatus, Tone } from '@conch/protocol';
 import {
+  AgentAvatar,
+  AgentFacePicker,
   Button,
   Heading,
   ImportOffer,
   Pearl,
-  SegmentedControl,
   Stack,
+  ToneChips,
   Text,
   WelcomeApps,
   WelcomeBackdrop,
@@ -17,12 +19,15 @@ import {
   WelcomeSteps,
   WelcomeVoice,
   toast,
+  type AgentFace,
+  type AgentPresetFace,
 } from '@conch/nacre';
 import {
   ArrowRight,
   Briefcase,
   CalendarDays,
   Code,
+  Dices,
   GraduationCap,
   House,
   Lightbulb,
@@ -35,6 +40,9 @@ import { useNavigate } from 'react-router';
 
 import { useAppState, useUpdateSettings } from '../../api/queries';
 import { useAutoFocus } from '../../lib/useAutoFocus';
+import { useDefaultAgent, useUpdateAgent } from '../agents/api';
+import { asPreset } from '../agents/face';
+import { TONE_CHOICES, agentHello, nextIdea } from '../agents/words';
 import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
 import { useImportStatus } from '../import/api';
@@ -49,7 +57,6 @@ import {
   VOICES,
   aboutWith,
   appsFor,
-  hello,
   interestsIn,
   startersFor,
   type Interest,
@@ -200,48 +207,92 @@ function HelpStep({
   );
 }
 
-function VoiceStep({
-  name,
-  assistant,
+/**
+ * Who it is: a name (yours to keep, or the dice for one that comes with its
+ * face), a face, and how it sounds, heard as it's chosen. The face at the top
+ * lands with each choice; the hello under it says the name as it's typed.
+ */
+function AgentStep({
+  you,
   initial,
   onNext,
 }: {
-  name: string;
-  assistant: string;
-  initial: Tone;
-  onNext: (tone: Tone) => void;
+  you: string;
+  initial: { name: string; tone: Tone; avatar: AgentFace };
+  onNext: (agent: { name: string; tone: Tone; avatar?: AgentPresetFace }) => void;
 }) {
-  const [tone, setTone] = useState<Tone>(initial);
+  const [name, setName] = useState(initial.name);
+  const [face, setFace] = useState<AgentFace>(initial.avatar);
+  const [tone, setTone] = useState<Tone>(
+    VOICES.some((v) => v.value === initial.tone) ? initial.tone : 'warm',
+  );
+  const [idea, setIdea] = useState<string>();
+  const shown = name.trim() || initial.name;
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    onNext({ name: shown, tone, ...(face.kind === 'preset' && { avatar: face }) });
+  };
   return (
-    <>
+    <form onSubmit={submit} className={styles.form}>
       <WelcomeRise order={0}>
         <Heading level={1} display size="4xl" align="center">
-          How should I sound?
+          And who am I?
         </Heading>
       </WelcomeRise>
-      <WelcomeRise order={1}>
-        <WelcomeVoice from={assistant} text={hello(tone, name)} />
-      </WelcomeRise>
-      <WelcomeRise order={2}>
-        <SegmentedControl
-          aria-label="How I should sound"
-          size="md"
-          value={tone}
-          onValueChange={(v) => v && setTone(v as Tone)}
+      <WelcomeRise order={1} className={styles.agent}>
+        <AgentAvatar key={JSON.stringify(face)} name={shown} avatar={face} size="3xl" decorative />
+        <WelcomeName
+          label="My name"
+          placeholder={initial.name}
+          maxLength={40}
+          autoComplete="off"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <Button
+          size="sm"
+          variant="ghost"
+          leadingIcon={<Dices />}
+          onClick={() => {
+            const next = nextIdea([], idea);
+            setIdea(next.name);
+            setName(next.name);
+            setFace({ kind: 'preset', id: next.face });
+          }}
         >
-          {VOICES.map((v) => (
-            <SegmentedControl.Item key={v.value} value={v.value}>
-              {v.label}
-            </SegmentedControl.Item>
-          ))}
-        </SegmentedControl>
+          Another name
+        </Button>
       </WelcomeRise>
-      <WelcomeRise order={3} className={styles.actions}>
-        <Button size="lg" trailingIcon={<ArrowRight />} onClick={() => onNext(tone)}>
+      <WelcomeRise order={2} className={styles.wide}>
+        <AgentFacePicker
+          name={shown}
+          value={face}
+          size="lg"
+          align="center"
+          onValueChange={setFace}
+        />
+      </WelcomeRise>
+      <WelcomeRise order={3}>
+        <ToneChips
+          aria-label="How I should sound"
+          choices={TONE_CHOICES.filter((t) => VOICES.some((v) => v.value === t.value))}
+          value={tone}
+          onValueChange={(v) => setTone(v as Tone)}
+        />
+      </WelcomeRise>
+      <WelcomeRise order={4}>
+        <WelcomeVoice
+          from={shown}
+          face={<AgentAvatar name={shown} avatar={face} size="xs" decorative />}
+          text={agentHello(tone, shown, you)}
+        />
+      </WelcomeRise>
+      <WelcomeRise order={5} className={styles.actions}>
+        <Button type="submit" size="lg" trailingIcon={<ArrowRight />}>
           Sounds good
         </Button>
       </WelcomeRise>
-    </>
+    </form>
   );
 }
 
@@ -398,11 +449,14 @@ function HomeStep({ status, onNext }: { status: ImportStatus; onNext: () => void
 
 function Ready({
   name,
+  agent,
   starters,
   finishing,
   onFinish,
 }: {
   name: string;
+  /** Who it just named: its face greets them here. */
+  agent?: { name: string; avatar: AgentFace };
   starters: string[];
   finishing: boolean;
   onFinish: (draft?: string) => void;
@@ -411,7 +465,11 @@ function Ready({
   return (
     <>
       <WelcomeRise order={0}>
-        <Pearl size="xl" state="streaming" label={null} className={styles.pearl} />
+        {agent ? (
+          <AgentAvatar name={agent.name} avatar={agent.avatar} size="3xl" decorative />
+        ) : (
+          <Pearl size="xl" state="streaming" label={null} className={styles.pearl} />
+        )}
       </WelcomeRise>
       <WelcomeRise order={1}>
         <Heading level={1} display size="5xl" align="center">
@@ -448,6 +506,9 @@ function Ready({
 export function Onboarding() {
   const state = useAppState();
   const update = useUpdateSettings();
+  const updateAgent = useUpdateAgent();
+  // The agent the welcome makes yours: the first one (ADR 0101).
+  const me = useDefaultAgent();
   const navigate = useNavigate();
   const imports = useImportStatus();
   const [step, setStep] = useState<Step>(remembered);
@@ -538,11 +599,31 @@ export function Onboarding() {
           />
         )}
         {step === 'voice' && (
-          <VoiceStep
-            name={profile.name}
-            assistant={persona.name}
-            initial={persona.tone}
-            onNext={(tone) => saveThen({ persona: { ...persona, tone } }, 'voice')}
+          <AgentStep
+            you={profile.name}
+            initial={{
+              name: me?.name ?? persona.name,
+              tone: me?.persona.tone ?? persona.tone,
+              avatar: me?.avatar ?? { kind: 'preset', id: 'shell' },
+            }}
+            onNext={(agent) => {
+              if (!me)
+                return saveThen(
+                  { persona: { ...persona, name: agent.name, tone: agent.tone } },
+                  'voice',
+                );
+              go(after('voice'));
+              updateAgent
+                .mutateAsync({
+                  id: me.id,
+                  body: {
+                    name: agent.name,
+                    persona: { tone: agent.tone },
+                    ...(agent.avatar && { avatar: asPreset(agent.avatar) }),
+                  },
+                })
+                .catch((e: unknown) => toast.error((e as Error).message));
+            }}
           />
         )}
         {step === 'mind' && <MindStep onNext={() => go(after('mind'))} />}
@@ -551,6 +632,7 @@ export function Onboarding() {
         {step === 'ready' && (
           <Ready
             name={profile.name}
+            agent={me}
             starters={startersFor(picked)}
             finishing={update.isPending}
             onFinish={(draft) => void finish(draft)}

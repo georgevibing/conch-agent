@@ -1,5 +1,6 @@
 import { ImportSourceId } from '@conch/protocol';
 
+import { useAgents } from '../agents/api';
 import { useImportStatus } from '../import/api';
 import { useProviders } from '../providers/queries';
 import { SERVER_TILE } from '../providers/words';
@@ -23,7 +24,9 @@ export function usePageInside(tab: SettingsTab | null, item: string | undefined)
   // Asked for only when a page needs its name; the place showing it asks for the same.
   const providers = useProviders(provider);
   const imports = useImportStatus(Boolean(from?.success));
+  const { data: agents } = useAgents();
   if (!item) return undefined;
+  if (tab === 'agents') return agents?.agents.find((a) => a.id === item)?.name;
   if (tab === 'memory') {
     if (item === MEMORY_ALL) return 'What Conch knows';
     if (from?.success) {

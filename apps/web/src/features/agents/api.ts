@@ -17,10 +17,12 @@ import {
   type UpdateAgentBody,
 } from '@conch/protocol';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
 import { z } from 'zod';
 
 import { request } from '../../api/client';
 import { keys } from '../../api/queries';
+import { useHiddenAgents, withoutHidden } from './hidden';
 
 const Ok = z.object({ ok: z.boolean() });
 
@@ -76,9 +78,19 @@ export const agentKeys = {
   generation: ['agents', 'generation'] as const,
 };
 
-/** Every agent, in order, and which is the default. */
+/**
+ * Every agent, in order, and which is the default: without any being deleted
+ * while its Undo is offered (`remove.ts`).
+ */
 export function useAgents() {
-  return useQuery({ queryKey: agentKeys.list, queryFn: agentsApi.list, staleTime: 5 * 60_000 });
+  const hidden = useHiddenAgents((s) => s.ids);
+  const select = useCallback((list: AgentList) => withoutHidden(list, hidden), [hidden]);
+  return useQuery({
+    queryKey: agentKeys.list,
+    queryFn: agentsApi.list,
+    staleTime: 5 * 60_000,
+    select,
+  });
 }
 
 /** One agent from the list (no request of its own). */

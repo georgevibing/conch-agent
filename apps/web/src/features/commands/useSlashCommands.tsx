@@ -1,6 +1,6 @@
 import type { PermissionMode, TurnOptions } from '@conch/protocol';
 import type { CommandItem, CommandMenuHeading } from '@conch/nacre';
-import { SkillIcon, toast, useCommandMenu, useNacreTheme } from '@conch/nacre';
+import { AgentAvatar, SkillIcon, toast, useCommandMenu, useNacreTheme } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
@@ -586,7 +586,7 @@ export function useSlashCommands(options: {
               name: agent.name.toLowerCase(),
               title: agent.name,
               ...(agent.role && { description: agent.role }),
-              icon: <UserRound />,
+              icon: <AgentAvatar name={agent.name} avatar={agent.avatar} size="xs" decorative />,
               current: agent.id === currentAgent?.id,
             },
             () => void chooseAgent(agent),

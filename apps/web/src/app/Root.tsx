@@ -8,6 +8,7 @@ import { APPS_PATH, newHome } from '../features/integrations/paths';
 import { ProviderDone } from '../features/providers/ProviderDone';
 import { Onboarding } from '../features/onboarding/Onboarding';
 import { behindOf, settingsAt } from '../features/settings/paths';
+import { NewAgentDialog } from '../features/agents/NewAgentDialog';
 import { Settings } from '../features/settings/Settings';
 import { UpdateDialogHost } from '../features/updates/UpdateDialogHost';
 import { FolderChooserHost } from '../features/folders/FolderChooser';
@@ -86,6 +87,8 @@ export function Root() {
         <Route path="*" element={<Shell />} />
       </Routes>
       <Settings />
+      {/* Making an agent, from anywhere: over Settings too. */}
+      <NewAgentDialog />
       {/* Conch's own update, from anywhere: over Settings too. */}
       <UpdateDialogHost />
       {/* Choosing a folder on this computer, from any device: over Settings and dialogs too. */}

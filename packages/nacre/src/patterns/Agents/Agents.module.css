@@ -1,0 +1,710 @@
+@layer nacre.components {
+  /* ── A profile: the face large, the name under it ───────────────────── */
+  .card {
+    --ag-face: 6rem;
+
+    position: relative;
+    display: grid;
+    justify-items: center;
+    align-content: start;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+    text-align: center;
+  }
+
+  .card[data-size='xl'] {
+    --ag-face: 3.5rem;
+  }
+  .card[data-size='3xl'] {
+    --ag-face: 8.5rem;
+
+    gap: var(--nc-space-1-5);
+  }
+
+  .cardFace {
+    position: relative;
+    display: grid;
+    margin-block-end: var(--nc-space-1-5);
+    border-radius: calc(var(--ag-face) * 0.29);
+    corner-shape: var(--nc-corner-shape);
+    transition:
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy),
+      box-shadow var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  /* Every face surfaces as it comes, one after another, with a little spring. */
+  .cardFace > * {
+    animation: ag-arrive var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) backwards;
+    animation-delay: calc(min(var(--ag-i, 0), 12) * 35ms);
+  }
+
+  /* Just made: one ring of pearl light passes out from it. */
+  .card[data-arrived] .cardFace::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    corner-shape: inherit;
+    box-shadow: 0 0 0 2px var(--nc-accent-8);
+    pointer-events: none;
+    animation: ag-ring 900ms var(--nc-ease-out) 120ms both;
+  }
+
+  .cardName {
+    max-inline-size: 100%;
+    overflow: hidden;
+    color: var(--nc-text);
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-medium);
+    line-height: var(--nc-leading-snug);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .card[data-size='3xl'] .cardName {
+    font-family: var(--nc-font-display);
+    font-size: var(--nc-text-3xl);
+    font-weight: var(--nc-weight-regular);
+    letter-spacing: -0.01em;
+    line-height: var(--nc-leading-tight);
+  }
+
+  .cardName[data-empty] {
+    color: var(--nc-text-subtle);
+  }
+
+  .cardRole {
+    display: -webkit-box;
+    max-inline-size: 11rem;
+    overflow: hidden;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-snug);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  .card[data-size='3xl'] .cardRole {
+    max-inline-size: 18rem;
+    font-size: var(--nc-text-sm);
+  }
+
+  .cardDefault {
+    padding: 0 var(--nc-space-2);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-3);
+    color: var(--nc-accent-11);
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-medium);
+    line-height: 1.6;
+  }
+
+  /* ── The wall of faces ─────────────────────────────────────────────── */
+  .gallery {
+    position: relative;
+  }
+
+  .wall {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+    gap: var(--nc-space-6) var(--nc-space-3);
+    margin: 0;
+    padding: var(--nc-space-1) 0 0;
+    list-style: none;
+  }
+
+  .wallItem {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    min-inline-size: 0;
+  }
+
+  .wallButton {
+    display: grid;
+    justify-items: center;
+    inline-size: 100%;
+    min-inline-size: 0;
+    padding: var(--nc-space-1);
+    border: 0;
+    border-radius: var(--nc-radius-lg);
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  .wallButton:focus-visible {
+    outline: none;
+  }
+
+  .wallButton:focus-visible .cardFace {
+    box-shadow:
+      0 0 0 3px var(--nc-canvas),
+      0 0 0 5px var(--nc-ring);
+  }
+
+  @media (hover: hover) {
+    .wallButton:hover .cardFace {
+      transform: translateY(-2px) scale(1.04);
+      box-shadow:
+        0 0 0 3px var(--nc-canvas),
+        0 0 0 5px var(--nc-text);
+    }
+  }
+
+  .wallButton:active .cardFace {
+    transform: scale(0.97);
+    transition-duration: var(--nc-duration-instant);
+  }
+
+  /* Lifted: it follows the pointer, a little larger, over the others. */
+  .wallItem[data-lifted] {
+    z-index: 2;
+    transform: translate(var(--ag-x, 0), var(--ag-y, 0));
+    cursor: grabbing;
+  }
+
+  .wallItem[data-lifted] .cardFace {
+    transform: scale(1.08) rotate(-2deg);
+    box-shadow: var(--nc-elevation-4);
+  }
+
+  .gallery[data-dragging] .wallMore {
+    visibility: hidden;
+  }
+
+  /* Each face's ⋯, at its corner: in sight when it's near, always on a touch screen. */
+  .wallMore {
+    position: absolute;
+    inset-block-start: calc(var(--nc-space-1) - var(--nc-space-1-5));
+    inset-inline-start: calc(50% + 3rem - var(--nc-space-5));
+    display: grid;
+    place-items: center;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    padding: 0;
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface-overlay);
+    box-shadow:
+      var(--nc-glaze-edge),
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-2);
+    color: var(--nc-text-muted);
+    cursor: pointer;
+    opacity: 0;
+    transition:
+      opacity var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .wallMore svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .wallItem:hover .wallMore,
+  .wallItem:focus-within .wallMore,
+  .wallMore[data-state='open'] {
+    opacity: 1;
+  }
+
+  .wallMore:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  @media (hover: hover) {
+    .wallMore:hover {
+      color: var(--nc-text);
+      transform: scale(1.06);
+    }
+  }
+
+  @media (hover: none) {
+    .wallMore {
+      opacity: 1;
+    }
+  }
+
+  .addFace {
+    display: grid;
+    place-items: center;
+    inline-size: var(--ag-face);
+    block-size: var(--ag-face);
+    margin-block-end: var(--nc-space-1-5);
+    border-radius: calc(var(--ag-face) * 0.29);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1.5px var(--nc-border);
+    color: var(--nc-text-subtle);
+    transition:
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy),
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      background var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .addFace svg {
+    inline-size: 2rem;
+    block-size: 2rem;
+    stroke-width: 1.75;
+  }
+
+  .wallButton:focus-visible .addFace {
+    box-shadow:
+      inset 0 0 0 1.5px var(--nc-border),
+      0 0 0 3px var(--nc-canvas),
+      0 0 0 5px var(--nc-ring);
+  }
+
+  @media (hover: hover) {
+    .wallButton:hover .addFace {
+      transform: translateY(-2px) scale(1.04);
+      background: var(--nc-wash-2);
+      color: var(--nc-text);
+    }
+  }
+
+  .wallButton:has(.addFace) .cardName {
+    color: var(--nc-text-muted);
+  }
+
+  /* ── How it sounds: a row of chips ─────────────────────────────────── */
+  .tones {
+    display: grid;
+    gap: var(--nc-space-2);
+  }
+
+  .toneRow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-2);
+  }
+
+  .tone {
+    min-block-size: var(--nc-control-sm);
+    padding: 0 var(--nc-space-3);
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface);
+    box-shadow:
+      var(--nc-glaze-edge),
+      inset 0 0 0 1px var(--nc-border);
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    cursor: pointer;
+    transition:
+      background var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      box-shadow var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  @media (hover: hover) {
+    .tone:hover {
+      background: var(--nc-surface-hi);
+    }
+  }
+
+  .tone:active {
+    transform: scale(0.975);
+    transition-duration: var(--nc-duration-instant);
+  }
+
+  .tone[data-state='checked'] {
+    background: var(--nc-accent-3);
+    box-shadow: inset 0 0 0 1.5px var(--nc-accent-8);
+    color: var(--nc-accent-11);
+  }
+
+  .tone:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .toneSays {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+  }
+
+  /* ── Choosing a face ──────────────────────────────────────────────── */
+  /* The cast in even rows: nine across where there's room, else six (two rows or
+     three, never a straggler), and the colours in one row, or seven and six. */
+  .facePicker {
+    --ag-tile: 3.5rem;
+
+    display: grid;
+    gap: var(--nc-space-4);
+    container-type: inline-size;
+  }
+
+  .facePicker[data-size='lg'] {
+    --ag-tile: 2.5rem;
+  }
+
+  .facePicker[data-align='center'] :is(.faces, .colours) {
+    justify-content: center;
+  }
+
+  .facePicker[data-align='center'] .faceActions {
+    justify-content: center;
+  }
+
+  .faces {
+    display: grid;
+    grid-template-columns: repeat(6, var(--ag-tile));
+    gap: var(--nc-space-3);
+    justify-content: start;
+  }
+
+  @container (min-width: 37.5rem) {
+    .faces {
+      grid-template-columns: repeat(9, var(--ag-tile));
+    }
+  }
+
+  @container (min-width: 28.5rem) {
+    .facePicker[data-size='lg'] .faces {
+      grid-template-columns: repeat(9, var(--ag-tile));
+    }
+  }
+
+  .facePicker[data-size='lg'] .faceOption {
+    border-radius: calc(2.5rem * 0.29);
+  }
+
+  .faceOption {
+    position: relative;
+    display: grid;
+    padding: 0;
+    border: 0;
+    border-radius: calc(3.5rem * 0.29);
+    corner-shape: var(--nc-corner-shape);
+    background: none;
+    cursor: pointer;
+    transition:
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy),
+      box-shadow var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .faceOption:hover {
+      transform: translateY(-1px) scale(1.05);
+    }
+  }
+
+  .faceOption:active {
+    transform: scale(0.95);
+    transition-duration: var(--nc-duration-instant);
+  }
+
+  .faceOption[data-state='checked'] {
+    box-shadow:
+      0 0 0 2px var(--nc-canvas),
+      0 0 0 4px var(--nc-accent-9);
+  }
+
+  .faceOption:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px var(--nc-canvas),
+      0 0 0 4px var(--nc-ring);
+  }
+
+  .faceCheck {
+    position: absolute;
+    inset-block-end: -0.3rem;
+    inset-inline-end: -0.3rem;
+    display: grid;
+    place-items: center;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-9);
+    box-shadow: 0 0 0 2px var(--nc-canvas);
+    color: var(--nc-accent-contrast);
+    animation: ag-arrive var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) both;
+  }
+
+  .faceCheck svg {
+    inline-size: 0.8rem;
+    block-size: 0.8rem;
+    stroke-width: 3;
+  }
+
+  .colours {
+    display: grid;
+    grid-template-columns: repeat(7, 1.75rem);
+    gap: var(--nc-space-2);
+  }
+
+  @container (min-width: 28.75rem) {
+    .colours {
+      grid-template-columns: repeat(13, 1.75rem);
+    }
+  }
+
+  .colour {
+    --ag-swatch: var(--nc-app-slate);
+
+    display: grid;
+    place-items: center;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    padding: 0;
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: linear-gradient(
+      172deg,
+      color-mix(in oklab, var(--ag-swatch) 84%, oklch(1 0 0)),
+      var(--ag-swatch)
+    );
+    box-shadow:
+      inset 0 0 0 1px oklch(0 0 0 / 0.08),
+      inset 0 1px 0 oklch(1 0 0 / 0.25);
+    color: oklch(1 0 0);
+    cursor: pointer;
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  @media (hover: hover) {
+    .colour:hover {
+      transform: scale(1.1);
+    }
+  }
+
+  .colour[data-state='checked'] {
+    box-shadow:
+      0 0 0 2px var(--nc-canvas),
+      0 0 0 4px var(--ag-swatch);
+  }
+
+  .colour:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 4px;
+  }
+
+  .colourCheck {
+    display: grid;
+  }
+
+  .colourCheck svg {
+    inline-size: 0.9rem;
+    block-size: 0.9rem;
+    stroke-width: 3;
+  }
+
+  .colour[data-color='red'] {
+    --ag-swatch: var(--nc-app-red);
+  }
+  .colour[data-color='orange'] {
+    --ag-swatch: var(--nc-app-orange);
+  }
+  .colour[data-color='amber'] {
+    --ag-swatch: var(--nc-app-amber);
+    color: oklch(0.36 0.08 70);
+  }
+  .colour[data-color='yellow'] {
+    --ag-swatch: var(--nc-app-yellow);
+    color: oklch(0.4 0.09 95);
+  }
+  .colour[data-color='lime'] {
+    --ag-swatch: var(--nc-app-lime);
+    color: oklch(0.38 0.09 130);
+  }
+  .colour[data-color='green'] {
+    --ag-swatch: var(--nc-app-green);
+  }
+  .colour[data-color='teal'] {
+    --ag-swatch: var(--nc-app-teal);
+  }
+  .colour[data-color='cyan'] {
+    --ag-swatch: var(--nc-app-cyan);
+  }
+  .colour[data-color='blue'] {
+    --ag-swatch: var(--nc-app-blue);
+  }
+  .colour[data-color='indigo'] {
+    --ag-swatch: var(--nc-app-indigo);
+  }
+  .colour[data-color='violet'] {
+    --ag-swatch: var(--nc-app-violet);
+  }
+  .colour[data-color='pink'] {
+    --ag-swatch: var(--nc-app-pink);
+  }
+
+  .faceActions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  /* ── Who you're talking to: a face and a name that open a menu ────── */
+  .picker {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    max-inline-size: 100%;
+    min-inline-size: 0;
+    padding: 0 var(--nc-space-2) 0 var(--nc-space-1);
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: none;
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    cursor: pointer;
+    min-block-size: var(--nc-control-sm);
+    transition:
+      background var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .picker[data-variant='hello'] {
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-2) var(--nc-space-3);
+    border-radius: var(--nc-radius-xl);
+    color: var(--nc-text-muted);
+  }
+
+  @media (hover: hover) {
+    .picker:hover {
+      background: var(--nc-wash-1);
+      color: var(--nc-text);
+    }
+
+    .picker[data-variant='hello']:hover .pickerFace {
+      transform: translateY(-2px) scale(1.04);
+    }
+  }
+
+  .picker:active {
+    transform: scale(0.975);
+    transition-duration: var(--nc-duration-instant);
+  }
+
+  .picker[data-state='open'] {
+    background: var(--nc-wash-2);
+    color: var(--nc-text);
+  }
+
+  .picker:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .pickerFace {
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .picker[data-variant='hello'] .pickerFace {
+    animation: ag-arrive var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) backwards;
+  }
+
+  .pickerName {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-0-5);
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pickerChevron {
+    flex-shrink: 0;
+    inline-size: 0.9rem;
+    block-size: 0.9rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .pickerMenu {
+    min-inline-size: 15rem;
+    max-inline-size: min(22rem, calc(100vw - 2rem));
+  }
+
+  .pickerItem {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) 1rem;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+    padding-block: var(--nc-space-1-5);
+  }
+
+  .pickerText {
+    display: grid;
+    min-inline-size: 0;
+  }
+
+  .pickerItemName {
+    overflow: hidden;
+    font-weight: var(--nc-weight-medium);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pickerRole {
+    overflow: hidden;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pickerCheck {
+    display: grid;
+    color: var(--nc-accent-11);
+  }
+
+  .pickerCheck svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  @keyframes ag-arrive {
+    from {
+      opacity: 0;
+      transform: scale(0.6);
+    }
+  }
+
+  @keyframes ag-ring {
+    from {
+      opacity: 1;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(1.3);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cardFace > *,
+    .card[data-arrived] .cardFace::after,
+    .faceCheck,
+    .picker[data-variant='hello'] .pickerFace {
+      animation: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .cardFace > *,
+  :global([data-nacre-motion='reduced']) .card[data-arrived] .cardFace::after,
+  :global([data-nacre-motion='reduced']) .faceCheck,
+  :global([data-nacre-motion='reduced']) .picker[data-variant='hello'] .pickerFace {
+    animation: none;
+  }
+}

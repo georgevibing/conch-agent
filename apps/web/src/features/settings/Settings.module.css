@@ -198,12 +198,6 @@
     opacity: 0;
   }
 
-  .tones {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--nc-space-2);
-  }
-
   /* The way to everything Conch knows (ADR 0032) */
   .memoryDoor {
     display: flex;
@@ -324,10 +318,6 @@
 
     .column {
       padding: var(--nc-space-2) var(--nc-space-4) var(--nc-space-10);
-    }
-
-    .tones {
-      grid-template-columns: minmax(0, 1fr);
     }
   }
 }

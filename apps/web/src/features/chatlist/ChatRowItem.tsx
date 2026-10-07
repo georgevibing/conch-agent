@@ -22,6 +22,7 @@ import { keys } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { useLiveStore } from '../../live/store';
 import { useAutoFocus } from '../../lib/useAutoFocus';
+import { ChatRowAgent } from '../agents/ChatAgent';
 import { DeleteChat } from '../archive/DeleteChat';
 import { useArchive } from '../archive/useArchive';
 import { APPS } from '../channels/describe';
@@ -216,7 +217,9 @@ export function ChatRowItem({
               color={APPS[chat.origin.channel].color}
               size="xs"
             />
-          ) : undefined
+          ) : (
+            <ChatRowAgent chat={chat} />
+          )
         }
         selecting={selection.selecting}
         selected={selection.selected}

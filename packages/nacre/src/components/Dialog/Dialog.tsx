@@ -3,6 +3,7 @@ import { Dialog as DialogPrimitive } from 'radix-ui';
 import type { ComponentProps, ReactNode } from 'react';
 
 import { cx } from '../../utils/cx';
+import { keepOpenForToasts } from '../../utils/toasts';
 import { IconButton } from '../IconButton';
 import styles from './Dialog.module.css';
 
@@ -37,6 +38,7 @@ function DialogContent({
   className,
   children,
   container,
+  onInteractOutside,
   ...props
 }: DialogContentProps) {
   return (
@@ -47,6 +49,7 @@ function DialogContent({
         // A full-window page is canvas, not a card: only what's on it ripples.
         data-lustre={size === 'full' ? undefined : ''}
         className={cx(styles.content, className)}
+        onInteractOutside={keepOpenForToasts(onInteractOutside)}
         {...props}
       >
         {children}
