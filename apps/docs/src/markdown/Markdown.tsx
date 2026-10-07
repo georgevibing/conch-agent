@@ -4,6 +4,7 @@ import {
   CommandLine,
   formatKey,
   Prose,
+  ProseTable,
   Steps,
   type CalloutTone,
 } from '@conch/nacre';
@@ -92,6 +93,9 @@ function components(file: string): Components {
       if (language && SHELLS.has(language) && !code.includes('\n') && !/\s#\s/.test(code))
         return <CommandLine command={code} prompt={language.startsWith('p') ? '>' : '$'} />;
       return <CodeBlock code={code} language={language} />;
+    },
+    table({ children }) {
+      return <ProseTable>{children}</ProseTable>;
     },
     ol({ children, node: _node, ...props }) {
       if ('data-steps' in props) return <Steps>{children}</Steps>;

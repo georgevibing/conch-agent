@@ -1,3 +1,14 @@
+@property --pt-start {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --pt-end {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
 @layer nacre.components {
   .prose {
     --prose-size: var(--nc-text-md);
@@ -246,6 +257,11 @@
     text-align: start;
     vertical-align: top;
     border-block-end: 1px solid var(--nc-border-subtle);
+    /* Break between words, never inside them, so a narrow column can't
+       collapse to a letter per line; a long word still wraps if it must. */
+    overflow-wrap: break-word;
+    hyphens: manual;
+    min-inline-size: 5.5em;
   }
 
   .prose :where(th) {
@@ -263,6 +279,111 @@
   @media (hover: hover) {
     .prose :where(tbody tr):hover {
       background: var(--nc-wash-1);
+    }
+  }
+
+  /* A table in a ProseTable: the frame stays crisp while the rows scroll
+     sideways inside it, fading out at whichever edge has more. */
+  .tableFrame {
+    --pt-fade: 2.25rem;
+    /* Room per column before a table would rather scroll than squeeze. */
+    --pt-column: 11em;
+
+    position: relative;
+    max-inline-size: 100%;
+    inline-size: fit-content;
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    font-size: 0.93em;
+    transition: border-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .tableFrame:has(> .tableScroll:focus-visible) {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .tableScroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    border-radius: inherit;
+    corner-shape: inherit;
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 var(--pt-start),
+      #000 calc(100% - var(--pt-end)),
+      transparent 100%
+    );
+    transition:
+      --pt-start var(--nc-duration-base) var(--nc-ease-out),
+      --pt-end var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .tableScroll:focus-visible {
+    outline: none;
+  }
+
+  .tableScroll:dir(rtl) {
+    mask-image: linear-gradient(
+      to left,
+      transparent 0,
+      #000 var(--pt-start),
+      #000 calc(100% - var(--pt-end)),
+      transparent 100%
+    );
+  }
+
+  .tableScroll[data-fade-start='true'] {
+    --pt-start: var(--pt-fade);
+  }
+  .tableScroll[data-fade-end='true'] {
+    --pt-end: var(--pt-fade);
+  }
+
+  .tableScroll > table {
+    display: table;
+    /* As wide as its content wants, up to the space it has, but never so
+       narrow that each column gets less than a comfortable measure. */
+    inline-size: max-content;
+    max-inline-size: max(100%, calc(var(--pt-cols, 3) * var(--pt-column)));
+    min-inline-size: 100%;
+    overflow: visible;
+    border-radius: 0;
+    box-shadow: none;
+    font-size: 1em;
+  }
+
+  .tableScroll[data-peek] > table {
+    animation: pt-peek calc(var(--nc-duration-slower) * 2) var(--nc-ease-in-out)
+      var(--nc-duration-slow) both;
+  }
+
+  @keyframes pt-peek {
+    0%,
+    100% {
+      translate: 0;
+    }
+    45% {
+      translate: calc(var(--pt-fade) * -0.9);
+    }
+  }
+
+  .tableScroll:dir(rtl)[data-peek] > table {
+    animation-name: pt-peek-rtl;
+  }
+
+  @keyframes pt-peek-rtl {
+    0%,
+    100% {
+      translate: 0;
+    }
+    45% {
+      translate: calc(var(--pt-fade) * 0.9);
     }
   }
 
@@ -291,7 +412,7 @@
     box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
   }
 
-  .prose > :where(figure, pre, table) {
+  .prose > :where(figure, pre, table, .tableFrame) {
     margin-block: 1.1em;
   }
 

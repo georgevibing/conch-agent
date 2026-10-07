@@ -2,6 +2,7 @@ import { ScrollArea as ScrollAreaPrimitive } from 'radix-ui';
 import { useEffect, useImperativeHandle, useRef, type ComponentProps, type Ref } from 'react';
 
 import { cx } from '../../utils/cx';
+import { trackScrollEdges } from '../../utils/scrollEdges';
 import styles from './ScrollArea.module.css';
 
 export interface ScrollAreaProps extends ComponentProps<typeof ScrollAreaPrimitive.Root> {
@@ -37,22 +38,7 @@ export function ScrollArea({
   useEffect(() => {
     const el = localRef.current;
     if (!el || !fade) return;
-    const update = () => {
-      const eps = 1;
-      el.dataset.fadeTop = String(el.scrollTop > eps);
-      el.dataset.fadeBottom = String(el.scrollTop + el.clientHeight < el.scrollHeight - eps);
-      el.dataset.fadeStart = String(el.scrollLeft > eps);
-      el.dataset.fadeEnd = String(el.scrollLeft + el.clientWidth < el.scrollWidth - eps);
-    };
-    update();
-    el.addEventListener('scroll', update, { passive: true });
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    if (el.firstElementChild) ro.observe(el.firstElementChild);
-    return () => {
-      el.removeEventListener('scroll', update);
-      ro.disconnect();
-    };
+    return trackScrollEdges(el);
   }, [fade]);
 
   return (

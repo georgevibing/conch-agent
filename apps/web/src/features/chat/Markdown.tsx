@@ -2,6 +2,7 @@ import {
   CodeBlock,
   InlineCode,
   Prose,
+  ProseTable,
   revealWords,
   type SmoothText,
   useSettleOnce,
@@ -32,6 +33,10 @@ const components: Components = {
   },
   code({ children }) {
     return <InlineCode>{children}</InlineCode>;
+  },
+  // Wide tables scroll sideways instead of squeezing their columns.
+  table({ children }) {
+    return <ProseTable>{children}</ProseTable>;
   },
   a({ href, children }) {
     return (

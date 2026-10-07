@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { CodeBlock } from '../CodeBlock';
 import { sampleCode } from '../fixtures';
 import { Prose } from './Prose';
+import { ProseTable } from './ProseTable';
 
 const meta = {
   title: 'Patterns/Chat/Prose',
@@ -86,3 +87,71 @@ export const Playground: Story = {
 };
 
 export const Small: Story = { ...Playground, args: { size: 'sm', measure: true } };
+
+const probes = [
+  [
+    'Read-only tools',
+    'Passed',
+    'Both calls reported success; the listing has a confirmed receipt.',
+  ],
+  [
+    'Write → Read → Edit → Read',
+    'Passed',
+    'All four operations recorded and confirmed. Initial and final reads differ, as they should.',
+  ],
+  [
+    'Missing-file recovery',
+    'Passed, with a gap',
+    'The expected ENOENT was reported; the following Write and Read were confirmed.',
+  ],
+  ['Artifact creation', 'Passed', 'Version 1 saved with a confirmed receipt.'],
+];
+
+/**
+ * On a phone a wide table keeps readable columns and scrolls sideways: the
+ * edge with more beyond it fades, both edges mid-scroll, and the first time
+ * it's seen it peeks to show it moves. Scroll it, or Tab to it and use the
+ * arrow keys.
+ */
+export const WideTableOnMobile: Story = {
+  render: (args) => (
+    <div style={{ maxInlineSize: 340 }}>
+      <Prose {...args}>
+        <p>Four live probes passed; one diagnostic gap remains.</p>
+        <ProseTable label="Probe results">
+          <thead>
+            <tr>
+              <th>Probe</th>
+              <th>Result</th>
+              <th>Evidence</th>
+            </tr>
+          </thead>
+          <tbody>
+            {probes.map(([probe, result, evidence]) => (
+              <tr key={probe}>
+                <td>{probe}</td>
+                <td>{result}</td>
+                <td>{evidence}</td>
+              </tr>
+            ))}
+          </tbody>
+        </ProseTable>
+        <p>A table that fits sits still, with no fades:</p>
+        <ProseTable>
+          <thead>
+            <tr>
+              <th>Suite</th>
+              <th>Tests</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>session</td>
+              <td>6</td>
+            </tr>
+          </tbody>
+        </ProseTable>
+      </Prose>
+    </div>
+  ),
+};
