@@ -10,6 +10,18 @@
  * so it means the same whichever provider answers.
  */
 
+import type { ChannelKind } from './channels';
+
+/**
+ * How a command is typed in this chat app. Slack keeps every message that
+ * starts with `/` for its own commands, so there they go after Conch's one:
+ * `/conch model`. The gateway writes its replies with it; the web app its hints.
+ */
+export function slashIn(kind: ChannelKind | undefined, name: string, args = ''): string {
+  const typed = kind === 'slack' ? `/conch ${name}` : `/${name}`;
+  return args ? `${typed} ${args}` : typed;
+}
+
 /** Where a command is listed: what it acts on. */
 export type CommandSection = 'chat' | 'answers' | 'conch';
 

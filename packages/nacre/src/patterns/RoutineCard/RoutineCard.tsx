@@ -16,6 +16,8 @@ import { useId, type ComponentProps, type ReactNode } from 'react';
 import { Button } from '../../components/Button';
 import { Switch } from '../../components/Switch';
 import { cx } from '../../utils/cx';
+import { AgentAvatar } from '../AgentAvatar/AgentAvatar';
+import type { AgentFace } from '../AgentAvatar/presets';
 import { runStatusMeta, RunStatusBadge } from '../Routines/RunStatusBadge';
 import { formatWhenInline } from '../Routines/time';
 import type { RunStatusValue } from '../Routines/types';
@@ -59,6 +61,11 @@ export interface RoutineCardProps extends Omit<ComponentProps<'article'>, 'title
   lastRun?: RoutineCardLastRun;
   /** What it costs, shown beside its schedule. */
   cost?: RoutineCardCost;
+  /**
+   * Who does it (ADR 0101), small beside its schedule: only worth saying for
+   * an agent of its own, not the default one.
+   */
+  agent?: { name: string; avatar?: AgentFace | string };
   icon?: ReactNode;
   /** `list` for the Routines page, `proposal` for the inline card Claude drafts in a chat. */
   variant?: 'list' | 'proposal';
@@ -127,6 +134,7 @@ export function RoutineCard({
   nextRunAt,
   lastRun,
   cost,
+  agent,
   icon,
   variant = 'list',
   onOpen,
@@ -289,6 +297,13 @@ export function RoutineCard({
             <span className={styles.chip} data-cost={cost.billing}>
               {costIcons[cost.billing ?? 'metered']}
               {cost.text}
+            </span>
+          )}
+          {agent && (
+            <span className={styles.agent}>
+              <AgentAvatar name={agent.name} avatar={agent.avatar} size="xs" decorative />
+              <span className="nc-visually-hidden">Answered by </span>
+              {agent.name}
             </span>
           )}
           <span className={styles.dim}>

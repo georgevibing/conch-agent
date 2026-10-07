@@ -204,6 +204,16 @@
     block-size: 0.75rem;
   }
 
+  /* Who does it: a small face and its name, quieter than the chips. */
+  .agent {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+    color: var(--nc-text-muted);
+    font-weight: var(--nc-weight-medium);
+  }
+
   .lastRun {
     display: flex;
     align-items: center;

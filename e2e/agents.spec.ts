@@ -135,3 +135,83 @@ test('make an agent, talk to it, hand the chat over, rename it, delete it with U
     page.getByRole('list', { name: 'Your agents' }).getByRole('button', { name: 'Sage Owl' }),
   ).toHaveCount(0);
 });
+
+test('a routine and a chat app each choose who answers, with the chat’s own picker', async ({
+  page,
+}) => {
+  const atlas = (await (
+    await page.request.post('/api/agents', {
+      data: { name: 'Atlas', role: 'Plans trips', avatar: { kind: 'preset', id: 'compass' } },
+    })
+  ).json()) as { id: string };
+
+  // A routine set up by hand: the default agent unless you choose, and Atlas when you do.
+  await page.goto('/routines');
+  await page
+    .getByRole('button', { name: /New routine|Create your first routine/ })
+    .first()
+    .click();
+  await page.getByRole('button', { name: 'Set it up yourself' }).click();
+  const editor = page.getByRole('dialog', { name: 'New routine' });
+  await editor.getByRole('textbox', { name: 'Name' }).fill('Trip check');
+  await editor
+    .getByRole('textbox', { name: /What should Conch do/ })
+    .fill('Check my bookings for the next trip.');
+  await editor
+    .getByRole('button', { name: 'Answered by Default agent. Choose another agent' })
+    .click();
+  await expect(page.getByRole('menuitemradio', { name: /Default agent/ })).toBeChecked();
+  await page.getByRole('menuitemradio', { name: /Atlas/ }).click();
+  await editor.getByRole('button', { name: 'Turn on' }).click();
+  await expect(page).toHaveURL(/\/routines\/r_/);
+  await expect(page.getByRole('main').getByText(/Answered by Atlas/)).toBeVisible();
+  const routines = (await (await page.request.get('/api/routines')).json()) as {
+    title: string;
+    agentId?: string;
+  }[];
+  expect(routines.find((r) => r.title === 'Trip check')?.agentId).toBe(atlas.id);
+  // On its card, small, since it isn't the default's.
+  await page.getByRole('navigation', { name: 'Breadcrumb' }).getByText('Routines').click();
+  await expect(page.getByRole('article', { name: 'Trip check' })).toContainText(
+    'Answered by Atlas',
+  );
+
+  // A chat app: chosen on its page, and the page follows `/agent` sent from the phone.
+  const mocks = (await (await page.request.get('/api/channels/mock')).json()) as {
+    telegram: string;
+  };
+  const token = `123456789:${'AAHmockmockmockmockmockmockmockmock1'}`;
+  const made = (await (
+    await page.request.post('/api/channels', { data: { kind: 'telegram', token } })
+  ).json()) as { id: string; pairing: { link: string } };
+  const code = new URL(made.pairing.link).searchParams.get('start');
+  const say = (text: string) =>
+    page.request.post(`${mocks.telegram}/__control/say`, { data: { text } });
+  await say(`/start ${code}`);
+  await page.goto(`/channels/${made.id}`);
+  await page
+    .getByRole('button', { name: 'Answered by Default agent. Choose another agent' })
+    .click();
+  await page.getByRole('menuitemradio', { name: /Atlas/ }).click();
+  await expect(
+    page.getByText('Atlas answers you in Telegram from your next message'),
+  ).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Who can talk to Atlas here' })).toBeVisible();
+  await expect
+    .poll(
+      async () =>
+        (
+          (await (await page.request.get(`/api/channels/${made.id}`)).json()) as {
+            agentId?: string;
+          }
+        ).agentId,
+    )
+    .toBe(atlas.id);
+
+  await say('/agent juniper');
+  await expect(
+    page.getByRole('button', { name: 'Answered by Juniper. Choose another agent' }),
+  ).toBeVisible({ timeout: 15_000 });
+
+  await page.request.delete(`/api/channels/${made.id}`);
+});

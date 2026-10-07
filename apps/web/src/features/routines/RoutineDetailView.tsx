@@ -1,5 +1,6 @@
 import type { Routine, RoutineRun } from '@conch/protocol';
 import {
+  AgentAvatar,
   AlertDialog,
   Button,
   Callout,
@@ -26,6 +27,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
 import { usePageTrail } from '../../app/trail';
+import { ANSWERED_BY, useAnswering } from '../agents/AgentChoice';
 import { useUi, type SettingsTab } from '../../app/ui';
 import { routinesApi } from './api';
 import { routineIcon } from './icon';
@@ -51,6 +53,22 @@ function statusLine(routine: Routine, now: number) {
   return routine.nextRunAt
     ? `Next run ${formatWhen(routine.nextRunAt, { now }).replace(/^./, (c) => c.toLowerCase())}`
     : 'On';
+}
+
+/** Who does it, beside its schedule: a small face and a name, once there's more than one agent. */
+function RoutineAgent({ routine }: { routine: Routine }) {
+  const { agent, choosable } = useAnswering(routine.agentId);
+  if (!choosable || !agent) return null;
+  return (
+    <>
+      {' · '}
+      <span className={styles.agentLine}>
+        <AgentAvatar name={agent.name} avatar={agent.avatar} size="xs" decorative />
+        <span className="nc-visually-hidden">{ANSWERED_BY} </span>
+        {agent.name}
+      </span>
+    </>
+  );
 }
 
 function NextRuns({ routine }: { routine: Routine }) {
@@ -204,6 +222,7 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
           <Text size="sm" tone="subtle">
             {routine.scheduleText} · {statusLine(routine, now)}
             {spend?.text && ` · ${spend.text}`}
+            <RoutineAgent routine={routine} />
           </Text>
         </Stack>
         <Stack direction="row" gap={2} align="center" className={styles.detailActions}>
@@ -471,6 +490,7 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
                       trust: routine.trust,
                       catchUp: routine.catchUp,
                       options: routine.options,
+                      ...(routine.agentId && { agentId: routine.agentId }),
                       ...(routine.runLimitUsd && { runLimitUsd: routine.runLimitUsd }),
                     },
                     null,

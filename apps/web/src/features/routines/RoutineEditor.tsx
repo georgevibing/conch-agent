@@ -1,5 +1,6 @@
 import {
   fuzzyMatch,
+  type AgentId,
   type CreateRoutineBody,
   type Routine,
   type RoutineTrust,
@@ -32,6 +33,7 @@ import type { z } from 'zod';
 
 import { ApiError } from '../../api/client';
 import { useAppState, useModels } from '../../api/queries';
+import { AgentChoice, ANSWERED_BY, useAnswering } from '../agents/AgentChoice';
 import { chooseOnComputer } from '../folders/FolderChooser';
 import { pickerProviders } from '../models/catalog';
 import { findModel, modelKey, parseModelKey } from '../models/useTurnOptions';
@@ -154,6 +156,35 @@ function ModelField({
 }
 
 /**
+ * Who does it (ADR 0101): an agent of its own, in its voice and with its
+ * instructions, or the default agent at the time it runs. Only once there's
+ * more than one agent.
+ */
+function AgentField({
+  agentId,
+  onChange,
+}: {
+  agentId: AgentId | null;
+  onChange: (agentId: AgentId | null) => void;
+}) {
+  const { own, choosable } = useAnswering(agentId);
+  if (!choosable) return null;
+  return (
+    <Field>
+      <Field.Label id="routine-agent">{ANSWERED_BY}</Field.Label>
+      <Stack direction="row">
+        <AgentChoice value={agentId} onValueChange={onChange} />
+      </Stack>
+      <Field.Description>
+        {own
+          ? `${own.name} does it, in its own voice and with its own instructions.`
+          : 'Whichever agent is your default when it runs.'}
+      </Field.Description>
+    </Field>
+  );
+}
+
+/**
  * Create or edit a routine. Everything a person needs is up front in plain
  * words; the exact instruction, and when it starts — at a time, or when
  * something happens — are right there too, never hidden.
@@ -185,6 +216,7 @@ export function RoutineEditor({
   const [catchUp, setCatchUp] = useState(initial.catchUp ?? true);
   const [runOnFullPlan, setRunOnFullPlan] = useState(routine?.runOnFullPlan ?? false);
   const [options, setOptions] = useState<TurnOptions>(initial.options ?? {});
+  const [agentId, setAgentId] = useState<AgentId | null>(initial.agentId ?? null);
   const [limitText, setLimitText] = useState(
     routine?.runLimitUsd ? String(routine.runLimitUsd) : '',
   );
@@ -219,6 +251,7 @@ export function RoutineEditor({
       const saved = routine
         ? await routinesApi.update(routine.id, {
             ...common,
+            agentId,
             ...(starts === 'when'
               ? { when, onlyIf: onlyIf.trim() }
               : { schedule, ...(routine.when && { when: null }) }),
@@ -232,6 +265,7 @@ export function RoutineEditor({
               ? { when, ...(onlyIf.trim() && { onlyIf: onlyIf.trim() }) }
               : { schedule }),
             ...(limit && { runLimitUsd: limit }),
+            ...(agentId && { agentId }),
             status,
           });
       await client.invalidateQueries({ queryKey: routineKeys.all });
@@ -363,6 +397,8 @@ export function RoutineEditor({
                 />
               )}
             </Stack>
+
+            <AgentField agentId={agentId} onChange={setAgentId} />
 
             <ModelField options={options} onChange={setOptions} />
 

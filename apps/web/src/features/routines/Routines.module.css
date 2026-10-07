@@ -134,6 +134,15 @@
     min-inline-size: 0;
   }
 
+  /* Who does it, in the line under the title: its face sits on the text. */
+  .agentLine {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    vertical-align: bottom;
+    white-space: nowrap;
+  }
+
   .detailGrid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(15rem, 20rem);

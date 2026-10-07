@@ -12,18 +12,13 @@ import {
   type ChannelKind,
   type CommandDef,
   similarCommands,
+  slashIn,
 } from '@conch/protocol';
 
 import type { ChannelButton } from './types';
 
-/**
- * How a command is typed in this app. Slack keeps every message that starts
- * with `/` for its own commands, so there they go after Conch's one: `/conch model`.
- */
-export function slashIn(kind: ChannelKind | undefined, name: string, args = ''): string {
-  const typed = kind === 'slack' ? `/conch ${name}` : `/${name}`;
-  return args ? `${typed} ${args}` : typed;
-}
+/** How a command is typed in this app (`/conch model` in Slack): the protocol's, for the web too. */
+export { slashIn };
 
 /** What a command says it does in a chat app. */
 export const chatWords = (command: CommandDef) => command.chat?.description ?? command.description;

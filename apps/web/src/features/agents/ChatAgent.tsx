@@ -7,7 +7,7 @@ import { useAppState, useConversations } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { useAgents, useSetChatAgent } from './api';
 
-const pickable = (agents: readonly Agent[]) =>
+export const pickable = (agents: readonly Agent[]) =>
   agents.map((a) => ({
     id: a.id,
     name: a.name,

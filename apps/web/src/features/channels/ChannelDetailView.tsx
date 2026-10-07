@@ -1,4 +1,4 @@
-import type { Channel, ReplaceChannelTokenBody } from '@conch/protocol';
+import { slashIn, type AgentId, type Channel, type ReplaceChannelTokenBody } from '@conch/protocol';
 import {
   AlertDialog,
   Badge,
@@ -26,6 +26,7 @@ import { Link, useNavigate } from 'react-router';
 import { useAppState, useConversations } from '../../api/queries';
 import { usePageTrail } from '../../app/trail';
 import { relativeTime } from '../../lib/time';
+import { AgentChoice, ANSWERED_BY, useAnswering } from '../agents/AgentChoice';
 import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
 import { channelsApi } from './api';
@@ -92,7 +93,10 @@ function Detail({ channel }: { channel: Channel }) {
   const client = useQueryClient();
   const auth = useAuth();
   const { guard, dialog } = useVerify(auth.data?.method ?? 'none');
-  const assistant = useAppState().data?.persona.name ?? 'Conch';
+  // Who answers here (ADR 0101): its own agent, else the default.
+  const answering = useAnswering(channel.agentId);
+  const persona = useAppState().data?.persona.name;
+  const assistant = answering.agent?.name ?? persona ?? 'Conch';
   const { data: conversations } = useConversations();
   const { data: catalog } = useChannels();
   const [confirm, setConfirm] = useState(false);
@@ -102,6 +106,15 @@ function Detail({ channel }: { channel: Channel }) {
     'Couldn’t change that.',
   );
   const repair = useChannelAction(() => channelsApi.repair(channel.id), 'Repair didn’t work.');
+  /** Another agent answers here, your chat included, from your next message (as `/agent` does). */
+  const chooseAgent = (agentId: AgentId | null) => {
+    const list = answering.list;
+    const next = list?.agents.find((a) => a.id === (agentId ?? list.defaultId));
+    update.mutate([{ agentId }], {
+      onSuccess: () =>
+        next && toast.success(`${next.name} answers you in ${app.name} from your next message`),
+    });
+  };
   const answer = useChannelAction((personId: string, how: 'allow' | 'block' | 'dismiss') =>
     channelsApi.answer(channel.id, personId, how),
   );
@@ -410,6 +423,20 @@ function Detail({ channel }: { channel: Channel }) {
         <Heading level={2} id="ch-settings" size="sm" tone="muted">
           Settings
         </Heading>
+        {answering.choosable && (
+          <div className={styles.setting}>
+            <Stack gap={0}>
+              <Text weight="medium" id="ch-agent">
+                {ANSWERED_BY}
+              </Text>
+              <Text size="sm" tone="muted">
+                Who answers you in {app.name}. {slashIn(channel.kind, 'agent')} there changes it
+                too.
+              </Text>
+            </Stack>
+            <AgentChoice value={channel.agentId} onValueChange={chooseAgent} />
+          </div>
+        )}
         <div className={styles.setting}>
           <Stack gap={0}>
             <Text weight="medium" id="ch-routines">

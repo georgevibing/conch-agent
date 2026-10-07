@@ -210,4 +210,55 @@ describe('AgentPicker', () => {
     await user.click(await screen.findByRole('menuitem', { name: 'New agent' }));
     expect(make).toHaveBeenCalled();
   });
+
+  it('offers the default agent first, as no agent in particular', async () => {
+    const user = userEvent.setup();
+    const change = vi.fn();
+    const { container, rerender } = renderNacre(
+      <AgentPicker
+        agents={agents}
+        value={null}
+        onValueChange={change}
+        fallback={{
+          label: 'Default agent',
+          agent: { name: 'Conch', avatar: 'shell' },
+          role: 'Conch, while it’s the default',
+        }}
+        label={(name) => `Answered by ${name}. Choose another agent`}
+      />,
+    );
+    await expectAccessible(container);
+    const button = screen.getByRole('button', {
+      name: 'Answered by Default agent. Choose another agent',
+    });
+    await user.click(button);
+    const unset = await screen.findByRole('menuitemradio', { name: /Default agent/ });
+    expect(unset).toBeChecked();
+    expect(unset).toHaveTextContent('Conch, while it’s the default');
+    await user.click(screen.getByRole('menuitemradio', { name: /Atlas/ }));
+    expect(change).toHaveBeenLastCalledWith('b');
+
+    rerender(
+      <AgentPicker
+        agents={agents}
+        value="b"
+        onValueChange={change}
+        fallback={{ label: 'Default agent', agent: { name: 'Conch', avatar: 'shell' } }}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /Talking to Atlas/ }));
+    await user.click(await screen.findByRole('menuitemradio', { name: /Default agent/ }));
+    expect(change).toHaveBeenLastCalledWith(null);
+
+    // An agent that's gone is the default's to answer for.
+    rerender(
+      <AgentPicker
+        agents={agents}
+        value="ag_gone"
+        onValueChange={change}
+        fallback={{ label: 'Default agent', agent: { name: 'Conch', avatar: 'shell' } }}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /Talking to Default agent/ })).toBeVisible();
+  });
 });

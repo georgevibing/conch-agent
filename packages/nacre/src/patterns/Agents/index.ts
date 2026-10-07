@@ -5,6 +5,11 @@ export type { AgentFacePickerProps, AgentPresetFace } from './AgentFacePicker';
 export { AgentGallery } from './AgentGallery';
 export type { AgentGalleryItem, AgentGalleryProps } from './AgentGallery';
 export { AgentPicker } from './AgentPicker';
-export type { AgentPickerAction, AgentPickerAgent, AgentPickerProps } from './AgentPicker';
+export type {
+  AgentPickerAction,
+  AgentPickerAgent,
+  AgentPickerFallback,
+  AgentPickerProps,
+} from './AgentPicker';
 export { ToneChips } from './ToneChips';
 export type { ToneChipsProps, ToneChoice } from './ToneChips';

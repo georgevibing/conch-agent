@@ -135,7 +135,12 @@ default at the time it runs. **Chat apps** have an agent each (`Channel.agentId`
 `/agent [name]` (in the one list of commands, ADR 0098) shows the agents with the one
 answering marked, or chooses one for this chat and the chat app's new chats; the
 owner's, in their private chat. A guest in a group meets the agent's persona, never
-your instructions. Notifications and a chat app's messages name the chat's agent.
+your instructions. In Conch, a routine's editor and a chat app's page choose with the
+chat's own picker (Nacre `AgentPicker` with a `fallback`, web `agents/AgentChoice.tsx`):
+**Default agent** first, which is `null`, then every agent. Chosen on the page
+(`PATCH /api/channels/:id` `agentId`), the owner's private chat there changes too, as
+`/agent` does, and `channel.changed` keeps the page in step with `/agent`. Notifications and
+a chat app's messages name the chat's agent.
 Another app's chats through Conch (ADR 0073) are with the default agent.
 
 ### The prompt

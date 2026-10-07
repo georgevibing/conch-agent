@@ -1,4 +1,4 @@
-import type { Channel, ChannelCatalogEntry } from '@conch/protocol';
+import type { Agent, Channel, ChannelCatalogEntry } from '@conch/protocol';
 import axe from 'axe-core';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -342,6 +342,87 @@ describe('A channel’s page', () => {
     renderApp(<ChannelDetailView channelId="ch_1" />, { route: '/channels/ch_1' });
     const groups = await screen.findByRole('region', { name: 'Groups' });
     expect(groups).toHaveTextContent('Add @adas_conch_bot to a group in Telegram');
+  });
+});
+
+describe('Who answers in a chat app (ADR 0101)', () => {
+  const agent = (patch: Partial<Agent> & Pick<Agent, 'id' | 'name'>): Agent => ({
+    role: '',
+    avatar: { kind: 'preset', id: 'shell' },
+    persona: { tone: 'warm', personality: '' },
+    instructions: '',
+    isDefault: false,
+    order: 0,
+    createdAt: 1,
+    updatedAt: 1,
+    ...patch,
+  });
+  const agents = [
+    agent({ id: 'ag_conch', name: 'Conch', isDefault: true }),
+    agent({ id: 'ag_atlas', name: 'Atlas', role: 'Plans trips', order: 1 }),
+  ];
+
+  it('chooses who answers with the chat’s picker, the default first, and follows /agent live', async () => {
+    const user = userEvent.setup();
+    const calls = mockFetch({
+      ...base,
+      'GET /api/agents': () => ({ agents, defaultId: 'ag_conch' }),
+      'GET /api/channels': () => ({ channels: [channel({ people: [ada] })], catalog }),
+      // Like the gateway: `null` leaves the channel with no agent of its own.
+      'PATCH /api/channels/ch_1': (body) => {
+        const { agentId } = body as { agentId: string | null };
+        return channel({ people: [ada], ...(agentId && { agentId }) });
+      },
+    });
+    const { container } = renderApp(<ChannelDetailView channelId="ch_1" />, {
+      route: '/channels/ch_1',
+    });
+    const picker = await screen.findByRole('button', {
+      name: 'Answered by Default agent. Choose another agent',
+    });
+    expect(screen.getByText(/\/agent there changes it too/)).toBeInTheDocument();
+    await user.click(picker);
+    expect(await screen.findByRole('menuitemradio', { name: /Default agent/ })).toBeChecked();
+    await user.click(screen.getByRole('menuitemradio', { name: /Atlas/ }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({ agentId: 'ag_atlas' }),
+    );
+    expect(
+      await screen.findByRole('button', { name: 'Answered by Atlas. Choose another agent' }),
+    ).toBeInTheDocument();
+    // The page speaks of the agent that answers here.
+    expect(screen.getByRole('region', { name: 'Who can talk to Atlas here' })).toBeVisible();
+
+    // `/agent conch` in Telegram: the page follows.
+    act(() =>
+      FakeSocket.last?.push({
+        type: 'channel.changed',
+        channel: channel({ people: [ada], agentId: 'ag_conch' }),
+      }),
+    );
+    const now = await screen.findByRole('button', {
+      name: 'Answered by Conch. Choose another agent',
+    });
+
+    // Back to the default: `null`, whoever that is when a chat starts.
+    await user.click(now);
+    await user.click(await screen.findByRole('menuitemradio', { name: /Default agent/ }));
+    await waitFor(() =>
+      expect(calls.filter((c) => c.method === 'PATCH').at(-1)?.body).toEqual({ agentId: null }),
+    );
+    await screen.findByRole('button', { name: /Answered by Default agent/ });
+    expect(await axe.run(container)).toHaveProperty('violations', []);
+  });
+
+  it('isn’t offered with only one agent', async () => {
+    mockFetch({
+      ...base,
+      'GET /api/agents': () => ({ agents: agents.slice(0, 1), defaultId: 'ag_conch' }),
+      'GET /api/channels': () => ({ channels: [channel({ people: [ada] })], catalog }),
+    });
+    renderApp(<ChannelDetailView channelId="ch_1" />, { route: '/channels/ch_1' });
+    await screen.findByRole('region', { name: 'Settings' });
+    expect(screen.queryByRole('button', { name: /Answered by/ })).toBeNull();
   });
 });
 

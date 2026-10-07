@@ -73,6 +73,22 @@ describe('RoutineCard (list)', () => {
     expect(screen.getByText('Free on this computer')).toBeInTheDocument();
   });
 
+  it('says who does it, when it’s an agent of its own (ADR 0101)', async () => {
+    const { container } = renderNacre(
+      <RoutineCard
+        {...base}
+        status="active"
+        agent={{ name: 'Atlas', avatar: 'compass' }}
+        onOpen={() => {}}
+      />,
+    );
+    // Read as who does it; seen as a small face and a name.
+    expect(
+      screen.getByText((_, el) => el?.textContent === 'Answered by Atlas'),
+    ).toBeInTheDocument();
+    await expectAccessible(container);
+  });
+
   it('opens from the title and toggles without opening', async () => {
     const onOpen = vi.fn();
     const onToggle = vi.fn();

@@ -59,12 +59,14 @@ In <kbd>mod+k</kbd>, type an agent's name for **New chat with ‹name›** or **
 
 In [Telegram, WhatsApp, Slack](../channels/index.md) and the others, send `/agent` to see your agents, the one answering ticked, and tap another (in an app without buttons, reply with its number). `/agent atlas` chooses by name. The choice stays for that chat app.
 
+You can choose in Conch too: open the chat app from **Apps**, and under **Settings**, press **Answered by**. **Default agent** means whichever agent is your default. Either way, the other agent answers from your next message, and the page and the chat app always agree.
+
 Only you can change agents, in your private chat with Conch. A bot you [brought from OpenClaw or Hermes](../care/come-home.md) keeps answering as the agent it answered as there.
 
 ## Tasks and routines
 
 - **A task** you [send to the background](./tasks.md) is done by the agent of the chat it came from.
-- **A routine** asked for in a chat is done by that chat's agent; one you make on the Routines page, by your default agent. Its results come in that agent's voice, here and in your chat apps. If its agent is deleted, the default agent takes over. See [Routines](./routines.md).
+- **A routine** asked for in a chat is done by that chat's agent; one you make on the Routines page, by your default agent. **Answered by** in its editor chooses another, or **Default agent** for whichever is your default when it runs. Its results come in that agent's voice, here and in your chat apps. If its agent is deleted, the default agent takes over. See [Routines](./routines.md).
 
 ## What they share
 

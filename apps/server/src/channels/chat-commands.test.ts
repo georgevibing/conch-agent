@@ -404,9 +404,14 @@ describe('Agents in a chat app (ADR 0101)', () => {
     expect((await channelChat(s))?.agentId).toBe(sage.id);
     telegram.say('/agent nobody');
     await said(telegram, 'I don’t know an agent called “nobody”');
-    // `null` goes back to the default agent for new chats.
+    // Chosen in Conch, the owner's chat here changes too, as `/agent` would.
+    const milo = (await s.agents.list()).agents.find((a) => a.name === 'Milo');
+    await s.channels.update(channel.id, { agentId: milo?.id ?? null });
+    expect((await channelChat(s))?.agentId).toBe(milo?.id);
+    // `null` goes back to the default agent, for new chats and the owner's.
     await s.channels.update(channel.id, { agentId: null });
     expect((await s.channels.get(channel.id)).agentId).toBeUndefined();
+    expect((await channelChat(s))?.agentId).toBe((await s.agents.default()).id);
     await expect(s.channels.update(channel.id, { agentId: 'ag_never_was' })).rejects.toThrow(
       /isn’t there/,
     );

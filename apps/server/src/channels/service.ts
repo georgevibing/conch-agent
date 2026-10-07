@@ -968,6 +968,21 @@ export class ChannelService {
     await this.#refreshBot(id);
   }
 
+  /**
+   * The channel's agent chosen in Conch answers the owner's private chat there
+   * too, from their next message, as `/agent` does: the chat they're in is the
+   * one they'd expect to change. Groups keep whoever they have.
+   */
+  async #ownerChatWith(stored: StoredChannel): Promise<void> {
+    const owner = stored.people[0];
+    const chat = owner && stored.chats[owner.id];
+    if (!chat || !this.deps.agents) return;
+    const agentId = stored.agentId ?? (await this.deps.agents.default()).id;
+    await this.deps.conversations
+      .setAgent(chat, agentId)
+      .catch((error: unknown) => this.#log(`agent: ${explain(error)}`));
+  }
+
   async update(id: string, patch: UpdateChannelBody): Promise<Channel> {
     // Another agent answers new chats here (ADR 0101): one that exists, or the default (`null`).
     if (patch.agentId && !(await this.deps.agents?.get(patch.agentId)))
@@ -982,6 +997,7 @@ export class ChannelService {
       };
     });
     if (!stored) throw new ChannelServiceError('not-found', 'That channel isn’t connected.');
+    if (patch.agentId !== undefined) await this.#ownerChatWith(stored);
     if (patch.enabled !== undefined) {
       const secrets = await this.deps.store.secrets(id);
       if (patch.enabled && secrets) this.#connect(stored, secrets);

@@ -17,6 +17,8 @@ import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 
 import { useUi } from '../../app/ui';
+import { ownAgent } from '../agents/AgentChoice';
+import { useAgents } from '../agents/api';
 import { ROUTINES_SPEND_FOCUS } from './SpendingSection';
 
 import { routineIcon, WAITING_TEXT, watchProblem } from './icon';
@@ -77,6 +79,13 @@ export function RoutinesView() {
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
   const { data: spending } = useRoutineSpending();
+  const { data: agents } = useAgents();
+  /** Its own agent, small on its card, when it isn't the default (as a chat's row does). */
+  const agentOf = (r: Routine) => {
+    const agent = ownAgent(agents, r.agentId);
+    if (!agents || agents.agents.length < 2 || !agent || agent.id === agents.defaultId) return;
+    return { name: agent.name, avatar: agent.avatar };
+  };
   const keepPaused = useKeepPaused();
   const openSettings = useUi((s) => s.openSettings);
   const raiseLimit = () => openSettings('usage', ROUTINES_SPEND_FOCUS);
@@ -106,6 +115,7 @@ export function RoutinesView() {
         nextRunAt={r.nextRunAt}
         icon={routineIcon(r.schedule, r.when)}
         cost={r.spend?.text ? { text: r.spend.text, billing: r.spend.billing } : undefined}
+        agent={agentOf(r)}
         lastRun={
           r.lastRun && {
             status: r.lastRun.status,

@@ -246,3 +246,28 @@ export const Picker: Story = {
     );
   },
 };
+
+/**
+ * Who answers something that isn't a chat yet (a routine, a chat app): the
+ * default agent first, no agent in particular, worn with its face today.
+ */
+export const PickerWithDefault: Story = {
+  render: function Render() {
+    const [id, setId] = useState<string | null>(null);
+    const first = cast[0];
+    return (
+      <AgentPicker
+        heading="Answer with"
+        label={(name) => `Answered by ${name}. Choose another agent`}
+        agents={cast}
+        value={id}
+        onValueChange={setId}
+        fallback={{
+          label: 'Default agent',
+          agent: { name: first?.name ?? 'Conch', avatar: first?.avatar },
+          role: `${first?.name ?? 'Conch'}, while it’s the default`,
+        }}
+      />
+    );
+  },
+};

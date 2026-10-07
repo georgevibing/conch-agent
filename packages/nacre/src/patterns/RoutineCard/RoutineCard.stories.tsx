@@ -81,6 +81,7 @@ export const List: Story = {
           nextRunAt={now + 3 * 24 * hour}
           icon={<FolderInput />}
           cost={{ text: 'About 3% of your Claude Max limit a run', billing: 'plan' }}
+          agent={{ name: 'Atlas', avatar: { kind: 'preset', id: 'compass' } }}
           lastRun={{
             status: 'needs-you',
             at: now - 20 * 60_000,
