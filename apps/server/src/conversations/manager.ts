@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 
 import type {
+  Agent,
   ChatSpend,
   ConchAppOffer,
   Attachment,
@@ -29,6 +30,7 @@ import type {
 } from '@conch/protocol';
 
 import {
+  FIRST_AGENT_ID,
   chatGoal,
   contextStart,
   honouredMode,
@@ -639,6 +641,19 @@ const quietAfterStop = new Set<EngineEvent['type']>(['text', 'thinking', 'plan',
 /** A turn that was stopped before it began: nothing to run. */
 async function* nothing(): AsyncIterable<EngineEvent> {}
 
+/** What a chat needs to know of an agent (ADR 0101): its id and name, persona and defaults. */
+export type ChatAgent = Pick<
+  Agent,
+  'id' | 'name' | 'role' | 'persona' | 'instructions' | 'defaults'
+>;
+
+/** Where the manager finds agents (`AgentStore`). */
+export interface ChatAgents {
+  get(id: string): Promise<ChatAgent | undefined>;
+  default(): Promise<ChatAgent>;
+  forChat(chat: { agentId?: string }): Promise<ChatAgent>;
+}
+
 export class ConversationError extends Error {
   constructor(
     readonly code: 'not-found' | 'busy' | 'engine-unavailable',
@@ -861,6 +876,11 @@ export class ConversationManager {
       }) => Promise<void>;
       /** Say what was fixed on its own (Settings → Health). */
       heal?: (message: string) => void;
+      /**
+       * The agents (ADR 0101): who a chat is with, its persona and instructions
+       * in every turn. Absent (tests of other parts): the personality in settings.
+       */
+      agents?: ChatAgents;
       /** Quiet learning (ADR 0088): what a turn brings near the question, and what never to learn. */
       learning?: {
         /** The few preferences that bear on this message, as a block to go before it. */
@@ -1079,6 +1099,8 @@ export class ConversationManager {
     goal?: string;
     /** A new conversation starts filed in this folder (ADR 0089); the caller checked it exists. */
     folder?: string;
+    /** A new conversation is with this agent (ADR 0101); unset or gone, the default. */
+    agentId?: string;
   }) {
     this.#admit();
     const began = Date.now();
@@ -1104,6 +1126,12 @@ export class ConversationManager {
       );
     if (existing?.abort)
       throw new ConversationError('busy', 'Still replying to your last message.');
+    // A new chat is with the agent chosen for it, else the default (ADR 0101). Started
+    // here in Conch, it begins with that agent's choices of provider, model and mode,
+    // under what this message chose; a chat app or a routine keeps its own.
+    const agent = existing ? undefined : await this.#agentFor(input.agentId);
+    if (agent?.defaults && !input.origin)
+      input = { ...input, options: clean({ ...agent.defaults, ...input.options }) };
     // Whichever provider the conversation (or this message) chose answers —
     // unless it's offline or at its limit, and something else can (ADR 0023).
     const chosen = this.deps.engine(input.options?.engine ?? existing?.record.options.engine);
@@ -1172,6 +1200,7 @@ export class ConversationManager {
         ...(input.origin && { origin: input.origin }),
         ...(input.folder && { folderId: input.folder }),
         ...(autoTitle && { titling: true }),
+        ...(agent && { agentId: agent.id }),
       };
       live = {
         record,
@@ -1199,6 +1228,7 @@ export class ConversationManager {
     for (const offerId of openOffers(live.events))
       if (!this.#carrying.has(offerId))
         this.#append(live, { type: 'offer.resolved', offerId, outcome: 'expired' });
+    if (agent) this.#begunWith(live, agent);
     if (input.goal) this.#setGoal(live, input.goal);
     this.#append(live, {
       type: 'user.message',
@@ -1340,6 +1370,8 @@ export class ConversationManager {
     options?: TurnOptions;
     origin: NonNullable<ConversationRecord['origin']>;
     extras: TurnExtras;
+    /** The agent that does it (ADR 0101): a routine's, a task's chat's. Unset or gone, the default. */
+    agentId?: string;
     /**
      * Who answers, when it isn't one of your providers: another app's single
      * tool call, run by Conch itself (ADR 0073). Never routed elsewhere.
@@ -1372,6 +1404,7 @@ export class ConversationManager {
       ? undefined
       : await this.deps.expand?.(input.text, engine).catch(() => undefined);
     const now = Date.now();
+    const agent = await this.#agentFor(input.agentId);
     const record: ConversationRecord = {
       id: newId('c'),
       title: input.title,
@@ -1382,6 +1415,7 @@ export class ConversationManager {
       options: clean(input.options ?? {}),
       origin: input.origin,
       engine: engine.id,
+      ...(agent && { agentId: agent.id }),
     };
     const live: Live = {
       record,
@@ -1394,6 +1428,7 @@ export class ConversationManager {
     this.#live.set(record.id, live);
     await this.deps.store.upsert(record);
     this.events.emit({ type: 'conversation.updated', conversation: summary(record) });
+    if (agent) this.#begunWith(live, agent);
     this.#append(live, { type: 'user.message', messageId: newId('u'), text: input.text });
     if (expanded?.skill) this.#append(live, { type: 'skill.used', ...expanded.skill, by: 'user' });
     for (const source of input.extras.taint ?? []) this.#taint(live, source);
@@ -1432,6 +1467,62 @@ export class ConversationManager {
     if (options.permissionMode) live.setTurnMode?.(options.permissionMode);
     await this.deps.store.upsert(live.record);
     this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
+  }
+
+  /** The agent a new chat is with: the one asked for while it exists, else the default. */
+  async #agentFor(id: string | undefined): Promise<ChatAgent | undefined> {
+    const agents = this.deps.agents;
+    if (!agents) return undefined;
+    return ((id && (await agents.get(id))) || (await agents.default())) ?? undefined;
+  }
+
+  /**
+   * A chat with any agent but the first says so at its start (ADR 0101), so
+   * its log alone says who it's with (`recordFromLog`). No `from`: nobody
+   * answered before. The chat draws no divider for it.
+   */
+  #begunWith(live: Live, agent: ChatAgent) {
+    if (agent.id !== FIRST_AGENT_ID)
+      this.#append(live, { type: 'agent', agentId: agent.id, name: agent.name });
+  }
+
+  /** The agent answering this chat now (ADR 0101), whoever it was before. */
+  async agentOf(id: string): Promise<ChatAgent | undefined> {
+    const live = await this.#get(id);
+    return this.deps.agents?.forChat(live.record);
+  }
+
+  /**
+   * Another agent answers this chat from the next message on (ADR 0101). The
+   * chat says so where it happened (`agent`), and the first time also who
+   * answered before, since a chat's log from before says nobody. A reply
+   * that's running finishes as the agent it started as. Nothing else changes:
+   * the chat keeps its provider, model, mode, goal and what it read.
+   */
+  async setAgent(id: string, agentId: string): Promise<ConversationSummary> {
+    const live = await this.#get(id);
+    const agents = this.deps.agents;
+    const next = await agents?.get(agentId);
+    if (!agents || !next)
+      throw new ConversationError('not-found', 'That agent isn’t there any more.');
+    const now = await agents.forChat(live.record);
+    if (now.id === next.id && live.record.agentId === next.id) return summary(live.record);
+    live.record = { ...live.record, agentId: next.id };
+    if (now.id !== next.id) {
+      // Nobody said who answered before: a chat with the first agent from its start.
+      const first = !live.events.some((e) => e.type === 'agent');
+      this.#append(live, {
+        type: 'agent',
+        agentId: next.id,
+        name: next.name,
+        ...(first && { from: { agentId: now.id, name: now.name } }),
+      });
+    }
+    // A running turn saves the log when it ends; writing it now as well could race.
+    if (live.abort) await this.deps.store.upsert(live.record);
+    else await this.#persist(live);
+    this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
+    return summary(live.record);
   }
 
   #applyOptions(live: Live, options: TurnOptions) {
@@ -3689,6 +3780,7 @@ function summary(record: ConversationRecord): ConversationSummary {
     folderId,
     seenAt,
     spend,
+    agentId,
   } = record;
   return {
     id,
@@ -3705,6 +3797,7 @@ function summary(record: ConversationRecord): ConversationSummary {
     ...(folderId && { folderId }),
     ...(seenAt !== undefined && { seenAt }),
     ...(spend && { spend }),
+    ...(agentId && { agentId }),
   };
 }
 

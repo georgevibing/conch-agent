@@ -20,6 +20,7 @@ import {
   toast,
   TurnCostTag,
   useSmoothText,
+  type Speaker,
   type ToolCallStatus,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
@@ -129,10 +130,13 @@ export function Waiting({
   wait,
   trail,
   compact,
+  orb = Boolean(compact),
 }: {
   wait: Wait;
   trail?: string;
   compact?: boolean;
+  /** The swirling pearl: off when the speaker's face beside it already moves. */
+  orb?: boolean;
 }) {
   return (
     <ThinkingIndicator
@@ -142,50 +146,55 @@ export function Waiting({
       clockFrom={wait.clockFrom}
       tokens={wait.tokens}
       trail={trail}
-      orb={Boolean(compact)}
+      orb={orb}
       size={compact ? 'sm' : 'md'}
     />
   );
 }
 
 /** Stands in for the reply before anything arrives; the real one takes its place seamlessly. */
-export function AssistantPlaceholder({ name, wait }: { name: string; wait: Wait }) {
+export function AssistantPlaceholder({
+  speaker,
+  wait,
+  continued,
+}: {
+  speaker: Speaker;
+  wait: Wait;
+  /** The same voice as just before: no speaker line, so the wait wears its own pearl. */
+  continued?: boolean;
+}) {
   return (
     <Message
       from="assistant"
-      author={name}
+      speaker={speaker}
+      continued={continued}
       status="streaming"
       timestamp={wait.startedAt === undefined ? undefined : new Date(wait.startedAt)}
       since={wait.startedAt}
     >
-      <Waiting wait={wait} />
+      <Waiting wait={wait} orb={continued} />
     </Message>
   );
 }
 
-export function AssistantMessage({
+/**
+ * The words of a reply: the wait until the first whole word is ready, what
+ * it thought (folded), and the words themselves, revealed as they arrive.
+ * A reply's first words sit right under its speaker line; words after a
+ * step (`part`) are a part of the reply, like its tool rows.
+ */
+export function AssistantWords({
   item,
-  name,
   wait,
-  entrance = true,
-  attached,
-  said,
-  ended,
+  part = item.continuation,
+  faceless,
 }: {
   item: Of<'assistant'>;
-  name: string;
-  /** Present while the turn runs: shown in place of the reply until its first words arrive. */
+  /** Present while the turn runs: shown in place of the words until the first arrive. */
   wait?: Wait;
-  entrance?: boolean;
-  /** The rest of the reply (tool rows, more words, its cards), drawn before its actions. */
-  attached?: ReactNode;
-  /**
-   * The whole reply's words, once it's over: what Copy and Read aloud take.
-   * Undefined while any of it is still being written (no actions yet).
-   */
-  said?: string;
-  /** How its turn ended: what it cost sits among its actions (ADR 0079). */
-  ended?: Of<'turn-end'>;
+  part?: boolean;
+  /** No speaker line moves above these words: the wait wears its own pearl. */
+  faceless?: boolean;
 }) {
   const streaming = !item.done;
   const arrivedLive = useContext(ArrivedLive);
@@ -205,7 +214,7 @@ export function AssistantMessage({
     </Collapsible>
   );
   const reply = smooth.text && <StreamingMarkdown text={item.text} smooth={smooth} />;
-  if (item.continuation) {
+  if (part) {
     return (
       <div
         className={styles.continuation}
@@ -219,18 +228,74 @@ export function AssistantMessage({
     );
   }
   return (
+    <Stack gap={2}>
+      {pondering && <Waiting wait={wait} trail={item.thinking} orb={faceless} />}
+      {thought}
+      {reply}
+    </Stack>
+  );
+}
+
+/**
+ * One reply: who is speaking, its first words (`item`, when it began with
+ * words rather than a step), everything that belongs to it, then its
+ * actions. Each turn of the assistant is one of these, so its speaker line
+ * comes once, at the top, whatever the turn did first.
+ */
+export function AssistantMessage({
+  item,
+  speaker,
+  continued,
+  at,
+  meta,
+  wait,
+  working,
+  entrance = true,
+  attached,
+  said,
+  ended,
+}: {
+  /** The words it began with; left out when it began with a step (a tool, a card). */
+  item?: Of<'assistant'>;
+  speaker: Speaker;
+  /** The same voice as the turn before, with nothing between: no second speaker line. */
+  continued?: boolean;
+  /** When it began, for the speaker line. */
+  at: number;
+  /** The model that answered, for the speaker line. */
+  meta?: string;
+  /** Present while the turn runs: shown in place of the words until the first arrive. */
+  wait?: Wait;
+  /** Still at work on this reply (a step running, more to come): the face moves. */
+  working?: boolean;
+  entrance?: boolean;
+  /** The rest of the reply (tool rows, more words, its cards), drawn before its actions. */
+  attached?: ReactNode;
+  /**
+   * The whole reply's words, once it's over: what Copy and Read aloud take.
+   * Undefined while any of it is still being written (no actions yet).
+   */
+  said?: string;
+  /** How its turn ended: what it cost sits among its actions (ADR 0079). */
+  ended?: Of<'turn-end'>;
+}) {
+  const streaming = item ? !item.done : false;
+  return (
     <Message
       from="assistant"
-      data-anchor={item.messageId}
-      author={name}
-      timestamp={new Date(item.startedAt)}
+      data-anchor={item?.messageId}
+      speaker={speaker}
+      continued={continued}
+      meta={meta}
+      timestamp={new Date(at)}
       status={streaming ? 'streaming' : 'complete'}
+      working={working || streaming}
       entrance={entrance}
       // The turn's clock, shared with the placeholder this takes over from.
-      since={wait?.startedAt ?? item.startedAt}
+      since={wait?.startedAt ?? at}
       attached={attached}
       actions={
-        item.done && said ? (
+        said && !streaming ? (
           <>
             <ReadAloud text={said} />
             <CopyButton value={said} label="Copy reply" />
@@ -243,11 +308,7 @@ export function AssistantMessage({
         ) : undefined
       }
     >
-      <Stack gap={2}>
-        {pondering && <Waiting wait={wait} trail={item.thinking} />}
-        {thought}
-        {reply}
-      </Stack>
+      {item && <AssistantWords item={item} wait={wait} part={false} faceless={continued} />}
     </Message>
   );
 }

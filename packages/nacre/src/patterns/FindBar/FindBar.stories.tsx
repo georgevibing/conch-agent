@@ -75,11 +75,7 @@ function Live() {
           {replies.map((r, i) => (
             <div key={i} style={{ display: 'contents' }}>
               <Message from="user">{r.user}</Message>
-              <Message
-                from="assistant"
-                author="Conch"
-                actions={<CopyButton value={r.reply} label="Copy reply" />}
-              >
+              <Message from="assistant" actions={<CopyButton value={r.reply} label="Copy reply" />}>
                 {r.reply}
               </Message>
             </div>

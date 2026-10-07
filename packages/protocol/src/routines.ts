@@ -7,6 +7,7 @@
  */
 import { z } from 'zod';
 
+import { AgentId } from './agents';
 import { EngineId, TurnOptions, Usage } from './common';
 import { OnlyIf, RunEvent, Trigger, WatchState } from './triggers';
 
@@ -238,6 +239,8 @@ export const Routine = z.object({
   /** Run once when Conch starts if a scheduled run was missed. */
   catchUp: z.boolean().default(true),
   options: TurnOptions.default({}),
+  /** The agent that does it (ADR 0101); unset, the default agent at the time it runs. */
+  agentId: AgentId.optional(),
   createdBy: z.enum(['user', 'agent']),
   /** The chat it was created from, if any. */
   sourceConversationId: z.string().optional(),
@@ -283,6 +286,8 @@ const editable = {
   trust: RoutineTrust,
   catchUp: z.boolean(),
   options: TurnOptions,
+  /** `null`: the default agent does it (ADR 0101). */
+  agentId: AgentId.nullable(),
   /** `null` goes back to Conch's default. Only a person sets it (ADR 0057). */
   runLimitUsd: z.number().positive().max(1000).nullable(),
   runOnFullPlan: z.boolean(),
@@ -295,6 +300,7 @@ export const CreateRoutineBody = z
     trust: editable.trust.default('ask'),
     catchUp: editable.catchUp.default(true),
     options: editable.options.default({}),
+    agentId: AgentId.optional(),
     runLimitUsd: editable.runLimitUsd.optional(),
     runOnFullPlan: editable.runOnFullPlan.optional(),
     status: z.enum(['active', 'paused', 'draft']).default('active'),

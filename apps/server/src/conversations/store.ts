@@ -58,6 +58,7 @@ const StoredRecord = z.object({
   folderId: ConversationSummary.shape.folderId.catch(undefined),
   seenAt: z.number().optional().catch(undefined),
   spend: ChatSpend.optional().catch(undefined),
+  agentId: ConversationSummary.shape.agentId.catch(undefined),
   engine: EngineId.catch('claude-code'),
   pendingToolCalls: z.array(z.string()).optional().catch(['unknown']),
   recoveryPending: z.boolean().optional().catch(true),
@@ -222,7 +223,9 @@ export function recordFromLog(
   let lastText: string | undefined;
   let options: TurnOptions = {};
   let engine: EngineId | undefined;
+  let agentId: ConversationRecord['agentId'];
   for (const event of events) {
+    if (event.type === 'agent') agentId = event.agentId;
     if (event.type === 'title') title = event.title;
     else if (event.type === 'user.message') {
       firstText ??= event.text;
@@ -239,6 +242,8 @@ export function recordFromLog(
     status: 'idle',
     options,
     engine: engine ?? options.engine ?? 'claude-code',
+    // Who it was with is in its log once it changed agent (ADR 0101); before, the first agent.
+    ...(agentId && { agentId }),
   };
 }
 

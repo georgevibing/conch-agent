@@ -416,6 +416,123 @@ describe('a reply and what belongs to it (ADR 0060)', () => {
     expect(screen.getAllByRole('button', { name: 'Copy reply' })).toHaveLength(1);
   });
 
+  it('says who is speaking once, above the reply, even when it began with a step', () => {
+    mockFetch({ 'GET /api/state': () => appState() });
+    renderApp(
+      <Transcript
+        view={{
+          lastSeq: 4,
+          status: 'idle',
+          items: [
+            user,
+            calendar,
+            more,
+            { ...ended, engine: 'openrouter', model: 'openai/gpt-5-mini' },
+          ],
+        }}
+        pending={[]}
+        name="Pearl"
+        modelName={(engine, model) =>
+          engine === 'openrouter' && model === 'openai/gpt-5-mini' ? 'GPT-5 mini' : undefined
+        }
+        onRespond={() => {}}
+        onRetry={() => {}}
+      />,
+    );
+    const reply = screen.getByRole('article', { name: 'Pearl said:' });
+    const [heading] = within(reply).getAllByRole('heading');
+    expect(within(reply).getAllByRole('heading')).toHaveLength(1);
+    const row = within(reply).getByRole('button', { name: /Looked at your calendar/ });
+    // The speaker line comes first, then the step, then the words.
+    expect(heading?.compareDocumentPosition(row) ?? 0).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    // Quietly, the model that answered.
+    expect(reply).toHaveTextContent('GPT-5 mini');
+  });
+
+  it('goes on in the same voice, without a second speaker line, when nothing of yours came between', () => {
+    show({
+      items: [
+        user,
+        assistant('Working on it.', true),
+        {
+          kind: 'turn-end',
+          id: 'end-1',
+          outcome: 'interrupted',
+          restarted: { resumed: true },
+        },
+        {
+          kind: 'assistant',
+          id: 'm2',
+          messageId: 'm2',
+          continuation: false,
+          text: 'Picked it up again.',
+          thinking: '',
+          done: true,
+          startedAt: 5,
+        },
+      ],
+    });
+    const [first, second] = screen.getAllByRole('article', { name: 'Claude said:' });
+    expect(first).not.toHaveAttribute('data-continued');
+    expect(second).toHaveAttribute('data-continued');
+  });
+
+  it('names the agent that took over, and gives each reply its own speaker (ADR 0101)', () => {
+    mockFetch({ 'GET /api/state': () => appState() });
+    renderApp(
+      <Transcript
+        view={{
+          lastSeq: 6,
+          status: 'idle',
+          items: [
+            {
+              kind: 'agent',
+              id: 'agent-0',
+              seq: 0,
+              agentId: 'ag_juniper',
+              name: 'Juniper',
+              opening: true,
+            },
+            user,
+            assistant('Here is the plan.', true),
+            {
+              kind: 'agent',
+              id: 'agent-4',
+              seq: 4,
+              agentId: 'ag_atlas',
+              name: 'Atlas',
+              opening: false,
+            },
+            { ...user, id: 'u2', text: 'And the flights?' },
+            {
+              kind: 'assistant',
+              id: 'm2',
+              messageId: 'm2',
+              continuation: false,
+              text: 'Two options.',
+              thinking: '',
+              done: true,
+              startedAt: 6,
+            },
+          ],
+        }}
+        pending={[]}
+        name="Atlas"
+        avatar={{ kind: 'preset', id: 'compass' }}
+        agentOf={(id) => (id === 'ag_juniper' ? { name: 'Juniper' } : undefined)}
+        onRespond={() => {}}
+        onRetry={() => {}}
+      />,
+    );
+    // The opening agent is who the chat is with, not a change: one line, for the change.
+    expect(screen.getByText('Atlas took over from Juniper')).toBeInTheDocument();
+    expect(screen.queryByText(/took over from Atlas/)).toBeNull();
+    expect(screen.getByRole('article', { name: 'Juniper said:' })).toHaveTextContent(
+      'Here is the plan.',
+    );
+    expect(screen.getByRole('article', { name: 'Atlas said:' })).toHaveTextContent('Two options.');
+  });
+
   it('has no actions while any of it is still being written', () => {
     show({
       status: 'running',

@@ -1,5 +1,6 @@
 import { foldHolds } from '@conch/protocol';
 import type {
+  AgentId,
   Memory,
   AppNeed,
   AppsModel,
@@ -337,6 +338,20 @@ export type TranscriptItem =
       seq: number;
     }
   | {
+      /**
+       * Another agent answers from here on (ADR 0101): a divider. `name` as it
+       * was then; `from`, who answered before, on the chat's first one.
+       */
+      kind: 'agent';
+      id: string;
+      seq: number;
+      agentId: AgentId;
+      name: string;
+      from?: { agentId: AgentId; name: string };
+      /** Before anything was said: who the chat is with from its start, not a change (no divider). */
+      opening: boolean;
+    }
+  | {
       /** Where the chat's goal (`/goal`) was set, or cleared (no `goal`). */
       kind: 'goal-note';
       id: string;
@@ -380,6 +395,11 @@ export type TranscriptItem =
 
 export interface ConversationView {
   lastSeq: number;
+  /**
+   * Who answers from the latest `agent` event on (ADR 0101); unset until the
+   * chat changes agent (then it's the chat's own, `ConversationSummary.agentId`).
+   */
+  speaker?: { agentId: AgentId; name: string };
   items: TranscriptItem[];
   status: ConversationStatus;
   title?: string;
@@ -804,6 +824,23 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         items: at === -1 ? [...kept, line] : [...kept.slice(0, at), line, ...kept.slice(at)],
       };
     }
+    case 'agent':
+      return {
+        ...base,
+        speaker: { agentId: event.agentId, name: event.name },
+        items: [
+          ...items,
+          {
+            kind: 'agent',
+            id: `agent-${event.seq}`,
+            seq: event.seq,
+            agentId: event.agentId,
+            name: event.name,
+            ...(event.from && { from: event.from }),
+            opening: !items.some((i) => i.kind === 'user'),
+          },
+        ],
+      };
     case 'context.cleared':
       return {
         ...base,

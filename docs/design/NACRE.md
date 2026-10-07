@@ -172,9 +172,10 @@ should flow, never stutter.
   in place of an ellipsis. While the model reasons, the newest words of that reasoning
   drift past underneath in italic serif. The verb comes from the clock, so a remount
   continues where the last one left off. Screen readers hear one stable label.
-- **The mark** (`MessageMark`). While working, the conch spiral draws itself from the
-  centre, flows away and grows again. When the answer lands, one ring of light passes
-  around the rim.
+- **The face** (`AgentAvatar`, Conch's own `MessageMark`). While the speaker works —
+  words or steps — the conch spiral draws itself from the centre, flows away and grows
+  again, and light orbits the rim of every look. When the answer lands, one ring of
+  light passes around it.
 - **Arrival** (`useSmoothText` + `revealWords`). Bursty deltas are paced into an even
   flow of _whole words_, at a speed proportional to the backlog. Each fresh word
   _settles_ (`[data-nc-fresh]` → `nc-settle`): it un-blurs and dries from the accent
@@ -230,6 +231,41 @@ picture), turn red with a Retry when they fail, and wear a small amber dot when
 the chosen model can't use them. `AttachmentPreview` is the closer look;
 `DropOverlay` dims the chat and gathers a pearl halo while files are dragged over.
 
+### Who is speaking (chat)
+
+A reply uses the whole column. Nothing is set in beside a face, so on a phone the
+words get every pixel the column has.
+
+- **The speaker line** (`MessageSpeaker`, drawn by `Message`). One compact line over
+  the reply: the agent's face at `--nc-chat-speaker` (20 px), its name in a small
+  semibold, and after it, quietly, the model that answered and the time (`meta`,
+  `timestamp`) — shown on hover or focus where there's a pointer, always on touch.
+  The name is the turn's heading (“Conch said:”), so a screen reader hears it once
+  per turn, never per paragraph; the face is decoration.
+- **Once per turn, at its top.** Everything the assistant did in a turn is one reply
+  under one line, whatever it did first: a turn that opens with a tool row has its
+  speaker line above that row. The same voice again with nothing of yours (or a line
+  across the chat, `/clear`, a summary) between — it carried on after its own card,
+  or picked up after a restart — is `continued`: no second line, still named once
+  for assistive tech.
+- **The face** (`AgentAvatar`). Agents are rounded tiles, people (`Avatar`) circles,
+  so the two are never mistaken. `avatar` is the protocol's `Agent.avatar` — a preset
+  (`{ kind: 'preset', id, color? }`: its artwork on a glazed tile of one of the app
+  colours; `shell` in its own colour is Conch's mark in the accent) or a picture
+  (`{ kind: 'image', url }`) — or, for short, a preset's id or a picture's address.
+  A picture shows the name's initial on its own tint until it has loaded, and keeps
+  it if it can't; no avatar, or a preset nobody draws, is Conch's mark. Nacre draws
+  every preset the protocol names (`AGENT_AVATAR_ART`); the web app hands its own
+  artwork to `AgentAvatarArtProvider` once, merged over Nacre's by id. The same
+  component draws an agent anywhere else (a list of agents, a picker).
+- **Another agent takes over** (`AgentChange`). A hairline across the column with
+  the new face and one quiet sentence, “Atlas took over from Juniper”; replies from
+  there carry its speaker line. Who a chat is with from its start is not a change,
+  so it draws nothing.
+- **Yours.** Your words are a bubble at the column's end, up to 85 % of it. Where
+  there's a pointer and room, its time and Copy wait beside it, not under it, so
+  your message is only as tall as its words.
+
 ### A reply and what belongs to it (chat)
 
 A reply is one piece: its words, then everything that belongs to it (tool
@@ -238,11 +274,13 @@ next), then its actions. `Message attached` holds those parts, so the hover
 actions (Copy, Read aloud) come once, at the end, and never sit as an empty
 row between the words and their card.
 
-- **One step.** Each part sits `--nc-chat-step` under what's above it and
-  lines up with the words (`--nc-chat-inset`, the mark plus its gap). A part
-  reads `--nc-chat-flow-gap` and `--nc-chat-indent`, so the same rule fits in
-  the transcript and inside a reply. Tool rows stack closer, a stack of their
-  own. On a phone parts reach back to the mark's edge.
+- **One step, one edge.** Each part sits `--nc-chat-step` under what's above
+  it and starts where the words do: the column's edge (`--nc-chat-indent`, 0).
+  Tool rows, task cards, thinking, plans, and the lines across the chat
+  (`/clear`, a goal, a summary) all share that edge, on a phone as on a
+  computer. A part reads `--nc-chat-flow-gap` and `--nc-chat-indent`, so the
+  same rule fits in the transcript and inside a reply. Tool rows stack closer,
+  a stack of their own.
 - **One card.** Every card in a reply takes its shape from the `--nc-chat-card-*`
   tokens: radius, surface, ring with glaze and a soft shadow, padding, the
   1.75rem mark beside a small semibold title, and one width.

@@ -43,7 +43,7 @@ export const InAChat: Story = {
       <Message from="user" timestamp={new Date(2026, 9, 3, 9, 12)}>
         Thanks, that’s the garden sorted.
       </Message>
-      <Message from="assistant" author="Conch" timestamp={new Date(2026, 9, 3, 9, 12)}>
+      <Message from="assistant" timestamp={new Date(2026, 9, 3, 9, 12)}>
         <Prose>
           <p>Enjoy the tomatoes!</p>
         </Prose>
