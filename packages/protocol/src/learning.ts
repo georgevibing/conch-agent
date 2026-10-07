@@ -153,7 +153,17 @@ export const SkillSuggestion = z.object({
     .optional(),
   /** For `work`: how many steps it took. */
   steps: z.number().int().nonnegative().optional(),
-  /** Learned in a chat that read something from outside (ADR 0028): what, in a sentence. */
+  /**
+   * For `work`: what the skill would do, in a few words, for the card in the
+   * chat (“Log a meal in Yazio”). Written with the draft by its model and
+   * checked; unset, the card shows `title`.
+   */
+  headline: z.string().max(80).optional(),
+  /**
+   * Learned in a chat that read something from outside (ADR 0028): where, in a
+   * sentence written from the chat's marks, never by a model (“Learned from
+   * Yazio and GitHub content.”).
+   */
   untrusted: z.string().max(300).optional(),
 });
 export type SkillSuggestion = z.infer<typeof SkillSuggestion>;

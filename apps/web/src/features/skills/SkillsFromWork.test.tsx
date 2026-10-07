@@ -30,7 +30,8 @@ const offer: SkillSuggestion = {
   from: 'work',
   chat: { conversationId: 'c1', title: 'Trains to Lyon', endedAt: 200 },
   steps: 11,
-  untrusted: 'Learned in a chat that read trains.example.',
+  headline: 'Find the cheapest train',
+  untrusted: 'Learned from trains.example.',
 };
 
 const skill = (patch: Partial<Skill> & Pick<Skill, 'id' | 'name' | 'title'>): Skill => ({
@@ -72,7 +73,7 @@ describe('save how I did this, on the Skills page', () => {
       name: 'From your chat “Trains to Lyon”. Save how it was done as “Cheapest train”?',
     });
     expect(card).toHaveTextContent('It took 11 steps and worked.');
-    expect(card).toHaveTextContent('Learned in a chat that read trains.example.');
+    expect(card).toHaveTextContent('Learned from trains.example.');
     await userEvent.click(within(card).getByRole('button', { name: 'Look at the draft' }));
 
     expect(await screen.findByDisplayValue('Cheapest train')).toBeInTheDocument();
@@ -125,8 +126,10 @@ describe('save how I did this, on the Skills page', () => {
     }
     renderApp(<Harness />);
     const line = await screen.findByRole('group', { name: 'Save how this was done as a skill' });
+    // What it would do, in the model's few words, checked on the server.
+    expect(line).toHaveTextContent('Find the cheapest train');
     expect(line).toHaveTextContent('That took 11 steps, and it worked.');
-    expect(line).toHaveTextContent('Learned in a chat that read trains.example.');
+    expect(line).toHaveTextContent('Learned from trains.example. Check the steps before saving.');
 
     act(() => show({ conversationId: 'c1', view: view([asked]), running: true }));
     expect(screen.queryByRole('group')).toBeNull();

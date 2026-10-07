@@ -39,6 +39,7 @@ import type { Completion, CompletionInput } from '../engines/types';
 import { Mutex, writeJson } from '../lib/fs';
 import { readStore, type Heal } from '../lib/recover';
 import { cleanSkillDescription, cleanSkillTitle } from './draft';
+import { cleanHeadline, learnedFrom } from './notice';
 import { needs, permissionsValue, readPermissions } from './permissions';
 import { scanText } from './scan';
 import { similar } from './suggest';
@@ -338,9 +339,10 @@ export function withWords(p: SkillDraftPermissions): SkillDraftPermissions {
 
 export const LEARN_SYSTEM = [
   'You turn a piece of work an assistant just finished into a reusable skill: instructions it can follow the next time it is asked for the same kind of thing.',
-  'Reply with JSON only, no code fence: {"worth": true, "title": "...", "description": "...", "instructions": "..."}.',
+  'Reply with JSON only, no code fence: {"worth": true, "title": "...", "headline": "...", "description": "...", "instructions": "..."}.',
   'worth: false when the work was a one-off nobody would do the same way again, was trivial, or did not succeed. Then leave the other fields empty.',
   'title: 1 to 4 words in sentence case naming the kind of task, e.g. "Monthly invoice summary".',
+  'headline: what the skill does, as a short verb phrase of 2 to 6 words in sentence case, no trailing punctuation, e.g. "Log a meal in Yazio". Nothing particular to this one time.',
   'description: one sentence of at most 150 characters: what it does, then "Use when ...".',
   'instructions: numbered steps written to the assistant. Generalise: anything particular to this one time (a file name, a date, a person, an amount, an address, a folder) becomes what to ask for or look up, e.g. "the invoice month" or "the project\'s test command". Keep what worked. Leave out dead ends, but keep a short "If ... fails, ..." line for a lesson one of them taught. Say what to ask the person when something is missing.',
   'Never include passwords, keys, tokens or anything secret. Never add a step the work did not need. Do not include web addresses or commands the person did not use themselves.',
@@ -374,6 +376,7 @@ export function learnPrompt(work: Work): string {
 const Reply = z.object({
   worth: z.boolean(),
   title: z.string().max(200).default(''),
+  headline: z.string().max(200).optional(),
   description: z.string().max(600).default(''),
   instructions: z.string().max(12_000).default(''),
 });
@@ -420,7 +423,14 @@ export interface LearnedDraft {
   instructions: string;
 }
 
-export type DraftCheck = { ok: true; draft: LearnedDraft } | { ok: false; why: string };
+export type DraftCheck =
+  | {
+      ok: true;
+      draft: LearnedDraft;
+      /** What it would do, for the card ("Log a meal in Yazio"); unset when the model's isn't usable. */
+      headline?: string;
+    }
+  | { ok: false; why: string };
 
 /** The SKILL.md as it would be written: what the scan reads. */
 export function asSkillFile(draft: LearnedDraft): string {
@@ -478,7 +488,13 @@ export function checkDraft(
       .filter((a) => !context.yours.includes(a));
     if (strange.length) return { ok: false, why: 'a web address you didn’t give' };
   }
-  return { ok: true, draft };
+  // The card's headline is a nicety: one that isn't usable is left out, never the draft.
+  const headline = cleanHeadline(parsed.data.headline, {
+    specifics: context.specifics,
+    secret: SECRET,
+    ...(context.redact && { redact: context.redact }),
+  });
+  return { ok: true, draft, ...(headline && headline !== title && { headline }) };
 }
 
 // ── The offers ────────────────────────────────────────────────────────────
@@ -500,6 +516,8 @@ const Offer = z.object({
     instructions: z.string().max(8000),
     permissions: SkillDraftPermissions,
   }),
+  /** What it would do, in a few words, for the card (the model's, checked). */
+  headline: z.string().max(80).optional(),
   untrusted: z.string().max(300).optional(),
   state: z.enum(['open', 'saved']).default('open'),
 });
@@ -714,7 +732,7 @@ export class SkillLearner {
       }
     }
     if (!checked.ok) return { why: checked.why };
-    const { draft } = checked;
+    const { draft, headline } = checked;
     if (
       skills.some((s) =>
         similar(`${s.title} ${s.description}`, `${draft.title} ${draft.description}`),
@@ -738,9 +756,8 @@ export class SkillLearner {
         .reverse()
         .map((t) => ({ text: t.asked.slice(0, 300), at: t.at })),
       draft: { ...draft, permissions },
-      ...(tainted && {
-        untrusted: `Learned in a chat that ${learnedFrom(work.taint)}.`,
-      }),
+      ...(headline && { headline }),
+      ...(tainted && { untrusted: learnedFrom(work.taint) }),
       state: 'open',
     };
     await this.#change((f) => {
@@ -776,6 +793,7 @@ export class SkillLearner {
         endedAt: offer.endedAt,
       },
       steps: offer.steps,
+      ...(offer.headline && { headline: offer.headline }),
       ...(offer.untrusted && { untrusted: offer.untrusted }),
     });
   }
@@ -811,18 +829,4 @@ export class SkillLearner {
       if (offer) offer.state = 'saved';
     });
   }
-}
-
-/** "read news.example and things in Gmail", as `describeTaint` says it. */
-function learnedFrom(sources: readonly TaintSource[]): string {
-  const words: Record<TaintSource['kind'], string> = {
-    web: 'read',
-    download: 'downloaded',
-    app: 'read things in',
-    person: 'got a message from',
-  };
-  const parts = sources.slice(0, 3).map((s) => `${words[s.kind]} ${s.label}`);
-  const more = sources.length > 3 ? ` and ${sources.length - 3} more` : '';
-  if (parts.length <= 1) return `${parts[0] ?? 'read something from outside'}${more}`;
-  return `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}${more}`;
 }

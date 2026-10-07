@@ -232,8 +232,13 @@
   .memory[data-action='undone'],
   .memory[data-action='forgotten'] {
     color: var(--nc-text-subtle);
+  }
+
+  /* The end padding follows what sits at the end, not what kind of line it is:
+     with Undo there, the button's own padding is the room; without it (undone,
+     put back, nothing to restore), the words need the room instead. */
+  .memory:not(:has(> button)) {
     padding-inline-end: var(--nc-space-2-5);
-    padding-block: var(--nc-space-1);
   }
 
   .memory > svg {

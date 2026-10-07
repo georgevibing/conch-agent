@@ -112,9 +112,13 @@ exactly the work people do in a browser. So it's offered, with two changes:
 - **A stricter read.** A warning is enough to drop it (not only danger), and
   so is any web address in it that you didn't type yourself: an address is
   what a planted step needs most.
-- **It says so.** The card, the line in the chat and New skill all say
-  "Learned in a chat that read trains.example. Read the steps before you save
-  it." New skill adds that a page can try to slip in a step of its own.
+- **It says so.** The Skills page, the card in the chat and New skill all say
+  where: "Learned from trains.example." (the chat card adds "Check the steps
+  before saving."). New skill adds that a page can try to slip in a step of
+  its own. Conch writes that sentence from the chat's marks
+  (`skills/notice.ts`), each place once ("Yazio content" and an app from "a
+  chat that read GitHub and Yazio content" are "Yazio and GitHub content"),
+  never with a model: the model read what a page could have steered.
 
 Someone else's words (a `person` taint) still produce nothing, as above.
 
@@ -141,11 +145,15 @@ settles the offer.
 
 ### 5. Where it shows
 
-- **In the chat:** one quiet line under the reply that earned it, once the
-  turn is over (Nacre `SkillOffer`): "That took 12 steps, and it worked."
-  with **Save how I did this as a skill** and a small **Not now**. Once you
-  write again it leaves the chat and waits on the Skills page. Never a
-  dialog.
+- **In the chat:** a small card under the reply that earned it, once the
+  turn is over (Nacre `SkillOffer`): what the skill would do, in a few words
+  ("Log a meal in Yazio"), one quiet line ("That took 12 steps, and it
+  worked."), **Save as skill** and **Not now**. The few words are a
+  `headline` the draft's model writes in the same reply as the draft (no
+  second call), checked by `cleanHeadline` (short, one line, plain words, no
+  address, path, secret or specific of this one time); without a usable one
+  the card shows the draft's title. Once you write again it leaves the chat
+  and waits on the Skills page. Never a dialog.
 - **On the Skills page:** with the habits (ADR 0032), as the same
   `SkillSuggestionCard`, now saying where it came from: "From your chat
   'Trains to Lyon'. Save how it was done as 'Cheapest train'?" **Not now**

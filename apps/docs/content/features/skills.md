@@ -104,7 +104,7 @@ Nothing is saved or turned on unless you do it.
 
 Sometimes your assistant has to work something out: many steps, a false start or two, then it works. Conch can keep that know-how as a skill, so next time it goes straight there.
 
-When a piece of work goes well, a line appears under the reply: **Save how I did this as a skill**. It appears when:
+When a piece of work goes well, a small card appears under the reply. It names what the skill would do, like "Log a meal in Yazio", says how many steps it took, and has **Save as skill**. It appears when:
 
 - a task you sent to the background finished, and Conch checked it really happened;
 - a routine ran and did its job;
@@ -115,7 +115,7 @@ Press it to open a draft, written from the chat. It keeps the steps that worked 
 
 It's offered once per chat, never while an answer is being written, and never for work that failed. **Not now** puts it away. The offer waits on the Skills page too, with **Not now** and **Don't suggest this**. It's in <kbd>mod+k</kbd> while you're in that chat.
 
-If the chat read a web page, an email or a file from outside, the offer says so: "Learned in a chat that read trains.example." Read each step before you save it. A page can try to slip in a step of its own, so Conch reads the draft the way it reads any skill, and drops one that looks wrong. Work from a chat with someone else's messages in it is never offered.
+If the chat read a web page, an email or a file from outside, the offer says so: "Learned from trains.example. Check the steps before saving." Read each step before you save it. A page can try to slip in a step of its own, so Conch reads the draft the way it reads any skill, and drops one that looks wrong. Work from a chat with someone else's messages in it is never offered.
 
 The draft is written by the provider that answered the chat, which has seen it already. Nothing goes anywhere new.
 

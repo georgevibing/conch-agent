@@ -310,7 +310,8 @@ describe('the draft', () => {
       '1. Find the last tag with `git describe --tags --abbrev=0`.\n2. List the commits since it.\n3. Group them into features and fixes.',
   };
   const context = { specifics: [] as string[], tainted: false, yours: '' };
-  const reply = (patch: Partial<typeof good>) => JSON.stringify({ ...good, ...patch });
+  const reply = (patch: Partial<typeof good> & { headline?: string }) =>
+    JSON.stringify({ ...good, ...patch });
 
   it('frames the work as data, with your words, each step and the result', () => {
     const result = assess(
@@ -337,6 +338,28 @@ describe('the draft', () => {
         instructions: good.instructions,
       },
     });
+  });
+
+  it('the card’s headline comes with the draft, checked, and is only left out when it’s not usable', () => {
+    expect(checkDraft(reply({ headline: 'write release notes.' }), context)).toMatchObject({
+      ok: true,
+      headline: 'Write release notes',
+    });
+    for (const headline of [
+      'Open https://evil.example now',
+      'Write the release notes for every single version you can find',
+      'Line one\nline two',
+      'I’m sorry, I can’t',
+      '',
+    ]) {
+      const checked = checkDraft(reply({ headline }), context);
+      expect(checked.ok).toBe(true);
+      expect(checked).not.toHaveProperty('headline');
+    }
+    // The same as the title says nothing new.
+    expect(checkDraft(reply({ headline: 'Release notes' }), context)).not.toHaveProperty(
+      'headline',
+    );
   });
 
   it('a model that answers badly gives no suggestion at all', () => {
@@ -618,11 +641,32 @@ describe('save how I did this', () => {
     expect(t.asked).toHaveLength(0);
   });
 
+  it('the headline is kept on the offer, so the card has it with no second model call', async () => {
+    const reply = JSON.stringify({ ...JSON.parse(GOOD), headline: 'Write the release notes' });
+    const t = await learner({ chats: { c1: chat(work(12)) }, replies: [reply] });
+    expect(await t.l.consider('c1')).toMatchObject({
+      offered: { title: 'Release notes', headline: 'Write the release notes' },
+    });
+    expect(await t.l.list()).toMatchObject([{ headline: 'Write the release notes' }]);
+    expect(t.asked).toHaveLength(1);
+  });
+
+  it('where it was learned says each place once, in a short sentence', async () => {
+    const tainted = work(12)
+      .taint({ kind: 'app', label: 'Yazio content' })
+      .taint({ kind: 'app', label: 'Yazio (from a chat that read GitHub and Yazio content)' })
+      .taint({ kind: 'app', label: 'Yazio content' });
+    const t = await learner({ chats: { c1: chat(tainted) } });
+    expect(await t.l.consider('c1')).toMatchObject({
+      offered: { untrusted: 'Learned from Yazio and GitHub content.' },
+    });
+  });
+
   it('after reading a web page: offered with a note saying so, and held to a stricter scan', async () => {
     const tainted = work(12).taint({ kind: 'web', label: 'news.example' });
     const t = await learner({ chats: { c1: chat(tainted) } });
     expect(await t.l.consider('c1')).toMatchObject({
-      offered: { untrusted: 'Learned in a chat that read news.example.' },
+      offered: { untrusted: 'Learned from news.example.' },
     });
     const poisoned = JSON.stringify({
       ...JSON.parse(GOOD),

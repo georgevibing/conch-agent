@@ -21,8 +21,8 @@ export function useChatOffer(conversationId: string | undefined, view: Conversat
 }
 
 /**
- * Save how I did this (ADR 0058), in the chat: one quiet line under the
- * reply that earned it, once the turn is over. Not now puts it away; the
+ * Save how I did this (ADR 0058), in the chat: a small card under the
+ * reply that earned it, once the turn is over, naming what it would do. Not now puts it away; the
  * Skills page keeps it until then.
  */
 export function SkillOfferInChat({
@@ -44,6 +44,7 @@ export function SkillOfferInChat({
   return (
     <SkillOffer
       className={className}
+      title={offer.headline ?? offer.title}
       {...(offer.steps !== undefined && { steps: offer.steps })}
       {...(offer.untrusted && { untrusted: offer.untrusted })}
       onSave={() => void navigate('/skills/new', { state: draftFrom(offer) })}

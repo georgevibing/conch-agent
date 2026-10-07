@@ -9,17 +9,19 @@ import { SkillShelf } from './SkillShelf';
 import { SkillWriting } from './SkillWriting';
 
 describe('SkillOffer', () => {
-  it('is one line with one button, and Not now', async () => {
+  it('names what it would do, says how it went, and has one button and Not now', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn();
     const onDismiss = vi.fn();
     const { container } = renderNacre(
-      <SkillOffer steps={14} onSave={onSave} onDismiss={onDismiss} />,
+      <SkillOffer title="Log a meal in Yazio" steps={14} onSave={onSave} onDismiss={onDismiss} />,
     );
     const offer = screen.getByRole('group', { name: 'Save how this was done as a skill' });
-    expect(offer).toHaveTextContent('That took 14 steps, and it worked.');
+    expect(offer).toHaveAccessibleDescription(
+      'Log a meal in Yazio That took 14 steps, and it worked.',
+    );
     await user.tab();
-    expect(screen.getByRole('button', { name: 'Save how I did this as a skill' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Save as skill' })).toHaveFocus();
     await user.keyboard('{Enter}');
     expect(onSave).toHaveBeenCalledOnce();
     await user.click(screen.getByRole('button', { name: 'Not now' }));
@@ -27,16 +29,22 @@ describe('SkillOffer', () => {
     await expectAccessible(container);
   });
 
-  it('says so when it was learned after reading something from outside', async () => {
+  it('without a title, it still says what it is', () => {
+    renderNacre(<SkillOffer onSave={() => {}} />);
+    expect(screen.getByRole('group')).toHaveTextContent('Save how I did thisThat worked.');
+  });
+
+  it('says where it was learned after reading something from outside, quietly, in one line', async () => {
     const { container } = renderNacre(
       <SkillOffer
+        title="Find a train"
         steps={11}
-        untrusted="Learned in a chat that read trains.example."
+        untrusted="Learned from trains.example."
         onSave={() => {}}
       />,
     );
     expect(screen.getByRole('group')).toHaveTextContent(
-      'Learned in a chat that read trains.example. Read the steps before you save it.',
+      'That took 11 steps, and it worked. Learned from trains.example. Check the steps before saving.',
     );
     expect(screen.queryByRole('button', { name: 'Not now' })).not.toBeInTheDocument();
     await expectAccessible(container);
