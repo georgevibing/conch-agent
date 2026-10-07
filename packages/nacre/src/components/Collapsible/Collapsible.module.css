@@ -73,6 +73,11 @@
       filter var(--nc-duration-base) var(--nc-ease-out);
   }
 
+  /* Open from the start: simply there (Radix holds the height still too). */
+  .content[data-arriving] .inner {
+    transition: none;
+  }
+
   .content[data-state='closed'] .inner {
     opacity: 0;
     translate: 0 -4px;

@@ -23,6 +23,15 @@
       inset 0 0 0 1px var(--nc-border-subtle),
       inset 0 1px 2px 0 var(--nc-wash-2);
     cursor: pointer;
+  }
+
+  /*
+   * Motion only while a person is flipping it (`data-moving`, set by a press,
+   * a click or a key). A switch arrives in its place, and a value that changes
+   * by itself — data that loaded, a save undone — is simply there.
+   * Reduced motion collapses these durations to nothing (tokens.css).
+   */
+  .track[data-moving] {
     transition:
       background-color var(--nc-duration-base) var(--nc-ease-out),
       box-shadow var(--nc-duration-base) var(--nc-ease-out);
@@ -78,6 +87,9 @@
       0 1px 1px 0 oklch(0 0 0 / 0.08),
       0 2px 5px -1px oklch(0 0 0 / 0.18);
     transform: translateX(0);
+  }
+
+  .track[data-moving] .thumb {
     transition:
       transform var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy),
       inline-size var(--nc-spring-snappy-duration) var(--nc-spring-snappy);

@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, userEvent, within } from 'storybook/test';
+import { useEffect, useState } from 'react';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 
 import { Stack } from '../Stack';
 import { Surface } from '../Surface';
@@ -14,7 +15,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Immediate on/off setting. Press and hold to feel the thumb stretch toward its destination; release and it springs home.',
+          'Immediate on/off setting. It arrives in its place, and follows data without moving; only a person’s flip plays the spring. Press and hold to feel the thumb stretch toward its destination; release and it springs home.',
       },
     },
   },
@@ -87,5 +88,38 @@ export const KeyboardToggle: Story = {
     await userEvent.tab();
     await userEvent.keyboard(' ');
     await expect(sw).toBeChecked();
+  },
+};
+
+/**
+ * A switch arrives in its place, and a value that changes by itself (here,
+ * data that loaded a moment later) is simply there. Only a person's flip moves it.
+ */
+export const ArrivesInPlace: Story = {
+  tags: ['!autodocs'],
+  render: function Render() {
+    const [loaded, setLoaded] = useState(false);
+    useEffect(() => {
+      const t = setTimeout(() => setLoaded(true), 50);
+      return () => clearTimeout(t);
+    }, []);
+    return (
+      <Stack gap={3}>
+        <Switch label="Saved as on" defaultChecked />
+        <Switch label="Loaded as on" checked={loaded} onCheckedChange={setLoaded} />
+      </Stack>
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const saved = canvas.getByRole('switch', { name: 'Saved as on' });
+    const loaded = canvas.getByRole('switch', { name: 'Loaded as on' });
+    await waitFor(() => expect(loaded).toBeChecked());
+    const moving = (el: HTMLElement) =>
+      el.getAnimations({ subtree: true }).filter((a) => a.playState === 'running').length;
+    await expect(moving(saved)).toBe(0);
+    await expect(moving(loaded)).toBe(0);
+    await userEvent.click(saved);
+    await expect(saved).toHaveAttribute('data-moving');
   },
 };

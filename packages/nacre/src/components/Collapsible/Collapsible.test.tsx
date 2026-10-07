@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
@@ -25,5 +25,28 @@ describe('Collapsible', () => {
 
     await userEvent.keyboard(' ');
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('open from the start, it arrives open; only a later opening plays the reveal', async () => {
+    const { rerender } = renderNacre(
+      <Collapsible open>
+        <Collapsible.Content data-testid="body">Choices</Collapsible.Content>
+      </Collapsible>,
+    );
+    // The first frame holds it still: nothing fades or slides in as the page opens.
+    expect(screen.getByTestId('body')).toHaveAttribute('data-arriving');
+    await waitFor(() => expect(screen.getByTestId('body')).not.toHaveAttribute('data-arriving'));
+    rerender(
+      <Collapsible open={false}>
+        <Collapsible.Content data-testid="body">Choices</Collapsible.Content>
+      </Collapsible>,
+    );
+    rerender(
+      <Collapsible open>
+        <Collapsible.Content data-testid="body">Choices</Collapsible.Content>
+      </Collapsible>,
+    );
+    expect(screen.getByTestId('body')).not.toHaveAttribute('data-arriving');
+    expect(screen.getByText('Choices')).toBeVisible();
   });
 });

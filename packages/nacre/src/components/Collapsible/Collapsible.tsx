@@ -1,6 +1,6 @@
 import { Collapsible as CollapsiblePrimitive } from 'radix-ui';
 import { ChevronRight } from 'lucide-react';
-import type { ComponentProps } from 'react';
+import { useEffect, useState, type ComponentProps } from 'react';
 
 import { cx } from '../../utils/cx';
 import styles from './Collapsible.module.css';
@@ -48,8 +48,18 @@ function CollapsibleContent({
   children,
   ...props
 }: ComponentProps<typeof CollapsiblePrimitive.Content>) {
+  // Open from the start, it's simply there: only opening it later plays the reveal.
+  const [arriving, setArriving] = useState(true);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setArriving(false));
+    return () => cancelAnimationFrame(frame);
+  }, []);
   return (
-    <CollapsiblePrimitive.Content className={cx(styles.content, className)} {...props}>
+    <CollapsiblePrimitive.Content
+      className={cx(styles.content, className)}
+      data-arriving={arriving || undefined}
+      {...props}
+    >
       <div className={styles.inner}>{children}</div>
     </CollapsiblePrimitive.Content>
   );
@@ -57,7 +67,9 @@ function CollapsibleContent({
 
 /**
  * Show/hide a single region with a smooth height + fade animation.
- * Use for tool-call details, long outputs and "show more" affordances.
+ * Use for tool-call details, long outputs and "show more" affordances, and
+ * for choices that only mean something while the switch above them is on.
+ * Open from the start, it arrives open: the reveal plays only when it opens.
  */
 export const Collapsible = Object.assign(CollapsibleRoot, {
   Trigger: CollapsibleTrigger,

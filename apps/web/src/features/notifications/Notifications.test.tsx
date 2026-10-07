@@ -1,11 +1,14 @@
 import type { PushStatus } from '@conch/protocol';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useUi } from '../../app/ui';
 import { mockFetch, renderApp } from '../../test/harness';
 import { DevicesTab } from '../auth/DevicesTab';
+import { pushKeys } from './api';
 import { NotificationsTab } from './NotificationsTab';
 import { PushKeeper } from './PushKeeper';
 
@@ -107,6 +110,26 @@ const device = (patch: Partial<PushStatus['devices'][number]> = {}) => ({
   ...patch,
 });
 
+/** Every state the named switch was seen in, from the first render on. */
+function watchSwitch(container: HTMLElement, name: string) {
+  const states: string[] = [];
+  const look = () => {
+    const sw = within(container).queryByRole('switch', { name });
+    const state = sw?.getAttribute('aria-checked');
+    if (state && states.at(-1) !== state) states.push(state);
+  };
+  look();
+  const observer = new MutationObserver(look);
+  observer.observe(container, { subtree: true, childList: true, attributes: true });
+  return {
+    states,
+    stop: () => {
+      look();
+      observer.disconnect();
+    },
+  };
+}
+
 let userAgent: PropertyDescriptor | undefined;
 beforeEach(() => {
   userAgent = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(navigator), 'userAgent');
@@ -129,7 +152,7 @@ describe('Settings → Notifications', () => {
         status({ devices: [device({ prefs: { ...device().prefs, replies: false } })] }),
     });
     renderApp(<NotificationsTab />);
-    await user.click(await screen.findByRole('switch', { name: 'Notifications on this device' }));
+    await user.click(await screen.findByRole('switch', { name: 'Allow notifications' }));
     await waitFor(() => expect(browser.subscribe).toHaveBeenCalled());
     expect(browser.subscribe.mock.calls[0]?.[0]).toMatchObject({ userVisibleOnly: true });
     await waitFor(() =>
@@ -137,15 +160,74 @@ describe('Settings → Notifications', () => {
         subscription: { endpoint: 'https://fcm.googleapis.com/fcm/send/abc' },
       }),
     );
-    expect(
-      await screen.findByRole('region', { name: 'This device is told when something needs you' }),
-    ).toBeVisible();
+    await waitFor(() =>
+      expect(screen.getByRole('switch', { name: 'Allow notifications' })).toBeChecked(),
+    );
 
-    // What it's told about, one switch each.
-    await user.click(screen.getByRole('switch', { name: /When an answer is ready/ }));
+    // What it's told about opens beneath it, one switch each.
+    const told = await screen.findByRole('group', { name: 'Tell me when' });
+    await user.click(within(told).getByRole('switch', { name: 'An answer is ready' }));
     await waitFor(() =>
       expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({ prefs: { replies: false } }),
     );
+  });
+
+  it('opens as it was saved: on, with its choices, never off and then on', async () => {
+    pushableBrowser({ permission: 'granted', subscribedWith: KEY });
+    const saved = device({ prefs: { ...device().prefs, replies: false, previews: false } });
+    mockFetch({ 'GET /api/push': () => status({ devices: [saved] }) });
+    const { container } = renderApp(<NotificationsTab />);
+    const seen = watchSwitch(container, 'Allow notifications');
+    const master = await screen.findByRole('switch', { name: 'Allow notifications' });
+    await waitFor(() => expect(screen.getByRole('group', { name: 'Tell me when' })).toBeVisible());
+    seen.stop();
+    // The first switch anyone saw was already on, and nothing moved it there.
+    expect(seen.states).toEqual(['true']);
+    expect(master).not.toHaveAttribute('data-moving');
+    const told = screen.getByRole('group', { name: 'Tell me when' });
+    expect(within(told).getByRole('switch', { name: 'It needs you' })).toBeChecked();
+    expect(within(told).getByRole('switch', { name: 'An answer is ready' })).not.toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Show what it’s about' })).not.toBeChecked();
+    for (const sw of screen.getAllByRole('switch')) expect(sw).not.toHaveAttribute('data-moving');
+  });
+
+  it('opens as it was saved: off, with nothing beneath it', async () => {
+    pushableBrowser({ permission: 'default' });
+    mockFetch({ 'GET /api/push': () => status() });
+    const { container } = renderApp(<NotificationsTab />);
+    const seen = watchSwitch(container, 'Allow notifications');
+    expect(await screen.findByRole('switch', { name: 'Allow notifications' })).not.toBeChecked();
+    seen.stop();
+    expect(seen.states).toEqual(['false']);
+    expect(screen.queryByRole('group', { name: 'Tell me when' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Send a test' })).toBeNull();
+  });
+
+  it('opens straight away when the keeper already asked, on load', async () => {
+    pushableBrowser({ permission: 'granted', subscribedWith: KEY });
+    const calls = mockFetch({ 'GET /api/push': () => status({ devices: [device()] }) });
+    /** Settings → Notifications, opened once the keeper has looked. */
+    function Later() {
+      const client = useQueryClient();
+      const [open, setOpen] = useState(false);
+      useEffect(
+        () =>
+          client
+            .getQueryCache()
+            .subscribe(() => setOpen(client.getQueryData(pushKeys.here(KEY)) !== undefined)),
+        [client],
+      );
+      return open ? <NotificationsTab /> : null;
+    }
+    renderApp(
+      <>
+        <PushKeeper />
+        <Later />
+      </>,
+    );
+    // Its first frame has the switch, on: no placeholder, nothing asked again.
+    expect(await screen.findByRole('switch', { name: 'Allow notifications' })).toBeChecked();
+    expect(calls.filter((c) => c.path === '/api/push')).toHaveLength(1);
   });
 
   it('on an iPhone in Safari, says to add Conch to the Home Screen first', async () => {
@@ -158,10 +240,10 @@ describe('Settings → Notifications', () => {
     mockFetch({ 'GET /api/push': () => status() });
     renderApp(<NotificationsTab />);
     expect(
-      await screen.findByRole('region', { name: 'Add Conch to your Home Screen first' }),
+      await screen.findByRole('region', { name: 'Add Conch to your Home Screen' }),
     ).toBeVisible();
     expect(screen.getByRole('list', { name: 'Add Conch to your Home Screen' })).toBeVisible();
-    expect(screen.queryByRole('switch', { name: 'Notifications on this device' })).toBeNull();
+    expect(screen.queryByRole('switch', { name: 'Allow notifications' })).toBeNull();
   });
 
   it('says where to undo it when the browser was told no', async () => {
@@ -169,7 +251,7 @@ describe('Settings → Notifications', () => {
     mockFetch({ 'GET /api/push': () => status() });
     renderApp(<NotificationsTab />);
     expect(
-      await screen.findByRole('region', { name: 'Notifications are blocked for Conch' }),
+      await screen.findByRole('region', { name: 'Notifications are blocked' }),
     ).toHaveTextContent(/browser’s settings/);
   });
 
@@ -178,17 +260,17 @@ describe('Settings → Notifications', () => {
     const browser = pushableBrowser({ brave: true, refuses: true });
     const calls = mockFetch({ 'GET /api/push': () => status() });
     renderApp(<NotificationsTab />);
-    await user.click(await screen.findByRole('switch', { name: 'Notifications on this device' }));
+    await user.click(await screen.findByRole('switch', { name: 'Allow notifications' }));
     await waitFor(() => expect(browser.subscribe).toHaveBeenCalled());
     // It stays on the card, to read while Brave's settings are open.
-    const card = screen.getByRole('region', { name: 'Get notifications on this device' });
+    const card = screen.getByRole('region', { name: 'Allow notifications' });
     await waitFor(() =>
       expect(card).toHaveTextContent(/Brave’s settings.*“Use Google services for push messaging”/),
     );
     // Never the browser's own words, and Conch isn't told about a device that can't be reached.
     expect(screen.queryByText(/Registration failed/)).toBeNull();
     expect(calls.some((c) => c.method === 'POST')).toBe(false);
-    expect(screen.getByRole('switch', { name: 'Notifications on this device' })).not.toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Allow notifications' })).not.toBeChecked();
   });
 
   it('says so in plain words when another browser’s push service won’t answer', async () => {
@@ -196,9 +278,9 @@ describe('Settings → Notifications', () => {
     const browser = pushableBrowser({ refuses: true });
     mockFetch({ 'GET /api/push': () => status() });
     renderApp(<NotificationsTab />);
-    await user.click(await screen.findByRole('switch', { name: 'Notifications on this device' }));
+    await user.click(await screen.findByRole('switch', { name: 'Allow notifications' }));
     await waitFor(() => expect(browser.subscribe).toHaveBeenCalled());
-    const card = screen.getByRole('region', { name: 'Get notifications on this device' });
+    const card = screen.getByRole('region', { name: 'Allow notifications' });
     await waitFor(() => expect(card).toHaveTextContent(/couldn’t reach its notification service/));
     expect(card).not.toHaveTextContent(/Brave/);
     expect(screen.queryByText(/Registration failed/)).toBeNull();

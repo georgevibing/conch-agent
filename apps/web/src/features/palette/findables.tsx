@@ -275,7 +275,8 @@ const settingsPlaces: {
   {
     tab: 'notifications',
     label: 'Notifications',
-    keywords: 'notifications notify push alerts phone bell badge tell me lock screen',
+    keywords:
+      'notifications notify allow push alerts phone bell badge lock screen tell me when it needs you approval an answer is ready reply a routine runs a task finishes a device asks to sign in there’s a new version update show what it’s about preview details quiet send a test',
     icon: <Bell />,
   },
   {

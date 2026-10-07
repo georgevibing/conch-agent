@@ -130,6 +130,11 @@ place in a glance and never change a thing.
   looks, which voice) is never folded. Nothing is lost: ⌘K finds what's in
   there by name (`ADVANCED_FOCUS`, `useAdvanced`), and the place opens with its
   Advanced already open, as a repair's fix does.
+- **Choices under the switch they belong to.** A choice that only means
+  something while a switch is on (what notifications are about) sits beneath
+  it, indented under a hairline, and opens with it (`Collapsible`) — folded
+  away while it's off, never shown greyed out. Each is a short label, at most a
+  few words of hint.
 - **The other way in, quietly.** A page whose main way is a press (Providers:
   sign in) keeps the way for the few — an API key — as one muted line at its
   foot, **Use an API key instead**, that opens to a single field in place.
@@ -155,6 +160,17 @@ porcelain.
 | `--nc-spring-soft` (620 ms)   | Surfaces entering, layout shifts                |
 | `--nc-spring-bouncy` (780 ms) | Small confirmations (check-marks, switch thumb) |
 | `--nc-ease-out` + durations   | Colour, opacity, shadow                         |
+
+**Controls move when people move them.** A switch, a checkbox or a segmented
+control arrives already in its state, and a value that changes by itself —
+data that loaded, a save undone, another device's change — is simply there.
+Only a person's press, click or key plays the spring (`useMotionFromPeople`
+sets `data-moving`, which the control's CSS needs before it transitions at
+all), including a change that lands a moment after the press, once a
+permission prompt or a save has answered. A `Collapsible` that's open from the
+start arrives open too; only opening it later plays the reveal. And a screen
+never shows a control in a placeholder state while its value loads: it waits
+for the value (a `Skeleton` in its place), or uses the one it already has.
 
 Springs are real damped-spring curves baked into CSS `linear()`; the same physics are
 exported for JS as `springs` from `@conch/nacre` for the `motion` library. Keyframes:

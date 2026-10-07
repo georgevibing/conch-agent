@@ -66,12 +66,11 @@ test('notifications and voice have their own place in Settings', async ({ page }
   await page.getByRole('combobox').fill('notifications');
   await page.getByRole('option', { name: /Settings: Notifications/ }).click();
   const settings = page.getByRole('dialog', { name: /Settings/ });
-  await expect(
-    settings.getByRole('region', { name: 'Get notifications on this device' }),
-  ).toBeVisible();
-  await expect(
-    settings.getByRole('switch', { name: 'Notifications on this device' }),
-  ).toBeVisible();
+  const card = settings.getByRole('region', { name: 'Allow notifications' });
+  await expect(card).toBeVisible();
+  // It opens as it is (off here), with nothing beneath it until it's on.
+  await expect(card.getByRole('switch', { name: 'Allow notifications' })).not.toBeChecked();
+  await expect(card.getByRole('group', { name: 'Tell me when' })).toHaveCount(0);
   // Which devices get them is in Settings → Devices, beside each device.
   await expect(settings.getByText('No other device gets them yet.')).toBeVisible();
   await settings.getByRole('button', { name: 'Your devices' }).click();
@@ -96,6 +95,77 @@ test('notifications and voice have their own place in Settings', async ({ page }
   await expect(talk).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(talk).toBeHidden();
+});
+
+/**
+ * This browser as one that turned notifications on before: allowed, and
+ * holding a subscription made with Conch's key (a real push service isn't
+ * reachable from a test). Conch is told the same.
+ */
+async function notifiedBefore(page: Page, prefs: Record<string, boolean> = {}) {
+  await page.context().grantPermissions(['notifications']);
+  const real = (await (await page.request.get('/api/push')).json()) as {
+    publicKey: string;
+    devices: unknown[];
+  };
+  await page.addInitScript((publicKey) => {
+    const b64 = publicKey.replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
+    const key = Uint8Array.from(raw, (c) => c.charCodeAt(0)).buffer;
+    const subscription = { options: { applicationServerKey: key }, unsubscribe: async () => true };
+    const pushManager = { getSubscription: async () => subscription };
+    navigator.serviceWorker.getRegistration = async () =>
+      ({ pushManager }) as unknown as ServiceWorkerRegistration;
+  }, real.publicKey);
+  await page.route('**/api/push', (route) =>
+    route.request().method() === 'GET'
+      ? route.fulfill({
+          json: {
+            ...real,
+            devices: [
+              {
+                id: 'ps_here',
+                name: 'Chrome on Mac',
+                current: true,
+                createdAt: Date.now(),
+                prefs: {
+                  approvals: true,
+                  replies: true,
+                  routines: true,
+                  tasks: true,
+                  devices: true,
+                  updates: false,
+                  previews: true,
+                  ...prefs,
+                },
+              },
+            ],
+          },
+        })
+      : route.fallback(),
+  );
+}
+
+test('notifications open as they were saved: on, with nothing moving into place', async ({
+  page,
+}) => {
+  await notifiedBefore(page, { replies: false });
+  await page.goto('/settings/notifications');
+  const card = page.getByRole('region', { name: 'Allow notifications' });
+  const master = card.getByRole('switch', { name: 'Allow notifications' });
+  await expect(master).toBeChecked();
+  // At the moment it appears: the switch and its choices are still, already in place.
+  const moving = await card.evaluate(
+    (el) => el.getAnimations({ subtree: true }).filter((a) => a.playState === 'running').length,
+  );
+  expect(moving).toBe(0);
+  await expect(master).not.toHaveAttribute('data-moving');
+  const told = card.getByRole('group', { name: 'Tell me when' });
+  await expect(told).toBeVisible();
+  await expect(told.getByRole('switch', { name: 'It needs you' })).toBeChecked();
+  await expect(told.getByRole('switch', { name: 'An answer is ready' })).not.toBeChecked();
+  await expect(card.getByRole('switch', { name: 'Show what it’s about' })).toBeChecked();
+  await expect(card.getByRole('button', { name: 'Send a test' })).toBeVisible();
 });
 
 test('tapping the message box on a phone doesn’t zoom the page', async ({ browser }, info) => {

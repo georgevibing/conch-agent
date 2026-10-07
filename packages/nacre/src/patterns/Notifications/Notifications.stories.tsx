@@ -1,11 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
+import { expect, within } from 'storybook/test';
 
-import { Stack } from '../../components/Stack';
-import { Switch } from '../../components/Switch';
 import { AddToHomeScreen } from './AddToHomeScreen';
 import { NotifiedDevices } from './NotifiedDevices';
-import { NotifyThisDevice, type NotifyState } from './NotifyThisDevice';
+import { NotifyThisDevice, type NotifyState, type NotifyTopic } from './NotifyThisDevice';
 
 const meta = {
   title: 'Patterns/Notifications/NotifyThisDevice',
@@ -15,7 +14,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Notifications on this device: one switch and a test. When the device needs something first — the Home Screen on an iPhone, the browser’s own permission — it says exactly that, calmly. Conch only notifies when nobody is looking at it.',
+          'Notifications on this device: one switch. While it’s on, what it’s told about opens beneath it as a short list — and folds away when it’s off, because it means nothing then. When the device needs something first — the Home Screen on an iPhone, the browser’s own permission — it says exactly that, in a line. Conch only notifies when nobody is looking at it.',
       },
     },
   },
@@ -26,28 +25,38 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const prefs = (
-  <Stack gap={3}>
-    <Switch labelPosition="start" defaultChecked label="When it needs your OK" />
-    <Switch labelPosition="start" defaultChecked label="When an answer is ready" />
-    <Switch labelPosition="start" defaultChecked label="When a routine runs" />
-    <Switch labelPosition="start" defaultChecked label="When a new device wants to sign in" />
-    <Switch
-      labelPosition="start"
-      defaultChecked
-      label="Say what it’s about"
-      description="Off: only “Open Conch to see what it’s asking”."
-    />
-  </Stack>
-);
+const TOPICS: NotifyTopic[] = [
+  { id: 'approvals', label: 'It needs you', on: true },
+  { id: 'replies', label: 'An answer is ready', on: true },
+  { id: 'routines', label: 'A routine runs', on: true },
+  { id: 'tasks', label: 'A task finishes', on: true },
+  { id: 'devices', label: 'A device asks to sign in', on: true },
+  { id: 'updates', label: 'There’s a new version', on: false },
+];
 
+/** What a device chooses, kept as it would be by Conch. */
+function useChoices() {
+  const [topics, setTopics] = useState(TOPICS);
+  const [previews, setPreviews] = useState(true);
+  return {
+    topics,
+    onTopicChange: (id: string, on: boolean) =>
+      setTopics((all) => all.map((t) => (t.id === id ? { ...t, on } : t))),
+    previews,
+    onPreviewsChange: setPreviews,
+  };
+}
+
+/** Turn it on and off: what it's told about opens beneath it, and folds away. */
 export const Playground: Story = {
-  render: (args) => {
+  render: function Render(args) {
     const [state, setState] = useState<NotifyState>(args.state);
     const [busy, setBusy] = useState(false);
+    const choices = useChoices();
     return (
       <NotifyThisDevice
         {...args}
+        {...(state === 'on' ? choices : {})}
         state={state}
         busy={busy}
         onChange={(on) => {
@@ -57,15 +66,27 @@ export const Playground: Story = {
             setBusy(false);
           }, 900);
         }}
-      >
-        {state === 'on' ? prefs : undefined}
-      </NotifyThisDevice>
+      />
     );
   },
 };
 
 export const Off: Story = {};
-export const On: Story = { args: { state: 'on', children: prefs } };
+
+/** Saved as on, it opens as on: the switch in place, the list already open, nothing moving. */
+export const On: Story = {
+  args: { state: 'on' },
+  render: function Render(args) {
+    return <NotifyThisDevice {...args} {...useChoices()} />;
+  },
+  play: async ({ canvasElement }) => {
+    const card = within(canvasElement).getByRole('region', { name: 'Allow notifications' });
+    await expect(within(card).getByRole('switch', { name: 'Allow notifications' })).toBeChecked();
+    const running = card.getAnimations({ subtree: true }).filter((a) => a.playState === 'running');
+    await expect(running).toHaveLength(0);
+  },
+};
+
 export const InstallFirst: Story = {
   args: { state: 'install', children: <AddToHomeScreen /> },
 };
@@ -73,7 +94,7 @@ export const Blocked: Story = { args: { state: 'blocked' } };
 export const Unsupported: Story = {
   args: {
     state: 'unsupported',
-    detail: 'Notifications need a secure address. Open Conch at its https address instead.',
+    detail: 'Needs Conch’s secure (https) address. Add your phone in Devices to get one.',
   },
 };
 

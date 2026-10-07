@@ -14,11 +14,14 @@ import {
 
 import { springs } from '../../tokens';
 import { cx } from '../../utils/cx';
+import { useMotionFromPeople } from '../../utils/useMotionFromPeople';
 import styles from './SegmentedControl.module.css';
 
 interface SegmentedContextValue {
   value: string;
   indicatorId: string;
+  /** A person is choosing: the pill glides. Otherwise it's simply there. */
+  moving: boolean;
 }
 
 const SegmentedContext = createContext<SegmentedContextValue | null>(null);
@@ -37,7 +40,8 @@ export interface SegmentedControlProps extends Omit<
 
 /**
  * Mutually exclusive view switcher. A porcelain pill glides between segments
- * on a spring. Unlike a toggle group it can never be empty.
+ * on a spring when someone chooses; chosen by data, it's simply there.
+ * Unlike a toggle group it can never be empty.
  */
 function SegmentedControlRoot({
   value: valueProp,
@@ -49,15 +53,25 @@ function SegmentedControlRoot({
   children,
   ref: forwarded,
   onScroll,
+  onPointerEnter,
+  onPointerLeave,
+  onPointerDown,
+  onClick,
   ...props
 }: SegmentedControlProps) {
   const [internal, setInternal] = useState(defaultValue);
   const value = valueProp ?? internal;
   const indicatorId = useId();
   const { ref, edges, measure } = useOverflow(value);
+  const { moving, ...motion } = useMotionFromPeople(valueProp, {
+    onPointerEnter,
+    onPointerLeave,
+    onPointerDown,
+    onClick,
+  });
 
   return (
-    <SegmentedContext.Provider value={{ value, indicatorId }}>
+    <SegmentedContext.Provider value={{ value, indicatorId, moving }}>
       <MotionConfig reducedMotion="user">
         <ToggleGroup.Root
           type="single"
@@ -73,6 +87,7 @@ function SegmentedControlRoot({
           data-more-end={edges.end || undefined}
           className={cx(styles.root, className)}
           {...props}
+          {...motion}
           ref={(el: HTMLDivElement | null) => {
             ref.current = el;
             if (typeof forwarded === 'function') forwarded(el);
@@ -151,7 +166,7 @@ function SegmentedControlItem({
         <motion.span
           layoutId={ctx?.indicatorId}
           className={styles.indicator}
-          transition={springs.snappy}
+          transition={ctx?.moving ? springs.snappy : { duration: 0 }}
           aria-hidden
         />
       )}
