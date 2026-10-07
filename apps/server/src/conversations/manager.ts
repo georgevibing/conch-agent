@@ -1402,6 +1402,8 @@ export class ConversationManager {
       live.permissions.clear();
       // What the chat it came from allows now, as for a new one (never this one's old answers).
       grant(live, input.extras.grants);
+      for (const source of input.extras.taint ?? []) this.#taint(live, source);
+      this.#carry(live, input.extras.skills ?? []);
       this.#applyOptions(live, input.options ?? {});
       const engine = input.engine ?? this.deps.engine(live.record.options.engine);
       this.#append(live, { type: 'user.message', messageId: newId('u'), text: input.text });

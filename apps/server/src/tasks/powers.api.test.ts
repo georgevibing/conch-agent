@@ -120,7 +120,13 @@ describe('a task’s tools', () => {
     expect(done?.error).toBeUndefined();
     if (!done) throw new Error('No task result');
     expect(assessTask(done).verdict).toBe('unchecked');
-    expect(done.operations?.every((op) => op.state === 'confirmed')).toBe(true);
+    expect(assessTask(done).failedReads).toBe(1);
+    expect(done.operations?.[0]).toMatchObject({
+      tool: 'Read',
+      state: 'not-run',
+      execution: 'failed',
+    });
+    expect(done.operations?.slice(1).every((op) => op.state === 'confirmed')).toBe(true);
     expect(done.operations?.map((op) => op.tool)).toEqual(
       expect.arrayContaining(['Write', 'Edit', 'Read', 'artifact_create']),
     );

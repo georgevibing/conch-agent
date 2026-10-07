@@ -503,7 +503,10 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   changed); their taint comes back to the parent, the turn's abort stops them, and over
   budget it refuses. A part (or a background task) can go to another provider that's ready
   (`provider`, `model`), still in the parent's mode, taint and holds; `Task.by` names it.
-  A restart marks running tasks `interrupted` (one-press retry); a limit
+  A restart marks running and queued tasks `interrupted` (explicit safe resume), clears
+  stale approval cards, and retains receipts, the working folder and worktree metadata.
+  Resume rechecks current parent permissions and restrictions; shutdown fences new
+  admission. Confirmed writes are not replayed over later progress. A limit
   carries on once on `limitFallback`. Push topic `tasks`; doctor check `tasks`.
 
 - **Other apps using Conch** ([ADR 0073](./docs/adr/0073-conch-for-your-other-apps.md)).

@@ -156,3 +156,50 @@ Sources reviewed: [RFC 9110 §9.2.2](https://www.rfc-editor.org/rfc/rfc9110.html
 (idempotence is a property of an operation, not its result text), and
 [OWASP Transaction Authorization](https://cheatsheetseries.owasp.org/cheatsheets/Transaction_Authorization_Cheat_Sheet.html)
 (server-controlled authorization, bound transaction data, and ordered transitions).
+
+## Amended 2026-10-07: rejected reads and restart continuity
+
+Read failures before dispatch (including path checks, expired scope and denied
+account scope) append a failed, not-run observation under the same read identity.
+They invalidate earlier required evidence without granting any scope, storing
+provider error details, or blocking unrelated writes. Successful later reads can
+recover. Permission checks and path protection remain ahead of execution.
+
+A new turn snapshots earlier operation IDs. Reissuing a previously confirmed
+local mutation with the same payload returns its historical receipt instead of
+undoing later edits. A new payload may extend the work; a new goal revision may
+intentionally request an earlier value. Uncertain effects and backup-restored
+operations still require reconciliation. No prose or provider utility is promoted
+to a receipt: provider-internal operations without a result hook are outside the
+ledger’s coverage.
+
+Startup preserves queued/running tasks as interrupted and clears obsolete asking
+cards. Resume is explicit, increments a persisted attempt, and uses the same
+conversation, outcome criteria, tool scope and original working folder. Resumed
+turns recheck the parent’s current permission ceiling and inherit additional taint
+and skill holds. Old approval answers cannot release new requests. Shutdown fences
+admission across asynchronous preparation and leaves unfinished tasks recoverable.
+Provider/startup exceptions finish with an error instead of stranding a running
+card.
+
+Worktree metadata retains its repository, base commit and whether Conch kept the
+folder. Interrupted, stopped and failed tasks retain clean worktrees too. Successful
+clean worktrees persist their clean checkpoint before removal with Git’s own
+dirty check, never force-removal; failed checkpoint persistence prevents cleanup.
+A restart after removal can therefore reopen the folder. Failed removal retains
+the branch, and branch deletion uses the expected base hash to preserve concurrent
+commits. Only deliberate cleanup permits recreation at
+the saved base (or an existing saved branch). Missing retained folders and branch
+changes stop before starting a provider. Older records without recovery metadata
+remain readable and use their existing folder, failing closed if it is missing.
+
+Regression coverage includes cold service restarts with pending approvals and
+queued work, changed workspace/permissions/taint/skill holds, worktree recovery,
+shutdown during provider detection, rejected reads, and actual child-process death
+before a write, after its external effect, and after its durable receipt. The
+external-effect fixture demonstrates reconciliation without a duplicate; absence
+alone does not authorize replay. Fault injection uses temporary homes only.
+
+This follows the server-side state sequencing and per-operation authorization
+requirements of the [OWASP Transaction Authorization Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Transaction_Authorization_Cheat_Sheet.html#25-application-should-control-which-transaction-state-transitions-are-allowed).
+No automatic resume, trust setting, or new network capability is introduced.
