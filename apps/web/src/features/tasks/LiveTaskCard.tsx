@@ -118,7 +118,8 @@ export function LiveTaskCard({
       startedAt={task.startedAt}
       finishedAt={task.finishedAt}
       current={task.current && withCode(task.current)}
-      steps={task.steps.map((s) => withCode(s.label))}
+      steps={task.steps.map((s) => s.label)}
+      renderStep={withCode}
       summary={task.summary}
       // What's behind "Details": what it confirmed, and what it couldn't.
       details={details(task, assessment, unchecked)}

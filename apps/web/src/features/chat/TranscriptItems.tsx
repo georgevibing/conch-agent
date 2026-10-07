@@ -12,7 +12,7 @@ import {
   SkillUsed,
   Stack,
   Surface,
-  TaintNotice,
+  TaintReads,
   Text,
   ThinkingIndicator,
   WorkedFor,
@@ -477,19 +477,25 @@ export function PermissionCard({
   );
 }
 
-const READ_WORDS: Record<Of<'taint'>['source']['kind'], string> = {
-  web: '',
-  download: 'something downloaded from ',
-  app: 'things in ',
-  person: 'a message from ',
-};
-
-/** The chat read something from outside (ADR 0028): said once, quietly. */
-export function TaintItem({ item, first }: { item: Of<'taint'>; first: boolean }) {
-  const { kind, label } = item.source;
-  const read =
-    kind === 'download' && label === 'something downloaded' ? label : `${READ_WORDS[kind]}${label}`;
-  return <TaintNotice read={read} first={first} />;
+/** The chat read something from outside (ADR 0028): said once, quietly, however much it was. */
+export function TaintItems({
+  items,
+  first,
+  taskChat,
+}: {
+  items: Of<'taint'>[];
+  first: boolean;
+  /** This chat is a task's: what was carried came from the chat it was sent from. */
+  taskChat: boolean;
+}) {
+  const carried = items[0]?.carried;
+  return (
+    <TaintReads
+      reads={items.map((item) => item.source)}
+      first={first}
+      {...(carried && { from: taskChat ? 'chat' : 'task' })}
+    />
+  );
 }
 
 export function MemoryPill({ item }: { item: Of<'memory'> }) {

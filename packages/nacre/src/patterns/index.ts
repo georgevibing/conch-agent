@@ -23,6 +23,7 @@ export * from './Offer';
 export * from './PlanChecklist';
 export * from './ModePicker';
 export * from './Routines';
+export * from './LineGroup';
 export * from './Safety';
 export * from './ScheduleEditor';
 export * from './TriggerEditor';

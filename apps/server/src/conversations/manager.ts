@@ -1402,7 +1402,7 @@ export class ConversationManager {
       live.permissions.clear();
       // What the chat it came from allows now, as for a new one (never this one's old answers).
       grant(live, input.extras.grants);
-      for (const source of input.extras.taint ?? []) this.#taint(live, source);
+      for (const source of input.extras.taint ?? []) this.#taint(live, source, undefined, true);
       this.#carry(live, input.extras.skills ?? []);
       this.#applyOptions(live, input.options ?? {});
       const engine = input.engine ?? this.deps.engine(live.record.options.engine);
@@ -1447,7 +1447,7 @@ export class ConversationManager {
     if (agent) this.#begunWith(live, agent);
     this.#append(live, { type: 'user.message', messageId: newId('u'), text: input.text });
     if (expanded?.skill) this.#append(live, { type: 'skill.used', ...expanded.skill, by: 'user' });
-    for (const source of input.extras.taint ?? []) this.#taint(live, source);
+    for (const source of input.extras.taint ?? []) this.#taint(live, source, undefined, true);
     this.#carry(live, input.extras.skills ?? []);
     grant(live, input.extras.grants);
     this.#claim(live);
@@ -3645,11 +3645,16 @@ export class ConversationManager {
   }
 
   /** Note once that the chat read something from outside; the transcript says so, quietly. */
-  #taint(live: Live, source: TaintSource, toolUseId?: string) {
+  #taint(live: Live, source: TaintSource, toolUseId?: string, carried?: boolean) {
     const known = this.#tainted(live);
     if (known.length >= 12 || known.some((t) => t.kind === source.kind && t.label === source.label))
       return;
-    this.#append(live, { type: 'taint', source, ...(toolUseId && { toolUseId }) });
+    this.#append(live, {
+      type: 'taint',
+      source,
+      ...(toolUseId && { toolUseId }),
+      ...(carried && { carried }),
+    });
   }
 
   /**
@@ -3678,7 +3683,7 @@ export class ConversationManager {
   /** Carry what one chat read into another: a helper starts as wary as its parent, and back. */
   async addTaint(id: string, sources: readonly TaintSource[]): Promise<void> {
     const live = await this.#get(id);
-    for (const source of sources) this.#taint(live, source);
+    for (const source of sources) this.#taint(live, source, undefined, true);
     await this.#persist(live);
   }
 

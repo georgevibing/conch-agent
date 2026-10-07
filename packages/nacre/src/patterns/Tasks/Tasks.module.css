@@ -289,6 +289,49 @@
     line-height: var(--nc-leading-snug);
   }
 
+  .steps > li {
+    min-inline-size: 0;
+  }
+
+  .step {
+    display: inline;
+    overflow-wrap: anywhere;
+  }
+
+  .stepFailed {
+    display: inline-block;
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    margin-inline-end: var(--nc-space-1);
+    vertical-align: -0.1em;
+    stroke-width: 2.4;
+    color: light-dark(oklch(0.52 0.15 var(--nc-danger-h)), oklch(0.8 0.12 var(--nc-danger-h)));
+  }
+
+  .stepTimes,
+  .stepMore {
+    color: var(--nc-text-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stepTimes {
+    margin-inline-start: var(--nc-space-1);
+  }
+
+  /* A folded run reads like the lines around it, not like a note. */
+  .steps .stepGroup {
+    color: inherit;
+    font-size: inherit;
+    line-height: inherit;
+  }
+
+  /* In a numbered list the wash stays clear of the number. */
+  .steps .stepGroup > button {
+    --lg-bleed: var(--nc-space-1);
+    margin-inline-start: 0;
+    padding-inline-start: 0;
+  }
+
   .note {
     color: var(--nc-text-muted);
     font-size: var(--nc-text-xs);

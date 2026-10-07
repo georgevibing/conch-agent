@@ -600,6 +600,11 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     source: TaintSource,
     /** The tool call that brought it in, when one did. */
     toolUseId: z.string().optional(),
+    /**
+     * Read in another chat and carried here (ADR 0033): what the chat a task
+     * came from had read, or what a task brought back. Said as one line.
+     */
+    carried: z.boolean().optional(),
   }),
   /** The assistant looked through your other chats (ADR 0059): for what, and where it found it. */
   z.object({ ...logged, type: z.literal('chats.looked'), ...PastChatsLooked.shape }),

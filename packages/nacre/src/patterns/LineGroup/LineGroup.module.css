@@ -1,0 +1,171 @@
+@layer nacre.components {
+  .group {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-subtle);
+  }
+
+  .trigger {
+    appearance: none;
+    display: inline-flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+    align-self: flex-start;
+    /* The hover wash reaches a little past the words, so they line up with the lines around. */
+    --lg-bleed: var(--nc-space-1-5);
+    max-inline-size: calc(100% + 2 * var(--lg-bleed));
+    margin: 0 calc(-1 * var(--lg-bleed));
+    padding: var(--nc-space-0-5) var(--lg-bleed);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    text-wrap: pretty;
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .trigger:hover {
+      background: var(--nc-wash-2);
+      color: var(--nc-text-muted);
+    }
+  }
+
+  .trigger:active {
+    background: var(--nc-wash-3);
+  }
+
+  .trigger:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 1px;
+  }
+
+  .icon {
+    display: inline-flex;
+    flex-shrink: 0;
+  }
+
+  .icon > svg {
+    inline-size: 0.9rem;
+    block-size: 0.9rem;
+    margin-block-start: 0.1rem;
+  }
+
+  .summary {
+    min-inline-size: 0;
+  }
+
+  .chevron {
+    flex-shrink: 0;
+    inline-size: 0.8rem;
+    block-size: 0.8rem;
+    margin-block-start: 0.2rem;
+    stroke-width: 2.2;
+    opacity: 0.7;
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .group[data-state='open'] .chevron {
+    transform: rotate(90deg);
+  }
+
+  .content {
+    overflow: hidden;
+  }
+
+  .content[data-state='open'] {
+    animation: line-group-open var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .content[data-state='closed'] {
+    animation: line-group-close var(--nc-duration-base) var(--nc-ease-in-out);
+  }
+
+  .inner {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+    /* Under the summary's words, past the icon. */
+    padding: var(--nc-space-1) 0 var(--nc-space-1) calc(0.9rem + var(--nc-space-2));
+    transition:
+      opacity var(--nc-duration-base) var(--nc-ease-out),
+      translate var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .group[data-bare] .inner {
+    padding-inline-start: var(--nc-space-3);
+  }
+
+  .content[data-state='closed'] .inner {
+    opacity: 0;
+    translate: 0 -4px;
+  }
+
+  @starting-style {
+    .content[data-state='open'] .inner {
+      opacity: 0;
+      translate: 0 -4px;
+    }
+  }
+
+  .items {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--nc-text-muted);
+    overflow-wrap: anywhere;
+  }
+
+  .items > li {
+    position: relative;
+    padding-inline-start: var(--nc-space-3);
+  }
+
+  /* A small dot ties each line to the summary above it. */
+  .items > li::before {
+    content: '';
+    position: absolute;
+    inset-block-start: 0.6em;
+    inset-inline-start: 0;
+    inline-size: 4px;
+    block-size: 4px;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-border-strong);
+  }
+
+  .footnote {
+    margin: 0;
+    color: var(--nc-text-subtle);
+    text-wrap: pretty;
+  }
+
+  @keyframes line-group-open {
+    from {
+      block-size: 0;
+    }
+    to {
+      block-size: var(--radix-collapsible-content-height);
+    }
+  }
+
+  @keyframes line-group-close {
+    from {
+      block-size: var(--radix-collapsible-content-height);
+    }
+    to {
+      block-size: 0;
+    }
+  }
+}

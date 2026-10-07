@@ -20,6 +20,7 @@ import { Collapsible } from '../../components/Collapsible';
 import { Pearl } from '../../components/Pearl';
 import { cx } from '../../utils/cx';
 import { taskHeadline } from './headline';
+import { TaskSteps } from './TaskSteps';
 import styles from './Tasks.module.css';
 
 export type TaskCardStatus =
@@ -54,8 +55,10 @@ export interface TaskCardProps extends Omit<ComponentProps<'article'>, 'title'> 
   finishedAt?: number;
   /** What it's doing right now: "Running `npm test`". */
   current?: ReactNode;
-  /** What it did, newest last. */
-  steps?: ReactNode[];
+  /** What it did, newest last: repeats and long runs of one kind are said as one line. */
+  steps?: readonly string[];
+  /** Draw a step's words (`code` as code, say). */
+  renderStep?: (label: string) => ReactNode;
   /**
    * Its result, in one line, always in view once it's finished. Without it, a
    * text `summary`'s first sentence or two, ids and bookkeeping left out.
@@ -141,6 +144,7 @@ export function TaskCard({
   finishedAt,
   current,
   steps = [],
+  renderStep,
   outcome,
   summary,
   details,
@@ -184,7 +188,7 @@ export function TaskCard({
   const pastSteps = live ? [] : steps;
   const hidden = fullSummary || fullError || details || pastSteps.length > 0;
   // While it works: what it's doing, and the last few things (all of them on the Tasks page).
-  const shown = live ? (variant === 'compact' ? steps.slice(-3) : steps) : [];
+  const shown = live ? steps : [];
   const icon =
     status === 'running' ? (
       <Pearl size="sm" state="thinking" label={null} />
@@ -263,11 +267,11 @@ export function TaskCard({
           live && current && <p className={styles.current}>{current}</p>
         )}
         {shown.length > 0 && (
-          <ol className={styles.steps} aria-label="What it did">
-            {shown.map((step, i) => (
-              <li key={i}>{step}</li>
-            ))}
-          </ol>
+          <TaskSteps
+            steps={shown}
+            {...(renderStep && { render: renderStep })}
+            {...(variant === 'compact' && { last: 3 })}
+          />
         )}
         {problem && <p className={styles.problem}>{problem}</p>}
         {/* Opened, its whole result says it: the line would only repeat it. */}
@@ -285,11 +289,7 @@ export function TaskCard({
             {fullError && <p className={styles.error}>{fullError}</p>}
             {details && <div className={styles.extra}>{details}</div>}
             {pastSteps.length > 0 && (
-              <ol className={styles.steps} aria-label="What it did">
-                {pastSteps.map((step, i) => (
-                  <li key={i}>{step}</li>
-                ))}
-              </ol>
+              <TaskSteps steps={pastSteps} {...(renderStep && { render: renderStep })} />
             )}
           </Collapsible.Content>
         )}

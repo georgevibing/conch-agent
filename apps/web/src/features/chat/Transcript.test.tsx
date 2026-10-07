@@ -561,3 +561,61 @@ describe('a reply you stopped', () => {
     expect(screen.getByText('after 7m 59s')).toBeInTheDocument();
   });
 });
+
+describe('what a chat read from outside (ADR 0028)', () => {
+  const read = (
+    id: string,
+    kind: 'web' | 'download' | 'app',
+    label: string,
+    carried?: boolean,
+  ): TranscriptItem => ({
+    kind: 'taint',
+    id,
+    source: { kind, label },
+    ...(carried && { carried }),
+  });
+
+  it('says reads one after another as one line that opens, not a wall of them', async () => {
+    show({
+      items: [
+        user,
+        read('t1', 'web', 'docs.example'),
+        read('t2', 'download', 'docs.example'),
+        read('t3', 'web', 'news.example'),
+        read('t4', 'app', 'your chat “Taxes”'),
+      ],
+    });
+    const line = await screen.findByRole('button', {
+      name: /Read 2 sites and one of your chats\.\s*From here on/,
+    });
+    await userEvent.click(line);
+    expect(
+      within(screen.getByRole('list', { name: 'What it read' })).getAllByRole('listitem'),
+    ).toHaveLength(3);
+  });
+
+  it('in a task’s chat, says what the chat it came from had read, once', async () => {
+    mockFetch({ 'GET /api/state': () => appState() });
+    renderApp(
+      <Transcript
+        view={{
+          lastSeq: 1,
+          status: 'idle',
+          items: [
+            read('t1', 'web', 'docs.example', true),
+            read('t2', 'web', 'news.example', true),
+            user,
+          ],
+        }}
+        taskChat
+        pending={[]}
+        name="Claude"
+        onRespond={() => {}}
+        onRetry={() => {}}
+      />,
+    );
+    expect(
+      await screen.findByRole('button', { name: /The chat it came from had read 2 sites/ }),
+    ).toBeInTheDocument();
+  });
+});
