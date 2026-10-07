@@ -165,7 +165,10 @@ import {
 } from './memory/learning';
 import { registerLearningDoctor } from './memory/doctor';
 import { registerQuietLearningDoctor } from './learning/doctor';
-import { QuietLearning } from './learning/service';
+import { notYours, QuietLearning } from './learning/service';
+import { smallModelEngine, type SmallModelDeps } from './conversations/stories/ask';
+import { StoryExplainer } from './conversations/stories/explain';
+import { StoryTitler } from './conversations/stories/titler';
 import { LearningSpend } from './learning/spend';
 import { MemoryStore } from './memory/store';
 import { MemoryTidy } from './memory/tidy';
@@ -270,6 +273,10 @@ export class Services {
   readonly learning: QuietLearning;
   /** What learning may spend a month: a person's choice, never the agent's. */
   readonly learningSpend: LearningSpend;
+  /** Story headlines by a small model (ADR 0103). */
+  readonly stories: StoryTitler;
+  /** "Why?" on a step (ADR 0103). */
+  readonly explainer: StoryExplainer;
   /** When each skill was last used, for the tidy shelf (ADR 0058). */
   readonly skillUsage: SkillUsage;
   readonly commands: CommandStore;
@@ -1287,6 +1294,46 @@ export class Services {
     });
     if (!this.recovery.recoveryMode) this.learning.start();
     registerQuietLearningDoctor(this.doctor, this.learning);
+    // Story headlines and "Why?" (ADR 0103): learning's rules for who reads a chat and what it costs.
+    const small: SmallModelDeps = {
+      model: async (id) => {
+        const { engine, origin } = await this.conversations.answering(id);
+        const quiet = await this.learning.isQuiet(id).catch(() => true);
+        const pick = smallModelEngine(
+          this.providers.engineFor(engine),
+          await this.providers.ready().catch(() => []),
+          // A private chat goes only to its own provider, or one on this computer.
+          { private: quiet || notYours(origin) },
+        );
+        const cheap = pick && (await cheapModel(pick));
+        return pick && cheap ? { engine: pick, ...cheap } : undefined;
+      },
+      allow: async (engine) => {
+        const { usd, budgetUsd } = await this.usage.month();
+        if (budgetUsd !== undefined && usd >= budgetUsd) return { ok: false, reason: 'budget' };
+        const allowed = await this.learningSpend.allow(engine);
+        return allowed.ok ? allowed : { ok: false, reason: allowed.reason };
+      },
+      spent: (usage, engine, model) => {
+        void this.usage.recordTurn(usage).catch(() => undefined);
+        void this.learningSpend.record(usage, engine, model).catch(() => 0);
+      },
+    };
+    this.stories = new StoryTitler({
+      ...small,
+      enabled: async () => (await this.settings.get()).preferences.autoTitle,
+      // A page fetching its data or an app's client: nobody watches its steps.
+      watched: async (id) => {
+        const { origin } = await this.conversations.answering(id);
+        return origin?.kind !== 'artifact' && origin?.kind !== 'client';
+      },
+      note: (id, event) => this.conversations.noteStory(id, event),
+    });
+    this.conversations.events.on((event) => this.stories.onEvent(event));
+    this.explainer = new StoryExplainer({
+      ...small,
+      events: async (id) => (await this.conversations.detail(id)).events,
+    });
     void (this.mockVendor?.start() ?? Promise.resolve()).then(() => this.integrations.start());
     this.googleApps.start();
     this.activity = new Activity({

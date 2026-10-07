@@ -302,6 +302,8 @@ export class CodexEngine implements Engine {
   readonly hostTools = true;
   /** Its plan updates (`turn/plan/updated`) are drawn as Conch's checklist. */
   readonly plans = 'native' as const;
+  /** A plan update's explanation, when it gives one, is said as narration (ADR 0103). */
+  readonly narration = 'provider' as const;
   readonly attachments = { images: true, files: true };
   readonly #home: CodexHome;
   /** Threads carried on from one turn to the next (ADR 0066 § Carrying on). */
@@ -1003,6 +1005,9 @@ export class CodexEngine implements Engine {
             if (message.method === 'turn/plan/updated') {
               const steps = codexPlan(p.plan);
               if (steps) emit({ type: 'plan', steps });
+              // Why the plan changed, in its words for the person watching (ADR 0103).
+              if (typeof p.explanation === 'string' && p.explanation.trim())
+                emit({ type: 'narration', text: p.explanation });
             }
             if (message.method === 'thread/tokenUsage/updated') {
               // Codex's `total` is the whole thread's, every earlier turn included, and

@@ -107,6 +107,8 @@ export class MockEngine implements Engine {
   readonly attachments = { images: true, files: false };
   /** In plan mode it asks to start as Claude Code does (`ExitPlanMode`), scripted below. */
   readonly planApproval = 'native' as const;
+  /** It says what it's doing as it works ("look around"), as a provider does (ADR 0103). */
+  readonly narration = 'provider' as const;
   /**
    * Long chats are fitted by Conch, as for a model API (ADR 0055): `/compact`
    * gives a scripted summary, so the divider and its words can be seen and tested.
@@ -419,6 +421,28 @@ export class MockEngine implements Engine {
           ].join('\n'),
         }),
         usage: { inputTokens: 400, outputTokens: 160, costUsd: 0.001 },
+      };
+    }
+    // A story's headline (ADR 0103): "headline-fail" fails, "headline-garbled" answers nonsense.
+    if (input.system.startsWith('You write the headline for a short run of steps')) {
+      if (/headline-fail/i.test(input.prompt)) throw new Error('Mock completion failed.');
+      if (/headline-garbled/i.test(input.prompt)) return { text: 'Sure! Here is a headline.' };
+      const steps = (/<steps>\n([\s\S]*?)\n<\/steps>/.exec(input.prompt)?.[1] ?? '').split('\n');
+      return {
+        text: JSON.stringify({ headline: `Looked around the project in ${steps.length} steps` }),
+        usage: { inputTokens: 250, outputTokens: 20, costUsd: 0.0002 },
+      };
+    }
+    // "Why?" on a step (ADR 0103): what it was for, from the request.
+    if (input.system.startsWith('You explain one step an assistant took')) {
+      if (/explain-fail/i.test(input.prompt)) throw new Error('Mock completion failed.');
+      const step = /<step>([^|<]*)/
+        .exec(input.prompt)?.[1]
+        ?.replace(/^\[\w+\]\s*/, '')
+        .trim();
+      return {
+        text: `It did this to see what was there before changing anything. ${step ? `${step} showed it` : 'It showed it'} what it needed.`,
+        usage: { inputTokens: 300, outputTokens: 30, costUsd: 0.0002 },
       };
     }
     // “Only if…” (ADR 0056): yes when the condition's words are in the event; "garbled" answers nonsense.
@@ -1506,6 +1530,27 @@ export class MockEngine implements Engine {
               output: 'main -> main (forced update)',
             };
         yield* speak(decision === 'deny' ? 'I left main as it was.' : 'Force-pushed main.');
+        return;
+      }
+
+      // A run of steps with the provider's own words for them (ADR 0103).
+      if (!chatOnly && /\blook around\b/i.test(text)) {
+        yield { type: 'narration', text: 'Looking at how the project is laid out' };
+        const steps: [string, Record<string, unknown>, string][] = [
+          ['Read', { file_path: 'package.json' }, '{ "name": "garden" }'],
+          ['Grep', { pattern: 'TODO', path: 'src' }, 'src/plan.ts:3: TODO water'],
+          ['Bash', { command: 'git status --short' }, ' M src/plan.ts'],
+        ];
+        for (const [name, args, output] of steps) {
+          const toolUseId = newId('tool');
+          yield { type: 'tool-start', toolUseId, name, input: args };
+          await wait(40);
+          yield { type: 'tool-end', toolUseId, status: 'success', output };
+        }
+        yield { type: 'narration', text: '**Found** what changed' };
+        yield* speak(
+          'The project is a small garden planner with one change waiting in src/plan.ts.',
+        );
         return;
       }
 

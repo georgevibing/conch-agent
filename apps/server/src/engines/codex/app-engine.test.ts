@@ -480,6 +480,23 @@ describe('Codex app-server parity', () => {
       ],
     });
   });
+  it('says a plan update’s explanation as narration, and nothing when it gives none (ADR 0103)', async () => {
+    const { engine, turn } = await setup({
+      signedIn: true,
+      plan: [{ step: 'Read the code', status: 'inProgress' }],
+      explanation: 'Reading the code before changing it',
+    });
+    expect(engine.narration).toBe('provider');
+    const events = await collect(engine.runTurn(turn()));
+    expect(events).toContainEqual({
+      type: 'narration',
+      text: 'Reading the code before changing it',
+    });
+    const quiet = await setup({ signedIn: true, plan: [{ step: 'Fix it', status: 'pending' }] });
+    expect(
+      (await collect(quiet.engine.runTurn(quiet.turn()))).some((e) => e.type === 'narration'),
+    ).toBe(false);
+  });
   it('counts only this turn’s tokens, not the whole thread’s, with the cached part named', async () => {
     // A long chat: 1.9M already used before this turn. Its first request read 200k (150k cached).
     const { engine, turn } = await setup({

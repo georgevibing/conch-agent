@@ -14,7 +14,12 @@
  *    silently drop `redacted_thinking` and break the protocol;
  *  - the context window is `max_input_tokens` — there is no `context_window`;
  *  - `message_start.usage` has the final input count and a stub output of 1;
- *    the real output count is the last `message_delta.usage`, which is cumulative.
+ *    the real output count is the last `message_delta.usage`, which is cumulative;
+ *  - with thinking on, `thinking.display: 'updates'` (beta
+ *    `thinking-display-updates-2026-08-18`) makes the thinking blocks short
+ *    notes for the person watching (ADR 0103): Conch says them as narration,
+ *    still replays the blocks verbatim, and a model or account that refuses
+ *    the beta is asked again without it, and remembered.
  */
 import { z } from 'zod';
 
@@ -58,6 +63,21 @@ import {
 const BASE = 'https://api.anthropic.com';
 const VERSION = '2023-06-01';
 const LABEL = 'Anthropic API';
+/** Thinking said as progress notes for the person watching (ADR 0103). */
+const UPDATES_BETA = 'thinking-display-updates-2026-08-18';
+
+/** A 400 that refuses `display: 'updates'` or its beta, not something else about the request. */
+export function updatesRefused(detail: string): boolean {
+  return /\bdisplay\b|\bupdates\b|anthropic-beta|\bbeta\b/i.test(detail);
+}
+
+/** A block of thinking updates, as the lines to say: one note a line. */
+export function updateLines(thinking: string): string[] {
+  return thinking
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
 /** Enough for a long answer with thinking, without asking for the model's whole ceiling. */
 const TURN_MAX_TOKENS = 16_384;
 /** One page holds every model Anthropic offers today; the loop is for when it doesn't. */
@@ -273,6 +293,10 @@ function imageBlock(image: Picture): Record<string, unknown> {
 
 export class AnthropicWire implements Wire {
   readonly source = LABEL;
+  /** Its thinking updates come as `narration` (ADR 0103). */
+  readonly narrates = true;
+  /** Models that refused thinking updates: asked without them from then on. */
+  #noUpdates = new Set<string>();
   #fetch: FetchLike;
   #models = new Map<string, WireModel>();
 
@@ -284,11 +308,12 @@ export class AnthropicWire implements Wire {
    * `Authorization: Bearer` is the documented primary scheme now; `x-api-key`
    * is a legacy fallback and there's no reason to send both.
    */
-  #headers(key: string): Record<string, string> {
+  #headers(key: string, beta?: string): Record<string, string> {
     return {
       authorization: `Bearer ${key}`,
       'anthropic-version': VERSION,
       'content-type': 'application/json',
+      ...(beta && { 'anthropic-beta': beta }),
     };
   }
 
@@ -417,47 +442,70 @@ export class AnthropicWire implements Wire {
     ];
   }
 
-  #body(request: WireRequest): Record<string, unknown> {
+  #wantsEffort(request: WireRequest): boolean {
+    const model = this.#models.get(request.model);
+    return request.effort !== 'auto' && (model?.info.efforts ?? []).includes(request.effort);
+  }
+
+  /** Whether this request thinks, and so can say its thinking as updates. */
+  #thinks(request: WireRequest): boolean {
+    return this.#wantsEffort(request) && Boolean(this.#models.get(request.model)?.thinking);
+  }
+
+  #body(request: WireRequest, updates = false): Record<string, unknown> {
     const model = this.#models.get(request.model);
     const maxTokens = Math.min(model?.maxOutputTokens ?? TURN_MAX_TOKENS, TURN_MAX_TOKENS);
     const effort = request.effort;
-    const wantsEffort = effort !== 'auto' && (model?.info.efforts ?? []).includes(effort);
+    const wantsEffort = this.#wantsEffort(request);
     return {
       model: request.model,
       max_tokens: maxTokens,
       ...cached(request),
       // Forced tool choice 400s on several current models, so the default
       // (`auto`) is the only one Conch uses.
-      ...(wantsEffort && model?.thinking && { thinking: { type: 'adaptive' } }),
+      ...(this.#thinks(request) && {
+        thinking: { type: 'adaptive', ...(updates && { display: 'updates' }) },
+      }),
       ...(wantsEffort && { output_config: { effort } }),
     };
   }
 
   async *stream(request: WireRequest): AsyncIterable<WireEvent> {
-    const post = (messages: WireMessage[]) =>
+    // Thinking said as notes for the person watching (ADR 0103), where the model takes it.
+    let updates = this.#thinks(request) && !this.#noUpdates.has(request.model);
+    let messages = request.messages;
+    const post = () =>
       send({
         fetchImpl: this.#fetch,
         url: `${BASE}/v1/messages`,
         method: 'POST',
-        headers: this.#headers(request.key),
-        body: { ...this.#body({ ...request, messages }), stream: true },
+        headers: this.#headers(request.key, updates ? UPDATES_BETA : undefined),
+        body: { ...this.#body({ ...request, messages }, updates), stream: true },
         label: LABEL,
         key: request.key,
         signal: request.signal,
       });
-    let response = await post(request.messages);
-    if (response.status === 400) {
+    let response = await post();
+    for (let healed = 0; response.status === 400 && healed < 2; healed++) {
       const body = await text(response, LABEL).catch(() => '');
       const error = ErrorBody.safeParse(safeJson(body));
       const detail = error.success ? (error.data.error.message ?? '') : '';
+      // Thinking updates refused (a model or an account without the beta): asked
+      // again as before, and not offered to that model again.
+      if (updates && updatesRefused(detail)) {
+        updates = false;
+        this.#noUpdates.add(request.model);
+      }
       // Earlier thinking no longer matches what came before it (the start of the chat
       // was summarised, a stale page let go): it goes, and the request goes again.
-      if (thinkingMismatch(detail)) response = await post(withoutThinking(request.messages));
+      else if (messages === request.messages && thinkingMismatch(detail))
+        messages = withoutThinking(request.messages);
       // A tool's schema it won't read: the engine simplifies it and asks again (ADR 0072).
       else if (request.tools.length > 0 && toolRefusal(detail) === 'schema')
         throw refusalError('schema', LABEL);
       else
         throw mapError(400, error.success ? error.data.error : undefined, undefined, request.key);
+      response = await post();
     }
     if (!response.ok) throw await this.#fail(response, request.key, request.tools.length > 0);
     if (!response.body) throw new ApiError('network', `${LABEL} sent an empty reply.`);
@@ -506,7 +554,8 @@ export class AnthropicWire implements Wire {
           yield { type: 'text', delta: delta['text'] };
         } else if (type === 'thinking_delta' && typeof delta['thinking'] === 'string') {
           entry.block['thinking'] = `${entry.block['thinking'] ?? ''}${delta['thinking']}`;
-          yield { type: 'thinking', delta: delta['thinking'] };
+          // As updates, the block is said whole once it ends: a note, not reasoning.
+          if (!updates) yield { type: 'thinking', delta: delta['thinking'] };
         } else if (type === 'signature_delta' && typeof delta['signature'] === 'string') {
           entry.block['signature'] = `${entry.block['signature'] ?? ''}${delta['signature']}`;
         } else if (type === 'input_json_delta' && typeof delta['partial_json'] === 'string') {
@@ -517,6 +566,11 @@ export class AnthropicWire implements Wire {
       if (kind === 'content_block_stop') {
         const stop = frame(BlockDelta.pick({ index: true }), event.data);
         const entry = stop ? blocks.get(stop.index) : undefined;
+        if (updates && entry?.block['type'] === 'thinking') {
+          const said = entry.block['thinking'];
+          if (typeof said === 'string')
+            for (const line of updateLines(said)) yield { type: 'narration', text: line };
+        }
         if (entry && entry.block['type'] === 'tool_use') {
           // The arguments are replayed as an object. Bad JSON becomes an empty
           // one here and a tool error above — never a thrown turn.

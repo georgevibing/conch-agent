@@ -314,7 +314,10 @@ describe('an Anthropic turn', () => {
     await api.models({ key: KEY });
 
     await drain(api.stream(request({ effort: 'high' })));
-    expect((calls[1]?.body as Record<string, unknown>)['thinking']).toEqual({ type: 'adaptive' });
+    expect((calls[1]?.body as Record<string, unknown>)['thinking']).toEqual({
+      type: 'adaptive',
+      display: 'updates',
+    });
     expect((calls[1]?.body as Record<string, unknown>)['output_config']).toEqual({
       effort: 'high',
     });
@@ -322,6 +325,96 @@ describe('an Anthropic turn', () => {
     await drain(api.stream(request({ model: 'claude-haiku-4-5-20251001', effort: 'high' })));
     expect((calls[2]?.body as Record<string, unknown>)['thinking']).toBeUndefined();
     expect((calls[2]?.body as Record<string, unknown>)['output_config']).toBeUndefined();
+  });
+
+  it('says its thinking as updates for the person watching, and replays the block as it came (ADR 0103)', async () => {
+    const frames = namedFrames(
+      [
+        'content_block_start',
+        {
+          type: 'content_block_start',
+          index: 0,
+          content_block: { type: 'thinking', thinking: '' },
+        },
+      ],
+      [
+        'content_block_delta',
+        {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'thinking_delta', thinking: 'Reading the config\n' },
+        },
+      ],
+      [
+        'content_block_delta',
+        {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'thinking_delta', thinking: '\nChecking the tests' },
+        },
+      ],
+      [
+        'content_block_delta',
+        {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'signature_delta', signature: 's' },
+        },
+      ],
+      ['content_block_stop', { type: 'content_block_stop', index: 0 }],
+      ['message_stop', { type: 'message_stop' }],
+    );
+    const { wire: api, calls } = wire((call) =>
+      call.url.includes('/v1/models') ? jsonResponse(MODELS) : sseResponse(frames),
+    );
+    await api.models({ key: KEY });
+    expect(api.narrates).toBe(true);
+
+    const events = await drain(api.stream(request({ effort: 'high' })));
+    expect(calls[1]?.headers['anthropic-beta']).toBe('thinking-display-updates-2026-08-18');
+    expect(events.filter((e) => e.type === 'narration')).toEqual([
+      { type: 'narration', text: 'Reading the config' },
+      { type: 'narration', text: 'Checking the tests' },
+    ]);
+    expect(events.some((e) => e.type === 'thinking')).toBe(false);
+    const end = events.find((e) => e.type === 'end');
+    expect(end?.type === 'end' && end.message['content']).toEqual([
+      { type: 'thinking', thinking: 'Reading the config\n\nChecking the tests', signature: 's' },
+    ]);
+
+    // Without thinking there's nothing to say as updates, and no beta.
+    await drain(api.stream(request()));
+    expect(calls[2]?.headers['anthropic-beta']).toBeUndefined();
+  });
+
+  it('asks again without thinking updates when they’re refused, and remembers', async () => {
+    let refused = 0;
+    const { wire: api, calls } = wire((call) => {
+      if (call.url.includes('/v1/models')) return jsonResponse(MODELS);
+      const body = call.body as { thinking?: { display?: string } };
+      if (body.thinking?.display === 'updates') {
+        refused++;
+        return jsonResponse(
+          {
+            type: 'error',
+            error: {
+              type: 'invalid_request_error',
+              message: 'thinking.display: updates is not available',
+            },
+          },
+          400,
+        );
+      }
+      return sseResponse(namedFrames(['message_stop', { type: 'message_stop' }]));
+    });
+    await api.models({ key: KEY });
+    await drain(api.stream(request({ effort: 'high' })));
+    await drain(api.stream(request({ effort: 'high' })));
+    expect(refused).toBe(1);
+    expect((calls.at(-1)?.body as Record<string, unknown>)['thinking']).toEqual({
+      type: 'adaptive',
+    });
+    expect(calls.at(-1)?.headers['anthropic-beta']).toBeUndefined();
   });
 
   it('reports an error that arrives mid-stream after a 200', async () => {

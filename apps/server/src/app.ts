@@ -90,6 +90,7 @@ import { pushOwner, registerPushRoutes } from './push/routes';
 import { registerVoiceRoutes } from './voice/routes';
 import { registerSafetyRoutes } from './conversations/safety-routes';
 import { registerUndoRoutes } from './undo/routes';
+import { registerStoryRoutes } from './conversations/stories/routes';
 import { registerArtifactRoutes } from './artifacts/routes';
 import { registerMarketRoutes } from './skills/market/routes';
 import { registerConchAppRoutes } from './conchapps/routes';
@@ -300,6 +301,8 @@ export async function buildApp(services: Services) {
     sealing: async () => (await services.settings.get()).preferences.sealedCommands,
   });
   registerUndoRoutes(app, services.undo);
+  // "Why?" on a step (ADR 0103).
+  registerStoryRoutes(app, services.explainer);
   registerArtifactRoutes(app, services.artifacts);
   registerTaskRoutes(app, services.tasks);
   registerAgentRoutes(app, { agents: services.agents, faces: services.images });

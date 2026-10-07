@@ -157,7 +157,7 @@ interface Look {
 }
 
 /** Not a chat a person had: a routine's run, a task, a page fetching its data, a guest (ADR 0075). */
-function notYours(origin: Origin): boolean {
+export function notYours(origin: Origin): boolean {
   if (!origin) return false;
   if (
     origin.kind === 'routine' ||

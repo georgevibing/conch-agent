@@ -480,6 +480,28 @@ describe('a turn against the real OpenRouter wire', () => {
 
 // ── The loop ────────────────────────────────────────────────────────────────
 
+describe('a provider’s notes for the person watching (ADR 0103)', () => {
+  it('passes a narrating wire’s notes on, and declares it; a quiet wire declares nothing', async () => {
+    const { engine } = await engineFor(
+      stubWire({
+        narrates: true,
+        stream: () =>
+          (async function* (): AsyncIterable<WireEvent> {
+            yield { type: 'narration', text: 'Reading the config' };
+            yield* ended('Done.');
+          })(),
+      }),
+    );
+    expect(engine.narration).toBe('provider');
+    const events = await collect(engine.runTurn(turn()));
+    expect(events).toContainEqual({ type: 'narration', text: 'Reading the config' });
+    expect(
+      events.filter((e) => e.type === 'text').map((e) => e.type === 'text' && e.delta),
+    ).toEqual(['Done.']);
+    expect((await engineFor(stubWire())).engine.narration).toBeUndefined();
+  });
+});
+
 describe('the tool loop', () => {
   const toolTurn = (calls: { id: string; name: string; argumentsJson: string }[], text = '') =>
     (async function* (): AsyncIterable<WireEvent> {

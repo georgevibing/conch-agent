@@ -22,6 +22,8 @@ export async function fakeCodexApp(
     loginUrl?: string;
     /** Steps of a `turn/plan/updated`, sent before the answer. */
     plan?: unknown[];
+    /** That plan update's `explanation`: why the plan changed, for the person watching. */
+    explanation?: string;
     /** `thread/tokenUsage/updated`s, sent before the answer: the thread's running `total` and the request's own `last`. */
     tokenUsage?: {
       total: Record<string, number>;
@@ -61,7 +63,7 @@ const complete = () => {
    note('item/started',{threadId:TID,turnId:'turn1',item:{...item,status:'inProgress'}});
    note('item/completed',{threadId:TID,turnId:'turn1',item});
  }
- if (OPTIONS.plan) note('turn/plan/updated',{threadId:TID,turnId:'turn1',explanation:null,plan:OPTIONS.plan});
+ if (OPTIONS.plan) note('turn/plan/updated',{threadId:TID,turnId:'turn1',explanation:OPTIONS.explanation ?? null,plan:OPTIONS.plan});
  for (const u of OPTIONS.tokenUsage || []) note('thread/tokenUsage/updated',{threadId:TID,turnId:'turn1',tokenUsage:u});
  note('item/agentMessage/delta',{threadId:TID,itemId:'m1',delta:'Finished.'});
  note('item/completed',{threadId:TID,item:{type:'agentMessage',id:'m1'}});

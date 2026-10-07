@@ -944,9 +944,10 @@ export class TaskService {
         string,
         unknown
       >;
-      void this.#update(id, { current: tidy(doingWhat(e.name, input), 240) }).catch(
-        () => undefined,
-      );
+      // The call in plain words (ADR 0103), else worked out from its name and input.
+      void this.#update(id, {
+        current: tidy(e.label?.doing || doingWhat(e.name, input), 240),
+      }).catch(() => undefined);
       this.#calls.set(`${e.conversationId}:${e.toolUseId}`, { name: e.name, input });
     }
     if (e.type === 'tool.finished') {

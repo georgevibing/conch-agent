@@ -111,6 +111,8 @@ export class Translator {
   /** Its own plan (todos or tasks), drawn as Conch's checklist instead of tool rows. */
   #plan = new ClaudePlan();
   #planCalls = new Set<string>();
+  /** Every plan call this turn, kept after its result: a summary of only those says nothing new. */
+  #planned = new Set<string>();
 
   translate(msg: SDKMessage): EngineEvent[] {
     switch (msg.type) {
@@ -207,6 +209,7 @@ export class Translator {
             out.push({ type: 'text', messageId: id, delta: block.text });
           } else if (block.type === 'tool_use' && this.#plan.owns(block.name)) {
             this.#planCalls.add(block.id);
+            this.#planned.add(block.id);
             const steps = this.#plan.use(block.id, block.name, block.input);
             if (steps) out.push({ type: 'plan', steps });
           } else if (block.type === 'tool_use' || block.type === 'server_tool_use') {
@@ -294,6 +297,16 @@ export class Translator {
             ...context,
           },
         ];
+      }
+
+      case 'tool_use_summary': {
+        // A few words on the round of tool calls just done (ADR 0103), for the person
+        // watching: narration, about the last of them. Not the model's reasoning.
+        const summary = msg.summary.trim();
+        const shown = msg.preceding_tool_use_ids.filter((id) => !this.#planned.has(id));
+        if (!summary || (msg.preceding_tool_use_ids.length && !shown.length)) return [];
+        const last = shown.at(-1);
+        return [{ type: 'narration', text: summary, ...(last && { toolUseId: last }) }];
       }
 
       default:

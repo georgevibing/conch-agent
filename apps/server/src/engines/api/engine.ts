@@ -483,6 +483,8 @@ export class ApiEngine implements Engine {
   readonly usage?: (options?: { force?: boolean }) => Promise<EngineUsage>;
   /** A sign-in of the provider's own (Ollama Cloud through the Ollama app). */
   readonly login?: Engine['login'];
+  /** Its wire streams notes for the person watching (the Anthropic API's thinking updates). */
+  readonly narration?: 'provider';
   #sessions: TranscriptStore;
   #status?: { value: EngineStatus; at: number };
   #detecting?: Promise<EngineStatus>;
@@ -511,6 +513,7 @@ export class ApiEngine implements Engine {
     this.id = variant.id;
     this.label = variant.label;
     this.local = Boolean(variant.local);
+    if (variant.wire.narrates) this.narration = 'provider';
     this.#sessions = new TranscriptStore(sessionsDir(variant.home));
     if (variant.wire.usage) this.usage = (options) => this.#readUsage(options);
     const signIn = variant.login?.bind(variant);
@@ -988,6 +991,8 @@ export class ApiEngine implements Engine {
           for await (const event of plan.read(this.#stream(request))) {
             if (event.type === 'notice') {
               yield event;
+            } else if (event.type === 'narration') {
+              yield { type: 'narration', text: event.text };
             } else if (event.type === 'text' || event.type === 'thinking') {
               said = true;
               yield { type: event.type, messageId, delta: event.delta };

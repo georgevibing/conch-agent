@@ -131,6 +131,8 @@ export class ClaudeCodeEngine implements Engine {
    * limits); Conch doesn't second-guess a coding session from outside (ADR 0085).
    */
   readonly turnBudget = 'own' as const;
+  /** Its tool-use summaries, one after each round of tool calls (ADR 0103). */
+  readonly narration = 'provider' as const;
   /**
    * Claude Code runs MCP servers itself, and loads the connectors from your
    * Claude account by itself. Conch brings the ones it can connect into
@@ -592,7 +594,12 @@ export class ClaudeCodeEngine implements Engine {
           ...(input.readableDirs?.length && { additionalDirectories: input.readableDirs }),
           resume: input.resumeId,
           pathToClaudeCodeExecutable: programFile(status.executablePath),
-          env: childEnv({ ANTHROPIC_API_KEY: anthropicApiKey }),
+          env: childEnv({
+            ANTHROPIC_API_KEY: anthropicApiKey,
+            // After each round of tool calls its small model says, in a few words, what
+            // they did: for the person watching (ADR 0103), drawn as narration.
+            CLAUDE_CODE_EMIT_TOOL_USE_SUMMARIES: '1',
+          }),
           abortController: abort,
           includePartialMessages: true,
           // Words only (a guest in a group, ADR 0075): no tools of its own, and none of

@@ -41,6 +41,8 @@ export interface ToolResult {
 export interface Wire {
   /** Who meters you, for the usage card: "OpenRouter", "Anthropic API". */
   readonly source: string;
+  /** It streams notes for the person watching as `narration` events (ADR 0103). */
+  readonly narrates?: boolean;
   /** Validate a key and describe what it belongs to. Throws `ApiError`. */
   check(input: { key: string; signal?: AbortSignal }): Promise<WireAccount>;
   /** The models this key may use. Without a key, whatever the provider shows publicly. */

@@ -108,6 +108,8 @@ export type WireEvent =
   | { type: 'thinking'; delta: string }
   /** Something worth saying while it waits ("Loading the model into memory…"). */
   | { type: 'notice'; code: string; message: string }
+  /** A note for the person watching (ADR 0103), from a wire whose `narrates` is set. */
+  | { type: 'narration'; text: string }
   | {
       type: 'end';
       message: WireMessage;

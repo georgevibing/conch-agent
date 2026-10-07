@@ -193,6 +193,54 @@ describe('Translator', () => {
     expect(reportedWindow('x', undefined)).toBeUndefined();
   });
 
+  it('says its tool-use summaries as narration about the last call, never as thinking (ADR 0103)', () => {
+    const t = new Translator();
+    const assistant = (content: unknown[]) =>
+      m({
+        type: 'assistant',
+        parent_tool_use_id: null,
+        message: {
+          id: `msg${Math.random()}`,
+          content,
+          usage: { input_tokens: 1, output_tokens: 1 },
+        },
+      });
+    t.translate(
+      assistant([
+        { type: 'tool_use', id: 't1', name: 'Read', input: { file_path: 'a.ts' } },
+        { type: 'tool_use', id: 't2', name: 'Grep', input: { pattern: 'x' } },
+      ]),
+    );
+    expect(
+      t.translate(
+        m({
+          type: 'tool_use_summary',
+          summary: '  Searched in src/  ',
+          preceding_tool_use_ids: ['t1', 't2'],
+          uuid: 'u1',
+          session_id: 's1',
+        }),
+      ),
+    ).toEqual([{ type: 'narration', text: 'Searched in src/', toolUseId: 't2' }]);
+    // A round of only its own plan says nothing new: the checklist shows it.
+    t.translate(
+      assistant([{ type: 'tool_use', id: 'p1', name: 'TodoWrite', input: { todos: [] } }]),
+    );
+    const summary = (ids: string[], text = 'Updated the plan') =>
+      t.translate(
+        m({
+          type: 'tool_use_summary',
+          summary: text,
+          preceding_tool_use_ids: ids,
+          uuid: 'u2',
+          session_id: 's1',
+        }),
+      );
+    expect(summary(['p1'])).toEqual([]);
+    expect(summary(['t1'], '   ')).toEqual([]);
+    expect(summary([], 'Looked around')).toEqual([{ type: 'narration', text: 'Looked around' }]);
+  });
+
   it('falls back to full assistant text when nothing streamed', () => {
     const out = new Translator().translate(
       m({

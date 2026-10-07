@@ -363,6 +363,12 @@ export type EngineEvent =
     }
   | { type: 'notice'; code: string; message: string }
   /**
+   * The provider said, for the person watching, what it's doing (ADR 0103):
+   * a short progress note between tool calls, never its reasoning. Only from
+   * engines that declare `narration`; Conch cleans, dedupes and paces them.
+   */
+  | { type: 'narration'; text: string; toolUseId?: string }
+  /**
    * The engine's own plan for this turn, as it stands now (ADR 0060): Claude
    * Code's todo list, Codex's plan updates. Each one replaces the one before.
    */
@@ -528,6 +534,14 @@ export interface Engine {
    * `exit_plan_mode` instead (`plans/mode.ts`), when it can use Conch's tools.
    */
   readonly planApproval?: 'native';
+  /**
+   * The provider tells the person watching what it's doing as it works, and
+   * the engine passes that on as `narration` events (ADR 0103): Claude Code's
+   * tool-use summaries, Codex's plan explanations and MCP progress, the
+   * Anthropic API's thinking updates. Absent: it says nothing of the kind, and
+   * the chat's live line uses the rules' words for each step.
+   */
+  readonly narration?: 'provider';
   /** Commands are always sealed by Conch, independent of the native-provider toggle. */
   readonly commandSandbox?: 'conch';
   /** Conch fits long chats for it by summarising their start (ADR 0055). Absent: the provider does. */

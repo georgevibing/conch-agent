@@ -86,6 +86,8 @@ import { generateTitle } from './title';
 import { unansweredOnRestart, type QuestionDesk } from '../questions/desk';
 import { type CarryOn, OfferDesk, offerState, openOffers } from '../offers/desk';
 import { HostToolRows } from './views';
+import { NarrationPacer } from './stories/narration';
+import { toolLabel } from './stories/labels';
 import type { BillingInfo } from '../usage/billing';
 import {
   addTurn,
@@ -956,6 +958,17 @@ export class ConversationManager {
   async detail(id: string) {
     const live = await this.#get(id);
     return { conversation: summary(live.record), events: live.events };
+  }
+
+  /** Who answers this chat now, and where it came from: for small questions about it (ADR 0103). */
+  async answering(
+    id: string,
+  ): Promise<{ engine: EngineId; origin?: ConversationRecord['origin'] }> {
+    const live = await this.#get(id);
+    return {
+      engine: live.record.engine,
+      ...(live.record.origin && { origin: live.record.origin }),
+    };
   }
 
   async rename(id: string, title: string) {
@@ -2221,6 +2234,10 @@ export class ConversationManager {
     const calls = new Map<string, { name: string; input: unknown }>();
     // Conch's own tools get a row only when they found something to show (ADR 0060).
     const hostRows = new HostToolRows(this.deps.redact);
+    // What the provider says it's doing, for the person watching (ADR 0103): paced, plain.
+    const narrator = new NarrationPacer((line) =>
+      this.#append(live, { type: 'narration', ...line, source: 'provider' }),
+    );
     let outcome: 'success' | 'interrupted' | 'error' = 'success';
     let completed:
       { usage?: Usage; error?: string; problem?: TurnProblem; paused?: TurnPause } | undefined;
@@ -3012,6 +3029,9 @@ export class ConversationManager {
           case 'message-done':
             this.#append(live, { type: 'assistant.done', messageId: event.messageId });
             break;
+          case 'narration':
+            if (!abort.signal.aborted) narrator.say(event.text, event.toolUseId);
+            break;
           case 'tool-start':
             if (!abort.signal.aborted)
               await extras?.observeTool?.(
@@ -3150,6 +3170,7 @@ export class ConversationManager {
       outcome = 'error';
       completed = { error: (error as Error).message || 'Something went wrong.' };
     } finally {
+      narrator.close();
       if (live.setTurnMode === setTurnMode) live.setTurnMode = undefined;
       // A question still waiting can't be answered now: it's skipped (ADR 0060).
       this.deps.questions?.close(live.record.id);
@@ -3522,6 +3543,20 @@ export class ConversationManager {
     if (!live.abort) await this.#persist(live);
   }
 
+  /**
+   * A story of tool calls got its headline (ADR 0103). Kept with the chat's
+   * log; while a turn runs, its own saves carry it.
+   */
+  async noteStory(
+    id: string,
+    event: Extract<ConversationEventInput, { type: 'story.titled' }>,
+  ): Promise<void> {
+    const live = await this.#get(id).catch(() => undefined);
+    if (!live) return;
+    this.#append(live, event);
+    if (!live.abort) await this.#persist(live);
+  }
+
   /** Files were put back from Activity or the chat (ADR 0030): the chat says so. */
   async noteRestored(
     id: string,
@@ -3543,6 +3578,22 @@ export class ConversationManager {
       else if (input.type === 'assistant.delta') input = { ...input, delta: redact(input.delta) };
       else if (input.type === 'context.compacted')
         input = { ...input, summary: redact(input.summary) };
+    }
+    // Every tool call in plain words (ADR 0103), from what's logged: after redaction.
+    if (input.type === 'tool.started' && !input.label) {
+      const label = toolLabel(input.name, input.input);
+      if (label) input = { ...input, label };
+    } else if (input.type === 'tool.finished' && !input.label) {
+      const id = input.toolUseId;
+      const call = live.events.findLast((e) => e.type === 'tool.started' && e.toolUseId === id);
+      const label =
+        call?.type === 'tool.started' &&
+        toolLabel(call.name, call.input, {
+          status: input.status,
+          ...(input.output !== undefined && { output: input.output }),
+          ...(input.view && { viewKind: input.view.kind }),
+        });
+      if (label) input = { ...input, label };
     }
     const event = {
       ...input,
