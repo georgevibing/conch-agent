@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { ChannelServiceError } from '../channels/service';
 import type { Gatekeeper } from '../security';
+import { AGENT_ID } from './openclaw';
 import { ImportError, type ImportService } from './service';
 
 const STATUS = { 'not-found': 404, busy: 409, nothing: 400 } as const;
@@ -61,6 +62,30 @@ export function registerImportRoutes(
     }
   });
 
+  /**
+   * An agent's own picture from the last look (ADR 0101), for the plan to
+   * show: read from its folder, kept without metadata, served only as the
+   * picture it is and never cached, since nothing is kept until it's brought.
+   */
+  app.get<{ Params: { source: string; id: string } }>(
+    '/api/import/:source/agents/:id/face',
+    async (request, reply) => {
+      const source = ImportSourceId.safeParse(request.params.source);
+      const face =
+        source.success && AGENT_ID.test(request.params.id)
+          ? imports.face(source.data, request.params.id)
+          : undefined;
+      if (!face) return reply.code(404).send({ error: 'not-found', message: 'No picture.' });
+      return reply
+        .type(face.type)
+        .header('x-content-type-options', 'nosniff')
+        .header('content-security-policy', "default-src 'none'")
+        .header('content-disposition', 'inline')
+        .header('cache-control', 'no-store')
+        .send(face.bytes);
+    },
+  );
+
   app.get<{ Params: { source: string } }>('/api/import/:source', async (request, reply) => {
     const source = ImportSourceId.safeParse(request.params.source);
     if (!source.success)
@@ -80,7 +105,9 @@ export function registerImportRoutes(
       return reply.code(400).send({ error: 'bad-request', message: body.error.issues[0]?.message });
     if (!verify(request, reply)) return;
     try {
-      return await imports.run(body.data.source, body.data.items);
+      return await imports.run(body.data.source, body.data.items, {
+        ...(body.data.defaultAgent && { defaultAgent: body.data.defaultAgent }),
+      });
     } catch (error) {
       return fail(reply, error);
     }

@@ -79,7 +79,7 @@ separately; the search box stays in place. On a narrow screen, only results are 
 
 ## Who answers
 
-A chat starts with your default [agent](./agents.md). Choose another under **Who answers** before the first message, or type `/agent` and a name at any point to hand the chat over. <!-- verify-ui --> Above each answer, the agent's face and name say who wrote it, and the words below take the chat's full width.
+A chat starts with your default [agent](./agents.md): **Talking to** its name, above the message box, says who. Press it to choose another before the first message. Later, press the name at the top of the chat (**‹name› answers this chat**), or type `/agent` and a name. The new agent answers from your next message, and a line marks where: **Atlas took over from Juniper**. Above each answer, a small line with the agent's face and name says who wrote it, and the words below take the chat's full width.
 
 ## While it works
 

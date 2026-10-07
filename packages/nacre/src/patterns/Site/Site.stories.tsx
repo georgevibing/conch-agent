@@ -44,7 +44,7 @@ type Story = StoryObj<typeof meta>;
 const chat = (
   <>
     <Message from="user">What changed in the repo this week?</Message>
-    <Message from="assistant" author="Conch">
+    <Message from="assistant">
       <Text>Twelve commits: the terminal, two fixes to search, and a new backup format.</Text>
     </Message>
   </>

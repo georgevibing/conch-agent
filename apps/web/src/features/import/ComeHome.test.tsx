@@ -26,11 +26,17 @@ const status = (patch: Partial<ImportStatus> = {}): ImportStatus => ({
 const plan: ImportPlan = {
   source,
   problems: ['Its scheduled jobs couldn’t all be read; the rest still come.'],
+  defaultAgent: 'agent:main',
+  currentDefault: { name: 'Conch' },
   items: [
     {
-      id: 'persona:name',
-      group: 'persona',
-      title: 'Call your assistant “Pearl”',
+      id: 'agent:main',
+      group: 'agents',
+      title: 'Pearl',
+      name: 'Pearl',
+      detail: 'Your “main” agent in OpenClaw.',
+      preview: 'Be warm and brief.',
+      face: { avatar: { kind: 'preset', id: 'shell', color: 'pink' }, emoji: '🐚' },
       checked: true,
     },
     {
@@ -88,7 +94,8 @@ const plan: ImportPlan = {
 const result: ImportResult = {
   source: 'openclaw',
   counts: {
-    persona: 1,
+    agents: 1,
+    persona: 0,
     model: 0,
     about: 0,
     memories: 1,
@@ -98,7 +105,13 @@ const result: ImportResult = {
     keys: 0,
   },
   outcomes: [
-    { id: 'persona:name', group: 'persona', title: 'Name: Pearl', ok: true },
+    {
+      id: 'agent:main',
+      group: 'agents',
+      title: 'Pearl',
+      ok: true,
+      message: 'New chats start with Pearl.',
+    },
     { id: 'memory:0', group: 'memories', title: 'Ada takes her tea', ok: true },
     { id: 'routine:0', group: 'routines', title: 'Morning briefing', ok: true },
     {
@@ -178,8 +191,12 @@ describe('Come home', () => {
     expect(screen.getByRole('heading', { name: 'Welcome home' })).toBeInTheDocument();
     expect(calls.find((c) => c.method === 'POST' && c.path === '/api/import')?.body).toEqual({
       source: 'openclaw',
-      items: ['persona:name', 'memory:0', 'routine:0', 'channel:telegram'],
+      items: ['agent:main', 'memory:0', 'routine:0', 'channel:telegram'],
+      // Theirs starts new chats, as the plan said.
+      defaultAgent: 'agent:main',
     });
+    expect(summary).toHaveTextContent('1 agent');
+    expect(summary).toHaveTextContent('New chats start with Pearl.');
     expect(summary).toHaveTextContent('1 memory');
     expect(summary).toHaveTextContent('1 routine, as a draft');
     expect(summary).toHaveTextContent('Say hello to @pearl_bot');
@@ -240,9 +257,17 @@ describe('Come home', () => {
             checked: true,
           },
           {
-            id: 'agent:work:persona',
-            group: 'skills',
-            title: 'Talk as Atlas',
+            id: 'agent:work',
+            group: 'agents',
+            title: 'Atlas',
+            name: 'Atlas',
+            face: { avatar: { kind: 'preset', id: 'compass' } },
+            checked: true,
+          },
+          {
+            id: 'agent:work:about',
+            group: 'about',
+            title: 'What Atlas knows about you',
             checked: true,
             agent: atlas,
           },
@@ -282,13 +307,13 @@ describe('Come home', () => {
     });
     renderApp(<ComeHomePage source="openclaw" />);
     const agent = await screen.findByRole('region', { name: 'Atlas' });
-    expect(agent).toHaveTextContent('Talk as Atlas');
+    expect(agent).toHaveTextContent('What Atlas knows about you');
     expect(agent).toHaveTextContent('Charles reviews');
     expect(screen.getByRole('region', { name: 'Model' })).toHaveTextContent(
       'Use Claude Opus, as in OpenClaw',
     );
     await user.click(screen.getByRole('checkbox', { name: /Your Slack bot/ }));
-    await user.click(screen.getByRole('button', { name: 'Bring 4 things over' }));
+    await user.click(screen.getByRole('button', { name: 'Bring 5 things over' }));
     const summary = await screen.findByRole('region', {
       name: 'Your things from OpenClaw are here',
     });
@@ -298,6 +323,56 @@ describe('Come home', () => {
       'href',
       '/channels/new/slack?from=openclaw',
     );
+  });
+
+  it('shows the agents that come over with their faces, and keeps yours as the default when you say so (ADR 0101)', async () => {
+    const user = userEvent.setup();
+    const calls = mockFetch({
+      'GET /api/import/openclaw': () => ({
+        ...plan,
+        items: [
+          ...plan.items.slice(0, 1),
+          {
+            id: 'agent:work',
+            group: 'agents',
+            title: 'Atlas',
+            name: 'Atlas',
+            detail: 'Your “work” agent in OpenClaw. It answered your Slack bot.',
+            face: {
+              avatar: { kind: 'preset', id: 'compass' },
+              image: '/api/import/openclaw/agents/work/face',
+            },
+            checked: true,
+          },
+          ...plan.items.slice(1),
+        ],
+      }),
+      'POST /api/import': () => result,
+      'GET /api/auth': () => auth,
+    });
+    renderApp(<ComeHomePage source="openclaw" />);
+    const agents = await screen.findByRole('region', { name: 'Agents' });
+    expect(agents).toHaveTextContent(
+      'Pearl and Atlas come over as agents of their own, each with its face and voice.',
+    );
+    expect(within(agents).getByRole('checkbox', { name: /Pearl/ })).toBeChecked();
+    expect(within(agents).getByRole('checkbox', { name: /Atlas/ })).toBeChecked();
+    // Each face as it will be here: the preset its emoji matched, or its own picture.
+    expect(agents.querySelector('[data-preset="shell"][data-color="pink"]')).not.toBeNull();
+    expect(agents.querySelector('[data-look="picture"]')).not.toBeNull();
+    // Theirs starts new chats unless you keep yours.
+    const picker = within(agents).getByRole('combobox', { name: 'New chats start with' });
+    expect(picker).toHaveTextContent('Pearl');
+    await user.click(picker);
+    await user.click(await screen.findByRole('option', { name: 'Conch, as now' }));
+    await user.click(screen.getByRole('button', { name: /^Bring \d+ things over$/ }));
+    await screen.findByRole('region', { name: 'Your things from OpenClaw are here' });
+    const sent = calls.find((c) => c.method === 'POST' && c.path === '/api/import')?.body as {
+      items: string[];
+      defaultAgent?: string;
+    };
+    expect(sent.items).toEqual(expect.arrayContaining(['agent:main', 'agent:work']));
+    expect(sent.defaultAgent).toBeUndefined();
   });
 
   it('shows progress while things come over', async () => {

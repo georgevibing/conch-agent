@@ -12,7 +12,7 @@ If OpenClaw or Hermes is on this computer, Conch finds it and shows exactly what
 When Conch finds one during the welcome, it asks, with **Take a look** and **Not now**. After that, the offer lives in **Settings → Memory**, and <kbd>mod+k</kbd> finds it too.
 
 1. Open **Settings → Memory**. Under **Bring your things from another assistant**, press **Take a look** on the app's card. It opens as a page inside Settings, with **Memory › From OpenClaw** (or Hermes) above it: press **Memory** to go back.
-2. Look at the tiles: one for each kind of thing (**Agents**, **Memories**, **Skills**…), with how many are ticked. <!-- verify-ui --> Press a tile to see just that kind, or **Everything** to see it all.
+2. Look at the tiles: one for each kind of thing (**Agents**, **Memories**, **Skills**…), with how many are ticked. Press a tile to see just that kind, or **Everything** to see it all.
 3. Read the list. Everything has a tick, and **Show what it says** opens its words. A long list has its own search: find what you want, then **Tick these** or **Untick these**.
 4. Press the button at the bottom, which counts your ticks and stays in reach however long the list: **Bring 12 things over**. Conch may ask you to confirm it's you.
 5. Read the summary: what came over, what didn't and why, and what's left for you to do.
@@ -21,7 +21,7 @@ The section only shows when Conch has found one of the two apps.
 
 ## What comes over
 
-- **Agents.** Each agent there becomes one of your [agents](../features/agents.md) here, with its name, personality and instructions. Hermes has one; OpenClaw can run several, each listed under its name with one tick for all of it, and its memories, skills and routines come along with it. The agents you already have stay as they are, and your default stays your default. <!-- verify-ui -->
+- **Agents.** Each agent you had there, and each Hermes profile, becomes an agent of its own here, with its face beside its name: its picture, or one of Conch's matched to its emoji. Its name (with a number if one of yours has it), its tone, its instructions from SOUL.md and what you added to AGENTS.md, and its own model if Conch can run it. All are ticked. **New chats start with** picks the one that starts new chats: theirs, or yours as now. The routines and the chat bot an agent had stay with it. Bringing them again brings them up to date instead of making them twice. See [agents](../features/agents.md).
 - **Model.** The one you used there, for new chats: "Use Claude Sonnet, as in Hermes". Conch finds the same model, or the nearest of its family, among the providers you've connected. It's ticked only if you haven't chosen a model yourself. If none can run it, the list says why under what stays behind, and nothing changes. See [providers](../providers/index.md).
 - **About you.** Added to what's already in About you.
 - **Memories.** Ticked, except the ones Conch already has and OpenClaw's daily notes. See [memory](../features/memory.md).
@@ -29,6 +29,7 @@ The section only shows when Conch has found one of the two apps.
 - **Routines.** Scheduled jobs come over as drafts. Nothing runs until you turn it on in [Routines](../features/routines.md).
 - **Chat apps.** Your Telegram, Discord or Slack bot. Conch checks it with its app, then it waits for your hello, so nobody else gets in. See [Talk to me here](../channels/index.md).
 - **Keys.** Your Anthropic API or OpenRouter key, if Conch has none yet. It goes into Conch's encrypted key file and is never shown.
+- **What another agent knew and did.** Its memories, skills and routines are listed under its name, with one tick for all of it, and come over like the main agent's. Memories are yours, for every agent.
 
 ## A Slack bot with one key
 
@@ -44,11 +45,11 @@ If you open **Connect Slack** yourself, Conch offers the key it found, with **Us
 
 Some things wait for you to read them:
 
-- **Words that read like orders to the assistant**, such as "ignore previous instructions", in an agent's personality or instructions, a memory or a routine. Conch says what it found beside each one.
+- **Words that read like orders to the assistant**, such as "ignore previous instructions", in an agent, a memory or a routine. Conch says what it found beside each one.
 - **A skill that worries Conch** when it reads it through, with what it found.
 - **Chat bots and keys.** They never come over unless you tick them yourself.
 
-Invisible characters are removed from the agents, About you, memories and routines that come over.
+Invisible characters are removed from the agents, About you, memories and routines that come over. Anything in an agent's words that looks like a key or a password is left out, and so is the end of instructions longer than Conch keeps; the list says so. A picture is read only from the agent's own folder, never from the web, and kept without what a camera writes in it.
 
 > [!WARNING]
 > A bot answers in one app at a time. Stop OpenClaw or Hermes before you bring its bot over, or both will try to answer.
@@ -57,7 +58,7 @@ Invisible characters are removed from the agents, About you, memories and routin
 
 Conch [backs itself up](./backups.md) before it brings anything over.
 
-The summary has an **Undo** button. For a week after, **Settings → Memory** has one too: **Undo that import**. Undo removes what came over, the agents and a Slack bot you finished later included, and puts back what it replaced: About you and the model new chats start with. <!-- verify-ui --> Anything you've already removed yourself is skipped. It may ask you to confirm it's you.
+The summary has an **Undo** button. For a week after, **Settings → Memory** has one too: **Undo that import**. Undo removes what came over, a Slack bot you finished later included, and puts back what it replaced: the agents it brought up to date, the agent new chats start with, About you and the model new chats start with. Anything you've already removed yourself is skipped. It may ask you to confirm it's you.
 
 After a week, what came over is yours.
 

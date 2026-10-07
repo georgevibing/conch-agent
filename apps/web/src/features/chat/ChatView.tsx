@@ -19,7 +19,6 @@ import {
   Heading,
   IconButton,
   Kbd,
-  Pearl,
   Stack,
   Text,
   Tooltip,
@@ -64,6 +63,8 @@ import { providerKeys, putProvider, useProviders } from '../providers/queries';
 import { useNeed } from '../setup/useNeed';
 import { UsageComposerNotice } from '../usage/UsageComposerNotice';
 import { ChatSpend } from '../spend/Spend';
+import { useAgents, useChatAgent } from '../agents/api';
+import { NewChatAgent } from '../agents/ChatAgent';
 import styles from './ChatView.module.css';
 import { ChatContext } from './ChatContext';
 import { attachmentUrl } from './uploads';
@@ -385,7 +386,20 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
     [key],
   );
 
-  const name = app?.persona.name ?? 'Conch';
+  const record = useConversations().data?.find((c) => c.id === conversationId);
+  // Who answers here (ADR 0101): its name and face over every reply; any agent by id
+  // for the replies from before another one took the chat over. A new chat is with
+  // the one chosen for it (the picker, `/agent`), from the moment it's chosen until
+  // the chat says so itself.
+  const agents = useAgents().data?.agents;
+  const chatAgent = useChatAgent(record);
+  const draftAgent = useUi((s) => s.draftAgent);
+  const [startedWith, setStartedWith] = useState<string>();
+  const newAgentId = draftAgent ?? (sentId ? startedWith : undefined);
+  const agent =
+    (!record?.agentId && newAgentId && agents?.find((a) => a.id === newAgentId)) || chatAgent;
+  const agentOf = useMemo(() => (id: string) => agents?.find((a) => a.id === id), [agents]);
+  const name = agent?.name ?? app?.persona.name ?? 'Conch';
   // Talking needs the microphone and a voice to answer with.
   const canTalk = typeof window !== 'undefined' && window.isSecureContext && canSpeak();
   const engine = app?.engine;
@@ -422,7 +436,18 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
   }, [conversationId]);
 
   const turn = useTurnOptions(conversationId);
-  const record = useConversations().data?.find((c) => c.id === conversationId);
+  // The model that answered a reply, by the name the picker gives it, for its speaker line.
+  const catalog = turn.catalog;
+  const modelName = useMemo(
+    () => (engine: string | undefined, model: string | undefined) => {
+      if (!model) return undefined;
+      const found = catalog?.providers
+        .find((p) => p.engine === engine)
+        ?.models.find((m) => m.id === model);
+      return found ? modelLabel(found.label).label : undefined;
+    },
+    [catalog],
+  );
   const origin = record?.origin;
   const isRoutineRun = origin?.kind === 'routine';
   const continuingTask = useRef(false);
@@ -483,6 +508,10 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
     // A goal set before the first message (`/goal`) goes with it.
     const goal = conversationId ? undefined : (useUi.getState().draftGoal ?? undefined);
     if (goal) useUi.getState().setDraftGoal(null);
+    // So does the agent chosen for it (ADR 0101).
+    const agentId = conversationId ? undefined : (useUi.getState().draftAgent ?? undefined);
+    if (agentId) useUi.getState().setDraftAgent(null);
+    if (!conversationId) setStartedWith(agentId);
     const id = live.send(
       trimmed,
       conversationId,
@@ -493,6 +522,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
         // Started from a folder in the chat list: it goes there from the start.
         ...(!conversationId && startIn && { folder: startIn.id }),
         ...(goal && { goal }),
+        ...(agentId && { agentId }),
       },
     );
     if (!conversationId) setSentId(id);
@@ -1016,7 +1046,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
       <div ref={chatRoot} className={styles.empty} {...drop.props}>
         {dropOverlay}
         <Stack gap={4} align="center" className={styles.hello}>
-          <Pearl size="lg" state={running ? 'thinking' : 'idle'} label={null} />
+          <NewChatAgent />
           <Heading level={1} display size="4xl" align="center">
             {greeting()}
             {app?.profile.name ? `, ${app.profile.name}` : ''}.
@@ -1065,7 +1095,10 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
         taskChat={origin?.kind === 'task'}
         overlay={overlay}
         pending={pending}
-        name={name}
+        name={agent?.name ?? name}
+        avatar={agent?.avatar}
+        agentOf={agentOf}
+        modelName={modelName}
         onRespond={onRespond}
         onRetry={onRetry}
         onAskAgain={onAskAgain}

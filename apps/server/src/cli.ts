@@ -19,6 +19,7 @@ import { dnsReport } from './address/service';
 import { AddressStore } from './address/store';
 import { setup as setupWizard } from './cli/setup';
 
+import { AgentStore } from './agents/store';
 import { checkup, secureHome, workspaceRules } from './auth/checkup';
 import { ThisComputer } from './auth/here';
 import { askHere, openHere } from './auth/open-here';
@@ -915,12 +916,15 @@ async function importFrom() {
     emit: () => undefined,
   });
   const keys = new ProviderKeys(settings);
+  const agents = new AgentStore(config.CONCH_HOME, settings, heal);
   const imports = new ImportService({
     home: config.CONCH_HOME,
     ...(config.CONCH_IMPORT_HOME && { sourceHome: config.CONCH_IMPORT_HOME }),
     targets: {
       settings,
       memory,
+      // Each agent the other app ran becomes one of Conch's (ADR 0101); its model, in Conch itself.
+      agents,
       skills: {
         // Conch's own: another app's skills are only read in place, and go with it.
         names: async () =>

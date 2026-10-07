@@ -198,7 +198,7 @@ export function Landing() {
           }
           stage={<AgentsDemo />}
           points={[
-            'Choose a face from the set, use a photo, or have one drawn.',
+            'Choose one of Conch’s faces, upload a picture, or create one with AI.',
             <>
               Pick who answers each chat, task and routine. In a chat app, <code>/agent</code>{' '}
               switches.

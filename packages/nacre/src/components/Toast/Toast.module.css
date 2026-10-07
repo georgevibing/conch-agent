@@ -2,6 +2,8 @@
   .toaster {
     --width: 22.5rem;
     font-family: var(--nc-font-sans);
+    /* An open modal turns the page's pointer off; a toast is still pressable. */
+    pointer-events: auto;
   }
 
   .toast {

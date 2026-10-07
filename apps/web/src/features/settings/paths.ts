@@ -8,7 +8,7 @@ export const SETTINGS_TABS = [
   'general',
   'appearance',
   'notifications',
-  'personality',
+  'agents',
   'about',
   'memory',
   'voice',
@@ -29,6 +29,9 @@ export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 /** Everything Conch remembers: a page inside Settings → Memory (`/settings/memory/everything`). */
 export const MEMORY_ALL = 'everything';
+
+/** Places that moved: an old address (a bookmark, a link) lands where they are now. */
+const MOVED: Record<string, SettingsTab> = { personality: 'agents' };
 
 /** Bringing your things from another assistant: `/settings/memory/from-openclaw`. */
 export const comeHomeItem = (source: string) => `from-${source}`;
@@ -59,7 +62,8 @@ export function settingsPath(tab?: SettingsTab, item?: string): string {
 /** The place an address shows, or null when it isn't in Settings. */
 export function settingsAt(pathname: string): SettingsAddress | null {
   if (pathname !== SETTINGS_PATH && !pathname.startsWith(`${SETTINGS_PATH}/`)) return null;
-  const [tab, item] = pathname.slice(SETTINGS_PATH.length + 1).split('/');
+  const [named, item] = pathname.slice(SETTINGS_PATH.length + 1).split('/');
+  const tab = named && (MOVED[named] ?? named);
   // An address from a newer or older Conch that names no place here: Settings itself.
   if (!tab || !isTab(tab)) return {};
   if (!item) return { tab };

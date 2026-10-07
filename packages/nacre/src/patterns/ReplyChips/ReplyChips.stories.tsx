@@ -97,7 +97,7 @@ function Conversation() {
       <Message from="user" timestamp={new Date('2026-10-03T09:12:00')}>
         how did the shop do this spring?
       </Message>
-      <Message from="assistant" author="Conch" timestamp={new Date('2026-10-03T09:12:05')}>
+      <Message from="assistant" timestamp={new Date('2026-10-03T09:12:05')}>
         <Prose>
           <p>Here are this year’s sales by month:</p>
           <table>

@@ -42,11 +42,37 @@ const catalog = ['github', 'gmail', 'notion', 'slack', 'linear', 'todoist', 'goo
 /** The history entry's state when the welcome was marked done. */
 let landedWith: unknown;
 
+/** The first agent (ADR 0101), as the gateway makes it from the personality. */
+const first = {
+  id: 'ag_conch',
+  name: 'Conch',
+  role: '',
+  avatar: { kind: 'preset', id: 'shell' },
+  persona: { tone: 'warm', personality: '' },
+  instructions: '',
+  isDefault: true,
+  order: 0,
+  createdAt: 1,
+  updatedAt: 1,
+};
+
 function routes(extra: Record<string, (body: unknown) => unknown> = {}) {
   // What the gateway keeps: each save lands on top of the last, as it would.
   let saved = appState({ onboarded: false, profile: { name: '', about: '', facts: [] } });
+  let agent: typeof first = first;
   return mockFetch({
     'GET /api/state': () => saved,
+    'GET /api/agents': () => ({ agents: [agent], defaultId: agent.id }),
+    'PATCH /api/agents/ag_conch': (body) => {
+      const change = body as { name?: string; avatar?: typeof first.avatar; persona?: object };
+      agent = {
+        ...agent,
+        ...(change.name && { name: change.name }),
+        ...(change.avatar && { avatar: change.avatar }),
+        persona: { ...agent.persona, ...change.persona },
+      };
+      return agent;
+    },
     'GET /api/engine': () => baseEngine,
     'GET /api/providers': () => noneReady,
     'GET /api/import': () => ({ sources: [] }),
@@ -105,15 +131,24 @@ describe('the welcome', () => {
       }),
     );
 
-    // How it should sound: hearing a voice is choosing it.
-    expect(await screen.findByRole('heading', { name: 'How should I sound?' })).toBeInTheDocument();
-    expect(await screen.findByText(/Lovely to meet you, Ada/)).toBeInTheDocument();
+    // Who it is: a name (the dice for one with its face), a face, and how it sounds, heard.
+    expect(await screen.findByRole('heading', { name: 'And who am I?' })).toBeInTheDocument();
+    expect(await screen.findByText(/Hi Ada, I’m Conch!/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Another name' }));
+    expect(screen.getByRole('textbox', { name: 'My name' })).toHaveValue('Atlas');
+    expect(screen.getByRole('radio', { name: 'Compass' })).toBeChecked();
+    await user.click(screen.getByRole('radio', { name: 'Owl' }));
     await user.click(screen.getByRole('radio', { name: 'Concise' }));
-    expect(await screen.findByText(/Hi Ada\. Ready when you are\./)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Hi Ada\. I’m Atlas\. Ready when you are\./),
+    ).toBeInTheDocument();
+    expect(await clean(container)).toEqual([]);
     await user.click(screen.getByRole('button', { name: 'Sounds good' }));
     await waitFor(() =>
       expect(patched(calls)).toContainEqual({
-        persona: { name: 'Conch', tone: 'concise', instructions: '' },
+        name: 'Atlas',
+        persona: { tone: 'concise' },
+        avatar: { kind: 'preset', id: 'owl' },
       }),
     );
 

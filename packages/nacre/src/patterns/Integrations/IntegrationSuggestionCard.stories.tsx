@@ -136,7 +136,7 @@ export const InTheChat: Story = {
       <Message from="user" timestamp={new Date('2026-09-30T09:12:00')}>
         what’s assigned to me in Linear this week?
       </Message>
-      <Message from="assistant" author="Conch" timestamp={new Date('2026-09-30T09:12:04')}>
+      <Message from="assistant" timestamp={new Date('2026-09-30T09:12:04')}>
         <Prose>
           <p>
             I can’t see your Linear yet, so I won’t guess at what’s in it. Once Linear is connected,

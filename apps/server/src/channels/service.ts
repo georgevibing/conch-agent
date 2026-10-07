@@ -29,7 +29,9 @@ import {
   chatGoal,
   contextStart,
   expandCustom,
+  findAgent,
   findCommand,
+  type AgentId,
   MAX_GOAL_LENGTH,
   parseChatCommand,
   parseGoalArg,
@@ -51,6 +53,7 @@ import { PLAN_APPROVAL } from '../plans/mode';
 import type { PermissionDecision } from '../engines/types';
 import { newId } from '../lib/ids';
 import { pausedWords } from '../routines/spend';
+import type { AgentStore } from '../agents/store';
 import type { SettingsStore } from '../settings/store';
 import { VoiceError, type Hearing } from '../voice/service';
 import { CHANNEL_NAMES, catalogFor } from './catalog';
@@ -340,6 +343,8 @@ export class ChannelService {
       conversations: ConversationManager;
       attachments: AttachmentStore;
       settings: SettingsStore;
+      /** The agents (ADR 0101): who answers a channel's new chats, and `/agent`. */
+      agents?: Pick<AgentStore, 'get' | 'list' | 'default'>;
       models?: () => Promise<ModelCatalog>;
       saveSettings?: (patch: UpdateSettingsBody) => Promise<void>;
       address?: () => string | undefined;
@@ -527,6 +532,7 @@ export class ChannelService {
       groups: stored.groups.map(({ chatId: _, ...group }) => group),
       settings: stored.settings,
       health,
+      ...(stored.agentId && { agentId: stored.agentId }),
       ...(active && {
         pairing: { expiresAt: active.expiresAt, ...(active.link && { link: active.link }) },
       }),
@@ -845,6 +851,83 @@ export class ChannelService {
     });
   }
 
+  /**
+   * `/agent [name]` (ADR 0101): who answers here. Without a name, the agents to
+   * choose from, the one answering marked; with one, that agent answers this
+   * chat from the next message on, and new chats here too. The owner's choice,
+   * in their private chat (the command's `who`), like `/model`.
+   */
+  async #agent(
+    stored: StoredChannel,
+    seat: Seat,
+    args: string,
+    say: (text: string, buttons?: ChannelButton[]) => Promise<unknown>,
+    bound: { channelId: string; chatId: string; userId: string },
+  ): Promise<void> {
+    const agents = this.deps.agents;
+    if (!agents) {
+      await say('Agents are only in Conch itself here.');
+      return;
+    }
+    const { agents: all } = await agents.list();
+    const conversationId = stored.chats[seat.key];
+    const now = conversationId
+      ? await this.deps.conversations.agentOf(conversationId).catch(() => undefined)
+      : undefined;
+    const current =
+      now?.id ??
+      (stored.agentId && all.some((a) => a.id === stored.agentId)
+        ? stored.agentId
+        : (await agents.default()).id);
+    const choose = async (agent: { id: AgentId; name: string }) => {
+      await this.deps.store.update(stored.id, (c) => ({ ...c, agentId: agent.id }));
+      const chat = (await this.deps.store.get(stored.id))?.chats[seat.key];
+      if (chat) await this.deps.conversations.setAgent(chat, agent.id);
+      await this.#emit(stored.id);
+      await say(`${agent.name} answers you here from your next message.`);
+    };
+    if (!args.trim()) {
+      if (all.length < 2) {
+        await say(
+          `${all[0]?.name ?? 'Your assistant'} is your only agent. Make another in Conch, under Agents.`,
+        );
+        return;
+      }
+      const lines = all.map(
+        (a, i) =>
+          `${i + 1}. ${a.name}${a.role ? ` · ${a.role}` : ''}${a.id === current ? ' ✓' : ''}`,
+      );
+      await say(
+        [
+          `Who answers you here:`,
+          ...lines,
+          '',
+          `Send ${slashIn(stored.kind, 'agent')} and a name to choose.`,
+        ].join('\n'),
+        this.#actions.offer(
+          bound,
+          all
+            .filter((a) => a.id !== current)
+            .slice(0, 5)
+            .map((a) => ({ label: a.name, run: () => choose(a) })),
+        ),
+      );
+      return;
+    }
+    const found = findAgent(all, args) ?? all[Number(args.trim()) - 1];
+    if (!found) {
+      await say(
+        `I don’t know an agent called “${args.trim().slice(0, 40)}”. Yours: ${all.map((a) => a.name).join(', ')}.`,
+      );
+      return;
+    }
+    if (found.id === current) {
+      await say(`${found.name} is already answering you here.`);
+      return;
+    }
+    await choose(found);
+  }
+
   /** The assistant's name, and the owner's first name, for what a bot says about itself. */
   async profile(): Promise<{ assistant: string; owner?: string }> {
     const settings = await this.deps.settings.get();
@@ -854,11 +937,30 @@ export class ChannelService {
     };
   }
 
+  /**
+   * Who is speaking (ADR 0101): the agent of the chat it's about, else the
+   * channel's own agent, else the default agent (kept in step as `persona`).
+   */
+  async #assistant(where: { conversationId?: string; channelId?: string }): Promise<string> {
+    if (where.conversationId) {
+      const agent = await this.deps.conversations
+        .agentOf(where.conversationId)
+        .catch(() => undefined);
+      if (agent) return agent.name;
+    }
+    if (where.channelId) {
+      const agentId = (await this.deps.store.get(where.channelId).catch(() => undefined))?.agentId;
+      const agent = agentId ? await this.deps.agents?.get(agentId) : undefined;
+      if (agent) return agent.name;
+    }
+    return (await this.deps.settings.get()).persona.name;
+  }
+
   async #prepare(adapter: ChannelAdapter, id: string) {
     const settings = await this.deps.settings.get();
     await adapter
       .prepare?.({
-        assistant: settings.persona.name,
+        assistant: await this.#assistant({ channelId: id }),
         ...(settings.profile.name && { owner: firstName(settings.profile.name) }),
       })
       .catch(() => undefined);
@@ -867,11 +969,18 @@ export class ChannelService {
   }
 
   async update(id: string, patch: UpdateChannelBody): Promise<Channel> {
-    const stored = await this.deps.store.update(id, (c) => ({
-      ...c,
-      ...(patch.enabled !== undefined && { enabled: patch.enabled }),
-      ...(patch.settings && { settings: { ...c.settings, ...patch.settings } }),
-    }));
+    // Another agent answers new chats here (ADR 0101): one that exists, or the default (`null`).
+    if (patch.agentId && !(await this.deps.agents?.get(patch.agentId)))
+      throw new ChannelServiceError('not-found', 'That agent isn’t there any more.');
+    const stored = await this.deps.store.update(id, (c) => {
+      const { agentId: _, ...rest } = c;
+      return {
+        ...(patch.agentId === null ? rest : c),
+        ...(patch.agentId && { agentId: patch.agentId }),
+        ...(patch.enabled !== undefined && { enabled: patch.enabled }),
+        ...(patch.settings && { settings: { ...c.settings, ...patch.settings } }),
+      };
+    });
     if (!stored) throw new ChannelServiceError('not-found', 'That channel isn’t connected.');
     if (patch.enabled !== undefined) {
       const secrets = await this.deps.store.secrets(id);
@@ -1405,8 +1514,7 @@ export class ChannelService {
     const live = this.#live.get(id);
     if (!live) return;
     try {
-      const settings = await this.deps.settings.get();
-      const assistant = settings.persona.name;
+      const assistant = await this.#assistant({ channelId: id });
       const chat = chatId ?? (await live.connection.directChat(user.id));
       const ownerName = stored.people[0]?.name;
       await live.connection.send(
@@ -2046,7 +2154,10 @@ export class ChannelService {
       switch (command.name) {
         case 'start':
         case 'help': {
-          const assistant = (await this.deps.settings.get()).persona.name;
+          const assistant = await this.#assistant({
+            conversationId: stored.chats[seat.key],
+            channelId: stored.id,
+          });
           await say(
             helpWords({
               assistant,
@@ -2140,6 +2251,9 @@ export class ChannelService {
           );
           return true;
         }
+        case 'agent':
+          await this.#agent(stored, seat, parsed.args, say, bound);
+          return true;
         case 'goal':
           await this.#goal(stored, live, message, seat, parsed.args);
           return true;
@@ -2714,6 +2828,8 @@ export class ChannelService {
                 ),
               },
             }),
+          // A new chat here is with the channel's agent; unset or gone, the default (ADR 0101).
+          ...(!conversationId && current.agentId && { agentId: current.agentId }),
           ...(!conversationId && {
             origin: {
               kind: 'channel' as const,
@@ -2749,7 +2865,10 @@ export class ChannelService {
           continue;
         }
         this.#release(relay);
-        const assistant = (await this.deps.settings.get()).persona.name;
+        const assistant = await this.#assistant({
+          ...(relay.conversationId ? { conversationId: relay.conversationId } : {}),
+          channelId: stored.id,
+        });
         const why =
           error instanceof ConversationError && error.code === 'engine-unavailable'
             ? `${assistant} can’t answer right now: ${error.message} Open Conch on your computer to fix it.`
@@ -2926,7 +3045,10 @@ export class ChannelService {
     // A voice note back, after the written answer (ADR 0077).
     if (e.outcome === 'success') void this.#speakBack(relay);
     if (e.outcome === 'error') {
-      const assistant = (await this.deps.settings.get()).persona.name;
+      const assistant = await this.#assistant({
+        ...(relay.conversationId ? { conversationId: relay.conversationId } : {}),
+        channelId: relay.channelId,
+      });
       void this.#say(
         relay,
         `⚠️ ${assistant} couldn’t finish: ${e.error ?? 'something went wrong'}${
@@ -3000,7 +3122,10 @@ export class ChannelService {
       const chat = await live.connection.directChat(owner.id).catch(() => undefined);
       if (!chat) return;
       await this.#say(relay, '🔐 I’ve asked for your OK in our private chat.');
-      const assistant = (await this.deps.settings.get()).persona.name;
+      const assistant = await this.#assistant({
+        ...(relay.conversationId ? { conversationId: relay.conversationId } : {}),
+        channelId: relay.channelId,
+      });
       return this.#ask(
         relay.channelId,
         chat,
@@ -3059,7 +3184,7 @@ export class ChannelService {
     };
     this.#asks.set(askKey, ask);
     this.#buttons.set(key, askKey);
-    const assistant = (await this.deps.settings.get()).persona.name;
+    const assistant = await this.#assistant({ conversationId });
     // In the relay's order when it's asked where the relay answers; elsewhere (a group's question
     // in your private chat, a routine's) on its own.
     const relay = this.#relays.get(conversationId);

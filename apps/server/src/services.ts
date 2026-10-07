@@ -106,6 +106,8 @@ import { CommandStore } from './commands/store';
 import { ConversationManager, type TurnRoute, type ToolContext } from './conversations/manager';
 import { ConversationStore } from './conversations/store';
 import { ChatFolders } from './conversations/folders';
+import { AgentStore } from './agents/store';
+import { registerAgentsDoctor } from './agents/doctor';
 import type { ApiEngine } from './engines/api';
 import { builtInEngines, serverEngine } from './engines/registry';
 import { appsNeeded } from './providers/apps';
@@ -276,6 +278,8 @@ export class Services {
   readonly conversations: ConversationManager;
   /** The folders in the chat list (ADR 0089). */
   readonly folders: ChatFolders;
+  /** The agents you talk to: personas of the same Conch (ADR 0101). */
+  readonly agents: AgentStore;
   /** Questions the assistant asked, waiting for your answer (ADR 0060 §4). */
   readonly questions = new QuestionDesk();
   /** Every offer to turn something on in a chat goes through here (ADR 0060). */
@@ -433,6 +437,10 @@ export class Services {
     this.slackApps = new SlackApps(this.slack, { emit: (event) => this.broadcast.emit(event) });
     registerSlackDoctor(this.doctor, this.slack);
     this.settings = new SettingsStore(config.CONCH_HOME, heal);
+    this.agents = new AgentStore(config.CONCH_HOME, this.settings, heal, (list) =>
+      this.broadcast.emit({ type: 'agents.changed', list }),
+    );
+    registerAgentsDoctor(this.doctor, this.agents);
     this.access = new AccessStore(config.CONCH_HOME, heal);
     // "This computer", proven (ADR 0063): the key only your account can read.
     this.here = new ThisComputer(config.CONCH_HOME, {
@@ -906,6 +914,8 @@ export class Services {
     });
     const fetchPublicWeb = publicWebFetcher(config.CONCH_PORT);
     this.conversations = new ConversationManager({
+      // Who each chat is with: its persona and instructions in every turn (ADR 0101).
+      agents: this.agents,
       // What each turn costs, what a chat has spent, and its limits (ADR 0079).
       spend: new ChatSpendDesk({
         billings,
@@ -1387,6 +1397,7 @@ export class Services {
       conversations: this.conversations,
       attachments: this.attachments,
       settings: this.settings,
+      agents: this.agents,
       models: () => this.providers.models(),
       address: () => this.address.status().url,
       saveSettings: async (patch) => {
@@ -1839,6 +1850,7 @@ export class Services {
     ]);
     const latest = updates?.conch.source === 'releases' ? updates.conch.latest : undefined;
     return {
+      // The default agent's name, kept in step in settings (ADR 0101).
       name: settings.persona.name,
       alwaysOn: status.on,
       approvals: conversations.filter((c) => c.status === 'awaiting-permission').length,
@@ -1858,7 +1870,13 @@ export class Services {
         config.CONCH_HOME,
         (area, message) => void this.healed.note(area, message),
       ),
-      persona: async () => (await this.settings.get()).persona.name,
+      // The agent of the chat it's about (ADR 0101), else the default agent.
+      persona: async (conversationId) =>
+        (
+          (conversationId &&
+            (await this.conversations.agentOf(conversationId).catch(() => undefined))) ||
+          (await this.agents.default())
+        ).name,
       conversation: async (id) => {
         const chat = await this.conversations.detail(id).catch(() => undefined);
         if (!chat) return undefined;
@@ -1953,6 +1971,8 @@ export class Services {
       home: config.CONCH_HOME,
       ...(config.CONCH_IMPORT_HOME && { sourceHome: config.CONCH_IMPORT_HOME }),
       targets: {
+        // About you and the model. A personality comes over as an agent of its own
+        // (`agents`, ADR 0101), never into settings: the agent store keeps that in step.
         settings: this.settings,
         memory: this.memory,
         checkMemories: async () => (await this.settings.get()).preferences.checkMemories,
@@ -1968,23 +1988,17 @@ export class Services {
             await this.skillUsage.note(skill.id, 'imported').catch(() => undefined);
             return skill;
           },
-          // Another agent's persona (ADR 0042): one of Conch's own skills, off until you turn it on.
-          create: async (input) => {
-            const skill = await this.skills.store.create({
-              ...input,
-              name: await this.skills.store.freeName(input.base),
-              mode: 'off',
-            });
-            await this.skillUsage.note(skill.id, 'imported').catch(() => undefined);
-            return skill;
-          },
           remove: (id) => this.skills.remove(id),
         },
         routines: {
+          // With the agent it ran as there, when that one came over too (ADR 0101).
           create: (input) => this.routines.create(input, { createdBy: 'user' }),
           remove: (id) => this.routines.remove(id),
         },
+        // Each agent another app ran becomes one of Conch's (ADR 0101).
+        agents: this.agents,
         channels: {
+          setAgent: (id, agentId) => this.channels.update(id, { agentId }),
           connect: async (c) => {
             const channel = await this.channels.create(
               c.kind === 'slack'

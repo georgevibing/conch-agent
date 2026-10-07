@@ -201,17 +201,19 @@ export interface WelcomeVoiceProps extends Omit<ComponentProps<'figure'>, 'child
   from: string;
   /** What it says in the voice chosen. A new line is said afresh. */
   text: string;
+  /** Its face beside its name (an `AgentAvatar`); Conch's pearl when there's none. */
+  face?: ReactNode;
 }
 
 /**
  * How the assistant would sound, said by it: a message that writes itself out
  * again each time the voice changes, so choosing one is hearing it.
  */
-export function WelcomeVoice({ from, text, className, ...props }: WelcomeVoiceProps) {
+export function WelcomeVoice({ from, text, face, className, ...props }: WelcomeVoiceProps) {
   return (
     <figure className={cx(styles.voice, className)} {...props}>
       <figcaption className={styles.voiceFrom}>
-        <Pearl size="xs" state="idle" label={null} />
+        {face ?? <Pearl size="xs" state="idle" label={null} />}
         {from}
       </figcaption>
       <blockquote className={styles.voiceText} aria-live="polite">

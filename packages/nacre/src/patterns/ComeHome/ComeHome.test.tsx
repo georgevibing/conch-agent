@@ -88,13 +88,13 @@ describe('ImportPreview', () => {
       'Chats you’ve already started keep theirs',
     );
     const atlas = screen.getByRole('region', { name: 'Atlas' });
-    expect(atlas).toHaveTextContent('Another of your agents');
-    expect(atlas).toHaveTextContent('4 of 4');
+    expect(atlas).toHaveTextContent('What Atlas knew and did there');
+    expect(atlas).toHaveTextContent('3 of 3');
     // Its things aren't mixed in with the main agent's.
     expect(screen.getByRole('region', { name: 'Memories' })).not.toHaveTextContent('Charles');
-    // In the order they came: its personality first.
+    // In the order they came.
     const rows = within(atlas).getAllByRole('checkbox').slice(1);
-    expect(rows[0]).toHaveAccessibleName(/Talk as Atlas/);
+    expect(rows[0]).toHaveAccessibleName(/Quarterly planning/);
     expect(rows.at(-1)).toHaveAccessibleName(/Friday numbers/);
     await user.click(within(atlas).getByRole('checkbox', { name: 'All of Atlas' }));
     expect(onChange.mock.lastCall?.[0]).not.toContain('agent:work:memory:1');
@@ -102,6 +102,55 @@ describe('ImportPreview', () => {
     expect(screen.getByRole('region', { name: 'Chat apps' })).toHaveTextContent(
       'Slack needs one more key',
     );
+    await expectAccessible(container);
+  });
+
+  it('shows the agents that come over with their faces, a line about them, and who starts new chats', async () => {
+    const user = userEvent.setup();
+    const onDefault = vi.fn();
+    function Cast() {
+      const [selected, setSelected] = useState(openClawTeamTicked);
+      const [chosen, setChosen] = useState<string | undefined>('agent:main');
+      return (
+        <ImportPreview
+          items={openClawTeamItems}
+          selected={selected}
+          onSelectedChange={setSelected}
+          defaultAgent={chosen}
+          onDefaultAgentChange={(id) => {
+            setChosen(id);
+            onDefault(id);
+          }}
+          currentDefault="Conch"
+        />
+      );
+    }
+    const { container } = renderNacre(<Cast />);
+    const agents = screen.getByRole('region', { name: 'Agents' });
+    expect(agents).toHaveTextContent('2 of 2');
+    expect(agents).toHaveTextContent(
+      'Pearl and Atlas come over as agents of their own, each with its face and voice.',
+    );
+    // Each is ticked, with its face beside its name.
+    expect(within(agents).getByRole('checkbox', { name: /Pearl/ })).toBeChecked();
+    // The face is beside the name, so it isn't read out twice.
+    expect(agents.querySelector('[data-preset="compass"]')).not.toBeNull();
+    expect(agents).toHaveTextContent('Atlas’s model, GPT-5, stays behind');
+
+    const picker = within(agents).getByRole('combobox', { name: 'New chats start with' });
+    expect(picker).toHaveTextContent('Pearl');
+    await user.click(picker);
+    await user.click(await screen.findByRole('option', { name: 'Conch, as now' }));
+    expect(onDefault).toHaveBeenLastCalledWith(undefined);
+
+    // Unticking one leaves it out of the line and the picker.
+    await user.click(within(agents).getByRole('checkbox', { name: /Atlas/ }));
+    expect(agents).toHaveTextContent(
+      'Pearl comes over as an agent of its own, with its face and voice.',
+    );
+    await user.click(within(agents).getByRole('checkbox', { name: /Pearl/ }));
+    expect(within(agents).queryByRole('combobox')).toBeNull();
+    expect(agents).toHaveTextContent('Each comes over as an agent of its own');
     await expectAccessible(container);
   });
 
@@ -144,7 +193,7 @@ describe('ImportOffer, ImportProgress and ImportSummary', () => {
     rerender(
       <ImportSummary
         from="OpenClaw"
-        counts={{ memories: 2, skills: 1, routines: 1, keys: 0 }}
+        counts={{ agents: 2, memories: 2, skills: 1, routines: 1, keys: 0 }}
         next={['Turn on Morning briefing in Routines when you’re ready.']}
         failed={[{ title: 'Telegram bot', message: 'Telegram didn’t know that key.' }]}
         backedUp
@@ -152,10 +201,11 @@ describe('ImportOffer, ImportProgress and ImportSummary', () => {
       />,
     );
     const summary = screen.getByRole('region', { name: 'Your things from OpenClaw are here' });
+    expect(summary).toHaveTextContent('2 agents');
     expect(summary).toHaveTextContent('2 memories');
     expect(summary).toHaveTextContent('1 skill, off for now');
     expect(summary).toHaveTextContent('1 routine, as a draft');
-    expect(screen.getAllByRole('listitem')[0]).toHaveTextContent('2 memories');
+    expect(screen.getAllByRole('listitem')[0]).toHaveTextContent('2 agents');
     expect(summary).not.toHaveTextContent('0 keys');
     expect(screen.getByRole('list', { name: 'Didn’t come over' })).toHaveTextContent(
       'Telegram didn’t know that key.',

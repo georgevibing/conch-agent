@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { aboutWith, appsFor, hello, interestsIn, startersFor } from './welcome';
+import { aboutWith, appsFor, interestsIn, startersFor } from './welcome';
 
 describe('the welcome’s words', () => {
   it('writes what was picked into About you as one sentence, and reads it back', () => {
@@ -15,13 +15,6 @@ describe('the welcome’s words', () => {
     const again = aboutWith(first, ['writing']);
     expect(again).toBe('I’d mostly like a hand with writing.\nI build compilers.');
     expect(aboutWith(again, [])).toBe('I build compilers.');
-  });
-
-  it('greets by name in every voice, and without one', () => {
-    for (const tone of ['warm', 'concise', 'playful', 'precise'] as const) {
-      expect(hello(tone, 'Ada')).toContain('Ada');
-      expect(hello(tone, '  ')).not.toMatch(/,\s*\.|!\s*Finally|\s{2}/);
-    }
   });
 
   it('puts the apps a pick calls for first, only ones the catalog has, nine at most', () => {

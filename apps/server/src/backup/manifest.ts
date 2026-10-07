@@ -241,6 +241,18 @@ export const RULES: readonly BackupRule[] = [
     why: 'Your photo, as About you and the sidebar show it.',
   },
   {
+    match: 'agents/agents.json',
+    class: 'kept',
+    group: 'settings',
+    why: 'Your agents: each one’s name, persona, instructions and which is the default.',
+  },
+  {
+    match: 'agents/avatars/*',
+    class: 'kept',
+    group: 'settings',
+    why: 'Pictures of your own for your agents, kept without their metadata.',
+  },
+  {
     match: 'address.json',
     class: 'kept',
     group: 'settings',

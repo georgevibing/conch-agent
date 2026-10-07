@@ -6,6 +6,7 @@ import {
   Schedule,
   Trigger,
   WHEN_SCHEDULE,
+  type AgentId,
   type ConversationEventInput,
   type EngineId,
   type PermissionMode,
@@ -159,6 +160,12 @@ export class RoutineService {
     return { routine: await this.#view(stored), runs: await this.deps.store.runs(id) };
   }
 
+  /** The agent of the chat a routine was asked for in, when it's one of its own (ADR 0101). */
+  async #chatAgent(conversationId: string): Promise<{ agentId?: AgentId }> {
+    const agent = await this.deps.conversations.agentOf(conversationId).catch(() => undefined);
+    return agent ? { agentId: agent.id as AgentId } : {};
+  }
+
   // ── Mutations ──────────────────────────────────────────────────────────
 
   async create(
@@ -187,6 +194,7 @@ export class RoutineService {
       trust: body.trust,
       catchUp: body.catchUp,
       options: body.options,
+      ...(body.agentId && { agentId: body.agentId }),
       createdBy: meta.createdBy,
       sourceConversationId: meta.sourceConversationId,
       createdAt: now,
@@ -231,10 +239,12 @@ export class RoutineService {
     else if (toTime && was) await this.deps.when?.forget(id);
     else if (isWhen && reactivating) await this.deps.when?.restart(id);
     const now = this.#now;
-    const { runLimitUsd, ...rest } = patch;
+    const { runLimitUsd, agentId, ...rest } = patch;
     const stored = await this.deps.store.save({
       ...current,
       ...rest,
+      // `null`: the default agent does it (ADR 0101).
+      ...(agentId !== undefined && { agentId: agentId ?? undefined }),
       // `null` goes back to Conch's default.
       ...(runLimitUsd !== undefined && { runLimitUsd: runLimitUsd ?? undefined }),
       ...(patch.title !== undefined && { title: tidyTitle(patch.title) }),
@@ -796,6 +806,8 @@ export class RoutineService {
           : routine.prompt,
         options: routine.options,
         origin: { kind: 'routine', routineId: routine.id, runId: run.id },
+        // The agent it was given does it (ADR 0101); unset or gone, the default agent.
+        ...(routine.agentId && { agentId: routine.agentId }),
         extras: {
           systemExtra: runBrief(routine, trigger, this.#now, file && this.#whenText(file.when)),
           tools: [report as HostTool],
@@ -1044,6 +1056,8 @@ export class RoutineService {
               trust: 'ask',
               timezone: localTimezone(),
               status: 'draft',
+              // Done by the agent it was asked of, in its voice (ADR 0101).
+              ...(await this.#chatAgent(ctx.conversationId)),
             },
             { createdBy: 'agent', sourceConversationId: ctx.conversationId },
           );

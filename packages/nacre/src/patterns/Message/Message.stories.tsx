@@ -43,7 +43,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'One turn in the conversation. User turns are soft, accent-tinted bubbles aligned to the end; assistant turns are full-width prose beside the pearl mark, which comes alive while streaming. Actions surface on hover or focus.',
+          'One turn in the conversation. Your turns are soft, accent-tinted bubbles at the end of the column. The assistant’s use the whole column: one compact speaker line (its face, its name — the turn’s heading, read once — and, quietly on hover, the model and the time), then the answer flush with everything else in the chat. The face comes alive while the speaker works. The same voice carrying on (`continued`) drops the line. Actions surface on hover or focus.',
       },
     },
   },
@@ -61,6 +61,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {
   args: {
+    meta: 'Opus 4.5',
     actions: assistantActions,
     children: (
       <Prose>
@@ -110,6 +111,71 @@ export const Failed: Story = {
   },
 };
 
+/** Any agent can speak: its name, and a preset or a picture for its face (Nacre `AgentAvatar`). */
+export const Speakers: Story = {
+  render: () => (
+    <Stack gap={6}>
+      <Message from="assistant" timestamp={at} meta="Opus 4.5">
+        <Prose>
+          <p>Conch, in its own mark.</p>
+        </Prose>
+      </Message>
+      <Message from="assistant" speaker={{ name: 'Scout', avatar: 'compass' }} timestamp={at}>
+        <Prose>
+          <p>Scout wears a preset: a glyph on its colour.</p>
+        </Prose>
+      </Message>
+      <Message
+        from="assistant"
+        speaker={{ name: 'Ada', avatar: '/no-such-picture.png' }}
+        timestamp={at}
+      >
+        <Prose>
+          <p>A picture that can’t load keeps Ada’s initial.</p>
+        </Prose>
+      </Message>
+    </Stack>
+  ),
+};
+
+/**
+ * The same voice again with nothing of yours between (it carried on after its
+ * own card): no second speaker line, the words go on where they were.
+ */
+export const Continued: Story = {
+  render: () => (
+    <Stack gap={6}>
+      <Message from="assistant" timestamp={at}>
+        <Prose>
+          <p>I can see Friday once your calendar is connected.</p>
+        </Prose>
+      </Message>
+      <Message from="assistant" continued timestamp={at} actions={assistantActions}>
+        <Prose>
+          <p>Connected. Friday is free after 3, so a haircut at 4 fits.</p>
+        </Prose>
+      </Message>
+    </Stack>
+  ),
+};
+
+/** At work on a step after its words: the face moves; nothing is written, so no caret. */
+export const Working: Story = {
+  args: {
+    working: true,
+    attached: (
+      <div style={{ marginBlockStart: 'calc(var(--nc-chat-step) - var(--nc-chat-flow-gap))' }}>
+        <ToolCall name="Bash" summary="pnpm test" status="running" />
+      </div>
+    ),
+    children: (
+      <Prose>
+        <p>Let me run the tests.</p>
+      </Prose>
+    ),
+  },
+};
+
 export const System: Story = {
   args: { from: 'system', children: 'Session resumed in ~/code/conch' },
 };
@@ -150,7 +216,6 @@ export const WithWhatBelongsToIt: Story = {
   render: () => (
     <Message
       from="assistant"
-      author="Conch"
       timestamp={at}
       actions={assistantActions}
       attached={

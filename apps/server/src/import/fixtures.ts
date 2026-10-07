@@ -5,6 +5,8 @@
 import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+import { png } from '../test/faces';
+
 /** Made-up keys in the shape each app keeps them (built up, so no scanner mistakes them for real). */
 const ANTHROPIC = (tag: string) => ['sk', 'ant', 'api03', 'test', tag].join('-');
 /** The pretend Slack's bot token (channels/mock/slack.ts), so e2e can finish connecting it. */
@@ -252,5 +254,106 @@ export function openClawTeamHome(home: string): string {
       ],
     }),
   );
+  return root;
+}
+
+/**
+ * OpenClaw as it writes a fleet now (ADR 0101): agents keyed under
+ * `agents.entries`, a `systemAgent` owner, a face of its own for Sage (a
+ * picture in its workspace, with a camera's metadata in it), a bot on a named
+ * account bound to Sage, and an agent whose picture is on the web.
+ */
+export function openClawFleetHome(home: string): string {
+  const root = join(home, '.openclaw');
+  write(
+    join(root, 'openclaw.json'),
+    `{
+  agents: {
+    ownership: 'explicit',
+    defaults: { systemAgent: { agentId: 'sage' }, model: 'anthropic/claude-sonnet-4-5' },
+    entries: {
+      sage: {
+        workspace: '~/.openclaw/workspace-sage',
+        model: 'anthropic/claude-opus-4-6',
+        thinkingDefault: 'high',
+        identity: { name: 'Sage', emoji: '🦉', avatar: 'avatars/sage.png' },
+      },
+      scout: {
+        workspace: '~/.openclaw/workspace-scout',
+        identity: { name: 'Scout', theme: 'a curious fox', avatar: 'https://example.com/scout.png' },
+      },
+    },
+  },
+  bindings: [
+    { agentId: 'scout', match: { channel: 'telegram', peer: { kind: 'direct', id: '42' } } },
+    { agentId: 'sage', match: { channel: 'telegram', accountId: 'sage' } },
+  ],
+  channels: {
+    telegram: {
+      defaultAccount: 'sage',
+      accounts: {
+        sage: { botToken: '456:test-telegram-token-not-real' },
+        scout: { botToken: '789:test-telegram-token-not-real' },
+      },
+    },
+  },
+}
+`,
+  );
+  const sage = join(root, 'workspace-sage');
+  write(
+    join(sage, 'IDENTITY.md'),
+    '# IDENTITY.md - Who Am I?\n\n- **Name:** Sage\n- **Creature:**\n  _(AI? robot? familiar?)_\n- **Vibe:** calm, patient and unhurried\n- **Emoji:** 🦉\n- **Avatar:** avatars/sage.png\n',
+  );
+  write(
+    join(sage, 'SOUL.md'),
+    '# SOUL.md - Who You Are\n\nYou are Sage. Explain things slowly and kindly.\n',
+  );
+  mkdirSync(join(sage, 'avatars'), { recursive: true });
+  writeFileSync(join(sage, 'avatars', 'sage.png'), png(64, { text: true }));
+  const scout = join(root, 'workspace-scout');
+  write(join(scout, 'SOUL.md'), '# Soul\n\nYou are Scout: quick, witty and fun.\n');
+  return root;
+}
+
+/**
+ * Hermes with profiles (ADR 0101): the default (“Hermes”), a `coder` profile
+ * Bot Mode titled “Forge”, with its own model, memory, a picture as a data
+ * URI and a Telegram bot of its own; `writer`, whose SOUL.md is longer than
+ * Conch keeps. `hermes profile use coder` made coder the one it starts with.
+ */
+export function hermesProfilesHome(home: string): string {
+  const root = hermesHome(home);
+  const coder = join(root, 'profiles', 'coder');
+  write(join(coder, 'SOUL.md'), 'You are Forge. Be terse and precise: code first, words after.\n');
+  write(
+    join(coder, 'profile.yaml'),
+    [
+      'display_name: Coder',
+      'description: Writes and reviews code in my projects.',
+      'ui_meta:',
+      '  hermes-bots:',
+      '    title: Forge',
+      `    avatar: "data:image/png;base64,${png(48).toString('base64')}"`,
+      '',
+    ].join('\n'),
+  );
+  write(
+    join(coder, 'config.yaml'),
+    'model:\n  default: "anthropic/claude-opus-4.6"\n  provider: anthropic\nagent:\n  reasoning_effort: high\n',
+  );
+  write(join(coder, 'memories', 'MEMORY.md'), 'The engine repo uses pnpm.\n§\n');
+  write(join(coder, '.env'), 'TELEGRAM_BOT_TOKEN=999:coder-telegram-token-not-real\n');
+  const writer = join(root, 'profiles', 'writer');
+  write(
+    join(writer, 'SOUL.md'),
+    `You are Quill, a warm and encouraging writing partner.\n\n${Array.from(
+      { length: 400 },
+      (_, i) => `Paragraph ${i + 1} of how to edit a draft gently, line by line.`,
+    ).join('\n\n')}\n`,
+  );
+  // A folder that's no profile (no config, no SOUL.md): passed over.
+  mkdirSync(join(root, 'profiles', 'logs'), { recursive: true });
+  write(join(root, 'active_profile'), 'coder\n');
   return root;
 }

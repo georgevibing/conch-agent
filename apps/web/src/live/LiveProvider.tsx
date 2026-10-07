@@ -1,4 +1,5 @@
 import type {
+  AgentId,
   AppState,
   Attachment,
   ConversationEvent,
@@ -12,6 +13,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode }
 
 import { keys, refreshCapabilities, setEngineStatus } from '../api/queries';
 import { useUi } from '../app/ui';
+import { applyAgentsEvent } from '../features/agents/api';
 import { DEVICES_FOCUS } from '../features/auth/focus';
 import { browserKeys } from '../features/browser/queries';
 import { terminalKeys } from '../features/terminal/queries';
@@ -44,8 +46,9 @@ interface LiveApi {
      * `steer`: stop the running reply first, then send this, as one step.
      * `folder`: a new chat starts in this folder of the chat list.
      * `goal`: the chat's goal (`/goal` before its first message).
+     * `agentId`: a new chat is with this agent (ADR 0101); unset, the default.
      */
-    how?: { steer?: boolean; folder?: string; goal?: string },
+    how?: { steer?: boolean; folder?: string; goal?: string; agentId?: AgentId },
   ): string;
   /** Change a conversation's model/effort/mode. */
   configure(conversationId: string, options: TurnOptions): void;
@@ -197,6 +200,9 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         }
         case 'folders.changed':
           client.setQueryData(keys.folders, event.folders);
+          break;
+        case 'agents.changed':
+          applyAgentsEvent(client, event);
           break;
         case 'conversation.reset':
           live.forget(event.conversationId);
@@ -392,6 +398,7 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           ...(how?.steer && { steer: true }),
           ...(!conversationId && how?.folder && { folder: how.folder }),
           ...(how?.goal && { goal: how.goal }),
+          ...(!conversationId && how?.agentId && { agentId: how.agentId }),
         });
         if (!conversationId)
           startedNew.current = [...startedNew.current.slice(-9), clientMessageId];

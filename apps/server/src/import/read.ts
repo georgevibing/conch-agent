@@ -20,6 +20,35 @@ export async function readText(path: string): Promise<string | undefined> {
   }
 }
 
+/**
+ * A file's bytes, but only from inside `root`: a relative path with no `..`,
+ * every folder on the way a real one (never a link), the file a regular one
+ * of at most `max` bytes. Anything else is undefined, never an error.
+ */
+export async function readInside(
+  root: string,
+  relative: string,
+  max: number,
+): Promise<Buffer | undefined> {
+  if (!relative || relative.startsWith('/') || /^[A-Za-z]:/.test(relative)) return undefined;
+  const parts = relative.split(/[\\/]+/).filter((p) => p && p !== '.');
+  if (!parts.length || parts.some((p) => p === '..' || p.includes('\0'))) return undefined;
+  try {
+    if (!(await lstat(root)).isDirectory()) return undefined;
+    let at = root;
+    for (const [i, part] of parts.entries()) {
+      at = join(at, part);
+      const info = await lstat(at);
+      const last = i === parts.length - 1;
+      if (last ? !info.isFile() || info.size > max : !info.isDirectory()) return undefined;
+    }
+    const bytes = await readFile(at);
+    return bytes.length > max ? undefined : bytes;
+  } catch {
+    return undefined;
+  }
+}
+
 /** A folder's own entries (no links), or none. */
 export async function entries(dir: string): Promise<{ name: string; dir: boolean }[]> {
   try {

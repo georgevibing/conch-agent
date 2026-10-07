@@ -1,4 +1,4 @@
-import type { TurnOptions } from '@conch/protocol';
+import type { AgentId, TurnOptions } from '@conch/protocol';
 import { create } from 'zustand';
 
 import type { PageOwner } from '../features/conchapps/api';
@@ -41,6 +41,13 @@ interface UiState {
   folderDialog?: { file?: string[] };
   openFolderDialog(file?: string[]): void;
   closeFolderDialog(): void;
+  /**
+   * Making a new agent (ADR 0101), from anywhere: Settings → Agents, the
+   * chat's picker, ⌘K. `chat`: started from a new chat, which is then with it.
+   */
+  newAgent?: { chat?: boolean };
+  openNewAgent(how?: { chat?: boolean }): void;
+  closeNewAgent(): void;
   /**
    * Conch is starting itself again (an update, a restore): the page rests
    * until it's back. `reopen`: the settings tab to show again after the reload.
@@ -90,6 +97,12 @@ interface UiState {
   /** A goal set (`/goal`) for a new chat before its first message; it goes with that message. */
   draftGoal: string | null;
   setDraftGoal(goal: string | null): void;
+  /**
+   * The agent a new chat is with (ADR 0101), chosen before its first message
+   * (the picker, `/agent`); it goes with that message. Unset: the default agent.
+   */
+  draftAgent: AgentId | null;
+  setDraftAgent(agent: AgentId | null): void;
   /** Words to put in the open chat's composer (e.g. `/weekly-review ` from ⌘K). */
   composerText: string | null;
   setComposerText(text: string | null): void;
@@ -206,6 +219,8 @@ export const useUi = create<UiState>((set) => ({
   draftOptions: {},
   draftGoal: null,
   setDraftGoal: (draftGoal) => set({ draftGoal }),
+  draftAgent: null,
+  setDraftAgent: (draftAgent) => set({ draftAgent }),
   composerText: null,
   setComposerText: (composerText) => set({ composerText }),
   attachRequest: 0,
@@ -230,11 +245,14 @@ export const useUi = create<UiState>((set) => ({
     }),
   openFolderDialog: (file) => set({ folderDialog: { ...(file?.length && { file }) } }),
   closeFolderDialog: () => set({ folderDialog: undefined }),
+  openNewAgent: (how) => set({ newAgent: { ...how } }),
+  closeNewAgent: () => set({ newAgent: undefined }),
   openSettings: (tab, focus, move) => {
-    // A provider's page, and every memory, are places of their own; any other focus is
-    // brought into view.
+    // A provider's page, an agent's and every memory are places of their own; any other
+    // focus is brought into view.
     const item =
       tab === 'providers' ||
+      (tab === 'agents' && Boolean(focus?.startsWith('ag_'))) ||
       (tab === 'memory' && (focus === MEMORY_ALL || Boolean(focus?.startsWith('from-'))))
         ? focus
         : undefined;

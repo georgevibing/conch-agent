@@ -1,12 +1,10 @@
-import { ImportSourceId, type Persona } from '@conch/protocol';
+import { ImportSourceId } from '@conch/protocol';
 import {
   Button,
   Dialog,
   Field,
   Heading,
   IconButton,
-  Input,
-  RadioGroup,
   SegmentedControl,
   Sheet,
   Slider,
@@ -14,7 +12,6 @@ import {
   Switch,
   Tabs,
   Text,
-  Textarea,
   accents,
   useMediaQuery,
   useNacreTheme,
@@ -42,10 +39,10 @@ import {
   Palette,
   Settings2,
   ShieldCheck,
-  Sparkles,
   SquareSlash,
   Sun,
   User,
+  UsersRound,
 } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router';
@@ -65,10 +62,10 @@ import { ComputerTab } from '../computer/ComputerTab';
 import { ComeHomePage } from '../import/ComeHomePage';
 import { MemoryView } from '../memory/MemoryView';
 import { AboutYou } from './AboutYou';
+import { AgentsTab } from '../agents/AgentsTab';
 import { NotificationsTab } from '../notifications/NotificationsTab';
 import { VoiceTab } from '../voice/VoiceTab';
 import { TerminalSettings } from '../terminal/TerminalSettings';
-import { toneOptions } from '../onboarding/tones';
 import { ProvidersTab } from '../providers/ProvidersTab';
 import { UsageTab } from '../usage/UsageTab';
 import styles from './Settings.module.css';
@@ -83,68 +80,8 @@ import {
 } from './paths';
 import { GeneralTab } from './GeneralTab';
 import { ModelsTab } from './ModelsTab';
-import { SaveStatus, Section } from './Section';
+import { Section } from './Section';
 import { usePageInside } from './trail';
-import { useAutosave } from './useAutosave';
-
-function PersonalityTab({ initial }: { initial: Persona }) {
-  const update = useUpdateSettings();
-  const [persona, setPersona] = useState(initial);
-  const status = useAutosave(persona, (p) =>
-    update.mutateAsync({ persona: { ...p, name: p.name.trim() || 'Conch' } }),
-  );
-  return (
-    <Section
-      title="Personality"
-      description="How your assistant introduces itself and sounds."
-      status={<SaveStatus status={status} />}
-    >
-      <Stack gap={5}>
-        <Field>
-          <Field.Label>Name</Field.Label>
-          <Input
-            value={persona.name}
-            maxLength={40}
-            onChange={(e) => setPersona({ ...persona, name: e.target.value })}
-          />
-        </Field>
-        <Stack gap={2}>
-          <Text as="span" size="sm" weight="medium" id="settings-tone">
-            Voice
-          </Text>
-          <RadioGroup
-            variant="card"
-            aria-labelledby="settings-tone"
-            value={persona.tone}
-            onValueChange={(tone) => setPersona({ ...persona, tone: tone as Persona['tone'] })}
-            className={styles.tones}
-          >
-            {toneOptions.map((t) => (
-              <RadioGroup.Item
-                key={t.value}
-                value={t.value}
-                label={t.label}
-                description={t.sample}
-              />
-            ))}
-          </RadioGroup>
-        </Stack>
-        <Field>
-          <Field.Label optional>Instructions</Field.Label>
-          <Textarea
-            autosize
-            minRows={3}
-            maxRows={10}
-            value={persona.instructions}
-            placeholder="Always use British spelling. Suggest tests when I share code."
-            onChange={(e) => setPersona({ ...persona, instructions: e.target.value })}
-          />
-          <Field.Description>Anything you’d like followed in every conversation.</Field.Description>
-        </Field>
-      </Stack>
-    </Section>
-  );
-}
 
 function MemoryTab({
   autoMemory,
@@ -315,7 +252,7 @@ const groups: { label: string; hidden?: boolean; places: Place[] }[] = [
   {
     label: 'Your assistant',
     places: [
-      { value: 'personality', label: 'Personality', icon: <Sparkles /> },
+      { value: 'agents', label: 'Agents', icon: <UsersRound /> },
       { value: 'about', label: 'About you', icon: <User /> },
       { value: 'memory', label: 'Memory', icon: <Brain /> },
       { value: 'voice', label: 'Voice', icon: <Mic /> },
@@ -525,8 +462,8 @@ export function Settings() {
     switch (value) {
       case 'general':
         return <GeneralTab workspace={app.workspace} workspacePref={app.preferences.workspace} />;
-      case 'personality':
-        return <PersonalityTab initial={app.persona} />;
+      case 'agents':
+        return <AgentsTab item={tab === 'agents' ? address?.item : undefined} />;
       case 'about':
         return <AboutYou initial={app.profile} />;
       case 'memory':

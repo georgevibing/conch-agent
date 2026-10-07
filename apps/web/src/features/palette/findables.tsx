@@ -5,8 +5,11 @@ import {
   generatePassword,
   type TaskList,
   type TextRange,
+  chatAgentId,
+  type Agent,
 } from '@conch/protocol';
 import {
+  AgentAvatar,
   AppIcon,
   FolderMark,
   useMediaQuery,
@@ -22,6 +25,8 @@ import {
 } from '@conch/nacre';
 import {
   Cable,
+  UserRoundPlus,
+  UsersRound,
   Archive,
   ArchiveRestore,
   CirclePause,
@@ -131,6 +136,7 @@ import { useTerminalStatus } from '../terminal/queries';
 import { undoLast } from '../undo/UndoHost';
 import { useUpdates } from '../updates/queries';
 import { BACKGROUND_FOCUS } from '../background/AlwaysOnSection';
+import { agentsApi, useAgents } from '../agents/api';
 
 /** Something ⌘K can find and act on that isn't a chat or a message. */
 export interface Findable {
@@ -175,7 +181,12 @@ const settingsPlaces: {
     keywords: 'working folder workspace directory project files where cwd',
     icon: <Folder />,
   },
-  { tab: 'personality', label: 'Personality', keywords: 'name tone persona', icon: <Sparkles /> },
+  {
+    tab: 'agents',
+    label: 'Agents',
+    keywords: 'agents assistants personality persona name face avatar tone voice instructions',
+    icon: <UsersRound />,
+  },
   { tab: 'about', label: 'About you', keywords: 'profile me', icon: <User /> },
   { tab: 'memory', label: 'Memory', keywords: 'remember forget', icon: <Brain /> },
   {
@@ -455,6 +466,10 @@ export function useFindables(query: string, conversationId: string | undefined):
   // What the open chat is held to (ADR 0047): each can be let go of by name.
   const holds = useLiveStore((s) => (conversationId ? s.views[conversationId]?.holds : undefined));
   const { data: conversations } = useConversations();
+  // Your agents (ADR 0101): a new chat with one, or this chat answered by one.
+  const { data: agents } = useAgents();
+  const setDraftAgent = useUi((s) => s.setDraftAgent);
+  const openNewAgent = useUi((s) => s.openNewAgent);
   const { archive, unarchive } = useArchive();
   // The chat list, organised (ADR 0089): folders by name, pinning and filing the open chat.
   const { data: folders } = useFolders();
@@ -995,6 +1010,13 @@ export function useFindables(query: string, conversationId: string | undefined):
       run: () => void navigate('/activity'),
     },
     {
+      id: 'new-agent',
+      label: 'New agent',
+      keywords: 'agent create make add new assistant persona character profile',
+      icon: <UserRoundPlus />,
+      run: () => openNewAgent(),
+    },
+    {
       id: 'new-folder',
       label: 'New folder',
       keywords: 'folder create make add new group organise organize sort chats',
@@ -1295,8 +1317,69 @@ export function useFindables(query: string, conversationId: string | undefined):
     run: item.run,
   }));
 
+  const answering = agents && here ? chatAgentId(here, agents) : undefined;
+  const newChatWith = (agent: Agent) => {
+    setDraftAgent(agent.isDefault ? null : agent.id);
+    void navigate('/');
+  };
+  const agentItems = find(
+    agents?.agents ?? [],
+    q,
+    (a) => a.name,
+    (a) => `${a.role} agent persona assistant`,
+    3,
+  ).flatMap(({ item, match }): Findable[] => {
+    const face = <AgentAvatar name={item.name} avatar={item.avatar} size="xs" decorative />;
+    const edit: Findable = {
+      id: `agent-edit:${item.id}`,
+      label: `Edit ${item.name}`,
+      description: 'Its name, face, voice and instructions',
+      icon: face,
+      run: () => openSettings('agents', item.id),
+    };
+    if (!here)
+      return [
+        {
+          id: `agent:${item.id}`,
+          label: item.name,
+          ranges: match.ranges,
+          ...(item.role && { description: item.role }),
+          hint: 'New chat',
+          icon: face,
+          run: () => newChatWith(item),
+        },
+        edit,
+      ];
+    return [
+      {
+        id: `agent:${item.id}`,
+        label: item.name,
+        ranges: match.ranges,
+        ...(item.role && { description: item.role }),
+        hint: item.id === answering ? 'Answering' : 'Answer this chat',
+        icon: face,
+        run: () => {
+          if (item.id === answering) return;
+          void agentsApi.setChatAgent(here.id, item.id).then(
+            () => toast.success(`${item.name} answers from your next message`),
+            (error: unknown) =>
+              toast.error((error as Error).message || 'That didn’t change who answers. Try again.'),
+          );
+        },
+      },
+      {
+        id: `agent-new:${item.id}`,
+        label: `New chat with ${item.name}`,
+        icon: face,
+        run: () => newChatWith(item),
+      },
+      edit,
+    ];
+  });
+
   return [
     { heading: 'Go to', items: placeItems },
+    { heading: 'Agents', items: agentItems },
     { heading: 'Passwords', items: passwordItems },
     { heading: 'Skills', items: skillItems },
     { heading: 'Skills people share', items: sharedItems },

@@ -277,7 +277,7 @@ export const InTheChat: Story = {
       <Message from="user" timestamp={new Date('2026-10-03T09:12:00')}>
         what’s on my plate this week?
       </Message>
-      <Message from="assistant" author="Conch" timestamp={new Date('2026-10-03T09:12:04')}>
+      <Message from="assistant" timestamp={new Date('2026-10-03T09:12:04')}>
         <Prose>
           <p>
             I can’t see your calendar yet, so I won’t guess at it. From this chat, you wanted to
@@ -297,13 +297,13 @@ export const CarryingOn: Story = {
       <Message from="user" timestamp={new Date('2026-10-03T09:12:00')}>
         what’s on my plate this week?
       </Message>
-      <Message from="assistant" author="Conch" timestamp={new Date('2026-10-03T09:12:04')}>
+      <Message from="assistant" timestamp={new Date('2026-10-03T09:12:04')}>
         <Prose>
           <p>I can’t see your calendar yet, so I won’t guess at it.</p>
         </Prose>
       </Message>
       <OfferCard {...args} state="accepted" />
-      <Message from="assistant" author="Conch" timestamp={new Date('2026-10-03T09:13:10')}>
+      <Message from="assistant" timestamp={new Date('2026-10-03T09:13:10')}>
         <Prose>
           <p>
             Three things are booked: the design review on Tuesday at 10, lunch with Sam on

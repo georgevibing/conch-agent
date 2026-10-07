@@ -10,7 +10,7 @@ The first time you open Conch, it introduces itself and asks a few things, one a
 
 1. **Your name.** Type it and press <kbd>enter</kbd>. Conch uses it to greet you.
 2. **What you'd like a hand with.** Tap as many as fit: writing, coding, research, email and calendar, and more. Conch keeps them as one sentence in **Settings → About you**, where you can change the words.
-3. **Your first agent.** Give it a name, and choose how it should sound: **Warm**, **Concise**, **Playful** or **Precise**. It says hello in that voice as you choose. <!-- verify-ui --> You can make more [agents](../features/agents.md) later, each with a face and a voice of its own.
+3. **And who am I?** Your first agent. Type a name under **My name** (it suggests Conch), or press **Another name** for an idea, and choose how it sounds: **Warm**, **Concise**, **Playful** or **Precise**. It says hello in that voice as you choose. Press **Sounds good**. You can make more [agents](../features/agents.md) later, each with a face and a voice of its own.
 
 ## A mind to think with
 

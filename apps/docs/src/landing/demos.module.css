@@ -102,11 +102,6 @@
   block-size: clamp(17rem, 62cqi, 27rem);
 }
 
-/* An offer, and what to try next, sit under the words they follow, lined up with them. */
-.offer {
-  margin-inline-start: var(--nc-chat-inset);
-}
-
 /* Your agents: a row of faces you can choose from, over the chat they answer in. */
 .agents {
   display: flex;
@@ -137,7 +132,7 @@
   transition: background-color var(--nc-duration-slow) var(--nc-ease-out);
 }
 
-.agentChoice > [role='img'] {
+.agentChoice > [data-look] {
   box-shadow: 0 0 0 2px transparent;
   transition:
     box-shadow var(--nc-duration-slow) var(--nc-ease-out),
@@ -149,7 +144,7 @@
   background: var(--nc-wash-2);
 }
 
-.agentChoice[data-chosen] > [role='img'] {
+.agentChoice[data-chosen] > [data-look] {
   box-shadow:
     0 0 0 2px var(--nc-surface),
     0 0 0 4px var(--nc-accent-9);
@@ -182,18 +177,13 @@
   min-inline-size: 0;
 }
 
-.face {
-  inline-size: 55%;
-  block-size: 55%;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .agentChoice,
-  .agentChoice > [role='img'] {
+  .agentChoice > [data-look] {
     transition: none;
   }
 
-  .agentChoice[data-chosen] > [role='img'] {
+  .agentChoice[data-chosen] > [data-look] {
     transform: none;
   }
 }

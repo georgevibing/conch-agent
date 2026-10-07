@@ -182,7 +182,6 @@ function Conversation() {
       </Message>
       <Message
         from="assistant"
-        author="Conch"
         timestamp={new Date('2026-10-03T09:12:04')}
         status={ended ? 'complete' : 'streaming'}
       >

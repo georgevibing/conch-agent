@@ -273,7 +273,7 @@ function InChat(props: Partial<QuestionCardProps>) {
   return (
     <MessageList>
       <Message from="user">Book a call with Ada next week</Message>
-      <Message from="assistant" author="Conch">
+      <Message from="assistant">
         <Prose>Ada is free most mornings next week. Two things before I send the invite:</Prose>
       </Message>
       <QuestionCard
@@ -293,12 +293,12 @@ function InChat(props: Partial<QuestionCardProps>) {
         onSkip={() => setState('skipped')}
       />
       {state === 'answered' && (
-        <Message from="assistant" author="Conch">
+        <Message from="assistant">
           <Prose>Done — the invite is in both calendars, with a Meet link.</Prose>
         </Message>
       )}
       {state === 'skipped' && (
-        <Message from="assistant" author="Conch">
+        <Message from="assistant">
           <Prose>
             I went with Thursday at 10:00 as a video call, the first slot you both have free.
           </Prose>

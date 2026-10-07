@@ -7,8 +7,8 @@ import { openConch } from './app';
  * Come home, the rest of it (ADR 0042), from a pretend OpenClaw and Hermes:
  * Hermes's model matched to what's connected and put back by Undo; a Slack
  * bot Hermes had one key for, finished on the Slack setup with a link to
- * its app's own page; and OpenClaw's other agents, each under its name,
- * its personality coming over as a skill that starts off.
+ * its app’s own page; and OpenClaw’s agents, each one of Conch’s agents,
+ * with its face, its things under its name and its routines (ADR 0101).
  */
 test.describe.configure({ mode: 'serial' });
 
@@ -73,37 +73,64 @@ test('Hermes’s model and its half Slack bot come over, and Undo takes both bac
   expect((await (await request.get('/api/state')).json()).preferences.model).toBeUndefined();
 });
 
-test('OpenClaw’s other agents come over each under its name, as a skill that starts off', async ({
+test('OpenClaw’s agents come over as Conch’s, each with its things, and theirs starts new chats', async ({
   page,
   request,
 }) => {
   const dialog = await comeHome(page, 'OpenClaw');
+  // Every agent it ran, ticked, with a line about who comes and who starts new chats.
+  const agents = dialog.getByRole('region', { name: 'Agents' });
+  for (const name of ['Pearl', 'Atlas', 'Family'])
+    await expect(agents.getByRole('checkbox', { name: new RegExp(name) })).toBeChecked();
+  await expect(agents).toContainText('Pearl, Atlas and Family come over as agents of their own');
+  await expect(agents.getByRole('combobox', { name: 'New chats start with' })).toContainText(
+    'Pearl',
+  );
+  // What Atlas knew and did is under its name.
   const atlas = dialog.getByRole('region', { name: 'Atlas' });
-  await expect(atlas).toContainText('Another of your agents');
-  await expect(atlas.getByRole('checkbox', { name: /Talk as Atlas/ })).toBeChecked();
-  // A long section folds; its routine is behind Show all.
-  await atlas.getByRole('button', { name: /^Show all \d+$/ }).click();
+  await expect(atlas).toContainText('What Atlas knew and did there');
   await expect(atlas.getByRole('checkbox', { name: /Friday numbers/ })).toBeChecked();
   // Its memories aren't mixed with the main agent's, and one they share comes once.
   await expect(dialog.getByRole('region', { name: 'Memories' })).not.toContainText('Charles');
   await expect(atlas).not.toContainText('The build runs on Fridays');
-  await expect(dialog.getByRole('region', { name: 'Family' })).toBeVisible();
-  // One tick for all of an agent.
-  await dialog.getByRole('checkbox', { name: 'All of Family' }).click();
-  await expect(dialog.getByRole('region', { name: 'Family' })).toContainText('0 of 2');
+  // Leave Family behind, and what it knew.
+  await agents.getByRole('checkbox', { name: /Family/ }).click();
+  await dialog
+    .getByRole('region', { name: 'Family' })
+    .getByRole('checkbox', { name: /Grace’s birthday/ })
+    .click();
+  await expect(agents).toContainText('Pearl and Atlas come over');
 
   await dialog.getByRole('button', { name: /^Bring \d+ things over$/ }).click();
   const summary = page.getByRole('region', { name: 'Your things from OpenClaw are here' });
   await expect(summary).toBeVisible({ timeout: 15_000 });
+  await expect(summary).toContainText('2 agents');
+  await expect(summary).toContainText('New chats start with Pearl.');
 
-  const skills = (await (await request.get('/api/skills')).json()) as {
-    skills: { name: string; mode: string }[];
+  const list = (await (await request.get('/api/agents')).json()) as {
+    agents: { id: string; name: string; isDefault: boolean; imported?: { id: string } }[];
   };
-  expect(skills.skills.find((s) => s.name === 'atlas')).toMatchObject({ mode: 'off' });
-  expect(skills.skills.some((s) => s.name === 'family')).toBe(false);
-  const routines = JSON.stringify(await (await request.get('/api/routines')).json());
-  expect(routines).toContain('Friday numbers');
+  expect(list.agents.map((a) => a.name)).toEqual(['Conch', 'Pearl', 'Atlas']);
+  expect(list.agents.find((a) => a.isDefault)?.name).toBe('Pearl');
+  const atlasId = list.agents.find((a) => a.imported?.id === 'work')?.id;
+  // No skill pretends to be an agent.
+  const skills = (await (await request.get('/api/skills')).json()) as {
+    skills: { name: string }[];
+  };
+  expect(skills.skills.some((s) => s.name === 'atlas')).toBe(false);
+  const routines = (await (await request.get('/api/routines')).json()) as {
+    title: string;
+    agentId?: string;
+  }[];
+  expect(routines.find((r) => r.title === 'Friday numbers')?.agentId).toBe(atlasId);
   const memories = JSON.stringify(await (await request.get('/api/memories')).json());
   expect(memories).toContain('Charles reviews every pull request.');
   expect(memories).not.toContain('Grace’s birthday');
+
+  // Undo: Conch's own is the only agent again, and the default.
+  expect((await request.post('/api/import/undo', { data: {} })).ok()).toBe(true);
+  const after = (await (await request.get('/api/agents')).json()) as {
+    agents: { name: string; isDefault: boolean }[];
+  };
+  expect(after.agents.map((a) => [a.name, a.isDefault])).toEqual([['Conch', true]]);
 });

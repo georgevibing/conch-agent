@@ -73,6 +73,32 @@ export const OtherAgentsAndModel: Story = {
   },
 };
 
+/**
+ * Its agents (ADR 0101): each comes over as an agent of its own, its face
+ * beside its name, all ticked; a line says who comes, and the picker says
+ * which starts new chats (theirs, or the one you have).
+ */
+export const Agents: Story = {
+  render: (args) => {
+    const [selected, setSelected] = useState(args.selected);
+    const [chosen, setChosen] = useState<string | undefined>('agent:main');
+    return (
+      <div style={{ maxInlineSize: 620 }}>
+        <ImportPreview
+          {...args}
+          selected={selected}
+          onSelectedChange={setSelected}
+          defaultAgent={chosen}
+          onDefaultAgentChange={setChosen}
+          currentDefault="Conch"
+          view="agents"
+        />
+      </div>
+    );
+  },
+  args: { items: openClawTeamItems, selected: openClawTeamTicked },
+};
+
 export const WithProblems: Story = {
   ...Playground,
   args: {

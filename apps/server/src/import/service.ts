@@ -28,6 +28,12 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import type {
+  Agent,
+  AgentDefaults,
+  AgentImported,
+  AgentList,
+  CreateAgentBody,
+  UpdateAgentBody,
   ChannelBot,
   ChannelCheck,
   EngineId,
@@ -48,10 +54,18 @@ import type {
   Profile,
   Routine,
 } from '@conch/protocol';
-import { EngineId as EngineIdSchema } from '@conch/protocol';
+import {
+  AGENT_LIMITS,
+  AgentDefaults as AgentDefaultsSchema,
+  AgentPersona,
+  AgentPresetAvatar,
+  EngineId as EngineIdSchema,
+} from '@conch/protocol';
 import { z } from 'zod';
 
+import { uniqueName } from '../agents/store';
 import { Mutex, readJson, writeJson } from '../lib/fs';
+import { type AgentDraft, draftAgent } from './agents';
 import { checkMemory } from '../memory/guard';
 import { describe } from '../routines/schedule';
 import { scanSkill, scanText, unsmuggle } from '../skills/scan';
@@ -59,6 +73,7 @@ import {
   type Found,
   type FoundAgent,
   type FoundChannel,
+  type FoundIdentity,
   type FoundKey,
   type FoundRoutine,
   type KeyProvider,
@@ -78,6 +93,19 @@ const keyName = (provider: KeyProvider) => PROVIDER_COPY.get(provider)?.name ?? 
 /** The keys an older Conch's ledger knows; the rest are kept apart so it still reads (ADR 0051). */
 const FIRST_KEYS = new Set<string>(['anthropic-api', 'openrouter']);
 
+/** An agent as it was before an import brought it up to date: what Undo puts back. */
+const AgentBefore = z.object({
+  id: z.string().max(60),
+  name: z.string().max(AGENT_LIMITS.name),
+  role: z.string().max(AGENT_LIMITS.role),
+  persona: AgentPersona,
+  instructions: z.string().max(AGENT_LIMITS.instructions),
+  /** Its preset face, when it had one (a picture of its own is never replaced). */
+  avatar: AgentPresetAvatar.optional(),
+  defaults: AgentDefaultsSchema.nullable(),
+});
+type AgentBefore = z.infer<typeof AgentBefore>;
+
 /** What an import added and replaced, so Undo can put things back. */
 const Ledger = z.object({
   last: z
@@ -93,9 +121,15 @@ const Ledger = z.object({
         keys: z.array(z.enum(['anthropic-api', 'openrouter'])).default([]),
         /** Keys for the providers ADR 0053 added, apart from `keys` so an older Conch reads the ledger. */
         moreKeys: z.array(z.string().max(40)).default([]),
+        /** Agents it made (ADR 0101). */
+        agents: z.array(z.string().max(60)).default([]),
       }),
       before: z
         .object({
+          /** Agents an earlier import made, as they were before this one brought them up to date. */
+          agents: z.array(AgentBefore).default([]),
+          /** The default agent before this import chose another. */
+          defaultAgent: z.string().max(60).optional(),
           persona: z.object({ name: z.string(), instructions: z.string() }).partial().optional(),
           about: z.string().optional(),
           /** The model new chats started with (`null`: the provider's own choice). */
@@ -103,7 +137,7 @@ const Ledger = z.object({
             .object({ engine: EngineIdSchema, model: z.string().nullable() })
             .optional(),
         })
-        .default({}),
+        .default({ agents: [] }),
     })
     .optional(),
   history: z
@@ -144,13 +178,6 @@ export interface ImportTargets {
   skills: {
     names(): Promise<string[]>;
     adopt(folder: string, base: string): Promise<{ id: string }>;
-    /** A new skill of Conch's own, off (another agent's persona, ADR 0042). */
-    create?(input: {
-      base: string;
-      title: string;
-      description: string;
-      instructions: string;
-    }): Promise<{ id: string }>;
     remove(id: string): Promise<unknown>;
   };
   routines: {
@@ -162,11 +189,30 @@ export interface ImportTargets {
       timezone: string;
       status: 'draft';
       trust: 'ask';
+      /** The agent that does it (ADR 0101): the one it ran as there. */
+      agentId?: string;
     }): Promise<Routine>;
     remove(id: string): Promise<unknown>;
   };
+  /**
+   * Conch's agents (ADR 0101): each agent the other app ran comes over as
+   * one. Without them, its agents stay behind (and the plan says so).
+   */
+  agents?: {
+    list(): Promise<AgentList>;
+    create(body: CreateAgentBody, extra: { imported: AgentImported }): Promise<Agent>;
+    update(id: string, change: UpdateAgentBody): Promise<Agent>;
+    /** A picture of its own (base64), read from its bytes and kept without metadata. */
+    setImage(id: string, base64: string): Promise<Agent>;
+    setDefault(id: string): Promise<unknown>;
+    remove(id: string): Promise<unknown>;
+    /** The default agent's name and instructions, as an import before agents changed them. */
+    adoptPersona?(patch: Partial<Persona>): Promise<unknown>;
+  };
   channels: {
     connect(channel: FoundChannel): Promise<{ id: string; name: string; view?: unknown }>;
+    /** Which agent answers there (ADR 0101): the one that answered its bot in the other app. */
+    setAgent?(id: string, agentId: string): Promise<unknown>;
     /** Is this key good, and whose bot is it? Nothing is saved (ADR 0042's Slack step). */
     check?(parts: { botToken?: string; appToken?: string }): Promise<ChannelCheck>;
     remove(id: string): Promise<unknown>;
@@ -242,29 +288,45 @@ const norm = (text: string) => text.replace(/\s+/g, ' ').trim().toLowerCase();
 
 function summarize(found: Found): string {
   const parts = [
+    found.identities.length && plural(found.identities.length, 'agent'),
     found.memories.filter((m) => !m.daily).length &&
       plural(found.memories.filter((m) => !m.daily).length, 'memory', 'memories'),
     found.skills.length && plural(found.skills.length, 'skill'),
     found.routines.length && plural(found.routines.length, 'routine'),
     found.channels.length && plural(found.channels.length, 'chat app'),
-    found.agents.length && plural(found.agents.length, 'more agent'),
-    (found.persona || found.about) && 'your profile',
+    found.about && 'your profile',
   ].filter(Boolean);
   return parts.length ? parts.join(', ') : 'Nothing to bring over yet';
 }
 
-/** Another agent's persona as one of Conch's skills (ADR 0042): picked in a chat, never by itself. */
-function personaSkill(agent: FoundAgent, app: string, instructions: string) {
-  return {
-    base: agent.name,
-    title: `Talk as ${agent.name}`,
-    description: `Answer as ${agent.name}, your “${agent.id}” agent from ${app}.`.slice(0, 160),
-    instructions: [
-      `For this chat, answer as ${agent.name}, the “${agent.id}” agent you had in ${app}. Everything else Conch knows about the person still applies.`,
-      unsmuggle(instructions).slice(0, 4000),
-    ].join('\n\n'),
-  };
-}
+/** “Telegram”, “Telegram and Slack”. */
+const listed = (words: string[]) =>
+  words.length <= 1
+    ? (words[0] ?? '')
+    : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
+
+/** The keys and bot tokens the other app had: never part of an agent's words. */
+const secretsOf = (found: Found): string[] => [
+  ...found.keys.map((k) => k.value),
+  ...found.channels.flatMap((c) => [c.token, c.appToken].filter((v): v is string => Boolean(v))),
+];
+
+/** The fields an import sets on an agent, compared to tell “already here” apart. */
+const agentKey = (a: {
+  name: string;
+  role: string;
+  persona: { tone: string; personality: string };
+  instructions: string;
+  defaults?: AgentDefaults | null;
+}) =>
+  JSON.stringify([
+    a.name,
+    a.role,
+    a.persona.tone,
+    a.persona.personality,
+    a.instructions,
+    a.defaults ?? null,
+  ]);
 
 export class ImportService {
   readonly #mutex = new Mutex();
@@ -338,36 +400,15 @@ export class ImportService {
       );
     this.#looked.set(source, found);
     const t = this.deps.targets;
-    const { persona, profile, preferences } = await t.settings.get();
+    const { profile, preferences } = await t.settings.get();
     const known = new Set((await t.memory.list()).map((m) => norm(m.content)));
     const problems = [...found.problems];
     const skillNames = new Set((await t.skills.names()).map((n) => n.toLowerCase()));
     const items: ImportItem[] = [];
 
-    if (found.persona?.name)
-      items.push({
-        id: 'persona:name',
-        group: 'persona',
-        title: `Call your assistant “${found.persona.name}”`,
-        detail: `From ${found.label}’s IDENTITY.md. Now it’s “${persona.name}”.`,
-        checked: persona.name === 'Conch' && found.persona.name !== persona.name,
-        duplicate: found.persona.name === persona.name,
-      });
-    if (found.persona?.instructions) {
-      const odd = steering(found.persona.instructions, found.persona.from);
-      items.push({
-        id: 'persona:instructions',
-        group: 'persona',
-        title: 'How your assistant should behave',
-        detail: `From ${found.label}’s ${found.persona.from}, as your instructions in every chat.`,
-        preview: found.persona.instructions,
-        checked: !persona.instructions.trim() && !odd,
-        ...(persona.instructions.trim() && {
-          warning: 'Replaces the instructions you wrote in Conch. Undo puts yours back.',
-        }),
-        ...odd,
-      });
-    }
+    // Its agents first: each as one of Conch's, with its face and voice (ADR 0101).
+    const cast = await this.#agentPlan(found, problems);
+    items.push(...cast.items);
     if (found.model) {
       const item = await this.#modelItem(found, preferences);
       if (typeof item === 'string') problems.push(item);
@@ -468,7 +509,152 @@ export class ImportService {
       });
     }
 
-    return { source: this.#source(found, await this.#ledger()), items, problems };
+    return {
+      source: this.#source(found, await this.#ledger()),
+      items,
+      problems,
+      ...(cast.defaultAgent && { defaultAgent: cast.defaultAgent }),
+      ...(cast.current && { currentDefault: { name: cast.current } }),
+    };
+  }
+
+  /** The agents it ran, as they'd be here, read once per look. */
+  readonly #drafts = new Map<ImportSourceId, Map<string, AgentDraft>>();
+
+  /**
+   * Its own model and effort, as an agent's defaults (ADR 0101): the model
+   * matched to what's connected here the way the app's own is (ADR 0042),
+   * never a permission mode. A model that can't be placed stays behind, said.
+   */
+  #defaultsFor(
+    who: FoundIdentity,
+    name: string,
+    found: Found,
+    catalog: CatalogEntry[] | undefined,
+  ): { defaults?: AgentDefaults; words?: string; note?: string; key?: KeyProvider } {
+    const effort = who.effort;
+    const base: AgentDefaults | undefined = effort ? { effort } : undefined;
+    if (!who.model) return { ...(base && { defaults: base }) };
+    if (!catalog)
+      return {
+        ...(base && { defaults: base }),
+        note: `${name}’s model, ${modelWords(who.model.model)}, comes over in Conch itself: until then it uses your default.`,
+      };
+    const mapped = mapModel(
+      who.model,
+      name,
+      catalog,
+      found.keys.map((k) => k.provider),
+    );
+    if (!mapped.ok)
+      return {
+        ...(base && { defaults: base }),
+        note: mapped.reason.replace('new chats start with it', 'its chats start with it'),
+        ...(mapped.key && { key: mapped.key }),
+      };
+    return {
+      defaults: { ...base, engine: mapped.choice.engine, model: mapped.choice.model },
+      words: `${mapped.choice.modelLabel} on ${mapped.choice.engineLabel}`,
+    };
+  }
+
+  /**
+   * Each agent it ran, as one of Conch's (ADR 0101): its face, name (made
+   * unique here), tone, personality and instructions, read first like any
+   * words that will reach the assistant. One brought before is brought up to
+   * date rather than made twice. Ticked, unless its words read like orders,
+   * it's already as it would be, or Conch has no room for it.
+   */
+  async #agentPlan(
+    found: Found,
+    problems: string[],
+  ): Promise<{ items: ImportItem[]; defaultAgent?: string; current?: string }> {
+    const t = this.deps.targets;
+    const drafts = new Map<string, AgentDraft>();
+    this.#drafts.set(found.source, drafts);
+    if (!found.identities.length) return { items: [] };
+    if (!t.agents) {
+      problems.push(`${found.label}’s agents come over in Conch itself: Settings → Memory.`);
+      return { items: [] };
+    }
+    const list = await t.agents.list();
+    const mine = (id: string) =>
+      list.agents.find((a) => a.imported?.from === found.source && a.imported.id === id);
+    const taken = list.agents
+      .filter((a) => !found.identities.some((i) => mine(i.id)?.id === a.id))
+      .map((a) => a.name);
+    const catalog = t.models ? await t.models.catalog().catch(() => undefined) : undefined;
+    let room = AGENT_LIMITS.count - list.agents.length;
+    const known = secretsOf(found);
+    const items: ImportItem[] = [];
+    for (const who of found.identities) {
+      const draft = await draftAgent(who, found.label, known);
+      drafts.set(who.id, draft);
+      const existing = mine(who.id);
+      const name = uniqueName(draft.name, taken);
+      taken.push(name);
+      const { defaults, words, note } = this.#defaultsFor(who, name, found, catalog);
+      const full = !existing && room <= 0;
+      if (!existing) room -= 1;
+      const same =
+        existing !== undefined &&
+        agentKey(existing) ===
+          agentKey({ ...draft, name, defaults: defaults ?? existing.defaults ?? null });
+      const odd = draft.review && {
+        review: { verdict: draft.review.verdict, findings: draft.review.findings },
+      };
+      const apps = who.channels.map((c) => CHANNEL_NAMES[c]);
+      const detail = [
+        draft.role || `Your “${who.id}” agent in ${found.label}.`,
+        words && `Its chats start with ${words}.`,
+        apps.length && `It answered your ${listed(apps)} bot.`,
+      ]
+        .filter(Boolean)
+        .map((s) => (/[.!?]$/.test(String(s)) ? s : `${s}.`))
+        .join(' ');
+      const warnings = [
+        full &&
+          `Conch keeps at most ${AGENT_LIMITS.count} agents: remove one in Agents to bring this one.`,
+        odd &&
+          'Left unticked: its words read like orders to the assistant. Read them before bringing it.',
+        existing && !same && 'Brought over before: ticked, it’s brought up to date.',
+        ...draft.notes,
+        note,
+      ].filter((w): w is string => Boolean(w));
+      const image =
+        draft.picture?.ok &&
+        `/api/import/${found.source}/agents/${encodeURIComponent(who.id)}/face`;
+      items.push({
+        id: `agent:${who.id}`,
+        group: 'agents',
+        title: name,
+        name,
+        detail,
+        ...(draft.instructions && { preview: draft.instructions }),
+        face: {
+          avatar: draft.avatar,
+          ...(image && { image }),
+          ...(draft.emoji && { emoji: draft.emoji }),
+        },
+        checked: !full && !odd && !same,
+        ...(same && { duplicate: true }),
+        ...(warnings.length && { warning: warnings.join(' ') }),
+        ...odd,
+      });
+    }
+    const current = list.agents.find((a) => a.id === list.defaultId)?.name;
+    const theirs = found.defaultAgent && `agent:${found.defaultAgent}`;
+    return {
+      items,
+      ...(theirs && items.some((i) => i.id === theirs) && { defaultAgent: theirs }),
+      ...(current && { current }),
+    };
+  }
+
+  /** An agent's own picture from the last look, for the plan to show (never kept until brought). */
+  face(source: ImportSourceId, id: string): { bytes: Buffer; type: string } | undefined {
+    const picture = this.#drafts.get(source)?.get(id)?.picture;
+    return picture?.ok ? { bytes: picture.bytes, type: picture.type } : undefined;
   }
 
   /**
@@ -525,9 +711,9 @@ export class ImportService {
   }
 
   /**
-   * One of OpenClaw's other agents (ADR 0042): its persona as a skill you
-   * pick in a chat, then its about-you, memories, skills and routines, all
-   * read first like the main agent's, and shown together under its name.
+   * Another agent's things (ADR 0042): its about-you, memories, skills and
+   * routines, all read first like the main agent's, and shown together
+   * under its name. The agent itself is one of the `agents` items.
    */
   async #agentItems(agent: FoundAgent, found: Found, known: Set<string>): Promise<ImportItem[]> {
     const tag = { agent: { id: agent.id, name: agent.name } };
@@ -539,19 +725,6 @@ export class ImportService {
       (await this.deps.targets.skills.names()).map((n) => n.toLowerCase()),
     );
 
-    if (agent.persona?.instructions && this.deps.targets.skills.create) {
-      const odd = steering(agent.persona.instructions, agent.persona.from);
-      items.push({
-        id: `${prefix}:persona`,
-        group: 'skills',
-        title: `Talk as ${agent.name}`,
-        detail: `${agent.name}’s ${agent.persona.from}, as a skill: pick it in any chat to talk to ${agent.name}. It comes over off.`,
-        preview: agent.persona.instructions,
-        checked: !odd,
-        ...odd,
-        ...tag,
-      });
-    }
     if (agent.about && agent.about.text !== found.about?.text) {
       const odd = steering(agent.about.text, agent.about.from);
       items.push({
@@ -618,8 +791,16 @@ export class ImportService {
     return items;
   }
 
-  /** Bring the ticked things over. A backup is made first; then each item, one at a time. */
-  run(source: ImportSourceId, ids: string[]): Promise<ImportResult> {
+  /**
+   * Bring the ticked things over. A backup is made first; then each item, one
+   * at a time: agents first, so the routines and bots that were theirs go
+   * with them. `defaultAgent` (a ticked `agent:` item) starts new chats.
+   */
+  run(
+    source: ImportSourceId,
+    ids: string[],
+    options: { defaultAgent?: string } = {},
+  ): Promise<ImportResult> {
     return this.#mutex.run(async () => {
       const found = this.#looked.get(source) ?? (await this.#read(source));
       if (!found) throw new ImportError('not-found', 'That app isn’t on this computer any more.');
@@ -648,8 +829,9 @@ export class ImportService {
         channels: [],
         keys: [],
         moreKeys: [],
+        agents: [],
       };
-      const before: NonNullable<Ledger['last']>['before'] = {};
+      const before: NonNullable<Ledger['last']>['before'] = { agents: [] };
       const settings = await t.settings.get();
 
       const step = async (
@@ -688,21 +870,104 @@ export class ImportService {
           : undefined;
       };
 
-      // Persona and about you: what they replace is kept for Undo.
-      if (found.persona?.name)
-        await step('persona:name', 'persona', `Name: ${found.persona.name}`, async () => {
-          before.persona = { ...before.persona, name: settings.persona.name };
-          await t.settings.update({ persona: { name: found.persona?.name } });
-          return undefined;
-        });
-      if (found.persona?.instructions)
-        await step('persona:instructions', 'persona', 'Instructions', async () => {
-          before.persona = { ...before.persona, instructions: settings.persona.instructions };
-          await t.settings.update({
-            persona: { instructions: unsmuggle(found.persona?.instructions ?? '').slice(0, 4000) },
+      // Its agents (ADR 0101), each as one of Conch's. `here` maps the app's id to
+      // Conch's, for the routines and bots that were theirs; one brought before counts.
+      const here = new Map<string, string>();
+      const names = new Map<string, string>();
+      /** Agents whose model needs a key that comes over below: set once it has. */
+      const later: { id: string; who: FoundIdentity; name: string; key: KeyProvider }[] = [];
+      if (t.agents && found.identities.length) {
+        const agents = t.agents;
+        const list = await agents.list();
+        const mine = (id: string) =>
+          list.agents.find((a) => a.imported?.from === source && a.imported.id === id);
+        for (const who of found.identities) {
+          const existing = mine(who.id);
+          if (existing) {
+            here.set(who.id, existing.id);
+            names.set(who.id, existing.name);
+          }
+        }
+        const taken = list.agents
+          .filter((a) => !found.identities.some((i) => mine(i.id)?.id === a.id))
+          .map((a) => a.name);
+        const catalog = found.identities.some((i) => i.model)
+          ? await t.models?.catalog(true).catch(() => undefined)
+          : undefined;
+        const drafts = this.#drafts.get(source) ?? new Map<string, AgentDraft>();
+        const known = secretsOf(found);
+        for (const who of found.identities) {
+          const draft = drafts.get(who.id) ?? (await draftAgent(who, found.label, known));
+          const name = uniqueName(draft.name, taken);
+          taken.push(name);
+          await step(`agent:${who.id}`, 'agents', name, async () => {
+            const existing = mine(who.id);
+            const { defaults, note, key } = this.#defaultsFor(who, name, found, catalog);
+            const notes = [...draft.notes];
+            let agent: Agent;
+            if (existing) {
+              before.agents.push({
+                id: existing.id,
+                name: existing.name,
+                role: existing.role,
+                persona: existing.persona,
+                instructions: existing.instructions,
+                ...(existing.avatar.kind === 'preset' && { avatar: existing.avatar }),
+                defaults: existing.defaults ?? null,
+              });
+              agent = await agents.update(existing.id, {
+                name,
+                role: draft.role,
+                persona: draft.persona,
+                instructions: draft.instructions,
+                defaults: defaults ?? null,
+                // A picture of its own, made here or kept from before, stays.
+                ...(existing.avatar.kind === 'preset' && { avatar: draft.avatar }),
+              });
+            } else {
+              agent = await agents.create(
+                {
+                  name,
+                  role: draft.role,
+                  avatar: draft.avatar,
+                  persona: draft.persona,
+                  instructions: draft.instructions,
+                  ...(defaults && { defaults }),
+                },
+                { imported: { from: source, id: who.id, at: this.#now } },
+              );
+              created.agents.push(agent.id);
+            }
+            here.set(who.id, agent.id);
+            names.set(who.id, agent.name);
+            if (draft.picture?.ok && agent.avatar.kind === 'preset')
+              await agents.setImage(agent.id, draft.picture.bytes.toString('base64')).catch(() => {
+                notes.push('Its picture couldn’t be kept: it has one of Conch’s faces for now.');
+              });
+            if (key && wanted.has(`key:${key}`)) later.push({ id: agent.id, who, name, key });
+            else if (note) notes.push(note);
+            return notes.join(' ') || undefined;
           });
-          return undefined;
-        });
+        }
+        // Theirs (or the one you chose) starts new chats: only one that came over now.
+        const chosen = options.defaultAgent?.startsWith('agent:')
+          ? options.defaultAgent.slice('agent:'.length)
+          : undefined;
+        const id = chosen && wanted.has(`agent:${chosen}`) ? here.get(chosen) : undefined;
+        const brought = outcomes.find((o) => o.id === `agent:${chosen}` && o.ok);
+        if (id && brought) {
+          const now = (await agents.list()).defaultId;
+          if (now !== id) {
+            before.defaultAgent = now;
+            await agents.setDefault(id);
+            brought.message = [`New chats start with ${brought.title}.`, brought.message]
+              .filter(Boolean)
+              .join(' ');
+          }
+        }
+      }
+      const agentOf = (appId: string | undefined) => (appId ? here.get(appId) : undefined);
+
       if (found.about)
         await step('about', 'about', 'About you', async () => {
           before.about = settings.profile.about;
@@ -727,32 +992,27 @@ export class ImportService {
           return 'Off for now: turn it on in Skills.';
         });
 
-      for (const [i, r] of found.routines.entries())
-        await step(`routine:${i}`, 'routines', r.title, async () => {
-          const routine = await t.routines.create({
-            title: r.title,
-            summary: '',
-            prompt: unsmuggle(r.prompt),
-            schedule: r.schedule,
-            timezone: r.timezone,
-            status: 'draft',
-            trust: 'ask',
-          });
-          created.routines.push(routine.id);
-          return 'A draft: turn it on in Routines when you’re ready.';
+      const routine = async (r: FoundRoutine, owner: string | undefined) => {
+        const agentId = agentOf(owner);
+        const made = await t.routines.create({
+          title: r.title,
+          summary: '',
+          prompt: unsmuggle(r.prompt),
+          schedule: r.schedule,
+          timezone: r.timezone,
+          status: 'draft',
+          trust: 'ask',
+          ...(agentId && { agentId }),
         });
+        created.routines.push(made.id);
+        return 'A draft: turn it on in Routines when you’re ready.';
+      };
+      for (const [i, r] of found.routines.entries())
+        await step(`routine:${i}`, 'routines', r.title, () => routine(r, found.mainAgent));
 
-      // Another agent's things: its persona becomes a skill, the rest come as the main one's do.
+      // Another agent's things come as the main one's do; its routines go with it.
       for (const agent of found.agents) {
         const prefix = `agent:${agent.id}`;
-        const instructions = agent.persona?.instructions;
-        if (instructions && t.skills.create)
-          await step(`${prefix}:persona`, 'skills', `Talk as ${agent.name}`, async () => {
-            const skill = await t.skills.create?.(personaSkill(agent, found.label, instructions));
-            if (!skill) throw new Error('Skills can’t be made here.');
-            created.skills.push(skill.id);
-            return `Off for now: turn it on in Skills, then pick it in a chat to talk to ${agent.name}.`;
-          });
         if (agent.about)
           await step(`${prefix}:about`, 'about', `About you, from ${agent.name}`, async () => {
             const now = (await t.settings.get()).profile.about;
@@ -777,19 +1037,7 @@ export class ImportService {
             return 'Off for now: turn it on in Skills.';
           });
         for (const [i, r] of agent.routines.entries())
-          await step(`${prefix}:routine:${i}`, 'routines', r.title, async () => {
-            const routine = await t.routines.create({
-              title: r.title,
-              summary: '',
-              prompt: unsmuggle(r.prompt),
-              schedule: r.schedule,
-              timezone: r.timezone,
-              status: 'draft',
-              trust: 'ask',
-            });
-            created.routines.push(routine.id);
-            return 'A draft: turn it on in Routines when you’re ready.';
-          });
+          await step(`${prefix}:routine:${i}`, 'routines', r.title, () => routine(r, agent.id));
       }
 
       for (const c of found.channels) {
@@ -811,7 +1059,13 @@ export class ImportService {
         await step(`channel:${c.kind}`, 'channels', `${CHANNEL_NAMES[c.kind]} bot`, async () => {
           const channel = await t.channels.connect(c);
           created.channels.push(channel.id);
-          return `Say hello to ${channel.name} in ${CHANNEL_NAMES[c.kind]} to finish: nobody else gets in.`;
+          const as = await this.#answerAs(found, c.kind, channel.id, agentOf, names);
+          return [
+            `Say hello to ${channel.name} in ${CHANNEL_NAMES[c.kind]} to finish: nobody else gets in.`,
+            as,
+          ]
+            .filter(Boolean)
+            .join(' ');
         });
       }
 
@@ -842,6 +1096,18 @@ export class ImportService {
           return `New chats start with ${choice.modelLabel} on ${choice.engineLabel}.`;
         });
 
+      // An agent's own model, now that the key it needed may be here.
+      if (later.length && t.agents) {
+        const catalog = await t.models?.catalog(true).catch(() => undefined);
+        for (const l of later) {
+          const outcome = outcomes.find((o) => o.id === `agent:${l.who.id}`);
+          const { defaults, words, note } = this.#defaultsFor(l.who, l.name, found, catalog);
+          if (defaults?.model) await t.agents.update(l.id, { defaults }).catch(() => undefined);
+          const said = defaults?.model ? `Its chats start with ${words}.` : note;
+          if (outcome && said) outcome.message = [outcome.message, said].filter(Boolean).join(' ');
+        }
+      }
+
       const count = outcomes.filter((o) => o.ok).length;
       const ledger = await this.#ledger();
       await writeJson(join(this.deps.home, LEDGER), {
@@ -854,6 +1120,7 @@ export class ImportService {
         counts: Object.fromEntries(
           (
             [
+              'agents',
               'persona',
               'model',
               'about',
@@ -870,6 +1137,29 @@ export class ImportService {
         undoable: count > 0,
       };
     });
+  }
+
+  /**
+   * The agent that answered this bot in the other app answers it here too
+   * (`Channel.agentId`), when it's one of Conch's now. A sentence saying so.
+   */
+  async #answerAs(
+    found: Found,
+    kind: FoundChannel['kind'],
+    channelId: string,
+    agentOf: (appId: string | undefined) => string | undefined,
+    names: Map<string, string>,
+  ): Promise<string | undefined> {
+    const who = found.identities.find((i) => i.channels.includes(kind));
+    const agentId = agentOf(who?.id);
+    const setAgent = this.deps.targets.channels.setAgent;
+    if (!who || !agentId || !setAgent) return undefined;
+    try {
+      await setAgent(channelId, agentId);
+      return `${names.get(who.id) ?? who.name} answers there, as in ${found.label}.`;
+    } catch {
+      return undefined;
+    }
   }
 
   /** Take the last import back: what it added goes, what it replaced comes back. */
@@ -896,8 +1186,36 @@ export class ImportService {
       for (const id of last.created.channels) await quietly(() => t.channels.remove(id));
       for (const p of [...last.created.keys, ...last.created.moreKeys] as KeyProvider[])
         await quietly(() => t.keys.clear(p));
+      // Agents (ADR 0101): the default as it was first, then what it changed, then what it made.
+      const agents = t.agents;
+      if (agents) {
+        if (last.before.defaultAgent) {
+          const to = last.before.defaultAgent;
+          if ((await agents.list()).agents.some((a) => a.id === to)) {
+            await agents.setDefault(to).catch(() => undefined);
+            restored += 1;
+          }
+        }
+        for (const a of last.before.agents)
+          try {
+            await agents.update(a.id, {
+              name: a.name,
+              role: a.role,
+              persona: a.persona,
+              instructions: a.instructions,
+              defaults: a.defaults,
+              ...(a.avatar && { avatar: a.avatar }),
+            });
+            restored += 1;
+          } catch {
+            // Gone since, or renamed to a name another agent has now: it stays as it is.
+          }
+        for (const id of last.created.agents) await quietly(() => agents.remove(id));
+      }
+      // From an import before agents: the default agent's name and instructions.
       if (last.before.persona && Object.keys(last.before.persona).length) {
-        await t.settings.update({ persona: last.before.persona });
+        if (agents?.adoptPersona) await agents.adoptPersona(last.before.persona);
+        else await t.settings.update({ persona: last.before.persona });
         restored += 1;
       }
       if (last.before.about !== undefined) {
@@ -970,6 +1288,11 @@ export class ImportService {
           `Paste the ${KEY_WORDS[channel.token ? 'appToken' : 'botToken']} first.`,
         );
       const made = await this.deps.targets.channels.connect({ ...channel, token, appToken });
+      // The agent that answered it there answers it here, once it's one of Conch's (ADR 0101).
+      const list = await this.deps.targets.agents?.list().catch(() => undefined);
+      const ofApp = (appId: string | undefined) =>
+        list?.agents.find((a) => a.imported?.from === source && a.imported.id === appId)?.id;
+      await this.#answerAs(found, 'slack', made.id, ofApp, new Map());
       const ledger = await this.#ledger();
       const last =
         ledger.last && ledger.last.source === source && this.#now - ledger.last.at < UNDO_MS
@@ -993,8 +1316,9 @@ export class ImportService {
                 channels: [made.id],
                 keys: [],
                 moreKeys: [],
+                agents: [],
               },
-              before: {},
+              before: { agents: [] },
             },
         history: last
           ? ledger.history

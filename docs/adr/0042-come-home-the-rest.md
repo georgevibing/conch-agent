@@ -1,6 +1,6 @@
 # 0042 — Come home, the rest: the model, other agents, a Slack bot with one key
 
-- Status: accepted
+- Status: accepted; §2 superseded by [§ Update: agents come over as agents](#update-agents-come-over-as-agents) (ADR 0101)
 - Date: 2026-10-02
 - Builds on: [ADR 0035](./0035-come-home.md) (Come home),
   [ADR 0010](./0010-providers.md) and [ADR 0012](./0012-every-provider-at-once.md)
@@ -82,6 +82,9 @@ The terminal (`pnpm conch import`) has no provider list, so there the model
 is a sentence: it comes over in Conch itself.
 
 ### 2. Other agents: each persona as a skill, everything else as the main one's
+
+> Superseded: Conch has agents now (ADR 0101), so every agent comes over as
+> one of them. See [§ Update](#update-agents-come-over-as-agents) below.
 
 Conch has **one assistant**, with one name and one set of instructions
 (`Persona`), and everything you set up belongs to Conch and reaches every
@@ -172,3 +175,61 @@ that app's Basic Information page once a key gives it away.
     counterpart: a bot answers as your assistant, and you can pick the skill.
   - Slack's page addresses are Slack's to change; a link that moves still
     lands in your apps, one click from the right page.
+
+## Update: agents come over as agents
+
+- Date: 2026-10-07
+- Builds on: [ADR 0101](./0101-agents.md) (agents)
+
+Conch has agents now, each with a name, a face, a tone and instructions of
+its own, so a persona skill and a renamed default are no longer the honest
+counterpart. Every agent the other app ran comes over as one of Conch's
+agents (`import/agents.ts`, `ImportService.#agentPlan`, the plan's `agents`
+group). The persona items (`persona:name`, `persona:instructions`) and the
+"Talk as …" skill are gone; Undo still reads an older ledger's `persona`.
+
+**Where they're read** (both apps' docs and source, Oct 2026):
+
+- OpenClaw: `agents.entries.<id>` (and the older `agents.list`), each with
+  `name`, `workspace`, `model`, `thinkingDefault` and `identity { name,
+theme, emoji, avatar }`; the workspace's `SOUL.md`, `IDENTITY.md`
+  (`- **Name:**` lines, the template's hints ignored) and `AGENTS.md`. Its
+  default is the legacy `default: true`, else `agents.defaults.systemAgent`,
+  else the only agent. `bindings` say which agent answered which bot; a bot
+  on `channels.<app>.accounts.<defaultAccount>` is now read too.
+- Hermes: `~/.hermes` is the `default` profile, `~/.hermes/profiles/<name>/`
+  (with `config.yaml`, `.env`, `SOUL.md`, `profile.yaml`, `auth.json` or
+  `state.db`) the others, each a home of its own with memories, skills, cron
+  and `config.yaml`. `profile.yaml` gives `display_name`, `description` and
+  Bot Mode's `ui_meta.hermes-bots` (`title`, `avatar`); `active_profile` is
+  its default. A profile's own bots stay behind, said; its keys fill a gap.
+
+**How each maps:**
+
+| Conch's agent  | From                                                                                                                                                                                                                                                                                            |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`         | IDENTITY.md's Name, `identity.name`, the entry's `name`, Bot Mode's title, `display_name`, else its id; made unique with `uniqueName` ("Atlas 2")                                                                                                                                               |
+| `role`         | A Hermes profile's `description` (120 characters); OpenClaw has none                                                                                                                                                                                                                            |
+| `avatar`       | Its own picture (a workspace file, never through a link or out of its folder, or a `data:` URI; never fetched from the web), read and kept by `AgentStore.setImage`; else the preset and colour its emoji (or words: "a curious fox") match, else one chosen from its name, the same every time |
+| `persona.tone` | Counted from its words, its own words about its manner (Theme, Creature, Vibe) double, a negated one against; nothing that says one: warm                                                                                                                                                       |
+| `personality`  | Its Theme, Creature or Vibe                                                                                                                                                                                                                                                                     |
+| `instructions` | SOUL.md, then what the person added to AGENTS.md (OpenClaw's own template sections stay behind), cut at a paragraph to 8,000 characters, the plan saying so                                                                                                                                     |
+| `defaults`     | Its own model, matched as the app's model is (§1), and its effort; never a permission mode. A model that can't be placed is a sentence; one that needs a ticked key waits for it                                                                                                                |
+| `imported`     | `{ from, id, at }`: bringing it again finds it there and brings it up to date (Undo puts back what it was); unchanged, it's "Already in Conch"                                                                                                                                                  |
+| routines, bots | A routine that ran as it gets `agentId`; the bot it answered gets `Channel.agentId` (also when a half Slack bot is finished later)                                                                                                                                                              |
+
+All agents start ticked, except one whose words (or name, role, manner)
+read like orders (`scanText`), one already as it would be, and those past
+`AGENT_LIMITS.count`. Before its words are kept, the other app's own keys
+and bot tokens are taken out by value, then anything shaped like a key or a
+password (`scrubSecrets`, `secretIn`), and invisible characters
+(`unsmuggle`); the plan says when it did. **New chats start with** is
+theirs when the app said which was its default, else Conch's stays; Undo
+puts the old one back. A picture is shown in the plan from
+`GET /api/import/:source/agents/:id/face`: cleaned bytes from the last
+look, `nosniff`, no caching, behind sign-in, an id that's never a path.
+
+Known limits: Hermes's Bot Mode keeps its avatar in desktop metadata whose
+format isn't documented; only a `data:` URI or a file in the profile is read.
+An agent's own tools, sandbox and skill allowlist have no counterpart: every
+agent here shares Conch's apps, skills and safety settings (ADR 0101).

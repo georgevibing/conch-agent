@@ -49,8 +49,8 @@ export interface PushMessage {
 
 export interface PushDeps {
   store: PushStore;
-  /** The assistant's name, for "Conch needs your OK". */
-  persona: () => Promise<string>;
+  /** The assistant's name, for "Conch needs your OK": the chat's agent's, else the default's (ADR 0101). */
+  persona: (conversationId?: string) => Promise<string>;
   conversation: (id: string) => Promise<
     | {
         title: string;
@@ -333,7 +333,7 @@ export class PushService {
     if (e.type === 'permission.requested') {
       const chat = await this.deps.conversation(e.conversationId);
       // Another app asking through Conch says so: the OK is for it, not your assistant.
-      const name = chat?.app ?? (await this.deps.persona());
+      const name = chat?.app ?? (await this.deps.persona(e.conversationId));
       await this.notify('approvals', {
         title: `${name} needs your OK`,
         body: clip(chat?.title ? `${e.summary} · ${chat.title}` : e.summary),
@@ -353,7 +353,7 @@ export class PushService {
     // A memory the check held (ADR 0087): waiting for you, like an OK. The words
     // are Conch's own, never the memory's: a lock screen is no place for a plant.
     if (e.type === 'memory.saved' && e.memory.held) {
-      const name = await this.deps.persona();
+      const name = await this.deps.persona(e.conversationId);
       const chat = await this.deps.conversation(e.conversationId);
       const what =
         e.memory.held.verdict === 'refuse'
@@ -373,7 +373,7 @@ export class PushService {
     }
     // A question with answers to tap (ADR 0060): waiting for you, like an OK.
     if (e.type === 'question') {
-      const name = await this.deps.persona();
+      const name = await this.deps.persona(e.conversationId);
       const chat = await this.deps.conversation(e.conversationId);
       const asked = e.question.title ?? e.question.fields[0]?.label ?? '';
       await this.notify('approvals', {
@@ -389,7 +389,7 @@ export class PushService {
       return;
     }
     if (e.type === 'vault.request' && e.request.state === 'waiting') {
-      const name = await this.deps.persona();
+      const name = await this.deps.persona(e.conversationId);
       await this.notify('approvals', {
         title:
           e.request.kind === 'unlock'
@@ -405,7 +405,7 @@ export class PushService {
       return;
     }
     if (e.type === 'browser.handoff' && e.handoff.state === 'waiting') {
-      const name = await this.deps.persona();
+      const name = await this.deps.persona(e.conversationId);
       await this.notify('approvals', {
         title: `${name} needs you in the browser`,
         body: clip(e.handoff.reason),
@@ -426,7 +426,7 @@ export class PushService {
       const chat = await this.deps.conversation(e.conversationId);
       // A routine's run says so once it's done; a chat app already got its answer there.
       if (!chat || chat.routine || chat.channel || chat.task) return;
-      const name = await this.deps.persona();
+      const name = await this.deps.persona(e.conversationId);
       await this.notify('replies', {
         title: chat.title ? `${name} · ${clip(chat.title, 60)}` : `${name} replied`,
         body: clip(said),

@@ -1,5 +1,13 @@
-import { MessageList, SkillHoldEnded, SummaryDivider } from '@conch/nacre';
-import { memo, useState, type ReactNode, type Ref } from 'react';
+import {
+  AgentChange,
+  MessageList,
+  SkillHoldEnded,
+  SummaryDivider,
+  type AgentFace,
+  type Speaker,
+} from '@conch/nacre';
+import type { EngineId } from '@conch/protocol';
+import { memo, useMemo, useState, type ReactNode, type Ref } from 'react';
 
 import {
   isTurnStart,
@@ -10,6 +18,7 @@ import {
 import { familyOf, verbsFor, type ToolFamily } from './verbs';
 import {
   AssistantMessage,
+  AssistantWords,
   Arrival,
   AssistantPlaceholder,
   MemoryPill,
@@ -51,7 +60,14 @@ export interface TranscriptProps {
   /** The chat's log is still on its way: its outline shows, then the chat whole. */
   opening?: boolean;
   pending: PendingMessage[];
+  /** What the assistant is called: its speaker line, and the words its cards use. */
   name: string;
+  /** The chat's agent's face over its replies (`Agent.avatar`; Conch's mark without one). */
+  avatar?: AgentFace;
+  /** Any agent by id, for replies from before another one took the chat over (ADR 0101). */
+  agentOf?: (agentId: string) => { name: string; avatar?: AgentFace } | undefined;
+  /** A model's name as people know it, for the quiet line over a reply. */
+  modelName?: (engine: EngineId | undefined, model: string | undefined) => string | undefined;
   onRespond: (permissionId: string, decision: 'allow' | 'allow-always' | 'deny') => void;
   onRetry: () => void;
   /** What the chat can offer about the last failed turn (sign in, another provider…). */
@@ -161,7 +177,11 @@ function placeSuggestions(items: TranscriptItem[], holdLast: boolean): Transcrip
  * a note on the chat, not a reply's part, and not news.
  */
 const isContextLine = (item: TranscriptItem) =>
-  item.kind === 'summary' || item.kind === 'cleared' || item.kind === 'goal-note';
+  item.kind === 'summary' ||
+  item.kind === 'cleared' ||
+  item.kind === 'goal-note' ||
+  // Another agent answering from here (ADR 0101): a line across the chat, too.
+  item.kind === 'agent';
 
 /** Plan mode's question is its own card: the row of the tool that asked would say it twice. */
 function withoutPlanTools(items: TranscriptItem[]): TranscriptItem[] {
@@ -177,16 +197,22 @@ function planBefore(items: TranscriptItem[], id: string) {
   return plan?.kind === 'plan' ? plan.steps : undefined;
 }
 
-/** A reply: its first words, and everything after them until the next turn (its parts). */
+/**
+ * A reply: everything the assistant did in a turn, under one speaker line —
+ * its first words (`head`, when it began with words), then its parts.
+ */
 interface Reply {
-  head: Block;
+  key: string;
+  head?: Block;
   parts: Block[];
 }
 
 /**
- * Gathers each reply with what belongs to it, so it's drawn as one: its
- * words, then its tool rows, more words and cards, then its actions. A turn
- * that stopped or failed, or a summary line, ends the reply too.
+ * Gathers each reply with what belongs to it, so it's drawn as one: who is
+ * speaking, its words, its tool rows, more words and cards, then its
+ * actions. A reply that begins with a step (a tool, a page read) is still
+ * one, with its speaker line above that step. A turn that stopped or
+ * failed, or a summary line, ends the reply.
  */
 function replies(all: Block[]): (Block | Reply)[] {
   const out: (Block | Reply)[] = [];
@@ -197,19 +223,28 @@ function replies(all: Block[]): (Block | Reply)[] {
     const ended = item?.kind === 'turn-end' && item.outcome !== 'success';
     if (item && (isTurnStart(item) || ended || isContextLine(item))) {
       open = undefined;
-    } else if (item?.kind === 'assistant' && !item.continuation) {
-      // A reply with nothing to show yet (hidden reasoning) has no column to hold its parts.
-      open = item.text || item.thinking ? { head: block, parts: [] } : undefined;
-      out.push(open ?? block);
-      continue;
+      out.push(block);
     } else if (open) {
       open.parts.push(block);
-      continue;
+    } else if (item?.kind === 'assistant' && !item.continuation) {
+      // Nothing to show yet (hidden reasoning): no reply to hold anything.
+      if (item.text || item.thinking) out.push((open = { key: block.key, head: block, parts: [] }));
+      else out.push(block);
+    } else if (isPart(block)) {
+      out.push((open = { key: `reply-${block.key}`, parts: [block] }));
+    } else {
+      out.push(block);
     }
-    out.push(block);
   }
   return out;
 }
+
+/** What a reply opens with: its words, or its first step. */
+const openingOf = (reply: Reply): Block => reply.head ?? (reply.parts[0] as Block);
+
+/** The first thing a block shows, to find where it is in the chat. */
+const firstOf = (block: Block): TranscriptItem | undefined =>
+  block.item ?? block.tools?.[0] ?? block.browser?.[0];
 
 /** Everything but a message, the line where a turn ended and a summary is part of a reply. */
 const isPart = (block: Block) =>
@@ -230,7 +265,7 @@ function endOf(reply: Reply) {
 /** A reply's words, all of them, once every part has finished: what Copy takes. */
 function saidIn(reply: Reply): string | undefined {
   const words = [reply.head, ...reply.parts]
-    .map((b) => b.item)
+    .map((b) => b?.item)
     .filter((i): i is Extract<TranscriptItem, { kind: 'assistant' }> => i?.kind === 'assistant');
   if (words.some((w) => !w.done)) return undefined;
   return (
@@ -254,6 +289,9 @@ export const Transcript = memo(function Transcript({
   opening = false,
   pending,
   name,
+  avatar,
+  agentOf,
+  modelName,
   onRespond,
   onRetry,
   recover,
@@ -276,6 +314,7 @@ export const Transcript = memo(function Transcript({
   // News is what happened after the chat was opened. A reload replays history as a
   // burst of events (turn status included), so their own timestamps are what tell.
   const [openedAt] = useState(() => Date.now());
+  const speaker: Speaker = useMemo(() => ({ name, avatar }), [name, avatar]);
   const firstUserId = routineRun ? view.items.find((i) => i.kind === 'user')?.id : undefined;
   const running = view.status === 'running' || view.status === 'awaiting-permission';
   const items: TranscriptItem[] = [
@@ -400,9 +439,46 @@ export const Transcript = memo(function Transcript({
       {tail.footer && <div className={styles.part}>{tail.footer}</div>}
     </>
   );
-  const tailAttached = lastRow !== undefined && 'head' in lastRow;
+  const tailAttached = lastRow !== undefined && 'parts' in lastRow;
 
-  const render = (block: Block, rest?: Reply) => (
+  /** One reply, under its speaker line (left out when the same voice spoke just before). */
+  const renderReply = (reply: Reply, continued: boolean, speaker: Speaker) => {
+    const head = reply.head?.item?.kind === 'assistant' ? reply.head.item : undefined;
+    const opening = openingOf(reply);
+    const first = firstOf(opening);
+    const ended = endOf(reply);
+    const latest = reply === lastRow;
+    return (
+      <AssistantMessage
+        item={head}
+        speaker={speaker}
+        continued={continued}
+        at={head?.startedAt ?? opening.at}
+        meta={ended && modelName?.(ended.engine, ended.model)}
+        wait={busy ? wait : undefined}
+        // The face moves while the newest reply is still being worked on, words or steps.
+        working={latest && busy}
+        // A reply that takes the wait's place arrives in place, without an entrance.
+        entrance={!(running && (first ? (position.get(first) ?? -1) : -1) > turnStart)}
+        attached={
+          reply.parts.length > 0 || latest ? (
+            <>
+              {reply.parts.map((part) => (
+                <Arrival key={part.key} live={live(part)} part>
+                  {render(part)}
+                </Arrival>
+              ))}
+              {latest && tailParts}
+            </>
+          ) : undefined
+        }
+        said={latest && turnRunning ? undefined : saidIn(reply)}
+        ended={ended}
+      />
+    );
+  };
+
+  const render = (block: Block) => (
     <>
       {block.tools && (
         <div className={styles.tools}>
@@ -418,30 +494,12 @@ export const Transcript = memo(function Transcript({
           <UserMessage item={block.item} />
         ))}
       {block.item?.kind === 'assistant' && (
-        <AssistantMessage
+        // Words after a step, a part of their reply. (On its own, it's reasoning with nothing to show.)
+        <AssistantWords
           item={block.item}
-          name={name}
-          // A reply that picks up after its steps counts its own stretch.
-          wait={
-            busy
-              ? { ...wait, clockFrom: block.item.continuation ? block.item.startedAt : undefined }
-              : undefined
-          }
-          entrance={!(running && (position.get(block.item) ?? -1) > turnStart)}
-          {...(rest && {
-            attached: (
-              <>
-                {rest.parts.map((part) => (
-                  <Arrival key={part.key} live={live(part)} part>
-                    {render(part)}
-                  </Arrival>
-                ))}
-                {rest === lastRow && tailParts}
-              </>
-            ),
-            said: rest === lastRow && turnRunning ? undefined : saidIn(rest),
-            ended: endOf(rest),
-          })}
+          part
+          // Words that pick up after a step count their own stretch.
+          wait={busy ? { ...wait, clockFrom: block.item.startedAt } : undefined}
         />
       )}
       {block.browser && conversationId && (
@@ -605,6 +663,53 @@ export const Transcript = memo(function Transcript({
     </>
   );
 
+  // Whether the assistant spoke last, with nothing of yours (or a line across the
+  // chat) since: then its next reply goes on in the same voice, without a second
+  // speaker line. Its own cards in between (an offer it carried on from) keep it.
+  let spoke = false;
+  // Who is speaking, reply by reply: the agent a switch line names takes over
+  // from it. Before the first switch, whoever it says answered before.
+  const firstSwitch = items.find((i) => i.kind === 'agent');
+  const before = firstSwitch?.kind === 'agent' ? firstSwitch.from : undefined;
+  let current: Speaker = before
+    ? { name: before.name, avatar: agentOf?.(before.agentId)?.avatar }
+    : speaker;
+  const drawn = rows.map((row) => {
+    if ('parts' in row) {
+      const continued = spoke;
+      spoke = true;
+      return (
+        <Arrival key={row.key} live={live(openingOf(row))}>
+          {renderReply(row, continued, current)}
+        </Arrival>
+      );
+    }
+    const item = row.item;
+    if (item?.kind === 'agent') {
+      const previous = current;
+      current = { name: item.name, avatar: agentOf?.(item.agentId)?.avatar };
+      spoke = false;
+      // Who the chat is with from its start isn't news: only a change is drawn.
+      if (item.opening) return null;
+      return (
+        <Arrival key={row.key} live={live(row)}>
+          <AgentChange
+            speaker={current}
+            from={item.from?.name ?? previous.name}
+            className={styles.summary}
+          />
+        </Arrival>
+      );
+    }
+    if (item?.kind === 'user' || (item && isContextLine(item))) spoke = false;
+    else if (item?.kind !== 'turn-end' && item?.kind !== 'assistant') spoke = true;
+    return (
+      <Arrival key={row.key} live={live(row)} part={isPart(row)}>
+        {render(row)}
+      </Arrival>
+    );
+  });
+
   return (
     <MessageList
       className={styles.list}
@@ -615,18 +720,8 @@ export const Transcript = memo(function Transcript({
       loading={opening}
     >
       <div ref={columnRef} className={styles.column}>
-        {rows.map((row) =>
-          'head' in row ? (
-            <Arrival key={row.head.key} live={live(row.head)}>
-              {render(row.head, row)}
-            </Arrival>
-          ) : (
-            <Arrival key={row.key} live={live(row)} part={isPart(row)}>
-              {render(row)}
-            </Arrival>
-          ),
-        )}
-        {placeholder && <AssistantPlaceholder name={name} wait={wait} />}
+        {drawn}
+        {placeholder && <AssistantPlaceholder speaker={current} wait={wait} continued={spoke} />}
         {!tailAttached && tail.alsoTry && <div className={styles.part}>{tail.alsoTry}</div>}
         {between && (
           <div className={`${styles.part} ${styles.between}`}>

@@ -2,6 +2,7 @@ import { DropdownMenu, IconButton, Pearl } from '@conch/nacre';
 import { Globe, MoreHorizontal, SquareTerminal, TextSearch } from 'lucide-react';
 
 import { useUi } from '../../app/ui';
+import { ChatAgentMenu } from '../agents/ChatAgent';
 import { useLiveStore } from '../../live/store';
 import { useTerminalStatus } from '../terminal/queries';
 
@@ -34,6 +35,7 @@ export function HeaderMore({ conversationId }: { conversationId: string }) {
         </IconButton>
       </DropdownMenu.Trigger>
       <DropdownMenu.Content align="end">
+        <ChatAgentMenu conversationId={conversationId} />
         <DropdownMenu.Item icon={<TextSearch />} onSelect={() => ui().openFind(conversationId)}>
           Find in chat
         </DropdownMenu.Item>

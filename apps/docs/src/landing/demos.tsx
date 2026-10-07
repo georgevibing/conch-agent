@@ -9,7 +9,7 @@ import {
   AgendaView,
   AppOffer,
   ArtifactChart,
-  Avatar,
+  AgentAvatar,
   Badge,
   BrowserApproval,
   BrowserWindow,
@@ -41,8 +41,14 @@ import {
   type OfferCardState,
   type RepairItem,
 } from '@conch/nacre';
-import { appAbilities, appSourceLine } from '@conch/protocol';
-import { Compass, Mail, Sparkles, Sprout, Sun, type LucideIcon } from 'lucide-react';
+import {
+  appAbilities,
+  appSourceLine,
+  TONES,
+  type AgentAvatarPreset,
+  type Tone,
+} from '@conch/protocol';
+import { Mail } from 'lucide-react';
 import { useId, useState } from 'react';
 import reference from 'virtual:conch-reference';
 
@@ -101,11 +107,7 @@ function Transcript({ at }: { at: number }) {
     <div className={styles.chat}>
       {at >= CHAT.ask && <Message from="user">What changed in this repo since Monday?</Message>}
       {at >= CHAT.think && (
-        <Message
-          from="assistant"
-          author="Conch"
-          status={at < CHAT.answerDone ? 'streaming' : 'complete'}
-        >
+        <Message from="assistant" status={at < CHAT.answerDone ? 'streaming' : 'complete'}>
           <div className={styles.reply}>
             {at < CHAT.tool && <ThinkingIndicator size="sm" label="Reading the history" />}
             {at >= CHAT.tool && (
@@ -135,11 +137,7 @@ function Transcript({ at }: { at: number }) {
         </RoutedNote>
       )}
       {at >= CHAT.thinkAgain && (
-        <Message
-          from="assistant"
-          author="Conch"
-          status={at < CHAT.answerAgainDone ? 'streaming' : 'complete'}
-        >
+        <Message from="assistant" status={at < CHAT.answerAgainDone ? 'streaming' : 'complete'}>
           <div className={styles.reply}>
             {at < CHAT.answerAgain && <ThinkingIndicator size="sm" label="Picking up the thread" />}
             {at >= CHAT.answerAgain && (
@@ -245,11 +243,7 @@ function Knows({ at }: { at: number }) {
     <div className={styles.chat}>
       {at >= KNOWS.ask && <Message from="user">Can I fit a haircut in on Friday?</Message>}
       {at >= KNOWS.think && (
-        <Message
-          from="assistant"
-          author="Conch"
-          status={at < KNOWS.replyDone ? 'streaming' : 'complete'}
-        >
+        <Message from="assistant" status={at < KNOWS.replyDone ? 'streaming' : 'complete'}>
           {at < KNOWS.reply ? (
             <ThinkingIndicator size="sm" label="Thinking" />
           ) : (
@@ -263,7 +257,6 @@ function Knows({ at }: { at: number }) {
       )}
       {at >= KNOWS.offer && (
         <OfferCard
-          className={styles.offer}
           kind="app"
           name={CALENDAR}
           brand="google-calendar"
@@ -278,9 +271,10 @@ function Knows({ at }: { at: number }) {
         />
       )}
       {at >= KNOWS.tool && (
+        // The same voice carrying on after its card: no second speaker line.
         <Message
           from="assistant"
-          author="Conch"
+          continued
           status={at < KNOWS.answerDone ? 'streaming' : 'complete'}
         >
           <div className={styles.reply}>
@@ -319,9 +313,7 @@ function Knows({ at }: { at: number }) {
           </div>
         </Message>
       )}
-      {at >= KNOWS.also && (
-        <OfferAlsoTry className={styles.offer} examples={calendar?.examples ?? []} onPick={noop} />
-      )}
+      {at >= KNOWS.also && <OfferAlsoTry examples={calendar?.examples ?? []} onPick={noop} />}
     </div>
   );
 }
@@ -420,11 +412,7 @@ function Make({ at }: { at: number }) {
     <div className={styles.chat}>
       {at >= MAKE.ask && <Message from="user">{MAKE_ASK}</Message>}
       {at >= MAKE.think && (
-        <Message
-          from="assistant"
-          author="Conch"
-          status={at < MAKE.replyDone ? 'streaming' : 'complete'}
-        >
+        <Message from="assistant" status={at < MAKE.replyDone ? 'streaming' : 'complete'}>
           {at < MAKE.write ? (
             <ThinkingIndicator size="sm" label="Thinking" />
           ) : (
@@ -461,7 +449,6 @@ function Make({ at }: { at: number }) {
       )}
       {at >= MAKE.offer && (
         <AppOffer
-          className={styles.offer}
           action="add"
           manifest={PLANT_DIARY.manifest}
           tools={PLANT_DIARY.tools}
@@ -592,9 +579,10 @@ export function ProvidersDemo() {
 interface Agent {
   id: string;
   name: string;
-  /** One of the personalities Conch offers when you make an agent. */
-  voice: string;
-  face: LucideIcon;
+  /** The tone it was given; its name is the app's own (`TONES`). */
+  tone: Tone;
+  /** One of the faces Conch comes with (`AGENT_AVATAR_PRESETS`). */
+  face: AgentAvatarPreset;
   answer: string;
 }
 
@@ -602,37 +590,36 @@ interface Agent {
  * The agents in the picture, made up as the chats are. Each says the same
  * three facts (one memory, which every agent shares) in its own voice.
  */
-// verify-ui: the personality names, and how a preset face is drawn.
 export const AGENTS: readonly Agent[] = [
   {
     id: 'juniper',
     name: 'Juniper',
-    voice: 'Warm',
-    face: Sprout,
+    tone: 'warm',
+    face: 'feather',
     answer:
       'Nearly there. The ferry’s booked, so it’s only the tent to pack and Mia’s boots to pick up. It’s going to be a lovely weekend.',
   },
   {
     id: 'atlas',
     name: 'Atlas',
-    voice: 'Precise',
-    face: Compass,
+    tone: 'precise',
+    face: 'compass',
     answer:
       'Two things. Pack the tent. Collect the boots from Mia by Friday at 18:00. The ferry is confirmed for Saturday at 08:40.',
   },
   {
     id: 'pip',
     name: 'Pip',
-    voice: 'Playful',
-    face: Sparkles,
+    tone: 'playful',
+    face: 'spark',
     answer:
       'Tent in the bag, boots from Mia, and you’re off. The ferry already has your name on it.',
   },
   {
     id: 'sol',
     name: 'Sol',
-    voice: 'Concise',
-    face: Sun,
+    tone: 'concise',
+    face: 'sun',
     answer: 'The tent, and Mia’s boots. The ferry’s booked.',
   },
 ];
@@ -640,18 +627,6 @@ export const AGENTS: readonly Agent[] = [
 export const AGENTS_ASK = 'What’s left before the trip?';
 
 const AGENT = { think: 300, answer: 1_000, answerDone: 3_400, turn: 5_400 } as const;
-
-function AgentFace({ agent, size }: { agent: Agent; size: 'sm' | 'lg' }) {
-  const Face = agent.face;
-  return (
-    <Avatar
-      name={agent.name}
-      size={size}
-      fallback={<Face aria-hidden className={styles.face} />}
-      aria-hidden
-    />
-  );
-}
 
 /** The chat at one moment of an agent's turn: the question, and its answer so far. */
 function AgentReply({ agent, at }: { agent: Agent; at: number }) {
@@ -661,8 +636,7 @@ function AgentReply({ agent, at }: { agent: Agent; at: number }) {
       {at >= AGENT.think && (
         <Message
           from="assistant"
-          author={agent.name}
-          avatar={<AgentFace agent={agent} size="sm" />}
+          speaker={{ name: agent.name, avatar: agent.face }}
           status={at < AGENT.answerDone ? 'streaming' : 'complete'}
         >
           {at < AGENT.answer ? (
@@ -722,13 +696,13 @@ export function AgentsDemo() {
               onChange={() => setChosen(index)}
               className={styles.agentInput}
             />
-            <AgentFace agent={a} size="lg" />
+            <AgentAvatar name={a.name} avatar={a.face} size="lg" decorative />
             <span className={styles.agentWords}>
               <Text as="span" size="sm" weight="medium">
                 {a.name}
               </Text>
               <Text as="span" size="xs" tone="muted">
-                {a.voice}
+                {TONES[a.tone].label}
               </Text>
             </span>
           </label>

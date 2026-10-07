@@ -1,0 +1,100 @@
+/* Layout only: the parts are Nacre's. */
+
+/* The new agent: the card on top, its hello, then what it needs. */
+.makerForm {
+  display: contents;
+}
+
+.makerBody {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nc-space-4);
+}
+
+.makerHello,
+.makerFields {
+  align-self: stretch;
+  inline-size: auto;
+}
+
+/* Making one: the agent on one side, as it's made, and the choices on the other;
+   one above the other where there isn't room. */
+.makerTwo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nc-space-6);
+}
+
+.makerPreview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nc-space-4);
+}
+
+@media (min-width: 52rem) {
+  .makerTwo {
+    grid-template-columns: minmax(0, 14.5rem) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .makerPreview {
+    position: sticky;
+    inset-block-start: 0;
+    padding-block-start: var(--nc-space-4);
+  }
+}
+
+.makerFooter {
+  flex-wrap: wrap;
+}
+
+/* Settings → Agents: the wall, then the place's few rows. */
+.place {
+  display: grid;
+  gap: var(--nc-space-8);
+}
+
+/* One agent's page: its face and name beside each other, the rest under it. */
+.head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--nc-space-5);
+}
+
+@media (max-width: 560px) {
+  .head {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+  }
+}
+
+.headFields {
+  display: grid;
+  gap: var(--nc-space-3);
+  min-inline-size: 0;
+  inline-size: 100%;
+}
+
+.starters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nc-space-2);
+}
+
+.defaults {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nc-space-2);
+}
+
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nc-space-2);
+}

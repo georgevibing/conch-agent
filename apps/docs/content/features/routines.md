@@ -20,7 +20,7 @@ Ask in any chat: "every weekday at 8, tell me what's on my calendar", or "tell m
 - **Edit** changes the words, when it starts, or what it may do.
 - **Not now** keeps it, paused.
 
-A routine drafted in a chat runs as that chat's [agent](./agents.md), on its provider and model, so a routine you ask Atlas for in a chat with Codex runs as Atlas, with Codex. Its results come in that agent's voice. **Edit** changes any of it. <!-- verify-ui -->
+A routine drafted in a chat runs as that chat's [agent](./agents.md), on its provider and model, so a routine you ask Atlas for in a chat with Codex runs as Atlas, with Codex. Its results come in that agent's voice. **Edit** changes the provider and model. One made on the Routines page is done by your default agent.
 
 A run can do what a chat can: use your [apps](apps.md), the ones you added yourself too, your Conch apps and the browser. It can also write to you in any [chat app](../channels/index.md) you've connected: "every morning, send the weather to my Telegram" sends the message itself, to your own private chat with Conch.
 

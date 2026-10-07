@@ -21,7 +21,7 @@ test('first run to first conversation', async ({ page, request }) => {
 
   // How it sounds: choosing a voice is hearing it.
   await page.getByRole('radio', { name: 'Concise' }).click();
-  await expect(page.getByText('Hi Ada. Ready when you are.')).toBeVisible();
+  await expect(page.getByText('Hi Ada. I’m Conch. Ready when you are.')).toBeVisible();
   await page.getByRole('button', { name: 'Sounds good' }).click();
 
   // A mind to think with: the provider is already connected, so this carries on by itself.

@@ -22,6 +22,7 @@ import { RestoredNotice } from '../features/health/RestoredNotice';
 import { ChannelDetailView } from '../features/channels/ChannelDetailView';
 import { ConnectChannel } from '../features/channels/ConnectChannel';
 import { ChatView } from '../features/chat/ChatView';
+import { ChatAgentSwitch } from '../features/agents/ChatAgent';
 import { HeaderMore } from '../features/chat/HeaderMore';
 import { WakeWord } from '../features/voice/WakeWord';
 import { PasswordsView } from '../features/passwords/PasswordsView';
@@ -290,6 +291,10 @@ export function Shell() {
             </Text>
           )}
           <WakeWord onChat={onChat} />
+          {/* Who answers (ADR 0101): with two agents or more, a press hands the chat to another. */}
+          {onChat && conversationId && !phone && (
+            <ChatAgentSwitch conversationId={conversationId} />
+          )}
           {onChat && <ChatProvider conversationId={conversationId} compact={phone} />}
           {phone && conversationId ? (
             <HeaderMore conversationId={conversationId} />
