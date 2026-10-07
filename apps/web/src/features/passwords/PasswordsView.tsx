@@ -1087,11 +1087,6 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
               </VirtualList>
             </RowMenuContext.Provider>
           )}
-          {status?.protectionNote && (
-            <Text size="xs" tone="subtle" className={styles.protection}>
-              {status.protectionNote}
-            </Text>
-          )}
         </section>
       )}
 

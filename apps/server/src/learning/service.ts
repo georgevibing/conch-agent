@@ -183,8 +183,11 @@ export class QuietLearning {
   #queue: Promise<unknown> = Promise.resolve();
   #timer?: NodeJS.Timeout;
   #sweeping = false;
-  /** The last look found no model to ask. */
-  #noModel = false;
+  /**
+   * The last look found no model to ask: for the chat's provider, whose model
+   * is looked for again whenever status is read, so connecting one clears it.
+   */
+  #noModel?: { engine: EngineId | undefined };
 
   constructor(private readonly deps: QuietLearningDeps) {
     this.store = new LearningStore({
@@ -353,10 +356,9 @@ export class QuietLearning {
     }
 
     // A model reads it: the provider that answered, within what learning may spend.
-    const model = await deps
-      .model(answeredBy(events) ?? chat.options.engine)
-      .catch(() => undefined);
-    this.#noModel = !model;
+    const answered = answeredBy(events) ?? chat.options.engine;
+    const model = await deps.model(answered).catch(() => undefined);
+    this.#noModel = model ? undefined : { engine: answered };
     if (!model) return later('no-model');
     if (await deps.overBudget?.().catch(() => false)) return later('budget');
     const allowed = await deps.spend.allow(model.engine);
@@ -895,9 +897,18 @@ export class QuietLearning {
       spending,
       ...(spending.paused
         ? { paused: { reason: 'cap' as const, until: spending.paused.until } }
-        : this.#noModel && { paused: { reason: 'no-model' as const } }),
+        : (await this.#stillNoModel()) && { paused: { reason: 'no-model' as const } }),
       quiet,
     };
+  }
+
+  /** Whether learning still waits for a model: a provider connected since is found now. */
+  async #stillNoModel(): Promise<boolean> {
+    const waiting = this.#noModel;
+    if (!waiting) return false;
+    const model = await this.deps.model(waiting.engine).catch(() => undefined);
+    if (model && this.#noModel === waiting) this.#noModel = undefined;
+    return !model;
   }
 
   /** "Got it" on the week's recap. */

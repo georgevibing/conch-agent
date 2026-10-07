@@ -570,8 +570,8 @@ describe('Repair everything', () => {
     });
     expect(items[0]).toMatchObject({
       id: 'passwords:vault',
-      state: 'warning',
-      message: expect.stringContaining('file on this computer'),
+      state: 'ok',
+      message: '1 saved, encrypted on this computer.',
     });
     expect(items.find((i) => i.id === 'passwords:bitwarden')).toMatchObject({
       state: 'needs-you',

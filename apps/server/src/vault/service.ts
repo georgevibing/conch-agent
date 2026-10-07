@@ -523,7 +523,6 @@ export class VaultService {
   }
 
   async status(problemsBy?: Map<string, VaultProblem[]>): Promise<VaultStatus> {
-    const keystore = await this.keystore();
     const locked = (await this.store.lockState()).locked;
     const records = locked ? [] : await this.#records();
     const problems =
@@ -534,7 +533,6 @@ export class VaultService {
     return {
       lock: { ...(await this.store.lockState()), autoLockMinutes: settings.autoLockMinutes },
       protection: await this.store.protection(),
-      ...(keystore.kind === 'file' && keystore.note && { protectionNote: keystore.note }),
       sources: await this.sourceStatus(),
       health: {
         weak: count('weak'),

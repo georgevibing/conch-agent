@@ -88,7 +88,7 @@ A chat with no signal and nothing durable in your words (first person with "alwa
 
 ### 3. The review: a cheap model, data in, a few changes out
 
-**Which model.** The cheapest model of the provider that answered the chat, which has seen it already (as skill drafts do, ADR 0058). Failing that, a model on this computer. Failing that, nothing. If the answer fails, it gets one retry with the provider's default model.
+**Which model.** The cheapest model of the provider that answered the chat, which has seen it already (as skill drafts do, ADR 0058). Failing that, a model on this computer. Failing that, any other connected provider that can write a short answer (the default first), so learning only waits when none can. Failing that, nothing, and Health says learning is waiting until one is connected. If the answer fails, it gets one retry with the provider's default model.
 
 **What it reads:**
 

@@ -109,6 +109,27 @@
     transition: transform var(--nc-spring-soft);
   }
 
+  /* On a phone the slim columns would huddle at the start of the row: let them
+   * share the whole width, stand taller, and keep a sliver of fill when idle
+   * so every core still reads as a meter. */
+  @media (max-width: 30rem) {
+    .cores {
+      gap: var(--nc-space-1);
+      block-size: var(--nc-space-10);
+    }
+
+    .core {
+      max-inline-size: none;
+      border-radius: var(--nc-radius-xs);
+      background: var(--nc-gray-4);
+    }
+
+    .coreFill {
+      opacity: 1;
+      transform: scaleY(max(var(--core), 0.06));
+    }
+  }
+
   /* ── What's running ────────────────────────────────────────────────── */
 
   .helpers {

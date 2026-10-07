@@ -155,6 +155,20 @@ describe('ChatList', () => {
     expect(screen.getByRole('link', { name: 'Venue prices, Didn’t finish' })).toBeInTheDocument();
   });
 
+  it('keeps the working pearl out of the title’s way, at the mark’s place', () => {
+    renderNacre(
+      <ChatListSection label="Today">
+        <ChatRow status="working">
+          <a href="#c">Board deck</a>
+        </ChatRow>
+      </ChatListSection>,
+    );
+    const link = screen.getByRole('link', { name: 'Board deck, Working' });
+    // Nothing before the title inside the link, so it starts where its neighbours' do.
+    expect(link.querySelector('[data-state="thinking"]')).toBeNull();
+    expect(link.closest('li')?.querySelector('[data-state="thinking"]')).not.toBeNull();
+  });
+
   it('ticks rows while choosing, by click or Space, and never opens them', async () => {
     const user = userEvent.setup();
     const onNavigate = vi.fn((e: { defaultPrevented: boolean }) => e.defaultPrevented);

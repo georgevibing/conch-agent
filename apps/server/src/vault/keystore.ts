@@ -25,8 +25,6 @@ export type KeystoreKind = 'keychain' | 'file';
 
 export interface Keystore {
   readonly kind: KeystoreKind;
-  /** A sentence for Settings when the protection is the weaker kind. */
-  readonly note?: string;
   /** The device key, made the first time it's asked for. */
   deviceKey(): Promise<Buffer>;
   /** Replace the device key (after a restore onto this computer). */
@@ -51,8 +49,6 @@ function decodeKey(text: string): Buffer | undefined {
 /** A 0600 file beside the vault: honest about what it is. */
 export class FileKeystore implements Keystore {
   readonly kind = 'file' as const;
-  readonly note =
-    'Your passwords are encrypted, but the key that opens them is a file on this computer, because it has no keychain Conch can use. Anyone who can read your files can read them.';
   constructor(private readonly dir: string) {}
 
   get #path() {

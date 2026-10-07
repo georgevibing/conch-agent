@@ -156,7 +156,13 @@ import { hostedApps } from './integrations/hosted';
 import { IntegrationService } from './integrations/service';
 import { MemoryIndex } from './memory/index';
 import { OnDeviceModel } from './memory/ondevice';
-import { cheapModel, MeaningModel, yourRequests, yourWords } from './memory/learning';
+import {
+  cheapModel,
+  MeaningModel,
+  shortAnswerEngine,
+  yourRequests,
+  yourWords,
+} from './memory/learning';
 import { registerLearningDoctor } from './memory/doctor';
 import { registerQuietLearningDoctor } from './learning/doctor';
 import { QuietLearning } from './learning/service';
@@ -1171,14 +1177,14 @@ export class Services {
           title: s.title,
           description: s.description,
         })),
-      // The provider that answered the chat has seen it already; else one on this computer.
+      // The provider that answered the chat has seen it already; else one on this
+      // computer; else any connected one that can write a short answer.
       model: async (id) => {
-        const engine = id ? this.providers.engineFor(id) : undefined;
-        if (engine?.complete) return cheapModel(engine);
-        const local = (await this.providers.ready().catch(() => [])).find(
-          (e) => e.local && e.complete,
+        const pick = shortAnswerEngine(
+          id ? this.providers.engineFor(id) : undefined,
+          await this.providers.ready().catch(() => []),
         );
-        return local ? cheapModel(local) : undefined;
+        return pick ? cheapModel(pick) : undefined;
       },
       workspace: () => this.settings.workspace(),
       redact: this.vault.redactor(),
@@ -1227,12 +1233,13 @@ export class Services {
       events: async (id) =>
         (await this.conversations.detail(id).catch(() => undefined))?.events ??
         conversationStore.events(id),
-      // The provider that answered the chat has seen it already; else one on this computer.
+      // The provider that answered the chat has seen it already; else one on this
+      // computer; else any connected one that can write a short answer.
       model: async (id) => {
-        const engine = id ? this.providers.engineFor(id) : this.engine();
-        const pick = engine.complete
-          ? engine
-          : (await this.providers.ready().catch(() => [])).find((e) => e.local && e.complete);
+        const pick = shortAnswerEngine(
+          id ? this.providers.engineFor(id) : this.engine(),
+          await this.providers.ready().catch(() => []),
+        );
         const cheap = pick && (await cheapModel(pick));
         return pick && cheap && { engine: pick, ...cheap };
       },

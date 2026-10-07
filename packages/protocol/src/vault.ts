@@ -431,8 +431,6 @@ export const VaultStatus = z.object({
   lock: VaultLockState.default({ enabled: false, locked: false, autoLockMinutes: 30 }),
   /** How Conch's own vault is locked on this computer. */
   protection: z.enum(['keychain', 'file']),
-  /** A sentence about `protection` when it's the weaker one. */
-  protectionNote: z.string().optional(),
   sources: z.array(VaultSource),
   /** Counts of problems in every source, for the Security check. */
   health: z.object({

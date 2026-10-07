@@ -72,10 +72,11 @@ export function vaultCheck(vault: VaultService): DoctorCheck {
       else
         out.push(
           item('vault', TITLE, {
-            state: status.protection === 'file' ? 'warning' : 'ok',
+            // A key in a file isn't a warning: without a keychain there's nothing to do about it.
+            state: 'ok',
             message:
               status.protection === 'file'
-                ? (status.protectionNote ?? 'The key to your passwords is a file on this computer.')
+                ? `${count} saved, encrypted on this computer.`
                 : `${count} saved, encrypted, with the key in this computer’s keychain.`,
           }),
         );

@@ -74,7 +74,7 @@ export function registerQuietLearningDoctor(
           title: 'Learning is waiting',
           state: 'info',
           message:
-            'Learning needs a provider that can write a short answer; it carries on once one is ready.',
+            'Learning needs a provider that can write a short answer, like Claude Code, a model API or a model on this computer. It carries on by itself once one is connected.',
           action: { kind: 'open', label: 'Open providers', place: 'providers' },
         });
       return items;

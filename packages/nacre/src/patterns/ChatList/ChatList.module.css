@@ -317,6 +317,20 @@
     padding-inline-start: calc(var(--nc-space-3) + var(--cl-nest));
   }
 
+  /* Where a chat came from (a chat app's logo, its agent) hangs in that
+     indent, in the folder mark's column, so every title in the folder starts
+     under the folder's name. While choosing, the tick box has that place. */
+  .section[data-kind='folder'] .sectionList .link {
+    position: relative;
+  }
+
+  .section[data-kind='folder'] .sectionList .item:not([data-selecting]) .leading {
+    position: absolute;
+    inset-inline-start: var(--nc-space-3);
+    justify-content: center;
+    inline-size: var(--cl-mark);
+  }
+
   .section[data-kind='folder'] .sectionList .check {
     inset-inline-start: calc(var(--nc-space-3) + var(--cl-nest));
   }
@@ -470,10 +484,6 @@
     white-space: nowrap;
   }
 
-  .pearl {
-    flex-shrink: 0;
-  }
-
   .leading {
     display: inline-flex;
     flex-shrink: 0;
@@ -529,6 +539,17 @@
     translate: 0 -50%;
     pointer-events: none;
     transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  /* Working: the pearl, in the dot's place, so the title stays where its
+     neighbours' are. A touch larger than a dot, so it gets its own room. */
+  .item[data-status='working'] {
+    --cl-dot: 0.75rem;
+  }
+
+  .dot[data-status='working'] {
+    display: grid;
+    place-items: center;
   }
 
   .dot[data-status='unread'] {

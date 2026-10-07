@@ -715,13 +715,14 @@ export const Sidebar: Story = {
         label="Work"
         icon={<FolderMark glyph="briefcase" color="blue" />}
         collapsible
-        count={2}
+        count={3}
         actions={<FolderActions name="Work" />}
         onDropChats={fn()}
         dropHint="Move to Work"
       >
-        <Row chat={{ id: 'w1', title: 'Quarterly planning offsite agenda' }} />
+        <Row chat={{ id: 'w1', title: 'Quarterly planning offsite agenda', status: 'working' }} />
         <Row chat={{ id: 'w2', title: 'Draft the hiring post' }} />
+        <Row chat={{ id: 'w3', title: 'Standup notes', leading: telegram }} />
       </ChatListSection>
       <ChatListSection
         kind="folder"

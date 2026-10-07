@@ -274,6 +274,22 @@ describe('QuietLearning (ADR 0088)', () => {
     expect((await learning.status()).paused).toEqual({ reason: 'no-model' });
   });
 
+  it('a provider connected since: status no longer says learning waits', async () => {
+    const t = await setup(
+      [
+        {
+          summary: { id: 'c1' },
+          events: [you('a'), ...reply(), you('No, I meant b.'), ...reply()],
+        },
+      ],
+      { model: null },
+    );
+    expect(await t.learning.review('c1', { trigger: 'idle' })).toEqual({ why: 'no-model' });
+    const up = provider();
+    t.deps.model = async () => ({ engine: up.engine, model: 'cheap', complete: up.complete });
+    expect((await t.learning.status()).paused).toBeUndefined();
+  });
+
   it('at the cap: it rests, and the words wait', async () => {
     const model = provider({ costUsd: 0.6, metered: true });
     const { learning } = await setup(

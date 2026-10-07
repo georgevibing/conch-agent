@@ -218,7 +218,9 @@ export function ChatRow({
   });
 
   const canDrag = Boolean(dragIds?.length) && finePointer && !editing;
-  const dot = status === 'waiting' || status === 'unread' || status === 'error';
+  // One mark per row, at the ⋯'s place, so it never moves the title: the
+  // pearl while working, a dot otherwise.
+  const dot = Boolean(status);
   const showMenu = Boolean(menu) && !selecting && !editing;
   const showDisclosure = Boolean(disclosure) && !selecting && !editing;
 
@@ -288,9 +290,6 @@ export function ChatRow({
           children,
           undefined,
           <>
-            {status === 'working' && (
-              <Pearl size="xs" state="thinking" label={null} className={styles.pearl} />
-            )}
             {leading && <span className={styles.leading}>{leading}</span>}
             <span id={titleId} ref={titleRef} className={styles.title}>
               {children.props.children}
@@ -405,7 +404,11 @@ export function ChatRow({
             {disclosure}
           </span>
         )}
-        {dot && !editing && <span aria-hidden className={styles.dot} data-status={status} />}
+        {dot && !editing && (
+          <span aria-hidden className={styles.dot} data-status={status}>
+            {status === 'working' && <Pearl size="xs" state="thinking" label={null} />}
+          </span>
+        )}
         {showMenu && (
           <span ref={moreRef} className={styles.more}>
             {menu}
