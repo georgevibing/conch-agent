@@ -27,7 +27,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import type { ToolStatus, ToolView } from '@conch/protocol';
 
 import type { Callable } from '../api/engine';
-import type { ToolImage } from '../types';
+import { failureText, type ToolImage } from '../types';
 
 /** A request body bigger than this is not a tool call. */
 const MAX_BODY = 4 * 1024 * 1024;
@@ -127,8 +127,9 @@ export async function openDoor(
       try {
         signal.throwIfAborted();
         ({ text, isError, view, images } = await tool.run(args, id));
-      } catch {
-        if (signal.aborted) text = 'Stopped.';
+      } catch (error) {
+        // What went wrong, as it was said: a model told only "could not complete" guesses (ADR 0102).
+        text = signal.aborted ? 'Stopped.' : failureText(error);
       }
       await events.end({
         id,

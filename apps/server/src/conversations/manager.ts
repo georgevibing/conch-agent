@@ -78,6 +78,7 @@ import { TurnReplies } from '../replies/turn';
 import { turnBudget } from '../engines/budget';
 import { guardTurn } from './turn-guard';
 import { TurnPlan } from '../plans/turn';
+import { resiliencePrompt } from './resilience';
 import { PLAN_APPROVAL, PLAN_MODE_PROMPT, exitPlanModeTool, needsPlanTool } from '../plans/mode';
 import { goalPrompt } from './goal';
 
@@ -2926,11 +2927,15 @@ export class ConversationManager {
                     tools: false,
                   }),
                   guestPrompt(live.record.origin),
+                  // A guest's turn has no tools: thinking it through, and honesty.
+                  resiliencePrompt({ tools: false }),
                 ]
               : // What stays the same turn after turn first, the memories this message
                 // brought up after it, so the provider's prompt cache keeps the prefix (ADR 0085).
                 [
                   system.identity,
+                  // How it works on a problem, whichever provider and persona (ADR 0102).
+                  resiliencePrompt({ tools: engine.hostTools !== false }),
                   await this.deps.context?.(engine, conversationId),
                   system.memory,
                   // What the chat is for (`/goal`), whichever provider answers.
