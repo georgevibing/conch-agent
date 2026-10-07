@@ -128,6 +128,8 @@ export type TranscriptItem =
       kind: 'taint';
       id: string;
       source: TaintSource;
+      /** Read in another chat and carried here: the one a task came from, or a task's. */
+      carried?: boolean;
     }
   | {
       /** Passwords needs you (unlock it, or type in a credential); later events with the same id replace it. */
@@ -660,7 +662,15 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
     case 'taint':
       return {
         ...base,
-        items: [...items, { kind: 'taint', id: `taint-${event.seq}`, source: event.source }],
+        items: [
+          ...items,
+          {
+            kind: 'taint',
+            id: `taint-${event.seq}`,
+            source: event.source,
+            ...(event.carried && { carried: true }),
+          },
+        ],
       };
     case 'vault.request': {
       const updated = updateItem(items, 'vault-request', event.request.requestId, (item) => ({

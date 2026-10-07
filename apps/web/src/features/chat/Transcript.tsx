@@ -22,7 +22,7 @@ import {
   Arrival,
   AssistantPlaceholder,
   MemoryPill,
-  TaintItem,
+  TaintItems,
   SkillUsedLine,
   PermissionCard,
   ToolItem,
@@ -98,12 +98,14 @@ interface Block {
   at: number;
   tools?: Extract<TranscriptItem, { kind: 'tool' }>[];
   browser?: Extract<TranscriptItem, { kind: 'browser' }>[];
+  /** What it read from outside, one after another: said as one line. */
+  taints?: Extract<TranscriptItem, { kind: 'taint' }>[];
   item?: TranscriptItem;
 }
 
 /** Said between browser steps, without ending the trail: an answered site question, a page read. */
 const aside = (block: Block) =>
-  block.item?.kind === 'taint' ||
+  Boolean(block.taints) ||
   (block.item?.kind === 'permission' && Boolean(block.item.browser && block.item.decision));
 
 /** Consecutive tool calls are grouped into one tight stack; browser steps into one trail. */
@@ -126,6 +128,12 @@ function blocks(items: TranscriptItem[]): Block[] {
     } else if (item.kind === 'tool') {
       if (last?.tools) last.tools.push(item);
       else out.push({ key: `tools-${item.id}`, tools: [item], at });
+    } else if (item.kind === 'taint') {
+      // Read one after another (a task starting with what its chat had read, a
+      // page and its download): one line, not a wall of them.
+      if (last?.taints && Boolean(last.taints[0]?.carried) === Boolean(item.carried))
+        last.taints.push(item);
+      else out.push({ key: `taint-${item.id}`, taints: [item], at });
     } else if (item.kind === 'browser') {
       // Browsing goes on in the same trail past an answered site question and
       // the note that it read a page (both show under it), rather than starting
@@ -244,7 +252,7 @@ const openingOf = (reply: Reply): Block => reply.head ?? (reply.parts[0] as Bloc
 
 /** The first thing a block shows, to find where it is in the chat. */
 const firstOf = (block: Block): TranscriptItem | undefined =>
-  block.item ?? block.tools?.[0] ?? block.browser?.[0];
+  block.item ?? block.tools?.[0] ?? block.browser?.[0] ?? block.taints?.[0];
 
 /** Everything but a message, the line where a turn ended and a summary is part of a reply. */
 const isPart = (block: Block) =>
@@ -556,8 +564,12 @@ export const Transcript = memo(function Transcript({
             onRespond={(d) => onRespond((block.item as { id: string }).id, d)}
           />
         )}
-      {block.item?.kind === 'taint' && (
-        <TaintItem item={block.item} first={block.item.id === firstTaint} />
+      {block.taints && (
+        <TaintItems
+          items={block.taints}
+          first={block.taints.some((t) => t.id === firstTaint)}
+          taskChat={Boolean(taskChat)}
+        />
       )}
       {block.item?.kind === 'files' && (
         <ChatFiles

@@ -10,6 +10,8 @@ export {
   type ChatTasksTone,
 } from './ChatTasks';
 export { taskHeadline } from './headline';
+export { groupSteps, type TaskStepGroup, type TaskStepLine } from './steps';
+export { TaskSteps, type TaskStepsProps } from './TaskSteps';
 export {
   elapsed,
   TaskCard,

@@ -6,6 +6,12 @@ import { TaskCard } from './TaskCard';
 
 const NOW = 1_790_000_000_000;
 
+/** `code` in a step, as code: what the web app does. */
+const code = (label: string) =>
+  label
+    .split(/`([^`]+)`/)
+    .map((part, i) => (i % 2 ? <InlineCode key={i}>{part}</InlineCode> : part));
+
 const meta = {
   title: 'Patterns/Tasks/TaskCard',
   component: TaskCard,
@@ -28,12 +34,8 @@ const meta = {
         Running <InlineCode>npm test</InlineCode>
       </>
     ),
-    steps: [
-      'Read README.md',
-      <>
-        Ran <InlineCode>npm install</InlineCode>
-      </>,
-    ],
+    steps: ['Read README.md', 'Ran `npm install`'],
+    renderStep: code,
     onOpen: () => undefined,
     onStop: () => undefined,
     onRetry: () => undefined,
@@ -176,6 +178,31 @@ export const LongResult: Story = {
     onStop: undefined,
     onRemove: undefined,
     onRetry: undefined,
+  },
+};
+
+/**
+ * A busy task, as the gateway reports it: the same poll again and again said
+ * once (×6), a run of reads folded into one line that opens, a failure marked.
+ */
+export const ManySteps: Story = {
+  args: {
+    status: 'done',
+    finishedAt: NOW,
+    current: undefined,
+    summary: 'Fixed the flaky pager test: it counted one page too many.',
+    defaultExpanded: true,
+    steps: [
+      'Tool returned: Read src/pager.ts',
+      'Tool returned: Read src/pager.test.ts',
+      'Tool returned: Read src/fixtures/pages.ts',
+      'Tool returned: Read src/index.ts',
+      'Tool returned: Run `npm test`',
+      ...Array.from({ length: 6 }, () => 'Tool returned: Read command progress'),
+      'Tool failed: Edit src/pager.ts',
+      'Tool returned: Edit src/pager.ts',
+      'Tool returned: Run `npm test`',
+    ],
   },
 };
 

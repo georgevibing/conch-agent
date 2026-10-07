@@ -1530,6 +1530,11 @@ describe('a task has exactly its chat’s powers (ADR 0033)', () => {
     expect(await conversations.taintOf(done.conversationId ?? '')).toEqual([
       { kind: 'web', label: 'evil.example' },
     ]);
+    // Said as carried, so its chat shows it as one line from the chat it came from.
+    const { events } = await conversations.detail(done.conversationId ?? '');
+    expect(events.filter((e) => e.type === 'taint')).toEqual([
+      expect.objectContaining({ source: { kind: 'web', label: 'evil.example' }, carried: true }),
+    ]);
   });
 
   it('a helper runs in the mode of the turn that started it', async () => {

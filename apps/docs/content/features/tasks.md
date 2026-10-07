@@ -18,6 +18,8 @@ You can also ask in words: "do this as a task and tell me when it's done". Or ty
 
 A task uses the same [agent](./agents.md), provider, model and [mode](../reference/modes.md) as the chat it came from. It can do nothing that chat couldn't: if you chose **Full trust** there, it won't stop to ask here either; if that chat asks first, so does the task. Anything you've already allowed in that chat ("Always allow") counts for its tasks too, and nothing more. Change the mode in the chat and its tasks follow, including one already waiting for your OK.
 
+It also starts as careful as that chat. If the chat had read something from outside, such as a web page or an email, the task's chat says so in one line at the top: **The chat it came from had read 3 sites and one of your chats**. Press that line to see each one. What a task reads comes back to its chat in the same way.
+
 Every provider hands work off this way. Your assistant's own sub-agents are turned off wherever Conch can turn them off, so work always runs as a task you can see, answer and stop.
 
 To have another provider do it, say so: "have Codex CLI do this as a task". Any provider you've connected can take it. Its card says who's doing it.
@@ -40,7 +42,7 @@ A task asks before it acts, as its chat would, and holds nothing else up. Its ca
 
 Conch tells you in the app, and on your devices when notifications are on: **Done**, or **Didn't finish** and why. Tasks started together are told about together, once the last one is over ("3 tasks done · 1 didn't finish"). A tap opens the chat they came from. A task waiting for your OK says so on your devices too, under **When it needs you**; a notification can deny, but allowing always opens Conch. The switch for finished tasks is **When a task finishes**, in **Settings → Notifications**. See [On your phone](../start/phone.md).
 
-A task's card says how it went in a word and one line of what came of it, or of what went wrong. Press the chevron for **Details**: its whole result, what was confirmed and what it did.
+A task's card says how it went in a word and one line of what came of it, or of what went wrong. Press the chevron for **Details**: its whole result, what was confirmed and what it did. Steps it repeated show once, with how many times (**×6**), and a run of steps of one kind folds into one line, like **Read pager.ts and 3 more**. Press that line to see each step.
 
 Once it's over, a task says one of two things:
 
