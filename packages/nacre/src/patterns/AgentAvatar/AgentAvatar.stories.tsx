@@ -4,7 +4,7 @@ import { Stack } from '../../components/Stack';
 import { Text } from '../../components/Text';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentChange } from './AgentChange';
-import { AGENT_AVATAR_ART } from './presets';
+import { AGENT_AVATAR_ART, AGENT_AVATAR_COLORS } from './presets';
 
 const presets = Object.entries(AGENT_AVATAR_ART).map(([id, art]) => ({ id, ...art }));
 
@@ -22,7 +22,7 @@ const meta = {
       control: 'select',
       options: [undefined, ...presets.map((p) => p.id), portrait],
     },
-    size: { control: 'inline-radio', options: ['xs', 'sm', 'md', 'lg', 'xl'] },
+    size: { control: 'inline-radio', options: ['xs', 'sm', 'md', 'lg', 'xl', '2xl', '3xl'] },
   },
   parameters: {
     docs: {
@@ -39,7 +39,11 @@ type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {};
 
-/** Every look an agent can wear without a picture, as a picker would offer them. */
+/**
+ * Every look an agent can wear without a picture, as a picker would offer
+ * them: Conch's own mark, and the cast — one porcelain figure each, two eyes
+ * with a glint, a smile and a blush, on a glazed tile of its colour.
+ */
 export const Presets: Story = {
   render: () => (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, max-content)', gap: 20 }}>
@@ -58,9 +62,9 @@ export const Presets: Story = {
 export const Sizes: Story = {
   render: () => (
     <Stack gap={3}>
-      {[undefined, 'spark', portrait].map((avatar) => (
+      {[undefined, 'owl', 'spark', portrait].map((avatar) => (
         <Stack key={avatar ?? 'mark'} direction="row" gap={3} align="center">
-          {(['xs', 'sm', 'md', 'lg', 'xl'] as const).map((size) => (
+          {(['xs', 'sm', 'md', 'lg', 'xl', '2xl', '3xl'] as const).map((size) => (
             <AgentAvatar key={size} name="Ada" avatar={avatar} size={size} />
           ))}
         </Stack>
@@ -98,6 +102,43 @@ export const TakingOver: Story = {
     <Stack gap={4} style={{ inlineSize: 560 }}>
       <AgentChange speaker={{ name: 'Atlas', avatar: 'compass' }} from="Juniper" />
       <AgentChange speaker={{ name: 'Ada', avatar: portrait }} />
+    </Stack>
+  ),
+};
+
+/** One character in every colour: the figure is mixed from the tile, so each still looks finished. */
+export const Colours: Story = {
+  render: () => (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, max-content)', gap: 16 }}>
+      {AGENT_AVATAR_COLORS.map((color) => (
+        <AgentAvatar
+          key={color}
+          name={color}
+          avatar={{ kind: 'preset', id: 'fox', color }}
+          size="xl"
+        />
+      ))}
+    </div>
+  ),
+};
+
+/** Small, as beside a reply or on a chat's row: the figures keep their shape, the details fall away. */
+export const SmallCast: Story = {
+  name: 'Small cast',
+  render: () => (
+    <Stack gap={3}>
+      {(['xs', 'sm', 'md'] as const).map((size) => (
+        <Stack key={size} direction="row" gap={2} align="center">
+          {presets.map((preset) => (
+            <AgentAvatar
+              key={preset.id}
+              name={preset.label}
+              avatar={{ kind: 'preset', id: preset.id }}
+              size={size}
+            />
+          ))}
+        </Stack>
+      ))}
     </Stack>
   ),
 };

@@ -1,23 +1,6 @@
-import {
-  Bird,
-  Bot,
-  Cat,
-  Cloud,
-  Compass,
-  Feather,
-  Flame,
-  Flower2,
-  Gem,
-  Leaf,
-  Moon,
-  Orbit,
-  PawPrint,
-  Sparkles,
-  Star,
-  Sun,
-  Waves,
-} from 'lucide-react';
-import { createContext, type ComponentType, type SVGProps } from 'react';
+import { createContext, type ComponentType, type ReactNode, type SVGProps } from 'react';
+
+import { FIGURES } from './figures';
 
 /**
  * The colours a face is drawn in: Nacre's app colours (`--nc-app-*`), the
@@ -40,15 +23,21 @@ export const AGENT_AVATAR_COLORS = [
 ] as const;
 export type AgentAvatarColor = (typeof AGENT_AVATAR_COLORS)[number];
 
-/** How one preset is drawn: its artwork on a glazed tile of its colour. */
+/** How one preset is drawn: its figure on a glazed tile of its colour. */
 export interface AgentAvatarArt {
   /** What the look is called where one is chosen ("Owl"). */
   label: string;
   /** Its colour when the agent hasn't chosen one. */
   color: AgentAvatarColor;
   /**
-   * The artwork, drawn in `currentColor` at the tile's middle (a Lucide icon,
-   * or any SVG component taking `className`). Left out, it's Conch's spiral.
+   * The character, filling the tile: the inside of a 64-unit `<svg>`, drawn
+   * in the tile's own mixed colours (`figures.tsx`). Nacre's cast.
+   */
+  figure?: () => ReactNode;
+  /**
+   * Or a single-colour glyph, drawn in `currentColor` at the tile's middle (a
+   * Lucide icon, or any SVG component taking `className`). Neither: it's
+   * Conch's spiral.
    */
   glyph?: ComponentType<SVGProps<SVGSVGElement>>;
 }
@@ -62,29 +51,30 @@ export type AgentFace =
   { kind: 'preset'; id: string; color?: string } | { kind: 'image'; url: string };
 
 /**
- * Nacre's drawing of every preset the protocol names (`AGENT_AVATAR_PRESETS`).
- * `shell` is Conch's own mark. The web app can draw its own artwork over any
- * of them with `AgentAvatarArtProvider`.
+ * Nacre's drawing of every preset the protocol names (`AGENT_AVATAR_PRESETS`):
+ * Conch's own mark for `shell`, and a cast of characters for the rest, each in
+ * a colour of its own (any of the thirteen can take its place). The web app
+ * can draw its own over any of them with `AgentAvatarArtProvider`.
  */
 export const AGENT_AVATAR_ART: Readonly<Record<string, AgentAvatarArt>> = {
   shell: { label: 'Shell', color: 'orange' },
-  pearl: { label: 'Pearl', color: 'slate', glyph: Gem },
-  wave: { label: 'Wave', color: 'cyan', glyph: Waves },
-  coral: { label: 'Coral', color: 'pink', glyph: Flower2 },
-  spark: { label: 'Spark', color: 'violet', glyph: Sparkles },
-  leaf: { label: 'Leaf', color: 'green', glyph: Leaf },
-  moon: { label: 'Moon', color: 'indigo', glyph: Moon },
-  sun: { label: 'Sun', color: 'amber', glyph: Sun },
-  star: { label: 'Star', color: 'yellow', glyph: Star },
-  cloud: { label: 'Cloud', color: 'blue', glyph: Cloud },
-  flame: { label: 'Flame', color: 'red', glyph: Flame },
-  feather: { label: 'Feather', color: 'teal', glyph: Feather },
-  compass: { label: 'Compass', color: 'teal', glyph: Compass },
-  orbit: { label: 'Orbit', color: 'indigo', glyph: Orbit },
-  owl: { label: 'Owl', color: 'amber', glyph: Bird },
-  fox: { label: 'Fox', color: 'orange', glyph: PawPrint },
-  cat: { label: 'Cat', color: 'slate', glyph: Cat },
-  bot: { label: 'Bot', color: 'blue', glyph: Bot },
+  pearl: { label: 'Pearl', color: 'slate', figure: FIGURES.pearl },
+  wave: { label: 'Wave', color: 'teal', figure: FIGURES.wave },
+  coral: { label: 'Coral', color: 'pink', figure: FIGURES.coral },
+  spark: { label: 'Spark', color: 'yellow', figure: FIGURES.spark },
+  leaf: { label: 'Leaf', color: 'green', figure: FIGURES.leaf },
+  moon: { label: 'Moon', color: 'indigo', figure: FIGURES.moon },
+  sun: { label: 'Sun', color: 'amber', figure: FIGURES.sun },
+  star: { label: 'Star', color: 'blue', figure: FIGURES.star },
+  cloud: { label: 'Cloud', color: 'cyan', figure: FIGURES.cloud },
+  flame: { label: 'Flame', color: 'red', figure: FIGURES.flame },
+  feather: { label: 'Feather', color: 'lime', figure: FIGURES.feather },
+  compass: { label: 'Compass', color: 'teal', figure: FIGURES.compass },
+  orbit: { label: 'Orbit', color: 'violet', figure: FIGURES.orbit },
+  owl: { label: 'Owl', color: 'amber', figure: FIGURES.owl },
+  fox: { label: 'Fox', color: 'orange', figure: FIGURES.fox },
+  cat: { label: 'Cat', color: 'pink', figure: FIGURES.cat },
+  bot: { label: 'Bot', color: 'indigo', figure: FIGURES.bot },
 };
 
 /**
@@ -130,6 +120,7 @@ export function agentAvatarLook(
   const drawn = Object.hasOwn(art, face.id) ? art[face.id] : undefined;
   if (!drawn) return { kind: 'mark' };
   const color = isColor(face.color) ? face.color : drawn.color;
-  if (!drawn.glyph && face.id === 'shell' && !isColor(face.color)) return { kind: 'mark' };
+  if (!drawn.glyph && !drawn.figure && face.id === 'shell' && !isColor(face.color))
+    return { kind: 'mark' };
   return { kind: 'preset', id: face.id, art: drawn, color };
 }

@@ -11,7 +11,7 @@ describe('agentAvatarLook', () => {
     expect(agentAvatarLook({ kind: 'preset', id: 'spark' })).toMatchObject({
       kind: 'preset',
       id: 'spark',
-      color: 'violet',
+      color: 'yellow',
     });
     expect(agentAvatarLook({ kind: 'preset', id: 'spark', color: 'lime' })).toMatchObject({
       color: 'lime',
@@ -60,6 +60,11 @@ describe('agentAvatarLook', () => {
       expect(art.color).not.toBe('');
     }
   });
+
+  it('draws every preset but the shell (Conch’s own mark) as one of the cast', () => {
+    for (const [id, art] of Object.entries(AGENT_AVATAR_ART))
+      expect(Boolean(art.figure), id).toBe(id !== 'shell');
+  });
 });
 
 describe('AgentAvatar', () => {
@@ -85,10 +90,12 @@ describe('AgentAvatar', () => {
     await expectAccessible(container);
   });
 
-  it('draws a preset as its glyph on its colour', async () => {
+  it('draws a preset as its figure on its colour', async () => {
     const { container } = renderNacre(<AgentAvatar name="Scout" avatar="compass" size="lg" />);
     const face = screen.getByRole('img', { name: 'Scout' });
     expect(face).toHaveAttribute('data-look', 'preset');
+    expect(face).toHaveAttribute('data-figure');
+    expect(face.querySelector('svg[viewBox="0 0 64 64"]')).not.toBeNull();
     expect(face).toHaveAttribute('data-color', 'teal');
     expect(face).toHaveAttribute('data-size', 'lg');
     await expectAccessible(container);

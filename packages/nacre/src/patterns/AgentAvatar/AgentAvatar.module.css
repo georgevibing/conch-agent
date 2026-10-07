@@ -30,6 +30,12 @@
   .avatar[data-size='xl'] {
     --aa-size: 3.5rem;
   }
+  .avatar[data-size='2xl'] {
+    --aa-size: 6rem;
+  }
+  .avatar[data-size='3xl'] {
+    --aa-size: 8.5rem;
+  }
 
   /* ── Conch's mark ─────────────────────────────────────────────────── */
   .mark {
@@ -125,6 +131,149 @@
     stroke-width: 2.4;
   }
 
+  /* ── A figure of the cast (figures.tsx): the tile's colour, mixed ─── */
+  /*
+   * The figure is porcelain white with a whisper of the tile in it; its
+   * shadows are the tile's colour lightened, its features the tile's own hue
+   * deepened, so a face never has a colour the tile doesn't.
+   */
+  .tile[data-figure] {
+    --aa-body: color-mix(in oklab, oklch(0.995 0.004 90) 93%, var(--aa-color));
+    --aa-shade: color-mix(in oklab, oklch(0.995 0.004 90) 58%, var(--aa-color));
+    --aa-ink: color-mix(in oklab, var(--aa-color) 38%, oklch(0.22 0.03 var(--nc-neutral-h)));
+    --aa-cheek: color-mix(in oklab, oklch(0.74 0.15 12) 70%, var(--aa-color));
+    --aa-edge: transparent;
+
+    background:
+      radial-gradient(120% 90% at 30% 0%, oklch(1 0 0 / 0.24), transparent 60%),
+      linear-gradient(
+        172deg,
+        color-mix(in oklab, var(--aa-color) 86%, oklch(1 0 0)),
+        var(--aa-color) 50%,
+        color-mix(in oklab, var(--aa-color) 84%, oklch(0.2 0.02 var(--nc-neutral-h)))
+      );
+  }
+
+  /*
+   * On the three light hues white would wash out: the figure gets a hairline
+   * of the deep hue, and its shadows lean deeper, so it still stands up.
+   */
+  .tile[data-figure]:is([data-color='amber'], [data-color='yellow'], [data-color='lime']) {
+    --aa-edge: color-mix(in oklab, var(--aa-ink) 55%, transparent);
+    --aa-shade: color-mix(in oklab, oklch(0.995 0.004 90) 40%, var(--aa-color));
+    --aa-ink: color-mix(in oklab, var(--aa-color) 30%, oklch(0.24 0.04 60));
+  }
+
+  .figure {
+    grid-area: 1 / 1;
+    inline-size: 100%;
+    block-size: 100%;
+    /* Within the tile's corners; the rim's light outside it stays free. */
+    clip-path: inset(0 round calc(var(--aa-size) * 0.29));
+    filter: drop-shadow(0 0.04em 0 color-mix(in oklab, var(--aa-ink) 22%, transparent));
+  }
+
+  .body {
+    fill: var(--aa-body);
+    stroke: var(--aa-edge);
+    stroke-width: 1.2;
+    paint-order: stroke;
+  }
+  .rounded {
+    fill: var(--aa-body);
+    stroke: var(--aa-body);
+    stroke-width: 5;
+    stroke-linejoin: round;
+  }
+  .shade {
+    fill: var(--aa-shade);
+  }
+  .ink {
+    fill: var(--aa-ink);
+  }
+  .glint {
+    fill: oklch(1 0 0);
+  }
+  .cheek {
+    fill: var(--aa-cheek);
+    opacity: 0.55;
+  }
+  .line,
+  .lampLine {
+    fill: none;
+    stroke: var(--aa-ink);
+    stroke-width: 2.1;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .ridge,
+  .curl,
+  .tick,
+  .whisker {
+    fill: none;
+    stroke: var(--aa-shade);
+    stroke-width: 2.2;
+    stroke-linecap: round;
+  }
+  .curl {
+    stroke-width: 3.2;
+  }
+  .tick {
+    stroke: var(--aa-ink);
+    stroke-width: 1.8;
+    opacity: 0.55;
+  }
+  .whisker {
+    stroke: var(--aa-ink);
+    stroke-width: 1.3;
+    opacity: 0.45;
+  }
+  .branch,
+  .stem,
+  .ray {
+    fill: none;
+    stroke: var(--aa-body);
+    stroke-linecap: round;
+  }
+  .branch {
+    stroke-width: 7;
+  }
+  .stem {
+    stroke-width: 3;
+  }
+  .ray {
+    stroke-width: 4.2;
+  }
+  .ring {
+    fill: none;
+    stroke: var(--aa-shade);
+    stroke-width: 3.6;
+    stroke-linecap: round;
+  }
+  .drop {
+    fill: var(--aa-shade);
+  }
+  .needle {
+    fill: var(--aa-cheek);
+  }
+  .screen {
+    fill: var(--aa-ink);
+  }
+  .lamp {
+    fill: color-mix(in oklab, var(--aa-color) 35%, oklch(0.97 0.04 200));
+  }
+  .lampLine {
+    stroke: color-mix(in oklab, var(--aa-color) 35%, oklch(0.97 0.04 200));
+  }
+
+  /* Small, a figure keeps its shape and its eyes: the rest would be noise. */
+  .avatar:is([data-size='xs'], [data-size='sm']) .detail {
+    display: none;
+  }
+  .avatar:is([data-size='xs'], [data-size='sm']) .figure {
+    filter: none;
+  }
+
   /* ── A picture, over the name's initial on its own tint ──────────── */
   .tile[data-look='picture'] {
     color: light-dark(oklch(0.42 0.09 var(--aa-h)), oklch(0.88 0.06 var(--aa-h)));
@@ -205,7 +354,8 @@
   }
 
   .mark[data-landed] .markGlyph,
-  .tile[data-landed] .glyph {
+  .tile[data-landed] .glyph,
+  .tile[data-landed] .figure {
     animation: glyph-land 700ms var(--nc-spring-bouncy) both;
   }
 
@@ -255,7 +405,8 @@
     .mark[data-active] .markGlyph,
     .mark[data-active] .markGlyph path,
     .mark[data-landed] .markGlyph,
-    .tile[data-landed] .glyph {
+    .tile[data-landed] .glyph,
+    .tile[data-landed] .figure {
       animation: none;
     }
   }
@@ -265,7 +416,8 @@
   :global([data-nacre-motion='reduced']) .mark[data-active] .markGlyph,
   :global([data-nacre-motion='reduced']) .mark[data-active] .markGlyph path,
   :global([data-nacre-motion='reduced']) .mark[data-landed] .markGlyph,
-  :global([data-nacre-motion='reduced']) .tile[data-landed] .glyph {
+  :global([data-nacre-motion='reduced']) .tile[data-landed] .glyph,
+  :global([data-nacre-motion='reduced']) .tile[data-landed] .figure {
     animation: none;
   }
 }

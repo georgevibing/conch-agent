@@ -31,7 +31,7 @@ export interface Speaker {
   avatar?: AgentFace | string;
 }
 
-export type AgentAvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+export type AgentAvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl';
 
 export interface AgentAvatarProps extends Omit<ComponentProps<'span'>, 'children'> {
   /** The agent's name: what it's read as, and its initial if its picture can't load. */
@@ -41,7 +41,10 @@ export interface AgentAvatarProps extends Omit<ComponentProps<'span'>, 'children
    * or a preset's id or a picture's address. Anything else is Conch's mark.
    */
   avatar?: AgentFace | string;
-  /** 20 / 26 / 32 / 40 / 56 px, the same steps as a person's `Avatar`. */
+  /**
+   * 20 / 26 / 32 / 40 / 56 px, the same steps as a person's `Avatar`; then
+   * 96 px for a gallery of agents and 136 px for one agent's own page.
+   */
   size?: AgentAvatarSize;
   /** The agent is working: the mark's spiral draws itself, and light orbits the rim. */
   active?: boolean;
@@ -143,8 +146,9 @@ export function MessageMark({
  * list of agents, on its own page. Agents are drawn as rounded tiles, people
  * (`Avatar`) as circles, so the two are never mistaken for each other.
  *
- * A preset is its artwork on a glazed tile of its colour (the web app can
- * draw its own, `AgentAvatarArtProvider`). A picture shows the name's initial
+ * A preset is one of Nacre's cast on a glazed tile of its colour (the web
+ * app can draw its own, `AgentAvatarArtProvider`); the small details of a
+ * figure fall away at `xs` and `sm`. A picture shows the name's initial
  * on its own tint until it has loaded, and keeps it if it can't. No avatar,
  * or a preset nobody draws, is Conch's mark.
  */
@@ -181,6 +185,7 @@ export function AgentAvatar({
     <span
       data-size={size}
       data-look={look.kind}
+      data-figure={(look.kind === 'preset' && Boolean(look.art.figure)) || undefined}
       data-preset={look.kind === 'preset' ? look.id : undefined}
       data-color={look.kind === 'preset' ? look.color : undefined}
       data-active={active || undefined}
@@ -197,10 +202,16 @@ export function AgentAvatar({
       {...named}
     >
       {look.kind === 'preset' ? (
-        createElement(look.art.glyph ?? Spiral, {
-          'aria-hidden': true,
-          className: look.art.glyph ? styles.glyph : undefined,
-        })
+        look.art.figure ? (
+          <svg viewBox="0 0 64 64" aria-hidden focusable="false" className={styles.figure}>
+            {look.art.figure()}
+          </svg>
+        ) : (
+          createElement(look.art.glyph ?? Spiral, {
+            'aria-hidden': true,
+            className: look.art.glyph ? styles.glyph : undefined,
+          })
+        )
       ) : (
         <Picture key={look.src} src={look.src} name={name} />
       )}
