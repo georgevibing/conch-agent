@@ -197,6 +197,7 @@ export interface TurnExtras {
   tools?: HostTool[];
   /** Durable task ledger: invoked outside every host tool, independent of engine. */
   wrapTool?: (tool: HostTool) => HostTool;
+  observeTool?: (name: string, input: Record<string, unknown>, id: string) => Promise<void>;
   afterTool?: (id: string, status: 'success' | 'error', output?: string) => Promise<void>;
   beforeTool?: (
     name: string,
@@ -3014,6 +3015,14 @@ export class ConversationManager {
             this.#append(live, { type: 'assistant.done', messageId: event.messageId });
             break;
           case 'tool-start':
+            if (!abort.signal.aborted)
+              await extras?.observeTool?.(
+                event.name,
+                (event.input && typeof event.input === 'object' && !Array.isArray(event.input)
+                  ? event.input
+                  : {}) as Record<string, unknown>,
+                event.toolUseId,
+              );
             if (isHostTool(event.name)) {
               for (const shown of hostRows.start(
                 event,

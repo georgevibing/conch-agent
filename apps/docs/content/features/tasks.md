@@ -48,7 +48,7 @@ Conch tells you in the app, and on your devices when notifications are on: **Don
 
 A task's card says how it went in a word and one line of what came of it, or of what went wrong. Press the chevron for **Details**: its whole result, what was confirmed and what it did. Steps it repeated show once, with how many times (**×6**), and a run of steps of one kind folds into one line, like **Read pager.ts and 3 more**. Press that line to see each step.
 
-Once it's over, a task says one of two things:
+Once it's over, a task says how it went:
 
 | It says                 | What it means                                                                                                                                                                                                                        |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -56,6 +56,10 @@ Once it's over, a task says one of two things:
 | **Done · Worth a look** | It finished, and there's a reason to look, said in a few words: an action whose result it couldn't confirm, or something it was asked for that isn't confirmed. Its summary is kept, but not taken as proof, even if it says "done". |
 | **Didn't finish**       | Something went wrong, or Conch stopped while it was working. The card says why in a line.                                                                                                                                            |
 | **Stopped**             | You stopped it.                                                                                                                                                                                                                      |
+
+For a task that only asks for an answer, Conch checks that a nonempty answer was saved for this attempt. An empty reply is flagged for inspection. This confirms delivery, not the factual accuracy of what the assistant wrote.
+
+When your assistant hands off work that needs tools, it can set checks before the task starts: which observations or actions must have receipts, and the exact target or content when known. Missing receipts remain visible even if the assistant says it finished. The checks carry through a restart and cannot grant permission to use a tool.
 
 Partial results stay visible after a task didn't finish or was stopped.
 
@@ -100,4 +104,4 @@ as such; a write whose result is uncertain is kept for inspection, never blindly
 repeated. The assistant can use task status to see which results are missing and
 which tools lack independent checks.
 
-The operation history contains evidence Conch received through its tools and provider result hooks. Utilities a provider runs internally without reporting a tool event, such as its own clock, may not appear; this history is not a complete trace of the provider’s internals.
+Time observations made with Conch’s `current_time` tool are recorded too. Codex clock requests use that same tool, and its reported native tool calls appear in the history. Each entry records what Conch observed; a provider’s success message alone does not prove an external change happened. Older providers that do not report an internal operation can use Conch’s tools when a recorded observation is needed.

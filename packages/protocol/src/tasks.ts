@@ -85,6 +85,21 @@ export const TaskExpectation = z.object({
 
 export type TaskExpectation = z.infer<typeof TaskExpectation>;
 
+/** Checks fixed before a task starts; the server hashes arguments, never persists them here. */
+export const TaskCheck = TaskExpectation.omit({ inputHash: true }).extend({
+  tool: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .regex(/^(?!mcp__conch__$)[A-Za-z0-9_.-]+$/),
+  minimum: z.number().int().positive().max(100).default(1),
+  // Open objects survive every provider's MCP schema converter; z.record does not.
+  arguments: z.looseObject({}).optional(),
+});
+export type TaskCheck = z.infer<typeof TaskCheck>;
+export const TaskChecks = z.array(TaskCheck).min(1).max(100);
+
 export const Task = z.object({
   id: z.string(),
   kind: TaskKind,
@@ -93,6 +108,16 @@ export const Task = z.object({
   /** What it was asked to do, in full. */
   prompt: z.string().max(20_000),
   status: TaskStatus,
+  /** A saved answer or specified receipts: fixed before execution, never tool authority. */
+  completion: z.enum(['response', 'evidence']).optional(),
+  /** Server-recorded delivery of a nonempty answer for this goal and attempt. */
+  delivery: z
+    .object({
+      goalRevision: z.number().int().nonnegative(),
+      attempt: z.number().int().nonnegative(),
+      at: z.number(),
+    })
+    .optional(),
   /** Server-defined outcome criteria, never a grant of tool permission. */
   expectations: z.array(TaskExpectation).max(100).optional(),
   workflow: z.enum(['document', 'today', 'followups']).optional(),
@@ -190,6 +215,7 @@ export const TaskList = z.object({
 export type TaskList = z.infer<typeof TaskList>;
 
 export const CreateTaskBody = z.object({
+  checks: TaskChecks.optional(),
   requestKey: z.string().min(1).max(200).optional(),
   text: z.string().trim().min(1).max(20_000),
   /** The chat it's sent from: the result comes back there. */

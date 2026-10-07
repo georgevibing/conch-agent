@@ -1,3 +1,4 @@
+import { currentTimeTool } from './lib/time-tool';
 import { createHash } from 'node:crypto';
 import type { Server as HttpServer } from 'node:http';
 import { join, resolve, sep } from 'node:path';
@@ -938,6 +939,7 @@ export class Services {
         ctx.engine.hostTools === false
           ? []
           : [
+              currentTimeTool(),
               ...fileTools(ctx, () => this.#fileAccess(ctx)),
               ...documentTools(ctx, () => this.#fileAccess(ctx)),
               ...publishTools(ctx, () => this.#fileAccess(ctx), this.attachments),

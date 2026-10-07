@@ -469,3 +469,67 @@ describe('durable task operations', () => {
     expect((await f.get()).status).toBe('unverified');
   });
 });
+
+describe('provider result events without approval callbacks', () => {
+  it('records native reads and matches their result without duplicating guard events', async () => {
+    const f = await setup(),
+      ledger = f.ledger();
+    await ledger.observeNative('Read', { file_path: 'x' }, 'read1');
+    expect(await ledger.beforeNative('Read', { file_path: 'x' }, 'read1')).toBeUndefined();
+    await ledger.observeNative('Read', { file_path: 'x' }, 'read1');
+    await ledger.afterNative('read1', 'success', 'observed content');
+    expect((await f.get()).operations).toHaveLength(1);
+    expect((await f.get()).operations?.[0]).toMatchObject({
+      state: 'confirmed',
+      execution: 'succeeded',
+      receipt: { provider: 'native-read' },
+    });
+  });
+  it('observing a native invocation never bypasses the replay guard', async () => {
+    const f = await setup();
+    const first = f.ledger();
+    await first.observeNative('Bash', { command: 'write' }, 'first');
+    expect(await first.beforeNative('Bash', { command: 'write' }, 'first')).toBeUndefined();
+    const resumed = f.ledger();
+    await resumed.observeNative('Bash', { command: 'write' }, 'resumed');
+    expect(await resumed.beforeNative('Bash', { command: 'write' }, 'resumed')).toMatch(
+      /may already/,
+    );
+    expect((await f.get()).operations?.every((op) => op.state === 'unresolved')).toBe(true);
+  });
+  it('keeps opaque provider tools as observations, not independently verified reads', async () => {
+    const f = await setup(),
+      ledger = f.ledger();
+    await ledger.observeNative('mcp__clock__curr_time', { readOnlyHint: true }, 'clock');
+    await ledger.afterNative('clock', 'error', 'failed');
+    expect((await f.get()).operations?.[0]).toMatchObject({
+      effect: 'unknown',
+      state: 'unresolved',
+      execution: 'failed',
+    });
+    expect(verifiedOutcome(await f.get())).toBe(false);
+    f.stop();
+    await ledger.afterNative('clock', 'success', 'late');
+    expect((await f.get()).operations?.[0]?.execution).toBe('failed');
+  });
+  it('preserves an actual delivered answer across restart and invalidates it on backup restore', async () => {
+    const f = await setup();
+    await f.update({
+      status: 'done',
+      completion: 'response',
+      expectations: undefined,
+      verification: 'unverified',
+      summary: 'An answer',
+      delivery: { goalRevision: 0, attempt: 0, at: 2 },
+    });
+    f.restart();
+    expect(await f.get()).toMatchObject({ status: 'done', verification: 'unverified' });
+    const restored = mergeTaskLedgers(
+      undefined,
+      Buffer.from(JSON.stringify({ tasks: [await f.get()] })),
+    );
+    expect(
+      (JSON.parse(restored.toString()) as { tasks: Task[] }).tasks[0]?.delivery,
+    ).toBeUndefined();
+  });
+});

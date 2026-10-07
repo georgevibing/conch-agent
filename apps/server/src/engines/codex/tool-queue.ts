@@ -6,6 +6,7 @@
  */
 const READS = new Set([
   'Read',
+  'mcp__conch__current_time',
   'LS',
   'mcp__conch__read_file',
   'mcp__conch__read_document',

@@ -1,3 +1,4 @@
+import { currentTimeTool } from '../../lib/time-tool';
 import { mkdtemp, readFile, readdir } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -987,5 +988,82 @@ describe('Codex carrying a chat on (ADR 0066 § Carrying on)', () => {
     expect(await readdir(join(home, 'codex-sessions'))).toEqual([]);
     // Nothing that isn't a thread id becomes a path.
     await expect(engine.forgetSession('../../codex.secrets.json')).resolves.toBeUndefined();
+  });
+});
+
+describe('observed provider utilities', () => {
+  it('routes native clock requests through the guarded Conch tool and records both events', async () => {
+    const { engine, turn, fake } = await setup({ signedIn: true, clock: 'read' });
+    const guard = vi.fn(async () => undefined);
+    const sample = vi.fn(() => Date.parse('2026-10-07T16:00:00Z'));
+    const events = await collect(engine.runTurn(turn({ tools: [currentTimeTool(sample)], guard })));
+    expect(sample).toHaveBeenCalledTimes(1);
+    expect(guard).toHaveBeenCalledWith(
+      expect.objectContaining({ toolName: 'mcp__conch__current_time' }),
+    );
+    expect(events.filter((e) => e.type === 'tool-start')).toEqual([
+      expect.objectContaining({ name: 'mcp__conch__current_time' }),
+    ]);
+    expect(events.filter((e) => e.type === 'tool-end')).toEqual([
+      expect.objectContaining({ status: 'success', output: expect.stringContaining('1791388800') }),
+    ]);
+    expect((await fake.calls()).find((c) => c.id === 'clock1')).toMatchObject({
+      result: { currentTimeAt: 1791388800 },
+    });
+  });
+  it('does not sample a clock for a stale thread or a refused guard', async () => {
+    for (const wrongThread of [true, false]) {
+      const { engine, turn, fake } = await setup({
+        signedIn: true,
+        clock: wrongThread ? 'wrong-thread' : 'read',
+      });
+      const sample = vi.fn(() => 1);
+      const events = await collect(
+        engine.runTurn(
+          turn({
+            tools: [currentTimeTool(sample)],
+            guard: async () => ({ decision: 'deny', message: 'Blocked' }),
+          }),
+        ),
+      );
+      expect(sample).not.toHaveBeenCalled();
+      expect((await fake.calls()).find((c) => c.id === 'clock1')).toHaveProperty('error');
+      expect(events.filter((e) => e.type === 'tool-end' && e.status === 'success')).toHaveLength(0);
+    }
+  });
+  it('surfaces MCP and provider utility events even in the tools-only provider', async () => {
+    const { engine, turn } = await setup({
+      signedIn: true,
+      providerItems: [
+        {
+          type: 'mcpToolCall',
+          id: 'mcp1',
+          server: 'clock',
+          tool: 'curr_time',
+          arguments: {},
+          status: 'completed',
+          result: { content: [{ type: 'text', text: '16:00 UTC' }] },
+        },
+        {
+          type: 'dynamicToolCall',
+          id: 'native1',
+          namespace: 'clock',
+          tool: 'curr_time',
+          arguments: {},
+          status: 'failed',
+          success: false,
+          contentItems: [{ type: 'inputText', text: 'Unavailable' }],
+        },
+      ],
+    });
+    const events = await collect(engine.runTurn(turn()));
+    expect(events.filter((e) => e.type === 'tool-start').map((e) => e.name)).toEqual([
+      'mcp__clock__curr_time',
+      'provider__clock__curr_time',
+    ]);
+    expect(events.filter((e) => e.type === 'tool-end').map((e) => e.status)).toEqual([
+      'success',
+      'error',
+    ]);
   });
 });

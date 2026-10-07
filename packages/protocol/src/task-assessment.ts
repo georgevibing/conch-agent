@@ -21,9 +21,23 @@ export function assessTask(task: Task) {
       op.receipt &&
       (op.effect !== 'read' || latestByKey.get(op.key) === op),
   );
+  // A count may require repeated observations (for example two clock samples).
+  // A pending/failed newer read invalidates everything before it for that identity.
+  const lastInvalidRead = new Map<string, number>();
+  current.forEach((op, i) => {
+    if (op.effect === 'read' && (op.state !== 'confirmed' || !op.receipt))
+      lastInvalidRead.set(op.key, i);
+  });
+  const observations = current.filter(
+    (op, i) =>
+      op.state === 'confirmed' &&
+      op.receipt &&
+      (op.effect !== 'read' || i > (lastInvalidRead.get(op.key) ?? -1)),
+  );
   const missing = expectations.filter((expected: TaskExpectation) => {
     if (
-      confirmed.filter(
+      // An exact receipt still requires the latest result, never an obsolete sample.
+      (expected.receipt ? confirmed : observations).filter(
         (op) =>
           op.tool === expected.tool &&
           (!expected.inputHash || op.inputHash === expected.inputHash) &&
@@ -43,6 +57,12 @@ export function assessTask(task: Task) {
       sources.some((op) => op.state === 'confirmed' && op.receipt?.empty !== true)
     );
   });
+  const response = task.completion === 'response' && !expectations.length;
+  const delivered =
+    response &&
+    Boolean(task.summary?.trim()) &&
+    task.delivery?.goalRevision === (task.goalRevision ?? 0) &&
+    task.delivery?.attempt === (task.attempt ?? 0);
   const uncertain = operations.filter(uncertainEffect);
   const reasons = [
     ...uncertain.map((op) => ({
@@ -64,18 +84,23 @@ export function assessTask(task: Task) {
       tool: expectation.tool,
       minimum: expectation.minimum,
     })),
-    ...(!expectations.length ? [{ code: 'no-criteria' as const }] : []),
+    ...(response && !delivered ? [{ code: 'response-missing' as const }] : []),
+    ...(!expectations.length && !response ? [{ code: 'no-criteria' as const }] : []),
   ];
   const unsupported = reasons.some((reason) => reason.code === 'receipt-unavailable');
   const verdict = uncertain.length
     ? 'uncertain'
     : missing.length
       ? 'incomplete'
-      : !expectations.length
-        ? 'unchecked'
+      : response && !delivered
+        ? 'incomplete'
         : unsupported
           ? 'unsupported'
-          : 'verified';
+          : response
+            ? 'delivered'
+            : !expectations.length
+              ? 'unchecked'
+              : 'verified';
   return {
     verdict,
     reasons,
@@ -99,6 +124,9 @@ export function taskWorth(task: Task): string | undefined {
       ? 'Couldn’t confirm one of its actions worked.'
       : `Couldn’t confirm ${n} of its actions worked.`;
   }
-  if (verdict === 'incomplete') return 'Some of what it was asked for isn’t confirmed.';
+  if (verdict === 'incomplete')
+    return reasons.some((r) => r.code === 'response-missing')
+      ? 'It finished without returning an answer.'
+      : 'Some of what it was asked for isn’t confirmed.';
   return undefined;
 }

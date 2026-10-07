@@ -181,7 +181,7 @@ describe('a task sent to the background', () => {
     await tasks.create({ kind: 'background', text: 'second' });
     await until(
       () => tasks.get(first.id),
-      (task) => task.status === 'unverified',
+      (task) => task.status === 'done',
     );
     tasks.close();
     const last = await tasks.create({ kind: 'background', text: 'last' });
@@ -194,7 +194,7 @@ describe('a task sent to the background', () => {
     const task = await tasks.create({ kind: 'background', text: 'draft the weekly note' });
     const done = await until(
       () => tasks.get(task.id),
-      (t) => t.status === 'unverified',
+      (t) => t.status === 'done',
     );
     const { conversation } = await conversations.detail(done.conversationId ?? '');
     expect(conversation.origin).toEqual({ kind: 'task', taskId: task.id, standalone: true });
@@ -214,7 +214,7 @@ describe('a task sent to the background', () => {
     });
     const done = await until(
       () => tasks.get(task.id),
-      (t) => t.status === 'unverified',
+      (t) => t.status === 'done',
     );
     expect(done.summary).toBe('Scripted did: tidy the README');
     expect(done.conversationId).toBeDefined();
@@ -224,7 +224,7 @@ describe('a task sent to the background', () => {
     expect(cards.map((e) => (e.type === 'task' ? e.state : ''))).toEqual([
       'queued',
       'running',
-      'unverified',
+      'done',
     ]);
     expect(cards.at(-1)).toMatchObject({ summary: 'Scripted did: tidy the README' });
   });
@@ -242,9 +242,9 @@ describe('a task sent to the background', () => {
     engines.get('mock')?.release?.();
     await until(
       () => status(tasks, second.id),
-      (s) => s === 'unverified',
+      (s) => s === 'done',
     );
-    expect(await status(tasks, first.id)).toBe('unverified');
+    expect(await status(tasks, first.id)).toBe('done');
   });
 
   it('waits for your OK without holding up the others', async () => {
@@ -257,7 +257,7 @@ describe('a task sent to the background', () => {
     );
     await until(
       () => status(tasks, other.id),
-      (s) => s === 'unverified',
+      (s) => s === 'done',
     );
     const conversationId = (await tasks.get(asking.id)).conversationId ?? '';
     const request = (await conversations.detail(conversationId)).events.find(
@@ -425,7 +425,7 @@ describe('a task sent to the background', () => {
     expect(second.engines.get('mock')?.turns).toHaveLength(0);
     await second.tasks.retry(queued.id);
     const [done] = await second.tasks.waitFor([queued.id]);
-    expect(done?.status).toBe('unverified');
+    expect(done?.status).toBe('done');
     expect((await second.tasks.get(asking.id)).status).toBe('interrupted');
     second.tasks.close();
   });
@@ -526,7 +526,7 @@ describe('a task sent to the background', () => {
       ],
       'source-chat',
     );
-    await second.tasks.retry(task.id);
+    await second.tasks.continue(task.id, 'Continue inspecting the files');
     const [done] = await second.tasks.waitFor([task.id]);
     expect(done?.conversationId).toBe(before?.conversationId);
     expect(done?.options.permissionMode).toBe('plan');
@@ -547,10 +547,10 @@ describe('a task sent to the background', () => {
     const task = await tasks.create({ kind: 'background', text: 'hit the limit' });
     const done = await until(
       () => tasks.get(task.id),
-      (t) => t.status === 'unverified' || t.status === 'failed',
+      (t) => t.status === 'done' || t.status === 'failed',
     );
     expect(done).toMatchObject({
-      status: 'unverified',
+      status: 'done',
       summary: expect.stringContaining('Other did:'),
       note: 'Scripted reached its limit, so Other carried on.',
     });
@@ -570,7 +570,11 @@ describe('a task sent to the background', () => {
 describe('safe continuation and bounded workflow requests', () => {
   it('reuses the existing conversation and confirmed progress, rejecting simultaneous retry', async () => {
     const { tasks, conversations } = await setup();
-    const first = await tasks.create({ kind: 'background', text: 'research this topic' });
+    const first = await tasks.create({
+      kind: 'background',
+      text: 'research this topic',
+      expectations: [{ tool: 'required_read', minimum: 1 }],
+    });
     const before = await until(
       () => tasks.get(first.id),
       (task) => task.status === 'unverified',
@@ -820,7 +824,7 @@ describe('safe continuation and bounded workflow requests', () => {
     });
     await until(
       () => tasks.get(task.id),
-      (value) => value.status === 'unverified',
+      (value) => value.status === 'done',
     );
     const turn = engines.get('mock')?.turns[0];
     if (!turn) throw new Error('Expected a running scripted turn');
@@ -863,9 +867,7 @@ describe('helpers side by side (delegate)', () => {
         { title: 'Check B', instructions: 'look at B', model: 'same', worktree: false },
       ],
     } as never);
-    expect(out).toBe(
-      '## Check A\nFinished; no automatic outcome criteria: Scripted did: look at A\n\n## Check B\nFinished; no automatic outcome criteria: Scripted did: look at B',
-    );
+    expect(out).toBe('## Check A\nScripted did: look at A\n\n## Check B\nScripted did: look at B');
     const helpers = (await tasks.list()).tasks.filter((t) => t.kind === 'helper');
     expect(helpers).toHaveLength(2);
     expect(new Set(helpers.map((t) => t.group)).size).toBe(1);
@@ -1044,9 +1046,9 @@ describe('helpers side by side (delegate)', () => {
       }).trim();
       yield* run(input);
     });
-    await second.tasks.retry(task.id);
+    await second.tasks.continue(task.id, 'Inspect again');
     const [done] = await second.tasks.waitFor([task.id]);
-    expect(done?.status).toBe('unverified');
+    expect(done?.status).toBe('done');
     expect(engine.turns.at(-1)?.cwd).toBe(before?.worktree?.path);
     expect(resumedHead).toBe(base);
     second.tasks.close();
@@ -1065,11 +1067,7 @@ describe('helpers side by side (delegate)', () => {
       this: TaskStore,
       task,
     ) {
-      if (
-        task.kind === 'helper' &&
-        task.status === 'unverified' &&
-        task.worktree?.retained === false
-      ) {
+      if (task.kind === 'helper' && task.status === 'done' && task.worktree?.retained === false) {
         lostCompletion = true;
         return new Promise<Task>(() => {});
       }
@@ -1086,7 +1084,7 @@ describe('helpers side by side (delegate)', () => {
       expect((await second.tasks.get(task.id)).worktree?.retained).toBe(false);
       await second.tasks.retry(task.id);
       const [done] = await second.tasks.waitFor([task.id]);
-      expect(done?.status).toBe('unverified');
+      expect(done?.status).toBe('done');
       expect(second.engines.get('mock')?.turns.at(-1)?.cwd).toBe(task.worktree?.path);
       second.tasks.close();
     } finally {
@@ -1114,7 +1112,7 @@ describe('helpers side by side (delegate)', () => {
     expect(engine.turns.at(-1)?.cwd).toBe(task.worktree?.path);
     engine.release?.();
     const [done] = await second.tasks.waitFor([task.id]);
-    expect(done?.status).toBe('unverified');
+    expect(done?.status).toBe('done');
     expect(done?.worktree?.retained).toBe(false);
     second.tasks.close();
   });
@@ -1162,7 +1160,7 @@ describe('helpers on another provider', () => {
       ],
     } as never);
     expect(out).toBe(
-      '## Write the tests\nFinished; no automatic outcome criteria: Other did: write the tests\n\n## Check it\nFinished; no automatic outcome criteria: Scripted did: check it',
+      '## Write the tests\nOther did: write the tests\n\n## Check it\nScripted did: check it',
     );
     const helpers = (await tasks.list()).tasks;
     const other = helpers.find((t) => t.title === 'Write the tests');
@@ -1331,7 +1329,7 @@ describe('helpers on another provider', () => {
     });
     await until(
       () => tasks.get(task.id),
-      (t) => t.status === 'unverified',
+      (t) => t.status === 'done',
     );
     expect(engines.get('openrouter')?.turns).toHaveLength(1);
   });
@@ -1683,7 +1681,7 @@ describe('a task has exactly its chat’s powers (ADR 0033)', () => {
     });
     await until(
       () => tasks.get(task.id),
-      (t) => t.status === 'unverified',
+      (t) => t.status === 'done',
     );
     const inTask =
       engines
@@ -1700,5 +1698,128 @@ describe('a task has exactly its chat’s powers (ADR 0033)', () => {
 
   it('tells every provider to hand work off as Conch’s tasks, never its own sub-agents', () => {
     expect(TASKS_PROMPT).toMatch(/Never use a sub-agent or task tool of your own provider/);
+  });
+});
+
+describe('declared completion contracts through task tools', () => {
+  it('both helper and background tools persist checks before execution and verify their receipts', async () => {
+    const { tasks, conversations, engines } = await setup({
+      tools: () => [
+        {
+          name: 'fixture_read',
+          description: 'Read',
+          input: {},
+          effect: 'read',
+          run: async () => 'a real observation',
+        },
+      ],
+    });
+    const parent = await conversations.send({ clientMessageId: 'parent-checks', text: 'hello' });
+    await until(
+      () => conversations.detail(parent.id),
+      (d) => d.conversation.status === 'idle',
+    );
+    const ctx = {
+      conversationId: parent.id,
+      append: () => undefined,
+      engine: engines.get('mock') as Engine,
+      permissionMode: 'default' as const,
+      ask: async () => 'deny' as const,
+      signal: new AbortController().signal,
+    };
+    const tools = tasks.tools(ctx);
+    const checks = [{ tool: 'mcp__conch__fixture_read', arguments: {}, minimum: 1 }];
+    await tools
+      .find((t) => t.name === 'delegate')
+      ?.run({
+        parts: [
+          {
+            title: 'Observe',
+            instructions: 'trusted workflow',
+            model: 'same',
+            worktree: false,
+            checks,
+          },
+        ],
+      });
+    await tools
+      .find((t) => t.name === 'start_background_task')
+      ?.run({ title: 'Observe later', instructions: 'trusted workflow', checks });
+    const listed = (await tasks.list()).tasks;
+    expect(listed).toHaveLength(2);
+    const completed = await tasks.waitFor(listed.map((t) => t.id));
+    for (const task of completed) {
+      expect(task).toMatchObject({
+        completion: 'evidence',
+        status: 'done',
+        verification: 'verified',
+      });
+      expect(task.expectations?.[0]).toMatchObject({
+        tool: 'fixture_read',
+        inputHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      });
+      expect(task.expectations?.[0]).not.toHaveProperty('arguments');
+    }
+  });
+  it('validates every helper’s checks before any helper starts', async () => {
+    const { tasks, conversations, engines } = await setup();
+    const parent = await conversations.send({ clientMessageId: 'parent-checks', text: 'hello' });
+    await until(
+      () => conversations.detail(parent.id),
+      (d) => d.conversation.status === 'idle',
+    );
+    const tool = tasks
+      .tools({
+        conversationId: parent.id,
+        append: () => undefined,
+        engine: engines.get('mock') as Engine,
+        permissionMode: 'default',
+        ask: async () => 'deny',
+        signal: new AbortController().signal,
+      })
+      .find((t) => t.name === 'delegate');
+    await expect(
+      tool?.run({
+        parts: [
+          { title: 'First', instructions: 'look', model: 'same', worktree: false },
+          {
+            title: 'Bad',
+            instructions: 'look',
+            model: 'same',
+            worktree: false,
+            checks: [{ tool: 'mcp__conch__', minimum: 1 }],
+          },
+        ],
+      }),
+    ).rejects.toThrow();
+    expect((await tasks.list()).tasks).toHaveLength(0);
+  });
+  it('does not complete an empty answer, and checks fresh delivery on a retry', async () => {
+    const { tasks, engines } = await setup();
+    const engine = engines.get('mock');
+    if (!engine) throw new Error('No engine');
+    const run = vi.spyOn(engine, 'runTurn').mockImplementation(async function* () {
+      yield { type: 'done', outcome: 'success' };
+    });
+    const task = await tasks.create({ kind: 'background', text: 'Answer me' });
+    const [empty] = await tasks.waitFor([task.id]);
+    expect(empty).toMatchObject({
+      completion: 'response',
+      status: 'unverified',
+      modelCompleted: true,
+    });
+    expect(empty?.delivery).toBeUndefined();
+    run.mockImplementation(async function* () {
+      yield { type: 'text', messageId: 'm', delta: 'An actual answer.' };
+      yield { type: 'done', outcome: 'success' };
+    });
+    await tasks.retry(task.id);
+    const [answer] = await tasks.waitFor([task.id]);
+    expect(answer).toMatchObject({
+      status: 'done',
+      verification: 'unverified',
+      delivery: { attempt: 1, goalRevision: 0 },
+      summary: 'An actual answer.',
+    });
   });
 });

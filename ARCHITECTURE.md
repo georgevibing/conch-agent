@@ -508,6 +508,15 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   Resume rechecks current parent permissions and restrictions; shutdown fences new
   admission. Confirmed writes are not replayed over later progress. A limit
   carries on once on `limitFallback`. Push topic `tasks`; doctor check `tasks`.
+  Every new task fixes a completion contract before starting: answer delivery or
+  explicit receipt criteria (`checks` on task tools and the create API, arguments
+  hashed server-side). Answer delivery requires a nonempty saved result tagged to
+  both goal revision and attempt; it never counts as independent action verification.
+  Backup restore clears this marker. `observeTool` records provider events without
+  granting execution authority; the existing guard still controls each invocation.
+  The shared `current_time` read tool records clock observations, including Codex's
+  `currentTime/read` requests. Its standard tool events also feed the operation
+  ledger, with unknown effects kept opaque and duplicate notifications ignored.
 
 - **Other apps using Conch** ([ADR 0073](./docs/adr/0073-conch-for-your-other-apps.md)).
   `/mcp` on the gateway's own port speaks stateless streamable HTTP MCP to paired apps only

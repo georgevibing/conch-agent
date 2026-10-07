@@ -1,3 +1,4 @@
+import { taskExpectations } from './service';
 /**
  * What a task may do, end to end (ADR 0033): the real gateway with the mock
  * engine, which calls Conch's tools the bridged way, as every provider whose
@@ -84,6 +85,7 @@ describe('a task’s tools', () => {
           ['Edit', { file_path: 'probe.txt', old_string: 'initial', new_string: 'updated' }],
           ['Read', { file_path: 'probe.txt' }],
           ['Write', { file_path: 'probe.txt', content: 'final' }],
+          ['mcp__conch__current_time', {}],
           [
             'mcp__conch__artifact_create',
             { kind: 'markdown', title: 'Probe', content: 'Initial report' },
@@ -113,13 +115,20 @@ describe('a task’s tools', () => {
     const task = await services.tasks.create({
       kind: 'background',
       text: 'Run the diagnostic',
+      expectations: taskExpectations([
+        { tool: 'Write', minimum: 1, arguments: { file_path: 'probe.txt', content: 'final' } },
+        { tool: 'Edit', minimum: 1 },
+        { tool: 'Read', minimum: 1 },
+        { tool: 'artifact_create', minimum: 1 },
+        { tool: 'current_time', minimum: 1 },
+      ]),
       parentConversationId: parent.id,
     });
     const [done] = await services.tasks.waitFor([task.id]);
-    expect(done).toMatchObject({ status: 'unverified', modelCompleted: true });
+    expect(done).toMatchObject({ status: 'done', verification: 'verified', modelCompleted: true });
     expect(done?.error).toBeUndefined();
     if (!done) throw new Error('No task result');
-    expect(assessTask(done).verdict).toBe('unchecked');
+    expect(assessTask(done).verdict).toBe('verified');
     expect(assessTask(done).failedReads).toBe(1);
     expect(done.operations?.[0]).toMatchObject({
       tool: 'Read',
@@ -128,7 +137,7 @@ describe('a task’s tools', () => {
     });
     expect(done.operations?.slice(1).every((op) => op.state === 'confirmed')).toBe(true);
     expect(done.operations?.map((op) => op.tool)).toEqual(
-      expect.arrayContaining(['Write', 'Edit', 'Read', 'artifact_create']),
+      expect.arrayContaining(['Write', 'Edit', 'Read', 'artifact_create', 'current_time']),
     );
     expect(
       assessTask({

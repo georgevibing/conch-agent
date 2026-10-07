@@ -7,6 +7,8 @@ import { fakeProgram } from './fakeProgram';
 export async function fakeCodexApp(
   options: {
     signedIn?: boolean;
+    clock?: 'read' | 'wrong-thread' | 'duplicate';
+    providerItems?: Record<string, unknown>[];
     loginFails?: boolean;
     tool?: string;
     args?: Record<string, unknown>;
@@ -55,6 +57,10 @@ const findRollout = (id) => { try { return fs.readdirSync(path.join(process.env.
 fs.appendFileSync(LOG, JSON.stringify({spawn:true, argv: process.argv.slice(2), home: process.env.CODEX_HOME, secretLeaked: Boolean(process.env.CONCH_TOKEN || process.env.OPENAI_API_KEY || process.env.OP_SERVICE_ACCOUNT_TOKEN)})+'\\n');
 const complete = () => {
  if (OPTIONS.hang) return;
+ for (const item of OPTIONS.providerItems || []) {
+   note('item/started',{threadId:TID,turnId:'turn1',item:{...item,status:'inProgress'}});
+   note('item/completed',{threadId:TID,turnId:'turn1',item});
+ }
  if (OPTIONS.plan) note('turn/plan/updated',{threadId:TID,turnId:'turn1',explanation:null,plan:OPTIONS.plan});
  for (const u of OPTIONS.tokenUsage || []) note('thread/tokenUsage/updated',{threadId:TID,turnId:'turn1',tokenUsage:u});
  note('item/agentMessage/delta',{threadId:TID,itemId:'m1',delta:'Finished.'});
@@ -95,6 +101,10 @@ rl.createInterface({input:process.stdin}).on('line', line => {
    const file = findRollout(TID);
    if (file) fs.appendFileSync(path.join(process.env.CODEX_HOME, 'sessions', file), JSON.stringify({type:'user', input:m.params.input})+'\\n');
    if (OPTIONS.malformed) process.stdout.write('not-json\\n');
+   else if (OPTIONS.clock) {
+     send({id:'clock1',method:'currentTime/read',params:{threadId: OPTIONS.clock === 'wrong-thread' ? 'other' : TID}});
+     if (OPTIONS.clock === 'duplicate') send({id:'clock1',method:'currentTime/read',params:{threadId:TID}});
+   }
    else if (OPTIONS.tools) {
      pendingCalls = OPTIONS.tools.length;
      OPTIONS.tools.forEach((t, i) => send({id:'batch'+i,method:'item/tool/call',params:{threadId:TID,turnId:'turn1',callId:'batch'+i,tool:t.tool,arguments:t.args || {}}}));
@@ -112,7 +122,7 @@ rl.createInterface({input:process.stdin}).on('line', line => {
    else complete();
  }
  else if (typeof m.id === 'string' && m.id.startsWith('batch')) { if (--pendingCalls === 0) complete(); }
- else if (m.id === 'call1') complete();
+ else if (m.id === 'call1' || m.id === 'clock1') complete();
  else if (m.id === 'approve1') {
    const ok = m.result && m.result.decision === 'accept';
    if (OPTIONS.native.command) note('item/completed',{threadId:TID,turnId:'turn1',item:{type:'commandExecution',id:'cmd1',command:OPTIONS.native.command,cwd:'/work',status:ok?'completed':'declined',aggregatedOutput:ok?'ran it':null,exitCode:ok?0:null}});

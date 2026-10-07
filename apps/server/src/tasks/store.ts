@@ -6,7 +6,7 @@
 import { open } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
-import { Task } from '@conch/protocol';
+import { assessTask, Task } from '@conch/protocol';
 import { z } from 'zod';
 
 import { Mutex, readJson, syncFile, writeJson } from '../lib/fs';
@@ -44,7 +44,9 @@ export class TaskStore {
         );
       }
       return parsed.data.tasks.map((task) =>
-        task.status === 'done' && task.verification !== 'verified'
+        task.status === 'done' &&
+        task.verification !== 'verified' &&
+        assessTask(task).verdict !== 'delivered'
           ? {
               ...task,
               status: 'unverified' as const,
@@ -127,6 +129,7 @@ export function mergeTaskLedgers(current: Buffer | undefined, restored: Buffer):
       status: newest.archivedAt ? newest.status : 'interrupted',
       verification: 'unverified',
       modelCompleted: false,
+      delivery: undefined,
       error:
         'Restored from a historical backup. Existing results must be checked before this task can continue.',
       operations: [...operations.values()].map((op) => ({ ...op, state: 'unresolved' as const })),

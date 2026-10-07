@@ -31,7 +31,13 @@ import type {
   TaskStatus,
   TurnOptions,
 } from '@conch/protocol';
-import { assessTask, MODE_POWER } from '@conch/protocol';
+import {
+  assessTask,
+  MODE_POWER,
+  TaskChecks,
+  TaskExpectation,
+  type TaskCheck,
+} from '@conch/protocol';
 import { z } from 'zod';
 
 import type { ConversationManager, ToolContext } from '../conversations/manager';
@@ -86,6 +92,18 @@ export class TaskError extends Error {
   ) {
     super(message);
   }
+}
+
+/** Resolve caller checks before starting; these never change permissions or tool scope. */
+export function taskExpectations(checks: TaskCheck[]): Task['expectations'] {
+  return TaskChecks.parse(checks).map(({ arguments: args, ...check }) =>
+    TaskExpectation.parse({
+      ...check,
+      tool: check.tool.replace(/^mcp__conch__/, ''),
+      ...(check.unlessEmpty && { unlessEmpty: check.unlessEmpty.replace(/^mcp__conch__/, '') }),
+      ...(args && { inputHash: taskArgumentHash(args) }),
+    }),
+  );
 }
 
 /** "Run `npm test`" → "Running `npm test`": what it's doing right now. */
@@ -243,7 +261,8 @@ export class TaskService {
         title: (input.title?.trim() || titleOf(text)).slice(0, 120),
         prompt: text,
         status: 'queued',
-        expectations: input.expectations,
+        completion: input.expectations?.length ? 'evidence' : 'response',
+        expectations: input.expectations?.map((check) => TaskExpectation.parse(check)),
         workflow: input.workflow,
         toolScope: input.toolScope,
         requestKey: input.requestKey,
@@ -368,7 +387,10 @@ export class TaskService {
   async retry(id: string): Promise<Task> {
     const again = await this.#mutate(id, (task) => {
       if (!FINISHED.includes(task.status) || task.status === 'done')
-        throw new TaskError('busy', 'This task is still going or already verified.');
+        throw new TaskError(
+          'busy',
+          'This task is still going or already finished. Continue a finished task with a new instruction.',
+        );
       return {
         status: 'queued',
         attempt: (task.attempt ?? 0) + 1,
@@ -555,7 +577,7 @@ export class TaskService {
       name: 'report_result',
       description:
         'Call once at the end with the result, for the user to read: what you found or did, in a few short lines (no preamble). It goes back to the chat this task came from.',
-      input: { summary: z.string().min(1).max(4_000) },
+      input: { summary: z.string().trim().min(1).max(4_000) },
       async run(args) {
         reported = args.summary;
         return 'Recorded.';
@@ -672,6 +694,10 @@ export class TaskService {
               },
             };
           },
+          observeTool: async (name, args, invocationId) => {
+            if (!hostNames.has(name.replace(/^mcp__conch__/, '')))
+              await operations.observeNative(name, args, invocationId);
+          },
           afterTool: (invocationId, status, output) =>
             operations.afterNative(invocationId, status, output),
           beforeTool: async (name, args, invocationId, phase) => {
@@ -716,28 +742,40 @@ export class TaskService {
         if (next && next !== engine.id) return this.#run(id, { engine: next, from: engine.label });
       }
       const stopped = this.#stopping.delete(id);
-      const assessment = assessTask(await this.get(id));
+      const current = await this.get(id);
+      const summary = tidy(reported ?? turn.finalText ?? '', 4_000);
+      const answer =
+        !stopped && turn.outcome === 'success' && summary
+          ? {
+              summary,
+              delivery: {
+                goalRevision: current.goalRevision ?? 0,
+                attempt: current.attempt ?? 0,
+                at: this.#now,
+              },
+            }
+          : {};
+      const assessment = assessTask({ ...current, ...answer });
       await this.#finish(
         await this.get(id),
         stopped
           ? { status: 'stopped', verification: 'unverified', error: undefined }
           : turn.outcome === 'success'
             ? {
-                status: assessment.verdict === 'verified' ? 'done' : 'unverified',
+                status: ['verified', 'delivered'].includes(assessment.verdict)
+                  ? 'done'
+                  : 'unverified',
                 verification: assessment.verdict === 'verified' ? 'verified' : 'unverified',
                 modelCompleted: true,
-                summary: tidy(
-                  reported ?? turn.finalText ?? 'The assistant finished its turn.',
-                  4_000,
-                ),
-                error:
-                  assessment.verdict === 'verified' || assessment.verdict === 'unchecked'
-                    ? undefined
-                    : assessment.verdict === 'uncertain'
-                      ? 'It couldn’t confirm some of its actions worked. Look at what it recorded before running them again.'
-                      : assessment.verdict === 'unsupported'
-                        ? 'It finished; some of its tools can’t confirm what they did.'
-                        : 'It finished, but some of what it was asked for isn’t confirmed.',
+                ...answer,
+                summary: summary || undefined,
+                error: ['verified', 'delivered', 'unchecked'].includes(assessment.verdict)
+                  ? undefined
+                  : assessment.verdict === 'uncertain'
+                    ? 'It couldn’t confirm some of its actions worked. Look at what it recorded before running them again.'
+                    : assessment.verdict === 'unsupported'
+                      ? 'It finished; some of its tools can’t confirm what they did.'
+                      : 'It finished, but some of what it was asked for isn’t confirmed.',
               }
             : turn.outcome === 'interrupted'
               ? {
@@ -1081,11 +1119,12 @@ export class TaskService {
           provider: z.ZodOptional<z.ZodString>;
           model: z.ZodDefault<z.ZodString>;
           worktree: z.ZodDefault<z.ZodBoolean>;
+          checks: z.ZodOptional<typeof TaskChecks>;
         }>
       >;
     }> = {
       name: 'delegate',
-      description: `Do up to ${MAX_PARTS} independent parts of a job at the same time, each by a helper in its own conversation, and get all their results back together. Use it when the work splits cleanly (look into several things, check several files, draft alternatives) and each part can be done without the others. Each helper starts fresh: make every instruction complete on its own. Helpers can't ask the user anything. \`provider\` hands a part to another connected provider by its id (the list is in your instructions); leave it out to use your own. \`model: "fast"\` (the default) uses that provider's quicker, cheaper model; "same" its full model (yours, on your own provider); or name one of its models. \`worktree: true\` gives a code-changing part its own copy of the repository on its own branch.`,
+      description: `Do up to ${MAX_PARTS} independent parts of a job at the same time, each by a helper in its own conversation, and get all their results back together. Use it when the work splits cleanly (look into several things, check several files, draft alternatives) and each part can be done without the others. Each helper starts fresh: make every instruction complete on its own. Helpers can't ask the user anything. \`provider\` hands a part to another connected provider by its id (the list is in your instructions); leave it out to use your own. \`model: "fast"\` (the default) uses that provider's quicker, cheaper model; "same" its full model (yours, on your own provider); or name one of its models. \`worktree: true\` gives a code-changing part its own copy of the repository on its own branch. Supply \`checks\` for actions and tool-based research: name each required tool, its minimum receipt count, and exact arguments when known. Checks are fixed before work starts and grant no permissions. Without checks, completion means a saved answer, not independent verification of its claims.`,
       input: {
         parts: z
           .array(
@@ -1095,6 +1134,7 @@ export class TaskService {
               provider: z.string().min(1).max(80).optional(),
               model: z.string().min(1).max(200).default('fast'),
               worktree: z.boolean().default(false),
+              checks: TaskChecks.optional(),
             }),
           )
           .min(1)
@@ -1114,6 +1154,7 @@ export class TaskService {
             throw error;
           }
         }
+        const expectations = args.parts.map((part) => part.checks && taskExpectations(part.checks));
         const group = this.#batchOf(ctx);
         const tasks = [];
         for (const [i, part] of args.parts.entries())
@@ -1125,6 +1166,7 @@ export class TaskService {
               parentConversationId: ctx.conversationId,
               group,
               worktree: part.worktree,
+              expectations: expectations[i],
               options: handed[i]?.options,
               by: handed[i]?.by,
               ceiling: ctx.permissionMode,
@@ -1138,6 +1180,7 @@ export class TaskService {
       },
     };
     const background: HostTool<{
+      checks: z.ZodOptional<typeof TaskChecks>;
       title: z.ZodString;
       instructions: z.ZodString;
       provider: z.ZodOptional<z.ZodString>;
@@ -1145,8 +1188,9 @@ export class TaskService {
     }> = {
       name: 'start_background_task',
       description:
-        'Start a longer job in the background, when the user asked you to or agreed to it ("do it in the background", "let me know when it’s done"). It runs in its own conversation; its result comes back to this chat and the user is notified. Make the instructions complete on their own. `provider` runs it on another connected provider by its id (leave it out for your own); `model` is "fast", "same" (the default) or one of its models. Then tell the user it’s started and they can carry on.',
+        'Start a longer job in the background, when the user asked you to or agreed to it ("do it in the background", "let me know when it’s done"). It runs in its own conversation; its result comes back to this chat and the user is notified. Make the instructions complete on their own. `provider` runs it on another connected provider by its id (leave it out for your own); `model` is "fast", "same" (the default) or one of its models. Then tell the user it’s started and they can carry on. Supply `checks` for actions and tool-based research: required tool names, minimum receipt counts and exact arguments when known. Without checks, completion confirms answer delivery only.',
       input: {
+        checks: TaskChecks.optional(),
         title: z.string().min(1).max(80),
         instructions: z.string().min(1).max(8_000),
         provider: z.string().min(1).max(80).optional(),
@@ -1164,6 +1208,7 @@ export class TaskService {
         const task = await this.create({
           kind: 'background',
           text: args.instructions,
+          expectations: args.checks && taskExpectations(args.checks),
           title: args.title,
           parentConversationId: ctx.conversationId,
           group: this.#batchOf(ctx),
@@ -1212,6 +1257,8 @@ export class TaskService {
                 error: t.error,
                 result: t.summary,
                 modelCompleted: t.modelCompleted,
+                completion: t.completion,
+                expectations: t.expectations,
                 assessment: {
                   ...assessment,
                   reasons: assessment.reasons.slice(0, 20),
@@ -1321,6 +1368,7 @@ export const TASKS_PROMPT = [
   '## Handing work off',
   '- When a job splits into independent parts (look into several things, check several files, draft alternatives), use `delegate` to run them side by side instead of one after another. Keep each part’s instructions complete on their own.',
   '- When the user wants something done in the background, or agrees to it for a long job, use `start_background_task`; its result comes back to this chat.',
+  '- Give tasks `checks` for every requested action or observation; Conch checks their receipts. Exact arguments bind a check to the intended target/content. For a prose-only answer, omit checks: Conch checks delivery, not factual accuracy. Use Conch’s `current_time` for the time so it has a recorded observation.',
   '- Never use a sub-agent or task tool of your own provider for this (yours are turned off where Conch can): Conch’s helpers and tasks are the ones the user can see, stop and answer, and they run with exactly this chat’s permissions.',
   '- When you talk to the user about either, call it a task: that’s the one word they see, whoever started it.',
 ].join('\n');
@@ -1332,6 +1380,9 @@ function brief(task: Task): string {
       ? 'You are a helper working on one part of a bigger job, in the background. Nobody is watching this conversation, and you can’t ask the user anything: do the part as well as you can with what you have.'
       : 'You are working on a task the user sent to the background. They aren’t watching this conversation; they’ll read your result later.',
     'Do the work yourself: don’t start sub-agents or tasks of your own.',
+    task.expectations?.length
+      ? `Completion requires these saved checks: ${JSON.stringify(task.expectations)}. Do not change or invent receipts. Use current_time for time observations.`
+      : 'Completion requires a nonempty saved answer. Conch checks delivery, not the factual accuracy of prose. Use current_time for time observations.',
     // Nobody to ask, so a blocker is worked around where it safely can be, and reported where it can’t (ADR 0102).
     'When a step fails, work through it as you would with them watching: find the cause, try another way, check the result. What only they can do (a sign-in, a key, a choice that’s theirs) you name instead of guessing.',
     'When you’re done, call report_result once with the result in a few short lines: what you found or did, and anything the user must know. If you couldn’t finish, say what you tried, what’s in the way, and the one thing they can do.',

@@ -34,7 +34,9 @@ export function tasksCheck(tasks: TaskService): DoctorCheck {
       const uncertain = all.filter(
         (t) =>
           ['unverified', 'done', 'failed', 'interrupted', 'stopped'].includes(t.status) &&
-          ['uncertain', 'incomplete'].includes(assessTask(t).verdict),
+          (assessTask(t).verdict === 'uncertain' ||
+            (assessTask(t).verdict === 'incomplete' &&
+              (t.modelCompleted || !!t.expectations?.length))),
       );
       const waiting = all.filter((t) => t.status === 'needs-you');
       const items: DoctorItem[] = [];

@@ -77,7 +77,7 @@ your desktop and the chat apps you already use.
 - **Work in the background.** Hand a job off and keep chatting, or have another
   provider do a part ("have Codex write the tests"). Every provider runs it as a
   Conch task you can see, answer and stop, with its chat's permissions and never
-  more. Finished work and independently verified outcomes are shown separately, with recorded results you can inspect. [Hand it off](./apps/docs/content/features/tasks.md)
+  more. Tasks check for a saved answer or the tool receipts set before work starts, with recorded results you can inspect. [Hand it off](./apps/docs/content/features/tasks.md)
 - **Memory that looks after itself.** Conch learns what will still matter from a chat
   and tidies its memories quietly. They're Markdown you can read, edit or forget. A
   memory a web page tries to plant is held and asked about. [Memory](./apps/docs/content/features/memory.md)

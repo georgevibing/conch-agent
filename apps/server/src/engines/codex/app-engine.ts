@@ -47,6 +47,7 @@ import { DOCS_URL, MIN_VERSION, findCodex, installHints, isAtLeast, parseVersion
 import { CodexHome } from './home';
 import type { RpcMessage } from './rpc';
 import { ToolQueue } from './tool-queue';
+import { CodexToolEvents } from './tool-events';
 import { CodexThreads, digest, parseResumeId, resumeIdFor, toolsDigest } from './threads';
 
 const Account = z.object({
@@ -739,6 +740,7 @@ export class CodexEngine implements Engine {
           const pendingTools = new Set<Promise<void>>();
           const toolQueue = new ToolQueue();
           const invoked = new Set<string>();
+          const providerTools = new CodexToolEvents(new Set(tools.keys()));
           let complete!: () => void;
           let fail!: (error: Error) => void;
           const done = new Promise<void>((resolve, reject) => {
@@ -764,6 +766,72 @@ export class CodexEngine implements Engine {
               complete();
             }
             if (message.id !== undefined && message.method) {
+              // Native clock requests use the same guarded, receipted host tool.
+              if (message.method === 'currentTime/read') {
+                const requestId = message.id;
+                const id = `clock:${typeof requestId}:${requestId}`;
+                const clock = tools.get('conch__current_time');
+                if (
+                  !threadId ||
+                  p.threadId !== threadId ||
+                  !clock ||
+                  signal.aborted ||
+                  invoked.has(id) ||
+                  invoked.size >= 512
+                ) {
+                  rpc.send({
+                    id: requestId,
+                    error: { code: -32602, message: 'Invalid or unavailable clock request.' },
+                  });
+                  return;
+                }
+                invoked.add(id);
+                const job = toolQueue.run(clock.display, async () => {
+                  await publish({
+                    type: 'tool-start',
+                    toolUseId: id,
+                    name: clock.display,
+                    input: {},
+                  });
+                  try {
+                    signal.throwIfAborted();
+                    const result = await clock.run({}, id);
+                    if (result.isError) throw new Error(result.text);
+                    const sample = z
+                      .object({ current_time_at: z.number().int() })
+                      .safeParse(JSON.parse(result.text));
+                    if (!sample.success)
+                      throw new Error('Clock observation failed. Call current_time again.');
+                    await publish({
+                      type: 'tool-end',
+                      toolUseId: id,
+                      status: 'success',
+                      output: result.text,
+                    });
+                    if (!signal.aborted)
+                      rpc.send({
+                        id: requestId,
+                        result: { currentTimeAt: sample.data.current_time_at },
+                      });
+                  } catch (error) {
+                    const output = failureText(error);
+                    await publish({
+                      type: 'tool-end',
+                      toolUseId: id,
+                      status: 'error',
+                      output,
+                    });
+                    if (!signal.aborted)
+                      rpc.send({
+                        id: requestId,
+                        error: { code: -32603, message: output },
+                      });
+                  }
+                });
+                pendingTools.add(job);
+                void job.finally(() => pendingTools.delete(job)).catch(fail);
+                return;
+              }
               if (message.method === 'item/tool/call') {
                 const parsed = z
                   .object({
@@ -870,12 +938,14 @@ export class CodexEngine implements Engine {
               return;
             }
             if (threadId && typeof p.threadId === 'string' && p.threadId !== threadId) return;
+            if (turnId && typeof p.turnId === 'string' && p.turnId !== turnId) return;
             if (message.method === 'item/agentMessage/delta' && typeof p.delta === 'string')
               emit({ type: 'text', messageId: String(p.itemId), delta: p.delta });
             if (message.method === 'item/reasoning/summaryTextDelta' && typeof p.delta === 'string')
               emit({ type: 'thinking', messageId: String(p.itemId), delta: p.delta });
             if (message.method === 'item/completed' && object(p.item).type === 'agentMessage')
               emit({ type: 'message-done', messageId: String(object(p.item).id) });
+            for (const event of providerTools.read(message.method, p, invoked)) emit(event);
             // Codex CLI's own commands and changes, drawn as tool cards like Claude Code's.
             if (
               agent &&

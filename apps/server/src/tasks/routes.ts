@@ -1,7 +1,7 @@
 import { ContinueTaskBody, CreateTaskBody } from '@conch/protocol';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 
-import { TaskError, type TaskService } from './service';
+import { TaskError, taskExpectations, type TaskService } from './service';
 
 const STATUS = { 'not-found': 404, invalid: 400, busy: 409 } as const;
 
@@ -27,6 +27,7 @@ export function registerTaskRoutes(app: FastifyInstance, tasks: TaskService): vo
       return await tasks.create({
         kind: 'background',
         text: body.data.text,
+        expectations: body.data.checks && taskExpectations(body.data.checks),
         requestKey: body.data.requestKey,
         ...(body.data.title && { title: body.data.title }),
         ...(body.data.conversationId && { parentConversationId: body.data.conversationId }),

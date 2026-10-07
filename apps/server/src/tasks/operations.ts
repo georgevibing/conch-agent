@@ -26,6 +26,7 @@ const unresolved =
 export class TaskOperations {
   readonly #locks = new Map<string, Promise<unknown>>();
   #prior?: Set<string>;
+  readonly #observedInvocations = new Map<string, string>();
   readonly #nativeChecks = new Map<string, Set<string>>();
   constructor(
     private readonly get: () => Promise<Task>,
@@ -401,6 +402,38 @@ export class TaskOperations {
     };
   }
 
+  /** Record reported invocations even when a provider skips its approval hook.
+   * This observes an event; it never authorizes a call or trusts MCP read-only hints.
+   */
+  observeNative(name: string, args: Record<string, unknown>, invocationId: string): Promise<void> {
+    return this.#serial('host-effects', async () => {
+      if (this.stopped()) return;
+      const key = hash({ tool: name, args });
+      const identity = `${invocationId}:${key}`;
+      if (this.#nativeChecks.has(identity) || this.#observedInvocations.has(identity)) return;
+      const task = await this.get();
+      const id = `op_${hash({ task: task.id, key, observed: task.operations?.length ?? 0 }).slice(0, 40)}`;
+      this.#observedInvocations.set(identity, id);
+      await this.#save({
+        id,
+        key,
+        invocationId,
+        inputHash: hash(args),
+        tool: name,
+        effect: ['Read', 'Glob', 'Grep', 'LS', 'WebFetch', 'WebSearch'].includes(name)
+          ? 'read'
+          : 'unknown',
+        account: 'native',
+        authorization: 'observed-only',
+        expiresAt: this.now(),
+        state: 'unresolved',
+        goalRevision: task.goalRevision ?? 0,
+        startedAt: this.now(),
+        error: 'This provider tool was observed without an independent receipt.',
+      });
+    });
+  }
+
   /** Native/MCP tools without a receipt contract cannot silently escape the ledger. */
   beforeNative(
     name: string,
@@ -417,11 +450,12 @@ export class TaskOperations {
         return 'This restored task cannot issue unverified native writes.';
       const identity = `${invocationId ?? 'unknown'}:${key}`;
       const seen = invocationId ? this.#nativeChecks.get(identity) : undefined;
+      const observed = invocationId ? this.#observedInvocations.get(identity) : undefined;
       if (seen && !seen.has(phase)) {
         seen.add(phase);
         return undefined;
       }
-      if (!read && task.operations?.some((entry) => entry.key === key))
+      if (!read && task.operations?.some((entry) => entry.key === key && entry.id !== observed))
         return ['Read', 'Glob', 'Grep', 'LS', 'WebFetch', 'WebSearch'].includes(name)
           ? undefined
           : unresolved;
@@ -429,6 +463,7 @@ export class TaskOperations {
         !['Read', 'Glob', 'Grep', 'LS', 'WebFetch', 'WebSearch'].includes(name) &&
         task.operations?.some(
           (entry) =>
+            entry.id !== observed &&
             entry.effect !== 'read' &&
             entry.state !== 'confirmed' &&
             entry.state !== 'not-run' &&
@@ -437,6 +472,7 @@ export class TaskOperations {
       )
         return unresolved;
       if (invocationId) this.#nativeChecks.set(identity, new Set([phase]));
+      if (observed) return undefined;
       await this.#save({
         id: `op_${hash({ task: task.id, key, ...(read ? { attempt: task.operations?.length ?? 0 } : {}) }).slice(0, 40)}`,
         key,

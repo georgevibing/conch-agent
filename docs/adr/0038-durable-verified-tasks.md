@@ -203,3 +203,64 @@ alone does not authorize replay. Fault injection uses temporary homes only.
 This follows the server-side state sequencing and per-operation authorization
 requirements of the [OWASP Transaction Authorization Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Transaction_Authorization_Cheat_Sheet.html#25-application-should-control-which-transaction-state-transitions-are-allowed).
 No automatic resume, trust setting, or new network capability is introduced.
+
+## Amended 2026-10-07: completion contracts and observable provider tools
+
+New general tasks fix a response-delivery contract before starting. A successful
+turn must save a nonempty answer, tagged by the server with the goal revision and
+attempt. `assessTask` reports `delivered`; this is not a claim that the prose is
+true or that an external action happened. Missing answers remain incomplete.
+Legacy tasks without a contract remain unchecked. Explicit receipt expectations
+always take precedence, and uncertain or unsupported effects cannot be hidden by
+an answer. This replaces the no-criteria default described above.
+
+`delegate`, `start_background_task` and the task-create API accept bounded `checks`
+(tool, minimum receipt count, optional exact arguments/receipt/empty-source rule).
+The server validates every helper's checks before starting any of the helpers,
+normalizes Conch tool names and hashes arguments before saving criteria. For
+example, a check for `Write` with arguments `{file_path: "probe.txt", content:
+"updated"}` requires a confirmed receipt for that exact payload. These fields
+never grant tool, account or permission scope. Repeated reads count as distinct
+observations only since the latest failed or pending read of that identity; an
+exact receipt requirement still needs the latest result. Task briefs include the fixed
+criteria and status diagnostics expose the missing ones. Guided workflows retain
+their existing server-defined criteria.
+
+Delivery uses optional fields in the existing ledger, and preserves the existing
+verification enum for rollback compatibility. An older release can still read the
+file and conservatively display a delivered answer as unverified. A cold restart
+preserves a valid delivery marker; a retry or new goal cannot reuse it, and backup
+restore clears it. No new backup file or authority setting is introduced.
+
+Conch's always-available `current_time` read tool samples UTC and records the exact
+result through the existing operation wrapper. Codex app-server `currentTime/read`
+requests use that same guarded tool and return the protocol's integer Unix seconds.
+Wrong-thread, duplicate, cancelled and unavailable calls never sample the clock.
+The queue and invocation cap bound requests. Other providers can call the same
+host tool; old providers need no private transcript or internal tracing API.
+
+Codex standard MCP, dynamic-tool and web-search item events are normalized into
+Conch tool events, including a completion received without a start. Host calls
+already executed locally are excluded; duplicate completions cannot replace a
+failure. Names, event counts and output are bounded. ConversationManager's
+observation hook records these calls even when a provider did not request an
+approval. Observation is telemetry only: it cannot skip the execution guard or
+replay checks. Remote `readOnlyHint`, descriptions and success text never establish
+trusted effect declarations or receipts. Opaque tools stay opaque.
+
+Threat model: untrusted models may claim success, supply weak criteria, replay
+notifications or label an effect as a read. A delivery marker establishes only
+that an answer was saved; criteria established before execution are evaluated
+against host evidence, never the answer. Every external effect retains its prior
+permission and receipt requirements. Tests cover empty replies, stale goal/attempt
+markers, backup and cold restart, malformed helper batches, exact argument checks,
+clock routing and denial, missing/duplicate provider events and an observation
+arriving before a rejected replay. Existing process-death tests exercise recovery
+before dispatch, after an external effect and after a persisted receipt.
+
+Sources reviewed: the Codex app-server protocol's
+[current-time request](https://github.com/openai/codex/blob/2dae757b8713d3317e8da58828bdac821386982c/codex-rs/app-server-protocol/src/protocol/v2/current_time.rs),
+[standard item events](https://github.com/openai/codex/blob/2dae757b8713d3317e8da58828bdac821386982c/codex-rs/app-server-protocol/src/protocol/v2/item.rs),
+and [clock forwarding](https://github.com/openai/codex/blob/2dae757b8713d3317e8da58828bdac821386982c/codex-rs/app-server/src/current_time.rs);
+[OWASP Transaction Authorization](https://cheatsheetseries.owasp.org/cheatsheets/Transaction_Authorization_Cheat_Sheet.html)
+for fixed transaction data and server-controlled sequencing.
