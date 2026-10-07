@@ -815,6 +815,7 @@ export class TaskService {
         state: task.status,
         ...(task.summary && { summary: tidy(task.summary, 600) }),
         ...(task.by && { by: task.by }),
+        ...(task.group && { group: task.group }),
       })
       .catch(() => undefined);
   }
@@ -1053,6 +1054,21 @@ export class TaskService {
     ].join('\n');
   }
 
+  /**
+   * What one reply starts is one batch (a card in its chat, one result): its
+   * turn's signal names it, and goes when the turn does.
+   */
+  #batchOf(ctx: ToolContext): string {
+    let group = this.#batches.get(ctx.signal);
+    if (!group) {
+      group = newId('grp');
+      this.#batches.set(ctx.signal, group);
+    }
+    return group;
+  }
+
+  readonly #batches = new WeakMap<AbortSignal, string>();
+
   /** `delegate` and `start_background_task`, in chats you're in (never inside a task). */
   tools(ctx: ToolContext): HostTool[] {
     // A task hands nothing on: one level, so nothing multiplies out of sight.
@@ -1098,7 +1114,7 @@ export class TaskService {
             throw error;
           }
         }
-        const group = newId('grp');
+        const group = this.#batchOf(ctx);
         const tasks = [];
         for (const [i, part] of args.parts.entries())
           tasks.push(
@@ -1150,6 +1166,7 @@ export class TaskService {
           text: args.instructions,
           title: args.title,
           parentConversationId: ctx.conversationId,
+          group: this.#batchOf(ctx),
           options: handed.options,
           by: handed.by,
           ceiling: ctx.permissionMode,

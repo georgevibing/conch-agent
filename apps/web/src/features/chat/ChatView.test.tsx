@@ -731,3 +731,76 @@ describe('Chats started elsewhere', () => {
     );
   });
 });
+
+describe('Tasks started together', () => {
+  it('are one card in the chat, and each opens over it in a sheet you step through', async () => {
+    const user = userEvent.setup();
+    const helper = (id: string, title: string, patch: Record<string, unknown> = {}) => ({
+      id,
+      kind: 'helper',
+      title,
+      prompt: title,
+      status: 'running',
+      options: {},
+      createdAt: id === 'a' ? 1 : 2,
+      startedAt: Date.now() - 10_000,
+      steps: [],
+      group: 'g1',
+      parentConversationId: 'c-batch',
+      conversationId: `c-${id}`,
+      rev: 1,
+      ...patch,
+    });
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/tasks': () => ({
+        concurrent: 3,
+        tasks: [
+          helper('a', 'Check the tests', { current: 'Running `npm test`' }),
+          helper('b', 'Read the README', {
+            status: 'done',
+            summary: 'It explains setup well.',
+            finishedAt: Date.now(),
+          }),
+        ],
+      }),
+    });
+    const { where } = renderApp(<ChatView conversationId="c-batch" />, { route: '/c/c-batch' });
+    await waitFor(() => expect(FakeSocket.last?.readyState).toBe(1));
+    const note = (taskId: string, title: string, state: string) => ({
+      type: 'task',
+      taskId,
+      title,
+      kind: 'helper',
+      state,
+      group: 'g1',
+    });
+    events('c-batch', 0, [
+      note('a', 'Check the tests', 'running'),
+      note('b', 'Read the README', 'running'),
+      note('b', 'Read the README', 'done'),
+    ]);
+    const card = await screen.findByRole('article', { name: '2 tasks' });
+    await waitFor(() => expect(card).toHaveTextContent('1 working · 1 done'));
+    expect(card).toHaveTextContent('It explains setup well.');
+    await user.click(within(card).getByRole('button', { name: /Read the README/ }));
+    await waitFor(() => expect(where()).toBe('/c/c-batch?task=b'));
+    const sheet = await screen.findByRole('dialog', { name: 'Read the README' });
+    const tabs = within(sheet).getByRole('tablist', { name: '2 tasks started together' });
+    // What's working first.
+    expect(
+      within(tabs)
+        .getAllByRole('tab')
+        .map((t) => t.getAttribute('aria-label')),
+    ).toEqual(['Check the tests: Working', 'Read the README: Done']);
+    await user.click(within(tabs).getByRole('tab', { name: 'Check the tests: Working' }));
+    await waitFor(() => expect(where()).toBe('/c/c-batch?task=a'));
+    expect(await screen.findByRole('dialog', { name: 'Check the tests' })).toBeInTheDocument();
+    expect(FakeSocket.last?.sent).toContainEqual(
+      expect.objectContaining({ type: 'conversation.subscribe', conversationId: 'c-a' }),
+    );
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(where()).toBe('/c/c-batch'));
+  });
+});

@@ -13,6 +13,12 @@ export { taskHeadline } from './headline';
 export { groupSteps, type TaskStepGroup, type TaskStepLine } from './steps';
 export { TaskSteps, type TaskStepsProps } from './TaskSteps';
 export {
+  batchSummary,
+  TaskGroupCard,
+  type TaskGroupCardProps,
+  type TaskGroupItem,
+} from './TaskGroupCard';
+export {
   elapsed,
   TaskCard,
   taskLook,

@@ -1,11 +1,11 @@
 import { taskWorth, type Task } from '@conch/protocol';
 import { ChatTasks, ChatTasksToggle, type ChatTask } from '@conch/nacre';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { NavLink } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { create } from 'zustand';
 
 import { withCode } from './LiveTaskCard';
-import { taskPath } from './open';
+import { TASK_PARAM, taskPath, type SheetState } from './open';
 import { going, useStopTask, useTasks } from './queries';
 import { isTaskFresh, useKnownConversations } from './seen';
 
@@ -114,6 +114,8 @@ export function useChatTaskTree({
 }): { disclosure?: ReactNode; below?: ReactNode } {
   const stop = useStopTask();
   const listId = useId();
+  const location = useLocation();
+  const sheet = new URLSearchParams(location.search).get(TASK_PARAM);
   const chosen = useTree((s) => s.open[chatId]);
   const setOpen = useTree((s) => s.set);
   const now = tasks?.now ?? [];
@@ -133,9 +135,19 @@ export function useChatTaskTree({
   const row = (task: Task): ChatTask => ({
     id: task.id,
     link: (
-      <NavLink to={taskPath(task)} onClick={onNavigate} end>
+      <Link
+        to={taskPath(task)}
+        state={{ taskSheet: true } satisfies SheetState}
+        onClick={onNavigate}
+        // Open over its chat, or as its own chat ("Continue in full").
+        aria-current={
+          sheet === task.id || location.pathname === `/c/${task.conversationId}`
+            ? 'page'
+            : undefined
+        }
+      >
         {task.title}
-      </NavLink>
+      </Link>
     ),
     status: task.status,
     worth: taskWorth(task),

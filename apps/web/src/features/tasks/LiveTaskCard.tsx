@@ -7,11 +7,12 @@ import {
 } from '@conch/protocol';
 import { InlineCode, TaskCard } from '@conch/nacre';
 import { useState, type ReactNode } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router';
+import { Link, useLocation } from 'react-router';
 
 import { useConversations } from '../../api/queries';
 import { useLive } from '../../live/LiveProvider';
 import { modeWords } from '../models/words';
+import { useOpenTask } from './open';
 import { useRemoveTask, useRetryTask, useStopTask } from './queries';
 
 /** "Full trust", "Ask first": the mode a task runs in, in the words the picker uses. */
@@ -81,7 +82,7 @@ export function LiveTaskCard({
 }) {
   const assessment = assessTask(task);
   const worth = taskWorth(task);
-  const navigate = useNavigate();
+  const openTask = useOpenTask();
   // Already in its chat: nothing to open.
   const inside = useLocation().pathname === `/c/${task.conversationId}`;
   const live = useLive();
@@ -135,11 +136,7 @@ export function LiveTaskCard({
             }
           : undefined
       }
-      onOpen={
-        task.conversationId && !inside
-          ? () => void navigate(`/c/${task.conversationId}`)
-          : undefined
-      }
+      onOpen={task.conversationId && !inside ? () => openTask(task) : undefined}
       onStop={() => stop.mutate(task.id)}
       // A task the assistant split off is its to start again; one you started is yours.
       onRetry={task.kind === 'background' ? () => retry.mutate(task.id) : undefined}

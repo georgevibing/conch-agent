@@ -1121,13 +1121,13 @@ describe('helpers side by side (delegate)', () => {
 });
 
 describe('helpers on another provider', () => {
-  const ctx = (conversationId: string, engine: Engine) => ({
+  const ctx = (conversationId: string, engine: Engine, signal = new AbortController().signal) => ({
     conversationId,
     append: () => undefined,
     engine,
     permissionMode: 'acceptEdits' as const,
     ask: async () => 'deny' as const,
-    signal: new AbortController().signal,
+    signal,
   });
 
   async function idleChat(conversations: ConversationManager, options?: { model: string }) {
@@ -1334,6 +1334,28 @@ describe('helpers on another provider', () => {
       (t) => t.status === 'unverified',
     );
     expect(engines.get('openrouter')?.turns).toHaveLength(1);
+  });
+
+  it('what one reply starts is one batch, and the next reply starts another', async () => {
+    const { tasks, conversations, engines } = await setup();
+    const chat = await idleChat(conversations);
+    const engine = engines.get('mock') as Engine;
+    const start = (signal: AbortSignal, title: string) =>
+      tasks
+        .tools(ctx(chat.id, engine, signal))
+        .find((t) => t.name === 'start_background_task')
+        ?.run({ title, instructions: title } as never);
+    const reply = new AbortController().signal;
+    await start(reply, 'One');
+    await start(reply, 'Two');
+    await start(new AbortController().signal, 'Three');
+    const all = (await tasks.list()).tasks;
+    const group = (title: string) => all.find((t) => t.title === title)?.group;
+    expect(group('One')).toBeDefined();
+    expect(group('Two')).toBe(group('One'));
+    expect(group('Three')).not.toBe(group('One'));
+    const cards = (await conversations.detail(chat.id)).events.filter((e) => e.type === 'task');
+    expect(cards.every((e) => e.type === 'task' && e.group)).toBe(true);
   });
 
   it('tells the assistant who else it can hand work to', async () => {

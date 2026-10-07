@@ -1,35 +1,114 @@
-import type { TaskStatus } from '@conch/protocol';
-import { TaskCard } from '@conch/nacre';
+import { taskWorth, type Task } from '@conch/protocol';
+import { TaskCard, TaskGroupCard, type TaskGroupItem } from '@conch/nacre';
+import { useState } from 'react';
 
-import { LiveTaskCard } from './LiveTaskCard';
-import { useTask } from './queries';
+import type { TaskNote } from '../../live/reducer';
+import { useLive } from '../../live/LiveProvider';
+import { LiveTaskCard, withCode } from './LiveTaskCard';
+import { useOpenTask } from './open';
+import { useTasks } from './queries';
 import styles from './Tasks.module.css';
 
 /**
- * A task's card in the chat it was sent from: live while the task is in the
- * list, and what the chat last heard of it once it's gone from there.
+ * The tasks a reply started, as their card in the chat they came from (ADR
+ * 0033): one on its own as its card; several as one, a line each, that
+ * becomes their result once they've all finished. Live while the tasks are in
+ * the list, and what the chat last heard of them once they're gone from there.
  */
-export function TaskChatCard({
-  taskId,
-  title,
-  state,
-  summary,
-  by,
-}: {
-  taskId: string;
-  title: string;
-  state: TaskStatus;
-  summary?: string;
-  by?: string;
-}) {
-  const task = useTask(taskId);
+export function TaskChatCard({ tasks: notes }: { tasks: TaskNote[] }) {
+  const all = useTasks().data?.tasks;
+  const open = useOpenTask();
+  const live = notes.map((note) => all?.find((t) => t.id === note.taskId));
+  if (notes.length === 1) {
+    const [note] = notes;
+    const [task] = live;
+    if (!note) return null;
+    return (
+      <div className={styles.chatCard}>
+        {task ? (
+          <LiveTaskCard task={task} variant="compact" />
+        ) : (
+          <TaskCard
+            variant="compact"
+            title={note.title}
+            status={note.state}
+            summary={note.summary}
+            by={note.by}
+          />
+        )}
+      </div>
+    );
+  }
   return (
-    <div className={styles.chatCard}>
-      {task ? (
-        <LiveTaskCard task={task} variant="compact" />
-      ) : (
-        <TaskCard variant="compact" title={title} status={state} summary={summary} by={by} />
-      )}
-    </div>
+    <BatchCard
+      notes={notes}
+      live={live}
+      onOpen={(id) => {
+        const task = all?.find((t) => t.id === id);
+        if (task) open(task);
+      }}
+    />
   );
 }
+
+function BatchCard({
+  notes,
+  live,
+  onOpen,
+}: {
+  notes: TaskNote[];
+  live: (Task | undefined)[];
+  onOpen: (id: string) => void;
+}) {
+  const socket = useLive();
+  // The answer is on its way: its buttons wait for it to land.
+  const [answered, setAnswered] = useState<string>();
+  const items: TaskGroupItem[] = notes.map((note, i) => {
+    const task = live[i];
+    if (!task)
+      return { id: note.taskId, title: note.title, status: note.state, summary: note.summary };
+    const asking = task.status === 'needs-you' && task.asking?.here ? task.asking : undefined;
+    const conversation = task.conversationId;
+    const answer = (decision: 'allow' | 'deny') => {
+      if (!asking || !conversation) return;
+      setAnswered(asking.permissionId);
+      socket.respond(conversation, asking.permissionId, decision);
+    };
+    return {
+      id: task.id,
+      title: task.title,
+      status: task.status,
+      worth: taskWorth(task),
+      current:
+        task.status === 'needs-you' && task.asking && !asking
+          ? withCode(`Wants to ${lower(task.asking.summary)}`)
+          : task.current && withCode(task.current),
+      summary: task.summary,
+      error: task.error,
+      startedAt: task.startedAt,
+      finishedAt: task.finishedAt,
+      ...(asking &&
+        conversation && {
+          asking: {
+            summary: withCode(lower(asking.summary)),
+            command: asking.command,
+            why: asking.taint,
+            pending: answered === asking.permissionId,
+            onAllow: () => answer('allow'),
+            onDeny: () => answer('deny'),
+          },
+        }),
+    };
+  });
+  const known = new Set(live.flatMap((t) => (t ? [t.id] : [])));
+  return (
+    <TaskGroupCard
+      className={styles.chatCard}
+      tasks={items}
+      // What's gone from the list has nothing left to open.
+      onOpen={known.size ? (id) => known.has(id) && onOpen(id) : undefined}
+    />
+  );
+}
+
+const lower = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);

@@ -30,11 +30,13 @@ The card stays where it first appeared and keeps itself current: what the task i
 
 In the chat list, a chat with tasks has a badge on its row saying how many there are and how they're going. Press it for a row per task: what it's doing now, how long it's been, a press to open its own chat, and **Stop** while it works. It opens by itself while something is going.
 
-The pearl by your assistant's name, at the top of the sidebar, says what's going on in the background across all your chats. It rests when nothing is, breathes while tasks work, turns amber when one needs your OK, and glints once when one finishes. While anything is going, press it for a short list of just those — what needs you first, with **Allow** and **Deny** right there. On a phone, or with the sidebar hidden, it's in the header. Up to three tasks work at once. The rest wait their turn.
+The pearl by your assistant's name, at the top of the sidebar, says what your tasks are doing across all your chats. It rests when nothing is, breathes while tasks work, turns amber when one needs your OK, and glints once when one finishes. While anything is going, press it for a short list of just those — what needs you first, with **Allow** and **Deny** right there. On a phone, or with the sidebar hidden, it's in the header. Up to three tasks work at once. The rest wait their turn.
 
 A task you start from a new chat, or that another app starts, has no chat to come back to: it shows up in your chat list as a chat of its own, with its card at the top.
 
-Every task is a chat of its own. **Open** shows it, and there you can read along, answer what it asks, or stop it. **Stop** on the card ends a task at any point.
+Tasks started together, by one reply or one job split into parts, share one card: how many, how they're going in a line and a bar, then a line each. What needs your OK rises to the top and is answered right there. When the last one finishes, the bar folds away and the lines are the result: what each did, or why it didn't.
+
+Every task is a chat of its own. Press one, on its card or under its chat in the chat list, and it opens over the chat you're in: from the bottom on a phone, from the side on a computer. Read along, answer what it asks, or **Stop** it. The tasks started with it sit along the top, a mark each: tap one, swipe sideways on a phone, or use the arrow keys. Close it, or go back, and you're where you were. **Continue in full** opens its own chat, to give it more to do.
 
 ## When it needs you
 
@@ -69,7 +71,7 @@ In a task that's a chat of its own, **Remove** on its card hides the finished ta
 
 ## Several at once
 
-When a job splits into parts that don't need each other, your assistant can run them at once, each as a task, and bring the results back together. Each one is a card in the chat, like any task.
+When a job splits into parts that don't need each other, your assistant can run them at once, each as a task, and bring the results back together. Tasks started together share one card in the chat, a line each.
 
 - They use the provider's faster model, unless a part needs the full one.
 - A task can go to another provider you've connected. Ask for it ("have Codex write the tests while you fix the bug"), or your assistant picks one when it plainly suits a part, like a coding agent for changing code. The card says **by** which provider.

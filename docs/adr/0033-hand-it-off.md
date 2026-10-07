@@ -5,6 +5,7 @@
 - Amended: 2026-10-04 (a part can go to another provider, below)
 - Amended: 2026-10-06 (every provider hands off through Conch's tasks; what a task
   inherits; tasks under their chat, below)
+- Amended: 2026-10-07 (what one reply starts is one batch; a task opens over its chat, below)
 - Builds on: [ADR 0005](./0005-usage-limits.md) (budgets that never block),
   [ADR 0006](./0006-routines.md) (a run is a conversation),
   [ADR 0023](./0023-offline-and-limits.md) (carrying on at a limit),
@@ -361,3 +362,26 @@ one that may do more than its chat is an escalation. Both are bugs.
   job) is a chat of its own: its chat's origin says `standalone`, the chat list
   shows it with your chats, and its card sits at the top of it, in full, where
   Stop, Resume safely and Remove are.
+
+## Amended 2026-10-07: one batch, one card; a task opens over its chat
+
+Asking for ten things at once made ten cards and ten chats to jump between.
+
+- **A batch.** `Task.group` names the tasks started together: the helpers of one
+  `delegate`, and every `start_background_task` in the same reply (the turn's
+  signal names the batch, and it goes when the turn does). "Run as a task" pressed by a person is a batch of one. The chat's `task` event carries
+  the group, and the chat's transcript keeps one item per batch (`tasks`, in the
+  order they started).
+- **One card.** A batch of one keeps its own card (`TaskCard`). More than one share
+  `TaskGroupCard`: how many and how they're going in words, a bar of one segment
+  per task in its state's colour (a sheen of pearl light on the working ones), then
+  a line each. What needs your OK rises to the top, answered right there. Once all
+  have finished the bar folds away and the lines are the result, a line each: what
+  it did, or why it didn't. Helpers still come back to the model as one merged
+  tool result.
+- **Over its chat.** Opening a task (its card, its line, the list under its chat, a
+  notification) opens it at `?task=` over the chat it came from, as a `Sheet` (the
+  glint), from the bottom on a phone and the side on a computer: its live
+  conversation, answered there, Stop, and **Continue in full** for its own chat.
+  Its batch sits along the top, a mark each, needs you first: a tap, a swipe, the
+  arrow keys. Opening pushes one step of history, so closing it is going back.

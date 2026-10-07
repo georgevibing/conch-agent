@@ -57,6 +57,37 @@ describe('transcript reducer', () => {
     expect(compacted.context).toBeUndefined();
   });
 
+  it('tasks started together are one card, kept where the first appeared; others their own', () => {
+    const note = (taskId: string, state: 'running' | 'done', group?: string) => ({
+      type: 'task' as const,
+      taskId,
+      title: taskId,
+      kind: 'background' as const,
+      state,
+      ...(group && { group }),
+    });
+    const view = reduceAll(
+      log(
+        note('a', 'running', 'g1'),
+        { type: 'user.message', messageId: 'u1', text: 'and another' },
+        note('b', 'running', 'g1'),
+        note('c', 'running'),
+        note('a', 'done', 'g1'),
+      ),
+    );
+    const cards = view.items.filter((i) => i.kind === 'task');
+    expect(cards).toHaveLength(2);
+    expect(view.items[0]).toMatchObject({
+      kind: 'task',
+      group: 'g1',
+      tasks: [
+        { taskId: 'a', state: 'done' },
+        { taskId: 'b', state: 'running' },
+      ],
+    });
+    expect(cards[1]).toMatchObject({ tasks: [{ taskId: 'c' }] });
+  });
+
   it('keeps how long a turn ran, for what it took under its reply', () => {
     const view = reduceAll(
       log(
@@ -101,7 +132,9 @@ describe('transcript reducer', () => {
       ),
     );
     expect(view.items.map((i) => i.kind)).toEqual(['task', 'user']);
-    expect(view.items[0]).toMatchObject({ taskId: 't1', state: 'done', summary: 'Tidied.' });
+    expect(view.items[0]).toMatchObject({
+      tasks: [{ taskId: 't1', state: 'done', summary: 'Tidied.' }],
+    });
   });
 
   it('keeps chronological order when tools interleave with text', () => {

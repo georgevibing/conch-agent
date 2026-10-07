@@ -59,7 +59,11 @@ test('run as a task, it works while you chat, and its result comes back', async 
   await expect(openChatRow(page).getByRole('list', { name: /^Tasks from/ })).toContainText(
     'Run the checks slowly',
   );
+  // It opens over the chat; its own chat is a press further, with the way back.
   await card.getByRole('button', { name: 'Open' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Run the checks slowly' });
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole('button', { name: 'Continue in full' }).click();
   const strip = page.getByRole('navigation', { name: 'Task' });
   await expect(strip).toBeVisible();
   await strip.getByRole('link').click();
@@ -107,19 +111,39 @@ test('a task stops when you say, runs again with one press, and goes when you re
   await expect(card).toHaveCount(0);
 });
 
-test('several tasks work at once, each with its own card, and their results come back together', async ({
+test('several tasks work at once on one card, open over the chat, and come back together', async ({
   page,
 }) => {
   await page.goto('/');
   const composer = page.getByRole('textbox', { name: 'Message Conch' });
   await composer.fill('look over the project in parallel');
   await composer.press('Enter');
+  // Started together: one card, a line each.
+  const card = page.getByRole('article', { name: '3 tasks' });
+  await expect(card).toBeVisible();
   for (const name of ['Read the README', 'Check the tests', 'Skim the changelog'])
-    await expect(page.getByRole('article', { name: new RegExp(name) })).toBeVisible();
+    await expect(card.getByRole('button', { name: new RegExp(name) })).toBeVisible();
   await expect(page.getByText('I split that into three')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('heading', { name: 'Check the tests' })).toBeVisible();
-  for (const name of ['Read the README', 'Check the tests', 'Skim the changelog'])
-    await expect(page.getByRole('article', { name: new RegExp(name) })).toContainText(/Done ·/);
+  // All finished: the lines are the result.
+  await expect(card).toContainText('3 done');
+  await expect(card.getByRole('img', { name: /finished/ })).toHaveCount(0);
+
+  // Each opens over the chat, the others a tap away; closing it is going back.
+  const url = page.url();
+  await card.getByRole('button', { name: /Check the tests/ }).click();
+  const sheet = page.getByRole('dialog', { name: 'Check the tests' });
+  await expect(sheet).toBeVisible();
+  await expect(page).toHaveURL(/\?task=/);
+  const tabs = sheet.getByRole('tablist', { name: '3 tasks started together' });
+  await expect(tabs.getByRole('tab')).toHaveCount(3);
+  await tabs.getByRole('tab', { name: /Skim the changelog/ }).click();
+  await expect(page.getByRole('dialog', { name: 'Skim the changelog' })).toBeVisible();
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByRole('dialog', { name: 'Check the tests' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(page.url()).toBe(url);
 });
 
 test('a task that needs your OK says so, and waits only for you', async ({ page }) => {
@@ -155,11 +179,13 @@ test('a chat’s tasks sit under it in the sidebar, and open from there', async 
   const tasks = row.getByRole('list', { name: /^Tasks from/ });
   await expect(tasks).toContainText('Keep checking for a while');
   await expect(tasks).toContainText('npm run watch');
-  // Stopped from the list, and its own chat opens from there.
+  // Stopped from the list, and it opens from there, over the chat.
   await tasks.getByRole('button', { name: 'Stop' }).click();
   await expect(tasks).toContainText('Stopped');
   await tasks.getByRole('link', { name: /Keep checking for a while/ }).click();
-  await expect(page.getByRole('navigation', { name: 'Task' })).toContainText('Stopped');
+  await expect(page.getByRole('dialog', { name: 'Keep checking for a while' })).toContainText(
+    'Stopped',
+  );
   // Seen, and you've moved on: it tidies away, and the chat is one line again.
   await page.goto('/');
   const list = page.getByRole('navigation', { name: 'Conversations' });

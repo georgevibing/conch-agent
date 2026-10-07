@@ -117,7 +117,11 @@ export const Task = z.object({
   attempt: z.number().int().nonnegative().optional(),
   /** The chat it was sent from, where its result comes back. */
   parentConversationId: z.string().optional(),
-  /** Helpers started together share a group: their results are merged. */
+  /**
+   * Tasks started together share a group: one batch, shown as one card in the
+   * chat they came from. Helpers from one `delegate`, background tasks started
+   * in the same reply. Unset, a batch of one.
+   */
   group: z.string().optional(),
   /** The conversation it runs in (once it has started). */
   conversationId: z.string().optional(),
