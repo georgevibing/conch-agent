@@ -68,7 +68,7 @@ Each agent has its own name, face, personality and instructions. Everything else
 
 ## Every agent keeps going
 
-Whichever you pick, an agent doesn't give up at the first error. When something fails, it works out why, tries another way, and checks the result before it tells you it's done. If it really can't, it says what it tried and the one thing it needs from you, in its own voice. See [how Conch works on a problem](./how-conch-works-on-a-problem.md).
+Whichever you pick, an agent doesn't give up at the first error. When something fails, it works out why, tries another way, and checks the result before it tells you it's done. If it really can't, it says what it tried and the one thing it needs from you, in its own voice. See [how Conch works on a problem](./working-on-a-problem.md).
 
 ## Bring them from OpenClaw or Hermes
 
