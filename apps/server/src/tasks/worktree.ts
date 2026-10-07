@@ -4,8 +4,8 @@
  * other or over you. A helper that changed nothing leaves no trace; one that
  * did leaves its branch for you to look at and merge.
  */
-import { mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, realpath, stat } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 
 import { findExecutable, run, type RunResult } from '../lib/proc';
 
@@ -52,14 +52,76 @@ export async function createWorktree(
 export async function finishWorktree(
   wt: Worktree,
   git: Git = defaultGit,
-): Promise<{ changed: boolean }> {
+  beforeRemoval?: () => Promise<void>,
+): Promise<{ changed: boolean; retained: boolean }> {
   const status = await git(['status', '--porcelain'], wt.path);
   const head = await git(['rev-parse', 'HEAD'], wt.path);
   const changed =
     status.code !== 0 || status.stdout.trim() !== '' || head.stdout.trim() !== wt.base;
   if (!changed) {
-    await git(['worktree', 'remove', '--force', wt.path], wt.repo);
-    await git(['branch', '-D', wt.branch], wt.repo);
+    // A restart between removal and task completion must know this folder was clean
+    // and may be recreated. Do not remove it if the durable checkpoint fails.
+    await beforeRemoval?.();
+    // Git checks again for edits: a file written after status must not be deleted.
+    const removed = await git(['worktree', 'remove', wt.path], wt.repo);
+    if (removed.code !== 0) return { changed: true, retained: true };
+    // Delete only the unchanged branch; a concurrent commit must retain its reference.
+    await git(['update-ref', '-d', `refs/heads/${wt.branch}`, wt.base], wt.repo);
+    return { changed: false, retained: false };
   }
-  return { changed };
+  return { changed, retained: true };
+}
+
+/** Reopen only a worktree Conch deliberately cleaned up; never guess after missing work. */
+export async function resumeWorktree(
+  saved: { path: string; branch: string; repo?: string; base?: string; retained?: boolean },
+  git: Git = defaultGit,
+): Promise<void> {
+  const exists = await stat(saved.path).then(
+    () => true,
+    (error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return false;
+      throw error;
+    },
+  );
+  if (!exists) {
+    if (saved.retained !== false || !saved.repo || !saved.base)
+      throw new Error(
+        'This task’s work folder is missing. Restore that folder before resuming; Conch will not switch to another folder.',
+      );
+    const branch = await git(['rev-parse', '--verify', `refs/heads/${saved.branch}`], saved.repo);
+    const args =
+      branch.code === 0
+        ? ['worktree', 'add', saved.path, saved.branch]
+        : ['worktree', 'add', '-b', saved.branch, saved.path, saved.base];
+    const added = await git(args, saved.repo);
+    if (added.code !== 0)
+      throw new Error(
+        'Conch could not reopen this task’s work folder. Check its branch and folder in the repository, then resume.',
+      );
+  }
+  const top = await git(['rev-parse', '--show-toplevel'], saved.path);
+  const branch = await git(['symbolic-ref', '--short', 'HEAD'], saved.path);
+  if (
+    top.code !== 0 ||
+    resolve(top.stdout.trim()) !== (await realpath(saved.path)) ||
+    branch.code !== 0 ||
+    branch.stdout.trim() !== saved.branch
+  )
+    throw new Error(
+      'This task’s work folder or branch changed. Restore its original branch before resuming.',
+    );
+  if (saved.repo) {
+    const common = ['rev-parse', '--path-format=absolute', '--git-common-dir'];
+    const expected = await git(common, saved.repo);
+    const actual = await git(common, saved.path);
+    if (
+      expected.code !== 0 ||
+      actual.code !== 0 ||
+      resolve(expected.stdout.trim()) !== resolve(actual.stdout.trim())
+    )
+      throw new Error(
+        'This task’s work folder belongs to a different repository. Restore its original worktree before resuming.',
+      );
+  }
 }

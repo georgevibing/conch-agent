@@ -44,7 +44,13 @@ import { taskArgumentHash, taskArgumentText, TaskOperations } from './operations
 import { newId } from '../lib/ids';
 import type { SettingsStore } from '../settings/store';
 import type { TaskStore } from './store';
-import { createWorktree, finishWorktree, type Git, type Worktree } from './worktree';
+import {
+  createWorktree,
+  finishWorktree,
+  resumeWorktree,
+  type Git,
+  type Worktree,
+} from './worktree';
 
 /** Background tasks at once; the rest queue. */
 export const BACKGROUND_AT_ONCE = 3;
@@ -145,7 +151,7 @@ export class TaskService {
 
   /**
    * On start: what was running when Conch stopped says so (one press runs it
-   * again); what was waiting its turn carries on.
+   * again). Queued work also waits for a fresh decision; old approvals expire.
    */
   async start(): Promise<void> {
     for (const task of await this.deps.store.list()) {
@@ -155,8 +161,12 @@ export class TaskService {
           ...task,
           status: 'interrupted',
           current: undefined,
+          asking: undefined,
+          modelCompleted: false,
+          verification: 'pending',
           finishedAt: this.#now,
-          error: 'Conch stopped while this was running.',
+          error:
+            'Conch stopped before this task finished. Resume safely to continue from its saved progress.',
         });
     }
     this.#pump();
@@ -244,6 +254,7 @@ export class TaskService {
         modelCompleted: false,
         options,
         createdAt: this.#now,
+        cwd: await this.deps.settings.workspace(),
         steps: [],
         rev: 0,
         ...(input.parentConversationId && { parentConversationId: input.parentConversationId }),
@@ -251,13 +262,13 @@ export class TaskService {
         ...(input.by && { by: input.by.slice(0, 80) }),
       };
       if (input.worktree) {
-        const workspace = await this.deps.settings.workspace();
+        const workspace = task.cwd ?? (await this.deps.settings.workspace());
         const wt = await createWorktree(workspace, this.deps.home, task.id, this.deps.git).catch(
           () => undefined,
         );
         if (wt) {
           this.#worktrees.set(task.id, wt);
-          task.worktree = { path: wt.path, branch: wt.branch, changed: false };
+          task.worktree = { ...wt, changed: false, retained: true };
         }
       }
       await this.#save(task);
@@ -361,11 +372,13 @@ export class TaskService {
         throw new TaskError('busy', 'This task is still going or already verified.');
       return {
         status: 'queued',
+        attempt: (task.attempt ?? 0) + 1,
         finishedAt: undefined,
         error: undefined,
         current: undefined,
         verification: 'pending',
         modelCompleted: false,
+        asking: undefined,
       };
     });
     this.#stopping.delete(id);
@@ -396,12 +409,14 @@ export class TaskService {
       return {
         prompt: instruction,
         status: 'queued',
+        attempt: (task.attempt ?? 0) + 1,
         finishedAt: undefined,
         archivedAt: undefined,
         verification: 'pending',
         modelCompleted: false,
         error: undefined,
         current: undefined,
+        asking: undefined,
         goalRevision: (task.goalRevision ?? 0) + 1,
         continuations: requestKey
           ? [...(task.continuations ?? []), { key: requestKey, text: instruction }]
@@ -482,14 +497,27 @@ export class TaskService {
           for (const task of tasks
             .filter((t) => t.kind === kind && t.status === 'queued')
             .sort((a, b) => a.createdAt - b.createdAt)) {
-            if (room-- <= 0) break;
+            if (this.#closed || room-- <= 0) break;
             // Marked running before the next look, so one pass never starts it twice.
             const claimed = await this.#mutate(task.id, (current) =>
-              current.status === 'queued'
+              !this.#closed && current.status === 'queued'
                 ? { status: 'running', startedAt: current.startedAt ?? this.#now }
                 : undefined,
             );
-            if (claimed.status === 'running') void this.#run(task.id).catch(() => undefined);
+            if (!this.#closed && claimed.status === 'running')
+              void this.#run(task.id)
+                .catch(async (error: unknown) => {
+                  const current = await this.get(task.id);
+                  if (!this.#closed && RUNNING.includes(current.status))
+                    await this.#finish(current, {
+                      status: 'failed',
+                      error: tidy(
+                        error instanceof Error ? error.message : 'This task could not start.',
+                        1000,
+                      ),
+                    });
+                })
+                .catch(() => undefined);
           }
         }
       },
@@ -499,15 +527,16 @@ export class TaskService {
 
   async #run(id: string, fallback?: { engine: EngineId; from: string }): Promise<void> {
     let task = await this.get(id);
-    if (task.status !== 'running') return;
+    if (this.#closed || task.status !== 'running') return;
     // Stopped between being claimed and starting: it ends stopped, never left "running".
     if (this.#stopping.has(id)) {
       await this.#finish(task, { status: 'stopped' });
       return;
     }
-    const options = fallback ? { ...task.options, engine: fallback.engine } : task.options;
+    let options = fallback ? { ...task.options, engine: fallback.engine } : task.options;
     const engine = this.deps.engine(options.engine);
     const ready = await engine.detect().catch(() => undefined);
+    if (this.#closed) return;
     if (this.#stopping.has(id)) {
       await this.#finish(await this.get(id), { status: 'stopped' });
       return;
@@ -555,13 +584,13 @@ export class TaskService {
     const agentId = parent
       ? (await this.deps.conversations.agentOf(parent).catch(() => undefined))?.id
       : undefined;
-    const wt = this.#worktrees.get(task.id);
+    let wt = this.#worktrees.get(task.id);
     let operationsClosed = false;
     const operations = new TaskOperations(
       () => this.get(id),
       // A closed turn must not overwrite receipts recovered by a later retry, either.
       (change) => this.#mutate(id, (current) => (operationsClosed ? {} : change(current))),
-      () => operationsClosed || this.#stopping.has(id),
+      () => operationsClosed || this.#closed || this.#stopping.has(id),
       () => this.#now,
     );
     const hostNames = new Set<string>();
@@ -570,6 +599,34 @@ export class TaskService {
       return !task.toolScope || plain === 'report_result' || task.toolScope.names.includes(plain);
     };
     try {
+      // Recheck the parent’s current ceiling, including changes made while interrupted.
+      if (task.attempt) options = await this.#optionsFor(parent, options);
+      const cwd = task.cwd ?? (await this.deps.settings.workspace());
+      task = await this.#mutate(id, (current) => ({
+        options: {
+          ...options,
+          permissionMode: noMoreThan(
+            options.permissionMode,
+            current.options.permissionMode ?? 'default',
+          ),
+        },
+        cwd: current.cwd ?? cwd,
+      }));
+      options = task.options;
+      if (task.worktree && !wt) {
+        await resumeWorktree(task.worktree, this.deps.git);
+        const { path, branch, repo, base } = task.worktree;
+        if (repo && base) {
+          wt = { path, branch, repo, base };
+          this.#worktrees.set(id, wt);
+        }
+        task = await this.#update(id, { worktree: { ...task.worktree, retained: true } });
+      }
+      if (this.#closed) return;
+      if (this.#stopping.has(id)) {
+        await this.#finish(await this.get(id), { status: 'stopped' });
+        return;
+      }
       const { conversationId, result } = await this.deps.conversations.start({
         conversationId: task.conversationId,
         title: task.title,
@@ -628,10 +685,9 @@ export class TaskService {
           ...(grants && !task.toolScope && { grants }),
           taint,
           skills,
-          ...((wt?.path ?? (task.worktree?.changed ? task.worktree.path : undefined)) && {
-            cwd: wt?.path ?? task.worktree?.path,
-          }),
+          ...((task.worktree?.path ?? task.cwd) && { cwd: task.worktree?.path ?? task.cwd }),
           onStatus: (s) => {
+            if (operationsClosed || this.#closed) return;
             if (s === 'awaiting-permission') void this.#update(task.id, { status: 'needs-you' });
             if (s === 'running') void this.#update(task.id, { status: 'running' });
           },
@@ -649,6 +705,7 @@ export class TaskService {
       const turn = await result;
       // A provider may still have an in-flight call after its turn ends or is stopped.
       operationsClosed = true;
+      if (this.#closed) return;
       // A limit another provider can answer (ADR 0023): carry on with it, once.
       if (turn.outcome === 'error' && turn.problem === 'limit' && !fallback && !task.toolScope) {
         const { preferences } = await this.deps.settings.get();
@@ -689,6 +746,7 @@ export class TaskService {
       );
     } catch (error) {
       operationsClosed = true;
+      if (this.#closed) return;
       await this.#finish(await this.get(id), {
         status: 'failed',
         error: tidy((error as Error).message || 'Something went wrong.', 1_000),
@@ -702,9 +760,17 @@ export class TaskService {
     let worktree = task.worktree;
     const wt = this.#worktrees.get(task.id);
     if (wt) {
-      const { changed } = await finishWorktree(wt, this.deps.git).catch(() => ({ changed: true }));
+      const complete =
+        patch.status === 'done' || (patch.status === 'unverified' && patch.modelCompleted);
+      const { changed, retained } = complete
+        ? await finishWorktree(wt, this.deps.git, async () => {
+            await this.#mutate(task.id, () => ({
+              worktree: { ...wt, changed: false, retained: false },
+            }));
+          }).catch(() => ({ changed: true, retained: true }))
+        : { changed: task.worktree?.changed ?? false, retained: true };
       this.#worktrees.delete(task.id);
-      worktree = { path: wt.path, branch: wt.branch, changed };
+      worktree = { ...wt, changed, retained };
     }
     this.#asks.delete(task.id);
     const done = await this.#mutate(task.id, () => ({

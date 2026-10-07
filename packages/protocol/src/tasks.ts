@@ -113,12 +113,16 @@ export const Task = z.object({
   operations: z.array(TaskOperation).optional(),
   verification: z.enum(['pending', 'verified', 'unverified']).optional(),
   modelCompleted: z.boolean().optional(),
+  /** Explicit resumes; original turn permissions apply only to the first attempt. */
+  attempt: z.number().int().nonnegative().optional(),
   /** The chat it was sent from, where its result comes back. */
   parentConversationId: z.string().optional(),
   /** Helpers started together share a group: their results are merged. */
   group: z.string().optional(),
   /** The conversation it runs in (once it has started). */
   conversationId: z.string().optional(),
+  /** The original working folder; a restart must not follow changed workspace settings. */
+  cwd: z.string().optional(),
   /** Who answers it, and with which model when it isn't the provider's default. */
   options: TurnOptions.default({}),
   /**
@@ -158,7 +162,17 @@ export const Task = z.object({
   /** A provider reached its limit and another carried on: one sentence. */
   note: z.string().max(300).optional(),
   /** A helper that worked in its own copy of the folder: where, and on which branch. */
-  worktree: z.object({ path: z.string(), branch: z.string(), changed: z.boolean() }).optional(),
+  worktree: z
+    .object({
+      path: z.string(),
+      branch: z.string(),
+      changed: z.boolean(),
+      /** Enough to reopen a clean worktree that Conch deliberately removed. */
+      repo: z.string().optional(),
+      base: z.string().optional(),
+      retained: z.boolean().optional(),
+    })
+    .optional(),
   /** Goes up with every change, so a newer copy always wins over an older one arriving late. */
   rev: z.number().int().nonnegative().default(0),
 });

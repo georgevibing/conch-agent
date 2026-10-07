@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { assessTask, type Task } from '@conch/protocol';
@@ -30,11 +30,13 @@ async function fixture(expectations?: Task['expectations']) {
     expectations,
   };
   let stopped = false;
-  const ledger = new TaskOperations(
-    async () => task,
-    async (change) => (task = { ...task, ...change(task) }),
-    () => stopped,
-  );
+  const makeLedger = () =>
+    new TaskOperations(
+      async () => task,
+      async (change) => (task = { ...task, ...change(task) }),
+      () => stopped,
+    );
+  let ledger = makeLedger();
   const input: TurnInput = {
     conversationId: 'probe',
     cwd,
@@ -45,7 +47,7 @@ async function fixture(expectations?: Task['expectations']) {
     options: { permissionMode: 'bypassPermissions', effort: 'auto', fastMode: false },
     requestPermission: async () => 'allow',
   };
-  const tools = new Map(hostComputerTools(input).map((tool) => [tool.name, ledger.wrap(tool)]));
+  let tools = new Map(hostComputerTools(input).map((tool) => [tool.name, ledger.wrap(tool)]));
   const call = (name: string, args: Record<string, unknown>) => {
     const tool = tools.get(name);
     if (!tool) throw new Error('Missing tool');
@@ -56,6 +58,10 @@ async function fixture(expectations?: Task['expectations']) {
     input,
     ledger,
     call,
+    resume: () => {
+      ledger = makeLedger();
+      tools = new Map(hostComputerTools(input).map((tool) => [tool.name, ledger.wrap(tool)]));
+    },
     get: () => task,
     stop: () => {
       stopped = true;
@@ -97,6 +103,25 @@ describe('task evidence across real tool sequences', () => {
     expect(await f.call('Read', { file_path: 'a.txt' })).toBe('initial');
     expect(verifiedOutcome(f.get())).toBe(true);
     expect(f.get().operations?.every((op) => op.state === 'confirmed')).toBe(true);
+  });
+
+  it('a resumed turn cannot replay earlier writes over its saved final contents', async () => {
+    const f = await fixture();
+    await f.call('Write', { file_path: 'a.txt', content: 'initial' });
+    await f.call('Edit', { file_path: 'a.txt', old_string: 'initial', new_string: 'edited' });
+    await f.call('Write', { file_path: 'a.txt', content: 'final' });
+    f.resume();
+    expect(await f.call('Write', { file_path: 'a.txt', content: 'initial' })).toMatch(
+      /Already confirmed/,
+    );
+    expect(
+      await f.call('Edit', { file_path: 'a.txt', old_string: 'initial', new_string: 'edited' }),
+    ).toMatch(/Already confirmed/);
+    expect(await f.call('Read', { file_path: 'a.txt' })).toBe('final');
+    expect(f.get().operations?.filter((op) => op.effect === 'write')).toHaveLength(3);
+    // A genuinely new mutation in this resumed turn can still extend the work.
+    await f.call('Write', { file_path: 'a.txt', content: 'next' });
+    expect(await f.call('Read', { file_path: 'a.txt' })).toBe('next');
   });
 
   it('retains the first nonempty observation when the same search later becomes empty', async () => {
@@ -141,6 +166,78 @@ describe('task evidence across real tool sequences', () => {
     expect(await f.call('Read', { file_path: 'a.txt' })).toBe('new');
     expect(verifiedOutcome(f.get())).toBe(true);
   });
+
+  it.each(['Read', 'LS'])(
+    'a missing %s target invalidates old evidence and can recover',
+    async (name) => {
+      const f = await fixture([{ tool: name, minimum: 1 }]);
+      const target = join(f.cwd, 'target');
+      const args = name === 'Read' ? { file_path: 'target' } : { path: 'target' };
+      const create = () => (name === 'Read' ? writeFile(target, 'value') : mkdir(target));
+      await create();
+      await f.call(name, args);
+      expect(verifiedOutcome(f.get())).toBe(true);
+      await rm(target, { recursive: true });
+      await expect(f.call(name, args)).rejects.toMatchObject({ code: 'ENOENT' });
+      expect(f.get().operations).toHaveLength(2);
+      expect(assessTask(f.get())).toMatchObject({ verdict: 'incomplete', failedReads: 1 });
+      expect(f.get().operations?.at(-1)).toMatchObject({ state: 'not-run', execution: 'failed' });
+      expect(f.get().operations?.at(-1)?.receipt).toBeUndefined();
+      await create();
+      await f.call(name, args);
+      expect(verifiedOutcome(f.get())).toBe(true);
+      expect(f.get().operations).toHaveLength(3);
+    },
+  );
+
+  it('a rejected optional read does not block writing a recovery file', async () => {
+    const f = await fixture([{ tool: 'Write', minimum: 1 }]);
+    await expect(f.call('Read', { file_path: 'missing' })).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    await f.call('Write', { file_path: 'recovered', content: 'ok' });
+    expect(assessTask(f.get())).toMatchObject({ verdict: 'verified', failedReads: 1 });
+    expect(f.get().operations).toHaveLength(2);
+  });
+
+  it.each(['throw', 'expire'])(
+    'a read scope that can %s cannot leave a stale success',
+    async (failure) => {
+      const f = await fixture([{ tool: 'lookup', minimum: 1 }]);
+      let valid = true;
+      const run = vi.fn(async () => 'observed');
+      const lookup = f.ledger.wrap({
+        name: 'lookup',
+        description: '',
+        input: {},
+        run,
+        verification: {
+          effect: 'read',
+          scope: async () => {
+            if (!valid && failure === 'throw') throw new Error('private provider details');
+            return {
+              account: 'fixture',
+              authorization: 'fixture',
+              expiresAt: valid || failure === 'throw' ? Number.MAX_SAFE_INTEGER : 0,
+            };
+          },
+          reconcile: async () => ({
+            state: 'confirmed',
+            receipt: { provider: 'fixture', id: 'observation', label: 'Read result' },
+          }),
+        },
+      });
+      await lookup.run({});
+      valid = false;
+      await expect(lookup.run({})).rejects.toThrow();
+      expect(run).toHaveBeenCalledTimes(1);
+      expect(assessTask(f.get())).toMatchObject({ verdict: 'incomplete', failedReads: 1 });
+      expect(JSON.stringify(f.get().operations)).not.toContain('private provider details');
+      valid = true;
+      await lookup.run({});
+      expect(verifiedOutcome(f.get())).toBe(true);
+    },
+  );
 
   it('an optional failed read does not poison completed work, but required evidence is still required', async () => {
     const f = await fixture([{ tool: 'Write', minimum: 1 }]);

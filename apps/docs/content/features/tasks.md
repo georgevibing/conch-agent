@@ -48,7 +48,9 @@ A task's card says how it went in a word and one line of what came of it, or of 
 
 **Resume safely** continues in the same chat with saved progress. It does not restart from a blank conversation. Confirmed writes are not repeated. If Conch lost a provider's response and cannot prove whether a write happened, it stops rather than create a duplicate. Open the original app to inspect the result. A search returning no matches is not always proof that a write failed.
 
-After a restart or backup restore, both running and queued tasks wait for you to resume. Old approval answers do not carry over. A declined approval that provably prevented a write can be asked again; a lost network response cannot be treated as a decline. An account change or renewed consent cannot silently reuse an earlier account's operations.
+After a restart or backup restore, both running and queued tasks wait for you to resume. Their saved results and conversation remain available. Old approval cards are cleared, and anything needing approval asks afresh. The task checks the current permission limits and security restrictions of the chat it came from. Old approval answers do not carry over. A declined approval that provably prevented a write can be asked again; a lost network response cannot be treated as a decline. An account change or renewed consent cannot silently reuse an earlier account's operations.
+
+A resumed task keeps its original work folder even if you changed your default workspace. A code helper keeps its branch and worktree through an interruption. If Conch deliberately removed a clean worktree after completion, it can reopen it at the saved starting commit; a folder missing unexpectedly requires recovery instead of silently using a different folder.
 
 Open a finished task and type a clarification or revision to continue. The same tool and account boundaries remain; asking a draft-only job to send a message does not give it permission to send. Previous results remain inspectable, but do not by themselves verify a revised goal.
 
@@ -83,3 +85,5 @@ contents or versions. A tool that finished without an independent check is shown
 as such; a write whose result is uncertain is kept for inspection, never blindly
 repeated. The assistant can use task status to see which results are missing and
 which tools lack independent checks.
+
+The operation history contains evidence Conch received through its tools and provider result hooks. Utilities a provider runs internally without reporting a tool event, such as its own clock, may not appear; this history is not a complete trace of the provider’s internals.

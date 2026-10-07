@@ -113,6 +113,7 @@ class Scripted implements Engine {
 
 async function setup(
   options: {
+    home?: string;
     background?: number;
     allowed?: () => boolean;
     helpers?: number;
@@ -121,7 +122,7 @@ async function setup(
     integrations?: ConstructorParameters<typeof ConversationManager>[0]['integrations'];
   } = {},
 ) {
-  const home = mkdtempSync(join(tmpdir(), 'conch-tasks-'));
+  const home = options.home ?? mkdtempSync(join(tmpdir(), 'conch-tasks-'));
   const engines = new Map<EngineId, Scripted>([
     ['mock', new Scripted('mock')],
     ['openrouter', new Scripted('openrouter')],
@@ -357,6 +358,176 @@ describe('a task sent to the background', () => {
     });
     await again.retry(task.id);
     expect(['queued', 'running']).toContain(await status(again, task.id));
+  });
+
+  it('reports a provider startup exception instead of leaving a task running forever', async () => {
+    const { tasks, engines } = await setup();
+    vi.spyOn(engines.get('mock') as Scripted, 'detect').mockImplementation(() => {
+      throw new Error('Fixture provider could not start');
+    });
+    const task = await tasks.create({ kind: 'background', text: 'start a task' });
+    const [done] = await tasks.waitFor([task.id]);
+    expect(done).toMatchObject({ status: 'failed', error: 'Fixture provider could not start' });
+    tasks.close();
+  });
+
+  it('shutdown during provider detection admits no new turn', async () => {
+    const { tasks, engines, make } = await setup();
+    const engine = engines.get('mock');
+    if (!engine) throw new Error('Missing engine');
+    let release = () => {};
+    const wait = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const detect = engine.detect.bind(engine);
+    vi.spyOn(engine, 'detect').mockImplementation(async () => {
+      await wait;
+      return detect();
+    });
+    const task = await tasks.create({ kind: 'background', text: 'detect then start' });
+    await until(async () => vi.mocked(engine.detect).mock.calls.length, Boolean);
+    tasks.close();
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(engine.turns).toHaveLength(0);
+    const again = make();
+    await again.start();
+    expect((await again.get(task.id)).status).toBe('interrupted');
+    again.close();
+  });
+
+  it('restart clears old approval cards, preserves queued work, and waits for explicit resume', async () => {
+    const first = await setup({ background: 1 });
+    const asking = await first.tasks.create({ kind: 'background', text: 'ask before testing' });
+    await until(
+      () => first.tasks.get(asking.id),
+      (t) => !!t.asking,
+    );
+    const queued = await first.tasks.create({ kind: 'background', text: 'queued before restart' });
+    first.tasks.close();
+    await first.conversations.drain();
+    const second = await setup({ home: first.home });
+    const recovered = await second.tasks.get(asking.id);
+    expect(recovered).toMatchObject({ status: 'interrupted', modelCompleted: false });
+    expect(recovered.asking).toBeUndefined();
+    expect((await second.tasks.get(queued.id)).status).toBe('interrupted');
+    expect(second.engines.get('mock')?.turns).toHaveLength(0);
+    await second.tasks.retry(queued.id);
+    const [done] = await second.tasks.waitFor([queued.id]);
+    expect(done?.status).toBe('unverified');
+    expect((await second.tasks.get(asking.id)).status).toBe('interrupted');
+    second.tasks.close();
+  });
+
+  it('a pending host approval is asked afresh after restart and an old answer cannot release it', async () => {
+    let writes = 0;
+    const tools: ToolProvider = () => [
+      {
+        name: 'fixture_write',
+        description: 'Write fixture',
+        input: {},
+        run: async () => {
+          writes++;
+          return 'saved';
+        },
+      },
+    ];
+    const script = async function* (input: TurnInput): AsyncIterable<EngineEvent> {
+      const decision = await input.requestPermission(
+        { toolName: 'fixture_write', toolUseId: 'write', input: {} },
+        input.signal,
+      );
+      if (decision !== 'deny')
+        await input.tools.find((tool) => tool.name === 'fixture_write')?.run({});
+      yield { type: 'done', outcome: 'success' };
+    };
+    const first = await setup({ tools });
+    vi.spyOn(first.engines.get('mock') as Scripted, 'runTurn').mockImplementation(script);
+    const task = await first.tasks.create({ kind: 'background', text: 'write with approval' });
+    const waiting = await until(
+      () => first.tasks.get(task.id),
+      (t) => !!t.asking,
+    );
+    first.tasks.close();
+    await first.conversations.drain();
+    const second = await setup({ home: first.home, tools });
+    vi.spyOn(second.engines.get('mock') as Scripted, 'runTurn').mockImplementation(script);
+    await second.tasks.retry(task.id);
+    const fresh = await until(
+      () => second.tasks.get(task.id),
+      (t) => !!t.asking && t.status === 'needs-you',
+    );
+    expect(fresh.conversationId).toBe(waiting.conversationId);
+    expect(fresh.asking?.permissionId).not.toBe(waiting.asking?.permissionId);
+    await second.conversations.respond(
+      fresh.conversationId ?? '',
+      waiting.asking?.permissionId ?? '',
+      'allow',
+    );
+    expect(writes).toBe(0);
+    expect((await second.tasks.get(task.id)).status).toBe('needs-you');
+    await second.conversations.respond(
+      fresh.conversationId ?? '',
+      fresh.asking?.permissionId ?? '',
+      'allow',
+    );
+    await second.tasks.waitFor([task.id]);
+    expect(writes).toBe(1);
+    second.tasks.close();
+  });
+
+  it('a resumed task keeps its original folder and takes the parent’s stricter current permissions', async () => {
+    const first = await setup();
+    const workspace = await first.settings.workspace();
+    const parent = await first.conversations.send({
+      clientMessageId: 'parent',
+      text: 'hi',
+      options: { permissionMode: 'bypassPermissions' },
+    });
+    await until(
+      () => first.conversations.detail(parent.id),
+      (d) => d.conversation.status === 'idle',
+    );
+    const task = await first.tasks.create({
+      kind: 'background',
+      text: 'inspect files',
+      parentConversationId: parent.id,
+    });
+    const [before] = await first.tasks.waitFor([task.id]);
+    first.tasks.close();
+    await first.conversations.drain();
+    const second = await setup({ home: first.home });
+    await second.settings.update({
+      preferences: { workspace: mkdtempSync(join(tmpdir(), 'conch-new-workspace-')) },
+    });
+    await second.conversations.configure(parent.id, { permissionMode: 'plan' });
+    await second.conversations.addTaint(parent.id, [{ kind: 'web', label: 'untrusted.example' }]);
+    await second.conversations.addHolds(
+      parent.id,
+      [
+        {
+          skillId: 'read-only-review',
+          name: 'read-only-review',
+          title: 'Read only review',
+          permissions: { declared: true, capabilities: [], words: ['read files'] },
+          seq: 0,
+        },
+      ],
+      'source-chat',
+    );
+    await second.tasks.retry(task.id);
+    const [done] = await second.tasks.waitFor([task.id]);
+    expect(done?.conversationId).toBe(before?.conversationId);
+    expect(done?.options.permissionMode).toBe('plan');
+    expect(second.engines.get('mock')?.turns.at(-1)?.cwd).toBe(workspace);
+    expect(await second.conversations.taintOf(done?.conversationId ?? '')).toContainEqual({
+      kind: 'web',
+      label: 'untrusted.example',
+    });
+    expect(await second.conversations.holdsOf(done?.conversationId ?? '')).toMatchObject([
+      { skillId: 'read-only-review', from: parent.id },
+    ]);
+    second.tasks.close();
   });
 
   it('at a provider’s limit, carries on with your fallback provider, and says so', async () => {
@@ -834,6 +1005,107 @@ describe('helpers side by side (delegate)', () => {
     expect(existsSync(looked?.worktree?.path ?? '/nope')).toBe(false);
     expect(out).toContain(`branch \`conch/${changed?.id}\``);
     expect(changed?.worktree?.path.startsWith(join(home, 'worktrees'))).toBe(true);
+  });
+  it('reopens a cleaned worktree at its saved base after restart', async () => {
+    const first = await setup();
+    const repo = mkdtempSync(join(tmpdir(), 'conch-reopen-repo-'));
+    const git = (...args: string[]) =>
+      execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
+    git('init', '-q');
+    git('-c', 'user.email=a@b.c', '-c', 'user.name=A', 'commit', '--allow-empty', '-qm', 'base');
+    const base = git('rev-parse', 'HEAD');
+    await first.settings.update({ preferences: { workspace: repo } });
+    const task = await first.tasks.create({ kind: 'helper', text: 'look around', worktree: true });
+    const [before] = await first.tasks.waitFor([task.id]);
+    expect(before?.worktree).toMatchObject({ base, retained: false });
+    first.tasks.close();
+    await first.conversations.drain();
+    git('-c', 'user.email=a@b.c', '-c', 'user.name=A', 'commit', '--allow-empty', '-qm', 'later');
+    const second = await setup({ home: first.home });
+    const engine = second.engines.get('mock');
+    if (!engine) throw new Error('Missing engine');
+    const run = engine.runTurn.bind(engine);
+    let resumedHead = '';
+    vi.spyOn(engine, 'runTurn').mockImplementation(async function* (input) {
+      resumedHead = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: input.cwd,
+        encoding: 'utf8',
+      }).trim();
+      yield* run(input);
+    });
+    await second.tasks.retry(task.id);
+    const [done] = await second.tasks.waitFor([task.id]);
+    expect(done?.status).toBe('unverified');
+    expect(engine.turns.at(-1)?.cwd).toBe(before?.worktree?.path);
+    expect(resumedHead).toBe(base);
+    second.tasks.close();
+  });
+
+  it('can resume if Conch dies after cleaning a worktree but before saving completion', async () => {
+    const first = await setup();
+    const repo = mkdtempSync(join(tmpdir(), 'conch-cleanup-crash-'));
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: repo, stdio: 'ignore' });
+    git('init', '-q');
+    git('-c', 'user.email=a@b.c', '-c', 'user.name=A', 'commit', '--allow-empty', '-qm', 'base');
+    await first.settings.update({ preferences: { workspace: repo } });
+    const save = TaskStore.prototype.save;
+    let lostCompletion = false;
+    const saving = vi.spyOn(TaskStore.prototype, 'save').mockImplementation(function (
+      this: TaskStore,
+      task,
+    ) {
+      if (
+        task.kind === 'helper' &&
+        task.status === 'unverified' &&
+        task.worktree?.retained === false
+      ) {
+        lostCompletion = true;
+        return new Promise<Task>(() => {});
+      }
+      return save.call(this, task);
+    });
+    try {
+      const task = await first.tasks.create({ kind: 'helper', text: 'inspect', worktree: true });
+      await until(async () => lostCompletion, Boolean);
+      expect(existsSync(task.worktree?.path ?? '')).toBe(false);
+      first.tasks.close();
+      await first.conversations.drain();
+      saving.mockRestore();
+      const second = await setup({ home: first.home });
+      expect((await second.tasks.get(task.id)).worktree?.retained).toBe(false);
+      await second.tasks.retry(task.id);
+      const [done] = await second.tasks.waitFor([task.id]);
+      expect(done?.status).toBe('unverified');
+      expect(second.engines.get('mock')?.turns.at(-1)?.cwd).toBe(task.worktree?.path);
+      second.tasks.close();
+    } finally {
+      saving.mockRestore();
+      first.tasks.close();
+    }
+  });
+
+  it('retains an interrupted clean worktree and resumes in it after a cold restart', async () => {
+    const first = await setup();
+    const repo = mkdtempSync(join(tmpdir(), 'conch-interrupted-repo-'));
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: repo, stdio: 'ignore' });
+    git('init', '-q');
+    git('-c', 'user.email=a@b.c', '-c', 'user.name=A', 'commit', '--allow-empty', '-qm', 'base');
+    await first.settings.update({ preferences: { workspace: repo } });
+    const task = await first.tasks.create({ kind: 'helper', text: 'slow inspect', worktree: true });
+    await until(async () => first.engines.get('mock')?.turns.length, Boolean);
+    first.tasks.close();
+    await first.conversations.drain();
+    const second = await setup({ home: first.home });
+    const engine = second.engines.get('mock');
+    if (!engine) throw new Error('Missing engine');
+    await second.tasks.retry(task.id);
+    await until(async () => engine.turns.length, Boolean);
+    expect(engine.turns.at(-1)?.cwd).toBe(task.worktree?.path);
+    engine.release?.();
+    const [done] = await second.tasks.waitFor([task.id]);
+    expect(done?.status).toBe('unverified');
+    expect(done?.worktree?.retained).toBe(false);
+    second.tasks.close();
   });
 });
 
