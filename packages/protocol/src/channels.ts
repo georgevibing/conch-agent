@@ -17,6 +17,7 @@
  */
 import { z } from 'zod';
 
+import { AgentId } from './agents';
 import { Id } from './common';
 
 /**
@@ -268,6 +269,8 @@ export const Channel = z.object({
   /** Voice notes waiting until Conch can hear them (ADR 0077). */
   voiceNotes: ChannelVoiceNotes.optional(),
   lastMessageAt: z.number().optional(),
+  /** The agent that answers here (ADR 0101); unset, the default agent. `/agent` changes a chat's. */
+  agentId: AgentId.optional(),
 });
 export type Channel = z.infer<typeof Channel>;
 
@@ -574,7 +577,12 @@ export const CreateChannelBody = ChannelSecrets;
 export type CreateChannelBody = z.infer<typeof CreateChannelBody>;
 
 export const UpdateChannelBody = z
-  .object({ enabled: z.boolean(), settings: ChannelSettings.partial() })
+  .object({
+    enabled: z.boolean(),
+    settings: ChannelSettings.partial(),
+    /** The agent that answers new chats here; `null`: the default agent (ADR 0101). */
+    agentId: AgentId.nullable(),
+  })
   .partial();
 export type UpdateChannelBody = z.infer<typeof UpdateChannelBody>;
 

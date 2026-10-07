@@ -8,6 +8,7 @@
 import { z } from 'zod';
 
 import { AddressStatus } from './address';
+import { AgentId, AgentList, Tone } from './agents';
 import { AppNeed, AppsModel } from './apps';
 import { Artifact, ArtifactKind } from './artifacts';
 import { ATTACHMENT_LIMITS, Attachment } from './attachments';
@@ -59,6 +60,7 @@ import { UsageSnapshot } from './usage';
 import { CappedOutcome, ChatSpend, SpendLimitKind, SpendModel, TurnCost } from './spend';
 
 export * from './access';
+export * from './agents';
 export * from './profile';
 export * from './address';
 export * from './apps';
@@ -139,15 +141,18 @@ export const SaveCommandBody = z.object({
 
 // ── Personality & profile ───────────────────────────────────────────────────
 
-export const Tone = z.enum(['warm', 'concise', 'playful', 'precise']);
-export type Tone = z.infer<typeof Tone>;
-
+/**
+ * The default agent's personality (ADR 0101), as Settings and setup knew it
+ * before there were agents. Still read and written: `PATCH /api/settings`
+ * `persona` changes the default agent, and the gateway keeps this in step, so
+ * a Conch from before agents reads the right name if you go back.
+ */
 export const Persona = z.object({
   /** What the agent calls itself. */
   name: z.string().trim().min(1).max(40).default('Conch'),
   tone: Tone.default('warm'),
   /** Free-form extra guidance ("Always answer in British English"). */
-  instructions: z.string().max(4000).default(''),
+  instructions: z.string().max(8000).default(''),
 });
 export type Persona = z.infer<typeof Persona>;
 
@@ -414,6 +419,11 @@ export const ConversationSummary = z.object({
   seenAt: z.number().optional(),
   /** What it has spent, its tasks included, and its own limit (ADR 0079). */
   spend: ChatSpend.optional(),
+  /**
+   * The agent answering it (ADR 0101). Absent in chats from before agents:
+   * they're with the first agent while it exists (`chatAgentId`).
+   */
+  agentId: AgentId.optional(),
 });
 export type ConversationSummary = z.infer<typeof ConversationSummary>;
 
@@ -425,6 +435,8 @@ export const UpdateConversationBody = ChatChange.extend({
   title: z.string().trim().min(1).max(120).optional(),
   /** You have it open: nothing in it is new any more. */
   seen: z.literal(true).optional(),
+  /** Another agent answers from the next message on (ADR 0101); the chat shows where. */
+  agentId: AgentId.optional(),
 })
   .strict()
   .refine((body) => Object.values(body).some((v) => v !== undefined), {
@@ -745,6 +757,19 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     message: z.string(),
   }),
   z.object({ ...logged, type: z.literal('options'), options: TurnOptions }),
+  /**
+   * Another agent answers from here on (ADR 0101): a divider in the chat. Its
+   * name as it was then, so the chat still reads right once it's renamed or
+   * gone. `from`: who answered before, on the first one, since a chat's log
+   * from before says nobody.
+   */
+  z.object({
+    ...logged,
+    type: z.literal('agent'),
+    agentId: AgentId,
+    name: z.string().max(40),
+    from: z.object({ agentId: AgentId, name: z.string().max(40) }).optional(),
+  }),
   /** Passwords needs the person: to unlock it, or to type in a credential (ADR 0025). Later ones with the same id replace it. */
   z.object({ ...logged, type: z.literal('vault.request'), request: VaultRequest }),
   /** A step the agent (or you, while driving) took in this chat's browser tab. */
@@ -954,6 +979,11 @@ export const ClientCommand = z.discriminatedUnion('type', [
       steer: z.boolean().optional(),
       /** A goal for the chat (`/goal` before its first message), kept from this message on. */
       goal: ChatGoal.optional(),
+      /**
+       * A new chat is with this agent (ADR 0101); unset, the default. Ignored when
+       * sending to a chat that exists (change it with `PATCH /api/conversations/:id`).
+       */
+      agentId: AgentId.optional(),
     })
     .refine((command) => command.text.length > 0 || Boolean(command.attachments?.length), {
       message: 'Write a message or attach something.',
@@ -999,6 +1029,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('conversation.deleted'), conversationId: z.string() }),
   /** The folders in the chat list, all of them, after any change (ADR 0089). */
   z.object({ type: z.literal('folders.changed'), folders: z.array(ChatFolder) }),
+  /** The agents, all of them, after any change: one added, changed, reordered, a new default (ADR 0101). */
+  z.object({ type: z.literal('agents.changed'), list: AgentList }),
   z.object({ type: z.literal('conversation.event'), event: ConversationEvent }),
   /**
    * The log this tab has seen doesn't match the gateway's (it restarted and lost the end of a

@@ -94,6 +94,8 @@ import { registerArtifactRoutes } from './artifacts/routes';
 import { registerMarketRoutes } from './skills/market/routes';
 import { registerConchAppRoutes } from './conchapps/routes';
 import { registerTaskRoutes } from './tasks/routes';
+import { registerAgentRoutes } from './agents/routes';
+import { AgentError } from './agents/store';
 import { registerMcpEndpoint } from './mcp/endpoint';
 import { registerMcpRoutes } from './mcp/routes';
 import { registerQuestionRoutes } from './questions/routes';
@@ -300,6 +302,7 @@ export async function buildApp(services: Services) {
   registerUndoRoutes(app, services.undo);
   registerArtifactRoutes(app, services.artifacts);
   registerTaskRoutes(app, services.tasks);
+  registerAgentRoutes(app, { agents: services.agents, faces: services.images });
   registerQuestionRoutes(app, services.questions);
   registerFirstJobRoutes(app, services);
   registerChannelRoutes(
@@ -353,7 +356,8 @@ export async function buildApp(services: Services) {
       serverVersion: SERVER_VERSION,
       protocolVersion: PROTOCOL_VERSION,
       onboarded: settings.onboarded,
-      persona: settings.persona,
+      // The default agent, as Settings knew it before agents (ADR 0101).
+      persona: await services.agents.persona(),
       profile: settings.profile,
       preferences: settings.preferences,
       engine: await services.engineStatus(),
@@ -437,6 +441,16 @@ export async function buildApp(services: Services) {
       }
     }
     const learnedBefore = (await services.settings.get()).preferences.autoMemory;
+    // The personality is the default agent's (ADR 0101): changed there, and kept in step here.
+    if (body.persona) {
+      try {
+        await services.agents.adoptPersona(body.persona);
+      } catch (error) {
+        if (error instanceof AgentError)
+          return reply.code(409).send({ error: error.code, message: error.message });
+        throw error;
+      }
+    }
     await services.settings.update(body);
     // Learn from your chats, on again: it starts from here, never reading what was said while off.
     if (!learnedBefore && body.preferences?.autoMemory === true)
@@ -1193,13 +1207,15 @@ export async function buildApp(services: Services) {
     const body = parse(UpdateConversationBody, request.body, reply);
     if (!body) return;
     try {
-      const { title, seen, ...change } = body;
+      const { title, seen, agentId, ...change } = body;
       if (change.folder && !(await services.folders.has(change.folder)))
         throw new FolderError('not-found', 'That folder isn’t there any more.');
       if (title !== undefined) await services.conversations.rename(request.params.id, title);
       if (Object.keys(change).length)
         await services.conversations.change(request.params.id, change);
       if (seen) await services.conversations.seen(request.params.id);
+      // Another agent answers from the next message on (ADR 0101).
+      if (agentId) await services.conversations.setAgent(request.params.id, agentId);
       return { ok: true };
     } catch (error) {
       return sendError(reply, error);
