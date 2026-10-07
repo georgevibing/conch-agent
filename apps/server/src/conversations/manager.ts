@@ -713,6 +713,20 @@ const GUEST_DISALLOWED = [
   'BashOutput',
 ];
 
+/**
+ * The names of the agents who answered this chat before the one answering
+ * now (ADR 0101), from its `agent` events: their replies are in its history.
+ */
+export function agentsBefore(events: readonly ConversationEvent[], now?: string): string[] {
+  const names = new Set<string>();
+  for (const event of events) {
+    if (event.type !== 'agent') continue;
+    if (event.from && event.from.agentId !== now) names.add(event.from.name);
+    if (event.agentId !== now) names.add(event.name);
+  }
+  return [...names];
+}
+
 /** What a guest's turn is told about where it is and who's asking. */
 function guestPrompt(origin: ConversationRecord['origin']): string {
   const where = origin?.kind === 'channel' && origin.group ? ` “${origin.group}”` : '';
@@ -2851,8 +2865,12 @@ export class ConversationManager {
 
       // How much this turn may do before it checks in, watched from outside for
       // agents that run their own loop (ADR 0085).
+      // Who answers (ADR 0101): the chat's agent now, and who answered before it.
+      const agent = await this.deps.agents?.forChat(live.record).catch(() => undefined);
+      const before = agentsBefore(live.events, agent?.id);
       const system = systemParts({
-        persona: settings.persona,
+        ...(agent ? { agent } : { persona: settings.persona }),
+        ...(before.length && { before }),
         profile: settings.profile,
         memories,
         total: memoryTotal,
@@ -2897,7 +2915,10 @@ export class ConversationManager {
             systemAppend: (guest
               ? [
                   buildSystemAppend({
-                    persona: { ...settings.persona, instructions: '' },
+                    // Your instructions to it stay yours: a guest meets only its persona.
+                    ...(agent
+                      ? { agent: { ...agent, instructions: '' } }
+                      : { persona: { ...settings.persona, instructions: '' } }),
                     profile: { name: '', about: '', facts: [] },
                     memories: [],
                     total: 0,

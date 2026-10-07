@@ -1847,6 +1847,7 @@ export class Services {
     ]);
     const latest = updates?.conch.source === 'releases' ? updates.conch.latest : undefined;
     return {
+      // The default agent's name, kept in step in settings (ADR 0101).
       name: settings.persona.name,
       alwaysOn: status.on,
       approvals: conversations.filter((c) => c.status === 'awaiting-permission').length,
@@ -1866,7 +1867,13 @@ export class Services {
         config.CONCH_HOME,
         (area, message) => void this.healed.note(area, message),
       ),
-      persona: async () => (await this.settings.get()).persona.name,
+      // The agent of the chat it's about (ADR 0101), else the default agent.
+      persona: async (conversationId) =>
+        (
+          (conversationId &&
+            (await this.conversations.agentOf(conversationId).catch(() => undefined))) ||
+          (await this.agents.default())
+        ).name,
       conversation: async (id) => {
         const chat = await this.conversations.detail(id).catch(() => undefined);
         if (!chat) return undefined;
