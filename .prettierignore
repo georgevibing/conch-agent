@@ -11,6 +11,7 @@ apps/desktop/out
 
 # Other checkouts of this repo (git worktrees) format themselves.
 .worktrees
+.claude
 
 # Website publishing artifacts and detached content checkouts
 .site

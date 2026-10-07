@@ -27,3 +27,6 @@ playwright-report/
 
 # Website publishing checkouts and public build metadata
 .site/
+
+# Claude Code agent worktrees
+.claude/worktrees/
