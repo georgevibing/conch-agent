@@ -62,8 +62,9 @@ test('sent to the background, it works while you chat, and its result comes back
     'Run the checks slowly',
   );
   await card.getByRole('button', { name: 'Open' }).click();
-  await expect(page.getByRole('note')).toContainText('Working in the background.');
-  await page.getByRole('link', { name: 'Back to the chat' }).click();
+  const strip = page.getByRole('navigation', { name: 'Task' });
+  await expect(strip).toBeVisible();
+  await strip.getByRole('link').click();
   await expect(page.getByText('what’s the weather like?', { exact: true })).toBeVisible();
 
   await page
@@ -155,6 +156,5 @@ test('a chat’s tasks sit under it in the sidebar, and open from there', async 
   await tasks.getByRole('button', { name: 'Stop' }).click();
   await expect(tasks).toContainText('Stopped');
   await tasks.getByRole('link', { name: /Keep checking for a while/ }).click();
-  await expect(page.getByRole('note')).toContainText('Working in the background.');
-  await expect(page.getByRole('note')).toContainText('never more than the chat it came from');
+  await expect(page.getByRole('navigation', { name: 'Task' })).toContainText('Stopped');
 });

@@ -1,32 +1,38 @@
-import { ListChecks } from 'lucide-react';
+import { assessTask } from '@conch/protocol';
+import { TASK_STATUS_LABELS, TaskStatusMark } from '@conch/nacre';
+import { ChevronLeft } from 'lucide-react';
 import { Link } from 'react-router';
 
 import { useConversations } from '../../api/queries';
-import { modeLabel } from './LiveTaskCard';
 import { useTask } from './queries';
 import styles from './Tasks.module.css';
 
-/** Shown at the top of a conversation a task runs in. */
+/**
+ * Shown at the top of a conversation a task runs in: the way back to the chat
+ * it came from, and how it's going. What a task is lives in the docs.
+ */
 export function TaskBanner({ conversationId }: { conversationId?: string }) {
   const { data: conversations } = useConversations();
   const origin = conversations?.find((c) => c.id === conversationId)?.origin;
   const task = useTask(origin?.kind === 'task' ? origin.taskId : undefined);
   if (origin?.kind !== 'task') return null;
-  const from = task?.parentConversationId;
-  const mode = modeLabel(task?.options.permissionMode);
+  const fromId = task?.parentConversationId;
+  const from = conversations?.find((c) => c.id === fromId)?.title;
+  const unchecked = task?.status === 'unverified' && assessTask(task).verdict === 'unchecked';
   return (
-    <div className={styles.banner} role="note">
-      <ListChecks size={14} aria-hidden />
-      <span>
-        {task?.kind === 'helper'
-          ? 'A helper working on part of a bigger job.'
-          : 'Working in the background.'}{' '}
-        {task?.status === 'needs-you'
-          ? 'It’s waiting for your OK below.'
-          : 'You can watch, answer what it asks, or stop it. When it finishes, add instructions below to continue with its saved results and the same tool permissions.'}
-        {mode && ` It may do what “${mode}” allows, never more than the chat it came from.`}
-      </span>
-      {from ? <Link to={`/c/${from}`}>Back to the chat</Link> : <Link to="/tasks">All tasks</Link>}
-    </div>
+    <nav className={styles.banner} aria-label="Task">
+      <Link className={styles.back} to={fromId ? `/c/${fromId}` : '/tasks'}>
+        <ChevronLeft aria-hidden />
+        <span className={styles.backTitle}>
+          {fromId ? (from ?? 'Back to the chat') : 'All tasks'}
+        </span>
+      </Link>
+      {task && (
+        <span className={styles.state} data-status={task.status} role="status">
+          <TaskStatusMark status={task.status} />
+          <span>{unchecked ? 'Finished' : TASK_STATUS_LABELS[task.status]}</span>
+        </span>
+      )}
+    </nav>
   );
 }

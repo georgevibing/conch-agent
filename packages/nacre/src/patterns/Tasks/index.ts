@@ -13,6 +13,7 @@ export { taskHeadline } from './headline';
 export {
   elapsed,
   TaskCard,
+  TASK_STATUS_LABELS,
   type TaskCardAsking,
   type TaskCardProps,
   type TaskCardStatus,

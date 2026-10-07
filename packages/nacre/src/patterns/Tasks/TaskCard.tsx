@@ -90,7 +90,8 @@ export interface TaskCardProps extends Omit<ComponentProps<'article'>, 'title'> 
   now?: number;
 }
 
-const LABELS: Record<TaskCardStatus, string> = {
+/** A task's state in a word or two. */
+export const TASK_STATUS_LABELS: Record<TaskCardStatus, string> = {
   queued: 'Waiting its turn',
   running: 'Working',
   'needs-you': 'Needs your OK',
@@ -225,7 +226,7 @@ export function TaskCard({
             </p>
             <p className={styles.meta} aria-live="polite">
               <span className={styles.status} data-look={look}>
-                {unchecked && status === 'unverified' ? 'Finished' : LABELS[status]}
+                {unchecked && status === 'unverified' ? 'Finished' : TASK_STATUS_LABELS[status]}
               </span>
               {took && status !== 'queued' && <span> · {took}</span>}
               {by && <span> · by {by}</span>}
