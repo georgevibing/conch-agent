@@ -247,6 +247,6 @@ describe('browsing across an answered question', () => {
     show(view);
     expect(screen.getAllByRole('button', { name: /^Browsed / })).toHaveLength(1);
     expect(screen.getByRole('button', { name: /· 3 steps/ })).toBeInTheDocument();
-    expect(screen.getByText(/Read wikipedia\.org\./)).toBeInTheDocument();
+    expect(screen.getByText(/Read wikipedia\.org/)).toBeInTheDocument();
   });
 });

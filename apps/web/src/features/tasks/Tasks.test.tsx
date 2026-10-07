@@ -419,7 +419,8 @@ describe('Tasks', () => {
       permissionId: 'perm1',
       decision: 'allow',
     });
+    // It opens over the chat it came from.
     await user.click(within(rows[1] as HTMLElement).getByRole('link', { name: 'Write the notes' }));
-    await waitFor(() => expect(where()).toBe('/c/c-task'));
+    await waitFor(() => expect(where()).toBe('/c/c1?task=t2'));
   });
 });
