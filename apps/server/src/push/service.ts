@@ -299,7 +299,10 @@ export class PushService {
             : (task.error ?? 'Something went wrong.'),
         ),
         quiet: task.status === 'failed' ? 'Your task didn’t finish.' : 'Your task finished.',
-        url: task.parentConversationId ? `/c/${task.parentConversationId}` : `/tasks`,
+        url:
+          task.parentConversationId || task.conversationId
+            ? `/c/${task.parentConversationId ?? task.conversationId}`
+            : '/',
         tag: `task-${task.id}`,
       });
       return;

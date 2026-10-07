@@ -189,6 +189,17 @@ describe('a task sent to the background', () => {
     expect((await tasks.get(last.id)).status).toBe('queued');
   });
 
+  it('sent from no chat, its own chat is one of your chats', async () => {
+    const { tasks, conversations } = await setup();
+    const task = await tasks.create({ kind: 'background', text: 'draft the weekly note' });
+    const done = await until(
+      () => tasks.get(task.id),
+      (t) => t.status === 'unverified',
+    );
+    const { conversation } = await conversations.detail(done.conversationId ?? '');
+    expect(conversation.origin).toEqual({ kind: 'task', taskId: task.id, standalone: true });
+  });
+
   it('runs on its own, and its result comes back to the chat it came from', async () => {
     const { tasks, conversations } = await setup();
     const chat = await conversations.send({ clientMessageId: 'u1', text: 'hello' });

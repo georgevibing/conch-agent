@@ -13,6 +13,7 @@ import { useLocation, useNavigate, useParams } from 'react-router';
 
 import { useConversations } from '../api/queries';
 import { ActivityView } from '../features/activity/ActivityView';
+import { BackgroundPulse } from '../features/tasks/BackgroundPulse';
 import { ArchiveView } from '../features/archive/ArchiveView';
 import { ARCHIVE_PATH } from '../features/archive/useArchive';
 import { AppView } from '../features/artifacts/AppView';
@@ -41,7 +42,6 @@ import { isPinnedId } from '../features/integrations/paths';
 import { Palette } from '../features/palette/Palette';
 import { RoutineDetailView } from '../features/routines/RoutineDetailView';
 import { RoutinesView } from '../features/routines/RoutinesView';
-import { TasksView } from '../features/tasks/TasksView';
 import { NewSkill } from '../features/skills/NewSkill';
 import { MarketSkillView } from '../features/skills/Discover';
 import { SkillDetailView } from '../features/skills/SkillDetailView';
@@ -112,7 +112,6 @@ export function Shell() {
   const activityArea = path.startsWith('/activity');
   const { data: app } = useArtifact(artifactId);
   const memoryArea = path.startsWith('/memory');
-  const tasksArea = path.startsWith('/tasks');
   const archiveArea = path === ARCHIVE_PATH;
   // The chat is on screen: its header names who answers it, and "Hey Conch"
   // opens talk there (anywhere else, on a new chat).
@@ -125,7 +124,6 @@ export function Shell() {
     passwordsArea ||
     activityArea ||
     memoryArea ||
-    tasksArea ||
     archiveArea
   );
 
@@ -165,11 +163,9 @@ export function Shell() {
                 ? (app?.title ?? '')
                 : memoryArea
                   ? 'What Conch knows'
-                  : tasksArea
-                    ? 'Tasks'
-                    : archiveArea
-                      ? 'Archived chats'
-                      : (current?.title ?? (conversationId ? '' : 'New chat'));
+                  : archiveArea
+                    ? 'Archived chats'
+                    : (current?.title ?? (conversationId ? '' : 'New chat'));
 
   useEffect(() => {
     document.title = current ? `${current.title} · Conch` : 'Conch';
@@ -295,7 +291,6 @@ export function Shell() {
                   !channelsArea &&
                   !passwordsArea &&
                   !pinnedArea &&
-                  !tasksArea &&
                   !archiveArea &&
                   current?.titling
                 }
@@ -304,6 +299,8 @@ export function Shell() {
               </LiveTitle>
             </Text>
           )}
+          {/* The sidebar's pearl is out of sight: what's going on in the background, here. */}
+          {(narrow || !sidebarOpen) && <BackgroundPulse />}
           <WakeWord onChat={onChat} />
           {/* Who answers (ADR 0101): with two agents or more, a press hands the chat to another. */}
           {onChat && conversationId && !phone && (
@@ -337,8 +334,6 @@ export function Shell() {
               <AppView key={artifactId} artifactId={artifactId} />
             ) : memoryArea ? (
               <MemoryMoved />
-            ) : tasksArea ? (
-              <TasksView />
             ) : archiveArea ? (
               <ArchiveView />
             ) : activityArea ? (

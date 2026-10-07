@@ -11,12 +11,14 @@ export const ARCHIVE_PATH = '/archived';
 
 /**
  * A chat you started (here, or from a chat app) — not a routine's run, a
- * task's work, a pinned app's refresh or what another app did through Conch,
- * which live on their own pages.
+ * pinned app's refresh or what another app did through Conch, which live on
+ * their own pages, nor a task's work, which sits under the chat it came from.
+ * A task sent from no chat is a chat of its own.
  */
 export function isChat(c: ConversationSummary): boolean {
-  const kind = c.origin?.kind;
-  return kind !== 'routine' && kind !== 'artifact' && kind !== 'task' && kind !== 'client';
+  const origin = c.origin;
+  if (origin?.kind === 'task') return origin.standalone === true;
+  return origin?.kind !== 'routine' && origin?.kind !== 'artifact' && origin?.kind !== 'client';
 }
 
 /** The chats in the archive, most recently archived first. */

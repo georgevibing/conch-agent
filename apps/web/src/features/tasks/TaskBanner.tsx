@@ -4,6 +4,7 @@ import { ChevronLeft } from 'lucide-react';
 import { Link } from 'react-router';
 
 import { useConversations } from '../../api/queries';
+import { LiveTaskCard } from './LiveTaskCard';
 import { useTask } from './queries';
 import styles from './Tasks.module.css';
 
@@ -15,24 +16,27 @@ export function TaskBanner({ conversationId }: { conversationId?: string }) {
   const { data: conversations } = useConversations();
   const origin = conversations?.find((c) => c.id === conversationId)?.origin;
   const task = useTask(origin?.kind === 'task' ? origin.taskId : undefined);
-  if (origin?.kind !== 'task') return null;
-  const fromId = task?.parentConversationId;
+  if (origin?.kind !== 'task' || !task) return null;
+  const fromId = task.parentConversationId;
   const from = conversations?.find((c) => c.id === fromId)?.title;
-  const unchecked = task?.status === 'unverified' && assessTask(task).verdict === 'unchecked';
+  const unchecked = task.status === 'unverified' && assessTask(task).verdict === 'unchecked';
+  // Sent from no chat, its card has nowhere else to be: it's here, at the top, in full.
+  if (!fromId)
+    return (
+      <div className={styles.standalone}>
+        <LiveTaskCard task={task} />
+      </div>
+    );
   return (
     <nav className={styles.banner} aria-label="Task">
-      <Link className={styles.back} to={fromId ? `/c/${fromId}` : '/tasks'}>
+      <Link className={styles.back} to={`/c/${fromId}`}>
         <ChevronLeft aria-hidden />
-        <span className={styles.backTitle}>
-          {fromId ? (from ?? 'Back to the chat') : 'All tasks'}
-        </span>
+        <span className={styles.backTitle}>{from ?? 'Back to the chat'}</span>
       </Link>
-      {task && (
-        <span className={styles.state} data-status={task.status} role="status">
-          <TaskStatusMark status={task.status} />
-          <span>{unchecked ? 'Finished' : TASK_STATUS_LABELS[task.status]}</span>
-        </span>
-      )}
+      <span className={styles.state} data-status={task.status} role="status">
+        <TaskStatusMark status={task.status} />
+        <span>{unchecked ? 'Finished' : TASK_STATUS_LABELS[task.status]}</span>
+      </span>
     </nav>
   );
 }

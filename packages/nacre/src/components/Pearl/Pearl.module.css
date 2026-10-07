@@ -191,6 +191,97 @@
     );
   }
 
+  /* Needs you: warm amber nacre that sways, gently, until it's seen to. */
+  .pearl[data-state='attention'] {
+    --tint-h: var(--nc-warning-h);
+    --tint-c: 0.11;
+    --spin: 9s;
+    --breath: 2.2s;
+    --breath-depth: 0.88;
+    --breath-state: running;
+    --halo-opacity: 0.7;
+    --halo-scale: 1.45;
+  }
+
+  .pearl[data-state='attention'] .halo {
+    background: radial-gradient(
+      circle,
+      oklch(0.82 0.15 var(--nc-warning-h) / 0.9) 0%,
+      oklch(0.82 0.12 var(--nc-warning-h) / 0.35) 45%,
+      transparent 70%
+    );
+    animation: pearl-halo var(--breath) var(--nc-ease-in-out) infinite;
+  }
+
+  .pearl[data-size='xs'][data-state='attention'] {
+    --halo-opacity: 0.95;
+    --halo-scale: 2;
+  }
+
+  /* Glint: one bright turn of light, and the halo blooms once. */
+  .sheen {
+    background: linear-gradient(
+      115deg,
+      transparent 30%,
+      oklch(1 0 0 / 0.9) 48%,
+      color-mix(in oklch, var(--nc-pearl-2) 70%, transparent) 54%,
+      transparent 70%
+    );
+    opacity: 0;
+    transform: translateX(-110%);
+  }
+
+  .pearl[data-glint] .sheen {
+    animation: pearl-sheen var(--nc-panel-glint-duration) var(--nc-ease-out) both;
+  }
+
+  .pearl[data-glint] .halo {
+    animation: pearl-bloom var(--nc-duration-slower) var(--nc-ease-out) both;
+  }
+
+  .pearl[data-glint] .core {
+    animation: pearl-pop var(--nc-duration-slow) var(--nc-ease-out) both;
+  }
+
+  @keyframes pearl-sheen {
+    0% {
+      opacity: 0;
+      transform: translateX(-110%);
+    }
+    25% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(110%);
+    }
+  }
+
+  @keyframes pearl-bloom {
+    0% {
+      opacity: calc(var(--halo-opacity) * var(--nc-lustre, 1));
+      transform: scale(var(--halo-scale));
+    }
+    35% {
+      opacity: calc(0.95 * var(--nc-lustre, 1));
+      transform: scale(calc(var(--halo-scale) * 1.7));
+    }
+    100% {
+      opacity: calc(var(--halo-opacity) * var(--nc-lustre, 1));
+      transform: scale(var(--halo-scale));
+    }
+  }
+
+  @keyframes pearl-pop {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    40% {
+      transform: scale(1.18);
+    }
+  }
+
   @keyframes pearl-breathe {
     0%,
     100% {
@@ -219,7 +310,8 @@
     .core,
     .film,
     .swirl,
-    .halo {
+    .halo,
+    .sheen {
       animation: none !important;
     }
   }
@@ -227,7 +319,8 @@
   [data-nacre-motion='reduced'] .pearl .core,
   [data-nacre-motion='reduced'] .pearl .film,
   [data-nacre-motion='reduced'] .pearl .swirl,
-  [data-nacre-motion='reduced'] .pearl .halo {
+  [data-nacre-motion='reduced'] .pearl .halo,
+  [data-nacre-motion='reduced'] .pearl .sheen {
     animation: none !important;
   }
 }

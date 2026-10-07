@@ -1,11 +1,14 @@
 import type { Task } from '@conch/protocol';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { appState, FakeSocket, mockFetch, renderApp } from '../../test/harness';
 import { Sidebar } from '../sidebar/Sidebar';
-import { TasksView } from './TasksView';
+import { LiveTaskCard } from './LiveTaskCard';
+import { useTask } from './queries';
+import { TasksMoved } from './TasksMoved';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -24,32 +27,13 @@ const task = (patch: Partial<Task> = {}): Task => ({
   ...patch,
 });
 
-describe('Tasks', () => {
-  it('shows what needs you first, then what’s working, then what finished', async () => {
-    mockFetch({
-      'GET /api/state': () => appState(),
-      'GET /api/tasks': () => ({
-        concurrent: 3,
-        tasks: [
-          task({ id: 'a', title: 'Working one' }),
-          task({ id: 'b', title: 'Asking one', status: 'needs-you' }),
-          task({ id: 'c', title: 'Old one', status: 'done', summary: 'All tidy.', finishedAt: 1 }),
-        ],
-      }),
-    });
-    renderApp(<TasksView />);
-    const now = await screen.findByRole('region', { name: 'Working on it' });
-    const cards = within(now).getAllByRole('article');
-    expect(cards.map((c) => c.getAttribute('data-status'))).toEqual(['needs-you', 'running']);
-    expect(
-      within(cards[0] as HTMLElement).getByRole('button', { name: 'See what it’s asking' }),
-    ).toBeInTheDocument();
-    expect(within(cards[1] as HTMLElement).getByText('npm test')).toBeInTheDocument();
-    const done = screen.getByRole('region', { name: 'Finished' });
-    expect(within(done).getByText('All tidy.')).toBeInTheDocument();
-    expect(screen.getByText(/Up to 3 work at once/)).toBeInTheDocument();
-  });
+/** One task's card, live: what the chat it came from shows. */
+function Card({ id }: { id: string }) {
+  const found = useTask(id);
+  return found ? <LiveTaskCard task={found} /> : null;
+}
 
+describe('Tasks', () => {
   it('stops one and tries one again', async () => {
     const user = userEvent.setup();
     const calls = mockFetch({
@@ -69,7 +53,12 @@ describe('Tasks', () => {
       'POST /api/tasks/t1/stop': () => task({ status: 'stopped', finishedAt: Date.now() }),
       'POST /api/tasks/t2/retry': () => task({ id: 't2', title: 'Cut off', status: 'queued' }),
     });
-    renderApp(<TasksView />);
+    renderApp(
+      <>
+        <Card id="t1" />
+        <Card id="t2" />
+      </>,
+    );
     await user.click(await screen.findByRole('button', { name: 'Stop' }));
     await user.click(
       within(screen.getByRole('article', { name: 'Cut off' })).getByRole('button', {
@@ -94,32 +83,57 @@ describe('Tasks', () => {
       'GET /api/tasks': () => ({ concurrent: 3, tasks: [latest] }),
     });
     let latest = task({ rev: 3 });
-    renderApp(<TasksView />);
-    const card = await screen.findByRole('article', { name: 'Tidy up the README' });
+    renderApp(<Card id="t1" />);
+    await screen.findByRole('article', { name: 'Tidy up the README' });
     await waitFor(() => expect(FakeSocket.last).toBeDefined());
     latest = task({ status: 'stopped', rev: 4 });
     act(() => FakeSocket.last?.push({ type: 'task.changed', task: latest }));
     act(() => FakeSocket.last?.push({ type: 'task.changed', task: task({ rev: 2 }) }));
-    // Finished, it moves down to Finished, and stays there.
     await waitFor(() =>
       expect(screen.getByRole('article', { name: 'Tidy up the README' })).toHaveAttribute(
         'data-status',
         'stopped',
       ),
     );
-    expect(card).not.toBeInTheDocument();
   });
 
-  it('says how to start one when there are none', async () => {
+  it('an old link to Tasks lands on the chat of the task most worth seeing', async () => {
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/tasks': () => ({
+        concurrent: 3,
+        tasks: [
+          task({ id: 'a', parentConversationId: 'c1' }),
+          task({ id: 'b', status: 'needs-you', parentConversationId: 'c2', createdAt: 1 }),
+        ],
+      }),
+    });
+    const { where } = renderApp(
+      <Routes>
+        <Route path="/tasks" element={<TasksMoved />} />
+        <Route path="*" element={null} />
+      </Routes>,
+      { route: '/tasks' },
+    );
+    await waitFor(() => expect(where()).toBe('/c/c2'));
+  });
+
+  it('with nothing in the background, an old link to Tasks lands on a new chat', async () => {
     mockFetch({
       'GET /api/state': () => appState(),
       'GET /api/tasks': () => ({ concurrent: 3, tasks: [] }),
     });
-    renderApp(<TasksView />);
-    expect(await screen.findByText('Nothing in the background')).toBeInTheDocument();
+    const { where } = renderApp(
+      <Routes>
+        <Route path="/tasks" element={<TasksMoved />} />
+        <Route path="*" element={null} />
+      </Routes>,
+      { route: '/tasks' },
+    );
+    await waitFor(() => expect(where()).toBe('/'));
   });
 
-  it('the sidebar counts what needs you, live, and keeps task chats out of the list', async () => {
+  it('the pearl says what’s going, live, and task chats stay out of the list', async () => {
     mockFetch({
       'GET /api/state': () => appState(),
       'GET /api/conversations': () => [
@@ -148,11 +162,60 @@ describe('Tasks', () => {
     renderApp(<Sidebar />);
     await screen.findByText('Mine');
     expect(screen.queryByRole('link', { name: 'Tidy up the README' })).not.toBeInTheDocument();
-    expect(await screen.findByLabelText('1 working')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Conch: 1 task working' })).toBeVisible();
     await waitFor(() => expect(FakeSocket.last).toBeDefined());
-    act(() => FakeSocket.last?.push({ type: 'task.changed', task: task({ status: 'needs-you' }) }));
-    expect(await screen.findByLabelText('1 need your OK')).toBeInTheDocument();
+    act(() =>
+      FakeSocket.last?.push({ type: 'task.changed', task: task({ status: 'needs-you', rev: 2 }) }),
+    );
+    expect(await screen.findByRole('button', { name: 'Conch: 1 task needs you' })).toBeVisible();
+    act(() =>
+      FakeSocket.last?.push({
+        type: 'task.changed',
+        task: task({ status: 'done', finishedAt: Date.now(), rev: 3 }),
+      }),
+    );
+    // Nothing going: the pearl rests, and there's nothing to press.
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /^Conch/ })).not.toBeInTheDocument(),
+    );
   });
+
+  it('a task sent from no chat is a chat of its own in the list', async () => {
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [
+        {
+          id: 'c-task',
+          title: 'Draft the weekly note',
+          preview: '',
+          createdAt: 1,
+          updatedAt: Date.now(),
+          status: 'idle',
+          options: {},
+          origin: { kind: 'task', taskId: 't1', standalone: true },
+        },
+      ],
+      'GET /api/tasks': () => ({ concurrent: 3, tasks: [task({ status: 'done', finishedAt: 1 })] }),
+    });
+    renderApp(<Sidebar />);
+    expect(await screen.findByText('Draft the weekly note')).toBeInTheDocument();
+  });
+
+  const asking = () =>
+    task({
+      kind: 'helper',
+      title: 'Check the tests',
+      status: 'needs-you',
+      parentConversationId: 'c1',
+      options: { permissionMode: 'default' },
+      asking: {
+        permissionId: 'perm1',
+        summary: 'Run `npm test`',
+        toolName: 'Bash',
+        here: true,
+        command: 'npm test',
+      },
+    });
 
   const chat = (patch: Record<string, unknown> = {}) => ({
     id: 'c1',
@@ -189,7 +252,7 @@ describe('Tasks', () => {
             conversationId: 'c-h2',
             finishedAt: Date.now() - 1000,
           }),
-          // Long finished: only on Tasks and in its chat, not under the chat any more.
+          // Long finished: only in its chat, not under the chat any more.
           task({
             id: 'old',
             title: 'Old one',
@@ -228,30 +291,10 @@ describe('Tasks', () => {
     mockFetch({
       'GET /api/state': () => appState(),
       'GET /api/conversations': () => [chat()],
-      'GET /api/tasks': () => ({
-        concurrent: 3,
-        tasks: [
-          task({
-            kind: 'helper',
-            title: 'Check the tests',
-            status: 'needs-you',
-            parentConversationId: 'c1',
-            options: { permissionMode: 'default' },
-            asking: {
-              permissionId: 'perm1',
-              summary: 'Run `npm test`',
-              toolName: 'Bash',
-              here: true,
-              command: 'npm test',
-            },
-          }),
-        ],
-      }),
+      'GET /api/tasks': () => ({ concurrent: 3, tasks: [asking()] }),
     });
-    renderApp(<TasksView />);
+    renderApp(<Card id="t1" />);
     const card = await screen.findByRole('article', { name: /Check the tests/ });
-    expect(card).toHaveTextContent('Ask first');
-    await waitFor(() => expect(card).toHaveTextContent('from Fix the parser'));
     expect(within(card).getByRole('group', { name: 'It’s asking' })).toHaveTextContent(
       'Wants to run npm test',
     );
@@ -263,5 +306,42 @@ describe('Tasks', () => {
       permissionId: 'perm1',
       decision: 'allow',
     });
+  });
+
+  it('the pearl lists what’s going everywhere, and what’s asking is answered there', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [chat()],
+      'GET /api/tasks': () => ({
+        concurrent: 3,
+        tasks: [
+          asking(),
+          task({ id: 't2', title: 'Write the notes', parentConversationId: 'c1', rev: 2 }),
+          task({ id: 't3', title: 'Long done', status: 'done', finishedAt: 1 }),
+        ],
+      }),
+    });
+    const { where } = renderApp(<Sidebar />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Conch: 1 task working, 1 needs you' }),
+    );
+    const list = await screen.findByRole('dialog', { name: 'In the background' });
+    const rows = within(list).getAllByRole('listitem');
+    expect(rows.map((r) => r.textContent)).toEqual([
+      expect.stringContaining('Check the tests'),
+      expect.stringContaining('Write the notes'),
+    ]);
+    expect(rows[0]).toHaveTextContent('Wants to run npm test');
+    await waitFor(() => expect(FakeSocket.last?.readyState).toBe(1));
+    await user.click(within(rows[0] as HTMLElement).getByRole('button', { name: 'Allow' }));
+    expect(FakeSocket.last?.sent).toContainEqual({
+      type: 'permission.respond',
+      conversationId: 'c-task',
+      permissionId: 'perm1',
+      decision: 'allow',
+    });
+    await user.click(within(rows[1] as HTMLElement).getByRole('link', { name: 'Write the notes' }));
+    await waitFor(() => expect(where()).toBe('/c/c-task'));
   });
 });

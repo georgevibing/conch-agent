@@ -11,7 +11,10 @@ const meta = {
   component: Pearl,
   args: { state: 'thinking', size: 'xl' },
   argTypes: {
-    state: { control: 'inline-radio', options: ['idle', 'thinking', 'streaming', 'error'] },
+    state: {
+      control: 'inline-radio',
+      options: ['idle', 'thinking', 'streaming', 'attention', 'error'],
+    },
     size: { control: 'inline-radio', options: ['xs', 'sm', 'md', 'lg', 'xl'] },
   },
   parameters: {
@@ -29,7 +32,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {};
 
-const states: PearlState[] = ['idle', 'thinking', 'streaming', 'error'];
+const states: PearlState[] = ['idle', 'thinking', 'streaming', 'attention', 'error'];
 
 export const States: Story = {
   render: () => (
@@ -72,6 +75,7 @@ export const InlineStatus: Story = {
       idle: 'Ready',
       thinking: 'Thinking about the retry strategy…',
       streaming: 'Writing src/gateway/retry.ts',
+      attention: 'Wants to run npm install',
       error: 'Lost connection',
     };
     return (

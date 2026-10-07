@@ -5,6 +5,7 @@ import { NavLink } from 'react-router';
 import { create } from 'zustand';
 
 import { withCode } from './LiveTaskCard';
+import { taskPath } from './open';
 import { going, useStopTask, useTasks } from './queries';
 
 /** Finished tasks stay under their chat this long, then only on Tasks and in the chat. */
@@ -80,11 +81,7 @@ export function useChatTaskTree({
   const items: ChatTask[] = tasks.map((task) => ({
     id: task.id,
     link: (
-      <NavLink
-        to={task.conversationId ? `/c/${task.conversationId}` : '/tasks'}
-        onClick={onNavigate}
-        end
-      >
+      <NavLink to={taskPath(task)} onClick={onNavigate} end>
         {task.title}
       </NavLink>
     ),

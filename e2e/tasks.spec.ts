@@ -4,9 +4,9 @@ import { say } from './app';
 
 const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
 
-/** The sidebar's Tasks entry, whose badge counts what's working. */
-const tasksLink = (page: Page) =>
-  page.getByRole('navigation', { name: 'Conversations' }).getByRole('button', { name: /^Tasks/ });
+/** The pearl by the assistant's name: pressable, and named for what's going, while anything is. */
+const pulse = (page: Page) =>
+  page.getByRole('navigation', { name: 'Conversations' }).getByRole('button', { name: /^Conch:/ });
 
 /** The chat open right now, in the list, with whatever sits under it. */
 const openChatRow = (page: Page) =>
@@ -17,7 +17,7 @@ const openChatRow = (page: Page) =>
 
 /**
  * Hand it off, end to end (ADR 0033): send something to the background and
- * keep chatting; its live card, the Tasks page and the result coming back;
+ * keep chatting; its live card, the pearl's list and the result coming back;
  * stopping and trying again; helpers side by side; a task that needs your OK.
  */
 test.beforeEach(async ({ request }) => {
@@ -38,7 +38,7 @@ test('sent to the background, it works while you chat, and its result comes back
   const card = page.getByRole('article', { name: 'Run the checks slowly' });
   // The sidebar says something's working, while it is: the task is a short one.
   await expect(card).toContainText('Working');
-  await expect(tasksLink(page).getByLabel('1 working')).toBeVisible();
+  await expect(pulse(page)).toHaveAccessibleName('Conch: 1 task working');
   await expect(card).toContainText(/Running|Ran/);
 
   // The chat is still yours meanwhile.
@@ -67,18 +67,14 @@ test('sent to the background, it works while you chat, and its result comes back
   await strip.getByRole('link').click();
   await expect(page.getByText('what’s the weather like?', { exact: true })).toBeVisible();
 
-  await page
-    .getByRole('navigation', { name: 'Conversations' })
-    .getByRole('button', { name: /^Tasks/ })
-    .click();
-  await expect(page.getByRole('heading', { name: 'Tasks', level: 1 })).toBeVisible();
-  const finished = page.getByRole('region', { name: 'Finished' }).getByRole('article', {
-    name: 'Run the checks slowly',
-  });
-  await expect(finished).toContainText('Finished: Run the checks slowly');
-  // What it did waits behind Details once it's done.
-  await finished.getByRole('button', { name: 'Details' }).click();
-  await expect(finished.getByRole('list', { name: 'What it did' })).toContainText('npm test');
+  // Nothing going any more: the pearl rests. What it did waits behind Details.
+  await expect(pulse(page)).toHaveCount(0);
+  await card.getByRole('button', { name: 'Details' }).click();
+  await expect(card.getByRole('list', { name: 'What it did' })).toContainText('npm test');
+
+  // An old link to the Tasks page lands on the chat it came from.
+  await page.goto('/tasks');
+  await expect(page.getByText('what’s the weather like?', { exact: true })).toBeVisible();
 });
 
 test('a task stops when you say, runs again with one press, and goes when you remove it', async ({
@@ -88,10 +84,19 @@ test('a task stops when you say, runs again with one press, and goes when you re
   const composer = page.getByRole('textbox', { name: 'Message Conch' });
   await composer.fill('Keep checking for a while');
   await composer.press(`${mod}+Shift+Enter`);
+  // Sent from no chat: the pearl lists it, and it opens as a chat of its own, its card on top.
+  await pulse(page).click();
   await page
-    .getByRole('navigation', { name: 'Conversations' })
-    .getByRole('button', { name: /^Tasks/ })
+    .getByRole('dialog', { name: 'In the background' })
+    .getByRole('link', { name: 'Keep checking for a while' })
     .click();
+  await expect(page.getByRole('dialog', { name: 'In the background' })).toHaveCount(0);
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Conversations' })
+      .locator('[data-chat-link]')
+      .filter({ hasText: 'Keep checking for a while' }),
+  ).toHaveCount(1);
   const card = page.getByRole('article', { name: 'Keep checking for a while' });
   await expect(card).toContainText('Working');
   await expect(card).toContainText('Running npm run watch');
@@ -130,7 +135,7 @@ test('a task that needs your OK says so, and waits only for you', async ({ page 
   await page.getByRole('option', { name: /Do it in the background/ }).click();
   const card = page.getByRole('article', { name: 'Ship it, but ask first' });
   await expect(card).toContainText('Needs your OK');
-  await expect(tasksLink(page).getByLabel('1 need your OK')).toBeVisible();
+  await expect(pulse(page)).toHaveAccessibleName('Conch: 1 task needs you');
   // Answered on its card, in the chat it came from: no need to go to its own chat.
   const ask = card.getByRole('group', { name: 'It’s asking' });
   await expect(ask).toContainText('git push');

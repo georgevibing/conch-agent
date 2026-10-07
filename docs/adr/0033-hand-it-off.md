@@ -284,3 +284,26 @@ one that may do more than its chat is an escalation. Both are bugs.
   mode allows and never more than its chat.
 - The sidebar's Tasks badge and ⌘K count helpers too: each is a chat of its own, and
   one waiting for an OK holds up the chat that started it.
+
+## Amended 2026-10-07: no Tasks page; the pearl says what's going
+
+- **No page of its own.** A task lives where it came from: its card in the chat, its
+  row under that chat in the list, and its own chat. The `/tasks` page and the
+  sidebar's Tasks entry are gone; an old link (a bookmark, an older notification)
+  lands on the chat of the task most worth seeing — one waiting for you, else one
+  working, else the newest — or a new chat (`TasksMoved`).
+- **The pearl.** The pearl by the assistant's name (Nacre `TasksPulse`, web
+  `BackgroundPulse`) rests while nothing is going, breathes while tasks work, turns
+  amber when one needs you (`Pearl` `attention`) and glints once when one finishes
+  while you're elsewhere (`Pearl` `glint`). While anything is going it's a button,
+  named in full ("Conch: 2 tasks working, 1 needs you"), that opens a short list of
+  just those, from every chat, what's asking first; what's asking is allowed or
+  denied right there. With the sidebar out of sight (a phone, or hidden) the header
+  carries it as the pearl and a count. ⌘K "What's in the background" opens the
+  list, and so does Repair for several tasks; for one, Repair opens its chat.
+- **One way in.** Everything that opens a task goes through `taskPath` / `TaskLink`
+  (web `features/tasks/open.tsx`), so how a task opens is decided in one place.
+- **A task sent from no chat** (another app through `POST /api/tasks`, the first
+  job) is a chat of its own: its chat's origin says `standalone`, the chat list
+  shows it with your chats, and its card sits at the top of it, in full, where
+  Stop, Resume safely and Remove are.

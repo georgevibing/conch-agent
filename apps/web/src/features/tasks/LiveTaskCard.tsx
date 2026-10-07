@@ -1,7 +1,7 @@
 import { assessTask, uncertainEffect, type PermissionMode, type Task } from '@conch/protocol';
 import { InlineCode, TaskCard } from '@conch/nacre';
 import { useState, type ReactNode } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 
 import { useConversations } from '../../api/queries';
 import { useLive } from '../../live/LiveProvider';
@@ -89,6 +89,8 @@ export function LiveTaskCard({
   const assessment = assessTask(task);
   const unchecked = task.status === 'unverified' && assessment.verdict === 'unchecked';
   const navigate = useNavigate();
+  // Already in its chat: nothing to open.
+  const inside = useLocation().pathname === `/c/${task.conversationId}`;
   const live = useLive();
   const { data: chats } = useConversations();
   // The answer is on its way: the buttons wait for it to land (the task's next copy).
@@ -140,7 +142,11 @@ export function LiveTaskCard({
             }
           : undefined
       }
-      onOpen={task.conversationId ? () => void navigate(`/c/${task.conversationId}`) : undefined}
+      onOpen={
+        task.conversationId && !inside
+          ? () => void navigate(`/c/${task.conversationId}`)
+          : undefined
+      }
       onStop={() => stop.mutate(task.id)}
       // Helpers are the assistant's to start again; a task you sent away is yours.
       onRetry={task.kind === 'background' ? () => retry.mutate(task.id) : undefined}

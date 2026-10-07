@@ -53,6 +53,7 @@ import { RunBanner } from '../routines/RunBanner';
 import { tasksApi } from '../tasks/api';
 import { TaskBanner } from '../tasks/TaskBanner';
 import { ClientBanner } from '../otherapps/ClientBanner';
+import { taskPath } from '../tasks/open';
 import { useStartTask } from '../tasks/queries';
 import { ComposerControls } from '../models/ComposerControls';
 import { modeInfo, modelLabel } from '../models/catalog';
@@ -663,11 +664,14 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
       {
         onError: () => setDraft((d) => d || (words === undefined ? text : `/background ${text}`)),
         onSuccess: (task) => {
+          // From a chat, its card is right there; from a new one, it opens from here.
           toast(`Working on “${task.title}” in the background`, {
             description: conversationId
               ? 'Its result will come back to this chat.'
               : 'You’ll be told when it’s done.',
-            action: { label: 'Tasks', onClick: () => void navigate('/tasks') },
+            ...(!conversationId && {
+              action: { label: 'Open', onClick: () => void navigate(taskPath(task)) },
+            }),
           });
         },
       },

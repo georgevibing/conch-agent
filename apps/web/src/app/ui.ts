@@ -112,6 +112,9 @@ interface UiState {
   /** Bumped to send the open chat's draft off as a background task (⌘K, ⌘⇧↩). */
   backgroundRequest: number;
   requestBackground(): void;
+  /** The pearl's list of what's going on in the background (ADR 0033). */
+  pulseOpen: boolean;
+  setPulseOpen(open: boolean): void;
   setPicker(picker: Picker): void;
   setDraftOptions(options: TurnOptions): void;
   toggleSidebar(): void;
@@ -227,6 +230,8 @@ export const useUi = create<UiState>((set) => ({
   requestAttach: () => set((state) => ({ attachRequest: state.attachRequest + 1 })),
   backgroundRequest: 0,
   requestBackground: () => set((state) => ({ backgroundRequest: state.backgroundRequest + 1 })),
+  pulseOpen: false,
+  setPulseOpen: (pulseOpen) => set({ pulseOpen, ...(pulseOpen && { paletteOpen: false }) }),
   setPicker: (picker) => set({ picker }),
   setDraftOptions: (draftOptions) => set({ draftOptions }),
   toggleSidebar: () =>

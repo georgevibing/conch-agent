@@ -18,3 +18,4 @@ export {
   type TaskCardProps,
   type TaskCardStatus,
 } from './TaskCard';
+export { pulseSummary, TasksPulse, type PulseTask, type TasksPulseProps } from './TasksPulse';

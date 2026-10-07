@@ -94,7 +94,6 @@ const BEHIND_NAMES: [prefix: string, name: string][] = [
   ['/apps/a_', 'Back'],
   ['/apps', 'Apps'],
   ['/channels', 'Apps'],
-  ['/tasks', 'Tasks'],
   ['/passwords', 'Passwords'],
   ['/activity', 'Activity'],
   ['/archived', 'Archived chats'],

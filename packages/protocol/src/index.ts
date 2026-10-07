@@ -397,8 +397,15 @@ export const ConversationSummary = z.object({
       z.object({ kind: z.literal('artifact'), artifactId: z.string() }),
       /** You wrote to your assistant from a chat app (Telegram, Discord, Slack). */
       ChannelOrigin,
-      /** A task running in the background (ADR 0033). */
-      z.object({ kind: z.literal('task'), taskId: z.string() }),
+      /**
+       * A task running in the background (ADR 0033). `standalone`: sent from no
+       * chat (another app, the first job), so it's a chat of its own in the list.
+       */
+      z.object({
+        kind: z.literal('task'),
+        taskId: z.string(),
+        standalone: z.literal(true).optional(),
+      }),
       /** What another app did through Conch (ADR 0073): Claude Desktop, Cursor… */
       z.object({ kind: z.literal('client'), clientId: z.string(), name: z.string().max(60) }),
     ])

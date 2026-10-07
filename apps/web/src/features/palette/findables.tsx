@@ -125,7 +125,7 @@ import { useArtifacts } from '../artifacts/queries';
 import { useConchApps } from '../conchapps/queries';
 import { appLook, conchPagePath } from '../conchapps/words';
 import { useRoutines } from '../routines/queries';
-import { taskKeys } from '../tasks/queries';
+import { going, taskKeys } from '../tasks/queries';
 import { listingPath } from '../skills/Discover';
 import { useMarket } from '../skills/market';
 import { useSkills, useWorkSuggestions } from '../skills/queries';
@@ -873,10 +873,14 @@ export function useFindables(query: string, conversationId: string | undefined):
     },
     {
       id: 'tasks',
-      label: 'Tasks',
-      keywords: 'tasks background jobs running working queue helpers progress',
+      label: 'What’s in the background',
+      keywords: 'tasks background jobs running working queue helpers progress needs ok',
       icon: <ListChecks />,
-      run: () => void navigate('/tasks'),
+      run: () => {
+        // The pearl's list, when something's going; nothing going, it says so.
+        if (tasks?.tasks.some(going)) useUi.getState().setPulseOpen(true);
+        else toast('Nothing in the background right now.');
+      },
     },
     {
       id: 'backup-now',

@@ -1,5 +1,5 @@
 import { avatarUrl } from '@conch/protocol';
-import { Avatar, Button, cx, IconButton, Kbd, Pearl, Tooltip, UpdateChip } from '@conch/nacre';
+import { Avatar, Button, cx, IconButton, Kbd, Tooltip, UpdateChip } from '@conch/nacre';
 import { PanelLeftClose, Search, Settings, SquarePen } from 'lucide-react';
 import { useNavigate } from 'react-router';
 
@@ -11,7 +11,7 @@ import { PasswordsLink } from '../passwords/PasswordsLink';
 import { AppsLink } from '../integrations/AppsLink';
 import { RoutinesLink } from '../routines/RoutinesLink';
 import { SkillsLink } from '../skills/SkillsLink';
-import { TasksLink } from '../tasks/TasksLink';
+import { BackgroundPulse } from '../tasks/BackgroundPulse';
 import { updatesWaiting, useUpdates } from '../updates/queries';
 import { chipView } from '../updates/view';
 import styles from './Sidebar.module.css';
@@ -25,6 +25,7 @@ export function Sidebar({
 }) {
   const { data: app } = useAppState();
   const toggleSidebar = useUi((s) => s.toggleSidebar);
+  const sidebarOpen = useUi((s) => s.sidebarOpen);
   const openSettings = useUi((s) => s.openSettings);
   const setPalette = useUi((s) => s.setPalette);
   const navigate = useNavigate();
@@ -38,8 +39,14 @@ export function Sidebar({
   return (
     <nav className={styles.sidebar} aria-label="Conversations">
       <div className={styles.brand}>
-        <Pearl size="xs" label={null} />
-        <span className={styles.wordmark}>{app?.persona.name ?? 'Conch'}</span>
+        {/* The pearl says what's going on in the background, and lists it (ADR 0033). */}
+        <BackgroundPulse
+          className={styles.wordmark}
+          onNavigate={onNavigate}
+          bound={collapsible && sidebarOpen}
+        >
+          {app?.persona.name ?? 'Conch'}
+        </BackgroundPulse>
         {collapsible && (
           <IconButton
             size="sm"
@@ -80,7 +87,6 @@ export function Sidebar({
           Search
           <Kbd keys="mod+k" size="sm" aria-hidden />
         </Button>
-        <TasksLink onNavigate={onNavigate} />
         <RoutinesLink onNavigate={onNavigate} />
         <SkillsLink onNavigate={onNavigate} />
         <AppsLink onNavigate={onNavigate} />
