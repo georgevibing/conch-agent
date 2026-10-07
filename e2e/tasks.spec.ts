@@ -71,12 +71,13 @@ test('sent to the background, it works while you chat, and its result comes back
     .getByRole('button', { name: /^Tasks/ })
     .click();
   await expect(page.getByRole('heading', { name: 'Tasks', level: 1 })).toBeVisible();
-  await expect(
-    page.getByRole('region', { name: 'Finished' }).getByRole('article', {
-      name: 'Run the checks slowly',
-    }),
-  ).toContainText('Finished: Run the checks slowly');
-  await expect(page.getByRole('list', { name: 'What it did' })).toContainText('npm test');
+  const finished = page.getByRole('region', { name: 'Finished' }).getByRole('article', {
+    name: 'Run the checks slowly',
+  });
+  await expect(finished).toContainText('Finished: Run the checks slowly');
+  // What it did waits behind Details once it's done.
+  await finished.getByRole('button', { name: 'Details' }).click();
+  await expect(finished.getByRole('list', { name: 'What it did' })).toContainText('npm test');
 });
 
 test('a task stops when you say, runs again with one press, and goes when you remove it', async ({
