@@ -38,7 +38,7 @@ A task asks before it acts, as its chat would, and holds nothing else up. Its ca
 
 ## When it's done
 
-Conch tells you in the app, and on your devices when notifications are on: **Done**, or **Didn't finish** and why. Tasks started together are told about together, once the last one is over ("3 tasks done · 1 didn't finish"). A tap opens the chat they came from. A task waiting for your OK says so on your devices too, under **When it needs you**; a notification can deny, but allowing always opens Conch. The switch for finished tasks is **When a task finishes**, in **Settings → Notifications**. See [On your phone](../start/phone.md).
+Conch tells you in the app, and on your devices when notifications are on: **Done**, or **Didn't finish** and why. Tasks started together are told about together, once the last one is over ("3 tasks done · 1 didn't finish"). A tap opens the chat they came from. A task waiting for your OK says so on your devices too, under **It needs you**; a notification can deny, but allowing always opens Conch. The switch for finished tasks is **A task finishes**, under **Tell me when** in **Settings → Notifications**. See [On your phone](../start/phone.md).
 
 A task's card says how it went in a word and one line of what came of it, or of what went wrong. Press the chevron for **Details**: its whole result, what was confirmed and what it did.
 

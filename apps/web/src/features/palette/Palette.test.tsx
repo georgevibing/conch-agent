@@ -1373,7 +1373,16 @@ describe('Palette search', () => {
     });
     const { where } = renderApp(<Palette />);
     act(() => useUi.getState().setPalette(true));
-    for (const words of ['notifications', 'push', 'lock screen']) {
+    // By the page's own words too: the switch, and what it tells you about.
+    for (const words of [
+      'notifications',
+      'push',
+      'lock screen',
+      'allow notifications',
+      'answer is ready',
+      'show what',
+      'send a test',
+    ]) {
       await user.clear(await screen.findByRole('combobox'));
       await user.type(screen.getByRole('combobox'), words);
       expect(

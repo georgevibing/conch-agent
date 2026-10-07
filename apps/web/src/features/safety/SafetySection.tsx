@@ -95,8 +95,9 @@ export function SafetySection() {
         <Stack gap={2}>
           <Switch
             labelPosition="start"
-            checked={prefs.sealedCommands && Boolean(sandbox?.available)}
-            disabled={sandbox ? !sandbox.available : true}
+            // As saved until this computer has said whether it can seal: never off, then on.
+            checked={prefs.sealedCommands && (sandbox?.available ?? true)}
+            disabled={!sandbox?.available}
             onCheckedChange={(on) => change('sealedCommands', on)}
             label="Seal commands"
             description="A command reaches your work folder, never your keys and passwords. One that needs out asks first."

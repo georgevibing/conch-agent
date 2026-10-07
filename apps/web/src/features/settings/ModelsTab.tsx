@@ -145,13 +145,14 @@ export function ModelsTab() {
       <SettingsAdvanced open={advanced} onOpenChange={setAdvanced}>
         <Section title="Every new chat">
           <Stack gap={5}>
+            {/* As saved until the models have loaded: never off, then on. */}
             <Switch
-              checked={Boolean(prefs?.fastMode) && Boolean(model?.supportsFastMode)}
+              checked={Boolean(prefs?.fastMode) && (caps ? Boolean(model?.supportsFastMode) : true)}
               disabled={!model?.supportsFastMode}
               onCheckedChange={(fastMode) => save({ fastMode })}
               label="Fast mode"
               description={
-                model?.supportsFastMode
+                !caps || model?.supportsFastMode
                   ? 'Faster replies. Uses more of your plan.'
                   : 'Not available for this model or account.'
               }

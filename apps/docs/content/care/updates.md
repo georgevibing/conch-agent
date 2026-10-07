@@ -86,5 +86,5 @@ Conch itself never updates this way. It restarts, so it always asks first.
 
 - Automatic updates need the computer awake between 2 and 5 a.m.
 - [Repair everything](./health.md) also lists the updates that wait. A new release of Conch shows there as news, not a problem.
-- The menu bar says **Conch 0.3 is ready** too. To hear about new versions on your phone, turn on **New versions of Conch** in [Notifications](../start/phone.md). It's off until you do.
+- The menu bar says **Conch 0.3 is ready** too. To hear about new versions on your phone, turn on **There's a new version** in [Notifications](../start/phone.md). It's off until you do.
 - Running [the install line](../start/install.md) again repairs Conch, but a copy installed from a release updates here, in **Updates**. The installer gets the newest stable release. Set `CONCH_CHANNEL=beta` or `alpha` before it for those.

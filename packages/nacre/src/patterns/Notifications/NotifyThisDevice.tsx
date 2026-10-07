@@ -1,7 +1,8 @@
 import { Bell, BellOff, BellRing, Smartphone } from 'lucide-react';
-import { useId, type ComponentProps, type ReactNode } from 'react';
+import { useId, useState, type ComponentProps, type ReactNode } from 'react';
 
 import { Button } from '../../components/Button';
+import { Collapsible } from '../../components/Collapsible';
 import { Spinner } from '../../components/Spinner';
 import { Switch } from '../../components/Switch';
 import { cx } from '../../utils/cx';
@@ -17,6 +18,14 @@ import styles from './Notifications.module.css';
  */
 export type NotifyState = 'on' | 'off' | 'install' | 'blocked' | 'unsupported';
 
+/** One thing this device can be told about: “Tell me when … an answer is ready”. */
+export interface NotifyTopic {
+  id: string;
+  /** Finishes “Tell me when”: “An answer is ready”. */
+  label: string;
+  on: boolean;
+}
+
 export interface NotifyThisDeviceProps extends Omit<
   ComponentProps<'section'>,
   'title' | 'onChange'
@@ -25,41 +34,52 @@ export interface NotifyThisDeviceProps extends Omit<
   /** Turning on or off right now. */
   busy?: boolean;
   onChange?: (on: boolean) => void;
+  /** What it's told about, shown under the switch only while it's on. */
+  topics?: NotifyTopic[];
+  onTopicChange?: (id: string, on: boolean) => void;
+  /** Say what each one is about; off, only that there's something to open. */
+  previews?: boolean;
+  onPreviewsChange?: (on: boolean) => void;
   /** Send one now, to see it arrive. */
   onTest?: () => void;
   testing?: boolean;
   /** Why it can't, or what to do in the browser's settings, in a sentence. */
   detail?: ReactNode;
-  /** Under the card: the steps to install, or the device's choices. */
+  /** Under the card when it can't be on yet: the steps to install. */
   children?: ReactNode;
 }
 
 const TITLES: Record<NotifyState, string> = {
-  on: 'This device is told when something needs you',
-  off: 'Get notifications on this device',
-  install: 'Add Conch to your Home Screen first',
-  blocked: 'Notifications are blocked for Conch',
-  unsupported: 'This browser can’t show Conch’s notifications',
+  on: 'Allow notifications',
+  off: 'Allow notifications',
+  install: 'Add Conch to your Home Screen',
+  blocked: 'Notifications are blocked',
+  unsupported: 'This browser can’t show notifications',
 };
 
 const DETAILS: Record<NotifyState, string> = {
-  on: 'When Conch needs your OK, finishes an answer while you’re away, or a routine runs. Never while you’re looking at Conch.',
-  off: 'When Conch needs your OK, finishes an answer while you’re away, or a routine runs. Nothing while you’re looking at Conch.',
-  install: 'On iPhone and iPad, notifications work for apps on the Home Screen. It takes a moment:',
-  blocked:
-    'Your browser was told not to let Conch notify you. Allow it in the browser’s settings for this site, then come back.',
-  unsupported: 'Try Safari on an iPhone, or Chrome, Edge or Firefox elsewhere.',
+  on: 'On this device, while you’re away.',
+  off: 'On this device, while you’re away.',
+  install: 'iPhone and iPad notify from there:',
+  blocked: 'Allow them for this site in your browser’s settings.',
+  unsupported: 'Try Safari, Chrome, Edge or Firefox.',
 };
 
 /**
- * Notifications on this device, at a glance: one switch, and a test. When the
- * device needs something first (the Home Screen on an iPhone, the browser's
- * own permission), it says exactly that, calmly.
+ * Notifications on this device, at a glance: one switch. While it's on, what
+ * it's told about opens beneath it as a short list; off, the list folds away,
+ * because it means nothing then. When the device needs something first (the
+ * Home Screen on an iPhone, the browser's own permission), it says exactly
+ * that, in a line.
  */
 export function NotifyThisDevice({
   state,
   busy = false,
   onChange,
+  topics,
+  onTopicChange,
+  previews,
+  onPreviewsChange,
   onTest,
   testing,
   detail,
@@ -69,9 +89,17 @@ export function NotifyThisDevice({
 }: NotifyThisDeviceProps) {
   const titleId = useId();
   const detailId = useId();
+  const groupId = useId();
   const Icon =
     state === 'on' ? BellRing : state === 'install' ? Smartphone : state === 'off' ? Bell : BellOff;
   const canSwitch = state === 'on' || state === 'off';
+  const on = state === 'on';
+  // Folding away, it keeps what it showed: the list leaves whole, not empty.
+  const [shown, setShown] = useState(topics);
+  if (topics && topics !== shown) setShown(topics);
+  const list = topics ?? shown;
+  const anyOn = list?.some((t) => t.on) ?? false;
+
   return (
     <section
       aria-labelledby={titleId}
@@ -93,27 +121,74 @@ export function NotifyThisDevice({
         </div>
         {canSwitch && onChange && (
           <Switch
-            checked={state === 'on'}
+            checked={on}
             disabled={busy}
             onCheckedChange={onChange}
-            aria-label="Notifications on this device"
+            aria-labelledby={titleId}
             aria-describedby={detailId}
           />
         )}
       </div>
-      {state === 'on' && onTest && (
-        <div className={styles.actions}>
-          <Button
-            size="sm"
-            variant="surface"
-            leadingIcon={<BellRing />}
-            loading={testing}
-            onClick={onTest}
-          >
-            Send a test
-          </Button>
-        </div>
+
+      {canSwitch && (
+        // Always here while it can be on, so turning it on plays the reveal.
+        <Collapsible open={on && (Boolean(topics) || Boolean(onTest))}>
+          <Collapsible.Content>
+            <div className={styles.choices}>
+              {list && (
+                <>
+                  <p className={styles.groupLabel} id={groupId}>
+                    Tell me when
+                  </p>
+                  <div role="group" aria-labelledby={groupId} className={styles.rows}>
+                    {list.map((topic) => (
+                      <Switch
+                        key={topic.id}
+                        size="sm"
+                        labelPosition="start"
+                        label={topic.label}
+                        checked={topic.on}
+                        onCheckedChange={(next) => onTopicChange?.(topic.id, next)}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+              {list && previews !== undefined && (
+                // Only worth deciding while it's told about something.
+                <Collapsible open={anyOn}>
+                  <Collapsible.Content>
+                    <div className={styles.previews}>
+                      <Switch
+                        size="sm"
+                        labelPosition="start"
+                        label="Show what it’s about"
+                        description="Off: just “Open Conch to see it.”"
+                        checked={previews}
+                        onCheckedChange={(next) => onPreviewsChange?.(next)}
+                      />
+                    </div>
+                  </Collapsible.Content>
+                </Collapsible>
+              )}
+              {onTest && (
+                <div className={styles.actions}>
+                  <Button
+                    size="sm"
+                    variant="surface"
+                    leadingIcon={<BellRing />}
+                    loading={testing}
+                    onClick={onTest}
+                  >
+                    Send a test
+                  </Button>
+                </div>
+              )}
+            </div>
+          </Collapsible.Content>
+        </Collapsible>
       )}
+
       {children != null && <div className={styles.body}>{children}</div>}
     </section>
   );

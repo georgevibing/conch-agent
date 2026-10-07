@@ -130,6 +130,11 @@ place in a glance and never change a thing.
   looks, which voice) is never folded. Nothing is lost: ⌘K finds what's in
   there by name (`ADVANCED_FOCUS`, `useAdvanced`), and the place opens with its
   Advanced already open, as a repair's fix does.
+- **Choices under the switch they belong to.** A choice that only means
+  something while a switch is on (what notifications are about) sits beneath
+  it, indented under a hairline, and opens with it (`Collapsible`) — folded
+  away while it's off, never shown greyed out. Each is a short label, at most a
+  few words of hint.
 - **The other way in, quietly.** A page whose main way is a press (Providers:
   sign in) keeps the way for the few — an API key — as one muted line at its
   foot, **Use an API key instead**, that opens to a single field in place.

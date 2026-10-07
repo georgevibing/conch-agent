@@ -2,16 +2,17 @@ import type { PushPrefs, PushStatus } from '@conch/protocol';
 import {
   AddToHomeScreen,
   Button,
+  Callout,
   NotifyThisDevice,
+  Skeleton,
   Stack,
-  Switch,
   Text,
   toast,
   type NotifyState,
 } from '@conch/nacre';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { MonitorSmartphone } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { ApiError } from '../../api/client';
 import { useUi } from '../../app/ui';
@@ -32,27 +33,33 @@ export function usePush() {
   return useQuery({ queryKey: pushKeys.status, queryFn: pushApi.status, staleTime: 15_000 });
 }
 
-const TOPICS: { key: keyof PushPrefs; label: string; description?: string }[] = [
-  { key: 'approvals', label: 'When it needs you' },
-  { key: 'replies', label: 'When an answer is ready' },
-  { key: 'routines', label: 'When a routine runs' },
-  { key: 'tasks', label: 'When a task finishes' },
-  { key: 'devices', label: 'When a new device wants to sign in' },
-  { key: 'updates', label: 'New versions of Conch' },
-  {
-    key: 'previews',
-    label: 'Say what it’s about',
-    description: 'Off: only “Open Conch to see what it’s asking.”',
-  },
+/** Whether this browser still has the subscription Conch knows it by. */
+function hereQuery(publicKey: string) {
+  return {
+    queryKey: pushKeys.here(publicKey),
+    // A browser that can't say (its worker gone) has nothing: turning it on makes one.
+    queryFn: async () => matches(await current().catch(() => null), publicKey),
+    staleTime: 15_000,
+  };
+}
+
+/** Each finishes “Tell me when”. */
+const TOPICS: { key: Exclude<keyof PushPrefs, 'previews'>; label: string }[] = [
+  { key: 'approvals', label: 'It needs you' },
+  { key: 'replies', label: 'An answer is ready' },
+  { key: 'routines', label: 'A routine runs' },
+  { key: 'tasks', label: 'A task finishes' },
+  { key: 'devices', label: 'A device asks to sign in' },
+  { key: 'updates', label: 'There’s a new version' },
 ];
 
 /** This device's state, from the browser and from Conch. */
-function stateOf(status: PushStatus | undefined, subscribed: boolean): NotifyState {
+function stateOf(status: PushStatus, subscribed: boolean): NotifyState {
   const support = pushSupport();
   if (support === 'install') return 'install';
   if (support !== 'ok') return 'unsupported';
   if (permission() === 'denied') return 'blocked';
-  return subscribed && status?.devices.some((d) => d.current) ? 'on' : 'off';
+  return subscribed && status.devices.some((d) => d.current) ? 'on' : 'off';
 }
 
 /**
@@ -61,33 +68,66 @@ function stateOf(status: PushStatus | undefined, subscribed: boolean): NotifySta
  * Settings → Devices, beside each device.
  */
 export function NotificationsTab() {
+  const push = usePush();
+  const status = push.data;
+  // Asking the browser takes a moment: hold the card until both have answered,
+  // so the switch opens as it is, never off and then on.
+  const asks = pushSupport() === 'ok';
+  const here = useQuery({
+    ...hereQuery(status?.publicKey ?? ''),
+    enabled: Boolean(status) && asks,
+  });
+  const known = status && (!asks || here.data !== undefined);
+  return (
+    <Stack gap={8}>
+      <Section title="Notifications">
+        {known ? (
+          <ThisDevice status={status} subscribed={here.data ?? false} />
+        ) : push.isError ? (
+          <Callout
+            tone="danger"
+            title="Couldn’t load notifications"
+            action={
+              <Button size="sm" variant="surface" onClick={() => void push.refetch()}>
+                Try again
+              </Button>
+            }
+          >
+            {push.error instanceof ApiError ? push.error.message : 'Conch didn’t answer.'}
+          </Callout>
+        ) : (
+          <Skeleton shape="block" height="5rem" />
+        )}
+      </Section>
+      {status && <Elsewhere status={status} />}
+    </Stack>
+  );
+}
+
+function ThisDevice({ status, subscribed }: { status: PushStatus; subscribed: boolean }) {
   const client = useQueryClient();
-  const { data: status } = usePush();
-  const [subscribed, setSubscribed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [testing, setTesting] = useState(false);
   // What to change in the browser first; it stays on the card while they do it.
   const [problem, setProblem] = useState<string>();
-  const openSettings = useUi((s) => s.openSettings);
 
-  useEffect(() => {
-    if (!status) return;
-    void current().then((sub) => setSubscribed(matches(sub, status.publicKey)));
-  }, [status]);
-
+  const setSubscribed = (on: boolean) => client.setQueryData(pushKeys.here(status.publicKey), on);
   const put = (next: PushStatus) => client.setQueryData(pushKeys.status, next);
-  const mine = status?.devices.find((d) => d.current);
+  const mine = status.devices.find((d) => d.current);
   const state = stateOf(status, subscribed);
+  const prefs = mine?.prefs;
+  const topics = useMemo(
+    () => prefs && TOPICS.map((t) => ({ id: t.key, label: t.label, on: prefs[t.key] })),
+    [prefs],
+  );
 
   const change = async (on: boolean) => {
-    if (!status) return;
     setBusy(true);
     setProblem(undefined);
     try {
       if (on) {
         put(await pushApi.subscribe(await subscribe(status.publicKey)));
         setSubscribed(true);
-        toast.success('Notifications are on for this device.');
       } else {
         if (mine) put(await pushApi.remove(mine.id));
         await unsubscribe().catch(() => undefined);
@@ -106,7 +146,7 @@ export function NotificationsTab() {
   };
 
   const prefer = async (key: keyof PushPrefs, value: boolean) => {
-    if (!mine || !status) return;
+    if (!mine) return;
     put({
       ...status,
       devices: status.devices.map((d) =>
@@ -132,63 +172,54 @@ export function NotificationsTab() {
     }
   };
 
-  const others = (status?.devices ?? []).filter((d) => !d.current);
   return (
-    <Stack gap={8}>
-      <Section
-        title="This device"
-        description="Told when something needs you, quiet while you’re looking."
-      >
-        <NotifyThisDevice
-          state={state}
-          busy={busy}
-          onChange={(on) => void change(on)}
-          onTest={() => void test()}
-          testing={testing}
-          detail={
-            pushSupport() === 'insecure'
-              ? 'Notifications need Conch’s secure (https) address. Add your phone to turn it on.'
-              : state === 'off'
-                ? problem
-                : undefined
-          }
-        >
-          {state === 'install' ? (
-            <AddToHomeScreen />
-          ) : state === 'on' && mine ? (
-            <Stack gap={3}>
-              {TOPICS.map((topic) => (
-                <Switch
-                  key={topic.key}
-                  labelPosition="start"
-                  label={topic.label}
-                  description={topic.description}
-                  checked={mine.prefs[topic.key]}
-                  onCheckedChange={(value) => void prefer(topic.key, value)}
-                />
-              ))}
-            </Stack>
-          ) : undefined}
-        </NotifyThisDevice>
-      </Section>
+    <NotifyThisDevice
+      state={state}
+      busy={busy}
+      onChange={(on) => void change(on)}
+      topics={state === 'on' ? topics : undefined}
+      onTopicChange={(id, on) => {
+        const topic = TOPICS.find((t) => t.key === id);
+        if (topic) void prefer(topic.key, on);
+      }}
+      previews={prefs?.previews}
+      onPreviewsChange={(on) => void prefer('previews', on)}
+      onTest={() => void test()}
+      testing={testing}
+      detail={
+        pushSupport() === 'insecure'
+          ? 'Needs Conch’s secure (https) address. Add your phone in Devices to get one.'
+          : state === 'off'
+            ? problem
+            : undefined
+      }
+    >
+      {state === 'install' ? <AddToHomeScreen /> : undefined}
+    </NotifyThisDevice>
+  );
+}
 
-      <div className={styles.elsewhere}>
-        <Text size="sm" tone="muted">
-          {others.length === 0
-            ? 'No other device gets them yet.'
-            : others.length === 1
-              ? '1 other device gets them too.'
-              : `${others.length} other devices get them too.`}
-        </Text>
-        <Button
-          size="sm"
-          variant="surface"
-          leadingIcon={<MonitorSmartphone />}
-          onClick={() => openSettings('devices')}
-        >
-          Your devices
-        </Button>
-      </div>
-    </Stack>
+/** The other devices: a line, and the way to them. */
+function Elsewhere({ status }: { status: PushStatus }) {
+  const openSettings = useUi((s) => s.openSettings);
+  const others = status.devices.filter((d) => !d.current);
+  return (
+    <div className={styles.elsewhere}>
+      <Text size="sm" tone="muted">
+        {others.length === 0
+          ? 'No other device gets them yet.'
+          : others.length === 1
+            ? '1 other device gets them too.'
+            : `${others.length} other devices get them too.`}
+      </Text>
+      <Button
+        size="sm"
+        variant="surface"
+        leadingIcon={<MonitorSmartphone />}
+        onClick={() => openSettings('devices')}
+      >
+        Your devices
+      </Button>
+    </div>
   );
 }

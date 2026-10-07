@@ -22,4 +22,8 @@ export const pushApi = {
     request(z.object({ sent: z.number() }), '/api/push/test', { method: 'POST', body: {} }),
 };
 
-export const pushKeys = { status: ['push'] as const };
+export const pushKeys = {
+  status: ['push'] as const,
+  /** Whether this browser still holds a subscription made with Conch's key. */
+  here: (publicKey: string) => ['push', 'here', publicKey] as const,
+};
