@@ -38,11 +38,13 @@ A task asks before it acts, as its chat would, and holds nothing else up. Its ca
 
 Conch tells you in the app, and on your devices when notifications are on. The switch is **When a background task finishes**, in **Settings → Notifications**. See [On your phone](../start/phone.md).
 
-**Finished — outcome not checked** means the assistant finished a general task that had no automatic completion criteria. This is not an error. You can read its result and inspect the recorded tool results; running it again would not add missing criteria.
+A task's card says how it went in a word and one line of what came of it, or of what went wrong. Press the chevron for **Details**: its whole result, what was confirmed and what it did.
 
-**Verified complete** means Conch checked the workflow's required results against real tool or provider receipts. The card lists confirmed changes and links you can inspect, such as a saved draft. A saved draft is not a sent message.
+**Finished** means the assistant finished a general task that had no automatic completion criteria. This is not an error. You can read its result and, under Details, the recorded tool results; running it again would not add missing criteria.
 
-**Result not verified** means the assistant finished replying, but required results are missing, an action is uncertain, or a tool could not independently check its outcome. Its summary is preserved, not treated as evidence. The card explains what remains unchecked, even if the assistant says “done”. Partial results stay visible after failure or cancellation.
+**Done** means Conch checked the workflow's required results against real tool or provider receipts. The card lists confirmed changes and links you can inspect, such as a saved draft. A saved draft is not a sent message.
+
+**Needs a look** means the assistant finished replying, but required results are missing, an action is uncertain, or a tool could not independently check its outcome. Its summary is preserved, not treated as evidence. The card explains what remains unchecked, even if the assistant says “done”. Partial results stay visible after failure or cancellation.
 
 **Resume safely** continues in the same chat with saved progress. It does not restart from a blank conversation. Confirmed writes are not repeated. If Conch lost a provider's response and cannot prove whether a write happened, it stops rather than create a duplicate. Open the original app to inspect the result. A search returning no matches is not always proof that a write failed.
 

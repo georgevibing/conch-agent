@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { expectAccessible, renderNacre } from '../../test/render';
+import { taskHeadline } from './headline';
 import { elapsed, TaskCard } from './TaskCard';
 
 const NOW = 1_790_000_000_000;
@@ -19,8 +20,9 @@ describe('TaskCard', () => {
         onOpen={() => undefined}
       />,
     );
-    expect(screen.getByRole('article')).toHaveTextContent('Finished — outcome not checked');
-    expect(screen.queryByText('Verified complete')).not.toBeInTheDocument();
+    expect(screen.getByRole('article')).toHaveTextContent('Finished');
+    expect(screen.getByRole('article')).toHaveTextContent('The report is available.');
+    expect(screen.queryByText('Done')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Resume safely' })).not.toBeInTheDocument();
     await expectAccessible(container);
   });
@@ -109,9 +111,12 @@ describe('TaskCard', () => {
         onRetry={() => undefined}
       />,
     );
-    expect(screen.getByRole('article')).toHaveTextContent('Result not verified');
+    expect(screen.getByRole('article')).toHaveTextContent('Needs a look');
+    expect(screen.getByRole('article')).toHaveTextContent(
+      'The second write could not be verified.',
+    );
     expect(screen.getByRole('article')).toHaveTextContent('One draft is confirmed.');
-    expect(screen.queryByText('Verified complete')).not.toBeInTheDocument();
+    expect(screen.queryByText('Done')).not.toBeInTheDocument();
     rerender(
       <TaskCard title="Draft follow-ups" status="stopped" summary="One draft is confirmed." />,
     );
@@ -147,6 +152,69 @@ describe('TaskCard', () => {
     await user.click(screen.getByRole('button', { name: 'Deny' }));
     expect(onDeny).toHaveBeenCalled();
     await expectAccessible(container);
+  });
+
+  it('says what came of it in one line, with the rest behind Details', async () => {
+    const user = userEvent.setup();
+    const { container } = renderNacre(
+      <TaskCard
+        title="Task probe artifact rerun"
+        kind="helper"
+        status="unverified"
+        unchecked
+        startedAt={NOW - 21_000}
+        finishedAt={NOW}
+        summary={
+          'Saved markdown artifact “Task system probe rerun” successfully.\nArtifact ID: a_a460ef7a7e25954d1f85dc2fe5fe2f3eef8045cf11b007b15ee62c96f9be1647\nVersion: 1\nError: none.'
+        }
+        details={<a href="#a">Saved “Task system probe rerun”</a>}
+        steps={['Saved “Task system probe rerun”']}
+      />,
+    );
+    const card = screen.getByRole('article', { name: /Task probe artifact rerun/ });
+    expect(card).toHaveTextContent('Finished · 21s');
+    expect(card).toHaveTextContent(
+      'Saved markdown artifact “Task system probe rerun” successfully.',
+    );
+    expect(card).not.toHaveTextContent('a_a460');
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    const more = screen.getByRole('button', { name: 'Details' });
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    await user.click(more);
+    expect(more).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('link', { name: 'Saved “Task system probe rerun”' })).toBeVisible();
+    expect(card).toHaveTextContent('Version: 1');
+    await expectAccessible(container);
+  });
+
+  it('puts what went wrong first, in a line', () => {
+    renderNacre(
+      <TaskCard
+        title="Run the tests"
+        status="failed"
+        summary="I ran the first suite."
+        error="The test runner crashed: out of memory."
+      />,
+    );
+    const card = screen.getByRole('article');
+    expect(card).toHaveTextContent('Didn’t finish');
+    expect(card).toHaveTextContent('The test runner crashed: out of memory.');
+    expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument();
+  });
+
+  it('reads a result’s headline like a person would', () => {
+    expect(
+      taskHeadline(
+        'Diagnostic passed. Initial Read returned the expected ENOENT for notes.txt. Write and final Read succeeded.',
+      ),
+    ).toBe('Diagnostic passed. Initial Read returned the expected ENOENT for notes.txt.');
+    expect(
+      taskHeadline(
+        '**Saved** the draft for artifact a_a460ef7a7e25954d1f85dc2fe5fe2f3e.\nVersion: 2',
+      ),
+    ).toBe('Saved the draft for artifact.');
+    expect(taskHeadline('Artifact ID: abc\nError: none.')).toBeUndefined();
+    expect(taskHeadline('x'.repeat(400))?.length).toBe(200);
   });
 
   it('reads elapsed time like a person would', () => {

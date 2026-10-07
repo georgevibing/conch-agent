@@ -1,3 +1,9 @@
+@property --tk-turn {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
 @layer nacre.components {
   .card {
     --tk-icon: 2rem;
@@ -35,7 +41,18 @@
     gap: var(--nc-space-3);
   }
 
+  .body {
+    gap: var(--nc-space-2);
+  }
+
+  /*
+   * The status mark. Each state arrives with its own small motion (the mark
+   * is keyed by it): a soft pop in, a check that draws itself, a nudge when
+   * something went wrong. While it works, a band of pearl light turns around
+   * the breathing pearl.
+   */
   .icon {
+    position: relative;
     display: grid;
     place-items: center;
     flex-shrink: 0;
@@ -45,6 +62,10 @@
     corner-shape: var(--nc-corner-shape);
     background: var(--nc-surface-sunken);
     color: var(--nc-text-muted);
+    animation: tk-arrive var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) both;
+    transition:
+      background-color var(--nc-duration-base) var(--nc-ease-out),
+      color var(--nc-duration-base) var(--nc-ease-out);
   }
 
   .icon > svg {
@@ -52,17 +73,87 @@
     block-size: 1rem;
   }
 
-  .icon[data-status='done'] {
+  .icon[data-look='running']::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    padding: 1.5px;
+    border-radius: inherit;
+    corner-shape: inherit;
+    background: conic-gradient(
+      from var(--tk-turn) in oklab,
+      transparent 0deg,
+      var(--nc-pearl-2) 70deg,
+      var(--nc-pearl-3) 140deg,
+      var(--nc-pearl-4) 210deg,
+      transparent 280deg
+    );
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0) border-box;
+    mask-composite: exclude;
+    opacity: calc(0.35 + 0.65 * var(--nc-lustre));
+    animation: tk-turn 1.8s linear infinite;
+  }
+
+  .icon[data-look='queued'] > svg {
+    animation: nc-breathe 2.4s var(--nc-ease-in-out) infinite;
+  }
+
+  .icon[data-look='done'],
+  .icon[data-look='finished'] {
     color: light-dark(oklch(0.5 0.11 var(--nc-success-h)), oklch(0.8 0.1 var(--nc-success-h)));
   }
 
-  .icon[data-status='needs-you'] {
+  .icon[data-look='done'] {
+    background: light-dark(
+      oklch(0.95 0.035 var(--nc-success-h)),
+      oklch(0.32 0.05 var(--nc-success-h))
+    );
+  }
+
+  /* The check draws itself in. */
+  .icon[data-look='done'] > svg,
+  .icon[data-look='finished'] > svg {
+    stroke-dasharray: 24;
+    stroke-dashoffset: 24;
+    animation: tk-draw var(--nc-duration-slower) var(--nc-ease-out) var(--nc-duration-fast) forwards;
+  }
+
+  .icon[data-look='needs-you'],
+  .icon[data-look='check'] {
     color: light-dark(oklch(0.5 0.12 var(--nc-warning-h)), oklch(0.82 0.1 var(--nc-warning-h)));
   }
 
-  .icon[data-status='failed'],
-  .icon[data-status='interrupted'] {
+  .icon[data-look='needs-you'] > svg {
+    transform-origin: 60% 90%;
+    animation: tk-wave var(--nc-duration-slower) var(--nc-ease-out) var(--nc-duration-base) 2;
+  }
+
+  .icon[data-look='failed'] {
+    background: light-dark(oklch(0.95 0.03 var(--nc-danger-h)), oklch(0.3 0.05 var(--nc-danger-h)));
     color: light-dark(oklch(0.52 0.15 var(--nc-danger-h)), oklch(0.8 0.12 var(--nc-danger-h)));
+    animation:
+      tk-arrive var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) both,
+      tk-nudge var(--nc-duration-slow) var(--nc-ease-out) var(--nc-duration-base);
+  }
+
+  .more {
+    flex-shrink: 0;
+    align-self: center;
+    margin-inline-end: calc(-1 * var(--nc-space-1-5));
+    padding: var(--nc-space-1-5);
+  }
+
+  .more > svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    color: var(--nc-text-subtle);
+    transition: rotate var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .more[data-state='open'] > svg {
+    rotate: 180deg;
   }
 
   .text {
@@ -100,7 +191,7 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .status[data-status='needs-you'] {
+  .status[data-look='needs-you'] {
     color: light-dark(oklch(0.48 0.12 var(--nc-warning-h)), oklch(0.84 0.1 var(--nc-warning-h)));
     font-weight: var(--nc-weight-medium);
   }
@@ -108,12 +199,78 @@
   .current,
   .steps,
   .note,
-  .summary,
-  .error,
+  .outcome,
+  .problem,
+  .details,
   .branch,
   .actions {
     margin: 0;
     padding-inline-start: var(--tk-indent);
+  }
+
+  /* Its one line: what came of it, never more than two lines. */
+  .outcome,
+  .problem {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    overflow-wrap: anywhere;
+    text-wrap: pretty;
+    animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .outcome {
+    color: var(--nc-text-muted);
+  }
+
+  .problem {
+    color: light-dark(oklch(0.48 0.12 var(--nc-danger-h)), oklch(0.84 0.1 var(--nc-danger-h)));
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .card[data-look='check'] .problem {
+    color: light-dark(oklch(0.46 0.11 var(--nc-warning-h)), oklch(0.84 0.09 var(--nc-warning-h)));
+  }
+
+  .details > div {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    margin-block-start: var(--nc-space-1);
+    padding: var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+  }
+
+  .details .steps {
+    padding-inline-start: var(--nc-space-4);
+  }
+
+  .extra {
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-snug);
+    overflow-wrap: anywhere;
+  }
+
+  .extra :is(p, ul) {
+    margin: 0;
+  }
+
+  .extra ul {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    padding-inline-start: var(--nc-space-4);
+  }
+
+  .extra a {
+    color: var(--nc-text-accent);
   }
 
   .current {
@@ -140,6 +297,7 @@
   .summary {
     color: var(--nc-text);
     font-size: var(--nc-text-sm);
+    overflow-wrap: anywhere;
     line-height: var(--nc-leading-normal);
     white-space: pre-wrap;
     text-wrap: pretty;
@@ -251,8 +409,9 @@
     .current,
     .steps,
     .note,
-    .summary,
-    .error,
+    .outcome,
+    .problem,
+    .details,
     .branch,
     .actions {
       padding-inline-start: 0;
@@ -261,5 +420,58 @@
     .steps {
       padding-inline-start: var(--nc-space-4);
     }
+  }
+
+  @keyframes tk-arrive {
+    from {
+      opacity: 0;
+      scale: 0.6;
+    }
+  }
+
+  @keyframes tk-turn {
+    to {
+      --tk-turn: 360deg;
+    }
+  }
+
+  @keyframes tk-draw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @keyframes tk-wave {
+    30% {
+      rotate: -14deg;
+    }
+    65% {
+      rotate: 10deg;
+    }
+  }
+
+  @keyframes tk-nudge {
+    25% {
+      translate: -2px 0;
+    }
+    50% {
+      translate: 2px 0;
+    }
+    75% {
+      translate: -1px 0;
+    }
+  }
+
+  /* Loops stop; the one-off motions already shrink to nothing with the tokens. */
+  @media (prefers-reduced-motion: reduce) {
+    .icon[data-look='running']::before,
+    .icon[data-look='queued'] > svg {
+      animation: none;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .icon[data-look='running']::before,
+  [data-nacre-motion='reduced'] .icon[data-look='queued'] > svg {
+    animation: none;
   }
 }
