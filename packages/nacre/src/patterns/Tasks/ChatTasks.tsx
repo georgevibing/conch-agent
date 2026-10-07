@@ -13,6 +13,9 @@ import {
   cloneElement,
   isValidElement,
   useId,
+  useLayoutEffect,
+  useRef,
+  useState,
   type ComponentProps,
   type CSSProperties,
   type ReactElement,
@@ -46,6 +49,8 @@ export interface ChatTask {
   by?: ReactNode;
   /** Given, a going task can be stopped from the list. */
   onStop?: () => void;
+  /** It finished and you haven't looked yet: it stands out, once, then settles. */
+  fresh?: boolean;
 }
 
 export interface ChatTasksProps extends Omit<ComponentProps<'div'>, 'children'> {
@@ -53,6 +58,11 @@ export interface ChatTasksProps extends Omit<ComponentProps<'div'>, 'children'> 
   open: boolean;
   /** The chat's title, so the list says whose tasks these are. */
   chat: string;
+  /**
+   * Finished ones you've seen: folded away under "Earlier", a press from
+   * the rows that still matter.
+   */
+  earlier?: readonly ChatTask[];
   /** For tests and stories. */
   now?: number;
 }
@@ -61,7 +71,7 @@ export interface ChatTasksToggleProps extends Omit<
   ComponentProps<'button'>,
   'children' | 'onToggle'
 > {
-  tasks: readonly Pick<ChatTask, 'status'>[];
+  tasks: readonly Pick<ChatTask, 'status' | 'fresh'>[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** The chat's title, so the toggle says whose tasks these are. */
@@ -85,28 +95,31 @@ const going = (s: TaskCardStatus) => s === 'queued' || s === 'running' || s === 
 const broke = (s: TaskCardStatus) => s === 'failed' || s === 'interrupted';
 
 /** "3 tasks · 1 needs you", "2 working", "1 task": what's under a chat, in a few words. */
-export function tasksSummary(tasks: readonly Pick<ChatTask, 'status'>[]): string {
+export function tasksSummary(tasks: readonly Pick<ChatTask, 'status' | 'fresh'>[]): string {
   const needs = tasks.filter((t) => t.status === 'needs-you').length;
   const working = tasks.filter((t) => t.status === 'running').length;
   const waiting = tasks.filter((t) => t.status === 'queued').length;
   const failed = tasks.filter((t) => broke(t.status)).length;
+  const fresh = tasks.filter((t) => t.fresh).length;
   const all = `${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'}`;
   const now = [
     needs && `${needs} ${needs === 1 ? 'needs' : 'need'} you`,
     working && `${working} working`,
     !needs && !working && waiting && `${waiting} waiting`,
     failed && `${failed} didn’t finish`,
+    fresh && `${fresh} new`,
   ].filter(Boolean);
   return now.length ? `${all} · ${now.join(', ')}` : all;
 }
 
 /** How a chat's tasks are going, all together: the one the badge shows. */
-export type ChatTasksTone = 'needs' | 'working' | 'failed' | 'idle';
+export type ChatTasksTone = 'needs' | 'working' | 'failed' | 'fresh' | 'idle';
 
-export function tasksTone(tasks: readonly Pick<ChatTask, 'status'>[]): ChatTasksTone {
+export function tasksTone(tasks: readonly Pick<ChatTask, 'status' | 'fresh'>[]): ChatTasksTone {
   if (tasks.some((t) => t.status === 'needs-you')) return 'needs';
   if (tasks.some((t) => going(t.status))) return 'working';
   if (tasks.some((t) => broke(t.status))) return 'failed';
+  if (tasks.some((t) => t.fresh)) return 'fresh';
   return 'idle';
 }
 
@@ -189,8 +202,26 @@ export function ChatTasksToggle({
   );
 }
 
-function TaskRow({ task, now, index }: { task: ChatTask; now?: number; index: number }) {
+function TaskRow({
+  task,
+  now,
+  index,
+  leaving,
+  onLeft,
+}: {
+  task: ChatTask;
+  now?: number;
+  index: number;
+  leaving?: boolean;
+  onLeft?: () => void;
+}) {
   const titleId = useId();
+  const ref = useRef<HTMLLIElement>(null);
+  // Going: it folds from its own height, measured before the fold is drawn.
+  useLayoutEffect(() => {
+    const row = ref.current;
+    if (leaving && row) row.style.setProperty('--ct-h', `${row.getBoundingClientRect().height}px`);
+  }, [leaving]);
   const time = useTick(going(task.status), now);
   const took =
     task.startedAt && task.status !== 'queued'
@@ -214,6 +245,7 @@ function TaskRow({ task, now, index }: { task: ChatTask; now?: number; index: nu
               {/* The status mark carries the look; a helper is only said. */}
               {task.kind === 'helper' && <span className="nc-visually-hidden">Helper: </span>}
               {link.props.children}
+              {task.fresh && <span className="nc-visually-hidden"> (new)</span>}
             </span>
             <span className={styles.meta} data-status={task.status}>
               {/* Said after the title: what it's doing, or where it stands. */}
@@ -239,11 +271,20 @@ function TaskRow({ task, now, index }: { task: ChatTask; now?: number; index: nu
     : link;
   return (
     <li
+      ref={ref}
       className={styles.row}
       data-status={task.status}
+      data-fresh={task.fresh || undefined}
+      data-leaving={leaving || undefined}
+      aria-hidden={leaving || undefined}
+      inert={leaving || undefined}
       style={{ '--ct-i': index } as CSSProperties}
+      onAnimationEnd={(e) => {
+        if (leaving && e.target === e.currentTarget) onLeft?.();
+      }}
     >
       <Slot.Root className={styles.link}>{content}</Slot.Root>
+      {task.fresh && <span className={styles.fresh} aria-hidden />}
       {going(task.status) && task.onStop && (
         <span className={styles.stop}>
           <IconButton
@@ -262,22 +303,108 @@ function TaskRow({ task, now, index }: { task: ChatTask; now?: number; index: nu
 }
 
 /**
+ * Rows that leave stay a moment, folding shut where they were, so the list
+ * closes over them instead of jumping. Gone at once with motion reduced (the
+ * animation is as short as nothing, and ends).
+ */
+function useLeaving(tasks: readonly ChatTask[]) {
+  const [gone, setGone] = useState<{ task: ChatTask; at: number }[]>([]);
+  const before = useRef(tasks);
+  const ids = tasks.map((t) => t.id).join(' ');
+  useLayoutEffect(() => {
+    const here = new Set(tasks.map((t) => t.id));
+    const left = before.current
+      .map((task, at) => ({ task, at }))
+      .filter(({ task }) => !here.has(task.id));
+    setGone((g) => {
+      const kept = g.filter((x) => !here.has(x.task.id));
+      return left.length ? [...kept, ...left] : kept.length === g.length ? g : kept;
+    });
+    // Only which rows are here matters: `ids` says so.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ids]);
+  // After the one above: the newest copy of each row, for when it next goes.
+  useLayoutEffect(() => {
+    before.current = tasks;
+  });
+  // A fallback, should an animation never end (a hidden tab).
+  useLayoutEffect(() => {
+    if (!gone.length) return;
+    const timer = setTimeout(() => setGone([]), 1000);
+    return () => clearTimeout(timer);
+  }, [gone]);
+  const rows: { task: ChatTask; leaving?: boolean }[] = tasks.map((task) => ({ task }));
+  for (const { task, at } of [...gone].sort((a, b) => a.at - b.at))
+    rows.splice(Math.min(at, rows.length), 0, { task, leaving: true });
+  const left = (id: string) => setGone((g) => g.filter((x) => x.task.id !== id));
+  return { rows, left };
+}
+
+/**
  * A chat's tasks, under it in the chat list (ADR 0033), opened from the
  * badge on the chat's own row (`ChatTasksToggle`): a row per task on the
  * chat's title line — its state as a mark and in a word or two, what it's
  * doing right now, how long it took, a press to open its chat and, while it
- * works, a Stop.
+ * works, a Stop. What finished and you've seen folds away under "Earlier";
+ * a row that goes folds shut where it was.
  */
-export function ChatTasks({ tasks, open, chat, now, className, id, ...props }: ChatTasksProps) {
+export function ChatTasks({
+  tasks,
+  open,
+  chat,
+  earlier = [],
+  now,
+  className,
+  id,
+  ...props
+}: ChatTasksProps) {
+  const { rows, left } = useLeaving(tasks);
+  const [showEarlier, setShowEarlier] = useState(false);
+  const earlierId = useId();
   return (
     <div className={cx(styles.root, className)} {...props}>
       <Collapsible open={open}>
         <Collapsible.Content id={id} className={styles.content}>
           <ul className={styles.list} aria-label={`Tasks from ${chat}`}>
-            {tasks.map((task, i) => (
-              <TaskRow key={task.id} task={task} now={now} index={i} />
+            {rows.map(({ task, leaving }, i) => (
+              <TaskRow
+                key={task.id}
+                task={task}
+                now={now}
+                index={i}
+                leaving={leaving}
+                onLeft={() => left(task.id)}
+              />
             ))}
+            {earlier.length > 0 && (
+              <li className={styles.earlierRow}>
+                <button
+                  type="button"
+                  className={styles.earlier}
+                  aria-expanded={showEarlier}
+                  aria-controls={earlierId}
+                  onClick={() => setShowEarlier((v) => !v)}
+                >
+                  <ChevronRight className={styles.earlierChevron} aria-hidden />
+                  <span>Earlier</span> <span className={styles.earlierCount}>{earlier.length}</span>
+                </button>
+              </li>
+            )}
           </ul>
+          {earlier.length > 0 && (
+            <Collapsible open={showEarlier}>
+              <Collapsible.Content id={earlierId} className={styles.content}>
+                <ul
+                  className={cx(styles.list, styles.earlierList)}
+                  aria-label={`Earlier tasks from ${chat}`}
+                >
+                  {earlier.map((task, i) => (
+                    <TaskRow key={task.id} task={task} now={now} index={i} />
+                  ))}
+                </ul>
+              </Collapsible.Content>
+            </Collapsible>
+          )}
         </Collapsible.Content>
       </Collapsible>
     </div>

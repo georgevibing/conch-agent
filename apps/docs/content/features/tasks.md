@@ -70,6 +70,7 @@ When a job splits into parts that don't need each other, your assistant can run 
 
 - A background task can't take [attachments](./files.md) yet. Send those as a message.
 - Tasks stay out of your chat list; they sit under the chat that started them. <kbd>mod+k</kbd> finds one by name, helpers included. See [Find anything](./find.md).
+- They tidy themselves away. One that finished while you were elsewhere stands out under its chat, with a dot, until you've seen it: open it, or open the chat it came from. Then it folds under **Earlier**. Once nothing is working or new, the chat is a single line again, and its tasks are on their cards in the chat. Seen on your phone is seen on your computer too.
 
 ## Control work from the chat
 

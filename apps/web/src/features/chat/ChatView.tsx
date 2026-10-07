@@ -54,6 +54,7 @@ import { tasksApi } from '../tasks/api';
 import { TaskBanner } from '../tasks/TaskBanner';
 import { ClientBanner } from '../otherapps/ClientBanner';
 import { useStartTask } from '../tasks/queries';
+import { useSeenTasks } from '../tasks/seen';
 import { ComposerControls } from '../models/ComposerControls';
 import { modeInfo, modelLabel } from '../models/catalog';
 import { ChatFind } from '../search/ChatFind';
@@ -418,6 +419,8 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
   }, [conversationId, live]);
   // What lands while you're looking isn't new to you, here or on your phone (ADR 0089).
   useSeen(conversationId);
+  // And so is what its tasks did: they tidy away from the list (ADR 0033).
+  useSeenTasks(conversationId);
 
   // A new chat becomes a real conversation once the server confirms it. It's the
   // same chat (`fromNew`): the view stays as it is, only its address changes.

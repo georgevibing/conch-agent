@@ -103,12 +103,14 @@ function ChatWithTasks({
   open: initial,
   now,
   active,
+  earlier,
 }: {
   title: string;
   tasks: readonly ChatTask[];
   open: boolean;
   now?: number;
   active?: boolean;
+  earlier?: readonly ChatTask[];
 }) {
   const id = useId();
   const [open, setOpen] = useState(initial);
@@ -125,7 +127,9 @@ function ChatWithTasks({
           aria-controls={id}
         />
       }
-      below={<ChatTasks id={id} tasks={tasks} open={open} chat={title} now={now} />}
+      below={
+        <ChatTasks id={id} tasks={tasks} earlier={earlier} open={open} chat={title} now={now} />
+      }
     >
       <a href="#chat">{title}</a>
     </ChatRow>
@@ -140,7 +144,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'A chat’s tasks in the sidebar. The chat keeps its one line: a small badge on it says how many and how they’re going — a turning ring of lustre while something works, a hand in amber when one needs you, a tint when one didn’t finish — and opens the tasks under it. Each sits on the chat’s own grid, its mark where the chat’s title starts, threaded on a guide: a tick when done, a cross when it didn’t finish (and why, in a few words), a stop when stopped. A press opens the task’s own chat; a working one can be stopped right there. The app opens them by itself while something is going.',
+          'A chat’s tasks in the sidebar. The chat keeps its one line: a small badge on it says how many and how they’re going — a turning ring of lustre while something works, a hand in amber when one needs you, a tint when one didn’t finish — and opens the tasks under it. Each sits on the chat’s own grid, its mark where the chat’s title starts, threaded on a guide: a tick when done, a cross when it didn’t finish (and why, in a few words), a stop when stopped. A press opens the task’s own chat; a working one can be stopped right there. The app opens them by itself while something is going. One that finished while you were elsewhere is `fresh`: a dot, its title forward, a sheen of lustre once. What you’ve seen goes in `earlier`, folded under “Earlier”, and a row that leaves folds shut where it was.',
       },
     },
   },
@@ -205,4 +209,44 @@ export const InTheChatList: Story = {
       </ChatListSection>
     </>
   ),
+};
+
+const FRESH: ChatTask = {
+  id: 'f',
+  link: <a href="#f">Draft the release notes</a>,
+  status: 'done',
+  startedAt: NOW - 140_000,
+  finishedAt: NOW - 20_000,
+  fresh: true,
+};
+
+/** Seen or not: the row stands out until you've looked, then folds away under "Earlier". */
+function Tidying() {
+  const [seen, setSeen] = useState(false);
+  const working = TASKS[1] as ChatTask;
+  return (
+    <>
+      <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+        <ChatWithTasks
+          title="Fix the parser"
+          tasks={seen ? [working] : [working, FRESH]}
+          earlier={seen ? [{ ...FRESH, fresh: false }, ...FINISHED] : FINISHED}
+          open
+          now={NOW}
+        />
+      </ul>
+      <button type="button" style={{ marginBlockStart: 16 }} onClick={() => setSeen((v) => !v)}>
+        {seen ? 'Bring it back' : 'Seen it'}
+      </button>
+    </>
+  );
+}
+
+/**
+ * Tidied away: what finished while you were elsewhere stands out (a dot, the
+ * title forward, a sheen of lustre once), and what you've seen folds under
+ * "Earlier". Press "Seen it" to watch the row fold shut where it was.
+ */
+export const TidiedAway: Story = {
+  render: () => <Tidying />,
 };

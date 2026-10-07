@@ -133,7 +133,7 @@ export function ChatRowItem({
   const quiet = isQuiet(chat.id);
   const pinned = chat.pinned !== undefined;
   // What it sent off, under it (ADR 0033): live, each a press from its own chat.
-  const tasks = useChatTasks(chat.id, { open });
+  const tasks = useChatTasks(chat.id, { open, current: conversationId });
   const tree = useChatTaskTree({ chatId: chat.id, chatTitle: chat.title, tasks, onNavigate });
 
   const rename = async () => {

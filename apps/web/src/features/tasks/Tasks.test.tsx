@@ -167,9 +167,30 @@ describe('Tasks', () => {
 
   it('a chat’s tasks are under it in the sidebar, open while they work, each opening its chat', async () => {
     const user = userEvent.setup();
+    const finished = Date.now() - 1000;
     const calls = mockFetch({
       'GET /api/state': () => appState(),
-      'GET /api/conversations': () => [chat(), chat({ id: 'c2', title: 'Quiet one' })],
+      'GET /api/conversations': () => [
+        chat(),
+        chat({ id: 'c2', title: 'Quiet one' }),
+        // Its chat moved on after you last had it open: new to you.
+        chat({
+          id: 'c-h2',
+          title: 'Read the README',
+          origin: { kind: 'task', taskId: 'h2' },
+          seenAt: 0,
+          updatedAt: finished,
+        }),
+        // Seen since it finished: folded away under "Earlier".
+        chat({
+          id: 'c-h3',
+          title: 'Lint it',
+          origin: { kind: 'task', taskId: 'h3' },
+          seenAt: finished,
+          updatedAt: finished,
+        }),
+      ],
+      'PATCH /api/conversations/c-h2': () => ({ ok: true }),
       'GET /api/tasks': () => ({
         concurrent: 3,
         tasks: [
@@ -187,7 +208,16 @@ describe('Tasks', () => {
             parentConversationId: 'c1',
             status: 'done',
             conversationId: 'c-h2',
-            finishedAt: Date.now() - 1000,
+            finishedAt: finished,
+          }),
+          task({
+            id: 'h3',
+            kind: 'helper',
+            title: 'Lint it',
+            parentConversationId: 'c1',
+            status: 'done',
+            conversationId: 'c-h3',
+            finishedAt: finished - 1000,
           }),
           // Long finished: only on Tasks and in its chat, not under the chat any more.
           task({
@@ -205,14 +235,28 @@ describe('Tasks', () => {
     });
     const { where } = renderApp(<Sidebar />);
     const toggle = await screen.findByRole('button', {
-      name: 'Hide tasks from Fix the parser: 2 tasks · 1 working',
+      name: 'Hide tasks from Fix the parser: 2 tasks · 1 working, 1 new',
     });
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    // A badge on the chat's own row, not a line of its own.
+    // A badge on the chat's own row, not a line of its own: what's going or new.
     expect(toggle).toHaveTextContent('2');
     expect(toggle.closest('li')).toHaveTextContent('Fix the parser');
     const list = screen.getByRole('list', { name: 'Tasks from Fix the parser' });
     expect(within(list).getByText('npm test')).toBeInTheDocument();
+    expect(
+      within(list).getByRole('link', { name: /Read the README ?\(new\)/ }),
+    ).toBeInTheDocument();
+    // What you've seen is folded away, a press from the rest.
+    expect(within(list).queryByRole('link', { name: /Lint it/ })).not.toBeInTheDocument();
+    const earlier = within(list).getByRole('button', { name: /Earlier/ });
+    expect(earlier).toHaveAttribute('aria-expanded', 'false');
+    await user.click(earlier);
+    expect(
+      within(screen.getByRole('list', { name: 'Earlier tasks from Fix the parser' })).getByRole(
+        'link',
+        { name: /Lint it/ },
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /tasks from Quiet one/ })).not.toBeInTheDocument();
     await user.click(within(list).getAllByRole('button', { name: 'Stop' })[0] as HTMLElement);
     expect(calls.map((c) => `${c.method} ${c.path}`)).toContain('POST /api/tasks/h1/stop');
@@ -221,6 +265,40 @@ describe('Tasks', () => {
     // Closed by hand, it stays closed.
     await user.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('tidies away: with nothing going or new, a chat is a single line again', async () => {
+    const finished = Date.now() - 1000;
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [
+        chat(),
+        chat({
+          id: 'c-h3',
+          title: 'Lint it',
+          origin: { kind: 'task', taskId: 'h3' },
+          seenAt: finished,
+          updatedAt: finished,
+        }),
+      ],
+      'GET /api/tasks': () => ({
+        concurrent: 3,
+        tasks: [
+          task({
+            id: 'h3',
+            title: 'Lint it',
+            parentConversationId: 'c1',
+            status: 'done',
+            conversationId: 'c-h3',
+            finishedAt: finished,
+          }),
+        ],
+      }),
+    });
+    renderApp(<Sidebar />);
+    expect(await screen.findByRole('link', { name: /Fix the parser/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /tasks from Fix the parser/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: /Lint it/ })).toBeNull();
   });
 
   it('what a task is asking is answered from the chat it came from', async () => {
