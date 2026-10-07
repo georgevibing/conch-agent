@@ -54,10 +54,14 @@
     flex: 1;
     flex-direction: column;
     align-items: center;
-    gap: var(--nc-space-1);
+    /* A square, the icon and its name centred in it: the same space on every
+       side, the same shape for every app. */
+    justify-content: center;
+    gap: var(--nc-space-0-5);
+    aspect-ratio: 1;
     min-inline-size: 0;
     margin: 0;
-    padding: var(--nc-space-2) var(--nc-space-0-5) var(--nc-space-2-5);
+    padding: var(--nc-space-1-5);
     border: 0;
     border-radius: var(--nc-radius-lg);
     corner-shape: var(--nc-corner-shape);
@@ -162,7 +166,7 @@
   /* The open one: a small dot beneath it, as a home screen marks what's running. */
   .running {
     position: absolute;
-    inset-block-end: var(--nc-space-1);
+    inset-block-end: 0.0625rem;
     inset-inline: 0;
     inline-size: 0.25rem;
     block-size: 0.25rem;
