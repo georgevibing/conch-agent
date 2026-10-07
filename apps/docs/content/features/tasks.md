@@ -14,7 +14,7 @@ A chat does one thing at a time, and some jobs take a while. Hand one off and it
 
 You can also ask in words: "do this in the background and tell me when it's done". Or press <kbd>mod+k</kbd> and choose **Do it in the background**.
 
-A task uses the same provider, model and [mode](../reference/modes.md) as the chat it came from. It can do nothing that chat couldn't: if you chose **Full trust** there, it won't stop to ask here either; if that chat asks first, so does the task. Anything you've already allowed in that chat ("Always allow") counts for its tasks too, and nothing more. Change the mode in the chat and its tasks follow, including one already waiting for your OK.
+A task uses the same [agent](./agents.md), provider, model and [mode](../reference/modes.md) as the chat it came from. It can do nothing that chat couldn't: if you chose **Full trust** there, it won't stop to ask here either; if that chat asks first, so does the task. Anything you've already allowed in that chat ("Always allow") counts for its tasks too, and nothing more. Change the mode in the chat and its tasks follow, including one already waiting for your OK.
 
 Every provider hands work off this way. Your assistant's own sub-agents are turned off wherever Conch can turn them off, so work always runs as a task you can see, answer and stop.
 

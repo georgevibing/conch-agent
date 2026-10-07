@@ -9,6 +9,7 @@ import {
   AgendaView,
   AppOffer,
   ArtifactChart,
+  Avatar,
   Badge,
   BrowserApproval,
   BrowserWindow,
@@ -41,7 +42,8 @@ import {
   type RepairItem,
 } from '@conch/nacre';
 import { appAbilities, appSourceLine } from '@conch/protocol';
-import { Mail } from 'lucide-react';
+import { Compass, Mail, Sparkles, Sprout, Sun, type LucideIcon } from 'lucide-react';
+import { useId, useState } from 'react';
 import reference from 'virtual:conch-reference';
 
 import styles from './demos.module.css';
@@ -580,6 +582,176 @@ export function ProvidersDemo() {
             </div>
           ))}
         </div>
+      </Stage>
+    </div>
+  );
+}
+
+// ── Your agents: one question, each answering in its own voice ─────────────
+
+interface Agent {
+  id: string;
+  name: string;
+  /** One of the personalities Conch offers when you make an agent. */
+  voice: string;
+  face: LucideIcon;
+  answer: string;
+}
+
+/**
+ * The agents in the picture, made up as the chats are. Each says the same
+ * three facts (one memory, which every agent shares) in its own voice.
+ */
+// verify-ui: the personality names, and how a preset face is drawn.
+export const AGENTS: readonly Agent[] = [
+  {
+    id: 'juniper',
+    name: 'Juniper',
+    voice: 'Warm',
+    face: Sprout,
+    answer:
+      'Nearly there. The ferry’s booked, so it’s only the tent to pack and Mia’s boots to pick up. It’s going to be a lovely weekend.',
+  },
+  {
+    id: 'atlas',
+    name: 'Atlas',
+    voice: 'Precise',
+    face: Compass,
+    answer:
+      'Two things. Pack the tent. Collect the boots from Mia by Friday at 18:00. The ferry is confirmed for Saturday at 08:40.',
+  },
+  {
+    id: 'pip',
+    name: 'Pip',
+    voice: 'Playful',
+    face: Sparkles,
+    answer:
+      'Tent in the bag, boots from Mia, and you’re off. The ferry already has your name on it.',
+  },
+  {
+    id: 'sol',
+    name: 'Sol',
+    voice: 'Concise',
+    face: Sun,
+    answer: 'The tent, and Mia’s boots. The ferry’s booked.',
+  },
+];
+
+export const AGENTS_ASK = 'What’s left before the trip?';
+
+const AGENT = { think: 300, answer: 1_000, answerDone: 3_400, turn: 5_400 } as const;
+
+function AgentFace({ agent, size }: { agent: Agent; size: 'sm' | 'lg' }) {
+  const Face = agent.face;
+  return (
+    <Avatar
+      name={agent.name}
+      size={size}
+      fallback={<Face aria-hidden className={styles.face} />}
+      aria-hidden
+    />
+  );
+}
+
+/** The chat at one moment of an agent's turn: the question, and its answer so far. */
+function AgentReply({ agent, at }: { agent: Agent; at: number }) {
+  return (
+    <div className={styles.chat}>
+      <Message from="user">{AGENTS_ASK}</Message>
+      {at >= AGENT.think && (
+        <Message
+          from="assistant"
+          author={agent.name}
+          avatar={<AgentFace agent={agent} size="sm" />}
+          status={at < AGENT.answerDone ? 'streaming' : 'complete'}
+        >
+          {at < AGENT.answer ? (
+            <ThinkingIndicator size="sm" label="Thinking" />
+          ) : (
+            <StreamingText
+              as="p"
+              text={arrived(agent.answer, at, AGENT.answer, AGENT.answerDone)}
+              streaming={at < AGENT.answerDone}
+            />
+          )}
+        </Message>
+      )}
+    </div>
+  );
+}
+
+/** The agent you chose, answering from the start, once, and then staying. */
+function ChosenReply({ agent, inView }: { agent: Agent; inView: boolean }) {
+  const at = useClock(Number.POSITIVE_INFINITY, inView, AGENT.turn);
+  return <AgentReply agent={agent} at={Math.min(at, AGENT.turn)} />;
+}
+
+/**
+ * Your agents: a row of faces with names, and a chat under them. Left alone it
+ * goes round them, each answering the same question in its own voice. Choose
+ * one and it answers, and stays. The row is real and can be pressed; the chat
+ * is a picture.
+ */
+export function AgentsDemo() {
+  const [ref, inView] = useInView<HTMLDivElement>({ once: false, margin: '0px' });
+  const [chosen, setChosen] = useState<number | null>(null);
+  // Standing still, the first one has answered.
+  const at = useClock(AGENT.turn * AGENTS.length, inView && chosen === null, AGENT.answerDone);
+  const group = useId();
+  const turn = chosen ?? Math.floor(at / AGENT.turn) % AGENTS.length;
+  const agent = AGENTS[turn] ?? AGENTS[0];
+  if (!agent) return null;
+  const local = at % AGENT.turn;
+  const working = chosen === null && local >= AGENT.think && local < AGENT.answerDone;
+
+  return (
+    <div ref={ref} className={styles.agents}>
+      <fieldset className={styles.agentRow}>
+        <legend className="nc-visually-hidden">Who answers</legend>
+        {AGENTS.map((a, index) => (
+          <label
+            key={a.id}
+            className={styles.agentChoice}
+            data-chosen={index === turn || undefined}
+          >
+            <input
+              type="radio"
+              name={group}
+              value={a.id}
+              checked={index === turn}
+              onChange={() => setChosen(index)}
+              className={styles.agentInput}
+            />
+            <AgentFace agent={a} size="lg" />
+            <span className={styles.agentWords}>
+              <Text as="span" size="sm" weight="medium">
+                {a.name}
+              </Text>
+              <Text as="span" size="xs" tone="muted">
+                {a.voice}
+              </Text>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+      <Stage
+        label={`Asked “${AGENTS_ASK}”, ${agent.name} answers in its own voice. Each agent knows the same things, and says them its own way`}
+        alive={working}
+        align="end"
+      >
+        {/* As tall as the longest answer from the start: switching never moves the page. */}
+        <Steady
+          align="end"
+          holds={AGENTS.map((a) => (
+            <AgentReply key={a.id} agent={a} at={AGENT.turn} />
+          ))}
+        >
+          {chosen === null ? (
+            <AgentReply agent={agent} at={local} />
+          ) : (
+            <ChosenReply key={chosen} agent={agent} inView={inView} />
+          )}
+        </Steady>
       </Stage>
     </div>
   );

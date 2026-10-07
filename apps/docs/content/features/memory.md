@@ -4,7 +4,7 @@ description: Conch remembers what matters about you, shows every memory it keeps
 order: 1
 ---
 
-Your assistant remembers things from one chat to the next: what you like, who you work with, what you're building, how you correct it. It learns and tidies quietly, without asking. It only stops to ask when a memory looks unsafe. Every memory is a small file on your computer, and you can see, change or forget any of them.
+Your assistant remembers things from one chat to the next: what you like, who you work with, what you're building, how you correct it. It learns and tidies quietly, without asking. It only stops to ask when a memory looks unsafe. Every memory is a small file on your computer, and you can see, change or forget any of them. All your [agents](./agents.md) share it.
 
 ## How it learns
 
@@ -149,5 +149,5 @@ Reading a chat once it goes quiet uses a small model, at most once per stretch o
 
 - Memories are Markdown files in `~/.conch/memory`, one each. Open, edit or delete them with any editor. What used to be true is in `memory/superseded`, and what Conch learned and where is in `~/.conch/learning`. All of it is part of every [backup](../care/backups.md). A file changed outside Conch, or brought back from a backup, is looked at again when Conch reads it, and one that looks off waits for your OK.
 - The model for meaning isn't in backups: on a new computer, press **Get it** again. **Repair everything** notices if any of it goes missing and gets it back.
-- Memory belongs to Conch, so every provider you connect knows the same things. [Codex](../providers/codex-cli.md) reads your memories but can't save new ones itself.
+- Memory belongs to Conch, so every [agent](./agents.md) you make and every provider you connect knows the same things. Tell one agent something and the others know it too. [Codex](../providers/codex-cli.md) reads your memories but can't save new ones itself.
 - Only your own words teach it. Routine runs, and messages from other people on a chat app, are left out.

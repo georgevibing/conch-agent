@@ -28,6 +28,7 @@ import { AUTHOR, REPO_URL, VERSION_LABEL } from '../site/config';
 import { LANDING_HEAD, useHead } from '../site/head';
 import {
   AddressDemo,
+  AgentsDemo,
   ApprovalDemo,
   BrowserDemo,
   ChartDemo,
@@ -55,6 +56,7 @@ export const LANDING_LINKS = {
   how: '/start/how-it-works',
   providers: '/providers',
   channels: '/channels',
+  agents: '/features/agents',
   apps: '/features/apps',
   chats: '/features/chats',
   makeApps: '/features/make-apps',
@@ -139,7 +141,7 @@ export function Landing() {
               <em>Let it solve your problems.</em>
             </>
           }
-          lede="Use the AI subscriptions and API keys you already have. Conch sets itself up, fixes what breaks, and asks you only when it has to."
+          lede="Agents of your own, on the AI subscriptions and API keys you already have. Conch sets itself up, fixes what breaks, and asks you only when it has to."
           actions={
             <>
               <Download />
@@ -188,6 +190,36 @@ export function Landing() {
 
         <Scene
           flip
+          kicker="Your agents"
+          title={
+            <>
+              A name, a face, <em>a voice of its own.</em>
+            </>
+          }
+          stage={<AgentsDemo />}
+          points={[
+            'Choose a face from the set, use a photo, or have one drawn.',
+            <>
+              Pick who answers each chat, task and routine. In a chat app, <code>/agent</code>{' '}
+              switches.
+            </>,
+            'They share what Conch knows about you, so you never say it twice.',
+            'Coming from OpenClaw or Hermes? Your agents come too.',
+          ]}
+          action={
+            <TextLink arrow="forward" asChild>
+              <Link to={LANDING_LINKS.agents}>Make an agent</Link>
+            </TextLink>
+          }
+        >
+          <p>
+            Make as many agents as you like, each with its own personality and instructions. Every
+            one keeps going when something fails: it works out why, tries another way, and checks
+            the result before it tells you it’s done.
+          </p>
+        </Scene>
+
+        <Scene
           kicker="In the chat"
           title={
             <>
@@ -215,6 +247,7 @@ export function Landing() {
         </Scene>
 
         <Scene
+          flip
           kicker="Make it yours"
           title={
             <>
@@ -241,7 +274,6 @@ export function Landing() {
         </Scene>
 
         <Scene
-          flip
           kicker="Safe hands"
           title={
             <>
@@ -268,6 +300,7 @@ export function Landing() {
         </Scene>
 
         <Scene
+          flip
           kicker="The web"
           title={
             <>
@@ -289,7 +322,6 @@ export function Landing() {
         </Scene>
 
         <Scene
-          flip
           kicker="In your pocket"
           title={
             <>
@@ -330,6 +362,7 @@ export function Landing() {
         </Scene>
 
         <Scene
+          flip
           kicker="It fixes itself"
           title={
             <>
@@ -369,8 +402,8 @@ export function Landing() {
               span={3}
               index={1}
               title="Everything can be put back"
-              text="Every file your assistant makes, changes or deletes, whichever provider did it. You see what will change first."
-              picture="Three files your assistant changed, undone with one press"
+              text="Every file an agent makes, changes or deletes, whichever provider did it. You see what will change first."
+              picture="Three files an agent changed, undone with one press"
             >
               <UndoDemo />
             </Bento.Tile>

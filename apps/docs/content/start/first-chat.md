@@ -1,6 +1,6 @@
 ---
 title: Your first minute
-description: Conch says hello, asks your name and what you'd like a hand with, and helps you connect a provider. Then you're chatting.
+description: Conch says hello, asks your name and what you'd like a hand with, names your first agent, and helps you connect a provider. Then you're chatting.
 order: 2
 ---
 
@@ -10,7 +10,7 @@ The first time you open Conch, it introduces itself and asks a few things, one a
 
 1. **Your name.** Type it and press <kbd>enter</kbd>. Conch uses it to greet you.
 2. **What you'd like a hand with.** Tap as many as fit: writing, coding, research, email and calendar, and more. Conch keeps them as one sentence in **Settings → About you**, where you can change the words.
-3. **How it should sound.** Choose **Warm**, **Concise**, **Playful** or **Precise**, and Conch says hello in that voice as you choose.
+3. **Your first agent.** Give it a name, and choose how it should sound: **Warm**, **Concise**, **Playful** or **Precise**. It says hello in that voice as you choose. <!-- verify-ui --> You can make more [agents](../features/agents.md) later, each with a face and a voice of its own.
 
 ## A mind to think with
 
@@ -25,7 +25,7 @@ Once one works, Conch moves on by itself. **I’ll do this later** skips it for 
 
 Conch shows the apps that suit what you picked, like GitHub for coding or Gmail for email. Tap one to connect it in a step or two. Or skip them: when an app would help in a chat, Conch offers it right there. Apps that need more setup, like Google Calendar, are in [Apps](../features/apps.md).
 
-If Conch finds another assistant on your computer, it offers to [bring your things](../care/come-home.md) next.
+If Conch finds another assistant on your computer, it offers to [bring your agents and the rest](../care/come-home.md) next.
 
 ## Somewhere to start
 
@@ -35,7 +35,7 @@ To see the welcome again, use **Replay welcome** in **Settings → General**.
 
 ## Say hello
 
-Type in the box and press <kbd>enter</kbd>. The answer flows in as it's written, and anything it does (reading a file, running a command) appears as a step you can open.
+Type in the box and press <kbd>enter</kbd>. The answer flows in as it's written, under your agent's face and name, and anything it does (reading a file, running a command) appears as a step you can open.
 
 When it wants to do something that matters, it asks, right in the chat, with one button to allow it and one to refuse.
 
@@ -58,6 +58,7 @@ by name wherever it lives, and opens its place with **Advanced** already open.
 
 ## Where next
 
+- Make another agent, with a face and a voice of its own: [agents](../features/agents.md).
 - Take it with you: [Conch on your phone](./phone.md).
 - Let it use your tools: [connect an app](../features/apps.md).
 - Teach it something once: [skills](../features/skills.md).

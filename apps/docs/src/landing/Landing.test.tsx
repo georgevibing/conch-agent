@@ -8,6 +8,7 @@ import reference from 'virtual:conch-reference';
 
 import { DOWNLOADS, HAS_DOWNLOAD } from '../site/config';
 import { pageAt } from '../site/pages';
+import { AGENTS, AGENTS_ASK } from './demos';
 import { Landing, LANDING_LINKS } from './Landing';
 
 function open() {
@@ -90,6 +91,30 @@ describe('the front page', () => {
     expect(within(table).getByRole('rowheader', { name: '29 Sep' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('radio', { name: 'Chart' }));
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('lets you choose who answers, and each agent says the same things in its own voice', async () => {
+    open();
+    const row = screen.getByRole('group', { name: 'Who answers' });
+    const choices = within(row).getAllByRole('radio');
+    expect(choices.map((choice) => choice.getAttribute('value'))).toEqual(AGENTS.map((a) => a.id));
+    // Standing still, the first has answered.
+    const first = AGENTS[0];
+    const second = AGENTS[1];
+    if (!first || !second) throw new Error('the picture needs two agents at least');
+    expect(within(row).getByRole('radio', { name: new RegExp(first.name) })).toBeChecked();
+    expect(screen.getByRole('figure', { name: new RegExp(`${first.name} answers`) })).toBeTruthy();
+    // Choose another, and it answers, in its words.
+    await userEvent.click(within(row).getByRole('radio', { name: new RegExp(second.name) }));
+    expect(within(row).getByRole('radio', { name: new RegExp(second.name) })).toBeChecked();
+    const picture = screen.getByRole('figure', { name: new RegExp(`${second.name} answers`) });
+    expect(picture).toHaveTextContent(AGENTS_ASK);
+    expect(picture).toHaveTextContent(second.answer);
+    // The keyboard goes round them too.
+    await userEvent.keyboard('{ArrowRight}');
+    expect(
+      within(row).getByRole('radio', { name: new RegExp(AGENTS[2]?.name ?? '') }),
+    ).toBeChecked();
   });
 
   it('shows the chat carrying on once an app is on, with what that app really suggests next', () => {
