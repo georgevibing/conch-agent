@@ -1008,7 +1008,6 @@ function Task({ at }: { at: number }) {
   return (
     <TaskCard
       title="Fix the flaky pager test"
-      kind="background"
       variant="compact"
       status={done ? 'done' : 'running'}
       current={done ? undefined : TASK_STEPS[count - 1]}

@@ -191,5 +191,5 @@ test('a chat’s tasks sit under it in the sidebar, and open from there', async 
   const list = page.getByRole('navigation', { name: 'Conversations' });
   await expect(list.locator('[data-chat-link]').first()).toBeVisible();
   await expect(list.getByRole('button', { name: /tasks from/ })).toHaveCount(0);
-  await expect(list.getByText('Keep checking for a while')).toHaveCount(0);
+  await expect(list.getByRole('list', { name: /^Tasks from/ })).toHaveCount(0);
 });
