@@ -120,6 +120,19 @@ export function hostToolText(result: string | HostToolResult): string {
   return typeof result === 'string' ? result : result.text;
 }
 
+/** What a tool's failure says to the model when it fails with nothing more than a generic word. */
+export const TOOL_FAILED = 'The tool could not complete. Check the action and try again.';
+
+/**
+ * A tool's failure as the model reads it: what went wrong, as it was said (the
+ * command's own output, the file that's missing), since a model told only
+ * "could not complete" guesses (ADR 0102). Bounded, like every tool answer.
+ */
+export function failureText(error: unknown): string {
+  const said = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  return (said.trim() || TOOL_FAILED).slice(0, 16_000);
+}
+
 /**
  * An integration's tool, handed to an engine that can't talk MCP itself
  * (`integrations.mode === 'bridge'`). Conch holds the MCP connection;
