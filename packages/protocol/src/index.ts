@@ -62,6 +62,8 @@ import { CappedOutcome, ChatSpend, SpendLimitKind, SpendModel, TurnCost } from '
 
 export * from './access';
 export * from './activity';
+export * from './activity-describe';
+export * from './activity-stories';
 export * from './agents';
 export * from './profile';
 export * from './address';

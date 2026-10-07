@@ -1171,29 +1171,37 @@ export function VaultSourceRow({
         : state === 'ready'
           ? BadgeCheck
           : undefined;
+  // What to do about it gets a line of its own, under the name: beside the
+  // state and the button it would be squeezed into a sliver.
+  const hint = message && state !== 'ready' ? message : undefined;
   return (
     <div className={cx(styles.source, className)} data-state={state} {...props}>
-      {source === 'conch' || source === 'system' ? (
-        <span className={styles.conchMark} aria-hidden>
-          <KeyRound />
-        </span>
-      ) : (
-        <VaultSourceMark source={source} size="md" />
-      )}
-      <div className={styles.sourceText}>
-        <span className={styles.sourceName}>{SOURCE_NAMES[source]}</span>
-        <span className={styles.sourceState}>
-          {Icon && <Icon aria-hidden />}
-          {state === 'ready' && count !== undefined
-            ? `${count} ${count === 1 ? 'item' : 'items'}`
-            : STATE_WORDS[state]}
-          {message && state !== 'ready' && (
-            <span className={styles.sourceMessage}> · {message}</span>
-          )}
-          {keptUnlocked && state === 'ready' && (
-            <span className={styles.sourceMessage}> · Stays unlocked on this computer</span>
+      <div className={styles.sourceBody}>
+        <span className={styles.sourceIcon}>
+          {source === 'conch' || source === 'system' ? (
+            <span className={styles.conchMark} aria-hidden>
+              <KeyRound />
+            </span>
+          ) : (
+            <VaultSourceMark source={source} size="md" />
           )}
         </span>
+        <div className={styles.sourceText}>
+          <span className={styles.sourceName}>{SOURCE_NAMES[source]}</span>
+          <span className={styles.sourceState}>
+            <span className={styles.sourceLabel}>
+              {Icon && <Icon aria-hidden />}
+              {state === 'ready' && count !== undefined
+                ? `${count} ${count === 1 ? 'item' : 'items'}`
+                : STATE_WORDS[state]}
+            </span>
+            {keptUnlocked && state === 'ready' && (
+              <span className={styles.sourceMessage}>· Stays unlocked on this computer</span>
+            )}
+          </span>
+        </div>
+        {action && <div className={styles.sourceAction}>{action}</div>}
+        {hint && <span className={styles.sourceHint}>{hint}</span>}
         {sync && (sync.enabled || sync.copies > 0) && (
           <span className={styles.sourceSync} data-problem={sync.problem ? '' : undefined}>
             <RefreshCw aria-hidden data-spinning={sync.running || undefined} />
@@ -1207,7 +1215,6 @@ export function VaultSourceRow({
           </span>
         )}
       </div>
-      {action && <div className={styles.sourceAction}>{action}</div>}
     </div>
   );
 }
