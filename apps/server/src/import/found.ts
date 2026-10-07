@@ -3,7 +3,7 @@
  * by `openclaw.ts` or `hermes.ts`, and turned into a plan of items a person
  * ticks. Secrets are kept here only long enough to import the ticked ones.
  */
-import type { ImportSourceId, Schedule } from '@conch/protocol';
+import type { EffortChoice, ImportSourceId, Schedule } from '@conch/protocol';
 
 export interface FoundRoutine {
   title: string;
@@ -48,19 +48,55 @@ export interface FoundModel {
 }
 
 /**
- * One of OpenClaw's other agents (ADR 0042): its own workspace with a
- * persona, memories and skills, and the cron jobs that ran as it.
+ * Another agent's things (ADR 0042): its own workspace (OpenClaw) or profile
+ * (Hermes) with memories, about you and skills, and the jobs that ran as it.
+ * Its name, face and voice are its `FoundIdentity`.
  */
 export interface FoundAgent {
-  /** OpenClaw's id for it: `work`. */
+  /** The app's own id for it: `work`, `coder`. */
   id: string;
-  /** What it's called: its IDENTITY.md name, else its name in the config. */
+  /** What it's called. */
   name: string;
-  persona?: { name?: string; instructions?: string; from: string };
   about?: { text: string; from: string };
   memories: { text: string; from: string; daily?: boolean }[];
   skills: { name: string; path: string }[];
   routines: FoundRoutine[];
+}
+
+/**
+ * Where an agent's picture was, as its app wrote it. A file is read only
+ * inside its own folder (`root`, no links); a web address is never fetched.
+ */
+export type FoundAvatar =
+  | { kind: 'file'; root: string; path: string }
+  | { kind: 'data'; data: string }
+  | { kind: 'web' }
+  | { kind: 'outside' };
+
+/**
+ * One agent the app ran (ADR 0101), the main one included: what makes it
+ * itself. Each can become one of Conch's agents (`import/agents.ts` shapes it).
+ */
+export interface FoundIdentity {
+  /** The app's own id: `main`, `work`; Hermes's `default` or a profile's name. */
+  id: string;
+  name: string;
+  /** One line on what it's for (a Hermes profile's description). */
+  role?: string;
+  /** Its emoji there (OpenClaw's IDENTITY.md or `identity.emoji`). */
+  emoji?: string;
+  avatar?: FoundAvatar;
+  /** Its own words about its manner: IDENTITY.md's Theme, Creature or Vibe. */
+  vibe?: string;
+  /** Its personality (SOUL.md). */
+  soul?: { text: string; from: string };
+  /** The person's own standing orders for it (AGENTS.md, without the app's template). */
+  conventions?: { text: string; from: string };
+  /** Its own model, when it had one apart from the app's default. */
+  model?: FoundModel;
+  effort?: EffortChoice;
+  /** The chat apps whose bot (the one Come home brings) answered as it. */
+  channels: FoundChannel['kind'][];
 }
 
 /** The providers a key from another app can connect (ADR 0042, ADR 0053). */
@@ -124,7 +160,6 @@ export interface Found {
   label: string;
   /** Its folder. */
   path: string;
-  persona?: { name?: string; instructions?: string; from: string };
   about?: { text: string; from: string };
   /** Each memory, and the file it came from. */
   memories: { text: string; from: string; daily?: boolean }[];
@@ -135,8 +170,14 @@ export interface Found {
   keys: FoundKey[];
   /** The model it answered with, when it said. */
   model?: FoundModel;
-  /** OpenClaw's agents other than the main one, each with its own things. */
+  /** Its agents other than the main one, each with its own things (the main one's are above). */
   agents: FoundAgent[];
+  /** Every agent it ran, the main one first: each can come over as one of Conch's (ADR 0101). */
+  identities: FoundIdentity[];
+  /** The id of its own default agent, when it said which. */
+  defaultAgent?: string;
+  /** The id of the agent whose things are the ones above (`memories`, `routines`…). */
+  mainAgent?: string;
   /** What couldn't be read, in a sentence each. */
   problems: string[];
 }
@@ -151,5 +192,6 @@ export const empty = (source: ImportSourceId, label: string, path: string): Foun
   channels: [],
   keys: [],
   agents: [],
+  identities: [],
   problems: [],
 });

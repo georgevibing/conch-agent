@@ -10,6 +10,7 @@ import {
   Sparkles,
   TriangleAlert,
   User,
+  Users,
 } from 'lucide-react';
 import { useId, useState, type ComponentProps, type ReactNode } from 'react';
 
@@ -18,11 +19,20 @@ import { Button } from '../../components/Button';
 import { Checkbox } from '../../components/Checkbox';
 import { Collapsible } from '../../components/Collapsible';
 import { Input } from '../../components/Input';
+import { Select } from '../../components/Select';
 import { cx } from '../../utils/cx';
 import styles from './ComeHome.module.css';
 
 export type ImportGroupId =
-  'persona' | 'model' | 'about' | 'memories' | 'skills' | 'routines' | 'channels' | 'keys';
+  | 'agents'
+  | 'persona'
+  | 'model'
+  | 'about'
+  | 'memories'
+  | 'skills'
+  | 'routines'
+  | 'channels'
+  | 'keys';
 
 export interface ImportPreviewItem {
   id: string;
@@ -43,12 +53,21 @@ export interface ImportPreviewItem {
    * shown together under its name, after everything else, with one tick.
    */
   agent?: { id: string; name: string };
+  /** An agent that comes over as one of yours (group `agents`): its face, beside its name. */
+  face?: ReactNode;
+  /** An agent's name, for the default picker and the summary (group `agents`). */
+  name?: string;
 }
 
 export const importGroups: Record<
   ImportGroupId,
   { label: string; note?: string; icon: ReactNode }
 > = {
+  agents: {
+    label: 'Agents',
+    note: 'Each comes over as an agent of its own, with its face and voice.',
+    icon: <Users />,
+  },
   persona: { label: 'Personality', icon: <Sparkles /> },
   model: {
     label: 'Model',
@@ -80,6 +99,7 @@ export const importGroups: Record<
 };
 
 export const IMPORT_ORDER: ImportGroupId[] = [
+  'agents',
   'persona',
   'model',
   'about',
@@ -113,6 +133,11 @@ export interface ImportPreviewProps extends Omit<ComponentProps<'div'>, 'onChang
   disabled?: boolean;
   /** Show one kind (`memories`) or one other agent (`agent:<id>`); everything when unset. */
   view?: string;
+  /** The agents item that starts new chats (`agent:<id>`); unset keeps yours. */
+  defaultAgent?: string;
+  onDefaultAgentChange?: (id: string | undefined) => void;
+  /** The agent new chats start with now, for “… as now”. */
+  currentDefault?: string;
 }
 
 function Row({
@@ -136,6 +161,11 @@ function Row({
         onCheckedChange={(c) => onChange(c === true)}
         label={
           <span className={styles.itemTitle}>
+            {item.face && (
+              <span className={styles.itemFace} aria-hidden>
+                {item.face}
+              </span>
+            )}
             {item.title}
             {item.duplicate && (
               <Badge size="sm" tone="neutral">
@@ -180,9 +210,12 @@ function Group({
   setMany,
   disabled,
   alone = false,
+  footer,
 }: {
   /** What the section is: a kind of thing, or an agent. */
   id: string;
+  /** Below the list: the agents' default picker. */
+  footer?: ReactNode;
   /** The only group in view: shows more, and searches when long. */
   alone?: boolean;
   head: { label: string; note?: string; icon: ReactNode; all: string };
@@ -294,7 +327,72 @@ function Group({
           {all ? 'Show fewer' : `Show all ${items.length}`}
         </Button>
       )}
+      {footer}
     </section>
+  );
+}
+
+const nameOf = (item: ImportPreviewItem) =>
+  item.name ?? (typeof item.title === 'string' ? item.title : item.id);
+
+/** “Sage, Scout and Family”; four or more: “Sage, Scout, Family and 2 more”. */
+function listOf(names: string[]): string {
+  if (names.length > 4) return `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`;
+  return names.length <= 1
+    ? (names[0] ?? '')
+    : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/** The agents in one line: who comes over (ADR 0101). Nothing ticked: undefined. */
+function agentsLine(items: ImportPreviewItem[], selected: Set<string>): string | undefined {
+  const coming = items.filter((i) => selected.has(i.id)).map(nameOf);
+  if (!coming.length) return undefined;
+  return coming.length === 1
+    ? `${coming[0]} comes over as an agent of its own, with its face and voice.`
+    : `${listOf(coming)} come over as agents of their own, each with its face and voice.`;
+}
+
+/** The value for “keep the agent new chats start with now”. */
+const KEEP = 'keep';
+
+/** Which agent new chats start with: one that comes over, or the one you have. */
+function DefaultAgent({
+  agents,
+  value,
+  onChange,
+  current,
+  disabled,
+}: {
+  agents: ImportPreviewItem[];
+  value?: string;
+  onChange: (id: string | undefined) => void;
+  current?: string;
+  disabled?: boolean;
+}) {
+  const labelId = useId();
+  if (!agents.length) return null;
+  const chosen = value && agents.some((a) => a.id === value) ? value : KEEP;
+  return (
+    <div className={styles.defaultAgent}>
+      <span id={labelId} className={styles.defaultLabel}>
+        New chats start with
+      </span>
+      <Select
+        size="sm"
+        variant="surface"
+        aria-labelledby={labelId}
+        value={chosen}
+        disabled={disabled}
+        onValueChange={(v) => onChange(v === KEEP ? undefined : v)}
+      >
+        {agents.map((a) => (
+          <Select.Item key={a.id} value={a.id}>
+            {nameOf(a)}
+          </Select.Item>
+        ))}
+        <Select.Item value={KEEP}>{current ? `${current}, as now` : 'Yours, as now'}</Select.Item>
+      </Select>
+    </div>
   );
 }
 
@@ -311,6 +409,9 @@ export function ImportPreview({
   problems = [],
   disabled,
   view = 'all',
+  defaultAgent,
+  onDefaultAgentChange,
+  currentDefault,
   className,
   ...props
 }: ImportPreviewProps) {
@@ -338,13 +439,29 @@ export function ImportPreview({
           <Group
             key={g}
             id={g}
-            head={{ ...group, all: `All ${group.label.toLowerCase()}` }}
+            head={{
+              ...group,
+              ...(g === 'agents' && { note: agentsLine(inGroup, set) ?? group.note }),
+              all: `All ${group.label.toLowerCase()}`,
+            }}
             items={inGroup}
             selected={set}
             toggle={toggle}
             setMany={setMany}
             disabled={disabled}
             alone={view === g}
+            footer={
+              g === 'agents' &&
+              onDefaultAgentChange && (
+                <DefaultAgent
+                  agents={inGroup.filter((i) => set.has(i.id))}
+                  value={defaultAgent}
+                  onChange={onDefaultAgentChange}
+                  current={currentDefault}
+                  disabled={disabled}
+                />
+              )
+            }
           />
         ) : null;
       })}
@@ -356,7 +473,7 @@ export function ImportPreview({
             id="agent"
             head={{
               label: agent.name,
-              note: 'Another of your agents. Its personality comes over as a skill you pick in a chat; what it knew and did comes too.',
+              note: `What ${agent.name} knew and did there. Memories are yours, for every agent.`,
               icon: <Bot />,
               all: `All of ${agent.name}`,
             }}

@@ -21,7 +21,7 @@ export interface ImportIo {
 }
 
 const GROUPS: Record<string, string> = {
-  persona: 'Your assistant',
+  agents: 'Agents',
   about: 'About you',
   memories: 'Memories',
   skills: 'Skills (they come over off)',
@@ -98,7 +98,11 @@ export async function importCommand(
   const result = await working(
     ui,
     `Bringing your things over from ${plan.source.label}`,
-    () => imports.run(from, ids),
+    () =>
+      imports.run(from, ids, {
+        // Their default starts new chats, as it would in Conch with nothing changed.
+        ...(plan.defaultAgent && { defaultAgent: plan.defaultAgent }),
+      }),
     {
       done: (r) =>
         `Brought ${plural(r.outcomes.filter((o) => o.ok).length, 'thing')} over from ${plan.source.label}. Welcome home. ✨`,

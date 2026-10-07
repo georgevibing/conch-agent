@@ -60,6 +60,9 @@ export function ComeHomePage({ source }: { source: ImportSourceId }) {
               problems={step.plan.problems}
               disabled={busy}
               view={view}
+              defaultAgent={flow.defaultAgent}
+              onDefaultAgentChange={flow.setDefaultAgent}
+              currentDefault={flow.currentDefault}
             />
           </>
         ) : (

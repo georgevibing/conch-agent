@@ -1,6 +1,6 @@
 # 0035 — Come home: bring your things from OpenClaw and Hermes
 
-- Status: accepted (extended by [ADR 0042](./0042-come-home-the-rest.md))
+- Status: accepted (extended by [ADR 0042](./0042-come-home-the-rest.md); the persona rows are now agents, ADR 0042 § Update)
 - Date: 2026-10-01
 - Builds on: [ADR 0013](./0013-skills.md) (other agents' skill folders),
   [ADR 0018](./0018-channels.md) (chat bots and the owner's hello),

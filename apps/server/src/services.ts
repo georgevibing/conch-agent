@@ -1971,25 +1971,9 @@ export class Services {
       home: config.CONCH_HOME,
       ...(config.CONCH_IMPORT_HOME && { sourceHome: config.CONCH_IMPORT_HOME }),
       targets: {
-        // The personality is the default agent's (ADR 0101): read and changed there.
-        settings: {
-          get: async () => ({
-            ...(await this.settings.get()),
-            persona: await this.agents.persona(),
-          }),
-          update: async (body) => {
-            if (body.persona) {
-              const { name: _taken, ...rest } = body.persona;
-              // A name another agent has: the rest still comes over.
-              await this.agents
-                .adoptPersona(body.persona)
-                .catch(() => this.agents.adoptPersona(rest));
-            }
-            // The agent store writes the personality back to settings itself.
-            const { persona: _persona, ...others } = body;
-            return this.settings.update(others);
-          },
-        },
+        // About you and the model. A personality comes over as an agent of its own
+        // (`agents`, ADR 0101), never into settings: the agent store keeps that in step.
+        settings: this.settings,
         memory: this.memory,
         checkMemories: async () => (await this.settings.get()).preferences.checkMemories,
         skills: {
@@ -2004,23 +1988,17 @@ export class Services {
             await this.skillUsage.note(skill.id, 'imported').catch(() => undefined);
             return skill;
           },
-          // Another agent's persona (ADR 0042): one of Conch's own skills, off until you turn it on.
-          create: async (input) => {
-            const skill = await this.skills.store.create({
-              ...input,
-              name: await this.skills.store.freeName(input.base),
-              mode: 'off',
-            });
-            await this.skillUsage.note(skill.id, 'imported').catch(() => undefined);
-            return skill;
-          },
           remove: (id) => this.skills.remove(id),
         },
         routines: {
+          // With the agent it ran as there, when that one came over too (ADR 0101).
           create: (input) => this.routines.create(input, { createdBy: 'user' }),
           remove: (id) => this.routines.remove(id),
         },
+        // Each agent another app ran becomes one of Conch's (ADR 0101).
+        agents: this.agents,
         channels: {
+          setAgent: (id, agentId) => this.channels.update(id, { agentId }),
           connect: async (c) => {
             const channel = await this.channels.create(
               c.kind === 'slack'
