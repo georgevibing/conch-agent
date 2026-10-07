@@ -48,13 +48,14 @@ Turn a group off, and your assistant goes quiet there at once. **Forget** takes 
 
 ## What works from a chat
 
-- **Everything your assistant can do.** A message becomes a Conch chat with your default provider. It shows in the sidebar, wearing the app's logo.
+- **Everything your agents can do.** A message becomes a Conch chat with your default agent and provider. It shows in the sidebar, wearing the app's logo.
+- **Any of your agents.** Send `/agent` to choose who answers you here, or `/agent atlas` to choose by name. See [Agents](../features/agents.md#in-chat-apps).
 - **Approvals, as buttons.** When your assistant asks, the question arrives with **Allow**, **Always in this chat** and **Don't allow**. Answer it anywhere, and the message updates to say what was decided. WhatsApp, Signal, iMessage, email and SMS have no buttons, so you reply with the answer's number.
 - **Photos and files** you send become attachments.
 - **Voice notes** are turned into words on your computer and answered like anything you typed. See [Voice](../features/voice.md#voice-notes-from-your-chat-apps).
 - **Routine results**, and a routine's questions, come to you there when the channel has **Routine results** on.
 - **Messages your assistant starts.** Ask in any chat, here or in Conch, "text me on WhatsApp when it's done" or "send the weather to my Telegram", and your assistant writes to you there. A [routine](../features/routines.md) can do the same. It only ever writes to your own private chat with Conch, never to anyone else. Without an app named, it uses the one you wrote from last.
-- **Conch's commands, the same as in Conch.** `/clear` (with **Undo**), `/goal`, `/plan` (approved with **Start**), `/retry`, `/model`, `/effort`, `/fast`, `/mode`, `/status`, `/new`, `/stop` and `/help`, from the same list the web app uses, so they work with every provider. A mistyped one hears what you probably meant. `/name` runs your own command or skill of that name. See [Slash commands](../reference/slash-commands.md#in-chat-apps).
+- **Conch's commands, the same as in Conch.** `/clear` (with **Undo**), `/agent`, `/goal`, `/plan` (approved with **Start**), `/retry`, `/model`, `/effort`, `/fast`, `/mode`, `/status`, `/new`, `/stop` and `/help`, from the same list the web app uses, so they work with every provider. A mistyped one hears what you probably meant. `/name` runs your own command or skill of that name. See [Slash commands](../reference/slash-commands.md#in-chat-apps).
 
 ## Choose how Conch works here
 

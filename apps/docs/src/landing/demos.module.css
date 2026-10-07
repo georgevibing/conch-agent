@@ -101,3 +101,89 @@
 .browser {
   block-size: clamp(17rem, 62cqi, 27rem);
 }
+
+/* Your agents: a row of faces you can choose from, over the chat they answer in. */
+.agents {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-3);
+}
+
+.agentRow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--nc-space-1);
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.agentChoice {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nc-space-2);
+  padding: var(--nc-space-3) var(--nc-space-1);
+  border-radius: var(--nc-radius-lg);
+  text-align: center;
+  cursor: pointer;
+  transition: background-color var(--nc-duration-slow) var(--nc-ease-out);
+}
+
+.agentChoice > [data-look] {
+  box-shadow: 0 0 0 2px transparent;
+  transition:
+    box-shadow var(--nc-duration-slow) var(--nc-ease-out),
+    transform var(--nc-spring-soft-duration) var(--nc-spring-soft);
+}
+
+/* The one answering wears the ring and rises a little; nothing moves around it. */
+.agentChoice[data-chosen] {
+  background: var(--nc-wash-2);
+}
+
+.agentChoice[data-chosen] > [data-look] {
+  box-shadow:
+    0 0 0 2px var(--nc-surface),
+    0 0 0 4px var(--nc-accent-9);
+  transform: translateY(-2px);
+}
+
+@media (hover: hover) {
+  .agentChoice:not([data-chosen]):hover {
+    background: var(--nc-wash-1);
+  }
+}
+
+.agentChoice:has(:focus-visible) {
+  outline: 2px solid var(--nc-ring);
+  outline-offset: 2px;
+}
+
+/* The radio is the whole tile: it takes the press, and is never drawn. */
+.agentInput {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.agentWords {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agentChoice,
+  .agentChoice > [data-look] {
+    transition: none;
+  }
+
+  .agentChoice[data-chosen] > [data-look] {
+    transform: none;
+  }
+}
