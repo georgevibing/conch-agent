@@ -147,3 +147,72 @@ describe('the turn budget from outside (ADR 0085)', () => {
     expect(events.at(-1)).toMatchObject({ outcome: 'success', paused: { reason: 'time' } });
   });
 });
+
+describe('failures from Conch’s own tools (ADR 0102)', () => {
+  const live = () => new AbortController().signal;
+  const only = (tools: HostTool[]) => {
+    const [tool] = tools;
+    if (!tool) throw new Error('no tool');
+    return tool;
+  };
+
+  it('count toward the word to step back, carried in the error the model reads', async () => {
+    let n = 0;
+    const flaky: HostTool = {
+      name: 'browser_click',
+      description: 'Click',
+      input: { ref: z.string() },
+      run: async () => {
+        throw new Error(`Something is covering that button (${++n}).`);
+      },
+    };
+    const pace = guardTurn({}, { budget: roomy, tools: [flaky], signal: live() });
+    const said: string[] = [];
+    for (let i = 0; i < 4; i++)
+      said.push(
+        await only(pace.tools)
+          .run({ ref: `e${i}` })
+          .then(String, (e: Error) => e.message),
+      );
+    // The first three are the tool's own words; the fourth also says to step back.
+    expect(said.slice(0, 3).every((s) => !s.includes('[From Conch'))).toBe(true);
+    expect(said[3]).toMatch(/^Something is covering that button \(4\)\./);
+    expect(said[3]).toMatch(/the last 4 tool calls failed\. Step back/);
+  });
+
+  it('stay failures: what was thrown is thrown as it was, until there is a word to add', async () => {
+    const boom = new Error('No such file.');
+    const tool: HostTool = {
+      name: 'files_read',
+      description: 'Read',
+      input: {},
+      run: async () => {
+        throw boom;
+      },
+    };
+    const pace = guardTurn({}, { budget: roomy, tools: [tool], signal: live() });
+    await expect(only(pace.tools).run({})).rejects.toBe(boom);
+  });
+
+  it('a success in between starts the count again', async () => {
+    let n = 0;
+    const tool: HostTool = {
+      name: 'files_read',
+      description: 'Read',
+      input: { path: z.string() },
+      run: async () => {
+        if (++n === 3) return 'contents';
+        throw new Error('No such file.');
+      },
+    };
+    const pace = guardTurn({}, { budget: roomy, tools: [tool], signal: live() });
+    const said: string[] = [];
+    for (let i = 0; i < 5; i++)
+      said.push(
+        await only(pace.tools)
+          .run({ path: `p${i}` })
+          .then(String, (e: Error) => e.message),
+      );
+    expect(said.some((s) => s.includes('[From Conch'))).toBe(false);
+  });
+});

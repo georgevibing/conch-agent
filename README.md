@@ -63,6 +63,8 @@ your desktop and the chat apps you already use.
 - **A chat list that stays tidy.** Pin, file into folders (hold to drag on a phone),
   start a chat inside a folder, and see which chats need you. Your apps sit on top
   under **Apps**, with a folder for the rest. [Your chats](./apps/docs/content/features/chats.md)
+- **It doesn't give up at the first error.** Every model reads what went wrong, tries
+  another way and checks its work before it says done. [How Conch works on a problem](./apps/docs/content/features/working-on-a-problem.md)
 - **Long jobs that finish.** Long chats summarise their start, caching keeps costs
   down, and each reply says what it cost. [What it costs](./apps/docs/content/care/what-it-costs.md)
 
@@ -137,8 +139,6 @@ Being built now, and not in a release yet:
 - **Many agents.** Each with a name, an avatar (a preset, your own picture or one it
   draws), a persona and instructions, and imported from OpenClaw or Hermes. A chat
   shows who's speaking in a compact header.
-- **Agents that don't give up early.** Every agent diagnoses what went wrong, tries
-  more than one approach and checks its work before it says it can't.
 
 ## Good to know
 

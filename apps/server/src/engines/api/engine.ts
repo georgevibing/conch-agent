@@ -24,12 +24,14 @@ import type {
 import { authorizeTool, hostComputerTools, HOST_NAMES } from '../host';
 import { runsUnsealedByTrust } from '../trust';
 
+import { withResilience } from '../../conversations/resilience';
 import { cheapestModel } from '../../conversations/title';
 import { turnBudget, TurnWatch, withNote } from '../budget';
 import { newId } from '../../lib/ids';
 import type { ProviderKeys } from '../../providers/keys';
 import type { SettingsStore } from '../../settings/store';
 import {
+  failureText,
   hostToolImages,
   hostToolText,
   type Compacted,
@@ -325,14 +327,7 @@ export function buildTools(
           result = await run(host, args);
         } catch (error) {
           input.signal.throwIfAborted();
-          const said = error instanceof Error ? error.message : '';
-          return {
-            text: (said || 'The tool could not complete. Check the action and try again.').slice(
-              0,
-              16_000,
-            ),
-            isError: true,
-          };
+          return { text: failureText(error), isError: true };
         }
         return { ...result, text: withNotes(result.text, checked.notes), isError: false };
       },
@@ -901,7 +896,9 @@ export class ApiEngine implements Engine {
           ...(this.variant.where && { where: this.variant.where }),
         });
         const full = [input.systemAppend.trim(), note].filter(Boolean).join('\n\n');
-        return plan.system(lean ? leanSystem(full, { tools: plan.usable }) : full);
+        if (lean) return plan.system(leanSystem(full, { tools: plan.usable }));
+        // No tools it can use after all: how it works on a problem is thinking it through (ADR 0102).
+        return plan.system(plan.usable ? full : withResilience(full, 'words'));
       };
       // The last turn paused to check in: this one is told, so "carry on" picks up the work.
       if (session.paused) {
