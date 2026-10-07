@@ -70,6 +70,10 @@ your desktop and the chat apps you already use.
 
 ### Agents
 
+- **As many agents as you like.** Give each a name, a face (one of 18, your own
+  picture, or one drawn by AI), a personality and instructions. Pick who answers a
+  chat, switch mid-chat, or set one per chat app and routine; replies say who's
+  speaking. [Agents](./apps/docs/content/features/agents.md)
 - **Work in the background.** Hand a job off and keep chatting, or have another
   provider do a part ("have Codex write the tests"). Every provider runs it as a
   Conch task you can see, answer and stop, with its chat's permissions and never
@@ -131,14 +135,6 @@ your desktop and the chat apps you already use.
   shows the machine live, and what each provider uses. [Health](./apps/docs/content/care/health.md)
 - **Sign in with your device.** Touch ID, Windows Hello or Face ID; a new device waits
   for your OK in **Settings → Devices**.
-
-### On the way
-
-Being built now, and not in a release yet:
-
-- **Many agents.** Each with a name, an avatar (a preset, your own picture or one it
-  draws), a persona and instructions, and imported from OpenClaw or Hermes. A chat
-  shows who's speaking in a compact header.
 
 ## Good to know
 
