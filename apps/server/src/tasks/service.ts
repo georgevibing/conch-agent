@@ -633,7 +633,11 @@ export class TaskService {
           ? `Resume the existing goal: ${task.prompt}\nConfirmed progress and unresolved operations: ${JSON.stringify(task.operations ?? [])}\nContinue from confirmed results. Never repeat an unresolved external action. Previously granted approvals do not carry over.`
           : task.prompt,
         options,
-        origin: { kind: 'task', taskId: task.id },
+        origin: {
+          kind: 'task',
+          taskId: task.id,
+          ...(!task.parentConversationId && { standalone: true as const }),
+        },
         ...(agentId && { agentId }),
         extras: {
           systemExtra: brief(task),

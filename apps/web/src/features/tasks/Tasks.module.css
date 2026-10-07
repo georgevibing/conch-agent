@@ -1,20 +1,12 @@
-.section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nc-space-3);
-}
-
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nc-space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
 .chatCard {
   max-inline-size: 36rem;
+}
+
+.standalone {
+  inline-size: 100%;
+  max-inline-size: 48rem;
+  margin: var(--nc-space-3) auto 0;
+  padding-inline: var(--nc-space-3);
 }
 
 .banner {
@@ -69,6 +61,7 @@
 .state {
   display: inline-flex;
   flex-shrink: 0;
+  margin-inline-start: auto;
   align-items: center;
   gap: var(--nc-space-1);
   font-size: var(--nc-text-xs);

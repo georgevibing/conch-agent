@@ -20,6 +20,7 @@ function NeedButton({ action }: { action: Extract<DoctorAction, { kind: 'need' }
 /** The one button for an item that needs a person. */
 function ActionButton({ action }: { action: DoctorAction }) {
   const openSettings = useUi((s) => s.openSettings);
+  const setPulseOpen = useUi((s) => s.setPulseOpen);
   if (action.kind === 'need') return <NeedButton action={action} />;
   if (action.kind === 'command')
     return (
@@ -43,7 +44,10 @@ function ActionButton({ action }: { action: DoctorAction }) {
                 : action.place === 'memory'
                   ? '/memory'
                   : action.place === 'tasks'
-                    ? '/tasks'
+                    ? // One task: its chat. Several: the likeliest one's, with the pearl's list open.
+                      action.focus
+                      ? `/c/${encodeURIComponent(action.focus)}`
+                      : '/tasks'
                     : action.place === 'skills'
                       ? `/skills${action.focus ? `/${encodeURIComponent(action.focus)}` : ''}`
                       : action.place === 'routines'
@@ -51,6 +55,7 @@ function ActionButton({ action }: { action: DoctorAction }) {
                         : undefined;
         if (!page) return openSettings(action.place as SettingsTab, action.focus);
         window.dispatchEvent(new CustomEvent('conch:navigate', { detail: page }));
+        if (action.place === 'tasks' && !action.focus) setPulseOpen(true);
       }}
     >
       {action.label}

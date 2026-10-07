@@ -1,0 +1,236 @@
+@layer nacre.components {
+  .pulse {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .name {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── The pearl, pressable while something's going ── */
+
+  .trigger {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    margin-inline: calc(-1 * var(--nc-space-2));
+    padding: var(--nc-space-1) var(--nc-space-2);
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      scale var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .trigger[data-compact] {
+    margin-inline: 0;
+    gap: var(--nc-space-1-5);
+    padding-inline: var(--nc-space-2) var(--nc-space-1-5);
+    block-size: var(--nc-control-md);
+  }
+
+  @media (hover: hover) {
+    .trigger:hover {
+      background: var(--nc-wash-2);
+    }
+  }
+
+  .trigger:active {
+    scale: 0.96;
+  }
+
+  .trigger[data-state='open'] {
+    background: var(--nc-wash-2);
+  }
+
+  .trigger:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -1px;
+  }
+
+  /* How many are going: a small chip that turns amber when one needs you. */
+  .count {
+    display: inline-grid;
+    flex-shrink: 0;
+    place-items: center;
+    min-inline-size: 1.25rem;
+    block-size: 1.25rem;
+    padding-inline: var(--nc-space-1);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-wash-2);
+    color: var(--nc-text-muted);
+    font-family: var(--nc-font-sans);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+    line-height: 1;
+    animation: pulse-count-in var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) both;
+    transition:
+      background-color var(--nc-duration-base) var(--nc-ease-out),
+      color var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .trigger[data-tone='needs'] .count {
+    background: light-dark(
+      oklch(0.93 0.07 var(--nc-warning-h)),
+      oklch(0.36 0.07 var(--nc-warning-h))
+    );
+    color: light-dark(oklch(0.46 0.12 var(--nc-warning-h)), oklch(0.88 0.1 var(--nc-warning-h)));
+  }
+
+  @keyframes pulse-count-in {
+    from {
+      opacity: 0;
+      scale: 0.4;
+    }
+    to {
+      opacity: 1;
+      scale: 1;
+    }
+  }
+
+  /* ── The list ── */
+
+  .panel {
+    inline-size: min(22rem, calc(100vw - 1.5rem));
+    padding-block: var(--nc-space-2);
+  }
+
+  .heading {
+    margin: 0;
+    padding: var(--nc-space-1) var(--nc-space-3) var(--nc-space-1-5);
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin: 0;
+    padding: 0 var(--nc-space-1-5);
+    list-style: none;
+  }
+
+  .row {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1rem minmax(0, 1fr);
+    align-items: start;
+    gap: var(--nc-space-2-5);
+    padding: var(--nc-space-2) var(--nc-space-1-5);
+    border-radius: var(--nc-radius-md);
+    animation: pulse-row-in var(--nc-duration-base) var(--nc-ease-out) both;
+    animation-delay: calc(var(--i, 0) * 30ms);
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .row:has(a:hover) {
+      background: var(--nc-wash-1);
+    }
+  }
+
+  .row[data-status='needs-you'] {
+    background: light-dark(
+      oklch(0.97 0.03 var(--nc-warning-h)),
+      oklch(0.3 0.04 var(--nc-warning-h))
+    );
+  }
+
+  .mark {
+    margin-block-start: 0.15rem;
+  }
+
+  .text {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    min-inline-size: 0;
+  }
+
+  /* The whole row opens it; the title is the link. */
+  .text > a {
+    overflow: hidden;
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    text-decoration: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .text > a::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+  }
+
+  .text > a:focus-visible {
+    outline: none;
+  }
+
+  .text > a:focus-visible::after {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+
+  .meta {
+    overflow: hidden;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .from {
+    color: var(--nc-text-subtle);
+  }
+
+  .actions {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    gap: var(--nc-space-1);
+    margin-block-start: var(--nc-space-1);
+  }
+
+  @keyframes pulse-row-in {
+    from {
+      opacity: 0;
+      transform: translateY(3px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .count,
+    .row {
+      animation: none;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .count,
+  [data-nacre-motion='reduced'] .row {
+    animation: none;
+  }
+}

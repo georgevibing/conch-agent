@@ -23,3 +23,4 @@ export {
   type TaskCardStatus,
   type TaskLook,
 } from './TaskCard';
+export { pulseSummary, TasksPulse, type PulseTask, type TasksPulseProps } from './TasksPulse';

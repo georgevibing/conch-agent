@@ -15,12 +15,10 @@
     padding-inline: var(--nc-space-4) var(--nc-space-2);
   }
 
+  /* The pearl and the name; the pulse truncates the name itself. */
   .wordmark {
     flex: 1;
     min-inline-size: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     font-family: var(--nc-font-display);
     font-size: var(--nc-text-xl);
     letter-spacing: -0.01em;

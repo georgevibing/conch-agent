@@ -30,7 +30,9 @@ The card stays where it first appeared and keeps itself current: what the task i
 
 In the chat list, a chat with tasks has a badge on its row saying how many there are and how they're going. Press it for a row per task: what it's doing now, how long it's been, a press to open its own chat, and **Stop** while it works. It opens by itself while something is going.
 
-**Tasks** in the sidebar lists everything, with a count of what's working, or of what needs your OK. The page puts what needs you first, then what's working, then what's waiting, then what finished. Up to three tasks work at once. The rest wait their turn.
+The pearl by your assistant's name, at the top of the sidebar, says what's going on in the background across all your chats. It rests when nothing is, breathes while tasks work, turns amber when one needs your OK, and glints once when one finishes. While anything is going, press it for a short list of just those — what needs you first, with **Allow** and **Deny** right there. On a phone, or with the sidebar hidden, it's in the header. Up to three tasks work at once. The rest wait their turn.
+
+A task you start from a new chat, or that another app starts, has no chat to come back to: it shows up in your chat list as a chat of its own, with its card at the top.
 
 Every task is a chat of its own. **Open** shows it, and there you can read along, answer what it asks, or stop it. **Stop** on the card ends a task at any point.
 
@@ -63,7 +65,7 @@ A resumed task keeps its original work folder even if you changed your default w
 
 Open a finished task and type a clarification or revision to continue. The same tool and account boundaries remain; asking a draft-only job to send a message does not give it permission to send. Previous results remain inspectable, but do not by themselves verify a revised goal.
 
-On the Tasks page, **Remove** hides a finished task's card. Conch retains its operation receipts and request identity to prevent repeated effects; removing a card does not undo changes in other apps. Task goals and receipts are included with chats in backups. Restoring merges newer local receipts rather than erasing them. A restored task cannot issue a new write when the historical backup cannot prove whether it already happened; inspect the original app before starting a new job.
+In a task that's a chat of its own, **Remove** on its card hides the finished task. Conch retains its operation receipts and request identity to prevent repeated effects; removing a card does not undo changes in other apps. Task goals and receipts are included with chats in backups. Restoring merges newer local receipts rather than erasing them. A restored task cannot issue a new write when the historical backup cannot prove whether it already happened; inspect the original app before starting a new job.
 
 ## Several at once
 

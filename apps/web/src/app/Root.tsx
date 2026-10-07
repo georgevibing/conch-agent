@@ -12,6 +12,7 @@ import { NewAgentDialog } from '../features/agents/NewAgentDialog';
 import { Settings } from '../features/settings/Settings';
 import { UpdateDialogHost } from '../features/updates/UpdateDialogHost';
 import { FolderChooserHost } from '../features/folders/FolderChooser';
+import { TasksMoved } from '../features/tasks/TasksMoved';
 import { Shell } from './Shell';
 import styles from './Root.module.css';
 
@@ -60,7 +61,8 @@ export function Root() {
       <Routes location={behind ?? location}>
         <Route path="/" element={<Shell />} />
         <Route path="/c/:conversationId" element={<Shell />} />
-        <Route path="/tasks" element={<Shell />} />
+        {/* Tasks live under their chats now (ADR 0033); old links still land somewhere. */}
+        <Route path="/tasks" element={<TasksMoved />} />
         <Route path="/routines" element={<Shell />} />
         <Route path="/routines/:routineId" element={<Shell />} />
         <Route path="/skills" element={<Shell />} />

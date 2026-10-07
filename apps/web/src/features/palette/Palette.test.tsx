@@ -1,4 +1,5 @@
 import type { SearchPreview, SearchResults, TerminalStatus } from '@conch/protocol';
+import { Toaster } from '@conch/nacre';
 import { act, configure, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes, useLocation } from 'react-router';
@@ -1460,7 +1461,7 @@ describe('Palette search', () => {
     expect(useUi.getState().attachRequest).toBe(before + 1);
   });
 
-  it('sends the draft to the background, and finds Tasks', async () => {
+  it('sends the draft to the background, and finds what’s in the background', async () => {
     const user = userEvent.setup();
     mockFetch({
       'GET /api/state': () => appState(),
@@ -1468,7 +1469,12 @@ describe('Palette search', () => {
       'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
       'GET /api/tasks': () => ({ tasks: [], concurrent: 3 }),
     });
-    renderApp(<Palette />);
+    renderApp(
+      <>
+        <Palette />
+        <Toaster />
+      </>,
+    );
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'background');
     const before = useUi.getState().backgroundRequest;
@@ -1476,7 +1482,10 @@ describe('Palette search', () => {
     expect(useUi.getState().backgroundRequest).toBe(before + 1);
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'tasks');
-    expect(await screen.findByRole('option', { name: /^Tasks/ })).toBeInTheDocument();
+    // Nothing going: it says so, instead of an empty list.
+    await user.click(await screen.findByRole('option', { name: /Tasks going now/ }));
+    expect(await screen.findByText('No tasks going right now.')).toBeInTheDocument();
+    expect(useUi.getState().pulseOpen).toBe(false);
   });
 
   it('finds a task by name, helpers included', async () => {

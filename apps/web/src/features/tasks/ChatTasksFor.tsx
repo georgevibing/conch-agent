@@ -5,6 +5,7 @@ import { NavLink } from 'react-router';
 import { create } from 'zustand';
 
 import { withCode } from './LiveTaskCard';
+import { taskPath } from './open';
 import { going, useStopTask, useTasks } from './queries';
 import { isTaskFresh, useKnownConversations } from './seen';
 
@@ -132,11 +133,7 @@ export function useChatTaskTree({
   const row = (task: Task): ChatTask => ({
     id: task.id,
     link: (
-      <NavLink
-        to={task.conversationId ? `/c/${task.conversationId}` : '/tasks'}
-        onClick={onNavigate}
-        end
-      >
+      <NavLink to={taskPath(task)} onClick={onNavigate} end>
         {task.title}
       </NavLink>
     ),
