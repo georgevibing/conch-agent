@@ -177,6 +177,28 @@
     overflow-wrap: anywhere;
   }
 
+  /* An agent's face beside its name (ADR 0101). */
+  .itemFace {
+    display: inline-flex;
+    flex-shrink: 0;
+  }
+
+  .item:not([data-checked]) .itemFace {
+    opacity: 0.6;
+  }
+
+  .defaultAgent {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2) var(--nc-space-3);
+  }
+
+  .defaultLabel {
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+  }
+
   .itemMore {
     display: flex;
     flex-direction: column;

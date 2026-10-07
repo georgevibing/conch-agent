@@ -17,7 +17,8 @@ import { onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 import { MockSlack } from '../channels/mock/slack';
-import { hermesHome, openClawHome } from './fixtures';
+import { carriesSecret } from '../test/faces';
+import { hermesHome, openClawFleetHome, openClawHome } from './fixtures';
 
 const PASSWORD = 'a long enough sentence for conch';
 
@@ -149,6 +150,57 @@ describe('Come home over HTTP', () => {
       payload: {},
     });
     expect(none.json()).toMatchObject({ error: 'import-nothing' });
+  });
+
+  it('brings OpenClaw’s agents as Conch’s, shows their own faces, and Undo takes them back (ADR 0101)', async () => {
+    const { app, services, cookie } = await setup(openClawFleetHome);
+    const plan = ImportPlan.parse(
+      (await app.inject({ url: '/api/import/openclaw', headers: { cookie } })).json(),
+    );
+    expect(plan.defaultAgent).toBe('agent:sage');
+    const image = plan.items.find((i) => i.id === 'agent:sage')?.face?.image;
+    expect(image).toBe('/api/import/openclaw/agents/sage/face');
+
+    // The picture is served as the picture it is, never kept, and only behind sign-in.
+    expect((await app.inject({ url: image })).statusCode).toBe(401);
+    const face = await app.inject({ url: image, headers: { cookie } });
+    expect(face.statusCode).toBe(200);
+    expect(face.headers['content-type']).toBe('image/png');
+    expect(face.headers['x-content-type-options']).toBe('nosniff');
+    expect(face.headers['cache-control']).toBe('no-store');
+    expect(carriesSecret(face.rawPayload)).toBe(false);
+    for (const url of [
+      '/api/import/openclaw/agents/scout/face',
+      '/api/import/openclaw/agents/..%2F..%2Fetc/face',
+      '/api/import/claude/agents/sage/face',
+    ])
+      expect((await app.inject({ url, headers: { cookie } })).statusCode).toBe(404);
+
+    const ran = await app.inject({
+      method: 'POST',
+      url: '/api/import',
+      headers: { cookie },
+      payload: {
+        source: 'openclaw',
+        items: ['agent:sage', 'agent:scout'],
+        defaultAgent: 'agent:sage',
+      },
+    });
+    expect(ran.statusCode).toBe(200);
+    expect(ImportResult.parse(ran.json()).counts.agents).toBe(2);
+    const list = await services.agents.list();
+    expect(list.agents.map((a) => a.name)).toEqual(['Conch', 'Sage', 'Scout']);
+    expect(list.agents.find((a) => a.isDefault)).toMatchObject({
+      name: 'Sage',
+      avatar: { kind: 'image' },
+    });
+    // The default agent is still the personality Settings knew before agents.
+    expect((await services.settings.get()).persona.name).toBe('Sage');
+
+    await app.inject({ method: 'POST', url: '/api/import/undo', headers: { cookie }, payload: {} });
+    const after = await services.agents.list();
+    expect(after.agents.map((a) => a.name)).toEqual(['Conch']);
+    expect((await services.settings.get()).persona.name).toBe('Conch');
   });
 
   it('finishes a Slack bot Hermes had one key for, and Undo takes it back (ADR 0042)', async () => {

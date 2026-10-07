@@ -86,6 +86,7 @@ export interface ImportSummaryProps extends Omit<ComponentProps<'section'>, 'tit
 }
 
 const NOUNS: Record<ImportGroupId, [string, string]> = {
+  agents: ['agent', 'agents'],
   persona: ['personality setting', 'personality settings'],
   model: ['model choice', 'model choices'],
   about: ['note about you', 'notes about you'],

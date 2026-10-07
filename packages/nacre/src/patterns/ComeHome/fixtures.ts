@@ -1,18 +1,26 @@
+import { createElement } from 'react';
+
+import { AgentAvatar } from '../AgentAvatar';
 import type { ImportPreviewItem } from './ImportPreview';
+
+/** An agent's face for stories and tests, beside its name. */
+const face = (name: string, id: string, color: string) =>
+  createElement(AgentAvatar, {
+    name,
+    size: 'sm',
+    decorative: true,
+    avatar: { kind: 'preset', id, color },
+  });
 
 /** What Conch might find in an OpenClaw folder, for stories and tests. */
 export const openClawItems: ImportPreviewItem[] = [
   {
-    id: 'persona:name',
-    group: 'persona',
-    title: 'Call your assistant “Pearl”',
-    detail: 'From OpenClaw’s IDENTITY.md. Now it’s “Conch”.',
-  },
-  {
-    id: 'persona:instructions',
-    group: 'persona',
-    title: 'How your assistant should behave',
-    detail: 'From OpenClaw’s SOUL.md, as your instructions in every chat.',
+    id: 'agent:main',
+    group: 'agents',
+    title: 'Pearl',
+    name: 'Pearl',
+    face: face('Pearl', 'shell', 'pink'),
+    detail: 'Your “main” agent in OpenClaw. It answered your Telegram bot.',
     preview: 'Be warm and brief. Use British spelling.\n\nAsk before anything risky.',
   },
   {
@@ -79,8 +87,7 @@ export const openClawItems: ImportPreviewItem[] = [
 ];
 
 export const openClawTicked = [
-  'persona:name',
-  'persona:instructions',
+  'agent:main',
   'about',
   'memory:1',
   'memory:2',
@@ -95,7 +102,18 @@ const atlas = { id: 'work', name: 'Atlas' };
  * two keys (ADR 0042), for stories and tests.
  */
 export const openClawTeamItems: ImportPreviewItem[] = [
-  ...openClawItems.slice(0, 2),
+  ...openClawItems.slice(0, 1),
+  {
+    id: 'agent:work',
+    group: 'agents',
+    title: 'Atlas',
+    name: 'Atlas',
+    face: face('Atlas', 'compass', 'teal'),
+    detail: 'Your “work” agent in OpenClaw. It answered your Slack bot.',
+    preview: 'You are Atlas, a crisp work assistant. Lead with the answer, then the numbers.',
+    warning:
+      'Atlas’s model, GPT-5, stays behind: Codex isn’t connected in Conch yet. Connect it in Providers, then pick the model in any chat.',
+  },
   {
     id: 'model',
     group: 'model',
@@ -103,7 +121,7 @@ export const openClawTeamItems: ImportPreviewItem[] = [
     detail:
       'New chats start with Opus on Claude Code, the nearest here to Claude Opus 4.6. Now it’s Claude Code’s own choice.',
   },
-  ...openClawItems.slice(2, 10),
+  ...openClawItems.slice(1, 9),
   {
     id: 'channel:slack',
     group: 'channels',
@@ -112,15 +130,7 @@ export const openClawTeamItems: ImportPreviewItem[] = [
       'Its bot token, from OpenClaw’s openclaw.json. Slack needs one more key: Conch shows you where to get it, then waits for your hello.',
     warning: 'A bot answers in one app at a time. Stop OpenClaw first, or both will try to answer.',
   },
-  ...openClawItems.slice(10),
-  {
-    id: 'agent:work:persona',
-    group: 'skills',
-    title: 'Talk as Atlas',
-    detail: 'Atlas’s SOUL.md, as a skill: pick it in any chat to talk to Atlas. It comes over off.',
-    preview: 'You are Atlas, a crisp work assistant. Lead with the answer, then the numbers.',
-    agent: atlas,
-  },
+  ...openClawItems.slice(9),
   {
     id: 'agent:work:memory:1',
     group: 'memories',
@@ -149,7 +159,7 @@ export const openClawTeamItems: ImportPreviewItem[] = [
 export const openClawTeamTicked = [
   ...openClawTicked,
   'model',
-  'agent:work:persona',
+  'agent:work',
   'agent:work:memory:1',
   'agent:work:memory:2',
   'agent:work:routine:0',

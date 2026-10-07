@@ -5,6 +5,7 @@
  */
 import { z } from 'zod';
 
+import { AGENT_LIMITS, AgentPresetAvatar } from './agents';
 import { ChannelBot } from './channels';
 import { SkillReview } from './skills';
 
@@ -25,6 +26,9 @@ export const ImportSource = z.object({
 export type ImportSource = z.infer<typeof ImportSource>;
 
 export const ImportGroup = z.enum([
+  /** Each agent it ran, as one of Conch's agents (ADR 0101). */
+  'agents',
+  /** Before agents: the name and instructions of Conch's one assistant. Older results only. */
   'persona',
   /** The model new chats start with (ADR 0042). */
   'model',
@@ -36,6 +40,20 @@ export const ImportGroup = z.enum([
   'keys',
 ]);
 export type ImportGroup = z.infer<typeof ImportGroup>;
+
+/**
+ * An agent's face in the plan (ADR 0101): the picture of its own when it had
+ * one Conch can keep (`image`, served by `GET /api/import/:source/agents/:id/face`),
+ * and the preset and colour it gets otherwise (its emoji, matched).
+ */
+export const ImportAgentFace = z.object({
+  avatar: AgentPresetAvatar,
+  /** Where its own picture can be seen, read from the other app's folder and kept without metadata. */
+  image: z.string().max(300).optional(),
+  /** The emoji it had there, for the card. */
+  emoji: z.string().max(16).optional(),
+});
+export type ImportAgentFace = z.infer<typeof ImportAgentFace>;
 
 /** One thing that could come over, with everything a person needs to decide. */
 export const ImportItem = z.object({
@@ -64,6 +82,10 @@ export const ImportItem = z.object({
    * plan shows each agent's things together, with one tick for all of them.
    */
   agent: z.object({ id: z.string().max(64), name: z.string().max(80) }).optional(),
+  /** An agent that comes over as one of Conch's (group `agents`): its face. */
+  face: ImportAgentFace.optional(),
+  /** An agent's name as it will be here (unique among Conch's agents). */
+  name: z.string().max(AGENT_LIMITS.name).optional(),
 });
 export type ImportItem = z.infer<typeof ImportItem>;
 
@@ -72,6 +94,13 @@ export const ImportPlan = z.object({
   items: z.array(ImportItem),
   /** Files that couldn't be read, in a sentence each: the rest still comes over. */
   problems: z.array(z.string()),
+  /**
+   * The agents item that starts new chats here, when the other app said which
+   * was its default (ADR 0101). Unset: Conch's default agent stays.
+   */
+  defaultAgent: z.string().max(200).optional(),
+  /** Conch's default agent now, for “Keep Conch”. */
+  currentDefault: z.object({ name: z.string().max(AGENT_LIMITS.name) }).optional(),
 });
 export type ImportPlan = z.infer<typeof ImportPlan>;
 
@@ -92,6 +121,11 @@ export const RunImportBody = z.object({
   source: ImportSourceId,
   /** The ids of the items to bring over. */
   items: z.array(z.string().max(200)).max(5000),
+  /**
+   * The agents item (`agent:<id>`, ticked) that starts new chats from now on.
+   * Unset: Conch's default agent stays the default.
+   */
+  defaultAgent: z.string().max(200).optional(),
 });
 export type RunImportBody = z.infer<typeof RunImportBody>;
 

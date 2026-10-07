@@ -1,5 +1,6 @@
-import type { ImportPlan, ImportResult, ImportSourceId } from '@conch/protocol';
+import type { ImportAgentFace, ImportPlan, ImportResult, ImportSourceId } from '@conch/protocol';
 import {
+  AgentAvatar,
   Button,
   Callout,
   Dialog,
@@ -36,7 +37,12 @@ function nextSteps(result: ImportResult, onClose: () => void): ReactNode[] {
   const next: ReactNode[] = result.outcomes
     .filter(
       (o) =>
-        o.ok && o.message && (o.group === 'channels' || o.group === 'keys' || o.group === 'model'),
+        o.ok &&
+        o.message &&
+        (o.group === 'agents' ||
+          o.group === 'channels' ||
+          o.group === 'keys' ||
+          o.group === 'model'),
     )
     .map((o) =>
       o.finish === 'slack-key' ? (
@@ -117,6 +123,22 @@ export function plain(text: string): string {
 }
 
 /**
+ * An agent's face in the plan (ADR 0101), as it will be here: its own
+ * picture when it had one Conch can keep, else the preset its emoji matched.
+ * Beside its name, so it isn't read out twice.
+ */
+export function ImportFace({ name, face }: { name: string; face: ImportAgentFace }) {
+  return (
+    <AgentAvatar
+      name={name}
+      size="sm"
+      decorative
+      avatar={face.image ? { kind: 'image', url: face.image } : face.avatar}
+    />
+  );
+}
+
+/**
  * Come home's state, for the page in Settings and the dialog in onboarding:
  * Conch reads the other agent's folder, the person ticks what to bring, it
  * backs up and brings them over, then says what came, with Undo.
@@ -135,6 +157,8 @@ export function useComeHome({
   const client = useQueryClient();
   const [step, setStep] = useState<Step>({ kind: 'looking' });
   const [selected, setSelected] = useState<string[]>([]);
+  /** The agent that starts new chats (ADR 0101): theirs to begin with, else yours stays. */
+  const [defaultAgent, setDefaultAgent] = useState<string>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const progress = useImportProgress();
@@ -145,6 +169,7 @@ export function useComeHome({
       (plan) => {
         if (!current) return;
         setSelected(plan.items.filter((i) => i.checked).map((i) => i.id));
+        setDefaultAgent(plan.defaultAgent);
         setStep({ kind: 'preview', plan });
       },
       (failure: unknown) =>
@@ -173,6 +198,8 @@ export function useComeHome({
         duplicate: i.duplicate,
         review: i.review && <SkillReview verdict={i.review.verdict} findings={i.review.findings} />,
         ...(i.agent && { agent: i.agent }),
+        ...(i.name && { name: i.name }),
+        ...(i.face && { face: <ImportFace name={i.name ?? i.title} face={i.face} /> }),
       })),
     [plan],
   );
@@ -186,7 +213,9 @@ export function useComeHome({
       let result: ImportResult | undefined;
       setStep({ kind: 'bringing', plan });
       const ok = await guard(async () => {
-        result = await importApi.run(source, selected);
+        // Only an agent that comes over can start new chats.
+        const chosen = defaultAgent && selected.includes(defaultAgent) ? defaultAgent : undefined;
+        result = await importApi.run(source, selected, chosen);
       });
       if (!ok || !result) {
         setStep({ kind: 'preview', plan });
@@ -229,6 +258,9 @@ export function useComeHome({
     step,
     selected,
     setSelected,
+    defaultAgent,
+    setDefaultAgent,
+    currentDefault: plan?.currentDefault?.name,
     items,
     label,
     bring,
@@ -247,8 +279,22 @@ function ComeHomeFlow(props: {
   onImported?: (result: ImportResult) => void;
 }) {
   const { onClose } = props;
-  const { step, selected, setSelected, items, label, bring, undo, busy, error, progress, count } =
-    useComeHome(props);
+  const {
+    step,
+    selected,
+    setSelected,
+    defaultAgent,
+    setDefaultAgent,
+    currentDefault,
+    items,
+    label,
+    bring,
+    undo,
+    busy,
+    error,
+    progress,
+    count,
+  } = useComeHome(props);
   return (
     <form
       // Between the dialog and its body: the body can only scroll if this passes its layout on.
@@ -283,6 +329,9 @@ function ComeHomeFlow(props: {
                 onSelectedChange={setSelected}
                 problems={step.plan.problems}
                 disabled={busy}
+                defaultAgent={defaultAgent}
+                onDefaultAgentChange={setDefaultAgent}
+                currentDefault={currentDefault}
               />
             ) : (
               <Callout tone="info" title={`${label} has nothing to bring over yet`}>

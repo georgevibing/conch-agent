@@ -18,8 +18,12 @@ export const importApi = {
   status: () => request(ImportStatus, '/api/import'),
   plan: (source: ImportSourceId) =>
     request(ImportPlan, `/api/import/${encodeURIComponent(source)}`),
-  run: (source: ImportSourceId, items: string[]) =>
-    request(ImportResult, '/api/import', { method: 'POST', body: { source, items } }),
+  /** `defaultAgent`: the `agent:` item that starts new chats (ADR 0101); unset keeps yours. */
+  run: (source: ImportSourceId, items: string[], defaultAgent?: string) =>
+    request(ImportResult, '/api/import', {
+      method: 'POST',
+      body: { source, items, ...(defaultAgent && { defaultAgent }) },
+    }),
   undo: () => request(UndoImportResult, '/api/import/undo', { method: 'POST', body: {} }),
   /** A Slack bot another app had one key for (ADR 0042): which key and app, never the key. */
   slack: (source?: ImportSourceId) =>
