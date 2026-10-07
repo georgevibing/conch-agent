@@ -73,6 +73,9 @@ export interface ImageDeps {
   offer: (ctx: ToolContext) => Promise<string>;
 }
 
+/** The one picture for a face being made at a time (beside one per chat). */
+const FACE = ' face';
+
 export class ImageService {
   readonly #running = new Set<string>();
   constructor(private readonly deps: ImageDeps) {}
@@ -86,6 +89,121 @@ export class ImageService {
       m.architecture.output_modalities.includes('image'),
     );
   }
+  /** One picture from OpenRouter: the request, the bounded answer, its cost recorded. */
+  async #generate(input: {
+    model: string;
+    prompt: string;
+    reference?: string;
+    aspect_ratio?: string;
+    background?: string;
+    signal: AbortSignal;
+  }): Promise<{ bytes: Buffer; type: { mimeType: string }; usage: Usage }> {
+    const key = await this.deps.key(input.signal);
+    if (!key) throw new Error('OpenRouter needs reconnecting in Settings → Providers.');
+    let response: Response;
+    try {
+      response = await (this.deps.fetch ?? fetch)(`${BASE}/images`, {
+        method: 'POST',
+        redirect: 'error',
+        signal: AbortSignal.any([input.signal, AbortSignal.timeout(180_000)]),
+        headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: input.model,
+          prompt: input.prompt,
+          n: 1,
+          stream: false,
+          ...(input.reference && {
+            input_references: [{ type: 'image_url', image_url: { url: input.reference } }],
+          }),
+          ...(input.aspect_ratio !== undefined && { aspect_ratio: input.aspect_ratio }),
+          ...(input.background !== undefined && { background: input.background }),
+        }),
+      });
+    } catch {
+      throw new Error(
+        'The image request did not finish. Check OpenRouter’s activity before requesting another image.',
+      );
+    }
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new Error(
+        response.status === 401
+          ? 'Reconnect OpenRouter in Settings → Providers.'
+          : response.status === 402
+            ? 'OpenRouter needs API credit before it can make this picture.'
+            : response.status === 429
+              ? 'OpenRouter is busy or at its limit. Wait before trying again.'
+              : `The image service returned ${response.status}. No image was received.`,
+      );
+    }
+    const result = Generated.parse(await json(response, 43_000_000));
+    const usage: Usage = {
+      inputTokens: result.usage?.prompt_tokens ?? 0,
+      outputTokens: result.usage?.completion_tokens ?? 0,
+      ...(result.usage?.cost !== undefined && { costUsd: result.usage.cost }),
+    };
+    await this.deps.spend(usage).catch(() => undefined);
+    const first = result.data[0];
+    if (!first) throw new Error('The image service returned no image.');
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(first.b64_json))
+      throw new Error('The image service returned invalid image data.');
+    const bytes = Buffer.from(first.b64_json, 'base64');
+    const type = sniff(bytes, 'image', undefined);
+    if (
+      type.kind !== 'image' ||
+      !['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(type.mimeType)
+    )
+      throw new Error('The service returned a file that is not a supported raster image.');
+    return { bytes, type, usage };
+  }
+
+  /** Whether a picture can be made at all (an agent's face, ADR 0101): an OpenRouter key. */
+  async canMake(): Promise<boolean> {
+    return this.deps.hasKey().catch(() => false);
+  }
+
+  /**
+   * A square picture for an agent's face (ADR 0101), asked for by a person on
+   * the page, never by the assistant. Over the monthly budget it doesn't go.
+   * One at a time; the bytes go back to the page and are kept nowhere.
+   */
+  async face(
+    prompt: string,
+    signal: AbortSignal,
+  ): Promise<{ bytes: Buffer; mimeType: string; costUsd?: number }> {
+    if (!(await this.canMake()))
+      throw new Error('Connect OpenRouter in Settings → Providers to make a picture.');
+    if (await this.deps.overBudget())
+      throw new Error('Your monthly budget has been reached. Review it in Settings first.');
+    if (this.#running.has(FACE)) throw new Error('A picture is already being made. Wait for it.');
+    this.#running.add(FACE);
+    try {
+      const models = await this.#models(signal);
+      const preferred = ['google/gemini-2.5-flash-image', 'openai/gpt-image-1'];
+      const model =
+        preferred.map((id) => models.find((m) => m.id === id)).find(Boolean) ?? models[0];
+      if (!model) throw new Error('No image model is available just now. Try again later.');
+      const square = z
+        .object({ values: z.array(z.string()).optional() })
+        .safeParse(model.supported_parameters?.aspect_ratio);
+      const made = await this.#generate({
+        model: model.id,
+        prompt,
+        ...(square.success && (!square.data.values || square.data.values.includes('1:1'))
+          ? { aspect_ratio: '1:1' }
+          : {}),
+        signal,
+      });
+      return {
+        bytes: made.bytes,
+        mimeType: made.type.mimeType,
+        ...(made.usage.costUsd !== undefined && { costUsd: made.usage.costUsd }),
+      };
+    } finally {
+      this.#running.delete(FACE);
+    }
+  }
+
   tools(ctx: ToolContext, access: () => Promise<FileAccess>): HostTool[] {
     return [
       {
@@ -186,62 +304,14 @@ export class ImageService {
                 throw new Error('Choose a PNG, JPEG, WebP or GIF source picture.');
               reference = `data:${type.mimeType};base64,${bytes.toString('base64')}`;
             }
-            const key = await this.deps.key(ctx.signal);
-            if (!key) throw new Error('OpenRouter needs reconnecting in Settings → Providers.');
-            let response: Response;
-            try {
-              response = await (this.deps.fetch ?? fetch)(`${BASE}/images`, {
-                method: 'POST',
-                redirect: 'error',
-                signal: AbortSignal.any([ctx.signal, AbortSignal.timeout(180_000)]),
-                headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
-                body: JSON.stringify({
-                  model: model.id,
-                  prompt: args.prompt,
-                  n: 1,
-                  stream: false,
-                  ...(reference && {
-                    input_references: [{ type: 'image_url', image_url: { url: reference } }],
-                  }),
-                  ...(args.aspect_ratio !== undefined && { aspect_ratio: args.aspect_ratio }),
-                  ...(args.background !== undefined && { background: args.background }),
-                }),
-              });
-            } catch {
-              throw new Error(
-                'The image request did not finish. Check OpenRouter’s activity before requesting another image.',
-              );
-            }
-            if (!response.ok) {
-              await response.body?.cancel();
-              throw new Error(
-                response.status === 401
-                  ? 'Reconnect OpenRouter in Settings → Providers.'
-                  : response.status === 402
-                    ? 'OpenRouter needs API credit before it can make this picture.'
-                    : response.status === 429
-                      ? 'OpenRouter is busy or at its limit. Wait before trying again.'
-                      : `The image service returned ${response.status}. No image was received.`,
-              );
-            }
-            const result = Generated.parse(await json(response, 43_000_000));
-            const usage: Usage = {
-              inputTokens: result.usage?.prompt_tokens ?? 0,
-              outputTokens: result.usage?.completion_tokens ?? 0,
-              ...(result.usage?.cost !== undefined && { costUsd: result.usage.cost }),
-            };
-            await this.deps.spend(usage).catch(() => undefined);
-            const first = result.data[0];
-            if (!first) throw new Error('The image service returned no image.');
-            if (!/^[A-Za-z0-9+/]*={0,2}$/.test(first.b64_json))
-              throw new Error('The image service returned invalid image data.');
-            const bytes = Buffer.from(first.b64_json, 'base64');
-            const type = sniff(bytes, 'image', undefined);
-            if (
-              type.kind !== 'image' ||
-              !['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(type.mimeType)
-            )
-              throw new Error('The service returned a file that is not a supported raster image.');
+            const { bytes, type, usage } = await this.#generate({
+              model: model.id,
+              prompt: String(args.prompt),
+              ...(reference && { reference }),
+              ...(args.aspect_ratio !== undefined && { aspect_ratio: String(args.aspect_ratio) }),
+              ...(args.background !== undefined && { background: String(args.background) }),
+              signal: ctx.signal,
+            });
             const extension = type.mimeType === 'image/jpeg' ? 'jpg' : type.mimeType.split('/')[1];
             const attachment = await this.deps.store.save({
               name: `${String(args.name).replace(/\.(?:png|jpe?g|webp|gif)$/i, '')}.${extension}`,

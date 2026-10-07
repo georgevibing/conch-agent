@@ -12,6 +12,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode }
 
 import { keys, refreshCapabilities, setEngineStatus } from '../api/queries';
 import { useUi } from '../app/ui';
+import { applyAgentsEvent } from '../features/agents/api';
 import { DEVICES_FOCUS } from '../features/auth/focus';
 import { browserKeys } from '../features/browser/queries';
 import { terminalKeys } from '../features/terminal/queries';
@@ -197,6 +198,9 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         }
         case 'folders.changed':
           client.setQueryData(keys.folders, event.folders);
+          break;
+        case 'agents.changed':
+          applyAgentsEvent(client, event);
           break;
         case 'conversation.reset':
           live.forget(event.conversationId);

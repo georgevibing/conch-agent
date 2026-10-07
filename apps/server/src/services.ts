@@ -106,6 +106,7 @@ import { CommandStore } from './commands/store';
 import { ConversationManager, type TurnRoute, type ToolContext } from './conversations/manager';
 import { ConversationStore } from './conversations/store';
 import { ChatFolders } from './conversations/folders';
+import { AgentStore } from './agents/store';
 import type { ApiEngine } from './engines/api';
 import { builtInEngines, serverEngine } from './engines/registry';
 import { appsNeeded } from './providers/apps';
@@ -276,6 +277,8 @@ export class Services {
   readonly conversations: ConversationManager;
   /** The folders in the chat list (ADR 0089). */
   readonly folders: ChatFolders;
+  /** The agents you talk to: personas of the same Conch (ADR 0101). */
+  readonly agents: AgentStore;
   /** Questions the assistant asked, waiting for your answer (ADR 0060 §4). */
   readonly questions = new QuestionDesk();
   /** Every offer to turn something on in a chat goes through here (ADR 0060). */
@@ -433,6 +436,9 @@ export class Services {
     this.slackApps = new SlackApps(this.slack, { emit: (event) => this.broadcast.emit(event) });
     registerSlackDoctor(this.doctor, this.slack);
     this.settings = new SettingsStore(config.CONCH_HOME, heal);
+    this.agents = new AgentStore(config.CONCH_HOME, this.settings, heal, (list) =>
+      this.broadcast.emit({ type: 'agents.changed', list }),
+    );
     this.access = new AccessStore(config.CONCH_HOME, heal);
     // "This computer", proven (ADR 0063): the key only your account can read.
     this.here = new ThisComputer(config.CONCH_HOME, {
@@ -906,6 +912,8 @@ export class Services {
     });
     const fetchPublicWeb = publicWebFetcher(config.CONCH_PORT);
     this.conversations = new ConversationManager({
+      // Who each chat is with: its persona and instructions in every turn (ADR 0101).
+      agents: this.agents,
       // What each turn costs, what a chat has spent, and its limits (ADR 0079).
       spend: new ChatSpendDesk({
         billings,

@@ -1,17 +1,7 @@
-import type { Memory, Persona, Profile, Tone } from '@conch/protocol';
-import { describeProfile } from '@conch/protocol';
+import type { Memory, Persona, Profile } from '@conch/protocol';
+import { TONES, describeProfile } from '@conch/protocol';
 
 import { DATAMARK, datamark } from './guard';
-
-const tones: Record<Tone, string> = {
-  warm: 'Warm, encouraging and human. Plain language, a light touch of personality, never saccharine.',
-  concise:
-    'Brief and direct. Lead with the answer, skip pleasantries, use as few words as clarity allows.',
-  playful:
-    'Curious and good-humoured. Wit is welcome when it helps, but substance always comes first.',
-  precise:
-    'Careful and exact. State assumptions, qualify uncertainty, prefer specifics over generalities.',
-};
 
 /** Budget for memories inlined into every turn; the rest is reachable via `recall`. */
 const MEMORY_CHAR_BUDGET = 6000;
@@ -88,7 +78,7 @@ export function systemParts(input: SystemInput): { identity: string; memory: str
       // own business: each engine states it, because it differs.
       `You are ${persona.name}, a personal AI assistant the user talks to through Conch, an app on their own computer that sets itself up and fixes what breaks, so they don't have to.`,
       ``,
-      `Voice: ${tones[persona.tone]}`,
+      `Voice: ${TONES[persona.tone].prompt}`,
       `Write for a chat window: short paragraphs, Markdown when it aids clarity, code in fenced blocks.`,
       ...(persona.instructions.trim()
         ? [``, `The user asked you to follow these instructions:`, persona.instructions.trim()]

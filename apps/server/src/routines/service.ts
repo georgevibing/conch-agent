@@ -231,10 +231,12 @@ export class RoutineService {
     else if (toTime && was) await this.deps.when?.forget(id);
     else if (isWhen && reactivating) await this.deps.when?.restart(id);
     const now = this.#now;
-    const { runLimitUsd, ...rest } = patch;
+    const { runLimitUsd, agentId, ...rest } = patch;
     const stored = await this.deps.store.save({
       ...current,
       ...rest,
+      // `null`: the default agent does it (ADR 0101).
+      ...(agentId !== undefined && { agentId: agentId ?? undefined }),
       // `null` goes back to Conch's default.
       ...(runLimitUsd !== undefined && { runLimitUsd: runLimitUsd ?? undefined }),
       ...(patch.title !== undefined && { title: tidyTitle(patch.title) }),
