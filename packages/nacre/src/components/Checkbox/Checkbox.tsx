@@ -2,6 +2,7 @@ import { Checkbox as CheckboxPrimitive } from 'radix-ui';
 import { useId, type ComponentProps, type ReactNode } from 'react';
 
 import { cx } from '../../utils/cx';
+import { useMotionFromPeople } from '../../utils/useMotionFromPeople';
 import { useFieldControl } from '../Field';
 import { ChoiceRow } from '../Field/ChoiceRow';
 import styles from './Checkbox.module.css';
@@ -17,7 +18,8 @@ export interface CheckboxProps extends ComponentProps<typeof CheckboxPrimitive.R
 }
 
 /**
- * Checkbox whose tick draws itself in with a small spring. Supports
+ * Checkbox whose tick draws itself in with a small spring when someone ticks
+ * it; it arrives, and follows data, already in its place. Supports
  * `checked="indeterminate"`.
  */
 export function Checkbox({
@@ -27,6 +29,10 @@ export function Checkbox({
   invalid: invalidProp,
   className,
   id: idProp,
+  onPointerEnter,
+  onPointerLeave,
+  onPointerDown,
+  onClick,
   ...props
 }: CheckboxProps) {
   const autoId = useId();
@@ -45,6 +51,12 @@ export function Checkbox({
     [field['aria-describedby'], description != null ? descriptionId : undefined]
       .filter(Boolean)
       .join(' ') || undefined;
+  const { moving: _moving, ...motion } = useMotionFromPeople(props.checked, {
+    onPointerEnter,
+    onPointerLeave,
+    onPointerDown,
+    onClick,
+  });
 
   const control = (
     <CheckboxPrimitive.Root
@@ -55,6 +67,7 @@ export function Checkbox({
       {...field}
       id={id}
       aria-describedby={describedBy}
+      {...motion}
     >
       <CheckboxPrimitive.Indicator forceMount className={styles.indicator}>
         <svg viewBox="0 0 16 16" aria-hidden className={styles.glyph}>

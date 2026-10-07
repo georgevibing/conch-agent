@@ -1,4 +1,7 @@
-import { screen } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -36,5 +39,23 @@ describe('Checkbox', () => {
     renderNacre(<Checkbox label="Nope" disabled />);
     await userEvent.click(screen.getByRole('checkbox'));
     expect(screen.getByRole('checkbox')).not.toBeChecked();
+  });
+
+  it('arrives ticked and still; only a person’s tick draws itself in', () => {
+    const { rerender } = renderNacre(<Checkbox aria-label="Run tests" checked={false} />);
+    const box = screen.getByRole('checkbox');
+    rerender(<Checkbox aria-label="Run tests" checked />);
+    expect(box).toBeChecked();
+    expect(box).not.toHaveAttribute('data-moving');
+    fireEvent.click(box);
+    expect(box).toHaveAttribute('data-moving');
+    // Every rule that moves it applies only while a person moves it.
+    const css = readFileSync(join(import.meta.dirname, 'Checkbox.module.css'), 'utf8').replace(
+      /\/\*[\s\S]*?\*\//g,
+      '',
+    );
+    const moving = [...css.matchAll(/([^{}]+)\{[^{}]*\btransition(?:-duration)?\s*:/g)];
+    expect(moving.length).toBeGreaterThan(0);
+    for (const [, selector] of moving) expect(selector?.trim()).toMatch(/^\.box\[data-moving\]/);
   });
 });

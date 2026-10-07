@@ -89,6 +89,10 @@
     white-space: nowrap;
     cursor: pointer;
     user-select: none;
+  }
+
+  /* Motion only while a person is choosing (`data-moving`): chosen by data, it's simply there. */
+  .root[data-moving] .item {
     transition:
       color var(--nc-duration-base) var(--nc-ease-out),
       background-color var(--nc-duration-fast) var(--nc-ease-out);

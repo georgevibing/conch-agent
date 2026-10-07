@@ -156,6 +156,17 @@ porcelain.
 | `--nc-spring-bouncy` (780 ms) | Small confirmations (check-marks, switch thumb) |
 | `--nc-ease-out` + durations   | Colour, opacity, shadow                         |
 
+**Controls move when people move them.** A switch, a checkbox or a segmented
+control arrives already in its state, and a value that changes by itself —
+data that loaded, a save undone, another device's change — is simply there.
+Only a person's press, click or key plays the spring (`useMotionFromPeople`
+sets `data-moving`, which the control's CSS needs before it transitions at
+all), including a change that lands a moment after the press, once a
+permission prompt or a save has answered. A `Collapsible` that's open from the
+start arrives open too; only opening it later plays the reveal. And a screen
+never shows a control in a placeholder state while its value loads: it waits
+for the value (a `Skeleton` in its place), or uses the one it already has.
+
 Springs are real damped-spring curves baked into CSS `linear()`; the same physics are
 exported for JS as `springs` from `@conch/nacre` for the `motion` library. Keyframes:
 `nc-surface-in` / `nc-surface-out` (rise + un-blur), `nc-fade-*`, `nc-shimmer`,

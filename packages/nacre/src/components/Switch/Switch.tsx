@@ -2,6 +2,7 @@ import { Switch as SwitchPrimitive } from 'radix-ui';
 import { useId, type ComponentProps, type ReactNode } from 'react';
 
 import { cx } from '../../utils/cx';
+import { useMotionFromPeople } from '../../utils/useMotionFromPeople';
 import { useFieldControl } from '../Field';
 import { ChoiceRow } from '../Field/ChoiceRow';
 import styles from './Switch.module.css';
@@ -14,7 +15,10 @@ export interface SwitchProps extends ComponentProps<typeof SwitchPrimitive.Root>
   labelPosition?: 'end' | 'start';
 }
 
-/** On/off toggle. The thumb stretches while pressed and springs into place. */
+/**
+ * On/off toggle. It appears in its place; when someone flips it, the thumb
+ * stretches while pressed and springs into place.
+ */
 export function Switch({
   size = 'md',
   label,
@@ -22,6 +26,10 @@ export function Switch({
   labelPosition = 'end',
   className,
   id: idProp,
+  onPointerEnter,
+  onPointerLeave,
+  onPointerDown,
+  onClick,
   ...props
 }: SwitchProps) {
   const autoId = useId();
@@ -36,6 +44,12 @@ export function Switch({
     [field['aria-describedby'], description != null ? descriptionId : undefined]
       .filter(Boolean)
       .join(' ') || undefined;
+  const { moving: _moving, ...motion } = useMotionFromPeople(props.checked, {
+    onPointerEnter,
+    onPointerLeave,
+    onPointerDown,
+    onClick,
+  });
 
   const control = (
     <SwitchPrimitive.Root
@@ -45,6 +59,7 @@ export function Switch({
       {...field}
       id={id}
       aria-describedby={describedBy}
+      {...motion}
     >
       <SwitchPrimitive.Thumb className={styles.thumb} />
     </SwitchPrimitive.Root>

@@ -23,6 +23,13 @@
       var(--nc-glaze-edge),
       var(--nc-elevation-1);
     cursor: pointer;
+  }
+
+  /*
+   * Motion only while a person is near or ticking it (`data-moving`). It
+   * arrives in its place, and a value that changes by itself is simply there.
+   */
+  .box[data-moving] {
     transition:
       background-color var(--nc-duration-fast) var(--nc-ease-out),
       box-shadow var(--nc-duration-base) var(--nc-ease-out),
@@ -46,6 +53,9 @@
 
   .box:active:not(:disabled) {
     transform: scale(0.86);
+  }
+
+  .box[data-moving]:active:not(:disabled) {
     transition-duration: var(--nc-duration-fast), var(--nc-duration-fast), 120ms;
   }
 
@@ -112,23 +122,36 @@
   .dash {
     stroke-dasharray: 1;
     stroke-dashoffset: 1;
-    transition: stroke-dashoffset var(--nc-duration-fast) var(--nc-ease-in);
   }
 
   .indicator {
     transform: scale(0.7);
-    transition: transform var(--nc-duration-fast) var(--nc-ease-in);
   }
 
   .indicator[data-state='checked'],
   .indicator[data-state='indeterminate'] {
     transform: none;
-    transition: transform var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
   }
 
   .indicator[data-state='checked'] .check,
   .indicator[data-state='indeterminate'] .dash {
     stroke-dashoffset: 0;
+  }
+
+  .box[data-moving] :is(.check, .dash) {
+    transition: stroke-dashoffset var(--nc-duration-fast) var(--nc-ease-in);
+  }
+
+  .box[data-moving] .indicator {
+    transition: transform var(--nc-duration-fast) var(--nc-ease-in);
+  }
+
+  .box[data-moving] .indicator:is([data-state='checked'], [data-state='indeterminate']) {
+    transition: transform var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  .box[data-moving] .indicator[data-state='checked'] .check,
+  .box[data-moving] .indicator[data-state='indeterminate'] .dash {
     transition: stroke-dashoffset var(--nc-duration-slow) var(--nc-ease-out) 40ms;
   }
 }
