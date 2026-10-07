@@ -1,4 +1,14 @@
-export { ChatTasks, tasksSummary, type ChatTask, type ChatTasksProps } from './ChatTasks';
+export {
+  ChatTasks,
+  ChatTasksToggle,
+  TaskStatusMark,
+  tasksSummary,
+  tasksTone,
+  type ChatTask,
+  type ChatTasksProps,
+  type ChatTasksToggleProps,
+  type ChatTasksTone,
+} from './ChatTasks';
 export { taskHeadline } from './headline';
 export {
   elapsed,

@@ -116,6 +116,12 @@ export interface ChatRowProps extends Omit<ComponentProps<'li'>, 'children' | 'c
    * own (its tasks, `ChatTasks`). Not part of the link, so it has its own controls.
    */
   below?: ReactNode;
+  /**
+   * On the row, just before the ⋯, outside the link: a control of the chat's
+   * own that opens what's `below` (its tasks' badge, `ChatTasksToggle`). The
+   * row's gestures leave it alone.
+   */
+  disclosure?: ReactNode;
 }
 
 /**
@@ -144,6 +150,7 @@ export function ChatRow({
   editing,
   dropBefore,
   below,
+  disclosure,
   className,
   onClickCapture,
   onKeyDown,
@@ -160,6 +167,12 @@ export function ChatRow({
   const titleId = useId();
   const titleRef = useRef<HTMLSpanElement>(null);
   const moreRef = useRef<HTMLSpanElement>(null);
+  const disclosureRef = useRef<HTMLSpanElement>(null);
+  /** The ⋯ and the badge are buttons of their own: no hold, no tick, no link. */
+  const inControls = (target: EventTarget | null) =>
+    Boolean(
+      moreRef.current?.contains(target as Node) || disclosureRef.current?.contains(target as Node),
+    );
   /** What's under the row has its own controls: the row's gestures leave it alone. */
   const belowRef = useRef<HTMLDivElement>(null);
   const inBelow = (target: EventTarget | null) =>
@@ -207,6 +220,7 @@ export function ChatRow({
   const canDrag = Boolean(dragIds?.length) && finePointer && !editing;
   const dot = status === 'waiting' || status === 'unread' || status === 'error';
   const showMenu = Boolean(menu) && !selecting && !editing;
+  const showDisclosure = Boolean(disclosure) && !selecting && !editing;
 
   const toggle = (event: SelectEvent) => onSelectedChange?.(!selected, event);
 
@@ -217,8 +231,7 @@ export function ChatRow({
     onClickCapture?.(e);
     const target = e.target as Node;
     // Clicks inside a menu's portal bubble here through React; they aren't the row's.
-    if (!e.currentTarget.contains(target) || moreRef.current?.contains(target) || inBelow(target))
-      return;
+    if (!e.currentTarget.contains(target) || inControls(target) || inBelow(target)) return;
     const swiped = swipe.consumeClick();
     const held = hold.consumeClick();
     if (swiped || held) {
@@ -308,6 +321,7 @@ export function ChatRow({
       data-swiping={swipe.phase === 'idle' ? undefined : swipe.phase}
       data-swipeable={swipe.enabled || undefined}
       data-has-menu={showMenu || undefined}
+      data-disclosure={showDisclosure || undefined}
       data-drop-before={dropBefore || undefined}
       data-below={below ? '' : undefined}
       draggable={canDrag || undefined}
@@ -330,8 +344,8 @@ export function ChatRow({
         onPointerDown?.(e);
         if (inBelow(e.target)) return;
         swipe.down(e);
-        // Not from the ⋯: that's a button of its own.
-        if (!moreRef.current?.contains(e.target as Node)) hold.down(e);
+        // Not from the ⋯ or the badge: those are buttons of their own.
+        if (!inControls(e.target)) hold.down(e);
       }}
       onPointerMove={(e) => {
         onPointerMove?.(e);
@@ -385,6 +399,11 @@ export function ChatRow({
           >
             {content}
           </Slot.Root>
+        )}
+        {showDisclosure && (
+          <span ref={disclosureRef} className={styles.disclosure}>
+            {disclosure}
+          </span>
         )}
         {dot && !editing && <span aria-hidden className={styles.dot} data-status={status} />}
         {showMenu && (

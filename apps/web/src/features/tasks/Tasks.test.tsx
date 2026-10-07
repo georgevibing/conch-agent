@@ -208,6 +208,9 @@ describe('Tasks', () => {
       name: 'Hide tasks from Fix the parser: 2 tasks · 1 working',
     });
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    // A badge on the chat's own row, not a line of its own.
+    expect(toggle).toHaveTextContent('2');
+    expect(toggle.closest('li')).toHaveTextContent('Fix the parser');
     const list = screen.getByRole('list', { name: 'Tasks from Fix the parser' });
     expect(within(list).getByText('npm test')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /tasks from Quiet one/ })).not.toBeInTheDocument();

@@ -27,7 +27,7 @@ import { DeleteChat } from '../archive/DeleteChat';
 import { useArchive } from '../archive/useArchive';
 import { APPS } from '../channels/describe';
 import { useQuietChat } from '../learning/useQuietChat';
-import { ChatTasksFor, useChatTasks } from '../tasks/ChatTasksFor';
+import { useChatTasks, useChatTaskTree } from '../tasks/ChatTasksFor';
 import { ChatMenuItems, type ChatMenuActions } from './ChatMenu';
 import { useOrganise } from './useOrganise';
 
@@ -134,6 +134,7 @@ export function ChatRowItem({
   const pinned = chat.pinned !== undefined;
   // What it sent off, under it (ADR 0033): live, each a press from its own chat.
   const tasks = useChatTasks(chat.id, { open });
+  const tree = useChatTaskTree({ chatId: chat.id, chatTitle: chat.title, tasks, onNavigate });
 
   const rename = async () => {
     const next = draft?.trim();
@@ -199,16 +200,8 @@ export function ChatRowItem({
       <ChatRow
         status={statusOf(chat, { stopped, open })}
         dropBefore={dropping}
-        below={
-          tasks && !selection.selecting ? (
-            <ChatTasksFor
-              chatId={chat.id}
-              chatTitle={chat.title}
-              tasks={tasks}
-              onNavigate={onNavigate}
-            />
-          ) : undefined
-        }
+        disclosure={tree.disclosure}
+        below={selection.selecting ? undefined : tree.below}
         leading={
           chat.origin?.kind === 'channel' ? (
             <IntegrationLogo

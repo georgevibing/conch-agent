@@ -144,7 +144,9 @@ test('a chat’s tasks sit under it in the sidebar, and open from there', async 
   await composer.press(`${mod}+Shift+Enter`);
   const row = openChatRow(page);
   const toggle = row.getByRole('button', { name: /tasks from/ });
-  await expect(toggle).toContainText('1 task · 1 working');
+  // A badge on the chat's own row: how many, and in full to a screen reader.
+  await expect(toggle).toHaveText('1');
+  await expect(toggle).toHaveAccessibleName(/1 task · 1 working/);
   const tasks = row.getByRole('list', { name: /^Tasks from/ });
   await expect(tasks).toContainText('Keep checking for a while');
   await expect(tasks).toContainText('npm run watch');
