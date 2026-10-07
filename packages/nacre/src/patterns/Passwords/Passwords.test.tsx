@@ -186,6 +186,30 @@ describe('VaultSourceRow', () => {
     expect(screen.getByText('Locked')).toBeInTheDocument();
     await expectAccessible(container);
   });
+
+  it('puts what to do on its own line, apart from the state and the button', async () => {
+    const hint =
+      'Turn on Settings › Developer › Integrate with 1Password CLI in the 1Password app.';
+    const { container } = renderNacre(
+      <VaultSourceRow
+        source="1password"
+        state="locked"
+        message={hint}
+        action={<button type="button">Turn off</button>}
+      />,
+    );
+    // The state's word stands alone, whole; the hint is a line of its own.
+    expect(screen.getByText('Locked').textContent).toBe('Locked');
+    expect(screen.getByText(hint)).toBeInTheDocument();
+    expect(screen.getByText(hint).closest('[class*="sourceState"]')).toBeNull();
+    await expectAccessible(container);
+  });
+
+  it('shows no hint when it is connected', () => {
+    renderNacre(<VaultSourceRow source="bitwarden" state="ready" count={2} message="Old news" />);
+    expect(screen.getByText('2 items')).toBeInTheDocument();
+    expect(screen.queryByText('Old news')).toBeNull();
+  });
 });
 
 describe('connected managers and dates', () => {

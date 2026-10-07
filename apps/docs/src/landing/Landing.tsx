@@ -593,6 +593,7 @@ export function Landing() {
             <TextLink asChild>
               <Link to={LANDING_LINKS.decisions}>Decisions</Link>
             </TextLink>
+            <TextLink href="/releases/">Release notes</TextLink>
             <TextLink href={REPO_URL} target="_blank" rel="noreferrer">
               GitHub
             </TextLink>

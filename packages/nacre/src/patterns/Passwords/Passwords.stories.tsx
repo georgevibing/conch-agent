@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { fn } from 'storybook/test';
 
 import { Button } from '../../components/Button';
+import { Stack } from '../../components/Stack';
 import { VirtualList } from '../../components/VirtualList';
 import {
   type GeneratorSettings,
@@ -413,67 +414,101 @@ export const SecurityCheck: Story = {
   ),
 };
 
-export const Sources: Story = {
-  render: () => (
-    <div
-      style={{
-        maxInlineSize: 560,
-        borderRadius: 16,
-        background: 'var(--nc-surface)',
-        boxShadow: 'inset 0 0 0 1px var(--nc-border-subtle)',
-      }}
-    >
-      <VaultSourceRow source="conch" state="ready" count={42} />
-      <VaultSourceRow
-        source="1password"
-        state="ready"
-        count={318}
-        action={
-          <Button size="sm" variant="ghost">
-            Turn off
-          </Button>
-        }
-      />
-      <VaultSourceRow
-        source="bitwarden"
-        state="locked"
-        message="Unlock it with its master password"
-        action={<Button size="sm">Unlock</Button>}
-      />
-      <VaultSourceRow
-        source="keepassxc"
-        state="missing"
-        action={
+const sourceRows = (
+  <>
+    <VaultSourceRow source="conch" state="ready" count={42} />
+    <VaultSourceRow
+      source="1password"
+      state="locked"
+      message="Turn on Settings › Developer › Integrate with 1Password CLI in the 1Password app."
+      action={
+        <Button size="sm" variant="surface">
+          Turn off
+        </Button>
+      }
+    />
+    <VaultSourceRow
+      source="bitwarden"
+      state="locked"
+      message="Unlock it with its master password"
+      action={
+        <Button size="sm" variant="surface">
+          Unlock
+        </Button>
+      }
+    />
+    <VaultSourceRow
+      source="keepassxc"
+      state="missing"
+      message="Needs KeePassXC’s command line tool."
+      action={
+        <Button size="sm" variant="surface">
+          Install KeePassXC
+        </Button>
+      }
+    />
+    <VaultSourceRow
+      source="protonpass"
+      state="ready"
+      count={86}
+      keptUnlocked
+      sync={{ enabled: true, copies: 86, when: 'up to date 4 min ago' }}
+      action={
+        <Stack direction="row" gap={1}>
           <Button size="sm" variant="surface">
-            Install KeePassXC
-          </Button>
-        }
-      />
-      <VaultSourceRow
-        source="protonpass"
-        state="ready"
-        count={86}
-        sync={{ enabled: true, copies: 86, when: 'up to date 4 min ago' }}
-        action={
-          <Button size="sm" variant="ghost">
             Copy into Conch
           </Button>
-        }
-      />
-      <VaultSourceRow
-        source="dashlane"
-        state="locked"
-        message="Set up Dashlane once in a terminal with “dcli sync”"
-      />
-      <VaultSourceRow
-        source="keeper"
-        state="ready"
-        count={12}
-        sync={{ enabled: false, copies: 12 }}
-      />
-      <VaultSourceRow source="keychain" state="ready" count={7} />
-    </div>
-  ),
+          <Button size="sm" variant="surface">
+            Lock
+          </Button>
+          <Button size="sm" variant="surface">
+            Turn off
+          </Button>
+        </Stack>
+      }
+    />
+    <VaultSourceRow
+      source="dashlane"
+      state="error"
+      message="Dashlane didn’t answer. Try again in a moment."
+      sync={{ enabled: true, copies: 20, problem: 'Dashlane is locked' }}
+      action={
+        <Button size="sm" variant="surface">
+          Turn off
+        </Button>
+      }
+    />
+    <VaultSourceRow
+      source="keeper"
+      state="off"
+      action={
+        <Button size="sm" variant="surface">
+          Turn on
+        </Button>
+      }
+    />
+    <VaultSourceRow source="keychain" state="ready" count={7} />
+  </>
+);
+
+const sourceFrame = (width: number) => ({
+  maxInlineSize: width,
+  borderRadius: 16,
+  background: 'var(--nc-surface)',
+  boxShadow: 'inset 0 0 0 1px var(--nc-border-subtle)',
+});
+
+/**
+ * Every state a manager can be in. The state's word never breaks; what to do
+ * about it gets its own line under the name, so the button never squeezes it.
+ */
+export const Sources: Story = {
+  render: () => <div style={sourceFrame(560)}>{sourceRows}</div>,
+};
+
+/** On a phone: a long hint wraps under the name, and several buttons go underneath. */
+export const SourcesNarrow: Story = {
+  render: () => <div style={sourceFrame(340)}>{sourceRows}</div>,
 };
 
 /** The start screen's glance at what else Passwords is showing. */

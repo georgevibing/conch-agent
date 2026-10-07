@@ -315,7 +315,7 @@ export class OnePasswordSource implements PasswordSource {
       return {
         state: 'locked',
         message:
-          'In the 1Password app, open Settings › Developer and turn on “Integrate with 1Password CLI”.',
+          'Turn on Settings › Developer › Integrate with 1Password CLI in the 1Password app.',
       };
     return { state: 'ready' };
   }

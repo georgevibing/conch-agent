@@ -780,7 +780,7 @@ describe('gateway WebSocket', () => {
     );
     await vi.waitFor(async () => {
       const notes = await services.healed.list();
-      expect(notes.some((n) => n.message.includes('waiting message went'))).toBe(true);
+      expect(notes.some((n) => n.message.includes('once you were back online'))).toBe(true);
     });
   });
 

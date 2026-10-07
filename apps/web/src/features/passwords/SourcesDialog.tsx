@@ -135,12 +135,12 @@ export function SourcesDialog({
       );
     if (s.state === 'locked' && s.unlock === 'password')
       return (
-        <Button size="sm" onClick={() => setUnlocking(s)}>
+        <Button size="sm" variant="surface" onClick={() => setUnlocking(s)}>
           Unlock
         </Button>
       );
     return (
-      <Stack direction="row" gap={1}>
+      <Stack direction="row" gap={1} wrap>
         {s.state === 'ready' && (
           <Button size="sm" variant="surface" onClick={() => setCopying(s)}>
             Copy into Conch
@@ -149,7 +149,7 @@ export function SourcesDialog({
         {s.state === 'ready' && s.unlock === 'password' && (
           <Button
             size="sm"
-            variant="ghost"
+            variant="surface"
             loading={busy === `lock:${id}`}
             onClick={() =>
               void run(`lock:${id}`, async () => {
@@ -165,7 +165,7 @@ export function SourcesDialog({
         )}
         <Button
           size="sm"
-          variant="ghost"
+          variant="surface"
           loading={busy === id}
           onClick={() => void run(id, () => vaultApi.setSource(id, { enabled: false }))}
         >
@@ -220,9 +220,8 @@ export function SourcesDialog({
         <Dialog.Header>
           <Dialog.Title>Password managers</Dialog.Title>
           <Dialog.Description>
-            Show what’s in your other password manager here, next to Conch’s own. Items stay where
-            they are: Conch reads them when you open them, and your assistant can fill them in the
-            same way, with your OK. Or copy them into Conch, once or kept up to date.
+            See your other password managers here, beside Conch’s own. Items stay where they are, or
+            copy them into Conch.
           </Dialog.Description>
         </Dialog.Header>
         <Dialog.Body>
@@ -264,9 +263,8 @@ export function SourcesDialog({
               </Callout>
             )}
             <Text size="xs" tone="subtle">
-              Apple Passwords (Safari, iCloud Keychain), Chrome and the others don’t let other apps
-              read them, so import from them instead, once. The macOS Keychain here is your login
-              keychain; macOS asks you before it shares each password.
+              Apple Passwords, Chrome and other browsers can’t be read by other apps: import from
+              them instead.
             </Text>
           </Stack>
         </Dialog.Body>

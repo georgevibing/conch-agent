@@ -50,6 +50,8 @@ export function Layout() {
   const [searching, setSearching] = useState(false);
   const [wantsSearch, setWantsSearch] = useState(false);
   const [menu, setMenu] = useState(false);
+  // The front page links what it needs from the bar and its footer.
+  const front = useLocation().pathname === '/';
   useScrollToPlace();
   const dark = theme.resolvedMode === 'dark';
 
@@ -134,32 +136,34 @@ export function Layout() {
         </div>
       </header>
 
-      <Stack
-        direction="row"
-        wrap
-        align="center"
-        justify="between"
-        className={styles.version}
-        as="nav"
-        aria-label="Documentation versions"
-      >
-        <Stack direction="row" wrap align="center" gap={2}>
-          <Badge tone="neutral">{VERSION_LABEL}</Badge>
-          <Button variant="ghost" tone="neutral" size="sm" asChild>
-            <a href={`${REPO_URL}/tree/${REPO_BRANCH}`}>Source</a>
-          </Button>
+      {!front && (
+        <Stack
+          direction="row"
+          wrap
+          align="center"
+          justify="between"
+          className={styles.version}
+          as="nav"
+          aria-label="Documentation versions"
+        >
+          <Stack direction="row" wrap align="center" gap={2}>
+            <Badge tone="neutral">{VERSION_LABEL}</Badge>
+            <Button variant="ghost" tone="neutral" size="sm" asChild>
+              <a href={`${REPO_URL}/tree/${REPO_BRANCH}`}>Source</a>
+            </Button>
+          </Stack>
+          <Stack direction="row" wrap gap={1}>
+            <Button variant="ghost" tone="neutral" size="sm" asChild>
+              <a href={DEVELOPMENT ? '/docs/' : '/docs/next/'}>
+                {DEVELOPMENT ? 'Default docs' : 'Development docs'}
+              </a>
+            </Button>
+            <Button variant="ghost" tone="neutral" size="sm" asChild>
+              <a href="/releases/">Release notes</a>
+            </Button>
+          </Stack>
         </Stack>
-        <Stack direction="row" wrap gap={1}>
-          <Button variant="ghost" tone="neutral" size="sm" asChild>
-            <a href={DEVELOPMENT ? '/docs/' : '/docs/next/'}>
-              {DEVELOPMENT ? 'Default docs' : 'Development docs'}
-            </a>
-          </Button>
-          <Button variant="ghost" tone="neutral" size="sm" asChild>
-            <a href="/releases/">Release notes</a>
-          </Button>
-        </Stack>
-      </Stack>
+      )}
       <Outlet />
 
       {/* Loaded the first time it's asked for: by the button, or by ⌘K. */}

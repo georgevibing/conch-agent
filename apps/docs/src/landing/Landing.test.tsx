@@ -179,7 +179,9 @@ describe('the front page', () => {
     open();
     for (const link of screen.getAllByRole('link')) {
       const href = link.getAttribute('href') ?? '';
-      if (href.startsWith('/')) expect(href === '/docs' || pageAt(href), href).toBeTruthy();
+      // The release notes are their own page, built beside the guides.
+      if (href.startsWith('/') && href !== '/releases/')
+        expect(href === '/docs' || pageAt(href), href).toBeTruthy();
     }
   });
 });
