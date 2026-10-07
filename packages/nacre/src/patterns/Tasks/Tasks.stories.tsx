@@ -14,7 +14,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'A task working away in the background: what it is, how it’s going in words, what it’s doing right now and what it did, how long it’s been, and the one or two things you can do. In a chat it’s compact; on the Tasks page it shows everything. A helper (part of a bigger job the assistant split up) is marked as one.',
+          'A task working away in the background, read at a glance: what it is, how it’s going in words and with a mark that moves (a band of pearl light turning while it works, a check that draws itself, a nudge when it didn’t finish), and how long it’s been. Once it’s done, one line says what came of it — or what went wrong — without ids or bookkeeping; its whole result, what was confirmed and what it did wait behind the Details chevron. A helper (part of a bigger job the assistant split up) is marked as one.',
       },
     },
   },
@@ -156,4 +156,91 @@ export const FinishedUnchecked: Story = {
       'Read the source files and wrote the report. No automatic completion criteria were set.',
     error: undefined,
   },
+};
+
+/**
+ * A long, machine-flavoured result, as helpers often write them: one line in
+ * view, ids left out, the rest behind Details.
+ */
+export const LongResult: Story = {
+  args: {
+    variant: 'compact',
+    kind: 'helper',
+    title: 'Task probe recovery rerun',
+    status: 'unverified',
+    unchecked: true,
+    startedAt: NOW - 31_000,
+    finishedAt: NOW,
+    current: undefined,
+    summary:
+      'Diagnostic passed. Initial Read returned the expected ENOENT for conch-task-probe-intentionally-missing-rerun-20261007-b92e.txt. Write and final Read succeeded; the final content matched exactly "recovered successfully\\n", including the trailing newline. No unexpected errors. Left conch-task-probe-recovery-rerun-20261007-b92e.txt in the work folder for inspection.',
+    details: (
+      <ul aria-label="Confirmed results">
+        <li>Verified conch-task-probe-recovery-rerun-20261007-b92e.txt</li>
+        <li>Read conch-task-probe-recovery-rerun-20261007-b92e.txt</li>
+      </ul>
+    ),
+    onStop: undefined,
+    onRemove: undefined,
+    onRetry: undefined,
+  },
+};
+
+/** Every state side by side, as they'd stack in a chat. */
+export const AllStates: Story = {
+  render: (args) => (
+    <Stack gap={2}>
+      <TaskCard
+        {...args}
+        variant="compact"
+        title="Waiting its turn"
+        status="queued"
+        current={undefined}
+        steps={[]}
+      />
+      <TaskCard {...args} variant="compact" title="Working" />
+      <TaskCard
+        {...args}
+        variant="compact"
+        title="Ship it"
+        status="needs-you"
+        current="Wants to run git push"
+        steps={[]}
+      />
+      <TaskCard
+        {...args}
+        variant="compact"
+        title="Checked and done"
+        status="done"
+        finishedAt={NOW}
+        summary="Saved the draft “Weekly update”."
+      />
+      <TaskCard
+        {...args}
+        variant="compact"
+        title="Finished"
+        status="unverified"
+        unchecked
+        finishedAt={NOW}
+        summary="Wrote the report."
+      />
+      <TaskCard
+        {...args}
+        variant="compact"
+        title="Not confirmed"
+        status="unverified"
+        finishedAt={NOW}
+        error="The second draft could not be confirmed."
+      />
+      <TaskCard
+        {...args}
+        variant="compact"
+        title="Didn’t finish"
+        status="failed"
+        finishedAt={NOW}
+        error="OpenRouter isn’t available right now."
+      />
+      <TaskCard {...args} variant="compact" title="Stopped" status="stopped" finishedAt={NOW} />
+    </Stack>
+  ),
 };

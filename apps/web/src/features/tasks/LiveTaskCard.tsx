@@ -19,6 +19,63 @@ export function withCode(text: string): ReactNode {
   return parts.map((part, i) => (i % 2 ? <InlineCode key={i}>{part}</InlineCode> : part));
 }
 
+/** What a finished task confirmed, and what it couldn't: behind its card's "Details". */
+function details(
+  task: Task,
+  assessment: ReturnType<typeof assessTask>,
+  unchecked: boolean,
+): ReactNode {
+  const confirmed = (task.operations ?? []).filter(
+    (operation) => operation.state === 'confirmed' && operation.receipt,
+  );
+  const missing = assessment.reasons.flatMap((reason) =>
+    reason.code === 'required-evidence-missing' ? [reason] : [],
+  );
+  const unsupported = assessment.reasons.some((reason) => reason.code === 'receipt-unavailable');
+  const uncertain = task.operations?.some(uncertainEffect);
+  if (!confirmed.length && !missing.length && !unsupported && !uncertain) return undefined;
+  return (
+    <>
+      {confirmed.length > 0 && (
+        <ul aria-label="Confirmed results">
+          {confirmed.map((operation) => (
+            <li key={operation.id}>
+              {operation.receipt?.url ? (
+                <a href={operation.receipt.url} target="_blank" rel="noreferrer">
+                  {operation.receipt.label}
+                </a>
+              ) : (
+                operation.receipt?.label
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {unchecked && confirmed.length > 0 && (
+        <p>Nothing was set to check this against, so these are what it recorded.</p>
+      )}
+      {missing.length > 0 && (
+        <ul aria-label="Missing verification">
+          {missing.map((reason) => (
+            <li key={reason.tool}>
+              Still needs {reason.minimum} confirmed result(s) from {reason.tool}.
+            </li>
+          ))}
+        </ul>
+      )}
+      {unsupported && (
+        <p>
+          Some tools finished without independent outcome checks. Their earlier actions will not be
+          replayed.
+        </p>
+      )}
+      {uncertain && (
+        <p>Some actions have no confirmed result. They will not be repeated automatically.</p>
+      )}
+    </>
+  );
+}
+
 /** A task as a card, with what you can do about it. */
 export function LiveTaskCard({
   task,
@@ -62,51 +119,9 @@ export function LiveTaskCard({
       finishedAt={task.finishedAt}
       current={task.current && withCode(task.current)}
       steps={task.steps.map((s) => withCode(s.label))}
-      summary={
-        <>
-          {task.summary && <p>{task.summary}</p>}
-          {unchecked && (
-            <p>No automatic completion criteria were set. Recorded tool results are shown below.</p>
-          )}
-          {assessment.reasons.some((reason) => reason.code === 'required-evidence-missing') && (
-            <ul aria-label="Missing verification">
-              {assessment.reasons
-                .filter((reason) => reason.code === 'required-evidence-missing')
-                .map((reason) => (
-                  <li key={reason.tool}>
-                    Still needs {reason.minimum} confirmed result(s) from {reason.tool}.
-                  </li>
-                ))}
-            </ul>
-          )}
-          {task.operations?.some((operation) => operation.receipt) && (
-            <ul aria-label="Confirmed results">
-              {task.operations
-                .filter((operation) => operation.state === 'confirmed' && operation.receipt)
-                .map((operation) => (
-                  <li key={operation.id}>
-                    {operation.receipt?.url ? (
-                      <a href={operation.receipt.url} target="_blank" rel="noreferrer">
-                        {operation.receipt.label}
-                      </a>
-                    ) : (
-                      operation.receipt?.label
-                    )}
-                  </li>
-                ))}
-            </ul>
-          )}
-          {assessment.reasons.some((reason) => reason.code === 'receipt-unavailable') && (
-            <p>
-              Some tools finished without independent outcome checks. Their earlier actions will not
-              be replayed.
-            </p>
-          )}
-          {task.operations?.some(uncertainEffect) && (
-            <p>Some actions have no confirmed result. They will not be repeated automatically.</p>
-          )}
-        </>
-      }
+      summary={task.summary}
+      // What's behind "Details": what it confirmed, and what it couldn't.
+      details={details(task, assessment, unchecked)}
       error={unchecked ? undefined : task.error}
       note={task.note}
       branch={task.worktree?.changed ? task.worktree.branch : undefined}
