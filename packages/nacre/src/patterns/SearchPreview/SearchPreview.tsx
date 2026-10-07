@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef, type ComponentProps, type ReactNode } from 're
 import { Highlight, type HighlightRange } from '../../components/Highlight';
 import { Skeleton } from '../../components/Skeleton';
 import { cx } from '../../utils/cx';
-import { MessageMark } from '../Message/Message';
+import { MessageMark } from '../AgentAvatar/AgentAvatar';
 import styles from './SearchPreview.module.css';
 
 export interface SearchPreviewMessage {

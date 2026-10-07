@@ -5,6 +5,7 @@ export * from './Composer';
 export * from './CopyButton';
 export * from './Diff';
 export * from './Message';
+export * from './AgentAvatar';
 export * from './Passwords';
 export * from './Prose';
 export * from './StreamingText';

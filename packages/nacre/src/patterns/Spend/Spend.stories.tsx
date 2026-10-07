@@ -120,7 +120,6 @@ export const ReplyCosts: Story = {
         <Message
           key={id}
           from="assistant"
-          author="Conch"
           actionsVisibility="always"
           actions={
             <>

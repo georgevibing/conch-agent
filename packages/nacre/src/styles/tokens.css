@@ -335,17 +335,18 @@
        nothing jumps sideways moving between them. */
     --nc-page-width: 64rem;
     /* The chat: one geometry for a reply and everything that belongs to it.
-       Its words start past the assistant's mark (`--nc-chat-inset`); each
-       part after them (tool rows, a plan, a question, an offer, chips) sits
-       one step under what's above it, lined up with the words. */
+       Who is speaking is a line over the reply, its face `--nc-chat-speaker`
+       tall; the words, and each part after them (tool rows, a plan, a
+       question, an offer, chips), start at the column's edge, one step under
+       what's above. `--nc-chat-mark` is Conch's mark where it stands alone. */
+    --nc-chat-speaker: 1.25rem;
     --nc-chat-mark: 1.75rem;
-    --nc-chat-inset: calc(var(--nc-chat-mark) + var(--nc-space-3));
     --nc-chat-step: var(--nc-space-3);
     /* Where a part sits: the gap of the column it's in, and how far in it
-       starts. These are the transcript's; a reply's `Message attached` slot
-       sets its own, so the same part fits both. */
+       starts (the column's edge). These are the transcript's; a reply's
+       `Message attached` slot sets its own, so the same part fits both. */
     --nc-chat-flow-gap: var(--nc-space-6);
-    --nc-chat-indent: var(--nc-chat-inset);
+    --nc-chat-indent: 0px;
     /* A card in a reply (an offer, a question, a plan, an approval): one
        shape, one surface, one padding, one size of mark beside its title. */
     --nc-chat-card-radius: var(--nc-radius-lg);
@@ -589,14 +590,6 @@
       --nc-radius-lg: calc(21px * var(--nc-radius-scale));
       --nc-radius-xl: calc(30px * var(--nc-radius-scale));
       --nc-radius-2xl: calc(40px * var(--nc-radius-scale));
-    }
-  }
-
-  /* On a phone a reply's parts span the column, from the mark's edge. */
-  @media (max-width: 640px) {
-    :root,
-    [data-nacre-theme] {
-      --nc-chat-indent: 0px;
     }
   }
 

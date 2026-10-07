@@ -57,7 +57,7 @@ export const InAChat: Story = {
       <Message from="user" timestamp={new Date(2026, 9, 3, 9, 12)}>
         And the shady corner by the shed?
       </Message>
-      <Message from="assistant" author="Conch" timestamp={new Date(2026, 9, 3, 9, 12)}>
+      <Message from="assistant" timestamp={new Date(2026, 9, 3, 9, 12)}>
         <Prose>
           <p>Ferns and hostas will be happy there; skip anything that wants full sun.</p>
         </Prose>
@@ -66,7 +66,7 @@ export const InAChat: Story = {
       <Message from="user" timestamp={new Date(2026, 9, 3, 18, 40)}>
         Remind me what we decided for the south fence?
       </Message>
-      <Message from="assistant" author="Conch" timestamp={new Date(2026, 9, 3, 18, 40)}>
+      <Message from="assistant" timestamp={new Date(2026, 9, 3, 18, 40)}>
         <Prose>
           <p>Tomatoes along the fence with basil between them, and no peppers this year.</p>
         </Prose>

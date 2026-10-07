@@ -1,15 +1,9 @@
 import { AlertCircle, RotateCcw } from 'lucide-react';
-import {
-  useEffect,
-  useId,
-  useState,
-  type ComponentProps,
-  type CSSProperties,
-  type ReactNode,
-} from 'react';
+import { useId, useState, type ComponentProps, type ReactNode } from 'react';
 
 import { Button } from '../../components/Button';
 import { cx } from '../../utils/cx';
+import { AgentAvatar, type Speaker } from '../AgentAvatar/AgentAvatar';
 import styles from './Message.module.css';
 
 export type MessageFrom = 'user' | 'assistant' | 'system';
@@ -18,14 +12,27 @@ export type MessageStatus = 'complete' | 'streaming' | 'error';
 export interface MessageProps extends Omit<ComponentProps<'article'>, 'children'> {
   from: MessageFrom;
   children?: ReactNode;
-  /** Display name. Defaults to "You" / "Claude". */
-  author?: string;
-  /** Custom avatar for assistant messages. Defaults to the pearl mark. */
-  avatar?: ReactNode;
+  /**
+   * Who is speaking: a name, and for an agent how it looks (a preset's id or
+   * a picture's address, see `AgentAvatar`). Defaults to "You" for your
+   * turns and to Conch, in its mark, for the assistant's.
+   */
+  speaker?: Speaker;
+  /**
+   * The same speaker as the turn just before, with nothing between: the
+   * reply goes on without its speaker line, as one voice keeps talking. It
+   * is still named, once, for assistive tech.
+   */
+  continued?: boolean;
   timestamp?: Date | string;
   /**
+   * More about the turn, quietly, on the speaker line beside its time: the
+   * model that answered. Shown on hover or focus where there's a pointer.
+   */
+  meta?: ReactNode;
+  /**
    * What belongs to the reply after its words: tool rows, a plan, a question,
-   * an offer, replies to send next. Drawn in the text column one step under
+   * an offer, replies to send next. Drawn in the reply's column one step under
    * the words (`--nc-chat-step`) and before the actions, so the actions
    * never sit between the words and their card. Each part places itself with
    * `--nc-chat-flow-gap` and `--nc-chat-indent`, which the slot sets.
@@ -37,13 +44,18 @@ export interface MessageProps extends Omit<ComponentProps<'article'>, 'children'
   actionsVisibility?: 'hover' | 'always';
   status?: MessageStatus;
   /**
+   * The speaker is still at work on this turn, words or not (a step running,
+   * more to come): their face moves. Defaults to `status === 'streaming'`.
+   */
+  working?: boolean;
+  /**
    * Play the "surfacing" entrance on mount (turn off when it replaces a
    * placeholder in place). Read once, when the message mounts: changing it
    * later never replays the entrance on a message already on screen.
    */
   entrance?: boolean;
   /**
-   * Epoch ms when the work this message shows began. The moving mark keeps
+   * Epoch ms when the work this message shows began. The moving face keeps
    * time from it, so a reply that takes a placeholder's place carries the
    * spiral on where it was instead of starting it again.
    */
@@ -65,77 +77,25 @@ function Timestamp({ value }: { value: Date | string }) {
 }
 
 /**
- * The assistant's mark: a small glazed tile with a pearl rim. While `active`,
- * the conch spiral draws itself from the centre out, flows away and grows
- * again — a shell forming — as the rim's light orbits. When work finishes a
- * single ring of light passes around it.
- */
-export function MessageMark({
-  active,
-  since,
-  className,
-  style,
-  ...props
-}: ComponentProps<'span'> & {
-  active?: boolean;
-  /** Epoch ms the work began: the spiral keeps time from it across remounts. */
-  since?: number;
-}) {
-  const [landed, setLanded] = useState(false);
-  const [wasActive, setWasActive] = useState(active);
-  // How far into its loops the mark is, read when it starts moving and then fixed,
-  // so a re-render never shifts a running animation.
-  const [age, setAge] = useState(() => (active ? ageOf(since) : 0));
-  if (Boolean(active) !== Boolean(wasActive)) {
-    setWasActive(active);
-    if (!active) setLanded(true);
-    else setAge(ageOf(since));
-  }
-  useEffect(() => {
-    if (!landed) return;
-    const id = setTimeout(() => setLanded(false), 1200);
-    return () => clearTimeout(id);
-  }, [landed]);
-  return (
-    <span
-      aria-hidden
-      data-active={active || undefined}
-      data-landed={landed || undefined}
-      className={cx(styles.mark, className)}
-      style={{ '--nc-mark-age': `${age}ms`, ...style } as CSSProperties}
-      {...props}
-    >
-      <svg viewBox="3.5 3.5 17 17" className={styles.markGlyph}>
-        {/* Conch's mark: a shell spiral of growing quarter-arcs (a golden spiral). */}
-        <path
-          pathLength={1}
-          d="M12 12a1.5 1.5 0 0 1 1.5 1.5a3 3 0 0 1-3 3a4.5 4.5 0 0 1-4.5-4.5a6 6 0 0 1 6-6a7.5 7.5 0 0 1 7.5 7.5"
-          transform="translate(0 -1.5)"
-        />
-      </svg>
-    </span>
-  );
-}
-
-function ageOf(since: number | undefined): number {
-  return since === undefined ? 0 : Math.max(0, Date.now() - since);
-}
-
-/**
- * One turn in a conversation. User turns are soft accent-tinted bubbles
- * aligned to the end; assistant turns are full-width prose with a mark.
- * While `status="streaming"` a breathing pearl caret follows the last line.
+ * One turn in a conversation. Your turns are soft accent-tinted bubbles at
+ * the end of the column. The assistant's use the whole column: one compact
+ * line says who is speaking (their face, their name, and quietly when and
+ * with which model), and the answer starts under it, flush with everything
+ * else in the chat. While `status="streaming"` the face comes alive and a
+ * breathing pearl caret follows the last line.
  */
 export function Message({
   from,
   children,
-  author,
-  avatar,
+  speaker,
+  continued = false,
   timestamp,
+  meta,
   attached,
   actions,
   actionsVisibility = 'hover',
   status = 'complete',
+  working = status === 'streaming',
   entrance = true,
   since,
   error,
@@ -146,7 +106,7 @@ export function Message({
   const headingId = useId();
   // Decided when it mounts: a message already on screen never surfaces twice.
   const [entered] = useState(entrance);
-  const name = author ?? (from === 'user' ? 'You' : from === 'assistant' ? 'Claude' : 'System');
+  const name = speaker?.name ?? (from === 'user' ? 'You' : 'Conch');
 
   if (from === 'system') {
     return (
@@ -203,6 +163,38 @@ export function Message({
     </div>
   );
 
+  if (from === 'assistant') {
+    return (
+      <article
+        aria-labelledby={headingId}
+        aria-busy={status === 'streaming' || undefined}
+        data-from="assistant"
+        data-status={status}
+        data-continued={continued || undefined}
+        data-entrance={entered ? undefined : 'none'}
+        className={cx(styles.message, className)}
+        {...props}
+      >
+        {continued ? (
+          <h2 id={headingId} className="nc-visually-hidden">
+            {name} said:
+          </h2>
+        ) : (
+          <MessageSpeaker
+            speaker={{ name, avatar: speaker?.avatar }}
+            headingId={headingId}
+            active={working}
+            since={since}
+            timestamp={timestamp}
+            meta={meta}
+          />
+        )}
+        {body}
+        {actionBar}
+      </article>
+    );
+  }
+
   return (
     <article
       aria-labelledby={headingId}
@@ -216,38 +208,74 @@ export function Message({
       <h2 id={headingId} className="nc-visually-hidden">
         {name} said:
       </h2>
-      {from === 'assistant' ? (
-        <>
-          <div className={styles.avatar}>
-            {avatar ?? <MessageMark active={status === 'streaming'} since={since} />}
-          </div>
-          <div className={styles.main}>
-            <div className={styles.meta}>
-              <span className={styles.author} aria-hidden>
-                {name}
-              </span>
-              {timestamp && <Timestamp value={timestamp} />}
-            </div>
-            {body}
+      <div className={styles.main}>
+        {body}
+        {/* When it was sent and what you can do with it, on one quiet line. */}
+        {(timestamp || actionBar) && (
+          <div className={styles.userFoot}>
+            {timestamp && (
+              <div className={styles.userMeta}>
+                <Timestamp value={timestamp} />
+              </div>
+            )}
             {actionBar}
           </div>
-        </>
-      ) : (
-        <div className={styles.main}>
-          {body}
-          {/* When it was sent and what you can do with it, on one quiet line. */}
-          {(timestamp || actionBar) && (
-            <div className={styles.userFoot}>
-              {timestamp && (
-                <div className={styles.userMeta}>
-                  <Timestamp value={timestamp} />
-                </div>
-              )}
-              {actionBar}
-            </div>
-          )}
-        </div>
-      )}
+        )}
+      </div>
     </article>
+  );
+}
+
+export interface MessageSpeakerProps extends Omit<ComponentProps<'div'>, 'children'> {
+  speaker: Speaker;
+  /** The name is the turn's heading: the id the turn is labelled by. */
+  headingId?: string;
+  /** The speaker is working on this turn right now. */
+  active?: boolean;
+  /** Epoch ms the work began. */
+  since?: number;
+  timestamp?: Date | string;
+  /** The model that answered, or another quiet word about the turn. */
+  meta?: ReactNode;
+}
+
+/**
+ * The line over a reply that says who is speaking: a small face, the name,
+ * and — quietly, on hover or focus where there's a pointer — when, and with
+ * which model. The name is the turn's heading (“Conch said:”), so it's read
+ * once per turn, never per paragraph; the face beside it is decoration.
+ */
+export function MessageSpeaker({
+  speaker,
+  headingId,
+  active,
+  since,
+  timestamp,
+  meta,
+  className,
+  ...props
+}: MessageSpeakerProps) {
+  const hasMeta = meta != null && meta !== false && meta !== '';
+  return (
+    <div className={cx(styles.speaker, className)} {...props}>
+      <AgentAvatar
+        name={speaker.name}
+        avatar={speaker.avatar}
+        size="xs"
+        decorative
+        active={active}
+        since={since}
+      />
+      <h2 id={headingId} className={styles.author}>
+        {speaker.name} <span className="nc-visually-hidden">said:</span>
+      </h2>
+      {(hasMeta || timestamp) && (
+        <span className={styles.meta}>
+          {hasMeta && <span className={styles.model}>{meta}</span>}
+          {hasMeta && timestamp && <span aria-hidden> · </span>}
+          {timestamp && <Timestamp value={timestamp} />}
+        </span>
+      )}
+    </div>
   );
 }

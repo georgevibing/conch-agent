@@ -99,11 +99,7 @@ function Transcript({ at }: { at: number }) {
     <div className={styles.chat}>
       {at >= CHAT.ask && <Message from="user">What changed in this repo since Monday?</Message>}
       {at >= CHAT.think && (
-        <Message
-          from="assistant"
-          author="Conch"
-          status={at < CHAT.answerDone ? 'streaming' : 'complete'}
-        >
+        <Message from="assistant" status={at < CHAT.answerDone ? 'streaming' : 'complete'}>
           <div className={styles.reply}>
             {at < CHAT.tool && <ThinkingIndicator size="sm" label="Reading the history" />}
             {at >= CHAT.tool && (
@@ -133,11 +129,7 @@ function Transcript({ at }: { at: number }) {
         </RoutedNote>
       )}
       {at >= CHAT.thinkAgain && (
-        <Message
-          from="assistant"
-          author="Conch"
-          status={at < CHAT.answerAgainDone ? 'streaming' : 'complete'}
-        >
+        <Message from="assistant" status={at < CHAT.answerAgainDone ? 'streaming' : 'complete'}>
           <div className={styles.reply}>
             {at < CHAT.answerAgain && <ThinkingIndicator size="sm" label="Picking up the thread" />}
             {at >= CHAT.answerAgain && (
@@ -243,11 +235,7 @@ function Knows({ at }: { at: number }) {
     <div className={styles.chat}>
       {at >= KNOWS.ask && <Message from="user">Can I fit a haircut in on Friday?</Message>}
       {at >= KNOWS.think && (
-        <Message
-          from="assistant"
-          author="Conch"
-          status={at < KNOWS.replyDone ? 'streaming' : 'complete'}
-        >
+        <Message from="assistant" status={at < KNOWS.replyDone ? 'streaming' : 'complete'}>
           {at < KNOWS.reply ? (
             <ThinkingIndicator size="sm" label="Thinking" />
           ) : (
@@ -261,7 +249,6 @@ function Knows({ at }: { at: number }) {
       )}
       {at >= KNOWS.offer && (
         <OfferCard
-          className={styles.offer}
           kind="app"
           name={CALENDAR}
           brand="google-calendar"
@@ -276,9 +263,10 @@ function Knows({ at }: { at: number }) {
         />
       )}
       {at >= KNOWS.tool && (
+        // The same voice carrying on after its card: no second speaker line.
         <Message
           from="assistant"
-          author="Conch"
+          continued
           status={at < KNOWS.answerDone ? 'streaming' : 'complete'}
         >
           <div className={styles.reply}>
@@ -317,9 +305,7 @@ function Knows({ at }: { at: number }) {
           </div>
         </Message>
       )}
-      {at >= KNOWS.also && (
-        <OfferAlsoTry className={styles.offer} examples={calendar?.examples ?? []} onPick={noop} />
-      )}
+      {at >= KNOWS.also && <OfferAlsoTry examples={calendar?.examples ?? []} onPick={noop} />}
     </div>
   );
 }
@@ -418,11 +404,7 @@ function Make({ at }: { at: number }) {
     <div className={styles.chat}>
       {at >= MAKE.ask && <Message from="user">{MAKE_ASK}</Message>}
       {at >= MAKE.think && (
-        <Message
-          from="assistant"
-          author="Conch"
-          status={at < MAKE.replyDone ? 'streaming' : 'complete'}
-        >
+        <Message from="assistant" status={at < MAKE.replyDone ? 'streaming' : 'complete'}>
           {at < MAKE.write ? (
             <ThinkingIndicator size="sm" label="Thinking" />
           ) : (
@@ -459,7 +441,6 @@ function Make({ at }: { at: number }) {
       )}
       {at >= MAKE.offer && (
         <AppOffer
-          className={styles.offer}
           action="add"
           manifest={PLANT_DIARY.manifest}
           tools={PLANT_DIARY.tools}

@@ -1,4 +1,4 @@
-import { act, screen } from '@testing-library/react';
+import { act, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -19,7 +19,7 @@ describe('Message', () => {
     );
     expect(screen.getByRole('log', { name: 'Conversation' })).toBeInTheDocument();
     expect(screen.getByRole('article', { name: 'You said:' })).toHaveTextContent('Hi');
-    expect(screen.getByRole('article', { name: 'Claude said:' })).toHaveTextContent('Hello!');
+    expect(screen.getByRole('article', { name: 'Conch said:' })).toHaveTextContent('Hello!');
     expect(screen.getByRole('article', { name: 'System notice' })).toBeInTheDocument();
     expect(container.querySelector('time')).toHaveAttribute('datetime', '2026-09-29T10:42:00.000Z');
     await expectAccessible(container);
@@ -53,13 +53,54 @@ describe('Message', () => {
     expect(onRetry).toHaveBeenCalled();
   });
 
-  it('uses a custom author name', () => {
-    renderNacre(
-      <Message from="assistant" author="Opus">
-        Hey
+  it('says who is speaking once, on a line over the reply that is its heading', async () => {
+    const { container } = renderNacre(
+      <Message
+        from="assistant"
+        speaker={{ name: 'Opus', avatar: 'spark' }}
+        timestamp={new Date('2026-09-29T10:42:00Z')}
+        meta="Opus 4.5"
+      >
+        <p>One paragraph.</p>
+        <p>And another.</p>
       </Message>,
     );
-    expect(screen.getByRole('article', { name: 'Opus said:' })).toBeInTheDocument();
+    const reply = screen.getByRole('article', { name: 'Opus said:' });
+    // One heading per turn, however many paragraphs: the visible name is it.
+    const headings = within(reply).getAllByRole('heading');
+    expect(headings).toHaveLength(1);
+    expect(headings[0]).toHaveTextContent('Opus said:');
+    expect(headings[0]).toBeVisible();
+    // The face beside it is decoration; the model and the time sit quietly after it.
+    expect(within(reply).queryByRole('img')).toBeNull();
+    expect(reply).toHaveTextContent('Opus 4.5');
+    await expectAccessible(container);
+  });
+
+  it('goes on without a second speaker line when the same voice spoke just before', () => {
+    renderNacre(
+      <Message from="assistant" continued timestamp={new Date()} meta="Opus 4.5">
+        More
+      </Message>,
+    );
+    const reply = screen.getByRole('article', { name: 'Conch said:' });
+    expect(reply).toHaveAttribute('data-continued');
+    // Still named once for assistive tech, but nothing is drawn over the words.
+    expect(within(reply).getByRole('heading')).toHaveClass('nc-visually-hidden');
+    expect(reply).not.toHaveTextContent('Opus 4.5');
+  });
+
+  it('moves the face while the speaker works, words or not', () => {
+    const { container, rerender } = renderNacre(
+      <Message from="assistant" working>
+        Done with the words, still running a step
+      </Message>,
+    );
+    expect(container.querySelector('[data-active]')).not.toBeNull();
+    // Not busy: what's written is there to read, and the caret doesn't follow it.
+    expect(screen.getByRole('article')).not.toHaveAttribute('aria-busy');
+    rerender(<Message from="assistant">Done</Message>);
+    expect(container.querySelector('[data-active]')).toBeNull();
   });
 
   it('draws what belongs to the reply inside it, before its actions', () => {
@@ -72,7 +113,7 @@ describe('Message', () => {
         I can’t see your issues yet.
       </Message>,
     );
-    const reply = screen.getByRole('article', { name: 'Claude said:' });
+    const reply = screen.getByRole('article', { name: 'Conch said:' });
     const card = screen.getByRole('button', { name: 'Connect Linear' });
     expect(reply).toContainElement(card);
     expect(

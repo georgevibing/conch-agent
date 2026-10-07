@@ -64,6 +64,7 @@ import { providerKeys, putProvider, useProviders } from '../providers/queries';
 import { useNeed } from '../setup/useNeed';
 import { UsageComposerNotice } from '../usage/UsageComposerNotice';
 import { ChatSpend } from '../spend/Spend';
+import { useAgents, useChatAgent } from '../agents/api';
 import styles from './ChatView.module.css';
 import { ChatContext } from './ChatContext';
 import { attachmentUrl } from './uploads';
@@ -422,7 +423,24 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
   }, [conversationId]);
 
   const turn = useTurnOptions(conversationId);
+  // The model that answered a reply, by the name the picker gives it, for its speaker line.
+  const catalog = turn.catalog;
+  const modelName = useMemo(
+    () => (engine: string | undefined, model: string | undefined) => {
+      if (!model) return undefined;
+      const found = catalog?.providers
+        .find((p) => p.engine === engine)
+        ?.models.find((m) => m.id === model);
+      return found ? modelLabel(found.label).label : undefined;
+    },
+    [catalog],
+  );
   const record = useConversations().data?.find((c) => c.id === conversationId);
+  // Who answers here (ADR 0101): its name and face over every reply; any agent by id
+  // for the replies from before another one took the chat over.
+  const agents = useAgents().data?.agents;
+  const agent = useChatAgent(record);
+  const agentOf = useMemo(() => (id: string) => agents?.find((a) => a.id === id), [agents]);
   const origin = record?.origin;
   const isRoutineRun = origin?.kind === 'routine';
   const continuingTask = useRef(false);
@@ -1065,7 +1083,10 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
         taskChat={origin?.kind === 'task'}
         overlay={overlay}
         pending={pending}
-        name={name}
+        name={agent?.name ?? name}
+        avatar={agent?.avatar}
+        agentOf={agentOf}
+        modelName={modelName}
         onRespond={onRespond}
         onRetry={onRetry}
         onAskAgain={onAskAgain}

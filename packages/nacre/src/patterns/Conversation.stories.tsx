@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Paperclip, RotateCcw, ThumbsUp } from 'lucide-react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { IconButton } from '../components/IconButton';
 import { CodeBlock } from './CodeBlock';
@@ -22,7 +22,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Every chat pattern composed into a realistic Claude Code session: messages, tool calls with a file diff, code, the thinking state and the composer.',
+          'Every chat pattern composed into a realistic coding session: replies under their speaker line, tool calls with a file diff, code, a table, the thinking state and the composer, all on one column edge.',
       },
     },
   },
@@ -67,19 +67,34 @@ function Shell({
   );
 }
 
+/** How a part of a reply places itself (the web's `.part`): a step under what's above, at the column's edge. */
+const part: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  marginBlockStart: 'calc(var(--nc-chat-step) - var(--nc-chat-flow-gap))',
+  marginInlineStart: 'var(--nc-chat-indent)',
+};
+
+const tools: CSSProperties = { ...part, gap: 6 };
+
 function History() {
   return (
     <>
       <Message from="system" timestamp={t(40)}>
         New session · ~/code/conch
       </Message>
-      <Message from="user" timestamp={t(41)}>
+      <Message
+        from="user"
+        timestamp={t(41)}
+        actions={<CopyButton value="…" label="Copy message" />}
+      >
         The session relay drops frames when the client sends quickly. Can you make it validate
         incoming frames and queue them properly?
       </Message>
       <Message
         from="assistant"
         timestamp={t(41)}
+        meta="Opus 4.5"
         actions={
           <>
             <CopyButton value={sampleReply} label="Copy reply" />
@@ -91,48 +106,79 @@ function History() {
             </IconButton>
           </>
         }
+        attached={
+          <>
+            <div style={tools}>
+              <ToolCall
+                name="Read"
+                summary="apps/server/src/session.ts"
+                duration={42}
+                output={sampleCode}
+                outputLanguage="ts"
+              />
+              <ToolCall
+                name="Grep"
+                summary={'"buffer" in apps/server'}
+                duration={118}
+                output={'apps/server/src/session.ts:13\napps/server/src/session.ts:18'}
+              />
+              <ToolCall name="Edit" summary="apps/server/src/session.ts" duration={310}>
+                <Diff diff={sampleDiff} header={false} />
+              </ToolCall>
+              <ToolCall
+                name="Bash"
+                summary="pnpm --filter @conch/server test"
+                duration={2140}
+                output={sampleTestOutput}
+              />
+            </div>
+            <div style={part}>
+              <Prose>
+                <p>
+                  The bug was that frames were concatenated into a single string buffer, so two
+                  messages arriving in the same tick were merged. Frames are now parsed individually
+                  and validated with the shared schema:
+                </p>
+                <CodeBlock code={sampleCode} language="ts" filename="apps/server/src/protocol.ts" />
+                <p>What changed, at a glance:</p>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Before</th>
+                      <th>After</th>
+                      <th>Why it matters</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>One string buffer</td>
+                      <td>A typed queue</td>
+                      <td>Two frames in one tick stay two frames</td>
+                    </tr>
+                    <tr>
+                      <td>Parsed when read</td>
+                      <td>Validated on arrival</td>
+                      <td>A bad frame fails fast, with its reason</td>
+                    </tr>
+                    <tr>
+                      <td>Close ignored</td>
+                      <td>Close ends the iterator</td>
+                      <td>No reader waits forever</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <p>
+                  All <strong>18 tests</strong> pass. Want me to add a stress test that fires 1,000
+                  frames in a burst?
+                </p>
+              </Prose>
+            </div>
+          </>
+        }
       >
-        <div style={{ display: 'grid', gap: 12 }}>
-          <Prose>
-            <p>Let me look at how the relay handles incoming messages today, then fix the race.</p>
-          </Prose>
-          <div style={{ display: 'grid', gap: 6 }}>
-            <ToolCall
-              name="Read"
-              summary="apps/server/src/session.ts"
-              duration={42}
-              output={sampleCode}
-              outputLanguage="ts"
-            />
-            <ToolCall
-              name="Grep"
-              summary={'"buffer" in apps/server'}
-              duration={118}
-              output={'apps/server/src/session.ts:13\napps/server/src/session.ts:18'}
-            />
-            <ToolCall name="Edit" summary="apps/server/src/session.ts" duration={310}>
-              <Diff diff={sampleDiff} header={false} />
-            </ToolCall>
-            <ToolCall
-              name="Bash"
-              summary="pnpm --filter @conch/server test"
-              duration={2140}
-              output={sampleTestOutput}
-            />
-          </div>
-          <Prose>
-            <p>
-              The bug was that frames were concatenated into a single string buffer, so two messages
-              arriving in the same tick were merged. Frames are now parsed individually and
-              validated with the shared schema:
-            </p>
-            <CodeBlock code={sampleCode} language="ts" filename="apps/server/src/protocol.ts" />
-            <p>
-              All <strong>18 tests</strong> pass. Want me to add a stress test that fires 1,000
-              frames in a burst?
-            </p>
-          </Prose>
-        </div>
+        <Prose>
+          <p>Let me look at how the relay handles incoming messages today, then fix the race.</p>
+        </Prose>
       </Message>
       <Message from="user" timestamp={t(44)}>
         Yes please, and run it.
@@ -144,7 +190,7 @@ function History() {
 export const Session: Story = {
   render: function Render() {
     return (
-      <Shell composer={<Composer toolbar={toolbar} placeholder="Reply to Claude…" />}>
+      <Shell composer={<Composer toolbar={toolbar} placeholder="Reply to Conch…" />}>
         <History />
         <Message from="assistant" timestamp={t(44)} status="complete">
           <Prose>
@@ -174,7 +220,7 @@ export const Opening: Story = {
         loading={loading}
         composer={
           <div style={{ display: 'grid', gap: 8 }}>
-            <Composer toolbar={toolbar} placeholder="Reply to Claude…" />
+            <Composer toolbar={toolbar} placeholder="Reply to Conch…" />
             <button type="button" onClick={() => setLoading(true)}>
               Open it again
             </button>
@@ -233,14 +279,14 @@ export const Working: Story = {
               stop.current = true;
               setPhase('done');
             }}
-            placeholder={running ? 'Claude is working…' : 'Reply to Claude…'}
+            placeholder={running ? 'Conch is working…' : 'Reply to Conch…'}
           />
         }
       >
         <History />
         <Message from="assistant" timestamp={t(44)} status={running ? 'streaming' : 'complete'}>
           <div style={{ display: 'grid', gap: 12 }}>
-            {phase === 'thinking' && <ThinkingIndicator startedAt={startedAt} />}
+            {phase === 'thinking' && <ThinkingIndicator startedAt={startedAt} orb={false} />}
             {phase !== 'thinking' && (
               <ToolCall
                 name="Bash"
