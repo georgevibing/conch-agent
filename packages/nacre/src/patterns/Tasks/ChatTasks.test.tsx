@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { act, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -176,6 +176,59 @@ describe('ChatTasks', () => {
       'aria-expanded',
       'true',
     );
+  });
+
+  it('says what’s new to you, and folds what you’ve seen under Earlier', async () => {
+    const user = userEvent.setup();
+    const [, , done] = tasks();
+    const fresh = { ...(done as ChatTask), fresh: true };
+    const { container } = renderNacre(
+      <ChatTasks
+        id="tasks"
+        open
+        chat="Fix the parser"
+        now={NOW}
+        tasks={[fresh]}
+        earlier={[{ ...(done as ChatTask), id: 'old', link: <a href="#old">Lint it</a> }]}
+      />,
+    );
+    expect(screen.getByRole('link', { name: /Read the README ?\(new\)/ })).toBeInTheDocument();
+    expect(tasksSummary([fresh])).toBe('1 task · 1 new');
+    expect(tasksTone([fresh])).toBe('fresh');
+    const earlier = screen.getByRole('button', { name: 'Earlier 1' });
+    expect(earlier).toHaveAttribute('aria-expanded', 'false');
+    await user.click(earlier);
+    expect(earlier).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      screen.getByRole('list', { name: 'Earlier tasks from Fix the parser' }),
+    ).toHaveTextContent('Lint it');
+    await expectAccessible(container);
+  });
+
+  it('lets a row that goes fold shut where it was, then lets it go', () => {
+    vi.useFakeTimers();
+    const items = tasks();
+    const { rerender } = renderNacre(
+      <ChatTasks id="tasks" open chat="Fix the parser" now={NOW} tasks={items} />,
+    );
+    rerender(
+      <ChatTasks
+        id="tasks"
+        open
+        chat="Fix the parser"
+        now={NOW}
+        tasks={[items[0], items[2]] as ChatTask[]}
+      />,
+    );
+    // Still there a moment, in its place, out of reach.
+    const rows = screen.getAllByRole('listitem', { hidden: true });
+    expect(rows[1]).toHaveAttribute('data-leaving');
+    expect(rows[1]).toHaveTextContent('Write the parser tests');
+    expect(screen.queryByRole('link', { name: /Write the parser tests/ })).toBeNull();
+    // Once it has folded (here, where nothing animates, once it's had the time).
+    act(() => vi.advanceTimersByTime(1000));
+    expect(screen.queryByText('Write the parser tests')).toBeNull();
+    vi.useRealTimers();
   });
 
   it('hides the badge while the list is choosing several', () => {

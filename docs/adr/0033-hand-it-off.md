@@ -319,3 +319,22 @@ one that may do more than its chat is an escalation. Both are bugs.
   for an OK says **A task needs your OK**, with the task's title; Deny still
   answers from the notification and Allow still opens Conch (ADR 0027).
 - The switch reads **When a task finishes**.
+
+## Amended 2026-10-07: finished tasks tidy themselves away
+
+- **Seen is the task's chat's `seenAt`** (ADR 0089), so it's one answer on every
+  device and needs nothing new on the gateway: a finished task is new to you while
+  its own chat moved on after you last had it open (`isTaskFresh`, web
+  `features/tasks/seen.ts`; a task that never got a chat asks its parent chat).
+  Unlike `isUnread` it counts a chat that ended in an error: one that didn't finish
+  is news too. Nothing older than half a day is new.
+- **Seen when its result is in front of you**: its own chat open, or the chat it came
+  from (`useSeenTasks`, next to `useSeen`), or anywhere else that shows it
+  (`seeTask`).
+- **Under the chat, only what matters.** The badge counts what's going and what's
+  new; a new one stands out (a dot, the title forward, a sheen of lustre once).
+  What's finished and seen folds under **Earlier**. With nothing going or new and the
+  chat not in front of you, there's no badge and the rows fold shut: the chat is a
+  single line, its tasks on their cards in the chat. In the chat, or one of its
+  tasks, nothing leaves from under you: the rows you had stay until you go, then fold
+  shut where they were. The half-day "lately" stays as the outer bound.
