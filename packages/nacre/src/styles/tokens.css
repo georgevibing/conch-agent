@@ -6,6 +6,7 @@
  *
  *   --nc-accent-h / --nc-accent-c    accent hue + chroma
  *   --nc-neutral-h / --nc-neutral-c  neutral tint hue + chroma
+ *   --nc-neutral-dark-h / -dark-c    the neutral tint in dark mode
  *   --nc-lustre                      intensity of the iridescent sheen (0–1)
  *
  * Light/dark values are expressed with `light-dark()` and resolved by the
@@ -46,56 +47,59 @@
     --nc-accent-c: 0.145;
     --nc-neutral-h: 60;
     --nc-neutral-c: 0.008;
+    /* Dark mode is cool: a warm tint this dark reads as brown, not porcelain. */
+    --nc-neutral-dark-h: 255;
+    --nc-neutral-dark-c: 0.009;
     --nc-lustre: 1;
 
     /* ── Neutral scale (12 steps, Radix-style semantics) ─────────────── */
     --nc-gray-1: light-dark(
       oklch(0.991 calc(var(--nc-neutral-c) * 0.4) var(--nc-neutral-h)),
-      oklch(0.155 calc(var(--nc-neutral-c) * 1.3) var(--nc-neutral-h))
+      oklch(0.155 calc(var(--nc-neutral-dark-c) * 1.3) var(--nc-neutral-dark-h))
     );
     --nc-gray-2: light-dark(
       oklch(0.978 calc(var(--nc-neutral-c) * 0.6) var(--nc-neutral-h)),
-      oklch(0.185 calc(var(--nc-neutral-c) * 1.3) var(--nc-neutral-h))
+      oklch(0.185 calc(var(--nc-neutral-dark-c) * 1.3) var(--nc-neutral-dark-h))
     );
     --nc-gray-3: light-dark(
       oklch(0.952 var(--nc-neutral-c) var(--nc-neutral-h)),
-      oklch(0.225 calc(var(--nc-neutral-c) * 1.3) var(--nc-neutral-h))
+      oklch(0.225 calc(var(--nc-neutral-dark-c) * 1.3) var(--nc-neutral-dark-h))
     );
     --nc-gray-4: light-dark(
       oklch(0.93 var(--nc-neutral-c) var(--nc-neutral-h)),
-      oklch(0.255 calc(var(--nc-neutral-c) * 1.3) var(--nc-neutral-h))
+      oklch(0.255 calc(var(--nc-neutral-dark-c) * 1.3) var(--nc-neutral-dark-h))
     );
     --nc-gray-5: light-dark(
       oklch(0.905 var(--nc-neutral-c) var(--nc-neutral-h)),
-      oklch(0.285 calc(var(--nc-neutral-c) * 1.3) var(--nc-neutral-h))
+      oklch(0.285 calc(var(--nc-neutral-dark-c) * 1.3) var(--nc-neutral-dark-h))
     );
     --nc-gray-6: light-dark(
       oklch(0.878 var(--nc-neutral-c) var(--nc-neutral-h)),
-      oklch(0.32 calc(var(--nc-neutral-c) * 1.3) var(--nc-neutral-h))
+      oklch(0.32 calc(var(--nc-neutral-dark-c) * 1.3) var(--nc-neutral-dark-h))
     );
     --nc-gray-7: light-dark(
       oklch(0.835 var(--nc-neutral-c) var(--nc-neutral-h)),
-      oklch(0.37 calc(var(--nc-neutral-c) * 1.2) var(--nc-neutral-h))
+      oklch(0.37 calc(var(--nc-neutral-dark-c) * 1.2) var(--nc-neutral-dark-h))
     );
     --nc-gray-8: light-dark(
       oklch(0.76 var(--nc-neutral-c) var(--nc-neutral-h)),
-      oklch(0.45 var(--nc-neutral-c) var(--nc-neutral-h))
+      oklch(0.45 var(--nc-neutral-dark-c) var(--nc-neutral-dark-h))
     );
     --nc-gray-9: light-dark(
       oklch(0.62 var(--nc-neutral-c) var(--nc-neutral-h)),
-      oklch(0.56 var(--nc-neutral-c) var(--nc-neutral-h))
+      oklch(0.56 var(--nc-neutral-dark-c) var(--nc-neutral-dark-h))
     );
     --nc-gray-10: light-dark(
       oklch(0.57 var(--nc-neutral-c) var(--nc-neutral-h)),
-      oklch(0.62 var(--nc-neutral-c) var(--nc-neutral-h))
+      oklch(0.62 var(--nc-neutral-dark-c) var(--nc-neutral-dark-h))
     );
     --nc-gray-11: light-dark(
       oklch(0.475 var(--nc-neutral-c) var(--nc-neutral-h)),
-      oklch(0.76 calc(var(--nc-neutral-c) * 0.8) var(--nc-neutral-h))
+      oklch(0.76 calc(var(--nc-neutral-dark-c) * 0.8) var(--nc-neutral-dark-h))
     );
     --nc-gray-12: light-dark(
       oklch(0.22 calc(var(--nc-neutral-c) * 1.2) var(--nc-neutral-h)),
-      oklch(0.945 calc(var(--nc-neutral-c) * 0.5) var(--nc-neutral-h))
+      oklch(0.945 calc(var(--nc-neutral-dark-c) * 0.5) var(--nc-neutral-dark-h))
     );
 
     /* ── Accent scale ────────────────────────────────────────────────── */
@@ -196,19 +200,19 @@
 
     --nc-surface: light-dark(
       oklch(1 0 0),
-      oklch(0.205 calc(var(--nc-neutral-c) * 1.3) var(--nc-neutral-h))
+      oklch(0.205 calc(var(--nc-neutral-dark-c) * 1.3) var(--nc-neutral-dark-h))
     );
     --nc-surface-hi: light-dark(
       oklch(1 0 0),
-      oklch(0.235 calc(var(--nc-neutral-c) * 1.3) var(--nc-neutral-h))
+      oklch(0.235 calc(var(--nc-neutral-dark-c) * 1.3) var(--nc-neutral-dark-h))
     );
     --nc-surface-overlay: light-dark(
       oklch(0.998 0.002 var(--nc-neutral-h)),
-      oklch(0.225 calc(var(--nc-neutral-c) * 1.3) var(--nc-neutral-h))
+      oklch(0.225 calc(var(--nc-neutral-dark-c) * 1.3) var(--nc-neutral-dark-h))
     );
     --nc-surface-sunken: light-dark(
       oklch(0.968 calc(var(--nc-neutral-c) * 0.8) var(--nc-neutral-h)),
-      oklch(0.17 calc(var(--nc-neutral-c) * 1.3) var(--nc-neutral-h))
+      oklch(0.17 calc(var(--nc-neutral-dark-c) * 1.3) var(--nc-neutral-dark-h))
     );
     --nc-surface-inverse: var(--nc-gray-12);
 
@@ -216,7 +220,7 @@
     --nc-text-muted: var(--nc-gray-11);
     --nc-text-subtle: light-dark(
       oklch(0.525 var(--nc-neutral-c) var(--nc-neutral-h)),
-      oklch(0.68 var(--nc-neutral-c) var(--nc-neutral-h))
+      oklch(0.68 var(--nc-neutral-dark-c) var(--nc-neutral-dark-h))
     );
     --nc-text-disabled: var(--nc-gray-8);
     --nc-text-inverse: var(--nc-gray-1);
@@ -388,7 +392,7 @@
      */
     --nc-shadow-color: light-dark(
       oklch(0.3 calc(var(--nc-neutral-c) * 3) var(--nc-neutral-h)),
-      oklch(0.05 0.01 var(--nc-neutral-h))
+      oklch(0.05 0.01 var(--nc-neutral-dark-h))
     );
     --nc-glaze: light-dark(oklch(1 0 0 / 0.9), oklch(1 0 0 / 0.07));
     --nc-glaze-edge: inset 0 1px 0 0 var(--nc-glaze);

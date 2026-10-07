@@ -1304,7 +1304,7 @@ export class MockEngine implements Engine {
         } else if (last && change) {
           const content =
             last.kind === 'html'
-              ? `<div style="background:#1f1a17;color:#f5efe9;padding:16px;border-radius:12px">${last.content}</div>`
+              ? `<div style="background:#181c21;color:#eef0f3;padding:16px;border-radius:12px">${last.content}</div>`
               : last.kind === 'chart'
                 ? last.content.replace(/"type":(\s*)"bar"/, '"type":$1"line"')
                 : `${last.content}\n\n_${change}_\n`;

@@ -25,11 +25,16 @@ export type AccentName = keyof typeof accents;
 export interface NeutralTint {
   hue: number;
   chroma: number;
+  /** The tint in dark mode, when it differs from the light one. */
+  dark?: { hue: number; chroma: number };
 }
 
 export const neutrals = {
-  /** Warm porcelain — the default. */
-  porcelain: { hue: 60, chroma: 0.008 },
+  /**
+   * Warm porcelain — the default. Its dark side turns cool: a warm grey this
+   * dark reads as brown, and a cold graphite sets off the coral text.
+   */
+  porcelain: { hue: 60, chroma: 0.008, dark: { hue: 255, chroma: 0.009 } },
   /** Cool slate with a blue undertone. */
   slate: { hue: 255, chroma: 0.012 },
   /** Neutral follows the accent hue for a monochrome feel. */
@@ -49,5 +54,5 @@ export function resolveNeutral(
   accent: AccentColor,
 ): NeutralTint {
   const tint = typeof neutral === 'string' ? neutrals[neutral] : neutral;
-  return tint.hue < 0 ? { hue: accent.hue, chroma: tint.chroma } : tint;
+  return tint.hue < 0 ? { ...tint, hue: accent.hue } : tint;
 }

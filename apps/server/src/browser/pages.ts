@@ -12,7 +12,7 @@ export function blockedPage(message: string, url: string): string {
 <title>Kept away by Conch</title>
 <style>
   :root { color-scheme: light dark; --bg: #fbf9f7; --fg: #211d1a; --muted: #6f6660; --card: #ffffff; --edge: #e9e2dc; }
-  @media (prefers-color-scheme: dark) { :root { --bg: #14110f; --fg: #f3eee9; --muted: #a79d95; --card: #1d1916; --edge: #332c27; } }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0e1217; --fg: #edeff2; --muted: #9c9fa3; --card: #161a1f; --edge: #2a2e33; } }
   html, body { height: 100%; margin: 0; }
   body { display: grid; place-items: center; background: var(--bg); color: var(--fg);
     font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }

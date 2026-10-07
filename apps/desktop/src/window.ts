@@ -35,7 +35,7 @@ import {
 } from './policy';
 
 /** The page's own colours, so the window never flashes white in the dark. */
-export const BACKGROUND = { light: '#fbf9f7', dark: '#13100e' };
+export const BACKGROUND = { light: '#fbf9f7', dark: '#0d1116' };
 
 export interface WindowDeps {
   /** The app's pictures and pages. */

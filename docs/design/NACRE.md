@@ -56,6 +56,9 @@ pearly near-white instead of mud.
 - Accent presets: `coral` (default), `amber`, `kelp`, `lagoon`, `tide`, `iris`,
   `orchid`, `graphite`. Any `{ hue, chroma }` works.
 - Neutral tints: `porcelain` (warm, default), `slate`, `tinted` (follows accent), `pure`.
+  A tint may carry its own dark side (`--nc-neutral-dark-h`/`-c`): porcelain turns
+  to a cold graphite in the dark, since a warm grey that dark reads as brown and
+  the cool ground sets off the coral text.
 
 <!-- conch:accents -->
 

@@ -115,7 +115,7 @@ export function frameDocument(
 <style>
 :root { color-scheme: ${options.theme}; }
 html { font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
-body { margin: 16px; background: ${options.theme === 'dark' ? '#16120f' : '#fffdfb'}; color: ${options.theme === 'dark' ? '#efe8e3' : '#2b2522'}; }
+body { margin: 16px; background: ${options.theme === 'dark' ? '#0f1318' : '#fffdfb'}; color: ${options.theme === 'dark' ? '#e7eaec' : '#2b2522'}; }
 </style>${kit}`;
   // A Conch app's page calls its own tools (ADR 0061): only with `calls`, so an artifact's page is as it was.
   const calls = options.calls === true;

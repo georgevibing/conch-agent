@@ -96,6 +96,8 @@ function themeVars(theme: NacreTheme): Record<string, string> {
     '--nc-accent-c': String(accent.chroma),
     '--nc-neutral-h': String(neutral.hue),
     '--nc-neutral-c': String(neutral.chroma),
+    '--nc-neutral-dark-h': String(neutral.dark?.hue ?? neutral.hue),
+    '--nc-neutral-dark-c': String(neutral.dark?.chroma ?? neutral.chroma),
     '--nc-lustre': String(Math.min(1, Math.max(0, theme.lustre))),
     '--nc-radius-scale': String(Math.max(0, theme.radius)),
   };
