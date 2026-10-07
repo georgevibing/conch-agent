@@ -451,7 +451,9 @@ export async function buildApp(services: Services) {
         throw error;
       }
     }
-    await services.settings.update(body);
+    // The agents write the personality back to settings themselves, as an older Conch reads it.
+    const { persona: _persona, ...rest } = body;
+    await services.settings.update(rest);
     // Learn from your chats, on again: it starts from here, never reading what was said while off.
     if (!learnedBefore && body.preferences?.autoMemory === true)
       await services.learning.resumed().catch(() => undefined);
