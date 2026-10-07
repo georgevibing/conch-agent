@@ -32,7 +32,7 @@ function put(client: QueryClient, task: Task) {
 }
 
 /**
- * Task events from the live socket. A background task that finishes or needs
+ * Task events from the live socket. A task you started that finishes or needs
  * you says so in the app (the notification on your phone is the server's).
  */
 export function applyTaskEvent(

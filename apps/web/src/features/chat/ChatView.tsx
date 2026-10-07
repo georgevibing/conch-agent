@@ -643,17 +643,17 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  /** Send the draft off to be done in the background (ADR 0033); you keep chatting here. */
+  /** Run the draft as a task (ADR 0033); you keep chatting here. */
   const startTask = useStartTask();
   const sendAway = (words?: string) => {
     const text = (words ?? draft).trim();
     if (!text) {
-      toast('Write what you’d like done, then send it to the background.');
+      toast('Write what you’d like done, then run it as a task.');
       composerRef.current?.focus();
       return;
     }
     if (attachments.ready.length) {
-      toast('A background task can’t take attachments yet. Send it as a message instead.');
+      toast('A task can’t take attachments yet. Send it as a message instead.');
       return;
     }
     // On its way the moment it's pressed: the words come back only if it couldn't start.
@@ -661,9 +661,9 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
     startTask.mutate(
       { text, ...(conversationId && { conversationId }), options: turn.options },
       {
-        onError: () => setDraft((d) => d || (words === undefined ? text : `/background ${text}`)),
+        onError: () => setDraft((d) => d || (words === undefined ? text : `/task ${text}`)),
         onSuccess: (task) => {
-          toast(`Working on “${task.title}” in the background`, {
+          toast(`Working on “${task.title}”`, {
             description: conversationId
               ? 'Its result will come back to this chat.'
               : 'You’ll be told when it’s done.',
@@ -673,7 +673,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
       },
     );
   };
-  // ⌘K "Do it in the background" sends what's written here.
+  // ⌘K "Run as a task" sends what's written here.
   const onBackground = useEffectEvent(() => sendAway());
   useEffect(
     () =>
@@ -965,7 +965,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
           <>
             {draft.trim() && (
               <IconButton
-                label="Do it in the background"
+                label="Run as a task"
                 shortcut="mod+shift+enter"
                 shape="circle"
                 loading={startTask.isPending}

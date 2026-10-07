@@ -116,7 +116,7 @@ describe('in the chat', () => {
       'Held to the Quick setup skill, like the chat it came from',
     );
     expect(screen.getAllByRole('note')[1]).toHaveTextContent(
-      'A helper used the Weekly review skill, so this chat is held to it too',
+      'A task used the Weekly review skill, so this chat is held to it too',
     );
     expect(screen.getByText('You stopped holding this chat to Quick setup’s list.')).toBeVisible();
     await expectAccessible(container);

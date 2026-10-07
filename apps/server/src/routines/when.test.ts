@@ -59,7 +59,7 @@ describe('routines that start when something happens', () => {
       { createdBy: 'user' },
     );
     expect(r).toMatchObject({
-      scheduleText: 'When a background task finishes',
+      scheduleText: 'When a task finishes',
       when: { kind: 'task' },
       schedule: WHEN_SCHEDULE,
       status: 'active',

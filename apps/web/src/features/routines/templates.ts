@@ -33,9 +33,9 @@ export const templates: Template[] = [
   {
     id: 'task-done',
     title: 'When a big task finishes',
-    summary: 'A short note when a background task is done, with what to check.',
+    summary: 'A short note when a task is done, with what to check.',
     prompt:
-      'A background task just finished. Tell me in two lines what it did and the one thing I should check. If it failed, say why and what to try next.',
+      'A task just finished. Tell me in two lines what it did and the one thing I should check. If it failed, say why and what to try next.',
     when: { kind: 'task' },
   },
   {

@@ -63,9 +63,7 @@ describe('what a chat costs (ADR 0079)', () => {
     await userEvent.click(
       await screen.findByRole('button', { name: 'This chat has spent $0.31. Details and limit' }),
     );
-    expect(
-      await screen.findByText('$0.08 of it by tasks and helpers sent from here'),
-    ).toBeVisible();
+    expect(await screen.findByText('$0.08 of it by tasks started from here')).toBeVisible();
     await userEvent.type(screen.getByLabelText('Limit for this chat'), '2');
     await userEvent.click(screen.getByRole('button', { name: 'Set limit' }));
     await waitFor(() =>

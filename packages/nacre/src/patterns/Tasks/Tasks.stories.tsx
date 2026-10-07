@@ -14,7 +14,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'A task working away in the background, read at a glance: what it is, how it’s going in words and with a mark that moves (a band of pearl light turning while it works, a check that draws itself, a nudge when it didn’t finish), and how long it’s been. Once it’s done, one line says what came of it — or what went wrong — without ids or bookkeeping; its whole result, what was confirmed and what it did wait behind the Details chevron. A helper (part of a bigger job the assistant split up) is marked as one.',
+          'A task, read at a glance: what it is, how it’s going in words and with a mark that moves (a band of pearl light turning while it works, a check that draws itself, a nudge when it didn’t finish), and how long it’s been. Once it’s over it says one of two things: Done, or Didn’t finish (Stopped, when you stopped it). Done is worth a look only for a concrete reason, said in a few words. One line says what came of it — or what went wrong — without ids or bookkeeping; its whole result, what was confirmed and what it did wait behind the Details chevron. Whoever started it, the assistant or you, it’s a task.',
       },
     },
   },
@@ -76,27 +76,25 @@ export const Failed: Story = {
   },
 };
 export const Interrupted: Story = {
-  args: { status: 'interrupted', finishedAt: NOW, error: 'Conch stopped while this was running.' },
+  args: { status: 'interrupted', finishedAt: NOW, error: 'Conch stopped while it was working.' },
 };
-export const HelpersInAChat: Story = {
+export const SeveralInAChat: Story = {
   render: (args) => (
     <Stack gap={2}>
       <TaskCard
         {...args}
         variant="compact"
-        kind="helper"
         title="Read the README"
         status="done"
         summary="Install steps are missing."
         onStop={undefined}
         onRemove={undefined}
       />
-      <TaskCard {...args} variant="compact" kind="helper" title="Check the tests" />
-      <TaskCard {...args} variant="compact" kind="helper" title="Write the tests" by="Codex CLI" />
+      <TaskCard {...args} variant="compact" title="Check the tests" />
+      <TaskCard {...args} variant="compact" title="Write the tests" by="Codex CLI" />
       <TaskCard
         {...args}
         variant="compact"
-        kind="helper"
         title="Change the parser"
         status="done"
         summary="Fixed the off-by-one."
@@ -108,13 +106,13 @@ export const HelpersInAChat: Story = {
   ),
 };
 
-export const Unverified: Story = {
+/** Done, but worth a look: a concrete reason, in a few words. */
+export const WorthALook: Story = {
   args: {
     status: 'unverified',
     finishedAt: NOW,
     summary: 'A draft may have been saved.',
-    error:
-      'The provider response was lost. Inspect your drafts; Conch will not create another one automatically.',
+    worth: 'Couldn’t confirm one of its actions worked.',
   },
 };
 
@@ -122,7 +120,6 @@ export const Unverified: Story = {
 export const AskingInAChat: Story = {
   args: {
     variant: 'compact',
-    kind: 'helper',
     title: 'Check the tests',
     status: 'needs-you',
     mode: 'Ask first',
@@ -147,28 +144,24 @@ export const FromAChat: Story = {
   },
 };
 
-export const FinishedUnchecked: Story = {
+/** Nothing set to check it against: done is done. */
+export const DoneUnchecked: Story = {
   args: {
     status: 'unverified',
-    unchecked: true,
     finishedAt: NOW,
-    summary:
-      'Read the source files and wrote the report. No automatic completion criteria were set.',
-    error: undefined,
+    summary: 'Read the source files and wrote the report.',
   },
 };
 
 /**
- * A long, machine-flavoured result, as helpers often write them: one line in
+ * A long, machine-flavoured result, as tasks often write them: one line in
  * view, ids left out, the rest behind Details.
  */
 export const LongResult: Story = {
   args: {
     variant: 'compact',
-    kind: 'helper',
     title: 'Task probe recovery rerun',
     status: 'unverified',
-    unchecked: true,
     startedAt: NOW - 31_000,
     finishedAt: NOW,
     current: undefined,
@@ -193,7 +186,7 @@ export const AllStates: Story = {
       <TaskCard
         {...args}
         variant="compact"
-        title="Waiting its turn"
+        title="Waiting"
         status="queued"
         current={undefined}
         steps={[]}
@@ -218,19 +211,18 @@ export const AllStates: Story = {
       <TaskCard
         {...args}
         variant="compact"
-        title="Finished"
+        title="Done, nothing to check against"
         status="unverified"
-        unchecked
         finishedAt={NOW}
         summary="Wrote the report."
       />
       <TaskCard
         {...args}
         variant="compact"
-        title="Not confirmed"
+        title="Worth a look"
         status="unverified"
         finishedAt={NOW}
-        error="The second draft could not be confirmed."
+        worth="Couldn’t confirm one of its actions worked."
       />
       <TaskCard
         {...args}

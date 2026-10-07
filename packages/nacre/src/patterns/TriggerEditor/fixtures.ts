@@ -62,7 +62,7 @@ export function fakeTriggerPreview(value: TriggerValue, onlyIf = ''): TriggerPre
         text: `When something changes in ${value.path.split(/[\\/]/).filter(Boolean).at(-1) ?? value.path}${only}`,
       };
     case 'task':
-      return { valid: true, text: `When a background task finishes${only}` };
+      return { valid: true, text: `When a task finishes${only}` };
     case 'routine': {
       const title = ROUTINES.find((r) => r.id === value.routineId)?.title;
       return title

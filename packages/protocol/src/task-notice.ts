@@ -8,7 +8,7 @@
  *   is over: "3 tasks done · 1 didn't finish", never four in a row.
  * - A tap opens the chat they came from, at the task (`?task=`).
  */
-import { assessTask } from './task-assessment';
+import { taskWorth } from './task-assessment';
 import type { Task } from './tasks';
 
 export interface TaskNotice {
@@ -69,9 +69,7 @@ function headline(text: string | undefined): string | undefined {
 
 /** Done, but there's a concrete reason to look: something it did can't be confirmed. */
 function worthALook(task: Task): boolean {
-  if (task.status !== 'unverified') return false;
-  const verdict = assessTask(task).verdict;
-  return verdict === 'uncertain' || verdict === 'incomplete';
+  return taskWorth(task) !== undefined;
 }
 
 function one(task: Task): TaskNotice {
@@ -86,12 +84,11 @@ function one(task: Task): TaskNotice {
       tone: 'failed',
       tasks: [task],
     };
-  const look = worthALook(task);
+  const worth = taskWorth(task);
+  const look = worth !== undefined;
   return {
     title: look ? `Done, worth a look: ${title}` : `Done: ${title}`,
-    body: look
-      ? 'Some of what it did couldn’t be confirmed.'
-      : (headline(task.summary) ?? 'It’s ready.'),
+    body: worth ?? headline(task.summary) ?? 'It’s ready.',
     quiet: 'A task finished.',
     url: taskLink(task),
     tag: `task-${task.id}`,

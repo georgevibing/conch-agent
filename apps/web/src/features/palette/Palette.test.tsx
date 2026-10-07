@@ -1472,7 +1472,7 @@ describe('Palette search', () => {
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'background');
     const before = useUi.getState().backgroundRequest;
-    await user.click(await screen.findByRole('option', { name: /Do it in the background/ }));
+    await user.click(await screen.findByRole('option', { name: /Run as a task/ }));
     expect(useUi.getState().backgroundRequest).toBe(before + 1);
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'tasks');

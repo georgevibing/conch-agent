@@ -88,7 +88,7 @@ const builtinIcons: Partial<Record<BuiltinAction, ReactNode>> = {
   plan: <ListTodo />,
   retry: <RotateCcw />,
   undo: <Undo2 />,
-  background: <ListPlus />,
+  task: <ListPlus />,
   rename: <Pencil />,
   copy: <ClipboardCopy />,
   export: <Download />,
@@ -413,8 +413,8 @@ export function useSlashCommands(options: {
         return options.retry?.();
       case 'undo':
         return void undoLast();
-      case 'background':
-        if (!args) return setDraft('/background ');
+      case 'task':
+        if (!args) return setDraft('/task ');
         return options.background?.(args);
       case 'rename':
         if (!args) return setDraft(`/rename ${title}`.trimEnd() + ' ');

@@ -5,7 +5,6 @@ import {
   Clock,
   GitBranch,
   Hand,
-  Layers,
   MessageSquare,
   RotateCcw,
   ShieldQuestion,
@@ -45,10 +44,11 @@ export interface TaskCardAsking {
 export interface TaskCardProps extends Omit<ComponentProps<'article'>, 'title'> {
   title: string;
   status: TaskCardStatus;
-  /** Finished execution with no automatic criteria; distinct from an uncertain action. */
-  unchecked?: boolean;
-  /** A helper the assistant runs side by side, or something you sent away. */
-  kind?: 'background' | 'helper';
+  /**
+   * Done, but worth a look, and why, in a few words: "Couldn't confirm one of
+   * its actions worked." Only with a concrete reason; without one, done is done.
+   */
+  worth?: ReactNode;
   /** When it started, to show how long it's been going (epoch ms). */
   startedAt?: number;
   finishedAt?: number;
@@ -90,17 +90,24 @@ export interface TaskCardProps extends Omit<ComponentProps<'article'>, 'title'> 
   now?: number;
 }
 
-/** A task's state in a word or two. */
+/**
+ * A task's state in a word or two. Once it's over there are only two: it's
+ * done, or it didn't finish (and Stopped, when you stopped it). One that's done
+ * but worth a look says so beside it (`TASK_WORTH_A_LOOK`), and why.
+ */
 export const TASK_STATUS_LABELS: Record<TaskCardStatus, string> = {
-  queued: 'Waiting its turn',
+  queued: 'Waiting',
   running: 'Working',
   'needs-you': 'Needs your OK',
   done: 'Done',
-  unverified: 'Needs a look',
+  unverified: 'Done',
   failed: 'Didn’t finish',
   stopped: 'Stopped',
-  interrupted: 'Stopped when Conch did',
+  interrupted: 'Didn’t finish',
 };
+
+/** Said beside "Done" when there's a reason to look at what it did. */
+export const TASK_WORTH_A_LOOK = 'Worth a look';
 
 const going = (s: TaskCardStatus) => s === 'queued' || s === 'running' || s === 'needs-you';
 
@@ -125,7 +132,7 @@ export function useTick(on: boolean, now?: number): number {
 }
 
 /**
- * A task working away in the background (ADR 0033), read at a glance: what
+ * A task (ADR 0033), read at a glance: what
  * it is, how it's going in words (never colour alone) and how long it's
  * been; while it works, what it's doing, the pearl turning in its ring; once
  * it's done, one line of what came of it, or of what went wrong. Everything
@@ -135,8 +142,7 @@ export function useTick(on: boolean, now?: number): number {
 export function TaskCard({
   title,
   status,
-  unchecked = false,
-  kind = 'background',
+  worth,
   startedAt,
   finishedAt,
   current,
@@ -166,11 +172,17 @@ export function TaskCard({
   const live = going(status);
   const time = useTick(live, now);
   const took = startedAt ? elapsed((finishedAt ?? time) - startedAt) : undefined;
-  const look = lookOf(status, unchecked);
-  const wrong = status === 'failed' || status === 'interrupted' || status === 'unverified';
-  // The one line you read: what went wrong first, else what came of it.
+  const look = taskLook(status, worth);
+  const broke = status === 'failed' || status === 'interrupted';
+  // The one line you read: what went wrong, or why it's worth a look, else what came of it.
   const problem =
-    wrong && error ? (typeof error === 'string' ? taskHeadline(error) : error) : undefined;
+    broke && error
+      ? typeof error === 'string'
+        ? taskHeadline(error)
+        : error
+      : look === 'check'
+        ? worth
+        : undefined;
   const result = live
     ? undefined
     : (outcome ?? (typeof summary === 'string' ? taskHeadline(summary) : undefined));
@@ -192,7 +204,7 @@ export function TaskCard({
       <Clock aria-hidden />
     ) : status === 'needs-you' ? (
       <Hand aria-hidden />
-    ) : look === 'done' || look === 'finished' ? (
+    ) : look === 'done' || look === 'check' ? (
       <Check aria-hidden />
     ) : status === 'stopped' ? (
       <Square aria-hidden />
@@ -216,18 +228,18 @@ export function TaskCard({
           </span>
           <div className={styles.text}>
             <p className={styles.title} id={titleId}>
-              {kind === 'helper' && (
-                <>
-                  <Layers className={styles.kind} aria-hidden />
-                  <span className="nc-visually-hidden">Helper: </span>
-                </>
-              )}
               {title}
             </p>
             <p className={styles.meta} aria-live="polite">
               <span className={styles.status} data-look={look}>
-                {unchecked && status === 'unverified' ? 'Finished' : TASK_STATUS_LABELS[status]}
+                {TASK_STATUS_LABELS[status]}
               </span>
+              {look === 'check' && (
+                <span className={styles.worth}>
+                  {' · '}
+                  {TASK_WORTH_A_LOOK}
+                </span>
+              )}
               {took && status !== 'queued' && <span> · {took}</span>}
               {by && <span> · by {by}</span>}
               {mode && <span> · {mode}</span>}
@@ -317,16 +329,11 @@ export function TaskCard({
                 Stop
               </Button>
             )}
-            {(status === 'failed' ||
-              status === 'interrupted' ||
-              status === 'stopped' ||
-              status === 'unverified') &&
-              !unchecked &&
-              onRetry && (
-                <Button size="sm" variant="surface" onClick={onRetry} leadingIcon={<RotateCcw />}>
-                  Resume safely
-                </Button>
-              )}
+            {(broke || status === 'stopped' || look === 'check') && onRetry && (
+              <Button size="sm" variant="surface" onClick={onRetry} leadingIcon={<RotateCcw />}>
+                Resume safely
+              </Button>
+            )}
             {!live && onRemove && variant === 'full' && (
               <Button size="sm" variant="ghost" onClick={onRemove} leadingIcon={<Trash2 />}>
                 Remove
@@ -340,14 +347,13 @@ export function TaskCard({
 }
 
 /**
- * How it looks at a glance, a little finer than its status: a finished task
- * with nothing to check it against is "finished", not a warning.
+ * How it looks at a glance, a little finer than its status: done is done
+ * unless there's a reason to look ("check"); interrupted is didn't finish.
  */
-type TaskLook =
-  'queued' | 'running' | 'needs-you' | 'done' | 'finished' | 'check' | 'failed' | 'stopped';
+export type TaskLook = 'queued' | 'running' | 'needs-you' | 'done' | 'check' | 'failed' | 'stopped';
 
-function lookOf(status: TaskCardStatus, unchecked: boolean): TaskLook {
-  if (status === 'unverified') return unchecked ? 'finished' : 'check';
+export function taskLook(status: TaskCardStatus, worth?: unknown): TaskLook {
+  if (status === 'unverified') return worth ? 'check' : 'done';
   if (status === 'interrupted') return 'failed';
   return status;
 }

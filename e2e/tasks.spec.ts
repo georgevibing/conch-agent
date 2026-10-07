@@ -24,16 +24,14 @@ test.beforeEach(async ({ request }) => {
   await request.patch('/api/settings', { data: { onboarded: true, profile: { name: 'Ada' } } });
 });
 
-test('sent to the background, it works while you chat, and its result comes back', async ({
-  page,
-}) => {
+test('run as a task, it works while you chat, and its result comes back', async ({ page }) => {
   await page.goto('/');
   const composer = page.getByRole('textbox', { name: 'Message Conch' });
   await say(page, 'hello', /Ask me to/);
   await expect(page).toHaveURL(/\/c\//);
 
   await composer.fill('Run the checks slowly');
-  await page.getByRole('button', { name: 'Do it in the background' }).click();
+  await page.getByRole('button', { name: 'Run as a task' }).click();
   await expect(composer).toHaveValue('');
   const card = page.getByRole('article', { name: 'Run the checks slowly' });
   // The sidebar says something's working, while it is: the task is a short one.
@@ -46,7 +44,7 @@ test('sent to the background, it works while you chat, and its result comes back
   await composer.press('Enter');
   await expect(page.getByText('what’s the weather like?', { exact: true })).toBeVisible();
 
-  await expect(card).toContainText(/Finished ·/, { timeout: 15_000 });
+  await expect(card).toContainText(/Done ·/, { timeout: 15_000 });
   await expect(card).toContainText('Finished: Run the checks slowly');
   await expect(card.getByRole('button', { name: 'Resume safely' })).toHaveCount(0);
 
@@ -104,7 +102,7 @@ test('a task stops when you say, runs again with one press, and goes when you re
   await expect(card).toHaveCount(0);
 });
 
-test('helpers work side by side, each with its own card, and their results come back together', async ({
+test('several tasks work at once, each with its own card, and their results come back together', async ({
   page,
 }) => {
   await page.goto('/');
@@ -116,7 +114,7 @@ test('helpers work side by side, each with its own card, and their results come 
   await expect(page.getByText('I split that into three')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('heading', { name: 'Check the tests' })).toBeVisible();
   for (const name of ['Read the README', 'Check the tests', 'Skim the changelog'])
-    await expect(page.getByRole('article', { name: new RegExp(name) })).toContainText(/Finished ·/);
+    await expect(page.getByRole('article', { name: new RegExp(name) })).toContainText(/Done ·/);
 });
 
 test('a task that needs your OK says so, and waits only for you', async ({ page }) => {
@@ -127,7 +125,7 @@ test('a task that needs your OK says so, and waits only for you', async ({ page 
   await composer.fill('Ship it, but ask first');
   await page.keyboard.press(`${mod}+k`);
   await page.getByRole('combobox').fill('background');
-  await page.getByRole('option', { name: /Do it in the background/ }).click();
+  await page.getByRole('option', { name: /Run as a task/ }).click();
   const card = page.getByRole('article', { name: 'Ship it, but ask first' });
   await expect(card).toContainText('Needs your OK');
   await expect(tasksLink(page).getByLabel('1 need your OK')).toBeVisible();
@@ -135,7 +133,7 @@ test('a task that needs your OK says so, and waits only for you', async ({ page 
   const ask = card.getByRole('group', { name: 'It’s asking' });
   await expect(ask).toContainText('git push');
   await ask.getByRole('button', { name: 'Allow' }).click();
-  await expect(card).toContainText(/Finished ·/, { timeout: 15_000 });
+  await expect(card).toContainText(/Done ·/, { timeout: 15_000 });
 });
 
 test('a chat’s tasks sit under it in the sidebar, and open from there', async ({ page }) => {

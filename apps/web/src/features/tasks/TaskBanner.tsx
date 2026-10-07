@@ -1,9 +1,10 @@
-import { assessTask } from '@conch/protocol';
-import { TASK_STATUS_LABELS, TaskStatusMark } from '@conch/nacre';
+import { taskWorth } from '@conch/protocol';
+import { TaskStatusMark } from '@conch/nacre';
 import { ChevronLeft } from 'lucide-react';
 import { Link } from 'react-router';
 
 import { useConversations } from '../../api/queries';
+import { taskStatusWords } from './outcome';
 import { useTask } from './queries';
 import styles from './Tasks.module.css';
 
@@ -18,7 +19,6 @@ export function TaskBanner({ conversationId }: { conversationId?: string }) {
   if (origin?.kind !== 'task') return null;
   const fromId = task?.parentConversationId;
   const from = conversations?.find((c) => c.id === fromId)?.title;
-  const unchecked = task?.status === 'unverified' && assessTask(task).verdict === 'unchecked';
   return (
     <nav className={styles.banner} aria-label="Task">
       <Link className={styles.back} to={fromId ? `/c/${fromId}` : '/tasks'}>
@@ -29,8 +29,8 @@ export function TaskBanner({ conversationId }: { conversationId?: string }) {
       </Link>
       {task && (
         <span className={styles.state} data-status={task.status} role="status">
-          <TaskStatusMark status={task.status} />
-          <span>{unchecked ? 'Finished' : TASK_STATUS_LABELS[task.status]}</span>
+          <TaskStatusMark status={task.status} worth={taskWorth(task)} />
+          <span>{taskStatusWords(task)}</span>
         </span>
       )}
     </nav>

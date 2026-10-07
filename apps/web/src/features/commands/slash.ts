@@ -48,7 +48,7 @@ export type BuiltinAction =
   | 'undo'
   | 'goal'
   | 'plan'
-  | 'background'
+  | 'task'
   | 'rename'
   | 'copy'
   | 'export'

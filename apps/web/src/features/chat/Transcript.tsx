@@ -590,7 +590,6 @@ export const Transcript = memo(function Transcript({
         <TaskChatCard
           taskId={block.item.taskId}
           title={block.item.title}
-          kind={block.item.taskKind}
           state={block.item.state}
           summary={block.item.summary}
           by={block.item.by}

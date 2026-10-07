@@ -1,4 +1,4 @@
-import { assessTask, type Task } from '@conch/protocol';
+import { taskWorth, type Task } from '@conch/protocol';
 import { ChatTasks, ChatTasksToggle, type ChatTask } from '@conch/nacre';
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { NavLink } from 'react-router';
@@ -89,8 +89,7 @@ export function useChatTaskTree({
       </NavLink>
     ),
     status: task.status,
-    unchecked: task.status === 'unverified' && assessTask(task).verdict === 'unchecked',
-    kind: task.kind,
+    worth: taskWorth(task),
     current:
       task.status === 'needs-you' && task.asking
         ? withCode(`Wants to ${lower(task.asking.summary)}`)

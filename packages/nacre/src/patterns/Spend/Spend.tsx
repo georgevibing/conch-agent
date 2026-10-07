@@ -154,7 +154,7 @@ export function ChatSpendPanel({
   const changed = amount !== undefined && amount !== (spend.capUsd ?? null);
   const lines: string[] = [];
   if (spend.tasksUsd && spend.tasksUsd >= 0.005)
-    lines.push(`${usd(spend.tasksUsd, locale)} of it by tasks and helpers sent from here`);
+    lines.push(`${usd(spend.tasksUsd, locale)} of it by tasks started from here`);
   if (spend.savedUsd && spend.savedUsd >= 0.005)
     lines.push(`Reading from the cache saved about ${usd(spend.savedUsd, locale)}`);
   if (spend.planTurns)

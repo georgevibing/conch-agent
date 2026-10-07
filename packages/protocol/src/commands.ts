@@ -145,12 +145,12 @@ export const COMMANDS: readonly CommandDef[] = [
     chat: { who: 'people', groups: true },
   },
   {
-    name: 'background',
+    name: 'task',
     yields: true,
     section: 'chat',
-    description: 'Have it done in the background while you keep chatting',
+    description: 'Run it as a task while you keep chatting',
     argumentHint: '<what to do>',
-    aliases: ['task', 'bg', 'delegate'],
+    aliases: ['background', 'bg', 'delegate'],
     needsArgs: true,
   },
   {

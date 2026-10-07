@@ -23,7 +23,14 @@ import { Collapsible } from '../../components/Collapsible';
 import { IconButton } from '../../components/IconButton';
 import { cx } from '../../utils/cx';
 import styles from './ChatTasks.module.css';
-import { elapsed, useTick, type TaskCardStatus } from './TaskCard';
+import {
+  elapsed,
+  TASK_STATUS_LABELS,
+  TASK_WORTH_A_LOOK,
+  taskLook,
+  useTick,
+  type TaskCardStatus,
+} from './TaskCard';
 
 /** One task under its chat in the list. */
 export interface ChatTask {
@@ -34,8 +41,8 @@ export interface ChatTask {
    */
   link: ReactElement<{ children?: ReactNode }>;
   status: TaskCardStatus;
-  unchecked?: boolean;
-  kind?: 'background' | 'helper';
+  /** Done, but worth a look: why, in a few words (see `TaskCard`'s `worth`). */
+  worth?: ReactNode;
   /** What it's doing right now ("Running `npm test`"), while it works. */
   current?: ReactNode;
   /** Why it didn't finish, in a few words ("The tests failed"). */
@@ -69,17 +76,6 @@ export interface ChatTasksToggleProps extends Omit<
   /** The `id` of the `ChatTasks` it opens. */
   'aria-controls': string;
 }
-
-const WORDS: Record<TaskCardStatus, string> = {
-  queued: 'Waiting',
-  running: 'Working',
-  'needs-you': 'Needs your OK',
-  done: 'Done',
-  unverified: 'Finished',
-  failed: 'Didn’t finish',
-  stopped: 'Stopped',
-  interrupted: 'Interrupted',
-};
 
 const going = (s: TaskCardStatus) => s === 'queued' || s === 'running' || s === 'needs-you';
 const broke = (s: TaskCardStatus) => s === 'failed' || s === 'interrupted';
@@ -116,13 +112,21 @@ export function tasksTone(tasks: readonly Pick<ChatTask, 'status'>[]): ChatTasks
  */
 export function TaskStatusMark({
   status,
+  worth,
   className,
 }: {
   status: TaskCardStatus;
+  /** Done, but worth a look: the tick in amber. */
+  worth?: unknown;
   className?: string;
 }) {
   return (
-    <span aria-hidden className={cx(styles.mark, className)} data-status={status}>
+    <span
+      aria-hidden
+      className={cx(styles.mark, className)}
+      data-status={status}
+      data-look={taskLook(status, worth)}
+    >
       {status === 'running' ? (
         <span className={styles.ring} />
       ) : status === 'queued' ? (
@@ -197,30 +201,32 @@ function TaskRow({ task, now, index }: { task: ChatTask; now?: number; index: nu
       ? elapsed((task.finishedAt ?? time) - task.startedAt)
       : undefined;
   const link = task.link;
+  const look = taskLook(task.status, task.worth);
   const words =
     going(task.status) && task.current
       ? task.current
       : broke(task.status) && task.reason
         ? task.reason
-        : WORDS[task.status];
+        : look === 'check'
+          ? TASK_WORTH_A_LOOK
+          : TASK_STATUS_LABELS[task.status];
   const content = isValidElement(link)
     ? cloneElement(
         link,
         undefined,
         <>
-          <TaskStatusMark status={task.status} className={styles.icon} />
+          <TaskStatusMark status={task.status} worth={task.worth} className={styles.icon} />
           <span className={styles.text}>
             <span className={styles.title} id={titleId}>
-              {/* The status mark carries the look; a helper is only said. */}
-              {task.kind === 'helper' && <span className="nc-visually-hidden">Helper: </span>}
               {link.props.children}
             </span>
-            <span className={styles.meta} data-status={task.status}>
+            <span className={styles.meta} data-status={task.status} data-look={look}>
               {/* Said after the title: what it's doing, or where it stands. */}
               <span className="nc-visually-hidden">, </span>
               {broke(task.status) && task.reason && (
-                <span className="nc-visually-hidden">{WORDS[task.status]}: </span>
+                <span className="nc-visually-hidden">{TASK_STATUS_LABELS[task.status]}: </span>
               )}
+              {look === 'check' && <span className="nc-visually-hidden">Done, </span>}
               <span className={styles.doing}>{words}</span>
               {/* A fixed space, so the separator survives being its own flex item. */}
               {took && !(broke(task.status) && task.reason) && (

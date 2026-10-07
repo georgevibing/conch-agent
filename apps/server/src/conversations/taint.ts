@@ -72,7 +72,7 @@ export function taintFrom(toolName: string, input: unknown, app?: string): Taint
   if (/^(?:mcp__conch__)?image_(?:models|generate)$/.test(toolName))
     return { kind: 'app', label: 'OpenRouter image service' };
   if (/^(?:mcp__conch__)?task_status$/.test(toolName))
-    return { kind: 'app', label: 'background task results' };
+    return { kind: 'app', label: 'task results' };
   if (/^(?:mcp__conch__)?read_document$/.test(toolName))
     return { kind: 'download', label: 'document content' };
   if (WEB_READERS.has(toolName))
@@ -168,7 +168,7 @@ export function sinkReason(
   if (/^(?:mcp__conch__)?process_(?:start|write)$/.test(toolName))
     return 'run or send input to a command';
   if (/^(?:mcp__conch__)?task_control$/.test(toolName) && args.action !== 'stop')
-    return 'restart a background task';
+    return 'restart a task';
   if (toolName === 'Bash' || toolName === 'BashOutput' || toolName === 'KillShell')
     return toolName === 'Bash' ? 'run a command' : undefined;
   if (['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(toolName)) {
