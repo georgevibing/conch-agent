@@ -374,3 +374,41 @@ describe('Chat commands in Slack', () => {
     await until(() => slack.last()?.text.includes('Goal set'), 'goal set');
   });
 });
+
+describe('Agents in a chat app (ADR 0101)', () => {
+  it('answers as the channel’s agent, and /agent changes who answers here', async () => {
+    const { s, telegram, channel } = await telegramPaired();
+    const sage = await s.agents.create({ name: 'Sage', role: 'Plans trips' });
+    await s.agents.create({ name: 'Milo' });
+    // The channel's own agent answers new chats there.
+    await s.channels.update(channel.id, { agentId: sage.id });
+    expect((await s.channels.get(channel.id)).agentId).toBe(sage.id);
+    telegram.say('hello');
+    await quiet(s);
+    expect((await channelChat(s))?.agentId).toBe(sage.id);
+
+    // Without a name: the agents, the one answering marked, the others as buttons.
+    telegram.say('/agent');
+    const list = await said(telegram, 'Who answers you here');
+    expect(list.text).toMatch(/Sage · Plans trips ✓/);
+    expect(list.buttons.map((b) => b.text)).toEqual(['Conch', 'Milo']);
+    press(telegram, 'Milo', list);
+    await said(telegram, 'Milo answers you here');
+    const chat = await channelChat(s);
+    expect(chat?.agentId).toBe((await s.agents.list()).agents.find((a) => a.name === 'Milo')?.id);
+    expect((await eventsOf(s)).some((e) => e.type === 'agent' && e.name === 'Milo')).toBe(true);
+
+    // By name, and an agent it doesn't know.
+    telegram.say('/agent sage');
+    await said(telegram, 'Sage answers you here');
+    expect((await channelChat(s))?.agentId).toBe(sage.id);
+    telegram.say('/agent nobody');
+    await said(telegram, 'I don’t know an agent called “nobody”');
+    // `null` goes back to the default agent for new chats.
+    await s.channels.update(channel.id, { agentId: null });
+    expect((await s.channels.get(channel.id)).agentId).toBeUndefined();
+    await expect(s.channels.update(channel.id, { agentId: 'ag_never_was' })).rejects.toThrow(
+      /isn’t there/,
+    );
+  });
+});

@@ -83,7 +83,7 @@ export function systemParts(input: SystemInput): { identity: string; memory: str
     instructions: input.persona?.instructions ?? '',
   };
 
-  sections.push(agentLayers({ agent, ...(input.before && { before: input.before }) }));
+  sections.push(agentLayers({ agent, tools, ...(input.before && { before: input.before }) }));
 
   // The same words Settings → About you shows as "What every chat starts with".
   const about = describeProfile(profile);

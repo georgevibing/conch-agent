@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { AGENT_LIMITS, AgentList, FIRST_AGENT_ID, type Persona } from '@conch/protocol';
 import { describe, expect, it } from 'vitest';
 
+import { protectedPaths, touchesProtected } from '../lib/protect';
 import { SettingsStore } from '../settings/store';
 import { carriesSecret, jpeg, png } from '../test/faces';
 import { AgentError, AgentStore, uniqueName } from './store';
@@ -266,5 +267,14 @@ describe('an agent’s own picture', () => {
     expect((await agents.default()).avatar).toEqual({ kind: 'preset', id: 'shell' });
     expect(await readdir(dir)).toEqual([]);
     expect(await agents.check(false)).toEqual({ missing: [], strays: [] });
+  });
+});
+
+describe('what the assistant can’t touch', () => {
+  it('keeps its own file tools away from every agent’s persona, instructions and pictures', async () => {
+    const { home } = await setup();
+    const paths = protectedPaths(home);
+    for (const path of ['agents/agents.json', 'agents/avatars/im_abcd.png', 'agents'])
+      expect(touchesProtected({ file_path: join(home, path) }, paths), path).toBe(true);
   });
 });

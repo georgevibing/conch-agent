@@ -55,6 +55,7 @@ export type BuiltinAction =
   | 'resume'
   // How it answers
   | 'model'
+  | 'agent'
   | 'effort'
   | 'fast'
   | 'mode'

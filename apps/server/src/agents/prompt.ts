@@ -8,7 +8,9 @@
  *
  * 1. **Conch** — what the assistant is and the rules that hold whatever else
  *    is said. Written by Conch, never by a person or an agent.
- * 2. **Resilience** — how it solves problems (`RESILIENCE_PROMPT`).
+ * 2. **Resilience** — how it works on a problem (ADR 0102, `resilience.ts`):
+ *    the whole of it with tools, thinking it through without; lean mode and
+ *    the API engine swap in other forms by its heading (`withResilience`).
  * 3. **The agent's persona** — its name, what it's for, its voice and
  *    personality: how it speaks.
  * 4. **The agent's instructions** — what the person asked it always to do.
@@ -25,7 +27,7 @@
  */
 import { TONES, type AgentPersona } from '@conch/protocol';
 
-import { RESILIENCE_PROMPT } from '../conversations/resilience';
+import { resiliencePrompt } from '../conversations/resilience';
 
 /** What the prompt needs to know of an agent. */
 export interface PromptAgent {
@@ -47,6 +49,8 @@ export interface LayersInput {
    * speaks, but the person's instructions stay private.
    */
   guest?: boolean;
+  /** Whether this provider can call tools: which form of the resilience layer it reads. */
+  tools?: boolean;
 }
 
 /** The rule every layer after it is read under. The same words every turn, so they cost no cache. */
@@ -74,7 +78,7 @@ function personaLayer(agent: PromptAgent, before: readonly string[]): string {
   return [
     '# Your persona',
     `Your name is ${agent.name}. When you need a name for yourself, use it; never call yourself by the name of the model or the program you run on.`,
-    ...(role ? [`What you're for: ${role}`] : []),
+    ...(role ? [`What you’re for: ${role}`] : []),
     `Voice: ${TONES[agent.persona.tone].prompt}`,
     ...(personality ? ['Your personality, in the user’s words:', personality] : []),
     ...(others.length
@@ -100,7 +104,7 @@ function instructionsLayer(agent: PromptAgent): string | undefined {
 export function agentLayers(input: LayersInput): string {
   return [
     conchLayer(input.agent.name),
-    RESILIENCE_PROMPT,
+    resiliencePrompt({ tools: input.tools ?? true }),
     personaLayer(input.agent, input.before ?? []),
     input.guest ? undefined : instructionsLayer(input.agent),
   ]

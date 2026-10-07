@@ -1,4 +1,4 @@
-import type { TurnOptions } from '@conch/protocol';
+import type { AgentId, TurnOptions } from '@conch/protocol';
 import { create } from 'zustand';
 
 import type { PageOwner } from '../features/conchapps/api';
@@ -90,6 +90,12 @@ interface UiState {
   /** A goal set (`/goal`) for a new chat before its first message; it goes with that message. */
   draftGoal: string | null;
   setDraftGoal(goal: string | null): void;
+  /**
+   * The agent a new chat is with (ADR 0101), chosen before its first message
+   * (the picker, `/agent`); it goes with that message. Unset: the default agent.
+   */
+  draftAgent: AgentId | null;
+  setDraftAgent(agent: AgentId | null): void;
   /** Words to put in the open chat's composer (e.g. `/weekly-review ` from ⌘K). */
   composerText: string | null;
   setComposerText(text: string | null): void;
@@ -206,6 +212,8 @@ export const useUi = create<UiState>((set) => ({
   draftOptions: {},
   draftGoal: null,
   setDraftGoal: (draftGoal) => set({ draftGoal }),
+  draftAgent: null,
+  setDraftAgent: (draftAgent) => set({ draftAgent }),
   composerText: null,
   setComposerText: (composerText) => set({ composerText }),
   attachRequest: 0,
