@@ -123,6 +123,7 @@ export function documentTools(ctx: ToolContext, access: () => Promise<FileAccess
   return [
     {
       name: 'read_document',
+      effect: 'read',
       row: true,
       description:
         'Read text from PDF, DOCX, XLSX or PPTX files in the work folder or this chat’s attachments (up to 30 MB). Returns page, paragraph-block, sheet or slide references. Use nextOffset for more sections; if a section has nextTextOffset, read its offset with limit=1 and text_offset=nextTextOffset to continue within it. Reports truncation and pages needing visual/OCR reading. Does not execute macros, formulas or external links.',

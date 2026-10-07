@@ -221,6 +221,7 @@ export function googleTools(
           ),
         reconcile: async (args: Record<string, unknown>, operationId: string) => {
           let receipt = readEvidence.get(operationId);
+          readEvidence.delete(operationId);
           if (!receipt) {
             const result = resultOf(await run(await resolved(args)));
             receipt = readReceipt(name, result);
@@ -534,6 +535,7 @@ export function googleTools(
   return [
     {
       name: 'google_accounts',
+      effect: 'read',
       description:
         'List the Google accounts connected to Conch and what each may do: for Gmail, Calendar and Drive, read or read & write. Every Google tool takes accountId (an email from this list); leave it out when only one account can do the job, and ask if personal or work is unclear.',
       input: {},

@@ -215,7 +215,7 @@ export class ArtifactService {
   async update(
     id: string,
     input: { content: string; note?: string; refreshed?: boolean; base?: number },
-    options: { checkBase?: boolean } = {},
+    options: { checkBase?: boolean; expectedVersion?: number } = {},
   ) {
     const current = await this.deps.store.get(id);
     // Your edit is never overwritten blindly: the model must say it started from it.
@@ -227,9 +227,10 @@ export class ArtifactService {
       );
     const wrong = checkContent(current.kind, input.content);
     if (wrong) throw new ArtifactError('invalid', wrong);
-    const { base: _base, ...version } = input;
+    const { base, ...version } = input;
     const artifact = await this.deps.store.addVersion(id, {
       ...version,
+      base: options.expectedVersion ?? base,
       navigates: current.kind === 'html' && navigates(input.content),
     });
     this.#changed(artifact);
@@ -286,6 +287,43 @@ export class ArtifactService {
         : Promise.reject(error);
     const update: HostTool = {
       name: 'artifact_update',
+      verification: {
+        effect: 'write',
+        sequential: true,
+        identity: (args) => String(args.id),
+        scope: async () => ({
+          account: `local:${this.deps.store.dir}`,
+          authorization: `artifact:update:${ctx.conversationId}`,
+          expiresAt: Date.now() + 10 * 60_000,
+        }),
+        prepare: async (args) => {
+          if (options.only && args.id !== options.only)
+            throw new ArtifactError('invalid', 'This chat can only update its own artifact.');
+          const current = await this.deps.store.get(String(args.id));
+          return { version: String(current.versions.at(-1)?.n ?? 0) };
+        },
+        reconcile: async (args, _id, checkpoint) => {
+          if (!checkpoint) return { state: 'unknown' };
+          try {
+            const saved = await this.deps.store.content(
+              String(args.id),
+              Number(checkpoint.version) + 1,
+            );
+            if (saved.content !== args.content) return { state: 'unknown' };
+            return {
+              state: 'confirmed',
+              receipt: {
+                provider: 'Conch',
+                id: `${String(args.id)}:${Number(checkpoint.version) + 1}`,
+                label: `Updated “${saved.artifact.title}”`,
+                url: `/api/artifacts/${String(args.id)}/versions/${Number(checkpoint.version) + 1}/download`,
+              },
+            };
+          } catch {
+            return { state: 'unknown' };
+          }
+        },
+      },
       description:
         'Make a new version of something you made with artifact_create: send the whole new content (not a diff), and a few words on what changed. If the user edited it by hand, start from their version and pass its number as base.',
       input: {
@@ -294,7 +332,7 @@ export class ArtifactService {
         note: z.string().max(200).optional(),
         base: z.number().int().positive().optional(),
       },
-      run: async (args) => {
+      run: async (args, context) => {
         const { id, content, note, base } = args as {
           id: string;
           content: string;
@@ -302,16 +340,28 @@ export class ArtifactService {
           base?: number;
         };
         if (options.only && id !== options.only)
-          return { text: `This chat can only update ${options.only}.`, isError: true };
+          return {
+            text: `This chat can only update ${options.only}.`,
+            isError: true,
+            effect: 'not-executed',
+          };
         try {
           const artifact = await this.update(
             id,
             { content, note, base, refreshed: Boolean(options.only) },
-            { checkBase: true },
+            {
+              checkBase: true,
+              ...(context?.checkpoint && { expectedVersion: Number(context.checkpoint.version) }),
+            },
           );
           this.#card(ctx.append, artifact, 'updated');
           return say(artifact, 'Updated');
         } catch (error) {
+          if (
+            error instanceof ArtifactError &&
+            ['invalid', 'conflict', 'not-found', 'too-big'].includes(error.code)
+          )
+            return { text: error.message, isError: true, effect: 'not-executed' };
           return fail(error);
         }
       },
@@ -376,7 +426,7 @@ export class ArtifactService {
           (content.length > ARTIFACT_MAX
             ? 'That document is too large. Save a shorter version.'
             : undefined);
-        if (invalid) return { text: invalid, effect: 'not-executed' as const };
+        if (invalid) return { text: invalid, isError: true, effect: 'not-executed' as const };
         try {
           const events = await this.deps
             .conversations()

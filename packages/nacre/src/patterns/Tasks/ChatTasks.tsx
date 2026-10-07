@@ -25,6 +25,7 @@ export interface ChatTask {
    */
   link: ReactElement<{ children?: ReactNode }>;
   status: TaskCardStatus;
+  unchecked?: boolean;
   kind?: 'background' | 'helper';
   /** What it's doing right now ("Running `npm test`"), while it works. */
   current?: ReactNode;
@@ -73,12 +74,12 @@ export function tasksSummary(tasks: readonly Pick<ChatTask, 'status'>[]): string
   return now.length ? `${all} · ${now.join(', ')}` : all;
 }
 
-function StatusIcon({ status }: { status: TaskCardStatus }) {
+function StatusIcon({ status, unchecked }: { status: TaskCardStatus; unchecked?: boolean }) {
   if (status === 'running') return <Pearl size="xs" state="thinking" label={null} />;
   if (status === 'queued') return <Clock aria-hidden />;
   if (status === 'needs-you') return <Hand aria-hidden />;
   if (status === 'done') return <Check aria-hidden />;
-  if (status === 'stopped') return <Square aria-hidden />;
+  if (unchecked || status === 'stopped') return <Square aria-hidden />;
   return <CircleAlert aria-hidden />;
 }
 
@@ -90,14 +91,19 @@ function TaskRow({ task, now }: { task: ChatTask; now?: number }) {
       ? elapsed((task.finishedAt ?? time) - task.startedAt)
       : undefined;
   const link = task.link;
-  const words = going(task.status) && task.current ? task.current : WORDS[task.status];
+  const words =
+    going(task.status) && task.current
+      ? task.current
+      : task.unchecked
+        ? 'Finished — outcome not checked'
+        : WORDS[task.status];
   const content = isValidElement(link)
     ? cloneElement(
         link,
         undefined,
         <>
           <span className={styles.icon} data-status={task.status}>
-            <StatusIcon status={task.status} />
+            <StatusIcon status={task.status} unchecked={task.unchecked} />
           </span>
           <span className={styles.text}>
             <span className={styles.title} id={titleId}>

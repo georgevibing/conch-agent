@@ -1,3 +1,4 @@
+import { assessTask } from '@conch/protocol';
 import type { ServerEvent, Task, TaskList } from '@conch/protocol';
 import { toast } from '@conch/nacre';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
@@ -58,7 +59,10 @@ export function applyTaskEvent(
   if (task.status === 'done' && !here)
     toast.success(`Done: ${task.title}`, { description: task.summary, action: open });
   else if (task.status === 'unverified' && !here)
-    toast(`Result needs checking: ${task.title}`, { description: task.error, action: open });
+    toast(
+      `${assessTask(task).verdict === 'unchecked' ? 'Finished' : 'Result needs checking'}: ${task.title}`,
+      { description: task.error, action: open },
+    );
   else if (task.status === 'failed')
     toast.error(`Didn’t finish: ${task.title}`, { description: task.error, action: open });
   else if (task.status === 'needs-you' && task.conversationId && !here)

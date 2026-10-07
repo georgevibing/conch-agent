@@ -138,6 +138,7 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
 
   const guide: HostTool = {
     name: 'app_guide',
+    effect: 'read',
     description:
       'Read the guide to making a Conch app: the format, the tools module, pages, the quality bar and the steps. Read it before you build or change an app.',
     input: {},
@@ -335,6 +336,7 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
 
   const read: HostTool<{ draft: typeof draftArg; path: z.ZodOptional<z.ZodString> }> = {
     name: 'app_read',
+    effect: 'read',
     description: 'Read one file of the app being made, or list its files when no path is given.',
     input: {
       draft: draftArg,
@@ -454,6 +456,7 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
 
   const find: HostTool<{ query: z.ZodString }> = {
     name: 'app_find',
+    effect: 'read',
     description:
       'Look for a Conch app: among the person’s own, and apps others published on GitHub. Use before making one when something like it may exist. Offer one you found with app_get.',
     input: {

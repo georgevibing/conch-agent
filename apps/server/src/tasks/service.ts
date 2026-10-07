@@ -31,7 +31,7 @@ import type {
   TaskStatus,
   TurnOptions,
 } from '@conch/protocol';
-import { MODE_POWER } from '@conch/protocol';
+import { assessTask, MODE_POWER } from '@conch/protocol';
 import { z } from 'zod';
 
 import type { ConversationManager, ToolContext } from '../conversations/manager';
@@ -40,7 +40,7 @@ import { LOCAL_LABEL } from '../engines/api/ollama';
 import type { Engine, HostTool } from '../engines/types';
 import { Mutex } from '../lib/fs';
 import { PROVIDER_COPY } from '../providers/catalog';
-import { taskArgumentHash, taskArgumentText, TaskOperations, verifiedOutcome } from './operations';
+import { taskArgumentHash, taskArgumentText, TaskOperations } from './operations';
 import { newId } from '../lib/ids';
 import type { SettingsStore } from '../settings/store';
 import type { TaskStore } from './store';
@@ -307,7 +307,7 @@ export class TaskService {
         limits: { google_mail_create_draft: 1 },
         argumentHashes: { google_mail_create_draft: argumentHash },
       },
-      expectations: [{ tool: 'google_mail_create_draft', minimum: 1 }],
+      expectations: [{ tool: 'google_mail_create_draft', minimum: 1, inputHash: argumentHash }],
     });
   }
 
@@ -556,10 +556,12 @@ export class TaskService {
       ? (await this.deps.conversations.agentOf(parent).catch(() => undefined))?.id
       : undefined;
     const wt = this.#worktrees.get(task.id);
+    let operationsClosed = false;
     const operations = new TaskOperations(
       () => this.get(id),
-      (change) => this.#mutate(id, change),
-      () => this.#stopping.has(id),
+      // A closed turn must not overwrite receipts recovered by a later retry, either.
+      (change) => this.#mutate(id, (current) => (operationsClosed ? {} : change(current))),
+      () => operationsClosed || this.#stopping.has(id),
       () => this.#now,
     );
     const hostNames = new Set<string>();
@@ -610,6 +612,8 @@ export class TaskService {
               },
             };
           },
+          afterTool: (invocationId, status, output) =>
+            operations.afterNative(invocationId, status, output),
           beforeTool: async (name, args, invocationId, phase) => {
             if (!permitted(name))
               return 'This task is only authorized to use its listed tools. Shell commands, browser actions, and other tools are not authorized.';
@@ -643,6 +647,8 @@ export class TaskService {
       // Stopped while it was starting: it stops now.
       if (this.#stopping.has(id)) await this.deps.conversations.interrupt(conversationId);
       const turn = await result;
+      // A provider may still have an in-flight call after its turn ends or is stopped.
+      operationsClosed = true;
       // A limit another provider can answer (ADR 0023): carry on with it, once.
       if (turn.outcome === 'error' && turn.problem === 'limit' && !fallback && !task.toolScope) {
         const { preferences } = await this.deps.settings.get();
@@ -650,22 +656,28 @@ export class TaskService {
         if (next && next !== engine.id) return this.#run(id, { engine: next, from: engine.label });
       }
       const stopped = this.#stopping.delete(id);
+      const assessment = assessTask(await this.get(id));
       await this.#finish(
         await this.get(id),
         stopped
           ? { status: 'stopped', verification: 'unverified', error: undefined }
           : turn.outcome === 'success'
             ? {
-                status: verifiedOutcome(await this.get(id)) ? 'done' : 'unverified',
-                verification: verifiedOutcome(await this.get(id)) ? 'verified' : 'unverified',
+                status: assessment.verdict === 'verified' ? 'done' : 'unverified',
+                verification: assessment.verdict === 'verified' ? 'verified' : 'unverified',
                 modelCompleted: true,
                 summary: tidy(
                   reported ?? turn.finalText ?? 'The assistant finished its turn.',
                   4_000,
                 ),
-                error: verifiedOutcome(await this.get(id))
-                  ? undefined
-                  : 'The assistant finished, but Conch has not verified the requested outcome. Confirmed results below are kept; unresolved actions will not be repeated.',
+                error:
+                  assessment.verdict === 'verified' || assessment.verdict === 'unchecked'
+                    ? undefined
+                    : assessment.verdict === 'uncertain'
+                      ? 'Some actions have no independent receipt. Inspect the recorded results before repeating them.'
+                      : assessment.verdict === 'unsupported'
+                        ? 'The tools finished, but some results have no independent receipt. See the verification details.'
+                        : 'The assistant finished, but required results are still missing. See the verification details.',
               }
             : turn.outcome === 'interrupted'
               ? {
@@ -676,10 +688,13 @@ export class TaskService {
               : { status: 'failed', error: tidy(turn.error ?? 'Something went wrong.', 1_000) },
       );
     } catch (error) {
+      operationsClosed = true;
       await this.#finish(await this.get(id), {
         status: 'failed',
         error: tidy((error as Error).message || 'Something went wrong.', 1_000),
       });
+    } finally {
+      operationsClosed = true;
     }
   }
 
@@ -1082,9 +1097,13 @@ export class TaskService {
     const control: HostTool[] = [
       {
         name: 'task_status',
+        effect: 'read',
         description:
-          'List background tasks and helpers started in this chat, or read one by id. Returns progress, status, errors and the result. Cannot read tasks belonging to another chat.',
-        input: { id: z.string().min(1).max(128).optional() },
+          'List background tasks and helpers started in this chat, or read one by id. Returns progress, status, errors and the result. With id, includes up to 50 recent operations; operations_offset pages through earlier evidence. Cannot read tasks belonging to another chat.',
+        input: {
+          id: z.string().min(1).max(128).optional(),
+          operations_offset: z.number().int().nonnegative().optional(),
+        },
         run: async (args) => {
           const tasks = args.id
             ? [await owned(String(args.id))]
@@ -1092,14 +1111,47 @@ export class TaskService {
                 .filter((t) => t.parentConversationId === ctx.conversationId)
                 .slice(0, 50);
           return JSON.stringify(
-            tasks.map((t) => ({
-              id: t.id,
-              title: t.title,
-              status: t.status,
-              current: t.current,
-              error: t.error,
-              result: t.summary,
-            })),
+            tasks.map((t) => {
+              const assessment = assessTask(t);
+              const operations = t.operations ?? [];
+              const offset =
+                typeof args.operations_offset === 'number'
+                  ? args.operations_offset
+                  : Math.max(0, operations.length - 50);
+              return {
+                id: t.id,
+                title: t.title,
+                status: t.status,
+                current: t.current,
+                error: t.error,
+                result: t.summary,
+                modelCompleted: t.modelCompleted,
+                assessment: {
+                  ...assessment,
+                  reasons: assessment.reasons.slice(0, 20),
+                  reasonCount: assessment.reasons.length,
+                },
+                operationCount: operations.length,
+                ...(args.id
+                  ? {
+                      operationsOffset: offset,
+                      nextOperationsOffset:
+                        offset + 50 < operations.length ? offset + 50 : undefined,
+                      operations: operations
+                        .slice(offset, offset + 50)
+                        .map(({ id, tool, effect, state, execution, receipt, error }) => ({
+                          id,
+                          tool,
+                          effect,
+                          state,
+                          execution,
+                          receipt,
+                          error,
+                        })),
+                    }
+                  : {}),
+              };
+            }),
           );
         },
       },
@@ -1208,7 +1260,7 @@ export function merged(tasks: Task[]): string {
         ? `\n(Changes are on branch \`${t.worktree.branch}\` in ${t.worktree.path}.)`
         : '';
       if (t.status === 'unverified')
-        return `${head}\nNot verified: ${t.summary ?? t.error}${branch}`;
+        return `${head}\n${assessTask(t).verdict === 'unchecked' ? 'Finished; no automatic outcome criteria' : 'Not verified'}: ${t.summary ?? t.error}${branch}`;
       if (t.status === 'done') return `${head}\n${t.summary ?? 'Done.'}${branch}`;
       if (t.status === 'stopped') return `${head}\nStopped before it finished.`;
       return `${head}\nDidn’t finish: ${t.error ?? 'something went wrong.'}`;

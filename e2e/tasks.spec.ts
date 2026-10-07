@@ -46,8 +46,10 @@ test('sent to the background, it works while you chat, and its result comes back
   await composer.press('Enter');
   await expect(page.getByText('what’s the weather like?', { exact: true })).toBeVisible();
 
-  await expect(card).toContainText('Result not verified', { timeout: 15_000 });
+  await expect(card).toContainText('Finished — outcome not checked', { timeout: 15_000 });
   await expect(card).toContainText('Finished: Run the checks slowly');
+  await expect(card.getByRole('button', { name: 'Resume safely' })).toHaveCount(0);
+  await expect(card).toContainText('No automatic completion criteria were set.');
 
   // Its own chat is no chat of the list's: it sits under the chat that sent it,
   // and opens from the card.
@@ -114,7 +116,7 @@ test('helpers work side by side, each with its own card, and their results come 
   await expect(page.getByRole('heading', { name: 'Check the tests' })).toBeVisible();
   for (const name of ['Read the README', 'Check the tests', 'Skim the changelog'])
     await expect(page.getByRole('article', { name: new RegExp(name) })).toContainText(
-      'Result not verified',
+      'Finished — outcome not checked',
     );
 });
 
@@ -134,7 +136,7 @@ test('a task that needs your OK says so, and waits only for you', async ({ page 
   const ask = card.getByRole('group', { name: 'It’s asking' });
   await expect(ask).toContainText('git push');
   await ask.getByRole('button', { name: 'Allow' }).click();
-  await expect(card).toContainText('Result not verified', { timeout: 15_000 });
+  await expect(card).toContainText('Finished — outcome not checked', { timeout: 15_000 });
 });
 
 test('a chat’s tasks sit under it in the sidebar, and open from there', async ({ page }) => {

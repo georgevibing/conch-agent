@@ -276,6 +276,69 @@ describe('a task sent to the background', () => {
     );
   });
 
+  it('late tool results cannot clear uncertainty after the stopped turn has closed', async () => {
+    let release = () => {};
+    const response = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let started = false;
+    let pending: Promise<unknown> | undefined;
+    const reconcile = vi.fn(async () => ({
+      state: 'confirmed' as const,
+      receipt: { provider: 'fixture', id: 'late', label: 'Late result' },
+    }));
+    const { tasks, engines } = await setup({
+      tools: () => [
+        {
+          name: 'late_write',
+          description: 'Fixture',
+          input: {},
+          run: async () => {
+            started = true;
+            await response;
+            return 'saved';
+          },
+          verification: {
+            effect: 'write',
+            scope: async () => ({
+              account: 'fixture',
+              authorization: 'fixture',
+              expiresAt: Number.MAX_SAFE_INTEGER,
+            }),
+            reconcile,
+          },
+        },
+      ],
+    });
+    const engine = engines.get('mock');
+    if (!engine) throw new Error('Missing mock');
+    vi.spyOn(engine, 'runTurn').mockImplementation(
+      async function* (input): AsyncIterable<EngineEvent> {
+        pending = input.tools
+          .find((tool) => tool.name === 'late_write')
+          ?.run({})
+          .catch((error: unknown) => error);
+        await new Promise<void>((resolve) =>
+          input.signal.addEventListener('abort', () => resolve(), { once: true }),
+        );
+        yield { type: 'done', outcome: 'interrupted' };
+      },
+    );
+    const task = await tasks.create({ kind: 'background', text: 'late tool' });
+    await until(async () => started, Boolean);
+    await tasks.stop(task.id);
+    await until(
+      () => status(tasks, task.id),
+      (s) => s === 'stopped',
+    );
+    release();
+    await pending;
+    expect((await tasks.get(task.id)).operations?.[0]).toMatchObject({ state: 'running' });
+    expect((await tasks.get(task.id)).operations?.[0]?.execution).toBeUndefined();
+    expect((await tasks.get(task.id)).operations?.[0]?.receipt).toBeUndefined();
+    expect(reconcile).not.toHaveBeenCalled();
+  });
+
   it('after a crash, says it stopped, and runs again with one press', async () => {
     const { tasks, make, conversations } = await setup();
     const task = await tasks.create({ kind: 'background', text: 'slow one' });
@@ -506,7 +569,13 @@ describe('safe continuation and bounded workflow requests', () => {
       accountId: 'account_1',
     });
     expect(first.toolScope?.argumentHashes?.google_mail_create_draft).toMatch(/^[a-f0-9]{64}$/);
-    expect(first.expectations).toEqual([{ tool: 'google_mail_create_draft', minimum: 1 }]);
+    expect(first.expectations).toEqual([
+      {
+        tool: 'google_mail_create_draft',
+        minimum: 1,
+        inputHash: first.toolScope?.argumentHashes?.google_mail_create_draft,
+      },
+    ]);
     expect(first.parentConversationId).toBe(chat.id);
     await conversations.send({
       conversationId: chat.id,
@@ -613,7 +682,7 @@ describe('helpers side by side (delegate)', () => {
       ],
     } as never);
     expect(out).toBe(
-      '## Check A\nNot verified: Scripted did: look at A\n\n## Check B\nNot verified: Scripted did: look at B',
+      '## Check A\nFinished; no automatic outcome criteria: Scripted did: look at A\n\n## Check B\nFinished; no automatic outcome criteria: Scripted did: look at B',
     );
     const helpers = (await tasks.list()).tasks.filter((t) => t.kind === 'helper');
     expect(helpers).toHaveLength(2);
@@ -810,7 +879,7 @@ describe('helpers on another provider', () => {
       ],
     } as never);
     expect(out).toBe(
-      '## Write the tests\nNot verified: Other did: write the tests\n\n## Check it\nNot verified: Scripted did: check it',
+      '## Write the tests\nFinished; no automatic outcome criteria: Other did: write the tests\n\n## Check it\nFinished; no automatic outcome criteria: Scripted did: check it',
     );
     const helpers = (await tasks.list()).tasks;
     const other = helpers.find((t) => t.title === 'Write the tests');
@@ -1041,6 +1110,36 @@ describe('task controls in the originating chat', () => {
     const control = tools.find((t) => t.name === 'task_control');
     expect(await statusTool?.run({})).toContain(owned.id);
     expect(await statusTool?.run({})).not.toContain(other.id);
+    const evidence = Array.from({ length: 75 }, (_, index) => ({
+      id: `op-${index}`,
+      key: `key-${index}`,
+      tool: 'Read',
+      effect: 'read' as const,
+      state: 'confirmed' as const,
+      execution: 'succeeded' as const,
+      account: 'test',
+      authorization: 'read',
+      expiresAt: Number.MAX_SAFE_INTEGER,
+      startedAt: index,
+      receipt: { provider: 'test', id: String(index), label: 'Read' },
+    }));
+    const read = vi.spyOn(tasks, 'get');
+    read.mockResolvedValueOnce({ ...owned, operations: evidence });
+    const recent = JSON.parse(String(await statusTool?.run({ id: owned.id }))) as {
+      operationCount: number;
+      operationsOffset: number;
+      operations: { id: string }[];
+    }[];
+    expect(recent[0]).toMatchObject({ operationCount: 75, operationsOffset: 25 });
+    expect(recent[0]?.operations).toHaveLength(50);
+    expect(recent[0]?.operations[0]?.id).toBe('op-25');
+    read.mockResolvedValueOnce({ ...owned, operations: evidence });
+    const first = JSON.parse(
+      String(await statusTool?.run({ id: owned.id, operations_offset: 0 })),
+    ) as { nextOperationsOffset: number; operations: { id: string }[] }[];
+    expect(first[0]?.nextOperationsOffset).toBe(50);
+    expect(first[0]?.operations[0]?.id).toBe('op-0');
+    read.mockRestore();
     await expect(statusTool?.run({ id: other.id })).rejects.toThrow('not started in this chat');
     await expect(control?.run({ id: other.id, action: 'stop' })).rejects.toThrow(
       'not started in this chat',

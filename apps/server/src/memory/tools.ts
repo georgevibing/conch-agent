@@ -146,6 +146,7 @@ export function memoryTools(options: {
   };
   const recall: HostTool<{ query: z.ZodString }> = {
     name: 'recall',
+    effect: 'read',
     description: 'Search long-term memory for things you may know about the user.',
     input: { query: z.string().min(1).max(200) },
     async run({ query }) {

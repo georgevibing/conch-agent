@@ -1,4 +1,4 @@
-import type { PermissionMode, Task } from '@conch/protocol';
+import { assessTask, uncertainEffect, type PermissionMode, type Task } from '@conch/protocol';
 import { InlineCode, TaskCard } from '@conch/nacre';
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -29,6 +29,8 @@ export function LiveTaskCard({
   variant?: 'full' | 'compact';
   className?: string;
 }) {
+  const assessment = assessTask(task);
+  const unchecked = task.status === 'unverified' && assessment.verdict === 'unchecked';
   const navigate = useNavigate();
   const live = useLive();
   const { data: chats } = useConversations();
@@ -55,6 +57,7 @@ export function LiveTaskCard({
       kind={task.kind}
       title={task.title}
       status={task.status}
+      unchecked={unchecked}
       startedAt={task.startedAt}
       finishedAt={task.finishedAt}
       current={task.current && withCode(task.current)}
@@ -62,6 +65,20 @@ export function LiveTaskCard({
       summary={
         <>
           {task.summary && <p>{task.summary}</p>}
+          {unchecked && (
+            <p>No automatic completion criteria were set. Recorded tool results are shown below.</p>
+          )}
+          {assessment.reasons.some((reason) => reason.code === 'required-evidence-missing') && (
+            <ul aria-label="Missing verification">
+              {assessment.reasons
+                .filter((reason) => reason.code === 'required-evidence-missing')
+                .map((reason) => (
+                  <li key={reason.tool}>
+                    Still needs {reason.minimum} confirmed result(s) from {reason.tool}.
+                  </li>
+                ))}
+            </ul>
+          )}
           {task.operations?.some((operation) => operation.receipt) && (
             <ul aria-label="Confirmed results">
               {task.operations
@@ -79,12 +96,18 @@ export function LiveTaskCard({
                 ))}
             </ul>
           )}
-          {task.operations?.some((operation) => operation.state !== 'confirmed') && (
+          {assessment.reasons.some((reason) => reason.code === 'receipt-unavailable') && (
+            <p>
+              Some tools finished without independent outcome checks. Their earlier actions will not
+              be replayed.
+            </p>
+          )}
+          {task.operations?.some(uncertainEffect) && (
             <p>Some actions have no confirmed result. They will not be repeated automatically.</p>
           )}
         </>
       }
-      error={task.error}
+      error={unchecked ? undefined : task.error}
       note={task.note}
       branch={task.worktree?.changed ? task.worktree.branch : undefined}
       by={task.by}

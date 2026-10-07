@@ -5,11 +5,64 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ServerEvent } from '@conch/protocol';
 import type { ConversationManager } from '../conversations/manager';
 
+import { TaskOperations } from '../tasks/operations';
+import type { Task } from '@conch/protocol';
 import { LiveDataAccess } from './live';
 import { ArtifactService } from './service';
 import { artifactOperationId, ArtifactStore } from './store';
 
 describe('artifact completion receipts', () => {
+  it('updates an artifact with durable version evidence and recovers without another version', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-artifact-update-'));
+    const store = new ArtifactStore(home);
+    const service = new ArtifactService({
+      store,
+      conversations: () => {
+        throw new Error('not needed');
+      },
+      emit: () => undefined,
+      access: new LiveDataAccess(home),
+      gatewayPort: 4317,
+    });
+    const artifact = await store.create({
+      title: 'Report',
+      kind: 'markdown',
+      content: 'one',
+      conversationId: 'c_test',
+    });
+    let task: Task = {
+      id: 'task',
+      title: 'Update',
+      prompt: 'Update',
+      kind: 'background',
+      status: 'running',
+      options: {},
+      createdAt: 1,
+      rev: 0,
+      steps: [],
+      operations: [],
+    };
+    const ledger = () =>
+      new TaskOperations(
+        async () => task,
+        async (change) => (task = { ...task, ...change(task) }),
+        () => false,
+      );
+    const update = service
+      .tools({ conversationId: 'c_test', append: () => undefined })
+      .find((tool) => tool.name === 'artifact_update');
+    if (!update) throw new Error('Missing update');
+    await ledger().wrap(update).run({ id: artifact.id, content: 'two' });
+    expect(task.operations?.[0]?.state).toBe('confirmed');
+    // A restart loses in-memory state but the checkpoint can read back the exact version.
+    task = { ...task, operations: task.operations?.map((op) => ({ ...op, state: 'running' })) };
+    await ledger().wrap(update).run({ id: artifact.id, content: 'two' });
+    expect((await store.get(artifact.id)).versions).toHaveLength(2);
+    await ledger().wrap(update).run({ id: artifact.id, content: 'three' });
+    expect((await store.content(artifact.id)).content).toBe('three');
+    expect((await store.get(artifact.id)).versions).toHaveLength(3);
+    expect(task.operations?.every((op) => op.state === 'confirmed')).toBe(true);
+  });
   it('distinguishes rejected content from an uncertain write', async () => {
     const home = await mkdtemp(join(tmpdir(), 'conch-artifact-preflight-'));
     const store = new ArtifactStore(home);

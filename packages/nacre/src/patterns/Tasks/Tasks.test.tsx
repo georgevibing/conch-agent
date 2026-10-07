@@ -8,6 +8,22 @@ import { elapsed, TaskCard } from './TaskCard';
 const NOW = 1_790_000_000_000;
 
 describe('TaskCard', () => {
+  it('finishes without criteria without a warning or a misleading retry', async () => {
+    const { container } = renderNacre(
+      <TaskCard
+        title="Read the source"
+        status="unverified"
+        unchecked
+        summary="The report is available."
+        onRetry={() => undefined}
+        onOpen={() => undefined}
+      />,
+    );
+    expect(screen.getByRole('article')).toHaveTextContent('Finished — outcome not checked');
+    expect(screen.queryByText('Verified complete')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Resume safely' })).not.toBeInTheDocument();
+    await expectAccessible(container);
+  });
   it('says how it’s going in words, what it’s doing, and how long it’s been', async () => {
     const user = userEvent.setup();
     const onStop = vi.fn();

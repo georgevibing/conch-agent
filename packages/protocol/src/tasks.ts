@@ -53,6 +53,12 @@ export const TaskOperation = z.object({
   key: z.string(),
   tool: z.string(),
   inputHash: z.string().optional(),
+  /** Read attempts have distinct identities; native results settle only their own invocation. */
+  invocationId: z.string().optional(),
+  execution: z.enum(['succeeded', 'failed']).optional(),
+  /** A declared reconciler failed to prove this effect; different payloads cannot evade it. */
+  receiptExpected: z.boolean().optional(),
+  checkpoint: z.record(z.string(), z.string()).optional(),
   effect: z.enum(['read', 'write', 'unknown']),
   account: z.string(),
   authorization: z.string(),
@@ -66,10 +72,18 @@ export const TaskOperation = z.object({
 });
 export type TaskOperation = z.infer<typeof TaskOperation>;
 export const TaskExpectation = z.object({
+  /** Optional server-pinned target and content constraints; never grant tool authority. */
+  inputHash: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
+  receipt: z.object({ provider: z.string(), id: z.string() }).optional(),
   unlessEmpty: z.string().optional(),
   tool: z.string().min(1),
   minimum: z.number().int().positive().max(100),
 });
+
+export type TaskExpectation = z.infer<typeof TaskExpectation>;
 
 export const Task = z.object({
   id: z.string(),

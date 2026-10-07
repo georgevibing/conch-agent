@@ -42,6 +42,8 @@ export interface TaskCardAsking {
 export interface TaskCardProps extends Omit<ComponentProps<'article'>, 'title'> {
   title: string;
   status: TaskCardStatus;
+  /** Finished execution with no automatic criteria; distinct from an uncertain action. */
+  unchecked?: boolean;
   /** A helper the assistant runs side by side, or something you sent away. */
   kind?: 'background' | 'helper';
   /** When it started, to show how long it's been going (epoch ms). */
@@ -118,6 +120,7 @@ export function useTick(on: boolean, now?: number): number {
 export function TaskCard({
   title,
   status,
+  unchecked = false,
   kind = 'background',
   startedAt,
   finishedAt,
@@ -154,7 +157,7 @@ export function TaskCard({
       <Hand aria-hidden />
     ) : status === 'done' ? (
       <Check aria-hidden />
-    ) : status === 'stopped' ? (
+    ) : unchecked || status === 'stopped' ? (
       <Square aria-hidden />
     ) : (
       <CircleAlert aria-hidden />
@@ -183,7 +186,9 @@ export function TaskCard({
           </p>
           <p className={styles.meta} aria-live="polite">
             <span className={styles.status} data-status={status}>
-              {LABELS[status]}
+              {unchecked && status === 'unverified'
+                ? 'Finished — outcome not checked'
+                : LABELS[status]}
             </span>
             {took && status !== 'queued' && <span> · {took}</span>}
             {by && <span> · by {by}</span>}
@@ -253,6 +258,7 @@ export function TaskCard({
             status === 'interrupted' ||
             status === 'stopped' ||
             status === 'unverified') &&
+            !unchecked &&
             onRetry && (
               <Button size="sm" variant="surface" onClick={onRetry} leadingIcon={<RotateCcw />}>
                 Resume safely

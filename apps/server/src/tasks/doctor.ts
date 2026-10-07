@@ -1,5 +1,5 @@
 /** Repair everything's look at background tasks (ADR 0033). */
-import type { DoctorItem } from '@conch/protocol';
+import { assessTask, type DoctorItem } from '@conch/protocol';
 
 import type { DoctorCheck } from '../doctor/service';
 import type { TaskService } from './service';
@@ -15,7 +15,9 @@ export function tasksCheck(tasks: TaskService): DoctorCheck {
       const { tasks: all } = await tasks.list();
       const stuck = all.filter((t) => t.kind === 'background' && t.status === 'interrupted');
       const uncertain = all.filter(
-        (t) => t.status === 'unverified' || t.operations?.some((op) => op.state !== 'confirmed'),
+        (t) =>
+          ['unverified', 'done', 'failed', 'interrupted', 'stopped'].includes(t.status) &&
+          ['uncertain', 'incomplete', 'unsupported'].includes(assessTask(t).verdict),
       );
       const waiting = all.filter((t) => t.status === 'needs-you');
       const items: DoctorItem[] = [];

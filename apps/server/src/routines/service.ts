@@ -1076,6 +1076,7 @@ export class RoutineService {
 
     const list: HostTool = {
       name: 'list_routines',
+      effect: 'read',
       description: 'List the user’s routines with their ids, schedules, status and last outcome.',
       input: {},
       run: async () => {

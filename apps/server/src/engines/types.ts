@@ -28,6 +28,8 @@ import type { TurnBudget } from './budget';
  */
 export interface HostToolResult {
   text: string;
+  /** Execution failed; adapters must preserve this, including structured tool errors. */
+  isError?: boolean;
   /** Trusted tool guarantee: no write was attempted (e.g. approval declined). */
   effect?: 'not-executed';
   images?: ToolImage[];
@@ -55,11 +57,17 @@ export interface HostTool<Shape extends z.ZodRawShape = z.ZodRawShape> {
   row?: boolean;
   run(
     args: z.infer<z.ZodObject<Shape>>,
-    context?: { operationId: string },
+    context?: { operationId: string; checkpoint?: Record<string, string> },
   ): Promise<string | HostToolResult>;
+  /** Trusted host declaration, independent of receipt support. Never taken from model text. */
+  effect?: 'read' | 'write';
   /** Optional durable-effect contract; a write is confirmed only by a provider receipt. */
   verification?: {
     effect: 'read' | 'write';
+    /** Local, versioned mutations may proceed after a confirmed predecessor. */
+    sequential?: boolean;
+    /** Non-secret preconditions persisted before dispatch, used for read-only recovery. */
+    prepare?(args: Record<string, unknown>): Promise<Record<string, string>>;
     /** Trusted semantic target, never derived from untrusted model claims. */
     identity?(args: Record<string, unknown>): string;
     scope(
@@ -68,6 +76,7 @@ export interface HostTool<Shape extends z.ZodRawShape = z.ZodRawShape> {
     reconcile(
       args: Record<string, unknown>,
       operationId: string,
+      checkpoint?: Record<string, string>,
     ): Promise<
       | {
           state: 'confirmed';

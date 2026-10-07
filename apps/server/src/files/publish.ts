@@ -16,6 +16,7 @@ export function publishTools(
   return [
     {
       name: 'list_attachments',
+      effect: 'read',
       row: true,
       description:
         'Find this chat’s attached files and finished downloads, including pictures generated here. Returns names, paths for read_file/read_document or image editing, and preview cards. Other chats’ files are never listed.',
