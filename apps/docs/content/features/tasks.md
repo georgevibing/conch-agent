@@ -28,7 +28,9 @@ In the chat list, a chat with tasks has a line under it saying how many there ar
 
 **Tasks** in the sidebar lists everything, with a count of what's working, or of what needs your OK. The page puts what needs you first, then what's working, then what's waiting, then what finished. Up to three tasks work at once. The rest wait their turn.
 
-Every task is a chat of its own. **Open** shows it, and there you can read along, answer what it asks, or stop it. **Stop** on the card ends a task at any point.
+Tasks started together, by one reply or one job split into parts, share one card: how many, how they're going in a line and a bar, then a line each. What needs your OK rises to the top and is answered right there. When the last one finishes, the bar folds away and the lines are the result: what each did, or why it didn't.
+
+Every task is a chat of its own. Press one, on its card or under its chat in the chat list, and it opens over the chat you're in: from the bottom on a phone, from the side on a computer. Read along, answer what it asks, or **Stop** it. The tasks started with it sit along the top, a mark each: tap one, swipe sideways on a phone, or use the arrow keys. Close it, or go back, and you're where you were. **Continue in full** opens its own chat, to give it more to do.
 
 ## When it needs you
 
@@ -58,7 +60,7 @@ On the Tasks page, **Remove** hides a finished task's card. Conch retains its op
 
 ## Helpers, side by side
 
-When a job splits into parts that don't need each other, your assistant can run them at once, each with a helper, and bring the results back together. You don't start helpers. Your assistant does, and each one is a card in the chat.
+When a job splits into parts that don't need each other, your assistant can run them at once, each with a helper, and bring the results back together. You don't start helpers. Your assistant does, and they share one card in the chat, a line each.
 
 - Helpers use the provider's faster model, unless a part needs the full one.
 - A helper can be another provider you've connected. Ask for it ("have Codex write the tests while you fix the bug"), or your assistant picks one when it plainly suits a part, like a coding agent for changing code. The card says **by** which provider.

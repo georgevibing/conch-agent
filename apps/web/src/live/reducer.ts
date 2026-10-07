@@ -46,6 +46,17 @@ import { latestReplies, type LatestReplies } from '../features/replies/latest';
 import { foldPlan } from '../features/plans/fold';
 
 /** Everything the transcript renders, folded from the append-only event log. */
+/** What a chat last heard of a task it sent (`task` events): its card when the task is gone. */
+export interface TaskNote {
+  taskId: string;
+  title: string;
+  taskKind: TaskKind;
+  state: TaskStatus;
+  summary?: string;
+  /** Another provider is doing it, by name. */
+  by?: string;
+}
+
 export type TranscriptItem =
   | {
       kind: 'user';
@@ -199,16 +210,14 @@ export type TranscriptItem =
       title: string;
     }
   | {
-      /** A task sent from this chat, or a helper working on part of it: one card, kept current. */
+      /**
+       * Tasks sent from this chat together (one batch, `Task.group`), or one on
+       * its own: one card, kept current, in the order they started.
+       */
       kind: 'task';
       id: string;
-      taskId: string;
-      title: string;
-      taskKind: TaskKind;
-      state: TaskStatus;
-      summary?: string;
-      /** Another provider is doing it, by name. */
-      by?: string;
+      group?: string;
+      tasks: TaskNote[];
     }
   | {
       kind: 'integration-issue';
@@ -1155,9 +1164,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         ],
       };
     case 'task': {
-      const card = {
-        kind: 'task' as const,
-        id: `task-${event.taskId}`,
+      const note: TaskNote = {
         taskId: event.taskId,
         title: event.title,
         taskKind: event.kind,
@@ -1165,10 +1172,35 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         ...(event.summary && { summary: event.summary }),
         ...(event.by && { by: event.by }),
       };
-      const at = items.findIndex((i) => i.kind === 'task' && i.taskId === event.taskId);
-      if (at === -1) return { ...base, items: [...items, card] };
+      // Its batch's card when it has one, else its own: where it first appeared.
+      const at = items.findIndex(
+        (i) =>
+          i.kind === 'task' &&
+          ((event.group && i.group === event.group) ||
+            i.tasks.some((t) => t.taskId === event.taskId)),
+      );
+      const card = items[at];
+      if (!card || card.kind !== 'task')
+        return {
+          ...base,
+          items: [
+            ...items,
+            {
+              kind: 'task',
+              id: `task-${event.group ?? event.taskId}`,
+              ...(event.group && { group: event.group }),
+              tasks: [note],
+            },
+          ],
+        };
+      const known = card.tasks.some((t) => t.taskId === event.taskId);
       const next = items.slice();
-      next[at] = card;
+      next[at] = {
+        ...card,
+        tasks: known
+          ? card.tasks.map((t) => (t.taskId === event.taskId ? note : t))
+          : [...card.tasks, note],
+      };
       return { ...base, items: next };
     }
     case 'routine':

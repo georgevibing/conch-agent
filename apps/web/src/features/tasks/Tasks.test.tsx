@@ -165,7 +165,7 @@ describe('Tasks', () => {
     ...patch,
   });
 
-  it('a chat’s tasks are under it in the sidebar, open while they work, each opening its chat', async () => {
+  it('a chat’s tasks are under it in the sidebar, open while they work, each opening over its chat', async () => {
     const user = userEvent.setup();
     const calls = mockFetch({
       'GET /api/state': () => appState(),
@@ -217,7 +217,7 @@ describe('Tasks', () => {
     await user.click(within(list).getAllByRole('button', { name: 'Stop' })[0] as HTMLElement);
     expect(calls.map((c) => `${c.method} ${c.path}`)).toContain('POST /api/tasks/h1/stop');
     await user.click(within(list).getByRole('link', { name: /Read the README/ }));
-    await waitFor(() => expect(where()).toBe('/c/c-h2'));
+    await waitFor(() => expect(where()).toBe('/c/c1?task=h2'));
     // Closed by hand, it stays closed.
     await user.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'false');

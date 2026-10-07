@@ -11,6 +11,12 @@ export {
 } from './ChatTasks';
 export { taskHeadline } from './headline';
 export {
+  batchSummary,
+  TaskGroupCard,
+  type TaskGroupCardProps,
+  type TaskGroupItem,
+} from './TaskGroupCard';
+export {
   elapsed,
   TaskCard,
   TASK_STATUS_LABELS,

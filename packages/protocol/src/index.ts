@@ -651,6 +651,8 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     summary: z.string().optional(),
     /** Another provider is doing it, by name (`Task.by`). */
     by: z.string().max(80).optional(),
+    /** Its batch (`Task.group`): started together, one card. */
+    group: z.string().optional(),
   }),
   z.object({ ...logged, type: z.literal('status'), status: ConversationStatus }),
   /**

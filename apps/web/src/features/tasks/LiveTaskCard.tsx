@@ -1,11 +1,12 @@
 import { assessTask, uncertainEffect, type PermissionMode, type Task } from '@conch/protocol';
 import { InlineCode, TaskCard } from '@conch/nacre';
 import { useState, type ReactNode } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link } from 'react-router';
 
 import { useConversations } from '../../api/queries';
 import { useLive } from '../../live/LiveProvider';
 import { modeWords } from '../models/words';
+import { useOpenTask } from './open';
 import { useRemoveTask, useRetryTask, useStopTask } from './queries';
 
 /** "Full trust", "Ask first": the mode a task runs in, in the words the picker uses. */
@@ -88,7 +89,7 @@ export function LiveTaskCard({
 }) {
   const assessment = assessTask(task);
   const unchecked = task.status === 'unverified' && assessment.verdict === 'unchecked';
-  const navigate = useNavigate();
+  const openTask = useOpenTask();
   const live = useLive();
   const { data: chats } = useConversations();
   // The answer is on its way: the buttons wait for it to land (the task's next copy).
@@ -140,7 +141,7 @@ export function LiveTaskCard({
             }
           : undefined
       }
-      onOpen={task.conversationId ? () => void navigate(`/c/${task.conversationId}`) : undefined}
+      onOpen={task.conversationId ? () => openTask(task) : undefined}
       onStop={() => stop.mutate(task.id)}
       // Helpers are the assistant's to start again; a task you sent away is yours.
       onRetry={task.kind === 'background' ? () => retry.mutate(task.id) : undefined}

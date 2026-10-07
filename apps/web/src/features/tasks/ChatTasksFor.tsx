@@ -1,10 +1,11 @@
 import { assessTask, type Task } from '@conch/protocol';
 import { ChatTasks, ChatTasksToggle, type ChatTask } from '@conch/nacre';
 import { useEffect, useId, useState, type ReactNode } from 'react';
-import { NavLink } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { create } from 'zustand';
 
 import { withCode } from './LiveTaskCard';
+import { TASK_PARAM, taskHref, type SheetState } from './open';
 import { going, useStopTask, useTasks } from './queries';
 
 /** Finished tasks stay under their chat this long, then only on Tasks and in the chat. */
@@ -69,6 +70,8 @@ export function useChatTaskTree({
 }): { disclosure?: ReactNode; below?: ReactNode } {
   const stop = useStopTask();
   const listId = useId();
+  const location = useLocation();
+  const sheet = new URLSearchParams(location.search).get(TASK_PARAM);
   const chosen = useTree((s) => s.open[chatId]);
   const setOpen = useTree((s) => s.set);
   const working = tasks.some(going);
@@ -80,13 +83,19 @@ export function useChatTaskTree({
   const items: ChatTask[] = tasks.map((task) => ({
     id: task.id,
     link: (
-      <NavLink
-        to={task.conversationId ? `/c/${task.conversationId}` : '/tasks'}
+      <Link
+        to={taskHref(task) ?? '/tasks'}
+        state={{ taskSheet: true } satisfies SheetState}
         onClick={onNavigate}
-        end
+        // Open over its chat, or as its own chat ("Continue in full").
+        aria-current={
+          sheet === task.id || location.pathname === `/c/${task.conversationId}`
+            ? 'page'
+            : undefined
+        }
       >
         {task.title}
-      </NavLink>
+      </Link>
     ),
     status: task.status,
     unchecked: task.status === 'unverified' && assessTask(task).verdict === 'unchecked',

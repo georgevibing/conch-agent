@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 
 import { ApiError } from '../../api/client';
 import { tasksApi } from './api';
+import { taskHref } from './open';
 
 export const taskKeys = { all: ['tasks'] as const };
 
@@ -51,7 +52,9 @@ export function applyTaskEvent(
   put(client, task);
   if (task.kind !== 'background' || !before || before.status === task.status) return;
   const where = task.parentConversationId ?? task.conversationId;
-  const open = where ? { label: 'Open', onClick: () => navigate?.(`/c/${where}`) } : undefined;
+  // Over the chat it came from: its sheet.
+  const href = taskHref(task);
+  const open = href ? { label: 'Open', onClick: () => navigate?.(href) } : undefined;
   // Already looking at it (its chat, or the one it came from): the card says so.
   const at = window.location.pathname;
   const here =
@@ -67,7 +70,7 @@ export function applyTaskEvent(
     toast.error(`Didn’t finish: ${task.title}`, { description: task.error, action: open });
   else if (task.status === 'needs-you' && task.conversationId && !here)
     toast(`${task.title} needs your OK`, {
-      action: { label: 'See', onClick: () => navigate?.(`/c/${task.conversationId}`) },
+      action: { label: 'See', onClick: () => href && navigate?.(href) },
     });
 }
 

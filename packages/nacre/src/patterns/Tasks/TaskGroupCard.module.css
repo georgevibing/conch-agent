@@ -1,0 +1,365 @@
+@layer nacre.components {
+  /*
+   * A batch of tasks, as one card: a head line, a bar of one segment per task
+   * (its colour is its state), and a line each. While any works, a sheen of
+   * pearl light runs along the working segments; once they're all finished
+   * the bar folds away and the lines are the result.
+   */
+  .card {
+    --tg-mark: 1.25rem;
+    --tg-indent: calc(var(--tg-mark) + var(--nc-space-3));
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    max-inline-size: 36rem;
+    padding: var(--nc-space-3) var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    container-type: inline-size;
+    transition: box-shadow var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .card[data-status='needs-you'] {
+    box-shadow: inset 0 0 0 1px
+      light-dark(oklch(0.8 0.08 var(--nc-warning-h)), oklch(0.45 0.08 var(--nc-warning-h)));
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    min-inline-size: 0;
+  }
+
+  /* Keyed by the batch's state: each change arrives with a small pop. */
+  .mark {
+    --ct-icon: var(--tg-mark);
+
+    display: grid;
+    flex-shrink: 0;
+    animation: tg-arrive var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) both;
+  }
+
+  .title {
+    flex-shrink: 0;
+    margin: 0;
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+  }
+
+  .meta {
+    min-inline-size: 0;
+    margin: 0;
+    overflow: hidden;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── The bar ── */
+
+  .fold {
+    display: grid;
+    grid-template-rows: 0fr;
+    margin-block: calc(-1 * var(--nc-space-1));
+    opacity: 0;
+    transition:
+      grid-template-rows var(--nc-duration-slow) var(--nc-ease-out),
+      opacity var(--nc-duration-base) var(--nc-ease-out),
+      margin var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .fold[data-open] {
+    grid-template-rows: 1fr;
+    margin-block: 0;
+    opacity: 1;
+  }
+
+  .bar {
+    display: flex;
+    gap: 3px;
+    min-block-size: 0;
+    overflow: hidden;
+    padding-inline-start: var(--tg-indent);
+  }
+
+  .segment {
+    flex: 1;
+    block-size: 4px;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-wash-3);
+    background-size: 300% 100%;
+    transition: background-color var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .segment[data-status='running'] {
+    background-color: var(--nc-pearl-3);
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      var(--nc-pearl-2) 35%,
+      var(--nc-pearl-5) 50%,
+      var(--nc-pearl-2) 65%,
+      transparent 100%
+    );
+    animation: tg-sheen 1.8s linear infinite;
+  }
+
+  .segment[data-status='needs-you'] {
+    background-color: light-dark(
+      oklch(0.72 0.13 var(--nc-warning-h)),
+      oklch(0.72 0.12 var(--nc-warning-h))
+    );
+    animation: tg-breathe 1.6s var(--nc-ease-standard) infinite alternate;
+  }
+
+  .segment[data-status='done'],
+  .segment[data-status='unverified'] {
+    background-color: light-dark(
+      oklch(0.62 0.13 var(--nc-success-h)),
+      oklch(0.7 0.12 var(--nc-success-h))
+    );
+  }
+
+  .segment[data-status='failed'],
+  .segment[data-status='interrupted'] {
+    background-color: light-dark(
+      oklch(0.6 0.17 var(--nc-danger-h)),
+      oklch(0.68 0.15 var(--nc-danger-h))
+    );
+  }
+
+  .segment[data-status='stopped'] {
+    background-color: var(--nc-border-strong);
+  }
+
+  /* ── The lines ── */
+
+  .lines {
+    display: flex;
+    flex-direction: column;
+    margin: 0 calc(-1 * var(--nc-space-2));
+    padding: 0;
+    list-style: none;
+  }
+
+  .item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    animation: tg-line-in var(--nc-duration-base) var(--nc-ease-out) both;
+  }
+
+  .line {
+    appearance: none;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-3);
+    inline-size: 100%;
+    margin: 0;
+    padding: var(--nc-space-1-5) var(--nc-space-2);
+    border: 0;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  button.line {
+    cursor: pointer;
+  }
+
+  @media (hover: hover) {
+    button.line:hover {
+      background: var(--nc-wash-2);
+    }
+
+    button.line:hover .chevron {
+      opacity: 1;
+      translate: 0 0;
+    }
+  }
+
+  button.line:active {
+    background: var(--nc-wash-3);
+  }
+
+  .lineMark {
+    --ct-icon: var(--tg-mark);
+
+    margin-block-start: 1px;
+  }
+
+  .lineText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .lineTitle {
+    overflow: hidden;
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    line-height: var(--nc-leading-snug);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .lineSays {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-snug);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  .lineSays[data-wrong] {
+    color: light-dark(oklch(0.5 0.15 var(--nc-danger-h)), oklch(0.82 0.11 var(--nc-danger-h)));
+  }
+
+  .lineSays code {
+    font-size: 0.95em;
+  }
+
+  .chevron {
+    flex-shrink: 0;
+    align-self: center;
+    inline-size: 1rem;
+    block-size: 1rem;
+    color: var(--nc-text-subtle);
+    opacity: 0.5;
+    translate: -2px 0;
+    transition:
+      opacity var(--nc-duration-fast) var(--nc-ease-out),
+      translate var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (pointer: coarse) {
+    .line {
+      padding-block: var(--nc-space-2);
+    }
+
+    .chevron {
+      opacity: 0.7;
+      translate: 0 0;
+    }
+  }
+
+  .asking {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    margin: 0 var(--nc-space-2) var(--nc-space-1) calc(var(--tg-indent) + var(--nc-space-2));
+    padding: var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .askingLine {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+    margin: 0;
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .askingLine > svg {
+    flex-shrink: 0;
+    inline-size: 1rem;
+    block-size: 1rem;
+    margin-block-start: 0.125rem;
+    color: light-dark(oklch(0.5 0.12 var(--nc-warning-h)), oklch(0.82 0.1 var(--nc-warning-h)));
+  }
+
+  .askingWhy {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+  }
+
+  .askingCommand {
+    margin: 0;
+    padding: var(--nc-space-2);
+    overflow-x: auto;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    color: var(--nc-text);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xs);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .askingActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--nc-space-2);
+  }
+
+  @container (max-width: 22rem) {
+    .asking {
+      margin-inline-start: var(--nc-space-2);
+    }
+  }
+
+  @keyframes tg-arrive {
+    from {
+      opacity: 0;
+      scale: 0.6;
+    }
+  }
+
+  @keyframes tg-line-in {
+    from {
+      opacity: 0;
+      translate: 0 -3px;
+    }
+  }
+
+  @keyframes tg-sheen {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+
+  @keyframes tg-breathe {
+    to {
+      opacity: 0.55;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .segment,
+    .mark,
+    .item {
+      animation: none;
+    }
+  }
+
+  [data-nacre-motion='reduced'] :is(.segment, .mark, .item) {
+    animation: none;
+  }
+}

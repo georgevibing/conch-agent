@@ -52,6 +52,8 @@ import { useChannels } from '../channels/queries';
 import { RunBanner } from '../routines/RunBanner';
 import { tasksApi } from '../tasks/api';
 import { TaskBanner } from '../tasks/TaskBanner';
+import { useTaskSheet } from '../tasks/open';
+import { TaskSheet } from '../tasks/TaskSheet';
 import { ClientBanner } from '../otherapps/ClientBanner';
 import { useStartTask } from '../tasks/queries';
 import { ComposerControls } from '../models/ComposerControls';
@@ -1083,6 +1085,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
       {dropOverlay}
       <RunBanner conversationId={conversationId} />
       <TaskBanner conversationId={conversationId} />
+      {origin?.kind !== 'task' && <TaskSheetHere />}
       <ClientBanner conversationId={conversationId} />
       <ChannelBanner conversationId={conversationId} />
       <ArchivedBanner conversationId={conversationId} />
@@ -1141,4 +1144,10 @@ function typingElsewhere(composer: HTMLElement | null): boolean {
     active instanceof HTMLTextAreaElement ||
     (active instanceof HTMLInputElement && !['button', 'checkbox', 'radio'].includes(active.type))
   );
+}
+
+/** A task opened over this chat (`?task=`): its sheet. */
+function TaskSheetHere() {
+  const { taskId, close, show } = useTaskSheet();
+  return <TaskSheet taskId={taskId} onClose={close} onShow={show} />;
 }

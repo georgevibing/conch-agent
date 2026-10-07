@@ -586,16 +586,7 @@ export const Transcript = memo(function Transcript({
       {block.item?.kind === 'artifact' && conversationId && (
         <ArtifactChatCard conversationId={conversationId} item={block.item} />
       )}
-      {block.item?.kind === 'task' && (
-        <TaskChatCard
-          taskId={block.item.taskId}
-          title={block.item.title}
-          kind={block.item.taskKind}
-          state={block.item.state}
-          summary={block.item.summary}
-          by={block.item.by}
-        />
-      )}
+      {block.item?.kind === 'task' && <TaskChatCard tasks={block.item.tasks} />}
       {block.item?.kind === 'integration-issue' && <IntegrationIssue item={block.item} />}
       {block.item?.kind === 'held' && (
         <HeldItem item={block.item} conversationId={conversationId} />
