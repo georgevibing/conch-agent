@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ToolLabel, type ActivityChip, type ActivityEffect } from './activity';
 import { describeTool, type ToolResult } from './activity-describe';
-import { baseOfIng, fromPhrase, ing, past, say } from './activity-describe/words';
+import { baseOfIng, favicon, fromPhrase, ing, past, say } from './activity-describe/words';
 
 const ok = (output = ''): ToolResult => ({ status: 'success', output });
 const err = (output = ''): ToolResult => ({ status: 'error', output });
@@ -1360,7 +1360,7 @@ const TOOLS: Case[] = [
           kind: 'site',
           label: 'amazon.de',
           href: 'https://www.amazon.de/-/en/dp/B0CHWRXH8B?th=1',
-          image: 'https://www.google.com/s2/favicons?domain=amazon.de&sz=64',
+          image: '/api/favicon?host=amazon.de',
         },
       ],
     },
@@ -2204,5 +2204,19 @@ describe('the rules’ promises', () => {
     label('Bash', bash(`python3 - <<'PY'\n${'x = 1\n'.repeat(20_000)}PY`));
     label('Grep', { pattern: 'x', output_mode: 'content' }, ok(output));
     expect(Date.now() - started).toBeLessThan(1500);
+  });
+});
+
+describe('favicon', () => {
+  it('asks the gateway, never a third-party service', () => {
+    expect(favicon('amazon.de')).toBe('/api/favicon?host=amazon.de');
+    expect(favicon('a&b=c.example')).toBe('/api/favicon?host=a%26b%3Dc.example');
+  });
+
+  it('has none for this computer, addresses and ports', () => {
+    expect(favicon('localhost:5173')).toBeUndefined();
+    expect(favicon('127.0.0.1:8080')).toBeUndefined();
+    expect(favicon('93.184.216.34')).toBeUndefined();
+    expect(favicon('[2001:db8::1]')).toBeUndefined();
   });
 });

@@ -262,6 +262,16 @@ describe('app.fetch: what an app may send', () => {
     expect((await go(f, request('/big-declared'))).refused).toMatch(/more than an app can take/);
   });
 
+  it('takes less when told to, and with `cut` keeps the start instead of refusing', async () => {
+    expect((await go(fetcher({ maxBytes: 1000 }), request('/big'))).refused).toMatch(
+      /more than an app can take/,
+    );
+    const cut = await go(fetcher({ maxBytes: 1000, cut: true }), request('/big'));
+    expect(cut.refused).toBeUndefined();
+    expect(cut).toMatchObject({ ok: true, status: 200 });
+    expect(cut.body).toBe('a'.repeat(1000));
+  });
+
   it('gives up on a site that doesn’t answer, and when the call is stopped', async () => {
     expect((await go(fetcher({ timeoutMs: 300 }), request('/slow'))).refused).toBe(
       `api.example.test:${port} took too long to answer.`,

@@ -39,6 +39,13 @@ export interface FetcherDeps {
   timeoutMs?: number;
   /** Gateway-owned public web reader only; apps keep their manifest allowlist. */
   publicRedirects?: boolean;
+  /**
+   * At most this much back (default `APP_LIMITS.fetchBack`). `cut` keeps the
+   * first `maxBytes` and stops reading instead of refusing: the favicon
+   * reader only needs the top of a page.
+   */
+  maxBytes?: number;
+  cut?: boolean;
 }
 
 /** Headers an app may not set: the connection's, the proxy's, and anyone's cookies. */
@@ -254,7 +261,7 @@ export function createFetcher(deps: FetcherDeps = {}): AppFetcher {
         continue;
       }
       return {
-        ...(await read(response, target, current.method, timeout, signal)),
+        ...(await read(response, target, current.method, timeout, signal, deps.maxBytes, deps.cut)),
         url: target.href,
       };
     }
@@ -268,6 +275,8 @@ async function read(
   method: AppFetchRequest['method'],
   timeout: AbortSignal,
   signal: AbortSignal,
+  max: number = APP_LIMITS.fetchBack,
+  cut = false,
 ): Promise<AppFetchResponse> {
   const status = response.statusCode ?? 0;
   const headers: Record<string, string> = {};
@@ -275,13 +284,12 @@ async function read(
     if (value === undefined) continue;
     headers[name] = Array.isArray(value) ? value.join(', ') : value;
   }
-  const max = APP_LIMITS.fetchBack;
-  const tooBig = `${target.host} sent more than an app can take (${max / 1024 / 1024} MB).`;
+  const tooBig = `${target.host} sent more than an app can take (${+(max / 1024 / 1024).toFixed(2)} MB).`;
   if (method === 'HEAD') {
     response.resume();
     return { ok: status >= 200 && status < 300, status, headers, body: '' };
   }
-  if (Number(response.headers['content-length'] ?? 0) > max) {
+  if (!cut && Number(response.headers['content-length'] ?? 0) > max) {
     response.destroy();
     return refuse(tooBig);
   }
@@ -300,9 +308,10 @@ async function read(
     stream.on('data', (chunk: Buffer) => {
       size += chunk.length;
       if (size > max) {
+        if (cut) chunks.push(chunk.subarray(0, chunk.length - (size - max)));
         response.destroy();
         stream.destroy();
-        done('too-big');
+        done(cut ? Buffer.concat(chunks) : 'too-big');
       } else chunks.push(chunk);
     });
     stream.on('end', () => done(Buffer.concat(chunks)));

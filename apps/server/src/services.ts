@@ -45,6 +45,7 @@ import { QUESTIONS_PROMPT, questionTools } from './questions/tools';
 import { AttachmentStore } from './attachments/store';
 import { fileTools } from './files/tools';
 import { researchTools, publicWebFetcher } from './research/tools';
+import { faviconFetcher, Favicons } from './favicons/favicons';
 import { ProcessService } from './processes/service';
 import { GatewayRecovery } from './recovery/gateway';
 import { recoveryHistoryCheck } from './recovery/doctor';
@@ -277,6 +278,8 @@ export class Services {
   readonly stories: StoryTitler;
   /** "Why?" on a step (ADR 0103). */
   readonly explainer: StoryExplainer;
+  /** Site icons for chips, from each site itself (ADR 0103). */
+  readonly favicons: Favicons;
   /** When each skill was last used, for the tidy shelf (ADR 0058). */
   readonly skillUsage: SkillUsage;
   readonly commands: CommandStore;
@@ -927,6 +930,7 @@ export class Services {
       },
     });
     const fetchPublicWeb = publicWebFetcher(config.CONCH_PORT);
+    this.favicons = new Favicons({ fetcher: faviconFetcher(config.CONCH_PORT) });
     this.conversations = new ConversationManager({
       // Who each chat is with: its persona and instructions in every turn (ADR 0101).
       agents: this.agents,

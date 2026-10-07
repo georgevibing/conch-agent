@@ -438,9 +438,15 @@ export function isLocal(host: string): boolean {
   return /^(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[::1\])(?::\d+)?$/.test(host);
 }
 
-/** A site's small picture, by the same favicon service everyone uses. */
-export function favicon(host: string): string {
-  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`;
+/**
+ * A site's small picture, from the gateway (`GET /api/favicon`), which asks
+ * the site itself: a third-party favicon service would learn every site the
+ * assistant visits. Undefined for this computer, addresses and ports, which
+ * have no public icon (the chip shows a monogram).
+ */
+export function favicon(host: string): string | undefined {
+  if (isLocal(host) || /[:[\]]/.test(host) || /^[\d.]+$/.test(host)) return undefined;
+  return `/api/favicon?host=${encodeURIComponent(host)}`;
 }
 
 /** search_issues, searchIssues, search-issues → "Search issues". */

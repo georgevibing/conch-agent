@@ -581,7 +581,13 @@ export function scriptAct(
 }
 
 export function siteChip(url: string, host: string): ActivityChip {
-  return { kind: 'site', label: clip(host, 120), href: url.slice(0, 2000), image: favicon(host) };
+  const image = favicon(host);
+  return {
+    kind: 'site',
+    label: clip(host, 120),
+    href: url.slice(0, 2000),
+    ...(image && { image }),
+  };
 }
 
 // ---------------------------------------------------------------- what kind of script a name means
