@@ -165,8 +165,7 @@ export class TaskService {
           modelCompleted: false,
           verification: 'pending',
           finishedAt: this.#now,
-          error:
-            'Conch stopped before this task finished. Resume safely to continue from its saved progress.',
+          error: 'Conch stopped while it was working. Resume it to carry on from where it was.',
         });
     }
     this.#pump();
@@ -731,10 +730,10 @@ export class TaskService {
                   assessment.verdict === 'verified' || assessment.verdict === 'unchecked'
                     ? undefined
                     : assessment.verdict === 'uncertain'
-                      ? 'Some actions have no independent receipt. Inspect the recorded results before repeating them.'
+                      ? 'It couldn’t confirm some of its actions worked. Look at what it recorded before running them again.'
                       : assessment.verdict === 'unsupported'
-                        ? 'The tools finished, but some results have no independent receipt. See the verification details.'
-                        : 'The assistant finished, but required results are still missing. See the verification details.',
+                        ? 'It finished; some of its tools can’t confirm what they did.'
+                        : 'It finished, but some of what it was asked for isn’t confirmed.',
               }
             : turn.outcome === 'interrupted'
               ? {
@@ -1302,6 +1301,7 @@ export const TASKS_PROMPT = [
   '- When a job splits into independent parts (look into several things, check several files, draft alternatives), use `delegate` to run them side by side instead of one after another. Keep each part’s instructions complete on their own.',
   '- When the user wants something done in the background, or agrees to it for a long job, use `start_background_task`; its result comes back to this chat.',
   '- Never use a sub-agent or task tool of your own provider for this (yours are turned off where Conch can): Conch’s helpers and tasks are the ones the user can see, stop and answer, and they run with exactly this chat’s permissions.',
+  '- When you talk to the user about either, call it a task: that’s the one word they see, whoever started it.',
 ].join('\n');
 
 /** What a task is told about its situation. */

@@ -83,3 +83,22 @@ export function assessTask(task: Task) {
     failedReads: current.filter((op) => op.effect === 'read' && op.execution === 'failed').length,
   };
 }
+
+/**
+ * Why a finished task is worth a look, in a few words a person reads, only
+ * when there's a concrete reason: an action whose result it couldn't confirm,
+ * or something it was asked for that isn't confirmed. Nothing to check it
+ * against, or a tool that can't say what it did, is no reason: done is done.
+ */
+export function taskWorth(task: Task): string | undefined {
+  if (task.status !== 'unverified') return undefined;
+  const { verdict, reasons } = assessTask(task);
+  if (verdict === 'uncertain') {
+    const n = reasons.filter((r) => r.code === 'effect-uncertain').length;
+    return n === 1
+      ? 'Couldn’t confirm one of its actions worked.'
+      : `Couldn’t confirm ${n} of its actions worked.`;
+  }
+  if (verdict === 'incomplete') return 'Some of what it was asked for isn’t confirmed.';
+  return undefined;
+}

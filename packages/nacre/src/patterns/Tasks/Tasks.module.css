@@ -100,8 +100,7 @@
     animation: nc-breathe 2.4s var(--nc-ease-in-out) infinite;
   }
 
-  .icon[data-look='done'],
-  .icon[data-look='finished'] {
+  .icon[data-look='done'] {
     color: light-dark(oklch(0.5 0.11 var(--nc-success-h)), oklch(0.8 0.1 var(--nc-success-h)));
   }
 
@@ -114,7 +113,7 @@
 
   /* The check draws itself in. */
   .icon[data-look='done'] > svg,
-  .icon[data-look='finished'] > svg {
+  .icon[data-look='check'] > svg {
     stroke-dasharray: 24;
     stroke-dashoffset: 24;
     animation: tk-draw var(--nc-duration-slower) var(--nc-ease-out) var(--nc-duration-fast) forwards;
@@ -123,6 +122,14 @@
   .icon[data-look='needs-you'],
   .icon[data-look='check'] {
     color: light-dark(oklch(0.5 0.12 var(--nc-warning-h)), oklch(0.82 0.1 var(--nc-warning-h)));
+  }
+
+  /* Done, worth a look: the tick, on a soft amber disc. */
+  .icon[data-look='check'] {
+    background: light-dark(
+      oklch(0.95 0.04 var(--nc-warning-h)),
+      oklch(0.32 0.05 var(--nc-warning-h))
+    );
   }
 
   .icon[data-look='needs-you'] > svg {
@@ -165,9 +172,6 @@
   }
 
   .title {
-    display: flex;
-    align-items: center;
-    gap: var(--nc-space-1-5);
     margin: 0;
     overflow: hidden;
     color: var(--nc-text);
@@ -177,13 +181,6 @@
     white-space: nowrap;
   }
 
-  .kind {
-    flex-shrink: 0;
-    inline-size: 0.85rem;
-    block-size: 0.85rem;
-    color: var(--nc-text-subtle);
-  }
-
   .meta {
     margin: 0;
     color: var(--nc-text-subtle);
@@ -191,7 +188,8 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .status[data-look='needs-you'] {
+  .status[data-look='needs-you'],
+  .worth {
     color: light-dark(oklch(0.48 0.12 var(--nc-warning-h)), oklch(0.84 0.1 var(--nc-warning-h)));
     font-weight: var(--nc-weight-medium);
   }

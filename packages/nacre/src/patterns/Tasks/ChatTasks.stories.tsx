@@ -23,7 +23,6 @@ const TASKS: ChatTask[] = [
   {
     id: 't1',
     link: <a href="#t1">Check the tests</a>,
-    kind: 'helper',
     status: 'needs-you',
     startedAt: NOW - 70_000,
     current: (
@@ -36,7 +35,6 @@ const TASKS: ChatTask[] = [
   {
     id: 't2',
     link: <a href="#t2">Write the parser tests</a>,
-    kind: 'helper',
     status: 'running',
     startedAt: NOW - 95_000,
     current: (
@@ -50,7 +48,6 @@ const TASKS: ChatTask[] = [
   {
     id: 't3',
     link: <a href="#t3">Read the README</a>,
-    kind: 'helper',
     status: 'done',
     startedAt: NOW - 200_000,
     finishedAt: NOW - 166_000,
@@ -77,9 +74,16 @@ const FINISHED: ChatTask[] = [
     id: 'b',
     link: <a href="#b">Read the source</a>,
     status: 'unverified',
-    unchecked: true,
     startedAt: NOW - 31_000,
     finishedAt: NOW,
+  },
+  {
+    id: 'd',
+    link: <a href="#d">Send the drafts</a>,
+    status: 'unverified',
+    worth: 'Couldn’t confirm one of its actions worked.',
+    startedAt: NOW - 60_000,
+    finishedAt: NOW - 10_000,
   },
   {
     id: 'c',

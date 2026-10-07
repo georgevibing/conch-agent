@@ -1,4 +1,4 @@
-import type { TaskKind, TaskStatus } from '@conch/protocol';
+import type { TaskStatus } from '@conch/protocol';
 import { TaskCard } from '@conch/nacre';
 
 import { LiveTaskCard } from './LiveTaskCard';
@@ -12,14 +12,12 @@ import styles from './Tasks.module.css';
 export function TaskChatCard({
   taskId,
   title,
-  kind,
   state,
   summary,
   by,
 }: {
   taskId: string;
   title: string;
-  kind: TaskKind;
   state: TaskStatus;
   summary?: string;
   by?: string;
@@ -30,14 +28,7 @@ export function TaskChatCard({
       {task ? (
         <LiveTaskCard task={task} variant="compact" />
       ) : (
-        <TaskCard
-          variant="compact"
-          kind={kind}
-          title={title}
-          status={state}
-          summary={summary}
-          by={by}
-        />
+        <TaskCard variant="compact" title={title} status={state} summary={summary} by={by} />
       )}
     </div>
   );

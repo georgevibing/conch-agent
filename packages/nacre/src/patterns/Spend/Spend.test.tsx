@@ -70,7 +70,7 @@ describe('ChatSpendChip', () => {
     });
     await userEvent.click(chip);
     expect(await screen.findByText('This chat has spent $0.31')).toBeVisible();
-    expect(screen.getByText('$0.08 of it by tasks and helpers sent from here')).toBeVisible();
+    expect(screen.getByText('$0.08 of it by tasks started from here')).toBeVisible();
     expect(screen.getByText('Reading from the cache saved about $0.12')).toBeVisible();
     const set = screen.getByRole('button', { name: 'Set limit' });
     expect(set).toBeDisabled();

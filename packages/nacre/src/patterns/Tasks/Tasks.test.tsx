@@ -9,20 +9,19 @@ import { elapsed, TaskCard } from './TaskCard';
 const NOW = 1_790_000_000_000;
 
 describe('TaskCard', () => {
-  it('finishes without criteria without a warning or a misleading retry', async () => {
+  it('is done without a reason to look: no warning, no misleading retry', async () => {
     const { container } = renderNacre(
       <TaskCard
         title="Read the source"
         status="unverified"
-        unchecked
         summary="The report is available."
         onRetry={() => undefined}
         onOpen={() => undefined}
       />,
     );
-    expect(screen.getByRole('article')).toHaveTextContent('Finished');
+    expect(screen.getByRole('article')).toHaveTextContent('Done');
     expect(screen.getByRole('article')).toHaveTextContent('The report is available.');
-    expect(screen.queryByText('Done')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Worth a look/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Resume safely' })).not.toBeInTheDocument();
     await expectAccessible(container);
   });
@@ -54,7 +53,6 @@ describe('TaskCard', () => {
     const { container } = renderNacre(
       <TaskCard
         title="Write the tests"
-        kind="helper"
         status="running"
         startedAt={NOW - 4_000}
         now={NOW}
@@ -78,45 +76,44 @@ describe('TaskCard', () => {
     const { rerender, container } = renderNacre(
       <TaskCard
         title="Check A"
-        kind="helper"
         status="done"
         summary="Found it."
         branch="conch/t1"
         onRemove={() => undefined}
       />,
     );
-    expect(screen.getByRole('article', { name: /Helper:\s*Check A/ })).toHaveTextContent(
-      'Found it.',
-    );
+    expect(screen.getByRole('article', { name: 'Check A' })).toHaveTextContent('Found it.');
     expect(screen.getByText('conch/t1')).toBeInTheDocument();
     rerender(
       <TaskCard
         title="Check A"
         status="interrupted"
-        error="Conch stopped while this was running."
+        error="Conch stopped while it was working."
         onRetry={() => undefined}
       />,
     );
+    expect(screen.getByRole('article')).toHaveTextContent('Didn’t finish');
+    expect(screen.getByRole('article')).toHaveTextContent('Conch stopped while it was working.');
     expect(screen.getByRole('button', { name: 'Resume safely' })).toBeInTheDocument();
     await expectAccessible(container);
   });
 
-  it('shows unverified and partial results without claiming completion', async () => {
+  it('done but worth a look says why, and offers to resume', async () => {
     const { container, rerender } = renderNacre(
       <TaskCard
         title="Draft follow-ups"
         status="unverified"
         summary="One draft is confirmed."
-        error="The second write could not be verified."
+        worth="Couldn’t confirm one of its actions worked."
         onRetry={() => undefined}
       />,
     );
-    expect(screen.getByRole('article')).toHaveTextContent('Needs a look');
+    expect(screen.getByRole('article')).toHaveTextContent('Done · Worth a look');
     expect(screen.getByRole('article')).toHaveTextContent(
-      'The second write could not be verified.',
+      'Couldn’t confirm one of its actions worked.',
     );
     expect(screen.getByRole('article')).toHaveTextContent('One draft is confirmed.');
-    expect(screen.queryByText('Done')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Resume safely' })).toBeInTheDocument();
     rerender(
       <TaskCard title="Draft follow-ups" status="stopped" summary="One draft is confirmed." />,
     );
@@ -131,7 +128,6 @@ describe('TaskCard', () => {
     const { container } = renderNacre(
       <TaskCard
         title="Check the tests"
-        kind="helper"
         status="needs-you"
         mode="Ask first"
         from={<a href="#chat">Fix the parser</a>}
@@ -159,9 +155,7 @@ describe('TaskCard', () => {
     const { container } = renderNacre(
       <TaskCard
         title="Task probe artifact rerun"
-        kind="helper"
         status="unverified"
-        unchecked
         startedAt={NOW - 21_000}
         finishedAt={NOW}
         summary={
@@ -172,7 +166,7 @@ describe('TaskCard', () => {
       />,
     );
     const card = screen.getByRole('article', { name: /Task probe artifact rerun/ });
-    expect(card).toHaveTextContent('Finished · 21s');
+    expect(card).toHaveTextContent('Done · 21s');
     expect(card).toHaveTextContent(
       'Saved markdown artifact “Task system probe rerun” successfully.',
     );

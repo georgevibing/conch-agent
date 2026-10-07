@@ -860,15 +860,15 @@ export function useFindables(query: string, conversationId: string | undefined):
     },
     {
       id: 'background-task',
-      label: 'Do it in the background',
-      keywords: 'background task later async send away hand off delegate queue while i work',
+      label: 'Run as a task',
+      keywords: 'task background later async send away hand off delegate queue while i work',
       icon: <ListPlus />,
       run: () => {
         // It sends what's written in the open chat; elsewhere there's nothing written yet.
         if (/^\/(c\/|$)/.test(window.location.pathname))
           return useUi.getState().requestBackground();
         void navigate('/');
-        toast('Write what you’d like done, then choose “Do it in the background”.');
+        toast('Write what you’d like done, then choose “Run as a task”.');
       },
     },
     {

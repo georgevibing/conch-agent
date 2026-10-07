@@ -141,7 +141,7 @@ function from(origin: ChatFacts['origin']): string | undefined {
     case 'routine':
       return 'a routine';
     case 'task':
-      return 'a background task';
+      return 'a task';
     case 'artifact':
       return 'refreshing a page it made';
     default:

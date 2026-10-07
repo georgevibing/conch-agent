@@ -272,7 +272,7 @@
   }
 
   /* Finished ones sit on a soft disc of their colour; working ones don't need one. */
-  .mark[data-status='done'] {
+  .mark[data-look='done'] {
     background: light-dark(
       oklch(0.93 0.06 var(--nc-success-h)),
       oklch(0.36 0.07 var(--nc-success-h))
@@ -280,11 +280,7 @@
     color: light-dark(oklch(0.46 0.12 var(--nc-success-h)), oklch(0.86 0.1 var(--nc-success-h)));
   }
 
-  .mark[data-status='unverified'] {
-    background: var(--nc-wash-3);
-    color: var(--nc-text-muted);
-  }
-
+  .mark[data-look='check'],
   .mark[data-status='needs-you'] {
     background: light-dark(
       oklch(0.94 0.06 var(--nc-warning-h)),
@@ -373,6 +369,10 @@
   .meta[data-status='needs-you'] .doing {
     color: light-dark(oklch(0.48 0.12 var(--nc-warning-h)), oklch(0.84 0.1 var(--nc-warning-h)));
     font-weight: var(--nc-weight-medium);
+  }
+
+  .meta[data-look='check'] .doing {
+    color: light-dark(oklch(0.48 0.12 var(--nc-warning-h)), oklch(0.84 0.1 var(--nc-warning-h)));
   }
 
   .meta[data-status='failed'] .doing,

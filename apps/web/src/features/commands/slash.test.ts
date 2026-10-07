@@ -143,6 +143,7 @@ describe('the commands people expect', () => {
       'apps',
       'providers',
       'doctor',
+      'task',
       'background',
       'folder',
     ])

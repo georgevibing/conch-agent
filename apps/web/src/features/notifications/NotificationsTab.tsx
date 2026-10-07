@@ -36,7 +36,7 @@ const TOPICS: { key: keyof PushPrefs; label: string; description?: string }[] = 
   { key: 'approvals', label: 'When it needs you' },
   { key: 'replies', label: 'When an answer is ready' },
   { key: 'routines', label: 'When a routine runs' },
-  { key: 'tasks', label: 'When a background task finishes' },
+  { key: 'tasks', label: 'When a task finishes' },
   { key: 'devices', label: 'When a new device wants to sign in' },
   { key: 'updates', label: 'New versions of Conch' },
   {

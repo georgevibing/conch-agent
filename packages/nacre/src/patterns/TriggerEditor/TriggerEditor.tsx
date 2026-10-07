@@ -53,7 +53,7 @@ const CHOICES: { kind: TriggerKind; label: string; description: string; icon: Re
   {
     kind: 'task',
     label: 'A task finishes',
-    description: 'One you sent off to work in the background',
+    description: 'One you started from a chat',
     icon: <CircleCheckBig />,
   },
   {
@@ -367,9 +367,7 @@ function Details({
         />
       );
     case 'task':
-      return (
-        <p className={styles.note}>It starts as soon as one of your background tasks is done.</p>
-      );
+      return <p className={styles.note}>It starts as soon as one of your tasks is done.</p>;
     case 'routine':
       return (
         <div className={styles.field}>

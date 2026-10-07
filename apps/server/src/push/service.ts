@@ -1,4 +1,4 @@
-import { assessTask } from '@conch/protocol';
+import { taskWorth } from '@conch/protocol';
 /**
  * Notifications (ADR 0027): Conch tells your phone and your other devices
  * what needs you while you're away — an OK it's waiting for, an answer that
@@ -279,24 +279,25 @@ export class PushService {
   /** Conch's live stream, turned into the notifications that matter. */
   async onEvent(event: ServerEvent): Promise<void> {
     if (event.type === 'task.changed') {
-      // A task you sent away finished (ADR 0033); a helper's result goes back to its chat instead.
+      // A task you started finished (ADR 0033); one the assistant split off goes back to its chat instead.
       const task = event.task;
       if (task.kind !== 'background' || !['done', 'unverified', 'failed'].includes(task.status))
         return;
       if (this.#told.has(`${task.id}:${task.finishedAt}`)) return;
       this.#told.add(`${task.id}:${task.finishedAt}`);
+      // Done, or didn't finish: worth a look only with a reason, and then the reason.
+      const worth = taskWorth(task);
       await this.notify('tasks', {
         title:
-          task.status === 'done'
-            ? `Verified complete: ${clip(task.title, 60)}`
-            : task.status === 'unverified'
-              ? `${assessTask(task).verdict === 'unchecked' ? 'Finished' : 'Result needs checking'}: ${clip(task.title, 60)}`
-              : `Didn’t finish: ${clip(task.title, 60)}`,
+          task.status === 'failed'
+            ? `Didn’t finish: ${clip(task.title, 60)}`
+            : worth
+              ? `Done, worth a look: ${clip(task.title, 60)}`
+              : `Done: ${clip(task.title, 60)}`,
         body: clip(
-          task.status === 'done' ||
-            (task.status === 'unverified' && assessTask(task).verdict === 'unchecked')
-            ? (task.summary ?? 'It’s ready.')
-            : (task.error ?? 'Something went wrong.'),
+          task.status === 'failed'
+            ? (task.error ?? 'Something went wrong.')
+            : (worth ?? task.summary ?? 'It’s ready.'),
         ),
         quiet: task.status === 'failed' ? 'Your task didn’t finish.' : 'Your task finished.',
         url: task.parentConversationId ? `/c/${task.parentConversationId}` : `/tasks`,

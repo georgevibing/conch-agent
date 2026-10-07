@@ -1,4 +1,10 @@
-import { assessTask, uncertainEffect, type PermissionMode, type Task } from '@conch/protocol';
+import {
+  assessTask,
+  taskWorth,
+  uncertainEffect,
+  type PermissionMode,
+  type Task,
+} from '@conch/protocol';
 import { InlineCode, TaskCard } from '@conch/nacre';
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -20,20 +26,15 @@ export function withCode(text: string): ReactNode {
 }
 
 /** What a finished task confirmed, and what it couldn't: behind its card's "Details". */
-function details(
-  task: Task,
-  assessment: ReturnType<typeof assessTask>,
-  unchecked: boolean,
-): ReactNode {
+function details(task: Task, assessment: ReturnType<typeof assessTask>): ReactNode {
   const confirmed = (task.operations ?? []).filter(
     (operation) => operation.state === 'confirmed' && operation.receipt,
   );
   const missing = assessment.reasons.flatMap((reason) =>
     reason.code === 'required-evidence-missing' ? [reason] : [],
   );
-  const unsupported = assessment.reasons.some((reason) => reason.code === 'receipt-unavailable');
   const uncertain = task.operations?.some(uncertainEffect);
-  if (!confirmed.length && !missing.length && !unsupported && !uncertain) return undefined;
+  if (!confirmed.length && !missing.length && !uncertain) return undefined;
   return (
     <>
       {confirmed.length > 0 && (
@@ -51,26 +52,18 @@ function details(
           ))}
         </ul>
       )}
-      {unchecked && confirmed.length > 0 && (
-        <p>Nothing was set to check this against, so these are what it recorded.</p>
-      )}
       {missing.length > 0 && (
         <ul aria-label="Missing verification">
           {missing.map((reason) => (
             <li key={reason.tool}>
-              Still needs {reason.minimum} confirmed result(s) from {reason.tool}.
+              Not confirmed yet: {reason.tool}
+              {reason.minimum > 1 && ` (${reason.minimum} times)`}.
             </li>
           ))}
         </ul>
       )}
-      {unsupported && (
-        <p>
-          Some tools finished without independent outcome checks. Their earlier actions will not be
-          replayed.
-        </p>
-      )}
       {uncertain && (
-        <p>Some actions have no confirmed result. They will not be repeated automatically.</p>
+        <p>Some of its actions have no confirmed result, so Conch won’t repeat them by itself.</p>
       )}
     </>
   );
@@ -87,7 +80,7 @@ export function LiveTaskCard({
   className?: string;
 }) {
   const assessment = assessTask(task);
-  const unchecked = task.status === 'unverified' && assessment.verdict === 'unchecked';
+  const worth = taskWorth(task);
   const navigate = useNavigate();
   const live = useLive();
   const { data: chats } = useConversations();
@@ -111,18 +104,17 @@ export function LiveTaskCard({
     <TaskCard
       className={className}
       variant={variant}
-      kind={task.kind}
       title={task.title}
       status={task.status}
-      unchecked={unchecked}
+      worth={worth}
       startedAt={task.startedAt}
       finishedAt={task.finishedAt}
       current={task.current && withCode(task.current)}
       steps={task.steps.map((s) => withCode(s.label))}
       summary={task.summary}
       // What's behind "Details": what it confirmed, and what it couldn't.
-      details={details(task, assessment, unchecked)}
-      error={unchecked ? undefined : task.error}
+      details={details(task, assessment)}
+      error={task.status === 'failed' || task.status === 'interrupted' ? task.error : undefined}
       note={task.note}
       branch={task.worktree?.changed ? task.worktree.branch : undefined}
       by={task.by}
@@ -142,7 +134,7 @@ export function LiveTaskCard({
       }
       onOpen={task.conversationId ? () => void navigate(`/c/${task.conversationId}`) : undefined}
       onStop={() => stop.mutate(task.id)}
-      // Helpers are the assistant's to start again; a task you sent away is yours.
+      // A task the assistant split off is its to start again; one you started is yours.
       onRetry={task.kind === 'background' ? () => retry.mutate(task.id) : undefined}
       onRemove={() => remove.mutate(task.id)}
     />

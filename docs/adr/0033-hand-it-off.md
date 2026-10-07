@@ -284,3 +284,21 @@ one that may do more than its chat is an escalation. Both are bugs.
   mode allows and never more than its chat.
 - The sidebar's Tasks badge and ⌘K count helpers too: each is a chat of its own, and
   one waiting for an OK holds up the chat that started it.
+
+## Amended 2026-10-07: one word, two endings
+
+- **One noun.** People see only "task", whoever started it: the composer's button
+  and ⌘K say **Run as a task**, the command is `/task` (`/background`, `/bg` and
+  `/delegate` still work), and notifications, Repair, routines, spend and skills say
+  task. "Helper" and "background" stay internal (`kind: 'helper'`, `delegate`,
+  `start_background_task`); `TASKS_PROMPT` tells the assistant to say task too.
+- **Two endings.** Once it's over a task is **Done** or **Didn't finish**
+  (`interrupted` reads as didn't finish, with why in a line); **Stopped** when you
+  stopped it. `unverified` keeps its meaning on the server, but on screen it's Done,
+  and **Worth a look** only for a concrete reason, said in a few words: an action
+  it couldn't confirm (`uncertain`) or something asked for that isn't confirmed
+  (`incomplete`). No criteria (`unchecked`) or a tool without receipts
+  (`unsupported`) is no reason: done is done, with no Resume offered. The reason
+  comes from `taskWorth` (protocol), so the card, the sidebar row, the task chat's
+  strip, toasts and notifications say the same; Nacre's `TASK_STATUS_LABELS`,
+  `TASK_WORTH_A_LOOK` and `taskLook` are the words and the look.

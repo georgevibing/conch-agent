@@ -1,5 +1,4 @@
-import { assessTask } from '@conch/protocol';
-import type { ServerEvent, Task, TaskList } from '@conch/protocol';
+import { taskWorth, type ServerEvent, type Task, type TaskList } from '@conch/protocol';
 import { toast } from '@conch/nacre';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
@@ -32,7 +31,7 @@ function put(client: QueryClient, task: Task) {
 }
 
 /**
- * Task events from the live socket. A background task that finishes or needs
+ * Task events from the live socket. A task you started that finishes or needs
  * you says so in the app (the notification on your phone is the server's).
  */
 export function applyTaskEvent(
@@ -56,13 +55,11 @@ export function applyTaskEvent(
   const at = window.location.pathname;
   const here =
     (where && at === `/c/${where}`) || (task.conversationId && at === `/c/${task.conversationId}`);
-  if (task.status === 'done' && !here)
+  const worth = taskWorth(task);
+  if ((task.status === 'done' || task.status === 'unverified') && !worth && !here)
     toast.success(`Done: ${task.title}`, { description: task.summary, action: open });
-  else if (task.status === 'unverified' && !here)
-    toast(
-      `${assessTask(task).verdict === 'unchecked' ? 'Finished' : 'Result needs checking'}: ${task.title}`,
-      { description: task.error, action: open },
-    );
+  else if (worth && !here)
+    toast(`Done, worth a look: ${task.title}`, { description: worth, action: open });
   else if (task.status === 'failed')
     toast.error(`Didn’t finish: ${task.title}`, { description: task.error, action: open });
   else if (task.status === 'needs-you' && task.conversationId && !here)

@@ -13,7 +13,6 @@ const tasks = (onStop = vi.fn()): ChatTask[] => [
   {
     id: 'a',
     link: <a href="#a">Check the tests</a>,
-    kind: 'helper',
     status: 'needs-you',
     startedAt: NOW - 70_000,
     current: 'Wants to run npm test',
@@ -61,7 +60,7 @@ function Controlled({ items, initial = false }: { items: ChatTask[]; initial?: b
 }
 
 describe('ChatTasks', () => {
-  it('says a finished task without criteria in one word', async () => {
+  it('says done is done without a reason to look, and worth a look with one', async () => {
     const { container } = renderNacre(
       <Controlled
         initial
@@ -70,16 +69,23 @@ describe('ChatTasks', () => {
             id: 'finished',
             link: <a href="#finished">Read the source</a>,
             status: 'unverified',
-            unchecked: true,
             startedAt: NOW - 34_000,
+            finishedAt: NOW,
+          },
+          {
+            id: 'look',
+            link: <a href="#look">Send the drafts</a>,
+            status: 'unverified',
+            worth: 'Couldn’t confirm one of its actions worked.',
+            startedAt: NOW - 20_000,
             finishedAt: NOW,
           },
         ]}
       />,
     );
-    expect(screen.getByRole('list', { name: 'Tasks from Fix the parser' })).toHaveTextContent(
-      'Finished · 34s',
-    );
+    const list = screen.getByRole('list', { name: 'Tasks from Fix the parser' });
+    expect(list).toHaveTextContent('Done · 34s');
+    expect(list).toHaveTextContent('Done, Worth a look · 20s');
     expect(screen.queryByRole('button', { name: 'Stop' })).not.toBeInTheDocument();
     await expectAccessible(container);
   });

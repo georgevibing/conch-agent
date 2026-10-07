@@ -32,8 +32,8 @@ const DONE = new Set<Task['status']>(['done', 'unverified', 'failed']);
 export function taskSource(deps: FinishedDeps): TriggerSource<'task'> {
   return {
     kind: 'task',
-    describe: () => 'When a background task finishes',
-    note: () => 'Conch starts this as soon as one of your background tasks is done.',
+    describe: () => 'When a task finishes',
+    note: () => 'Conch starts this as soon as one of your tasks is done.',
     taint: () => ({ kind: 'app', label: 'a finished task' }),
     watch(ctx, arrive) {
       const told = new Set<string>();

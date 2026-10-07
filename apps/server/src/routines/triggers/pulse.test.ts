@@ -54,7 +54,7 @@ function fakePushed() {
   let stopped = 0;
   const source: TriggerSource<'task'> = {
     kind: 'task',
-    describe: () => 'When a background task finishes',
+    describe: () => 'When a task finishes',
     taint: () => ({ kind: 'app', label: 'a finished task' }),
     watch(_ctx, a, p) {
       arrive = a;
