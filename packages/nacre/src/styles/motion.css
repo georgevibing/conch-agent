@@ -122,3 +122,186 @@
     animation: none;
   }
 }
+
+/*
+ * "Glint" — how every panel appears and leaves: the browser and the terminal,
+ * what the assistant made, the sidebar, and every sheet. The panel surfaces a
+ * few pixels from the edge it lives on, with a touch of spring, and as it
+ * settles a band of pearl light crosses it, the way light runs over the inside
+ * of a shell as you turn it. Leaving is quicker: it sinks back toward its edge
+ * and the light runs back the other way, fainter.
+ *
+ * Only transform and opacity move, so nothing reflows. Driven by attributes:
+ *
+ *   [data-nc-panel]   the panel (`PanelPresence` sets it)
+ *   [data-side]       left | right | bottom | top — the edge it comes from
+ *   [data-state]      open | closed (Radix sets the same on a Sheet)
+ *   [data-animate]    set once there's something to play (a panel already open
+ *                     when the page drew doesn't play)
+ *   [data-nc-glint]   the light, `<PanelGlint />`, a child of the panel
+ *
+ * Knobs on the panel: `--nc-glint-inset` / `--nc-glint-radius` (light only the
+ * card inside a padded panel), `--nc-glint-strength` (default 0.42).
+ * `--nc-lustre: 0` turns the light off; reduced motion makes it all instant.
+ */
+@layer nacre.base {
+  [data-nc-panel] {
+    --nc-panel-from: translate3d(24px, 0, 0);
+    position: relative;
+    isolation: isolate;
+  }
+
+  [data-nc-panel][data-side='left'] {
+    --nc-panel-from: translate3d(-24px, 0, 0);
+  }
+
+  [data-nc-panel][data-side='bottom'] {
+    --nc-panel-from: translate3d(0, 20px, 0);
+  }
+
+  [data-nc-panel][data-side='top'] {
+    --nc-panel-from: translate3d(0, -20px, 0);
+  }
+
+  [data-nc-panel][data-animate][data-state='open'] {
+    animation: nc-panel-in var(--nc-panel-in-duration) var(--nc-spring-snappy) both;
+  }
+
+  [data-nc-panel][data-animate][data-state='closed'] {
+    animation: nc-panel-out var(--nc-panel-out-duration) var(--nc-ease-in) both;
+    pointer-events: none;
+  }
+
+  @keyframes nc-panel-in {
+    from {
+      opacity: 0;
+      transform: var(--nc-panel-from) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes nc-panel-out {
+    from {
+      opacity: 1;
+      transform: none;
+    }
+    to {
+      opacity: 0;
+      transform: var(--nc-panel-from) scale(0.99);
+    }
+  }
+
+  /* The light: a clipped layer over the panel. Its band travels the way the
+     panel moved in (right to left for a panel on the right), back as it leaves. */
+  [data-nc-glint] {
+    --nc-glint-from: translate3d(230%, 0, 0) skewX(-14deg);
+    --nc-glint-to: translate3d(-130%, 0, 0) skewX(-14deg);
+    --nc-glint-angle: 90deg;
+    position: absolute;
+    /* A panel drawn as a card inside padding sets these to light just the card. */
+    inset: var(--nc-glint-inset, 0);
+    z-index: 10;
+    overflow: hidden;
+    border-radius: var(--nc-glint-radius, inherit);
+    corner-shape: inherit;
+    pointer-events: none;
+  }
+
+  [data-side='left'] > [data-nc-glint] {
+    --nc-glint-from: translate3d(-130%, 0, 0) skewX(-14deg);
+    --nc-glint-to: translate3d(230%, 0, 0) skewX(-14deg);
+  }
+
+  [data-side='bottom'] > [data-nc-glint] {
+    --nc-glint-from: translate3d(0, 230%, 0) skewY(-4deg);
+    --nc-glint-to: translate3d(0, -130%, 0) skewY(-4deg);
+    --nc-glint-angle: 0deg;
+  }
+
+  [data-side='top'] > [data-nc-glint] {
+    --nc-glint-from: translate3d(0, -130%, 0) skewY(-4deg);
+    --nc-glint-to: translate3d(0, 230%, 0) skewY(-4deg);
+    --nc-glint-angle: 0deg;
+  }
+
+  [data-nc-glint]::before {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    inline-size: 45%;
+    background: linear-gradient(
+      var(--nc-glint-angle),
+      transparent 0%,
+      var(--nc-pearl-2) 28%,
+      var(--nc-pearl-3) 44%,
+      var(--nc-pearl-4) 58%,
+      var(--nc-pearl-5) 72%,
+      transparent 100%
+    );
+    opacity: 0;
+    transform: var(--nc-glint-from);
+  }
+
+  [data-side='bottom'] > [data-nc-glint]::before,
+  [data-side='top'] > [data-nc-glint]::before {
+    inset-inline: 0;
+    inline-size: auto;
+    block-size: 45%;
+  }
+
+  [data-state='open'] > [data-nc-glint]::before {
+    animation: nc-glint-in var(--nc-panel-glint-duration) var(--nc-ease-out) 40ms;
+  }
+
+  [data-state='closed'] > [data-nc-glint]::before {
+    animation: nc-glint-out var(--nc-panel-out-duration) var(--nc-ease-in);
+  }
+
+  [data-nc-panel]:not([data-animate]) > [data-nc-glint] {
+    display: none;
+  }
+
+  @keyframes nc-glint-in {
+    from {
+      opacity: 0;
+      transform: var(--nc-glint-from);
+    }
+    30% {
+      opacity: calc(var(--nc-glint-strength, 0.42) * var(--nc-lustre));
+    }
+    to {
+      opacity: 0;
+      transform: var(--nc-glint-to);
+    }
+  }
+
+  @keyframes nc-glint-out {
+    from {
+      opacity: 0;
+      transform: var(--nc-glint-to);
+    }
+    40% {
+      opacity: calc(var(--nc-glint-strength, 0.42) * 0.5 * var(--nc-lustre));
+    }
+    to {
+      opacity: 0;
+      transform: var(--nc-glint-from);
+    }
+  }
+
+  /* Reduced motion: no light, and the panel just appears (tokens.css makes the
+     durations all but nothing). */
+  @media (prefers-reduced-motion: reduce) {
+    [data-nc-glint] {
+      display: none;
+    }
+  }
+
+  [data-nacre-motion='reduced'] [data-nc-glint] {
+    display: none;
+  }
+}

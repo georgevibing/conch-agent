@@ -420,6 +420,12 @@
     --nc-duration-slow: 380ms;
     --nc-duration-slower: 560ms;
 
+    /* Panels appearing and leaving ("glint", see motion.css): quick in, quicker
+       out, and the pearl light that crosses a panel as it arrives. */
+    --nc-panel-in-duration: 320ms;
+    --nc-panel-out-duration: 200ms;
+    --nc-panel-glint-duration: 620ms;
+
     --nc-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
     --nc-ease-in: cubic-bezier(0.55, 0, 0.75, 0.2);
     --nc-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
@@ -603,6 +609,9 @@
       --nc-spring-snappy-duration: 1ms;
       --nc-spring-soft-duration: 1ms;
       --nc-spring-bouncy-duration: 1ms;
+      --nc-panel-in-duration: 1ms;
+      --nc-panel-out-duration: 1ms;
+      --nc-panel-glint-duration: 1ms;
     }
   }
 
@@ -614,5 +623,8 @@
     --nc-spring-snappy-duration: 1ms;
     --nc-spring-soft-duration: 1ms;
     --nc-spring-bouncy-duration: 1ms;
+    --nc-panel-in-duration: 1ms;
+    --nc-panel-out-duration: 1ms;
+    --nc-panel-glint-duration: 1ms;
   }
 }

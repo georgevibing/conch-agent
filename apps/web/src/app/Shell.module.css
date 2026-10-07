@@ -13,16 +13,18 @@
 
   /*
    * On a wide screen the sidebar has a column of its own, which opens and
-   * closes: the column glides, and what's in it fades and slides with it.
-   * Reduced motion makes the durations all but nothing (tokens.css).
+   * closes: the column glides in step with the panel's own motion — what's in
+   * it arrives and leaves like every panel (PanelPresence, "glint"). Reduced
+   * motion makes the durations all but nothing (tokens.css).
    */
   .shell[data-wide] {
     grid-template-columns: 0rem minmax(0, 1fr);
-    transition: grid-template-columns var(--nc-duration-slow) var(--nc-ease-out);
+    transition: grid-template-columns var(--nc-panel-out-duration) var(--nc-ease-in-out);
   }
 
   .shell[data-wide][data-sidebar] {
     grid-template-columns: 17rem minmax(0, 1fr);
+    transition: grid-template-columns var(--nc-panel-in-duration) var(--nc-ease-out);
   }
 
   .sidebar {
@@ -31,7 +33,7 @@
     overflow: hidden;
     border-inline-end: 1px solid var(--nc-border-subtle);
     transition:
-      border-color var(--nc-duration-slow) var(--nc-ease-out),
+      border-color var(--nc-panel-in-duration) var(--nc-ease-out),
       visibility 0s;
   }
 
@@ -40,22 +42,14 @@
     border-color: transparent;
     visibility: hidden;
     transition:
-      border-color var(--nc-duration-slow) var(--nc-ease-out),
-      visibility 0s linear var(--nc-duration-slow);
+      border-color var(--nc-panel-out-duration) var(--nc-ease-out),
+      visibility 0s linear var(--nc-panel-out-duration);
   }
 
   /* Its own width throughout, so nothing in it squeezes while the column moves. */
   .sidebarInner {
     inline-size: 17rem;
     block-size: 100%;
-    transition:
-      opacity var(--nc-duration-base) var(--nc-ease-out),
-      translate var(--nc-duration-slow) var(--nc-ease-out);
-  }
-
-  .shell:not([data-sidebar]) .sidebarInner {
-    opacity: 0;
-    translate: -1.5rem 0;
   }
 
   .showSidebar {

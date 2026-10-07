@@ -1,4 +1,4 @@
-import { ResizeHandle, Sheet, useMediaQuery } from '@conch/nacre';
+import { PanelPresence, ResizeHandle, Sheet, useMediaQuery } from '@conch/nacre';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { useUi } from '../../app/ui';
@@ -108,21 +108,19 @@ export function ArtifactDock({
   return (
     <div ref={row} className={styles.row}>
       <div className={styles.chat}>{children}</div>
-      {shownPanel && (
-        <>
-          <ResizeHandle
-            label="Resize the panel"
-            value={size}
-            min={MIN_WIDTH}
-            max={max}
-            onValueChange={setWidth}
-            className={styles.handle}
-          />
-          <aside className={styles.pane} style={{ inlineSize: size }} aria-label="Made for you">
-            {panel}
-          </aside>
-        </>
-      )}
+      <PanelPresence open={shownPanel} side="right" className={styles.presence}>
+        <ResizeHandle
+          label="Resize the panel"
+          value={size}
+          min={MIN_WIDTH}
+          max={max}
+          onValueChange={setWidth}
+          className={styles.handle}
+        />
+        <aside className={styles.pane} style={{ inlineSize: size }} aria-label="Made for you">
+          {panel}
+        </aside>
+      </PanelPresence>
     </div>
   );
 }

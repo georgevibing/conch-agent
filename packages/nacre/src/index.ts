@@ -51,6 +51,7 @@ export * from './components/Tooltip';
 export * from './components/Dialog';
 export * from './components/AlertDialog';
 export * from './components/Sheet';
+export * from './components/PanelPresence';
 export * from './components/Popover';
 export * from './components/HoverCard';
 export * from './components/DropdownMenu';

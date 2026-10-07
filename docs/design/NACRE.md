@@ -161,6 +161,26 @@ exported for JS as `springs` from `@conch/nacre` for the `motion` library. Keyfr
 `nc-surface-in` / `nc-surface-out` (rise + un-blur), `nc-fade-*`, `nc-shimmer`,
 `nc-breathe`, `nc-spin`, `nc-settle`. All durations collapse to ~0 under reduced motion.
 
+### Panels: one motion, "glint"
+
+Every panel that appears and leaves — the browser and what the assistant made beside
+the chat, the terminal under it, the sidebar, every `Sheet` — moves the same way. It
+surfaces about 24 px from the edge it lives on with a touch of spring
+(`--nc-panel-in-duration`, 320 ms, `--nc-spring-snappy`). As it settles, a band of
+pearl light (`--nc-pearl-*`) crosses it in the direction it travelled
+(`--nc-panel-glint-duration`, 620 ms), the way light runs across the inside of a
+shell as you turn it. Leaving is quicker (`--nc-panel-out-duration`, 200 ms,
+`--nc-ease-in`): it sinks back toward its edge and the light runs back, fainter. Only
+transform and opacity move. `lustre = 0` takes the light away; reduced motion makes
+it instant.
+
+Docked panels use `PanelPresence` (`open`, `side`, plus `keepMounted` and
+`appear={false}` for a panel that keeps its place, like the sidebar). It keeps what
+was in the panel on screen until the exit has played. A `Sheet` carries the same
+glint and timing. For a panel drawn as a card inside padding, set
+`--nc-glint-inset` / `--nc-glint-radius` so only the card lights up. Don't give a
+panel its own entrance keyframes.
+
 ### Waiting and arriving (chat)
 
 The wait before an answer should feel like progress, not a spinner, and the answer

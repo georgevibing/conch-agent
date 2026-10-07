@@ -6,6 +6,7 @@ import { cx } from '../../utils/cx';
 import { keepOpenForToasts } from '../../utils/toasts';
 import { Dialog, dialogStyles } from '../Dialog/Dialog';
 import { IconButton } from '../IconButton';
+import { PanelGlint } from '../PanelPresence';
 import styles from './Sheet.module.css';
 
 export type SheetSide = 'left' | 'right' | 'bottom';
@@ -54,6 +55,8 @@ function SheetContent({
             </IconButton>
           </DialogPrimitive.Close>
         )}
+        {/* Arrives and leaves like every panel ("glint", motion.css). */}
+        <PanelGlint />
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
   );
