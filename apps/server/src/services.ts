@@ -107,6 +107,7 @@ import { ConversationManager, type TurnRoute, type ToolContext } from './convers
 import { ConversationStore } from './conversations/store';
 import { ChatFolders } from './conversations/folders';
 import { AgentStore } from './agents/store';
+import { registerAgentsDoctor } from './agents/doctor';
 import type { ApiEngine } from './engines/api';
 import { builtInEngines, serverEngine } from './engines/registry';
 import { appsNeeded } from './providers/apps';
@@ -439,6 +440,7 @@ export class Services {
     this.agents = new AgentStore(config.CONCH_HOME, this.settings, heal, (list) =>
       this.broadcast.emit({ type: 'agents.changed', list }),
     );
+    registerAgentsDoctor(this.doctor, this.agents);
     this.access = new AccessStore(config.CONCH_HOME, heal);
     // "This computer", proven (ADR 0063): the key only your account can read.
     this.here = new ThisComputer(config.CONCH_HOME, {
@@ -1395,6 +1397,7 @@ export class Services {
       conversations: this.conversations,
       attachments: this.attachments,
       settings: this.settings,
+      agents: this.agents,
       models: () => this.providers.models(),
       address: () => this.address.status().url,
       saveSettings: async (patch) => {
@@ -1847,6 +1850,7 @@ export class Services {
     ]);
     const latest = updates?.conch.source === 'releases' ? updates.conch.latest : undefined;
     return {
+      // The default agent's name, kept in step in settings (ADR 0101).
       name: settings.persona.name,
       alwaysOn: status.on,
       approvals: conversations.filter((c) => c.status === 'awaiting-permission').length,
@@ -1866,7 +1870,13 @@ export class Services {
         config.CONCH_HOME,
         (area, message) => void this.healed.note(area, message),
       ),
-      persona: async () => (await this.settings.get()).persona.name,
+      // The agent of the chat it's about (ADR 0101), else the default agent.
+      persona: async (conversationId) =>
+        (
+          (conversationId &&
+            (await this.conversations.agentOf(conversationId).catch(() => undefined))) ||
+          (await this.agents.default())
+        ).name,
       conversation: async (id) => {
         const chat = await this.conversations.detail(id).catch(() => undefined);
         if (!chat) return undefined;
@@ -1961,7 +1971,25 @@ export class Services {
       home: config.CONCH_HOME,
       ...(config.CONCH_IMPORT_HOME && { sourceHome: config.CONCH_IMPORT_HOME }),
       targets: {
-        settings: this.settings,
+        // The personality is the default agent's (ADR 0101): read and changed there.
+        settings: {
+          get: async () => ({
+            ...(await this.settings.get()),
+            persona: await this.agents.persona(),
+          }),
+          update: async (body) => {
+            if (body.persona) {
+              const { name: _taken, ...rest } = body.persona;
+              // A name another agent has: the rest still comes over.
+              await this.agents
+                .adoptPersona(body.persona)
+                .catch(() => this.agents.adoptPersona(rest));
+            }
+            // The agent store writes the personality back to settings itself.
+            const { persona: _persona, ...others } = body;
+            return this.settings.update(others);
+          },
+        },
         memory: this.memory,
         checkMemories: async () => (await this.settings.get()).preferences.checkMemories,
         skills: {

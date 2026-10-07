@@ -501,6 +501,9 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
     // A goal set before the first message (`/goal`) goes with it.
     const goal = conversationId ? undefined : (useUi.getState().draftGoal ?? undefined);
     if (goal) useUi.getState().setDraftGoal(null);
+    // So does the agent chosen for it (ADR 0101).
+    const agentId = conversationId ? undefined : (useUi.getState().draftAgent ?? undefined);
+    if (agentId) useUi.getState().setDraftAgent(null);
     const id = live.send(
       trimmed,
       conversationId,
@@ -511,6 +514,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
         // Started from a folder in the chat list: it goes there from the start.
         ...(!conversationId && startIn && { folder: startIn.id }),
         ...(goal && { goal }),
+        ...(agentId && { agentId }),
       },
     );
     if (!conversationId) setSentId(id);

@@ -60,7 +60,7 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('the agents routes', () => {
   it('list, make, change, order and choose the default, and tell every tab', async () => {
-    const { app, events } = await setup();
+    const { app, events, services } = await setup();
     const listed = AgentList.parse((await json(app, 'GET', '/api/agents')).json());
     expect(listed.agents.map((a) => a.id)).toEqual([FIRST_AGENT_ID]);
 
@@ -89,6 +89,16 @@ describe('the agents routes', () => {
     // The older Settings read the default agent as `persona`.
     const state = (await json(app, 'GET', '/api/state')).json() as { persona: { name: string } };
     expect(state.persona.name).toBe('Sage II');
+
+    // Setup and the older Settings change the default agent through `persona`; the file an
+    // older Conch reads keeps a tone it knows.
+    const set = await json(app, 'PATCH', '/api/settings', { persona: { tone: 'calm' } });
+    expect((set.json() as { persona: { tone: string } }).persona.tone).toBe('calm');
+    expect((await services.agents.default()).persona.tone).toBe('calm');
+    expect((await services.settings.get()).persona.tone).toBe('warm');
+    expect(
+      (await json(app, 'PATCH', '/api/settings', { persona: { name: 'conch' } })).statusCode,
+    ).toBe(409);
 
     expect((await json(app, 'DELETE', `/api/agents/${sage.id}`)).json()).toEqual({ ok: true });
     expect((await json(app, 'DELETE', `/api/agents/${FIRST_AGENT_ID}`)).statusCode).toBe(409);

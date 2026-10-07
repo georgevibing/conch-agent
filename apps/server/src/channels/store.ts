@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 
 import {
+  AgentId,
   ChannelBot,
   ChannelGroup,
   ChannelKind,
@@ -40,6 +41,8 @@ export const StoredChannel = z.object({
   chats: z.record(z.string(), z.string()).default({}),
   /** Owner choices for private chats here, also used after /new. */
   chatOptions: TurnOptions.default({}),
+  /** The agent that answers new chats here (ADR 0101); unset, the default agent. */
+  agentId: AgentId.optional().catch(undefined),
   lastMessageAt: z.number().optional(),
   /** How far the connection has read (iMessage, email), so a restart carries on from there. */
   cursor: z.string().max(200).optional(),

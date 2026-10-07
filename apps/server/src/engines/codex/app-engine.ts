@@ -33,14 +33,15 @@ import { buildTools } from '../api/engine';
 import { withSight } from '../api/sight';
 import { secretPlaces } from '../../conversations/sandbox';
 import { hostEnvironment } from '../host';
-import type {
-  Engine,
-  EngineEvent,
-  EngineUsage,
-  LoginHandle,
-  PermissionRequest,
-  ToolImage,
-  TurnInput,
+import {
+  failureText,
+  type Engine,
+  type EngineEvent,
+  type EngineUsage,
+  type LoginHandle,
+  type PermissionRequest,
+  type ToolImage,
+  type TurnInput,
 } from '../types';
 import { DOCS_URL, MIN_VERSION, findCodex, installHints, isAtLeast, parseVersion } from './detect';
 import { CodexHome } from './home';
@@ -811,10 +812,9 @@ export class CodexEngine implements Engine {
                       view = result.isError ? undefined : result.view;
                       images = result.images ?? [];
                     }
-                  } catch {
-                    text = signal.aborted
-                      ? 'Stopped.'
-                      : 'The tool could not complete. Check the action and try again.';
+                  } catch (error) {
+                    // What went wrong, as it was said (ADR 0102).
+                    text = signal.aborted ? 'Stopped.' : failureText(error);
                   }
                   await publish({
                     type: 'tool-end',

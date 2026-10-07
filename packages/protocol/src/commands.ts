@@ -197,6 +197,19 @@ export const COMMANDS: readonly CommandDef[] = [
     chat: { who: 'owner' },
   },
   {
+    name: 'agent',
+    yields: true,
+    section: 'answers',
+    description: 'Choose who answers: one of your agents, from the next message on',
+    argumentHint: '[name]',
+    aliases: ['agents', 'who'],
+    values: 'choose',
+    chat: {
+      who: 'owner',
+      description: 'Choose who answers here: one of your agents',
+    },
+  },
+  {
     name: 'mode',
     section: 'answers',
     description: 'How much it can do without asking',

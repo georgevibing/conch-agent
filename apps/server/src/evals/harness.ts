@@ -17,6 +17,7 @@ import { join, resolve } from 'node:path';
 import type {
   ConversationEvent,
   EngineId,
+  EngineStatus,
   PermissionMode,
   Question,
   QuestionAnswer,
@@ -71,6 +72,11 @@ export interface RunOptions {
   log?: (line: string) => void;
   /** Write every chat's events here (`<model>.<task>.json`), to see what happened. */
   traceTo?: string;
+  /**
+   * Engines that stand in for a provider: the suite's own tests run a task
+   * with a scripted one, to prove its checker tells a good run from a bad one.
+   */
+  engines?: Partial<Record<EngineId, Engine>>;
 }
 
 /** A throwaway Conch: its own home, services, fixture site and (when asked) the Ledger app. */
@@ -139,6 +145,32 @@ export function tapped(engine: Engine, see: (event: EngineEvent) => void): Engin
   });
 }
 
+/** A provider that can't answer: signed out, and a turn that ends at once if one starts. */
+export function signedOut(engine: Engine): Engine {
+  return new Proxy(engine, {
+    get(target, property) {
+      if (property === 'detect')
+        return async (): Promise<EngineStatus> => ({
+          engine: target.id,
+          label: target.label,
+          state: 'signed-out',
+          install: [],
+          canSignIn: false,
+          checkedAt: Date.now(),
+        });
+      if (property === 'runTurn')
+        return async function* (): AsyncIterable<EngineEvent> {
+          yield { type: 'done', outcome: 'error', error: 'Signed out for this run.' };
+        };
+      if (property === 'complete') return undefined;
+      const value: unknown = Reflect.get(target, property, target);
+      return typeof value === 'function'
+        ? (value as (...a: unknown[]) => unknown).bind(target)
+        : value;
+    },
+  });
+}
+
 /** Save the key a model needs into the throwaway home, checked like Settings checks it. */
 export async function connect(services: Services, target: Ready): Promise<void> {
   const engine = services.engines.get(target.engine as EngineId);
@@ -176,6 +208,11 @@ export async function runTask(task: EvalTask, options: RunOptions): Promise<Task
     const { services, home } = conch;
     const bypass = bypassAllowed(home, env);
     const mode: PermissionMode = bypass ? 'bypassPermissions' : 'default';
+    // Stand-ins replace their provider, and every other one is signed out for the run: a
+    // scripted test must never reach a real (paid) provider by a fallback.
+    if (options.engines)
+      for (const [id, engine] of [...services.engines])
+        services.engines.set(id, options.engines[id] ?? signedOut(engine));
 
     await connect(services, options.model);
     if (task.needs?.includes('partner')) {

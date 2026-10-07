@@ -22,6 +22,7 @@ export function previewReads(path: string): boolean {
     path === 'integrations.json' ||
     path === 'conch-apps.json' ||
     path === 'settings.json' ||
+    path === 'agents/agents.json' ||
     path === 'browser.json' ||
     path === 'terminal.json' ||
     path === 'channels.json' ||
@@ -153,6 +154,14 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
   const mode = record(settings?.preferences)?.permissionMode;
   if (mode === 'bypassPermissions') powers.push({ kind: 'chats-never-ask' });
   if (mode === 'auto') powers.push({ kind: 'chats-go-ahead' });
+  // An agent whose new chats start in Auto (ADR 0101); none can carry Full trust.
+  const agents = record(json(read, 'agents/agents.json'))?.agents;
+  if (
+    Array.isArray(agents) &&
+    agents.some((agent) => record(record(agent)?.defaults)?.permissionMode === 'auto') &&
+    !powers.some((p) => p.kind === 'chats-go-ahead')
+  )
+    powers.push({ kind: 'chats-go-ahead' });
   // A safety check off (ADR 0028, ADR 0087) isn't brought back quietly either.
   const prefs = record(settings?.preferences);
   const off = [
