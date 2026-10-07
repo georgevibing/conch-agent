@@ -1,4 +1,4 @@
-import { assessTask } from '@conch/protocol';
+import { taskFinishNotice, taskLink } from '@conch/protocol';
 import type { ServerEvent, Task, TaskList } from '@conch/protocol';
 import { toast } from '@conch/nacre';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
@@ -50,24 +50,31 @@ export function applyTaskEvent(
   const before = client.getQueryData<TaskList>(taskKeys.all)?.tasks.find((t) => t.id === task.id);
   put(client, task);
   if (task.kind !== 'background' || !before || before.status === task.status) return;
-  const where = task.parentConversationId ?? task.conversationId;
-  const open = where ? { label: 'Open', onClick: () => navigate?.(`/c/${where}`) } : undefined;
   // Already looking at it (its chat, or the one it came from): the card says so.
   const at = window.location.pathname;
-  const here =
-    (where && at === `/c/${where}`) || (task.conversationId && at === `/c/${task.conversationId}`);
-  if (task.status === 'done' && !here)
-    toast.success(`Done: ${task.title}`, { description: task.summary, action: open });
-  else if (task.status === 'unverified' && !here)
-    toast(
-      `${assessTask(task).verdict === 'unchecked' ? 'Finished' : 'Result needs checking'}: ${task.title}`,
-      { description: task.error, action: open },
-    );
-  else if (task.status === 'failed')
-    toast.error(`Didn’t finish: ${task.title}`, { description: task.error, action: open });
-  else if (task.status === 'needs-you' && task.conversationId && !here)
-    toast(`${task.title} needs your OK`, {
-      action: { label: 'See', onClick: () => navigate?.(`/c/${task.conversationId}`) },
+  const here = (t: Task) =>
+    (t.parentConversationId && at === `/c/${t.parentConversationId}`) ||
+    (t.conversationId && at === `/c/${t.conversationId}`);
+  if (task.status === 'needs-you') {
+    if (!here(task))
+      toast(`A task needs your OK`, {
+        description: task.title,
+        action: { label: 'See', onClick: () => navigate?.(taskLink(task)) },
+      });
+    return;
+  }
+  // The same words as the phone's notification; tasks started together, once.
+  const notice = taskFinishNotice(task, client.getQueryData<TaskList>(taskKeys.all)?.tasks ?? []);
+  if (!notice) return;
+  const open = { label: 'Open', onClick: () => navigate?.(notice.url) };
+  // Not finishing says so even while you look: the card alone is easy to miss.
+  if (notice.tone === 'failed')
+    toast.error(notice.title, { id: notice.tag, description: notice.body, action: open });
+  else if (!notice.tasks.every(here))
+    (notice.tone === 'done' ? toast.success : toast)(notice.title, {
+      id: notice.tag,
+      description: notice.body,
+      action: open,
     });
 }
 

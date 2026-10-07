@@ -1,4 +1,3 @@
-import { assessTask } from '@conch/protocol';
 /**
  * Notifications (ADR 0027): Conch tells your phone and your other devices
  * what needs you while you're away — an OK it's waiting for, an answer that
@@ -14,14 +13,17 @@ import { assessTask } from '@conch/protocol';
  * A device can only be told about anything while it's still allowed in:
  * signing it out or removing it ends its notifications too.
  */
-import type {
-  PushDevice,
-  PushPrefs,
-  PushStatus,
-  PushSubscriptionJson,
-  PushTopic,
-  RoutineSpending,
-  ServerEvent,
+import {
+  taskFinishNotice,
+  taskLink,
+  type PushDevice,
+  type PushPrefs,
+  type PushStatus,
+  type PushSubscriptionJson,
+  type PushTopic,
+  type RoutineSpending,
+  type ServerEvent,
+  type Task,
 } from '@conch/protocol';
 
 import { pausedWords } from '../routines/spend';
@@ -58,11 +60,16 @@ export interface PushDeps {
         routine?: boolean;
         channel?: boolean;
         task?: boolean;
+        /** The task it runs, when it's a task's own chat. */
+        taskId?: string;
         /** Another app's chat (ADR 0073): the app is who's asking. */
         app?: string;
       }
     | undefined
   >;
+  /** Every task there is: a batch is told about once its last one is over. */
+  tasks?: () => Promise<Task[]>;
+  task?: (id: string) => Promise<Task | undefined>;
   routineTitle: (id: string) => Promise<string | undefined>;
   /** Still allowed in: signed in, not removed. */
   ownerExists: (owner: string) => Promise<boolean>;
@@ -279,28 +286,19 @@ export class PushService {
   /** Conch's live stream, turned into the notifications that matter. */
   async onEvent(event: ServerEvent): Promise<void> {
     if (event.type === 'task.changed') {
-      // A task you sent away finished (ADR 0033); a helper's result goes back to its chat instead.
-      const task = event.task;
-      if (task.kind !== 'background' || !['done', 'unverified', 'failed'].includes(task.status))
-        return;
-      if (this.#told.has(`${task.id}:${task.finishedAt}`)) return;
-      this.#told.add(`${task.id}:${task.finishedAt}`);
+      // A task you sent away is over (ADR 0033); tasks started together say so
+      // together, once the last is over. A helper's result goes back to its chat.
+      const notice = taskFinishNotice(event.task, (await this.deps.tasks?.()) ?? []);
+      if (!notice) return;
+      const key = `${notice.tag}:${Math.max(...notice.tasks.map((t) => t.finishedAt ?? 0))}`;
+      if (this.#told.has(key)) return;
+      this.#told.add(key);
       await this.notify('tasks', {
-        title:
-          task.status === 'done'
-            ? `Verified complete: ${clip(task.title, 60)}`
-            : task.status === 'unverified'
-              ? `${assessTask(task).verdict === 'unchecked' ? 'Finished' : 'Result needs checking'}: ${clip(task.title, 60)}`
-              : `Didn’t finish: ${clip(task.title, 60)}`,
-        body: clip(
-          task.status === 'done' ||
-            (task.status === 'unverified' && assessTask(task).verdict === 'unchecked')
-            ? (task.summary ?? 'It’s ready.')
-            : (task.error ?? 'Something went wrong.'),
-        ),
-        quiet: task.status === 'failed' ? 'Your task didn’t finish.' : 'Your task finished.',
-        url: task.parentConversationId ? `/c/${task.parentConversationId}` : `/tasks`,
-        tag: `task-${task.id}`,
+        title: notice.title,
+        body: notice.body ?? '',
+        quiet: notice.quiet,
+        url: notice.url,
+        tag: notice.tag,
       });
       return;
     }
@@ -334,13 +332,16 @@ export class PushService {
     }
     if (e.type === 'permission.requested') {
       const chat = await this.deps.conversation(e.conversationId);
+      // A task asking opens at it, in the chat it came from: answered there.
+      const task = chat?.taskId ? await this.deps.task?.(chat.taskId) : undefined;
       // Another app asking through Conch says so: the OK is for it, not your assistant.
-      const name = chat?.app ?? (await this.deps.persona(e.conversationId));
+      const name = task ? 'A task' : (chat?.app ?? (await this.deps.persona(e.conversationId)));
+      const about = task?.title ?? chat?.title;
       await this.notify('approvals', {
         title: `${name} needs your OK`,
-        body: clip(chat?.title ? `${e.summary} · ${chat.title}` : e.summary),
+        body: clip(about ? `${e.summary} · ${about}` : e.summary),
         quiet: 'Open Conch to see what it’s asking.',
-        url,
+        url: task ? taskLink(task) : url,
         tag: `ok-${e.permissionId}`,
         actions: [
           { action: 'open', title: 'Review' },

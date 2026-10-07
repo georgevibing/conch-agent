@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { ServerEvent } from '@conch/protocol';
+import type { ServerEvent, Task } from '@conch/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { PushService, type PushDeps } from './service';
@@ -394,6 +394,107 @@ describe('notifications', () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(calls).toBe(3);
     expect((await store.list())[0]?.problem).toMatch(/busy/);
+  });
+
+  describe('tasks (ADR 0033)', () => {
+    const task = (over: Partial<Task> & { batchId?: string } = {}): Task =>
+      ({
+        id: 't_1',
+        kind: 'background',
+        title: 'Add dark mode',
+        prompt: 'Add it',
+        status: 'done',
+        options: {},
+        expectations: [{ tool: 'Write', minimum: 1 }],
+        parentConversationId: 'c_main',
+        conversationId: 'c_t1',
+        createdAt: 1,
+        finishedAt: 10,
+        summary: 'Dark mode is in.',
+        ...over,
+      }) as Task;
+    const changed = (t: Task): ServerEvent => ({ type: 'task.changed', task: t }) as ServerEvent;
+
+    it('says a task is done, and opens at it in the chat it came from', async () => {
+      const t = task();
+      const { push, sent } = setup({ tasks: async () => [t] });
+      const phone = browser();
+      await push.subscribe('device:phone', 'iPhone', phone.subscription);
+      await push.onEvent(changed(t));
+      // The same change again says nothing new.
+      await push.onEvent(changed(t));
+      expect(sent).toHaveLength(1);
+      expect(phone.read(sent[0]?.body ?? Buffer.alloc(0))).toMatchObject({
+        title: 'Done: Add dark mode',
+        body: 'Dark mode is in.',
+        url: '/c/c_main?task=t_1',
+        tag: 'task-t_1',
+      });
+    });
+
+    it('tells about tasks started together once, when the last is over', async () => {
+      const a = task({ id: 't_a', batchId: 'b', finishedAt: 10 });
+      const b = task({ id: 't_b', batchId: 'b', status: 'running', finishedAt: undefined });
+      let all = [a, b];
+      const { push, sent } = setup({ tasks: async () => all });
+      const phone = browser();
+      await push.subscribe('device:phone', 'iPhone', phone.subscription);
+      await push.onEvent(changed(a));
+      expect(sent).toHaveLength(0);
+      const over = { ...b, status: 'failed' as const, error: 'Tests failed', finishedAt: 20 };
+      all = [a, over];
+      await push.onEvent(changed(over));
+      expect(sent).toHaveLength(1);
+      expect(phone.read(sent[0]?.body ?? Buffer.alloc(0))).toMatchObject({
+        title: '1 task done · 1 didn’t finish',
+        tag: 'tasks-b',
+        url: '/c/c_main?task=t_b',
+      });
+    });
+
+    it('stays quiet about a task while a Conch page is in front of someone', async () => {
+      const t = task();
+      const { push, sent } = setup({ tasks: async () => [t] });
+      await push.subscribe('device:phone', 'iPhone', browser().subscription);
+      push.presence.open('device:laptop').set(true);
+      await push.onEvent(changed(t));
+      expect(sent).toHaveLength(0);
+    });
+
+    it('says a task needs your OK, and opens at it in the chat it came from', async () => {
+      const t = task({ status: 'needs-you', finishedAt: undefined });
+      const { push, sent } = setup({
+        conversation: async () => ({ title: 'Add dark mode', task: true, taskId: 't_1' }),
+        task: async (id) => (id === 't_1' ? t : undefined),
+      });
+      const phone = browser();
+      await push.subscribe('device:phone', 'iPhone', phone.subscription);
+      await push.onEvent({
+        type: 'conversation.event',
+        event: {
+          seq: 1,
+          at: 1,
+          conversationId: 'c_t1',
+          type: 'permission.requested',
+          permissionId: 'p_t',
+          toolName: 'Bash',
+          input: {},
+          summary: 'Run `npm test`',
+        },
+      } as ServerEvent);
+      expect(phone.read(sent[0]?.body ?? Buffer.alloc(0))).toMatchObject({
+        title: 'A task needs your OK',
+        body: 'Run `npm test` · Add dark mode',
+        url: '/c/c_main?task=t_1',
+        // Deny answers the task's own chat, where it asked; Allow always opens Conch.
+        deny: { conversationId: 'c_t1', permissionId: 'p_t' },
+        actions: [
+          { action: 'open', title: 'Review' },
+          { action: 'deny', title: 'Deny' },
+        ],
+        requireInteraction: true,
+      });
+    });
   });
 
   it('a test reaches the device that asked, even while it’s looking', async () => {

@@ -284,3 +284,20 @@ one that may do more than its chat is an escalation. Both are bugs.
   mode allows and never more than its chat.
 - The sidebar's Tasks badge and ⌘K count helpers too: each is a chat of its own, and
   one waiting for an OK holds up the chat that started it.
+
+## Amended 2026-10-07: told once, in the same words everywhere
+
+- **One decision, two places.** `taskFinishNotice` (`@conch/protocol`) decides what
+  a finished task says, and both the phone's notification and the app's toast use
+  it: **Done: …**, **Done, worth a look: …** (something it did couldn't be
+  confirmed), or **Didn't finish: …** with the first line of why. Stopping a task
+  says nothing; a helper's result still goes back to its chat.
+- **Started together, told together.** Tasks that share a batch (`batchId`, else
+  `group`) wait for the last of them, then say so once: "3 tasks done · 1 didn't
+  finish", tag `tasks-<batch>`. A tap opens the one that didn't finish when it's
+  the only one, else the chat they came from.
+- **A tap opens the task where it lives.** Notifications and toasts link to the
+  chat it came from with `?task=<id>`, not to the task's own chat. A task waiting
+  for an OK says **A task needs your OK**, with the task's title; Deny still
+  answers from the notification and Allow still opens Conch (ADR 0027).
+- The switch reads **When a task finishes**.

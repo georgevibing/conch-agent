@@ -1886,9 +1886,12 @@ export class Services {
           routine: origin?.kind === 'routine',
           channel: origin?.kind === 'channel',
           task: origin?.kind === 'task',
+          ...(origin?.kind === 'task' && { taskId: origin.taskId }),
           ...(origin?.kind === 'client' && { app: origin.name }),
         };
       },
+      tasks: async () => (await this.tasks.list()).tasks,
+      task: (id) => this.tasks.get(id).catch(() => undefined),
       routineTitle: async (id) =>
         (await this.routines.detail(id).catch(() => undefined))?.routine.title,
       ownerExists: async (owner) => {
