@@ -38,8 +38,7 @@ function explainer(overrides: Partial<StoryExplainerDeps> = {}) {
   let now = 0;
   const why = new StoryExplainer({
     events: async () => LOG,
-    model: async () => ({ engine, complete, model: 'small' }),
-    allow: async () => ({ ok: true }),
+    pick: async () => ({ small: { engine, complete, model: 'small' } }),
     spent,
     now: () => now,
     ...overrides,
@@ -85,15 +84,21 @@ describe('“Why?” on a step (ADR 0103)', () => {
   });
 
   it('says plainly why there’s no answer', async () => {
-    expect(await explainer({ model: async () => undefined }).why.explain('c1', 't1')).toEqual({
-      unavailable: NOT_ASKED_WORDS.none,
-    });
     expect(
-      await explainer({ allow: async () => ({ ok: false, reason: 'cap' }) }).why.explain(
-        'c1',
-        't1',
-      ),
-    ).toEqual({ unavailable: NOT_ASKED_WORDS.cap });
+      await explainer({ pick: async () => ({ not: 'none' }) }).why.explain('c1', 't1'),
+    ).toEqual({ unavailable: NOT_ASKED_WORDS.none });
+    expect(await explainer({ pick: async () => ({ not: 'cap' }) }).why.explain('c1', 't1')).toEqual(
+      { unavailable: NOT_ASKED_WORDS.cap },
+    );
+    // Every plan nearly used up: it says which.
+    expect(
+      await explainer({
+        pick: async () => ({ not: 'plan-room', plans: ['Claude Code', 'Codex'] }),
+      }).why.explain('c1', 't1'),
+    ).toEqual({
+      unavailable:
+        'Your Claude Code and Codex plans are nearly used up, so Conch is saving them for your chats.',
+    });
     const failing = explainer();
     failing.complete.mockRejectedValueOnce(new Error('overloaded'));
     expect(await failing.why.explain('c1', 't1')).toEqual({ unavailable: NOT_ASKED_WORDS.failed });

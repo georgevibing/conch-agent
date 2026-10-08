@@ -126,17 +126,31 @@ export class LearningSpend {
   async allow(engine: Engine): Promise<LearningAllowed> {
     const info = await this.#billings.of(engine);
     if (info.billing === 'free') return { ok: true };
-    if (info.billing === 'plan') {
-      const usage = (await this.#billings.of(engine, { fresh: true })).usage;
-      const full = usage?.windows.find((w) => w.usedPercent >= PLAN_ROOM_PERCENT);
-      return full
-        ? { ok: false, reason: 'plan-room', ...(full.resetsAt && { until: full.resetsAt }) }
-        : { ok: true };
-    }
+    if (info.billing === 'plan') return this.room(engine);
     const file = await this.#mutex.run(() => this.#load());
     return this.#pausedIn(file, monthKey(this.#now))
       ? { ok: false, reason: 'cap', until: nextMonth(this.#now) }
       : { ok: true };
+  }
+
+  /**
+   * Has this provider's plan room for a small job? One nearly used up is left
+   * to your own chats until it resets; a provider without a plan always has.
+   */
+  async room(engine: Engine): Promise<LearningAllowed> {
+    const info = await this.#billings.of(engine);
+    if (info.billing !== 'plan') return { ok: true };
+    const usage = (await this.#billings.of(engine, { fresh: true })).usage;
+    const full = usage?.windows.find((w) => w.usedPercent >= PLAN_ROOM_PERCENT);
+    return full
+      ? { ok: false, reason: 'plan-room', ...(full.resetsAt && { until: full.resetsAt }) }
+      : { ok: true };
+  }
+
+  /** Whether this provider costs money (not a plan, not this computer): the month's budget applies. */
+  async costsMoney(engine: Engine): Promise<boolean> {
+    const info = await this.#billings.of(engine).catch(() => ({ billing: undefined }));
+    return info.billing !== 'free' && info.billing !== 'plan';
   }
 
   /** Count what one look cost: only money counts. Returns it, in USD. */

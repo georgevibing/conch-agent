@@ -107,12 +107,23 @@ asks a small model for a better one and logs `story.titled` (`StoryTitle`: `stor
   most eight words and an outcome of at most five; dropped when it has quotes, markdown,
   emoji or dashes, speaks in the first person, refuses, or only repeats one step's words.
   A dropped answer leaves the rules' headline standing.
-- **Who is asked, and what it costs**: the same rules as quiet learning (ADR 0088,
-  `conversations/stories/ask.ts`). The provider that answered the chat first (it has
-  read it already), else one on this computer, else any connected one. A private chat
+- **Who is asked, and what it costs**: one rule for every small job about a chat
+  (`providers/small.ts`: `smallModelOrder`, `pickSmallModel`, `smallAllow`), shared with
+  the chat's title, quiet learning (ADR 0088) and skill drafts (ADR 0058). The chat's
+  own provider first, on its cheapest model (Codex answers one prompt in a thread of its
+  own: `engines/codex/complete.ts`, no tools, nothing kept); then any other connected
+  provider with room, the default first; then one on this computer. A private chat
   (marked "Don't learn from this chat", a guest's, a routine's or a task's) goes only to
-  its own provider or one on this computer. Nothing is asked past the month's budget or
-  learning's spend gate, and what it costs counts against learning's monthly cap.
+  its own provider or one on this computer. Each is asked only if it may be now: a plan
+  needs room (under `PLAN_ROOM_PERCENT` used), money stays within the month's budget and
+  learning's monthly cap, which is what it counts against. A provider that may not is
+  passed over for the next, so a nearly used-up default plan never stops a chat on
+  another one. Only when every one says no is nothing asked, and the reason is the chat's
+  own provider's, naming the plans nearly used up ("Your Claude Code plan is nearly used
+  up, so Conch is saving it for your chats.", `notAskedWords`). A chat's title follows the
+  same order and plan rule but is counted with the chat, not learning's cap. The memory
+  check's and Auto's second looks (ADR 0087, ADR 0100) are not small jobs of this kind:
+  they stay on the default provider, a model other than the one that read the chat.
 - **The switch** is `preferences.autoTitle`, the one that names new chats.
 
 ### Stories
@@ -173,7 +184,7 @@ chat (which draws them) always cut them the same way.
   before, and the call with what it found, and returns one to three sentences. Same
   engine, privacy and spend rules as headlines; six a minute per chat; a finished step's
   answer is kept, so asking again costs nothing. With no one to ask, it says why
-  ("This month's budget is spent…"). It only reads the log; no tool reaches it.
+  ("This month's budget is spent…", or which plans are nearly used up). It only reads the log; no tool reaches it.
 - **The turn's tally.** How long, how many steps, what it cost, what it wrote.
 
 ### Site icons, through Conch

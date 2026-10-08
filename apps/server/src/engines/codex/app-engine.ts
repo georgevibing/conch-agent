@@ -35,6 +35,8 @@ import { secretPlaces } from '../../conversations/sandbox';
 import { hostEnvironment } from '../host';
 import {
   failureText,
+  type Completion,
+  type CompletionInput,
   type Engine,
   type EngineEvent,
   type EngineUsage,
@@ -47,6 +49,7 @@ import {
 } from '../types';
 import { DOCS_URL, MIN_VERSION, findCodex, installHints, isAtLeast, parseVersion } from './detect';
 import { CodexHome } from './home';
+import { completeWithCodex } from './complete';
 import { makeCodexPicture, PICTURE_LINE } from './pictures';
 import type { RpcMessage } from './rpc';
 import { ToolQueue } from './tool-queue';
@@ -216,6 +219,15 @@ const TOOL_CONFIG = [
 const PICTURE_CONFIG = [
   ...TOOL_CONFIG.filter((line) => !line.startsWith('features.image_generation=')),
   'features.image_generation=true',
+  'permissions.conch.extends=":read-only"',
+  'permissions.conch.filesystem={}',
+  'permissions.conch.network={enabled=false}',
+];
+
+// A short answer for the small jobs around a chat (`complete.ts`): no tools at all,
+// no files to read or write and no network for anything but the model.
+const COMPLETE_CONFIG = [
+  ...TOOL_CONFIG,
   'permissions.conch.extends=":read-only"',
   'permissions.conch.filesystem={}',
   'permissions.conch.network={enabled=false}',
@@ -404,6 +416,25 @@ export class CodexEngine implements Engine {
         // The picture comes back whole, in one message.
         maxLine: PICTURE_LINE,
       },
+    );
+  }
+
+  /**
+   * One short answer, in a thread of its own (`complete.ts`), for a story's
+   * headline, "Why?" or a title (ADR 0103): on the person's ChatGPT plan or
+   * key, with the lightest thinking the model offers.
+   */
+  async complete(input: CompletionInput): Promise<Completion> {
+    const status = await this.detect();
+    if (status.state !== 'ready' || !status.executablePath)
+      throw new Error(status.message ?? 'Reconnect ChatGPT in Settings → Providers.');
+    const caps = await this.capabilities().catch(() => undefined);
+    const model = caps?.models.find((m) => m.id === input.model) ?? caps?.models[0];
+    const effort = model?.efforts?.includes('low') ? 'low' : undefined;
+    return this.#home.withClient(
+      status.executablePath,
+      (rpc) => completeWithCodex(rpc, input, effort ? { effort } : {}),
+      { signal: input.signal, config: COMPLETE_CONFIG },
     );
   }
 

@@ -915,6 +915,12 @@ export class ConversationManager {
        * (ADR 0100, `risk-look.ts`); it can only add a question.
        */
       riskLook?: () => Promise<LookModel | undefined>;
+      /**
+       * Who names a new chat (`providers/small.ts`): its own provider when it can and
+       * its plan has room, else another, else one on this computer. Undefined: nobody
+       * may now, and the first line stays. Absent: the chat's own provider.
+       */
+      titleModel?: (conversationId: string) => Promise<Engine | undefined>;
       /** The provider for a turn: the one a conversation chose, else the default. */
       engine: (id?: EngineId) => Engine;
       tools?: ToolProvider;
@@ -1334,7 +1340,7 @@ export class ConversationManager {
     } else {
       const now = Date.now();
       const { preferences } = await this.deps.settings.get();
-      autoTitle = preferences.autoTitle && Boolean(engine.complete);
+      autoTitle = preferences.autoTitle && Boolean(engine.complete || this.deps.titleModel);
       const record: ConversationRecord = {
         id,
         // The first line is shown straight away and kept if no better title comes.
@@ -1508,8 +1514,11 @@ export class ConversationManager {
     live.titling = abort;
     let title: string | undefined;
     try {
-      const result = await generateTitle(engine, text, abort.signal);
-      if (result.usage) this.deps.onSpend?.(result.usage, engine);
+      const by = this.deps.titleModel
+        ? await this.deps.titleModel(live.record.id).catch(() => undefined)
+        : engine;
+      const result = by ? await generateTitle(by, text, abort.signal) : {};
+      if (by && result.usage) this.deps.onSpend?.(result.usage, by);
       title = result.title;
     } catch {
       // Keep the first line.

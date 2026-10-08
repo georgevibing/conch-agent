@@ -87,24 +87,6 @@ export async function cheapModel(engine: Engine) {
 }
 
 /**
- * The provider to write a short answer about a chat: the one that answered it
- * (it has seen it already), else one on this computer, else any other
- * connected one that can write one — `ready` comes default first. Only a
- * connected provider is asked, so one that's signed out never is.
- */
-export function shortAnswerEngine(
-  answered: Engine | undefined,
-  ready: readonly Engine[],
-): Engine | undefined {
-  const able = ready.filter((engine) => engine.complete);
-  return (
-    able.find((engine) => engine.id === answered?.id) ??
-    able.find((engine) => engine.local) ??
-    able[0]
-  );
-}
-
-/**
  * Ollama's embedding model, when the person has one (looked up now and then,
  * never more than every few minutes). Conch doesn't offer to pull one any
  * more: its own model (`ondevice.ts`, ADR 0041) is a tenth of the size and

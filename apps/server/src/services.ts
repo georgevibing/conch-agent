@@ -184,17 +184,12 @@ import { hostedApps } from './integrations/hosted';
 import { IntegrationService } from './integrations/service';
 import { MemoryIndex } from './memory/index';
 import { OnDeviceModel } from './memory/ondevice';
-import {
-  cheapModel,
-  MeaningModel,
-  shortAnswerEngine,
-  yourRequests,
-  yourWords,
-} from './memory/learning';
+import { cheapModel, MeaningModel, yourRequests, yourWords } from './memory/learning';
+import { pickSmallModel, smallAllow, smallModelOrder, type SmallPick } from './providers/small';
 import { registerLearningDoctor } from './memory/doctor';
 import { registerQuietLearningDoctor } from './learning/doctor';
 import { notYours, QuietLearning } from './learning/service';
-import { smallModelEngine, type SmallModelDeps } from './conversations/stories/ask';
+import type { SmallModelDeps } from './conversations/stories/ask';
 import { StoryExplainer } from './conversations/stories/explain';
 import { StoryTitler } from './conversations/stories/titler';
 import { LearningSpend } from './learning/spend';
@@ -1060,6 +1055,11 @@ export class Services {
       memoryLook: () => cheapModel(this.providers.engine()),
       // Auto's second look at an unusual command after reading (ADR 0100): the same model.
       riskLook: () => cheapModel(this.providers.engine()),
+      // A new chat's title (ADR 0103): its own provider, else another with room, else this computer.
+      titleModel: async (id) => {
+        const picked = await this.#smallFor(id, 'plan');
+        return 'small' in picked ? picked.small.engine : undefined;
+      },
       engine: (id) => this.providers.engineFor(id),
       route: (engine, context) => this.route(engine, context),
       describe: (engine, model) => this.describer.for(engine, model),
@@ -1385,14 +1385,12 @@ export class Services {
           title: s.title,
           description: s.description,
         })),
-      // The provider that answered the chat has seen it already; else one on this
-      // computer; else any connected one that can write a short answer.
+      // The chat's own provider has seen it already; else another with room; else one
+      // on this computer (`providers/small.ts`).
       model: async (id) => {
-        const pick = shortAnswerEngine(
-          id ? this.providers.engineFor(id) : undefined,
-          await this.providers.ready().catch(() => []),
-        );
-        return pick ? cheapModel(pick) : undefined;
+        const own = id ? this.providers.engineFor(id) : undefined;
+        const picked = await this.#smallModel(own, { private: false });
+        return 'small' in picked ? picked.small : undefined;
       },
       workspace: () => this.settings.workspace(),
       redact: this.vault.redactor(),
@@ -1446,13 +1444,14 @@ export class Services {
         conversationStore.events(id),
       // The provider that answered the chat has seen it already; else one on this
       // computer; else any connected one that can write a short answer.
+      // The chat's own provider, else another with room, else one on this computer
+      // (`providers/small.ts`). When none may be asked, its own, so the look says why it waits.
       model: async (id) => {
-        const pick = shortAnswerEngine(
-          id ? this.providers.engineFor(id) : this.engine(),
-          await this.providers.ready().catch(() => []),
-        );
-        const cheap = pick && (await cheapModel(pick));
-        return pick && cheap && { engine: pick, ...cheap };
+        const own = id ? this.providers.engineFor(id) : this.engine();
+        const picked = await this.#smallModel(own, { private: false });
+        if ('small' in picked) return picked.small;
+        const cheap = await cheapModel(own);
+        return cheap && { engine: own, ...cheap };
       },
       settings: async () => ({ autoMemory: (await this.settings.get()).preferences.autoMemory }),
       overBudget: async () => {
@@ -1508,24 +1507,7 @@ export class Services {
     registerQuietLearningDoctor(this.doctor, this.learning);
     // Story headlines and "Why?" (ADR 0103): learning's rules for who reads a chat and what it costs.
     const small: SmallModelDeps = {
-      model: async (id) => {
-        const { engine, origin } = await this.conversations.answering(id);
-        const quiet = await this.learning.isQuiet(id).catch(() => true);
-        const pick = smallModelEngine(
-          this.providers.engineFor(engine),
-          await this.providers.ready().catch(() => []),
-          // A private chat goes only to its own provider, or one on this computer.
-          { private: quiet || notYours(origin) },
-        );
-        const cheap = pick && (await cheapModel(pick));
-        return pick && cheap ? { engine: pick, ...cheap } : undefined;
-      },
-      allow: async (engine) => {
-        const { usd, budgetUsd } = await this.usage.month();
-        if (budgetUsd !== undefined && usd >= budgetUsd) return { ok: false, reason: 'budget' };
-        const allowed = await this.learningSpend.allow(engine);
-        return allowed.ok ? allowed : { ok: false, reason: allowed.reason };
-      },
+      pick: (id) => this.#smallFor(id),
       spent: (usage, engine, model) => {
         void recordSmallSpend(
           (u, priced) => this.usage.recordTurn(u, priced),
@@ -2407,6 +2389,37 @@ export class Services {
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  /**
+   * A cheap model for a small job around a chat (`providers/small.ts`): `own`
+   * first, then another connected provider with room, then one on this
+   * computer. `plan` checks only that a plan has room and money stays within
+   * the month's budget (a title, counted with the chat); `learning` adds
+   * learning's monthly cap (headlines, Why?, quiet learning, skill drafts).
+   */
+  async #smallModel(
+    own: Engine | undefined,
+    options: { private: boolean; gate?: 'learning' | 'plan' },
+  ): Promise<SmallPick> {
+    const order = smallModelOrder(own, await this.providers.ready().catch(() => []), options);
+    return pickSmallModel(order, {
+      cheap: cheapModel,
+      allow: smallAllow(
+        { spend: this.learningSpend, month: () => this.usage.month() },
+        options.gate,
+      ),
+    });
+  }
+
+  /** The small model for this chat: a private one goes only to its own provider or this computer. */
+  async #smallFor(conversationId: string, gate?: 'learning' | 'plan'): Promise<SmallPick> {
+    const { engine, origin } = await this.conversations.answering(conversationId);
+    const quiet = await this.learning.isQuiet(conversationId).catch(() => true);
+    return this.#smallModel(this.providers.engineFor(engine), {
+      private: quiet || notYours(origin),
+      ...(gate && { gate }),
+    });
   }
 
   /** What looking through earlier chats needs to know about one (ADR 0059); undefined once it's gone. */

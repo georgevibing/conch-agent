@@ -25,7 +25,7 @@ Some things only show once a chat is over: you corrected it ("no, I meant TypeSc
 - **What it learned about this computer saves you time.** "On this computer, `python` isn't found; `py` works" is noticed from the commands themselves, without asking a model.
 - **Your preferences come back when they matter.** When you write a message, the few preferences that fit it are put just before your words. Your assistant follows them a dozen messages in, not only at the start.
 
-Most chats teach nothing that lasts, and then nothing is kept. A chat with nothing lasting in your words isn't sent to a model at all. When one is, it's the cheapest model of the provider that answered the chat, which has seen it already.
+Most chats teach nothing that lasts, and then nothing is kept. A chat with nothing lasting in your words isn't sent to a model at all. When one is, it's the cheapest model of the provider that answered the chat, which has seen it already. If that plan is nearly used up, another provider you connected with room reads it, or one on this computer.
 
 To keep one chat out of it, choose **Don't learn from this chat** in its menu, or with <kbd>mod+k</kbd>. It still remembers what you ask it to there.
 
