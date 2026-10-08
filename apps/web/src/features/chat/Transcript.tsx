@@ -54,6 +54,7 @@ import { LearnedChatLine } from '../learning/LearnedChatLine';
 import { HeldItem, RoutedItem } from './OfflineBits';
 import { ArtifactChatCard } from '../artifacts/ArtifactChatCard';
 import { RoutineChatCard } from '../routines/RoutineChatCard';
+import { StandingOrderChatCard } from '../checkins/StandingOrderChatCard';
 import { TurnChanges } from '../undo/TurnChanges';
 import { AwayCard, useAway, type AwayStory } from './Away';
 import { MusicDock } from './MusicFound';
@@ -503,6 +504,7 @@ export const Transcript = memo(function Transcript({
       last?.kind === 'skill' ||
       last?.kind === 'skill-ended' ||
       last?.kind === 'routine' ||
+      last?.kind === 'standing-order' ||
       last?.kind === 'artifact' ||
       last?.kind === 'task' ||
       last?.kind === 'integration-issue' ||
@@ -802,6 +804,9 @@ export const Transcript = memo(function Transcript({
           title={block.item.title}
           action={block.item.action}
         />
+      )}
+      {block.item?.kind === 'standing-order' && (
+        <StandingOrderChatCard orderId={block.item.orderId} text={block.item.text} />
       )}
       {block.item?.kind === 'artifact' && conversationId && (
         <ArtifactChatCard conversationId={conversationId} item={block.item} />

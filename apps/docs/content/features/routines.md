@@ -102,6 +102,7 @@ The monthly limit is in **Settings → Usage**, under **Routines**, or type "wha
 
 ## Good to know
 
+- To hear only when something matters, without making a routine for it, say it once as a [standing order](check-ins.md): "always tell me if a flight changes".
 - Routines only run, and only notice things, while Conch is running. With [Always on](../care/always-on.md), Conch keeps running with no window open.
 - Each run starts fresh. It doesn't see the chat that created it, so the instruction should say everything it needs.
 - At most two routines run at once. A scheduled run that would be a third, or that comes due while the routine's last run is still going, is skipped, and **History** says why. Something that happened waits for its turn instead.

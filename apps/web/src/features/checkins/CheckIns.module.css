@@ -1,0 +1,16 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-3);
+}
+
+.quietRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nc-space-2);
+}
+
+.chatCard {
+  margin-block: var(--nc-space-1);
+}

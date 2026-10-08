@@ -87,3 +87,4 @@ export * from './TurnMeter';
 export * from './ImageMaking';
 export * from './Music';
 export * from './FileMaking';
+export * from './CheckIns';

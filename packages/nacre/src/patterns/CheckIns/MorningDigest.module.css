@@ -1,0 +1,207 @@
+@layer nacre.components {
+  /*
+   * The morning's note: a soft card with a band of first light along its
+   * top, which rises once as the card arrives. Lines follow one by one. Undo
+   * strikes a line through where it stands; Got it closes the gap it sat in.
+   */
+  .card {
+    display: grid;
+    grid-template-rows: 1fr;
+    min-inline-size: 0;
+    border-radius: var(--nc-chat-card-radius);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-chat-card-surface);
+    box-shadow: var(--nc-chat-card-shadow);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+    transition:
+      grid-template-rows var(--nc-duration-base) var(--nc-ease-in-out),
+      opacity var(--nc-duration-base) var(--nc-ease-out),
+      margin var(--nc-duration-base) var(--nc-ease-in-out);
+  }
+
+  .card[data-leaving] {
+    grid-template-rows: 0fr;
+    margin-block: calc(-0.5 * var(--nc-space-4));
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .inner {
+    position: relative;
+    min-block-size: 0;
+    overflow: hidden;
+    padding: var(--nc-space-4) var(--nc-space-4) var(--nc-space-3);
+    border-radius: inherit;
+  }
+
+  /* First light: the accent's warmest wash, rising from below the edge. */
+  .dawn {
+    position: absolute;
+    inset: 0 0 auto;
+    block-size: 4.5rem;
+    pointer-events: none;
+    background:
+      radial-gradient(
+        120% 100% at 50% 0%,
+        color-mix(in oklch, var(--nc-accent-5) 70%, transparent),
+        transparent 70%
+      ),
+      linear-gradient(180deg, var(--nc-accent-2), transparent);
+    opacity: 0.9;
+    transform-origin: 50% 0;
+    animation: dg-rise var(--nc-duration-slower) var(--nc-ease-out) 80ms both;
+  }
+
+  @keyframes dg-rise {
+    from {
+      opacity: 0;
+      transform: translateY(1.5rem) scaleY(0.6);
+    }
+    to {
+      opacity: 0.9;
+      transform: none;
+    }
+  }
+
+  .head {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+    margin-block-end: var(--nc-space-2);
+  }
+
+  .titles {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .title {
+    margin: 0;
+    color: var(--nc-text);
+    font-size: var(--nc-text-lg);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: -0.01em;
+  }
+
+  .line {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dismiss {
+    margin: calc(-1 * var(--nc-space-1)) calc(-1 * var(--nc-space-1-5)) 0 0;
+  }
+
+  .items {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .item {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+    padding-block: var(--nc-space-1-5);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+    animation-delay: calc(220ms + var(--i, 0) * 80ms);
+  }
+
+  .icon {
+    flex-shrink: 0;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    align-self: flex-start;
+    margin-block-start: 0.2rem;
+    color: var(--nc-accent-10);
+    transition: color var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .item[data-kind='merged'] .icon,
+  .item[data-kind='tidied'] .icon {
+    color: var(--nc-text-subtle);
+  }
+
+  .words {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .text {
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    text-decoration-line: line-through;
+    text-decoration-thickness: 1px;
+    text-decoration-color: transparent;
+    transition:
+      color var(--nc-duration-base) var(--nc-ease-out),
+      text-decoration-color var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .was {
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    overflow-wrap: anywhere;
+  }
+
+  .item[data-undone] .text {
+    color: var(--nc-text-subtle);
+    text-decoration-color: currentcolor;
+  }
+
+  .item[data-undone] .icon {
+    color: var(--nc-text-subtle);
+  }
+
+  .undoneTag {
+    flex-shrink: 0;
+    padding-inline: var(--nc-space-2);
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    line-height: 2rem;
+  }
+
+  .foot {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+    margin-block-start: var(--nc-space-1);
+  }
+
+  .more {
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card,
+    .item,
+    .dawn {
+      animation: none;
+    }
+    .text {
+      transition: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .card,
+  :global([data-nacre-motion='reduced']) .item,
+  :global([data-nacre-motion='reduced']) .dawn {
+    animation: none;
+  }
+}

@@ -241,6 +241,13 @@ export type TranscriptItem =
       title: string;
     }
   | {
+      /** A standing order the assistant suggested (ADR 0107): Keep it or Not now. */
+      kind: 'standing-order';
+      id: string;
+      orderId: string;
+      text: string;
+    }
+  | {
       /**
        * Tasks sent from this chat together (one batch, `Task.group`), or one on
        * its own: one card, kept current, in the order they started.
@@ -1360,6 +1367,19 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             routineId: event.routineId,
             action: event.action,
             title: event.title,
+          },
+        ],
+      };
+    case 'standing.order':
+      return {
+        ...base,
+        items: [
+          ...items,
+          {
+            kind: 'standing-order',
+            id: `order-${event.seq}`,
+            orderId: event.orderId,
+            text: event.text,
           },
         ],
       };

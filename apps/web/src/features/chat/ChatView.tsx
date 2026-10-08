@@ -36,6 +36,7 @@ import { chooseOnComputer } from '../folders/FolderChooser';
 import { useStable } from '../../lib/useStable';
 import { useUi } from '../../app/ui';
 import { greeting } from '../../lib/time';
+import { MorningNote } from '../memory/MorningNote';
 import { useLive } from '../../live/LiveProvider';
 import {
   emptyView,
@@ -1080,6 +1081,8 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
             </Button>
           ))}
         </div>
+        {/* What Conch learned and tidied overnight, mornings only (ADR 0107). */}
+        <MorningNote home />
         <div className={styles.hints}>
           <ConnectAppsHint />
           <ChannelsHint />

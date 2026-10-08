@@ -1330,6 +1330,15 @@ const CONCH: Record<string, (input: Input) => Draft> = {
     effects: [{ kind: 'delete', text: 'Deleted a routine' }],
   }),
   list_routines: () => ({ family: 'plan', words: say('look', 'at your routines') }),
+  // A standing order offered on a card (ADR 0107): kept only by the person's press.
+  suggest_standing_order: (input) => {
+    const text = str(input, 'text');
+    return {
+      family: 'plan',
+      words: say('suggest', 'a standing order'),
+      ...(text && { subject: clip(oneLine(text), 300) }),
+    };
+  },
   report_outcome: (input) => {
     const summary = str(input, 'summary');
     return {

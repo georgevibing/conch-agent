@@ -1393,6 +1393,38 @@ describe('Palette search', () => {
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/routines'));
   });
 
+  it('finds standing orders and the morning’s note by the words people use (ADR 0107)', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    renderApp(
+      <>
+        <Palette />
+        <Where />
+      </>,
+    );
+    act(() => useUi.getState().setPalette(true));
+    for (const words of ['standing orders', 'heartbeat', 'quiet hours', 'always tell me']) {
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(
+        await screen.findByRole('option', { name: /Standing orders and check-ins/ }),
+      ).toBeInTheDocument();
+    }
+    for (const words of ['while you slept', 'dreaming', 'overnight']) {
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(
+        await screen.findByRole('option', { name: /What Conch learned overnight/ }),
+      ).toBeInTheDocument();
+    }
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/memory'));
+  });
+
   it('finds notifications and adding a phone by the words people use', async () => {
     const user = userEvent.setup();
     mockFetch({

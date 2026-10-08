@@ -29,6 +29,7 @@ import { useLearning } from '../learning/api';
 import { EarlierDialog, NEVER_INTENT, NeverDialog } from '../learning/LearningSections';
 import { downloadMemories, memoryApi } from './api';
 import { HeldMemory } from './HeldMemory';
+import { MorningNote } from './MorningNote';
 import styles from './Memory.module.css';
 import { holdOf, MemoryRow } from './MemoryRow';
 import { browserLanguages, memoryKeys, useMemoryIndex, useMemorySearch, useTidy } from './queries';
@@ -242,6 +243,9 @@ export function MemoryView({ inSettings = false }: { inSettings?: boolean } = {}
           ))}
         </section>
       )}
+
+      {/* What Conch learned and tidied since you last looked, each with Undo (ADR 0107). */}
+      <MorningNote />
 
       {memories.isPending ? (
         <Skeleton shape="block" height="9rem" />

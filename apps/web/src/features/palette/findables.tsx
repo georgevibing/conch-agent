@@ -84,6 +84,7 @@ import {
   FingerprintPattern,
   GlobeLock,
   Compass,
+  Sunrise,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -1174,6 +1175,24 @@ export function useFindables(query: string, conversationId: string | undefined):
         'when something happens tell me let me know watch notify alert email arrives replies meeting calendar page changes website folder file task finishes webhook trigger heartbeat monitor',
       icon: <Zap />,
       run: () => void navigate('/routines', { state: { create: 'when' } }),
+    },
+    {
+      // Standing orders and the check-in (ADR 0107): on the Routines page.
+      id: 'standing-orders',
+      label: 'Standing orders and check-ins',
+      keywords:
+        'standing orders order always tell me let me know you may allowed wishes rules instructions check in check-ins checkin heartbeat watch for keep an eye out interrupt notify notifications quiet hours night',
+      icon: <Bell />,
+      run: () => void navigate('/routines?checkin=1'),
+    },
+    {
+      // The morning's note (ADR 0107): what learning and the nightly tidy-up did, with Undo.
+      id: 'morning-note',
+      label: 'What Conch learned overnight',
+      keywords:
+        'morning note digest overnight last night while you slept nightly tidy tidied learned dreaming dreams consolidation undo memory memories',
+      icon: <Sunrise />,
+      run: () => void navigate('/memory'),
     },
     {
       // What used to be the Channels page: a filter of Apps now (ADR 0052).

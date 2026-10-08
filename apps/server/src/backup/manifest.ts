@@ -285,6 +285,23 @@ export const RULES: readonly BackupRule[] = [
     merge: 'routine-spend',
     why: 'What your routines spent each month, and the monthly limit you chose (ADR 0057). Merged on restore: money already spent stays counted.',
   },
+  {
+    match: 'standing-orders.json',
+    class: 'kept',
+    group: 'routines',
+    why: 'Your standing orders, in your words: what to tell you about and what you welcome (ADR 0107). They never grant a permission.',
+  },
+  {
+    match: 'checkin.json',
+    class: 'kept',
+    group: 'routines',
+    why: 'The check-in’s quiet hours, whether it’s on, and what it told you lately (ADR 0107).',
+  },
+  {
+    match: 'checkin/**',
+    class: 'derived',
+    why: 'Where the check-in last looked and what waits for its next look (ADR 0107). A restored backup starts looking from now.',
+  },
   { match: 'memory/*.md', class: 'kept', group: 'memory', why: 'Your memories, one file each.' },
   {
     match: 'memory/superseded/*.md',

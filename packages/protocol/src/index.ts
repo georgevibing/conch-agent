@@ -110,6 +110,7 @@ export * from './doctor';
 export * from './phone';
 export * from './providers';
 export * from './routines';
+export * from './checkins';
 export * from './triggers';
 export * from './safety';
 export * from './search';
@@ -251,8 +252,12 @@ export const Preferences = z.object({
   menuBar: z.boolean().default(true),
   /** A Mac on mains power stays awake while Conch runs in the background (ADR 0029). */
   keepAwake: z.boolean().default(false),
-  /** Tidy memory every night, while nothing's running (ADR 0032). Every change can be undone. */
-  tidyMemory: z.boolean().default(false),
+  /**
+   * Tidy memory every night, while nothing's running (ADR 0032), within what
+   * learning may spend. On unless you turned it off (ADR 0107): every change
+   * shows in the morning's note on the Memory page, with Undo.
+   */
+  tidyMemory: z.boolean().default(true),
   /**
    * The voice a voice note from a chat app is answered with (ADR 0077): one of
    * Conch's, chosen in Settings → Voice. Unset: the first natural voice here.
@@ -982,6 +987,14 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     action: z.enum(['proposed', 'updated', 'paused', 'deleted']),
     /** Snapshot for display if the routine is later deleted. */
     title: z.string(),
+  }),
+  /** The assistant suggested a standing order (ADR 0107): a card with Keep it, nothing more. */
+  z.object({
+    ...logged,
+    type: z.literal('standing.order'),
+    orderId: z.string(),
+    /** The words the card shows, as suggested. */
+    text: z.string().max(240),
   }),
   /**
    * An integration Claude would have used isn't working (expired sign-in,
