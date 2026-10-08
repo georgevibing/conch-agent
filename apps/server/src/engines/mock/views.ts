@@ -530,7 +530,8 @@ export function pretendFind(prompt: string, now = Date.now()): PretendFind | und
   if (file) return files(now, file.replace(/^.*\s/, ''));
   const said = /\bwhat did #([\w-]+) say\b/i.exec(text)?.[1];
   if (said) return messages(now, said);
-  if (/\b(?:weather|will it rain)\b/i.test(text))
+  // Only the plain question: a routine's "weather briefing" or other journeys' prompts stay theirs.
+  if (/^(?:what(?:'|’)?s the weather in\b|will it rain in\b)/i.test(text))
     return weather(now, /\bin ([A-Z][\w-]+(?: [A-Z][\w-]+)?)/.exec(text)?.[1] ?? 'Lisbon');
   const dish = /\b(?:a )?recipe for (.+?)[.?!]*$/i.exec(text)?.[1];
   if (dish) return recipe(dish);

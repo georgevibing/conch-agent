@@ -29,5 +29,8 @@ describe('the mock’s pretend app finds', () => {
   it('leaves every other prompt alone', () => {
     expect(pretendFind('search my gmail for lunch')).toBeUndefined();
     expect(pretendFind('catch me up on #launch')).toBeUndefined();
+    // Other journeys' prompts that only mention the weather.
+    expect(pretendFind('Every morning, give me a weather briefing')).toBeUndefined();
+    expect(pretendFind('What is the weather like in Lisbon tomorrow')).toBeUndefined();
   });
 });
