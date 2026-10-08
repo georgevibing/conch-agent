@@ -76,6 +76,9 @@ export function taintFrom(toolName: string, input: unknown, app?: string): Taint
     return { kind: 'app', label: 'task results' };
   if (/^(?:mcp__conch__)?read_document$/.test(toolName))
     return { kind: 'download', label: 'document content' };
+  // Places found in OpenStreetMap: names, hours and links anyone can write.
+  if (/^(?:mcp__conch__)?places$/.test(toolName))
+    return { kind: 'web', label: 'OpenStreetMap places' };
   if (WEB_READERS.has(toolName))
     return {
       kind: 'web',
@@ -186,6 +189,13 @@ export function sinkReason(
   if (/(?:WebSearch|web_search)$/.test(toolName)) return 'send a search query to the web';
   if (/(?:WebFetch|web_fetch)$/.test(toolName) && typeof args.url === 'string' && carries(args.url))
     return 'open a web address that could carry what it read';
+  // A place search is short words to OpenStreetMap; long ones could carry what was read, as a URL can.
+  if (
+    /^(?:mcp__conch__)?places$/.test(toolName) &&
+    [args.what, args.near, args.from].map((v) => (typeof v === 'string' ? v : '')).join(' ')
+      .length > 120
+  )
+    return 'send a long place search to OpenStreetMap';
   // An app's picture fetched from an address (ADR 0090): the same way out as web_fetch.
   if (
     /^(?:mcp__conch__)?app_icon$/.test(toolName) &&
