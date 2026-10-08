@@ -26,6 +26,7 @@ import {
   type UpdateServerBody,
 } from '@conch/protocol';
 
+import type { CloudService } from '../clouds/service';
 import type { FetchLike } from '../engines/api/types';
 import type { Engine } from '../engines/types';
 import { SecretError } from '../secrets/vault';
@@ -81,6 +82,8 @@ export interface ProviderServiceDeps {
    * press: keys in this environment, servers on the usual ports. Off in tests.
    */
   lookAround?: { env: NodeJS.ProcessEnv };
+  /** Cloud sign-ins on this computer, offered in one press too (ADR 0109). Off in tests. */
+  clouds?: Pick<CloudService, 'found' | 'useFound'>;
   /** `CONCH_ENGINE`, when the operator set it. */
   pinned?: EngineId;
   emit: (event: ServerEvent) => void;
@@ -334,11 +337,24 @@ export class ProviderService {
     const connected = new Set(providers.filter((p) => p.ready || p.key).map((p) => p.id));
     const keys = environmentKeys(connected, around.env).map(({ key: _key, ...found }) => found);
     const servers = await this.#found.servers(this.#servers, force).catch(() => []);
-    return [...keys, ...servers];
+    const clouds = await (this.deps.clouds?.found(connected) ?? Promise.resolve([])).catch(
+      () => [],
+    );
+    return [...keys, ...clouds, ...servers];
   }
 
   /** Use something found on this computer: save a found key, or add a found server. */
   async useFound(id: string): Promise<ProvidersList> {
+    // A cloud sign-in found here: that account, for its provider.
+    if (id.startsWith('cloud-') && this.deps.clouds) {
+      const provider = await this.deps.clouds.useFound(id).catch((error: unknown) => {
+        throw new ProviderError((error as Error).message, 'not-found');
+      });
+      if (provider) {
+        await this.#detect(this.#engineOrThrow(provider), true);
+        return this.list();
+      }
+    }
     const env = this.deps.lookAround?.env ?? {};
     const key = environmentKeys(new Set(), env).find((found) => found.id === id)?.key;
     if (key) {
@@ -528,6 +544,7 @@ export class ProviderService {
       group: copy?.group ?? 'key',
       featured: copy?.featured ?? false,
       ...(copy?.free && { free: copy.free }),
+      ...(copy?.cloud && { cloud: copy.cloud }),
       connectedBefore: before || status.state === 'ready',
     };
   }

@@ -140,6 +140,7 @@ import { Doctor } from './doctor/service';
 import { NetworkWatch } from './network/watch';
 import { Healed } from './lib/healed';
 import type { Heal } from './lib/recover';
+import { CloudService } from './clouds/service';
 import { LocalService } from './local/service';
 import { ComputerSampler } from './computer/sampler';
 import { KNOWN_NEEDS } from './setup/known';
@@ -262,6 +263,8 @@ export class Services {
   readonly network: NetworkWatch;
   /** A model on this computer: Ollama, found, started and fed models (ADR 0022). */
   readonly local: LocalService;
+  /** Your company's cloud accounts, found on this computer (ADR 0109). */
+  readonly clouds: CloudService;
   /** This computer, looked at only while someone has Settings → This computer open. */
   readonly computer: ComputerSampler;
   readonly settings: SettingsStore;
@@ -541,8 +544,18 @@ export class Services {
       onChange: () => local.forget(),
     });
     this.doctor.register(this.local.doctorCheck());
+    // Your company's cloud (ADR 0109): an account chosen means its provider looks again.
+    this.clouds = new CloudService({
+      settings: this.settings,
+      env: process.env,
+      onChange: (id) => {
+        void this.engines.get(id)?.setApiKey?.(undefined);
+        void this.providers.get(id, { force: true }).catch(() => undefined);
+      },
+    });
     // Every provider Conch knows by name (ADR 0053); servers you add join as you add them.
     const registry = {
+      clouds: this.clouds,
       settings: this.settings,
       keys: this.keys,
       home: config.CONCH_HOME,
@@ -572,6 +585,7 @@ export class Services {
       keys: this.keys,
       makeServer: (server) => serverEngine(server, registry),
       lookAround: { env: process.env },
+      clouds: this.clouds,
       pinned: config.CONCH_ENGINE,
       emit: (event) => this.broadcast.emit(event),
       // A different provider means different limits and a different model list.

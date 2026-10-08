@@ -34,6 +34,10 @@ export const BuiltInEngineId = z.enum([
   'minimax',
   'qwen',
   'ollama-cloud',
+  // Your company's cloud (ADR 0109).
+  'bedrock',
+  'vertex',
+  'azure-openai',
   'ollama',
   'lm-studio',
   'mock',

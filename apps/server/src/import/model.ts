@@ -102,6 +102,14 @@ const VENDOR_ENGINES: Record<string, EngineId[]> = {
   'z-ai': ['zai', 'openrouter'],
   minimax: ['minimax', 'openrouter'],
   qwen: ['qwen', 'openrouter'],
+  // Your company's cloud (ADR 0109): connected by choosing the account, never by a copied key.
+  'amazon-bedrock': ['bedrock'],
+  bedrock: ['bedrock'],
+  'anthropic-vertex': ['vertex'],
+  'google-vertex': ['vertex'],
+  vertex: ['vertex'],
+  'azure-openai': ['azure-openai'],
+  'microsoft-foundry': ['azure-openai'],
 };
 
 /** Keys the app may have that would connect a provider. */

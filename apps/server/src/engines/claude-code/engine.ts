@@ -15,6 +15,7 @@ import type {
   ToolView,
 } from '@conch/protocol';
 
+import type { CloudService } from '../../clouds/service';
 import type { ProviderKeys } from '../../providers/keys';
 import type { SettingsStore } from '../../settings/store';
 import { Emitter } from '../../lib/emitter';
@@ -156,6 +157,8 @@ export class ClaudeCodeEngine implements Engine {
   #mcpProbe?: Promise<EngineMcpStatus[]>;
 
   #healed = new Set<string>();
+  /** Where it runs, as its environment says: empty on Anthropic's own sign-in (ADR 0109). */
+  #cloud: Record<string, string> = {};
 
   constructor(
     private readonly settings: SettingsStore,
@@ -163,7 +166,26 @@ export class ClaudeCodeEngine implements Engine {
     private readonly explicitPath?: string,
     /** Leaves a “fixed on its own” note. */
     private readonly onHeal?: (message: string) => void,
+    /** Bedrock or Vertex, when you chose to run it there (ADR 0109). */
+    private readonly clouds?: CloudService,
   ) {}
+
+  /** It runs on Bedrock or Vertex rather than Anthropic's own sign-in. */
+  get #onCloud(): boolean {
+    return Boolean(this.#cloud.CLAUDE_CODE_USE_BEDROCK || this.#cloud.CLAUDE_CODE_USE_VERTEX);
+  }
+
+  /**
+   * Its environment: the cloud it runs on, and Conch's Anthropic key only when
+   * it doesn't (on a cloud, a key would win over the cloud's sign-in).
+   */
+  #env(apiKey: string | undefined, extra: Record<string, string | undefined> = {}) {
+    return childEnv({
+      ...this.#cloud,
+      ...extra,
+      ANTHROPIC_API_KEY: this.#onCloud ? undefined : apiKey,
+    });
+  }
 
   /**
    * Claude Code's own key, when you gave Conch one. `peek` is used wherever the
@@ -177,9 +199,11 @@ export class ClaudeCodeEngine implements Engine {
   async detect({ force = false } = {}): Promise<EngineStatus> {
     if (!force && this.#cache && Date.now() - this.#cache.at < CACHE_MS) return this.#cache.status;
     this.#inflight ??= (async () => {
-      const status = await detectClaude({
+      this.#cloud = (await this.clouds?.claudeEnv().catch(() => undefined)) ?? {};
+      const detected = await detectClaude({
         explicitPath: this.explicitPath,
-        apiKey: await this.#apiKey({ peek: true }),
+        apiKey: this.#onCloud ? undefined : await this.#apiKey({ peek: true }),
+        env: this.#cloud,
         // Detection runs every few seconds; the note is worth saying once.
         onHeal: (message) => {
           if (this.#healed.has(message)) return;
@@ -187,6 +211,7 @@ export class ClaudeCodeEngine implements Engine {
           this.onHeal?.(message);
         },
       });
+      const status = await this.#onItsCloud(detected);
       this.#cache = { status, at: Date.now() };
       return status;
     })().finally(() => {
@@ -195,7 +220,66 @@ export class ClaudeCodeEngine implements Engine {
     return this.#inflight;
   }
 
+  /**
+   * On a cloud, Claude Code signs in with the cloud's own sign-in: Conch checks
+   * it before a turn finds out, says which account and region it uses, and
+   * turns a sign-in that ended into one press (ADR 0109).
+   */
+  async #onItsCloud(status: EngineStatus): Promise<EngineStatus> {
+    if (!this.#onCloud || !this.clouds || !status.executablePath) return status;
+    if (status.state !== 'ready' && status.state !== 'signed-out') return status;
+    const bedrock = Boolean(this.#cloud.CLAUDE_CODE_USE_BEDROCK);
+    const where = bedrock ? 'Amazon Bedrock' : 'Google Vertex AI';
+    const problem = await this.clouds.claudeProblem();
+    if (problem) {
+      const { error } = problem;
+      if (error.problem === 'missing-tool' && error.need)
+        return {
+          ...status,
+          state: 'not-installed',
+          message: error.message,
+          fix: { need: error.need, kind: 'install' },
+        };
+      return { ...status, state: 'signed-out', message: error.message, canSignIn: true };
+    }
+    const choice = await this.clouds.choice('claude-code');
+    const region = bedrock ? this.#cloud.AWS_REGION : this.#cloud.CLOUD_ML_REGION;
+    return {
+      ...status,
+      state: 'ready',
+      auth: {
+        method: bedrock ? 'bedrock' : 'vertex',
+        description: [where, choice?.label ?? choice?.account, region].filter(Boolean).join(' · '),
+      },
+    };
+  }
+
   login(method: LoginMethod, onUpdate: (state: LoginState) => void): LoginHandle {
+    // On a cloud, signing in is the cloud's own (`aws sso login`, `gcloud`).
+    if (this.#onCloud && this.clouds) {
+      let handle: LoginHandle | undefined;
+      let cancelled = false;
+      void this.clouds
+        .signIn('claude-code', onUpdate)
+        .then((started) => {
+          handle = started;
+          if (cancelled) started.cancel();
+        })
+        .catch((error: unknown) =>
+          onUpdate({
+            loginId: 'cloud',
+            phase: 'failed',
+            message: error instanceof Error ? error.message : 'Signing in didn’t start.',
+          }),
+        );
+      return {
+        submitCode: (code) => handle?.submitCode(code),
+        cancel: () => {
+          cancelled = true;
+          handle?.cancel();
+        },
+      };
+    }
     const executablePath = this.#cache?.status.executablePath;
     if (!executablePath) {
       const loginId = 'login_unavailable';
@@ -298,7 +382,7 @@ export class ClaudeCodeEngine implements Engine {
       prompt: idle(),
       options: {
         pathToClaudeCodeExecutable: programFile(status.executablePath),
-        env: childEnv({ ANTHROPIC_API_KEY: anthropicApiKey }),
+        env: this.#env(anthropicApiKey),
         cwd: await this.settings.workspace(),
       },
     });
@@ -478,7 +562,7 @@ export class ClaudeCodeEngine implements Engine {
         options: {
           cwd: await this.settings.workspace(),
           pathToClaudeCodeExecutable: programFile(status.executablePath),
-          env: childEnv({ ANTHROPIC_API_KEY: anthropicApiKey }),
+          env: this.#env(anthropicApiKey),
           abortController: abort,
           systemPrompt: input.system,
           ...(input.model && input.model !== 'default' && { model: input.model }),
@@ -597,8 +681,7 @@ export class ClaudeCodeEngine implements Engine {
           ...(input.readableDirs?.length && { additionalDirectories: input.readableDirs }),
           resume: input.resumeId,
           pathToClaudeCodeExecutable: programFile(status.executablePath),
-          env: childEnv({
-            ANTHROPIC_API_KEY: anthropicApiKey,
+          env: this.#env(anthropicApiKey, {
             // After each round of tool calls its small model says, in a few words, what
             // they did: for the person watching (ADR 0103), drawn as narration. That's a
             // small-model call per round of tool calls, on the person's own plan or key,

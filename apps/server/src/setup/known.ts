@@ -2,6 +2,7 @@ import { readdirSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 
+import { findCloudProgram } from '../clouds/exec';
 import { sandboxSupport } from '../conversations/sandbox';
 import { bundledClaude } from '../engines/claude-code/bundled';
 import { findClaude } from '../engines/claude-code/detect';
@@ -837,6 +838,57 @@ list.push(
       win32: 'https://www.docker.com/products/docker-desktop/',
       darwin: 'https://www.docker.com/products/docker-desktop/',
       linux: 'https://docs.docker.com/engine/install/',
+    },
+  },
+  // Your company's cloud (ADR 0109): each cloud's own program signs in and hands
+  // Conch keys or a token, so Conch never keeps a cloud credential of its own.
+  {
+    id: 'aws-cli',
+    name: 'AWS CLI',
+    short: 'AWS CLI',
+    find: () => findCloudProgram('aws'),
+    install: {
+      win32: winget('Amazon.AWSCLI'),
+      darwin: { manager: 'brew', args: ['install', 'awscli'] },
+    },
+    ...updatable({ winget: 'Amazon.AWSCLI', brew: 'awscli' }),
+    // Its Linux installer needs sudo.
+    download: {
+      win32: 'https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html',
+      darwin: 'https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html',
+      linux: 'https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html',
+    },
+  },
+  {
+    id: 'gcloud',
+    name: 'Google Cloud CLI',
+    short: 'Google Cloud CLI',
+    find: () => findCloudProgram('gcloud'),
+    install: {
+      win32: winget('Google.CloudSDK'),
+      darwin: { manager: 'brew', args: ['install', '--cask', 'gcloud-cli'] },
+    },
+    ...updatable({ winget: 'Google.CloudSDK', brew: 'gcloud-cli', cask: true }),
+    download: {
+      win32: 'https://cloud.google.com/sdk/docs/install',
+      darwin: 'https://cloud.google.com/sdk/docs/install',
+      linux: 'https://cloud.google.com/sdk/docs/install',
+    },
+  },
+  {
+    id: 'azure-cli',
+    name: 'Azure CLI',
+    short: 'Azure CLI',
+    find: () => findCloudProgram('az'),
+    install: {
+      win32: winget('Microsoft.AzureCLI'),
+      darwin: { manager: 'brew', args: ['install', 'azure-cli'] },
+    },
+    ...updatable({ winget: 'Microsoft.AzureCLI', brew: 'azure-cli' }),
+    download: {
+      win32: 'https://learn.microsoft.com/cli/azure/install-azure-cli',
+      darwin: 'https://learn.microsoft.com/cli/azure/install-azure-cli',
+      linux: 'https://learn.microsoft.com/cli/azure/install-azure-cli',
     },
   },
 );

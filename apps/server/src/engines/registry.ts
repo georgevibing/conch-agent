@@ -6,11 +6,13 @@
  */
 import type { BuiltInEngineId, ServerConfig } from '@conch/protocol';
 
+import { CloudService } from '../clouds/service';
 import type { ProviderKeys } from '../providers/keys';
 import type { SettingsStore } from '../settings/store';
 import { ACP_AGENTS } from './acp/agents';
 import { AcpEngine } from './acp/engine';
 import { anthropicApiVariant, ApiEngine, ollamaVariant, openrouterVariant } from './api';
+import { azureVariant, bedrockVariant, vertexVariant } from './api/clouds';
 import { lmStudioVariant } from './api/lmstudio';
 import type { OllamaLink } from './api/ollama';
 import { ollamaCloudVariant } from './api/ollamaCloud';
@@ -33,6 +35,8 @@ export interface RegistryDeps {
   heal?: (message: string) => void;
   paths?: { claude?: string; codex?: string };
   fetch?: FetchLike;
+  /** Your company's cloud accounts (ADR 0109); one that reads nothing until asked, when unset. */
+  clouds?: CloudService;
 }
 
 /**
@@ -77,10 +81,12 @@ export function presetVariant(
 export function builtInEngines(deps: RegistryDeps): Map<BuiltInEngineId, Engine> {
   const { settings, keys, home } = deps;
   const api = (variant: ApiVariant) => new ApiEngine(variant, settings, keys);
+  const clouds = deps.clouds ?? new CloudService({ settings });
+  const cloud = { clouds, home, ...(deps.fetch && { fetch: deps.fetch }) };
   const engines = new Map<BuiltInEngineId, Engine>([
     [
       'claude-code',
-      new ClaudeCodeEngine(settings, keys, deps.paths?.claude, (m) => deps.heal?.(m)),
+      new ClaudeCodeEngine(settings, keys, deps.paths?.claude, (m) => deps.heal?.(m), clouds),
     ],
     ['codex-cli', new CodexEngine(settings, keys, deps.paths?.codex)],
     // Codex CLI: Codex with its own tools, asking through Conch (ADR 0066).
@@ -107,6 +113,10 @@ export function builtInEngines(deps: RegistryDeps): Map<BuiltInEngineId, Engine>
     );
   }
   engines.set('ollama-cloud', api(ollamaCloudVariant(deps.local, { home })));
+  // Your company's cloud (ADR 0109).
+  engines.set('bedrock', api(bedrockVariant(cloud)));
+  engines.set('vertex', api(vertexVariant(cloud)));
+  engines.set('azure-openai', api(azureVariant(cloud)));
   return engines;
 }
 

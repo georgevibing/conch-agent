@@ -153,6 +153,55 @@ const MessageBody = z.object({
   error: ErrorBody.shape.error.nullish(),
 });
 
+// ── Where the Messages API answers ──────────────────────────────────────────
+
+/** How a refusal reads, for the place the Messages API answers. */
+export interface Voice {
+  label: string;
+  /** A refused sign-in or key: what to do next. */
+  refused: string;
+  /** A sign-in that isn't allowed to use the model. */
+  forbidden?: string;
+  /** A model this account can't reach. */
+  missing?: string;
+}
+
+const ANTHROPIC_VOICE: Voice = {
+  label: LABEL,
+  refused: `${LABEL} refused your key. Add a new one in Settings.`,
+};
+
+/** One request, ready to send: where, with which headers (signed if need be), and the body. */
+export interface RoutedRequest {
+  url: string;
+  headers: Record<string, string>;
+  body: Record<string, unknown>;
+}
+
+/**
+ * Somewhere else that serves the same Messages API (ADR 0109): Claude in Amazon
+ * Bedrock, Claude on Vertex AI. It says where each request goes and signs it;
+ * the wire does the rest exactly as for Anthropic's own API — streaming,
+ * thinking, caching, tools, healing.
+ */
+export interface AnthropicRoute {
+  readonly voice: Voice;
+  /** Where `messages` (or `count`, the free token count) goes for this model, and how. */
+  prepare(input: {
+    kind: 'messages' | 'count';
+    stream: boolean;
+    model: string;
+    body: Record<string, unknown>;
+    key: string;
+    beta?: string;
+    signal?: AbortSignal;
+  }): Promise<RoutedRequest>;
+  /** The models this account can use, shaped like the Models API's entries. */
+  list(input: { key: string; signal?: AbortSignal }): Promise<unknown[]>;
+  /** Prove the sign-in works, and say whose it is. */
+  check(input: { key: string; signal?: AbortSignal }): Promise<WireAccount>;
+}
+
 // ── Errors ──────────────────────────────────────────────────────────────────
 
 /** Branch on `error.type`, never on the message text — messages get reworded. */
@@ -161,17 +210,21 @@ export function mapError(
   error: AnthropicError | undefined,
   retryAfter: number | undefined,
   key?: string,
+  voice: Voice = ANTHROPIC_VOICE,
 ): ApiError {
   const type = error?.type ?? '';
   const detail = error?.message ? scrub(error.message, key) : '';
   if (type === 'authentication_error' || status === 401) {
-    return new ApiError('auth', `${LABEL} refused your key. Add a new one in Settings.`);
+    return new ApiError('auth', voice.refused);
   }
   if (type === 'permission_error' || status === 403) {
-    return new ApiError('auth', 'This key isn’t allowed to use that model.');
+    return new ApiError('auth', voice.forbidden ?? 'This key isn’t allowed to use that model.');
   }
   if (type === 'not_found_error' || status === 404) {
-    return new ApiError('not-found', 'Anthropic doesn’t offer that model to this key.');
+    return new ApiError(
+      'not-found',
+      voice.missing ?? 'Anthropic doesn’t offer that model to this key.',
+    );
   }
   if (type === 'request_too_large' || status === 413) {
     return new ApiError('context', 'That request is larger than Anthropic accepts.');
@@ -205,7 +258,7 @@ export function mapError(
     const window = windowIn(detail);
     return new ApiError('context', TOO_LONG, { ...(window && { window }) });
   }
-  return new ApiError('other', detail || `${LABEL} couldn’t answer that request.`);
+  return new ApiError('other', detail || `${voice.label} couldn’t answer that request.`);
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -308,7 +361,7 @@ function imageBlock(image: Picture): Record<string, unknown> {
 }
 
 export class AnthropicWire implements Wire {
-  readonly source = LABEL;
+  readonly source: string;
   /** Its thinking updates come as `narration` (ADR 0103). */
   readonly narrates = true;
   /** Models that refused thinking updates: asked without them from then on. */
@@ -316,8 +369,54 @@ export class AnthropicWire implements Wire {
   #fetch: FetchLike;
   #models = new Map<string, WireModel>();
 
-  constructor(fetchImpl: FetchLike) {
+  #route?: AnthropicRoute;
+  #label: string;
+
+  /** Anthropic's own API, or a `route` to another place that serves it (ADR 0109). */
+  constructor(fetchImpl: FetchLike, route?: AnthropicRoute) {
     this.#fetch = fetchImpl;
+    this.#route = route;
+    this.#label = route?.voice.label ?? LABEL;
+    this.source = this.#label;
+  }
+
+  get #voice(): Voice {
+    return this.#route?.voice ?? ANTHROPIC_VOICE;
+  }
+
+  /** One request to the Messages API, wherever it answers. */
+  async #request(
+    kind: 'messages' | 'count',
+    model: string,
+    body: Record<string, unknown>,
+    key: string,
+    options: { stream?: boolean; beta?: string; signal?: AbortSignal } = {},
+  ): Promise<Response> {
+    const routed = this.#route
+      ? await this.#route.prepare({
+          kind,
+          stream: Boolean(options.stream),
+          model,
+          body,
+          key,
+          ...(options.beta && { beta: options.beta }),
+          ...(options.signal && { signal: options.signal }),
+        })
+      : {
+          url: `${BASE}/v1/messages${kind === 'count' ? '/count_tokens' : ''}`,
+          headers: this.#headers(key, options.beta),
+          body,
+        };
+    return send({
+      fetchImpl: this.#fetch,
+      url: routed.url,
+      method: 'POST',
+      headers: routed.headers,
+      body: routed.body,
+      label: this.#label,
+      key,
+      ...(options.signal && { signal: options.signal }),
+    });
   }
 
   /**
@@ -334,7 +433,7 @@ export class AnthropicWire implements Wire {
   }
 
   async #fail(response: Response, key?: string, tools = false): Promise<ApiError> {
-    const body = await text(response, LABEL).catch(() => '');
+    const body = await text(response, this.#label).catch(() => '');
     const parsed = ErrorBody.safeParse(safeJson(body));
     // A tool's schema it won't read: the engine simplifies it and asks again (ADR 0072).
     if (
@@ -343,17 +442,19 @@ export class AnthropicWire implements Wire {
       parsed.success &&
       toolRefusal(parsed.data.error.message ?? '') === 'schema'
     )
-      return refusalError('schema', LABEL);
+      return refusalError('schema', this.#label);
     return mapError(
       response.status,
       parsed.success ? parsed.data.error : undefined,
       retryAfterMs(response.headers),
       key,
+      this.#voice,
     );
   }
 
   /** Listing models spends no tokens, so it's the cheapest honest key check. */
   async check({ key, signal }: { key: string; signal?: AbortSignal }): Promise<WireAccount> {
+    if (this.#route) return this.#route.check({ key, ...(signal && { signal }) });
     await this.#page(key, undefined, 1, signal);
     return { description: 'Anthropic API key' };
   }
@@ -378,10 +479,15 @@ export class AnthropicWire implements Wire {
   async models({ key, signal }: { key?: string; signal?: AbortSignal }): Promise<WireModel[]> {
     // Anthropic has no public catalogue: without a key there is nothing to list,
     // and inventing model names is worse than an empty picker.
-    if (!key) return [];
+    if (!key && !this.#route) return [];
     const entries: z.infer<typeof ModelEntry>[] = [];
+    if (this.#route)
+      for (const raw of await this.#route.list({ key: key ?? '', ...(signal && { signal }) })) {
+        const entry = ModelEntry.safeParse(raw);
+        if (entry.success) entries.push(entry.data);
+      }
     let after: string | undefined;
-    for (let page = 0; page < MAX_PAGES; page++) {
+    for (let page = 0; page < MAX_PAGES && !this.#route && key; page++) {
       const result = await this.#page(key, after, 1000, signal);
       entries.push(...result.data);
       if (!result.has_more || !result.last_id) break;
@@ -491,19 +597,20 @@ export class AnthropicWire implements Wire {
     let updates = this.#thinks(request) && !this.#noUpdates.has(request.model);
     let messages = request.messages;
     const post = () =>
-      send({
-        fetchImpl: this.#fetch,
-        url: `${BASE}/v1/messages`,
-        method: 'POST',
-        headers: this.#headers(request.key, updates ? UPDATES_BETA : undefined),
-        body: { ...this.#body({ ...request, messages }, updates), stream: true },
-        label: LABEL,
-        key: request.key,
-        signal: request.signal,
-      });
+      this.#request(
+        'messages',
+        request.model,
+        { ...this.#body({ ...request, messages }, updates), stream: true },
+        request.key,
+        {
+          stream: true,
+          ...(updates && { beta: UPDATES_BETA }),
+          signal: request.signal,
+        },
+      );
     let response = await post();
     for (let healed = 0; response.status === 400 && healed < 2; healed++) {
-      const body = await text(response, LABEL).catch(() => '');
+      const body = await text(response, this.#label).catch(() => '');
       const error = ErrorBody.safeParse(safeJson(body));
       const detail = error.success ? (error.data.error.message ?? '') : '';
       // Thinking updates refused (a model or an account without the beta): asked
@@ -518,13 +625,19 @@ export class AnthropicWire implements Wire {
         messages = withoutThinking(request.messages);
       // A tool's schema it won't read: the engine simplifies it and asks again (ADR 0072).
       else if (request.tools.length > 0 && toolRefusal(detail) === 'schema')
-        throw refusalError('schema', LABEL);
+        throw refusalError('schema', this.#label);
       else
-        throw mapError(400, error.success ? error.data.error : undefined, undefined, request.key);
+        throw mapError(
+          400,
+          error.success ? error.data.error : undefined,
+          undefined,
+          request.key,
+          this.#voice,
+        );
       response = await post();
     }
     if (!response.ok) throw await this.#fail(response, request.key, request.tools.length > 0);
-    if (!response.body) throw new ApiError('network', `${LABEL} sent an empty reply.`);
+    if (!response.body) throw new ApiError('network', `${this.#label} sent an empty reply.`);
 
     /** Blocks in the order the model sent them, kept whole for replay. */
     const blocks = new Map<number, { block: Record<string, unknown>; json: string }>();
@@ -539,7 +652,7 @@ export class AnthropicWire implements Wire {
       if (!kind || kind === 'ping') continue;
       if (kind === 'error') {
         const parsed = frame(ErrorBody, event.data);
-        throw mapError(0, parsed?.error, undefined, request.key);
+        throw mapError(0, parsed?.error, undefined, request.key, this.#voice);
       }
       if (kind === 'message_start') {
         const usage = frame(MessageStart, event.data)?.message?.usage;
@@ -632,25 +745,22 @@ export class AnthropicWire implements Wire {
   }
 
   async complete(request: WireCompletion): Promise<Completion> {
-    const response = await send({
-      fetchImpl: this.#fetch,
-      url: `${BASE}/v1/messages`,
-      method: 'POST',
-      headers: this.#headers(request.key),
-      body: {
+    const response = await this.#request(
+      'messages',
+      request.model,
+      {
         model: request.model,
         max_tokens: request.maxTokens,
         system: request.system,
         messages: [this.userMessage(request.prompt, request.images)],
       },
-      label: LABEL,
-      key: request.key,
-      signal: request.signal,
-    });
+      request.key,
+      { signal: request.signal },
+    );
     if (!response.ok) throw await this.#fail(response, request.key);
-    const body = validate(MessageBody, await text(response, LABEL), LABEL);
+    const body = validate(MessageBody, await text(response, this.#label), this.#label);
     if (body.error || body.type === 'error') {
-      throw mapError(0, body.error ?? undefined, undefined, request.key);
+      throw mapError(0, body.error ?? undefined, undefined, request.key, this.#voice);
     }
     return {
       text: (body.content ?? [])

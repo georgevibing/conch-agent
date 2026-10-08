@@ -13,6 +13,7 @@
  */
 import { z } from 'zod';
 
+import { CloudKind } from './clouds';
 import { EngineId, ServerId } from './common';
 import { EngineStatus, InstallHint } from './engine';
 
@@ -162,8 +163,9 @@ export type ServerPreset = z.infer<typeof ServerPreset>;
 export const Found = z.object({
   /** Stable, for the button that uses it. */
   id: z.string(),
-  kind: z.enum(['key', 'server']),
-  /** The provider it connects (a key), or `undefined` for a server to add. */
+  /** A key in the environment, a server running, or a cloud sign-in (ADR 0109). */
+  kind: z.enum(['key', 'server', 'cloud']),
+  /** The provider it connects (a key, a cloud), or `undefined` for a server to add. */
   provider: EngineId.optional(),
   /** "OpenAI", "llama.cpp" */
   name: z.string(),
@@ -230,6 +232,8 @@ export const Provider = z.object({
   brand: z.string().optional(),
   /** For a server you added: where it is and what it is. */
   server: ServerConfig.optional(),
+  /** It runs on your company's cloud: its page picks an account found here (ADR 0109). */
+  cloud: CloudKind.optional(),
   /** It has worked on this computer and you haven't removed it: it belongs with your providers, even while it needs you. */
   connectedBefore: z.boolean().default(false),
 });

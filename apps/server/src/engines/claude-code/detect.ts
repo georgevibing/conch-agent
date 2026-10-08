@@ -86,8 +86,12 @@ export function describeAuth(
 type Probe = { ok: true; version?: string; auth?: ClaudeAuthStatus } | { ok: false; error: string };
 
 /** Ask one copy of Claude Code its version and who it's signed in as. Spends nothing. */
-async function probeClaude(executablePath: string, apiKey?: string): Promise<Probe> {
-  const env = childEnv({ ANTHROPIC_API_KEY: apiKey });
+async function probeClaude(
+  executablePath: string,
+  apiKey?: string,
+  extra: Record<string, string> = {},
+): Promise<Probe> {
+  const env = childEnv({ ...extra, ANTHROPIC_API_KEY: apiKey });
   let version: string | undefined;
   try {
     const { command, prefix } = launch(executablePath);
@@ -114,6 +118,8 @@ async function probeClaude(executablePath: string, apiKey?: string): Promise<Pro
 export async function detectClaude(options: {
   explicitPath?: string;
   apiKey?: string;
+  /** More of its environment: where it runs, when that's a cloud (ADR 0109). */
+  env?: Record<string, string>;
   /** Leave a “fixed on its own” note (Conch fell back to its own copy). */
   onHeal?: (message: string) => void;
   /** Where the copy that comes with Conch is; overridable for tests. */
@@ -145,12 +151,12 @@ export async function detectClaude(options: {
   }
 
   let executablePath = installed ?? bundled ?? '';
-  let probe = await probeClaude(executablePath, options.apiKey);
+  let probe = await probeClaude(executablePath, options.apiKey, options.env);
   let usingBundled = !installed;
   // The copy on this computer won't start, or is too old to say who's signed in:
   // the one that comes with Conch is current, so use it and say so quietly.
   if (installed && bundled && (!probe.ok || !probe.auth)) {
-    const fallback = await probeClaude(bundled, options.apiKey);
+    const fallback = await probeClaude(bundled, options.apiKey, options.env);
     if (fallback.ok && fallback.auth) {
       options.onHeal?.(
         probe.ok

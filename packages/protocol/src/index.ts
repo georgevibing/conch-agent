@@ -100,6 +100,7 @@ export * from './learning';
 export * from './quiet-learning';
 export * from './linking';
 export * from './local';
+export * from './clouds';
 export * from './computer';
 export * from './memory';
 export * from './mcp';
