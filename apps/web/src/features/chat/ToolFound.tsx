@@ -2,6 +2,7 @@ import type { Attachment, ToolView } from '@conch/protocol';
 import {
   AgendaView,
   BookShelf,
+  ChartCard,
   ChatMessages,
   FileList,
   KnowledgeCard,
@@ -138,6 +139,11 @@ export function ToolFound({ view }: { view: ToolView }) {
           shows={view.items.map(({ poster, ...s }) => ({ ...s, poster: picture(poster) }))}
         />
       );
+    case 'chart': {
+      // Numbers only, drawn by Nacre: nothing in a chart is markup or a link.
+      const { kind, ...chart } = view;
+      return <ChartCard chart={chart} />;
+    }
   }
 }
 

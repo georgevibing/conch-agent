@@ -14,6 +14,7 @@ export * from './ToolCall';
 export * from './Approval';
 export * from './ToolViews';
 export * from './Weather';
+export * from './Charts';
 export * from './Knowledge';
 export * from './CommandMenu';
 export * from './ModelPicker';

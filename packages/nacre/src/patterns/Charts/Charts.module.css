@@ -1,0 +1,550 @@
+@layer nacre.components {
+  /*
+   * The chart card (see ChartCard.tsx).
+   *
+   * Knobs:
+   *   --ch-h        the plot's height
+   *   --ch-stagger  how far apart the marks arrive (0 under reduced motion)
+   *   --ch-x/--ch-y where the read-out sits, in the plot's own pixels
+   *
+   * Marks carry their colour as a presentation attribute, not a class, so the
+   * plot keeps its colours once it has been turned into a picture. Only
+   * transform, opacity and a stroke's dash move; nothing moves at all under
+   * reduced motion.
+   */
+  .root {
+    --ch-stagger: 26ms;
+
+    container-type: inline-size;
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2-5);
+    inline-size: 100%;
+    max-inline-size: var(--nc-chat-card-width);
+    min-inline-size: 0;
+    padding: var(--nc-space-3-5);
+    border-radius: var(--nc-chat-card-radius);
+    corner-shape: var(--nc-corner-shape);
+    /*
+     * Flat, not the chat card's glazed gradient: the plot carries its own
+     * background rectangle so a picture of it stands alone, and a gradient
+     * behind a flat rectangle would show its edge. The glaze edge and the
+     * ring keep the card in the family.
+     */
+    background: var(--nc-surface);
+    box-shadow:
+      var(--nc-glaze-edge),
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-1);
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text);
+  }
+
+  /* ── The words at the top ──────────────────────────────────────────── */
+
+  .head {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .title {
+    margin: 0;
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: -0.012em;
+    color: var(--nc-text);
+    text-wrap: balance;
+  }
+
+  .subtitle {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  /* ── The legend, which is also the way to take a series out ────────── */
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1) var(--nc-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .legendButton {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    min-block-size: 24px;
+    padding: 2px var(--nc-space-1-5);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: var(--nc-text-xs);
+    cursor: pointer;
+    transition:
+      opacity var(--nc-duration-fast) var(--nc-ease-out),
+      background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .legendButton:hover {
+      background: var(--nc-wash-1);
+    }
+  }
+
+  .legendButton:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 1px;
+  }
+
+  .legendButton[data-dim] {
+    opacity: 0.5;
+  }
+
+  /* Taken out: the swatch empties, so it never reads by colour alone. */
+  .legendButton[data-off] {
+    opacity: 0.55;
+  }
+
+  .legendButton[data-off] .key {
+    background: none !important;
+    box-shadow: inset 0 0 0 1.5px var(--nc-gray-7);
+  }
+
+  .legendButton[data-off] .keyName {
+    text-decoration: line-through;
+  }
+
+  .key {
+    flex: none;
+    inline-size: 0.625rem;
+    block-size: 0.625rem;
+    border-radius: 3px;
+  }
+
+  .key[data-shape='line'] {
+    inline-size: 0.75rem;
+    block-size: 2px;
+    border-radius: var(--nc-radius-full);
+  }
+
+  .keyName {
+    color: var(--nc-text-muted);
+    white-space: nowrap;
+  }
+
+  .keyValue {
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-semibold);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── The plot ──────────────────────────────────────────────────────── */
+
+  .plot {
+    position: relative;
+    block-size: var(--ch-h);
+    min-inline-size: 0;
+  }
+
+  .plot[data-empty] {
+    display: grid;
+    place-items: center;
+    block-size: auto;
+    min-block-size: 5rem;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+  }
+
+  .nothing {
+    margin: 0;
+    padding: var(--nc-space-4);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    text-align: center;
+  }
+
+  .svg {
+    --ch-surface: var(--nc-surface);
+    --ch-ink: var(--nc-text);
+    --ch-soft: var(--nc-text-muted);
+    --ch-subtle: var(--nc-text-subtle);
+    --ch-grid: var(--nc-gray-4);
+    --ch-axis: var(--nc-gray-6);
+    --ch-cross: var(--nc-gray-8);
+    --ch-goal: var(--nc-gray-9);
+    --ch-1: var(--nc-chart-1);
+    --ch-2: var(--nc-chart-2);
+    --ch-3: var(--nc-chart-3);
+    --ch-4: var(--nc-chart-4);
+    --ch-5: var(--nc-chart-5);
+    --ch-6: var(--nc-chart-6);
+    --ch-7: var(--nc-chart-7);
+    --ch-8: var(--nc-chart-8);
+
+    display: block;
+    /* Said here as well as inherited: a saved picture carries its own type. */
+    font-family: var(--nc-font-sans);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tick {
+    font-size: 11px;
+  }
+
+  .catLabel {
+    font-size: 11px;
+  }
+
+  .catLabel[data-on] {
+    font-weight: var(--nc-weight-semibold);
+  }
+
+  .valueLabel {
+    font-size: 11px;
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .goalLabel {
+    font-size: 10.5px;
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .hero {
+    font-size: 19px;
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: -0.015em;
+  }
+
+  .heroUnder {
+    font-size: 11px;
+  }
+
+  /* The surface that takes the pointer and the keyboard. Sized to the plot
+     area by the component, so where you aim is where you read. */
+  .reader {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    /* Vertical scrolling still works on a phone; a drag across reads the chart. */
+    touch-action: pan-y;
+  }
+
+  .reader:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  /* ── The one read-out ──────────────────────────────────────────────── */
+
+  .tip {
+    position: absolute;
+    inset-block-start: var(--ch-y);
+    inset-inline-start: var(--ch-x);
+    z-index: var(--nc-z-tooltip);
+    display: grid;
+    gap: 2px;
+    max-inline-size: 15rem;
+    padding: var(--nc-space-1-5) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-overlay);
+    box-shadow:
+      var(--nc-glaze-edge),
+      0 0 0 1px var(--nc-border),
+      var(--nc-elevation-2);
+    font-size: var(--nc-text-xs);
+    white-space: nowrap;
+    pointer-events: none;
+    transform: translate(var(--nc-space-2-5), -50%);
+  }
+
+  .tip[data-side='left'] {
+    transform: translate(calc(-100% - var(--nc-space-2-5)), -50%);
+  }
+
+  .tip[data-pinned] {
+    box-shadow:
+      var(--nc-glaze-edge),
+      0 0 0 1px var(--nc-ring),
+      var(--nc-elevation-2);
+  }
+
+  .tipRow {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    color: var(--nc-text-muted);
+  }
+
+  .tipRow strong {
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-semibold);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tipKey {
+    flex: none;
+    inline-size: 0.625rem;
+    block-size: 2px;
+    border-radius: var(--nc-radius-full);
+  }
+
+  .tipWhen {
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-2xs);
+  }
+
+  /* ── The numbers, and the small print ──────────────────────────────── */
+
+  .foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+    flex-wrap: wrap;
+    margin-inline-start: calc(var(--nc-space-2) * -1);
+  }
+
+  .share {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    margin-inline-start: auto;
+  }
+
+  .numbers {
+    max-block-size: 15rem;
+    overflow: auto;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+  }
+
+  .table {
+    inline-size: 100%;
+    border-collapse: collapse;
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .table :is(th, td) {
+    padding: var(--nc-space-1-5) var(--nc-space-2-5);
+    text-align: end;
+    white-space: nowrap;
+  }
+
+  .table thead th {
+    position: sticky;
+    inset-block-start: 0;
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 -1px 0 var(--nc-border-subtle);
+    color: var(--nc-text-muted);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .table :is(thead th, tbody th):first-child {
+    text-align: start;
+  }
+
+  .table tbody th {
+    color: var(--nc-text-muted);
+    font-weight: var(--nc-weight-regular);
+  }
+
+  .table tbody td {
+    color: var(--nc-text);
+  }
+
+  .table tbody tr + tr :is(th, td) {
+    box-shadow: inset 0 1px 0 var(--nc-border-subtle);
+  }
+
+  .small {
+    margin: 0;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-2xs);
+    text-wrap: pretty;
+  }
+
+  /* ── Arriving ──────────────────────────────────────────────────────── */
+
+  /* Bars grow out of the axis, never past their own value. */
+  .bar {
+    transform-box: fill-box;
+    animation: nc-ch-grow var(--nc-duration-slow) var(--nc-ease-out) both;
+    animation-delay: calc(var(--i, 0) * var(--ch-stagger));
+    transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .bar[data-grow='up'] {
+    transform-origin: bottom;
+  }
+
+  .bar[data-grow='down'] {
+    transform-origin: top;
+  }
+
+  .bar[data-grow='right'] {
+    transform-origin: left;
+    animation-name: nc-ch-grow-x;
+  }
+
+  .bar[data-grow='left'] {
+    transform-origin: right;
+    animation-name: nc-ch-grow-x;
+  }
+
+  .bar[data-dim],
+  .area[data-dim],
+  .line[data-dim],
+  .dot[data-dim],
+  .valueLabel[data-dim],
+  .slice[data-dim] {
+    opacity: 0.32;
+  }
+
+  /* Picked out: a quiet ring of the card's own light, not a colour change. */
+  .bar[data-on] {
+    opacity: 1;
+    filter: drop-shadow(0 0 0 1.5px var(--nc-ring));
+  }
+
+  .line {
+    animation: nc-ch-draw var(--nc-spring-soft-duration) var(--nc-ease-out) both;
+    animation-delay: calc(var(--i, 0) * var(--ch-stagger) * 3);
+    transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .area {
+    animation: nc-ch-rise var(--nc-duration-slow) var(--nc-ease-out) both;
+    animation-delay: calc(var(--i, 0) * var(--ch-stagger) * 3);
+    transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .dot {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: nc-ch-pop var(--nc-duration-base) var(--nc-ease-out) both;
+    animation-delay: calc(var(--i, 0) * var(--ch-stagger) + var(--nc-duration-fast));
+    transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .slice {
+    transition:
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy),
+      opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  /* The pie sweeps round from twelve o'clock as it arrives. */
+  .sweep {
+    animation: nc-ch-sweep var(--nc-spring-soft-duration) var(--nc-ease-out) both;
+  }
+
+  @keyframes nc-ch-grow {
+    from {
+      transform: scaleY(0);
+    }
+    to {
+      transform: scaleY(1);
+    }
+  }
+
+  @keyframes nc-ch-grow-x {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+
+  @keyframes nc-ch-draw {
+    from {
+      stroke-dashoffset: var(--len, 0);
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @keyframes nc-ch-rise {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes nc-ch-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.4);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes nc-ch-sweep {
+    from {
+      stroke-dashoffset: var(--c, 0);
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  /* Reduced motion: the durations already collapse; the stagger has to too,
+     and a drawn line arrives drawn. */
+  @media (prefers-reduced-motion: reduce) {
+    .root {
+      --ch-stagger: 0ms;
+    }
+
+    .line {
+      stroke-dasharray: none !important;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .root {
+    --ch-stagger: 0ms;
+  }
+
+  :global([data-nacre-motion='reduced']) .line {
+    stroke-dasharray: none !important;
+  }
+
+  /* A finger reads by touching, so the slices and bars get room. */
+  @media (hover: none) and (pointer: coarse) {
+    .legendButton {
+      min-block-size: 32px;
+      padding-inline: var(--nc-space-2);
+    }
+  }
+
+  /* On a phone the legend lies in one column so no name is cut. */
+  @container (max-width: 22rem) {
+    .legend {
+      gap: 0 var(--nc-space-2);
+    }
+
+    .tip {
+      max-inline-size: 11rem;
+    }
+  }
+}

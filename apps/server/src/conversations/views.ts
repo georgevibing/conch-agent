@@ -31,6 +31,8 @@ const CAPS: Record<ToolView['kind'], number> = {
   links: 8,
   books: 12,
   shows: 10,
+  // No rows of its own: its labels and series are capped by the protocol.
+  chart: 0,
 };
 
 /** A web link worth opening: `http(s)`, parseable, and with no sign-in tucked into it. */

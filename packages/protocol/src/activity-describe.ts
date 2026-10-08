@@ -1315,6 +1315,15 @@ const CONCH: Record<string, (input: Input) => Draft> = {
         return c(words('Clicking on the screen', 'Clicked on the screen'));
     }
   },
+  chart_show: (input) => {
+    const kind = str(input, 'type', 'kind', 'chart_type');
+    const title = str(input, 'title');
+    const what = kind ? `a ${clip(oneLine(kind), 20).toLowerCase()} chart` : 'a chart';
+    return {
+      family: 'make',
+      words: say('draw', title ? `${what} of ${quote(title, 40)}` : what),
+    };
+  },
   weather: (input) => {
     const place = str(input, 'place', 'location', 'city');
     return {
