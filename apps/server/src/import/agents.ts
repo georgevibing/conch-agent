@@ -15,6 +15,8 @@
 import {
   AGENT_AVATAR_PRESETS,
   AGENT_LIMITS,
+  aboutTokens,
+  instructionsWeight,
   APP_COLORS,
   type AgentAvatarPreset,
   type AgentImageType,
@@ -370,6 +372,10 @@ export function fitted(text: string, max: number): { text: string; truncated: bo
   return { text: head.slice(0, cut + (head[cut] === '.' ? 1 : 0)).trimEnd(), truncated: true };
 }
 
+/** The gentle word on instructions long enough to weigh on every reply (never a reason to cut them). */
+export const longInstructions = (tokens: number) =>
+  `Its instructions are long (${aboutTokens(tokens)}). Every reply carries them, so small models may struggle.`;
+
 // ── Pictures ────────────────────────────────────────────────────────────────
 
 /** OpenClaw keeps workspace pictures up to 2 MB: read that much, then Conch's own limit applies. */
@@ -458,11 +464,14 @@ export async function draftAgent(
         findings,
       }
     : undefined;
+  // Whole, however long: only a handbook past Conch's limit leaves its end behind.
   const fit = fitted(take(raw), AGENT_LIMITS.instructions);
   if (fit.truncated)
     notes.push(
       `Its instructions are longer than the ${AGENT_LIMITS.instructions.toLocaleString('en')} characters Conch keeps, so the end stays in ${app}.`,
     );
+  const weight = instructionsWeight(fit.text);
+  if (weight.level !== 'fine') notes.push(longInstructions(weight.tokens));
 
   const name = take(who.name).replace(/\s+/g, ' ').slice(0, AGENT_LIMITS.name).trim() || 'Agent';
   const role = take(who.role ?? '').replace(/\s+/g, ' ');

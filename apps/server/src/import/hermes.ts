@@ -37,6 +37,7 @@ import {
 } from './found';
 import { hermesModel } from './model';
 import {
+  changedAt,
   entries,
   get,
   isDir,
@@ -64,6 +65,8 @@ const PROFILE_FILES = ['config.yaml', '.env', 'SOUL.md', 'profile.yaml', 'auth.j
 /** One Hermes home (`~/.hermes` or a profile), read the same way. */
 interface HermesHome {
   soul?: string;
+  /** When SOUL.md last changed (ms). */
+  soulAt?: number;
   about?: { text: string; from: string };
   memories: Found['memories'];
   skills: Found['skills'];
@@ -87,6 +90,8 @@ async function readHome(path: string, whose: string): Promise<HermesHome> {
   const soul = await readText(join(path, 'SOUL.md'));
   const instructions = soul ? prose(soul, MAX_FILE) : undefined;
   if (instructions) out.soul = instructions;
+  const soulAt = await changedAt(join(path, 'SOUL.md'));
+  if (soulAt) out.soulAt = soulAt;
 
   const user = await readText(join(path, 'memories', 'USER.md'));
   const about = user ? prose(memoryEntries(user).join('\n')) : undefined;
@@ -239,6 +244,7 @@ export async function readHermes(home = homedir()): Promise<Found | undefined> {
     ...(h.soul && {
       soul: { text: h.soul, from: id === 'default' ? 'SOUL.md' : `profiles/${id}/SOUL.md` },
     }),
+    ...(h.soulAt && { wordsAt: h.soulAt }),
     ...(h.effort && { effort: h.effort }),
     channels: [],
   });

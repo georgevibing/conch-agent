@@ -49,7 +49,7 @@ Some things wait for you to read them:
 - **A skill that worries Conch** when it reads it through, with what it found.
 - **Chat bots and keys.** They never come over unless you tick them yourself.
 
-Invisible characters are removed from the agents, About you, memories and routines that come over. Anything in an agent's words that looks like a key or a password is left out, and so is the end of instructions longer than Conch keeps; the list says so. A picture is read only from the agent's own folder, never from the web, and kept without what a camera writes in it.
+Invisible characters are removed from the agents, About you, memories and routines that come over. Anything in an agent's words that looks like a key or a password is left out; the list says so. Instructions come over whole, up to 100,000 characters, with a word when they're long enough to cost on every reply. An agent an earlier Conch brought with only the start of its instructions gets the rest. A picture is read only from the agent's own folder, never from the web, and kept without what a camera writes in it.
 
 > [!WARNING]
 > A bot answers in one app at a time. Stop OpenClaw or Hermes before you bring its bot over, or both will try to answer.

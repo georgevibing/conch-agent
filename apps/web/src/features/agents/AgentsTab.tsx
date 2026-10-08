@@ -13,6 +13,7 @@ import {
   AgentFacePicker,
   AgentGallery,
   Button,
+  Callout,
   DropdownMenu,
   Field,
   Input,
@@ -28,12 +29,14 @@ import {
   useMediaQuery,
 } from '@conch/nacre';
 import { ChevronDown, MessageSquarePlus, Star, Trash2 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 
 import { useAppState, useModels } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { PHONE } from '../../app/widths';
+import { COME_HOME_FOCUS, importApi, importKeys, useImportRest } from '../import/api';
 import { availableModes, effortOptions, pickerProviders } from '../models/catalog';
 import { findModel, modelKey, parseModelKey } from '../models/useTurnOptions';
 import { SaveStatus, Section } from '../settings/Section';
@@ -50,7 +53,7 @@ import { FaceSources } from './FaceSources';
 import { LetAgentsInSection, OutsideAgentsSection } from './OtherAgents';
 import styles from './Agents.module.css';
 import { useRemoveAgent } from './remove';
-import { STARTERS, TONE_CHOICES, agentHello } from './words';
+import { STARTERS, TONE_CHOICES, agentHello, instructionsNote } from './words';
 
 /**
  * Settings → Agents (ADR 0101): everyone you talk to, as a wall of faces.
@@ -348,7 +351,12 @@ function AgentEditor({ agent, all }: { agent: Agent; all: readonly Agent[] }) {
               placeholder="Always use British spelling. Suggest a test when I share code."
               onChange={(e) => set({ instructions: e.target.value }, 'instructions')}
             />
+            <InstructionsNote agent={agent} text={form.instructions} />
           </Field>
+          <RestOfInstructions
+            agent={agent}
+            onBrought={(whole) => set({ instructions: whole }, 'instructions')}
+          />
         </Stack>
       </Section>
 
@@ -399,6 +407,94 @@ function AgentEditor({ agent, all }: { agent: Agent; all: readonly Agent[] }) {
         )}
       </div>
     </Stack>
+  );
+}
+
+/** The model an agent's chats start with: its own, else everyone's. */
+function useStartingModel(agent: Agent) {
+  const { data: app } = useAppState();
+  const { data: catalog } = useModels(Boolean(app));
+  const own = agent.defaults;
+  const prefs = app?.preferences;
+  const engine = own?.engine ?? catalog?.default ?? prefs?.engine;
+  const provider = catalog?.providers.find((p) => p.engine === engine) ?? catalog?.providers[0];
+  return findModel(provider, own?.model ?? prefs?.model);
+}
+
+/**
+ * A quiet word when its instructions are long enough to weigh on every reply,
+ * about the model its chats start with when that's the one that would feel
+ * it (ADR 0101). Only a note: they're kept whole, and saving never waits on it.
+ */
+function InstructionsNote({ agent, text }: { agent: Agent; text: string }) {
+  const model = useStartingModel(agent);
+  const note = instructionsNote(
+    text,
+    model && { label: model.label, ...(model.context && { context: model.context }) },
+  );
+  if (!note) return null;
+  return <Field.Description>{note}</Field.Description>;
+}
+
+/**
+ * An agent an older Conch brought with the end of its instructions cut off,
+ * when the app it came from still has the rest: one press brings it in. Words
+ * that read like orders are read in Come home first.
+ */
+function RestOfInstructions({
+  agent,
+  onBrought,
+}: {
+  agent: Agent;
+  /** Its whole instructions now, for the page's own copy. */
+  onBrought: (instructions: string) => void;
+}) {
+  const { data } = useImportRest(Boolean(agent.imported));
+  const openSettings = useUi((s) => s.openSettings);
+  const queryClient = useQueryClient();
+  const [bringing, setBringing] = useState(false);
+  const rest = data?.agents.find((a) => a.agentId === agent.id);
+  if (!rest) return null;
+  const bring = () => {
+    setBringing(true);
+    importApi
+      .bringRest(agent.id)
+      .then((next) => {
+        onBrought(next.instructions);
+        toast.success(`The rest of ${agent.name}’s instructions came in`);
+        return queryClient.invalidateQueries({ queryKey: importKeys.rest });
+      })
+      .catch((error: unknown) =>
+        toast.error(
+          error instanceof Error && error.message ? error.message : 'That didn’t come in.',
+        ),
+      )
+      .finally(() => setBringing(false));
+  };
+  return (
+    <Callout
+      tone="info"
+      title={`The end of its instructions stayed in ${rest.label}`}
+      action={
+        rest.review ? (
+          <Button
+            size="sm"
+            variant="surface"
+            onClick={() => openSettings('memory', COME_HOME_FOCUS)}
+          >
+            Take a look
+          </Button>
+        ) : (
+          <Button size="sm" variant="surface" loading={bringing} onClick={bring}>
+            Bring the rest in
+          </Button>
+        )
+      }
+    >
+      {rest.review
+        ? 'Some of it asks for keys, to send things away or to turn safety checks off, so read it in Come home before bringing it.'
+        : `An earlier Conch kept only the start. ${rest.label} still has the rest, about ${rest.chars.toLocaleString()} characters${rest.changed ? `, changed there since it came over` : ''}.`}
+    </Callout>
   );
 }
 

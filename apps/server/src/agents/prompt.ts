@@ -70,6 +70,26 @@ function conchLayer(name: string): string {
   ].join('\n');
 }
 
+/**
+ * The person's own words, with their headings two levels down: a `# Rules`
+ * of theirs stays inside its layer, so nothing that reads the prompt by its
+ * top headings (lean mode, `withResilience`) takes it for one of Conch's and
+ * drops or replaces it. Only the prompt changes; what they wrote is kept as it is.
+ */
+export function nested(text: string): string {
+  let fence = false;
+  return text
+    .split('\n')
+    .map((line) => {
+      if (/^\s*(```|~~~)/.test(line)) fence = !fence;
+      if (fence) return line;
+      const heading = /^(#{1,6})(\s.*)$/.exec(line);
+      if (!heading?.[1]) return line;
+      return `${'#'.repeat(Math.min(6, heading[1].length + 2))}${heading[2] ?? ''}`;
+    })
+    .join('\n');
+}
+
 /** The agent's persona: its name, what it's for, its voice and personality. */
 function personaLayer(agent: PromptAgent, before: readonly string[]): string {
   const role = agent.role?.trim();
@@ -80,7 +100,7 @@ function personaLayer(agent: PromptAgent, before: readonly string[]): string {
     `Your name is ${agent.name}. When you need a name for yourself, use it; never call yourself by the name of the model or the program you run on.`,
     ...(role ? [`What you’re for: ${role}`] : []),
     `Voice: ${TONES[agent.persona.tone].prompt}`,
-    ...(personality ? ['Your personality, in the user’s words:', personality] : []),
+    ...(personality ? ['Your personality, in the user’s words:', nested(personality)] : []),
     ...(others.length
       ? [
           `Earlier replies in this chat were written by ${others.join(' and ')}, another of the user’s assistants in Conch. You are ${agent.name} now: carry on from what was said, in your own voice.`,
@@ -89,14 +109,22 @@ function personaLayer(agent: PromptAgent, before: readonly string[]): string {
   ].join('\n');
 }
 
-/** What the person asked this agent always to do. */
+/** The heading the instructions layer starts with: lean mode finds it by this. */
+export const INSTRUCTIONS_HEADING = '# Your instructions';
+
+/**
+ * What the person asked this agent always to do, whole, however long (lean
+ * mode alone may shorten it, and says so). It stays with the first four
+ * layers, before anything that changes turn to turn, so a provider's prompt
+ * cache keeps it and a long handbook is paid for in full only once a chat.
+ */
 function instructionsLayer(agent: PromptAgent): string | undefined {
   const instructions = agent.instructions.trim();
   if (!instructions) return undefined;
   return [
-    '# Your instructions',
+    INSTRUCTIONS_HEADING,
     'The user asked you to follow these instructions:',
-    instructions,
+    nested(instructions),
   ].join('\n');
 }
 

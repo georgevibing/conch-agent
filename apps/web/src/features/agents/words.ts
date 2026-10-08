@@ -1,4 +1,10 @@
-import { TONES, type AgentAvatarPreset, type Tone } from '@conch/protocol';
+import {
+  TONES,
+  aboutTokens,
+  instructionsWeight,
+  type AgentAvatarPreset,
+  type Tone,
+} from '@conch/protocol';
 
 /**
  * The words of agents (ADR 0101): how each tone says hello, names to start
@@ -189,3 +195,21 @@ export const STARTERS: readonly Starter[] = [
     ].join('\n'),
   },
 ];
+
+/**
+ * The gentle word under instructions long enough to weigh on every reply
+ * (ADR 0101), or nothing. `model` is the one its chats start with, and its
+ * window when the provider says: the note is about that model when it's the
+ * one that would feel it. Never a reason to cut them, and never blocking.
+ */
+export function instructionsNote(
+  text: string,
+  model?: { label: string; context?: number },
+): string | undefined {
+  const weight = instructionsWeight(text, model?.context);
+  const size = aboutTokens(weight.tokens);
+  if (weight.level === 'crowded' && model?.context)
+    return `These instructions are long for ${model.label} (${size} of the ${aboutTokens(model.context).replace(' tokens', '')} it reads at once). Every reply carries them, so it may read only their start.`;
+  if (weight.level === 'fine') return undefined;
+  return `These instructions are long (${size}). Every reply carries them, so small models may struggle.`;
+}

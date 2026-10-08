@@ -19,11 +19,13 @@ import {
 } from '../conversations/resilience';
 import { ConversationStore } from '../conversations/store';
 import { conchInstructions, preamble } from '../engines/acp/engine';
-import { leanSystem } from '../engines/api/lean';
+import { cached } from '../engines/api/anthropic';
+import { instructionsRoom, leanPrompt, leanSystem } from '../engines/api/lean';
+import { systemParts } from '../memory/prompt';
 import type { Engine, EngineEvent, TurnInput } from '../engines/types';
 import { MemoryStore } from '../memory/store';
 import { SettingsStore } from '../settings/store';
-import { agentLayers, PRECEDENCE } from './prompt';
+import { agentLayers, nested, PRECEDENCE } from './prompt';
 import { AgentStore } from './store';
 
 const MODES: PermissionMode[] = ['default', 'auto', 'acceptEdits', 'plan', 'bypassPermissions'];
@@ -260,5 +262,74 @@ describe('the layers in other forms', () => {
     expect(agentLayers({ agent: { ...agent, instructions: '  ' } })).not.toContain(
       '# Your instructions',
     );
+  });
+});
+
+describe('long instructions (ADR 0101)', () => {
+  /** An OpenClaw AGENTS.md of the kind people keep: headings of their own, and plenty of rules. */
+  const handbook = [
+    '# Operating rules',
+    ...Array.from({ length: 400 }, (_, i) => `Rule ${i + 1}: check the calendar before booking.`),
+    '## Memory',
+    'Write things down in the diary, never in chat.',
+    '```md',
+    '# Not a heading: an example inside a fence',
+    '```',
+  ].join('\n\n');
+  const agent = {
+    name: 'James Claw',
+    persona: { tone: 'warm' as const, personality: '' },
+    instructions: handbook,
+  };
+
+  it('are carried whole, their own headings kept inside their layer', () => {
+    const system = agentLayers({ agent });
+    expect(system).toContain('Rule 400: check the calendar');
+    expect(system).toContain('### Operating rules');
+    expect(system).toContain('#### Memory');
+    expect(system).not.toMatch(/^# Operating rules/m);
+    // Inside a fence, words are kept exactly.
+    expect(system).toContain('```md\n\n# Not a heading: an example inside a fence');
+    expect(nested('Plain words\n# Top\n###### Deepest')).toBe(
+      'Plain words\n### Top\n###### Deepest',
+    );
+  });
+
+  it('sit before anything that changes turn to turn, where the prompt cache keeps them', () => {
+    const base = { agent, profile: { name: '', about: '' } as never, autoMemory: true };
+    const one = systemParts({ ...base, memories: [] });
+    const two = systemParts({
+      ...base,
+      memories: [{ id: 'm1', kind: 'fact', content: 'Likes tea.' } as never],
+    });
+    expect(one.identity).toContain('Rule 400: check the calendar');
+    expect(one.identity).toBe(two.identity);
+    // Anthropic's breakpoint is on the whole system prompt: the handbook is paid for once a chat.
+    const sent = cached({ system: one.identity, messages: [], tools: [] });
+    expect(sent.system?.[0]).toMatchObject({ cache_control: { type: 'ephemeral' } });
+  });
+
+  it('in lean mode are whole when the window has room, never lost to the cut of another section', () => {
+    const system = agentLayers({ agent });
+    const roomy = leanPrompt(system, { tools: true, window: 128_000 });
+    expect(roomy.trimmed).toBeUndefined();
+    expect(roomy.text).toContain('Rule 400: check the calendar');
+    expect(roomy.text).toContain('Write things down in the diary');
+  });
+
+  it('in lean mode on a small window keep their start, and say so to the model', () => {
+    const system = agentLayers({ agent });
+    const small = leanPrompt(system, { tools: true, window: 8_192 });
+    expect(small.trimmed).toMatchObject({ left: expect.any(Number) });
+    expect(small.text).toContain('Rule 1: check the calendar');
+    expect(small.text).not.toContain('Rule 400: check the calendar');
+    expect(small.text).toMatch(/That is only the start of the user’s instructions/);
+    expect(small.text).toMatch(/say you’re working from a shortened version/);
+    const layer = small.text.slice(small.text.indexOf('# Your instructions'));
+    expect(layer.indexOf('\n\n# Your tools')).toBeLessThanOrEqual(instructionsRoom(8_192) + 600);
+    // The persona and Conch's rules are still there.
+    expect(small.text).toContain('Your name is James Claw.');
+    expect(small.text).toContain(PRECEDENCE);
+    expect(leanSystem(system, { tools: true, window: 8_192 })).toBe(small.text);
   });
 });

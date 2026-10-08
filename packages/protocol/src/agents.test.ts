@@ -9,9 +9,12 @@ import {
   TONES,
   Tone,
   UpdateAgentBody,
+  aboutTokens,
   agentImageUrl,
   chatAgentId,
   findAgent,
+  instructionsWeight,
+  roughTokens,
   speakersAlong,
 } from './agents';
 import { ClientCommand, ConversationEvent, ServerEvent, UpdateConversationBody } from './index';
@@ -147,5 +150,37 @@ describe('who answers', () => {
     expect(findAgent(agents, 'mi')?.name).toBe('Milo');
     expect(findAgent(agents, '')).toBeUndefined();
     expect(findAgent(agents, 'nobody')).toBeUndefined();
+  });
+});
+
+describe('how heavy instructions are (ADR 0101)', () => {
+  it('lets a handbook of 30,000 characters and more through, up to 100,000', () => {
+    const big = 'Rule: be kind. '.repeat(2_000);
+    expect(big.length).toBe(30_000);
+    expect(CreateAgentBody.safeParse({ name: 'A', instructions: big }).success).toBe(true);
+    expect(AGENT_LIMITS.instructions).toBe(100_000);
+  });
+
+  it('counts about four characters a token, and one for anything else', () => {
+    expect(roughTokens('abcd'.repeat(10))).toBe(10);
+    expect(roughTokens('日本語')).toBe(3);
+  });
+
+  it('is fine for a few lines, long from ≈4k tokens, crowded past a tenth of the window', () => {
+    expect(instructionsWeight('Use British spelling.').level).toBe('fine');
+    expect(instructionsWeight('x'.repeat(15_996)).level).toBe('fine');
+    expect(instructionsWeight('x'.repeat(16_000))).toEqual({ tokens: 4_000, level: 'long' });
+    // A small model feels much less: ≈1k tokens is a tenth of an 8k window.
+    expect(instructionsWeight('x'.repeat(4_000), 8_192).level).toBe('crowded');
+    expect(instructionsWeight('x'.repeat(3_200), 8_192).level).toBe('fine');
+    // A big window: only long when they're long.
+    expect(instructionsWeight('x'.repeat(40_000), 200_000).level).toBe('long');
+    expect(instructionsWeight('x'.repeat(100_000), 200_000).level).toBe('crowded');
+  });
+
+  it('says a size a person can picture', () => {
+    expect(aboutTokens(9_200)).toBe('≈9k tokens');
+    expect(aboutTokens(812)).toBe('≈810 tokens');
+    expect(aboutTokens(3)).toBe('≈10 tokens');
   });
 });

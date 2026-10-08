@@ -56,6 +56,7 @@ import type {
 } from '@conch/protocol';
 import {
   AGENT_LIMITS,
+  OLDER_INSTRUCTIONS,
   AgentDefaults as AgentDefaultsSchema,
   AgentPersona,
   AgentPresetAvatar,
@@ -63,7 +64,7 @@ import {
 } from '@conch/protocol';
 import { z } from 'zod';
 
-import { uniqueName } from '../agents/store';
+import { joinInstructions, splitInstructions, uniqueName } from '../agents/store';
 import { Mutex, readJson, writeJson } from '../lib/fs';
 import { type AgentDraft, draftAgent } from './agents';
 import { checkMemory } from '../memory/guard';
@@ -99,7 +100,9 @@ const AgentBefore = z.object({
   name: z.string().max(AGENT_LIMITS.name),
   role: z.string().max(AGENT_LIMITS.role),
   persona: AgentPersona,
+  /** The start, as an older Conch reads the ledger (ADR 0051), then the rest (`splitInstructions`). */
   instructions: z.string().max(AGENT_LIMITS.instructions),
+  instructionsRest: z.string().max(AGENT_LIMITS.instructions).optional(),
   /** Its preset face, when it had one (a picture of its own is never replaced). */
   avatar: AgentPresetAvatar.optional(),
   defaults: AgentDefaultsSchema.nullable(),
@@ -327,6 +330,58 @@ const agentKey = (a: {
     a.instructions,
     a.defaults ?? null,
   ]);
+
+/** Instructions the size an older Conch cut them to: worth a look in the app they came from. */
+const cutShortLength = (text: string) => {
+  const n = text.trim().length;
+  return n >= OLDER_INSTRUCTIONS * 0.6 && n <= OLDER_INSTRUCTIONS;
+};
+
+/**
+ * Whether an agent here is one an older Conch brought with the end of its
+ * instructions cut off (at 8,000 characters): what it has is the start of
+ * what the other app has now, to a paragraph or a sentence, and nothing of
+ * its own was added since.
+ */
+export function cutShort(here: string, there: string): boolean {
+  const kept = here.trim();
+  return cutShortLength(kept) && there.length > kept.length && there.startsWith(kept);
+}
+
+/**
+ * What in the rest of someone's own instructions holds it back for a look
+ * (ADR 0101). Instructions are orders to the assistant by nature, and these
+ * are the person's own, from their own computer, so "always", "never" or
+ * "don't tell the user" are theirs to give. Only what reaches beyond words
+ * waits: keys and passwords, sending things away, running downloads,
+ * turning safety checks off.
+ */
+const REACHES = new Set(['secrets', 'exfiltration', 'download-run', 'binary']);
+export const reachesFurther = (text: string) =>
+  scanText(text, 'its instructions').findings.some(
+    (f) => REACHES.has(f.kind) || (f.kind === 'deception' && f.severity === 'warning'),
+  );
+
+/** An agent that came over cut short, and what of it is still in the app it came from. */
+export interface RestOfInstructions {
+  agentId: string;
+  name: string;
+  source: ImportSourceId;
+  /** “OpenClaw”. */
+  label: string;
+  /** Characters still to come. */
+  chars: number;
+  /**
+   * The rest reaches further than words can: for keys or passwords, to send
+   * things away, to run what it downloads, or to turn safety checks off. A
+   * person reads it in Come home first.
+   */
+  review: boolean;
+  /** Its files there changed since it came over: brought with one press, not by itself. */
+  changed: boolean;
+  /** The whole of its instructions now, ready to keep. */
+  instructions: string;
+}
 
 export class ImportService {
   readonly #mutex = new Mutex();
@@ -617,7 +672,11 @@ export class ImportService {
           `Conch keeps at most ${AGENT_LIMITS.count} agents: remove one in Agents to bring this one.`,
         odd &&
           'Left unticked: its words read like orders to the assistant. Read them before bringing it.',
-        existing && !same && 'Brought over before: ticked, it’s brought up to date.',
+        existing &&
+          !same &&
+          (cutShort(existing.instructions, draft.instructions)
+            ? `Brought over before, when the end of its instructions stayed in ${found.label}: ticked, the rest comes in.`
+            : 'Brought over before: ticked, it’s brought up to date.'),
         ...draft.notes,
         note,
       ].filter((w): w is string => Boolean(w));
@@ -649,6 +708,82 @@ export class ImportService {
       ...(theirs && items.some((i) => i.id === theirs) && { defaultAgent: theirs }),
       ...(current && { current }),
     };
+  }
+
+  /**
+   * Agents an older Conch brought cut short (at 8,000 characters), whose app
+   * still has the rest of their instructions: each with the whole of them now.
+   * An agent changed here since, or gone there, isn't one.
+   */
+  async rest(): Promise<RestOfInstructions[]> {
+    const agents = this.deps.targets.agents;
+    if (!agents) return [];
+    const list = await agents.list();
+    const out: RestOfInstructions[] = [];
+    for (const source of ['openclaw', 'hermes'] as const) {
+      const theirs = list.agents.filter(
+        (a) => a.imported?.from === source && a.imported.id && cutShortLength(a.instructions),
+      );
+      if (!theirs.length) continue;
+      const found = await this.#read(source).catch(() => undefined);
+      if (!found) continue;
+      const known = secretsOf(found);
+      for (const agent of theirs) {
+        const who = found.identities.find((i) => i.id === agent.imported?.id);
+        if (!who) continue;
+        const draft = await draftAgent(who, found.label, known);
+        if (!cutShort(agent.instructions, draft.instructions)) continue;
+        const more = draft.instructions.slice(agent.instructions.trim().length);
+        out.push({
+          agentId: agent.id,
+          name: agent.name,
+          source,
+          label: found.label,
+          chars: more.trim().length,
+          review: reachesFurther(more),
+          // Unchanged since it came over: the same file the start was read from.
+          changed: !who.wordsAt || who.wordsAt > (agent.imported?.at ?? 0),
+          instructions: draft.instructions,
+        });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * The rest of one agent's instructions, brought in: only its instructions
+   * change, to the whole of what it has there. A rest that reaches further
+   * than words (`reachesFurther`) is read in Come home first, unless `reviewed`.
+   */
+  bringRest(agentId: string, options: { reviewed?: boolean } = {}): Promise<Agent | undefined> {
+    return this.#mutex.run(async () => {
+      const agents = this.deps.targets.agents;
+      const one = (await this.rest()).find((r) => r.agentId === agentId);
+      if (!agents || !one) return undefined;
+      if (one.review && !options.reviewed)
+        throw new ImportError(
+          'nothing',
+          'Some of the rest asks for keys, to send things away or to turn safety checks off. Read it in Come home before bringing it.',
+        );
+      return agents.update(agentId, { instructions: one.instructions });
+    });
+  }
+
+  /**
+   * At start, by itself (working agreement 11): the rest of every agent that
+   * came over cut short, when its files there haven't changed since (the
+   * same words the start came from). `changed` brings those too (Repair
+   * everything, a person's press). Returns the ones brought in; the others
+   * are offered on their page.
+   */
+  async finishCutShort(options: { changed?: boolean } = {}): Promise<RestOfInstructions[]> {
+    const done: RestOfInstructions[] = [];
+    for (const one of await this.rest()) {
+      if (one.review || (one.changed && !options.changed)) continue;
+      const agent = await this.bringRest(one.agentId).catch(() => undefined);
+      if (agent) done.push(one);
+    }
+    return done;
   }
 
   /** An agent's own picture from the last look, for the plan to show (never kept until brought). */
@@ -911,7 +1046,7 @@ export class ImportService {
                 name: existing.name,
                 role: existing.role,
                 persona: existing.persona,
-                instructions: existing.instructions,
+                ...splitInstructions(existing.instructions),
                 ...(existing.avatar.kind === 'preset' && { avatar: existing.avatar }),
                 defaults: existing.defaults ?? null,
               });
@@ -1202,7 +1337,7 @@ export class ImportService {
               name: a.name,
               role: a.role,
               persona: a.persona,
-              instructions: a.instructions,
+              instructions: joinInstructions(a),
               defaults: a.defaults,
               ...(a.avatar && { avatar: a.avatar }),
             });

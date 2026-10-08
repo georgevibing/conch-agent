@@ -1817,6 +1817,18 @@ export class Services {
     this.doctor.register(trayCheck(this.tray));
     this.imports = this.#imports(config);
     this.doctor.register(importCheck(this.imports));
+    // Agents an older Conch brought cut short get the rest of their instructions, quietly (ADR 0101).
+    if (!this.recovery.recoveryMode)
+      void this.imports
+        .finishCutShort()
+        .then((done) => {
+          for (const one of done)
+            void this.healed.note(
+              'agents',
+              `Brought the rest of ${one.name}’s instructions from ${one.label}`,
+            );
+        })
+        .catch(() => undefined);
     const linked = this.linked;
     this.#channelsReady = (async () => {
       if (this.mockTelegram) {

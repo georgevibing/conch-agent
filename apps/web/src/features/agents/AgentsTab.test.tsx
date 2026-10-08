@@ -149,3 +149,82 @@ describe('Settings → Agents', () => {
     expect(calls.some((c) => c.method === 'DELETE')).toBe(false);
   });
 });
+
+describe('long instructions (ADR 0101)', () => {
+  const handbook = 'Keep every reply short. '.repeat(1_500).trim();
+
+  it('are shown whole, with a quiet word under them, never a cut', async () => {
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/agents': () => ({
+        agents: [
+          agent({ id: 'ag_james', name: 'James Claw', isDefault: true, instructions: handbook }),
+        ],
+        defaultId: 'ag_james',
+      }),
+      'GET /api/agents/avatar/generate': () => ({ available: false }),
+    });
+    const { container } = renderApp(<Settings />, { route: '/settings/agents/ag_james' });
+    const box = await screen.findByRole('textbox', { name: 'Instructions' });
+    expect((box as HTMLTextAreaElement).value).toBe(handbook);
+    expect(box).toHaveAccessibleDescription(
+      'These instructions are long (≈9k tokens). Every reply carries them, so small models may struggle.',
+    );
+    expect(box).not.toHaveAttribute('maxlength', '8000');
+    expect(await axeClean(container)).toEqual([]);
+  });
+
+  it('offers the rest of one an older Conch cut short, and brings it in with a press', async () => {
+    const start = 'Rule one: tidy the inbox.';
+    const whole = `${start}\n\nRule two: say what you moved.`;
+    let agents = [
+      agent({
+        id: 'ag_james',
+        name: 'James Claw',
+        isDefault: true,
+        instructions: start,
+        imported: { from: 'openclaw', id: 'main', at: 1 },
+      }),
+    ];
+    let rest = [
+      {
+        agentId: 'ag_james',
+        name: 'James Claw',
+        source: 'openclaw',
+        label: 'OpenClaw',
+        chars: 29,
+        review: false,
+      },
+    ];
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/agents': () => ({ agents, defaultId: 'ag_james' }),
+      'GET /api/agents/avatar/generate': () => ({ available: false }),
+      'GET /api/import/rest': () => ({ agents: rest }),
+      'POST /api/import/rest/ag_james': () => {
+        agents = agents.map((a) => ({ ...a, instructions: whole }));
+        rest = [];
+        return agents[0];
+      },
+      'PATCH /api/agents/ag_james': () => agents[0],
+    });
+    renderApp(
+      <>
+        <Settings />
+        <Toaster />
+      </>,
+      { route: '/settings/agents/ag_james' },
+    );
+    expect(await screen.findByText('The end of its instructions stayed in OpenClaw')).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: 'Bring the rest in' }));
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Instructions' })).toHaveValue(whole),
+    );
+    expect(calls.some((c) => c.method === 'POST' && c.path === '/api/import/rest/ag_james')).toBe(
+      true,
+    );
+    await waitFor(() =>
+      expect(screen.queryByText('The end of its instructions stayed in OpenClaw')).toBeNull(),
+    );
+  });
+});

@@ -92,6 +92,8 @@ export interface FoundIdentity {
   soul?: { text: string; from: string };
   /** The person's own standing orders for it (AGENTS.md, without the app's template). */
   conventions?: { text: string; from: string };
+  /** When the files its words come from last changed (ms): to tell an import's source unchanged. */
+  wordsAt?: number;
   /** Its own model, when it had one apart from the app's default. */
   model?: FoundModel;
   effort?: EffortChoice;

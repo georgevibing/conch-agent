@@ -1,4 +1,9 @@
-import { FinishSlackImportBody, ImportSourceId, RunImportBody } from '@conch/protocol';
+import {
+  FinishSlackImportBody,
+  type ImportRest,
+  ImportSourceId,
+  RunImportBody,
+} from '@conch/protocol';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { ChannelServiceError } from '../channels/service';
@@ -41,6 +46,25 @@ export function registerImportRoutes(
   };
 
   app.get('/api/import', () => imports.status());
+
+  // Agents an older Conch brought cut short (ADR 0101): what's left to offer, and bringing it.
+  app.get('/api/import/rest', async (): Promise<ImportRest> => ({
+    agents: (await imports.rest()).map(({ instructions: _whole, ...one }) => one),
+  }));
+
+  app.post<{ Params: { agentId: string } }>('/api/import/rest/:agentId', async (request, reply) => {
+    try {
+      const agent = await imports.bringRest(request.params.agentId);
+      if (!agent)
+        return reply.code(404).send({
+          error: 'not-found',
+          message: 'There’s nothing more of its instructions to bring.',
+        });
+      return agent;
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
 
   // A Slack bot another app had one key for (ADR 0042): what the Slack setup picks up from.
   app.get<{ Querystring: { source?: string } }>('/api/import/slack', (request) => {
