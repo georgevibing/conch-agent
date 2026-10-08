@@ -16,6 +16,7 @@ import { PlacesView } from './views/places';
 import { AudioView } from './views/audio';
 import { VideosView } from './views/video';
 import { BooksView, KnowledgeView, LinksView, ShowsView } from './views/knowledge';
+import { ChartView } from './views/chart';
 
 const Hex = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 /** An ISO 8601 date or date-time, as a tool read it. */
@@ -294,5 +295,6 @@ export const ToolView = z.discriminatedUnion('kind', [
   LinksView,
   BooksView,
   ShowsView,
+  ChartView,
 ]);
 export type ToolView = z.infer<typeof ToolView>;

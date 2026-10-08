@@ -6,7 +6,10 @@
  * hues are a fixed order validated for colour-blind separation on a light
  * surface; a ninth series is refused rather than invented.
  */
+import { formatValue, niceStep, SERIES } from './chartScale';
 import { escapeHtml as esc } from './html';
+
+export { SERIES };
 
 export type ChartType = 'bar' | 'line' | 'area' | 'pie';
 
@@ -23,17 +26,6 @@ export interface Chart {
   unit?: string;
 }
 
-/** Light-surface categorical order (validated: lightness band, chroma, CVD separation). */
-export const SERIES = [
-  '#2a78d6',
-  '#eb6834',
-  '#1baf7a',
-  '#eda100',
-  '#e87ba4',
-  '#008300',
-  '#4a3aa7',
-  '#e34948',
-];
 const SURFACE = '#fcfcfb';
 const INK = '#0b0b0b';
 const SOFT = '#52514e';
@@ -43,28 +35,7 @@ const FONT = '-apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-s
 
 export const CHART_SIZE = { width: 960, height: 540 };
 
-function niceStep(range: number, ticks: number): number {
-  const raw = range / ticks;
-  const power = 10 ** Math.floor(Math.log10(raw || 1));
-  const n = raw / power;
-  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * power;
-}
-
-function format(value: number, unit: string | undefined): string {
-  const abs = Math.abs(value);
-  const text =
-    abs >= 1e9
-      ? `${+(value / 1e9).toFixed(1)}B`
-      : abs >= 1e6
-        ? `${+(value / 1e6).toFixed(1)}M`
-        : abs >= 1e4
-          ? `${+(value / 1e3).toFixed(1)}k`
-          : `${+value.toFixed(2)}`;
-  if (!unit) return text;
-  return unit.length <= 2 && /^[$€£¥]/.test(unit)
-    ? `${unit}${text}`
-    : `${text}${unit === '%' ? '%' : ` ${unit}`}`;
-}
+const format = formatValue;
 
 function clip(text: string, max: number) {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
