@@ -5,6 +5,7 @@ import {
   ConversationEvent,
   DescribeSkillBody,
   Persona,
+  Preferences,
   ServerEvent,
   SkillDescriptionDraft,
   UpdateSettingsBody,
@@ -39,6 +40,14 @@ describe('protocol', () => {
     expect(ServerEvent.parse({ type: 'conversation.event', event })).toMatchObject({
       event: { delta: 'Hel' },
     });
+  });
+
+  it('reads preferences saved before limits could be put away, and keeps the field optional', () => {
+    expect(Preferences.parse({}).limitsPutAway).toEqual([]);
+    const put = { engine: 'claude-code', window: 'weekly', resetsAt: 1 };
+    expect(UpdateSettingsBody.parse({ preferences: { limitsPutAway: [put] } }).preferences).toEqual(
+      { limitsPutAway: [put] },
+    );
   });
 
   it('accepts partial settings updates', () => {
