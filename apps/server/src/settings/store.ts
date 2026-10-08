@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
+  CloudChoice,
   Persona,
   Preferences,
   Profile,
@@ -33,6 +34,12 @@ const SettingsFile = z.object({
   endpoints: z.record(z.string(), z.string().max(40)).default({}),
   /** Servers you added yourself (Settings → Providers → Another server). Their keys are secrets. */
   servers: z.array(Server).max(32).default([]),
+  /**
+   * The cloud account each cloud provider uses (ADR 0109), by provider id:
+   * an AWS profile's name, a Google Cloud project, an Azure resource. Names
+   * only — the sign-ins stay with the clouds' own programs.
+   */
+  clouds: z.record(z.string(), CloudChoice).optional(),
 });
 export type Settings = z.infer<typeof SettingsFile>;
 
@@ -155,6 +162,21 @@ export class SettingsStore {
       });
       await writeJson(this.#path, next);
       this.#cache = Promise.resolve(next);
+    });
+  }
+
+  /** Use a cloud account for a provider; `undefined` forgets it. */
+  setCloud(id: string, choice: CloudChoice | undefined): Promise<Settings> {
+    return this.#mutex.run(async () => {
+      const current = await this.get();
+      const { [id]: _old, ...rest } = current.clouds ?? {};
+      const next = SettingsFile.parse({
+        ...current,
+        clouds: choice ? { ...rest, [id]: choice } : rest,
+      });
+      await writeJson(this.#path, next);
+      this.#cache = Promise.resolve(next);
+      return next;
     });
   }
 

@@ -1658,6 +1658,29 @@ describe('Palette search', () => {
     expect(where()).toBe('/settings/providers/ollama');
   });
 
+  it('finds your company’s cloud by the words people use for it', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    const { where } = renderApp(<Palette />);
+    for (const [words, name] of [
+      ['aws sso', /Amazon Bedrock/],
+      ['gcp', /Google Vertex AI/],
+      ['entra', /Azure OpenAI/],
+    ] as const) {
+      act(() => useUi.getState().setPalette(true));
+      const box = await screen.findByRole('combobox');
+      await user.clear(box);
+      await user.type(box, words);
+      expect(await screen.findByRole('option', { name })).toBeInTheDocument();
+    }
+    await user.click(screen.getByRole('option', { name: /Azure OpenAI/ }));
+    expect(where()).toBe('/settings/providers/azure-openai');
+  });
+
   it('checks for updates, and offers “Update Conch” only when one is ready', async () => {
     const user = userEvent.setup();
     let behind = 0;

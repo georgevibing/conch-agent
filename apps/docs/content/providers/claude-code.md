@@ -10,6 +10,10 @@ provider: claude-code
 
 Already use Claude Code? There is nothing to do. Conch uses the copy you have, signed in as you are.
 
+## On your company's cloud
+
+Claude Code can run on Amazon Bedrock or Google Vertex AI instead of your Claude plan, billed to that account. On its page, choose **Amazon Bedrock** or **Google Vertex AI** under **Where Claude Code runs**, then press **Use this** on an account Conch found on this computer. Claude Code signs in with that same AWS or Google sign-in. When it ends, **Sign in to AWS again** brings it back. Choose **Claude plan** to go back.
+
 ## It brings your setup with it
 
 Conch drives the Claude Code that's on your computer, so everything you've set up there comes along: your `~/.claude` settings, `CLAUDE.md` files, MCP servers, hooks and skills.

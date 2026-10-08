@@ -32,6 +32,7 @@ import { LocalSetup } from '../local/LocalSetup';
 import { GetIt } from '../setup/GetIt';
 import { useNeed } from '../setup/useNeed';
 import { providersApi } from './api';
+import { ClaudeRunsOn, CloudSetup } from './CloudSetup';
 import styles from './Providers.module.css';
 import {
   errorText,
@@ -773,6 +774,23 @@ function ProviderBody({
           <ServerSettings key={provider.server.url + provider.server.name} provider={provider} />
           <KeyForm provider={provider} onePassword={onePassword} />
         </>
+      ) : provider.cloud ? (
+        // Your company's cloud (ADR 0109): an account found here, in one press.
+        <>
+          {state === 'ready' && <Connected provider={provider} />}
+          <CloudSetup provider={provider}>
+            {provider.keyForm && (
+              <Collapsible>
+                <Collapsible.Trigger className={styles.byHand}>
+                  Or use a {provider.keyForm.label}
+                </Collapsible.Trigger>
+                <Collapsible.Content>
+                  <KeyForm provider={provider} onePassword={onePassword} />
+                </Collapsible.Content>
+              </Collapsible>
+            )}
+          </CloudSetup>
+        </>
       ) : state === 'ready' ? (
         <Connected provider={provider} />
       ) : state === 'not-installed' && !fix && provider.local ? (
@@ -791,6 +809,9 @@ function ProviderBody({
         <TryAgain provider={provider} />
       ) : (
         <SignInProgram provider={provider} />
+      )}
+      {provider.id === 'claude-code' && state !== 'not-installed' && (
+        <ClaudeRunsOn provider={provider} />
       )}
       {provider.limits.map((limit) => (
         <ProviderCaution key={limit}>{limit}</ProviderCaution>

@@ -234,6 +234,57 @@ describe('Your providers', () => {
     ).toEqual({ 'providers:claude-code': 'ok', 'providers:codex': 'needs-you' });
   });
 
+  it('says whose cloud sign-in ended, with the one press that signs in again', async () => {
+    const bedrock = provider('bedrock', {
+      cloud: 'aws',
+      status: {
+        ...provider('bedrock').status,
+        message: 'Your AWS sign-in for “dev” has ended. Sign in to AWS again.',
+      },
+    });
+    const services = {
+      providers: {
+        list: async () => ({ providers: [bedrock] }),
+        connected: async () => new Set(['bedrock']),
+      },
+    } as unknown as Services;
+    const [item] = await providersCheck(services).run({
+      repair: false,
+      signal: new AbortController().signal,
+    });
+    expect(item).toMatchObject({
+      state: 'needs-you',
+      message: 'Your AWS sign-in for “dev” has ended. Sign in to AWS again.',
+      action: { kind: 'open', label: 'Sign in again', focus: 'bedrock' },
+    });
+  });
+
+  it('offers to install the cloud’s own program, by its name', async () => {
+    const vertex = provider('vertex', {
+      cloud: 'gcp',
+      status: {
+        ...provider('vertex').status,
+        state: 'not-installed',
+        fix: { need: 'gcloud', kind: 'install' },
+      },
+    });
+    const services = {
+      providers: {
+        list: async () => ({ providers: [vertex] }),
+        connected: async () => new Set(['vertex']),
+      },
+    } as unknown as Services;
+    const [item] = await providersCheck(services).run({
+      repair: false,
+      signal: new AbortController().signal,
+    });
+    expect(item?.action).toMatchObject({
+      kind: 'need',
+      label: 'Install the Google Cloud CLI',
+      need: 'gcloud',
+    });
+  });
+
   it('says so when no provider works at all', async () => {
     expect(await report([provider('claude-code', { active: true }), provider('codex')])).toEqual({
       'providers:claude-code': 'needs-you',

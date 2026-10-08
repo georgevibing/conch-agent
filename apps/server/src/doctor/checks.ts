@@ -25,6 +25,13 @@ const INTEGRATIONS = 'Apps';
 const COMPUTER = 'This computer';
 const CHANNELS = 'Talk to me here';
 
+/** The program a cloud provider needs, by its need's id (ADR 0109). */
+const CLOUD_TOOLS: Record<string, string> = {
+  'aws-cli': 'the AWS CLI',
+  gcloud: 'the Google Cloud CLI',
+  'azure-cli': 'the Azure CLI',
+};
+
 function providerItem(provider: Provider, fixed: boolean): DoctorItem {
   const { status } = provider;
   const base = { id: `providers:${provider.id}`, group: PROVIDERS, title: provider.name };
@@ -42,8 +49,14 @@ function providerItem(provider: Provider, fixed: boolean): DoctorItem {
     return {
       ...base,
       state: 'needs-you',
-      message: 'Signed out.',
-      action: { kind: 'open', label: 'Sign in', place: 'providers', focus: provider.id },
+      // A cloud says whose sign-in ended (ADR 0109).
+      message: provider.cloud && status.message ? status.message : 'Signed out.',
+      action: {
+        kind: 'open',
+        label: provider.cloud ? 'Sign in again' : 'Sign in',
+        place: 'providers',
+        focus: provider.id,
+      },
     };
   if (status.fix)
     return {
@@ -55,7 +68,8 @@ function providerItem(provider: Provider, fixed: boolean): DoctorItem {
           : (status.message ?? 'Needs an update.'),
       action: {
         kind: 'need',
-        label: `${status.fix.kind === 'update' ? 'Update' : 'Install'} ${provider.name}`,
+        // A cloud needs its own program, not itself (ADR 0109).
+        label: `${status.fix.kind === 'update' ? 'Update' : 'Install'} ${CLOUD_TOOLS[status.fix.need] ?? provider.name}`,
         need: status.fix.need,
         mode: status.fix.kind,
       },

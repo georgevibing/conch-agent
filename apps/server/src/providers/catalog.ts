@@ -13,6 +13,7 @@
  */
 import type {
   BuiltInEngineId,
+  CloudKind,
   EngineId,
   KeyForm,
   ProviderConnect,
@@ -57,6 +58,8 @@ export interface ProviderCopy {
   homepage?: string;
   /** Only offered when Conch is running with the mock engine. */
   internal?: boolean;
+  /** It runs on your company's cloud: its page picks an account found here (ADR 0109). */
+  cloud?: CloudKind;
 }
 
 /** Said about every model API: Conch is the hands, the provider is the brain. */
@@ -597,6 +600,73 @@ const PROVIDERS: ProviderCopy[] = [
     envKeys: ['OLLAMA_API_KEY'],
     color: '#1B1B1B',
     homepage: 'https://ollama.com/cloud',
+  },
+
+  // ── Your company's cloud: the sign-in already on this computer (ADR 0109) ──
+  {
+    id: 'bedrock',
+    name: 'Amazon Bedrock',
+    tagline: 'Claude in your AWS account',
+    description:
+      'Claude through Amazon Bedrock, billed to your company’s AWS account. Conch finds the AWS sign-ins already on this computer, single sign-on included, and you pick one. It lends the model your integrations.',
+    connect: 'key',
+    group: 'key',
+    cloud: 'aws',
+    highlights: ['Your AWS sign-in', 'Billed to your AWS account', 'Uses your integrations'],
+    limits: [
+      'Only the Claude models your AWS account has access to in that region are offered. Other Bedrock models aren’t yet.',
+      API_LIMIT,
+    ],
+    asksFirst: true,
+    // A Bedrock API key, for anyone without an AWS sign-in here. AWS's own marks, both of them.
+    keyForm: key({
+      label: 'Bedrock API key',
+      placeholder: 'ABSK…',
+      help: 'Or make a Bedrock API key in the AWS console. Short-term keys last up to 12 hours.',
+      url: 'https://console.aws.amazon.com/bedrock/home#/api-keys',
+      pattern: '^(ABSK|bedrock-api-key-)',
+      patternHint: 'Bedrock API keys start with ABSK or bedrock-api-key-.',
+      recognise: { distinct: '^(ABSK|bedrock-api-key-)' },
+    }),
+    envKeys: ['AWS_BEARER_TOKEN_BEDROCK'],
+    color: '#232F3E',
+    homepage: 'https://aws.amazon.com/bedrock/claude/',
+  },
+  {
+    id: 'vertex',
+    name: 'Google Vertex AI',
+    tagline: 'Claude in your Google Cloud',
+    description:
+      'Claude through Vertex AI, billed to the Google Cloud project you choose. Conch uses your Google Cloud sign-in on this computer and lists your projects. It lends the model your integrations.',
+    connect: 'key',
+    group: 'key',
+    cloud: 'gcp',
+    highlights: ['Your Google Cloud sign-in', 'Billed to your project', 'Uses your integrations'],
+    limits: [
+      'Claude has to be turned on for the project in Vertex AI’s Model Garden first. Gemini on Vertex isn’t offered yet: use Google Gemini for it.',
+      API_LIMIT,
+    ],
+    asksFirst: true,
+    color: '#4285F4',
+    homepage: 'https://cloud.google.com/vertex-ai/generative-ai/docs/partner-models/claude',
+  },
+  {
+    id: 'azure-openai',
+    name: 'Azure OpenAI',
+    tagline: 'Your Azure OpenAI deployments',
+    description:
+      'The models your company deployed in Azure OpenAI or Azure AI Foundry, billed to your Azure subscription. Conch uses your Azure sign-in and lists your resources and their deployments. It lends the model your integrations.',
+    connect: 'key',
+    group: 'key',
+    cloud: 'azure',
+    highlights: ['Your Azure sign-in', 'Your own deployments', 'Uses your integrations'],
+    limits: [
+      'Signs in with your Azure account (Microsoft Entra), which needs the Azure OpenAI User role on the resource. Resource keys aren’t taken yet.',
+      API_LIMIT,
+    ],
+    asksFirst: true,
+    color: '#0078D4',
+    homepage: 'https://azure.microsoft.com/products/ai-foundry/models/openai',
   },
 ];
 

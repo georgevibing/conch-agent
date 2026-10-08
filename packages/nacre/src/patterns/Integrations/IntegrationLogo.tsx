@@ -47,7 +47,14 @@ function hueOf(name: string): number {
 }
 
 /** Letters for brands whose name doesn't make a good monogram ("xAI API" isn't "XA"). */
-const letters: Record<string, string> = { xai: 'x', grok: 'x' };
+const letters: Record<string, string> = {
+  xai: 'x',
+  grok: 'x',
+  // The clouds (ADR 0109): AWS and Azure asked Simple Icons to remove their marks.
+  bedrock: 'aws',
+  vertex: 'V',
+  'azure-openai': 'Az',
+};
 
 /** Words that say what a thing is, not whose: "Together AI" is a T, not a TA. */
 const GENERIC = new Set(['ai', 'api']);

@@ -1314,6 +1314,28 @@ export function useFindables(query: string, conversationId: string | undefined):
       icon: <Laptop />,
       run: () => openSettings('providers', 'ollama'),
     },
+    // Your company's cloud (ADR 0109): straight to the page that picks an account.
+    {
+      id: 'cloud-bedrock',
+      label: 'Amazon Bedrock',
+      keywords: 'aws amazon bedrock sso profile company cloud enterprise claude',
+      icon: <Cpu />,
+      run: () => openSettings('providers', 'bedrock'),
+    },
+    {
+      id: 'cloud-vertex',
+      label: 'Google Vertex AI',
+      keywords: 'google cloud gcp vertex gcloud project company enterprise claude',
+      icon: <Cpu />,
+      run: () => openSettings('providers', 'vertex'),
+    },
+    {
+      id: 'cloud-azure',
+      label: 'Azure OpenAI',
+      keywords: 'azure microsoft foundry openai entra company cloud enterprise deployment',
+      icon: <Cpu />,
+      run: () => openSettings('providers', 'azure-openai'),
+    },
     // Checking opens Settings → Health and looks; updating opens the update
     // dialog, which says what it brings first.
     {

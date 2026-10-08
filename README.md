@@ -55,8 +55,9 @@ your desktop and the chat apps you already use.
 
 - **Every provider, one picker.** Claude Code, Codex, GitHub Copilot, Gemini CLI and
   Grok with your own sign-in; Ollama, LM Studio or a server of your own; keys from
-  OpenRouter, Anthropic, OpenAI, Google, Mistral, DeepSeek and more. A chat can switch
-  models without losing its thread. [Providers](./apps/docs/content/providers)
+  OpenRouter, Anthropic, OpenAI, Google, Mistral, DeepSeek and more; or your company's
+  Amazon Bedrock, Google Vertex AI or Azure OpenAI, picked from the sign-ins already on
+  your computer. A chat can switch models without losing its thread. [Providers](./apps/docs/content/providers)
 - **`/` commands that work everywhere.** Autocomplete for commands and their choices,
   on a phone too: `/clear` (with Undo), `/goal`, `/plan` and the rest, with every
   provider and in every chat app. [Slash commands](./apps/docs/content/reference/slash-commands.md)

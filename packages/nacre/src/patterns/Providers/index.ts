@@ -17,3 +17,9 @@ export { SignInCode } from './SignInCode';
 export type { SignInCodeProps } from './SignInCode';
 export { KeyCatcher, looksLikeKey, maskKey } from './KeyCatcher';
 export type { KeyCandidate, KeyCatcherProps, KeyMatch } from './KeyCatcher';
+export { CloudAccountPicker } from './CloudAccountPicker';
+export type {
+  CloudAccountItem,
+  CloudAccountPickerProps,
+  CloudAccountStateValue,
+} from './CloudAccountPicker';
