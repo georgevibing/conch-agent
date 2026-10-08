@@ -224,6 +224,16 @@ export async function buildApp(services: Services) {
           },
   });
   const { gate } = services;
+  /**
+   * Allowing a step that matters (ADR 0108): this computer, proven, as it always
+   * was; any other device only with a passkey or password from the last ten
+   * minutes. Read afresh, so confirming on a socket's page counts at once.
+   */
+  const stepUpDone = async (request: FastifyRequest): Promise<boolean> => {
+    if (gate.isLocal(request)) return true;
+    const access = await gate.resolve(request);
+    return typeof access === 'object' && gate.verified(access);
+  };
   registerSecurity(app, gate);
   // 1 MB per message is plenty for a 200k-character prompt; ws defaults to 100 MiB.
   await app.register(fastifyWebsocket, { options: { maxPayload: 1_000_000 } });
@@ -299,7 +309,7 @@ export async function buildApp(services: Services) {
   registerPushRoutes(app, {
     push: services.push,
     conversations: services.conversations,
-    verified: (access) => gate.verified(access),
+    verified: (request) => stepUpDone(request),
   });
   registerVoiceRoutes(app, services.voice, services.speech, services.wake);
   registerSafetyRoutes(app, services.activity, {
@@ -1564,13 +1574,27 @@ export async function buildApp(services: Services) {
             return await services.conversations.configure(command.conversationId, command.options);
           case 'conversation.interrupt':
             return await services.conversations.interrupt(command.conversationId);
-          case 'permission.respond':
+          case 'permission.respond': {
+            // A step that matters is allowed from another device only after a recent
+            // passkey or password, as on the approval sheet (ADR 0108); the card asks.
+            const confirm =
+              command.decision !== 'deny' &&
+              services.push.confirmFor(command.conversationId, command.permissionId);
+            if (confirm && !(await stepUpDone(request)))
+              return send({
+                type: 'error',
+                code: 'verify-required',
+                message: `Confirm it’s you to allow this. ${confirm}`,
+                conversationId: command.conversationId,
+                permissionId: command.permissionId,
+              });
             return await services.conversations.respond(
               command.conversationId,
               command.permissionId,
               command.decision,
               command.edit,
             );
+          }
         }
       } catch (error) {
         const code =

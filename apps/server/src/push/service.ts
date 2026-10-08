@@ -249,6 +249,18 @@ export class PushService {
     };
   }
 
+  /**
+   * Why allowing this question needs a recent passkey or password from a
+   * device that isn't this computer, in a few words; undefined for an
+   * everyday step (ADR 0108). The chat's own card and the approval sheet
+   * both ask this, so both behave the same.
+   */
+  confirmFor(conversationId: string, permissionId: string): string | undefined {
+    const asked = this.#asked.get(permissionId);
+    if (!asked || asked.conversationId !== conversationId || asked.check.quick) return undefined;
+    return asked.check.why;
+  }
+
   /** What the approval sheet shows before it's answered (ADR 0108). */
   approval(conversationId: string, permissionId: string): PushApproval {
     const asked = this.#asked.get(permissionId);
@@ -439,13 +451,18 @@ export class PushService {
       return;
     }
     if (e.type === 'permission.requested') {
-      const chat = await this.deps.conversation(e.conversationId);
-      const check = lockScreenCheck(e, chat?.workspace ?? '');
+      // Judged at once (strictly: no work folder yet, so every file is outside it), so
+      // an answer that comes before the chat is looked up is never let through on less.
+      const expiresAt = this.#now() + APPROVAL_WAIT_MS;
       this.#asked.set(e.permissionId, {
         conversationId: e.conversationId,
-        check,
-        expiresAt: this.#now() + APPROVAL_WAIT_MS,
+        check: lockScreenCheck(e, '\0'),
+        expiresAt,
       });
+      const chat = await this.deps.conversation(e.conversationId);
+      const check = lockScreenCheck(e, chat?.workspace ?? '\0');
+      if (this.#asked.has(e.permissionId))
+        this.#asked.set(e.permissionId, { conversationId: e.conversationId, check, expiresAt });
       // A task asking opens at it, in the chat it came from: answered there.
       const task = chat?.taskId ? await this.deps.task?.(chat.taskId) : undefined;
       // Another app asking through Conch says so: the OK is for it, not your assistant.

@@ -76,11 +76,26 @@ command, the file, the address), when no answer becomes a no, and two big button
 Answering seals it: a ring draws itself round a check (still under reduced motion), and **Back to the
 chat**. Arriving at a question already answered says so.
 
-From the sheet, a step that matters (the same `lockScreenCheck`) is allowed only after a recent passkey
-or password: the gateway answers `verify-required` unless `Gatekeeper.verified` (the 10-minute “sudo
-mode”), and `useVerify` asks. The sheet says why first. The chat's own card is unchanged: it's the same
-person in the same app on an unlocked device; the lock screen was the new reach, and that's what the
-passkey guards. Where a browser shows no notification buttons (iPhone, Safari), a tap opens the sheet; the
+A step that matters (the same `lockScreenCheck`) is allowed from another device only after a recent
+passkey or password, **whichever way the answer comes**: the approval sheet (`POST /api/push/answer`)
+and the chat's own card (the socket's `permission.respond`) both ask `PushService.confirmFor`, and both
+pass only when `stepUpDone` (`app.ts`) holds:
+
+- **This computer, proven** (`Gatekeeper.isLocal`, ADR 0063) passes as it always did. It's where Conch
+  runs and where approving has always happened; a passkey at the desk for every push of a branch would
+  be a question about routine work (agreement 11), and whoever is at that keyboard already has the
+  computer.
+- **Any other device** (a phone, a laptop over Tailscale, a browser through a proxy) needs a passkey or
+  password from the last ten minutes (`Gatekeeper.verified`, the “sudo mode” of ADR 0065), read afresh on
+  each answer, so confirming on a page counts at once for that page's socket.
+
+From the sheet, the gateway answers `verify-required` and `useVerify` asks; the sheet says why first.
+From the card, the socket answers with an `error` of code `verify-required` naming the question: the
+card waits again (`undecided`), `ConfirmToAllow` (mounted once in the shell) asks for the passkey or
+password right there, then sends the same answer again (with the email as you changed it, or **Always
+allow**). Cancelled, the card simply waits. A **Deny** never needs it, and an everyday step never asks.
+
+Where a browser shows no notification buttons (iPhone, Safari), a tap opens the sheet; the
 service worker offers buttons only up to `Notification.maxActions` where a browser says it.
 
 ### 4. A question nobody answers is a no
@@ -137,5 +152,4 @@ device, a replayed or forwarded push, and the agent itself.
 - “Hey Conch” works on a phone while Conch is open, and answers to the assistant's name everywhere.
 - **Not done:** a wake word on a locked phone (needs a native app, which ADR 0027 declines); the
   phrase following the chat's own agent rather than the default; mirroring a web chat's question to a
-  chat app (channels ask for their own chats already); the in-chat card asking for a passkey on
-  remote devices.
+  chat app (channels ask for their own chats already).

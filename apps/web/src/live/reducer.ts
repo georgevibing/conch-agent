@@ -1434,6 +1434,19 @@ export function decided(
     : next;
 }
 
+/**
+ * An answer the gateway didn't take (it wants you to confirm it's you first,
+ * ADR 0108): the question waits again, as it was.
+ */
+export function undecided(view: ConversationView, permissionId: string): ConversationView {
+  const items = updateItem(view.items, 'permission', permissionId, (item) => {
+    const { decision: _, ...rest } = item;
+    return rest;
+  });
+  if (!items) return view;
+  return { ...view, items, status: 'awaiting-permission' };
+}
+
 function stopBrowser(item: TranscriptItem, label: string): TranscriptItem {
   if (item.kind === 'browser' && (item.step.status === 'running' || item.step.status === 'waiting'))
     return { ...item, step: { ...item.step, status: 'error', label } };
