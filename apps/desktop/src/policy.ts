@@ -67,13 +67,17 @@ export function isSignInWindow(
 export const APP_SCHEME = 'conch-app';
 export const STATUS_PAGE = `${APP_SCHEME}://app/status.html`;
 
+/** The app's own pages: its status page, and the glowing edge and Stop card (ADR 0110). */
+export const APP_FILES = ['status.html', 'status.js', 'edge.html', 'stop.html', 'stop.js'] as const;
+export type AppFile = (typeof APP_FILES)[number];
+
 /** The app's own file a `conch-app:` address asks for, if it's one it serves. Nothing else, ever. */
-export function appFile(url: string): 'status.html' | 'status.js' | undefined {
+export function appFile(url: string): AppFile | undefined {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== `${APP_SCHEME}:` || parsed.host !== 'app') return undefined;
     const name = parsed.pathname.slice(1);
-    return name === 'status.html' || name === 'status.js' ? name : undefined;
+    return (APP_FILES as readonly string[]).includes(name) ? (name as AppFile) : undefined;
   } catch {
     return undefined;
   }

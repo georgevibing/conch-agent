@@ -29,7 +29,7 @@ export const options = {
 export function resources() {
   const dir = join(out, 'resources');
   mkdirSync(dir, { recursive: true });
-  for (const name of ['status.html', 'status.js'])
+  for (const name of ['status.html', 'status.js', 'edge.html', 'stop.html', 'stop.js'])
     copyFileSync(join(here, 'pages', name), join(dir, name));
   copyFileSync(join(icons, 'conch-512.png'), join(dir, 'icon.png'));
   copyFileSync(join(icons, 'conch-tray-256.png'), join(dir, 'tray.png'));

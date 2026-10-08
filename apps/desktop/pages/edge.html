@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'"
+    />
+    <meta name="color-scheme" content="light dark" />
+    <!-- The gateway looks through windows with this title (computer-use/driver.ts). -->
+    <title>Conch is using your computer</title>
+    <style>
+      /*
+       * The glowing edge (ADR 0110): Nacre's pearl spectrum (tokens.css
+       * --nc-pearl-1…5, dark values) as a soft light around the screen,
+       * slowly turning, so it's felt at the corner of the eye without
+       * covering anything. Reduced motion: the same glow, still.
+       */
+      @property --turn {
+        syntax: '<angle>';
+        inherits: false;
+        initial-value: 0deg;
+      }
+      :root {
+        --pearl:
+          oklch(0.74 0.1 42 / 0.9), oklch(0.74 0.09 200 / 0.9), oklch(0.7 0.11 265 / 0.9),
+          oklch(0.72 0.1 310 / 0.9), oklch(0.74 0.09 355 / 0.9), oklch(0.74 0.1 42 / 0.9);
+        --edge: 5px;
+        --glow: 28px;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        pointer-events: none;
+        user-select: none;
+      }
+      .edge {
+        position: fixed;
+        inset: 0;
+        padding: var(--edge);
+        background: conic-gradient(from var(--turn), var(--pearl));
+        -webkit-mask:
+          linear-gradient(#000 0 0) content-box exclude,
+          linear-gradient(#000 0 0);
+        mask:
+          linear-gradient(#000 0 0) content-box exclude,
+          linear-gradient(#000 0 0);
+        animation:
+          arrive 520ms cubic-bezier(0.22, 1, 0.36, 1) both,
+          turn 9s linear infinite;
+      }
+      .glow {
+        position: fixed;
+        inset: 0;
+        box-shadow:
+          inset 0 0 var(--glow) 2px oklch(0.72 0.1 310 / 0.42),
+          inset 0 0 calc(var(--glow) * 2.4) 0 oklch(0.74 0.09 200 / 0.22);
+        animation:
+          arrive 520ms cubic-bezier(0.22, 1, 0.36, 1) both,
+          breathe 3.2s ease-in-out 520ms infinite;
+      }
+      @keyframes arrive {
+        from {
+          opacity: 0;
+        }
+      }
+      @keyframes turn {
+        to {
+          --turn: 360deg;
+        }
+      }
+      @keyframes breathe {
+        50% {
+          opacity: 0.6;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .edge,
+        .glow {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="edge"></div>
+  </body>
+</html>

@@ -17,8 +17,10 @@ import { dirname, join } from 'node:path';
 
 import {
   app,
+  BrowserWindow as ElectronWindow,
   type BrowserWindow,
   dialog,
+  globalShortcut,
   Notification,
   type OpenDialogOptions,
   screen,
@@ -31,6 +33,7 @@ import { gatewayEnv, loginShellPath } from './environment';
 import { Gateway } from './gateway';
 import { asThisComputer } from './here';
 import { appMenu, ConchTray } from './menus';
+import { ComputerOverlay } from './overlay';
 import { missing, places } from './places';
 import { originOf, STATUS_PAGE } from './policy';
 import { Updater, updatesMode } from './updater';
@@ -248,6 +251,23 @@ function main(): void {
     dev,
   };
   const tray = new ConchTray(resources, actions);
+  // The glowing edge while the assistant uses this computer's apps (ADR 0110).
+  const overlay = new ComputerOverlay({
+    create: (options) => new ElectronWindow(options),
+    displays: () => {
+      const main = screen.getPrimaryDisplay();
+      return [main, ...screen.getAllDisplays().filter((d) => d.id !== main.id)];
+    },
+    register: (accelerator, pressed) => {
+      try {
+        return globalShortcut.register(accelerator, pressed);
+      } catch {
+        return false;
+      }
+    },
+    unregister: (accelerator) => globalShortcut.unregister(accelerator),
+    onStop: () => void gateway.send({ type: 'computer.stop' }),
+  });
   const updater = new Updater({
     development: build.kind === 'dev',
     send: (message) => void gateway.send(message),
@@ -262,6 +282,8 @@ function main(): void {
   let watching: NodeJS.Timeout | undefined;
   gateway.on('state', (state) => {
     clearInterval(watching);
+    // A gateway that went away isn't using the computer any more.
+    if (state.kind !== 'running') overlay.hide();
     if (state.kind === 'running') {
       const moved = gatewayUrl !== state.url;
       gatewayUrl = state.url;
@@ -330,6 +352,7 @@ function main(): void {
       if (window && !window.isDestroyed()) window.webContents.setBackgroundThrottling(!message.on);
     } else if (message.type === 'show') showWindow();
     else if (message.type === 'update') void updater.get(message.version, message.feed);
+    else if (message.type === 'computer') overlay.set(message.on, message.label);
   });
 
   const watchElsewhere = (url: string) => {
@@ -365,6 +388,7 @@ function main(): void {
   let stopped = false;
   app.on('before-quit', (event) => {
     quitting = true;
+    overlay.hide();
     if (stopped) return;
     event.preventDefault();
     clearInterval(watching);
