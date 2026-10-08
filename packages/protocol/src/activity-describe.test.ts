@@ -2,7 +2,21 @@ import { describe, expect, it } from 'vitest';
 
 import { ToolLabel, type ActivityChip, type ActivityEffect } from './activity';
 import { describeTool, type ToolResult } from './activity-describe';
-import { baseOfIng, favicon, fromPhrase, ing, past, say } from './activity-describe/words';
+import {
+  baseName,
+  baseOfIng,
+  clip,
+  favicon,
+  folderName,
+  fromPhrase,
+  ing,
+  notDone,
+  past,
+  quote,
+  say,
+  shortPath,
+  trimEnd,
+} from './activity-describe/words';
 
 const ok = (output = ''): ToolResult => ({ status: 'success', output });
 const err = (output = ''): ToolResult => ({ status: 'error', output });
@@ -75,6 +89,8 @@ describe('verbs', () => {
     ['stopping', 'stop'],
     ['lying', 'lie'],
     ['coding', 'code'],
+    ['buying', 'buy'],
+    ['dying', 'die'],
   ])('%s comes from %s', (word, base) => expect(baseOfIng(word)).toBe(base));
 
   it('keeps a capital and writes all three ways', () => {
@@ -85,6 +101,24 @@ describe('verbs', () => {
       tried: 'Couldn’t push to main',
     });
   });
+
+  it.each([
+    [say('run', 'the tests'), 'Didn’t run the tests'],
+    [say('read', 'notes.md'), 'Didn’t read notes.md'],
+    [say('send', 'an email'), 'Didn’t send an email'],
+    [say('write', 'a.ts'), 'Didn’t write a.ts'],
+    [say('force-push', 'to main'), 'Didn’t force-push to main'],
+    [
+      { doing: 'Making a picture', done: 'Made a picture', tried: 'Made a picture' },
+      'Didn’t make a picture',
+    ],
+    [{ doing: 'Buying shoes', done: 'Bought shoes', tried: 'Bought shoes' }, 'Didn’t buy shoes'],
+    [{ doing: 'Stopping it', done: 'Stopped it', tried: 'Stopped it' }, 'Didn’t stop it'],
+    [
+      { doing: 'GitHub release', done: 'GitHub release', tried: 'GitHub release' },
+      'Didn’t go ahead: gitHub release',
+    ],
+  ])('%o never ran: %s', (said, not) => expect(notDone(said)).toBe(not));
 
   it.each([
     ['Run unit tests', 'Running unit tests', 'Ran unit tests'],
@@ -1184,7 +1218,7 @@ const SHELL: Case[] = [
     'Bash',
     bash('rm -rf /'),
     err('Not run: it wasn’t allowed.'),
-    { done: 'Couldn’t delete the whole computer', outcome: 'Not allowed', failed: false },
+    { done: 'Didn’t delete the whole computer', outcome: 'Not allowed', failed: false },
   ],
   [
     'a background command',
@@ -1337,6 +1371,22 @@ const TOOLS: Case[] = [
     { pattern: 'blocks\\(', output_mode: 'content' },
     ok('a.ts:1:x\nb.ts:2:y'),
     { done: 'Searched the code for “blocks(”', outcome: '2 matches' },
+  ],
+  [
+    'Grep lines that look like counts, outside count mode',
+    'Grep',
+    { pattern: 'expiresAt', path: '/x/apps' },
+    ok(
+      'apps/server/src/auth/session.ts:12\napps/server/src/auth/store.ts:40\napps/web/src/login.ts:8',
+    ),
+    { outcome: '3 matches' },
+  ],
+  [
+    'Grep in count mode',
+    'Grep',
+    { pattern: 'expiresAt', output_mode: 'count' },
+    ok('a.ts:12\nb.ts:40'),
+    { outcome: '52 matches' },
   ],
   ['Grep nothing', 'Grep', { pattern: 'zzz' }, ok('No files found'), { outcome: 'No matches' }],
   [
@@ -2207,6 +2257,59 @@ describe('the rules’ promises', () => {
   });
 });
 
+describe('calls that never ran', () => {
+  const no = (approval: ToolResult['approval'], output = ''): ToolResult => ({
+    status: 'error',
+    output,
+    approval,
+  });
+
+  it.each([
+    ['Bash', bash('pnpm test'), 'Didn’t run the tests'],
+    [
+      'Edit',
+      { file_path: '/x/notes.md', old_string: 'a', new_string: 'b' },
+      'Didn’t edit notes.md',
+    ],
+    ['Write', { file_path: '/x/notes.md', content: 'x' }, 'Didn’t write notes.md'],
+    ['Read', { file_path: '/x/secret.txt' }, 'Didn’t read secret.txt'],
+    ['google_mail_send', { to: 'ana@example.com' }, 'Didn’t send an email'],
+    ['Bash', bash('git push origin main'), 'Didn’t push to main'],
+    ['Bash', bash('git commit -m "fix"'), 'Didn’t commit the changes'],
+    ['mcp__conch__process_start', { command: 'pnpm test' }, 'Didn’t start the tests'],
+  ] as const)('%s: %s', (name, input, done) => {
+    for (const approval of ['declined', 'refused', 'expired'] as const) {
+      const made = label(name, input, no(approval));
+      expect(made.done).toBe(done);
+      expect(made.failed).toBe(false);
+      expect(made.effects).toBeUndefined();
+    }
+  });
+
+  it('says why it didn’t run, and keeps the words for while it waited', () => {
+    expect(label('Bash', bash('pnpm test'), no('declined'))).toMatchObject({
+      doing: 'Running the tests',
+      outcome: 'You said no',
+    });
+    expect(label('Bash', bash('pnpm test'), no('refused')).outcome).toBe('Not allowed');
+    expect(label('Bash', bash('pnpm test'), no('expired')).outcome).toBe('Not answered');
+  });
+
+  it('is said the same whatever the tool reported, even before it reported', () => {
+    for (const status of ['success', 'error', 'running', 'pending'] as const) {
+      expect(
+        label('Bash', bash('rm -rf build'), { status, approval: 'declined', output: 'ok' }).done,
+      ).toMatch(/^Didn’t /);
+    }
+  });
+
+  it('reads an answer that let it run as running', () => {
+    expect(
+      label('Bash', bash('pnpm test'), { ...ok(' Tests  3 passed (3)'), approval: 'allowed' }),
+    ).toMatchObject({ done: 'Ran the tests', outcome: '3 passed' });
+  });
+});
+
 describe('favicon', () => {
   it('asks the gateway, never a third-party service', () => {
     expect(favicon('amazon.de')).toBe('/api/favicon?host=amazon.de');
@@ -2218,5 +2321,48 @@ describe('favicon', () => {
     expect(favicon('127.0.0.1:8080')).toBeUndefined();
     expect(favicon('93.184.216.34')).toBeUndefined();
     expect(favicon('[2001:db8::1]')).toBeUndefined();
+  });
+});
+
+describe('words on hostile input', () => {
+  /** Milliseconds `run` takes. */
+  const timed = (run: () => unknown) => {
+    const start = Date.now();
+    run();
+    return Date.now() - start;
+  };
+
+  it('says paths, folders and quotes in linear time, however long the run of marks', () => {
+    for (const hostile of [
+      `${'/'.repeat(50_000)}!`,
+      `${'\\'.repeat(50_000)}!`,
+      `${'"'.repeat(50_000)}!`,
+      `${'.'.repeat(50_000)}!`,
+      `a${' '.repeat(50_000)}!`,
+    ]) {
+      expect(timed(() => baseName(hostile))).toBeLessThan(50);
+      expect(timed(() => shortPath(hostile))).toBeLessThan(50);
+      expect(timed(() => folderName(hostile))).toBeLessThan(50);
+      expect(timed(() => quote(hostile))).toBeLessThan(50);
+      expect(timed(() => fromPhrase(hostile))).toBeLessThan(50);
+      expect(timed(() => clip(hostile, 50_000))).toBeLessThan(50);
+      for (const name of ['Read', 'LS', 'Glob', 'Task']) {
+        const input = { file_path: hostile, path: hostile, pattern: hostile, description: hostile };
+        expect(timed(() => label(name, input))).toBeLessThan(50);
+      }
+      expect(timed(() => label('Bash', { command: `git show HEAD${hostile}` }))).toBeLessThan(50);
+      expect(timed(() => label('Bash', { command: `cp a ${hostile}` }))).toBeLessThan(50);
+    }
+  });
+
+  it('trims the same as before', () => {
+    expect(baseName('/home/x/repo/src/Transcript.tsx///')).toBe('Transcript.tsx');
+    expect(baseName('"C:\\Users\\me\\notes.txt\\"')).toBe('notes.txt');
+    expect(shortPath('/a/b/c/d/e/')).toBe('c/d/e');
+    expect(folderName('///')).toBe('the whole computer');
+    expect(folderName('src/')).toBe('src');
+    expect(quote('"hello"')).toBe('“hello”');
+    expect(trimEnd('done. ,;', ',;.', true)).toBe('done');
+    expect(fromPhrase('Run the tests...')?.done).toBe('Ran the tests');
   });
 });

@@ -18,6 +18,7 @@ import {
   plural,
   quote,
   say,
+  trimEnd,
   words,
   type Words,
 } from './words';
@@ -1500,7 +1501,10 @@ function git(input: string[]): Act {
       });
     case 'show': {
       const ref = pos[0] ?? '';
-      const file = /:(.+)$/.exec(ref)?.[1];
+      // What follows the first colon (`HEAD~1:src/a.ts`): found by index, linear on anything.
+      const colon = ref.indexOf(':');
+      const rest = colon >= 0 ? ref.slice(colon + 1) : '';
+      const file = rest && !/[\n\r\u2028\u2029]/.test(rest) ? rest : undefined;
       if (file)
         return act('explore', say('read', `${baseName(file)} as it was`), 28, baseName(file));
       return act('explore', say('look', 'at a commit'), 28, 'a commit', { read: 'diff' });
@@ -1825,7 +1829,7 @@ function gh(args: string[]): Act {
     '-n',
   ]).slice(2);
   const number = pos.find((p) => /^#?\d+$/.test(p) || /\/(?:pull|issues)\/\d+/.test(p));
-  const ref = number ? ` #${/\d+$/.exec(number)?.[0] ?? number}` : '';
+  const ref = number ? ` #${/\d+$/.exec(number.slice(-40))?.[0] ?? number}` : '';
   const title = valueOf(args, '-t', '--title');
   if (area === 'pr') {
     if (sub === 'create' || sub === 'new') {
@@ -2464,8 +2468,9 @@ function search(program: string, args: string[]): Act {
         : folderName(path)
       : 'the code';
   const listsFiles = has(args, '-l', '--files-with-matches', '-L', '--files-without-match');
+  const counts = has(args, '-c', '--count', '--count-matches');
   return act('explore', say('search', `${place} for ${shownPattern}`), 30, place, {
-    read: listsFiles ? 'files' : 'matches',
+    read: listsFiles ? 'files' : counts ? 'match-counts' : 'matches',
     ...(path && /\.\w{1,6}$/.test(path) && { chips: [fileChip(path)] }),
   });
 }
@@ -2669,7 +2674,7 @@ function copier(program: string, args: string[]): Act {
 }
 
 function dirOf(path: string): string {
-  const cut = path.replace(/\/+$/, '').lastIndexOf('/');
+  const cut = trimEnd(path, '/').lastIndexOf('/');
   return cut < 0 ? '.' : path.slice(0, cut);
 }
 

@@ -22,6 +22,8 @@ export type ReadKind =
   | 'log'
   | 'pull'
   | 'matches'
+  /** `grep -c`, a search's count mode: a number per file (`path:12`), summed. */
+  | 'match-counts'
   | 'files'
   | 'entries'
   | 'install'
@@ -318,7 +320,8 @@ export function readOutput(kind: ReadKind | undefined, output: string, ok: boole
   switch (kind) {
     case 'tests': {
       const sum = testSummary(text);
-      return sum ? testOutcome(sum) : {};
+      // A run that ended well without counting says so: never "No problems".
+      return sum ? testOutcome(sum) : ok ? { outcome: 'All passed' } : {};
     }
     case 'types':
       return typeErrors(text, ok) ?? {};
@@ -383,6 +386,18 @@ export function readOutput(kind: ReadKind | undefined, output: string, ok: boole
       const stat = /(\d+) files? changed/.exec(text);
       return stat?.[1] ? { outcome: `${plural(Number(stat[1]), 'file')} changed` } : {};
     }
+    case 'match-counts': {
+      let sum = 0;
+      const all = lines(text).filter((l) => l.trim());
+      for (const line of all.slice(0, 400)) {
+        const m = /(?:^|:)(\d+)$/.exec(line.trim());
+        if (!m) return readOutput('matches', output, ok);
+        sum += Number(m[1]);
+      }
+      return sum || all.length
+        ? { outcome: plural(sum, 'match', 'matches') }
+        : readOutput('matches', output, ok);
+    }
     case 'matches': {
       if (empty || /^(?:No (?:matches|files) found|No files matched)/m.test(text.slice(0, 200)))
         return { outcome: 'No matches', fine: true };
@@ -395,19 +410,6 @@ export function readOutput(kind: ReadKind | undefined, output: string, ok: boole
             : plural(n, 'match', 'matches'),
         };
       }
-      let sum = 0;
-      let counted = true;
-      const all = lines(text).filter((l) => l.trim());
-      for (const line of all.slice(0, 400)) {
-        const m = /(?:^|:)(\d+)$/.exec(line.trim());
-        if (!m) {
-          counted = false;
-          break;
-        }
-        sum += Number(m[1]);
-      }
-      if (counted && all.length && all.length <= 400)
-        return { outcome: plural(sum, 'match', 'matches') };
       const n = countLines(output, /^(?:--|Found \d+|\[.*truncated.*\])$/);
       return { outcome: plural(n, 'match', 'matches') };
     }

@@ -730,9 +730,265 @@ describe('tellStories: headlines', () => {
     const gh = step(
       'gh',
       { b: 1 },
-      { family: 'ship', doing: 'x', done: 'GitHub took the release' },
+      {
+        family: 'ship',
+        doing: 'x',
+        done: 'GitHub took the release',
+        effects: [{ kind: 'publish', text: 'Published v1' }],
+      },
     );
     expect(one([commit(), gh]).headline).toBe('Committed and GitHub took the release');
+  });
+});
+
+// ------------------------------------------- what leads a headline
+
+/** A step from a real call, worded by the rules themselves (`describeTool`). */
+function real(
+  name: string,
+  input: unknown,
+  output = '',
+  over: { status?: 'success' | 'error'; viewKind?: string; approval?: 'declined' } = {},
+): StoryStep {
+  n += 1;
+  clock += 1_000;
+  return stepFromTool({
+    id: `r${n}`,
+    name,
+    input,
+    status: over.status ?? 'success',
+    output,
+    startedAt: clock,
+    durationMs: 500,
+    ...(over.viewKind && { viewKind: over.viewKind }),
+    ...(over.approval && { approval: over.approval }),
+  });
+}
+
+const root = '/Users/ada/garden';
+const proc = (status: string, extra: Record<string, unknown> = {}) =>
+  JSON.stringify({ id: 'p1', status, command: 'pnpm test --filter auth', ...extra });
+
+describe('tellStories: what leads a headline (consequence, then count, then order)', () => {
+  const one = (steps: StoryStep[]) => {
+    const stories = tellStories(steps);
+    expect(stories).toHaveLength(1);
+    return stories[0] as Story;
+  };
+
+  it('leads a ship story with its weightiest act: push, then commit, then staging', () => {
+    const s = one([
+      real('Bash', { command: `git -C ${root} add -A` }),
+      real(
+        'Bash',
+        { command: `git -C ${root} commit -m "fix(auth): compare session expiry in milliseconds"` },
+        '[main 4e1c2a9] fix(auth): compare session expiry in milliseconds\n 3 files changed, 5 insertions(+), 2 deletions(-)',
+      ),
+      real(
+        'Bash',
+        { command: `git -C ${root} push origin main` },
+        'To github.com:ada/garden.git\n   9b0d1f2..4e1c2a9  main -> main',
+      ),
+    ]);
+    expect(s.family).toBe('ship');
+    expect(s.headline).toBe('Committed and pushed to main');
+    expect(s.outcome).toBe('“fix(auth): compare session expiry in milliseconds”');
+  });
+
+  it('says staging only when it’s all there is', () => {
+    expect(one([real('Bash', { command: 'git add -A' })]).headline).toBe('Staged the changes');
+    expect(
+      one([real('Bash', { command: 'git add -A' }), real('Bash', { command: 'git tag v1.2.0' })])
+        .headline,
+    ).not.toMatch(/^Staged/);
+  });
+
+  it('tells a test run started and checked on until it ended as the run, with what it found', () => {
+    const s = one([
+      real(
+        'mcp__conch__process_start',
+        { command: 'pnpm test --filter auth', cwd: root },
+        proc('running'),
+      ),
+      real('mcp__conch__process_read', { id: 'p1' }, proc('running')),
+      real('mcp__conch__process_read', { id: 'p1' }, proc('running')),
+      real(
+        'mcp__conch__process_read',
+        { id: 'p1' },
+        proc('exited', {
+          exitCode: 0,
+          output: ' Test Files  38 passed (38)\n      Tests  241 passed (241)',
+        }),
+      ),
+    ]);
+    expect(s.headline).toBe('Ran the tests');
+    expect(s.outcome).toBe('241 passed');
+    const [run] = storyVisibleSteps(s);
+    expect(run?.label).toMatchObject({ done: 'Ran the tests', outcome: '241 passed' });
+    // The run lasts until the check that saw it end.
+    const end = s.steps[s.steps.length - 1] as StoryStep;
+    expect(run?.durationMs).toBe(end.startedAt + 500 - (run?.startedAt ?? 0));
+  });
+
+  it('says a run that ended badly failed, and one still going as started', () => {
+    const failed = one([
+      real('mcp__conch__process_start', { command: 'pnpm test --filter auth' }, proc('running')),
+      real(
+        'mcp__conch__process_read',
+        { id: 'p1' },
+        proc('exited', { exitCode: 1, output: ' Tests  2 failed | 239 passed (241)' }),
+      ),
+    ]);
+    expect(failed.status).toBe('failed');
+    expect(failed.outcome).toBe('2 failed');
+    const going = one([
+      real('mcp__conch__process_start', { command: 'pnpm test --filter auth' }, proc('running')),
+      real('mcp__conch__process_read', { id: 'p1' }, proc('running')),
+    ]);
+    expect(storyVisibleSteps(going)[0]?.label.done).toBe('Started the tests');
+  });
+
+  it('tells a check with its fixes as the check: the tests lead, edits never do', () => {
+    const s = one([
+      real(
+        'mcp__conch__process_start',
+        { command: 'pnpm test --filter auth', cwd: root },
+        proc('running'),
+      ),
+      real('mcp__conch__process_read', { id: 'p1' }, proc('running')),
+      real(
+        'mcp__conch__process_read',
+        { id: 'p1' },
+        proc('exited', { exitCode: 0, output: '      Tests  241 passed (241)' }),
+      ),
+      real('Bash', { command: `pnpm -C ${root} typecheck` }, 'Tasks: 6 successful, 6 total'),
+      real(
+        'Bash',
+        { command: `pnpm -C ${root} lint` },
+        '/x/clock.ts\n  1:1  error  Missing return type  rule\n\n✖ 2 problems (2 errors, 0 warnings)',
+        { status: 'error' },
+      ),
+      real(
+        'Edit',
+        { file_path: `${root}/apps/server/src/auth/clock.ts`, old_string: 'a', new_string: 'b' },
+        'ok',
+      ),
+      real('Bash', { command: `pnpm -C ${root} lint` }, 'Tasks: 6 successful, 6 total'),
+    ]);
+    expect(s.family).toBe('verify');
+    expect(s.status).toBe('done');
+    expect(s.headline).toBe('Ran the tests and 2 other checks');
+    expect(s.outcome).toBe('241 passed');
+    expect(s.note).toBe('Worked after a fix');
+  });
+
+  it('leads with what most steps did: three pages read over one search', () => {
+    const page = (asin: string) =>
+      real('mcp__conch__web_fetch', { url: `https://www.amazon.de/dp/${asin}` }, 'Title: x', {
+        viewKind: 'sources',
+      });
+    const s = one([
+      real(
+        'mcp__conch__web_search',
+        { query: 'amazon.de herren oxford hemd weiß slim fit' },
+        '1. x\n2. y',
+      ),
+      page('B07QXV6N4R'),
+      page('B08Z4KQ1LM'),
+      page('B09MZ2XR7T'),
+      page('B07QXV6N4R'),
+    ]);
+    expect(s.repeats).toBe(1);
+    expect(s.headline).toBe('Searched the web and read 3 pages on amazon.de');
+  });
+
+  it('keeps the leading phrase’s fullest words that fit, and drops to it alone when none do', () => {
+    const host = 'docs.a-very-long-documentation-site.example.com';
+    const page = (i: number) => real('WebFetch', { url: `https://${host}/p${i}` });
+    // "Read 3 pages on docs.…" won't fit beside anything: the search keeps its words.
+    expect(one([webSearch('x'.repeat(10)), page(1), page(2), page(3)]).headline).toBe(
+      'Searched the web for “xxxxxxxxxx” and read 3 pages',
+    );
+    const long = (i: number) =>
+      step(
+        'mail_send',
+        { i },
+        {
+          family: 'connect',
+          doing: 'x',
+          done: `Sent ${'a long word '.repeat(5)}${i}`,
+          effects: [{ kind: 'send', text: 'Sent' }],
+        },
+      );
+    const s = one([
+      long(1),
+      long(2),
+      step(
+        'mail_x',
+        {},
+        {
+          family: 'connect',
+          doing: 'x',
+          done: `Moved ${'another long word '.repeat(3)}`,
+          effects: [{ kind: 'other', text: 'Moved' }],
+        },
+      ),
+    ]);
+    expect(s.headline).toMatch(/^Sent a long word/);
+    expect(s.headline).not.toMatch(/ and moved/);
+  });
+
+  it('counts looks against looks, and the most-done one leads', () => {
+    const s = one([
+      real('Bash', { command: `git -C ${root} status --short` }, ' M a.ts'),
+      real('Read', { file_path: `${root}/apps/web/src/login.test.ts` }, 'x'),
+      real('Read', { file_path: `${root}/apps/server/src/auth/session.ts` }, 'x'),
+      real('Grep', { pattern: 'expiresAt', path: `${root}/apps` }, 'apps/a.ts\napps/b.ts'),
+      real('Glob', { pattern: '**/*.test.ts' }, 'a.test.ts\nb.test.ts'),
+      real('Bash', { command: "python3 - <<'PY'\nprint(1)\nPY" }, '1'),
+      real('Read', { file_path: `${root}/package.json` }, '{}'),
+    ]);
+    expect(s.headline).toBe('Read 3 files and searched the code');
+    expect(s.family).toBe('explore');
+    // What a listing found isn't what reading three files came to.
+    expect(s.outcome).toBeUndefined();
+  });
+
+  it('never lets a look join a change, but lets a check', () => {
+    expect(one([read('a.ts'), read('b.ts'), read('c.ts'), edit('a.ts')]).headline).toBe(
+      'Edited a.ts',
+    );
+    expect(one([edit('a.ts'), test()]).headline).toBe('Edited a.ts and ran the tests');
+  });
+
+  it('says changes to several files in their lines together', () => {
+    const s = one([
+      real('Edit', { file_path: '/x/session.ts', old_string: 'a', new_string: 'b' }, 'ok'),
+      real('Write', { file_path: '/x/clock.ts', content: 'x\n' }, 'ok'),
+      real('Edit', { file_path: '/x/login.test.ts', old_string: 'a', new_string: 'b\nc' }, 'ok'),
+    ]);
+    expect(s.headline).toBe('Changed session.ts and 2 other files');
+    expect(s.outcome).toBe('+4 −2');
+  });
+
+  it('puts what never ran last, and says it plainly when that’s all', () => {
+    const no = (name: string, input: unknown) => real(name, input, '', { approval: 'declined' });
+    const all = one([no('Bash', { command: 'pnpm test' })]);
+    expect(all.headline).toBe('Didn’t run the tests');
+    expect(all.status).toBe('done');
+    expect(all.effects).toEqual([]);
+    const two = one([
+      no('Edit', { file_path: '/x/a.md', old_string: 'a', new_string: 'b' }),
+      no('Bash', { command: 'pnpm test' }),
+    ]);
+    expect(two.headline).toBe('Didn’t edit a.md and run the tests');
+    const mixed = one([
+      read('a.ts'),
+      read('b.ts'),
+      no('Edit', { file_path: '/x/notes.md', old_string: 'a', new_string: 'b' }),
+    ]);
+    expect(mixed.headline).toBe('Read 2 files');
+    expect(mixed.status).toBe('done');
   });
 });
 

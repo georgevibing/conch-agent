@@ -12,9 +12,16 @@
  */
 import type { ActivityChip, ActivityEffect, ActivityFamily, ToolLabel } from './activity';
 import { describeTool } from './activity-describe';
+import { count, quote } from './activity-describe/words';
 import { cutSteps } from './activity-stories/cut';
 import { mergeEffects, stepEffects } from './activity-stories/effects';
-import { fit, HEADLINE_MAX, headlineOf, weightOf } from './activity-stories/headline';
+import {
+  fit,
+  HEADLINE_MAX,
+  isTestsStep,
+  tellHeadline,
+  weightOf,
+} from './activity-stories/headline';
 import {
   changesThings,
   isFailed,
@@ -23,9 +30,10 @@ import {
   isSettled,
   retryKey,
   sameKey,
+  settleRuns,
 } from './activity-stories/steps';
 import { stuckOf } from './activity-stories/stuck';
-import type { ToolStatus } from './index';
+import type { ToolApproval, ToolStatus } from './index';
 
 export { groupEffects, stepEffects, EFFECT_ORDER } from './activity-stories/effects';
 export type { EffectGroup } from './activity-stories/effects';
@@ -41,6 +49,8 @@ export interface StoryStep {
   label: ToolLabel;
   startedAt: number;
   durationMs?: number;
+  /** It asked first and didn't run: you said no, a rule did, or nobody answered. */
+  declined?: boolean;
 }
 
 export interface Story {
@@ -155,12 +165,18 @@ function statusOf(
   return 'done';
 }
 
-function familyOf(steps: readonly StoryStep[], meaningful: readonly StoryStep[]): ActivityFamily {
-  const from = meaningful.length > 0 ? meaningful : steps;
-  let best: ActivityFamily = from[0]?.label.family ?? 'other';
-  // A check that holds its fixes is still a check.
-  if (best === 'verify' && !from.some((s) => s.label.family === 'ship')) return best;
-  for (const s of from) if (weightOf(s.label.family) > weightOf(best)) best = s.label.family;
+/** A check that holds its fixes is still a check: it starts with one, and nothing is sent off. */
+function verifyLedOf(meaningful: readonly StoryStep[]): boolean {
+  return (
+    meaningful[0]?.label.family === 'verify' && !meaningful.some((s) => s.label.family === 'ship')
+  );
+}
+
+/** The story's family: the one its headline leads with, else the weightiest of its steps. */
+function familyOf(steps: readonly StoryStep[], lead: readonly StoryStep[]): ActivityFamily {
+  if (lead[0]) return lead[0].label.family;
+  let best: ActivityFamily = steps[0]?.label.family ?? 'other';
+  for (const s of steps) if (weightOf(s.label.family) > weightOf(best)) best = s.label.family;
   return best;
 }
 
@@ -172,27 +188,82 @@ function last<T>(items: readonly T[], test: (item: T) => boolean): T | undefined
   return undefined;
 }
 
+/** "+12 −3", "4 lines": what one change came to, in lines added and removed. */
+function linesOf(outcome: string | undefined): [number, number] | undefined {
+  const n = (text: string | undefined) => Number((text ?? '0').replace(/,/g, ''));
+  const lines = /^([\d,]+) lines?$/.exec(outcome ?? '');
+  if (lines) return [n(lines[1]), 0];
+  const change = /^(?:\+([\d,]+))?\s?(?:−([\d,]+))?$/.exec(outcome ?? '');
+  return change && (change[1] || change[2]) ? [n(change[1]), n(change[2])] : undefined;
+}
+
+/** Changes to several files said together, "+14 −3", when each said its lines. */
+function changesOutcome(edits: readonly StoryStep[]): string | undefined {
+  const files = new Set(edits.map((s) => s.label.subject));
+  if (files.size <= 1) return last(edits, (s) => !!s.label.outcome)?.label.outcome;
+  let added = 0;
+  let removed = 0;
+  for (const s of edits) {
+    const lines = linesOf(s.label.outcome);
+    if (!lines) return undefined;
+    added += lines[0];
+    removed += lines[1];
+  }
+  if (!added && !removed) return undefined;
+  if (!removed) return `+${count(added)}`;
+  if (!added) return `−${count(removed)}`;
+  return `+${count(added)} −${count(removed)}`;
+}
+
+/** What the commit said, from its effect: “fix the login”. */
+function commitMessage(steps: readonly StoryStep[]): string | undefined {
+  for (const s of [...steps].reverse())
+    for (const e of s.label.effects ?? [])
+      if (e.kind === 'commit') {
+        const m = /“(.+)”/.exec(e.text);
+        if (m?.[1]) return quote(m[1].replace(/…$/, ''), HEADLINE_MAX - 2);
+      }
+  return undefined;
+}
+
+/**
+ * What the story came to, from the steps its headline names: what a check
+ * found (the tests first), where a push went (else what the commit said), the
+ * lines a change came to. A failed story says what went wrong.
+ */
 function outcomeOf(
   steps: readonly StoryStep[],
   visible: readonly StoryStep[],
   status: Story['status'],
-  family: ActivityFamily,
+  headline: { lead: readonly StoryStep[]; also?: readonly StoryStep[] },
 ): string | undefined {
   const has = (s: StoryStep) => !!s.label.outcome;
-  let step: StoryStep | undefined;
+  const { lead } = headline;
+  const family = lead[0]?.label.family;
+  const named = [...lead, ...(headline.also ?? [])];
+  let text: string | undefined;
   if (status === 'failed') {
-    step = last(steps, (s) => isFailed(s) && has(s));
+    text = last(steps, (s) => isFailed(s) && has(s))?.label.outcome;
+  } else if (named.some((s) => s.label.family === 'verify')) {
+    // A check it names is what it came to: "Edited 3 files and ran the type check · No errors".
+    const checks = named.filter((s) => s.label.family === 'verify' && has(s));
+    text = (last(checks, isTestsStep) ?? checks[checks.length - 1])?.label.outcome;
+  } else if (family === 'edit') {
+    text = changesOutcome(lead);
+  } else if (family === 'ship') {
+    text = last(lead, has)?.label.outcome ?? commitMessage(steps);
   } else {
-    step =
-      last(steps, (s) => s.label.family === 'verify' && has(s)) ??
-      last(steps, (s) => s.label.family === 'ship' && has(s)) ??
-      (visible.length === 1 && visible[0] && has(visible[0]) ? visible[0] : undefined) ??
-      last(visible, (s) => s.label.family === family && has(s));
+    // Only the lead's own: "41 files" from a listing isn't what "Read 3 files" came to.
+    text =
+      last(lead, has)?.label.outcome ??
+      (visible.length === 1 ? visible[0]?.label.outcome : undefined);
   }
-  return step?.label.outcome ? fit(step.label.outcome, HEADLINE_MAX, false) : undefined;
+  return text ? fit(text, HEADLINE_MAX, false) : undefined;
 }
 
-function tell(steps: StoryStep[]): Story {
+function tell(cut: StoryStep[]): Story {
+  // A command started and checked on until it ended reads as the run it was.
+  const steps = settleRuns(cut);
   const first = steps[0] as StoryStep;
   const repeats = repeatsOf(steps);
   const quiet = steps.filter((s) => isNoiseStep(s) || repeats.has(s.id)).map((s) => s.id);
@@ -200,12 +271,18 @@ function tell(steps: StoryStep[]): Story {
   const visible = meaningful.filter((s) => !repeats.has(s.id));
   const { note, recovered } = retriesOf(steps);
   const status = statusOf(steps, meaningful, recovered);
-  const family = familyOf(steps, meaningful);
   const focus = last(steps, isLive);
   // A story of only checks on a running command says what those checks say.
   const words = visible.length > 0 ? visible : steps.slice(-1);
-  const headline = headlineOf(words, status === 'running' ? 'doing' : 'done', focus);
-  const outcome = outcomeOf(steps, visible, status, family);
+  const verifyLed = verifyLedOf(meaningful);
+  const told = tellHeadline(words, 'done', { verifyLed });
+  // Its family is what it's about as a whole, so it doesn't change with the step at hand.
+  const family = familyOf(meaningful.length > 0 ? meaningful : steps, told.lead);
+  const headline =
+    status === 'running'
+      ? tellHeadline(words, 'doing', { ...(focus && { focus }), verifyLed }).text
+      : told.text;
+  const outcome = outcomeOf(steps, visible, status, told);
   const story: Story = {
     id: first.id,
     family,
@@ -268,21 +345,40 @@ export interface ToolCallLike {
   label?: ToolLabel;
   /** The `kind` of the view it returned, for the words of what it found. */
   viewKind?: string;
+  /** It asked first, or a rule stopped it: how that went (ADR 0028). */
+  approval?: ToolApproval;
 }
 
-/** A story step from a tool call, with its words worked out when the call doesn't carry them. */
+/** Answers that mean a call never ran. */
+const NEVER_RAN = new Set<ToolApproval>(['declined', 'refused', 'expired']);
+
+/**
+ * A story step from a tool call, with its words worked out when the call
+ * doesn't carry them. A call that never ran (you said no) is said so by the
+ * rules, "Didn’t run the tests", whatever words it carried while it waited,
+ * and is over even if the tool hasn't said so yet.
+ */
 export function stepFromTool(call: ToolCallLike): StoryStep {
-  const result = isSettled(call)
-    ? { status: call.status, output: call.output, viewKind: call.viewKind }
-    : undefined;
+  const declined = call.approval !== undefined && NEVER_RAN.has(call.approval);
+  const status: ToolStatus = declined && !isSettled(call) ? 'error' : call.status;
+  const result =
+    declined || isSettled(call)
+      ? {
+          status,
+          ...(call.output !== undefined && { output: call.output }),
+          ...(call.viewKind !== undefined && { viewKind: call.viewKind }),
+          ...(declined && { approval: call.approval }),
+        }
+      : undefined;
   const step: StoryStep = {
     id: call.id,
     name: call.name,
     input: call.input,
-    status: call.status,
-    label: call.label ?? describeTool(call.name, call.input, result),
+    status,
+    label: (!declined && call.label) || describeTool(call.name, call.input, result),
     startedAt: call.startedAt,
   };
   if (call.durationMs !== undefined) step.durationMs = call.durationMs;
+  if (declined) step.declined = true;
   return step;
 }

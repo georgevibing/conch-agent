@@ -95,8 +95,12 @@ export function isLive(step: Pick<StoryStep, 'status'>): boolean {
   return step.status === 'running' || step.status === 'pending';
 }
 
-/** Went wrong: an error, or a result worth calling a failure (tests that failed). */
-export function isFailed(step: Pick<StoryStep, 'status' | 'label'>): boolean {
+/**
+ * Went wrong: an error, or a result worth calling a failure (tests that
+ * failed). A step that never ran (you said no) didn't go wrong.
+ */
+export function isFailed(step: Pick<StoryStep, 'status' | 'label' | 'declined'>): boolean {
+  if (step.declined) return false;
   return step.status === 'error' || (step.status === 'success' && step.label.failed === true);
 }
 
@@ -133,4 +137,53 @@ export function retryKey(step: Pick<StoryStep, 'name' | 'input' | 'label'>): str
 export function changesThings(step: Pick<StoryStep, 'label'>): boolean {
   const f = step.label.family;
   return f === 'edit' || f === 'ship' || f === 'make' || (step.label.effects?.length ?? 0) > 0;
+}
+
+/** A step that started a command left running: Conch's `process_start`. */
+function startsRun(step: Pick<StoryStep, 'name'>): boolean {
+  return bareName(step.name) === 'process_start';
+}
+
+/**
+ * A check on a running command that saw it end: its words are the run's own
+ * ("Ran the tests"), not "Checked on the tests".
+ */
+function endsRun(step: Pick<StoryStep, 'name' | 'status' | 'label'>): boolean {
+  return (
+    bareName(step.name) === 'process_read' &&
+    isSettled(step) &&
+    !/^(?:Checked on|Checking on|Couldn[’']t check on)\b/.test(step.label.done)
+  );
+}
+
+/**
+ * A command started and then checked on until it ended is one run: the step
+ * that started it says what the run came to ("Ran the tests · 241 passed"),
+ * from the last check that saw it end, and lasts until then. Each check goes
+ * with the latest start of the same command before it.
+ */
+export function settleRuns(steps: readonly StoryStep[]): StoryStep[] {
+  const out = [...steps];
+  const ends = new Map<number, number>();
+  steps.forEach((step, i) => {
+    if (!endsRun(step) || !step.label.subject) return;
+    for (let j = i - 1; j >= 0; j -= 1) {
+      const start = steps[j] as StoryStep;
+      if (startsRun(start) && start.label.subject === step.label.subject) {
+        ends.set(j, i);
+        return;
+      }
+    }
+  });
+  for (const [j, i] of ends) {
+    const start = steps[j] as StoryStep;
+    const end = steps[i] as StoryStep;
+    const label = { ...end.label };
+    if (start.label.chips?.length && !label.chips?.length) label.chips = start.label.chips;
+    const settled: StoryStep = { ...start, status: end.status, label };
+    const until = end.startedAt + (end.durationMs ?? 0);
+    settled.durationMs = Math.max(start.durationMs ?? 0, until - start.startedAt);
+    out[j] = settled;
+  }
+  return out;
 }

@@ -9,7 +9,7 @@
  */
 import type { ActivityChip, ActivityEffect, ActivityFamily, ToolLabel } from './activity';
 import { APP_TOOL_WORDS, type AppToolName } from './app-tools';
-import type { ToolStatus } from './index';
+import type { ToolApproval, ToolStatus } from './index';
 import { PAST_CHATS_TOOLS } from './past-chats';
 import {
   exitCode,
@@ -39,11 +39,13 @@ import {
   hostOf,
   humanize,
   isLocal,
+  notDone,
   oneLine,
   plural,
   quote,
   say,
   shortPath,
+  trimEnd,
   words,
   type Words,
 } from './activity-describe/words';
@@ -54,7 +56,19 @@ export interface ToolResult {
   output?: string;
   /** The `kind` of the `ToolView` it returned, when it returned one. */
   viewKind?: string;
+  /**
+   * It asked first, or a rule stopped it: how that went. `declined`, `refused`
+   * and `expired` mean it never ran, whatever `status` the tool reported.
+   */
+  approval?: ToolApproval;
 }
+
+/** Answers that mean a call never ran, and what its line says about why. */
+const NOT_RUN: Partial<Record<ToolApproval, string>> = {
+  declined: 'You said no',
+  refused: 'Not allowed',
+  expired: 'Not answered',
+};
 
 /** A label on its way: the words, and how to read the output when it comes. */
 interface Draft {
@@ -484,7 +498,7 @@ function grepDraft(input: Input): Draft {
   return {
     family: 'explore',
     words: say('search', `${place} for ${quote(pattern.replace(/\\([^\w\s])/g, '$1'))}`),
-    read: 'matches',
+    read: input.output_mode === 'count' ? 'match-counts' : 'matches',
     ...(pattern && { subject: clip(pattern, 200) }),
     ...(filePath && { chips: [fileChip(filePath)] }),
   };
@@ -566,9 +580,7 @@ function todoDraft(items: unknown, doneWords: readonly string[]): Draft {
 }
 
 function helperDraft(description: string | undefined): Draft {
-  const task = description
-    ? lowerFirst(clip(oneLine(description).replace(/[.!]+$/, ''), 70))
-    : undefined;
+  const task = description ? lowerFirst(clip(trimEnd(oneLine(description), '.!'), 70)) : undefined;
   return {
     family: 'delegate',
     words: say('ask', task ? `a helper to ${task}` : 'a helper'),
@@ -1370,6 +1382,17 @@ function failureOutcome(output: string, code?: number): string {
 function finishDraft(draft: Draft, result: ToolResult | undefined): ToolLabel {
   let { words: said, outcome, effects, chips, family, subject } = draft;
   let failed: boolean | undefined;
+  // It never ran: said as not done, never as a failure, and it changed nothing.
+  const notRun = result?.approval && NOT_RUN[result.approval];
+  if (notRun)
+    return finalize({
+      family,
+      words: { ...said, done: notDone(said) },
+      outcome: notRun,
+      failed: false,
+      ...(subject && { subject }),
+      ...(chips && { chips }),
+    });
   const ended = result && (result.status === 'success' || result.status === 'error');
   if (!ended) effects = undefined;
   if (ended && result) {
@@ -1389,7 +1412,7 @@ function finishDraft(draft: Draft, result: ToolResult | undefined): ToolLabel {
     if (refusal) {
       return finalize({
         family,
-        words: { ...said, done: said.tried },
+        words: { ...said, done: refusal === 'declined' ? notDone(said) : said.tried },
         outcome: refusal === 'declined' ? 'Not allowed' : 'Stopped',
         failed: false,
         ...(subject && { subject }),

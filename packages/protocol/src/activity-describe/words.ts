@@ -230,7 +230,7 @@ export function baseOfIng(word: string): string {
   const lower = word.toLowerCase();
   const stem = lower.slice(0, -3);
   if (/(.)\1$/.test(stem) && ingOf(stem.slice(0, -1)) === lower) return stem.slice(0, -1);
-  if (stem.endsWith('y') && ingOf(`${stem.slice(0, -1)}ie`) === lower && stem.length <= 3)
+  if (stem.endsWith('y') && ingOf(`${stem.slice(0, -1)}ie`) === lower && stem.length <= 2)
     return `${stem.slice(0, -1)}ie`;
   if (ingOf(stem) === lower) return stem;
   if (ingOf(`${stem}e`) === lower) return `${stem}e`;
@@ -250,6 +250,21 @@ export function say(verb: string, rest = ''): Words {
     done: cap(`${past(verb)}${tail}`),
     tried: `Couldn’t ${verb.toLowerCase()}${tail}`,
   };
+}
+
+/**
+ * What a step says when it never ran (you said no, a rule did, or nobody
+ * answered): the verb negated, "Didn’t run the tests", "Didn’t send an email",
+ * read from the words it would have said.
+ */
+export function notDone(said: Words): string {
+  const couldnt = /^Couldn[’']t\s+(.+)$/.exec(said.tried);
+  if (couldnt?.[1]) return `Didn’t ${couldnt[1]}`;
+  const doing = said.doing.trim();
+  const verb = /^(\S+ing)\b(.*)$/i.exec(doing);
+  if (verb?.[1] && !NOT_ING.has(verb[1].toLowerCase()))
+    return `Didn’t ${inflect(verb[1], baseOfIng).toLowerCase()}${verb[2] ?? ''}`;
+  return `Didn’t go ahead: ${said.done.charAt(0).toLowerCase()}${said.done.slice(1)}`;
 }
 
 /** Words written out already, for what a verb can't say. */
@@ -317,7 +332,7 @@ const NOT_ING = new Set(['thing', 'string', 'something', 'nothing', 'everything'
  * them) said both ways, or undefined when it doesn't start with a verb.
  */
 export function fromPhrase(text: string, max = 90): Words | undefined {
-  const phrase = clip(oneLine(text).replace(/[.:;!]+$/, ''), max);
+  const phrase = clip(trimEnd(oneLine(text), '.:;!'), max);
   const match = /^([A-Za-z][A-Za-z'-]*)(\s+.*)?$/.exec(phrase);
   if (!match?.[1]) return undefined;
   const first = match[1];
@@ -364,12 +379,41 @@ export function clip(text: string, max: number): string {
   const space = cut.lastIndexOf(' ');
   if (space > max * 0.6) cut = cut.slice(0, space);
   if (/[\ud800-\udbff]$/.test(cut)) cut = cut.slice(0, -1);
-  return `${cut.replace(/[\s,;:.-]+$/, '')}…`;
+  return `${trimEnd(cut, ',;:.-', true)}…`;
+}
+
+/**
+ * Path-ish text is cut to this before anything looks at it: a path, a
+ * folder or a quoted word is never longer, and nothing here grows with it.
+ */
+export const PATH_MAX = 4_096;
+
+/**
+ * `text` without any of `chars` (and white space, with `space`) at its end.
+ * An index loop, not `/[…]+$/`: a regex anchored at the end only by `$`
+ * tries every start, quadratic on a long run that isn't at the end.
+ */
+export function trimEnd(text: string, chars: string, space = false): string {
+  let end = text.length;
+  while (end > 0) {
+    const ch = text.charAt(end - 1);
+    if (!chars.includes(ch) && !(space && /\s/.test(ch))) break;
+    end--;
+  }
+  return text.slice(0, end);
+}
+
+/** `text` without any of `chars` at its start. */
+export function trimStart(text: string, chars: string): string {
+  let start = 0;
+  while (start < text.length && chars.includes(text.charAt(start))) start++;
+  return text.slice(start);
 }
 
 /** “like this”, one line, short. */
 export function quote(text: string, max = 40): string {
-  return `“${clip(oneLine(text).replace(/^["'“”‘’`]+|["'“”‘’`]+$/g, ''), max)}”`;
+  const marks = `"'“”‘’\``;
+  return `“${clip(trimEnd(trimStart(oneLine(text), marks), marks), max)}”`;
 }
 
 /** 7388 → "7,388". */
@@ -384,13 +428,13 @@ export function plural(n: number, one: string, many = `${one}s`): string {
 
 /** The last part of a path: `/home/x/repo/src/Transcript.tsx` → `Transcript.tsx`. */
 export function baseName(path: string): string {
-  const trimmed = unquote(path).replace(/[\\/]+$/, '');
+  const trimmed = trimEnd(unquote(path), '/\\');
   const cut = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
   return clip((cut >= 0 ? trimmed.slice(cut + 1) : trimmed) || trimmed || path, 60);
 }
 
 function unquote(path: string): string {
-  return path.trim().replace(/^["'`]+|["'`]+$/g, '');
+  return trimEnd(trimStart(path.slice(0, PATH_MAX).trim(), `"'\``), `"'\``);
 }
 
 /**
@@ -398,7 +442,7 @@ function unquote(path: string): string {
  * folder or the project's long road to it. `.` and empty are the folder itself.
  */
 export function shortPath(path: string, keep = 3): string {
-  const clean = unquote(path).replace(/\\/g, '/').replace(/\/+$/, '');
+  const clean = trimEnd(unquote(path).replace(/\\/g, '/'), '/');
   if (!clean || clean === '.') return '.';
   if (clean === '~') return '~';
   const parts = clean.replace(/^\.\//, '').split('/').filter(Boolean);
@@ -408,8 +452,9 @@ export function shortPath(path: string, keep = 3): string {
 
 /** A folder said in words: "src", "the folder", "your home folder". */
 export function folderName(path: string | undefined): string {
-  if (/^\/+$/.test(unquote(path ?? ''))) return 'the whole computer';
-  const clean = unquote(path ?? '').replace(/\/+$/, '');
+  const bare = unquote(path ?? '');
+  const clean = trimEnd(bare, '/');
+  if (bare && !clean) return 'the whole computer';
   if (!clean || clean === '.' || clean === './') return 'the folder';
   if (clean === '..') return 'the folder above';
   if (clean === '~' || /^(?:\/Users|\/home)\/[^/]+$/.test(clean)) return 'your home folder';
