@@ -1539,6 +1539,56 @@ const TOOLS: Case[] = [
     },
   ],
   [
+    'product_details',
+    'mcp__conch__product_details',
+    { urls: ['https://www.lakeland.co.uk/a', 'https://shop.example/b'] },
+    ok(
+      JSON.stringify({
+        products: [
+          { url: 'https://www.lakeland.co.uk/a', found: true, title: 'Kettle' },
+          { url: 'https://shop.example/b', found: false, problem: 'The site returned 403.' },
+        ],
+      }),
+    ),
+    {
+      family: 'research',
+      done: 'Looked at 2 products',
+      outcome: '1 product',
+      chips: [
+        { kind: 'site', label: 'lakeland.co.uk' },
+        { kind: 'site', label: 'shop.example' },
+      ],
+    },
+  ],
+  [
+    'music_search',
+    'mcp__conch__music_search',
+    { query: 'bohemian rhapsody', kind: 'song' },
+    ok(JSON.stringify({ query: 'bohemian rhapsody', results: [{ title: 'a' }, { title: 'b' }] })),
+    { family: 'research', done: 'Found “bohemian rhapsody”', outcome: '2 songs' },
+  ],
+  [
+    'music_search for podcasts, nothing found',
+    'music_search',
+    { query: 'zzz', kind: 'podcast' },
+    ok(JSON.stringify({ query: 'zzz', results: [] })),
+    { family: 'research', outcome: 'Nothing found' },
+  ],
+  [
+    'video_search',
+    'mcp__conch__video_search',
+    { query: 'sourdough shaping' },
+    ok(JSON.stringify({ query: 'sourdough shaping', videos: [{ title: 'a' }, { title: 'b' }] })),
+    { family: 'research', done: 'Found videos of “sourdough shaping”', outcome: '2 videos' },
+  ],
+  [
+    'video_details',
+    'video_details',
+    { urls: ['https://youtu.be/dQw4w9WgXcQ'] },
+    ok(JSON.stringify({ videos: [{ title: 'a' }] })),
+    { family: 'research', done: 'Looked up a video', outcome: '1 video' },
+  ],
+  [
     'web_fetch with a title',
     'web_fetch',
     { url: 'https://www.amazon.de/dp/B0CHWRXH8B' },
@@ -1554,6 +1604,87 @@ const TOOLS: Case[] = [
       outcome: 'Apple AirPods Pro (2nd generation)',
       chips: [{ kind: 'site', label: 'amazon.de' }],
     },
+  ],
+  [
+    'places nearby',
+    'mcp__conch__places',
+    { what: 'coffee', near: 'the Ritz, London' },
+    ok(JSON.stringify({ places: [{ name: 'a' }, { name: 'b' }, { name: 'c' }] })),
+    {
+      family: 'research',
+      done: 'Found coffee near the Ritz, London',
+      outcome: '3 places',
+      chips: [{ kind: 'text' }],
+    },
+  ],
+  [
+    'places, one place',
+    'places',
+    { near: 'the Louvre' },
+    ok(JSON.stringify({ places: [{ name: 'Louvre' }] })),
+    { family: 'research', done: 'Looked up the Louvre' },
+  ],
+  [
+    'places, how far',
+    'places',
+    { near: 'Brighton', from: 'London' },
+    ok(JSON.stringify({ places: [{ name: 'Brighton' }] })),
+    { done: 'Measured how far Brighton is from London' },
+  ],
+  [
+    'knowledge_card',
+    'mcp__conch__knowledge_card',
+    { query: 'Ada Lovelace', lang: 'en' },
+    ok(
+      JSON.stringify({ title: 'Ada Lovelace', url: 'https://en.wikipedia.org/wiki/Ada_Lovelace' }),
+    ),
+    {
+      family: 'research',
+      done: 'Looked up “Ada Lovelace”',
+      outcome: 'Ada Lovelace',
+      chips: [{ kind: 'site', label: 'en.wikipedia.org' }],
+    },
+  ],
+  [
+    'link_preview, one link',
+    'link_preview',
+    { urls: ['https://github.com/vitejs/vite'] },
+    ok(JSON.stringify({ links: [{ url: 'https://github.com/vitejs/vite' }] })),
+    { family: 'research', done: 'Read github.com', chips: [{ kind: 'site', label: 'github.com' }] },
+  ],
+  [
+    'link_preview, several',
+    'link_preview',
+    { urls: ['https://a.example/1', 'https://a.example/2', 'https://b.example/'] },
+    undefined,
+    {
+      doing: 'Previewing 3 links',
+      chips: [
+        { kind: 'site', label: 'a.example' },
+        { kind: 'site', label: 'b.example' },
+      ],
+    },
+  ],
+  [
+    'book_search',
+    'mcp__conch__book_search',
+    { query: 'Le Guin', limit: 6 },
+    ok(JSON.stringify({ books: [{ title: 'A' }, { title: 'B' }] })),
+    { family: 'research', done: 'Searched books for “Le Guin”', outcome: '2 books' },
+  ],
+  [
+    'show_search',
+    'show_search',
+    { query: 'Severance', kind: 'tv' },
+    ok(JSON.stringify({ shows: [{ title: 'Severance' }] })),
+    { done: 'Searched TV shows for “Severance”', outcome: '1 show' },
+  ],
+  [
+    'show_search for a film',
+    'show_search',
+    { query: 'Dune', kind: 'movie' },
+    ok(JSON.stringify({ title: 'Dune (2021 film)' })),
+    { done: 'Looked up the film “Dune”', outcome: 'Dune (2021 film)' },
   ],
   [
     'read_file',
@@ -2086,10 +2217,21 @@ const TOOLS: Case[] = [
   ],
   [
     'an unknown tool',
-    'weather',
+    'tide_tables',
     {},
     undefined,
-    { family: 'other', doing: 'Using weather', done: 'Used weather' },
+    { family: 'other', doing: 'Using tide tables', done: 'Used tide tables' },
+  ],
+  [
+    'the weather',
+    'mcp__conch__weather',
+    { place: 'Lisbon' },
+    { status: 'success', output: '{"now":{"temp":21.4,"sky":"Partly cloudy"}}' },
+    {
+      family: 'research',
+      done: 'Checked the weather in Lisbon',
+      outcome: '21° and partly cloudy',
+    },
   ],
 ];
 

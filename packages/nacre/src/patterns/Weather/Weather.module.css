@@ -1,0 +1,1168 @@
+/* The sky's two colours, registered so scrubbing from noon into the night eases between them. */
+@property --wx-top {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: transparent;
+}
+
+@property --wx-bottom {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: transparent;
+}
+
+@layer nacre.components {
+  /*
+   * The weather card (see Weather.tsx).
+   *
+   * Knobs:
+   *   --wx-top / --wx-bottom  the sky, top to horizon (set per time and tone below)
+   *   --wx-curve-h            how tall the hour line is
+   *   --wx-sun, --wx-moon, --wx-cloud…  the art's paints
+   *
+   * The sky is opaque and calm: soft OKLCH gradients, a sun glow, stars or a
+   * veil of fog, never blur. Night and storms are dark in either theme (the
+   * hero takes `color-scheme: dark`, so every token in it reads as dark).
+   * Only transform and opacity move, and nothing does under reduced motion.
+   */
+  .root {
+    --wx-curve-h: 4.5rem;
+    --wx-strip-h: 7.25rem;
+    --wx-art-w: 9.5rem;
+
+    --wx-sun: light-dark(oklch(0.82 0.16 78), oklch(0.85 0.15 82));
+    --wx-sun-glow: light-dark(oklch(0.985 0.03 85 / 0.85), oklch(0.8 0.06 70 / 0.18));
+    --wx-moon: light-dark(oklch(0.8 0.06 92), oklch(0.94 0.04 95));
+    --wx-star: light-dark(oklch(0.7 0.05 90), oklch(0.96 0.03 95));
+    --wx-cloud: light-dark(oklch(0.995 0.003 250), oklch(0.86 0.012 255));
+    --wx-cloud-shade: light-dark(oklch(0.86 0.02 250), oklch(0.64 0.02 255));
+    --wx-cloud-back: light-dark(oklch(0.94 0.01 250), oklch(0.72 0.015 255));
+    --wx-cloud-dark: light-dark(oklch(0.6 0.02 262), oklch(0.5 0.02 262));
+    --wx-cloud-dark-shade: light-dark(oklch(0.48 0.02 262), oklch(0.38 0.02 262));
+    --wx-rain: light-dark(oklch(0.6 0.13 245), oklch(0.75 0.11 235));
+    --wx-rain-ink: light-dark(oklch(0.5 0.13 245), oklch(0.8 0.09 235));
+    --wx-snow: light-dark(oklch(0.995 0.004 240), oklch(0.97 0.01 240));
+    --wx-bolt: light-dark(oklch(0.85 0.16 92), oklch(0.88 0.15 95));
+    --wx-fog: light-dark(oklch(0.8 0.012 250 / 0.85), oklch(0.72 0.012 255 / 0.6));
+
+    container-type: inline-size;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    inline-size: 100%;
+    max-inline-size: var(--nc-chat-card-width);
+    min-inline-size: 0;
+    overflow: hidden;
+    border-radius: var(--nc-chat-card-radius);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-chat-card-surface);
+    box-shadow: var(--nc-glaze-edge), var(--nc-elevation-1);
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* The card's ring, over the sky too. */
+  .root::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    corner-shape: inherit;
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    pointer-events: none;
+  }
+
+  .srOnly {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* ── The sky ───────────────────────────────────────────────────────── */
+
+  .hero {
+    /* A clear day. */
+    --wx-top: light-dark(oklch(0.87 0.075 236), oklch(0.36 0.07 250));
+    --wx-bottom: light-dark(oklch(0.955 0.035 215), oklch(0.27 0.05 242));
+    --wx-glow: 1;
+    --wx-stars: 0;
+    --wx-veil: 0;
+
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    padding-block-end: var(--nc-space-2);
+    color: var(--nc-text);
+    background: linear-gradient(172deg, var(--wx-top), var(--wx-bottom));
+    transition:
+      --wx-top var(--nc-duration-slower) var(--nc-ease-out),
+      --wx-bottom var(--nc-duration-slower) var(--nc-ease-out);
+  }
+
+  .hero[data-sky='dawn'] {
+    --wx-top: light-dark(oklch(0.88 0.05 300), oklch(0.33 0.06 296));
+    --wx-bottom: light-dark(oklch(0.94 0.055 62), oklch(0.34 0.06 42));
+  }
+
+  .hero[data-sky='dusk'] {
+    --wx-top: light-dark(oklch(0.85 0.065 282), oklch(0.31 0.07 282));
+    --wx-bottom: light-dark(oklch(0.915 0.075 45), oklch(0.35 0.08 36));
+  }
+
+  .hero[data-tone='cloudy'] {
+    --wx-top: light-dark(oklch(0.88 0.04 238), oklch(0.35 0.04 248));
+    --wx-bottom: light-dark(oklch(0.95 0.018 232), oklch(0.27 0.03 246));
+    --wx-glow: 0.45;
+  }
+
+  .hero[data-tone='grey'] {
+    --wx-top: light-dark(oklch(0.86 0.016 245), oklch(0.34 0.018 252));
+    --wx-bottom: light-dark(oklch(0.935 0.01 240), oklch(0.27 0.014 252));
+    --wx-glow: 0;
+  }
+
+  .hero[data-tone='fog'] {
+    --wx-top: light-dark(oklch(0.9 0.008 240), oklch(0.37 0.01 252));
+    --wx-bottom: light-dark(oklch(0.955 0.005 240), oklch(0.3 0.01 252));
+    --wx-glow: 0;
+    --wx-veil: 1;
+  }
+
+  .hero[data-tone='snow'] {
+    --wx-top: light-dark(oklch(0.84 0.03 236), oklch(0.36 0.03 246));
+    --wx-bottom: light-dark(oklch(0.95 0.012 230), oklch(0.29 0.02 246));
+    --wx-glow: 0;
+  }
+
+  /* Grey at the day's edges keeps a little warmth low down. */
+  .hero:is([data-sky='dawn'], [data-sky='dusk']):not([data-tone='clear']) {
+    --wx-bottom: light-dark(oklch(0.92 0.03 52), oklch(0.31 0.03 40));
+  }
+
+  /* Night, and storms, are dark in either theme. */
+  .hero:is([data-sky='night'], [data-tone='storm']) {
+    color-scheme: dark;
+    --wx-glow: 0;
+  }
+
+  .hero[data-sky='night'] {
+    --wx-top: oklch(0.235 0.05 270);
+    --wx-bottom: oklch(0.31 0.05 258);
+    --wx-stars: 1;
+  }
+
+  .hero[data-sky='night']:not(:is([data-tone='clear'], [data-tone='cloudy'])) {
+    --wx-top: oklch(0.25 0.02 262);
+    --wx-bottom: oklch(0.31 0.02 256);
+    --wx-stars: 0;
+  }
+
+  .hero[data-sky='night'][data-tone='cloudy'] {
+    --wx-stars: 0.45;
+  }
+
+  .hero[data-tone='storm'] {
+    --wx-top: oklch(0.26 0.03 276);
+    --wx-bottom: oklch(0.36 0.035 252);
+    --wx-stars: 0;
+  }
+
+  .layers {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  .layers > * {
+    position: absolute;
+    inset: 0;
+    transition: opacity var(--nc-duration-slower) var(--nc-ease-out);
+  }
+
+  /* The sun's light on the sky, where the art's sun sits. */
+  .glow {
+    opacity: var(--wx-glow);
+    background: radial-gradient(
+      circle at calc(100% - var(--wx-art-w) * 0.42) 22%,
+      var(--wx-sun-glow),
+      transparent 42%
+    );
+  }
+
+  .hero:is([data-sky='dawn'], [data-sky='dusk']) .glow {
+    background: radial-gradient(
+      ellipse 70% 40% at calc(100% - var(--wx-art-w) * 0.42) 100%,
+      var(--wx-sun-glow),
+      transparent 75%
+    );
+  }
+
+  .starfield {
+    opacity: var(--wx-stars);
+  }
+
+  .starfield::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(1px 1px at 12% 18%, var(--wx-star), transparent 100%),
+      radial-gradient(1.5px 1.5px at 27% 9%, var(--wx-star), transparent 100%),
+      radial-gradient(1px 1px at 38% 30%, var(--wx-star), transparent 100%),
+      radial-gradient(1px 1px at 51% 12%, var(--wx-star), transparent 100%),
+      radial-gradient(1.5px 1.5px at 58% 34%, var(--wx-star), transparent 100%),
+      radial-gradient(1px 1px at 66% 7%, var(--wx-star), transparent 100%),
+      radial-gradient(1px 1px at 47% 44%, var(--wx-star), transparent 100%),
+      radial-gradient(1px 1px at 8% 46%, var(--wx-star), transparent 100%),
+      radial-gradient(1.5px 1.5px at 92% 40%, var(--wx-star), transparent 100%),
+      radial-gradient(1px 1px at 33% 52%, var(--wx-star), transparent 100%);
+    animation: wx-twinkle 5.2s var(--nc-ease-in-out) infinite alternate;
+  }
+
+  .veil {
+    opacity: calc(var(--wx-veil) * 0.55);
+    background: linear-gradient(
+      180deg,
+      transparent 25%,
+      var(--wx-fog) 48%,
+      transparent 70%,
+      var(--wx-fog) 88%,
+      transparent
+    );
+    inset-inline: -10%;
+    animation: wx-veil 14s var(--nc-ease-in-out) infinite alternate;
+  }
+
+  .flash {
+    opacity: 0;
+    background: oklch(1 0 0 / 0.16);
+  }
+
+  .hero[data-tone='storm'] .flash {
+    animation: wx-flash 9s linear infinite;
+  }
+
+  .heroArt {
+    position: absolute;
+    inset-block-start: var(--nc-space-1);
+    inset-inline-end: var(--nc-space-1);
+    inline-size: var(--wx-art-w);
+    block-size: auto;
+  }
+
+  .root[data-touched] .heroArt {
+    animation: wx-art-in var(--nc-duration-slower) var(--nc-ease-out);
+  }
+
+  /* ── The headline ──────────────────────────────────────────────────── */
+
+  .head {
+    display: flex;
+    flex-direction: column;
+    padding: var(--nc-space-3-5) var(--nc-space-4) 0;
+    padding-inline-end: calc(var(--wx-art-w) * 0.8);
+    min-inline-size: 0;
+  }
+
+  .place {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    column-gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+  }
+
+  .placeName {
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    overflow-wrap: anywhere;
+  }
+
+  .placeWhere {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+    overflow-wrap: anywhere;
+  }
+
+  .when {
+    margin-block-start: var(--nc-space-2);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text-muted);
+  }
+
+  .temp {
+    display: flex;
+    align-items: flex-start;
+    margin-block: calc(var(--nc-space-1) * -1) calc(var(--nc-space-0-5) * -1);
+    font-size: calc(var(--nc-text-5xl) * 1.2);
+    font-weight: calc(var(--nc-weight-regular) - 120);
+    line-height: 1.05;
+    letter-spacing: -0.045em;
+  }
+
+  .unit {
+    margin-block-start: var(--nc-space-2);
+    margin-inline-start: var(--nc-space-0-5);
+    font-size: var(--nc-text-lg);
+    font-weight: var(--nc-weight-medium);
+    letter-spacing: 0;
+    color: var(--nc-text-muted);
+  }
+
+  .condition {
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .sub {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: var(--nc-space-2);
+    margin-block-start: var(--nc-space-0-5);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+  }
+
+  .hilo {
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .lo {
+    margin-inline-start: var(--nc-space-1);
+    color: var(--nc-text-muted);
+  }
+
+  .swap {
+    display: inline-block;
+  }
+
+  .root[data-touched] .swap {
+    animation: wx-swap var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  /* ── The hours ─────────────────────────────────────────────────────── */
+
+  .strip {
+    position: relative;
+    block-size: var(--wx-strip-h);
+    margin: var(--nc-space-3) var(--nc-space-4) 0;
+  }
+
+  .curve {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-start: 0;
+    inline-size: 100%;
+    block-size: var(--wx-curve-h);
+    overflow: visible;
+  }
+
+  .stop {
+    stop-color: light-dark(oklch(0.7 0.16 var(--h)), oklch(0.8 0.13 var(--h)));
+  }
+
+  .fillTop {
+    stop-color: var(--nc-text);
+    stop-opacity: 0.09;
+  }
+
+  .fillBottom {
+    stop-color: var(--nc-text);
+    stop-opacity: 0;
+  }
+
+  .line {
+    fill: none;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .bars {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-end: calc(var(--nc-text-2xs) * 1.6);
+    block-size: calc(var(--wx-strip-h) - var(--wx-curve-h) - var(--nc-text-2xs) * 2);
+  }
+
+  .bar {
+    position: absolute;
+    inset-block-end: 0;
+    inset-inline-start: var(--x);
+    inline-size: 3px;
+    block-size: max(2px, calc(var(--p) * 100%));
+    border-radius: var(--nc-radius-full);
+    background: var(--wx-rain);
+    opacity: calc(0.12 + var(--p) * 0.5);
+    transform: translateX(-50%);
+    transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .bar[data-on] {
+    opacity: calc(0.35 + var(--p) * 0.65);
+  }
+
+  .marks {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .mark {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: var(--x);
+  }
+
+  .markTemp,
+  .markTime {
+    position: absolute;
+    translate: -50% 0;
+    font-size: var(--nc-text-2xs);
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .markTemp {
+    inset-block-start: calc(var(--y) * var(--wx-curve-h) - var(--nc-text-2xs) * 1.75);
+    font-weight: var(--nc-weight-semibold);
+  }
+
+  .markTime {
+    inset-block-end: 0;
+    color: var(--nc-text-muted);
+  }
+
+  /* The slider over all of it: the whole strip is its track. */
+  .scrub {
+    position: absolute;
+    inset: 0;
+    display: block;
+    touch-action: pan-y;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  @media (hover: hover) {
+    .scrub {
+      cursor: ew-resize;
+    }
+  }
+
+  .scrubTrack {
+    position: absolute;
+    inset: 0;
+  }
+
+  /* Radix's box around the thumb: as tall as the line and the bars. */
+  .scrub > span:has(> .thumb) {
+    inset-block: 0 calc(var(--nc-text-2xs) * 1.6);
+    transition: left var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .root[data-returning] .scrub > span:has(> .thumb) {
+    transition: left var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .thumb {
+    position: relative;
+    display: block;
+    inline-size: 2px;
+    block-size: 100%;
+    outline: none;
+  }
+
+  /* The line down from the hour read: only once it's away from now. */
+  .thumb::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: var(--nc-radius-full);
+    background: linear-gradient(180deg, transparent, var(--nc-text) 30%, transparent);
+    opacity: 0;
+    transition: opacity var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .scrub[data-away] .thumb::before {
+    opacity: 0.35;
+  }
+
+  .thumbDot {
+    position: absolute;
+    inset-inline-start: 50%;
+    inset-block-start: calc(var(--y) * var(--wx-curve-h));
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface-hi);
+    box-shadow:
+      0 0 0 2px var(--nc-text),
+      var(--nc-elevation-1);
+    translate: -50% -50%;
+    transition:
+      inset-block-start var(--nc-duration-fast) var(--nc-ease-out),
+      scale var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .root[data-returning] .thumbDot {
+    transition:
+      inset-block-start var(--nc-spring-soft-duration) var(--nc-spring-soft),
+      scale var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .scrub[data-away] .thumbDot {
+    scale: 1.15;
+  }
+
+  .thumb:focus-visible .thumbDot {
+    box-shadow:
+      0 0 0 2px var(--nc-text),
+      0 0 0 4px var(--wx-bottom),
+      0 0 0 6px var(--nc-ring);
+  }
+
+  @media (pointer: coarse) {
+    .root {
+      --wx-strip-h: 8rem;
+      --wx-curve-h: 5rem;
+    }
+
+    .thumbDot {
+      inline-size: 1rem;
+      block-size: 1rem;
+    }
+  }
+
+  /* ── An alert ──────────────────────────────────────────────────────── */
+
+  .alert {
+    --wx-alert-h: var(--nc-warning-h);
+
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-2) var(--nc-space-4);
+    font-size: var(--nc-text-sm);
+    color: light-dark(oklch(0.42 0.1 var(--wx-alert-h)), oklch(0.85 0.09 var(--wx-alert-h)));
+    background: light-dark(oklch(0.96 0.04 var(--wx-alert-h)), oklch(0.3 0.05 var(--wx-alert-h)));
+    border-block-end: 1px solid var(--nc-border-subtle);
+  }
+
+  .alert:is([data-severity='severe'], [data-severity='extreme']) {
+    --wx-alert-h: var(--nc-danger-h);
+  }
+
+  .alertIcon {
+    flex: none;
+    inline-size: 1rem;
+    block-size: 1rem;
+    margin-block-start: var(--nc-space-0-5);
+  }
+
+  /* ── At a glance ───────────────────────────────────────────────────── */
+
+  .glance {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-3) var(--nc-space-3) var(--nc-space-1);
+  }
+
+  .tile {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    min-inline-size: 0;
+    padding: var(--nc-space-2) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .tileLabel {
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text-muted);
+  }
+
+  .tileRow {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+  }
+
+  .tileValue {
+    font-size: var(--nc-text-lg);
+    font-weight: var(--nc-weight-medium);
+    line-height: var(--nc-leading-tight);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .tileUnit {
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-regular);
+    color: var(--nc-text-muted);
+  }
+
+  .tileWords {
+    font-size: var(--nc-text-sm);
+  }
+
+  .tileDetail {
+    font-size: var(--nc-text-2xs);
+    color: var(--nc-text-muted);
+    overflow-wrap: anywhere;
+  }
+
+  .compass {
+    flex: none;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+  }
+
+  .compass svg {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  .compassRing {
+    fill: none;
+    stroke: var(--nc-border);
+    stroke-width: 1.5;
+  }
+
+  .compassN {
+    font-size: 6px;
+    font-weight: var(--nc-weight-bold);
+    fill: var(--nc-text-subtle);
+  }
+
+  .windArrow {
+    fill: var(--nc-text);
+    transform-box: view-box;
+    transform-origin: 16px 16px;
+    animation: wx-sway 3.6s var(--nc-ease-in-out) infinite alternate;
+  }
+
+  .meter {
+    position: relative;
+    display: block;
+    block-size: 0.375rem;
+    margin-block: var(--nc-space-1) var(--nc-space-0-5);
+    border-radius: var(--nc-radius-full);
+    background: linear-gradient(
+      90deg in oklch,
+      light-dark(oklch(0.72 0.15 var(--nc-success-h)), oklch(0.66 0.13 var(--nc-success-h))),
+      light-dark(
+        oklch(0.84 0.16 calc(var(--nc-warning-h) + 20)),
+        oklch(0.78 0.14 calc(var(--nc-warning-h) + 20))
+      ),
+      light-dark(
+        oklch(0.7 0.17 calc(var(--nc-danger-h) + 25)),
+        oklch(0.66 0.15 calc(var(--nc-danger-h) + 25))
+      ),
+      light-dark(oklch(0.6 0.19 var(--nc-danger-h)), oklch(0.6 0.17 var(--nc-danger-h))),
+      light-dark(
+        oklch(0.52 0.17 calc(var(--nc-danger-h) + 300)),
+        oklch(0.6 0.15 calc(var(--nc-danger-h) + 300))
+      )
+    );
+  }
+
+  .meterDot {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: clamp(0.3125rem, calc(var(--at) * 100%), calc(100% - 0.3125rem));
+    inline-size: 0.625rem;
+    block-size: 0.625rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface-hi);
+    box-shadow: 0 0 0 2px var(--nc-text);
+    translate: -50% -50%;
+  }
+
+  .arc {
+    display: block;
+    inline-size: 100%;
+    max-block-size: 2.25rem;
+    margin-block: var(--nc-space-0-5);
+    overflow: visible;
+  }
+
+  .horizon {
+    stroke: var(--nc-border);
+    stroke-width: 1;
+  }
+
+  .arcPath,
+  .arcDone {
+    fill: none;
+    stroke-linecap: round;
+  }
+
+  .arcPath {
+    stroke: var(--nc-border-strong);
+    stroke-width: 1.25;
+    stroke-dasharray: 0.012 0.024;
+  }
+
+  .arcDone {
+    stroke: var(--wx-sun);
+    stroke-width: 2;
+  }
+
+  .arcSun {
+    fill: var(--nc-text-subtle);
+  }
+
+  .sunTile[data-up] .arcSun {
+    fill: var(--wx-sun);
+    filter: drop-shadow(0 0 3px var(--wx-sun-glow));
+  }
+
+  /* ── The days ──────────────────────────────────────────────────────── */
+
+  .daysWrap {
+    padding: var(--nc-space-1) var(--nc-space-3) 0;
+  }
+
+  .days {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .day {
+    display: grid;
+    grid-template-columns: 3.25rem 1.75rem 2.25rem 2.25rem minmax(3rem, 1fr) 2.25rem;
+    align-items: center;
+    column-gap: var(--nc-space-2);
+    min-block-size: 2.375rem;
+    padding-inline: var(--nc-space-1);
+  }
+
+  .day + .day {
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .dayName {
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .day[data-today] .dayName {
+    font-weight: var(--nc-weight-bold);
+  }
+
+  .dayGlyph {
+    display: flex;
+  }
+
+  .dayWet {
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--wx-rain-ink);
+  }
+
+  .dayMin,
+  .dayMax {
+    text-align: end;
+  }
+
+  .dayMin {
+    color: var(--nc-text-muted);
+  }
+
+  .dayMax {
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .range {
+    position: relative;
+    block-size: 0.3125rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-wash-2);
+  }
+
+  .rangeFill {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: calc(var(--l) * 100%);
+    inline-size: max(0.3125rem, calc((var(--r) - var(--l)) * 100%));
+    border-radius: inherit;
+    background: linear-gradient(
+      90deg in oklch,
+      light-dark(oklch(0.7 0.14 var(--h1)), oklch(0.74 0.12 var(--h1))),
+      light-dark(oklch(0.7 0.14 var(--h2)), oklch(0.74 0.12 var(--h2)))
+    );
+  }
+
+  .rangeNow {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: calc(var(--at) * 100%);
+    inline-size: 0.5625rem;
+    block-size: 0.5625rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface-hi);
+    box-shadow:
+      0 0 0 1.5px var(--nc-text),
+      0 0 0 3px var(--nc-surface);
+    translate: -50% -50%;
+  }
+
+  .small {
+    margin: 0;
+    padding: var(--nc-space-2) var(--nc-space-4) var(--nc-space-3);
+    font-size: var(--nc-text-2xs);
+    color: var(--nc-text-subtle);
+  }
+
+  /* ── The art ───────────────────────────────────────────────────────── */
+
+  .art {
+    display: block;
+    overflow: visible;
+  }
+
+  .glyph {
+    --wx-cloud: light-dark(oklch(0.9 0.012 250), oklch(0.8 0.012 255));
+    --wx-cloud-back: light-dark(oklch(0.86 0.014 250), oklch(0.68 0.015 255));
+    --wx-cloud-shade: light-dark(oklch(0.76 0.02 250), oklch(0.6 0.02 255));
+
+    inline-size: 1.75rem;
+    block-size: auto;
+  }
+
+  .glyph * {
+    animation: none !important;
+  }
+
+  .sunDisc {
+    fill: var(--wx-sun);
+  }
+
+  .glowStop {
+    stop-color: var(--wx-sun-glow);
+  }
+
+  .moonGlowStop {
+    stop-color: var(--wx-moon);
+  }
+
+  .sunGlow {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: wx-breathe 6s var(--nc-ease-in-out) infinite alternate;
+  }
+
+  .rays {
+    stroke: var(--wx-sun);
+    stroke-width: 3.4;
+    stroke-linecap: round;
+    transform-box: view-box;
+    animation: wx-turn 60s linear infinite;
+  }
+
+  .moonDisc {
+    fill: var(--wx-moon);
+  }
+
+  .moonGlow {
+    opacity: 0.22;
+  }
+
+  .star {
+    fill: var(--wx-star);
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: wx-twinkle 3.2s var(--nc-ease-in-out) infinite alternate;
+    animation-delay: calc(var(--i) * -0.9s);
+  }
+
+  .cloudBody {
+    fill: var(--wx-cloud);
+  }
+
+  .cloudShade {
+    fill: var(--wx-cloud-shade);
+  }
+
+  .cloud[data-tone='back'] .cloudBody {
+    fill: var(--wx-cloud-back);
+  }
+
+  .cloud[data-tone='dark'] .cloudBody {
+    fill: var(--wx-cloud-dark);
+  }
+
+  .cloud[data-tone='dark'] .cloudShade {
+    fill: var(--wx-cloud-dark-shade);
+  }
+
+  .drift {
+    animation: wx-drift 8s var(--nc-ease-in-out) infinite alternate;
+  }
+
+  .driftSlow {
+    animation: wx-drift-back 13s var(--nc-ease-in-out) infinite alternate;
+  }
+
+  .drop {
+    stroke: var(--wx-rain);
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    animation: wx-fall 1.05s linear infinite;
+    animation-delay: calc(var(--i) * -0.37s);
+  }
+
+  .rain[data-short] .drop {
+    stroke-width: 1.8;
+    animation-duration: 1.4s;
+  }
+
+  .flake {
+    fill: var(--wx-snow);
+    stroke: var(--wx-cloud-shade);
+    stroke-width: 0.6;
+    animation: wx-snow 3.8s linear infinite;
+    animation-delay: calc(var(--i) * -0.71s);
+  }
+
+  .bolt {
+    fill: var(--wx-bolt);
+    opacity: 0;
+    animation: wx-bolt 9s linear infinite;
+  }
+
+  .band {
+    fill: var(--wx-fog);
+    animation: wx-band 9s var(--nc-ease-in-out) infinite alternate;
+    animation-delay: calc(var(--i) * -2.3s);
+  }
+
+  /* ── Narrow (a phone) ──────────────────────────────────────────────── */
+
+  @container (max-width: 26rem) {
+    .root {
+      --wx-art-w: 7.25rem;
+    }
+
+    .temp {
+      font-size: var(--nc-text-5xl);
+    }
+
+    .glance {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .mark:not([data-sixth]) {
+      display: none;
+    }
+
+    .day {
+      grid-template-columns: 2.75rem 1.5rem 2rem 2rem minmax(2.5rem, 1fr) 2rem;
+      column-gap: var(--nc-space-1-5);
+    }
+  }
+
+  /* ── Motion ────────────────────────────────────────────────────────── */
+
+  @keyframes wx-swap {
+    from {
+      opacity: 0.2;
+      transform: translateY(0.125rem);
+    }
+  }
+
+  @keyframes wx-art-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+  }
+
+  @keyframes wx-turn {
+    to {
+      transform: rotate(1turn);
+    }
+  }
+
+  @keyframes wx-breathe {
+    from {
+      opacity: 0.55;
+      transform: scale(0.94);
+    }
+    to {
+      opacity: 0.9;
+      transform: scale(1.04);
+    }
+  }
+
+  @keyframes wx-drift {
+    from {
+      transform: translateX(-3px);
+    }
+    to {
+      transform: translateX(5px);
+    }
+  }
+
+  @keyframes wx-drift-back {
+    from {
+      transform: translateX(4px);
+    }
+    to {
+      transform: translateX(-5px);
+    }
+  }
+
+  @keyframes wx-fall {
+    0% {
+      opacity: 0;
+      transform: translate(1px, -6px);
+    }
+    18%,
+    78% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-4px, 22px);
+    }
+  }
+
+  @keyframes wx-snow {
+    0% {
+      opacity: 0;
+      transform: translate(0, -6px);
+    }
+    20% {
+      opacity: 1;
+    }
+    50% {
+      transform: translate(3px, 8px);
+    }
+    82% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-1px, 26px);
+    }
+  }
+
+  @keyframes wx-bolt {
+    0%,
+    86% {
+      opacity: 0;
+    }
+    87% {
+      opacity: 1;
+    }
+    88.5% {
+      opacity: 0.25;
+    }
+    90% {
+      opacity: 1;
+    }
+    93%,
+    100% {
+      opacity: 0;
+    }
+  }
+
+  @keyframes wx-flash {
+    0%,
+    86% {
+      opacity: 0;
+    }
+    87% {
+      opacity: 1;
+    }
+    88.5% {
+      opacity: 0.2;
+    }
+    90% {
+      opacity: 0.8;
+    }
+    94%,
+    100% {
+      opacity: 0;
+    }
+  }
+
+  @keyframes wx-twinkle {
+    from {
+      opacity: 0.35;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes wx-band {
+    from {
+      transform: translateX(-7px);
+    }
+    to {
+      transform: translateX(7px);
+    }
+  }
+
+  @keyframes wx-veil {
+    from {
+      transform: translateX(-4%);
+    }
+    to {
+      transform: translateX(4%);
+    }
+  }
+
+  @keyframes wx-sway {
+    from {
+      transform: rotate(-4deg);
+    }
+    to {
+      transform: rotate(4deg);
+    }
+  }
+
+  /* Still: the sky as it is, the bolt shown, nothing moving. */
+  @media (prefers-reduced-motion: reduce) {
+    .root *,
+    .root *::before {
+      animation: none !important;
+      transition: none !important;
+    }
+
+    .bolt {
+      opacity: 1;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .root *,
+  :global([data-nacre-motion='reduced']) .root *::before {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  :global([data-nacre-motion='reduced']) .bolt {
+    opacity: 1;
+  }
+}

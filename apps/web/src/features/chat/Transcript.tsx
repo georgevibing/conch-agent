@@ -56,6 +56,7 @@ import { ArtifactChatCard } from '../artifacts/ArtifactChatCard';
 import { RoutineChatCard } from '../routines/RoutineChatCard';
 import { TurnChanges } from '../undo/TurnChanges';
 import { AwayCard, useAway, type AwayStory } from './Away';
+import { MusicDock } from './MusicFound';
 import { isFileTool } from './FileToolItem';
 import { isImageTool } from './ImageToolItem';
 import { RunStories } from './Stories';
@@ -931,6 +932,7 @@ export const Transcript = memo(function Transcript({
       overlay={
         <>
           {overlay}
+          <MusicDock />
           {away && <AwayCard away={away} column={column} onJump={jump} onDismiss={dismiss} />}
         </>
       }

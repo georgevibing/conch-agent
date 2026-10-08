@@ -366,6 +366,9 @@ export function PolicyAndTools({
   const slack = integration.id === 'slack';
   const { health } = integration;
   const prefix = new RegExp(`^${integration.server.replace(/[-_]\d+$/, '')}[-_]+`, 'i');
+  /** Conch's own Google apps: their words are short, and say what they really do. */
+  const google = integration.transport.type === 'host' && !slack;
+  const speaksForYou = integration.tools.some((t) => t.asksFirst);
   return (
     <>
       <section className={styles.section} aria-labelledby="int-policy">
@@ -388,12 +391,16 @@ export function PolicyAndTools({
           className={styles.policyHelp}
         >
           {policyHelp[integration.policy](integration.name, assistant)}
-          {integration.policy !== 'trust' &&
-            ' Full trust in a chat skips these app and tool questions, and so does Auto, except for a tool you set to Ask and one that deletes. Tools turned off stay off.'}
-          {integration.tools.some((t) => t.alwaysAsks) &&
-            (slack
-              ? ' Sending a message always asks, whatever you choose here.'
-              : ' Saving a draft always asks, whatever you choose here, and nothing is ever sent.')}
+          {google
+            ? speaksForYou
+              ? ' Sending and saving drafts show you the email first, unless you allow them below.'
+              : integration.tools.some((t) => t.alwaysAsks) &&
+                ' Changes always show you what they’ll do first.'
+            : integration.policy !== 'trust' &&
+              ' Full trust in a chat skips these app and tool questions, and so does Auto, except for a tool you set to Ask and one that deletes. Tools turned off stay off.'}
+          {slack &&
+            integration.tools.some((t) => t.alwaysAsks) &&
+            ' Sending a message always asks, whatever you choose here.'}
         </Text>
       </section>
 
@@ -410,10 +417,18 @@ export function PolicyAndTools({
         {integration.tools.length ? (
           <ToolPermissionList
             policy={integration.policy}
-            tools={integration.tools.map((t) => ({
-              ...t,
-              title: t.title || humanizeTool(t.name.replace(prefix, '')),
-            }))}
+            assistant={assistant}
+            tools={integration.tools.map((t) => {
+              const title = t.title || humanizeTool(t.name.replace(prefix, ''));
+              return {
+                ...t,
+                title,
+                // What Allow means for a tool that speaks for you, said as it's chosen.
+                ...(t.asksFirst && {
+                  allowWarning: `${assistant} will ${title.charAt(0).toLowerCase()}${title.slice(1)} without showing you first.`,
+                }),
+              };
+            })}
             onChange={(tool, policy) =>
               update.mutate({ id: integration.id, patch: { tools: { [tool]: policy } } })
             }

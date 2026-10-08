@@ -7,10 +7,10 @@ import { ChatView } from './ChatView';
 
 afterEach(() => vi.unstubAllGlobals());
 
-function push(seq: number, event: Record<string, unknown>) {
+function push(seq: number, event: Record<string, unknown>, conversationId = 'c1') {
   FakeSocket.last?.push({
     type: 'conversation.event',
-    event: { conversationId: 'c1', seq, at: 1000 + seq, ...event },
+    event: { conversationId, seq, at: 1000 + seq, ...event },
   } as never);
 }
 
@@ -61,6 +61,122 @@ describe('what a tool found, in the chat (ADR 0060)', () => {
     await userEvent.click(within(emails).getByRole('button', { name: 'Reply to Ada Lovelace' }));
     expect(composer).toHaveValue('Draft a reply to Ada Lovelace about “Budget”');
     expect(calls.some((c) => c.method === 'POST' && c.path.includes('/messages'))).toBe(false);
+  });
+
+  it('plays a video it found in place, from a player address Conch built', async () => {
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+    });
+    const { container } = renderApp(<ChatView conversationId="v1" />, { route: '/c/v1' });
+    await screen.findByRole('textbox', { name: 'Message Conch' });
+    act(() => {
+      push(
+        0,
+        { type: 'user.message', messageId: 'u1', text: 'Show me how to shape sourdough' },
+        'v1',
+      );
+      push(
+        1,
+        {
+          type: 'tool.started',
+          toolUseId: 't1',
+          name: 'mcp__conch__video_search',
+          input: { query: 'shape sourdough' },
+        },
+        'v1',
+      );
+      push(
+        2,
+        {
+          type: 'tool.finished',
+          toolUseId: 't1',
+          status: 'success',
+          output: '{"videos":[{"n":1}]}',
+          view: {
+            kind: 'videos',
+            query: 'shape sourdough',
+            items: [
+              {
+                provider: 'youtube',
+                id: 'dQw4w9WgXcQ',
+                title: 'Shaping a boule',
+                channel: 'The Flour Room',
+                duration: 504,
+                url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+              },
+            ],
+          },
+        },
+        'v1',
+      );
+    });
+    const found = await screen.findByRole('region', { name: 'A video for “shape sourdough”' });
+    expect(container.querySelector('iframe')).toBeNull();
+    expect(within(found).getByRole('link', { name: /Open on YouTube/ })).toHaveAttribute(
+      'href',
+      'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    );
+    await userEvent.click(
+      within(found).getByRole('button', { name: 'Play: Shaping a boule, 8 minutes' }),
+    );
+    expect(container.querySelector('iframe')?.getAttribute('src')).toBe(
+      'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0&modestbranding=1&playsinline=1',
+    );
+  });
+
+  it('draws a knowledge card in sight, its picture from Conch and never the web', async () => {
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+    });
+    // A chat of its own: the last test's chat is still in the store.
+    renderApp(<ChatView conversationId="c2" />, { route: '/c/c2' });
+    await screen.findByRole('textbox', { name: 'Message Conch' });
+    act(() => {
+      const say = (seq: number, event: Record<string, unknown>) => push(seq, event, 'c2');
+      say(0, { type: 'user.message', messageId: 'u1', text: 'Who was Ada Lovelace?' });
+      say(1, {
+        type: 'tool.started',
+        toolUseId: 't1',
+        name: 'mcp__conch__knowledge_card',
+        input: { query: 'Ada Lovelace' },
+      });
+      say(2, {
+        type: 'tool.finished',
+        toolUseId: 't1',
+        status: 'success',
+        output: '{"title":"Ada Lovelace"}',
+        view: {
+          kind: 'knowledge',
+          title: 'Ada Lovelace',
+          description: 'English mathematician',
+          extract: 'Augusta Ada King was an English mathematician.',
+          picture: {
+            id: 'att_ada',
+            name: 'Ada Lovelace.jpg',
+            mimeType: 'image/jpeg',
+            size: 2048,
+            kind: 'image',
+            width: 600,
+            height: 760,
+            createdAt: 1,
+          },
+          facts: [{ label: 'Born', value: '10 December 1815' }],
+          url: 'https://en.wikipedia.org/wiki/Ada_Lovelace',
+          lang: 'en',
+        },
+      });
+    });
+    const card = await screen.findByRole('article', { name: 'Ada Lovelace' });
+    const picture = card.querySelector('img[src^="/api/attachments/"]');
+    expect(picture).toHaveAttribute('src', '/api/attachments/att_ada');
+    expect(within(card).getByRole('link', { name: 'Read on Wikipedia' })).toHaveAttribute(
+      'href',
+      'https://en.wikipedia.org/wiki/Ada_Lovelace',
+    );
+    for (const img of card.querySelectorAll('img'))
+      expect(img.getAttribute('src')).toMatch(/^\/api\//);
   });
 
   it('draws an email that went as a letter that went, and Follow up is only words', async () => {

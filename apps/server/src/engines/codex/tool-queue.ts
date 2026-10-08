@@ -13,6 +13,13 @@ const READS = new Set([
   'mcp__conch__search_files',
   'mcp__conch__web_fetch',
   'mcp__conch__web_search',
+  'mcp__conch__product_details',
+  'mcp__conch__video_search',
+  'mcp__conch__video_details',
+  'mcp__conch__knowledge_card',
+  'mcp__conch__link_preview',
+  'mcp__conch__book_search',
+  'mcp__conch__show_search',
 ]);
 
 export class ToolQueue {

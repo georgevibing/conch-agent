@@ -48,7 +48,9 @@ export async function capturePicture(
       {
         url: url.href,
         method: 'GET',
-        headers: { accept: 'image/avif,image/webp,image/png,image/jpeg,image/gif;q=0.8' },
+        // Only what the attachment store can keep: a CDN asked for AVIF sends AVIF
+        // (Vimeo's does), which the store can't read, and the card loses its picture.
+        headers: { accept: 'image/webp,image/png,image/jpeg,image/gif;q=0.8' },
       },
       signal,
     );

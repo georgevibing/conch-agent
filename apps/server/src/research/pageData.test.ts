@@ -23,6 +23,7 @@ describe('page data', () => {
   it('keeps only https pictures, plain text and real durations', () => {
     expect(ldImage('http://shop.example/k.jpg', 'https://shop.example')).toBeUndefined();
     expect(ldImage('javascript:alert(1)', 'https://shop.example')).toBeUndefined();
+    expect(ldImage('', 'https://shop.example/p/1')).toBeUndefined();
     expect(plain('<b>Big</b>\n  kettle &#x2014; 2l')).toBe('Big kettle — 2l');
     expect(isoDuration('PT1H20M')).toBe(4800);
     expect(isoDuration('P')).toBeUndefined();

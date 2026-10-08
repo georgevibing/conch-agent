@@ -36,7 +36,7 @@ describe('pictures for rich views', () => {
     const picture = await capturePicture(d, 'c1', 'https://cdn.example/a.png', signal, 'Kettle');
     expect(picture).toMatchObject({ kind: 'image', mimeType: 'image/png', width: 1, height: 1 });
     expect(fetcher.mock.calls[0]?.[0].reaches).toEqual(['cdn.example']);
-    expect(await d.store.inConversation(picture!.id, 'c1')).toBeDefined();
+    expect(await d.store.inConversation(picture?.id ?? '', 'c1')).toBeDefined();
   });
   it('leaves out what isn’t a safe picture, without throwing', async () => {
     const d = await deps(async (_app, request) =>

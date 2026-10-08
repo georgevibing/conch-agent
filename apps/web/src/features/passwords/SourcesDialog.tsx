@@ -21,6 +21,7 @@ import { chooseOnComputer } from '../folders/FolderChooser';
 import { GetIt } from '../setup/GetIt';
 import { vaultApi } from './api';
 import { ago } from './filter';
+import { OnePasswordAccess, onePasswordVia } from './OnePasswordAccess';
 import { vaultKeys } from './queries';
 import { TransferDialog } from './TransferDialog';
 
@@ -45,13 +46,22 @@ export function SourcesDialog({
   onOpenChange,
   sources,
   guard,
+  accessOpen,
+  onAccessOpenChange,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   sources: VaultSource[];
   guard: <T>(task: () => Promise<T>) => Promise<T | undefined>;
+  /**
+   * 1Password's settings (the app or a service account), open by themselves too:
+   * from Repair everything's “Replace the token” or ⌘K, without this list under them.
+   */
+  accessOpen: boolean;
+  onAccessOpenChange: (open: boolean) => void;
 }) {
   const client = useQueryClient();
+  const setAccessOpen = onAccessOpenChange;
   const [unlocking, setUnlocking] = useState<VaultSource>();
   const [password, setPassword] = useState('');
   const [keep, setKeep] = useState(false);
@@ -115,6 +125,13 @@ export function SourcesDialog({
   const action = (s: VaultSource) => {
     if (s.id === 'conch') return undefined;
     const id = s.id;
+    // 1Password: the app on this computer, or a service account. Choosing is the first step.
+    const settings = id === '1password' && (
+      <Button size="sm" variant="surface" onClick={() => setAccessOpen(true)}>
+        {s.state === 'off' ? 'Turn on' : 'Settings'}
+      </Button>
+    );
+    if (settings && s.state === 'off') return settings;
     if (s.state === 'off')
       return (
         <Button
@@ -141,6 +158,7 @@ export function SourcesDialog({
       );
     return (
       <Stack direction="row" gap={1} wrap>
+        {settings}
         {s.state === 'ready' && (
           <Button size="sm" variant="surface" onClick={() => setCopying(s)}>
             Copy into Conch
@@ -238,6 +256,7 @@ export function SourcesDialog({
                       message={s.message}
                       count={s.count}
                       keptUnlocked={s.keptUnlocked}
+                      via={onePasswordVia(s)}
                       action={action(s)}
                       sync={
                         s.sync && {
@@ -391,6 +410,13 @@ export function SourcesDialog({
           </form>
         </Dialog.Content>
       </Dialog.Root>
+
+      <OnePasswordAccess
+        source={sources.find((s) => s.id === '1password')}
+        open={accessOpen}
+        onOpenChange={onAccessOpenChange}
+        guard={guard}
+      />
 
       <TransferDialog
         source={copying}

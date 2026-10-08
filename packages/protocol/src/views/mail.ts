@@ -63,7 +63,8 @@ const Address = z.email().max(254);
 /**
  * An email as the person changed it on the approval card
  * (`permission.respond` `edit`). Only the words and who they go to; never the
- * account, the thread or anything else the call carried.
+ * account, the thread or anything else the call carried; a file may be
+ * taken off, never put on.
  */
 export const MailEdit = z
   .object({
@@ -74,6 +75,8 @@ export const MailEdit = z
       .max(500)
       .refine((s) => !/[\r\n]/.test(s), { error: 'Keep the subject on one line.' }),
     body: z.string().max(100_000),
+    /** The files still going (their att_… ids): only ones the call named; one taken off stays off. */
+    attachments: z.array(z.string().min(1).max(200)).max(10).optional(),
   })
   .strict();
 export type MailEdit = z.infer<typeof MailEdit>;

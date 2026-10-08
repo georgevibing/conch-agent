@@ -7,7 +7,7 @@ import type { HostTool, HostToolResult } from '../engines/types';
 import type { ToolContext } from '../conversations/manager';
 import { accountRef, composeRaw, pickAccount } from './accounts';
 import { GoogleError, type GoogleService } from './service';
-import { googleWriteTools, mailSentView } from './writes';
+import { googleWriteTools, mailSentView, type GoogleWriteOptions } from './writes';
 
 export { accountRef, composeRaw, pickAccount };
 import {
@@ -190,6 +190,7 @@ export function googleTools(
   service: GoogleService,
   ctx: ToolContext,
   draftTask?: (args: z.infer<typeof DraftInput> & { accountId: string }) => Promise<{ id: string }>,
+  options: GoogleWriteOptions = {},
 ): HostTool[] {
   const createdDrafts = new Map<string, string>();
   const emailOf = async (id: string) =>
@@ -419,14 +420,21 @@ export function googleTools(
       const authorized = await service.verificationScope(args.accountId, 'mail-draft');
       const restricted = await ctx.restricted?.('apps', 'google');
       const warning = [ctx.untrusted?.(), restricted].filter(Boolean).join(' ');
-      const decision = await ctx.ask({
-        toolName: 'google_mail_create_draft',
-        input: { ...args, accountEmail: account.email },
-        summary: `save a draft to ${args.to.join(', ')} with subject “${args.subject}” (not send it)`,
-        ...(warning ? { taint: warning } : {}),
-        // The exact draft is shown each time.
-        once: true,
-      });
+      const chosen = options.chosen?.('google_mail_create_draft');
+      // Allowed in Apps, and nothing from outside in the chat: saved without the question.
+      const quiet =
+        chosen === 'allow' && !warning && !ctx.untrusted?.() && !(ctx.taints?.() ?? []).length;
+      const decision = quiet
+        ? 'allow'
+        : await ctx.ask({
+            toolName: 'google_mail_create_draft',
+            input: { ...args, accountEmail: account.email },
+            summary: `save a draft from ${account.email} to ${args.to.join(', ')} with subject “${args.subject}” (not send it)`,
+            ...(warning ? { taint: warning } : {}),
+            // The exact draft is shown each time.
+            once: true,
+            ...(chosen === 'ask' && { explicit: true }),
+          });
       if (decision === 'deny')
         return {
           text: 'Draft was not approved; nothing was saved.',
@@ -550,7 +558,7 @@ export function googleTools(
       name: 'google_accounts',
       effect: 'read',
       description:
-        'List the Google accounts connected to Conch and what each may do: for Gmail, Calendar and Drive, read or read & write. Every Google tool takes accountId (an email from this list); leave it out when only one account can do the job, and ask if personal or work is unclear.',
+        'List the Google accounts connected to Conch, how each is signed in (Google sign-in or an app password) and what each may do: for Gmail, Calendar and Drive, read or read & write. Read & write in Gmail can save drafts and send email. Every Google tool takes accountId (an email from this list): the account the person names; leave it out when only one account can do the job, and ask if personal or work is unclear.',
       input: {},
       run: async () => JSON.stringify(await service.status()),
     },
@@ -560,6 +568,6 @@ export function googleTools(
     driveSearch,
     driveRead,
     draft,
-    ...googleWriteTools(service, ctx),
+    ...googleWriteTools(service, ctx, options),
   ] as HostTool[];
 }

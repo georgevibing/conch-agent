@@ -544,6 +544,13 @@
     list-style: none;
   }
 
+  .file {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+  }
+
   .note {
     margin: 0;
     font-size: var(--nc-text-xs);

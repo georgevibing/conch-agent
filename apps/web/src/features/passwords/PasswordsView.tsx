@@ -329,18 +329,26 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
     import?: boolean;
     check?: boolean;
     sources?: boolean;
+    /** 1Password's settings, from its key in Passwords or Repair everything (`?manage=1password`). */
+    manage?: string;
   } | null;
+  const manageAsked =
+    asked?.manage ?? new URLSearchParams(location.search).get('manage') ?? undefined;
+  const [managing, setManaging] = useState(false);
   const [handled, setHandled] = useState<unknown>(null);
-  if (asked && asked !== handled) {
-    setHandled(asked);
-    if (asked.new) setMode({ kind: 'new', type: asked.new });
-    if (asked.import) setImporting(true);
-    if (asked.check) setFilter({ kind: 'all' });
-    if (asked.sources) setSourcesOpen(true);
+  const ask = asked ?? (manageAsked ? location.search : null);
+  if (ask && ask !== handled) {
+    setHandled(ask);
+    if (asked?.new) setMode({ kind: 'new', type: asked.new });
+    if (asked?.import) setImporting(true);
+    if (asked?.check) setFilter({ kind: 'all' });
+    if (asked?.sources) setSourcesOpen(true);
+    if (manageAsked === '1password') setManaging(true);
   }
   useEffect(() => {
-    if (location.state) void navigate(location.pathname, { replace: true, state: null });
-  }, [location.state, location.pathname, navigate]);
+    if (location.state || location.search.includes('manage='))
+      void navigate(location.pathname, { replace: true, state: null });
+  }, [location.state, location.search, location.pathname, navigate]);
 
   const guard = async <T,>(task: () => Promise<T>): Promise<T | undefined> => {
     let result: T | undefined;
@@ -1200,6 +1208,8 @@ export function PasswordsView({ itemId }: { itemId?: string }) {
         onOpenChange={setSourcesOpen}
         sources={status?.sources ?? []}
         guard={guard}
+        accessOpen={managing}
+        onAccessOpenChange={setManaging}
       />
       <AlertDialog.Root open={exporting} onOpenChange={setExporting}>
         <AlertDialog.Content tone="danger" icon={<Download />}>

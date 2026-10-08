@@ -14,6 +14,7 @@ import {
   followUpRequest,
   retryRequest,
   sendDraftRequest,
+  type MailAttachment,
   type MailPerson,
 } from '@conch/nacre';
 import { useState, type ReactNode } from 'react';
@@ -35,6 +36,8 @@ export interface MailCall {
   body: string;
   from?: string;
   reply: boolean;
+  /** The files going: their names as the gateway found them, beside the ids the call named. */
+  files: MailAttachment[];
 }
 
 const strings = (value: unknown): string[] =>
@@ -53,7 +56,14 @@ export function mailOf(input: unknown): MailCall | undefined {
     const name = names[address.toLowerCase()];
     return typeof name === 'string' && name.trim() ? { address, name } : { address };
   };
+  // The card's names (`files`) and their ids (`fileIds`), both from the gateway, in order.
+  const ids = strings(call.fileIds);
+  const files = strings(call.files).map((name, i) => {
+    const id = ids[i];
+    return id ? { id, name } : { name };
+  });
   return {
+    files,
     to: to.map(person),
     cc: strings(call.cc).map(person),
     subject: call.subject,
@@ -106,6 +116,7 @@ export function MailApproval({
       cc={mail.cc}
       subject={mail.subject}
       body={mail.body}
+      files={mail.files}
       reply={mail.reply}
       editable={Boolean(item.editable)}
       caution={item.caution ?? item.taint}

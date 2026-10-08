@@ -19,6 +19,7 @@ import {
   passwordScore,
   sameAccountKey,
   SaveVaultItemBody,
+  SERVICE_ACCOUNT_TOKEN,
   siteMatches,
   siteOf,
   VAULT_LIMITS,
@@ -55,11 +56,13 @@ import {
   KeychainSource,
   OnePasswordSource,
   type OutgoingItem,
+  type SourcePlace,
   type PasswordSource,
   ProtonPassSource,
   realExec,
   SourceError,
 } from './sources';
+import { ServiceAccountStore } from './serviceAccount';
 import { type ItemRecord, VaultStore, WrongPassword } from './store';
 import { type SyncState, Transfers } from './transfer';
 import { isValidTotp, parseTotp, totpNow, TotpError } from './totp';
@@ -207,6 +210,9 @@ function expired(field: VaultField, now: number): boolean {
 export class VaultService {
   readonly store: VaultStore;
   readonly sources: PasswordSource[];
+  /** A 1Password service account's token, sealed (`onepassword.secrets.json`). */
+  readonly serviceAccount: ServiceAccountStore;
+  readonly onePassword: OnePasswordSource;
   readonly #settingsPath: string;
   readonly #mutex = new Mutex();
   #keystore?: Promise<Keystore>;
@@ -233,8 +239,16 @@ export class VaultService {
     this.#settingsPath = join(dir, 'sources.json');
     this.store = new VaultStore(dir, () => this.keystore());
     const exec = deps.exec ?? realExec;
+    this.serviceAccount = new ServiceAccountStore(deps.home);
+    this.onePassword = new OnePasswordSource(exec, async () => {
+      const saved = await this.serviceAccount.read();
+      if (!saved.token) return {};
+      // Known for redaction, like every secret this process handles.
+      this.#remember(saved.token);
+      return { token: saved.token, ...(saved.vaults && { vaults: saved.vaults }) };
+    });
     this.sources = [
-      new OnePasswordSource(exec),
+      this.onePassword,
       new BitwardenSource(exec),
       new KeePassXcSource(
         async () => (await this.settings()).keepassxc.database,
@@ -316,6 +330,8 @@ export class VaultService {
       .catch(() => ({ items: new Map<string, ItemRecord>() }));
     for (const record of items.values())
       for (const field of record.fields) if (isConcealed(field.kind)) this.#remember(field.value);
+    const token = (await this.serviceAccount.read().catch(() => undefined))?.token;
+    if (token) this.#remember(token);
     return [...this.#known];
   }
 
@@ -450,6 +466,11 @@ export class VaultService {
     };
   }
 
+  /** It asks the person something when read, so it's read only while they look (`PROMPTS`). */
+  #asks(source: PasswordSource): boolean {
+    return source.prompts ?? PROMPTS.has(source.id);
+  }
+
   async #enabled(id: VaultSourceId): Promise<boolean> {
     return (await this.settings()).enabled[id] ?? false;
   }
@@ -501,6 +522,9 @@ export class VaultService {
         ...(kept[source.id] !== undefined && { keptUnlocked: true }),
         ...(state.state === 'locked' &&
           this.#reopenFailed.has(source.id) && { message: this.#reopenFailed.get(source.id) }),
+        ...(source === this.onePassword && {
+          access: enabled ? this.onePassword.accessFor() : await this.onePassword.describe(),
+        }),
         ...(source.id === 'keepassxc' &&
           (await this.settings()).keepassxc.database && {
             database: (await this.settings()).keepassxc.database,
@@ -563,7 +587,7 @@ export class VaultService {
     for (const source of this.sources) {
       const state = status.sources.find((s) => s.id === source.id);
       if (state?.state !== 'ready') continue;
-      if (!options.looking && PROMPTS.has(source.id)) {
+      if (!options.looking && this.#asks(source)) {
         // Not looking: what it showed last, if anything, and no question asked.
         const last = this.#listed.get(source.id);
         if (last) {
@@ -1259,6 +1283,97 @@ export class VaultService {
     this.#changed();
   }
 
+  // ── 1Password through a service account ─────────────────────────────────
+  //
+  // For a computer without the 1Password app (a server): the person makes a
+  // service account on 1Password.com, gives it read access to the vaults they
+  // choose, and pastes its token here once. It's tried before it's kept,
+  // sealed in `onepassword.secrets.json`, and handed to `op` only in its
+  // environment. It never comes back out: not to the browser, not in an error.
+
+  /** Try a token (`op vault list`), then keep it and show 1Password through it. */
+  async connectOnePassword(
+    token: string,
+  ): Promise<{ vaults: SourcePlace[]; sources: VaultSource[] }> {
+    const clean = token.replace(/\s+/g, '');
+    if (!SERVICE_ACCOUNT_TOKEN.test(clean))
+      throw new VaultError('invalid', 'That isn’t a service account token. It starts with ops_.');
+    this.#remember(clean);
+    const source = this.onePassword;
+    if (!(await source.installed()))
+      throw new VaultError(
+        'unavailable',
+        'Conch needs the 1Password command line tool for this. Install it, then paste the token again.',
+      );
+    let vaults: SourcePlace[];
+    try {
+      vaults = await source.check(clean);
+    } catch (error) {
+      throw new VaultError(
+        'refused',
+        error instanceof SourceError ? error.message : '1Password didn’t answer. Try again.',
+      );
+    }
+    if (!vaults.length)
+      throw new VaultError(
+        'refused',
+        'That token works, but it can’t read any vaults. Give the service account access to one on 1Password.com.',
+      );
+    await this.serviceAccount.update(() => ({ token: clean, savedAt: Date.now() }));
+    source.lock();
+    await this.#saveSettings({
+      enabled: { ...(await this.settings()).enabled, '1password': true },
+    });
+    this.#listed.delete('1password');
+    this.#changed();
+    return { vaults, sources: await this.sourceStatus() };
+  }
+
+  /** Which of the service account's vaults Passwords shows. */
+  async setOnePasswordVaults(ids: string[]): Promise<VaultSource[]> {
+    const saved = await this.serviceAccount.read();
+    if (!saved.token)
+      throw new VaultError(
+        'invalid',
+        'Connect a service account first. Choosing vaults is for it.',
+      );
+    let vaults: SourcePlace[];
+    try {
+      vaults = await this.onePassword.check(saved.token);
+    } catch (error) {
+      throw new VaultError(
+        'unavailable',
+        error instanceof SourceError ? error.message : '1Password didn’t answer. Try again.',
+      );
+    }
+    const known = new Set(vaults.map((v) => v.id));
+    const chosen = [...new Set(ids)].filter((id) => known.has(id));
+    if (!chosen.length) throw new VaultError('invalid', 'Choose at least one vault.');
+    // Every vault chosen: every vault, including ones it's given later.
+    const all = chosen.length === known.size;
+    await this.serviceAccount.update((data) => ({
+      ...data,
+      vaults: all ? undefined : chosen,
+    }));
+    this.onePassword.lock();
+    this.#listed.delete('1password');
+    this.#changed();
+    return this.sourceStatus();
+  }
+
+  /** Forget the token: back to the 1Password app on this computer, or off with `disconnect`. */
+  async forgetOnePassword(options: { disconnect?: boolean } = {}): Promise<VaultSource[]> {
+    await this.serviceAccount.update(() => ({}));
+    this.onePassword.lock();
+    this.#listed.delete('1password');
+    if (options.disconnect)
+      await this.#saveSettings({
+        enabled: { ...(await this.settings()).enabled, '1password': false },
+      });
+    this.#changed();
+    return this.sourceStatus();
+  }
+
   // ── Kept unlocked (ADR 0025 § Kept unlocked) ───────────────────────────
   //
   // A person can choose to keep a password manager unlocked on this computer.
@@ -1516,7 +1631,7 @@ export class VaultService {
       if (!state?.enabled || !(await this.#enabled(source.id))) continue;
       if (this.transfers.isRunning(source.id)) continue;
       if (!options.force && state.at && Date.now() - state.at < SYNC_EVERY_MS) continue;
-      if (!options.interactive && !options.force && PROMPTS.has(source.id)) continue;
+      if (!options.interactive && !options.force && this.#asks(source)) continue;
       const ready = await source.state().catch(() => ({ state: 'error' as const }));
       if (ready.state !== 'ready') continue;
       const job = this.transfers.start(source, { skipDuplicates: true, removeGone: true });

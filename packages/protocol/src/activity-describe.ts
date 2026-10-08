@@ -580,6 +580,31 @@ function fetchDraft(input: Input): Draft {
   };
 }
 
+/** `recipe`: one to three recipe pages, read for the recipe card. */
+function recipeDraft(input: Input): Draft {
+  const urls = Array.isArray(input.urls)
+    ? input.urls.filter((u): u is string => typeof u === 'string')
+    : [];
+  const sites = urls.flatMap((url) => {
+    const host = hostOf(url);
+    return host && !isLocal(host) ? [siteChip(url, host)] : [];
+  });
+  const host = urls[0] ? hostOf(urls[0]) : undefined;
+  return {
+    family: 'research',
+    words: say(
+      'find',
+      urls.length > 1 ? `${urls.length} recipes` : host ? `a recipe on ${host}` : 'a recipe',
+    ),
+    ...(sites.length && { chips: sites }),
+    finish: (output) => {
+      const recipes = record(parseJson(output)).recipes;
+      const first = Array.isArray(recipes) ? record(recipes[0]).title : undefined;
+      return typeof first === 'string' && first ? { outcome: clip(oneLine(first), 60) } : {};
+    },
+  };
+}
+
 function searchWebDraft(input: Input): Draft {
   const query = str(input, 'query', 'q', 'search_query') ?? '';
   return {
@@ -592,6 +617,151 @@ function searchWebDraft(input: Input): Draft {
         ...(chips.length && { chips: [...(query ? [textChip(query)] : []), ...chips] }),
         ...(found && { outcome: plural(found, 'result') }),
       };
+    },
+  };
+}
+
+/** `product_details`: shop pages read for what they sell, drawn as a shelf of cards. */
+function productsDraft(input: Input): Draft {
+  const urls = (Array.isArray(input.urls) ? input.urls : []).filter(
+    (u): u is string => typeof u === 'string',
+  );
+  const { chips } = siteChips(JSON.stringify(urls.map((url) => ({ url }))), 3);
+  const host = urls.length === 1 && urls[0] ? hostOf(urls[0]) : undefined;
+  return {
+    family: 'research',
+    words: say('look', host ? `at a product on ${host}` : `at ${plural(urls.length, 'product')}`),
+    ...(chips.length && { chips }),
+    finish: (output) => {
+      const found = record(parseJson(output)).products;
+      const shown = Array.isArray(found) ? found.filter((p) => record(p).found === true) : [];
+      return shown.length ? { outcome: plural(shown.length, 'product') } : {};
+    },
+  };
+}
+
+/** `places`: what's near somewhere, where one place is, or how far it is from another. */
+function placesDraft(input: Input): Draft {
+  const what = str(input, 'what');
+  const near = str(input, 'near') ?? '';
+  const from = str(input, 'from');
+  const place = clip(oneLine(near), 80);
+  const said = what
+    ? say('find', `${clip(oneLine(what), 60)}${place ? ` near ${place}` : ''}`)
+    : from
+      ? say('measure', `how far ${place || 'it'} is from ${clip(oneLine(from), 60)}`)
+      : say('look', `up ${place || 'a place'}`);
+  return {
+    family: 'research',
+    words: said,
+    ...(near && { subject: clip(oneLine(near), 300), chips: [textChip(near)] }),
+    finish: (output) => {
+      const found = record(parseJson(output));
+      const places = Array.isArray(found.places) ? found.places.length : undefined;
+      return what && places !== undefined ? { outcome: plural(places, 'place') } : {};
+    },
+  };
+}
+
+/** `music_search`: songs, albums, artists, podcasts and episodes from Apple's catalogue. */
+function musicDraft(input: Input): Draft {
+  const query = str(input, 'query') ?? '';
+  const kind = str(input, 'kind');
+  const podcasts = kind === 'podcast' || kind === 'episode';
+  return {
+    family: 'research',
+    words: query
+      ? say('find', quote(clip(oneLine(query), 60)))
+      : say('look', podcasts ? 'for podcasts' : 'for music'),
+    ...(query && { subject: clip(oneLine(query), 300), chips: [textChip(query)] }),
+    finish: (output) => {
+      const found = record(parseJson(output));
+      const items = Array.isArray(found.results) ? found.results.length : undefined;
+      if (items === undefined) return undefined;
+      const one = podcasts ? (kind === 'episode' ? 'episode' : 'podcast') : (kind ?? 'song');
+      return { outcome: items ? plural(items, one) : 'Nothing found', handled: true };
+    },
+  };
+}
+
+/** Videos found to watch in the chat (`video_search`, `video_details`): the card is the answer. */
+function videoDraft(input: Input, details = false): Draft {
+  const query = details ? '' : (str(input, 'query', 'q') ?? '');
+  const urls = Array.isArray(input.urls) ? input.urls.length : 0;
+  return {
+    family: 'research',
+    words: details
+      ? say('look', urls > 1 ? `up ${urls} videos` : 'up a video')
+      : say('find', query ? `videos of ${quote(query)}` : 'videos'),
+    ...(query && { subject: clip(oneLine(query), 300), chips: [textChip(query)] }),
+    finish: (output) => {
+      const videos = record(parseJson(output)).videos;
+      const found = Array.isArray(videos) ? videos.length : 0;
+      return found ? { outcome: plural(found, 'video') } : {};
+    },
+  };
+}
+
+/** A site's chip from a JSON field of the output (`"url": "https://…"`), when it has one. */
+function outputSite(output: string): ActivityChip | undefined {
+  const url = /"url"\s*:\s*"(https:\/\/[^"\s]{1,1900})"/.exec(output.slice(0, 200_000))?.[1];
+  const host = url ? hostOf(url) : undefined;
+  return url && host ? siteChip(url, host) : undefined;
+}
+
+/** How many a card's output lists under `key`. */
+function listed(output: string, key: string): number | undefined {
+  const list = record(parseJson(output))[key];
+  return Array.isArray(list) ? list.length : undefined;
+}
+
+/** A knowledge card (Wikipedia): "Looked up “Ada Lovelace”", its title once found. */
+function knowledgeDraft(input: Input, film = false): Draft {
+  const query = str(input, 'query') ?? '';
+  return {
+    family: 'research',
+    words: say('look', `up ${film ? 'the film ' : ''}${query ? quote(query) : 'it'}`),
+    ...(query && { subject: clip(oneLine(query), 300) }),
+    finish: (output) => {
+      const found = record(parseJson(output));
+      const title = typeof found.title === 'string' ? oneLine(found.title) : '';
+      const site = outputSite(output);
+      return { ...(title && { outcome: clip(title, 60) }), ...(site && { chips: [site] }) };
+    },
+  };
+}
+
+/** Link previews: "Read github.com", or "Previewed 3 links" with their sites. */
+function linksDraft(input: Input): Draft {
+  const urls = (Array.isArray(input.urls) ? input.urls : []).filter(
+    (u): u is string => typeof u === 'string',
+  );
+  const sites = urls.flatMap((url) => {
+    const host = hostOf(url);
+    return host && !isLocal(host) ? [{ url, host }] : [];
+  });
+  const hosts = [...new Map(sites.map((s) => [s.host, s])).values()].slice(0, 6);
+  return {
+    family: 'research',
+    words:
+      urls.length === 1 && hosts[0]
+        ? say('read', hosts[0].host)
+        : say('preview', urls.length ? plural(urls.length, 'link') : 'links'),
+    ...(urls[0] && { subject: clip(urls[0], 300) }),
+    ...(hosts.length && { chips: hosts.map((s) => siteChip(s.url, s.host)) }),
+  };
+}
+
+/** A search of a catalogue (Open Library, TVmaze): "Searched books for “Le Guin”", "6 books". */
+function catalogueDraft(input: Input, what: string, key: string, one: string): Draft {
+  const query = str(input, 'query') ?? '';
+  return {
+    family: 'research',
+    words: say('search', `${what}${query ? ` for ${quote(query)}` : ''}`),
+    ...(query && { subject: clip(oneLine(query), 300), chips: [textChip(query)] }),
+    finish: (output) => {
+      const found = listed(output, key);
+      return found !== undefined ? { outcome: plural(found, one) } : undefined;
     },
   };
 }
@@ -901,6 +1071,19 @@ function serverTool(server: string | undefined, tool: string): Draft {
 const CONCH: Record<string, (input: Input) => Draft> = {
   web_search: searchWebDraft,
   web_fetch: fetchDraft,
+  recipe: recipeDraft,
+  product_details: productsDraft,
+  places: placesDraft,
+  music_search: musicDraft,
+  video_search: (input) => videoDraft(input),
+  video_details: (input) => videoDraft(input, true),
+  knowledge_card: (input) => knowledgeDraft(input),
+  link_preview: linksDraft,
+  book_search: (input) => catalogueDraft(input, 'books', 'books', 'book'),
+  show_search: (input) =>
+    input.kind === 'movie'
+      ? knowledgeDraft(input, true)
+      : catalogueDraft(input, 'TV shows', 'shows', 'show'),
   read_file: (input) => readDraft(input),
   read_document: (input) => readDraft(input, 'document'),
   search_files: (input) => {
@@ -1104,6 +1287,20 @@ const CONCH: Record<string, (input: Input) => Draft> = {
     };
   },
   current_time: () => ({ family: 'other', words: say('check', 'the time') }),
+  weather: (input) => {
+    const place = str(input, 'place', 'location', 'city');
+    return {
+      family: 'research',
+      words: say('check', place ? `the weather in ${clip(oneLine(place), 40)}` : 'the weather'),
+      finish: (output) => {
+        const now = record(record(parseJson(output)).now);
+        const sky = typeof now.sky === 'string' ? oneLine(now.sky).toLowerCase() : '';
+        const temp = typeof now.temp === 'number' ? `${Math.round(now.temp)}°` : '';
+        const outcome = [temp, sky].filter(Boolean).join(' and ');
+        return outcome ? { outcome: clip(outcome, 60) } : undefined;
+      },
+    };
+  },
   use_skill: (input) => skillDraft(str(input, 'name')),
   list_skills: () => ({ family: 'other', words: say('look', 'at the skills') }),
   find_skills: (input) => {

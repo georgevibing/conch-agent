@@ -8,10 +8,12 @@
  *
  * Its tools are Conch's own host tools, so what a person chose is held here,
  * on every engine: a tool that's off isn't offered at all, and one set to Ask
- * asks before it runs. Saving a Gmail draft asks every time whatever the
- * policy says (ADR 0037's approval binding), so it can be Ask or Off only;
- * so can every other change Conch makes in Google (sending, calendar events,
- * Drive files). Which accounts each app uses, and whether an account may
+ * asks before it runs. Saving a Gmail draft and sending an email show the
+ * exact email and ask first, whatever the app's policy says, unless the
+ * person set that one tool to Allow — and even then they ask once the chat
+ * has read something from outside (ADR 0104). Every other change Conch makes
+ * in Google (calendar events, Drive files) asks every time, so it can be Ask
+ * or Off only. Which accounts each app uses, and whether an account may
  * only read or also write there, is the person's choice per account
  * (`limits` in the store), held by the service under what Google allows.
  */
@@ -73,20 +75,20 @@ const TOOLS: Record<GoogleAppId, AppTool[]> = {
       name: 'google_mail_create_draft',
       title: 'Save a draft',
       description:
-        'Saves a new email or a reply in your Drafts, for you to send yourself. Asks you every time.',
+        'Saves a new email or a reply in your Drafts without sending it. Shows you the draft first.',
       access: 'write',
       destructive: false,
-      alwaysAsks: true,
+      asksFirst: true,
       needs: 'mail-draft',
     },
     {
       name: 'google_mail_send',
       title: 'Send an email',
       description:
-        'Sends an email or a reply from your account. Shows you the exact email and asks every time.',
+        'Sends an email or a reply, with files from the chat if you like, from the account you choose. Shows you the exact email first.',
       access: 'write',
       destructive: false,
-      alwaysAsks: true,
+      asksFirst: true,
       needs: 'mail-send',
     },
   ],
@@ -161,6 +163,10 @@ const TOOLS: Record<GoogleAppId, AppTool[]> = {
 const ALWAYS_ASKS = new Set<string>(
   Object.values(TOOLS).flatMap((tools) => tools.filter((t) => t.alwaysAsks).map((t) => t.name)),
 );
+/** The tools that speak for the person: they ask inside themselves, unless the person allowed them. */
+const ASKS_FIRST = new Set<string>(
+  Object.values(TOOLS).flatMap((tools) => tools.filter((t) => t.asksFirst).map((t) => t.name)),
+);
 
 const APP_OF = new Map<string, GoogleAppId>(
   Object.entries(TOOLS).flatMap(([app, tools]) => tools.map((t) => [t.name, app as GoogleAppId])),
@@ -199,6 +205,8 @@ function summary(name: string, args: Record<string, unknown>): string {
       return 'read a file’s details in Google Drive';
     case 'google_mail_send':
       return 'send an email';
+    case 'google_mail_create_draft':
+      return 'save a Gmail draft';
     case 'google_calendar_create_event':
       return 'add an event to your calendar';
     case 'google_calendar_update_event':
@@ -432,7 +440,23 @@ export class GoogleApps {
     if (!item?.enabled || !item.tools.some((t) => t.name === name)) return 'off';
     const decision = toolDecision(item, name);
     // Every change asks inside itself, with the real account and exactly what it will do.
-    return ALWAYS_ASKS.has(name) && decision !== 'off' ? 'allow' : decision;
+    return (ALWAYS_ASKS.has(name) || ASKS_FIRST.has(name)) && decision !== 'off'
+      ? 'allow'
+      : decision;
+  }
+
+  /**
+   * What the person chose for a tool that speaks for them (sending, a draft):
+   * `allow` lets it go without the question while the chat hasn't read
+   * anything from outside; `ask` is their own Ask, which Auto keeps asking;
+   * `undefined` is the default, Ask.
+   */
+  chosen(toolName: string): 'allow' | 'ask' | undefined {
+    const name = bare(toolName);
+    if (!ASKS_FIRST.has(name)) return undefined;
+    const app = APP_OF.get(name);
+    const policy = app && this.#data ? settingsOf(this.#data, app).tools[name] : undefined;
+    return policy === 'allow' || policy === 'ask' ? policy : undefined;
   }
 
   /**
@@ -511,7 +535,7 @@ export class GoogleApps {
           capabilities: a.capabilities.filter((c) => allowed.has(c)),
         }))
         .filter((a) => a.capabilities.length),
-      note: 'Pass accountId as one of these emails (or leave it out when only one can do the job). "read" can only look; "write" can also change things, and every change asks the person first. To do more than an account allows, ask the person to change it in Apps. Ask if personal or work is unclear.',
+      note: 'Pass accountId as one of these emails: the one the person names; when they name none, leave it out and the first account that can do the job is used (the card shows which). "read" can only look; "write" can also save drafts, send email and change things, and each change shows the person exactly what it will do first unless they allowed it in Apps. To do more than an account allows, ask the person to change it in Apps → Gmail → Google accounts. Ask if personal or work is unclear.',
     });
   }
 
@@ -547,11 +571,24 @@ export class GoogleApps {
       const tools = item.tools.filter((t) => t.policy !== 'off').map((t) => `\`${t.name}\``);
       const entry = CATALOG.get(item.id);
       const product = GOOGLE_APP_PRODUCT[item.id as GoogleAppId];
-      const who = accountsFor(await this.#read(), item.id as GoogleAppId)
-        .map((a) => `${a.email}: ${a.access?.[product] === 'write' ? 'read & write' : 'read only'}`)
+      const accounts = accountsFor(await this.#read(), item.id as GoogleAppId);
+      const who = accounts
+        .map(
+          (a) =>
+            `${a.email} (${a.via === 'app-password' ? 'app password' : 'Google sign-in'}): ${a.access?.[product] === 'write' ? 'read & write' : 'read only'}`,
+        )
         .join('; ');
+      const send = item.tools.find((t) => t.name === 'google_mail_send');
+      const mail =
+        item.id !== 'gmail'
+          ? ''
+          : send && send.policy !== 'off'
+            ? ' It can send email: when the person asks you to send, send it with `google_mail_send` from the account they name (it shows them the exact email first, unless they allowed it); don’t only save a draft.'
+            : send
+              ? ' The person turned “Send an email” off in Apps → Gmail: say so, and offer a draft or turning it on there.'
+              : ' No account may send yet (read only): say so, and that the person can choose Read & write for an account in Apps → Gmail.';
       working.push(
-        `- ${item.name} (Conch’s own tools ${tools.join(', ')}; ${who})${entry ? `: ${entry.tagline}` : ''} — ${POLICY_LABELS[item.policy].toLowerCase()}; every change asks first.`,
+        `- ${item.name} (Conch’s own tools ${tools.join(', ')}; ${who})${entry ? `: ${entry.tagline}` : ''} — ${POLICY_LABELS[item.policy].toLowerCase()}; changes show the person what they’ll do first.${mail}`,
       );
     }
     return { working, broken };

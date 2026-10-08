@@ -9,6 +9,13 @@ import { z } from 'zod';
 import { MarketTrust } from './market-basics';
 import { Attachment } from './attachments';
 import { MailSentView } from './views/mail';
+import { WeatherView } from './views/weather';
+import { RecipeView } from './views/recipe';
+import { ProductsView } from './views/products';
+import { PlacesView } from './views/places';
+import { AudioView } from './views/audio';
+import { VideosView } from './views/video';
+import { BooksView, KnowledgeView, LinksView, ShowsView } from './views/knowledge';
 
 const Hex = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 /** An ISO 8601 date or date-time, as a tool read it. */
@@ -277,5 +284,15 @@ export const ToolView = z.discriminatedUnion('kind', [
     place: z.string().max(120).optional(),
     items: z.array(ChatMessageItem).max(30),
   }),
+  WeatherView,
+  RecipeView,
+  ProductsView,
+  PlacesView,
+  AudioView,
+  VideosView,
+  KnowledgeView,
+  LinksView,
+  BooksView,
+  ShowsView,
 ]);
 export type ToolView = z.infer<typeof ToolView>;

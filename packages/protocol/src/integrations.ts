@@ -130,8 +130,14 @@ export const IntegrationTool = z.object({
   access: z.enum(['read', 'write']),
   /** The server says this can delete or overwrite. */
   destructive: z.boolean().default(false),
-  /** Asks every time, whatever the policy says (saving a Gmail draft): only Ask or Off. */
+  /** Asks every time, whatever the policy says (a Slack message, a calendar event): only Ask or Off. */
   alwaysAsks: z.boolean().optional(),
+  /**
+   * Speaks for the person (sending an email, saving a draft): Ask unless the
+   * person set this one tool to Allow, whatever the app's policy says. Allow
+   * still asks when the chat has read something from outside.
+   */
+  asksFirst: z.boolean().optional(),
   /** Set when you overrode the integration's policy for this tool. */
   policy: ToolPolicy.optional(),
 });
@@ -423,6 +429,7 @@ export function toolDecision(
   if (tool?.policy === 'off') return 'off';
   if (tool?.policy === 'allow') return 'allow';
   if (tool?.policy === 'ask') return 'ask';
+  if (tool?.asksFirst) return 'ask';
   if (integration.policy === 'trust') return 'allow';
   if (integration.policy === 'ask-writes' && tool?.access === 'read' && !tool.destructive)
     return 'allow';

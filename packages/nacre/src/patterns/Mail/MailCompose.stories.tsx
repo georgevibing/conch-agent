@@ -96,8 +96,9 @@ export const LongBody: Story = {
 export const WithFiles: Story = {
   args: {
     files: [
-      { name: 'Launch checklist.pdf', mime: 'application/pdf', size: 248_000 },
+      { id: 'att_1', name: 'Launch checklist.pdf', mime: 'application/pdf', size: 248_000 },
       {
+        id: 'att_2',
         name: 'Budget.xlsx',
         mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         size: 41_000,

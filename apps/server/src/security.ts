@@ -450,6 +450,18 @@ function securityHeaders(request: FastifyRequest, reply: FastifyReply, secure: b
       `connect-src 'self' ws://${host} wss://${host}`,
       "media-src 'self' blob:",
       "worker-src 'self' blob:",
+      // Frames are our own pages (artifacts, files, Conch apps), and exactly two video
+      // players, so a video plays in the chat. Narrow on purpose: the player's frame is
+      // made only after the person presses play (until then nothing loads from YouTube
+      // or Vimeo, the poster is a picture the gateway kept); its address is built by
+      // Conch from an id checked against the site's own shape (`videoPlayer` in
+      // @conch/protocol: 11 letters for YouTube, digits for Vimeo), never a link a
+      // model or a page supplied, so nothing from the chat can ride in it; and the
+      // frame is sandboxed, has no microphone or camera, and is cross-origin, so it
+      // can't read the page. YouTube's player refuses to play without a referrer
+      // (error 153), so that one frame sends Conch's origin, never a path; the page
+      // itself stays `no-referrer`.
+      "frame-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com",
       "object-src 'none'",
       "base-uri 'none'",
       "form-action 'self'",

@@ -97,6 +97,27 @@ describe('MailCompose', () => {
     );
   });
 
+  it('a file can be taken off while editing, never put on, and goes by its id', async () => {
+    const onSend = vi.fn();
+    renderNacre(
+      <MailCompose
+        {...letter}
+        files={[
+          { id: 'att_a', name: 'plan.pdf', mime: 'application/pdf', size: 1200 },
+          { id: 'att_b', name: 'budget.xlsx', size: 900 },
+        ]}
+        editable
+        onSend={onSend}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Take plan.pdf off' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Take budget.xlsx off' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Send/ }));
+    expect(onSend).toHaveBeenCalledWith(expect.objectContaining({ attachments: ['att_a'] }));
+  });
+
   it('keeps a reply’s people and subject, and needs someone to send to', async () => {
     const onSend = vi.fn();
     renderNacre(<MailCompose {...letter} reply editable onSend={onSend} />);

@@ -20,6 +20,17 @@ const CAPS: Record<ToolView['kind'], number> = {
   downloads: 10,
   /** One email, no rows. */
   'mail-sent': 0,
+  // No rows of its own: its hours and days are capped by the protocol.
+  weather: 0,
+  recipe: 3,
+  products: 12,
+  places: 12,
+  audio: 12,
+  videos: 8,
+  knowledge: 0,
+  links: 8,
+  books: 12,
+  shows: 10,
 };
 
 /** A web link worth opening: `http(s)`, parseable, and with no sign-in tucked into it. */

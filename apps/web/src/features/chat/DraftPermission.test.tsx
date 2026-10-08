@@ -80,6 +80,29 @@ describe('an email before it goes', () => {
     expect(screen.getByText('Sending to Maya Kim…')).toBeInTheDocument();
   });
 
+  it('shows the files going, and one taken off on the card stays off', async () => {
+    const respond = vi.fn();
+    const withFiles = {
+      ...asking,
+      input: {
+        ...email,
+        attachments: ['att_a1', 'att_b2'],
+        files: ['plan.pdf', 'budget.xlsx'],
+        fileIds: ['att_a1', 'att_b2'],
+      },
+    };
+    renderApp(<PermissionCard item={withFiles} name="Conch" onRespond={respond} call={call} />);
+    expect(screen.getByText('plan.pdf')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Take plan.pdf off' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Send/ }));
+    expect(respond).toHaveBeenCalledWith(
+      'allow',
+      expect.objectContaining({ attachments: ['att_b2'] }),
+    );
+  });
+
   it('keeps an allowed email’s card while it goes, and folds it once Gmail answers', () => {
     const allowed = { ...asking, decision: 'allow' as const };
     expect(foldedAnswers([call, allowed]).has(allowed.id)).toBe(false);
@@ -147,5 +170,36 @@ describe('an email that didn’t go, or may have', () => {
     expect(
       mailMoment(tool({ status: 'success', approval: 'declined', output: 'Nothing was sent.' })),
     ).toBeUndefined();
+  });
+});
+
+describe('review an email before it goes', () => {
+  it('shows From, To, the files and the words, and sends only this once', async () => {
+    const respond = vi.fn();
+    const item: Extract<TranscriptItem, { kind: 'permission' }> = {
+      kind: 'permission',
+      id: 'permission_send',
+      toolName: 'mcp__conch__google_mail_send',
+      summary: 'send an email from pro@example.com to sam@example.org, with subject “Invoice”',
+      once: true,
+      input: {
+        accountEmail: 'pro@example.com',
+        to: ['sam@example.org'],
+        subject: 'Invoice',
+        body: 'Here it is.',
+        files: ['invoice.pdf'],
+      },
+    };
+    renderApp(<PermissionCard item={item} name="Conch" onRespond={respond} />);
+    expect(
+      screen.getByRole('group', { name: 'Email to sam@example.org: Invoice' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('From')).toBeInTheDocument();
+    expect(screen.getByText('pro@example.com')).toBeInTheDocument();
+    expect(screen.getByText('invoice.pdf')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Always allow' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Don’t send' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /^Send/ }));
+    expect(respond).toHaveBeenCalledExactlyOnceWith('allow', undefined);
   });
 });

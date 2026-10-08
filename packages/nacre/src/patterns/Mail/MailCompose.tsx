@@ -1,4 +1,4 @@
-import { ChevronDown, CornerUpLeft, PenLine, Send, ShieldAlert, Undo2 } from 'lucide-react';
+import { ChevronDown, CornerUpLeft, PenLine, Send, ShieldAlert, Undo2, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ReactNode, type Ref } from 'react';
 
 import { Avatar } from '../../components/Avatar';
@@ -61,11 +61,13 @@ interface Letter {
   cc: MailPerson[];
   subject: string;
   body: string;
+  files: readonly MailAttachment[];
 }
 
 const same = (a: Letter, b: Letter) =>
   a.subject === b.subject &&
   a.body === b.body &&
+  a.files.map((f) => f.id ?? f.name).join('\n') === b.files.map((f) => f.id ?? f.name).join('\n') &&
   samePeople(
     a.to.map((p) => p.address),
     b.to.map((p) => p.address),
@@ -107,7 +109,7 @@ export function MailCompose({
   sendRef,
   className,
 }: MailComposeProps) {
-  const original: Letter = { to: to.map(personOf), cc: cc.map(personOf), subject, body };
+  const original: Letter = { to: to.map(personOf), cc: cc.map(personOf), subject, body, files };
   const [kept, setKept] = useState<Letter>();
   const [working, setWorking] = useState<Letter>();
   const [open, setOpen] = useState(false);
@@ -170,6 +172,9 @@ export function MailCompose({
             ...(final.cc.length && { cc: final.cc.map((p) => p.address) }),
             subject: final.subject.trim(),
             body: final.body,
+            ...(files.some((f) => f.id) && {
+              attachments: final.files.flatMap((f) => (f.id ? [f.id] : [])),
+            }),
           }
         : undefined,
     );
@@ -358,15 +363,26 @@ export function MailCompose({
                 )}
               </>
             )}
-            {files.length > 0 && (
+            {letter.files.length > 0 && (
               <ul className={styles.files} aria-label="Files">
-                {files.map((file) => (
-                  <li key={file.name}>
+                {letter.files.map((file) => (
+                  <li key={file.id ?? file.name} className={styles.file}>
                     <FileTile
                       name={file.name}
                       {...(file.mime && { mimeType: file.mime })}
                       {...(file.size !== undefined && { size: file.size })}
                     />
+                    {/* A file can be taken off while editing, never put on: that's the assistant's to ask. */}
+                    {editing && file.id && (
+                      <button
+                        type="button"
+                        className={styles.chipRemove}
+                        aria-label={`Take ${file.name} off`}
+                        onClick={() => change({ files: letter.files.filter((f) => f !== file) })}
+                      >
+                        <X aria-hidden />
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>

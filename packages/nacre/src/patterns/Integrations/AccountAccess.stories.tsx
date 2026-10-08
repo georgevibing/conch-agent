@@ -37,7 +37,7 @@ const GMAIL = {
   describe: {
     off: 'Not used with this account.',
     read: 'Search and read your mail.',
-    write: 'Also save drafts and send — it asks you every time.',
+    write: 'Also save drafts and send email. Shows you each email first.',
   },
 } as const;
 const CALENDAR = {

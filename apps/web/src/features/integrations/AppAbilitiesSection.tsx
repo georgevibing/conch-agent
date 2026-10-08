@@ -19,6 +19,7 @@ import { channelsApi } from '../channels/api';
 import { channelMessage, isLinkedKind, needsYou, whoOf } from '../channels/describe';
 import { errorText, putChannel } from '../channels/queries';
 import { vaultApi } from '../passwords/api';
+import { OnePasswordAccess, onePasswordVia } from '../passwords/OnePasswordAccess';
 import { vaultKeys } from '../passwords/queries';
 import { groupOn, groupPatch, TALKS_AS, toolGroups, unsetGroups, type AppItem } from './apps';
 import { ConnectDialog } from './ConnectDialog';
@@ -62,6 +63,7 @@ export function AppAbilitiesSection({
   const [connecting, setConnecting] = useState(false);
   const setUp = onSetUp ?? (() => setConnecting(true));
   const [busy, setBusy] = useState<string>();
+  const [opAccess, setOpAccess] = useState(false);
   const { integration, entry, channels, source } = item;
   const catalogId = integration?.catalogId ?? entry?.id;
   const talksAs = catalogId ? TALKS_AS[catalogId] : undefined;
@@ -87,6 +89,15 @@ export function AppAbilitiesSection({
 
   const setChannel = (target: Channel, enabled: boolean) =>
     run('talk', async () => putChannel(client, await channelsApi.update(target.id, { enabled })));
+
+  /** The sign-in check, handing back what the task made (or nothing, when it wasn't confirmed). */
+  const guardFor = async <T,>(task: () => Promise<T>): Promise<T | undefined> => {
+    let out: T | undefined;
+    const done = await guard(async () => {
+      out = await task();
+    });
+    return done ? out : undefined;
+  };
 
   const rows: AppAbility[] = [];
 
@@ -226,6 +237,39 @@ export function AppAbilitiesSection({
       description: `Your ${from.name} logins show in Passwords, and ${assistant} fills one in the browser when you say OK. Nothing is copied.`,
       icon: <KeyRound />,
     };
+    // 1Password: the app on this computer or a service account, chosen (and changed) in its settings.
+    if (from.id === '1password') {
+      const via = onePasswordVia(from);
+      return {
+        ...base,
+        on: from.state !== 'off',
+        busy: busy === 'fill',
+        onChange: (enabled: boolean) =>
+          enabled
+            ? setOpAccess(true)
+            : void run('fill', async () => {
+                await vaultApi.setSource(from.id, { enabled: false });
+                await client.invalidateQueries({ queryKey: vaultKeys.all });
+              }),
+        ...(from.state !== 'off' && {
+          note:
+            from.state === 'ready'
+              ? [
+                  via,
+                  from.count !== undefined &&
+                    `${from.count} ${from.count === 1 ? 'item' : 'items'}, read where they are.`,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
+              : (from.message ??
+                (from.state === 'locked'
+                  ? `Locked. Unlock ${from.name} to use it.`
+                  : `${from.name} isn’t ready.`)),
+          attention: from.state !== 'ready',
+        }),
+        action: { label: 'Settings', onClick: () => setOpAccess(true) },
+      };
+    }
     if (from.state === 'missing')
       return {
         ...base,
@@ -277,6 +321,14 @@ export function AppAbilitiesSection({
         <ConnectDialog
           entry={connecting ? entry : undefined}
           onOpenChange={(open) => !open && setConnecting(false)}
+        />
+      )}
+      {source?.id === '1password' && (
+        <OnePasswordAccess
+          source={source}
+          open={opAccess}
+          onOpenChange={setOpAccess}
+          guard={guardFor}
         />
       )}
       {dialog}

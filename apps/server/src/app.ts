@@ -66,6 +66,7 @@ import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import type { z } from 'zod';
 
 import { registerAttachmentRoutes } from './attachments/routes';
+import { carriedIn, registerListenRoutes } from './research/listen';
 import { secretPlaces } from './conversations/sandbox';
 import { protectedPaths } from './lib/protect';
 import { folderRules } from './pick/folders';
@@ -306,6 +307,12 @@ export async function buildApp(services: Services) {
   registerStoryRoutes(app, services.explainer);
   // Site icons for chips, from each site itself, never a third party (ADR 0103).
   registerFaviconRoutes(app, services.favicons);
+  // What a music card plays, streamed through Conch: only what that chat's own card carries.
+  registerListenRoutes(app, {
+    carried: async (chat, src) =>
+      carriedIn((await services.conversations.detail(chat)).events, chat, src),
+    gatewayPort: config.CONCH_PORT,
+  });
   registerArtifactRoutes(app, services.artifacts);
   registerTaskRoutes(app, services.tasks);
   registerAgentRoutes(app, { agents: services.agents, faces: services.images });

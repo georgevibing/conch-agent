@@ -2016,5 +2016,9 @@ describe('Palette search', () => {
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'generate password');
     expect(await screen.findByRole('option', { name: /Generate a password/ })).toBeInTheDocument();
+    // 1Password's service account, by the words someone on a server would type.
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'service account token');
+    expect(await screen.findByRole('option', { name: /Connect 1Password/ })).toBeInTheDocument();
   });
 });

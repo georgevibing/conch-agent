@@ -136,6 +136,11 @@ export interface PasswordSource {
   add?(item: OutgoingItem, options?: { place?: string; signal?: AbortSignal }): Promise<void>;
   /** Where `add` can put it, from what the last list read. Cheap: never asks the program. */
   places?(): SourcePlace[];
+  /**
+   * It asks the person something when read (1Password's approval, Touch ID),
+   * so it's read only while they look at Passwords. Unset: as `PROMPTS` says.
+   */
+  readonly prompts?: boolean;
   /** For `password` sources: unlock with what the person typed. */
   unlockWith?(password: string): Promise<void>;
   lock?(): void;
@@ -283,31 +288,227 @@ export function toOpTemplate(item: OutgoingItem) {
   };
 }
 
+/**
+ * How Conch reaches 1Password. Without a token: the 1Password app on this
+ * computer, through its CLI integration (Touch ID, Windows Hello). With one:
+ * a service account, for a computer without the app (a server), reading only
+ * the vaults the person gave it — and of those, the ones they chose to show.
+ */
+export interface OnePasswordAccess {
+  /** A service account token (`ops_…`). Only ever in `op`'s own environment. */
+  token?: string;
+  /** The vaults Conch shows. Absent: every vault the service account can read. */
+  vaults?: string[];
+}
+
+/** Anything that looks like a service account token, for redaction. */
+const OPS_TOKEN = /ops_[A-Za-z0-9+/=_-]{8,}/g;
+
+/** 1Password's words, with any token in them taken out (they never echo it, but never trust that). */
+function opWords(stderr: string, token?: string): string {
+  let text = firstLine(stderr);
+  if (token) text = text.split(token).join('…');
+  return text.replace(OPS_TOKEN, 'ops_…');
+}
+
+/** What a service account said when its token wasn't taken: wrong, revoked, expired or cut. */
+const TOKEN_REFUSED =
+  /token|service account|unauthori[sz]ed|authenticat|not authori[sz]ed|forbidden|invalid|expired|revoked|deleted|decode|credentials|sign(ed)?[ -]?in|session/;
+
+/** How long a service account's vault list is trusted. Each read counts against its hourly limit. */
+const VAULTS_MS = 5 * 60_000;
+/** A look that failed is tried again sooner, but not on every status. */
+const VAULTS_FAILED_MS = 60_000;
+
+interface ServiceVaults {
+  /** Which token looked (a hash of it). */
+  key: string;
+  at: number;
+  vaults?: SourcePlace[];
+  problem?: Pick<VaultSource, 'state' | 'message'>;
+}
+
 export class OnePasswordSource implements PasswordSource {
   readonly id = '1password' as const;
   readonly name = '1Password';
   readonly unlock = 'app' as const;
   readonly need = 'op';
   #list?: { items: ExternalItem[]; at: number };
+  /** A service account's vaults, from its last look (names only), by which token looked. */
+  #vaults?: ServiceVaults;
+  #mode: 'app' | 'service-account' = 'app';
 
-  constructor(private readonly exec: Exec = realExec) {}
+  constructor(
+    private readonly exec: Exec = realExec,
+    private readonly access: () => Promise<OnePasswordAccess> = async () => ({}),
+  ) {}
 
-  async #op(args: string[], signal?: AbortSignal, input?: string): Promise<RunResult> {
+  /**
+   * The app asks the person to approve (Touch ID), so it's read only while
+   * someone looks at Passwords. A service account asks nobody.
+   */
+  get prompts(): boolean {
+    return this.#mode === 'app';
+  }
+
+  /** Which way Conch reaches 1Password, as last read. */
+  get mode(): 'app' | 'service-account' {
+    return this.#mode;
+  }
+
+  async #access(): Promise<OnePasswordAccess> {
+    const access = await this.access().catch(() => ({}) as OnePasswordAccess);
+    this.#mode = access.token ? 'service-account' : 'app';
+    this.#shownIds = access.vaults;
+    return access;
+  }
+
+  /**
+   * `op`'s environment. With a token: the token in `OP_SERVICE_ACCOUNT_TOKEN`
+   * (1Password's own variable; never an argument, never a file), and no
+   * Connect server, which `op` would prefer over it.
+   */
+  #env(token: string | undefined): Record<string, string> | undefined {
+    if (!token) return undefined;
+    const env = agentEnv({ OP_SERVICE_ACCOUNT_TOKEN: token });
+    delete env.OP_CONNECT_HOST;
+    delete env.OP_CONNECT_TOKEN;
+    return env;
+  }
+
+  async #op(
+    args: string[],
+    signal?: AbortSignal,
+    input?: string,
+    token?: string,
+  ): Promise<RunResult> {
     const op = await this.exec.find('op');
     if (!op)
       throw new SourceError(
         'Install the 1Password command line tool to see your 1Password items here.',
       );
+    const env = this.#env(token);
     return this.exec.run(op, args, {
       timeout: UNLOCK_WAIT_MS,
+      ...(env && { env }),
       ...(signal && { signal }),
       ...(input !== undefined && { input }),
     });
   }
 
-  async state(): Promise<Pick<VaultSource, 'state' | 'message'>> {
+  /**
+   * The vaults a token can read, asked of 1Password itself (`op vault list`).
+   * Throws a sentence a person can act on; never the token.
+   */
+  async check(token: string, signal?: AbortSignal): Promise<SourcePlace[]> {
+    const result = await this.#op(['vault', 'list', '--format', 'json'], signal, undefined, token);
+    if (result.code !== 0) throw new SourceError(this.#explain(result.stderr, token));
+    let raw: { id?: string; name?: string }[];
+    try {
+      raw = JSON.parse(result.stdout) as { id?: string; name?: string }[];
+    } catch {
+      throw new SourceError('1Password answered with something Conch couldn’t read.');
+    }
+    if (!Array.isArray(raw))
+      throw new SourceError('1Password answered with something Conch couldn’t read.');
+    return raw
+      .filter((v): v is { id: string; name?: string } => OP_ID.test(v.id ?? ''))
+      .map((v) => ({ id: v.id, name: v.name?.trim() || 'Vault' }));
+  }
+
+  /** What a service account's last look found: its vaults, or why it couldn't. */
+  async #serviceVaults(
+    token: string,
+    force = false,
+  ): Promise<{ vaults?: SourcePlace[]; problem?: Pick<VaultSource, 'state' | 'message'> }> {
+    const key = sha(token);
+    const last = this.#vaults;
+    if (
+      last &&
+      last.key === key &&
+      !force &&
+      Date.now() - last.at < (last.problem ? VAULTS_FAILED_MS : VAULTS_MS)
+    )
+      return last;
+    let next: ServiceVaults;
+    try {
+      const vaults = await this.check(token);
+      next = vaults.length
+        ? { key, at: Date.now(), vaults }
+        : {
+            key,
+            at: Date.now(),
+            vaults,
+            problem: {
+              state: 'locked',
+              message:
+                'This service account can’t read any vaults. Give it access to one on 1Password.com.',
+            },
+          };
+    } catch (error) {
+      const message = (error as Error).message;
+      next = {
+        key,
+        at: Date.now(),
+        problem: {
+          state: /token/.test(message) ? 'locked' : 'error',
+          message,
+        },
+      };
+    }
+    this.#vaults = next;
+    return next;
+  }
+
+  /**
+   * The vaults a service account can read and Conch shows. Undefined in the
+   * app's mode, where every vault the app has is shown, as before.
+   */
+  #shown(access: OnePasswordAccess, vaults: SourcePlace[] | undefined): SourcePlace[] | undefined {
+    if (!access.token) return undefined;
+    const all = vaults ?? [];
+    if (!access.vaults) return all;
+    const chosen = new Set(access.vaults);
+    return all.filter((v) => chosen.has(v.id));
+  }
+
+  /** Whether `op` is on this computer. */
+  async installed(): Promise<boolean> {
+    return Boolean(await this.exec.find('op'));
+  }
+
+  /** Which way it's reached, read now (a file, never `op`). */
+  async describe(): Promise<ReturnType<OnePasswordSource['accessFor']>> {
+    await this.#access();
+    return this.accessFor();
+  }
+
+  /** A service account: the vaults it can read, and the ones shown. Cheap: what it last saw. */
+  accessFor(): { mode: 'app' | 'service-account'; vaults?: SourcePlace[]; shown?: string[] } {
+    if (this.#mode === 'app') return { mode: 'app' };
+    return {
+      mode: 'service-account',
+      ...(this.#vaults?.vaults && { vaults: this.#vaults.vaults }),
+      ...(this.#shownIds && { shown: this.#shownIds }),
+    };
+  }
+
+  #shownIds?: string[];
+
+  async state(options: { force?: boolean } = {}): Promise<Pick<VaultSource, 'state' | 'message'>> {
+    const access = await this.#access();
     const op = await this.exec.find('op');
     if (!op) return { state: 'missing', message: 'Needs the 1Password command line tool.' };
+    if (access.token) {
+      const { vaults, problem } = await this.#serviceVaults(access.token, options.force);
+      if (problem) return problem;
+      if (!this.#shown(access, vaults)?.length)
+        return {
+          state: 'locked',
+          message: 'None of the vaults Conch shows are there any more. Choose them again.',
+        };
+      return { state: 'ready' };
+    }
     const accounts = await this.exec.run(op, ['account', 'list', '--format', 'json'], {
       timeout: 10_000,
     });
@@ -326,18 +527,20 @@ export class OnePasswordSource implements PasswordSource {
     return { vault: m[1], item: m[2] };
   }
 
-  async list(options: { force?: boolean; signal?: AbortSignal } = {}): Promise<ExternalItem[]> {
-    if (this.#list && !options.force && Date.now() - this.#list.at < LIST_MS)
-      return this.#list.items;
-    const result = await this.#op(['item', 'list', '--format', 'json'], options.signal);
-    if (result.code !== 0) throw new SourceError(this.#explain(result.stderr));
-    let raw: OpListItem[];
-    try {
-      raw = JSON.parse(result.stdout) as OpListItem[];
-    } catch {
-      throw new SourceError('1Password answered with something Conch couldn’t read.');
-    }
-    const items = raw
+  /**
+   * The token to read one item with, after checking its vault is one Conch
+   * shows. Undefined in the app's mode.
+   */
+  async #scoped(vault: string): Promise<string | undefined> {
+    const access = await this.#access();
+    if (!access.token) return undefined;
+    if (access.vaults && !access.vaults.includes(vault))
+      throw new SourceError('That 1Password vault isn’t shown in Conch.');
+    return access.token;
+  }
+
+  #map(raw: OpListItem[]): ExternalItem[] {
+    return raw
       .filter((i) => OP_ID.test(i.id) && i.vault && OP_ID.test(i.vault.id))
       .map((i): ExternalItem => ({
         ref: `op_${i.vault?.id}_${i.id}`,
@@ -351,17 +554,62 @@ export class OnePasswordSource implements PasswordSource {
         container: i.vault?.name,
         ...(i.updated_at && { updatedAt: Date.parse(i.updated_at) || undefined }),
       }));
+  }
+
+  #parse(stdout: string): OpListItem[] {
+    try {
+      const raw = JSON.parse(stdout) as OpListItem[];
+      if (!Array.isArray(raw)) throw new Error('not a list');
+      return raw;
+    } catch {
+      throw new SourceError('1Password answered with something Conch couldn’t read.');
+    }
+  }
+
+  async list(options: { force?: boolean; signal?: AbortSignal } = {}): Promise<ExternalItem[]> {
+    if (this.#list && !options.force && Date.now() - this.#list.at < LIST_MS)
+      return this.#list.items;
+    const access = await this.#access();
+    let items: ExternalItem[];
+    if (access.token) {
+      // A service account reads vault by vault: only the ones shown, one after another.
+      const { vaults, problem } = await this.#serviceVaults(access.token);
+      if (problem) throw new SourceError(problem.message ?? '1Password isn’t ready.');
+      items = [];
+      for (const vault of this.#shown(access, vaults) ?? []) {
+        const result = await this.#op(
+          ['item', 'list', '--vault', vault.id, '--format', 'json'],
+          options.signal,
+          undefined,
+          access.token,
+        );
+        if (result.code !== 0) throw new SourceError(this.#explain(result.stderr, access.token));
+        items.push(
+          ...this.#map(this.#parse(result.stdout)).map((i) => ({
+            ...i,
+            container: i.container ?? vault.name,
+          })),
+        );
+      }
+    } else {
+      const result = await this.#op(['item', 'list', '--format', 'json'], options.signal);
+      if (result.code !== 0) throw new SourceError(this.#explain(result.stderr));
+      items = this.#map(this.#parse(result.stdout));
+    }
     this.#list = { items, at: Date.now() };
     return items;
   }
 
   async fields(ref: string, signal?: AbortSignal) {
     const { vault, item } = this.#split(ref);
+    const token = await this.#scoped(vault);
     const result = await this.#op(
       ['item', 'get', item, '--vault', vault, '--format', 'json'],
       signal,
+      undefined,
+      token,
     );
-    if (result.code !== 0) throw new SourceError(this.#explain(result.stderr));
+    if (result.code !== 0) throw new SourceError(this.#explain(result.stderr, token));
     const parsed = JSON.parse(result.stdout) as { fields?: OpField[] };
     let notes = '';
     const fields: ExternalField[] = [];
@@ -389,11 +637,14 @@ export class OnePasswordSource implements PasswordSource {
 
   async value(ref: string, fieldId: string, signal?: AbortSignal): Promise<string> {
     const { vault, item } = this.#split(ref);
+    const token = await this.#scoped(vault);
     const result = await this.#op(
       ['item', 'get', item, '--vault', vault, '--format', 'json', '--reveal'],
       signal,
+      undefined,
+      token,
     );
-    if (result.code !== 0) throw new SourceError(this.#explain(result.stderr));
+    if (result.code !== 0) throw new SourceError(this.#explain(result.stderr, token));
     const parsed = JSON.parse(result.stdout) as { fields?: OpField[] };
     const field = (parsed.fields ?? []).find(
       (f) => (f.id ?? '').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64) === fieldId,
@@ -404,13 +655,27 @@ export class OnePasswordSource implements PasswordSource {
 
   async totp(ref: string, signal?: AbortSignal): Promise<string> {
     const { vault, item } = this.#split(ref);
-    const result = await this.#op(['item', 'get', item, '--vault', vault, '--otp'], signal);
+    const token = await this.#scoped(vault);
+    const result = await this.#op(
+      ['item', 'get', item, '--vault', vault, '--otp'],
+      signal,
+      undefined,
+      token,
+    );
     if (result.code !== 0 || !/^\d{6,8}$/.test(result.stdout.trim()))
-      throw new SourceError(this.#explain(result.stderr) || 'That item has no one-time code.');
+      throw new SourceError(
+        this.#explain(result.stderr, token) || 'That item has no one-time code.',
+      );
     return result.stdout.trim();
   }
 
   places(): SourcePlace[] {
+    // A service account: the vaults it shows, known even before they hold anything.
+    if (this.#mode === 'service-account') {
+      const all = this.#vaults?.vaults ?? [];
+      const chosen = this.#shownIds && new Set(this.#shownIds);
+      return chosen ? all.filter((v) => chosen.has(v.id)) : all;
+    }
     const seen = new Map<string, string>();
     for (const item of this.#list?.items ?? []) {
       const vault = /^op_([a-z0-9]+)_/.exec(item.ref)?.[1];
@@ -422,29 +687,44 @@ export class OnePasswordSource implements PasswordSource {
   async add(item: OutgoingItem, options: { place?: string; signal?: AbortSignal } = {}) {
     if (options.place !== undefined && !OP_ID.test(options.place))
       throw new SourceError('That 1Password vault isn’t known.');
+    const access = await this.#access();
+    // A service account names its vault every time, and only one Conch shows.
+    const place = options.place ?? (access.token ? this.places()[0]?.id : undefined);
+    if (access.token && !place) throw new SourceError('Choose a 1Password vault for it.');
+    const token = place ? await this.#scoped(place) : undefined;
     // The item as 1Password's own JSON template, piped in: `-` reads it from stdin.
     const result = await this.#op(
-      [
-        'item',
-        'create',
-        ...(options.place ? ['--vault', options.place] : []),
-        '--format',
-        'json',
-        '-',
-      ],
+      ['item', 'create', ...(place ? ['--vault', place] : []), '--format', 'json', '-'],
       options.signal,
       JSON.stringify(toOpTemplate(item)),
+      token,
     );
-    if (result.code !== 0) throw new SourceError(this.#explain(result.stderr));
+    if (result.code !== 0) throw new SourceError(this.#explain(result.stderr, token));
     // Read again next time; until then its vaults are still known.
     if (this.#list) this.#list.at = 0;
   }
 
-  #explain(stderr: string): string {
-    const text = firstLine(stderr).toLowerCase();
+  /** Forget what was read: after the token or the vaults shown change, or it's turned off. */
+  lock(): void {
+    this.#list = undefined;
+    this.#vaults = undefined;
+  }
+
+  #explain(stderr: string, token?: string): string {
+    const words = opWords(stderr, token);
+    const text = words.toLowerCase();
+    if (token) {
+      if (/too many requests|rate limit/.test(text))
+        return '1Password is limiting this service account for now. Conch tries again in a while.';
+      if (/write|permission|access/.test(text) && /vault/.test(text))
+        return 'This service account can’t do that in this vault. Give it access on 1Password.com.';
+      if (TOKEN_REFUSED.test(text))
+        return '1Password didn’t accept the service account token. Replace it with a new one.';
+      return words ? `1Password said: ${words}` : '1Password didn’t answer.';
+    }
     if (/\block|\bsign(ed)?[ -]?in\b|authoriz|session|biometric/.test(text))
       return '1Password is locked. Unlock it, then try again.';
-    return text ? `1Password said: ${firstLine(stderr)}` : '1Password didn’t answer.';
+    return words ? `1Password said: ${words}` : '1Password didn’t answer.';
   }
 }
 

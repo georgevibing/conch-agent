@@ -12,6 +12,8 @@ export interface MailPerson {
 
 /** A file that goes with an email. Mirrors `MailFile`. */
 export interface MailAttachment {
+  /** Its id in the chat (`att_…`): with one, it can be taken off the email on the card. */
+  id?: string;
   name: string;
   mime?: string;
   size?: number;
@@ -23,6 +25,8 @@ export interface MailChange {
   cc?: string[];
   subject: string;
   body: string;
+  /** The files still going, by id: only ever fewer than were shown. */
+  attachments?: string[];
 }
 
 /** A person from an address or from what a tool said. */

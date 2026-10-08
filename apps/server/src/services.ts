@@ -44,7 +44,14 @@ import { QuestionDesk } from './questions/desk';
 import { QUESTIONS_PROMPT, questionTools } from './questions/tools';
 import { AttachmentStore } from './attachments/store';
 import { fileTools } from './files/tools';
+import { placesTools } from './research/places';
+import { knowledgeTools } from './research/knowledge';
 import { researchTools, publicWebFetcher } from './research/tools';
+import { weatherTool } from './research/weather';
+import { recipeTools } from './research/recipe';
+import { productTools } from './research/products';
+import { musicTools } from './research/music';
+import { videoTools } from './research/video';
 import { faviconFetcher, Favicons } from './favicons/favicons';
 import { ProcessService } from './processes/service';
 import { GatewayRecovery } from './recovery/gateway';
@@ -144,6 +151,7 @@ import { SecretVault } from './secrets/vault';
 import { GoogleService } from './google/service';
 import { GoogleStore } from './google/store';
 import { googleTools } from './google/tools';
+import { filesOf } from './channels/outbound';
 import { registerGoogleDoctor } from './google/doctor';
 import { GoogleApps } from './google/apps';
 import { GMAIL_IMAP, GmailImap } from './google/imap';
@@ -976,6 +984,13 @@ export class Services {
               ...publishTools(ctx, () => this.#fileAccess(ctx), this.attachments),
               ...this.files.tools(ctx, () => this.#fileAccess(ctx)),
               ...researchTools(ctx, fetchPublicWeb),
+              weatherTool(ctx, fetchPublicWeb),
+              ...recipeTools(ctx, { fetcher: fetchPublicWeb, store: this.attachments }),
+              ...productTools(ctx, { fetcher: fetchPublicWeb, store: this.attachments }),
+              ...placesTools(ctx, fetchPublicWeb, this.attachments),
+              ...musicTools(ctx, { fetcher: fetchPublicWeb, store: this.attachments }),
+              ...videoTools(ctx, { fetcher: fetchPublicWeb, store: this.attachments }),
+              ...knowledgeTools(ctx, { fetcher: fetchPublicWeb, store: this.attachments }),
               ...this.processes.tools(ctx),
               ...this.images.tools(ctx, () => this.#fileAccess(ctx)),
               ...this.routines.tools(ctx),
@@ -988,8 +1003,17 @@ export class Services {
               ...(ctx.origin?.kind === 'routine' ? [] : this.tasks.tools(ctx)),
               // Only the Google apps that are connected and on, without the tools turned off.
               ...this.googleApps.tools(
-                googleTools(this.google, ctx, (draft) =>
-                  this.tasks.createDraft({ parentConversationId: ctx.conversationId, draft }),
+                googleTools(
+                  this.google,
+                  ctx,
+                  (draft) =>
+                    this.tasks.createDraft({ parentConversationId: ctx.conversationId, draft }),
+                  {
+                    // Allow or Ask, as the person set "Send an email" and "Save a draft" (ADR 0104).
+                    chosen: (name) => this.googleApps.chosen(name),
+                    // An email's files: this chat's own, by id (as message_user sends them).
+                    files: (ids) => filesOf(this.attachments, ids, ctx.conversationId),
+                  },
                 ),
                 ctx,
               ),
@@ -2297,6 +2321,23 @@ export class Services {
         hint: tail(slack.token),
         manage: { label: 'Open Apps', place: 'integrations' },
         reveal: async () => slack.token,
+      });
+    // A 1Password service account's token, for Passwords: listed, never copied back out.
+    const serviceAccount = await this.vault.serviceAccount.read().catch(() => undefined);
+    if (serviceAccount?.token)
+      out.push({
+        id: id('1password', 'service-account'),
+        title: '1Password service account',
+        usedBy: 'Passwords',
+        hint: 'Saved securely',
+        ...(serviceAccount.savedAt && { savedAt: serviceAccount.savedAt }),
+        manage: { label: 'Open Passwords', place: 'passwords', focus: '1password' },
+        reveal: () =>
+          Promise.reject(
+            new Error(
+              'Conch keeps this token only to read 1Password. Replace it in Passwords › Password managers.',
+            ),
+          ),
       });
     // A cloud browser's key, or a browser's address with its token (ADR 0080).
     const browser = await this.browser.secrets.read().catch(() => undefined);

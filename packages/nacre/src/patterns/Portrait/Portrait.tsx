@@ -109,6 +109,7 @@ export function Portrait({
             maxLength={80}
             autoComplete="given-name"
             spellCheck={false}
+            data-nc-large-type=""
           />
           <p className={styles.summary}>
             {summary || 'Add a few things below, and every chat starts knowing them.'}

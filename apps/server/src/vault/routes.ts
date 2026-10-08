@@ -23,6 +23,9 @@ import {
   VaultSource,
   VaultSourceId,
   KeePassDatabase,
+  OnePasswordConnected,
+  OnePasswordTokenBody,
+  OnePasswordVaultsBody,
   VaultSourcePatch,
   VaultSyncPatch,
   VaultTransferBody,
@@ -301,6 +304,36 @@ export function registerVaultRoutes(
     if (!id) return;
     await vault.lockSource(id);
     return { ok: true };
+  });
+
+  // 1Password through a service account: the token is tried, then kept sealed. Saving one
+  // lets Conch read those vaults unattended, so it takes a recent sign-in. It's never sent back.
+  app.put('/api/vault/sources/1password/token', async (request, reply) => {
+    const body = parse(OnePasswordTokenBody, request.body, reply);
+    if (!body) return;
+    if (!verify(request, reply)) return;
+    return guarded(reply, async () =>
+      OnePasswordConnected.parse(await vault.connectOnePassword(body.token)),
+    );
+  });
+
+  // Back to the 1Password app on this computer (`?disconnect=1`: and off).
+  app.delete<{ Querystring: { disconnect?: string } }>(
+    '/api/vault/sources/1password/token',
+    (request, reply) =>
+      guarded(reply, async () =>
+        z
+          .array(VaultSource)
+          .parse(await vault.forgetOnePassword({ disconnect: request.query.disconnect === '1' })),
+      ),
+  );
+
+  app.put('/api/vault/sources/1password/vaults', async (request, reply) => {
+    const body = parse(OnePasswordVaultsBody, request.body, reply);
+    if (!body) return;
+    return guarded(reply, async () =>
+      z.array(VaultSource).parse(await vault.setOnePasswordVaults(body.vaults)),
+    );
   });
 
   // KeePassXC databases on this computer, so nobody types a path. Names and paths only.

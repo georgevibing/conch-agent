@@ -28,7 +28,23 @@ const WEB_READERS = new Set([
   'web_search',
   'mcp__conch__web_fetch',
   'mcp__conch__web_search',
+  'video_search',
+  'video_details',
+  'mcp__conch__video_search',
+  'mcp__conch__video_details',
 ]);
+/** Conch's cards of what's known (ADR 0060 §7): someone else's words, like a page. */
+const CARDS = /^(?:mcp__conch__)?(knowledge_card|link_preview|book_search|show_search)$/;
+const CARD_SOURCES: Record<string, string> = {
+  knowledge_card: 'Wikipedia',
+  book_search: 'Open Library',
+  show_search: 'TVmaze',
+};
+/** The sites a link preview opened: one by name, several together. */
+const linksLabel = (urls: unknown): string => {
+  const hosts = [...new Set((Array.isArray(urls) ? urls : []).flatMap((u) => hostOf(u) ?? []))];
+  return hosts.length === 1 && hosts[0] ? hosts[0] : 'web pages';
+};
 /** Conch's browser: every look at a page is the outside coming in. */
 const BROWSER =
   /^(?:mcp__conch__)?browser_(?:open|read|screenshot|click|click_at|back|scroll|wait|select|press|type|tabs|upload)$/;
@@ -76,15 +92,43 @@ export function taintFrom(toolName: string, input: unknown, app?: string): Taint
     return { kind: 'app', label: 'task results' };
   if (/^(?:mcp__conch__)?read_document$/.test(toolName))
     return { kind: 'download', label: 'document content' };
+  // Recipe pages (the recipe card): someone else's page, as web_fetch's is.
+  if (/^(?:mcp__conch__)?recipe$/.test(toolName))
+    return {
+      kind: 'web',
+      label: hostOf(Array.isArray(args.urls) ? args.urls[0] : undefined) ?? 'a recipe page',
+    };
+  // Places found in OpenStreetMap: names, hours and links anyone can write.
+  if (/^(?:mcp__conch__)?places$/.test(toolName))
+    return { kind: 'web', label: 'OpenStreetMap places' };
   if (WEB_READERS.has(toolName))
     return {
       kind: 'web',
       label: /(?:WebSearch|web_search)$/.test(toolName)
         ? 'web search results'
-        : (hostOf(args.url) ?? 'a web page'),
+        : /video_(?:search|details)$/.test(toolName)
+          ? 'video titles from YouTube and Vimeo'
+          : (hostOf(args.url) ?? 'a web page'),
     };
   if (BROWSER.test(toolName))
     return { kind: 'web', label: hostOf(args.url) ?? 'pages in the browser' };
+  // Shop pages read for their products: someone else's words, like web_fetch.
+  if (/^(?:mcp__conch__)?product_details$/.test(toolName))
+    return {
+      kind: 'web',
+      label: (Array.isArray(args.urls) ? hostOf(args.urls[0]) : undefined) ?? 'shop pages',
+    };
+  const card = CARDS.exec(toolName)?.[1];
+  if (card)
+    return {
+      kind: 'web',
+      label:
+        card === 'link_preview'
+          ? linksLabel(args.urls)
+          : card === 'show_search' && args.kind === 'movie'
+            ? 'Wikipedia'
+            : (CARD_SOURCES[card] ?? 'web pages'),
+    };
   if (
     (toolName === 'Bash' || /^(?:mcp__conch__)?process_(?:start|read)$/.test(toolName)) &&
     typeof args.command === 'string' &&
@@ -184,8 +228,36 @@ export function sinkReason(
       : undefined;
   }
   if (/(?:WebSearch|web_search)$/.test(toolName)) return 'send a search query to the web';
+  if (/^(?:mcp__conch__)?video_search$/.test(toolName)) return 'send a search query to YouTube';
   if (/(?:WebFetch|web_fetch)$/.test(toolName) && typeof args.url === 'string' && carries(args.url))
     return 'open a web address that could carry what it read';
+  if (
+    /^(?:mcp__conch__)?recipe$/.test(toolName) &&
+    Array.isArray(args.urls) &&
+    args.urls.some((u) => typeof u === 'string' && carries(u))
+  )
+    return 'open a web address that could carry what it read';
+  if (
+    /^(?:mcp__conch__)?product_details$/.test(toolName) &&
+    Array.isArray(args.urls) &&
+    args.urls.some((url) => typeof url === 'string' && carries(url))
+  )
+    return 'open a web address that could carry what it read';
+  // A place search is short words to OpenStreetMap; long ones could carry what was read, as a URL can.
+  if (
+    /^(?:mcp__conch__)?places$/.test(toolName) &&
+    [args.what, args.near, args.from].map((v) => (typeof v === 'string' ? v : '')).join(' ')
+      .length > 120
+  )
+    return 'send a long place search to OpenStreetMap';
+  // A card's lookup: the pages a preview opens, like web_fetch; a name sent to look up is
+  // research, unless it's long enough to carry what was read.
+  const card = CARDS.exec(toolName)?.[1];
+  if (card === 'link_preview')
+    return Array.isArray(args.urls) && args.urls.some((u) => typeof u === 'string' && carries(u))
+      ? 'open a web address that could carry what it read'
+      : undefined;
+  if (card && String(args.query ?? '').length > 120) return 'send a search query to the web';
   // An app's picture fetched from an address (ADR 0090): the same way out as web_fetch.
   if (
     /^(?:mcp__conch__)?app_icon$/.test(toolName) &&
