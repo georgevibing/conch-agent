@@ -129,6 +129,20 @@ export interface ReplyEnvelope {
   threadId: string;
   inReplyTo: string;
   references: string;
+  /**
+   * The names the thread gave the people in it, by address in lower case:
+   * outside words, only ever drawn as plain text beside the address.
+   */
+  names?: Record<string, string>;
+}
+/** The names an email's headers give its people, by address in lower case. */
+function namesOf(email: Email): Record<string, string> {
+  const names: Record<string, string> = {};
+  const people = [email.from, ...(email.replyTo ?? []), ...(email.to ?? []), ...(email.cc ?? [])];
+  for (const person of people.flatMap((p) => (p ? (p.group ?? [p]) : [])))
+    if (person.address && person.name?.trim() && !names[person.address.toLowerCase()])
+      names[person.address.toLowerCase()] = person.name.replace(/\s+/g, ' ').trim().slice(0, 200);
+  return names;
 }
 export async function replyEnvelope(
   service: GoogleService,
@@ -202,5 +216,6 @@ export async function replyEnvelope(
     threadId: source.message.threadId,
     inReplyTo: inReplyTo.data,
     references: [...new Set([...safeReferences, inReplyTo.data])].join(' '),
+    names: namesOf(source.email),
   };
 }

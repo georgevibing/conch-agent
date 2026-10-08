@@ -18,6 +18,8 @@ const CAPS: Record<ToolView['kind'], number> = {
   messages: 30,
   sources: 10,
   downloads: 10,
+  /** One email, no rows. */
+  'mail-sent': 0,
   // No rows of its own: its hours and days are capped by the protocol.
   weather: 0,
   recipe: 3,

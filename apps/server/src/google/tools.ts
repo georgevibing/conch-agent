@@ -7,7 +7,7 @@ import type { HostTool, HostToolResult } from '../engines/types';
 import type { ToolContext } from '../conversations/manager';
 import { accountRef, composeRaw, pickAccount } from './accounts';
 import { GoogleError, type GoogleService } from './service';
-import { googleWriteTools, type GoogleWriteOptions } from './writes';
+import { googleWriteTools, mailSentView, type GoogleWriteOptions } from './writes';
 
 export { accountRef, composeRaw, pickAccount };
 import {
@@ -410,6 +410,13 @@ export function googleTools(
       const existing = await reconcileDraft(service, args, context.operationId);
       if (existing.state === 'confirmed') return JSON.stringify(existing);
       const reply = await replyEnvelope(service, args);
+      /** The draft as it now waits in Drafts, drawn as a letter that hasn't gone. */
+      const savedView = (url?: string) =>
+        mailSentView(args, account, {
+          state: 'draft',
+          ...(url && { url }),
+          ...(reply?.names && { names: reply.names }),
+        });
       const authorized = await service.verificationScope(args.accountId, 'mail-draft');
       const restricted = await ctx.restricted?.('apps', 'google');
       const warning = [ctx.untrusted?.(), restricted].filter(Boolean).join(' ');
@@ -479,7 +486,10 @@ export function googleTools(
             'ambiguous',
             'Gmail saved a draft but its contents could not be verified. Check Gmail before doing anything again.',
           );
-        return JSON.stringify({ ...saved, messageId: saved.receipt.id });
+        return {
+          text: JSON.stringify({ ...saved, messageId: saved.receipt.id }),
+          view: savedView(saved.receipt.url),
+        };
       }
       let result;
       try {
@@ -528,16 +538,19 @@ export function googleTools(
           'ambiguous',
           'Google saved a draft but its contents could not be verified. Check Gmail before doing anything again.',
         );
-      return JSON.stringify({
-        state: 'confirmed',
-        receipt: {
-          provider: 'google',
-          id: result.id,
-          label: 'Gmail draft verified — not sent',
-          url: gmailLink(account.email, result.message.id, 'drafts'),
-        },
-        messageId: result.message.id,
-      });
+      return {
+        text: JSON.stringify({
+          state: 'confirmed',
+          receipt: {
+            provider: 'google',
+            id: result.id,
+            label: 'Gmail draft verified — not sent',
+            url: gmailLink(account.email, result.message.id, 'drafts'),
+          },
+          messageId: result.message.id,
+        }),
+        view: savedView(gmailLink(account.email, result.message.id, 'drafts')),
+      };
     },
   };
   return [

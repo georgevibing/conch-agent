@@ -178,4 +178,48 @@ describe('what a tool found, in the chat (ADR 0060)', () => {
     for (const img of card.querySelectorAll('img'))
       expect(img.getAttribute('src')).toMatch(/^\/api\//);
   });
+
+  it('draws an email that went as a letter that went, and Follow up is only words', async () => {
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+    });
+    renderApp(<ChatView conversationId="c1" />, { route: '/c/c1' });
+    const composer = await screen.findByRole('textbox', { name: 'Message Conch' });
+    act(() => {
+      // The same chat as above, a turn later.
+      push(10, { type: 'user.message', messageId: 'u2', text: 'Send Maya the checklist' });
+      push(11, {
+        type: 'tool.started',
+        toolUseId: 't2',
+        name: 'mcp__conch__google_mail_send',
+        input: { to: ['maya@example.com'], subject: 'Checklist', body: 'Here it is.' },
+      });
+      push(12, {
+        type: 'tool.finished',
+        toolUseId: 't2',
+        status: 'success',
+        output: '{"state":"confirmed"}',
+        view: {
+          kind: 'mail-sent',
+          state: 'sent',
+          from: 'ada@work.example',
+          to: [{ address: 'maya@example.com', name: 'Maya Kim' }],
+          subject: 'Checklist',
+          body: 'Here it is.',
+          at: '2026-10-08T14:41:00Z',
+          url: 'https://mail.google.com/mail/?authuser=ada%40work.example#sent/s1',
+        },
+      });
+    });
+    const sent = await screen.findByRole('region', { name: 'Sent to Maya Kim: Checklist' });
+    expect(within(sent).getByRole('link', { name: /Open in Gmail/ })).toHaveAttribute(
+      'href',
+      'https://mail.google.com/mail/?authuser=ada%40work.example#sent/s1',
+    );
+    // Not the inbox row it used to be.
+    expect(within(sent).queryByRole('region', { name: /Emails/ })).toBeNull();
+    await userEvent.click(within(sent).getByRole('button', { name: 'Follow up' }));
+    expect(composer).toHaveValue('Draft a follow-up to Maya Kim about “Checklist”');
+  });
 });

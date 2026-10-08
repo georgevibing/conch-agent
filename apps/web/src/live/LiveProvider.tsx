@@ -5,6 +5,7 @@ import type {
   ConversationEvent,
   ConversationSummary,
   HealLog,
+  MailEdit,
   TurnOptions,
 } from '@conch/protocol';
 import { toast } from '@conch/nacre';
@@ -54,10 +55,12 @@ interface LiveApi {
   configure(conversationId: string, options: TurnOptions): void;
   /** Stop the running reply. A new chat's (no id yet) stops as soon as it has one. */
   interrupt(conversationId: string | undefined): void;
+  /** Answer a question; `edit` is the email as the person changed it on an `editable` card. */
   respond(
     conversationId: string,
     permissionId: string,
     decision: 'allow' | 'allow-always' | 'deny',
+    edit?: MailEdit,
   ): void;
   watch(conversationId: string): () => void;
 }
@@ -434,13 +437,14 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
           stopWhenCreated.current.add(message.clientMessageId);
         startedNew.current = [];
       },
-      respond(conversationId, permissionId, decision) {
+      respond(conversationId, permissionId, decision, edit) {
         useLiveStore.getState().decide(conversationId, permissionId, decision);
         socketRef.current?.send({
           type: 'permission.respond',
           conversationId,
           permissionId,
           decision,
+          ...(edit && { edit }),
         });
       },
       watch(conversationId) {

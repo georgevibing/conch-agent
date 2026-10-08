@@ -18,6 +18,7 @@ import {
 
 import { useUi } from '../../app/ui';
 import { SentAttachments } from './AttachmentViewer';
+import { MailSentItem } from './MailItems';
 import { recipeCards, recipeTimerDone } from './recipes';
 import { ShopShelf } from './ShopShelf';
 import { attachmentUrl } from './uploads';
@@ -72,6 +73,8 @@ export function ToolFound({ view }: { view: ToolView }) {
       return <AgendaView events={view.items} from={view.from} to={view.to} />;
     case 'mail':
       return <MailList messages={view.items} onReply={(m) => insert(replyRequest(m))} />;
+    case 'mail-sent':
+      return <MailSentItem view={view} />;
     case 'files':
       return <FileList files={view.items} />;
     case 'messages':

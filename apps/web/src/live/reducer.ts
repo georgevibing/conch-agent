@@ -138,6 +138,8 @@ export type TranscriptItem =
       lasting?: boolean;
       /** Shows what goes to other people, so it's asked each time: no "always". */
       once?: boolean;
+      /** The person may change it before allowing it (an email's words): the answer carries it. */
+      editable?: boolean;
     }
   | {
       /**
@@ -738,6 +740,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             ...(event.taint && { taint: event.taint }),
             ...((event.lasting || event.afterReading) && { lasting: true }),
             ...(event.once && { once: true }),
+            ...(event.editable && { editable: true }),
           },
         ],
       };

@@ -57,20 +57,28 @@ export function rowState(
  * has one. They leave the chat; the row says what was decided.
  */
 export function foldedAnswers(items: readonly TranscriptItem[]): Set<string> {
-  const rows = new Set(items.flatMap((i) => (i.kind === 'tool' ? [i.id] : [])));
+  const rows = new Map(items.flatMap((i) => (i.kind === 'tool' ? [[i.id, i] as const] : [])));
   return new Set(
-    items.flatMap((i) =>
-      i.kind === 'permission' &&
-      i.decision &&
-      !i.browser &&
-      !i.vault &&
-      i.toolUseId &&
-      rows.has(i.toolUseId)
+    items.flatMap((i) => {
+      const row = i.kind === 'permission' && i.toolUseId ? rows.get(i.toolUseId) : undefined;
+      // An email allowed and still going keeps its card: the letter folds and flies there,
+      // and the sent card takes its place once Gmail has answered.
+      const going =
+        row &&
+        i.kind === 'permission' &&
+        i.decision === 'allow' &&
+        isMailApproval(i.toolName) &&
+        (row.status === 'running' || row.status === 'pending');
+      return i.kind === 'permission' && i.decision && !i.browser && !i.vault && row && !going
         ? [i.id]
-        : [],
-    ),
+        : [];
+    }),
   );
 }
+
+/** Conch's own email tools, whose approval card is the letter itself. */
+export const isMailApproval = (toolName: string) =>
+  /^(?:mcp__conch__)?google_mail_(?:send|create_draft)$/.test(toolName);
 
 /** Each call's question, by the call. */
 export function questionsByCall(items: readonly TranscriptItem[]): Map<string, Permission> {

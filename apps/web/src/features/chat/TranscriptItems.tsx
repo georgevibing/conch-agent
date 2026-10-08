@@ -6,7 +6,6 @@ import {
   Collapsible,
   CopyButton,
   Diff,
-  DraftReview,
   formatDuration,
   InlineCode,
   Message,
@@ -24,6 +23,7 @@ import {
   type Speaker,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
+import type { MailEdit } from '@conch/protocol';
 import { Brain, Undo2 } from 'lucide-react';
 import { memo, createContext, useContext, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
@@ -33,7 +33,8 @@ import { keys } from '../../api/queries';
 import type { TranscriptItem } from '../../live/reducer';
 import { useAutoFocus } from '../../lib/useAutoFocus';
 import { SentAttachments } from './AttachmentViewer';
-import { rowState, withAnswer } from './approval';
+import { isMailApproval, rowState, withAnswer } from './approval';
+import { MailApproval, mailOf } from './MailItems';
 import { StreamingMarkdown } from './Markdown';
 import { drawnAsFile, FileToolItem } from './FileToolItem';
 import { drawnAsPicture, ImageToolItem } from './ImageToolItem';
@@ -419,12 +420,32 @@ export function PermissionCard({
   name,
   onRespond,
   allowAlways = true,
+  call,
+}: {
+  item: Of<'permission'>;
+  name: string;
+  onRespond: (decision: 'allow' | 'allow-always' | 'deny', edit?: MailEdit) => void;
+  /** Bounded workflows approve this action only, never a lasting permission. */
+  allowAlways?: boolean;
+  /** The call it's about: an email's card follows it while it goes. */
+  call?: Of<'tool'>;
+}) {
+  // An email is asked about as the letter itself (ADR 0099).
+  const mail = isMailApproval(item.toolName) ? mailOf(item.input) : undefined;
+  if (mail) return <MailApproval item={item} call={call} mail={mail} onRespond={onRespond} />;
+  return <AskCard item={item} name={name} onRespond={onRespond} allowAlways={allowAlways} />;
+}
+
+function AskCard({
+  item,
+  name,
+  onRespond,
+  allowAlways,
 }: {
   item: Of<'permission'>;
   name: string;
   onRespond: (decision: 'allow' | 'allow-always' | 'deny') => void;
-  /** Bounded workflows approve this action only, never a lasting permission. */
-  allowAlways?: boolean;
+  allowAlways: boolean;
 }) {
   const [sent, setSent] = useState<'allow' | 'allow-always' | 'deny'>();
   const allowRef = useAutoFocus<HTMLButtonElement>();
@@ -439,30 +460,6 @@ export function PermissionCard({
     item.toolName === 'Bash' && typeof (item.input as { command?: unknown })?.command === 'string'
       ? (item.input as { command: string }).command
       : undefined;
-  const draftInput =
-    item.input && typeof item.input === 'object' ? (item.input as Record<string, unknown>) : {};
-  const tool = item.toolName.replace(/^mcp__conch__/, '');
-  const strings = (value: unknown) =>
-    Array.isArray(value) && value.every((v) => typeof v === 'string') ? (value as string[]) : [];
-  // An email to save or to send: the exact one, From, To, Cc, its files and words.
-  const draft =
-    (tool === 'google_mail_create_draft' || tool === 'google_mail_send') &&
-    typeof draftInput.body === 'string' &&
-    typeof draftInput.subject === 'string' &&
-    Array.isArray(draftInput.to) &&
-    draftInput.to.every((to) => typeof to === 'string')
-      ? {
-          kind: tool === 'google_mail_send' ? ('send' as const) : ('draft' as const),
-          to: draftInput.to as string[],
-          cc: strings(draftInput.cc),
-          files: strings(draftInput.files),
-          subject: draftInput.subject,
-          body: draftInput.body,
-          account:
-            typeof draftInput.accountEmail === 'string' ? draftInput.accountEmail : undefined,
-        }
-      : undefined;
-  const sending = draft?.kind === 'send';
   return (
     <ApprovalCard
       aria-label={`${name} asks first: ${title}`}
@@ -473,15 +470,12 @@ export function PermissionCard({
       // Asked because of what it read or for leaving the sealed box, "always" lets this
       // tool through for the rest of the chat; for a skill's list, or words going to
       // other people, it's this once.
-      allowAlways={(!item.taint || Boolean(item.lasting)) && !item.once && allowAlways && !draft}
-      allowLabel={sending ? 'Send' : draft ? 'Save draft' : 'Allow'}
-      denyLabel={sending ? 'Don’t send' : draft ? 'Don’t save' : 'Deny'}
+      allowAlways={(!item.taint || Boolean(item.lasting)) && !item.once && allowAlways}
       sent={sent}
       onDecide={respond}
       allowRef={allowRef}
     >
       {command && <pre className={styles.permissionCommand}>{command}</pre>}
-      {draft && <DraftReview {...draft} />}
     </ApprovalCard>
   );
 }

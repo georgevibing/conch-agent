@@ -7,7 +7,7 @@ import {
   type AgentFace,
   type Speaker,
 } from '@conch/nacre';
-import type { EngineId } from '@conch/protocol';
+import type { EngineId, MailEdit } from '@conch/protocol';
 import {
   memo,
   useCallback,
@@ -84,7 +84,11 @@ export interface TranscriptProps {
   agentOf?: (agentId: string) => { name: string; avatar?: AgentFace } | undefined;
   /** A model's name as people know it, for the quiet line over a reply. */
   modelName?: (engine: EngineId | undefined, model: string | undefined) => string | undefined;
-  onRespond: (permissionId: string, decision: 'allow' | 'allow-always' | 'deny') => void;
+  onRespond: (
+    permissionId: string,
+    decision: 'allow' | 'allow-always' | 'deny',
+    edit?: MailEdit,
+  ) => void;
   onRetry: () => void;
   /** What the chat can offer about the last failed turn (sign in, another provider…). */
   recover?: TurnRecovery;
@@ -514,6 +518,8 @@ export const Transcript = memo(function Transcript({
   const shown = withoutPlanTools(items);
   const folded = foldedAnswers(shown);
   const asks = questionsByCall(shown);
+  /** Each call by its id: an email's card follows its call while it goes. */
+  const calls = new Map(shown.flatMap((i) => (i.kind === 'tool' ? [[i.id, i] as const] : [])));
   const all = blocks(
     placeSuggestions(
       shown.filter((i) => !folded.has(i.id) || i.kind !== 'permission'),
@@ -768,7 +774,8 @@ export const Transcript = memo(function Transcript({
           <PermissionCard
             item={block.item}
             name={name}
-            onRespond={(d) => onRespond((block.item as { id: string }).id, d)}
+            onRespond={(d, edit) => onRespond((block.item as { id: string }).id, d, edit)}
+            call={block.item.toolUseId ? calls.get(block.item.toolUseId) : undefined}
           />
         )}
       {block.taints && (

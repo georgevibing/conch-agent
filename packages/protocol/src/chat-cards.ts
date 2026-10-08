@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import { MarketTrust } from './market-basics';
 import { Attachment } from './attachments';
+import { MailSentView } from './views/mail';
 import { WeatherView } from './views/weather';
 import { RecipeView } from './views/recipe';
 import { ProductsView } from './views/products';
@@ -274,6 +275,8 @@ export const ToolView = z.discriminatedUnion('kind', [
     to: When.optional(),
   }),
   z.object({ kind: z.literal('mail'), items: z.array(MailItem).max(30) }),
+  /** An email Conch sent or saved to Drafts for the person (`views/mail.ts`). */
+  MailSentView,
   z.object({ kind: z.literal('files'), items: z.array(FileItem).max(30) }),
   z.object({
     kind: z.literal('messages'),

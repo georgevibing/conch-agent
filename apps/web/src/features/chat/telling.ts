@@ -65,6 +65,7 @@ const STANDALONE = new Set<ToolView['kind']>([
   'files',
   'messages',
   'downloads',
+  'mail-sent',
   'weather',
   'recipe',
   'products',

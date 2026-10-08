@@ -1565,6 +1565,7 @@ export async function buildApp(services: Services) {
               command.conversationId,
               command.permissionId,
               command.decision,
+              command.edit,
             );
         }
       } catch (error) {

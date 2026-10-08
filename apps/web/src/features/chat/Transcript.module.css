@@ -284,6 +284,12 @@
     }
   }
 
+  /* A card of its own (an email that went) starts where the words do, like every card. */
+  .found[data-view='mail-sent'] {
+    margin-block: var(--nc-chat-step) 0;
+    margin-inline-start: var(--nc-chat-indent);
+  }
+
   /* A step's exact call, and the checks on it that had no line of their own. */
   .raw {
     display: flex;
