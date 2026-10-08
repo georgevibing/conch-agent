@@ -1,6 +1,6 @@
-import { Check, ChevronDown, Info } from 'lucide-react';
+import { ArrowRight, Check, ChevronDown, Info } from 'lucide-react';
 import { Popover as PopoverPrimitive, RadioGroup as RadioPrimitive } from 'radix-ui';
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 
 import { Popover } from '../../components/Popover';
 import { cx } from '../../utils/cx';
@@ -18,8 +18,21 @@ export interface WorkPlaceOption {
   state?: WorkPlaceState;
   /** What's wrong or going on, in one sentence, when it isn't ready. */
   message?: string;
-  /** The one next step under a place that isn't ready (Finish setup, Add a key). */
-  action?: ReactNode;
+  /**
+   * A place that needs setting up first. Its row isn't chosen: pressing it
+   * closes the list and takes the person to where it's set up (Settings,
+   * with the key's box ready to type in). `label` is the few words said
+   * after the message ("Add a key"); `where` is read out after it.
+   */
+  setup?: WorkPlaceSetup;
+}
+
+export interface WorkPlaceSetup {
+  /** "Add a key", "Set it up". */
+  label: string;
+  /** Read after the label, for a screen reader: "opens Settings". */
+  where?: string;
+  onSetup(): void;
 }
 
 export interface WorkPlacePickerProps {
@@ -52,7 +65,8 @@ const STATE_WORDS: Record<WorkPlaceState, string> = {
  * machine of yours, the cloud. A calm chip beside the mode: its mark is the
  * place, and when the place changes the mark glides in from below with a
  * glint, as if the work had just moved there. A place that isn't ready wears
- * a small dot, and its row offers the one next step.
+ * a small dot. A place that needs setting up isn't chosen: its row says what
+ * it needs and, quietly, the next step, and pressing it goes there.
  */
 export function WorkPlacePicker({
   options,
@@ -73,6 +87,9 @@ export function WorkPlacePicker({
   const [moved, setMoved] = useState(false);
   const listId = useId();
   const previous = useRef(value);
+  // Arrow keys move along the list and choose as they go: a row that needs
+  // setting up is passed over, never opened, on the way.
+  const arrowing = useRef(false);
 
   const setOpen = (next: boolean) => {
     if (openProp === undefined) setUncontrolledOpen(next);
@@ -138,13 +155,26 @@ export function WorkPlacePicker({
         )}
         <RadioPrimitive.Root
           value={value}
-          onValueChange={onValueChange}
+          onValueChange={(next) => {
+            const setup = options.find((o) => o.value === next)?.setup;
+            if (!setup) return onValueChange(next);
+            if (arrowing.current) return;
+            setOpen(false);
+            setup.onSetup();
+          }}
+          onKeyDownCapture={(event) => {
+            arrowing.current = event.key.startsWith('Arrow');
+          }}
+          onKeyUpCapture={() => {
+            arrowing.current = false;
+          }}
           aria-label="Where work runs"
           className={picker.list}
           loop
         >
           {options.map((option) => {
             const state = option.state ?? 'ready';
+            const { setup } = option;
             return (
               <div key={option.value} className={styles.option}>
                 <RadioPrimitive.Item
@@ -152,8 +182,18 @@ export function WorkPlacePicker({
                   value={option.value}
                   data-kind={option.kind}
                   data-place-state={state}
+                  data-setup={setup ? '' : undefined}
                   className={cx(picker.row, styles.row)}
                   aria-describedby={`${listId}-${option.value}-about`}
+                  {...(setup && {
+                    // A radio doesn't answer Enter; a row that goes somewhere does.
+                    onKeyDown: (event: KeyboardEvent) => {
+                      if (event.key !== 'Enter') return;
+                      event.preventDefault();
+                      setOpen(false);
+                      setup.onSetup();
+                    },
+                  })}
                 >
                   <span className={styles.icon} aria-hidden>
                     <PlaceGlyph kind={option.kind} />
@@ -169,15 +209,24 @@ export function WorkPlacePicker({
                     </span>
                     <span id={`${listId}-${option.value}-about`} className={picker.rowDescription}>
                       {state !== 'ready' && option.message ? option.message : option.description}
+                      {setup && (
+                        <>
+                          {' '}
+                          <span className={styles.setup}>
+                            {setup.label}
+                            <ArrowRight aria-hidden className={styles.setupIcon} />
+                          </span>
+                          <span className="nc-visually-hidden">
+                            , {setup.where ?? 'opens Settings'}
+                          </span>
+                        </>
+                      )}
                     </span>
                   </span>
                   <RadioPrimitive.Indicator className={picker.check}>
                     <Check aria-hidden />
                   </RadioPrimitive.Indicator>
                 </RadioPrimitive.Item>
-                {state !== 'ready' && option.action && (
-                  <div className={styles.action}>{option.action}</div>
-                )}
               </div>
             );
           })}

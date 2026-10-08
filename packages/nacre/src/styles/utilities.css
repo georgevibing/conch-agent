@@ -34,4 +34,19 @@
       background-color: transparent;
     }
   }
+
+  /* Reduced motion: no glow that swells and fades, a still ring for as long as
+     the attribute stays. */
+  @media (prefers-reduced-motion: reduce) {
+    [data-nc-flash] {
+      animation: none;
+      box-shadow: 0 0 0 1px color-mix(in oklch, var(--nc-accent-9) 45%, transparent);
+    }
+  }
+
+  [data-nacre-motion='reduced'] [data-nc-flash],
+  [data-nacre-motion='reduced'][data-nc-flash] {
+    animation: none;
+    box-shadow: 0 0 0 1px color-mix(in oklch, var(--nc-accent-9) 45%, transparent);
+  }
 }

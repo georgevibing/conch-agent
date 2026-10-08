@@ -1,12 +1,11 @@
 import type { WorkPlaceId } from '@conch/protocol';
-import { Button, WorkPlacePicker } from '@conch/nacre';
+import { WorkPlacePicker } from '@conch/nacre';
 import { useState } from 'react';
 
 import { useUi } from '../../app/ui';
 import type { useTurnOptions } from '../models/useTurnOptions';
-import { GetIt } from '../setup/GetIt';
 import { useWorkPlaces } from './api';
-import { placeOption, runsItsOwn, WORKPLACES_FOCUS } from './words';
+import { placeOption, placeSetup, runsItsOwn } from './words';
 
 /**
  * Where this chat's work runs (ADR 0106), beside the mode in the composer.
@@ -32,25 +31,15 @@ export function PlaceChip({
   const elsewhere = status.places.some((p) => p.id !== 'computer' && p.state !== 'needs-setup');
   if (!elsewhere && value === 'computer') return null;
 
-  const options = status.places.map((place) =>
-    placeOption(
+  // A place that needs setting up isn't chosen: its row goes to Settings, to
+  // the key's box or what gets Docker or Podman, ready to use.
+  const options = status.places.map((place) => {
+    const setup = placeSetup(place);
+    return placeOption(
       place,
-      place.need ? (
-        <GetIt needId={place.need} />
-      ) : place.needsKey ? (
-        <Button
-          size="sm"
-          variant="soft"
-          onClick={() => {
-            setOpen(false);
-            openSettings('security', WORKPLACES_FOCUS);
-          }}
-        >
-          Add a key
-        </Button>
-      ) : undefined,
-    ),
-  );
+      setup && { label: setup.label, onSetup: () => openSettings('security', setup.focus) },
+    );
+  });
   // A place that's gone (a machine taken out of your SSH settings) is still shown as chosen.
   if (!options.some((o) => o.value === value))
     options.push({
