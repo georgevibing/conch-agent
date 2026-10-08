@@ -60,6 +60,7 @@ export const LANDING_LINKS = {
   apps: '/features/apps',
   chats: '/features/chats',
   makeApps: '/features/make-apps',
+  workRuns: '/features/where-work-runs',
   decisions: '/project/decisions',
   nacre: '/project/nacre',
   privacy: '/privacy',
@@ -429,7 +430,7 @@ export function Landing() {
               span={2}
               index={4}
               title="At a time, or when it happens"
-              text="Routines run at a time you read in plain words, or when something happens, like an email from someone. Watching costs nothing. Nothing runs until you turn it on."
+              text="Routines run at a time you read in plain words, or when something happens, like an email from someone. Or say it once, “tell me if my flight changes”, and it speaks up only when it does. Watching costs nothing. Nothing runs until you turn it on."
               picture="A routine your assistant drafted to tell you when someone emails, waiting to be turned on"
             >
               <RoutineDemo />
@@ -527,7 +528,11 @@ export function Landing() {
               title="It runs as you"
               text={
                 <>
-                  Conch can read your files and run commands. Treat it like an SSH server, and read{' '}
+                  Conch can read your files and run commands. Treat it like an SSH server, or{' '}
+                  <TextLink asChild>
+                    <Link to={LANDING_LINKS.workRuns}>run the work in a locked-down box</Link>
+                  </TextLink>
+                  , and read{' '}
                   <TextLink asChild>
                     <Link to={LANDING_LINKS.security}>how it’s protected</Link>
                   </TextLink>{' '}
