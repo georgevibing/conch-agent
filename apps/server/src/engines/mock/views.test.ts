@@ -10,6 +10,9 @@ describe('the mock’s pretend app finds', () => {
     ['Find the budget email', 'google_mail_search', 'mail'],
     ['find the launch deck in Drive', 'google_drive_search', 'files'],
     ['What did #design say about onboarding?', 'slack_read_channel', 'messages'],
+    ['Who was Ada Lovelace?', 'knowledge_card', 'knowledge'],
+    ['Find books by Ursula K. Le Guin', 'book_search', 'books'],
+    ['What’s on with Severance?', 'show_search', 'shows'],
   ])('“%s” finds a %s with a view that logs as it is', (prompt, tool, kind) => {
     const found = pretendFind(prompt);
     expect(found?.tool).toBe(tool);

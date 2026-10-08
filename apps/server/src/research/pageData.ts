@@ -127,6 +127,8 @@ export function ldImage(value: unknown, base: string): string | undefined {
 
 /** An absolute `https:` address with no sign-in in it, or nothing. */
 export function httpsUrl(raw: string, base?: string): string | undefined {
+  // An empty address resolves to the page itself, which is never what was meant.
+  if (!raw.trim()) return undefined;
   try {
     const url = new URL(raw.trim(), base);
     if (url.protocol !== 'https:' || url.username || url.password) return undefined;

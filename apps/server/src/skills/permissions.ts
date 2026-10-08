@@ -170,7 +170,12 @@ export function needs(
     const path = String(args.file_path ?? args.notebook_path ?? '');
     return { capability: path && !inside(context.workspace, path) ? 'files-anywhere' : 'files' };
   }
-  if (/(?:WebFetch|WebSearch|web_fetch|web_search)$/.test(toolName) || BROWSER_READS.test(toolName))
+  if (
+    /(?:WebFetch|WebSearch|web_fetch|web_search|knowledge_card|link_preview|book_search|show_search)$/.test(
+      toolName,
+    ) ||
+    BROWSER_READS.test(toolName)
+  )
     return { capability: 'web' };
   if (BROWSER_ACTS.test(toolName)) return { capability: 'browser' };
   if (/^(?:mcp__conch__)?passwords_/.test(toolName)) return { capability: 'passwords' };

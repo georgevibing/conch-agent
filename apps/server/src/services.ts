@@ -44,6 +44,7 @@ import { QuestionDesk } from './questions/desk';
 import { QUESTIONS_PROMPT, questionTools } from './questions/tools';
 import { AttachmentStore } from './attachments/store';
 import { fileTools } from './files/tools';
+import { knowledgeTools } from './research/knowledge';
 import { researchTools, publicWebFetcher } from './research/tools';
 import { faviconFetcher, Favicons } from './favicons/favicons';
 import { ProcessService } from './processes/service';
@@ -976,6 +977,7 @@ export class Services {
               ...publishTools(ctx, () => this.#fileAccess(ctx), this.attachments),
               ...this.files.tools(ctx, () => this.#fileAccess(ctx)),
               ...researchTools(ctx, fetchPublicWeb),
+              ...knowledgeTools(ctx, { fetcher: fetchPublicWeb, store: this.attachments }),
               ...this.processes.tools(ctx),
               ...this.images.tools(ctx, () => this.#fileAccess(ctx)),
               ...this.routines.tools(ctx),

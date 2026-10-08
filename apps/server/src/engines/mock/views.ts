@@ -178,9 +178,98 @@ function messages(now: number, channel: string): PretendFind {
   };
 }
 
+/** A knowledge card, as `knowledge_card` draws it from Wikipedia (no picture: the mock fetches nothing). */
+function knowledge(): PretendFind {
+  const view: ToolView = {
+    kind: 'knowledge',
+    title: 'Ada Lovelace',
+    description: 'English mathematician and writer (1815–1852)',
+    extract:
+      'Augusta Ada King, Countess of Lovelace, was an English mathematician and writer chiefly known for her work on Charles Babbage’s proposed mechanical general-purpose computer, the Analytical Engine. She was the first to recognise that the machine had applications beyond pure calculation, and published the first algorithm intended to be carried out by such a machine. As a result, she is often regarded as one of the first computer programmers.',
+    facts: [
+      { label: 'Born', value: '10 December 1815, London' },
+      { label: 'Died', value: '27 November 1852, Marylebone' },
+      { label: 'Occupation', value: 'Mathematician, writer' },
+    ],
+    url: 'https://en.wikipedia.org/wiki/Ada_Lovelace',
+    lang: 'en',
+    source: 'Wikipedia',
+  };
+  return {
+    tool: 'knowledge_card',
+    input: { query: 'Ada Lovelace', lang: 'en' },
+    text: JSON.stringify({ ...view, kind: undefined }),
+    view,
+    reply:
+      'She wrote what’s often called the first computer program, for Babbage’s Analytical Engine.',
+  };
+}
+
+function books(): PretendFind {
+  const book = (title: string, year: number, pages: number, rating: number, id: string) => ({
+    title,
+    authors: ['Ursula K. Le Guin'],
+    year,
+    pages,
+    rating,
+    url: `https://openlibrary.org/works/${id}`,
+  });
+  const view: ToolView = {
+    kind: 'books',
+    items: [
+      { ...book('A Wizard of Earthsea', 1968, 183, 4.1, 'OL59863W'), subjects: ['Fantasy'] },
+      {
+        ...book('The Left Hand of Darkness', 1969, 304, 4.0, 'OL59878W'),
+        subjects: ['Science fiction'],
+      },
+      { ...book('The Dispossessed', 1974, 387, 4.2, 'OL59856W'), subjects: ['Utopias'] },
+      book('The Lathe of Heaven', 1971, 184, 3.9, 'OL59870W'),
+    ],
+  };
+  return {
+    tool: 'book_search',
+    input: { query: 'Ursula K. Le Guin', limit: 6 },
+    text: JSON.stringify({ books: view.items }),
+    view,
+    reply:
+      'A Wizard of Earthsea is the gentlest place to start; The Dispossessed if you want ideas.',
+  };
+}
+
+function shows(now: number): PretendFind {
+  const view: ToolView = {
+    kind: 'shows',
+    items: [
+      {
+        title: 'Severance',
+        kind: 'tv',
+        year: 2022,
+        genres: ['Drama', 'Mystery', 'Science-Fiction'],
+        rating: 8.4,
+        network: 'Apple TV+',
+        status: 'Running',
+        summary:
+          'Mark leads a team of office workers whose memories have been surgically divided between their work and personal lives.',
+        next: { at: new Date(now + 3 * 24 * HOUR).toISOString(), season: 3, number: 1 },
+        url: 'https://www.tvmaze.com/shows/44933/severance',
+      },
+    ],
+  };
+  return {
+    tool: 'show_search',
+    input: { query: 'Severance', kind: 'tv' },
+    text: JSON.stringify({ shows: view.items }),
+    view,
+    reply: 'Season 3 starts in three days.',
+  };
+}
+
 /** What a prompt asks the pretend apps for, if anything. */
 export function pretendFind(prompt: string, now = Date.now()): PretendFind | undefined {
   const text = prompt.trim();
+  if (/\bwho (?:was|is) ada lovelace\b/i.test(text)) return knowledge();
+  if (/\bbooks by (?:ursula k\.? )?le guin\b/i.test(text)) return books();
+  if (/\bwhat(?:'|’)?s on with severance\b/i.test(text)) return shows(now);
   if (/\bwhat(?:'|’)?s on my calendar\b/i.test(text)) return calendar(now);
   const email = /\bfind the (.+?) email\b/i.exec(text)?.[1];
   if (email) return mail(now, email.replace(/^.*\s/, ''));
