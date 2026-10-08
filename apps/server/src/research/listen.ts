@@ -86,7 +86,8 @@ export function carriedIn(
 /** The type the browser is told: audio only, from the answer or the file's name. */
 export function audioType(contentType: string | undefined, url: URL): string | undefined {
   const type = (contentType ?? '').split(';')[0]?.trim().toLowerCase() ?? '';
-  if (/^audio\/[a-z0-9.+-]+$/.test(type)) return type === 'audio/x-m4a' ? 'audio/mp4' : type;
+  if (/^audio\/[a-z0-9.+-]+$/.test(type))
+    return type === 'audio/x-m4a' || type === 'audio/x-m4p' ? 'audio/mp4' : type;
   if (type && !/^(?:application|binary)\/octet-stream$/.test(type) && type !== 'video/mp4')
     return undefined;
   const ext = /\.([a-z0-9]{2,4})$/i.exec(url.pathname)?.[1]?.toLowerCase();

@@ -302,6 +302,7 @@ describe('what a chat’s cards carry', () => {
     const u = new URL('https://a.example/x.mp3');
     expect(audioType('audio/mpeg', u)).toBe('audio/mpeg');
     expect(audioType('audio/x-m4a; charset=binary', u)).toBe('audio/mp4');
+    expect(audioType('audio/x-m4p', u)).toBe('audio/mp4');
     expect(audioType('application/octet-stream', u)).toBe('audio/mpeg');
     expect(audioType('text/html', u)).toBeUndefined();
     expect(audioType('application/octet-stream', new URL('https://a.example/x.exe'))).toBe(
