@@ -425,19 +425,29 @@ picture above its line; pressing anywhere still opens it.
 
 A picture being made is drawn where the picture will be (`ImageMaking`), never as
 a tool row. The frame already has the picture's shape (its aspect ratio from the
-request), and slow pearl light moves inside it: a turning film of
-`--nc-pearl-spectrum`, four soft shapes wandering, a sheen that crosses now and
-then, fine grain. How far it got sits in a small pill on the frame: a ring that
-fills, the percent, and "about 12s left" once there's enough to tell; with no
-number the ring just turns. A rough picture from the service shows through,
-blurred, under the sheen. While its approval waits, the light holds still.
-When it's ready it _develops_: it sharpens out of the light from the middle as
-one glint crosses it, and only when it arrived live; a picture already there
-just shows. Then it rests as a quiet card: the picture, its name, **Look closer**,
-**Download**, **Copy picture**, **Change it**, and **Details** (what was asked for,
-the model, who made it; never a path or the raw call). Not made (you said no, it
-failed, it was stopped) is a calm line with an image-off glyph, never a tick.
-Reduced motion keeps the light still and the percent.
+request). Inside, a mesh of pearl light moves: five soft shapes, each on its own
+loop and clock (17, 19, 23, 29, 31 beats, so it never repeats), a turning film of
+`--nc-pearl-spectrum`, caustic veins and a slow hue drift, with a sheen that
+crosses now and then and fine grain. Round the edge, two arcs of iridescent light
+chase each other, with a soft bloom outside the frame. Only transform and opacity
+move. Every inner layer is cut to the corners by one clip (`clip-path`, or the
+squircle overflow clip where `corner-shape` exists): a rounded `overflow` alone
+lets moving, blurred layers show square corners on Safari. How far it got sits in
+a small pill on the frame: a ring that fills, the percent, and "about 12s left"
+once there's enough to tell; with no number the ring just turns. A rough picture
+from the service shows through, blurred, under the sheen. While its approval
+waits, the light holds still. When it's ready it _develops_ (about a second): a
+wave of light runs in from the edge while the picture sharpens out of the pearl
+and the edge light flares once and goes, only when it arrived live; a picture
+already there just shows. Then it rests as a quiet card: the picture, its name,
+and one row of icon buttons: **Look closer**, **Download**, **Copy picture**,
+**Change it** and **Details** (an info button). Details opens a quiet panel under
+the card, on its edges: what was asked for, the model, who made it, the size, how
+long it took, the cost; never a path or the raw call. Not made (you said no, it
+failed, it was stopped) is a calm line with an image-off glyph on its first line,
+never a tick; a long reason keeps to three lines there and is in full in Details.
+Reduced motion keeps the light still (a resting mesh, the edge lit) and the
+percent.
 
 ### The browser (chat)
 

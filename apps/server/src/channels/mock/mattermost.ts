@@ -17,6 +17,17 @@ export interface MockMattermostPost {
   channel_id: string;
   message: string;
   edited?: boolean;
+  /** The files it carries (`file_ids`), as they were uploaded. */
+  files?: MockMattermostFile[];
+}
+
+/** A file the bot uploaded (`POST /files`). */
+export interface MockMattermostFile {
+  id: string;
+  channel_id: string;
+  name: string;
+  type: string;
+  size: number;
 }
 
 const id = () => randomBytes(13).toString('hex').slice(0, 26);
@@ -37,6 +48,8 @@ export class MockMattermost {
   base = '';
   readonly sent: MockMattermostPost[] = [];
   readonly reactions: string[] = [];
+  /** Files uploaded, by id, until a post carries them. */
+  readonly uploads = new Map<string, MockMattermostFile>();
 
   // Written in two parts, so secret scanners never take it for a real one.
   static readonly TOKEN = 'mockmattermost' + 'botoken0001';
@@ -59,6 +72,24 @@ export class MockMattermost {
     const app = Fastify({ logger: false });
     this.#app = app;
     await app.register(fastifyWebsocket);
+    // `POST /files`: the channel and each file, as a form.
+    app.addContentTypeParser(
+      'multipart/form-data',
+      { parseAs: 'buffer', bodyLimit: 64 * 1024 * 1024 },
+      async (request: { headers: Record<string, unknown> }, body: Buffer) => {
+        const form = await new Response(new Uint8Array(body), {
+          headers: { 'content-type': String(request.headers['content-type'] ?? '') },
+        }).formData();
+        return {
+          channel_id: form.get('channel_id'),
+          files: form
+            .getAll('files')
+            .flatMap((f) =>
+              typeof f === 'string' ? [] : [{ name: f.name, type: f.type, size: f.size }],
+            ),
+        };
+      },
+    );
     app.addHook('onRequest', async (request, reply) => {
       if (request.url.startsWith('/api/v4/websocket') || request.url.startsWith('/__control'))
         return;
@@ -85,9 +116,32 @@ export class MockMattermost {
       const [, other] = request.body as [string, string];
       return { id: this.dmOf(other), type: 'D' };
     });
-    app.post('/api/v4/posts', (request) => {
-      const body = request.body as { channel_id: string; message: string };
-      const post = { id: id(), channel_id: body.channel_id, message: body.message };
+    app.post('/api/v4/files', (request, reply) => {
+      const body = request.body as {
+        channel_id?: string;
+        files?: { name: string; type: string; size: number }[];
+      };
+      if (!body.channel_id || !body.files?.length)
+        return reply.code(400).send({ message: 'Unable to upload file(s).' });
+      const file_infos = body.files.map((f) => {
+        const info = { id: id(), channel_id: body.channel_id ?? '', ...f };
+        this.uploads.set(info.id, info);
+        return { id: info.id, name: f.name, size: f.size, mime_type: f.type };
+      });
+      return reply.code(201).send({ file_infos });
+    });
+    app.post('/api/v4/posts', (request, reply) => {
+      const body = request.body as { channel_id: string; message: string; file_ids?: string[] };
+      // As Mattermost does: at most five, each uploaded to this channel.
+      const files = (body.file_ids ?? []).map((f) => this.uploads.get(f));
+      if (files.length > 5 || files.some((f) => !f || f.channel_id !== body.channel_id))
+        return reply.code(400).send({ message: 'Invalid file_ids.' });
+      const post: MockMattermostPost = {
+        id: id(),
+        channel_id: body.channel_id,
+        message: body.message,
+        ...(files.length && { files: files as MockMattermostFile[] }),
+      };
       this.sent.push(post);
       return { ...post, user_id: MockMattermost.BOT.id };
     });

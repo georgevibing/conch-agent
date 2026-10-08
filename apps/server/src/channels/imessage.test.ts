@@ -98,6 +98,36 @@ describe('iMessage — texting yourself', () => {
     expect(got.map((m) => m.text)).toEqual(['thanks']);
   });
 
+  it('sends a picture and a file after their caption, and never reads them back', async () => {
+    const { got, online, mock, connection } = connect('self');
+    await online();
+    const chat = `iMessage;-;${MockMessages.ME}`;
+    const png = Buffer.from('89504e470d0a1a0a', 'hex');
+    await connection.files?.send(
+      chat,
+      [
+        { id: 'att_1', name: 'beach.png', mimeType: 'image/png', bytes: png, image: true },
+        {
+          id: 'att_2',
+          name: 'notes.pdf',
+          mimeType: 'application/pdf',
+          bytes: Buffer.from('%PDF-1.4'),
+          image: false,
+        },
+      ],
+      'Your **beach**',
+    );
+    expect(mock.sent.slice(-3)).toEqual([
+      { text: 'Your beach\u2063', target: chat, kind: 'chat' },
+      { text: '', target: chat, kind: 'chat', file: { name: 'beach.png', size: png.length } },
+      { text: '', target: chat, kind: 'chat', file: { name: 'notes.pdf', size: 8 } },
+    ]);
+    mock.say('thanks');
+    await until(() => got.length, 'a message');
+    await new Promise((r) => setTimeout(r, 300));
+    expect(got.map((m) => m.text)).toEqual(['thanks']);
+  });
+
   it('asks with numbered answers instead of buttons, and a reply of one answers', async () => {
     const { got, presses, online, mock, connection } = connect('self');
     await online();

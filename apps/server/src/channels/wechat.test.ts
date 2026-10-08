@@ -56,6 +56,12 @@ async function until<T>(
   }
 }
 
+/** 1×1 transparent PNG. */
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64',
+);
+
 const state = async (s: Services, id: string) => (await s.channels.get(id)).health.state;
 
 /**
@@ -314,6 +320,30 @@ describe('WeChat through an Official Account (the public door)', { timeout: 40_0
     expect(first.status).toBe(200);
     const request = (await s.channels.get(channel.id)).requests[0];
     expect(request?.count).toBe(1);
+  });
+
+  it('sends a picture as a customer-service image after its caption, and refuses other files', async () => {
+    const { s, wechat, channel } = await configured();
+    await wechat.say('hi');
+    await s.channels.answer(channel.id, personId(MockWeChat.OWNER), 'allow');
+    await until(() => wechat.sent.some((m) => m.text.includes('Hi WeChat')), 'welcome');
+    const picture = await s.attachments.save({ name: 'beach.png', bytes: PNG });
+    const notes = await s.attachments.save({ name: 'notes.pdf', bytes: Buffer.from('%PDF-1.4 x') });
+    await s.attachments.claim([picture.id, notes.id], 'c_files');
+    const done = await s.channels.messageOwner('Your beach', {
+      attachments: [picture.id],
+      conversationId: 'c_files',
+    });
+    expect(done).toMatchObject({ sent: ['beach.png'] });
+    const image = wechat.sent.findIndex((m) => m.image);
+    expect(wechat.sent[image]).toMatchObject({
+      to: MockWeChat.OWNER,
+      image: { name: 'beach.png', type: 'image/png', size: PNG.length },
+    });
+    expect(wechat.sent.findIndex((m) => m.text === 'Your beach')).toBe(image - 1);
+    await expect(
+      s.channels.messageOwner('', { attachments: [notes.id], conversationId: 'c_files' }),
+    ).resolves.toMatchObject({ sent: [], missed: [expect.stringMatching(/takes only pictures/)] });
   });
 
   it('an unverified account keeps the answer for the next message, and says so', async () => {

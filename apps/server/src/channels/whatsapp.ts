@@ -79,6 +79,16 @@ export interface WaHandlers {
 export interface WaSocket {
   /** `id`: the message's id, chosen beforehand so its echo is known as Conch's own. */
   send(chat: string, text: string, options?: { edit?: string; id?: string }): Promise<string>;
+  /**
+   * A picture (shown in the chat) or a file (to download), with a caption.
+   * `id` as for `send`, so its echo is known as Conch's own.
+   */
+  file(
+    chat: string,
+    file: { bytes: Buffer; name: string; mimeType: string; image: boolean },
+    caption: string | undefined,
+    options: { id: string },
+  ): Promise<string>;
   /** A voice note (Opus in Ogg), played in the chat like one you recorded (ADR 0077). */
   voice(chat: string, audio: Buffer, seconds: number, options: { id: string }): Promise<string>;
   react(chat: string, id: string, fromMe: boolean, emoji: string): Promise<void>;
@@ -100,6 +110,14 @@ export type WaConnect = (session: WaSessionHandle, handlers: WaHandlers) => Prom
 
 /** Pictures, voice notes, files: what Conch takes at most. */
 const FILE_LIMIT = 25 * 1024 * 1024;
+/**
+ * What Conch sends at most: a picture WhatsApp shows in the chat (16 MB), and
+ * any file as a document (WhatsApp takes 100 MB; Conch's own files are at most 30).
+ */
+const PICTURE_LIMIT = 16 * 1024 * 1024;
+const DOCUMENT_LIMIT = 100 * 1024 * 1024;
+/** A caption WhatsApp shows whole under a picture; a longer one goes as its own message. */
+const CAPTION = 1000;
 /** WhatsApp takes 65,536 characters, but a phone screen reads better in parts this long. */
 const PART = 4000;
 /** How long to wait out another copy of the link, and the window in which two take-overs mean one. */
@@ -344,6 +362,33 @@ export class WhatsAppAdapter implements ChannelAdapter {
 
     return {
       send,
+      files: {
+        maxBytes: DOCUMENT_LIMIT,
+        send: async (chatId, files, caption) => {
+          const refs: SentRef[] = [];
+          let words = caption?.trim() ? toWhatsApp(caption) : undefined;
+          if (words && words.length > CAPTION) {
+            refs.push(...(await send(chatId, caption ?? '')));
+            words = undefined;
+          }
+          for (const file of files) {
+            // Known as Conch's own before it goes, so its echo is never read as you writing.
+            const chosen = messageId();
+            sent.add(chosen);
+            const image =
+              file.image &&
+              file.bytes.length <= PICTURE_LIMIT &&
+              /^image\/(?:png|jpeg|webp)$/.test(file.mimeType);
+            const id = await withRetry(() =>
+              live().file(chatId, { ...file, image }, words, { id: chosen }),
+            );
+            sent.add(id);
+            refs.push({ chatId, messageId: id });
+            words = undefined;
+          }
+          return refs;
+        },
+      },
       voiceNotes: {
         format: 'ogg',
         send: async (chatId, note) => {

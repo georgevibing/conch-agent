@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -32,6 +32,12 @@ describe('ImageMaking', () => {
     expect(screen.getByText('Dunes at dusk')).toBeInTheDocument();
     // No actions or raw details while it's being made.
     expect(screen.queryByRole('button', { name: /download|copy|details/i })).toBeNull();
+    // Named by its title, not by everything under it.
+    expect(screen.getByRole('figure', { name: 'Dunes at dusk' })).toBe(figure);
+    // Light round the edge, and every layer inside the one corner-cut clip.
+    const frame = figure?.firstElementChild;
+    expect(frame?.querySelector('[class*="rim"]')).not.toBeNull();
+    expect(frame?.querySelector('[class*="clip"] [class*="nacre"]')).not.toBeNull();
     await expectAccessible(container);
   });
 
@@ -56,16 +62,29 @@ describe('ImageMaking', () => {
   });
 
   it('develops when it becomes ready while watched, and says so', () => {
-    const { container, rerender } = renderNacre(
-      <ImageMaking state="making" title="Dunes" progress={0.9} />,
-    );
-    rerender(<ImageMaking state="ready" title="Dunes" src={src} />);
-    const img = screen.getByRole('img', { name: 'Dunes' });
-    fireEvent.load(img);
-    const figure = container.querySelector('figure');
-    expect(figure).toHaveAttribute('data-develop');
-    expect(screen.getByRole('status')).toHaveTextContent('Picture ready');
-    expect(screen.queryByRole('progressbar')).toBeNull();
+    vi.useFakeTimers();
+    try {
+      const { container, rerender } = renderNacre(
+        <ImageMaking state="making" title="Dunes" progress={0.9} />,
+      );
+      rerender(<ImageMaking state="ready" title="Dunes" src={src} />);
+      const img = screen.getByRole('img', { name: 'Dunes' });
+      fireEvent.load(img);
+      const figure = container.querySelector('figure');
+      expect(figure).toHaveAttribute('data-develop');
+      expect(screen.getByRole('status')).toHaveTextContent('Picture ready');
+      expect(screen.queryByRole('progressbar')).toBeNull();
+      // The light stays under it while it develops, then goes.
+      expect(container.querySelector('[class*="iris"]')).not.toBeNull();
+      expect(container.querySelector('[class*="nacre"]')).not.toBeNull();
+      expect(container.querySelector('[class*="rim"]')).not.toBeNull();
+      act(() => vi.advanceTimersByTime(1400));
+      expect(container.querySelector('[class*="iris"]')).toBeNull();
+      expect(container.querySelector('[class*="nacre"]')).toBeNull();
+      expect(container.querySelector('[class*="rim"]')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('a picture already there just shows: no develop', () => {
@@ -73,6 +92,8 @@ describe('ImageMaking', () => {
     fireEvent.load(screen.getByRole('img', { name: 'Dunes' }));
     expect(container.querySelector('figure')).toHaveAttribute('data-shown');
     expect(container.querySelector('figure')).not.toHaveAttribute('data-develop');
+    expect(container.querySelector('[class*="rim"]')).toBeNull();
+    expect(container.querySelector('[class*="nacre"]')).toBeNull();
   });
 
   it('is a quiet card once ready: look closer, download, copy, change, details', async () => {
@@ -106,10 +127,26 @@ describe('ImageMaking', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Change it' }));
     expect(onEdit).toHaveBeenCalled();
     expect(screen.queryByText('Dunes at dusk, cinematic')).toBeNull();
-    await userEvent.click(screen.getByRole('button', { name: 'Details' }));
+    // Details is an info button in the same row as the other actions.
+    const info = screen.getByRole('button', { name: 'Details' });
+    expect(info.parentElement).toBe(
+      screen.getByRole('button', { name: 'Change it' }).parentElement,
+    );
+    expect(info).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(info);
+    expect(info).toHaveAttribute('aria-expanded', 'true');
+    const panel = document.getElementById(info.getAttribute('aria-controls') ?? '');
+    expect(panel).toContainElement(screen.getByText('Dunes at dusk, cinematic'));
     expect(screen.getByText('Dunes at dusk, cinematic')).toBeVisible();
     expect(screen.getByText('Gemini 2.5 Flash Image')).toBeVisible();
     await expectAccessible(container);
+    await userEvent.click(info);
+    expect(info).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('has no Details button when there is nothing to tell', () => {
+    renderNacre(<ImageMaking state="ready" title="Dunes" src={src} />);
+    expect(screen.queryByRole('button', { name: 'Details' })).toBeNull();
   });
 
   it('says plainly when the picture is gone', () => {
@@ -132,6 +169,21 @@ describe('ImageMaking', () => {
     expect(container.querySelector('img')).toBeNull();
     expect(screen.getByRole('button', { name: 'Details' })).toBeInTheDocument();
     await expectAccessible(container);
+  });
+
+  it('keeps a long reason to a few lines, and gives it in full in Details', async () => {
+    const reason =
+      `The image service refused it. ${'Try describing it differently. '.repeat(6)}`.trim();
+    renderNacre(<ImageMaking state="failed" title="Dunes" reason={reason} />);
+    expect(screen.getByText(`Couldn’t make it: ${reason}`)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Details' }));
+    expect(screen.getByText('What went wrong')).toBeVisible();
+    expect(screen.getByText(reason)).toBeVisible();
+  });
+
+  it('a short reason with nothing else to tell has no Details', () => {
+    renderNacre(<ImageMaking state="failed" title="Dunes" reason="Too big." />);
+    expect(screen.queryByRole('button', { name: 'Details' })).toBeNull();
   });
 });
 

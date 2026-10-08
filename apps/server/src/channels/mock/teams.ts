@@ -13,6 +13,8 @@ export interface MockTeamsSent {
   text: string;
   buttons: { title: string; data: string }[];
   updated?: boolean;
+  /** Pictures sent inside the message (data: addresses), as Teams shows them. */
+  pictures?: { name?: string; type: string; size: number }[];
 }
 
 type Key = Awaited<ReturnType<typeof generateKeyPair>>['privateKey'];
@@ -66,7 +68,7 @@ export class MockTeams {
     const pair = await generateKeyPair('RS256', { extractable: true });
     this.#key = { private: pair.privateKey, public: await exportJWK(pair.publicKey) };
     this.#other = (await generateKeyPair('RS256')).privateKey;
-    const app = Fastify({ logger: false, requestTimeout: 20_000 });
+    const app = Fastify({ logger: false, requestTimeout: 20_000, bodyLimit: 4 * 1024 * 1024 });
     this.#app = app;
     guardMockServer(app);
     app.addContentTypeParser(
@@ -125,8 +127,28 @@ export class MockTeams {
         const body = request.body as {
           type: string;
           text?: string;
-          attachments?: { content?: { actions?: { title: string; data: { conch: string } }[] } }[];
+          attachments?: {
+            contentType?: string;
+            contentUrl?: string;
+            name?: string;
+            content?: { actions?: { title: string; data: { conch: string } }[] };
+          }[];
         };
+        const pictures = (body.attachments ?? []).flatMap((a) => {
+          const data = /^data:([\w/+.-]+);base64,(.*)$/.exec(a.contentUrl ?? '');
+          return data?.[1] && data[2] !== undefined
+            ? [
+                {
+                  ...(a.name && { name: a.name }),
+                  type: data[1],
+                  size: Buffer.from(data[2], 'base64').length,
+                },
+              ]
+            : [];
+        });
+        // As Teams does: a picture inside a message is 1 MB at most.
+        if (pictures.some((p) => p.size > 1024 * 1024))
+          return reply.code(413).send({ error: { code: 'MessageSizeTooBig' } });
         const id = `1:${randomBytes(4).toString('hex')}`;
         this.sent.push({
           conversation: request.params.id,
@@ -137,6 +159,7 @@ export class MockTeams {
             title: a.title,
             data: a.data.conch,
           })),
+          ...(pictures.length && { pictures }),
         });
         return { id };
       },

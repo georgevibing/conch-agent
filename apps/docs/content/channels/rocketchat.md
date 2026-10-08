@@ -22,6 +22,7 @@ Once Conch knows it's you, the bot greets you by name.
 
 - **No public address.** Conch connects to your server from this computer, over Rocket.Chat's own realtime connection, so your server only has to be reachable from here.
 - **Answers keep their formatting**: Rocket.Chat writes Markdown, as Conch does.
+- **Pictures and files.** A picture Conch makes, or a file it finishes, arrives as an upload in the chat, one to a message, the words with the first. A file over the server's **Maximum File Upload Size** (Administration → File Upload) can't go, and Conch says so.
 - **Approvals** come with numbered answers: reply with the number.
 - **In a channel**, add the bot to it. When someone mentions it, the channel shows on its page in Conch, off. Turn it on there, and it answers whoever mentions it: you as in private, everyone else in words only. See [In a group](index.md#in-a-group).
 - **A token that stops working** stops this channel only. Make a new one for the bot and paste it.

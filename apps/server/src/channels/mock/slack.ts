@@ -4,6 +4,16 @@ import { SLACK_USER_SCOPES } from '@conch/protocol';
 import fastifyWebsocket from '@fastify/websocket';
 import Fastify, { type FastifyInstance } from 'fastify';
 
+/** A file the bot shared in a chat. */
+export interface MockSlackFile {
+  channel: string;
+  id: string;
+  name: string;
+  size: number;
+  /** The caption, as the message above the file(s). */
+  comment?: string;
+}
+
 export interface MockSlackMessage {
   channel: string;
   ts: string;
@@ -146,6 +156,13 @@ export class MockSlack {
   readonly calls: { method: string; params: Record<string, string> }[] = [];
   readonly acked = new Set<string>();
   readonly reactions: { name: string; added: boolean; ts: string }[] = [];
+  /** Files the bot shared (`files.completeUploadExternal`), with what was uploaded for each. */
+  readonly files: MockSlackFile[] = [];
+  /** Uploads waiting to be completed, by file id. */
+  readonly #slots = new Map<string, { name: string; length: number; size?: number }>();
+  #nextFile = 1;
+  /** Answer `files.getUploadURLExternal` as an app without `files:write` would. */
+  noFilesScope = false;
   noMarkdownBlocks = false;
   connections = 0;
 
@@ -167,6 +184,18 @@ export class MockSlack {
         (request.body ?? {}) as Record<string, string>,
         token,
       );
+    });
+    // Where `files.getUploadURLExternal` says to send a file's bytes (no key needed).
+    app.addContentTypeParser(
+      'application/octet-stream',
+      { parseAs: 'buffer', bodyLimit: 64 * 1024 * 1024 },
+      (_request, body, done) => done(null, body),
+    );
+    app.post<{ Params: { id: string } }>('/upload/:id', (request, reply) => {
+      const slot = this.#slots.get(request.params.id);
+      if (!slot) return reply.code(404).send('unknown upload');
+      slot.size = (request.body as Buffer).length;
+      return reply.send('OK');
     });
     app.get('/socket', { websocket: true }, (socket) => this.#socket(socket as unknown as Socket));
     app.post<{ Params: { action: string } }>('/__control/:action', (request) => {
@@ -358,6 +387,29 @@ export class MockSlack {
           ...(method === 'chat.update' && { updated: true }),
         });
         return { ok: true, ts, channel: params.channel };
+      }
+      case 'files.getUploadURLExternal': {
+        if (this.noFilesScope) return { ok: false, error: 'missing_scope' };
+        const id = `F0FILE${this.#nextFile++}`;
+        this.#slots.set(id, { name: params.filename ?? '', length: Number(params.length) });
+        return { ok: true, upload_url: `${this.base}/upload/${id}`, file_id: id };
+      }
+      case 'files.completeUploadExternal': {
+        const files = JSON.parse(params.files ?? '[]') as { id: string; title?: string }[];
+        for (const [index, file] of files.entries()) {
+          const slot = this.#slots.get(file.id);
+          if (!slot || slot.size === undefined || slot.size !== slot.length)
+            return { ok: false, error: 'file_upload_size_mismatch' };
+          this.#slots.delete(file.id);
+          this.files.push({
+            channel: params.channel_id ?? '',
+            id: file.id,
+            name: file.title ?? slot.name,
+            size: slot.size,
+            ...(index === 0 && params.initial_comment && { comment: params.initial_comment }),
+          });
+        }
+        return { ok: true, files: files.map((f) => ({ id: f.id, title: f.title })) };
       }
       case 'reactions.add':
       case 'reactions.remove':

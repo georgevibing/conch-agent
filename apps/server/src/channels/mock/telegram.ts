@@ -20,7 +20,25 @@ export interface MockSent {
   buttons: { text: string; callback_data: string }[];
 }
 
+/** One picture or file the bot uploaded, as Telegram would show it. */
+export interface MockUpload {
+  method: string;
+  chat_id: string;
+  message_id: number;
+  kind: 'photo' | 'document';
+  name: string;
+  type: string;
+  size: number;
+  caption?: string;
+  parse_mode?: string;
+}
+
 type Update = Record<string, unknown> & { update_id: number };
+interface FormFile {
+  name: string;
+  type: string;
+  size: number;
+}
 
 /**
  * A pretend Telegram Bot API for tests, E2E and `pnpm dev:mock`, speaking
@@ -50,6 +68,8 @@ export class MockTelegram {
   /** Voice notes the bot sent (ADR 0077). */
   readonly voices: { chat_id: string; duration: number; type: string; size: number }[] = [];
   readonly calls: { method: string; params: Record<string, unknown> }[] = [];
+  /** Pictures and files the bot sent (`sendPhoto`, `sendDocument`, `sendMediaGroup`). */
+  readonly uploads: MockUpload[] = [];
   /** The bot has a profile picture (set with setMyProfilePhoto). */
   hasPhoto = false;
   /** Streaming drafts sent (Bot API `sendMessageDraft`). */
@@ -378,6 +398,59 @@ export class MockTelegram {
         });
         return ok({ message_id: this.#nextMessage++, chat: { id: Number(params.chat_id) } });
       }
+      case 'sendPhoto':
+      case 'sendDocument': {
+        const kind = method === 'sendPhoto' ? 'photo' : 'document';
+        const file = params[kind] as FormFile | undefined;
+        if (!file) return badRequest(res, `Bad Request: there is no ${kind} in the request`);
+        if (params.parse_mode === 'HTML' && this.refuseHtml)
+          return badRequest(res, "Bad Request: can't parse entities: Unsupported start tag");
+        if (kind === 'photo' && file.size > 10 * 1024 * 1024)
+          return badRequest(res, 'Bad Request: PHOTO_INVALID_DIMENSIONS');
+        const message_id = this.#nextMessage++;
+        this.uploads.push({
+          method,
+          chat_id: String(params.chat_id),
+          message_id,
+          kind,
+          ...file,
+          ...(typeof params.caption === 'string' && { caption: params.caption }),
+          ...(typeof params.parse_mode === 'string' && { parse_mode: params.parse_mode }),
+        });
+        return ok({ message_id, chat: { id: Number(params.chat_id) } });
+      }
+      case 'sendMediaGroup': {
+        const media = JSON.parse(String(params.media ?? '[]')) as {
+          type: 'photo' | 'document';
+          media: string;
+          caption?: string;
+          parse_mode?: string;
+        }[];
+        // As Telegram does: 2–10 items, and documents only with documents.
+        if (media.length < 2 || media.length > 10)
+          return badRequest(res, 'Bad Request: wrong number of media');
+        if (this.refuseHtml && media.some((m) => m.parse_mode === 'HTML'))
+          return badRequest(res, "Bad Request: can't parse entities: Unsupported start tag");
+        if (new Set(media.map((m) => m.type)).size > 1)
+          return badRequest(res, "Bad Request: documents can't be mixed with other media types");
+        const results = [];
+        for (const item of media) {
+          const file = params[item.media.replace('attach://', '')] as FormFile | undefined;
+          if (!file) return badRequest(res, 'Bad Request: wrong file identifier');
+          const message_id = this.#nextMessage++;
+          this.uploads.push({
+            method,
+            chat_id: String(params.chat_id),
+            message_id,
+            kind: item.type,
+            ...file,
+            ...(item.caption && { caption: item.caption }),
+            ...(item.parse_mode && { parse_mode: item.parse_mode }),
+          });
+          results.push({ message_id, chat: { id: Number(params.chat_id) } });
+        }
+        return ok(results);
+      }
       case 'getFile':
         return ok({
           file_id: params.file_id,
@@ -415,9 +488,14 @@ export class MockTelegram {
     else if (path === '/__control/down') this.down(true);
     else if (path === '/__control/up') this.down(false);
     else if (path === '/__control/sent') return json(res, 200, this.sent);
+    else if (path === '/__control/uploads') return json(res, 200, this.uploads);
     else return json(res, 404, {});
     return json(res, 200, { ok: true });
   }
+}
+
+function badRequest(res: ServerResponse, description: string) {
+  return json(res, 400, { ok: false, error_code: 400, description });
 }
 
 function conflict(res: ServerResponse, description: string) {

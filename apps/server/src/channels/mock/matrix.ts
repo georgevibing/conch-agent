@@ -40,6 +40,12 @@ export interface MockMatrixSeen {
   encrypted: boolean;
   edits?: string;
   reaction?: string;
+  /** A picture or file: `m.image`, `m.file`. */
+  msgtype?: string;
+  /** Where its bytes are: `url` in the clear, `file` (encrypted) in an encrypted room. */
+  url?: string;
+  file?: { url: string; key: { k: string; alg?: string }; iv: string; hashes: { sha256: string } };
+  info?: { mimetype?: string; size?: number; w?: number; h?: number };
 }
 
 /**
@@ -102,6 +108,10 @@ export class MockMatrix {
       ['image/jpeg', 'image/png', 'application/octet-stream'],
       { parseAs: 'buffer' },
       (_request, body, done) => done(null, body),
+    );
+    // Any other file Conch uploads (a PDF it sends): its bytes as they are.
+    app.addContentTypeParser('*', { parseAs: 'buffer' }, (_request, body, done) =>
+      done(null, body),
     );
     app.get('/.well-known/matrix/client', () => ({ 'm.homeserver': { base_url: this.base } }));
     app.get('/_matrix/client/versions', () => ({ versions: ['v1.11'] }));
@@ -470,9 +480,18 @@ export class MockMatrix {
         encrypted,
         ...(relates?.rel_type === 'm.replace' && relates.event_id && { edits: relates.event_id }),
         ...(relates?.rel_type === 'm.annotation' && relates.key && { reaction: relates.key }),
+        ...(typeof c.msgtype === 'string' && c.msgtype !== 'm.text' && { msgtype: c.msgtype }),
+        ...(typeof c.url === 'string' && { url: c.url }),
+        ...(c.file !== undefined && { file: c.file as MockMatrixSeen['file'] }),
+        ...(c.info !== undefined && { info: c.info as MockMatrixSeen['info'] }),
       });
     }
     return out;
+  }
+
+  /** What was uploaded at an `mxc://` address, as the homeserver keeps it. */
+  media(mxc: string): { bytes: Buffer; type: string } | undefined {
+    return this.#media.get(mxc.split('/').at(-1) ?? '');
   }
 
   // ── Breaking it on purpose ─────────────────────────────────────────────

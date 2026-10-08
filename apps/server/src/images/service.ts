@@ -54,6 +54,41 @@ const FACE = ' face';
 const KEYS: readonly ImageKeyId[] = ['openai', 'gemini', 'openrouter'];
 const RASTER = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 
+const ASPECT_RATIOS = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3'] as const;
+/** Words for a shape that mean one ratio and nothing else. */
+const SHAPE_WORDS: Record<string, (typeof ASPECT_RATIOS)[number]> = {
+  square: '1:1',
+  landscape: '16:9',
+  horizontal: '16:9',
+  wide: '16:9',
+  widescreen: '16:9',
+  portrait: '9:16',
+  vertical: '9:16',
+  tall: '9:16',
+};
+
+/**
+ * An aspect ratio written another way, as the option it plainly is: `"16x9"`,
+ * `"16/9"`, `"1920x1080"`, `"landscape"`, or a size like `"1536x1024"` when it's
+ * within 3% of one. Anything else is left for the strict check to explain.
+ */
+export function readAspectRatio(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  const text = value.trim().toLowerCase();
+  if ((ASPECT_RATIOS as readonly string[]).includes(text)) return text;
+  const word = SHAPE_WORDS[text.replace(/[\s_-]+/g, '')];
+  if (word) return word;
+  const sides = /^(\d+(?:\.\d+)?)\s*(?:[:x×/*]|\s+by\s+)\s*(\d+(?:\.\d+)?)$/.exec(text);
+  if (!sides) return value;
+  const ratio = Number(sides[1]) / Number(sides[2]);
+  if (!Number.isFinite(ratio) || ratio <= 0) return value;
+  const near = ASPECT_RATIOS.find((option) => {
+    const [w, h] = option.split(':').map(Number) as [number, number];
+    return Math.abs(ratio / (w / h) - 1) <= 0.03;
+  });
+  return near ?? value;
+}
+
 /** A picture's bytes are a real raster image, or nothing is kept. */
 function raster(bytes: Buffer) {
   const type = sniff(bytes, 'image', undefined);
@@ -172,7 +207,7 @@ export class ImageService {
         effect: 'read',
         row: true,
         description:
-          'List the ways this person can make pictures now, in the order image_generate tries them, with each one’s models and settings: their own plan first (no extra charge), then their own API keys, then OpenRouter. Works whichever model answers this chat.',
+          'List the ways this person can make pictures now, in the order image_generate tries them, with each one’s models and settings: their own plan first (no extra charge), then their own API keys, then OpenRouter. Works whichever model answers this chat. Takes no arguments: call it with {}.',
         input: {},
         run: async () => {
           const all = await this.backends();
@@ -197,15 +232,55 @@ export class ImageService {
         name: 'image_generate',
         row: true,
         description:
-          'Create or edit one raster image and show it as a preview/download card. Describe the image in prompt. For editing, pass a source image path from this work folder or chat attachments. Uses the person’s own providers first (a ChatGPT plan makes pictures at no extra charge), then their API keys, and offers a paid way only when none can. Leave model out unless the person asked for one (image_models lists them). Never retry a generation automatically after an uncertain failure.',
+          'Create or edit one raster image and show it as a preview/download card. prompt is required: the whole description of the picture, in words. Example: {"prompt": "A sunny beach with palm trees and turquoise water, photorealistic", "aspect_ratio": "16:9"}. For editing, also pass source: an image path from this work folder or chat attachments. Uses the person’s own providers first (a ChatGPT plan makes pictures at no extra charge), then their API keys, and offers a paid way only when none can. Leave model out unless the person asked for one (image_models lists them). Never retry a generation automatically after an uncertain failure.',
         input: {
-          prompt: z.string().trim().min(1).max(12_000),
-          name: z.string().min(1).max(200).default('Generated image'),
-          model: z.string().min(1).max(200).optional(),
-          source: z.string().min(1).max(4096).optional(),
-          aspect_ratio: z.enum(['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3']).optional(),
+          prompt: z
+            .string()
+            .trim()
+            .min(1)
+            .max(12_000)
+            .describe('Required. What to draw (or how to change source), in words.'),
+          name: z
+            .string()
+            .min(1)
+            .max(200)
+            .default('Generated image')
+            .describe('A short title for the picture.'),
+          model: z
+            .string()
+            .min(1)
+            .max(200)
+            .optional()
+            .describe('Only when the person asked for one; image_models lists them.'),
+          source: z
+            .string()
+            .min(1)
+            .max(4096)
+            .optional()
+            .describe('To edit a picture: its path in this work folder or chat attachments.'),
+          aspect_ratio: z.enum(ASPECT_RATIOS).optional().describe('The shape. Default 1:1.'),
           background: z.enum(['auto', 'transparent', 'opaque']).optional(),
         },
+        // What models call these fields when they guess (ADR 0072): read, and the model told.
+        aliases: {
+          prompt: [
+            'description',
+            'image_prompt',
+            'image_description',
+            'prompt_text',
+            'text',
+            'query',
+            'input',
+          ],
+          name: ['title', 'filename', 'file_name'],
+          // Not `path` or `size`: those may mean where to save it, or pixels the tool can't take.
+          source: ['source_image', 'input_image'],
+          aspect_ratio: ['aspectRatio', 'aspect', 'ratio'],
+        },
+        mend: (args) =>
+          args['aspect_ratio'] === undefined
+            ? args
+            : { ...args, aspect_ratio: readAspectRatio(args['aspect_ratio']) },
         run: async (args) => {
           if (ctx.permissionMode === 'plan')
             throw new Error('Leave plan mode before generating an image.');
@@ -410,6 +485,7 @@ export class ImageService {
         costUsd: made.usage?.costUsd ?? null,
         message:
           'The image is shown with a preview and Download. ' +
+          'In a chat that came from a chat app (Telegram, WhatsApp…) it is sent there with your reply; to send it to one of their chat apps, use message_user with attachments: [id]. The path is only for editing it here: never paste it into a message. ' +
           (backend.cost === 'included'
             ? `Made with ${backend.by}, at no extra charge.`
             : `Made with ${backend.by} and billed by it separately from the chat model.`),

@@ -6,7 +6,8 @@ import type { ConversationEventInput } from '@conch/protocol';
 import type { ToolContext } from '../conversations/manager';
 import { AttachmentStore } from '../attachments/store';
 import { PictureLimit, type PictureMaker } from '../engines/types';
-import { ImageService, type ImageDeps } from './service';
+import { checkHostArgs } from '../engines/tools/args';
+import { ImageService, readAspectRatio, type ImageDeps } from './service';
 import type { ImageKeyId } from './backends';
 
 const png =
@@ -429,5 +430,54 @@ describe('progress while a picture is made', () => {
     const posts = fetcher.mock.calls.filter((c) => c[1]?.method === 'POST');
     expect(posts).toHaveLength(2);
     expect(JSON.parse(String(posts[1]?.[1]?.body))).not.toHaveProperty('stream');
+  });
+});
+
+describe('reading image_generate’s arguments the first time', () => {
+  async function generate() {
+    const { service, ctx, cwd } = await setup();
+    const tool = service.tools(ctx, async () => ({ cwd })).find((t) => t.name === 'image_generate');
+    if (!tool) throw new Error('no image_generate');
+    return tool;
+  }
+  const check = async (raw: unknown) => checkHostArgs(await generate(), raw);
+
+  it('takes the beach picture as asked, under the names models give the description', async () => {
+    for (const key of ['prompt', 'description', 'image_prompt', 'text', 'query', 'input']) {
+      const checked = await check({ [key]: 'A beach' });
+      expect(checked).toMatchObject({
+        ok: true,
+        args: { prompt: 'A beach', name: 'Generated image' },
+      });
+    }
+    expect(await check('{"arguments": "{\\"description\\": \\"A beach\\"}"}')).toMatchObject({
+      ok: true,
+      args: { prompt: 'A beach' },
+    });
+  });
+
+  it('reads an aspect ratio written another way', async () => {
+    for (const [sent, read] of [
+      ['16:9', '16:9'],
+      ['Landscape', '16:9'],
+      ['portrait', '9:16'],
+      ['16x9', '16:9'],
+      ['1920x1080', '16:9'],
+      ['1536 x 1024', '3:2'],
+      ['4/3', '4:3'],
+    ] as const) {
+      const checked = await check({ prompt: 'A beach', aspectRatio: sent });
+      expect(checked).toMatchObject({ ok: true, args: { aspect_ratio: read } });
+    }
+    expect(readAspectRatio('21:9')).toBe('21:9');
+    expect((await check({ prompt: 'A beach', aspect_ratio: '21:9' })).ok).toBe(false);
+  });
+
+  it('still says plainly what’s missing, with an example in its description', async () => {
+    const tool = await generate();
+    expect(tool.description).toContain('{"prompt": "A sunny beach');
+    const missing = await check({ size: '1024x1024' });
+    expect(missing).toMatchObject({ ok: false });
+    expect(!missing.ok && missing.message).toContain('prompt: required');
   });
 });

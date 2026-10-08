@@ -17,6 +17,14 @@ export interface MockRocketMessage {
   rid: string;
   text: string;
   edited?: boolean;
+  /** The file it carries, as it was uploaded. */
+  file?: { name: string; type: string; size: number };
+}
+
+interface FormFile {
+  name: string;
+  type: string;
+  size: number;
 }
 
 const id17 = () => randomBytes(12).toString('base64url').replace(/[-_]/g, 'x').slice(0, 17);
@@ -52,6 +60,10 @@ export class MockRocketChat {
   base = '';
   readonly sent: MockRocketMessage[] = [];
   readonly tokens = new Set<string>([MockRocketChat.TOKEN]);
+  /** Files staged with `rooms.media`, until `rooms.mediaConfirm` posts them. */
+  readonly #staged = new Map<string, { rid: string; file: FormFile }>();
+  /** Answer as a Rocket.Chat older than 6.8 would: no `rooms.media`, only `rooms.upload`. */
+  legacyUploads = false;
 
   dmOf(userId: string) {
     return `${MockRocketChat.BOT._id}${userId}`;
@@ -61,6 +73,25 @@ export class MockRocketChat {
     const app = Fastify({ logger: false });
     this.#app = app;
     await app.register(fastifyWebsocket);
+    // Uploads: the file and its words, as a form.
+    app.addContentTypeParser(
+      'multipart/form-data',
+      { parseAs: 'buffer', bodyLimit: 64 * 1024 * 1024 },
+      async (request: { headers: Record<string, unknown> }, body: Buffer) => {
+        const form = await new Response(new Uint8Array(body), {
+          headers: { 'content-type': String(request.headers['content-type'] ?? '') },
+        }).formData();
+        const file = form.get('file');
+        const msg = form.get('msg');
+        return {
+          ...(file &&
+            typeof file !== 'string' && {
+              file: { name: file.name, type: file.type, size: file.size },
+            }),
+          ...(typeof msg === 'string' && { msg }),
+        };
+      },
+    );
     const users = [MockRocketChat.BOT, MockRocketChat.OWNER, MockRocketChat.MEMBER];
     app.addHook('onRequest', async (request, reply) => {
       if (request.url.startsWith('/websocket') || request.url.startsWith('/__control')) return;
@@ -100,6 +131,34 @@ export class MockRocketChat {
       const body = request.body as { roomId: string; msgId: string; text: string };
       this.sent.push({ id: body.msgId, rid: body.roomId, text: body.text, edited: true });
       return { success: true };
+    });
+    app.post<{ Params: { rid: string } }>('/api/v1/rooms.media/:rid', (request, reply) => {
+      if (this.legacyUploads) return reply.code(404).send({ success: false, error: 'Not found' });
+      const { file } = request.body as { file?: FormFile };
+      if (!file) return reply.code(400).send({ success: false, error: '[No file uploaded]' });
+      const id = id17();
+      this.#staged.set(id, { rid: request.params.rid, file });
+      return { file: { _id: id, url: `/file-upload/${id}/${file.name}` }, success: true };
+    });
+    app.post<{ Params: { rid: string; id: string } }>(
+      '/api/v1/rooms.mediaConfirm/:rid/:id',
+      (request, reply) => {
+        const staged = this.#staged.get(request.params.id);
+        if (!staged || staged.rid !== request.params.rid)
+          return reply.code(400).send({ success: false, error: 'error-file-not-found' });
+        this.#staged.delete(request.params.id);
+        const text = (request.body as { msg?: string }).msg ?? '';
+        const message = { id: id17(), rid: staged.rid, text, file: staged.file };
+        this.sent.push(message);
+        return { message: { _id: message.id, rid: message.rid, msg: text }, success: true };
+      },
+    );
+    app.post<{ Params: { rid: string } }>('/api/v1/rooms.upload/:rid', (request, reply) => {
+      const { file, msg } = request.body as { file?: FormFile; msg?: string };
+      if (!file) return reply.code(400).send({ success: false, error: '[No file uploaded]' });
+      const message = { id: id17(), rid: request.params.rid, text: msg ?? '', file };
+      this.sent.push(message);
+      return { message: { _id: message.id, rid: message.rid, msg: message.text }, success: true };
     });
     app.post('/api/v1/chat.react', () => ({ success: true }));
     app.get('/websocket', { websocket: true }, (socket) =>

@@ -144,6 +144,24 @@ export const baileysConnect: WaConnect = async (session, handlers) => {
       if (!id) throw new Error('WhatsApp didn’t say it took the message.');
       return id;
     },
+    async file(chat, file, caption, options) {
+      const sent = await socket.sendMessage(
+        chat,
+        file.image
+          ? { image: file.bytes, mimetype: file.mimeType, ...(caption && { caption }) }
+          : {
+              document: file.bytes,
+              mimetype: file.mimeType,
+              fileName: file.name,
+              ...(caption && { caption }),
+            },
+        { messageId: options.id },
+      );
+      if (sent) keep(sent);
+      const id = sent?.key.id;
+      if (!id) throw new Error('WhatsApp didn’t say it took the file.');
+      return id;
+    },
     async voice(chat, audio, seconds, options) {
       const sent = await socket.sendMessage(
         chat,

@@ -20,7 +20,9 @@ import {
   type ChannelFile,
   type ChannelUser,
   type ConnectOptions,
+  type OutboundFile,
   type SendOptions,
+  type SentRef,
   pause,
 } from './types';
 
@@ -342,12 +344,17 @@ export class EmailAdapter implements ChannelAdapter {
       });
     });
 
-    const send = async (chatId: string, markdown: string, sendOptions?: SendOptions) => {
+    const send = async (
+      chatId: string,
+      markdown: string,
+      sendOptions?: SendOptions,
+      attached: OutboundFile[] = [],
+    ) => {
       const to = chatId.startsWith('new:') ? chatId.slice(4) : threads.get(chatId)?.to;
       if (!to) throw new ChannelError('refused', 'Conch lost track of that email thread.');
       const thread: Thread = threads.get(chatId) ?? {
         to,
-        subject: subjectFrom(markdown),
+        subject: subjectFrom(markdown || (attached[0]?.name ?? '')),
         references: [],
       };
       const buttons = sendOptions?.buttons ?? [];
@@ -365,7 +372,24 @@ export class EmailAdapter implements ChannelAdapter {
         ...(thread.last && { inReplyTo: thread.last }),
         ...(thread.references.length && { references: thread.references }),
         text: plain(body).slice(0, 200_000),
-        html: toEmailHtml(body.slice(0, 200_000)),
+        // Pictures shown in the email itself, under the words; every file attached too.
+        html:
+          toEmailHtml(body.slice(0, 200_000)) +
+          attached
+            .map((file, index) =>
+              file.image
+                ? `<p><img src="cid:conch-${index}@${domain}" alt="${escapeAttr(file.name)}" style="max-width:100%"></p>`
+                : '',
+            )
+            .join(''),
+        ...(attached.length && {
+          attachments: attached.map((file, index) => ({
+            filename: file.name,
+            content: file.bytes,
+            contentType: file.mimeType,
+            ...(file.image && { cid: `conch-${index}@${domain}` }),
+          })),
+        }),
         // RFC 3834: an answer made by a program, so other programs don't answer it back.
         headers: { 'Auto-Submitted': 'auto-replied', 'X-Auto-Response-Suppress': 'All' },
       };
@@ -389,7 +413,31 @@ export class EmailAdapter implements ChannelAdapter {
     };
 
     return {
-      send,
+      send: (chatId, markdown, options) => send(chatId, markdown, options),
+      // Attached to emails in the thread, as many to one email as mail services take.
+      files: {
+        maxBytes: MAIL_FILES_LIMIT,
+        send: async (chatId, files, caption) => {
+          const refs: SentRef[] = [];
+          let batch: OutboundFile[] = [];
+          let size = 0;
+          let words = caption?.trim() ?? '';
+          const flush = async () => {
+            if (!batch.length) return;
+            refs.push(...(await send(chatId, words, undefined, batch)));
+            words = '';
+            batch = [];
+            size = 0;
+          };
+          for (const file of files) {
+            if (batch.length && size + file.bytes.length > MAIL_FILES_LIMIT) await flush();
+            batch.push(file);
+            size += file.bytes.length;
+          }
+          await flush();
+          return refs;
+        },
+      },
       // An email can't change once sent; the question's buttons just stop working.
       edit: async (ref) => {
         choices.forget(ref);
@@ -606,6 +654,16 @@ function otherAuthserv(secrets: EmailSecrets) {
 }
 
 /** A first line short enough for a subject. */
+/**
+ * What Conch attaches to one email at most: mail services take about 25 MB
+ * once the files are written as text (a third bigger), so 18 MB of files.
+ */
+const MAIL_FILES_LIMIT = 18 * 1024 * 1024;
+
+function escapeAttr(text: string): string {
+  return text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+}
+
 function subjectFrom(markdown: string): string {
   const line =
     plain(markdown)

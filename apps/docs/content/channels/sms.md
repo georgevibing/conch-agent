@@ -24,6 +24,7 @@ Text the number "hi". In Conch your message shows with **That's me**. Press it, 
 - **Plain text.** Texts have no bold or buttons. When your assistant asks before doing something, reply with the answer's number.
 - **Long answers are cut at three texts**, since each one costs. The whole answer is in Conch.
 - **Pictures** you send by MMS (where your carrier and number allow it) become attachments.
+- **Pictures from Conch stay in Conch.** A picture by MMS has to be on a public web address, and Conch never puts your files on the internet: when your assistant makes a picture or a file, the text says it's in Conch.
 - **A trial account** only texts numbers you verified: the phone you signed up with is. Its texts start with "Sent from your Twilio trial account".
 - **In the US**, carriers block texts from numbers that aren't registered. Register yours for A2P 10DLC in Twilio (**Messaging → Regulatory Compliance**), or use a toll-free number and verify it. If texts stop arriving for this reason, the channel's page says so.
 - **Someone else** who texts the number gets one polite reply and shows up in Conch for you to let in or block.

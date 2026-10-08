@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 import { MockRocketChat } from './mock/rocketchat';
-import { normalizeRocketChat } from './rocketchat';
+import { normalizeRocketChat, RocketChatAdapter } from './rocketchat';
 
 let services: Services | undefined;
 
@@ -174,5 +174,59 @@ describe('Rocket.Chat pieces', () => {
       userId: 'B0tB0tB0tB0tB0tB0',
       token: 'a'.repeat(43),
     });
+  });
+});
+
+describe('Rocket.Chat — pictures and files Conch sends', () => {
+  const png = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+  const files = [
+    { id: 'att_1', name: 'beach.png', mimeType: 'image/png', bytes: png, image: true },
+    {
+      id: 'att_2',
+      name: 'notes.pdf',
+      mimeType: 'application/pdf',
+      bytes: Buffer.from('%PDF-1.4'),
+      image: false,
+    },
+  ];
+  const quiet = {
+    message: () => undefined,
+    press: () => undefined,
+    state: () => undefined,
+    healed: () => undefined,
+  };
+
+  it('sends each file as a message of its own, the caption with the first', async () => {
+    const { rc, keys } = await setup();
+    const connection = new RocketChatAdapter(keys).connect(quiet);
+    try {
+      const room = rc.dmOf(MockRocketChat.OWNER._id);
+      await connection.files?.send(room, files, 'Here’s **your** beach');
+      expect(
+        rc.sent.filter((m) => m.file).map((m) => [m.text, m.file?.name, m.file?.type]),
+      ).toEqual([
+        ['Here’s **your** beach', 'beach.png', 'image/png'],
+        ['', 'notes.pdf', 'application/pdf'],
+      ]);
+    } finally {
+      connection.close();
+    }
+  });
+
+  it('uses rooms.upload on a server older than 6.8', async () => {
+    const { rc, keys } = await setup();
+    rc.legacyUploads = true;
+    const connection = new RocketChatAdapter(keys).connect(quiet);
+    try {
+      const room = rc.dmOf(MockRocketChat.OWNER._id);
+      await connection.files?.send(room, files.slice(0, 1), 'A beach');
+      expect(rc.sent.at(-1)).toMatchObject({
+        rid: room,
+        text: 'A beach',
+        file: { name: 'beach.png', size: png.length },
+      });
+    } finally {
+      connection.close();
+    }
   });
 });

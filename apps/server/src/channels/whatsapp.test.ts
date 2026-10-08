@@ -283,3 +283,43 @@ describe('WhatsApp, linked by QR code', () => {
     );
   });
 });
+
+/** 1×1 PNG: a picture as Conch's attachment store sees one. */
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+describe('WhatsApp, sending pictures and files', () => {
+  it('sends a picture with its caption, and any other file as a document, never read back', async () => {
+    const { s, wa } = await linked();
+    const picture = await s.attachments.save({ name: 'beach.png', bytes: PNG });
+    const notes = await s.attachments.save({
+      name: 'notes.pdf',
+      bytes: Buffer.from('%PDF-1.4\n%…\n'),
+    });
+    await s.attachments.claim([picture.id, notes.id], 'c_files');
+    const before = wa.sent.length;
+    const done = await s.channels.messageOwner('Your **beach**', {
+      attachments: [picture.id, notes.id],
+      conversationId: 'c_files',
+    });
+    expect(done).toMatchObject({ app: 'WhatsApp', sent: ['beach.png', 'notes.pdf'], missed: [] });
+    const sent = wa.sent.slice(before);
+    expect(sent.filter((m) => m.kind === 'image')).toEqual([
+      expect.objectContaining({
+        chat: MockWhatsApp.SELF_CHAT,
+        id: expect.stringMatching(new RegExp(`^${CONCH_ID_PREFIX}`)),
+        file: { name: 'beach.png', type: 'image/png', size: PNG.length, caption: 'Your *beach*' },
+      }),
+    ]);
+    expect(sent.filter((m) => m.kind === 'document')).toEqual([
+      expect.objectContaining({
+        file: expect.objectContaining({ name: 'notes.pdf', type: 'application/pdf' }),
+      }),
+    ]);
+    // The echoes are Conch's own: nothing starts a turn, nothing is answered.
+    await new Promise((r) => setTimeout(r, 200));
+    expect(wa.sent.slice(before).filter((m) => m.kind === 'text')).toEqual([]);
+  });
+});

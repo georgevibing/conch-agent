@@ -751,6 +751,14 @@ export class MockEngine implements Engine {
         return;
       }
 
+      // A picture made in the turn (`draw me a beach`): in a chat app's chat it goes back as a photo.
+      const draw = /^\s*draw (?:me )?(.+?)[.!]*\s*$/i.exec(said);
+      if (draw?.[1] && input.tools.some((t) => t.name === 'image_generate')) {
+        yield* hostTool('image_generate', { prompt: draw[1], name: 'Picture' });
+        yield* speak('Here’s your picture.');
+        return;
+      }
+
       // Writing to you in a chat app: `send "hi" to my Telegram`, `message me "hi"`.
       const sendTo =
         /\b(?:send|message|text)(?: me)? ["“]([^"”]+)["”](?: (?:to|on) my (\w+))?/i.exec(

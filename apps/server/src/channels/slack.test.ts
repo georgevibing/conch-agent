@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 import { MockSlack } from './mock/slack';
+import { SlackAdapter } from './slack';
 
 let services: Services | undefined;
 
@@ -192,4 +193,74 @@ describe('Slack', () => {
       15_000,
     );
   }, 20_000);
+});
+
+describe('Slack — pictures and files Conch sends', () => {
+  const png = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+  const quiet = {
+    message: () => undefined,
+    press: () => undefined,
+    state: () => undefined,
+    healed: () => undefined,
+  };
+
+  async function connected() {
+    const slack = new MockSlack();
+    await slack.start();
+    const adapter = new SlackAdapter(MockSlack.BOT_TOKEN, MockSlack.APP_TOKEN, slack.api);
+    const connection = adapter.connect(quiet);
+    return { slack, connection, files: connection.files };
+  }
+
+  it('uploads a picture and a document together, the caption above them', async () => {
+    const { slack, connection, files } = await connected();
+    try {
+      if (!files) throw new Error('no files');
+      await files.send(
+        'D0ADA',
+        [
+          { id: 'att_1', name: 'beach.png', mimeType: 'image/png', bytes: png, image: true },
+          {
+            id: 'att_2',
+            name: 'notes.pdf',
+            mimeType: 'application/pdf',
+            bytes: Buffer.from('%PDF-1.4'),
+            image: false,
+          },
+        ],
+        'Here’s **your** beach',
+      );
+      expect(slack.files).toEqual([
+        {
+          channel: 'D0ADA',
+          id: expect.any(String),
+          name: 'beach.png',
+          size: png.length,
+          comment: 'Here’s *your* beach',
+        },
+        { channel: 'D0ADA', id: expect.any(String), name: 'notes.pdf', size: 8 },
+      ]);
+      // Each file had its own upload address, and one message shared them both.
+      const uploads = slack.calls.filter((c) => c.method === 'files.getUploadURLExternal');
+      expect(uploads).toHaveLength(2);
+    } finally {
+      connection.close();
+      await slack.stop();
+    }
+  });
+
+  it('names the permission when the app can’t send files yet', async () => {
+    const { slack, connection, files } = await connected();
+    try {
+      slack.noFilesScope = true;
+      await expect(
+        files?.send('D0ADA', [
+          { id: 'att_1', name: 'beach.png', mimeType: 'image/png', bytes: png, image: true },
+        ]),
+      ).rejects.toThrow(/files:write/);
+    } finally {
+      connection.close();
+      await slack.stop();
+    }
+  });
 });

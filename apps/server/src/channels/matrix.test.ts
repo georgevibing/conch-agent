@@ -48,6 +48,12 @@ async function until<T>(
   }
 }
 
+/** 1×1 transparent PNG. */
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64',
+);
+
 const state = async (s: Services, id: string) => (await s.channels.get(id)).health.state;
 const keys = (matrix: MockMatrix) => ({
   kind: 'matrix' as const,
@@ -190,6 +196,53 @@ describe('Matrix', { timeout: 40_000 }, () => {
       'the hello hint',
     );
     expect(reply.encrypted).toBe(false);
+  });
+
+  it('sends a picture encrypted in an encrypted DM, with the caption first', async () => {
+    const { s, matrix } = await paired();
+    const picture = await s.attachments.save({ name: 'beach.png', bytes: PNG });
+    await s.attachments.claim([picture.id], 'c_files');
+    const done = await s.channels.messageOwner('Your **beach**', {
+      attachments: [picture.id],
+      conversationId: 'c_files',
+    });
+    expect(done).toMatchObject({ app: 'Matrix', sent: ['beach.png'], missed: [] });
+    const image = await until(
+      async () => (await matrix.seen()).find((m) => m.msgtype === 'm.image'),
+      'the picture',
+    );
+    expect(image).toMatchObject({
+      text: 'beach.png',
+      encrypted: true,
+      info: { mimetype: 'image/png' },
+    });
+    // The homeserver holds only the encrypted bytes; Ada's phone opens them.
+    expect(image.url).toBeUndefined();
+    const held = matrix.media(image.file?.url ?? '');
+    expect(held?.type).toBe('application/octet-stream');
+    expect(held?.bytes.equals(PNG)).toBe(false);
+    if (!image.file || !held) throw new Error('no file');
+    expect(decryptAttachment(held.bytes, image.file).equals(PNG)).toBe(true);
+    const seen = await matrix.seen();
+    const caption = seen.findIndex((m) => m.text.includes('Your beach'));
+    expect(caption).toBeGreaterThanOrEqual(0);
+    expect(caption).toBeLessThan(seen.findIndex((m) => m.event_id === image.event_id));
+  });
+
+  it('sends any other file as m.file in an unencrypted DM, and refuses another chat’s file', async () => {
+    const { s, matrix } = await paired({ encrypted: false });
+    const notes = await s.attachments.save({ name: 'notes.pdf', bytes: Buffer.from('%PDF-1.4 x') });
+    await s.attachments.claim([notes.id], 'c_files');
+    await s.channels.messageOwner('', { attachments: [notes.id], conversationId: 'c_files' });
+    const file = await until(
+      async () => (await matrix.seen()).find((m) => m.msgtype === 'm.file'),
+      'the file',
+    );
+    expect(file).toMatchObject({ text: 'notes.pdf', encrypted: false });
+    expect(matrix.media(file.url ?? '')?.bytes.toString()).toBe('%PDF-1.4 x');
+    await expect(
+      s.channels.messageOwner('hi', { attachments: [notes.id], conversationId: 'c_other' }),
+    ).rejects.toThrow(/no file/);
   });
 
   it('asks for a new sign-in when the session is ended elsewhere, and retries a rate limit by itself', async () => {

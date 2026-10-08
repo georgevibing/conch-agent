@@ -25,5 +25,6 @@ Once Conch knows it's you, your assistant greets you by name.
 - **Plain text.** LINE has no bold or headings, so answers come as plain words. When your assistant asks before doing something, the answers are buttons under the message.
 - **Messages a month.** An answer within a minute of your message is free. Later ones count against the messages your plan allows each month; the free plan's are few. If they run out, the channel's page says so.
 - **Every message is checked**: LINE signs what it delivers with the channel secret, and Conch reads nothing that isn't signed.
+- **Pictures and files from Conch** can't go to LINE: LINE only takes them from a public web address, and Conch never puts your files on the internet. Your assistant says so, and they're in the chat in Conch.
 - **In a group**, invite the account like a friend. It shows on its page in Conch, off. Turn it on there, and it answers whoever mentions it: you as in private, everyone else in words only. See [In a group](index.md#in-a-group).
 - **A token that stops working** stops this channel only. Reissue it on the **Messaging API** tab and paste it.

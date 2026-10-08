@@ -16,6 +16,10 @@
     text-align: center;
   }
 
+  .hero[data-alone] {
+    padding-block-end: var(--nc-space-8);
+  }
+
   .pearl {
     margin-block-end: var(--nc-space-3);
   }

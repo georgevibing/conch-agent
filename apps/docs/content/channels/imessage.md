@@ -25,4 +25,5 @@ In Conch, open **Apps**, choose **Talk to me here**, then **iMessage**.
 - **Approvals are a number.** Messages has no buttons: when your assistant asks, the question lists its answers, and you reply with one's number (or yes, or no).
 - **The first answer asks macOS once.** macOS asks whether Conch may use Messages. Press **Allow**. If you said no, the channel page says so, with **Open System Settings** (**Privacy & Security** → **Automation**).
 - **Photos come as photos.** Pictures from your iPhone (HEIC) arrive as JPEG, so every provider can see them.
+- **Pictures and files come back too.** A picture your assistant makes, or a file it finishes, arrives in the chat after its words. Messages sends it from a **Conch outbox** folder in your Pictures, which empties itself after a few minutes.
 - **Your Mac has to be on**, with Conch running. Texts sent while it's off are answered when it's back, for up to a day.

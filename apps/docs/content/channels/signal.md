@@ -28,5 +28,6 @@ When it asks before doing something, the question ends with numbers: reply **1**
 
 - **Your friends' chats stay yours.** Conch never reads or answers other people's chats with you, or your groups, unless you turn on **A number just for Conch** for a number used only by your assistant.
 - **signal-cli** is a long-standing open-source Signal client that Signal doesn't make. Your messages stay end-to-end encrypted; this computer becomes one of your linked devices.
+- **Pictures and files come back too.** A picture your assistant makes, or a file it finishes, arrives in Note to Self with its words, several in one message.
 - **It keeps going by itself.** If signal-cli stops, Conch starts it again. If it needs Java or signal-cli itself, the channel shows **Install**, and **Repair everything** does too.
 - **Disconnect** in Conch deletes its keys from this computer. Then remove Conch under **Linked devices** in Signal as well: Signal only lets the phone do that.

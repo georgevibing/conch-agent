@@ -295,3 +295,32 @@ describe('signal-cli', () => {
     daemon.stop();
   });
 });
+
+/** 1×1 PNG: a picture as Conch's attachment store sees one. */
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+describe('Signal, sending pictures and files', () => {
+  it('sends pictures and files in one message, with the caption, marked as Conch’s', async () => {
+    const { s, signal } = await linked();
+    const picture = await s.attachments.save({ name: 'beach.png', bytes: PNG });
+    const notes = await s.attachments.save({
+      name: 'notes.pdf',
+      bytes: Buffer.from('%PDF-1.4\n%…\n'),
+    });
+    await s.attachments.claim([picture.id, notes.id], 'c_files');
+    const done = await s.channels.messageOwner('Your beach', {
+      attachments: [picture.id, notes.id],
+      conversationId: 'c_files',
+    });
+    expect(done).toMatchObject({ app: 'Signal', sent: ['beach.png', 'notes.pdf'], missed: [] });
+    const last = signal.last();
+    expect(last?.params.message).toBe(`Your beach${CONCH_MARK}`);
+    expect(last?.files).toEqual([
+      { name: 'beach.png', type: 'image/png', size: PNG.length },
+      { name: 'notes.pdf', type: 'application/pdf', size: notes.size },
+    ]);
+  });
+});

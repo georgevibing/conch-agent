@@ -1,8 +1,16 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -15,6 +23,8 @@ export interface MockImessageSent {
   text: string;
   target: string;
   kind: 'chat' | 'to';
+  /** A file sent (the script's item 4): its name and size, as Messages took it. */
+  file?: { name: string; size: number };
 }
 
 /**
@@ -91,6 +101,7 @@ export class MockMessages {
     return {
       db: this.db,
       attachments: this.attachments,
+      outbox: join(this.dir, 'outbox'),
       send: (args: string[]) => this.send(args),
       convert: async () => Buffer.from('jpeg'),
       platform: 'darwin' as const,
@@ -163,9 +174,9 @@ export class MockMessages {
     this.#knownChats = false;
   }
 
-  /** Plays the send script: `[text, target, "chat" | "to"]`. */
+  /** Plays the send script: `[text, target, "chat" | "to", file?]`. */
   async send(args: string[]): Promise<RunResult> {
-    const [text = '', target = '', kind = 'to'] = args;
+    const [text = '', target = '', kind = 'to', path] = args;
     if (this.denyAutomation)
       return {
         stdout: '',
@@ -178,13 +189,38 @@ export class MockMessages {
         stderr: `execution error: Can’t get chat id "${target}". (-1728)`,
         code: 1,
       };
-    this.sent.push({ text, target, kind: kind === 'chat' ? 'chat' : 'to' });
+    // Messages reads the file as it sends it (and fails when it can't).
+    const bytes = path ? readFileSync(path) : undefined;
+    const file = path && bytes ? { name: basename(path), mime: mimeOf(path), bytes } : undefined;
+    this.sent.push({
+      text: file ? '' : text,
+      target,
+      kind: kind === 'chat' ? 'chat' : 'to',
+      ...(file && { file: { name: file.name, size: file.bytes.length } }),
+    });
     const to = kind === 'chat' ? (/;-;(.+)$/.exec(target)?.[1] ?? target) : target;
     const chat = this.#chat(to, 45);
     const handle = this.#handle(to);
-    this.#insert({ text, handle, fromMe: 1, chat, ago: 0, plainText: false });
+    const said = file ? '' : text;
+    this.#insert({
+      text: said,
+      handle,
+      fromMe: 1,
+      chat,
+      ago: 0,
+      plainText: false,
+      ...(file && { file }),
+    });
     if (to === MockMessages.ME)
-      this.#insert({ text, handle, fromMe: 0, chat, ago: 0, plainText: false });
+      this.#insert({
+        text: said,
+        handle,
+        fromMe: 0,
+        chat,
+        ago: 0,
+        plainText: false,
+        ...(file && { file }),
+      });
     return { stdout: '', stderr: '', code: 0 };
   }
 
@@ -265,4 +301,11 @@ export class MockMessages {
     }
     return id;
   }
+}
+
+function mimeOf(path: string): string {
+  if (/\.png$/i.test(path)) return 'image/png';
+  if (/\.jpe?g$/i.test(path)) return 'image/jpeg';
+  if (/\.pdf$/i.test(path)) return 'application/pdf';
+  return 'application/octet-stream';
 }

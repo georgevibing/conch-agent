@@ -194,3 +194,65 @@ describe('Mattermost pieces', () => {
     });
   });
 });
+
+describe('Mattermost — pictures and files Conch sends', () => {
+  const png = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+  const file = (name: string, mimeType: string, bytes: Buffer, image = false) => ({
+    id: `att_${name}`,
+    name,
+    mimeType,
+    bytes,
+    image,
+  });
+
+  it('uploads a picture and a document and posts them with the caption', async () => {
+    const { mm, keys } = await setup();
+    const connection = new MattermostAdapter(keys).connect({
+      message: vi.fn(),
+      state: vi.fn(),
+      press: vi.fn(),
+      healed: vi.fn(),
+    });
+    try {
+      const chat = mm.dmOf(MockMattermost.OWNER.id);
+      await connection.files?.send(
+        chat,
+        [
+          file('beach.png', 'image/png', png, true),
+          file('notes.pdf', 'application/pdf', Buffer.from('%PDF-1.4')),
+        ],
+        'Here’s **your** beach',
+      );
+      const post = mm.sent.at(-1);
+      expect(post).toMatchObject({ channel_id: chat, message: 'Here’s **your** beach' });
+      expect(post?.files?.map((f) => [f.name, f.type, f.size])).toEqual([
+        ['beach.png', 'image/png', png.length],
+        ['notes.pdf', 'application/pdf', 8],
+      ]);
+    } finally {
+      connection.close();
+    }
+  });
+
+  it('puts more than five files on several posts, the caption on the first', async () => {
+    const { mm, keys } = await setup();
+    const connection = new MattermostAdapter(keys).connect({
+      message: vi.fn(),
+      state: vi.fn(),
+      press: vi.fn(),
+      healed: vi.fn(),
+    });
+    try {
+      const chat = mm.dmOf(MockMattermost.OWNER.id);
+      const many = Array.from({ length: 7 }, (_, i) => file(`p${i}.png`, 'image/png', png, true));
+      await connection.files?.send(chat, many, 'Seven');
+      const posts = mm.sent.filter((p) => p.files);
+      expect(posts.map((p) => [p.message, p.files?.length])).toEqual([
+        ['Seven', 5],
+        ['', 2],
+      ]);
+    } finally {
+      connection.close();
+    }
+  });
+});

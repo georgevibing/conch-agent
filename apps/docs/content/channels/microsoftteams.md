@@ -32,4 +32,5 @@ Teams only delivers a bot's messages to a web address. Conch gives it one that l
 - **Commands are in the app's menu.** Teams lists ten of Conch's: `/new`, `/stop`, `/model`, `/clear`, `/plan`, `/goal`, `/effort`, `/retry`, `/status` and `/help`. Every other one works when you type it. See [Slash commands](../reference/slash-commands.md#in-chat-apps).
 - **While it works** Teams shows "typing…".
 - **Files you send** in the chat come too: the app asks Teams for that.
+- **Pictures from Conch** (a picture it made) arrive in the chat: PNG, JPEG or GIF, up to 1 MB each. Other files can't go to Teams from Conch, and your assistant says so; they're in the chat in Conch.
 - **Turn the address off** under the channel's **Where Teams delivers** when you stop using Teams.

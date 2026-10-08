@@ -14,6 +14,7 @@ import {
   type ChannelEvents,
   type ChannelFile,
   type ChannelUser,
+  type OutboundFile,
   type SendOptions,
   type SentRef,
   appId,
@@ -40,6 +41,13 @@ type WeChatSecrets = Extract<ChannelSecrets, { kind: 'wechat' }>;
 export const WECHAT_API = 'https://api.weixin.qq.com';
 export const WECOM_BOT_SOCKET = 'wss://openws.work.weixin.qq.com';
 const FILE_LIMIT = 20 * 1024 * 1024;
+/**
+ * An Official Account sends a picture as a customer-service `image` (uploaded
+ * first as temporary media): 10 MB at most, PNG, JPEG or GIF. WeChat has no
+ * customer-service message for other files, so those are refused, honestly.
+ */
+const OA_PICTURE_LIMIT = 10 * 1024 * 1024;
+const OA_PICTURE_TYPES = /^image\/(?:png|jpeg|gif)$/;
 
 /**
  * What was pasted, tidied. An Official Account's Token and EncodingAESKey
@@ -217,6 +225,8 @@ export class WeComBotAdapter implements ChannelAdapter {
         await session.send(ref.chatId, markdown);
       },
       typing: () => Promise.resolve(),
+      // No `files`: Conch's WeCom bot sends words and cards only (markdown, template_card)
+      // over its long connection, so the assistant is told it can't carry files from Conch.
       download: (file, options) => session.download(file, options),
       directChat: (userId) => Promise.resolve(appId(userId)),
       close: () => session.close(),
@@ -808,6 +818,11 @@ export class WeChatOfficialAdapter implements ChannelAdapter {
         await session.send(ref.chatId, markdown);
       },
       typing: (chatId) => session.typing(chatId),
+      files: {
+        maxBytes: OA_PICTURE_LIMIT,
+        accepts: (file) => file.image && OA_PICTURE_TYPES.test(file.mimeType),
+        send: (chatId, files, caption) => session.sendPictures(chatId, files, caption),
+      },
       download: (file, options) => session.download(file, options),
       directChat: (userId) => Promise.resolve(appId(userId)),
       close: () => {
@@ -1086,6 +1101,89 @@ class OfficialSession {
     const last = sent.at(-1);
     if (buttons.length && last) this.#choices.remember(last, buttons);
     return sent;
+  }
+
+  /**
+   * Pictures as customer-service images, after the caption. They can't wait
+   * for the person's next message the way words can, so an account that
+   * may not send later (unverified), or a chat past WeChat's 48 hours, is
+   * told plainly instead.
+   */
+  async sendPictures(chatId: string, files: OutboundFile[], caption?: string): Promise<SentRef[]> {
+    const other = files.filter((f) => !f.image || !OA_PICTURE_TYPES.test(f.mimeType));
+    if (other.length)
+      throw new ChannelError(
+        'refused',
+        `A WeChat Official Account can only send pictures (PNG, JPEG or GIF, up to 10 MB), so ${other.map((f) => f.name).join(', ')} can’t go there. Nothing was sent.`,
+      );
+    if (this.#passive) throw this.#cantSendLater();
+    const sent: SentRef[] = caption ? await this.send(chatId, caption) : [];
+    for (const file of files) {
+      const mediaId = await this.#uploadImage(file);
+      try {
+        await this.call('/cgi-bin/message/custom/send', {
+          touser: chatId,
+          msgtype: 'image',
+          image: { media_id: mediaId },
+        });
+      } catch (error) {
+        const code = error instanceof WeChatError ? error.wechat : undefined;
+        if (code === 48001 || code === 48004) {
+          this.#passive = true;
+          throw this.#cantSendLater();
+        }
+        if (code === 45015 || code === 45047)
+          throw new ChannelError(
+            'refused',
+            'WeChat only lets an Official Account send pictures within 48 hours of the person’s last message. Ask them to write first.',
+          );
+        throw error;
+      }
+      sent.push({ chatId, messageId: mediaId });
+    }
+    return sent;
+  }
+
+  #cantSendLater() {
+    return new ChannelError(
+      'refused',
+      'This Official Account can’t send pictures: WeChat only lets verified accounts send messages of their own.',
+    );
+  }
+
+  /** A picture as temporary media (kept by WeChat for three days); its media_id back. */
+  async #uploadImage(file: OutboundFile): Promise<string> {
+    const token = await this.adapter.accessToken();
+    const form = new FormData();
+    form.set('media', new Blob([new Uint8Array(file.bytes)], { type: file.mimeType }), file.name);
+    const url = `${this.api}/cgi-bin/media/upload?access_token=${encodeURIComponent(token)}&type=image`;
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        body: form,
+        signal: AbortSignal.timeout(120_000),
+      });
+    } catch (error) {
+      throw new ChannelError(
+        'network',
+        redact(`Couldn’t reach WeChat (${(error as Error).message}).`, token, this.secrets.secret),
+      );
+    }
+    if (response.status >= 500)
+      throw new ChannelError('network', `WeChat had a problem (${response.status}).`);
+    const data = (await response.json().catch(() => ({ errcode: -1 }))) as {
+      media_id?: string;
+      errcode?: number;
+      errmsg?: string;
+    };
+    if (data.media_id && !data.errcode) return data.media_id;
+    if (data.errcode === 40005 || data.errcode === 40009)
+      throw new ChannelError('refused', 'WeChat didn’t take that picture (its type or size).');
+    throw new ChannelError(
+      'refused',
+      `WeChat didn’t take that picture (${data.errcode ?? response.status}${data.errmsg ? ` ${redact(data.errmsg, token)}` : ''}).`,
+    );
   }
 
   #queue(chatId: string, part: string) {

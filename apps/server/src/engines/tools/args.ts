@@ -298,8 +298,11 @@ function normaliseObject(
 export function normaliseArgs(
   schema: JsonSchema,
   raw: Record<string, unknown>,
-  { dropUnknown }: { dropUnknown: boolean },
-): { args: Record<string, unknown>; dropped: string[] } {
+  {
+    dropUnknown,
+    aliases,
+  }: { dropUnknown: boolean; aliases?: Readonly<Record<string, readonly string[] | undefined>> },
+): { args: Record<string, unknown>; dropped: string[]; renamed: string[] } {
   const properties = isRecord(schema['properties']) ? schema['properties'] : {};
   let args = raw;
   // `{"arguments": {…}}` around arguments the tool would take by themselves.
@@ -310,8 +313,34 @@ export function normaliseArgs(
     const parsed = typeof inner === 'string' ? repairJson(inner)?.value : inner;
     if (isRecord(parsed)) args = parsed;
   }
+  const renamed: string[] = [];
+  if (aliases) args = renameAliases(args, properties, aliases, renamed);
   const dropped: string[] = [];
-  return { args: normaliseObject(args, schema, '', dropped, dropUnknown, 0), dropped };
+  return { args: normaliseObject(args, schema, '', dropped, dropUnknown, 0), dropped, renamed };
+}
+
+/**
+ * A field sent under another name the tool declared for it (`description` for
+ * `prompt`), read as the field: only when the field itself is missing, exactly
+ * one of its other names was sent, and that name isn't one the tool takes.
+ */
+function renameAliases(
+  args: Record<string, unknown>,
+  properties: Record<string, unknown>,
+  aliases: Readonly<Record<string, readonly string[] | undefined>>,
+  renamed: string[],
+): Record<string, unknown> {
+  let out = args;
+  for (const [field, names] of Object.entries(aliases)) {
+    if (!names || !Object.hasOwn(properties, field) || Object.hasOwn(out, field)) continue;
+    const sent = names.filter((n) => Object.hasOwn(out, n) && !Object.hasOwn(properties, n));
+    const alias = sent.length === 1 ? sent[0] : undefined;
+    if (alias === undefined) continue;
+    const { [alias]: value, ...rest } = out;
+    out = { ...rest, [field]: value };
+    renamed.push(`${alias} as ${field}`);
+  }
+  return out;
 }
 
 // ── Explaining ──────────────────────────────────────────────────────────────
@@ -440,6 +469,10 @@ function mismatch(name: string, lines: string[], schema: JsonSchema, notes: stri
   ].join('\n');
 }
 
+function renamedNote(renamed: string[]): string[] {
+  return renamed.length ? [`Read ${renamed.join(', ')}: use those names next time.`] : [];
+}
+
 function droppedNote(dropped: string[]): string[] {
   return dropped.length
     ? [
@@ -480,15 +513,27 @@ function start(
  * the sentence the model needs.
  */
 export function checkHostArgs(
-  tool: Pick<HostTool, 'name' | 'input'>,
+  tool: Pick<HostTool, 'name' | 'input' | 'aliases' | 'mend'>,
   raw: unknown,
   name = tool.name,
 ): Checked {
   const read = start(raw);
   if ('problem' in read) return { ok: false, message: read.problem };
   const schema = schemaOf(tool.input);
-  const { args, dropped } = normaliseArgs(schema, read.args, { dropUnknown: true });
-  const notes = [...read.notes, ...droppedNote(dropped)];
+  const normalised = normaliseArgs(schema, read.args, {
+    dropUnknown: true,
+    ...(tool.aliases && { aliases: tool.aliases }),
+  });
+  const { dropped, renamed } = normalised;
+  let { args } = normalised;
+  if (tool.mend) {
+    try {
+      args = tool.mend(args);
+    } catch {
+      // A mend that can't read the value leaves it for the strict check to explain.
+    }
+  }
+  const notes = [...read.notes, ...renamedNote(renamed), ...droppedNote(dropped)];
   const parsed = z.object(tool.input).strict().safeParse(args, { reportInput: true });
   if (parsed.success) return { ok: true, args: parsed.data, notes };
   return { ok: false, message: mismatch(name, parsed.error.issues.map(issueLine), schema, notes) };
@@ -598,11 +643,36 @@ export function lenientShape(shape: z.ZodRawShape): z.ZodRawShape {
       continue;
     }
     const any = z.unknown().meta(json);
-    // Identity on the way in keeps a required field required in the schema, yet lets it be missing.
+    // Identity on the way in lets a required field be missing here; which fields are
+    // required is said once, on the object (`lenientSchema`), whatever Zod reads it.
     out[key] = z.safeParse(field, undefined).success
       ? any.optional()
       : z.preprocess((value) => value, any);
   }
   lenient.set(shape, out);
+  return out;
+}
+
+const lenientObjects = new WeakMap<z.ZodRawShape, z.ZodObject>();
+
+/**
+ * The whole argument object Claude Code's in-process MCP server is given: the
+ * lenient fields, advertised with the tool's own `required` list, and keeping
+ * fields the tool doesn't name so Conch can read an alias and tell the model.
+ *
+ * The list has to be said on the object. The SDK turns a raw shape into JSON
+ * Schema with the Zod it bundles, which counts a field required only when Zod
+ * can't skip it, and a lenient field always can: every field came out
+ * optional, so a model was told it could leave `prompt` out of image_generate
+ * and sometimes did, then retried after Conch said it was missing.
+ */
+export function lenientSchema(shape: z.ZodRawShape): z.ZodObject {
+  const known = lenientObjects.get(shape);
+  if (known) return known;
+  const required = toJsonSchema(shape)['required'];
+  const object = z.looseObject(lenientShape(shape));
+  const out =
+    Array.isArray(required) && required.length ? object.meta({ required: [...required] }) : object;
+  lenientObjects.set(shape, out);
   return out;
 }

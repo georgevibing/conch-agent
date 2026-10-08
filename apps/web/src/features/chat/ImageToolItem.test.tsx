@@ -105,7 +105,10 @@ describe('the picture tool in the chat', () => {
     // Never the raw call or a file path.
     expect(screen.queryByText(/\/Users\/someone/)).toBeNull();
     expect(screen.queryByText('Input')).toBeNull();
-    await userEvent.click(screen.getByRole('button', { name: 'Details' }));
+    // Details is the info button beside the other actions; it opens a panel under the card.
+    const info = screen.getByRole('button', { name: 'Details' });
+    await userEvent.click(info);
+    expect(info).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText('Gemini 2.5 Flash Image, by Google')).toBeVisible();
     expect(screen.getByText('OpenAI')).toBeVisible();
     expect(screen.getByText('1536 × 1024')).toBeVisible();

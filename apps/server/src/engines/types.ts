@@ -93,6 +93,18 @@ export interface HostTool<Shape extends z.ZodRawShape = z.ZodRawShape> {
   alwaysLoad?: boolean;
   /** Words that find it when tools are searched for. */
   searchHint?: string;
+  /**
+   * Other names models give a field (`description` for `prompt`), read as the
+   * field when it's missing and exactly one of them was sent (ADR 0072). Never
+   * a name the tool takes itself.
+   */
+  aliases?: Readonly<Partial<Record<keyof Shape & string, readonly string[]>>>;
+  /**
+   * The tool's own reading of a value written another unambiguous way
+   * (`"landscape"` for an aspect ratio), before the strict check. It may only
+   * rewrite a value into the one it plainly means; the check still runs after.
+   */
+  mend?(args: Record<string, unknown>): Record<string, unknown>;
 }
 
 /** A picture, whoever sent it: base64, no data-URL prefix. */

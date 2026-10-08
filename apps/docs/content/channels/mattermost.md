@@ -23,6 +23,7 @@ Once Conch knows it's you, the bot greets you by name.
 - **No public address.** Conch connects to your server from this computer, over Mattermost's own WebSocket, so your server only has to be reachable from here.
 - **No Bot Accounts in the menu?** Someone who runs the server turns them on in **System Console → Integrations → Bot Accounts**.
 - **Answers keep their formatting**: Mattermost writes Markdown, as Conch does.
+- **Pictures and files.** A picture Conch makes, or a file it finishes, arrives attached to a post with its words, five to a post. A file over the server's **Maximum File Size** (System Console → File Storage) can't go, and Conch says so.
 - **Approvals.** Mattermost's buttons need the server to reach Conch, so the question comes with numbered answers: reply with the number.
 - **In a channel**, invite the bot (`/invite @yourbot`). When someone mentions it, the channel shows on its page in Conch, off. Turn it on there, and it answers whoever mentions it: you as in private, everyone else in words only. See [In a group](index.md#in-a-group).
 - **A token that stops working** (revoked, or the bot turned off) stops this channel only. Make a new token on the bot's page and paste it.

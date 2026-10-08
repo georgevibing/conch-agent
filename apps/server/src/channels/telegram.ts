@@ -13,6 +13,7 @@ import {
   type ChannelMessage,
   type ChannelProfile,
   type ChannelUser,
+  type OutboundFile,
   type SendOptions,
   type SentRef,
   type VoiceNote,
@@ -34,6 +35,13 @@ const POLL_SECONDS = 30;
 /** Conflicts in a row before saying another program has the bot (each is a 409). */
 const CONFLICTS_BEFORE_TELLING = 3;
 const FILE_LIMIT = 20 * 1024 * 1024;
+/** The most a bot may upload: a photo (shown in the chat), and any file (a document). */
+const PHOTO_LIMIT = 10 * 1024 * 1024;
+const DOCUMENT_LIMIT = 50 * 1024 * 1024;
+/** A caption's length, counted after formatting; a longer one goes as its own message first. */
+const CAPTION = 1000;
+/** Pictures in one album (`sendMediaGroup`). */
+const ALBUM = 10;
 
 interface TgUser {
   id: number;
@@ -289,6 +297,116 @@ export class TelegramAdapter implements ChannelAdapter {
       );
   }
 
+  /**
+   * Pictures as photos (with the caption under them), anything else as a
+   * document; several of a kind together as an album. A picture over
+   * Telegram's 10 MB for photos, or too long and thin to be one, goes as a
+   * document instead, so it still arrives whole.
+   */
+  async #sendFiles(chatId: string, files: OutboundFile[], caption?: string): Promise<SentRef[]> {
+    const sent: SentRef[] = [];
+    let words = caption?.trim() || undefined;
+    // Too long for a caption: the words go first, as a message of their own.
+    if (words && plain(words).length > CAPTION) {
+      sent.push(...(await this.#send(chatId, words)));
+      words = undefined;
+    }
+    const photos = files.filter(asPhoto);
+    const documents = files.filter((f) => !asPhoto(f));
+    for (const [kind, group] of [
+      ['photo', photos],
+      ['document', documents],
+    ] as const) {
+      for (let i = 0; i < group.length; i += ALBUM) {
+        const batch = group.slice(i, i + ALBUM);
+        const refs = await this.#withRetry(() => this.#upload(chatId, kind, batch, words));
+        words = undefined;
+        sent.push(...refs);
+      }
+    }
+    return sent;
+  }
+
+  /** One `sendPhoto`/`sendDocument`, or a `sendMediaGroup` for several; plain words if HTML is refused. */
+  async #upload(
+    chatId: string,
+    kind: 'photo' | 'document',
+    files: OutboundFile[],
+    caption?: string,
+  ): Promise<SentRef[]> {
+    const attempt = async (html: boolean) => {
+      const form = new FormData();
+      form.set('chat_id', chatId);
+      const text = caption ? (html ? toTelegramHtml(caption) : plain(caption)) : undefined;
+      const blob = (file: OutboundFile) =>
+        new Blob([new Uint8Array(file.bytes)], { type: file.mimeType });
+      let method: string;
+      if (files.length === 1 && files[0]) {
+        method = kind === 'photo' ? 'sendPhoto' : 'sendDocument';
+        form.set(kind, blob(files[0]), files[0].name);
+        if (text) form.set('caption', text);
+        if (text && html) form.set('parse_mode', 'HTML');
+      } else {
+        method = 'sendMediaGroup';
+        const media = files.map((file, index) => {
+          form.set(`f${index}`, blob(file), file.name);
+          return {
+            type: kind,
+            media: `attach://f${index}`,
+            ...(index === 0 && text && { caption: text, ...(html && { parse_mode: 'HTML' }) }),
+          };
+        });
+        form.set('media', JSON.stringify(media));
+      }
+      const result = await this.#multipart<{ message_id: number } | { message_id: number }[]>(
+        method,
+        form,
+      );
+      return (Array.isArray(result) ? result : [result]).map((m) => ({
+        chatId,
+        messageId: String(m.message_id),
+      }));
+    };
+    try {
+      return await attempt(Boolean(caption));
+    } catch (error) {
+      if (!(error instanceof ChannelError) || error.code !== 'refused' || !caption) throw error;
+      if (!/parse|entit|tag/i.test(error.message)) throw error;
+      return attempt(false);
+    }
+  }
+
+  /** A Bot API call with files in it (multipart), its errors read the way `call` reads them. */
+  async #multipart<T>(method: string, form: FormData): Promise<T> {
+    let response: Response;
+    try {
+      response = await fetch(`${this.base}/bot${this.token}/${method}`, {
+        method: 'POST',
+        body: form,
+        signal: AbortSignal.timeout(120_000),
+      });
+    } catch (error) {
+      throw new ChannelError(
+        'network',
+        redact(`Couldn’t reach Telegram (${(error as Error).message}).`, this.token),
+      );
+    }
+    const body = (await response.json().catch(() => undefined)) as TgResponse<T> | undefined;
+    if (body?.ok) return body.result as T;
+    const code = body?.error_code ?? response.status;
+    const description = redact(body?.description ?? response.statusText, this.token);
+    if (code === 401 || code === 404)
+      throw new ChannelError('auth', 'Telegram doesn’t recognise this key.', { field: 'token' });
+    if (code === 413)
+      throw new ChannelError('refused', 'That file is too big for Telegram (50 MB at most).');
+    if (code === 429)
+      throw new ChannelError('rate-limit', 'Telegram asked Conch to slow down.', {
+        retryAfterMs: (body?.parameters?.retry_after ?? 3) * 1000,
+      });
+    if (code >= 500) throw new ChannelError('network', `Telegram had a problem (${code}).`);
+    throw new ChannelError('refused', description);
+  }
+
   connect(events: ChannelEvents): ChannelConnection {
     const stop = new AbortController();
     void this.#poll(events, stop.signal);
@@ -300,6 +418,10 @@ export class TelegramAdapter implements ChannelAdapter {
       buttonLimit: 8,
       send: (chatId, markdown, options) => this.#send(chatId, markdown, options),
       voiceNotes: { format: 'ogg', send: (chatId, note) => this.#sendVoice(chatId, note) },
+      files: {
+        maxBytes: DOCUMENT_LIMIT,
+        send: (chatId, files, caption) => this.#sendFiles(chatId, files, caption),
+      },
       draft: async (chatId, draftId, markdown) => {
         if (!drafts) return false;
         try {
@@ -649,6 +771,19 @@ export class TelegramAdapter implements ChannelAdapter {
       );
     }
   }
+}
+
+/**
+ * Telegram shows it as a photo: a picture of at most 10 MB, its sides adding
+ * up to at most 10,000 pixels and no more than 20 times longer than wide.
+ * GIFs would be shown as stills, so they go as documents (Telegram animates those).
+ */
+function asPhoto(file: OutboundFile): boolean {
+  if (!file.image || file.bytes.length > PHOTO_LIMIT) return false;
+  if (!/^image\/(?:png|jpeg|webp)$/.test(file.mimeType)) return false;
+  const { width, height } = file;
+  if (!width || !height) return true;
+  return width + height <= 10_000 && Math.max(width, height) / Math.min(width, height) <= 20;
 }
 
 function keyboard(options: SendOptions) {

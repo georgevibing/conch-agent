@@ -37,7 +37,11 @@ gives a model that can't call tools natively its tools.
 engine that runs Conch's tools for a model reads a call the same way: the model APIs,
 Codex's dynamic tools and the door ACP programs reach (all through `buildTools`), and
 Claude Code's in-process server (its shape is advertised unchanged through Zod metadata,
-`lenientShape`, so Conch's check sees the call instead of the SDK refusing it).
+`lenientSchema`, so Conch's check sees the call instead of the SDK refusing it). The
+`required` list is said on that object, not left to the fields: the SDK converts with the
+Zod it bundles, which counted every lenient field optional, so Claude was told it could
+leave out `image_generate`'s `prompt`. The object keeps fields the tool doesn't name, so
+Conch, not the SDK, drops them and says so.
 
 1. **Read.** Almost-JSON is mended by a small in-house reader (`repair.ts`): trailing commas,
    single quotes, bare keys, Python's `True`/`None`, comments, a fence, an unclosed brace or
@@ -51,7 +55,10 @@ Claude Code's in-process server (its shape is advertised unchanged through Zod m
    `"false"` becomes a boolean; a list or object sent as JSON text is read; one value where
    a list is wanted becomes a list of one; an option in the wrong case is the option when
    only one matches. Browser refs copied as `[ref=e12]`, `ref=e12` or `e12]` are unwrapped
-   (`unwrapRef`) and must still be a bare ref.
+   (`unwrapRef`) and must still be a bare ref. A tool may declare other names models
+   give a field (`aliases`: `description` for `prompt`), read when the field is missing
+   and exactly one was sent, and the model told; and `mend` a value it plainly means
+   (`"landscape"` as `16:9`) before the check.
 3. **Check** the tool's strict schema, as before. When it fails, the model reads each field,
    what was wanted, what it sent and the valid values, then a one-line signature:
 

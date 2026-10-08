@@ -477,6 +477,8 @@ export class TwilioSmsAdapter implements ChannelAdapter {
 
     return {
       send,
+      // No `files`: a picture by MMS must be at a public web address Twilio fetches
+      // (`MediaUrl`), and Conch never puts your files on the internet. The assistant is told so.
       // A text can't be changed once sent; the question just stops taking answers.
       edit: async (ref) => choices.forget(ref),
       typing: () => Promise.resolve(),

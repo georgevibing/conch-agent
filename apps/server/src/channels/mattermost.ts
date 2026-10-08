@@ -29,6 +29,7 @@ import {
   type ChannelFile,
   type ChannelProfile,
   type ChannelUser,
+  type OutboundFile,
   type SendOptions,
   type SentRef,
   pause,
@@ -40,6 +41,10 @@ type MattermostSecrets = Extract<ChannelSecrets, { kind: 'mattermost' }>;
 /** Mattermost's default post size is 16383 characters; keep well under. */
 const PART = 8000;
 const FILE_LIMIT = 25 * 1024 * 1024;
+/** The most one file Conch sends may be (Mattermost's own default allows 100 MB). */
+const UPLOAD_LIMIT = 50 * 1024 * 1024;
+/** Files one post carries. */
+const FILES_PER_POST = 5;
 /** A ping this often; two without an answer replace the socket. */
 const PING_MS = 30_000;
 
@@ -133,18 +138,23 @@ export class MattermostAdapter implements ChannelAdapter {
         'That doesn’t look like a bot’s access token. Copy it from the bot’s page (it’s shown once).',
         { field: 'token' },
       );
+    // A file goes as it is (multipart, its own boundary), anything else as JSON.
+    const form = body instanceof FormData ? body : undefined;
     let response: Response;
     try {
       response = await fetch(`${server}/api/v4${path}`, {
         method,
         headers: {
           authorization: `Bearer ${this.secrets.token}`,
-          ...(body !== undefined && { 'content-type': 'application/json' }),
+          ...(body !== undefined && !form && { 'content-type': 'application/json' }),
           'x-requested-with': 'XMLHttpRequest',
         },
-        ...(body !== undefined && { body: JSON.stringify(body) }),
+        ...(body !== undefined && { body: form ?? JSON.stringify(body) }),
         redirect: 'error',
-        signal: AbortSignal.any([AbortSignal.timeout(15_000), ...(signal ? [signal] : [])]),
+        signal: AbortSignal.any([
+          AbortSignal.timeout(form ? 120_000 : 15_000),
+          ...(signal ? [signal] : []),
+        ]),
       });
     } catch (error) {
       if (signal?.aborted) throw error;
@@ -172,6 +182,11 @@ export class MattermostAdapter implements ChannelAdapter {
       });
     if (response.status >= 500)
       throw new ChannelError('network', `Mattermost had a problem (${response.status}).`);
+    if (response.status === 413)
+      throw new ChannelError(
+        'refused',
+        'That file is bigger than this Mattermost server takes (System Console → File Storage → Maximum File Size).',
+      );
     if (response.status === 404 && path === '/users/me')
       throw new ChannelError(
         'setup',
@@ -314,11 +329,55 @@ export class MattermostAdapter implements ChannelAdapter {
       },
       download: (file) => this.#download(file),
       directChat: (userId) => this.#directChat(userId),
+      files: {
+        maxBytes: UPLOAD_LIMIT,
+        send: async (chatId, files, caption) => {
+          const refs: SentRef[] = [];
+          let words = caption;
+          // Too long to go with the files: the words first, on their own.
+          if (words && words.length > PART) {
+            refs.push(...(await send(chatId, words)));
+            words = undefined;
+          }
+          for (let i = 0; i < files.length; i += FILES_PER_POST) {
+            const ids = await this.#upload(chatId, files.slice(i, i + FILES_PER_POST));
+            const post = await this.#withRetry(() =>
+              this.call<MmPost>('POST', '/posts', {
+                channel_id: chatId,
+                message: words ?? '',
+                file_ids: ids,
+              }),
+            );
+            words = undefined;
+            refs.push({ chatId, messageId: post.id });
+          }
+          return refs;
+        },
+      },
       close: () => {
         stop.abort();
         socket?.close(1000);
       },
     };
+  }
+
+  /** Files uploaded to a channel (`POST /files`), ready for a post to carry: their ids. */
+  async #upload(chatId: string, files: OutboundFile[]): Promise<string[]> {
+    const form = new FormData();
+    form.set('channel_id', chatId);
+    for (const file of files)
+      form.append(
+        'files',
+        new Blob([new Uint8Array(file.bytes)], { type: file.mimeType }),
+        file.name,
+      );
+    const done = await this.#withRetry(() =>
+      this.call<{ file_infos?: { id: string }[] }>('POST', '/files', form),
+    );
+    const ids = (done.file_infos ?? []).map((f) => f.id);
+    if (ids.length !== files.length)
+      throw new ChannelError('refused', 'Mattermost didn’t take the files.');
+    return ids;
   }
 
   async #withRetry<T>(fn: () => Promise<T>): Promise<T> {

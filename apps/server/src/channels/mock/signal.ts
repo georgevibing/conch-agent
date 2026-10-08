@@ -9,6 +9,20 @@ import type { SignalProcess, SignalSpawn } from '../signal-cli';
 export interface MockSignalSent {
   method: string;
   params: Record<string, unknown>;
+  /** The files it carried (signal-cli's `data:` attachments), as Signal would show them. */
+  files?: { name: string; type: string; size: number }[];
+}
+
+/** `data:<type>;filename=<name>;base64,<bytes>`, as signal-cli takes an attachment. */
+function dataFile(uri: unknown) {
+  const match = /^data:([^;,]+);filename=([^;,]+);base64,(.*)$/s.exec(String(uri));
+  return match
+    ? {
+        name: match[2] ?? '',
+        type: match[1] ?? '',
+        size: Buffer.from(match[3] ?? '', 'base64').length,
+      }
+    : { name: '', type: '', size: 0 };
 }
 
 interface Fake {
@@ -172,7 +186,12 @@ export class MockSignal {
       case 'sendReaction': {
         if (!account || !this.#accounts.has(account))
           return fail(-1, '[401] Authorization failed!');
-        this.sent.push({ method: message.method, params });
+        const attached = Array.isArray(params.attachments) ? params.attachments : undefined;
+        this.sent.push({
+          method: message.method,
+          params,
+          ...(attached && { files: attached.map(dataFile) }),
+        });
         const timestamp = ++this.#clock;
         return ok(
           message.method === 'send' ? { timestamp, results: [{ type: 'SUCCESS' }] } : { timestamp },

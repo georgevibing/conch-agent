@@ -607,6 +607,8 @@ export class GoogleChatAdapter implements ChannelAdapter {
       },
       // Chat shows no typing for apps.
       typing: () => Promise.resolve(),
+      // No `files`: Chat's media upload works only with a person's own sign-in, never an app's
+      // service account, so the assistant is told Google Chat can't carry files from Conch.
       download: () =>
         Promise.reject(new ChannelError('refused', 'Conch can’t take files from Google Chat yet.')),
       directChat: (userId) => this.#directChat(userId),

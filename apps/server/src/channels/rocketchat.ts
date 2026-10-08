@@ -28,6 +28,7 @@ import {
   type ChannelEvents,
   type ChannelFile,
   type ChannelUser,
+  type OutboundFile,
   type SendOptions,
   type SentRef,
   pause,
@@ -39,6 +40,8 @@ type RocketSecrets = Extract<ChannelSecrets, { kind: 'rocketchat' }>;
 /** Rocket.Chat's default message limit is 5000 characters. */
 const PART = 4800;
 const FILE_LIMIT = 25 * 1024 * 1024;
+/** The most one file Conch sends may be (Rocket.Chat's own default allows 100 MB). */
+const UPLOAD_LIMIT = 100 * 1024 * 1024;
 /** Without a word from the server this long, the socket is replaced. */
 const SILENT_MS = 70_000;
 
@@ -110,6 +113,8 @@ export class RocketChatAdapter implements ChannelAdapter {
         'That doesn’t look like a personal access token. It’s shown once, when you make it.',
         { field: 'token' },
       );
+    // A file goes as it is (multipart, its own boundary), anything else as JSON.
+    const form = body instanceof FormData ? body : undefined;
     let response: Response;
     try {
       response = await fetch(`${server}/api/v1${path}`, {
@@ -117,11 +122,14 @@ export class RocketChatAdapter implements ChannelAdapter {
         headers: {
           'x-user-id': this.secrets.userId,
           'x-auth-token': this.secrets.token,
-          ...(body !== undefined && { 'content-type': 'application/json' }),
+          ...(body !== undefined && !form && { 'content-type': 'application/json' }),
         },
-        ...(body !== undefined && { body: JSON.stringify(body) }),
+        ...(body !== undefined && { body: form ?? JSON.stringify(body) }),
         redirect: 'error',
-        signal: AbortSignal.any([AbortSignal.timeout(15_000), ...(signal ? [signal] : [])]),
+        signal: AbortSignal.any([
+          AbortSignal.timeout(form ? 120_000 : 15_000),
+          ...(signal ? [signal] : []),
+        ]),
       });
     } catch (error) {
       if (signal?.aborted) throw error;
@@ -153,6 +161,11 @@ export class RocketChatAdapter implements ChannelAdapter {
       });
     if (response.status >= 500)
       throw new ChannelError('network', `Rocket.Chat had a problem (${response.status}).`);
+    if (response.status === 413 || /too-large|too large/i.test(said))
+      throw new ChannelError(
+        'refused',
+        'That file is bigger than this Rocket.Chat server takes (Administration → File Upload → Maximum File Upload Size).',
+      );
     if (response.status === 404 && path === '/me')
       throw new ChannelError(
         'setup',
@@ -271,6 +284,24 @@ export class RocketChatAdapter implements ChannelAdapter {
       },
       download: (file) => this.#download(file),
       directChat: (userId) => this.#directChat(userId),
+      files: {
+        maxBytes: UPLOAD_LIMIT,
+        send: async (chatId, files, caption) => {
+          const refs: SentRef[] = [];
+          let words = caption;
+          // Too long to go with a file: the words first, on their own.
+          if (words && words.length > PART) {
+            refs.push(...(await send(chatId, words)));
+            words = undefined;
+          }
+          // One file a message; the caption with the first.
+          for (const file of files) {
+            refs.push({ chatId, messageId: await this.#upload(chatId, file, words) });
+            words = undefined;
+          }
+          return refs;
+        },
+      },
       close: () => {
         stop.abort();
         socket?.close(1000);
@@ -471,6 +502,40 @@ export class RocketChatAdapter implements ChannelAdapter {
       mentioned,
       group: room.name ? `#${room.name}` : 'A Rocket.Chat room',
     });
+  }
+
+  /**
+   * One file into a room, as a message with `text` (Rocket.Chat 6.8+:
+   * `rooms.media`, then `rooms.mediaConfirm`); an older server, with `rooms.upload`.
+   */
+  async #upload(roomId: string, file: OutboundFile, text?: string): Promise<string> {
+    const room = encodeURIComponent(roomId);
+    const form = () => {
+      const data = new FormData();
+      data.set('file', new Blob([new Uint8Array(file.bytes)], { type: file.mimeType }), file.name);
+      return data;
+    };
+    let staged: { file?: { _id: string } };
+    try {
+      staged = await this.call<{ file?: { _id: string } }>('POST', `/rooms.media/${room}`, form());
+    } catch (error) {
+      if (!(error instanceof ChannelError) || !/\(404/.test(error.message)) throw error;
+      const data = form();
+      if (text) data.set('msg', text);
+      const sent = await this.call<{ message?: { _id: string } }>(
+        'POST',
+        `/rooms.upload/${room}`,
+        data,
+      );
+      return sent.message?._id ?? '';
+    }
+    if (!staged.file?._id) throw new ChannelError('refused', 'Rocket.Chat didn’t take the file.');
+    const sent = await this.call<{ message?: { _id: string } }>(
+      'POST',
+      `/rooms.mediaConfirm/${room}/${encodeURIComponent(staged.file._id)}`,
+      { msg: text ?? '' },
+    );
+    return sent.message?._id ?? '';
   }
 
   /** A file someone attached: only from this server, with the bot's token. */

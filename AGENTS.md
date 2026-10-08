@@ -686,6 +686,11 @@ coming, and each one follows the same shape:
    - Map every error to a plain `ChannelError`, turning the app's own error
      codes into the setting to change.
    - Never put a key in a message or a URL you log (`redact`).
+   - Pictures and files out (`connection.files`, `channels/outbound.ts`): a
+     picture as the app shows one (with the caption), anything else as a
+     file, `maxBytes` the app's own limit. They only ever come from the
+     chat's own attachments, by id; leave it out where the app can't, and
+     the assistant and the person are told so.
    - Private chats, unless it can tell a mention apart in a group (ADR 0075):
      then set `groups = true`, report `direct: false` with `mentioned` (an
      @mention or a reply to the bot), the group's name, the mention cut out of

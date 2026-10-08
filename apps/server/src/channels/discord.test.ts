@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../config';
 import { Services } from '../services';
+import { DiscordAdapter } from './discord';
 import { MockDiscord } from './mock/discord';
 
 let services: Services | undefined;
@@ -203,5 +204,81 @@ describe('Discord', () => {
       10_000,
     );
     expect((await s.channels.get(channel.id)).health.message).toMatch(/Developer Portal/);
+  });
+});
+
+describe('Discord — pictures and files Conch sends', () => {
+  const png = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+  const file = (name: string, mimeType: string, bytes: Buffer, image = false) => ({
+    id: `att_${name}`,
+    name,
+    mimeType,
+    bytes,
+    image,
+  });
+
+  async function connected() {
+    const discord = new MockDiscord();
+    await discord.start();
+    const adapter = new DiscordAdapter(MockDiscord.TOKEN, discord.api);
+    const connection = adapter.connect({
+      message: () => undefined,
+      press: () => undefined,
+      state: () => undefined,
+      healed: () => undefined,
+    });
+    return { discord, connection };
+  }
+
+  it('sends a picture and a document as attachments on one message, with the caption', async () => {
+    const { discord, connection } = await connected();
+    try {
+      expect(connection.files?.maxBytes).toBe(10 * 1024 * 1024);
+      await connection.files?.send(
+        'dm424242',
+        [
+          file('beach.png', 'image/png', png, true),
+          file('notes.pdf', 'application/pdf', Buffer.from('%PDF-1.4')),
+        ],
+        'Here’s **your** beach',
+      );
+      expect(discord.files).toEqual([
+        expect.objectContaining({
+          channel_id: 'dm424242',
+          name: 'beach.png',
+          type: 'image/png',
+          size: png.length,
+          content: 'Here’s **your** beach',
+        }),
+        expect.objectContaining({ name: 'notes.pdf', type: 'application/pdf', size: 8 }),
+      ]);
+      expect(new Set(discord.files.map((f) => f.message_id)).size).toBe(1);
+    } finally {
+      connection.close();
+      await discord.stop();
+    }
+  });
+
+  it('spreads files that don’t fit on one message over several, the caption on the first', async () => {
+    const { discord, connection } = await connected();
+    try {
+      const big = Buffer.alloc(6 * 1024 * 1024, 1);
+      await connection.files?.send(
+        'dm424242',
+        [
+          file('a.bin', 'application/octet-stream', big),
+          file('b.bin', 'application/octet-stream', big),
+        ],
+        'Two big ones',
+      );
+      expect(discord.files.map((f) => [f.name, f.content])).toEqual([
+        ['a.bin', 'Two big ones'],
+        ['b.bin', undefined],
+      ]);
+      expect(new Set(discord.files.map((f) => f.message_id)).size).toBe(2);
+    } finally {
+      connection.close();
+      await discord.stop();
+    }
   });
 });

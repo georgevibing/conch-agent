@@ -1,4 +1,4 @@
-import { readFile, realpath, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -38,6 +38,18 @@ const ACCESS_POLL_MS = 3_000;
 /** Apple's clock starts on 1 January 2001. */
 const APPLE_EPOCH_MS = 978_307_200_000;
 const FILE_LIMIT = 25 * 1024 * 1024;
+/** What Conch sends in one file (iMessage carries about 100 MB). */
+const FILE_SEND_LIMIT = 100 * 1024 * 1024;
+/**
+ * Messages copies a file it sends while it delivers it: the copy Conch hands
+ * it is kept this long, then removed.
+ */
+const OUTBOX_KEEP_MS = 10 * 60_000;
+/**
+ * Where files Conch sends wait for Messages: a folder of Conch's own in your
+ * Pictures, which Messages may read (it can't send from a system temp folder).
+ */
+const OUTBOX = join(homedir(), 'Pictures', 'Conch outbox');
 
 /** Messages' own ways of saying a chat is between two people or a group. */
 const STYLE_GROUP = 43;
@@ -223,6 +235,8 @@ export interface ImessageOptions {
   /** Files may only be read from here (Messages' own attachments folder). */
   attachments?: string;
   send?: MessagesRunner;
+  /** Where files wait for Messages to send them (tests: a folder of their own). */
+  outbox?: string;
   convert?: PhotoConverter;
   platform?: NodeJS.Platform;
   pollMs?: number;
@@ -318,6 +332,8 @@ export class ImessageAdapter implements ChannelAdapter {
     /** Your own texts to yourself can be stored twice (sent and received): each is read once. */
     const seen = new Map<string, { at: number; fromMe: number }>();
     const state = { selfChat: undefined as string | undefined, blocked: false };
+    /** Names of files Conch sent lately (Messages has no room for a mark in a file): never read back. */
+    const ownFiles = new Map<string, number>();
 
     void this.#poll(events, stop.signal, options.cursor, (row) => {
       const text = (row.text ?? attributedText(row.body) ?? '')
@@ -328,6 +344,13 @@ export class ImessageAdapter implements ChannelAdapter {
       if (row.assoc || row.itemType) return;
       // Conch's own words, read back from the database (or another Conch's): never yours.
       if (text.endsWith(CONCH_MARK)) return;
+      // A file Conch sent, read back (twice, to yourself): no words, only its own files.
+      if (!text && row.hasFiles && ownFiles.size) {
+        const now = Date.now();
+        for (const [name, until] of ownFiles) if (until < now) ownFiles.delete(name);
+        const names = this.#db.files(row.id).map((f) => f.name ?? '');
+        if (names.length && names.every((name) => ownFiles.has(name))) return;
+      }
       const self = this.options.mode === 'self';
       if (self) {
         if (row.style === STYLE_GROUP || normalHandle(row.chatHandle ?? '') !== this.#handle)
@@ -415,6 +438,36 @@ export class ImessageAdapter implements ChannelAdapter {
 
     return {
       send,
+      files: {
+        maxBytes: FILE_SEND_LIMIT,
+        send: async (chatId, files, caption) => {
+          const refs: SentRef[] = caption?.trim() ? await send(chatId, caption) : [];
+          const outbox = this.options.outbox ?? OUTBOX;
+          await mkdir(outbox, { recursive: true, mode: 0o700 });
+          for (const file of files) {
+            // A folder of its own, so the name Messages shows is the file's own.
+            const folder = await mkdtemp(join(outbox, 'f-'));
+            const name = file.name.replaceAll('\u0000', '').replace(/[/\\:]/g, '_') || 'file';
+            const path = join(folder, name);
+            await writeFile(path, file.bytes, { mode: 0o600 });
+            ownFiles.set(name, Date.now() + OUTBOX_KEEP_MS);
+            const later = setTimeout(
+              () => void rm(folder, { recursive: true, force: true }).catch(() => undefined),
+              OUTBOX_KEEP_MS,
+            );
+            later.unref?.();
+            try {
+              await this.#send(chatId, '', path);
+            } catch (error) {
+              clearTimeout(later);
+              await rm(folder, { recursive: true, force: true }).catch(() => undefined);
+              throw error;
+            }
+            refs.push({ chatId, messageId: `${Date.now()}-${refs.length}` });
+          }
+          return refs;
+        },
+      },
       // Messages can't change a text once sent: what was decided goes as a new one.
       edit: async (ref, markdown) => {
         choices.forget(ref);
@@ -503,19 +556,21 @@ export class ImessageAdapter implements ChannelAdapter {
     }
   }
 
-  async #send(chatId: string, text: string) {
+  /** Words, or the file at `file` (a path Conch wrote itself) instead. */
+  async #send(chatId: string, text: string, file?: string) {
     const runner = this.options.send ?? osascript;
     // An argument can't carry a NUL; nothing else needs changing (it's never part of the script).
     const words = text.replaceAll('\u0000', '');
     const target = chatId.startsWith('to:')
       ? (['to', chatId.slice(3)] as const)
       : (['chat', chatId] as const);
-    let result = await runner([words, target[1], target[0]]);
+    const extra = file ? [file] : [];
+    let result = await runner([words, target[1], target[0], ...extra]);
     if (result.code !== 0 && target[0] === 'chat') {
       // A chat Messages no longer has (deleted on the Mac): send to the person instead.
       const person = /;-;(.+)$/.exec(chatId)?.[1];
       if (person && sendError(result).code === 'refused')
-        result = await runner([words, person, 'to']);
+        result = await runner([words, person, 'to', ...extra]);
     }
     if (result.code !== 0) throw sendError(result);
   }

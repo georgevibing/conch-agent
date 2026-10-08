@@ -12,6 +12,7 @@ import {
   type ChannelFile,
   type ChannelProfile,
   type ChannelUser,
+  type OutboundFile,
   type SendOptions,
   type SentRef,
   capOf,
@@ -40,6 +41,10 @@ const FRESH = new Set([4007, 4009]);
 /** Discord resets a token after 1000 identifies a day; stay far below. */
 const IDENTIFY_BUDGET = 100;
 const FILE_LIMIT = 25 * 1024 * 1024;
+/** What a bot may upload to a server without boosts: 10 MB a file, and a message's files together. */
+const UPLOAD_LIMIT = 10 * 1024 * 1024;
+/** Files on one message. */
+const FILES_PER_MESSAGE = 10;
 const FILE_HOSTS = new Set(['cdn.discordapp.com', 'media.discordapp.net']);
 
 interface DiscordUser {
@@ -255,6 +260,10 @@ export class DiscordAdapter implements ChannelAdapter {
           );
         },
       },
+      files: {
+        maxBytes: UPLOAD_LIMIT,
+        send: (chatId, files, caption) => this.#sendFiles(chatId, files, caption),
+      },
       edit: async (ref, markdown, options) => {
         await this.#retry(() =>
           this.rest('PATCH', `/channels/${ref.chatId}/messages/${ref.messageId}`, {
@@ -297,6 +306,59 @@ export class DiscordAdapter implements ChannelAdapter {
         }),
       );
       sent.push({ chatId, messageId: message.id });
+    }
+    return sent;
+  }
+
+  /**
+   * Files as attachments on a message (pictures show in the chat), up to ten
+   * and 10 MB together on each; the caption is the first message's words, or
+   * a message of its own before them when it's too long for one.
+   */
+  async #sendFiles(chatId: string, files: OutboundFile[], caption?: string): Promise<SentRef[]> {
+    const sent: SentRef[] = [];
+    let words = caption ? toDiscordMarkdown(caption) : undefined;
+    if (words && words.length > PART && caption) {
+      sent.push(...(await this.#send(chatId, caption)));
+      words = undefined;
+    }
+    const batches: OutboundFile[][] = [];
+    for (const file of files) {
+      const batch = batches.at(-1);
+      const size = batch?.reduce((sum, f) => sum + f.bytes.length, 0) ?? 0;
+      if (batch && batch.length < FILES_PER_MESSAGE && size + file.bytes.length <= UPLOAD_LIMIT)
+        batch.push(file);
+      else batches.push([file]);
+    }
+    for (const batch of batches) {
+      const form = new FormData();
+      form.set(
+        'payload_json',
+        JSON.stringify({
+          ...(words && { content: words }),
+          attachments: batch.map((file, id) => ({ id, filename: file.name })),
+          allowed_mentions: { parse: [] },
+        }),
+      );
+      for (const [id, file] of batch.entries())
+        form.set(
+          `files[${id}]`,
+          new Blob([new Uint8Array(file.bytes)], { type: file.mimeType }),
+          file.name,
+        );
+      words = undefined;
+      try {
+        const message = await this.#retry(() =>
+          this.rest<{ id: string }>('POST', `/channels/${chatId}/messages`, form, {
+            timeoutMs: 120_000,
+          }),
+        );
+        sent.push({ chatId, messageId: message.id });
+      } catch (error) {
+        if (error instanceof ChannelError && /entity too large/i.test(error.message))
+          throw new ChannelError('refused', 'That file is too big for Discord (10 MB at most).');
+        throw error;
+      }
     }
     return sent;
   }

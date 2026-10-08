@@ -39,6 +39,45 @@ export interface VoiceNote {
   seconds: number;
 }
 
+/**
+ * A file Conch sends (a picture it made, a finished document): always one
+ * from Conch's own attachment store, already checked to belong to the chat,
+ * never a path the model named.
+ */
+export interface OutboundFile {
+  /** Its id in Conch's attachment store. */
+  id: string;
+  name: string;
+  mimeType: string;
+  bytes: Buffer;
+  /** A picture (PNG, JPEG, WebP, GIF): shown as one where the app can. */
+  image: boolean;
+  /** A picture's size, when known (Telegram won't show a very long one as a photo). */
+  width?: number;
+  height?: number;
+}
+
+/**
+ * Sending files, where the app has them. `maxBytes` is the most one file may
+ * be (the app's own limit); the service never hands over a bigger one, and
+ * says so instead. Pictures the app won't show as a photo (too big, an odd
+ * size) go as a file to download: the adapter decides, the person still gets it.
+ */
+export interface ChannelFiles {
+  maxBytes: number;
+  /**
+   * The kinds it takes, when not every kind (Teams: pictures only). Files it
+   * won't take are left out and named, so the rest still go.
+   */
+  accepts?(file: OutboundFile): boolean;
+  /**
+   * Send the files to a chat, with `caption` (Markdown) under the first (or
+   * as a message of its own where the app has no captions). Several pictures
+   * go together where the app groups them (Telegram's albums).
+   */
+  send(chatId: string, files: OutboundFile[], caption?: string): Promise<SentRef[]>;
+}
+
 /** Where a message Conch sent lives, so it can be changed later (a button pressed). */
 export interface SentRef {
   chatId: string;
@@ -175,6 +214,11 @@ export interface ChannelConnection {
    * format it plays, and sending one. Conch's own notes are never read back.
    */
   voiceNotes?: { format: NoteFormat; send(chatId: string, note: VoiceNote): Promise<void> };
+  /**
+   * Sending pictures and files (a picture Conch made, a finished document).
+   * An app without it can't carry files from Conch, and the assistant is told so.
+   */
+  files?: ChannelFiles;
   close(): void;
 }
 

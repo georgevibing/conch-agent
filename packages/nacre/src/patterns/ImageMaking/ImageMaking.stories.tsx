@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useEffect, useState } from 'react';
-import { expect, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 
 import { Button } from '../../components/Button';
 import { ImageMaking, type ImageMakingProps } from './ImageMaking';
@@ -47,7 +47,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'A picture being made, then the picture. While it’s made, the frame already has the picture’s shape, and slow pearl light wanders inside it: a turning film, soft shapes, a sheen that crosses now and then, fine grain. How far it got sits in a small pill (a ring that fills, the percent, about how long is left); when it can’t say, the ring just turns. A partial picture shows through, soft. When it’s ready it develops in place, sharpening out of the light as one glint crosses it, then rests as a quiet card: the picture, its name, Look closer, Download, Copy, Change it, and Details (what was asked for, the model, who made it). Not made is a calm line, never a tick. Reduced motion keeps the light still and the percent.',
+          'A picture being made, then the picture. While it’s made, the frame already has the picture’s shape. Inside, a mesh of pearl light moves: five soft shapes, each on its own loop and clock, a turning film, caustic veins and a slow hue drift, with a sheen that crosses now and then. Round the edge, two arcs of iridescent light chase each other, with a soft bloom outside the frame. Every layer is cut to the frame’s corners (`clip-path` where corners are round, the squircle overflow clip where they’re squircles), so nothing shows square on Safari. How far it got sits in a small pill (a ring that fills, the percent, about how long is left); when it can’t say, the ring just turns. A partial picture shows through, soft. When it’s ready it develops in place: a wave of light runs in from the edge while the picture sharpens out of the pearl (about a second). Then it rests as a quiet card: the picture, its name, and Look closer, Download, Copy, Change it and Details (the info button) in one row. Details opens a quiet panel under the card, on its edges: what was asked for, the model, who made it, the size, how long it took, the cost. Not made is a calm line, its glyph on the first line, never a tick. Only transform and opacity move; reduced motion keeps the light still, the edge lit and the percent.',
       },
     },
   },
@@ -127,7 +127,11 @@ export const EditingPortrait: S = {
   },
 };
 
-/** The moment it lands: made → ready, developing out of the light. Press Again to replay. */
+/**
+ * The moment it lands: made → ready. A wave of light runs in from the edge as the
+ * picture sharpens out of the pearl, and the edge light flares once and goes. Press
+ * Again to replay.
+ */
 export const Reveal: S = {
   render: (args) => {
     const [run, setRun] = useState(0);
@@ -185,19 +189,49 @@ export const Declined: S = { args: { state: 'declined' } };
 /** Stopped while it was being made. */
 export const Stopped: S = { args: { state: 'stopped' } };
 
-/** Reduced motion: the light holds still, the percent stays. */
+/** Reduced motion: the light holds still (a resting mesh, the edge lit), the percent stays. */
 export const ReducedMotion: S = {
   decorators: [(Story) => <div data-nacre-motion="reduced">{Story()}</div>],
   args: { state: 'making' },
 };
 
-/** On a phone (about 370 px wide): the caption truncates, the actions stay. */
+/** Details open: a quiet panel under the card, its edges on the card's. */
+export const DetailsOpen: S = {
+  args: { state: 'ready' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const button = canvas.getByRole('button', { name: 'Details' });
+    await userEvent.click(button);
+    await expect(button).toHaveAttribute('aria-expanded', 'true');
+    // It opens with a short reveal.
+    await waitFor(() => expect(canvas.getByText('Gemini 2.5 Flash Image')).toBeVisible());
+  },
+};
+
+/** A long reason: three lines on the line, the rest in Details. */
+export const FailedLong: S = {
+  decorators: [(Story) => <div style={{ inlineSize: 358 }}>{Story()}</div>],
+  args: {
+    state: 'failed',
+    reason:
+      'The image service said the request was refused by its safety system. Try describing the scene differently, leaving out real people’s names, then ask again. If it keeps happening, pick another model in Settings.',
+  },
+};
+
+/** On a phone (390 px wide, 16 px either side): the caption truncates, the actions stay. */
 export const Phone: S = {
-  decorators: [(Story) => <div style={{ inlineSize: 340 }}>{Story()}</div>],
+  decorators: [(Story) => <div style={{ inlineSize: 358 }}>{Story()}</div>],
   render: (args) => (
     <div style={{ display: 'grid', gap: 24 }}>
       <ImageMaking {...args} state="making" />
+      <ImageMaking {...args} state="making" preview={dunes} progress={0.71} secondsLeft={5} />
       <ImageMaking {...args} state="ready" title="A very long name for dunes at dusk, cinematic" />
+      <ImageMaking {...args} state="ready" aspect="9:16" title="Lighthouse, at night" src={tower} />
+      <ImageMaking
+        {...args}
+        state="failed"
+        reason="OpenRouter is out of credit. Add some in its settings, then ask again."
+      />
       <ImageMaking {...args} state="declined" />
     </div>
   ),

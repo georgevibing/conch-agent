@@ -17,6 +17,23 @@ export interface MockDiscordMessage {
   edited?: boolean;
 }
 
+/** A file the bot sent with a message (multipart `files[n]`). */
+export interface MockDiscordFile {
+  channel_id: string;
+  message_id: string;
+  name: string;
+  type: string;
+  size: number;
+  /** The message's words, on the message the file came with. */
+  content?: string;
+}
+
+/** A multipart body: `payload_json` read, and each file's name, type and size. */
+interface MultipartBody {
+  payload?: Record<string, unknown>;
+  files: { field: string; name: string; type: string; size: number }[];
+}
+
 interface Socket {
   send(data: string): void;
   close(code?: number): void;
@@ -50,6 +67,8 @@ export class MockDiscord {
     global_name: 'Conch',
   };
   readonly sent: MockDiscordMessage[] = [];
+  /** Files sent with messages (pictures, documents, voice notes). */
+  readonly files: MockDiscordFile[] = [];
   readonly calls: { method: string; path: string; body: unknown }[] = [];
   identifies = 0;
   /** The person has direct messages turned off for the server (Discord error 50007). */
@@ -69,6 +88,24 @@ export class MockDiscord {
     const app = Fastify({ logger: false, routerOptions: { ignoreTrailingSlash: true } });
     this.#app = app;
     await app.register(fastifyWebsocket);
+    // Messages with files come as multipart: their JSON in `payload_json`, the files beside it.
+    app.addContentTypeParser(
+      'multipart/form-data',
+      { parseAs: 'buffer', bodyLimit: 64 * 1024 * 1024 },
+      async (request: { headers: Record<string, unknown> }, body: Buffer) => {
+        const form = await new Response(new Uint8Array(body), {
+          headers: { 'content-type': String(request.headers['content-type'] ?? '') },
+        }).formData();
+        const out: MultipartBody = { files: [] };
+        for (const [field, value] of form) {
+          if (typeof value === 'string') {
+            if (field === 'payload_json')
+              out.payload = JSON.parse(value) as Record<string, unknown>;
+          } else out.files.push({ field, name: value.name, type: value.type, size: value.size });
+        }
+        return out;
+      },
+    );
     app.addHook('onRequest', async (request, reply) => {
       if (request.url.startsWith('/gateway') || request.url.startsWith('/__control')) return;
       const token = request.headers.authorization?.replace(/^Bot /, '');
@@ -108,18 +145,40 @@ export class MockDiscord {
         ? reply.code(403).send({ code: 50007, message: 'Cannot send messages to this user' })
         : { id: `dm${(request.body as { recipient_id: string }).recipient_id}`, type: 1 },
     );
-    app.post<{ Params: { id: string } }>('/api/v10/channels/:id/messages', (request) => {
-      const body = request.body as {
-        content: string;
+    app.post<{ Params: { id: string } }>('/api/v10/channels/:id/messages', (request, reply) => {
+      const multipart =
+        'files' in (request.body as object) ? (request.body as MultipartBody) : undefined;
+      const body = (multipart?.payload ?? request.body) as {
+        content?: string;
         components?: { components: MockDiscordMessage['buttons'] }[];
+        attachments?: { id: number; filename: string }[];
       };
+      if (multipart) {
+        // As Discord does: at most 10 files, 10 MB each, each named in `attachments`.
+        if (multipart.files.length > 10)
+          return reply.code(400).send({ code: 50045, message: 'Too many attachments' });
+        if (multipart.files.some((f) => f.size > 10 * 1024 * 1024))
+          return reply.code(413).send({ code: 40005, message: 'Request entity too large' });
+        const named = new Set((body.attachments ?? []).map((a) => `files[${a.id}]`));
+        if (multipart.files.some((f) => !named.has(f.field)))
+          return reply.code(400).send({ code: 50035, message: 'Invalid Form Body' });
+      }
       const message: MockDiscordMessage = {
         channel_id: request.params.id,
         id: String(this.#nextId++),
-        content: body.content,
+        content: body.content ?? '',
         buttons: body.components?.flatMap((row) => row.components) ?? [],
       };
       this.sent.push(message);
+      for (const file of multipart?.files ?? [])
+        this.files.push({
+          channel_id: message.channel_id,
+          message_id: message.id,
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          ...(body.content && { content: body.content }),
+        });
       return message;
     });
     app.patch<{ Params: { id: string; mid: string } }>(

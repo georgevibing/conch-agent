@@ -137,7 +137,19 @@ export function UpdateDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content size="md" className={styles.dialog} data-stage={stage}>
-        <div className={styles.hero}>
+        <div
+          className={styles.hero}
+          // Nothing below it (starting again): the words get room before the edge.
+          data-alone={
+            !(list?.length || (notes && (stage === 'ready' || stage === 'done'))) &&
+            !notice &&
+            !slow &&
+            !action &&
+            !footnote
+              ? ''
+              : undefined
+          }
+        >
           <PearlProgress
             state={PEARL[stage]}
             value={stage === 'updating' ? progress?.value : undefined}

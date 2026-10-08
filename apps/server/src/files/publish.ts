@@ -66,7 +66,8 @@ export function publishTools(
             name: attachment.name,
             bytes: attachment.size,
             path: (await store.get(attachment.id))?.path,
-            message: 'A preview and Download card is shown in the chat.',
+            message:
+              'A preview and Download card is shown in the chat. In a chat that came from a chat app it is sent there with your reply; to send it to one of their chat apps, use message_user with attachments: [id]. Never paste its path into a message.',
           }),
           view: { kind: 'downloads', items: [attachment] },
         };

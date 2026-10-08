@@ -132,6 +132,20 @@ export class AttachmentStore {
     return { attachment: parsed.data, path: safeJoin(this.folder(id), file) };
   }
 
+  /**
+   * One of this conversation's own files (sent in it, or made in it), with
+   * where it is; undefined for an unknown id or another chat's file, so a
+   * chat can never reach for someone else's.
+   */
+  async inConversation(
+    id: string,
+    conversationId: string,
+  ): Promise<{ attachment: Attachment; path: string } | undefined> {
+    const stored = await this.#read(id);
+    if (!stored?.conversations.includes(conversationId)) return undefined;
+    return this.get(id);
+  }
+
   /** Includes finished files made here, even if a turn stopped before its result was logged. */
   async forConversation(conversationId: string): Promise<Attachment[]> {
     const items: Attachment[] = [];

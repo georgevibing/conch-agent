@@ -62,6 +62,30 @@ export interface MockSentMail {
   references: string;
   replyTo: string;
   text: string;
+  /** Files attached (`inline` when shown in the email itself, by its Content-ID). */
+  files: { name: string; type: string; size: number; inline: boolean }[];
+}
+
+/** The attached files of a raw MIME message: each part with a file name, its bytes decoded. */
+function filesIn(raw: string): MockSentMail['files'] {
+  const files: MockSentMail['files'] = [];
+  for (const part of raw.split(/\r\n--[^\r\n]+\r\n/)) {
+    const split = part.indexOf('\r\n\r\n');
+    if (split < 0) continue;
+    const head = part.slice(0, split).replace(/\r\n[ \t]+/g, ' ');
+    const name = /filename="?([^";\r\n]+)"?/i.exec(head)?.[1];
+    if (!name) continue;
+    const body = part.slice(split + 4).split(/\r\n--/)[0] ?? '';
+    files.push({
+      name,
+      type: /Content-Type: ([^;\r\n]+)/i.exec(head)?.[1]?.trim() ?? '',
+      size: /Content-Transfer-Encoding: base64/i.test(head)
+        ? Buffer.from(body.replace(/\s+/g, ''), 'base64').length
+        : Buffer.byteLength(body),
+      inline: /Content-ID:/i.test(head),
+    });
+  }
+  return files;
 }
 
 /**
@@ -412,6 +436,7 @@ export class MockMail {
       references: header('References'),
       replyTo: header('Reply-To'),
       text: decodedText,
+      files: filesIn(raw),
     });
     // As Gmail does: kept in Sent, and mail to yourself also lands in the inbox.
     this.#store('[Gmail]/Sent Mail', Buffer.from(raw));

@@ -35,5 +35,6 @@ When it asks before doing something, the question ends with numbers: reply **1**
 - **WhatsApp's terms allow only its own apps.** Conch links the way WhatsApp Web does, through Baileys, an unofficial open-source client. WhatsApp can restrict a number it thinks is automated. That's rare for a number only you use; if you couldn't do without yours, link a spare number instead.
 - **Your phone keeps its notifications.** Conch never says it's online, so WhatsApp keeps telling your phone about new messages.
 - **No history.** Conch reads what arrives from the moment it's linked, never your past chats.
+- **Pictures and files come back too.** A picture your assistant makes, or a file it finishes, arrives in Message yourself: pictures as photos with their words under them (up to 16 MB), anything else as a document.
 - **Unlinked on the phone?** The channel says so and shows **Show the code** to link it again. Linking a different number there is refused: connect that one as a new channel.
 - **Disconnect** in Conch takes Conch off your Linked devices too.

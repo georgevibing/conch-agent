@@ -10,6 +10,7 @@ import {
   type ChannelEvents,
   type ChannelFile,
   type ChannelUser,
+  type OutboundFile,
   type SendOptions,
   type SentRef,
   dataUrl,
@@ -26,6 +27,8 @@ const SLACK_APP_ID = /^A[A-Z0-9]{6,20}$/;
 /** A section of mrkdwn holds 3000 characters; parts this long stay under it once formatted. */
 const PART = 2800;
 const FILE_LIMIT = 50 * 1024 * 1024;
+/** The most one file Conch sends may be (Slack takes up to 1 GB). */
+const UPLOAD_LIMIT = 1024 * 1024 * 1024;
 /** Open a fresh socket this often, so one that died quietly is replaced. */
 const RENEW_MS = 10 * 60_000;
 /** How long a part is as Slack counts it, whichever way it ends up written. */
@@ -313,6 +316,10 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
       },
       download: (file, options) => this.#download(file, options),
       directChat: (userId) => this.#directChat(userId),
+      files: {
+        maxBytes: UPLOAD_LIMIT,
+        send: (chatId, files, caption) => this.#sendFiles(chatId, files, caption),
+      },
       close: () => stop.abort(),
     };
   }
@@ -348,6 +355,72 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
       sent.push({ chatId, messageId: posted.ts ?? '' });
     }
     return sent;
+  }
+
+  /**
+   * Files the way Slack asks for them now: an upload address for each
+   * (`files.getUploadURLExternal`), the bytes sent there (no key: the address
+   * is the permission), then one `files.completeUploadExternal` that shares
+   * them all in the chat as one message, with the caption above them.
+   */
+  async #sendFiles(chatId: string, files: OutboundFile[], caption?: string): Promise<SentRef[]> {
+    try {
+      return await this.#uploadFiles(chatId, files, caption);
+    } catch (error) {
+      // An app made before Conch sent files lacks the permission to.
+      if (
+        error instanceof ChannelError &&
+        error.code === 'setup' &&
+        /permission/.test(error.message)
+      )
+        throw new ChannelError(
+          'setup',
+          'The Slack app can’t send files yet. In its settings, open OAuth & Permissions, add the files:write bot scope, and press Reinstall to Workspace.',
+        );
+      throw error;
+    }
+  }
+
+  async #uploadFiles(chatId: string, files: OutboundFile[], caption?: string): Promise<SentRef[]> {
+    const uploaded: { id: string; title: string }[] = [];
+    for (const file of files) {
+      const slot = await this.web<SlackResponse & { upload_url?: string; file_id?: string }>(
+        'files.getUploadURLExternal',
+        { filename: file.name, length: String(file.bytes.length) },
+      );
+      if (!slot.upload_url || !slot.file_id)
+        throw new ChannelError('refused', 'Slack didn’t give Conch a place to upload the file.');
+      let response: Response;
+      try {
+        response = await fetch(slot.upload_url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/octet-stream' },
+          body: new Uint8Array(file.bytes),
+          signal: AbortSignal.timeout(120_000),
+        });
+      } catch (error) {
+        throw new ChannelError(
+          'network',
+          redact(
+            `Couldn’t upload ${file.name} to Slack (${(error as Error).message}).`,
+            this.botToken,
+            this.appToken,
+          ),
+        );
+      }
+      if (!response.ok)
+        throw new ChannelError(
+          response.status >= 500 ? 'network' : 'refused',
+          `Slack didn’t take ${file.name} (${response.status}).`,
+        );
+      uploaded.push({ id: slot.file_id, title: file.name });
+    }
+    await this.web('files.completeUploadExternal', {
+      files: uploaded,
+      channel_id: chatId,
+      ...(caption && { initial_comment: toSlackMrkdwn(caption) }),
+    });
+    return uploaded.map((f) => ({ chatId, messageId: f.id }));
   }
 
   /** Post with Markdown blocks; if this workspace refuses them, with mrkdwn from then on. */

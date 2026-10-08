@@ -395,6 +395,8 @@ export class LineAdapter implements ChannelAdapter {
         if (!/^U[0-9a-f]{32}$/.test(chatId)) return;
         await this.call('POST', '/v2/bot/chat/loading/start', { chatId, loadingSeconds: 20 });
       },
+      // No `files`: LINE takes pictures and files only as public HTTPS addresses it fetches
+      // itself (no upload), and Conch never puts your files on the internet for anyone with a link.
       download: (file) => this.#download(file),
       directChat: (userId) => Promise.resolve(userId),
       close: () => {

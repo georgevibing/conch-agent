@@ -120,6 +120,8 @@ export function slackManifest(assistant: string) {
           'im:write',
           'users:read',
           'files:read',
+          // Pictures and files Conch made, sent in the chat.
+          'files:write',
           'reactions:write',
         ],
         user: [...SLACK_USER_SCOPES],

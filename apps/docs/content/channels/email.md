@@ -28,5 +28,6 @@ In Conch, open **Apps**, choose **Talk to me here**, then **Email**.
 - **Other people's mail is never read.** Mail to your `+conch` address from someone else is left alone, unless you turn on **An address just for Conch** on the channel's page: then they get one polite reply and show up in Conch for you to **Let in** or **Block**. Lists, auto-replies and bounces are never answered.
 - **A forward is someone else's words.** Forward an email to ask about it: your assistant reads it as it would a web page, and asks before acting on it.
 - **Threads are conversations.** Reply in a thread to carry on; a new email starts a fresh conversation. Approvals are a number: the question lists its answers, and you reply with one's number (or yes, or no).
+- **Pictures and files come attached.** A picture your assistant makes shows in the email itself, and is attached too; finished files are attached. More than about 18 MB of files goes in several emails, as mail services take about 25 MB each.
 - **App passwords need two-step sign-in.** Gmail asks for 2-Step Verification and iCloud for two-factor authentication before they make one. Fastmail's Basic plan has none.
 - **Changing your Apple Account password** takes back every iCloud app password: paste a new one in Conch.

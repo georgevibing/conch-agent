@@ -25,6 +25,8 @@ export { CONCH_MARK } from './linked';
 /** Signal shows up to 2,000 characters as a message; longer goes as a file, so parts stay under. */
 const PART = 1900;
 const FILE_LIMIT = 25 * 1024 * 1024;
+/** What Signal takes in one attachment Conch sends. */
+const FILE_SEND_LIMIT = 100 * 1024 * 1024;
 /** How often to ask whether the account is still linked, while it's quiet. */
 const CHECK_EVERY_MS = 10 * 60_000;
 
@@ -290,6 +292,34 @@ export class SignalAdapter implements ChannelAdapter {
 
     return {
       send,
+      // Pictures and files in one message, as Signal shows several together (100 MB each).
+      files: {
+        maxBytes: FILE_SEND_LIMIT,
+        send: async (chatId, files, caption) => {
+          const refs: SentRef[] = [];
+          let words = caption?.trim() ?? '';
+          // Too long to go with them: the words first, as messages of their own.
+          if (toSignal(words).text.length > PART) {
+            refs.push(...(await send(chatId, words)));
+            words = '';
+          }
+          const { text, styles } = toSignal(words);
+          const result = await this.#call<{ timestamp?: number }>('send', {
+            account,
+            ...target(chatId),
+            // Marked like every message Conch sends, so its echo is never read as you.
+            message: `${text}${CONCH_MARK}`,
+            ...(styles.length && { textStyle: styles }),
+            attachments: files.map(
+              (file) =>
+                `data:${file.mimeType};filename=${file.name.replace(/[;,]/g, '_')};base64,${file.bytes.toString('base64')}`,
+            ),
+          });
+          const id = String(result.timestamp ?? Date.now());
+          sent.add(id);
+          return [...refs, { chatId, messageId: id }];
+        },
+      },
       voiceNotes: {
         format: 'aac',
         send: async (chatId, note) => {

@@ -32,7 +32,7 @@ import type {
   LoginHandle,
   TurnInput,
 } from '../types';
-import { checkHostArgs, lenientShape, withNotes } from '../tools/args';
+import { checkHostArgs, lenientSchema, withNotes } from '../tools/args';
 import { detectClaude } from './detect';
 import { PROTECTED_MESSAGE, touchesProtected } from '../../lib/protect';
 import { childEnv } from './env';
@@ -531,7 +531,8 @@ export class ClaudeCodeEngine implements Engine {
           t.name,
           t.description,
           // Advertised exactly as declared, read forgivingly and checked by Conch (ADR 0072).
-          lenientShape(t.input),
+          // The SDK takes a whole object schema as well as a raw shape (`required` lives on it).
+          lenientSchema(t.input) as unknown as Parameters<typeof tool>[2],
           async (raw, extra) => {
             const checked = checkHostArgs(t, raw);
             if (!checked.ok)

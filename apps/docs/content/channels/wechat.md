@@ -32,4 +32,5 @@ A personal WeChat account has no official way to be a bot. Tools that log in as 
 - **Answers that take a while.** WeChat waits five seconds for an answer. Later ones go as customer-service messages (客服消息), which verified accounts and the test account may send within 48 hours of your last message. An account of your own that isn't verified can't: Conch keeps the answer and says "Still working on it". Send "?" to see it.
 - **WeChat needs the standard port.** If your phone's private address already uses it, use an address of your own for WeChat.
 - **Approvals** come as a card with buttons in WeCom, and as numbers to reply with in WeChat.
+- **Pictures from Conch** (a picture it made) arrive in an Official Account's chat: PNG, JPEG or GIF, up to 10 MB, within WeChat's 48 hours and from a verified or test account. Other files, and anything through a WeCom bot, can't go; your assistant says so, and they're in the chat in Conch.
 - **Messages are signed and encrypted** by WeChat. Conch checks every signature before it reads anything.

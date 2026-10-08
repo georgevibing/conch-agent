@@ -21,6 +21,8 @@ export interface MockWeChatSent {
   /** How it went: in the reply to a delivery (passive), or as a customer-service message. */
   via: 'reply' | 'custom' | 'wecom';
   card?: { task_id: string; buttons: { text: string; key: string }[] };
+  /** A picture sent as a customer-service image: the upload it named. */
+  image?: { name: string; type: string; size: number };
 }
 
 /**
@@ -44,6 +46,7 @@ export class MockWeChat {
   #sockets = new Set<Socket>();
   #config?: { url: string; token: string; aesKey?: string };
   #msgId = 6_000_000;
+  #uploads = new Map<string, { name: string; type: string; size: number }>();
   base = '';
   readonly sent: MockWeChatSent[] = [];
   readonly typing: string[] = [];
@@ -65,7 +68,7 @@ export class MockWeChat {
   static readonly USER = 'AdaLovelace';
 
   async start(port = 0): Promise<string> {
-    const app = Fastify({ logger: false, requestTimeout: 20_000 });
+    const app = Fastify({ logger: false, requestTimeout: 20_000, bodyLimit: 12 * 1024 * 1024 });
     this.#app = app;
     guardMockServer(app);
     await app.register(fastifyWebsocket);
@@ -81,9 +84,39 @@ export class MockWeChat {
     app.post('/cgi-bin/message/custom/send', (request) => {
       if (!authorised(request.query)) return { errcode: 40001, errmsg: 'invalid credential' };
       if (!this.verified) return { errcode: 48001, errmsg: 'api unauthorized' };
-      const body = request.body as { touser: string; text?: { content: string } };
+      const body = request.body as {
+        touser: string;
+        msgtype?: string;
+        text?: { content: string };
+        image?: { media_id: string };
+      };
+      if (body.msgtype === 'image') {
+        const media = this.#uploads.get(body.image?.media_id ?? '');
+        if (!media) return { errcode: 40007, errmsg: 'invalid media_id' };
+        this.sent.push({ to: body.touser, text: '', via: 'custom', image: media });
+        return { errcode: 0, errmsg: 'ok' };
+      }
       this.sent.push({ to: body.touser, text: body.text?.content ?? '', via: 'custom' });
       return { errcode: 0, errmsg: 'ok' };
+    });
+    // Temporary media (a picture the account sends): kept by id, as WeChat does for three days.
+    app.addContentTypeParser('multipart/form-data', { parseAs: 'buffer' }, (_request, body, done) =>
+      done(null, body),
+    );
+    app.post('/cgi-bin/media/upload', async (request) => {
+      const query = request.query as { access_token?: string; type?: string };
+      if (!authorised(query)) return { errcode: 40001, errmsg: 'invalid credential' };
+      const form = await new Response(new Uint8Array(request.body as Buffer), {
+        headers: { 'content-type': String(request.headers['content-type']) },
+      }).formData();
+      const media = form.get('media');
+      if (!media || typeof media === 'string')
+        return { errcode: 41005, errmsg: 'media data missing' };
+      if (query.type === 'image' && media.size > 10 * 1024 * 1024)
+        return { errcode: 40009, errmsg: 'invalid image size' };
+      const id = `media_${this.#uploads.size + 1}`;
+      this.#uploads.set(id, { name: media.name, type: media.type, size: media.size });
+      return { type: query.type, media_id: id, created_at: Math.floor(Date.now() / 1000) };
     });
     app.post('/cgi-bin/message/custom/typing', (request) => {
       if (!this.verified) return { errcode: 48001, errmsg: 'api unauthorized' };

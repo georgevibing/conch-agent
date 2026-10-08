@@ -7,13 +7,15 @@ import { WA_CLOSE } from '../whatsapp';
 import type { WaIdentity, WaSessionHandle } from '../whatsapp-sessions';
 
 export interface MockWaSent {
-  kind: 'text' | 'edit' | 'react' | 'presence' | 'read' | 'voice';
+  kind: 'text' | 'edit' | 'react' | 'presence' | 'read' | 'voice' | 'image' | 'document';
   chat: string;
   id?: string;
   text?: string;
   emoji?: string;
   /** A voice note's length, in seconds. */
   seconds?: number;
+  /** A picture or file: its name, type, size and caption. */
+  file?: { name: string; type: string; size: number; caption?: string };
 }
 
 interface MockState {
@@ -105,6 +107,36 @@ export class MockWhatsApp {
             1,
           );
         return Promise.resolve(id);
+      },
+      file: (chat, file, caption, options) => {
+        if (!live.open) return Promise.reject(new Error('Connection Closed'));
+        this.sent.push({
+          kind: file.image ? 'image' : 'document',
+          chat,
+          id: options.id,
+          file: {
+            name: file.name,
+            type: file.mimeType,
+            size: file.bytes.length,
+            ...(caption && { caption }),
+          },
+        });
+        // Echoed like anything this device sends: Conch must never read it back.
+        setTimeout(
+          () =>
+            this.#deliver({
+              id: options.id,
+              chat,
+              fromMe: true,
+              sender: chat,
+              at: Date.now(),
+              text: caption ?? '',
+              files: [{ name: file.name, ref: options.id, mimeType: file.mimeType }],
+              group: chat.endsWith('@g.us'),
+            }),
+          1,
+        );
+        return Promise.resolve(options.id);
       },
       voice: (chat, _audio, seconds, options) => {
         if (!live.open) return Promise.reject(new Error('Connection Closed'));

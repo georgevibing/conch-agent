@@ -26,5 +26,6 @@ Once Conch knows it's you, the app greets you by name.
 - **The key stays here.** Conch uses the service account's key to answer as the app, and sends it nowhere: only the short-lived tokens Google trades it for go to Google Chat.
 - **Approvals** come with numbered answers: reply with the number. Conch reads your reply back from Google Chat itself, so only you can answer.
 - **Files** you send in Google Chat aren't taken yet.
+- **Pictures and files from Conch** can't go to Google Chat: Google lets only a person, not an app, upload them. Your assistant says so, and they're in the chat in Conch.
 - **In a space**, add the app. When someone mentions it, the space shows on its page in Conch, off. Turn it on there, and it answers whoever mentions it: you as in private, everyone else in words only. See [In a group](index.md#in-a-group).
 - **A key that stops working** (deleted in Google Cloud) stops this channel only. Add a new key and paste it.

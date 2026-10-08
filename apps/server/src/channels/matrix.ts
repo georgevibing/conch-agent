@@ -1,4 +1,4 @@
-import { createDecipheriv, createHash, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 
 import type { ChannelBot, ChannelSecrets } from '@conch/protocol';
 
@@ -26,6 +26,7 @@ import {
   type ChannelEvents,
   type ChannelFile,
   type ChannelProfile,
+  type OutboundFile,
   type SendOptions,
   type SentRef,
   appId,
@@ -462,9 +463,53 @@ export class MatrixAdapter implements ChannelAdapter {
       typing: (chatId) => session.typing(chatId),
       seen: (ref, working) => session.seen(ref, working),
       download: (file, options) => session.download(file, options),
+      files: {
+        maxBytes: FILE_LIMIT,
+        send: (chatId, files, caption) => session.sendFiles(chatId, files, caption),
+      },
       directChat: (userId) => session.directChat(appId(userId)),
       close: () => session.close(),
     };
+  }
+
+  /** Put bytes in the homeserver's media store; its `mxc://` address back. */
+  async upload(bytes: Buffer, type: string, name: string): Promise<string> {
+    const base = await this.#api();
+    let response: Response;
+    try {
+      response = await fetch(
+        `${base}/_matrix/media/v3/upload?filename=${encodeURIComponent(name)}`,
+        {
+          method: 'POST',
+          headers: { authorization: `Bearer ${this.secrets.accessToken}`, 'content-type': type },
+          body: new Uint8Array(bytes),
+          signal: AbortSignal.timeout(120_000),
+        },
+      );
+    } catch (error) {
+      throw new ChannelError(
+        'network',
+        redact(
+          `Couldn’t reach the homeserver (${(error as Error).message}).`,
+          this.secrets.accessToken,
+        ),
+      );
+    }
+    if (response.status === 413)
+      throw new ChannelError('refused', 'That file is bigger than this homeserver takes.');
+    if (response.status === 429)
+      throw new ChannelError('rate-limit', 'The homeserver asked Conch to slow down.');
+    if (response.status === 401)
+      throw new ChannelError('auth', 'The homeserver ended this session.');
+    if (!response.ok)
+      throw new ChannelError(
+        'refused',
+        `The homeserver didn’t take the file (${response.status}).`,
+      );
+    const uri = ((await response.json().catch(() => ({}))) as { content_uri?: string }).content_uri;
+    if (!uri || !mxcParts(uri))
+      throw new ChannelError('refused', 'The homeserver didn’t say where it kept the file.');
+    return uri;
   }
 
   /** The homeserver's media, with the session's token, only from the homeserver itself. */
@@ -1107,6 +1152,45 @@ class MatrixSession {
     return sent;
   }
 
+  /**
+   * Pictures as `m.image` (with their size, so clients lay them out), the
+   * rest as `m.file`; the caption first, as its own message. In an encrypted
+   * room the file is encrypted before it's uploaded (Matrix spec § Sending
+   * encrypted attachments), so the homeserver never holds it in the clear.
+   */
+  async sendFiles(chatId: string, files: OutboundFile[], caption?: string): Promise<SentRef[]> {
+    const room = await this.#room(chatId);
+    if (room.encrypted && !this.#olm)
+      throw new ChannelError(
+        'refused',
+        'This Matrix room is encrypted, and encryption isn’t running on this computer, so Conch can’t send files there. Press Repair on Matrix in Conch.',
+      );
+    const sent: SentRef[] = caption ? await this.send(chatId, caption) : [];
+    for (const file of files) {
+      const info = {
+        mimetype: file.mimeType,
+        size: file.bytes.length,
+        ...(file.image && file.width && { w: file.width }),
+        ...(file.image && file.height && { h: file.height }),
+      };
+      let where: Record<string, unknown>;
+      if (room.encrypted) {
+        const { bytes, file: encrypted } = encryptAttachment(file.bytes);
+        const url = await this.adapter.upload(bytes, 'application/octet-stream', file.name);
+        where = { file: { ...encrypted, url } };
+      } else where = { url: await this.adapter.upload(file.bytes, file.mimeType, file.name) };
+      const id = await this.#post(chatId, {
+        msgtype: file.image ? 'm.image' : 'm.file',
+        body: file.name,
+        filename: file.name,
+        info,
+        ...where,
+      });
+      sent.push({ chatId, messageId: id });
+    }
+    return sent;
+  }
+
   /** Change a message (Matrix edits): its question, if it was one, is answered now. */
   async edit(ref: SentRef, markdown: string) {
     this.#questions.delete(ref.messageId);
@@ -1230,6 +1314,33 @@ export function decryptAttachment(bytes: Buffer, file: EncryptedFile): Buffer {
     throw new ChannelError('refused', 'That file’s encryption isn’t one Conch can read.');
   const decipher = createDecipheriv('aes-256-ctr', key, iv);
   return Buffer.concat([decipher.update(bytes), decipher.final()]);
+}
+
+/** Encrypt a file to send in an encrypted room: AES-256-CTR, a fresh key, its hash (spec v2). */
+export function encryptAttachment(plain: Buffer): {
+  bytes: Buffer;
+  file: Omit<EncryptedFile, 'url'> & { key: Record<string, unknown> };
+} {
+  const key = randomBytes(32);
+  // The counter's low 64 bits start at zero, as the spec asks.
+  const iv = Buffer.concat([randomBytes(8), Buffer.alloc(8)]);
+  const cipher = createCipheriv('aes-256-ctr', key, iv);
+  const bytes = Buffer.concat([cipher.update(plain), cipher.final()]);
+  return {
+    bytes,
+    file: {
+      key: {
+        kty: 'oct',
+        key_ops: ['encrypt', 'decrypt'],
+        alg: 'A256CTR',
+        k: key.toString('base64url'),
+        ext: true,
+      } as EncryptedFile['key'] & Record<string, unknown>,
+      iv: iv.toString('base64').replace(/=+$/, ''),
+      hashes: { sha256: createHash('sha256').update(bytes).digest('base64').replace(/=+$/, '') },
+      v: 'v2',
+    },
+  };
 }
 
 function mxcParts(mxc: string | undefined): { server: string; id: string } | undefined {

@@ -21,6 +21,7 @@ import {
   ChannelError,
   type ChannelEvents,
   type ChannelFile,
+  type OutboundFile,
   type SendOptions,
   type SentRef,
   appId,
@@ -38,6 +39,14 @@ export const MICROSOFT_LOGIN = 'https://login.microsoftonline.com';
 /** Teams takes messages up to 100 KB; parts this long stay far below it as HTML. */
 const PART = 12_000;
 const FILE_LIMIT = 50 * 1024 * 1024;
+/**
+ * A picture a bot puts in a personal chat goes inside the message itself
+ * (a data: address), which Teams takes up to 1 MB, in PNG, JPEG or GIF. Any
+ * other file needs the person to accept it into their OneDrive first (a
+ * consent card), which Conch doesn't do: those are refused, honestly.
+ */
+const PICTURE_LIMIT = 1024 * 1024;
+const PICTURE_TYPES = /^image\/(?:png|jpeg|gif)$/;
 
 /** One key set for every Teams channel: they're Microsoft's, not the bot's. */
 const sharedKeys = new Map<string, BotFrameworkKeys>();
@@ -308,6 +317,11 @@ export class TeamsAdapter implements ChannelAdapter {
       send: (chatId, markdown, options) => this.#send(chatId, markdown, options),
       edit: (ref, markdown) => this.#edit(ref, markdown),
       typing: (chatId) => this.#activity(chatId, { type: 'typing' }).then(() => undefined),
+      files: {
+        maxBytes: PICTURE_LIMIT,
+        accepts: (file) => file.image && PICTURE_TYPES.test(file.mimeType),
+        send: (chatId, files, caption) => this.#sendPictures(chatId, files, caption),
+      },
       download: (file, options) => this.#download(file, options),
       directChat: (userId) => this.#directChat(appId(userId)),
       close: () => {
@@ -518,6 +532,30 @@ export class TeamsAdapter implements ChannelAdapter {
       sent.push({ chatId, messageId: posted.id ?? '' });
     }
     return sent;
+  }
+
+  /** Pictures in one message, the caption above them; nothing goes if any file isn't a picture Teams shows. */
+  async #sendPictures(chatId: string, files: OutboundFile[], caption?: string): Promise<SentRef[]> {
+    const other = files.filter((f) => !f.image || !PICTURE_TYPES.test(f.mimeType));
+    if (other.length)
+      throw new ChannelError(
+        'refused',
+        `Teams only takes pictures from Conch (PNG, JPEG or GIF, up to 1 MB), so ${other.map((f) => f.name).join(', ')} can’t go there. Nothing was sent.`,
+      );
+    const text = caption ? (fit(caption, PART, (p) => toChatHtml(p).length)[0] ?? '') : '';
+    const posted = await this.#withRetry(() =>
+      this.#activity(chatId, {
+        type: 'message',
+        textFormat: 'xml',
+        text: text ? toChatHtml(text) : '',
+        attachments: files.map((file) => ({
+          contentType: file.mimeType,
+          contentUrl: `data:${file.mimeType};base64,${file.bytes.toString('base64')}`,
+          name: file.name,
+        })),
+      }),
+    );
+    return [{ chatId, messageId: posted.id ?? '' }];
   }
 
   async #edit(ref: SentRef, markdown: string) {

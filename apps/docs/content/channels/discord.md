@@ -26,4 +26,5 @@ Once Conch knows it's you, the bot greets you by name.
 - **Nothing to switch on.** The bot needs no special settings in the portal: Conch handles them.
 - **Conch's commands are in Discord's `/` menu.** Type `/` in your chat with the bot to pick `/model`, `/clear`, `/goal`, `/plan` and the rest, with a box for what goes after it. Discord shows what you chose to you alone, and the answer arrives as usual. See [Slash commands](../reference/slash-commands.md#in-chat-apps).
 - **While it works** you see Discord's "typing…".
+- **Pictures and files.** A picture Conch makes, or a file it finishes, arrives as an attachment, with its words on the message: up to ten on a message, and 10 MB a file (what Discord lets bots send to a server without boosts).
 - **Private messages, and server channels you turn on.** A server channel where someone mentions the bot shows on its page in Conch, off. Turn it on there, and it answers whoever mentions it: you as in private, everyone else in words only. See [In a group](index.md#in-a-group).

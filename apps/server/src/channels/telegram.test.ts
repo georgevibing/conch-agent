@@ -94,6 +94,121 @@ describe('TelegramAdapter', () => {
   });
 });
 
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64',
+);
+const picture = (name = 'beach.png', bytes: Buffer = PNG) => ({
+  id: `att_${name.replace(/\W/g, '')}`,
+  name,
+  mimeType: 'image/png',
+  bytes,
+  image: true,
+  width: 1024,
+  height: 768,
+});
+
+describe('TelegramAdapter — pictures and files', () => {
+  it('sends a picture as a photo with its caption, formatted', async () => {
+    const connection = adapter.connect(quiet);
+    const refs = await connection.files?.send('4242', [picture()], 'Your **beach**');
+    expect(refs).toHaveLength(1);
+    expect(telegram.uploads).toEqual([
+      expect.objectContaining({
+        method: 'sendPhoto',
+        chat_id: '4242',
+        kind: 'photo',
+        name: 'beach.png',
+        type: 'image/png',
+        size: PNG.length,
+        caption: 'Your <b>beach</b>',
+        parse_mode: 'HTML',
+      }),
+    ]);
+    // No text message besides: the caption is the message.
+    expect(telegram.sent).toEqual([]);
+    connection.close();
+  });
+
+  it('sends anything else as a document', async () => {
+    const connection = adapter.connect(quiet);
+    await connection.files?.send(
+      '4242',
+      [
+        {
+          id: 'att_r',
+          name: 'report.pdf',
+          mimeType: 'application/pdf',
+          bytes: Buffer.from('%PDF-1.4'),
+          image: false,
+        },
+      ],
+      'The report',
+    );
+    expect(telegram.uploads).toEqual([
+      expect.objectContaining({
+        method: 'sendDocument',
+        kind: 'document',
+        name: 'report.pdf',
+        caption: 'The report',
+      }),
+    ]);
+    connection.close();
+  });
+
+  it('puts several pictures in one album, the caption on the first', async () => {
+    const connection = adapter.connect(quiet);
+    const refs = await connection.files?.send('4242', [picture('a.png'), picture('b.png')], 'Two');
+    expect(refs).toHaveLength(2);
+    expect(telegram.uploads.map((u) => [u.method, u.name, u.caption])).toEqual([
+      ['sendMediaGroup', 'a.png', 'Two'],
+      ['sendMediaGroup', 'b.png', undefined],
+    ]);
+    connection.close();
+  });
+
+  it('sends pictures and documents apart (Telegram won’t mix them in an album)', async () => {
+    const connection = adapter.connect(quiet);
+    await connection.files?.send('4242', [
+      picture(),
+      {
+        id: 'att_n',
+        name: 'notes.txt',
+        mimeType: 'text/plain',
+        bytes: Buffer.from('hi'),
+        image: false,
+      },
+    ]);
+    expect(telegram.uploads.map((u) => u.method)).toEqual(['sendPhoto', 'sendDocument']);
+    connection.close();
+  });
+
+  it('sends a picture over 10 MB, or one too long to be a photo, as a document', async () => {
+    const connection = adapter.connect(quiet);
+    await connection.files?.send('4242', [picture('big.png', Buffer.alloc(11 * 1024 * 1024, 1))]);
+    await connection.files?.send('4242', [{ ...picture('strip.png'), width: 9000, height: 200 }]);
+    expect(telegram.uploads.map((u) => [u.method, u.name])).toEqual([
+      ['sendDocument', 'big.png'],
+      ['sendDocument', 'strip.png'],
+    ]);
+    expect(connection.files?.maxBytes).toBe(50 * 1024 * 1024);
+    connection.close();
+  });
+
+  it('sends the caption plain when Telegram can’t read the formatting, and a long one first on its own', async () => {
+    const connection = adapter.connect(quiet);
+    telegram.refuseHtml = true;
+    await connection.files?.send('4242', [picture()], '**Hi**');
+    expect(telegram.uploads.at(-1)).toMatchObject({ caption: 'Hi' });
+    expect(telegram.uploads.at(-1)?.parse_mode).toBeUndefined();
+    telegram.refuseHtml = false;
+    await connection.files?.send('4242', [picture()], 'word '.repeat(300));
+    expect(telegram.sent.at(-1)?.text).toMatch(/^word word/);
+    expect(telegram.uploads.at(-1)?.caption).toBeUndefined();
+    connection.close();
+  });
+});
+
 describe('the pretend apps', () => {
   it('start on any free port when the one asked for is taken', async () => {
     const { createServer } = await import('node:net');

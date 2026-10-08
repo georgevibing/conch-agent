@@ -25,6 +25,7 @@ Type `/` and Telegram's own menu lists Conch's commands. `/model` shows your mod
 ## Good to know
 
 - **Answers arrive as they're written.** Telegram shows the reply as a draft while your assistant works, with its own Stop button.
+- **Pictures and files.** A picture your assistant makes arrives as a photo with a caption, several as an album; other files arrive as documents. A picture over Telegram's 10 MB for photos comes as a document instead, whole; files go up to 50 MB.
 - **One program per bot.** Telegram lets only one program read a bot's messages. If another has yours, Conch says so, waits, and retries every minute.
 - **A leftover webhook** from another tool is removed for you.
 - **In a group**, add the bot like any member. It shows on its page in Conch, off; turn it on there, and it answers when someone writes `@yourbot` or replies to it. See [In a group](index.md#in-a-group).

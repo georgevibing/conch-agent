@@ -1,3 +1,6 @@
+import { createSdkMcpServer, tool as sdkTool } from '@anthropic-ai/claude-agent-sdk';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
@@ -6,6 +9,7 @@ import type { HostTool } from '../types';
 import {
   checkBridgedArgs,
   checkHostArgs,
+  lenientSchema,
   lenientShape,
   normaliseArgs,
   readArgs,
@@ -319,5 +323,95 @@ describe('Claude Code’s in-process tools', () => {
     const node: z.ZodType = z.lazy(() => z.object({ child: node.optional() }));
     const shape = { tree: node };
     expect(lenientShape(shape).tree).toBe(node);
+  });
+});
+
+describe('a field sent under another name', () => {
+  const draw: Pick<HostTool, 'name' | 'input' | 'aliases' | 'mend'> = {
+    name: 'draw',
+    input: { prompt: z.string().min(1), title: z.string().optional() },
+    aliases: { prompt: ['description', 'text'], title: ['name'] },
+  };
+
+  it('is read as the field, and the model told the right name', () => {
+    const checked = ok(checkHostArgs(draw, { description: 'A beach' }));
+    expect(checked.args).toEqual({ prompt: 'A beach' });
+    expect(checked.notes.join(' ')).toContain('description as prompt');
+  });
+
+  it('never replaces the field itself, nor guesses between two other names', () => {
+    const both = ok(checkHostArgs(draw, { prompt: 'A beach', description: 'A lake' }));
+    expect(both.args).toEqual({ prompt: 'A beach' });
+    expect(both.notes.join(' ')).toContain('Ignored a field');
+    const two = checkHostArgs(draw, { description: 'A beach', text: 'A lake' });
+    expect(two.ok).toBe(false);
+  });
+
+  it('is read inside the envelopes and JSON text models send', () => {
+    expect(ok(checkHostArgs(draw, '{"arguments": {"text": "A beach"}}')).args).toEqual({
+      prompt: 'A beach',
+    });
+    expect(ok(checkHostArgs(draw, '"{\\"description\\": \\"A beach\\"}"')).args).toEqual({
+      prompt: 'A beach',
+    });
+  });
+
+  it('lets the tool mend a value, and still checks it strictly after', () => {
+    const shaped = {
+      ...draw,
+      input: { prompt: z.string(), shape: z.enum(['1:1', '16:9']).optional() },
+      mend: (args: Record<string, unknown>) =>
+        args['shape'] === 'wide' ? { ...args, shape: '16:9' } : args,
+    };
+    expect(ok(checkHostArgs(shaped, { prompt: 'x', shape: 'wide' })).args.shape).toBe('16:9');
+    expect(checkHostArgs(shaped, { prompt: 'x', shape: 'round' }).ok).toBe(false);
+  });
+});
+
+describe('Claude Code’s in-process server, as the model sees it', () => {
+  /** The tool as Claude Code's own SDK lists it and hands it the arguments. */
+  async function served(shape: z.ZodRawShape) {
+    const seen: unknown[] = [];
+    const server = createSdkMcpServer({
+      name: 'conch',
+      version: '1.0.0',
+      tools: [
+        sdkTool(
+          'image_generate',
+          'Make a picture.',
+          lenientSchema(shape) as unknown as Parameters<typeof sdkTool>[2],
+          async (raw) => {
+            seen.push(raw);
+            return { content: [{ type: 'text' as const, text: 'ok' }] };
+          },
+        ),
+      ],
+    });
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    await server.instance.connect(serverSide);
+    const client = new Client({ name: 'test', version: '1.0.0' });
+    await client.connect(clientSide);
+    return { client, seen };
+  }
+
+  const shape = {
+    prompt: z.string().trim().min(1).describe('What to draw'),
+    name: z.string().default('Generated image'),
+    aspect_ratio: z.enum(['1:1', '16:9']).optional(),
+  };
+
+  it('says which fields are required (the SDK’s own Zod used to drop them all)', async () => {
+    const { client } = await served(shape);
+    const { tools } = await client.listTools();
+    const schema = tools[0]?.inputSchema;
+    expect(schema?.required).toEqual(['prompt']);
+    expect(schema?.properties).toEqual(toJsonSchema(shape)['properties']);
+  });
+
+  it('hands Conch every call as sent, a missing field and another name included', async () => {
+    const { client, seen } = await served(shape);
+    for (const args of [{}, { description: 'A beach' }, { prompt: 3, aspect_ratio: 'wide' }])
+      await client.callTool({ name: 'image_generate', arguments: args });
+    expect(seen).toEqual([{}, { description: 'A beach' }, { prompt: 3, aspect_ratio: 'wide' }]);
   });
 });

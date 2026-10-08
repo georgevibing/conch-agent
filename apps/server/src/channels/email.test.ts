@@ -303,6 +303,34 @@ describe('Email — answering', () => {
   });
 });
 
+describe('Email — pictures and files', () => {
+  it('attaches a picture (shown in the email) and a file, with the caption as the words', async () => {
+    const { m, connection } = await connect();
+    const chat = await connection.directChat(
+      `m${Buffer.from('ada@gmail.com').toString('base64url')}`,
+    );
+    const png = Buffer.from('89504e470d0a1a0a0000', 'hex');
+    const pdf = Buffer.from('%PDF-1.4 notes');
+    await connection.files?.send(
+      chat,
+      [
+        { id: 'att_1', name: 'beach.png', mimeType: 'image/png', bytes: png, image: true },
+        { id: 'att_2', name: 'notes.pdf', mimeType: 'application/pdf', bytes: pdf, image: false },
+      ],
+      'Your **beach**',
+    );
+    const last = m.last();
+    expect(last).toMatchObject({ subject: 'Your beach' });
+    expect(last?.text).toMatch(/Your beach/);
+    // Quoted-printable, as nodemailer writes HTML.
+    expect(last?.raw.replace(/=\r\n/g, '').replace(/=3D/g, '=')).toMatch(/<img src="cid:conch-0@/);
+    expect(last?.files).toEqual([
+      { name: 'beach.png', type: 'image/png', size: png.length, inline: true },
+      { name: 'notes.pdf', type: 'application/pdf', size: pdf.length, inline: false },
+    ]);
+  });
+});
+
 describe('Email — healing', () => {
   it('reconnects after a drop, and stops for a new app password when it’s revoked', async () => {
     const { m, got, states } = await connect();

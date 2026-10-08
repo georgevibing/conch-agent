@@ -28,4 +28,5 @@ If a session of yours isn't verified, the assistant says so in the chat and does
 - **Approvals come with reactions.** Tap ✅ to allow, ♾️ for always in this chat, or ❌ not to. Replying with the number works too.
 - **An access token instead?** Use one made for Conch only. One of Element's own would break Element's encryption, and Conch refuses it.
 - **Groups are declined**, with a note saying why.
+- **Pictures and files from Conch** (a picture it made, a file it finished) arrive in the chat, up to 50 MB each. In an encrypted chat they're encrypted before they leave your computer.
 - **Messages sent while Conch was off** are answered when it's back, for a day.

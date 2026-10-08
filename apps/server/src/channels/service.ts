@@ -95,6 +95,7 @@ import {
   type WaitingNote,
 } from './voice-notes';
 import { normalizeWeChat } from './wechat';
+import { type Delivered, deliver, filesOf, MAKES_FILES, mayCarry } from './outbound';
 import { ChannelSettingsMenu, modeLabel, type SettingsContext } from './settings';
 import { ChatActions, helpWords, onlyInConch, slashIn, unknownWords } from './commands';
 
@@ -201,6 +202,10 @@ interface Relay {
   toldQueued?: boolean;
   /** Sends go one after another, in order. */
   chain: Promise<unknown>;
+  /** Tools started this turn that may finish with a picture or file to send along. */
+  making?: Map<string, { name: string; input: unknown }>;
+  /** Said already this turn that the app can't carry files. */
+  toldNoFiles?: boolean;
 }
 
 /** A question asked in a chat with buttons, until it's answered. */
@@ -314,6 +319,8 @@ export class ChannelService {
   #notified = new Map<string, string>();
   /** The chat apps each conversation wrote to you on itself, so a routine's result isn't said twice. */
   #messaged = new Map<string, Set<string>>();
+  /** Pictures and files already sent for each conversation (`channel:chat:attachment`), never twice. */
+  #sentFiles = new Map<string, Set<string>>();
   #started = false;
   /** The Slack app id behind each Slack channel, once asked ('' when Slack wouldn't say). */
   #slackApps = new Map<string, string>();
@@ -2954,6 +2961,59 @@ export class ChannelService {
     draft.timer.unref?.();
   }
 
+  /**
+   * A picture or file the turn made goes back with the answer, the way the
+   * person would see it in Conch (Telegram: a photo). A picture made from
+   * words goes to whoever the answer goes to; one made from a file here (an
+   * edit) and a published file only to you, the owner: someone else's chat
+   * never carries out a file of yours.
+   */
+  async #sendMade(
+    relay: Relay,
+    conversationId: string,
+    made: { name: string; input: unknown },
+    ids: string[],
+  ) {
+    const live = this.#live.get(relay.channelId);
+    const stored = await this.deps.store.get(relay.channelId);
+    if (!live || !stored) return;
+    const fromOwner = relay.seat.group
+      ? relay.seat.group.owner
+      : stored.people[0]?.id === relay.seat.userId;
+    if (!mayCarry(made, fromOwner)) return;
+    const sent = this.#sentFiles.get(conversationId);
+    const fresh = ids.filter((id) => !sent?.has(`${relay.channelId}:${relay.chatId}:${id}`));
+    if (!fresh.length) return;
+    const files = await filesOf(this.deps.attachments, fresh, conversationId);
+    const app = CHANNEL_NAMES[stored.kind];
+    if (!live.connection.files) {
+      if (relay.toldNoFiles) return;
+      relay.toldNoFiles = true;
+      await live.connection.send(
+        relay.chatId,
+        `🖼️ ${files.length === 1 ? 'There’s a file' : 'There are files'} for you in Conch: ${app} can’t carry ${files.length === 1 ? 'it' : 'them'} from Conch. Open Conch to see ${files.length === 1 ? 'it' : 'them'}.`,
+      );
+      return;
+    }
+    let done: Delivered;
+    try {
+      done = await deliver(live.connection, app, relay.chatId, files);
+    } catch (error) {
+      this.#log(`send files: ${explain(error)}`);
+      await live.connection.send(
+        relay.chatId,
+        `Couldn’t send ${files.map((f) => f.name).join(', ')}: ${explain(error)} ${files.length === 1 ? 'It’s' : 'They’re'} in this chat in Conch.`,
+      );
+      return;
+    }
+    this.#filesSent(conversationId, relay.chatId, relay.channelId, done.ids);
+    if (done.missed.length)
+      await live.connection.send(
+        relay.chatId,
+        `Couldn’t send ${done.missed.join(', ')}. Open Conch to get ${done.missed.length === 1 ? 'it' : 'them'}.`,
+      );
+  }
+
   /** Queue a send after the ones before it, so answers arrive in order. */
   #say(relay: Relay, markdown: string, buttons?: Parameters<ChannelConnection['send']>[2]) {
     const live = this.#live.get(relay.channelId);
@@ -3020,6 +3080,21 @@ export class ChannelService {
           relay.said.push(text);
           void this.#say(relay, text).catch(() => undefined);
         }
+        break;
+      }
+      case 'tool.started':
+        if (MAKES_FILES.test(e.name))
+          (relay.making ??= new Map()).set(e.toolUseId, { name: e.name, input: e.input });
+        break;
+      case 'tool.finished': {
+        const made = relay.making?.get(e.toolUseId);
+        if (!made) break;
+        relay.making?.delete(e.toolUseId);
+        if (e.status !== 'success' || e.view?.kind !== 'downloads') break;
+        const ids = e.view.items.map((item) => item.id);
+        // In order, after what was said before it.
+        const next = relay.chain.then(() => this.#sendMade(relay, e.conversationId, made, ids));
+        relay.chain = next.catch((error: unknown) => this.#log(`send files: ${explain(error)}`));
         break;
       }
       case 'permission.requested':
@@ -3367,8 +3442,21 @@ export class ChannelService {
    */
   async messageOwner(
     text: string,
-    options: { app?: string; conversationId?: string } = {},
-  ): Promise<{ app: string }> {
+    options: {
+      app?: string;
+      conversationId?: string;
+      /** Pictures and files to send with it: ids of this conversation's own (ADR 0018). */
+      attachments?: readonly string[];
+    } = {},
+  ): Promise<{ app: string; sent?: string[]; missed?: string[] }> {
+    // Checked before anything goes: a wrong id never sends the words without the file.
+    const files = options.attachments?.length
+      ? await filesOf(this.deps.attachments, options.attachments, options.conversationId).catch(
+          (error: unknown) => {
+            throw new ChannelServiceError('invalid', (error as Error).message);
+          },
+        )
+      : [];
     const online = new Set(this.reachable().map((c) => c.id));
     const all = (await this.deps.store.all()).filter(
       (c) => c.enabled && c.people.length && online.has(c.id),
@@ -3394,7 +3482,17 @@ export class ChannelService {
     if (!channel || !live || !owner)
       throw new ChannelServiceError('unavailable', 'That chat app isn’t connected right now.');
     const chat = await live.connection.directChat(owner.id);
-    await live.connection.send(chat, text);
+    // What this chat's answer already carried there isn't sent a second time.
+    const already = options.conversationId
+      ? this.#sentFiles.get(options.conversationId)
+      : undefined;
+    const fresh = files.filter((f) => !already?.has(`${channel.id}:${chat}:${f.id}`));
+    let delivered: Delivered | undefined;
+    if (fresh.length) {
+      delivered = await deliver(live.connection, CHANNEL_NAMES[channel.kind], chat, fresh, text);
+      this.#filesSent(options.conversationId, chat, channel.id, delivered.ids);
+    } else if (text.trim()) await live.connection.send(chat, text);
+    if (files.length && !fresh.length) delivered = { refs: [], sent: [], ids: [], missed: [] };
     if (options.conversationId) {
       const sent = this.#messaged.get(options.conversationId) ?? new Set<string>();
       sent.add(channel.id);
@@ -3402,7 +3500,25 @@ export class ChannelService {
       if (this.#messaged.size > 200)
         this.#messaged.delete(this.#messaged.keys().next().value ?? '');
     }
-    return { app: CHANNEL_NAMES[channel.kind] };
+    return {
+      app: CHANNEL_NAMES[channel.kind],
+      ...(delivered && { sent: delivered.sent, missed: delivered.missed }),
+    };
+  }
+
+  /** Files already sent to a chat for a conversation, so its reply doesn't send them twice. */
+  #filesSent(
+    conversationId: string | undefined,
+    chatId: string,
+    channelId: string,
+    ids: readonly string[],
+  ) {
+    if (!conversationId) return;
+    const sent = this.#sentFiles.get(conversationId) ?? new Set<string>();
+    for (const id of ids) sent.add(`${channelId}:${chatId}:${id}`);
+    this.#sentFiles.set(conversationId, sent);
+    if (this.#sentFiles.size > 200)
+      this.#sentFiles.delete(this.#sentFiles.keys().next().value ?? '');
   }
 
   // ── Routines ───────────────────────────────────────────────────────────

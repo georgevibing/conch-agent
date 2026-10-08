@@ -51,6 +51,12 @@ const keys = {
   appId: MockTeams.APP_ID,
   appPassword: MockTeams.SECRET,
 };
+/** 1×1 transparent PNG. */
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64',
+);
+
 const state = async (s: Services, id: string) => (await s.channels.get(id)).health.state;
 
 /** Connected, its address public, pasted in "Azure", and Ada let in. */
@@ -128,6 +134,26 @@ describe('Microsoft Teams', () => {
       () => teams.sent.some((m) => m.updated && m.id === question.id && m.text.includes('Allowed')),
       'the card says it was allowed',
     );
+  });
+
+  it('sends a picture inside the message with its caption, and refuses other files honestly', async () => {
+    const { s, teams } = await paired();
+    const picture = await s.attachments.save({ name: 'beach.png', bytes: PNG });
+    const notes = await s.attachments.save({ name: 'notes.pdf', bytes: Buffer.from('%PDF-1.4 x') });
+    await s.attachments.claim([picture.id, notes.id], 'c_files');
+    const done = await s.channels.messageOwner('Your **beach**', {
+      attachments: [picture.id],
+      conversationId: 'c_files',
+    });
+    expect(done).toMatchObject({ app: 'Microsoft Teams', sent: ['beach.png'] });
+    const sent = teams.sent.find((m) => m.pictures?.length);
+    expect(sent).toMatchObject({
+      text: expect.stringContaining('<strong>beach</strong>'),
+      pictures: [{ name: 'beach.png', type: 'image/png', size: PNG.length }],
+    });
+    await expect(
+      s.channels.messageOwner('', { attachments: [notes.id], conversationId: 'c_files' }),
+    ).resolves.toMatchObject({ sent: [], missed: [expect.stringMatching(/takes only pictures/)] });
   });
 
   it('refuses every forged delivery: wrong key, issuer, audience, service, channel, expired, none, HMAC', async () => {
