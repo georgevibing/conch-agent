@@ -10,6 +10,9 @@ export * from './theme';
 export { installLustre } from './lustre';
 export { durations, easings, springs } from './tokens';
 export { cx, useMediaQuery, usePrefersReducedMotion } from './utils';
+// A card in the chat as a picture, drawn by this browser (ADR 0105).
+export { cardPng, cardSvg, CardImageError } from './utils/raster';
+export type { CardImageOptions, CardSvg } from './utils/raster';
 
 // Layout & typography
 export * from './components/Stack';

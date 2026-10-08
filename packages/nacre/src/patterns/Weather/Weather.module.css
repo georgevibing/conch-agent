@@ -835,6 +835,14 @@
     padding: var(--nc-space-2) var(--nc-space-3) var(--nc-space-3) var(--nc-space-4);
   }
 
+  /* The share bar and the units sit together at the end of the footer. */
+  .footEnd {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
   .units {
     flex: none;
   }

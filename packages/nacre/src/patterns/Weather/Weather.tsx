@@ -6,6 +6,7 @@ import {
   useState,
   type ComponentProps,
   type CSSProperties,
+  type ReactNode,
 } from 'react';
 
 import { SegmentedControl } from '../../components/SegmentedControl';
@@ -46,6 +47,12 @@ export interface WeatherCardProps extends Omit<ComponentProps<'section'>, 'child
   units?: WeatherUnits;
   /** The person chose the other units on the card's switch. */
   onUnitsChange?: (units: WeatherUnits) => void;
+  /**
+   * The card's share bar (Nacre `CardShare`), in the footer beside the units:
+   * save the forecast as a picture, copy it, or send it to a chat app. Left
+   * out, the footer is as it was.
+   */
+  share?: ReactNode;
 }
 
 /** The sky's mood, for its colours: bright, between, grey, milky, snowy or stormy. */
@@ -83,6 +90,7 @@ export function WeatherCard({
   days = 7,
   units: unitsProp,
   onUnitsChange,
+  share,
   className,
   ...props
 }: WeatherCardProps) {
@@ -283,16 +291,19 @@ export function WeatherCard({
           {weather.source ? `${weather.source} · ` : ''}
           {timeLabel(weather.at, clock)} in {placeName}
         </p>
-        <SegmentedControl
-          size="sm"
-          aria-label="Units"
-          className={styles.units}
-          value={units}
-          onValueChange={(next) => chooseUnits(next === 'imperial' ? 'imperial' : 'metric')}
-        >
-          <SegmentedControl.Item value="metric">°C</SegmentedControl.Item>
-          <SegmentedControl.Item value="imperial">°F</SegmentedControl.Item>
-        </SegmentedControl>
+        <div className={styles.footEnd}>
+          {share}
+          <SegmentedControl
+            size="sm"
+            aria-label="Units"
+            className={styles.units}
+            value={units}
+            onValueChange={(next) => chooseUnits(next === 'imperial' ? 'imperial' : 'metric')}
+          >
+            <SegmentedControl.Item value="metric">°C</SegmentedControl.Item>
+            <SegmentedControl.Item value="imperial">°F</SegmentedControl.Item>
+          </SegmentedControl>
+        </div>
       </div>
     </section>
   );
