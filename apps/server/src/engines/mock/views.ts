@@ -178,6 +178,63 @@ function messages(now: number, channel: string): PretendFind {
   };
 }
 
+/** A pretend recipe card (no picture: the mock fetches nothing). */
+function recipe(dish: string): PretendFind {
+  const title = dish.charAt(0).toUpperCase() + dish.slice(1);
+  const step = (text: string, said?: string, seconds?: number, upTo?: number) => {
+    const start = said ? text.indexOf(said) : -1;
+    return {
+      text,
+      timers:
+        said && seconds && start >= 0
+          ? [{ start, end: start + said.length, seconds, ...(upTo && { upTo }) }]
+          : [],
+    };
+  };
+  const view: ToolView = {
+    kind: 'recipe',
+    items: [
+      {
+        title,
+        source: { site: 'Pretend Kitchen', url: 'https://kitchen.example.org/recipes/pretend' },
+        description: 'A weeknight favourite, made up for the mock.',
+        yield: { amount: 4, unit: 'servings' },
+        times: { prep: 600, cook: 1500, total: 2100 },
+        rating: { value: 4.6, count: 212 },
+        ingredients: [
+          { text: '2 tbsp olive oil', quantity: 2, unit: 'tbsp', item: 'olive oil' },
+          { text: '1 onion, finely chopped', quantity: 1, item: 'onion', note: 'finely chopped' },
+          {
+            text: '2–3 cloves garlic',
+            quantity: { from: 2, to: 3 },
+            unit: 'cloves',
+            item: 'garlic',
+          },
+          { text: '1½ cups rice', quantity: 1.5, unit: 'cups', item: 'rice' },
+          { text: 'Salt, to taste', item: 'Salt', note: 'to taste' },
+        ],
+        steps: [
+          step('Soften the onion and garlic in the olive oil for 5 minutes.', '5 minutes', 300),
+          step('Stir in the rice and cook for 1 minute.', '1 minute', 60),
+          step('Add water, cover and simmer for 18–20 minutes.', '18–20 minutes', 1080, 1200),
+          step('Season with salt and serve.'),
+        ],
+        nutrition: [
+          { label: 'Calories', value: '320 kcal' },
+          { label: 'Protein', value: '7 g' },
+        ],
+      },
+    ],
+  };
+  return {
+    tool: 'recipe',
+    input: { urls: ['https://kitchen.example.org/recipes/pretend'] },
+    text: JSON.stringify({ recipes: [{ title }] }),
+    view,
+    reply: `Here’s a simple ${dish}: about 35 minutes, start to finish.`,
+  };
+}
+
 /** What a prompt asks the pretend apps for, if anything. */
 export function pretendFind(prompt: string, now = Date.now()): PretendFind | undefined {
   const text = prompt.trim();
@@ -188,5 +245,7 @@ export function pretendFind(prompt: string, now = Date.now()): PretendFind | und
   if (file) return files(now, file.replace(/^.*\s/, ''));
   const said = /\bwhat did #([\w-]+) say\b/i.exec(text)?.[1];
   if (said) return messages(now, said);
+  const dish = /\b(?:a )?recipe for (.+?)[.?!]*$/i.exec(text)?.[1];
+  if (dish) return recipe(dish);
   return undefined;
 }
