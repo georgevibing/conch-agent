@@ -24,6 +24,10 @@ Under the processor's chart, a row of bars shows each core.
 
 A table shows what Conch itself uses, and everything it started, grouped by who it belongs to: each provider's program, the browser, and **Commands and helpers**. A command your assistant runs counts toward the provider that ran it, so you can see which one is busy. Ollama is counted even when it was started on its own.
 
+## Use your apps
+
+At the bottom of the page, **Use your apps** lets your assistant look at the screen and click and type in the apps you allow, on a Mac. It's off until you turn it on. See [Use your apps](../features/use-your-apps.md).
+
 ## What it reads
 
 Conch looks only while the page is open and in front. Leave it, and Conch stops looking soon after. It keeps only the last three minutes, in memory, and lets them go when you leave.
