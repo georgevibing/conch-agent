@@ -1,0 +1,215 @@
+@property --cu-turn {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@layer nacre.components {
+  /* ── The live card ─────────────────────────────────────────────────── */
+
+  .live {
+    --cu-edge: 3px;
+    --cu-turning: 9s;
+    display: grid;
+    gap: var(--nc-space-3);
+    max-inline-size: var(--nc-chat-card-width);
+    padding: var(--nc-chat-card-pad);
+    border-radius: var(--nc-chat-card-radius);
+    background: var(--nc-chat-card-surface);
+    box-shadow: var(--nc-chat-card-shadow);
+  }
+
+  /* The screen, in the same pearl edge the desktop app draws around the real one. */
+  .screen {
+    position: relative;
+    aspect-ratio: 16 / 10;
+    border-radius: var(--nc-radius-md);
+    overflow: hidden;
+    background: var(--nc-surface-sunken);
+    isolation: isolate;
+  }
+
+  .edge {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    padding: var(--cu-edge);
+    border-radius: inherit;
+    background: conic-gradient(from var(--cu-turn), var(--nc-pearl-spectrum));
+    mask:
+      linear-gradient(#000 0 0) content-box exclude,
+      linear-gradient(#000 0 0);
+    pointer-events: none;
+    animation: cu-turn var(--cu-turning) linear infinite;
+    transition: opacity var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .live[data-stopping] .edge {
+    opacity: 0;
+  }
+
+  .shot {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+    object-position: top left;
+  }
+
+  .blank {
+    display: grid;
+    place-items: center;
+    block-size: 100%;
+    color: var(--nc-text-subtle);
+  }
+
+  .blank svg {
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+  }
+
+  .liveBody {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+  }
+
+  .liveWords {
+    flex: 1;
+    min-inline-size: 0;
+    display: grid;
+    gap: var(--nc-space-0-5);
+  }
+
+  .liveTitle,
+  .liveLabel,
+  .liveSteps {
+    margin: 0;
+  }
+
+  .liveTitle {
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  .liveLabel {
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .liveSteps {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .keys {
+    font: inherit;
+    font-weight: var(--nc-weight-medium);
+    opacity: 0.75;
+  }
+
+  @keyframes cu-turn {
+    to {
+      --cu-turn: 360deg;
+    }
+  }
+
+  /* ── The two switches ──────────────────────────────────────────────── */
+
+  .access {
+    display: grid;
+    gap: var(--nc-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .row {
+    --cu-mark: var(--nc-gray-11);
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-2-5) var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-surface-sunken);
+  }
+
+  .row[data-state='granted'] {
+    --cu-mark: light-dark(
+      oklch(0.52 0.13 var(--nc-success-h)),
+      oklch(0.74 0.13 var(--nc-success-h))
+    );
+  }
+
+  .rowIcon {
+    flex: none;
+    display: grid;
+    place-items: center;
+    inline-size: 2rem;
+    block-size: 2rem;
+    border-radius: var(--nc-radius-full);
+    color: var(--cu-mark);
+    background: color-mix(in oklch, var(--cu-mark) 12%, transparent);
+    transition:
+      color var(--nc-duration-slow) var(--nc-ease-out),
+      background-color var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .rowIcon svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  /* A switch that just turned on: the pearl's light passes over its mark, once. */
+  .row[data-glint] .rowIcon {
+    animation: cu-granted var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) both;
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--cu-mark) 18%, transparent);
+  }
+
+  .rowWords {
+    flex: 1;
+    min-inline-size: 0;
+    display: grid;
+    gap: var(--nc-space-0-5);
+  }
+
+  .rowTitle {
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .rowDetail {
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  .rowOn {
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    color: var(--cu-mark);
+  }
+
+  @keyframes cu-granted {
+    from {
+      transform: scale(0.6);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .edge,
+    .row[data-glint] .rowIcon {
+      animation: none;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .edge,
+  [data-nacre-motion='reduced'] .row[data-glint] .rowIcon {
+    animation: none;
+  }
+}
