@@ -62,7 +62,15 @@ const gmail = (patch: Partial<Integration> = {}): Integration => ({
       description: '',
       access: 'write',
       destructive: false,
-      alwaysAsks: true,
+      asksFirst: true,
+    },
+    {
+      name: 'google_mail_send',
+      title: 'Send an email',
+      description: '',
+      access: 'write',
+      destructive: false,
+      asksFirst: true,
     },
   ],
   values: {},
@@ -298,8 +306,12 @@ describe('a Google app’s page', () => {
         configured: false,
         accounts: [account({ access: { gmail: 'write' }, granted: { gmail: 'write' } })],
       }),
-      'PATCH /api/integrations/gmail': (body) =>
-        gmail({ tools: gmail().tools, ...(body as object) }),
+      'PATCH /api/integrations/gmail': (body) => {
+        const chosen = (body as { tools?: Record<string, 'allow' | 'ask' | 'off'> }).tools ?? {};
+        return gmail({
+          tools: gmail().tools.map((t) => (chosen[t.name] ? { ...t, policy: chosen[t.name] } : t)),
+        });
+      },
       'POST /api/google/accounts/pw-ada/access': () => ({
         configured: false,
         accounts: [account({ access: { gmail: 'read' }, granted: { gmail: 'write' } })],
@@ -307,8 +319,25 @@ describe('a Google app’s page', () => {
     });
     renderApp(<IntegrationDetailView integrationId="gmail" />, { route: '/apps/gmail' });
     expect(await screen.findByRole('heading', { name: 'Gmail' })).toBeInTheDocument();
-    const draft = screen.getByRole('radiogroup', { name: 'Save a draft' });
-    expect(within(draft).queryByRole('radio', { name: 'Allow' })).toBeNull();
+    // Read & write can send: the tool is there, Ask by default, and says what that means.
+    const send = screen.getByRole('radiogroup', { name: 'Send an email' });
+    expect(within(send).getByRole('radio', { checked: true })).toHaveTextContent('Ask');
+    expect(send).toHaveAccessibleDescription('Asks you each time.');
+    expect(screen.queryByText(/nothing is ever sent/)).toBeNull();
+    expect(
+      screen.getByText(/Sending and saving drafts show you the email first/),
+    ).toBeInTheDocument();
+    // Allow is the person's to choose, said plainly as it's chosen, with Undo.
+    await userEvent.click(within(send).getByRole('radio', { name: 'Allow' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({
+        tools: { google_mail_send: 'allow' },
+      }),
+    );
+    expect(
+      await screen.findByText('Conch will send an email without showing you first.'),
+    ).toBeInTheDocument();
+    calls.length = 0;
     await userEvent.click(
       within(screen.getByRole('radiogroup', { name: 'Read an email' })).getByRole('radio', {
         name: 'Off',
@@ -321,7 +350,14 @@ describe('a Google app’s page', () => {
     );
     const list = screen.getByRole('list', { name: 'Google accounts' });
     const card = within(list).getByRole('article', { name: 'ada@gmail.com' });
-    expect(within(card).getByText('App password')).toBeInTheDocument();
+    expect(
+      within(card).getByText(
+        'App password · Gmail: read and send. Calendar and Drive need Google sign-in.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(card).getByRole('button', { name: 'Switch to Google sign-in' }),
+    ).toBeInTheDocument();
     // An app password reaches Gmail only: Calendar and Drive say how to get there.
     expect(within(card).getAllByRole('button', { name: 'Use Google sign-in' })).toHaveLength(2);
     // Taking access away is one tap.
@@ -396,5 +432,48 @@ describe('a Google app’s page', () => {
         accountId: 'pw-ada',
       }),
     );
+  });
+
+  it('says plainly when a sign-in can’t send, and offers the app password that can', async () => {
+    mockFetch({
+      'GET /api/integrations': () => ({
+        catalog,
+        providers: [],
+        integrations: [gmail({ auth: 'oauth', tools: gmail().tools.slice(0, 2) })],
+      }),
+      'GET /api/google': () => ({
+        configured: true,
+        accounts: [
+          account({
+            id: 'work',
+            email: 'ada@work.example',
+            name: 'ada@work.example',
+            via: 'google',
+            capabilities: ['mail-read', 'calendar-read'],
+            access: { gmail: 'read', calendar: 'read' },
+            granted: { gmail: 'read', calendar: 'read' },
+          }),
+        ],
+      }),
+      'GET /api/google/mail/reusable': () => ({}),
+    });
+    renderApp(<IntegrationDetailView integrationId="gmail" />, { route: '/apps/gmail' });
+    const card = await screen.findByRole('article', { name: 'ada@work.example' });
+    expect(
+      within(card).getByText(
+        'Google sign-in · Gmail read only: this sign-in can’t send yet. Calendar and Drive too.',
+      ),
+    ).toBeInTheDocument();
+    expect(within(card).getByText('Read only: this sign-in can’t send.')).toBeInTheDocument();
+    expect(
+      within(card).getByText('Read & write asks Google once, so it can send.'),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      within(card).getByRole('button', { name: 'Use an app password instead' }),
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Use an app password for Gmail' });
+    expect(
+      within(dialog).getByText(/Calendar and Drive keep using Google sign-in/),
+    ).toBeInTheDocument();
   });
 });

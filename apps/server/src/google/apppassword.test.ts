@@ -204,12 +204,14 @@ describe('Gmail as an app', () => {
       health: { state: 'ok' },
       account: ADDRESS,
     });
-    expect(gmail?.tools.map((t) => [t.name, t.access, t.alwaysAsks ?? false])).toEqual([
-      ['google_mail_search', 'read', false],
-      ['google_mail_read', 'read', false],
-      ['google_mail_create_draft', 'write', true],
-      ['google_mail_send', 'write', true],
+    // Sending and drafts speak for the person: Ask by default, and Allow is theirs to choose.
+    expect(gmail?.tools.map((t) => [t.name, t.access, t.asksFirst ?? false, t.policy])).toEqual([
+      ['google_mail_search', 'read', false, undefined],
+      ['google_mail_read', 'read', false, undefined],
+      ['google_mail_create_draft', 'write', true, undefined],
+      ['google_mail_send', 'write', true, undefined],
     ]);
+    expect(gmail?.tools.some((t) => t.alwaysAsks)).toBe(false);
     expect(events).toContainEqual(
       expect.objectContaining({
         type: 'integration.changed',
@@ -298,13 +300,15 @@ describe('Gmail as an app', () => {
     expect(mail.folder('[Gmail]/Drafts')?.messages).toHaveLength(0);
   });
 
-  it('holds Off and Ask on every engine: off isn’t offered, ask asks first, a draft can’t be Allow', async () => {
+  it('holds Off and Ask on every engine: off isn’t offered, ask asks first, a draft may be Allow', async () => {
     await google.connectPassword({ address: ADDRESS, password: PASSWORD, access: 'write' });
     await apps.refresh();
     await apps.update('gmail', { tools: { google_mail_read: 'off', google_mail_search: 'ask' } });
-    await expect(
-      apps.update('gmail', { tools: { google_mail_create_draft: 'allow' } }),
-    ).rejects.toThrow(/always asks/);
+    expect(apps.chosen('google_mail_create_draft')).toBeUndefined();
+    await apps.update('gmail', { tools: { google_mail_create_draft: 'allow' } });
+    expect(apps.chosen('mcp__conch__google_mail_create_draft')).toBe('allow');
+    // The guard lets it through; the tool itself decides whether to show the draft.
+    expect(apps.decide('mcp__conch__google_mail_create_draft')).toBe('allow');
     const { ctx, ask } = context('deny');
     const tools = apps.tools(googleTools(google, ctx), ctx);
     expect(tools.map((t) => t.name)).not.toContain('google_mail_read');
@@ -416,8 +420,15 @@ describe('Gmail as an app', () => {
     expect(await integrations.get('gmail')).toMatchObject({ name: 'Gmail' });
     const prompt = await integrations.promptSection();
     expect(prompt).toContain('- Gmail (Conch’s own tools `google_mail_search`');
-    expect(prompt).toContain(`${ADDRESS}: read only`);
-    expect(prompt).toContain('every change asks first');
+    expect(prompt).toContain(`${ADDRESS} (app password): read only`);
+    expect(prompt).toContain('changes show the person what they’ll do first');
+    // Read only says so, and what to do, so the model never pretends it can send.
+    expect(prompt).toContain('No account may send yet (read only)');
+    await google.setAccess(passwordId(ADDRESS), { product: 'gmail', level: 'write' });
+    await apps.refresh();
+    const writing = await integrations.promptSection();
+    expect(writing).toContain('`google_mail_send`');
+    expect(writing).toContain('don’t only save a draft');
     await integrations.update('gmail', { tools: { google_mail_search: 'off' } });
     expect(await integrations.decide('mcp__conch__google_mail_search')).toBe('off');
     // Allowed tools are held by the tools themselves: nothing here asks a second time.

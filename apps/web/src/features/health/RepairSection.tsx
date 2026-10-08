@@ -41,7 +41,9 @@ function ActionButton({ action }: { action: DoctorAction }) {
                 ? `/channels/${encodeURIComponent(action.focus)}`
                 : '/apps?show=talk'
               : action.place === 'passwords'
-                ? '/passwords'
+                ? action.focus === '1password'
+                  ? '/passwords?manage=1password'
+                  : '/passwords'
                 : action.place === 'memory'
                   ? '/memory'
                   : action.place === 'tasks'

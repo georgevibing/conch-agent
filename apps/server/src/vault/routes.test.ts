@@ -132,4 +132,63 @@ describe('Passwords routes', () => {
     expect(list).toContain('•••• 1111');
     expect(list).not.toMatch(/4111111111111111|cvv-seven|pin-nine|river-otter/);
   });
+
+  it('takes a 1Password service account token after a recent sign-in, and never says it back', async () => {
+    const { g, cookie } = await signedIn();
+    const token = 'ops_' + 'eyJzaWduSW5BZGRyZXNzIjoibXkuMXBhc3N3b3JkLmNvbSJ9ROUTEROUTE';
+    const op = g.services.vault.onePassword;
+    vi.spyOn(op, 'installed').mockResolvedValue(true);
+    vi.spyOn(op, 'check').mockResolvedValue([{ id: 'vlt1', name: 'Servers' }]);
+    vi.spyOn(op, 'state').mockResolvedValue({ state: 'ready' });
+    vi.spyOn(op, 'list').mockResolvedValue([]);
+    const put = (payload: { token: string }) =>
+      g.app.inject({
+        method: 'PUT',
+        url: '/api/vault/sources/1password/token',
+        headers: { cookie },
+        payload,
+      });
+
+    const wrong = await put({ token: 'not-a-token' });
+    expect(wrong.statusCode).toBe(400);
+    expect(wrong.body).not.toContain('not-a-token');
+
+    const saved = await put({ token });
+    expect(saved.statusCode).toBe(200);
+    expect(JSON.parse(saved.body)).toMatchObject({ vaults: [{ id: 'vlt1', name: 'Servers' }] });
+    expect(saved.body).not.toContain(token);
+
+    // Listed among the keys Conch uses, and never copied back out.
+    const list = await g.app.inject({ url: '/api/vault', headers: { cookie } });
+    expect(list.body).not.toContain(token);
+    const key = (JSON.parse(list.body) as { items: { id: string; title: string }[] }).items.find(
+      (i) => i.title === '1Password service account',
+    );
+    expect(key).toBeDefined();
+    const reveal = await g.app.inject({
+      method: 'POST',
+      url: `/api/vault/items/${key?.id}/reveal`,
+      headers: { cookie },
+      payload: { fieldId: 'value' },
+    });
+    expect(reveal.body).not.toContain(token);
+
+    // A stale sign-in can't put another one in.
+    const now = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(now + 11 * 60_000);
+    expect((await put({ token })).statusCode).toBe(403);
+    vi.spyOn(Date, 'now').mockReturnValue(now);
+
+    const forgot = await g.app.inject({
+      method: 'DELETE',
+      url: '/api/vault/sources/1password/token?disconnect=1',
+      headers: { cookie },
+    });
+    expect(forgot.statusCode).toBe(200);
+    expect(
+      (JSON.parse(forgot.body) as { id: string; state: string }[]).find(
+        (s) => s.id === '1password',
+      ),
+    ).toMatchObject({ state: 'off', access: { mode: 'app' } });
+  });
 });

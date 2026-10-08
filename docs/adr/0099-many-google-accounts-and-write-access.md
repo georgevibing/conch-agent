@@ -149,6 +149,10 @@ could save drafts becomes Gmail's write level — and `google_mail_send`, which
 did not exist, starts `off` in Gmail's tools, so no older setup can newly reach
 out before a person turns it on.
 
+(Amended by [ADR 0104](./0104-gmail-sends-when-it-says-it-can.md): that "off" showed as
+the person's own choice and stopped Read & write accounts from sending, so store
+version 3 takes it back out.)
+
 ## Verification
 
 `google/access.test.ts` covers levels under grants, the `consent` refusal, the

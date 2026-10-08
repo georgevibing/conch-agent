@@ -20,7 +20,7 @@ const Credential = z.object({
   generation: z.string(),
 });
 export type Credential = z.infer<typeof Credential>;
-/** Gmail signed in with an app password (ADR 0048): only IMAP, never SMTP. */
+/** Gmail signed in with an app password (ADR 0048): IMAP to read and save drafts, SMTP to send. */
 const PasswordLogin = z.object({
   profile: GoogleAccount,
   address: z.email(),
@@ -58,26 +58,32 @@ export type GoogleData = z.infer<typeof Data>;
 export type GoogleLimits = GoogleData['limits'][string];
 
 /** The store's shape now. Older files are brought up to it as they're read. */
-export const GOOGLE_STORE_VERSION = 2;
+export const GOOGLE_STORE_VERSION = 3;
 
 /**
  * A file from before per-account access: every account keeps exactly what it
- * could do (Gmail that saved drafts is Gmail's write level now), and sending
- * mail, which didn't exist then, starts off in Gmail's tools, so nothing can
- * newly reach out until a person turns it on.
+ * could do (Gmail that saved drafts is Gmail's write level now).
+ *
+ * Version 2 also turned "Send an email" off in Gmail's tools, by itself, for
+ * every older setup (ADR 0099). Nobody chose that, the page showed it as the
+ * person's own choice, and an account set to Read & write then couldn't send
+ * (ADR 0104). Version 3 takes that one setting back out, so sending follows
+ * the account's level and asks first like every new setup. A choice made on
+ * the page since is the person's and stays.
  */
 export function migrateGoogle(data: GoogleData): GoogleData {
-  if ((data.version ?? 1) >= GOOGLE_STORE_VERSION) return data;
-  const profiles = [
-    ...Object.entries(data.accounts).map(([id, a]) => [id, a.profile] as const),
-    ...Object.entries(data.passwords).map(([id, p]) => [id, p.profile] as const),
-  ];
-  for (const [id, profile] of profiles)
-    if (!Object.hasOwn(data.limits, id)) data.limits[id] = accessOf(profile.capabilities);
-  if (profiles.some(([, p]) => p.capabilities.some((c) => c.startsWith('mail-')))) {
-    const gmail = AppSettings.parse(data.apps.gmail ?? {});
-    gmail.tools.google_mail_send ??= 'off';
-    data.apps.gmail = gmail;
+  const version = data.version ?? 1;
+  if (version >= GOOGLE_STORE_VERSION) return data;
+  if (version < 2) {
+    const profiles = [
+      ...Object.entries(data.accounts).map(([id, a]) => [id, a.profile] as const),
+      ...Object.entries(data.passwords).map(([id, p]) => [id, p.profile] as const),
+    ];
+    for (const [id, profile] of profiles)
+      if (!Object.hasOwn(data.limits, id)) data.limits[id] = accessOf(profile.capabilities);
+  } else if (data.apps.gmail?.tools.google_mail_send === 'off') {
+    // Version 2's own "off", never shown as anything but the person's: back to asking first.
+    delete data.apps.gmail.tools.google_mail_send;
   }
   data.version = GOOGLE_STORE_VERSION;
   return data;

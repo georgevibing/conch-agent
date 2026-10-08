@@ -228,6 +228,21 @@ export const VaultSource = z.object({
   database: z.string().optional(),
   /** KeePassXC: its key file, if it needs one. */
   keyFile: z.string().optional(),
+  /**
+   * 1Password: how Conch reaches it. `app`: the 1Password app on this computer
+   * (its CLI integration). `service-account`: a service account's token,
+   * saved sealed in Conch, for a computer without the app (a server). The
+   * token itself is never sent back.
+   */
+  access: z
+    .object({
+      mode: z.enum(['app', 'service-account']),
+      /** Service account: the vaults it can read (names only), from its last look. */
+      vaults: z.array(z.object({ id: z.string(), name: z.string() })).optional(),
+      /** Service account: the vaults Conch shows. Absent: every one it can read. */
+      shown: z.array(z.string()).optional(),
+    })
+    .optional(),
   /** Its items are copied into Conch's vault and kept up to date (`VaultTransferBody.keepSynced`). */
   sync: z
     .object({
@@ -622,6 +637,33 @@ export const KeePassDatabase = z.object({
   modifiedAt: z.number().optional(),
 });
 export type KeePassDatabase = z.infer<typeof KeePassDatabase>;
+/**
+ * A 1Password service account token (`ops_…`), as 1Password shows it once
+ * when the service account is made. Whitespace a paste brings is dropped.
+ */
+export const SERVICE_ACCOUNT_TOKEN = /^ops_[A-Za-z0-9+/=_-]{20,4000}$/;
+export const OnePasswordTokenBody = z.object({
+  token: z
+    .string()
+    .max(4100)
+    .transform((t) => t.replace(/\s+/g, ''))
+    .refine((t) => SERVICE_ACCOUNT_TOKEN.test(t), {
+      message: 'That isn’t a service account token. It starts with ops_.',
+    }),
+});
+export const OnePasswordVaultsBody = z.object({
+  /** The vaults Conch shows, by 1Password's vault id. */
+  vaults: z
+    .array(z.string().regex(/^[a-z0-9]{1,64}$/))
+    .min(1, 'Choose at least one vault.')
+    .max(500),
+});
+/** A token that worked: the vaults it can read, and every manager as it is now. Never the token. */
+export const OnePasswordConnected = z.object({
+  vaults: z.array(z.object({ id: z.string(), name: z.string() })),
+  sources: z.array(VaultSource),
+});
+export type OnePasswordConnected = z.infer<typeof OnePasswordConnected>;
 export const UnlockSourceBody = z.object({
   password: z.string().min(1).max(1024),
   /** Keep it unlocked on this computer, across restarts (sealed with its device key). */

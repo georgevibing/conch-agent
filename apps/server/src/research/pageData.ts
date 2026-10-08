@@ -53,7 +53,7 @@ export function plain(value: unknown, max = 300): string | undefined {
 function attributes(tag: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const m of tag.matchAll(/([a-z_:-]+)\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/gi)) {
-    out[m[1]!.toLowerCase()] = decodeEntities(m[3] ?? m[4] ?? m[5] ?? '');
+    out[(m[1] ?? '').toLowerCase()] = decodeEntities(m[3] ?? m[4] ?? m[5] ?? '');
   }
   return out;
 }
@@ -78,7 +78,7 @@ export function pageData(html: string): PageData {
     /<script\b[^>]*type\s*=\s*["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script>/gi,
   )) {
     try {
-      flatten(JSON.parse(m[1]!.trim().replace(/^<!--|-->$/g, '')), ld);
+      flatten(JSON.parse((m[1] ?? '').trim().replace(/^<!--|-->$/g, '')), ld);
     } catch {
       // A site's broken JSON-LD is its own business.
     }
@@ -141,6 +141,6 @@ export function isoDuration(value: unknown): number | undefined {
   if (typeof value !== 'string') return undefined;
   const m = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/i.exec(value.trim());
   if (!m || !m.slice(1).some(Boolean)) return undefined;
-  const [d, h, min, s] = m.slice(1).map((v) => Number(v ?? 0));
-  return Math.round(d! * 86400 + h! * 3600 + min! * 60 + s!);
+  const [d = 0, h = 0, min = 0, s = 0] = m.slice(1).map((v) => Number(v ?? 0));
+  return Math.round(d * 86400 + h * 3600 + min * 60 + s);
 }

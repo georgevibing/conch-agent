@@ -85,13 +85,15 @@ When a model asks for a tool almost right, Conch reads what it meant: a number w
 
 ## Decide what it may do
 
-Choose how your assistant uses each app. Anything that changes something in Google — a draft, a sent email, a calendar event, a new Doc — always asks, whatever you choose, so those only offer **Ask** or **Off**:
+Choose how your assistant uses each app. Sending an email and saving a Gmail draft show you the exact email first, whatever you choose here, unless you set that one tool to **Allow**. A calendar change and a new Doc always ask, so those only offer **Ask** or **Off**:
 
 - **Ask every time.** It asks before every action.
 - **Ask before changes.** It looks things up on its own, and asks before it creates, sends, changes or deletes anything. Apps from the gallery start here.
 - **Don't ask.** It acts without asking. Something it reads could try to trick it, so Conch asks you to confirm it's you first.
 
-Under **Each tool**, every tool the app offers has its own **Allow**, **Ask** or **Off**, for when the switches under **What it does** aren't fine enough. Turn off what you don't need: your assistant stays more focused with fewer tools. Sending a Slack message, like anything that changes something in Google, only offers **Ask** or **Off**.
+Under **Each tool**, every tool the app offers has its own **Allow**, **Ask** or **Off**, for when the switches under **What it does** aren't fine enough, and a line under it says what the choice means: **Allow** uses it without asking, **Ask** asks you each time, and **Off** means your assistant can't use it at all. A tool you turned off says **You turned this off**, with **Turn on** beside it. Turn off what you don't need: your assistant stays more focused with fewer tools. Sending a Slack message, a calendar change and a new Doc only offer **Ask** or **Off**.
+
+**Send an email** and **Save a draft** start at **Ask**. Choose **Allow** to skip the question: the page says what that means, with **Undo**. Even then, once the chat has read something from outside (an email, a web page), sending still shows you the email first, because words from outside could try to make your assistant send something you didn't mean. So does an email from an account you didn't name, when several could send.
 
 A Google app only offers the tools its accounts can do: when every account is read only, **Draft & send** (or **Change events**, or **Make files**) says so and offers **Allow**, which takes you to **Google accounts**.
 
@@ -115,7 +117,7 @@ Conch checks your apps and keeps their sign-ins fresh. One that needs you moves 
 
 1Password is one app with two parts, each with its own switch on its page:
 
-- **Fill sign-ins from 1Password.** Your 1Password logins show in **Passwords**, read where they are, and your assistant fills one in the browser when you say OK. Nothing is copied. It needs 1Password's command line on this computer; **Set up** shows how.
+- **Fill sign-ins from 1Password.** Your 1Password logins show in **Passwords**, read where they are, and your assistant fills one in the browser when you say OK. Nothing is copied. It needs 1Password's command line on this computer, and either the 1Password app or a service account token for a computer without it (see [Passwords](./passwords.md#1password-on-a-computer-without-the-app)). **Settings** shows which is in use and changes it.
 - **Manage Environments.** For developers: your assistant sees the names of your 1Password Environments and their variables, and adds to them when you say yes. It never reads the secret values. **Set up** walks you through turning it on in 1Password.
 
 ## Something that isn't listed
@@ -164,9 +166,9 @@ Gmail, Google Calendar and Google Drive share one list of accounts. Add as many 
 
 - **Off.** It isn't used there at all.
 - **Read.** It can look: search and read your mail, see your events, find your files.
-- **Read & write.** It can also make changes — save a draft or send an email, add, move or delete an event, make a new Doc. **Every change asks you first**, with the exact email or event in front of you, whatever else you've chosen.
+- **Read & write.** It can also make changes — save a draft or send an email, add, move or delete an event, make a new Doc. Each change shows you first, with the exact email or event in front of you (an email can skip that if you set **Send an email** to **Allow**).
 
-The list is the same on all three pages (**Apps → Gmail**, **Google Calendar** or **Google Drive**), under **Google accounts**, with the app you opened marked. Each account says how it's signed in, whether it's working, and what it may do in each app. Turning something down is one tap. Turning it up is one tap too, unless Google hasn't allowed Conch that much yet: then the row says **Read & write asks Google once**, and choosing it opens one Google sign-in for that account, right there. Nothing else about the account changes.
+The list is the same on all three pages (**Apps → Gmail**, **Google Calendar** or **Google Drive**), under **Google accounts**, with the app you opened marked. Each account says how it's signed in and what that can do in one line — **App password · Gmail: read and send. Calendar and Drive need Google sign-in.**, or **Google sign-in · Gmail, Calendar and Drive.** — whether it's working, and what it may do in each app. An app-password account offers **Switch to Google sign-in**; a Google sign-in offers **Use an app password instead**, which moves Gmail to the app password and leaves Calendar and Drive on Google sign-in. A Google sign-in that Google only allowed to read Gmail says **Read only: this sign-in can't send**, and choosing **Read & write** asks Google once. Turning something down is one tap. Turning it up is one tap too, unless Google hasn't allowed Conch that much yet: then the row says **Read & write asks Google once**, and choosing it opens one Google sign-in for that account, right there. Nothing else about the account changes.
 
 **Check now** looks at an account again. **Remove** forgets it: with Google sign-in, Conch asks Google to take its access back first; with an app password, Conch forgets the password, and Google’s app passwords page is where you remove it at Google too. To stop one app using an account but keep the account, set that app to **Off** on it instead.
 
@@ -244,13 +246,18 @@ Open **If Google says no** for links to the right project settings:
 With **Read**, Gmail is searched and read, Calendar’s events are read, and
 Drive’s file names and details are read — not what’s inside a document.
 
-With **Read & write**, each app can also do exactly this, and asks you every
-single time, showing what will happen:
+With **Read & write**, each app can also do exactly this, showing you what
+will happen first:
 
-- **Gmail:** save a draft in your **Drafts**, or send an email or a reply.
-  Replies use the original message’s verified thread, reply address and subject;
-  sent-email follow-ups go to the original recipients. Nothing else about your
-  mailbox is touched: no labels, no deleting, no settings.
+- **Gmail:** save a draft in your **Drafts**, or send an email or a reply, with
+  an app password (over Gmail's SMTP) or Google sign-in alike. An email can carry
+  files from the chat — a document your assistant made, a picture, a file you
+  added — up to about 18 MB together. It goes from the account you name ("send it
+  from my work address"); if you don't name one and several can send, the first
+  is used and the card shows it under **From** before anything goes. Replies use
+  the original message’s verified thread, reply address and subject; sent-email
+  follow-ups go to the original recipients. Nothing else about your mailbox is
+  touched: no labels, no deleting, no settings.
 - **Google Calendar:** add an event, change its title, time, place or
   description, or delete it. Guests are only emailed when you say so.
 - **Google Drive:** make a new Google Doc or text file. Conch can only touch

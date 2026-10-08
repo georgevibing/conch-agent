@@ -428,6 +428,17 @@ const sourceRows = (
       }
     />
     <VaultSourceRow
+      source="1password"
+      state="ready"
+      count={12}
+      via="Service account · 2 vaults"
+      action={
+        <Button size="sm" variant="surface">
+          Settings
+        </Button>
+      }
+    />
+    <VaultSourceRow
       source="bitwarden"
       state="locked"
       message="Unlock it with its master password"

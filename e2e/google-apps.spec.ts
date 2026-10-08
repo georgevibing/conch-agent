@@ -83,10 +83,38 @@ test('connect Gmail with an app password, use it in a chat, turn a tool off, fix
     page.getByText('I found 1 email about lunch. The newest is “Lunch on Friday”.'),
   ).toBeVisible();
 
-  // Off is off on every engine: the tool isn't offered at all.
+  // Read & write with an app password sends (over SMTP), showing the exact email first.
+  const sentBefore = (await (await request.post(`${MAIL}/__control/sent`)).json()).length as number;
+  await page.goto('/');
+  await ask(page, 'email sam@example.org saying Noon works for lunch');
+  const review = page.getByRole('region', { name: 'Email to review' });
+  await expect(review.getByText('ada@gmail.com', { exact: true })).toBeVisible();
+  await expect(review.getByText('sam@example.org', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.getByText('Sent it to sam@example.org.')).toBeVisible();
+  const sent = (await (await request.post(`${MAIL}/__control/sent`)).json()) as {
+    from: string;
+    to: string[];
+    text: string;
+  }[];
+  expect(sent).toHaveLength(sentBefore + 1);
+  expect(sent.at(-1)).toMatchObject({ from: 'ada@gmail.com', to: ['sam@example.org'] });
+
+  // Each tool says what its choice means; sending is Ask by default and can be Allow.
   await page.goto('/apps/gmail');
-  const draft = page.getByRole('radiogroup', { name: 'Save a draft' });
-  await expect(draft.getByRole('radio', { name: 'Allow' })).toHaveCount(0);
+  await expect(page.getByText(/nothing is ever sent/)).toHaveCount(0);
+  const sending = page.getByRole('radiogroup', { name: 'Send an email' });
+  await expect(sending.getByRole('radio', { checked: true })).toHaveText('Ask');
+  await expect(sending).toHaveAccessibleDescription('Asks you each time.');
+  await sending.getByRole('radio', { name: 'Allow' }).click();
+  await expect(page.getByText('Conch will send an email without showing you first.')).toBeVisible();
+  await expect(sending).toHaveAccessibleDescription(
+    'Doesn’t ask. Still asks if the chat read something from outside.',
+  );
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(sending.getByRole('radio', { checked: true })).toHaveText('Ask');
+
+  // Off is off on every engine: the tool isn't offered at all.
   await page
     .getByRole('radiogroup', { name: 'Search your mail' })
     .getByRole('radio', { name: 'Off' })
@@ -103,7 +131,10 @@ test('connect Gmail with an app password, use it in a chat, turn a tool off, fix
   // Its account is on the page, with what it may do in each Google app.
   await page.goto('/apps/gmail');
   const card = page.getByRole('article', { name: 'ada@gmail.com' });
-  await expect(card.getByText('App password', { exact: true })).toBeVisible();
+  await expect(
+    card.getByText('App password · Gmail: read and send. Calendar and Drive need Google sign-in.'),
+  ).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Switch to Google sign-in' })).toBeVisible();
   await expect(card.getByText('Working', { exact: true })).toBeVisible();
   const mailLevel = card.getByRole('radiogroup', { name: 'Gmail' });
   await expect(mailLevel.getByRole('radio', { checked: true })).toHaveText('Read & write');

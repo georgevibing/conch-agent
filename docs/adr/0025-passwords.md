@@ -45,6 +45,14 @@ own items can be copied the other way, as a new item in 1Password or Bitwarden. 
 iCloud Keychain, Chrome and the rest don't let other apps read them, so Conch
 imports from them once.
 
+1Password has a second way in, for a computer without its app (a server): a
+**service account token** the person makes on 1Password.com, with read access
+to the vaults they choose. Conch tries it (`op vault list`) before keeping it,
+seals it in `onepassword.secrets.json` (a key Conch uses, § Secrets in a new
+feature), hands it to `op` only in `OP_SERVICE_ACCOUNT_TOKEN`, reads vault by
+vault (only the vaults the person shows), and never sends it back or puts it in
+an error. It asks nobody for an OK, so it's read without `PROMPTS`' wait.
+
 **What you can keep** (`VAULT_TEMPLATES`): logins (username, password,
 one-time code, websites), payment cards, identities, secure notes, API keys,
 Wi-Fi, bank accounts, SSH keys, servers, databases, ID documents, software
