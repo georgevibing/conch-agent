@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ToolContext } from '../conversations/manager';
+import type { AskRequest, ToolContext } from '../conversations/manager';
 import { type GoogleService } from './service';
 import { readMail, replyEnvelope } from './mail';
 import { draftRaw, googleTools, matchesDraft, reconcileDraft } from './tools';
@@ -125,6 +125,8 @@ describe('readable mail and verified follow-up drafts', () => {
       threadId: 'thread1',
       inReplyTo: '<original@example.com>',
       references: '<earlier@example.com> <original@example.com>',
+      // The thread's own names for its people, for the card: words only, by address.
+      names: expect.objectContaining({ 'alice@example.com': 'Alice' }),
     });
     const raw = draftRaw(args, 'op1', reply);
     expect(raw).toContain('In-Reply-To: <original@example.com>');
@@ -165,13 +167,28 @@ describe('readable mail and verified follow-up drafts', () => {
     const draft = googleTools(service, ctx).find(
       (t) => t.name === 'google_mail_create_draft',
     ) as unknown as {
-      run: (args: Record<string, unknown>, context: { operationId: string }) => Promise<string>;
+      run: (
+        args: Record<string, unknown>,
+        context: { operationId: string },
+      ) => Promise<{ text: string; view?: unknown }>;
     };
-    const result = JSON.parse(await draft.run(args, { operationId: 'op1' })) as {
+    const saved = await draft.run(args, { operationId: 'op1' });
+    const result = JSON.parse(saved.text) as {
       state: string;
       receipt: { url: string };
     };
     expect(result.state).toBe('confirmed');
+    // Drawn as a letter waiting in Drafts, with the way to it, never as sent.
+    expect(saved.view).toMatchObject({
+      kind: 'mail-sent',
+      state: 'draft',
+      from: 'person@example.com',
+      to: [{ address: args.to[0] }],
+      subject: args.subject,
+      body: args.body,
+      reply: true,
+      url: expect.stringContaining('#drafts/draftMessage1'),
+    });
     expect(result.receipt.url).toContain('authuser=person%40example.com#drafts/draftMessage1');
     expect(ask).toHaveBeenCalledTimes(1);
     expect(ask).toHaveBeenCalledWith(
@@ -218,5 +235,50 @@ describe('readable mail and verified follow-up drafts', () => {
     };
     expect(await draft.run(args, { operationId: 'op1' })).toMatchObject({ effect: 'not-executed' });
     expect(calls.some((c) => c.options?.method === 'POST')).toBe(false);
+  });
+  it('lets a reply’s words change on the card, never who it goes to or its subject', async () => {
+    profile.capabilities.push('mail-send');
+    try {
+      const sendWith = (edit: Record<string, unknown>) => {
+        const { service, calls } = fixture();
+        const ask = vi.fn(async (request: AskRequest) => {
+          try {
+            request.edit?.({ to: args.to, subject: args.subject, body: args.body, ...edit });
+          } catch {
+            return 'deny' as const;
+          }
+          return 'allow' as const;
+        });
+        const send = googleTools(service, {
+          ask,
+          signal: new AbortController().signal,
+        } as unknown as ToolContext).find((t) => t.name === 'google_mail_send');
+        return { run: () => send?.run(args), ask, calls };
+      };
+      const words = sendWith({ body: 'Thanks, see you at noon.' });
+      const sent = await words.run();
+      // The thread is read before asking: the card names its people, beside their address.
+      expect(words.ask.mock.calls[0]?.[0].input).toMatchObject({
+        names: { 'reply@example.com': 'Alice' },
+      });
+      expect(sent).toMatchObject({
+        view: {
+          kind: 'mail-sent',
+          reply: true,
+          edited: true,
+          to: [{ address: 'reply@example.com', name: 'Alice' }],
+          body: 'Thanks, see you at noon.',
+        },
+      });
+      const posted = words.calls.find((c) => c.options?.method === 'POST');
+      expect(posted?.options?.body).toMatchObject({ threadId: 'thread1' });
+      for (const change of [{ to: ['thief@example.com'] }, { subject: 'Something else' }]) {
+        const moved = sendWith(change);
+        expect(await moved.run()).toMatchObject({ effect: 'not-executed' });
+        expect(moved.calls.some((c) => c.options?.method === 'POST')).toBe(false);
+      }
+    } finally {
+      profile.capabilities.pop();
+    }
   });
 });

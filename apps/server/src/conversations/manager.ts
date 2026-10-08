@@ -27,6 +27,7 @@ import type {
   Usage,
   ContextFill,
   ChatChange,
+  MailEdit,
 } from '@conch/protocol';
 
 import {
@@ -151,6 +152,8 @@ interface PendingPermission {
    * for leaving the sealed box.
    */
   waive?: string;
+  /** The question's own check of a change the person made before allowing it (`AskRequest.edit`). */
+  edit?: (proposed: MailEdit) => void;
 }
 
 /**
@@ -209,6 +212,13 @@ export interface AskRequest {
   chosen?: boolean;
   /** The person set this one tool to Ask in Apps: Auto keeps asking (Full trust doesn't). */
   explicit?: boolean;
+  /**
+   * The person may change it before allowing it (an email's words and who it
+   * goes to). Called with their change before the answer is given: it checks
+   * the change and keeps it, or throws, and then the answer is no. Never
+   * called when nobody was asked (Full trust), so the call goes as it was.
+   */
+  edit?: (proposed: MailEdit) => void;
 }
 
 /** Per-turn additions used by routines (and future automations). */
@@ -1661,14 +1671,32 @@ export class ConversationManager {
     await this.#persist(live);
   }
 
-  async respond(id: string, permissionId: string, decision: PermissionDecision) {
-    await this.#resolvePermission(await this.#get(id), permissionId, decision);
+  async respond(id: string, permissionId: string, decision: PermissionDecision, edit?: MailEdit) {
+    await this.#resolvePermission(await this.#get(id), permissionId, decision, edit);
   }
 
-  async #resolvePermission(live: Live, permissionId: string, decision: PermissionDecision) {
+  async #resolvePermission(
+    live: Live,
+    permissionId: string,
+    asked: PermissionDecision,
+    edit?: MailEdit,
+  ) {
     const pending = live.permissions.get(permissionId);
     if (!pending) return;
     live.permissions.delete(permissionId);
+    // Allowed as the person changed it: the question checks the change first. One it
+    // can't take, or a change to a question that can't be changed, is a no — never
+    // a yes to what was shown before the change.
+    let decision = asked;
+    if (edit && decision !== 'deny') {
+      decision = 'allow';
+      try {
+        if (!pending.edit) throw new Error('This question can’t be changed.');
+        pending.edit(edit);
+      } catch {
+        decision = 'deny';
+      }
+    }
     if (decision === 'allow-always' && pending.remember) {
       live.alwaysAllow.add(pending.toolName);
       if (pending.waive) live.waived.add(pending.waive);
@@ -2355,6 +2383,7 @@ export class ConversationManager {
           remember: request.remember,
           ...(request.waive && { waive: request.waive }),
           ...(request.explicit && { explicit: true }),
+          ...(request.edit && { edit: request.edit }),
         });
         const expire = () => {
           if (!live.permissions.delete(permissionId)) return;
@@ -2388,6 +2417,7 @@ export class ConversationManager {
           ...(caution && { caution: caution.slice(0, 240) }),
           ...(request.waive && { lasting: true }),
           ...(request.once && { once: true }),
+          ...(request.edit && { editable: true }),
         });
         this.#setStatus(live, 'awaiting-permission');
       });

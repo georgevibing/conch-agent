@@ -368,3 +368,58 @@ describe('apps hosted by Conch', () => {
     },
   );
 });
+
+describe('an email the person changes before allowing it', () => {
+  const change = { to: ['kim@example.org'], subject: 'Lunch on Friday', body: 'Noon works.' };
+  /** Asks in Default, answers with `decision` and `edit`, and says what was decided. */
+  async function asked(
+    host: Partial<AskRequest>,
+    decision: 'allow' | 'allow-always' | 'deny',
+    edit?: typeof change,
+  ) {
+    const { manager, call } = await setup({ host: { once: true, ...host }, mode: 'default' });
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'send it' });
+    const events = await eventsUntil(manager, convo.id, 'permission.requested');
+    const request = events.find((e) => e.type === 'permission.requested');
+    if (request?.type !== 'permission.requested') throw new Error('No question');
+    await manager.respond(convo.id, request.permissionId, decision, edit);
+    const after = await eventsUntil(manager, convo.id, 'turn.completed');
+    const resolved = after.find((e) => e.type === 'permission.resolved');
+    return {
+      request,
+      call,
+      decision: resolved?.type === 'permission.resolved' ? resolved.decision : undefined,
+    };
+  }
+
+  it('says the question can be changed, and hands the change to it before going ahead', async () => {
+    const edit = vi.fn();
+    const { request, call, decision } = await asked({ edit }, 'allow', change);
+    expect(request).toMatchObject({ editable: true, once: true });
+    expect(edit).toHaveBeenCalledWith(change);
+    expect(decision).toBe('allow');
+    expect(call).toHaveBeenCalledOnce();
+  });
+
+  it('is a no when the question can’t take the change, never a yes to the old words', async () => {
+    const edit = vi.fn(() => {
+      throw new Error('not an email');
+    });
+    const refused = await asked({ edit }, 'allow', change);
+    expect(refused.decision).toBe('deny');
+    expect(refused.call).not.toHaveBeenCalled();
+    // A question that can't be changed at all: a change sent to it is a no too.
+    const fixed = await asked({}, 'allow', change);
+    expect(fixed.request.editable).toBeUndefined();
+    expect(fixed.decision).toBe('deny');
+    expect(fixed.call).not.toHaveBeenCalled();
+  });
+
+  it('allows a change this once only, and a no stays a no', async () => {
+    const edit = vi.fn();
+    expect((await asked({ edit }, 'allow-always', change)).decision).toBe('allow');
+    const no = await asked({ edit: vi.fn() }, 'deny', change);
+    expect(no.decision).toBe('deny');
+    expect(no.call).not.toHaveBeenCalled();
+  });
+});

@@ -12,7 +12,7 @@ import type { OAuth2Client } from 'google-auth-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MockMail } from '../channels/mock/email';
-import type { ToolContext } from '../conversations/manager';
+import type { AskRequest, ToolContext } from '../conversations/manager';
 import type { HostTool } from '../engines/types';
 import { GoogleApps } from './apps';
 import { pickAccount } from './accounts';
@@ -423,8 +423,17 @@ describe('changes Conch makes, each asked first', () => {
     await expect(send.run(args)).rejects.toThrow(/send email/);
     expect(ask).not.toHaveBeenCalled();
     await service.setAccess(passwordId(MockMail.ADDRESS), { product: 'gmail', level: 'write' });
-    const out = JSON.parse(text(await send.run(args, { operationId: 'op-mail' })));
+    const result = await send.run(args, { operationId: 'op-mail' });
+    const out = JSON.parse(text(result));
     expect(out).toMatchObject({ state: 'confirmed', receipt: { label: 'Sent from Gmail' } });
+    // No message id from SMTP: Gmail's own search for the one Conch gave it finds it.
+    expect(typeof result === 'string' ? undefined : result.view).toMatchObject({
+      kind: 'mail-sent',
+      state: 'sent',
+      url: expect.stringContaining('#search/rfc822msgid%3Aconch.'),
+    });
+    // In a task the call is the ledger's: the card shows it as it is.
+    expect((ask.mock.calls as unknown as [AskRequest][])[0]?.[0]).not.toHaveProperty('edit');
     expect(mail.sent).toHaveLength(1);
     expect(mail.sent[0]).toMatchObject({ to: ['sam@example.org'], subject: 'Lunch' });
     // The same operation again finds it in Gmail rather than sending it twice.
@@ -432,6 +441,105 @@ describe('changes Conch makes, each asked first', () => {
       state: 'confirmed',
     });
     expect(mail.sent).toHaveLength(1);
+  });
+
+  describe('an email changed on its card', () => {
+    const asked = { to: ['sam@example.org'], subject: 'Lunch', body: 'Noon works.' };
+    const change = {
+      to: ['kim@example.org'],
+      cc: ['sam@example.org'],
+      subject: 'Lunch on Friday',
+      body: 'Friday, noon. ☀️',
+    };
+    /** Answers the card as the manager does: the change first, a no if it can't be used. */
+    const answering = (proposed?: unknown) => {
+      const ask = vi.fn(async (request: AskRequest) => {
+        if (proposed === undefined) return 'allow' as const;
+        try {
+          request.edit?.(proposed as typeof change);
+        } catch {
+          return 'deny' as const;
+        }
+        return 'allow' as const;
+      });
+      return { ask, ctx: { ask, signal: new AbortController().signal } as unknown as ToolContext };
+    };
+    /** The one email Gmail was handed, read back. */
+    const sentRaw = () => {
+      const [, init] = calls('POST')[0] ?? [];
+      return Buffer.from(JSON.parse(String(init?.body)).raw, 'base64url').toString('utf8');
+    };
+    const header = (raw: string, key: string) =>
+      new RegExp(`^${key}: (.*(?:\\r\\n .*)*)`, 'm')
+        .exec(raw)?.[1]
+        ?.replace(/\r\n /g, '')
+        .replace(/=\?UTF-8\?B\?([^?]+)\?=/g, (_, v: string) =>
+          Buffer.from(v, 'base64').toString('utf8'),
+        );
+    const bodyOf = (raw: string) =>
+      Buffer.from(raw.slice(raw.indexOf('\r\n\r\n') + 4), 'base64').toString('utf8');
+
+    beforeEach(async () => {
+      granted = scopesOf('mail-send');
+      await signIn(['mail-send']);
+      fetcher.mockImplementation(async (_url, init) =>
+        init?.method === 'POST'
+          ? new Response('{"id":"sent1","threadId":"t1"}')
+          : new Response('{}'),
+      );
+    });
+
+    it('sends exactly what the person approved, and tells the model what they changed', async () => {
+      const { ctx, ask } = answering(change);
+      const result = await tool(googleTools(service, ctx), 'google_mail_send').run(asked);
+      expect(ask).toHaveBeenCalledTimes(1);
+      const raw = sentRaw();
+      expect(header(raw, 'To')).toBe('kim@example.org');
+      expect(header(raw, 'Cc')).toBe('sam@example.org');
+      expect(header(raw, 'Subject')).toBe('Lunch on Friday');
+      expect(header(raw, 'From')).toBe('ada@work.example');
+      expect(bodyOf(raw)).toBe('Friday, noon. ☀️');
+      expect(JSON.parse(text(result))).toMatchObject({
+        state: 'confirmed',
+        changedByPerson: ['to', 'cc', 'subject', 'body'],
+        sent: change,
+      });
+      expect(typeof result === 'string' ? undefined : result.view).toMatchObject({
+        kind: 'mail-sent',
+        state: 'sent',
+        from: 'ada@work.example',
+        to: [{ address: 'kim@example.org' }],
+        cc: [{ address: 'sam@example.org' }],
+        subject: 'Lunch on Friday',
+        body: 'Friday, noon. ☀️',
+        edited: true,
+        url: expect.stringContaining('#sent/sent1'),
+      });
+    });
+
+    it('sends nothing when the change isn’t an email Gmail could send', async () => {
+      for (const bad of [
+        { ...change, to: ['not an address'] },
+        { ...change, to: [] },
+        { ...change, subject: 'Hi\r\nBcc: thief@evil.example' },
+        { ...change, accountId: 'other@work.example' },
+      ]) {
+        const { ctx } = answering(bad);
+        const result = await tool(googleTools(service, ctx), 'google_mail_send').run(asked);
+        expect(result).toMatchObject({ effect: 'not-executed' });
+        expect(text(result)).toMatch(/couldn’t be used.*Nothing was sent\.$/);
+      }
+      expect(calls('POST')).toHaveLength(0);
+    });
+
+    it('offers the card for changing in a chat, and says so to nobody when nothing changed', async () => {
+      const { ctx, ask } = answering();
+      const result = await tool(googleTools(service, ctx), 'google_mail_send').run(asked);
+      expect(ask.mock.calls[0]?.[0]).toMatchObject({ once: true, edit: expect.any(Function) });
+      expect(JSON.parse(text(result))).not.toHaveProperty('changedByPerson');
+      expect(typeof result === 'string' ? undefined : result.view).not.toHaveProperty('edited');
+      expect(header(sentRaw(), 'To')).toBe('sam@example.org');
+    });
   });
 
   it('makes a Drive file with a mark that finds it again, and only with Drive write', async () => {

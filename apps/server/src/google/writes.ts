@@ -15,17 +15,25 @@
  */
 import { createHash, randomBytes } from 'node:crypto';
 
-import type { GoogleAccount, GoogleCapability, GoogleToolName, ToolView } from '@conch/protocol';
+import {
+  MAIL_PREVIEW_MAX,
+  MailEdit,
+  type GoogleAccount,
+  type GoogleCapability,
+  type GoogleToolName,
+  type MailPerson,
+  type ToolView,
+} from '@conch/protocol';
 import { z } from 'zod';
 
 import { ChannelError } from '../channels/types';
 import type { ToolContext } from '../conversations/manager';
 import type { HostTool, HostToolResult } from '../engines/types';
 import { SendUncertain } from './imap';
-import { gmailLink, replyEnvelope, viaImap } from './mail';
+import { gmailLink, replyEnvelope, viaImap, type ReplyEnvelope } from './mail';
 import { GoogleError, type GoogleService } from './service';
 import { accountRef, composeRaw, pickAccount } from './accounts';
-import { agendaView, filesView, mailView } from './views';
+import { agendaView, filesView } from './views';
 
 type Reconciled =
   { state: 'confirmed'; receipt: Receipt } | { state: 'absent' } | { state: 'unknown' };
@@ -142,23 +150,49 @@ const eventView = (event: Event): ToolView | undefined => {
   const start = startOf(event);
   return start ? agendaView({ items: [event] }, { start, end: endOf(event) || start }) : undefined;
 };
-/** The email that just went, drawn like the ones a search finds. */
-const sentView = (
-  args: { to: string[]; subject: string; body: string },
-  account: GoogleAccount,
-  url?: string,
-): ToolView | undefined =>
-  mailView([
-    {
-      from: account.email,
-      subject: args.subject || '(no subject)',
-      snippet: args.body.replace(/\s+/g, ' ').trim().slice(0, 300),
-      date: new Date().toISOString(),
-      unread: false,
-      attachments: false,
-      ...(url && { url }),
-    },
-  ]);
+/** Who an email goes to, named as the thread named them when it did. */
+const people = (addresses: string[], names?: Record<string, string>): MailPerson[] =>
+  addresses.map((address) => {
+    const name = names?.[address.toLowerCase()];
+    return { address, ...(name && name.toLowerCase() !== address.toLowerCase() && { name }) };
+  });
+
+/**
+ * An email Conch sent or saved, as a letter that went (ADR 0060): who it went
+ * to, what it said, from which account, and where Gmail keeps it.
+ */
+export function mailSentView(
+  args: { to: string[]; cc?: string[]; subject: string; body: string; sourceMessageId?: string },
+  account: Pick<GoogleAccount, 'email'>,
+  options: {
+    state: 'sent' | 'draft';
+    url?: string;
+    names?: Record<string, string>;
+    edited?: boolean;
+  },
+): ToolView {
+  return {
+    kind: 'mail-sent',
+    state: options.state,
+    from: account.email,
+    to: people(args.to, options.names),
+    ...(args.cc?.length && { cc: people(args.cc, options.names) }),
+    subject: args.subject.slice(0, 300),
+    body: args.body.slice(0, MAIL_PREVIEW_MAX),
+    ...(args.body.length > MAIL_PREVIEW_MAX && { clipped: true }),
+    at: new Date().toISOString(),
+    ...(options.url && { url: options.url }),
+    ...(args.sourceMessageId && { reply: true }),
+    ...(options.edited && { edited: true }),
+  };
+}
+
+/** Gmail's own search for one Message-ID, in the account it went from. */
+export const findInGmail = (email: string, messageId: string) =>
+  `https://mail.google.com/mail/?authuser=${encodeURIComponent(email)}#search/${encodeURIComponent(`rfc822msgid:${messageId.replace(/^<|>$/g, '')}`)}`;
+
+/** What the person may change on an email's card: its words and who it goes to. */
+const MAIL_FIELDS = ['to', 'cc', 'subject', 'body'] as const;
 
 interface WriteSpec<Shape extends z.ZodRawShape, Prepared> {
   name: GoogleToolName;
@@ -167,6 +201,17 @@ interface WriteSpec<Shape extends z.ZodRawShape, Prepared> {
   capability: GoogleCapability;
   /** What it changes, as a person would name it, for the "nothing was …" lines. */
   noun: string;
+  /** Show a row while it runs, so going (and failing) is seen, not only arriving. */
+  row?: boolean;
+  /**
+   * The person may change it on the card before allowing it: takes their
+   * change and gives the call as it now is, or throws when it can't be used.
+   * Checked with the same rules as the model's call; never the account.
+   */
+  edit?: (
+    args: z.infer<z.ZodObject<Shape>> & { accountId: string },
+    proposed: MailEdit,
+  ) => z.infer<z.ZodObject<Shape>> & { accountId: string };
   /** The fields that make two calls the same action, never the model's wording. */
   identity: (args: z.infer<z.ZodObject<Shape>> & { accountId: string }) => unknown[];
   /** A look before asking (the event being changed), so the card can name it. */
@@ -184,7 +229,14 @@ interface WriteSpec<Shape extends z.ZodRawShape, Prepared> {
   perform: (
     args: z.infer<z.ZodObject<Shape>> & { accountId: string },
     account: GoogleAccount,
-    run: { operationId: string; authorization: string; signal: AbortSignal; prepared: Prepared },
+    run: {
+      operationId: string;
+      authorization: string;
+      signal: AbortSignal;
+      prepared: Prepared;
+      /** The person changed it on the card before allowing it. */
+      edited: boolean;
+    },
   ) => Promise<{ receipt: Receipt; view?: ToolView }>;
   reconcile: (
     args: z.infer<z.ZodObject<Shape>> & { accountId: string },
@@ -216,6 +268,7 @@ export function googleWriteTools(service: GoogleService, ctx: ToolContext): Host
       name: spec.name,
       description: spec.description,
       input: spec.input,
+      ...(spec.row && { row: true }),
       verification: {
         effect: 'write',
         identity: (raw) => {
@@ -256,15 +309,44 @@ export function googleWriteTools(service: GoogleService, ctx: ToolContext): Host
         const prepared = (await spec.prepare?.(args, account)) as Prepared;
         const restricted = await ctx.restricted?.('apps', 'google');
         const warning = [ctx.untrusted?.(), restricted].filter(Boolean).join(' ');
+        // What the person changed on the card, checked as the model's call is. Not in a
+        // task: its ledger holds the call it was given, so there it goes as it was.
+        const { edit } = spec;
+        let edited: typeof args | undefined;
+        let refused: string | undefined;
+        const names = (prepared as { names?: Record<string, string> } | undefined)?.names;
         const decision = await ctx.ask({
           toolName: spec.name,
-          input: { ...args, accountEmail: account.email },
+          input: {
+            ...args,
+            accountEmail: account.email,
+            ...(names && Object.keys(names).length && { names }),
+          },
           summary: spec.summary(args, account, prepared),
           ...(warning ? { taint: warning } : {}),
           // Exactly this, this time: never "always".
           once: true,
+          ...(edit &&
+            !context?.operationId && {
+              edit: (proposed: MailEdit) => {
+                try {
+                  edited = edit(args, MailEdit.parse(proposed));
+                } catch (error) {
+                  refused =
+                    error instanceof GoogleError
+                      ? error.message
+                      : 'it wasn’t an email Gmail could send';
+                  throw error;
+                }
+              },
+            }),
         });
-        if (decision === 'deny') return notDone('The person said no.');
+        if (decision === 'deny')
+          return notDone(
+            refused
+              ? `The person changed it on the card, but the change couldn’t be used (${refused}). Ask them what to change.`
+              : 'The person said no.',
+          );
         if (ctx.signal.aborted) return notDone('Stopped before it started.');
         let current;
         try {
@@ -274,14 +356,47 @@ export function googleWriteTools(service: GoogleService, ctx: ToolContext): Host
         }
         if (current.authorization !== authorized.authorization)
           return notDone('The account’s access changed while waiting for the approval.');
+        // Exactly what the person approved: their change, prepared again (a reply's
+        // thread is checked against the words that will go), or the call as it was.
+        const final = edited ?? args;
+        let ready = prepared;
+        if (edited)
+          try {
+            ready = (await spec.prepare?.(edited, account)) as Prepared;
+          } catch (error) {
+            if (error instanceof GoogleError)
+              return notDone(`The person’s change couldn’t be used: ${error.message}`);
+            throw error;
+          }
         try {
-          const { receipt, view } = await spec.perform(args, account, {
+          const { receipt, view } = await spec.perform(final, account, {
             operationId,
             authorization: authorized.authorization,
             signal: ctx.signal,
-            prepared,
+            prepared: ready,
+            edited: Boolean(edited),
           });
-          const text = JSON.stringify({ state: 'confirmed', receipt });
+          const changed = edited
+            ? MAIL_FIELDS.filter(
+                (key) =>
+                  JSON.stringify((args as Record<string, unknown>)[key] ?? null) !==
+                  JSON.stringify((final as Record<string, unknown>)[key] ?? null),
+              )
+            : [];
+          const text = JSON.stringify({
+            state: 'confirmed',
+            receipt,
+            ...(changed.length && {
+              changedByPerson: changed,
+              note: `The person changed the ${changed.join(', ')} on the card before approving. What went is in "sent"; it is done, so don't send it again.`,
+              sent: Object.fromEntries(
+                MAIL_FIELDS.flatMap((key) => {
+                  const value = (final as Record<string, unknown>)[key];
+                  return value === undefined ? [] : [[key, value]];
+                }),
+              ),
+            }),
+          });
           return view ? { text, view } : text;
         } catch (error) {
           if (error instanceof GoogleError && error.kind === 'not-executed')
@@ -295,25 +410,28 @@ export function googleWriteTools(service: GoogleService, ctx: ToolContext): Host
   // ── Gmail: send ────────────────────────────────────────────────────────
 
   const Mail = z.object({ id: resourceId, threadId: resourceId.optional() });
+  const SendInput = {
+    accountId: accountRef,
+    to: z.array(email).min(1).max(20),
+    cc: z.array(email).max(20).optional(),
+    subject: oneLine(500),
+    body: z.string().max(100_000),
+    sourceMessageId: resourceId.optional(),
+    threadId: resourceId.optional(),
+  };
+  type SendShape = typeof SendInput;
   const MailList = z.object({
     messages: z.array(z.object({ id: resourceId })).optional(),
     nextPageToken: z.string().optional(),
   });
-  const send = write({
+  const send = write<SendShape, ReplyEnvelope | undefined>({
     name: 'google_mail_send',
     noun: 'sent',
     capability: 'mail-send',
+    row: true,
     description:
       'Send an email from a connected Gmail account, as the person, after they approve this exact email. For a reply, pass sourceMessageId from google_mail_read: the recipients and subject must match the original, and it is threaded. Plain text only, no attachments. Prefer google_mail_create_draft when the person may want to edit first. Never retry an uncertain send.',
-    input: {
-      accountId: accountRef,
-      to: z.array(email).min(1).max(20),
-      cc: z.array(email).max(20).optional(),
-      subject: oneLine(500),
-      body: z.string().max(100_000),
-      sourceMessageId: resourceId.optional(),
-      threadId: resourceId.optional(),
-    },
+    input: SendInput,
     identity: (a) => [
       a.accountId,
       a.sourceMessageId ?? a.threadId ?? null,
@@ -321,10 +439,38 @@ export function googleWriteTools(service: GoogleService, ctx: ToolContext): Host
       (a.cc ?? []).map((v) => v.toLowerCase()).sort(),
       a.subject.trim().toLowerCase(),
     ],
+    // A reply's thread is read before asking: a reply that can't go says so before
+    // anyone approves it, and the card can name the people in it.
+    prepare: (a) => replyEnvelope(service, a),
+    edit(a, change) {
+      const same = (x: string[], y: string[]) =>
+        x.map((v) => v.toLowerCase()).join() === y.map((v) => v.toLowerCase()).join();
+      // A reply goes to the thread's people with its subject: that's what threads it.
+      if (a.sourceMessageId && (change.subject !== a.subject || !same(change.to, a.to)))
+        throw new GoogleError(
+          'invalid',
+          'a reply keeps the thread’s people and subject; write a new email for anyone else',
+        );
+      const { cc: _cc, ...rest } = a;
+      return {
+        ...rest,
+        to: change.to,
+        ...(change.cc?.length && { cc: change.cc }),
+        subject: change.subject.trim(),
+        body: change.body,
+      };
+    },
     summary: (a, account) =>
       `send an email from ${account.email} to ${a.to.join(', ')}${a.cc?.length ? `, copying ${a.cc.join(', ')}` : ''}, with subject “${a.subject}”`,
     async perform(a, account, run) {
-      const reply = await replyEnvelope(service, a);
+      const reply = run.prepared;
+      const shown = (url?: string) =>
+        mailSentView(a, account, {
+          state: 'sent',
+          ...(url && { url }),
+          ...(reply?.names && { names: reply.names }),
+          edited: run.edited,
+        });
       const messageId = sendMessageId(run.operationId, account.email);
       const raw = composeRaw(a, { messageId, from: account.email, reply });
       if (account.via === 'app-password') {
@@ -356,7 +502,7 @@ export function googleWriteTools(service: GoogleService, ctx: ToolContext): Host
         // Gmail took it (SMTP said so): that answer is the receipt.
         return {
           receipt: { provider: 'google', id: messageId, label: 'Sent from Gmail' },
-          ...(sentView(a, account) && { view: sentView(a, account) }),
+          view: shown(findInGmail(account.email, messageId)),
         };
       }
       const sent = Mail.parse(
@@ -377,9 +523,7 @@ export function googleWriteTools(service: GoogleService, ctx: ToolContext): Host
           label: 'Sent from Gmail',
           url: gmailLink(account.email, sent.id, 'sent'),
         },
-        ...(sentView(a, account, gmailLink(account.email, sent.id, 'sent')) && {
-          view: sentView(a, account, gmailLink(account.email, sent.id, 'sent')),
-        }),
+        view: shown(gmailLink(account.email, sent.id, 'sent')),
       };
     },
     async reconcile(_a, account, operationId) {
