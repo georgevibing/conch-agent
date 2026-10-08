@@ -53,6 +53,15 @@ export class SearchIndexer {
     }
   }
 
+  /**
+   * Look again for what changed (past chats brought in, ADR 0111): the same
+   * catch-up as at start, after whatever is already running.
+   */
+  refresh(): Promise<void> {
+    this.#ready = this.#ready.then(() => this.#catchUp()).catch(this.log);
+    return this.#ready;
+  }
+
   /** Wait for pending work on a conversation (tests). */
   async settled(id?: string) {
     await this.#ready;

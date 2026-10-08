@@ -24,6 +24,8 @@ import { MockTeams } from '../channels/mock/teams';
 import { MockTelegram } from '../channels/mock/telegram';
 import { recordGateway } from '../port';
 import { Services } from '../services';
+import { claudeHome } from '../import/chats/fixtures';
+import { ChatImportService } from '../import/chats/service';
 import { fakePack, fakeParts, fakeSign, textFiles } from './conchapps';
 import { png } from './faces';
 
@@ -397,6 +399,14 @@ export async function useConch(g: Gateway) {
     provider: 'anthropic-api',
     messages: [{ role: 'user', content: 'hi' }],
   });
+  // Past chats brought in from another app on this computer (ADR 0111).
+  const elsewhere = await mkdtemp(join(tmpdir(), 'conch-elsewhere-'));
+  claudeHome(elsewhere);
+  await new ChatImportService({
+    store: services.chatImports.store,
+    sourceHome: elsewhere,
+    env: {},
+  }).start();
   // The browser's own profile, as Chromium leaves it.
   await mkdir(join(home, 'browser', 'profile', 'Default'), { recursive: true });
   await writeFile(join(home, 'browser', 'profile', 'Default', 'Cookies'), 'cookies');

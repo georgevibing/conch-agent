@@ -57,6 +57,8 @@ export interface ChatFacts {
   title?: string;
   archivedAt?: number;
   origin?: ConversationSummary['origin'];
+  /** Where it happened, when it was another app (a past chat, ADR 0111): “Claude Code, in shop”. */
+  place?: string;
   /** What it read from outside (its `taint` events). */
   taint: readonly TaintSource[];
 }
@@ -158,7 +160,7 @@ function who(role: SearchRole, others: boolean): PastChatWho {
 /** What a result says about the chat it's from. */
 function describe(id: string, title: string, updatedAt: number, facts: ChatFacts) {
   const people = facts.taint.filter((t) => t.kind === 'person').map((t) => t.label);
-  const place = from(facts.origin);
+  const place = facts.place ?? from(facts.origin);
   return {
     chat: id,
     title: clip(title.replace(/\s+/g, ' ').trim() || 'Untitled', 200),

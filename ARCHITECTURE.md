@@ -133,6 +133,7 @@ src/
   activity/                   everything the assistant did, read from the chats' logs (ADR 0028)
   undo/                       what each change was before: blobs, change sets, the preview diff, putting back (ADR 0030)
   import/                     Come home: OpenClaw and Hermes read-only, a plan, a ledger for Undo (ADR 0035)
+    chats/                    Past chats from other apps: a reader per app, the past-chats store, keep-up (ADR 0111)
   artifacts/                  things made beside the chat: store, tools, fenced blocks, the sealed frame (ADR 0034); edits, drafts, live data (`live.ts`, ADR 0046)
   tasks/                      background tasks and helpers side by side (`delegate`), queue, worktrees (ADR 0033)
   mcp/                        other apps using Conch: the MCP door at `/mcp`, the launcher's handshake, scopes,
@@ -396,6 +397,19 @@ src/
   persona a skill made off, `ImportItem.agent`), and a Slack bot with one key
   (`slackHalf`, `GET /api/import/slack`, finished by `POST /api/import/:source/slack`
   into the same ledger).
+
+- **Past chats from other apps** ([ADR 0111](./docs/adr/0111-your-past-chats-from-other-apps.md)).
+  `import/chats/` has a `ChatFinder` per app (Claude Code, Codex, Gemini CLI, OpenCode,
+  Copilot, OpenClaw, Hermes): `find` lists its sessions cheaply, `read` streams one
+  (`jsonLines`, zstd where needed; databases read-only through `sqlite.ts`, asking only
+  for the columns they have) into words, never steps or thinking. `ChatImportService`
+  looks (`status`), brings in what's new or grew (`start`, in the background, secrets out
+  through Passwords' redactor and `scrubSecrets`), keeps up by itself once the person
+  has said yes (`keepUp`), and carries one on (`ConversationManager.adopt`, tainted,
+  `QuietLearning.broughtIn`). `PastChatStore` keeps `past-chats/index.json` + `<id>.jsonl`
+  (`pc_` ids from the app's own id, so twice is once), apart from the chat list; the
+  search index's source is both stores, so ⌘K, `search_chats` and `read_chat` find
+  them, marked as from outside (`ChatFacts.place`, an `app` taint).
 
 - **Show me** ([ADR 0034](./docs/adr/0034-show-me.md)). `artifact_create`/`artifact_update`
   (or a fenced ` ```artifact ` block from a provider without tools, taken out on
@@ -835,7 +849,7 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   [ADR 0059 — Looking through earlier chats](./docs/adr/0059-looking-through-earlier-chats.md).
 - Local data lives in `~/.conch/` (`CONCH_HOME`): `settings.json`, `secrets.json`
   (the API key and a key per provider, or a 1Password reference to one),
-  `memory/*.md` (+ `memory/superseded/*.md`, `learning/*.json`, `learning-spend.json`; derived `memory-index.db`, `memory-tidy.json`, `models/`; `skill-suggestions.json`, `skill-learned.json`, `skill-usage.json`), `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`, `routines/when/*.json`; derived `routines/when/*.seen.json`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `search.db`,
+  `memory/*.md` (+ `memory/superseded/*.md`, `learning/*.json`, `learning-spend.json`; derived `memory-index.db`, `memory-tidy.json`, `models/`; `skill-suggestions.json`, `skill-learned.json`, `skill-usage.json`), `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`, `routines/when/*.json`; derived `routines/when/*.seen.json`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `past-chats/index.json` + `<id>.jsonl` (past chats from other apps, ADR 0111), `search.db`,
   `integrations.json` + `integrations.secrets.json`, `skills/<name>/SKILL.md` +
   `skills.json` (modes for skills Conch doesn't own), `local.json` (the local model chosen, the last download speed), `api-sessions/<id>.json` (the
   transcript a plain model API needs, since it keeps no session of its own),

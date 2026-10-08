@@ -483,6 +483,12 @@ export const RULES: readonly BackupRule[] = [
     why: 'Each chat, every message and step.',
   },
   {
+    match: 'past-chats/**',
+    class: 'kept',
+    group: 'chats',
+    why: 'Your past chats brought in from Claude Code, Codex and other apps, with secrets taken out (ADR 0111).',
+  },
+  {
     match: 'attachments/**',
     class: 'kept',
     group: 'chats',
@@ -714,7 +720,14 @@ export const GROUP_DIRS: Partial<Record<BackupGroup, string[]>> = {
   commands: ['commands'],
   routines: ['routines'],
   skills: ['skills'],
-  chats: ['conversations', 'attachments', 'api-sessions', 'browser/shots', 'app-workshop'],
+  chats: [
+    'conversations',
+    'past-chats',
+    'attachments',
+    'api-sessions',
+    'browser/shots',
+    'app-workshop',
+  ],
   integrations: ['conch-apps', 'conch-app-data'],
 };
 

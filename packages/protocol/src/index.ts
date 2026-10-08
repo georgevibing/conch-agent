@@ -95,6 +95,7 @@ export * from './engine';
 export * from './first-job';
 export * from './healed';
 export * from './import';
+export * from './chat-import';
 export * from './integrations';
 export * from './learning';
 export * from './quiet-learning';

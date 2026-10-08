@@ -5,6 +5,9 @@ import { join, resolve, sep } from 'node:path';
 
 import {
   ARTIFACT_FILES,
+  CHAT_SOURCE_LABELS,
+  isPastChatId,
+  type ConversationSummary,
   type EngineId,
   type LoginState,
   type ServerEvent,
@@ -16,6 +19,9 @@ import {
 import { Activity } from './activity/service';
 import { importCheck } from './import/doctor';
 import { ImportService } from './import/service';
+import { pastChatsCheck } from './import/chats/doctor';
+import { CARRY_ON_WITH, ChatImportService } from './import/chats/service';
+import { PastChatStore } from './import/chats/store';
 import { fetchLive, LiveDataAccess } from './artifacts/live';
 import { ArtifactService } from './artifacts/service';
 import { conchAppParts, type ConchAppParts } from './conchapps/deps';
@@ -345,6 +351,8 @@ export class Services {
   readonly channels: ChannelService;
   /** Come home: bringing your things from OpenClaw or Hermes (ADR 0035). */
   readonly imports: ImportService;
+  /** Your past chats from Claude Code, Codex and the rest, brought in to read and carry on (ADR 0111). */
+  readonly chatImports: ChatImportService;
   /** Always on: starting at login, running with no window (ADR 0026). */
   readonly background: BackgroundService;
   /** Conch in the menu bar, tray or panel (ADR 0029). */
@@ -747,6 +755,10 @@ export class Services {
     // The browser fills sign-in fields from Passwords, with your OK (ADR 0025).
     this.browser.passwords = this.vault;
     const conversationStore = new ConversationStore(join(config.CONCH_HOME, 'conversations'), heal);
+    // Past chats from other apps (ADR 0111): read-only, searched beside Conch's own.
+    const pastChats = new PastChatStore(config.CONCH_HOME, heal);
+    this.chatImports = this.#chatImports(config, pastChats, conversationStore);
+    this.doctor.register(pastChatsCheck(this.chatImports));
     this.folders = new ChatFolders(join(config.CONCH_HOME, 'conversations'), heal, (folders) =>
       this.broadcast.emit({ type: 'folders.changed', folders }),
     );
@@ -1403,8 +1415,12 @@ export class Services {
     this.search = new SearchService({
       path: join(config.CONCH_HOME, 'search.db'),
       source: {
-        list: () => conversationStore.list(),
-        events: (id) => conversationStore.events(id),
+        // Conch's own chats, and the past chats brought in from other apps (ADR 0111).
+        list: async () => [
+          ...(await conversationStore.list()),
+          ...(await pastSummaries(pastChats)),
+        ],
+        events: (id) => (isPastChatId(id) ? pastChats.events(id) : conversationStore.events(id)),
         detail: (id) => this.conversations.detail(id),
       },
       heal,
@@ -1412,6 +1428,10 @@ export class Services {
     });
     this.conversations.events.on((event) => this.search.onEvent(event));
     this.search.open();
+    // Once you've brought past chats in, the new ones follow by themselves (ADR 0111).
+    const keepUp = () => void this.chatImports.keepUp().catch(() => undefined);
+    setTimeout(keepUp, 2 * 60_000).unref();
+    setInterval(keepUp, 6 * 60 * 60_000).unref();
     // Repair everything looks at every part of Conch (see `doctor/checks.ts`).
     registerCoreChecks(this);
     // Back online: whatever waited goes now, in order.
@@ -2093,6 +2113,49 @@ export class Services {
     return value;
   }
 
+  /**
+   * Your past chats from other apps (ADR 0111): found where each app keeps
+   * them, read only, kept with secrets taken out, and carried on in a chat of
+   * Conch's own with the same provider when it's connected here.
+   */
+  #chatImports(
+    config: Config,
+    store: PastChatStore,
+    conversations: ConversationStore,
+  ): ChatImportService {
+    return new ChatImportService({
+      store,
+      // Pointed at a pretend home (tests, the journeys): nothing the real environment moves counts.
+      ...(config.CONCH_IMPORT_HOME && { sourceHome: config.CONCH_IMPORT_HOME, env: {} }),
+      redact: this.vault.redactor(),
+      // Conch drives Claude Code itself: its sessions behind Conch's own chats are already here.
+      ownSessions: async () => {
+        const ids = new Set<string>();
+        for (const record of await conversations.list()) {
+          if (record.resumeId) ids.add(record.resumeId);
+          for (const session of Object.values(record.sessions ?? {}))
+            if (session?.resumeId) ids.add(session.resumeId);
+        }
+        return ids;
+      },
+      changed: () => void this.search?.refresh().catch(() => undefined),
+      carryOn: async ({ chat, messages }) => {
+        const ready = new Set((await this.providers.ready()).map((e) => e.id));
+        const engine = CARRY_ON_WITH[chat.source].find((id) => ready.has(id as EngineId));
+        const { conversation, lastSeq } = await this.conversations.adopt({
+          title: chat.title,
+          messages,
+          ...(engine && { options: { engine: engine as EngineId } }),
+          taint: { kind: 'app', label: CHAT_SOURCE_LABELS[chat.source] },
+        });
+        // What another app's chat said is never learned from: only what's said here next.
+        await this.learning.broughtIn(conversation.id, lastSeq).catch(() => undefined);
+        return conversation.id;
+      },
+      log: (error) => console.error('[past chats]', error),
+    });
+  }
+
   /** Come home: what Conch already has, and where things go when they come over. */
   #imports(config: Config): ImportService {
     return new ImportService({
@@ -2194,6 +2257,17 @@ export class Services {
 
   /** What looking through earlier chats needs to know about one (ADR 0059); undefined once it's gone. */
   async #chatFacts(id: string): Promise<ChatFacts | undefined> {
+    // A past chat from another app (ADR 0111): from outside, so what it says is information.
+    if (isPastChatId(id)) {
+      const past = await this.chatImports.store.get(id);
+      if (!past) return undefined;
+      const app = CHAT_SOURCE_LABELS[past.source];
+      return {
+        title: past.title,
+        place: past.project ? `${app}, in ${past.project}` : app,
+        taint: [{ kind: 'app', label: app }],
+      };
+    }
     const found = await this.conversations.detail(id).catch(() => undefined);
     if (!found) return undefined;
     const { conversation, events } = found;
@@ -2781,4 +2855,17 @@ function mockBlueprints(vendor: MockVendor) {
 function clock(at: number): string {
   const d = new Date(at);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+/** Past chats as the search index lists conversations (ADR 0111). */
+async function pastSummaries(store: PastChatStore): Promise<ConversationSummary[]> {
+  return (await store.list().catch(() => [])).map((chat) => ({
+    id: chat.id,
+    title: chat.title,
+    preview: '',
+    createdAt: chat.createdAt,
+    updatedAt: chat.updatedAt,
+    status: 'idle',
+    options: {},
+  }));
 }

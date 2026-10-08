@@ -18,6 +18,9 @@ export function protectedPaths(home: string): string[] {
     // Each agent's persona and instructions are read into every turn it answers (ADR 0101):
     // only a person changes them, in Conch, never the assistant's own file tools.
     join(home, 'agents'),
+    // Past chats from other apps (ADR 0111) are read through `read_chat`, never edited by hand:
+    // a line written into one would read as something you once said.
+    join(home, 'past-chats'),
     join(home, 'vault'),
     join(home, 'codex.secrets.json'),
     join(home, 'codex-runtime'),

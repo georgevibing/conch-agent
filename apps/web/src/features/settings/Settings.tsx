@@ -58,6 +58,7 @@ import { BrowserSettings } from '../browser/BrowserSettings';
 import { HealthTab } from '../health/HealthTab';
 import { OtherAppsTab } from '../otherapps/OtherAppsTab';
 import { ComeHomeSection } from '../import/ComeHomeSection';
+import { PastChatsSection } from '../import/PastChatsSection';
 import { ComputerTab } from '../computer/ComputerTab';
 import { ComeHomePage } from '../import/ComeHomePage';
 import { MemoryView } from '../memory/MemoryView';
@@ -149,6 +150,7 @@ function MemoryTab({
         </Stack>
       </Section>
       <ComeHomeSection />
+      <PastChatsSection />
     </Stack>
   );
 }

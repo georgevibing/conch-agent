@@ -96,6 +96,7 @@ import { MEMORY_ALL } from '../settings/paths';
 import { ARCHIVE_PATH, isChat, useArchive } from '../archive/useArchive';
 import { useOrganise } from '../chatlist/useOrganise';
 import { COME_HOME_FOCUS } from '../import/api';
+import { PAST_CHATS_FOCUS } from '../import/pastChats';
 import { doctorApi } from '../health/api';
 import { LIVE_DATA_FOCUS } from '../artifacts/LiveDataSection';
 import {
@@ -911,6 +912,14 @@ export function useFindables(query: string, conversationId: string | undefined):
         'import move migrate switch bring come home openclaw clawdbot moltbot hermes agent memories skills persona soul',
       icon: <House />,
       run: () => openSettings('memory', COME_HOME_FOCUS),
+    },
+    {
+      id: 'past-chats',
+      label: 'Bring in your past chats from other apps',
+      keywords:
+        'import past chats conversations history sessions transcripts claude code codex gemini cli opencode copilot openclaw hermes bring in old',
+      icon: <MessagesSquare />,
+      run: () => openSettings('memory', PAST_CHATS_FOCUS),
     },
     {
       id: 'passwords',

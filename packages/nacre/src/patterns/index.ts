@@ -67,6 +67,7 @@ export * from './Backups';
 export * from './PathPicker';
 export * from './FolderBrowser';
 export * from './ComeHome';
+export * from './ChatsFound';
 export * from './Artifacts';
 export * from './ConchApps';
 export * from './Memory';

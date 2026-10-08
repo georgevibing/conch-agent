@@ -1,4 +1,4 @@
-import type { ImportSourceId, ImportStatus, Tone } from '@conch/protocol';
+import type { ChatImportStatus, ImportSourceId, ImportStatus, Tone } from '@conch/protocol';
 import {
   AgentAvatar,
   AgentFacePicker,
@@ -47,6 +47,8 @@ import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
 import { useImportStatus } from '../import/api';
 import { ComeHomeDialog } from '../import/ComeHomeDialog';
+import { PastChatsFound } from '../import/PastChatsFound';
+import { useChatImportStatus } from '../import/pastChats';
 import { ConnectDialog } from '../integrations/ConnectDialog';
 import { useIntegrations } from '../integrations/queries';
 import { ProviderSetup } from '../providers/ProviderSetup';
@@ -81,7 +83,7 @@ const ICONS: Record<Interest, ReactNode> = {
   life: <House />,
 };
 
-type Step = 'hello' | 'name' | 'help' | 'voice' | 'mind' | 'apps' | 'home' | 'ready';
+type Step = 'hello' | 'name' | 'help' | 'voice' | 'mind' | 'apps' | 'home' | 'chats' | 'ready';
 const STEP_KEY = 'conch:welcome-step';
 
 function remembered(): Step {
@@ -447,6 +449,33 @@ function HomeStep({ status, onNext }: { status: ImportStatus; onNext: () => void
   );
 }
 
+/**
+ * Your past chats (ADR 0111), offered once: Conch found conversations from
+ * other apps on this computer, and one press brings them in to search and
+ * carry on. It follows them in, then carries on itself.
+ */
+function ChatsStep({ status, onNext }: { status: ChatImportStatus; onNext: () => void }) {
+  const ref = useAutoFocus<HTMLButtonElement>();
+  return (
+    <>
+      <WelcomeRise order={0}>
+        <Heading level={1} display size="4xl" align="center">
+          Bring your past chats with you?
+        </Heading>
+      </WelcomeRise>
+      <WelcomeRise order={1} className={styles.wide}>
+        <PastChatsFound
+          status={status}
+          primaryRef={ref}
+          onLater={onNext}
+          laterLabel="Not now"
+          onDone={onNext}
+        />
+      </WelcomeRise>
+    </>
+  );
+}
+
 function Ready({
   name,
   agent,
@@ -511,6 +540,7 @@ export function Onboarding() {
   const me = useDefaultAgent();
   const navigate = useNavigate();
   const imports = useImportStatus();
+  const pastChats = useChatImportStatus();
   const [step, setStep] = useState<Step>(remembered);
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
   const about = state.data?.profile.about ?? '';
@@ -520,6 +550,12 @@ export function Onboarding() {
   const home = imports.data?.sources.length ? imports.data : undefined;
   const steps: Step[] = ['hello', 'name', 'help', 'voice', 'mind', 'apps'];
   if (home) steps.push('home');
+  // Your past chats in other apps (ADR 0111), offered once, when there are some to bring.
+  const chats =
+    pastChats.data && (pastChats.data.sources.some((s) => s.fresh > 0) || step === 'chats')
+      ? pastChats.data
+      : undefined;
+  if (chats) steps.push('chats');
   steps.push('ready');
   const between = steps.slice(1, -1);
 
@@ -628,7 +664,8 @@ export function Onboarding() {
         )}
         {step === 'mind' && <MindStep onNext={() => go(after('mind'))} />}
         {step === 'apps' && <AppsStep picked={picked} onNext={() => go(after('apps'))} />}
-        {step === 'home' && home && <HomeStep status={home} onNext={() => go('ready')} />}
+        {step === 'home' && home && <HomeStep status={home} onNext={() => go(after('home'))} />}
+        {step === 'chats' && chats && <ChatsStep status={chats} onNext={() => go('ready')} />}
         {step === 'ready' && (
           <Ready
             name={profile.name}

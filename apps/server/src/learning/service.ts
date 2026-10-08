@@ -834,6 +834,15 @@ export class QuietLearning {
    * Don't learn from this chat, or learn from it again. Learning again starts
    * from here: what was said while it was marked is never read.
    */
+  /**
+   * A chat that starts with another app's past chat (ADR 0111): what it
+   * brought is never learned from, only what's said here after `lastSeq`.
+   */
+  async broughtIn(conversationId: string, lastSeq: number): Promise<void> {
+    const state = await this.store.chat(conversationId);
+    await this.store.setChat(conversationId, { reviewed: Math.max(lastSeq, state.reviewed ?? -1) });
+  }
+
   async quiet(conversationId: string, quiet: boolean): Promise<void> {
     const last = quiet ? undefined : await this.#lastSeq(conversationId);
     await this.store.setChat(conversationId, {

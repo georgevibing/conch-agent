@@ -89,6 +89,9 @@ your desktop and the chat apps you already use.
   sentence, or from **Discover**. [Skills](./apps/docs/content/features/skills.md)
 - **Bring your things.** Memories, skills, routines and agents from OpenClaw or
   Hermes, shown first and undoable for a week.
+- **Your past chats.** Conversations from Claude Code, Codex, Gemini CLI, OpenCode,
+  Copilot, OpenClaw and Hermes, found by themselves and brought in with one press, to
+  search and carry on. [Past chats](./apps/docs/content/care/past-chats.md)
 
 ### Works for you
 

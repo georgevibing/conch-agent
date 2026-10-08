@@ -102,6 +102,12 @@ export class SearchService {
     return this.#use((index) => index.slice(conversationId, options), null);
   }
 
+  /** Catch up on chats that came in from elsewhere (ADR 0111): past chats from other apps. */
+  async refresh(): Promise<void> {
+    await this.#work;
+    await this.#indexer?.refresh();
+  }
+
   /** Wait for pending indexing (tests). */
   async settled(id?: string): Promise<void> {
     await this.#work;
