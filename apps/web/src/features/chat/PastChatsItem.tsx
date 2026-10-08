@@ -1,9 +1,10 @@
-import { findRanges, foldText, parseQuery, type PastChatWho } from '@conch/protocol';
+import { findRanges, foldText, isPastChatId, parseQuery, type PastChatWho } from '@conch/protocol';
 import { PastChatsLook, type PastChatView } from '@conch/nacre';
 import { useNavigate } from 'react-router';
 
 import { useUi } from '../../app/ui';
 import { relativeTime } from '../../lib/time';
+import { openPastChat } from '../import/pastChats';
 import type { TranscriptItem } from '../../live/reducer';
 
 type Looked = Extract<TranscriptItem, { kind: 'looked' }>;
@@ -43,6 +44,8 @@ export function PastChatsItem({ item, name }: { item: Looked; name: string }) {
       close={item.close}
       chats={chats}
       onOpen={(chat, line) => {
+        // A past chat from another app opens to read, beside this one (ADR 0111).
+        if (isPastChatId(chat.id)) return openPastChat(chat.id);
         void navigate(`/c/${encodeURIComponent(chat.id)}`);
         // Lands on the line itself, with what it looked for lit, as a search result does.
         if (line)

@@ -79,6 +79,7 @@ Memories hold facts about you. Your chats hold everything else: the plan you mad
 Say "like last time", "the Lisbon plan" or "what did we decide about the venue?" and it searches your other chats, the same way [Find anything](./find.md) does, then reads around the line it needs. The chat shows **Looked through your chats** with what it looked for. Open it to see each chat and line it found; choose one to go there.
 
 - It finds [archived](./chats.md#archive) chats too, and knows they're archived. The chat you're in is left out.
+- It finds the [past chats you brought in](../care/past-chats.md) from Claude Code, Codex and other apps, and says which app each was in. They come from outside Conch, so reading one marks your chat like reading a web page, and nothing in them is learned by itself.
 - **Activity** lists every time it looked, beside what it remembered.
 - It never passes on a password or a key. Anything Passwords handed out, and anything shaped like a key or written as "password: …", comes back as •••.
 - A chat that read a web page or an email, or has someone else's words, could be trying to steer it. Reading one marks your chat the same way, so anything risky asks first. See [when the assistant reads something untrusted](../security/signing-in.md#when-the-assistant-reads-something-untrusted).

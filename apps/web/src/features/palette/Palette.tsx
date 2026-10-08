@@ -1,6 +1,7 @@
 import {
   fuzzyFilter,
   excerpt,
+  isPastChatId,
   type ConversationSummary,
   type SearchGroup,
   type SearchHit,
@@ -50,6 +51,7 @@ import { relativeTime } from '../../lib/time';
 import { isChat } from '../archive/useArchive';
 import { compactChat } from '../chat/compact';
 import { clearChat } from '../commands/context';
+import { openPastChat } from '../import/pastChats';
 import { useSearchPreview, useSearchResults } from '../search/useSearch';
 import { useHowItDidIt } from '../trajectory/api';
 import { useFindables } from './findables';
@@ -356,9 +358,12 @@ export function Palette() {
   const fuzzy = search.data?.mode === 'fuzzy';
   const titleById = new Map((conversations ?? []).map((c) => [c.id, c]));
 
-  const openChat = (id: string) => run(() => void navigate(`/c/${id}`));
+  const openChat = (id: string) =>
+    run(() => (isPastChatId(id) ? openPastChat(id) : void navigate(`/c/${id}`)));
   const openHit = (hit: SearchHit) =>
     run(() => {
+      // A past chat from another app opens to read, beside where you are (ADR 0111).
+      if (isPastChatId(hit.conversationId)) return openPastChat(hit.conversationId);
       // A close (typo) match lands on what was actually matched, not what was typed.
       const [start, end] = hit.ranges[0] ?? [0, 0];
       const find = fuzzy && end > start ? hit.snippet.slice(start, end) : q;

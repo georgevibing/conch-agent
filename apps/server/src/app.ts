@@ -107,6 +107,7 @@ import { registerQuestionRoutes } from './questions/routes';
 import { registerFirstJobRoutes } from './onboarding/first-job';
 import { registerBackgroundRoutes } from './background/routes';
 import { registerImportRoutes } from './import/routes';
+import { registerChatImportRoutes } from './import/chats/routes';
 import { registerLearningRoutes } from './memory/routes';
 import { registerQuietLearningRoutes } from './learning/routes';
 import { registerCheckInRoutes } from './checkins/routes';
@@ -269,6 +270,7 @@ export async function buildApp(services: Services) {
   );
   registerBackupRoutes(app, services.backups, gate);
   registerImportRoutes(app, services.imports, gate);
+  registerChatImportRoutes(app, services.chatImports, gate);
   registerBackgroundRoutes(
     app,
     services.background,

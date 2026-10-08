@@ -125,6 +125,31 @@ const venue = (): Chat[] => [
 ];
 
 describe('looking through earlier chats', () => {
+  it('finds a past chat from another app, says where it was, and treats it as from outside (ADR 0111)', async () => {
+    const { deps } = world([
+      {
+        id: 'pc_0123456789abcdef',
+        title: 'Checkout double charge',
+        events: turn(
+          'pc_0123456789abcdef',
+          'Why does checkout charge twice?',
+          'The retry runs first.',
+        ),
+        facts: { place: 'Claude Code, in shop', taint: [{ kind: 'app', label: 'Claude Code' }] },
+      },
+    ]);
+    const { ctx, taints } = context();
+    const tools = pastChatTools(deps, ctx);
+    const found = readPastChatsFound(await run(tools, 'search_chats', { query: 'checkout' }));
+    expect(found?.chats[0]).toMatchObject({
+      chat: 'pc_0123456789abcdef',
+      from: 'Claude Code, in shop',
+      untrusted: true,
+    });
+    // What it says came from outside: this chat now asks before anything risky.
+    expect(taints).toContainEqual({ kind: 'app', label: 'your chat “Checkout double charge”' });
+  });
+
   it('ranks and cuts like ⌘K, without the chat it is asked from', async () => {
     const { index, deps } = world(venue());
     const tools = pastChatTools(deps, context().ctx);

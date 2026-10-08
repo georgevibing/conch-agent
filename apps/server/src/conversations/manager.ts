@@ -1519,6 +1519,68 @@ export class ConversationManager {
   }
 
   /**
+   * A past chat from another app, carried on here (ADR 0111): a new chat of
+   * Conch's own that starts with its messages, as wary as anything read from
+   * outside (`taint`). Nothing runs: whoever answers the next message is
+   * handed the conversation so far (ADR 0069).
+   */
+  async adopt(input: {
+    title: string;
+    messages: readonly { role: 'user' | 'assistant'; text: string; at: number }[];
+    options?: TurnOptions;
+    taint: TaintSource;
+  }): Promise<{ conversation: ConversationSummary; lastSeq: number }> {
+    const now = Date.now();
+    const engine = this.deps.engine(input.options?.engine);
+    const agent = await this.#agentFor(undefined);
+    const lastYours = input.messages.findLast((m) => m.role === 'user')?.text ?? '';
+    const record: ConversationRecord = {
+      id: newId('c'),
+      title: input.title,
+      preview: lastYours.slice(0, 140),
+      createdAt: now,
+      updatedAt: now,
+      status: 'idle',
+      options: clean(input.options ?? {}),
+      engine: engine.id,
+      ...(agent && { agentId: agent.id }),
+    };
+    const live: Live = {
+      record,
+      events: [],
+      seq: 0,
+      permissions: new Map(),
+      alwaysAllow: new Set(),
+      waived: new Set(),
+    };
+    // Nobody is watching it yet: its history is written as it was, then announced once.
+    const log = (event: ConversationEventInput & { at?: number }) =>
+      live.events.push({
+        ...event,
+        conversationId: record.id,
+        seq: live.seq++,
+        at: event.at ?? now,
+      } as ConversationEvent);
+    log({ type: 'title', title: input.title });
+    log({ type: 'taint', source: input.taint, carried: true });
+    for (const m of input.messages) {
+      const text = this.deps.redact ? this.deps.redact(m.text) : m.text;
+      if (m.role === 'user') log({ type: 'user.message', messageId: newId('u'), text, at: m.at });
+      else {
+        const messageId = newId('m');
+        log({ type: 'assistant.delta', messageId, kind: 'text', delta: text, at: m.at });
+        log({ type: 'assistant.done', messageId, at: m.at });
+      }
+    }
+    this.#live.set(record.id, live);
+    this.#evict();
+    if (agent) this.#begunWith(live, agent);
+    await this.#persist(live);
+    this.events.emit({ type: 'conversation.updated', conversation: summary(record) });
+    return { conversation: summary(record), lastSeq: live.seq - 1 };
+  }
+
+  /**
    * The tools Conch's other parts give a turn with this context: what another
    * app paired with Conch could be offered (ADR 0073), before its scopes.
    */

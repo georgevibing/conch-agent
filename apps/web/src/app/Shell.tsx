@@ -57,6 +57,7 @@ import { TerminalDock } from '../features/terminal/TerminalDock';
 import { TerminalToggle } from '../features/terminal/TerminalToggle';
 import { useProviderSignInResult } from '../features/providers/useSignInResult';
 import { MEMORY_ALL } from '../features/settings/paths';
+import { PastChatSheet } from '../features/import/PastChatSheet';
 import { useUi } from './ui';
 import { NARROW, PHONE } from './widths';
 import { useHotkey } from './useHotkey';
@@ -401,6 +402,7 @@ export function Shell() {
       <UndoHost />
       <TrajectoryHost />
       <OpenFromLink />
+      <PastChatSheet />
     </div>
   );
 }

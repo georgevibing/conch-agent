@@ -975,6 +975,32 @@ describe('Palette search', () => {
     act(() => useUi.setState({ settingsFocus: undefined }));
   });
 
+  it('finds bringing in past chats from other apps by the apps’ names (ADR 0111)', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    const { where } = renderApp(<Palette />);
+    act(() => useUi.getState().setPalette(true));
+    for (const words of ['claude code', 'codex sessions', 'past chats']) {
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(
+        await screen.findByRole('option', { name: /Bring in your past chats from other apps/ }),
+      ).toBeInTheDocument();
+    }
+    await user.keyboard('{Enter}');
+    await waitFor(() =>
+      expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
+        at: '/settings/memory',
+        focus: 'past-chats',
+      }),
+    );
+    act(() => useUi.setState({ settingsFocus: undefined }));
+  });
+
   it('finds what Conch knows about you, tidying up and exporting, by the words people use', async () => {
     const user = userEvent.setup();
     mockFetch({
