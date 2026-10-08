@@ -99,8 +99,8 @@
 
   .content {
     min-inline-size: 0;
-    font-size: var(--nc-text-md);
-    line-height: 1.7;
+    font-size: var(--nc-chat-text);
+    line-height: var(--nc-chat-leading);
     color: var(--nc-text);
   }
 
@@ -156,7 +156,7 @@
     border-radius: var(--nc-radius-xl);
     border-end-end-radius: var(--nc-radius-sm);
     corner-shape: var(--nc-corner-shape);
-    font-size: var(--nc-text-md);
+    font-size: var(--nc-chat-text);
     line-height: var(--nc-leading-normal);
     color: var(--nc-text);
     background: linear-gradient(

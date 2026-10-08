@@ -11,8 +11,8 @@
 
 @layer nacre.components {
   .prose {
-    --prose-size: var(--nc-text-md);
-    --prose-leading: 1.7;
+    --prose-size: var(--nc-text-read);
+    --prose-leading: var(--nc-leading-read);
     --prose-flow: 0.9em;
 
     font-size: var(--prose-size);
@@ -28,12 +28,12 @@
   }
 
   .prose[data-size='lg'] {
-    --prose-size: var(--nc-text-lg);
-    --prose-leading: 1.72;
+    --prose-size: var(--nc-text-read-lg);
+    --prose-leading: var(--nc-leading-read);
   }
 
   .prose[data-measure] {
-    max-inline-size: 68ch;
+    max-inline-size: var(--nc-measure-read);
   }
 
   /* Vertical rhythm: space between siblings, never above the first child. */

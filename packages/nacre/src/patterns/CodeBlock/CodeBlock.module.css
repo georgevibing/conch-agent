@@ -34,7 +34,7 @@
     --shiki-ansi-cyan: var(--shiki-token-string-expression);
     --shiki-ansi-white: var(--nc-gray-1);
 
-    --code-font: 0.8125rem;
+    --code-font: var(--nc-text-code);
     --code-leading: 1.65;
     --code-pad-x: var(--nc-space-4);
     --code-pad-y: var(--nc-space-3);

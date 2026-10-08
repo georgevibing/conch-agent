@@ -96,7 +96,7 @@
     background: transparent;
     color: var(--nc-text);
     font: inherit;
-    font-size: var(--nc-text-lg);
+    font-size: var(--nc-chat-text);
     line-height: var(--cmp-line);
     letter-spacing: -0.006em;
     scrollbar-width: thin;

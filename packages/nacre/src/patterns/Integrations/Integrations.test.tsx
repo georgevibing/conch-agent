@@ -10,7 +10,12 @@ import { IntegrationHandshake } from './IntegrationHandshake';
 import { IntegrationIssueCard } from './IntegrationIssueCard';
 import { IntegrationLogo } from './IntegrationLogo';
 import { integrationStateMeta, IntegrationStatusBadge } from './status';
-import { defaultPermission, humanizeTool, ToolPermissionList } from './ToolPermissionList';
+import {
+  defaultPermission,
+  humanizeTool,
+  ToolPermissionList,
+  type PermissionTool,
+} from './ToolPermissionList';
 
 describe('IntegrationLogo', () => {
   it('draws the bundled mark, or a monogram, and names it', async () => {
@@ -276,6 +281,42 @@ describe('ToolPermissionList', () => {
     expect(onChange).toHaveBeenLastCalledWith('google_calendar_create_event', 'off');
     expect(defaultPermission({ access: 'write', alwaysAsks: true }, 'trust')).toBe('ask');
     await expectAccessible(container);
+  });
+
+  it('offers More only when a description runs past its two lines', async () => {
+    const long =
+      'Sends an email or a reply from the account you choose. Shows you the exact email first.';
+    const tools: PermissionTool[] = [
+      { name: 'send', title: 'Send an email', description: long, access: 'write' },
+    ];
+    // jsdom lays nothing out: every box is 0 tall, so nothing is clipped.
+    const { unmount } = renderNacre(<ToolPermissionList tools={tools} policy="ask-writes" />);
+    expect(screen.getByText(long)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'More' })).not.toBeInTheDocument();
+    unmount();
+
+    // Folded, the words go further than the box: there is more to read.
+    const scroll = vi
+      .spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return this.dataset.expanded ? 0 : 60;
+      });
+    const client = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(36);
+    try {
+      const { container } = renderNacre(<ToolPermissionList tools={tools} policy="ask-writes" />);
+      const more = screen.getByRole('button', { name: 'More' });
+      expect(more).toHaveAttribute('aria-expanded', 'false');
+      await userEvent.click(more);
+      const less = screen.getByRole('button', { name: 'Less' });
+      expect(less).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByText(long)).toHaveAttribute('data-expanded');
+      await expectAccessible(container);
+      await userEvent.click(less);
+      expect(screen.getByText(long)).not.toHaveAttribute('data-expanded');
+    } finally {
+      scroll.mockRestore();
+      client.mockRestore();
+    }
   });
 
   it('says what each choice means under it, so Off never reads as “don’t ask”', async () => {

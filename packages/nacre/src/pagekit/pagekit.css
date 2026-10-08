@@ -37,7 +37,8 @@
     background: var(--nc-canvas);
     color: var(--nc-text);
     font-family: var(--nc-font-sans);
-    font-size: var(--nc-text-md);
+    /* The reader's own size, so 1rem is 16px as in Conch; the text is 14px from the body. */
+    font-size: 100%;
     line-height: var(--nc-leading-normal);
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
@@ -51,6 +52,7 @@
   }
 
   body {
+    font-size: var(--nc-text-md);
     max-inline-size: var(--nc-page-width);
     margin: 0 auto;
     padding: var(--nc-space-5) var(--nc-space-4);

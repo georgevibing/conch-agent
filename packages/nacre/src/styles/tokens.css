@@ -311,6 +311,19 @@
     --nc-leading-normal: 1.5;
     --nc-leading-relaxed: 1.65;
 
+    /* Reading: words people read through rather than glance at (a reply, your
+       own message, the composer you write them in, a document). One step up
+       the scale from the 14px UI text, at the reader's own size, with room
+       between the lines; a long-form page (the documentation) goes one notch
+       further. Meta lines stay at `--nc-text-xs`, so a reply reads
+       16 / 13 / 12: the words, the steps, the when. */
+    --nc-text-read: 1rem; /* 16 */
+    --nc-text-read-lg: 1.0625rem; /* 17 */
+    --nc-leading-read: 1.6;
+    --nc-measure-read: 70ch;
+    /* Code set beside reading text: a mono reads large, so a notch smaller. */
+    --nc-text-code: var(--nc-text-md);
+
     --nc-weight-regular: 420;
     --nc-weight-medium: 520;
     --nc-weight-semibold: 600;
@@ -345,6 +358,10 @@
        what's above. `--nc-chat-mark` is Conch's mark where it stands alone. */
     --nc-chat-speaker: 1.25rem;
     --nc-chat-mark: 1.75rem;
+    /* The words of the chat — a reply, your bubble and the composer — are one
+       size, so what you type is the size it will be read at. */
+    --nc-chat-text: var(--nc-text-read);
+    --nc-chat-leading: var(--nc-leading-read);
     --nc-chat-step: var(--nc-space-3);
     /* Where a part sits: the gap of the column it's in, and how far in it
        starts (the column's edge). These are the transcript's; a reply's

@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { expect, userEvent, within } from 'storybook/test';
 
 import { Button } from '../../components/Button';
 import { SegmentedControl } from '../../components/SegmentedControl';
@@ -392,7 +393,7 @@ function AlwaysAsksPermissions() {
       name: 'google_mail_send',
       title: 'Send an email',
       description:
-        'Sends an email or a reply from the account you choose. Shows you the exact email first.',
+        'Sends an email or a reply, with files from the chat if you like, from the account you choose. Shows you the exact email first.',
       access: 'write',
       asksFirst: true,
       allowWarning: 'Conch will send emails without showing you first.',
@@ -424,6 +425,45 @@ function AlwaysAsksPermissions() {
 }
 
 export const ToolThatAlwaysAsks: Story = { render: () => <AlwaysAsksPermissions /> };
+
+/**
+ * A description folds at two lines. Only one that runs longer offers More —
+ * one that fits shows no button, since there would be nothing more to read.
+ */
+export const ToolWithALongDescription: Story = {
+  render: () => (
+    <div style={{ maxWidth: 640 }}>
+      <ToolPermissionList
+        assistant="Conch"
+        policy="ask-writes"
+        tools={[
+          {
+            name: 'linear_search',
+            title: 'Search issues',
+            description: 'Finds issues by words, team or who they are assigned to.',
+            access: 'read',
+          },
+          {
+            name: 'linear_update_issue',
+            title: 'Update an issue',
+            description:
+              'Changes an issue’s title, description, state, priority, estimate, labels, project, cycle or who it is assigned to. Anything left out stays as it was. Moving an issue to another team keeps its comments and history but gives it a new number, and links to the old number keep working.',
+            access: 'write',
+          },
+        ]}
+      />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getAllByRole('button', { name: 'More' })).toHaveLength(1);
+    await userEvent.click(canvas.getByRole('button', { name: 'More' }));
+    await expect(canvas.getByRole('button', { name: 'Less' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  },
+};
 
 export const IssueInChat: Story = {
   render: () => (

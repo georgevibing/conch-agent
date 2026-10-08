@@ -50,4 +50,14 @@ describe('Input', () => {
     renderNacre(<Input aria-label="Q" invalid />);
     expect(screen.getByRole('textbox')).toHaveAttribute('aria-invalid', 'true');
   });
+
+  it('focuses the input from anywhere in its text box, the part a phone draws it in', async () => {
+    renderNacre(<Input aria-label="Budget" leading="$" placeholder="No budget" />);
+    const input = screen.getByRole('textbox', { name: 'Budget' });
+    const box = input.parentElement;
+    if (!box) throw new Error('no text box');
+    expect(box.tagName).toBe('SPAN');
+    await userEvent.pointer({ keys: '[MouseLeft]', target: box });
+    expect(input).toHaveFocus();
+  });
 });

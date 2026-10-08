@@ -102,6 +102,13 @@ export const Color: Story = {
 
 const typeScale = ['5xl', '4xl', '3xl', '2xl', 'xl', 'lg', 'md', 'sm', 'xs', '2xs'] as const;
 
+const readingSamples = [
+  { token: 'read-lg', size: '--nc-text-read-lg', label: 'read-lg 17' },
+  { token: 'read', size: '--nc-text-read', label: 'read 16' },
+  { token: 'code', size: '--nc-text-code', label: 'code 14' },
+  { token: 'md', size: '--nc-text-md', label: 'UI 14' },
+] as const;
+
 export const Typography: Story = {
   render: () => (
     <div className={styles.page}>
@@ -134,6 +141,33 @@ export const Typography: Story = {
             </Text>
           ))}
         </Stack>
+      </section>
+      <section className={styles.section}>
+        <Heading level={2} size="lg">
+          Reading
+        </Heading>
+        <Text tone="muted" size="sm">
+          UI text is glanced at (14px); reading text is read through (16px, line height 1.6, at most
+          70ch). A reply reads 16 / 13 / 12: the words, the steps, the when.
+        </Text>
+        {readingSamples.map(({ token, size, label }) => (
+          <div key={token} className={styles.typeRow}>
+            <span className={styles.typeMeta}>{label}</span>
+            <p
+              style={{
+                margin: 0,
+                fontSize: `var(${size})`,
+                lineHeight: 'var(--nc-leading-read)',
+                maxInlineSize: 'var(--nc-measure-read)',
+                fontFamily: token === 'code' ? 'var(--nc-font-mono)' : undefined,
+              }}
+            >
+              {token === 'code'
+                ? 'const frames = queue.drain(); // one frame, one message'
+                : 'The bug was that frames were concatenated into a single buffer, so two messages arriving in the same tick were merged. Frames are now parsed one by one.'}
+            </p>
+          </div>
+        ))}
       </section>
     </div>
   ),
