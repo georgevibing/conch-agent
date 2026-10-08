@@ -21,6 +21,16 @@ describe('conversation helpers', () => {
     expect(summarizeToolUse('Bash', { command: 'npm test' })).toBe('Run `npm test`');
     expect(summarizeToolUse('Edit', { file_path: '/a/b.ts' })).toBe('Edit /a/b.ts');
     expect(summarizeToolUse('mcp__github__create_issue', {})).toBe('Use create_issue from github');
+    expect(summarizeToolUse('mcp__conch__quote', { symbols: ['AAPL', 'MSFT'] })).toBe(
+      'Look up prices for AAPL and MSFT',
+    );
+    expect(summarizeToolUse('quote', { symbols: 'AAPL' })).toBe('Look up prices for AAPL');
+    expect(summarizeToolUse('price_history', { symbol: 'AAPL' })).toBe(
+      'Look up AAPL price history',
+    );
+    expect(summarizeToolUse('fundamentals', { companies: ['Apple'] })).toBe(
+      'Look up filings for Apple',
+    );
   });
 
   it('makes short titles', () => {

@@ -34,6 +34,26 @@ describe('what taints a chat', () => {
       expect(sinkReason(`${prefix}video_search`, { query: 'x' }, { workspace: '/w' })).toBe(
         'send a search query to YouTube',
       );
+      // Prices and filings: someone else's numbers and names, like a page.
+      for (const tool of ['quote', 'price_history'])
+        expect(taintFrom(`${prefix}${tool}`, { symbols: ['AAPL'] })).toMatchObject({
+          kind: 'web',
+          label: 'market prices from Stooq',
+        });
+      expect(taintFrom(`${prefix}fundamentals`, { companies: ['AAPL'] })).toMatchObject({
+        kind: 'web',
+        label: 'company filings from SEC EDGAR',
+      });
+      // None of them is a sink: only a ticker's own shape ever reaches a service,
+      // and a company name is matched against the regulator's list on this computer.
+      for (const tool of ['quote', 'price_history', 'fundamentals'])
+        expect(
+          sinkReason(
+            `${prefix}${tool}`,
+            { symbols: ['AAPL'], symbol: 'AAPL', companies: ['a'.repeat(200)] },
+            { workspace: '/w' },
+          ),
+        ).toBeUndefined();
       expect(taintFrom(`${prefix}read_document`, {})).toMatchObject({ kind: 'download' });
       expect(taintFrom(`${prefix}task_status`, {})).toMatchObject({ kind: 'app' });
       // Conch's own picture catalog and the note of a picture it made bring no one's words in.

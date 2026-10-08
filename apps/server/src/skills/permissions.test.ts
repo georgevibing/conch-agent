@@ -116,6 +116,19 @@ describe('holding a skill to it', () => {
     expect(allows(usual, must(needs('passwords_fill', {}, ws)))).toBe(false);
   });
 
+  it('prices and filings need the web, like any other reading', () => {
+    const usual = readPermissions(undefined);
+    const nothing = readPermissions('allowed-tools: Read');
+    for (const prefix of ['', 'mcp__conch__'])
+      for (const tool of ['quote', 'price_history', 'fundamentals']) {
+        expect(must(needs(`${prefix}${tool}`, { symbols: ['AAPL'] }, ws))).toEqual({
+          capability: 'web',
+        });
+        expect(allows(usual, must(needs(`${prefix}${tool}`, {}, ws))), tool).toBe(true);
+        expect(allows(nothing, must(needs(`${prefix}${tool}`, {}, ws))), tool).toBe(false);
+      }
+  });
+
   it('says what it didn’t ask for', () => {
     expect(missing({ capability: 'commands', detail: 'curl x' })).toBe('run this command');
     expect(missing({ capability: 'apps', detail: 'gmail' })).toBe('use gmail');

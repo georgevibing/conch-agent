@@ -4,6 +4,17 @@ export function summarizeToolUse(toolName: string, input: Record<string, unknown
     typeof input[key] === 'string' ? (input[key] as string) : undefined;
   const file = str('file_path') ?? str('path') ?? str('notebook_path');
   const conch = toolName.replace(/^mcp__conch__/, '');
+  /** "AAPL and MSFT": the tickers a finance tool was asked about, however they came. */
+  const symbols = (fields: Record<string, unknown>, key: string): string => {
+    const given = fields[key];
+    const list = (typeof given === 'string' ? [given] : Array.isArray(given) ? given : [])
+      .flatMap((s) => (typeof s === 'string' && s.trim() ? [s.trim().slice(0, 24)] : []))
+      .slice(0, 4);
+    if (!list.length) return '';
+    return list.length === 1
+      ? (list[0] ?? '')
+      : `${list.slice(0, -1).join(', ')} and ${list.at(-1)}`;
+  };
   const labels: Record<string, string> = {
     read_file: `Read ${file ?? 'a text file'}`,
     read_document: `Read ${file ?? 'a document'}`,
@@ -15,6 +26,9 @@ export function summarizeToolUse(toolName: string, input: Record<string, unknown
     knowledge_card: `Look up “${str('query') ?? ''}” on Wikipedia`,
     link_preview: `Preview ${Array.isArray(input.urls) && input.urls.length === 1 ? String(input.urls[0]) : 'links'}`,
     book_search: `Search Open Library for “${str('query') ?? ''}”`,
+    quote: `Look up prices${symbols(input, 'symbols') ? ` for ${symbols(input, 'symbols')}` : ''}`,
+    price_history: `Look up ${str('symbol') ?? 'a'} price history`,
+    fundamentals: `Look up filings${symbols(input, 'companies') ? ` for ${symbols(input, 'companies')}` : ''}`,
     show_search: `Search ${input.kind === 'movie' ? 'films' : 'TV shows'} for “${str('query') ?? ''}”`,
     process_start: `Start “${(str('command') ?? '').slice(0, 160)}”`,
     process_read: 'Read command progress',

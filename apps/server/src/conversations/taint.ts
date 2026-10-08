@@ -101,6 +101,11 @@ export function taintFrom(toolName: string, input: unknown, app?: string): Taint
   // Places found in OpenStreetMap: names, hours and links anyone can write.
   if (/^(?:mcp__conch__)?places$/.test(toolName))
     return { kind: 'web', label: 'OpenStreetMap places' };
+  // Prices and filings: someone else's numbers and company names, like a page.
+  if (/^(?:mcp__conch__)?(?:quote|price_history)$/.test(toolName))
+    return { kind: 'web', label: 'market prices from Stooq' };
+  if (/^(?:mcp__conch__)?fundamentals$/.test(toolName))
+    return { kind: 'web', label: 'company filings from SEC EDGAR' };
   if (WEB_READERS.has(toolName))
     return {
       kind: 'web',
@@ -250,6 +255,9 @@ export function sinkReason(
       .length > 120
   )
     return 'send a long place search to OpenStreetMap';
+  // `quote`, `price_history` and `fundamentals` are not sinks: only a symbol that already
+  // matches a ticker's shape ever reaches a service, and a company name is matched against
+  // the regulator's own list on this computer, so there's no way out to carry anything.
   // A card's lookup: the pages a preview opens, like web_fetch; a name sent to look up is
   // research, unless it's long enough to carry what was read.
   const card = CARDS.exec(toolName)?.[1];

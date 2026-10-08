@@ -20,6 +20,9 @@ const READS = new Set([
   'mcp__conch__link_preview',
   'mcp__conch__book_search',
   'mcp__conch__show_search',
+  'mcp__conch__quote',
+  'mcp__conch__price_history',
+  'mcp__conch__fundamentals',
 ]);
 
 export class ToolQueue {
