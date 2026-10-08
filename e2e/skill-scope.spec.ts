@@ -115,7 +115,8 @@ test('a chat stays held to a skill’s list until you stop it, and Activity says
   await expect(again.getByRole('button', { name: 'Always allow' })).toBeVisible();
   await expect(again).not.toContainText('held to');
   await again.getByRole('button', { name: 'Deny' }).click();
-  await expect(page.getByText('You said no')).toHaveCount(2);
+  // Each no reads as one story line (its steps and raw call stay folded).
+  await expect(page.getByRole('button', { name: /Didn’t run the tests/ })).toHaveCount(2);
 
   // Activity has both.
   await page.goto('/activity');

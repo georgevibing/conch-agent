@@ -128,7 +128,8 @@ test('every mode in the chat and in Settings, and Auto stops only for something 
   // Routine work goes ahead without a word.
   await composer.fill('run the tests');
   await composer.press('Enter');
-  await expect(page.getByText('npm test').first()).toBeVisible();
+  // It ran without asking: told as a story line, the command folded inside it.
+  await expect(page.getByRole('button', { name: /Ran the tests/ }).first()).toBeVisible();
   // Something serious stops, says why, and offers no “always”.
   await composer.fill('force-push it');
   await composer.press('Enter');

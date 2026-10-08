@@ -40,5 +40,5 @@ test('offline: a message waits, then goes by itself when the internet is back', 
   const settings = page.getByRole('dialog');
   await settings.getByRole('tab', { name: 'Health' }).click();
   // What Conch fixed by itself is reassurance, at the foot of the page.
-  await expect(settings.getByText(/waiting message went when you were back/)).toBeVisible();
+  await expect(settings.getByText(/Sent your message once you were back online/)).toBeVisible();
 });
