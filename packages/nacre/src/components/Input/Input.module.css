@@ -9,6 +9,7 @@
     --well-px: var(--nc-space-3);
     --well-radius: var(--nc-radius-md);
     --well-font: var(--nc-text-md);
+    --well-slot-font: var(--nc-text-sm);
     --well-icon: 1rem;
     --well-border: var(--nc-border);
     --well-halo: var(--nc-accent-9);
@@ -80,6 +81,54 @@
     --well-icon: 1.125rem;
   }
 
+  /* On a pointer, the input is the well's flex child itself. */
+  .text {
+    display: contents;
+  }
+
+  /*
+   * A phone zooms the page into any field typed in under 16px, and Nacre's
+   * rem is 14px, so base.css holds every field at 16 real pixels on a touch
+   * screen. Left at that, a field reads 1.3× the words around it: a 16px
+   * placeholder under a 11px label. So on a touch screen the well is set one
+   * step up (text-lg, which is 14px), and the input inside it, still 16px to
+   * the phone, is drawn at 14/16 of that (`--well-type`): what you type, the
+   * unit beside it and Field's label over it read as one size.
+   */
+  @media (pointer: coarse) {
+    .well[data-size] {
+      --well-font: var(--nc-text-lg);
+      --well-slot-font: var(--nc-text-md);
+      --well-icon: 1.125rem;
+      --well-type: 0.875;
+    }
+
+    /* The text box: as wide and tall as the input looks, while the input
+       inside lays out at 16px and is scaled down into it. */
+    .text {
+      position: relative;
+      display: block;
+      flex: 1 1 12em;
+      align-self: stretch;
+      min-inline-size: 0;
+      min-block-size: var(--well-h);
+    }
+
+    .text > .input {
+      position: absolute;
+      inset-block-start: 0;
+      inset-inline-start: 0;
+      inline-size: calc(100% / var(--well-type));
+      block-size: calc(100% / var(--well-type));
+      scale: var(--well-type);
+      transform-origin: top left;
+    }
+
+    .text > .input:dir(rtl) {
+      transform-origin: top right;
+    }
+  }
+
   .input {
     flex: 1 1 auto;
     min-inline-size: 0;
@@ -128,7 +177,7 @@
     gap: var(--nc-space-1);
     flex-shrink: 0;
     color: var(--nc-text-subtle);
-    font-size: var(--nc-text-sm);
+    font-size: var(--well-slot-font);
     transition: color var(--nc-duration-base) var(--nc-ease-out);
   }
 

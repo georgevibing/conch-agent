@@ -26,11 +26,22 @@
 
   .value .input {
     flex: 0 0 auto;
+    inline-size: calc(var(--nf-chars, 2.5) * 1ch);
     min-inline-size: 2ch;
     text-align: center;
     font-variant-numeric: tabular-nums;
     font-weight: var(--nc-weight-medium);
     cursor: text;
+  }
+
+  /* On a touch screen the number is laid out at the 16px a phone needs
+     (no zoom) and drawn at the well's size, as Input's text is: the
+     margins give back the width the scale takes off. */
+  @media (pointer: coarse) {
+    .value .input {
+      margin-inline: calc(var(--nf-chars, 2.5) * 1ch * (var(--well-type, 1) - 1) / 2);
+      scale: var(--well-type, 1);
+    }
   }
 
   .input[data-nudge='up'] {
@@ -43,7 +54,7 @@
 
   .unit {
     color: var(--nc-text-subtle);
-    font-size: var(--nc-text-sm);
+    font-size: var(--well-slot-font);
     white-space: nowrap;
   }
 

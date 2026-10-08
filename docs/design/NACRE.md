@@ -681,6 +681,13 @@ If a screen needs a value none of these cover, build the control in Nacre first 
 stories and an axe test). `<input type="date|time|number|range|color">` and bare
 `<select>` never ship.
 
+**On a phone, one size.** A phone zooms into any field typed in under 16px, so on a
+touch screen every field is 16px to the browser (`base.css`). `Input` and `NumberField`
+lay their text out at that and draw it at the well's size, one step up (`text-lg`);
+`Select`, `DatePicker` and `TimePicker` show their value at that size too, and `Field`'s
+label and description step up with them. A field never looks a size too big for the
+words around it. `Textarea` stays at 16px: it holds writing, like the composer.
+
 **One exception, and only one: a Conch app's page.** It is HTML in a sealed frame with
 no React in it, so there is no Nacre component to reach for, and a hand-rolled listbox
 inside a page loses the keyboard, the screen reader and a phone's own wheel. There, the

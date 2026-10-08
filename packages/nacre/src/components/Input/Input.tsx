@@ -117,16 +117,18 @@ export function Input({
           {leading}
         </span>
       )}
-      <input
-        ref={mergeRefs(inputRef, ref)}
-        className={styles.input}
-        value={value}
-        defaultValue={defaultValue}
-        onChange={handleChange}
-        {...props}
-        {...field}
-        disabled={disabled}
-      />
+      <span className={styles.text}>
+        <input
+          ref={mergeRefs(inputRef, ref)}
+          className={styles.input}
+          value={value}
+          defaultValue={defaultValue}
+          onChange={handleChange}
+          {...props}
+          {...field}
+          disabled={disabled}
+        />
+      </span>
       {clearable && (
         <button
           type="button"
