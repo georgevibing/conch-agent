@@ -7,7 +7,8 @@
   [ADR 0036](./0036-provider-consistency.md) (declining a program's own tools),
   [ADR 0042](./0042-come-home-the-rest.md) (keys brought home)
 - Amended by: [ADR 0069](./0069-carrying-a-chat-on.md) (sessions loaded again, instructions where each
-  program takes them, its own tool calls shown, the door over stdio)
+  program takes them, its own tool calls shown, the door over stdio),
+  [ADR 0109](./0109-your-company-cloud.md) (the enterprise clouds left for later here)
 
 ## Context
 

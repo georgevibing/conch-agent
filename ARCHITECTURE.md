@@ -118,6 +118,7 @@ src/
     tools/                    reading a tool call's arguments for every engine: repair, normalise, precise errors (ADR 0072)
     mock/                     scripted engine for UI work and E2E tests
   providers/                  the words for each engine, connecting them, switching, keys
+  clouds/                     your company's cloud: AWS, Google Cloud, Azure sign-ins found here, SigV4 (ADR 0109)
   secrets/                    where a key lives: this computer, or 1Password (`op read`)
   setup/                      what features need from this computer; find, install, update, open
   updates/                    daily quiet checks, one-click updates, Conch following signed releases (ADR 0051)
@@ -609,6 +610,19 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   - _On this computer_: LM Studio (`engines/api/lmstudio.ts`) is found from its own
     files and its server started when needed. Ollama Cloud (`ollamaCloud.ts`) takes
     a key, or the Ollama app's own sign-in.
+- **Your company's cloud** ([ADR 0109](./docs/adr/0109-your-company-cloud.md)).
+  `clouds/` finds the sign-ins already here, read-only: AWS profiles and SSO state
+  (`aws.ts`), Google's application default credentials and projects (`gcp.ts`), the
+  Azure CLI's subscriptions and, through the management API, its OpenAI resources
+  (`azure.ts`). `CloudService` keeps the chosen account per provider in
+  `settings.clouds` (names only), offers a signed-in one under _Found on this
+  computer_, signs in again with the cloud's own program (`signin.ts`) and gives
+  Claude Code `CLAUDE_CODE_USE_BEDROCK`/`_VERTEX` when it runs there. Keys and tokens
+  come from `aws`, `gcloud` and `az` (needs `aws-cli`, `gcloud`, `azure-cli`) and stay
+  in memory. Bedrock and Vertex are the Anthropic wire with an `AnthropicRoute`
+  (`engines/api/clouds.ts`; SigV4 in `clouds/sigv4.ts`); a model is offered only
+  after a free token count says the account can use it. Azure is the OpenAI wire
+  with a token. `GET|PUT /api/clouds/:id`.
 - **A model on this computer** (`local/`, `engines/api/ollama.ts`,
   [ADR 0022](./docs/adr/0022-a-model-on-this-computer.md)). The `ollama` provider
   (`Engine.local`) runs an open model through Ollama's native `/api/chat` with
