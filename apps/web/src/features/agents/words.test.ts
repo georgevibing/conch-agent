@@ -1,7 +1,20 @@
-import { AGENT_AVATAR_PRESETS, AGENT_LIMITS, TONES, Tone } from '@conch/protocol';
+import {
+  AGENT_AVATAR_PRESETS,
+  AGENT_LIMITS,
+  OLDER_INSTRUCTIONS,
+  TONES,
+  Tone,
+} from '@conch/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { NAME_IDEAS, STARTERS, TONE_CHOICES, agentHello, nextIdea } from './words';
+import {
+  NAME_IDEAS,
+  STARTERS,
+  TONE_CHOICES,
+  agentHello,
+  instructionsNote,
+  nextIdea,
+} from './words';
 
 describe('how an agent says hello', () => {
   it('says its name, and yours, in every tone', () => {
@@ -50,8 +63,31 @@ describe('instructions to start from', () => {
     for (const starter of STARTERS) {
       for (const part of ['Goals', 'Boundaries', 'Style'])
         expect(starter.text, starter.id).toContain(part);
-      expect(starter.text.length).toBeLessThan(AGENT_LIMITS.instructions / 8);
+      expect(starter.text.length).toBeLessThan(OLDER_INSTRUCTIONS / 8);
+      expect(instructionsNote(starter.text)).toBeUndefined();
       expect(starter.role.length).toBeLessThanOrEqual(AGENT_LIMITS.role);
     }
+  });
+});
+
+describe('a word on long instructions', () => {
+  const words = (n: number) => 'Keep every reply short. '.repeat(n);
+  it('says nothing for a few lines, whatever the model', () => {
+    expect(instructionsNote('Use British spelling.')).toBeUndefined();
+    expect(instructionsNote(words(100), { label: 'Opus', context: 200_000 })).toBeUndefined();
+  });
+  it('says long ones cost on every reply, with their size', () => {
+    // ≈36,000 characters: ≈9k tokens.
+    expect(instructionsNote(words(1_500))).toBe(
+      'These instructions are long (≈9k tokens). Every reply carries them, so small models may struggle.',
+    );
+  });
+  it('speaks of the model when they crowd its window', () => {
+    // ≈2k tokens of an 8k window.
+    expect(instructionsNote(words(330), { label: 'Llama 3.2', context: 8_192 })).toBe(
+      'These instructions are long for Llama 3.2 (≈2k tokens of the ≈8k it reads at once). Every reply carries them, so it may read only their start.',
+    );
+    // The same words beside a big window say nothing: they're not long by themselves.
+    expect(instructionsNote(words(330), { label: 'Opus', context: 200_000 })).toBeUndefined();
   });
 });
