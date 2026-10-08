@@ -114,9 +114,9 @@ While a line is still going, the words under it say the step at hand, like "Read
 - **Press a step** to see exactly what ran: the command, what came back, the change made. Nothing is hidden, only folded away.
 - **Why?** beside a step asks why your assistant did it and what it learned. The answer takes a moment and comes from what's in the chat. Your assistant keeps working meanwhile. Asking again about a finished step costs nothing.
 
-When a step is done again with the same result and nothing changed in between, it shows once, with **×2**. When something failed and then worked, the line says so: "Worked on the second try". When your assistant is going round in circles, the line says that too, like "The same command failed 3 times", so you can step in.
+When a step is done again with the same result and nothing changed in between, it shows once: a line of one step says **×2**, and an opened line says how many repeats it folded. When something failed and then worked, the line says so: "Worked on the second try". When your assistant is going round in circles, the line says that too, like "The same command failed 3 times", so you can step in.
 
-Once a part of the work is done, a small model may rewrite its line in better words. **Why?** asks it too. It follows the rules of [learning by itself](./memory.md#learning-by-itself). It asks the chat's own provider first, then one on this computer, then any other you connected. A chat marked **Don't learn from this chat** only goes to its own provider or one on this computer. Each answer costs a fraction of a cent on pay-as-you-go providers. It counts toward **Learning from your chats** in **Settings → Usage**, and stops when your [budget for the month](../care/what-it-costs.md#a-budget-for-the-month) is spent. To keep the lines as they are, turn off **Name new chats automatically** in **Settings → Models**.
+Once a part of the work is done, a small model may rewrite its line in better words. **Why?** asks it too. It follows the rules of [learning by itself](./memory.md#learning-by-itself). It asks the chat's own provider first, then one on this computer, then any other you connected. A chat marked **Don't learn from this chat** only goes to its own provider or one on this computer. Each answer costs a fraction of a cent on pay-as-you-go providers. It counts toward **Learning from your chats** in **Settings → Usage**, and stops when your [budget for the month](../care/what-it-costs.md#a-budget-for-the-month) is spent. To keep the lines as they are, turn off **Name new chats automatically** in **Settings → Models**. That also stops Claude Code describing its steps in its own words, which costs a small call on your plan for each round of steps.
 
 ### What changed
 
@@ -124,7 +124,7 @@ At the end of a reply, one line sums up what it changed outside the chat: **Chan
 
 ### While you were away
 
-If you leave a chat while it works and come back later, a card says **While you were away** and what happened, one line for each part of the work. Press a line to go to it in the chat. Close the card with **Dismiss**.
+If you switch to another chat or another app while your assistant works, and two or more parts of the work finish meanwhile, a card at the top of the chat says **While you were away**: how long it worked, and one line for each part. Press a line to go to it in the chat, opened. The card goes when you close it with **Dismiss**, send a message, or read down to the end.
 
 ### Site icons
 

@@ -63,6 +63,10 @@ your desktop and the chat apps you already use.
 - **A chat list that stays tidy.** Pin, file into folders (hold to drag on a phone),
   start a chat inside a folder, and see which chats need you. Your apps sit on top
   under **Apps**, with a folder for the rest. [Your chats](./apps/docs/content/features/chats.md)
+- **It says what it's doing, in plain words.** Instead of a wall of commands, each run
+  of work is one line, like "Ran the tests · 241 passed", that opens into its steps
+  and then the exact calls. Ask **Why?** about any step, and see what each reply
+  changed, with Undo. [Your chats](./apps/docs/content/features/chats.md)
 - **It doesn't give up at the first error.** Every model reads what went wrong, tries
   another way and checks its work before it says done. [How Conch works on a problem](./apps/docs/content/features/working-on-a-problem.md)
 - **Long jobs that finish.** Long chats summarise their start, caching keeps costs

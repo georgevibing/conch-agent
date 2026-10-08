@@ -8,15 +8,17 @@ Your assistant changes files for you, and sometimes it changes the wrong one. Co
 
 ## Undo from the chat
 
-After each change, the chat shows a quiet line with what was changed and an **Undo** button.
+When a reply changes something, its end shows **What changed**: one line such as "Changed 4 files · committed · pushed to main". Press it to see each change, with an **Undo** button beside each file.
 
 1. Press **Undo**.
 2. Read the preview. Each file says what will happen: it goes back to how it was, it's removed because the assistant made it, or it comes back because the assistant deleted it. The change is shown line by line.
 3. Press **Undo** to confirm.
 
-The line then says **Undone** and offers **Redo**, which works the same way in the other direction.
+The file then says **Undone** and offers **Redo**, which works the same way in the other direction. A file the assistant changed several times in one reply goes back to how it was before the reply.
 
-When one turn changed several things, its last line also offers to undo them all at once, for example **Undo all 3 changes from this turn**.
+When a reply changed several files, the list also offers to undo them all at once, for example **Undo all 3 changes**.
+
+What can't be put back from Conch, like a commit pushed to GitHub or an email sent, is listed first, so you see it at a glance.
 
 ## From Activity, or from anywhere
 
