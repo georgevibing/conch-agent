@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { ServerEvent, Task } from '@conch/protocol';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PushService, type PushDeps } from './service';
 import { PushStore } from './store';
@@ -400,9 +400,11 @@ describe('notifications', () => {
         summary: 's',
       }),
     );
-    await new Promise((r) => setTimeout(r, 50));
-    expect(calls).toBe(3);
-    expect((await store.list())[0]?.problem).toMatch(/busy/);
+    // The retries and the note they leave land a moment later: wait for them.
+    await vi.waitFor(async () => {
+      expect(calls).toBe(3);
+      expect((await store.list())[0]?.problem).toMatch(/busy/);
+    });
   });
 
   describe('tasks (ADR 0033)', () => {
