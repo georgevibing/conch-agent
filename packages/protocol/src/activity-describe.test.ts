@@ -2086,10 +2086,21 @@ const TOOLS: Case[] = [
   ],
   [
     'an unknown tool',
-    'weather',
+    'tide_tables',
     {},
     undefined,
-    { family: 'other', doing: 'Using weather', done: 'Used weather' },
+    { family: 'other', doing: 'Using tide tables', done: 'Used tide tables' },
+  ],
+  [
+    'the weather',
+    'mcp__conch__weather',
+    { place: 'Lisbon' },
+    { status: 'success', output: '{"now":{"temp":21.4,"sky":"Partly cloudy"}}' },
+    {
+      family: 'research',
+      done: 'Checked the weather in Lisbon',
+      outcome: '21° and partly cloudy',
+    },
   ],
 ];
 

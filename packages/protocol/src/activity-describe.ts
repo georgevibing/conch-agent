@@ -1104,6 +1104,20 @@ const CONCH: Record<string, (input: Input) => Draft> = {
     };
   },
   current_time: () => ({ family: 'other', words: say('check', 'the time') }),
+  weather: (input) => {
+    const place = str(input, 'place', 'location', 'city');
+    return {
+      family: 'research',
+      words: say('check', place ? `the weather in ${clip(oneLine(place), 40)}` : 'the weather'),
+      finish: (output) => {
+        const now = record(record(parseJson(output)).now);
+        const sky = typeof now.sky === 'string' ? oneLine(now.sky).toLowerCase() : '';
+        const temp = typeof now.temp === 'number' ? `${Math.round(now.temp)}°` : '';
+        const outcome = [temp, sky].filter(Boolean).join(' and ');
+        return outcome ? { outcome: clip(outcome, 60) } : undefined;
+      },
+    };
+  },
   use_skill: (input) => skillDraft(str(input, 'name')),
   list_skills: () => ({ family: 'other', words: say('look', 'at the skills') }),
   find_skills: (input) => {
