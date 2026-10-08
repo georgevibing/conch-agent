@@ -125,7 +125,7 @@ function MemoryTab({
               void update.mutateAsync({ preferences: { tidyMemory: checked } })
             }
             label="Tidy up every night"
-            description="Merge repeats and update what’s changed while you sleep, quietly. The last tidy-up can always be undone."
+            description="Merge repeats and update what’s changed while you sleep. A short note in the morning says what changed, each with Undo."
           />
           <div className={styles.memoryDoor}>
             <Brain aria-hidden />

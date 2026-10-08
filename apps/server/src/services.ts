@@ -126,7 +126,7 @@ import { carryTools } from './providers/capabilities';
 import { Describer } from './vision/describer';
 import { MockEngine } from './engines/mock/engine';
 import { MOCK_MEANING_SPEC, mockMeaningFetch, mockMeaningLoad } from './engines/mock/meaning';
-import type { Engine, LoginHandle } from './engines/types';
+import type { CompletionInput, Engine, LoginHandle } from './engines/types';
 import { Emitter } from './lib/emitter';
 import { sandboxFor, sandboxSupport, secretPlaces } from './conversations/sandbox';
 import { heldTaints } from './conversations/taint';
@@ -183,6 +183,11 @@ import { StoryTitler } from './conversations/stories/titler';
 import { LearningSpend } from './learning/spend';
 import { MemoryStore } from './memory/store';
 import { MemoryTidy } from './memory/tidy';
+import { checkInCheck } from './checkins/doctor';
+import { StandingOrderStore } from './checkins/orders';
+import { CheckIns } from './checkins/service';
+import { tellWords } from './checkins/tell';
+import { standingOrderTools } from './checkins/tools';
 import { SkillLearner } from './skills/learn';
 import { SkillSuggester } from './skills/suggest';
 import { SkillUsage, skillUsedIn } from './skills/usage';
@@ -303,6 +308,9 @@ export class Services {
   /** Passwords: Conch's own vault and the managers it reads (ADR 0025). */
   readonly vault: VaultService;
   readonly routines: RoutineService;
+  /** Standing orders and the check-in that watches for them (ADR 0107). */
+  readonly standingOrders: StandingOrderStore;
+  readonly checkins: CheckIns;
   /** What routines spend, and the limits on it (ADR 0057). */
   readonly routineSpend: RoutineSpend;
   readonly conversations: ConversationManager;
@@ -806,7 +814,22 @@ export class Services {
     this.tidy = new MemoryTidy({
       home: config.CONCH_HOME,
       store: this.memory,
-      model: () => cheapModel(this.providers.engine()),
+      // The nightly pass is learning's spending (ADR 0107): within its cap, counted by it.
+      // Past the cap, it still merges exact repeats, which needs no model.
+      model: async () => {
+        const engine = this.providers.engine();
+        if (!(await this.learningSpend.allow(engine).catch(() => ({ ok: true }))).ok) return;
+        const found = await cheapModel(engine);
+        if (!found) return;
+        return {
+          ...found,
+          complete: async (input: CompletionInput) => {
+            const answer = await found.complete(input);
+            await this.learningSpend.record(answer.usage, engine, found.model).catch(() => 0);
+            return answer;
+          },
+        };
+      },
       said: async (since) => {
         // A quiet chat stays private from nightly learning and legacy rechecks too.
         if (!this.learning) return [];
@@ -994,6 +1017,8 @@ export class Services {
               ...this.processes.tools(ctx),
               ...this.images.tools(ctx, () => this.#fileAccess(ctx)),
               ...this.routines.tools(ctx),
+              // Offering a standing order (ADR 0107): a draft for a card, only where someone can press it.
+              ...standingOrderTools(this.standingOrders, ctx),
               ...this.skills.tools(ctx),
               ...this.browser.tools(ctx),
               ...vaultTools(this.vault, ctx),
@@ -1050,6 +1075,10 @@ export class Services {
       context: async (engine, conversationId) =>
         [
           engine.hostTools === false ? '' : await this.routines.promptSection(),
+          // What the person asked for every chat, in their words; never a permission (ADR 0107).
+          await this.standingOrders
+            .promptSection({ tools: engine.hostTools !== false })
+            .catch(() => ''),
           await this.skills.promptSection(engine).catch(() => ''),
           await this.browser.promptSection(engine).catch(() => ''),
           await this.integrations.promptSection(),
@@ -1168,6 +1197,50 @@ export class Services {
       when: this.#when(config, heal),
     });
     this.doctor.register(routinesWatchCheck(this.routines));
+    // The check-in (ADR 0107): the When-routines' own sources, routines' spending, no model until something's new.
+    this.standingOrders = new StandingOrderStore(config.CONCH_HOME, {
+      heal,
+      changed: () => void this.checkins.look().catch(() => undefined),
+    });
+    this.checkins = new CheckIns({
+      home: config.CONCH_HOME,
+      orders: this.standingOrders,
+      sources: {
+        mail: mailSource(gmailAccess(this.google, this.googleApps)),
+        calendar: calendarSource(calendarAccess(this.google, this.googleApps)),
+      },
+      model: () => cheapModel(this.providers.engine()),
+      spend: {
+        allow: async () => {
+          const allowed = await this.routineSpend.allow('check-in', this.providers.engine());
+          return allowed.ok ? { ok: true } : { ok: false, message: allowed.message };
+        },
+        record: async (usage, model) =>
+          (
+            await this.routineSpend.record('check-in', usage, {
+              engine: this.providers.engine(),
+              ...(model && { model }),
+            })
+          ).usd,
+      },
+      tell: async (thing) => {
+        const words = tellWords(thing);
+        await this.push
+          .notify('routines', {
+            title: words.title,
+            body: words.body,
+            quiet: words.quiet,
+            url: '/routines?checkin=1',
+            tag: `checkin-${thing.id}`,
+          })
+          .catch(() => undefined);
+        await this.channels.tellOwner(words.markdown).catch(() => undefined);
+      },
+      allowed: () => this.recovery.allowsWork,
+      heal,
+      onHeal: (message) => void this.healed.note('routines', message),
+    });
+    this.doctor.register(checkInCheck(this.checkins));
     this.tasks = new TaskService({
       allowed: () => this.recovery.allowsWork,
       store: new TaskStore(config.CONCH_HOME, heal),
@@ -1343,6 +1416,7 @@ export class Services {
       }
     });
     if (!this.recovery.recoveryMode) this.learning.start();
+    if (!this.recovery.recoveryMode) this.checkins.start();
     registerQuietLearningDoctor(this.doctor, this.learning);
     // Story headlines and "Why?" (ADR 0103): learning's rules for who reads a chat and what it costs.
     const small: SmallModelDeps = {
@@ -2546,6 +2620,7 @@ export class Services {
     this.door.stop();
     this.tailscale.stop();
     this.tidy.stop();
+    this.checkins.stop();
     this.learning.stop();
     this.learner.stop();
     this.memoryIndex.close();

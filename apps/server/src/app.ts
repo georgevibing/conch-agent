@@ -107,6 +107,7 @@ import { registerBackgroundRoutes } from './background/routes';
 import { registerImportRoutes } from './import/routes';
 import { registerLearningRoutes } from './memory/routes';
 import { registerQuietLearningRoutes } from './learning/routes';
+import { registerCheckInRoutes } from './checkins/routes';
 import { AvatarError, AvatarStore } from './profile/avatar';
 import { ProfileUnavailable, understandProfile } from './profile/understand';
 import { registerBackupRoutes } from './backup/routes';
@@ -284,6 +285,8 @@ export async function buildApp(services: Services) {
     spend: services.learningSpend,
     memory: services.memory,
   });
+  // Standing orders and the check-in (ADR 0107): a person's choices only.
+  registerCheckInRoutes(app, { orders: services.standingOrders, checkins: services.checkins });
   registerLearningRoutes(app, {
     decided: memoryDecided,
     store: services.memory,

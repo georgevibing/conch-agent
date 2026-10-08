@@ -1979,6 +1979,13 @@ const TOOLS: Case[] = [
     ok('{}'),
     { effects: [{ kind: 'delete', text: 'Deleted a routine' }] },
   ],
+  [
+    'suggest_standing_order',
+    'suggest_standing_order',
+    { text: 'Tell me if a flight changes' },
+    ok('Offered on a card.'),
+    { family: 'plan', done: 'Suggested a standing order' },
+  ],
   ['use_skill', 'use_skill', { name: 'pdf' }, undefined, { done: 'Used the pdf skill' }],
   ['current_time', 'mcp__conch__current_time', {}, undefined, { done: 'Checked the time' }],
   [

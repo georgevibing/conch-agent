@@ -3541,6 +3541,26 @@ export class ChannelService {
     }
   }
 
+  /**
+   * Something the check-in found worth telling (ADR 0107), in Conch's words: to
+   * the owner of each channel that hears about routines. Returns how many heard.
+   */
+  async tellOwner(markdown: string): Promise<number> {
+    let sent = 0;
+    for (const channel of await this.#routineChannels()) {
+      const live = this.#live.get(channel.id);
+      const owner = channel.people[0];
+      if (!live || !owner) continue;
+      const chat = await live.connection.directChat(owner.id).catch(() => undefined);
+      if (!chat) continue;
+      await live.connection
+        .send(chat, markdown)
+        .then(() => (sent += 1))
+        .catch((error: unknown) => this.#log(`check-in: ${explain(error)}`));
+    }
+    return sent;
+  }
+
   /** Channels whose owner wants to hear about routines, and that are online now. */
   async #routineChannels() {
     return (await this.deps.store.all()).filter(

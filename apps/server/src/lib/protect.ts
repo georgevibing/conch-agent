@@ -64,6 +64,11 @@ export function protectedPaths(home: string): string[] {
     // or raise its own cap.
     join(home, 'learning'),
     join(home, 'learning-spend.json'),
+    // Standing orders and the check-in's choices (ADR 0107): an assistant that could write
+    // these would give itself orders, or choose what interrupts you and when.
+    join(home, 'standing-orders.json'),
+    join(home, 'checkin.json'),
+    join(home, 'checkin'),
     // Whose skills are trusted, and your signing key (ADR 0031): an assistant
     // that could write the one would vouch for its own skills.
     join(home, 'skills.trust.json'),

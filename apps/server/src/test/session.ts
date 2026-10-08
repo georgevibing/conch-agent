@@ -383,6 +383,22 @@ export async function useConch(g: Gateway) {
       payload: { limitUsd: 2 },
     }),
   );
+  // A standing order in your words, the check-in's quiet hours, and one look (ADR 0107).
+  await ok(
+    await app.inject({
+      method: 'POST',
+      url: '/api/standing-orders',
+      payload: { text: 'Always tell me if a flight changes' },
+    }),
+  );
+  await ok(
+    await app.inject({
+      method: 'PUT',
+      url: '/api/checkin',
+      payload: { quiet: { from: '23:00', to: '06:30' } },
+    }),
+  );
+  await ok(await app.inject({ method: 'POST', url: '/api/checkin/look' }));
   // A thumbnail of a page the agent looked at, as the browser keeps them.
   await services.browser.saveShot(convo.id, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
   // …and the tabs that chat had open, kept to open again.

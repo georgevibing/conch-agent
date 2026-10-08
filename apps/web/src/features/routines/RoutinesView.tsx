@@ -20,6 +20,7 @@ import { useUi } from '../../app/ui';
 import { ownAgent } from '../agents/AgentChoice';
 import { useAgents } from '../agents/api';
 import { ROUTINES_SPEND_FOCUS } from './SpendingSection';
+import { CheckInSection } from '../checkins/CheckInSection';
 
 import { routineIcon, WAITING_TEXT, watchProblem } from './icon';
 import { NewRoutine } from './NewRoutine';
@@ -205,6 +206,9 @@ export function RoutinesView() {
           })}
         </Stack>
       )}
+
+      {/* Standing orders and the check-in (ADR 0107): on every Routines page, routines or not. */}
+      <CheckInSection />
 
       {onPlan && <PlanRoomSection />}
 

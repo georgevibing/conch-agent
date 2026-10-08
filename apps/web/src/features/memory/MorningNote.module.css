@@ -1,0 +1,4 @@
+/* On the new chat's screen: as wide as a card in the chat, under the suggestions. */
+.home {
+  inline-size: min(var(--nc-chat-card-width), 100%);
+}
