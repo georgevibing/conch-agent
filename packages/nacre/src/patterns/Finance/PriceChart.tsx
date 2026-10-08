@@ -9,7 +9,17 @@ import {
   type ReactNode,
 } from 'react';
 
-import { axisDate, dateWords, money, niceBounds, niceTicks, percent, signed } from './format';
+import {
+  axisDate,
+  axisMoment,
+  dateWords,
+  momentWords,
+  money,
+  niceBounds,
+  niceTicks,
+  percent,
+  signed,
+} from './format';
 import type { PriceSeries } from './types';
 import styles from './Finance.module.css';
 
@@ -91,6 +101,18 @@ export function PriceChart({
     return Math.min(n - 1, Math.max(0, Math.round(f * (n - 1))));
   };
 
+  /** A point's moment in words: its time when the chart has times (a coin's day), else its date. */
+  const when = (i: number, long = false) => {
+    const instant = series.times?.[i];
+    return instant ? momentWords(instant, locale) : dateWords(series.dates[i] ?? '', locale, long);
+  };
+  const axis = (i: number) => {
+    const instant = series.times?.[i];
+    return instant
+      ? axisMoment(instant, series.period, locale)
+      : axisDate(series.dates[i] ?? '', series.period, locale);
+  };
+
   const say = (i: number) => {
     const point = series.closes[i];
     const day = series.dates[i];
@@ -99,7 +121,7 @@ export function PriceChart({
       first !== undefined && first !== 0
         ? `, ${percent(((point - first) / first) * 100, locale)} from the start of the range`
         : '';
-    return `${dateWords(day, locale, true)}: ${money(point, currency, locale)}${from}`;
+    return `${when(i, true)}: ${money(point, currency, locale)}${from}`;
   };
 
   const last = series.closes.at(-1);
@@ -107,7 +129,7 @@ export function PriceChart({
   const low = n ? Math.min(...series.closes) : undefined;
   const summary =
     first !== undefined && last !== undefined && series.dates[0]
-      ? `${label}. ${money(first, currency, locale)} on ${dateWords(series.dates[0], locale, true)} to ${money(last, currency, locale)} on ${dateWords(series.dates.at(-1) ?? '', locale, true)}, ${
+      ? `${label}. ${money(first, currency, locale)} on ${when(0, true)} to ${money(last, currency, locale)} on ${when(n - 1, true)}, ${
           first === 0 ? 'unchanged' : percent(((last - first) / first) * 100, locale)
         } over the range. Highest ${money(high ?? last, currency, locale)}, lowest ${money(low ?? last, currency, locale)}. ${series.source}.`
       : `${label}. No closes to draw.`;
@@ -257,11 +279,9 @@ export function PriceChart({
       </div>
 
       <div className={styles.xAxis} aria-hidden>
-        <span>{series.dates[0] ? axisDate(series.dates[0], series.period, locale) : ''}</span>
-        {date && away && <span className={styles.xAt}>{dateWords(date, locale)}</span>}
-        <span>
-          {series.dates.at(-1) ? axisDate(series.dates.at(-1) ?? '', series.period, locale) : ''}
-        </span>
+        <span>{n ? axis(0) : ''}</span>
+        {date && away && <span className={styles.xAt}>{when(index)}</span>}
+        <span>{n ? axis(n - 1) : ''}</span>
       </div>
       {footer}
 
@@ -276,9 +296,9 @@ export function PriceChart({
           </tr>
         </thead>
         <tbody>
-          {tableRows(series).map(({ i, day, close }) => (
-            <tr key={day}>
-              <th scope="row">{dateWords(day, locale)}</th>
+          {tableRows(series).map(({ i, close }) => (
+            <tr key={i}>
+              <th scope="row">{when(i)}</th>
               <td>{money(close, currency, locale)}</td>
               <td>
                 {first === undefined || first === 0 || i === 0

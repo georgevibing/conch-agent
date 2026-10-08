@@ -4,6 +4,7 @@ import { SegmentedControl } from '../../components/SegmentedControl';
 import { cx } from '../../utils/cx';
 import {
   CLASS_WORDS,
+  coinHue,
   changeWords,
   monthWords,
   compact,
@@ -22,18 +23,32 @@ import { FINANCE_PERIODS, type FinancePeriod, type PriceSeries, type Quote } fro
 import styles from './Finance.module.css';
 
 /** A letter tile instead of a logo: nothing is ever fetched from a brand's site. */
-export function Lettermark({ symbol, className }: { symbol: string; className?: string }) {
+export function Lettermark({
+  symbol,
+  coin,
+  className,
+}: {
+  symbol: string;
+  /** A coin: round like one, in the coin's own hue, with up to three letters of its symbol. */
+  coin?: boolean;
+  className?: string;
+}) {
   const letters =
     symbol
       .replace(/[^A-Za-z0-9]/g, '')
-      .slice(0, 2)
+      .slice(0, coin ? (symbol.length <= 3 ? 3 : 1) : 2)
       .toUpperCase() || '·';
-  // The same symbol always gets the same tint, from its own letters.
-  const hue = [...symbol].reduce((sum, c) => (sum * 31 + c.charCodeAt(0)) % 360, 7);
+  // The same symbol always gets the same tint, from its own letters (a coin, its own colour).
+  const hue = coin
+    ? coinHue(symbol)
+    : [...symbol].reduce((sum, c) => (sum * 31 + c.charCodeAt(0)) % 360, 7);
   return (
     <span
       aria-hidden
       className={cx(styles.mark, className)}
+      data-coin={coin || undefined}
+      data-long={letters.length > 2 || undefined}
+      data-one={(coin && letters.length === 1) || undefined}
       style={{ '--fm-h': hue } as CSSProperties}
     >
       {letters}
@@ -42,7 +57,7 @@ export function Lettermark({ symbol, className }: { symbol: string; className?: 
 }
 
 /** ▲ or ▼, drawn so it sits on the text's baseline at any size. */
-function Caret({ way }: { way: 'up' | 'down' | 'flat' }) {
+export function Caret({ way }: { way: 'up' | 'down' | 'flat' }) {
   if (way === 'flat')
     return (
       <svg className={styles.caret} viewBox="0 0 10 10" aria-hidden focusable="false">
@@ -178,9 +193,10 @@ export function QuoteCard({
     >
       <p className="nc-visually-hidden">{summary}</p>
       {children}
+      {quote.notice && <p className={styles.notice}>{quote.notice}.</p>}
 
       <header className={styles.head}>
-        <Lettermark symbol={quote.symbol} />
+        <Lettermark symbol={quote.symbol} coin={quote.class === 'crypto'} />
         <div className={styles.who}>
           <h3 className={styles.symbol}>{quote.symbol}</h3>
           {quote.name && <p className={styles.name}>{quote.name}</p>}
@@ -302,14 +318,17 @@ export function QuoteCard({
 }
 
 /** Where today's price sits between the day's low and its high. */
-function DayRange({
+export function DayRange({
   quote,
   currency,
   locale,
+  label = 'Day range',
 }: {
   quote: Quote;
   currency?: string;
   locale?: string;
+  /** "Day range"; a coin's is "24-hour range". */
+  label?: string;
 }) {
   const range = quote.dayRange;
   if (!range) return null;
@@ -325,7 +344,7 @@ function DayRange({
   return (
     <div className={styles.dayRange}>
       <p className={styles.dayRangeLabel}>
-        Day range
+        {label}
         <span className="nc-visually-hidden">
           : {money(range.low, currency, locale)} to {money(range.high, currency, locale)}, now{' '}
           {money(quote.price, currency, locale)}
@@ -356,7 +375,7 @@ function DayRange({
   );
 }
 
-function Tile({ label, value, detail }: { label: string; value: string; detail?: string }) {
+export function Tile({ label, value, detail }: { label: string; value: string; detail?: string }) {
   return (
     <div className={styles.tile}>
       <dt className={styles.tileLabel}>{label}</dt>

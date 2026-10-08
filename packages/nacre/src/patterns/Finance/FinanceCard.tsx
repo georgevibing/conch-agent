@@ -1,11 +1,19 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 
 import { cx } from '../../utils/cx';
+import { CoinCard } from './CoinCard';
 import { CompareChart } from './CompareChart';
+import { CryptoMarketCard } from './CryptoMarket';
 import { FundamentalsCard } from './Fundamentals';
 import { QuoteCard } from './QuoteCard';
 import { MissingSymbols, QuoteShelf } from './QuoteShelf';
-import type { FinancePeriod, FundamentalsData, PriceSeries, QuotesData } from './types';
+import type {
+  CryptoMarketData,
+  FinancePeriod,
+  FundamentalsData,
+  PriceSeries,
+  QuotesData,
+} from './types';
 import styles from './Finance.module.css';
 
 /** Asks the app for another range of closes. `undefined` when nobody has them. */
@@ -88,6 +96,20 @@ export function QuotesCard({ quotes, locale, onRange, share, className }: Quotes
   const onPeriodChange = onRange ? choose : undefined;
   const card = (symbol: string) => {
     const quote = quotes.items.find((q) => q.symbol === symbol) ?? first;
+    const { crypto } = quote;
+    // A coin with CoinGecko's figures gets its own card; a coin Stooq stood in for is priced as any other.
+    if (crypto)
+      return (
+        <CoinCard
+          quote={{ ...quote, crypto }}
+          series={seriesFor(quote.symbol)}
+          locale={locale}
+          period={period}
+          onPeriodChange={onPeriodChange}
+          loading={loading}
+          share={share}
+        />
+      );
     return (
       <QuoteCard
         quote={quote}
@@ -153,5 +175,21 @@ export function Fundamentals({
       share={share}
       className={className}
     />
+  );
+}
+
+export interface CryptoMarketProps {
+  market: CryptoMarketData;
+  locale?: string;
+  share?: ReactNode;
+  className?: string;
+}
+
+/** Crypto as a whole in the chat: the total, its day, the dominance and the biggest coins. */
+export function CryptoMarket({ market, locale, share, className }: CryptoMarketProps) {
+  return (
+    <div className={cx(styles.root, className)}>
+      <CryptoMarketCard market={market} locale={locale} share={share} />
+    </div>
   );
 }

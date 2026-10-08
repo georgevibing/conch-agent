@@ -8,9 +8,10 @@
 
 /** The stretches of time the price chart draws. */
 export const FINANCE_PERIODS = ['1W', '1M', '3M', '6M', '1Y', '5Y'] as const;
-export type FinancePeriod = (typeof FINANCE_PERIODS)[number] | 'MAX';
+export type FinancePeriod = (typeof FINANCE_PERIODS)[number] | '1D' | 'MAX';
 
-export type MarketState = 'open' | 'closed' | 'pre' | 'post' | 'unknown';
+/** `always`: what never closes (a coin trades 24/7). */
+export type MarketState = 'open' | 'closed' | 'pre' | 'post' | 'always' | 'unknown';
 
 export type InstrumentClass = 'stock' | 'etf' | 'index' | 'crypto' | 'fx' | 'commodity' | 'unknown';
 
@@ -21,9 +22,84 @@ export interface PriceSeries {
   dates: string[];
   closes: number[];
   currency?: string;
-  /** Who the closes are from: "Stooq (daily closes)". */
+  /** The instant of each point, when they're hours or minutes apart (a coin's day). */
+  times?: string[];
+  /** Who the closes are from: "Stooq (daily closes)", "CoinGecko (hourly)". */
   source: string;
   note?: string;
+}
+
+/** The stretches a coin's move is given over, shortest first. */
+export const COIN_CHANGES = ['1h', '24h', '7d', '30d', '1y'] as const;
+export type CoinChange = (typeof COIN_CHANGES)[number];
+
+/** A price a coin reached once, when, and how far today's is from it (−38 is 38% below). */
+export interface CoinExtreme {
+  price: number;
+  date: string;
+  fromPercent?: number;
+}
+
+/** Another coin that answers to the same symbol. */
+export interface CoinAlternative {
+  id: string;
+  symbol: string;
+  name: string;
+  rank?: number;
+}
+
+/**
+ * What an aggregator says about a coin. Every amount is in the quote's
+ * currency. `supply.max` is absent when there's no maximum, and `unlimited`
+ * says so in words.
+ */
+export interface CryptoDetails {
+  id: string;
+  rank?: number;
+  marketCap?: number;
+  fullyDiluted?: number;
+  volume24h?: number;
+  supply?: { circulating?: number; total?: number; max?: number; unlimited?: boolean };
+  ath?: CoinExtreme;
+  atl?: CoinExtreme;
+  changes?: Partial<Record<CoinChange, number>>;
+  alternatives?: CoinAlternative[];
+  about?: string;
+  genesis?: string;
+  algorithm?: string;
+  categories?: string[];
+  /** "CoinGecko". */
+  source: string;
+}
+
+/** One coin in the market overview. */
+export interface MarketCoin {
+  id: string;
+  symbol: string;
+  name: string;
+  rank?: number;
+  price: number;
+  change24h?: number;
+  change7d?: number;
+  marketCap?: number;
+  /** The last week's shape. */
+  spark?: number[];
+}
+
+/** Crypto as a whole, as the overview card takes it. */
+export interface CryptoMarketData {
+  currency: string;
+  totalMarketCap: number;
+  change24h?: number;
+  volume24h?: number;
+  /** Shares of the whole, in percent. */
+  dominance?: { btc: number; eth?: number };
+  coinsTracked?: number;
+  coins: MarketCoin[];
+  asOf: string;
+  /** "CoinGecko". */
+  source: string;
+  notice?: string;
 }
 
 /** A sparkline's worth of closes: the shape without the dates. */
@@ -60,7 +136,11 @@ export interface Quote {
   marketCap?: MarketCap;
   dayState?: MarketState;
   spark?: PriceSpark;
-  /** Who the price is from: "Stooq". */
+  /** A coin's aggregator figures. */
+  crypto?: CryptoDetails;
+  /** Said on the card about where this came from: "CoinGecko is busy; prices from Stooq". */
+  notice?: string;
+  /** Who the price is from: "Stooq", "CoinGecko". */
   source: string;
 }
 

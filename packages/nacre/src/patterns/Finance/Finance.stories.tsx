@@ -7,6 +7,7 @@ import type { FinancePeriod } from './types';
 
 /** A pretend range switch: the same made-up walk, longer or shorter. */
 const points: Record<FinancePeriod, { points: number; every: number; drift: number }> = {
+  '1D': { points: 96, every: 1, drift: 0.004 },
   '1W': { points: 5, every: 1, drift: 0.012 },
   '1M': { points: 22, every: 1, drift: 0.07 },
   '3M': { points: 63, every: 1, drift: 0.11 },
