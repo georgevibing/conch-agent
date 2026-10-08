@@ -43,8 +43,13 @@ export const AGENT_LIMITS = {
   role: 120,
   /** Its personality in your words, beside the tone: "Dry humour, never gushes". */
   personality: 2000,
-  /** What it should always do, in your words. Part of every turn's prompt, so bounded. */
-  instructions: 8000,
+  /**
+   * What it should always do, in your words. Part of every turn's prompt, so
+   * bounded, but roomy: an agent brought from OpenClaw can have a whole
+   * handbook (≈25k tokens at most). Long ones are warned about, never cut
+   * (`instructionsWeight`).
+   */
+  instructions: 100_000,
   /** An uploaded picture, after the browser framed and shrank it (bytes). */
   avatarBytes: 700_000,
   /** A picture made by a model, before the browser frames it (bytes). */
@@ -52,6 +57,52 @@ export const AGENT_LIMITS = {
   /** What a generated picture should show, in your words. */
   avatarPrompt: 1000,
 } as const;
+
+/**
+ * The instructions a Conch from before 100,000 read (ADR 0051): the store
+ * keeps the first this many characters where that Conch looks, and the rest
+ * beside them, so going back a version still reads the start.
+ */
+export const OLDER_INSTRUCTIONS = 8000;
+
+// ── How heavy instructions are ──────────────────────────────────────────────
+
+/** Tokens in plain text, roughly: about four ASCII characters each, about one for anything else. */
+export function roughTokens(text: string): number {
+  let ascii = 0;
+  let other = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text.charCodeAt(i) < 128) ascii++;
+    else other++;
+  }
+  return Math.ceil(ascii / 4 + other);
+}
+
+/** From this many tokens, instructions cost noticeably on every reply, whatever the model. */
+export const LONG_INSTRUCTIONS_TOKENS = 4_000;
+/** Instructions taking more than this share of a model's window crowd it. */
+export const CROWDED_INSTRUCTIONS_SHARE = 0.1;
+
+/**
+ * How much an agent's instructions weigh on every turn: `long` when they cost
+ * noticeably on every reply, `crowded` when they take a real share of the
+ * model's window (`window`, when the model says). Only ever a note: they're
+ * kept whole either way.
+ */
+export function instructionsWeight(
+  text: string,
+  window?: number,
+): { tokens: number; level: 'fine' | 'long' | 'crowded' } {
+  const tokens = roughTokens(text.trim());
+  if (window && tokens > window * CROWDED_INSTRUCTIONS_SHARE) return { tokens, level: 'crowded' };
+  return { tokens, level: tokens >= LONG_INSTRUCTIONS_TOKENS ? 'long' : 'fine' };
+}
+
+/** “≈9k tokens”, “≈800 tokens”: a size a person can picture. */
+export function aboutTokens(tokens: number): string {
+  if (tokens < 1_000) return `≈${Math.max(10, Math.round(tokens / 10) * 10)} tokens`;
+  return `≈${Math.round(tokens / 1_000)}k tokens`;
+}
 
 // ── Tone ────────────────────────────────────────────────────────────────────
 

@@ -11,6 +11,12 @@
  * Lenient on purpose: an agent with an odd field is put right, not lost; a
  * file that won't read at all is kept aside and the first agent is made again
  * from your settings.
+ *
+ * Instructions are kept in two parts (ADR 0051): `instructions` holds the
+ * start, at most the 8,000 characters a Conch from before read there (cut
+ * where a paragraph ends), and `instructionsRest` holds the rest, exactly, so
+ * the two together are the whole. Going back a version reads the start, as it
+ * always did, instead of finding the field too long and losing it all.
  */
 import { constants } from 'node:fs';
 import { lstat, mkdir, open, readdir, rm } from 'node:fs/promises';
@@ -19,6 +25,7 @@ import { join } from 'node:path';
 import {
   AGENT_LIMITS,
   Agent,
+  OLDER_INSTRUCTIONS,
   AgentDefaults,
   AgentId,
   AgentImageId,
@@ -55,20 +62,58 @@ type StoredAvatar = z.infer<typeof StoredAvatar>;
 
 const SHELL: StoredAvatar = { kind: 'preset', id: 'shell' };
 
+/**
+ * Instructions as a Conch from before reads them, and the rest beside them:
+ * the start (at most `OLDER_INSTRUCTIONS`, cut where a paragraph, else a
+ * sentence, else a word ends) and what follows, exactly.
+ */
+export function splitInstructions(text: string): {
+  instructions: string;
+  instructionsRest?: string;
+} {
+  if (text.length <= OLDER_INSTRUCTIONS) return { instructions: text };
+  const head = text.slice(0, OLDER_INSTRUCTIONS);
+  const end =
+    [head.lastIndexOf('\n\n'), head.lastIndexOf('. ') + 1, head.lastIndexOf(' ')].find(
+      (at) => at > OLDER_INSTRUCTIONS * 0.6,
+    ) ?? OLDER_INSTRUCTIONS;
+  return { instructions: text.slice(0, end), instructionsRest: text.slice(end) };
+}
+
+/** The whole of an agent's instructions, from its two parts. */
+export function joinInstructions(parts: {
+  instructions: string;
+  instructionsRest?: string;
+}): string {
+  return `${parts.instructions}${parts.instructionsRest ?? ''}`
+    .trim()
+    .slice(0, AGENT_LIMITS.instructions);
+}
+
 /** One agent as kept: what's derived (`isDefault`, the picture's address) is worked out on reading. */
-const StoredAgent = z.object({
+const DiskAgent = z.object({
   id: AgentId,
   name: Agent.shape.name.catch('Agent'),
   role: z.string().trim().max(AGENT_LIMITS.role).catch(''),
   avatar: StoredAvatar.catch(SHELL),
   persona: AgentPersona.catch({ tone: 'warm', personality: '' }),
-  instructions: z.string().trim().max(AGENT_LIMITS.instructions).catch(''),
+  // Either part too long (a hand-edited file) keeps the start, never loses it all.
+  instructions: z
+    .string()
+    .catch('')
+    .transform((s) => s.slice(0, AGENT_LIMITS.instructions)),
+  instructionsRest: z.string().optional().catch(undefined),
   defaults: AgentDefaults.optional().catch(undefined),
   order: z.number().catch(0),
   imported: AgentImported.optional().catch(undefined),
   createdAt: z.number().catch(0),
   updatedAt: z.number().catch(0),
 });
+/** In memory, the instructions are one text; they're split again only on the way to disk. */
+const StoredAgent = DiskAgent.transform(({ instructionsRest, ...agent }) => ({
+  ...agent,
+  instructions: joinInstructions({ instructions: agent.instructions, instructionsRest }),
+}));
 export type StoredAgent = z.infer<typeof StoredAgent>;
 
 const AgentsFile = z.object({
@@ -88,6 +133,17 @@ const AgentsFile = z.object({
     }),
 });
 type AgentsFile = z.infer<typeof AgentsFile>;
+
+/** The file as written: every agent's instructions in the two parts an older Conch can read. */
+function toDisk(file: AgentsFile) {
+  return {
+    ...file,
+    agents: file.agents.map(({ instructions, ...agent }) => ({
+      ...agent,
+      ...splitInstructions(instructions),
+    })),
+  };
+}
 
 export class AgentError extends Error {
   constructor(
@@ -192,7 +248,7 @@ export class AgentStore {
           file.defaultId = sorted(file.agents)[0]?.id;
           fixed = true;
         }
-        if (fixed) await writeJson(this.#path, file);
+        if (fixed) await writeJson(this.#path, toDisk(file));
         return file;
       })
       .catch((error: unknown) => {
@@ -464,7 +520,7 @@ export class AgentStore {
           agents: current.agents.map((a) => structuredClone(a)),
         };
         const result = change(file);
-        await writeJson(this.#path, file);
+        await writeJson(this.#path, toDisk(file));
         this.#file = Promise.resolve(file);
         await this.#mirror(file);
         this.changed?.(this.#list(file));

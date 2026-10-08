@@ -110,9 +110,13 @@ describe('the agents routes', () => {
       (await json(app, method, url, payload)).statusCode;
     expect(await bad('POST', '/api/agents', { name: '' })).toBe(400);
     expect(await bad('POST', '/api/agents', { name: 'x'.repeat(41) })).toBe(400);
-    expect(await bad('POST', '/api/agents', { name: 'A', instructions: 'x'.repeat(8001) })).toBe(
+    expect(await bad('POST', '/api/agents', { name: 'A', instructions: 'x'.repeat(100_001) })).toBe(
       400,
     );
+    // A handbook of 30,000 characters (in any script) fits, as the editor sends it.
+    expect(
+      await bad('POST', '/api/agents', { name: 'Handbook', instructions: 'ß'.repeat(30_000) }),
+    ).toBe(200);
     expect(await bad('POST', '/api/agents', { name: 'A', isAdmin: true })).toBe(400);
     expect(
       await bad('POST', '/api/agents', {

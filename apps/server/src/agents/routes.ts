@@ -66,6 +66,13 @@ function parse<T extends z.ZodType>(
  * face (square, one subject, no words in it). Your words can't make it more
  * than a picture: it only ever comes back to the page as bytes to look at.
  */
+/**
+ * An agent's body as sent: up to 100,000 characters of instructions, which
+ * JSON may write as up to four bytes each, and the rest of it beside them.
+ * The schema then holds it to its limits, with a sentence saying which.
+ */
+const AGENT_BODY = AGENT_LIMITS.instructions * 4 + 32_000;
+
 export function facePrompt(body: { prompt: string; name?: string; tone?: Tone }): string {
   return [
     'A square avatar for a personal AI assistant, to be shown small and round beside its messages in a chat app.',
@@ -156,7 +163,7 @@ export function registerAgentRoutes(
     }
   });
 
-  app.post('/api/agents', { bodyLimit: 64_000 }, async (request, reply) => {
+  app.post('/api/agents', { bodyLimit: AGENT_BODY }, async (request, reply) => {
     const body = parse(CreateAgentBody, request.body, reply);
     if (!body) return;
     try {
@@ -175,7 +182,7 @@ export function registerAgentRoutes(
 
   app.patch<{ Params: { id: string } }>(
     '/api/agents/:id',
-    { bodyLimit: 64_000 },
+    { bodyLimit: AGENT_BODY },
     async (request, reply) => {
       const id = parse(AgentId, request.params.id, reply);
       const body = id && parse(UpdateAgentBody, request.body, reply);

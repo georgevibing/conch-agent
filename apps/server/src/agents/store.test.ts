@@ -2,13 +2,20 @@ import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { AGENT_LIMITS, AgentList, FIRST_AGENT_ID, type Persona } from '@conch/protocol';
+import {
+  AGENT_LIMITS,
+  AgentList,
+  FIRST_AGENT_ID,
+  OLDER_INSTRUCTIONS,
+  type Persona,
+} from '@conch/protocol';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
 import { protectedPaths, touchesProtected } from '../lib/protect';
 import { SettingsStore } from '../settings/store';
 import { carriesSecret, jpeg, png } from '../test/faces';
-import { AgentError, AgentStore, uniqueName } from './store';
+import { AgentError, AgentStore, joinInstructions, splitInstructions, uniqueName } from './store';
 
 async function setup(persona?: Partial<Persona>) {
   const home = await mkdtemp(join(tmpdir(), 'conch-agents-'));
@@ -146,7 +153,7 @@ describe('agents you make', () => {
         }),
       ),
     ).not.toBe('ok');
-    expect(await code(agents.create({ name: 'Long', instructions: 'x'.repeat(8001) }))).not.toBe(
+    expect(await code(agents.create({ name: 'Long', instructions: 'x'.repeat(100_001) }))).not.toBe(
       'ok',
     );
     expect(await code(agents.create({ name: 'x'.repeat(41) }))).not.toBe('ok');
@@ -276,5 +283,66 @@ describe('what the assistant can’t touch', () => {
     const paths = protectedPaths(home);
     for (const path of ['agents/agents.json', 'agents/avatars/im_abcd.png', 'agents'])
       expect(touchesProtected({ file_path: join(home, path) }, paths), path).toBe(true);
+  });
+});
+
+describe('long instructions, and the Conch from before', () => {
+  /** How a Conch from before read an agent's instructions: at most 8,000, or nothing at all. */
+  const OlderAgent = z.object({
+    id: z.string(),
+    instructions: z.string().trim().max(OLDER_INSTRUCTIONS).catch(''),
+  });
+  const handbook = Array.from(
+    { length: 500 },
+    (_, i) => `Rule ${i + 1}: answer the door politely, and write down who came.`,
+  ).join('\n\n');
+
+  it('keeps 30,000 characters whole, and the file reads in the Conch from before', async () => {
+    expect(handbook.length).toBeGreaterThan(30_000);
+    const { agents, home } = await setup();
+    const james = await agents.create({ name: 'James Claw', instructions: handbook });
+    expect(james.instructions).toBe(handbook);
+    // Read again from disk by a new store: still whole.
+    const again = new AgentStore(home, new SettingsStore(home));
+    expect((await again.get(james.id))?.instructions).toBe(handbook);
+
+    const raw = JSON.parse(await readFile(join(home, 'agents', 'agents.json'), 'utf8')) as {
+      agents: { id: string; instructions: string; instructionsRest?: string }[];
+    };
+    const kept = raw.agents.find((a) => a.id === james.id);
+    // Where the Conch from before looks: the start, cut where a paragraph ends.
+    expect(kept?.instructions.length).toBeLessThanOrEqual(OLDER_INSTRUCTIONS);
+    expect(kept?.instructions).toMatch(/write down who came\.$/);
+    expect(`${kept?.instructions}${kept?.instructionsRest}`).toBe(handbook);
+    const older = OlderAgent.parse(kept);
+    expect(older.instructions.length).toBeGreaterThan(OLDER_INSTRUCTIONS * 0.6);
+    expect(handbook.startsWith(older.instructions)).toBe(true);
+  });
+
+  it('reads a file the Conch from before wrote, even after it dropped the rest', async () => {
+    const { agents, home } = await setup();
+    const james = await agents.create({ name: 'James Claw', instructions: handbook });
+    const path = join(home, 'agents', 'agents.json');
+    const raw = JSON.parse(await readFile(path, 'utf8')) as {
+      agents: Record<string, unknown>[];
+    };
+    // The older Conch rewrote the file: it keeps only the fields it knows.
+    for (const a of raw.agents) delete a.instructionsRest;
+    await writeFile(path, JSON.stringify(raw));
+    const again = new AgentStore(home, new SettingsStore(home));
+    const read = await again.get(james.id);
+    expect(handbook.startsWith(read?.instructions ?? '-')).toBe(true);
+    expect(read?.instructions.length).toBeLessThanOrEqual(OLDER_INSTRUCTIONS);
+  });
+
+  it('splits and joins without losing a character', () => {
+    expect(splitInstructions('Short.')).toEqual({ instructions: 'Short.' });
+    const parts = splitInstructions(handbook);
+    expect(parts.instructions.length).toBeLessThanOrEqual(OLDER_INSTRUCTIONS);
+    expect(joinInstructions(parts)).toBe(handbook);
+    // One long word with no place to cut: cut at the limit, still whole together.
+    const word = 'x'.repeat(20_000);
+    expect(splitInstructions(word).instructions).toHaveLength(OLDER_INSTRUCTIONS);
+    expect(joinInstructions(splitInstructions(word))).toBe(word);
   });
 });
