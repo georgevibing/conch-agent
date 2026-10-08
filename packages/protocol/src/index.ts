@@ -1257,9 +1257,19 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('pong') }),
   z.object({
     type: z.literal('error'),
-    code: z.enum(['bad-request', 'engine-unavailable', 'not-found', 'busy', 'internal']),
+    code: z.enum([
+      'bad-request',
+      'engine-unavailable',
+      'not-found',
+      'busy',
+      'internal',
+      /** Allowing this needs a recent passkey or password from this device (ADR 0108). */
+      'verify-required',
+    ]),
     message: z.string(),
     conversationId: z.string().optional(),
+    /** The question it's about, for `verify-required`: it still waits. */
+    permissionId: z.string().optional(),
     clientMessageId: z.string().optional(),
   }),
 ]);

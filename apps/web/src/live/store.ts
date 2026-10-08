@@ -1,7 +1,9 @@
 import type { Attachment, ConversationEvent, LoginState, TurnOptions } from '@conch/protocol';
 import { create } from 'zustand';
 
-import { decided, emptyView, reduce, type ConversationView } from './reducer';
+import type { MailEdit } from '@conch/protocol';
+
+import { decided, emptyView, reduce, undecided, type ConversationView } from './reducer';
 
 export type ConnectionState = 'connecting' | 'open' | 'reconnecting';
 
@@ -15,6 +17,15 @@ export interface PendingMessage {
    * log names it afresh (and may wrap it), so it's matched by its words.
    */
   byText?: boolean;
+}
+
+export interface StepUp {
+  conversationId: string;
+  permissionId: string;
+  decision: 'allow' | 'allow-always';
+  edit?: MailEdit;
+  /** The gateway's words: what it needs, and why. */
+  message: string;
 }
 
 /** Key for a conversation that doesn't exist yet (the first message of a new chat). */
@@ -44,6 +55,15 @@ interface LiveState {
    * turn yet, with when: they're drawn stopped at once (`stoppedView`).
    */
   stopping: Record<string, number>;
+
+  /**
+   * An Allow the gateway held back until you confirm it's you (a step that
+   * matters, from a device that isn't the computer Conch runs on: ADR 0108).
+   * The card waits again; `ConfirmToAllow` asks, then sends it again.
+   */
+  stepUp?: StepUp;
+  needStepUp(stepUp: StepUp): void;
+  clearStepUp(): void;
 
   setConnection(state: ConnectionState): void;
   apply(event: ConversationEvent): void;
@@ -116,6 +136,17 @@ export const useLiveStore = create<LiveState>((set) => ({
   stopping: {},
   setStartedWith: (startedWith) => set({ startedWith }),
 
+  needStepUp: (stepUp) =>
+    set((state) => {
+      const view = state.views[stepUp.conversationId];
+      return {
+        stepUp,
+        ...(view && {
+          views: { ...state.views, [stepUp.conversationId]: undecided(view, stepUp.permissionId) },
+        }),
+      };
+    }),
+  clearStepUp: () => set({ stepUp: undefined }),
   setConnection: (connection) => set({ connection }),
   apply: (event) => set((state) => applied(state, event)),
   catchUp: (conversationId, events) =>

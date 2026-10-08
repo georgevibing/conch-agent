@@ -42,8 +42,12 @@ export function registerPushRoutes(
   deps: {
     push: PushService;
     conversations: ConversationManager;
-    /** A recent passkey or password ("sudo mode"): `Gatekeeper.verified`. */
-    verified: (access: Access | undefined) => boolean;
+    /**
+     * Allowing a step that matters is fine from here: this computer, proven, or a
+     * recent passkey or password ("sudo mode") — `stepUpDone`, the same for the
+     * chat's own card (ADR 0108).
+     */
+    verified: (request: FastifyRequest) => boolean | Promise<boolean>;
   },
 ): void {
   const { push, conversations } = deps;
@@ -119,7 +123,7 @@ export function registerPushRoutes(
     const body = parse(PushAnswerBody, request.body, reply);
     if (!body) return;
     const result = await push.answer(pushOwner(request.access), body, {
-      verified: deps.verified(request.access),
+      verified: await deps.verified(request),
       respond: (conversationId, permissionId, decision) =>
         conversations.respond(conversationId, permissionId, decision),
     });

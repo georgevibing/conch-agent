@@ -67,6 +67,9 @@ interface LiveApi {
 
 const LiveContext = createContext<LiveApi | null>(null);
 
+/** Allows on their way, by question: sent again once you confirm it's you (ADR 0108). */
+const allowsSent = new Map<string, { decision: 'allow' | 'allow-always'; edit?: MailEdit }>();
+
 function upsertSummary(list: ConversationSummary[] | undefined, next: ConversationSummary) {
   const rest = (list ?? []).filter((c) => c.id !== next.id);
   return [next, ...rest].sort((a, b) => b.updatedAt - a.updatedAt);
@@ -251,7 +254,17 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         case 'error': {
           const key = event.conversationId ?? NEW;
           if (event.clientMessageId) live.returnPending(key, event.clientMessageId);
-          if (event.code === 'engine-unavailable') {
+          const sent = event.permissionId ? allowsSent.get(event.permissionId) : undefined;
+          if (event.code === 'verify-required' && event.conversationId && event.permissionId) {
+            // A step that matters, from this device: the card waits again while you confirm.
+            if (sent)
+              live.needStepUp({
+                conversationId: event.conversationId,
+                permissionId: event.permissionId,
+                ...sent,
+                message: event.message,
+              });
+          } else if (event.code === 'engine-unavailable') {
             live.setEngineIssue(event.message);
             void client.invalidateQueries({ queryKey: keys.engine });
           } else if (event.code === 'busy') {
@@ -439,6 +452,9 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
       },
       respond(conversationId, permissionId, decision, edit) {
         useLiveStore.getState().decide(conversationId, permissionId, decision);
+        if (decision === 'deny') allowsSent.delete(permissionId);
+        else allowsSent.set(permissionId, { decision, ...(edit && { edit }) });
+        if (allowsSent.size > 50) allowsSent.delete(allowsSent.keys().next().value ?? '');
         socketRef.current?.send({
           type: 'permission.respond',
           conversationId,

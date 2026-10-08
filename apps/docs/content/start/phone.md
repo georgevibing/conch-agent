@@ -36,6 +36,7 @@ When your assistant needs your OK, the notification says what it wants to do.
 - **Allow** and **Deny** are right on it for everyday steps: running the tests, building, changing a file in the work folder. One tap, and it carries on. The notification says **Allowed** or **Denied**.
 - **Review** is there instead for a step that matters: anything that deletes, sends something to other people, spends money, acts in one of your apps, or comes after the chat read something from outside. It opens Conch at the question.
 - Tapping the notification opens the question in a sheet at the bottom of the screen: who's asking, exactly what it would do, and two big buttons. For a step that matters, **Confirm and allow** asks for your passkey (Face ID, a fingerprint) or your password first.
+- The question in the chat itself works the same way: on your phone, or any device that isn't the computer Conch runs on, allowing a step that matters asks you to confirm it's you first. Once you have, it doesn't ask again for ten minutes. At the computer itself, nothing changes.
 - On an iPhone, notifications have no buttons, so a tap opens the sheet.
 - With **Show what it's about** off, there's no **Allow**: you'd be allowing something you can't see.
 - Each tap works once, only on the phone it was sent to, and only while the question waits. Answered somewhere else first, the notification says **Already answered**.

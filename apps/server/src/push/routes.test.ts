@@ -4,11 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
 
-import { PhoneAddress, PushStatus } from '@conch/protocol';
+import { PhoneAddress, PushStatus, ServerEvent } from '@conch/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
-import { onThisComputer } from '../test/here';
+import { hereInit, NOT_HERE, onThisComputer } from '../test/here';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 import { PushStore } from './store';
@@ -249,5 +249,104 @@ describe('the phone’s secure address', () => {
     expect((after.json() as { urls: string[] }).urls).toContain(
       'https://conch-studio.tail1234.ts.net',
     );
+  });
+});
+
+describe('a step that matters, from another device (ADR 0108)', () => {
+  /** A socket from a device that isn't this computer: its own sign-in, no proof. */
+  async function socket(port: number, headers: Record<string, string>) {
+    const ws = new WebSocket(`ws://localhost:${port}/ws`, { headers });
+    const events: ServerEvent[] = [];
+    ws.onmessage = (msg) => events.push(ServerEvent.parse(JSON.parse(String(msg.data))));
+    await new Promise((r) => (ws.onopen = r));
+    const respond = (decision: 'allow' | 'deny') =>
+      ws.send(
+        JSON.stringify({
+          type: 'permission.respond',
+          conversationId: 'c_1',
+          permissionId: 'p_1',
+          decision,
+        }),
+      );
+    return { ws, events, respond };
+  }
+
+  it('the chat’s card asks for a passkey or password first, as the sheet does; this computer doesn’t', async () => {
+    const { app, services, cookie } = await setup();
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const port = (app.server.address() as { port: number }).port;
+    vi.spyOn(services.push, 'confirmFor').mockReturnValue('It deletes or sends something.');
+    const respond = vi.spyOn(services.conversations, 'respond').mockResolvedValue(undefined);
+    // Signed in a while ago: the last passkey or password was more than ten minutes back.
+    const now = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(now + 11 * 60_000);
+
+    const phone = await socket(port, { cookie });
+    phone.respond('allow');
+    await vi.waitUntil(() => phone.events.some((e) => e.type === 'error'));
+    expect(phone.events.find((e) => e.type === 'error')).toMatchObject({
+      code: 'verify-required',
+      conversationId: 'c_1',
+      permissionId: 'p_1',
+    });
+    expect(respond).not.toHaveBeenCalled();
+    // A no never needs it.
+    phone.respond('deny');
+    await vi.waitUntil(() => respond.mock.calls.length === 1);
+    expect(respond).toHaveBeenLastCalledWith('c_1', 'p_1', 'deny', undefined);
+
+    // The sheet's way in is held to the same.
+    const answer = vi.spyOn(services.push, 'answer');
+    await app.inject({
+      method: 'POST',
+      url: '/api/push/answer',
+      headers: { cookie, [NOT_HERE]: '1' },
+      payload: { conversationId: 'c_1', permissionId: 'p_1', decision: 'allow' },
+    });
+    expect(answer.mock.calls.at(-1)?.[2]).toMatchObject({ verified: false });
+
+    // Confirmed on the phone: the same socket may allow it now.
+    const verified = await app.inject({
+      method: 'POST',
+      url: '/api/access/verify',
+      headers: { cookie, [NOT_HERE]: '1' },
+      payload: { secret: PASSWORD },
+    });
+    expect(verified.statusCode).toBe(200);
+    phone.respond('allow');
+    await vi.waitUntil(() => respond.mock.calls.length === 2);
+    expect(respond).toHaveBeenLastCalledWith('c_1', 'p_1', 'allow', undefined);
+    phone.ws.close();
+
+    // This computer, proven, allows as it always did: Date.now is still past the window.
+    vi.spyOn(Date, 'now').mockReturnValue(now + 30 * 60_000);
+    const here = await socket(port, {
+      cookie: `${cookie}; ${hereInit(app).headers.cookie ?? ''}`,
+    });
+    here.respond('allow');
+    await vi.waitUntil(() => respond.mock.calls.length === 3);
+    expect(here.events.some((e) => e.type === 'error')).toBe(false);
+    await app.inject({
+      method: 'POST',
+      url: '/api/push/answer',
+      headers: { cookie },
+      payload: { conversationId: 'c_1', permissionId: 'p_1', decision: 'allow' },
+    });
+    expect(answer.mock.calls.at(-1)?.[2]).toMatchObject({ verified: true });
+    here.ws.close();
+  });
+
+  it('an everyday step needs nothing more, from anywhere', async () => {
+    const { app, services, cookie } = await setup();
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const port = (app.server.address() as { port: number }).port;
+    const respond = vi.spyOn(services.conversations, 'respond').mockResolvedValue(undefined);
+    const now = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(now + 11 * 60_000);
+    const phone = await socket(port, { cookie });
+    phone.respond('allow');
+    await vi.waitUntil(() => respond.mock.calls.length === 1);
+    expect(phone.events.some((e) => e.type === 'error')).toBe(false);
+    phone.ws.close();
   });
 });

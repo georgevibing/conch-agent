@@ -36,6 +36,7 @@ import { ChatView } from '../features/chat/ChatView';
 import { ChatAgentSwitch } from '../features/agents/ChatAgent';
 import { HeaderMore } from '../features/chat/HeaderMore';
 import { WakeWord } from '../features/voice/WakeWord';
+import { ConfirmToAllow } from '../features/notifications/ConfirmToAllow';
 import { PasswordsView } from '../features/passwords/PasswordsView';
 import { ChatProvider } from '../features/engine/ChatProvider';
 import { AppDetailView } from '../features/integrations/AppDetailView';
@@ -305,6 +306,8 @@ export function Shell() {
           {/* The sidebar's pearl is out of sight: what's going on in the background, here. */}
           {(narrow || !sidebarOpen) && <BackgroundPulse />}
           <WakeWord onChat={onChat} />
+          {/* A step that matters, allowed from another device: confirm it's you (ADR 0108). */}
+          <ConfirmToAllow />
           {/* Who answers (ADR 0101): with two agents or more, a press hands the chat to another. */}
           {onChat && conversationId && !phone && (
             <ChatAgentSwitch conversationId={conversationId} />
