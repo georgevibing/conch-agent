@@ -411,7 +411,8 @@ export function VaultRow({
       <span className={styles.rowTile}>
         {selecting ? (
           <span aria-hidden className={styles.rowCheck} data-checked={checked || undefined}>
-            {checked && <Check />}
+            {/* The circle holds its tick, so the two stay centred wherever the circle sits. */}
+            <span className={styles.rowCheckMark}>{checked && <Check />}</span>
           </span>
         ) : (
           <VaultItemIcon kind={kind} domain={domain} title={title} />

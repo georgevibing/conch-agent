@@ -4,6 +4,7 @@
  *
  *   node scripts/snap.mjs <story-id> [--mode=dark] [--accent=iris] [--hover=selector]
  *                        [--width=900] [--height=600] [--out=path.png] [--full]
+ *                        [--touch]   (a phone: touch, pointer: coarse)
  *
  * Requires Storybook running on http://localhost:6006 (pnpm storybook).
  * Uses the locally installed Google Chrome, so no browser download is needed.
@@ -44,6 +45,7 @@ const browser = await chromium.launch(
 const page = await browser.newPage({
   viewport: { width: Number(opts.width ?? 900), height: Number(opts.height ?? 600) },
   deviceScaleFactor: 2,
+  ...(opts.touch === 'true' && { hasTouch: true, isMobile: true }),
 });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
