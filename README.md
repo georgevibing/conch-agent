@@ -78,6 +78,11 @@ your desktop and the chat apps you already use.
   picture, or one drawn by AI), a personality and instructions. Pick who answers a
   chat, switch mid-chat, or set one per chat app and routine; replies say who's
   speaking. [Agents](./apps/docs/content/features/agents.md)
+- **Agents that talk to each other.** "@Researcher find options, @Writer draft it":
+  agents take turns in one chat, with a live picture of who's talking to whom, and
+  stop by themselves before they loop or run up a bill. Add agents elsewhere by
+  pasting their address (A2A), and let other agents talk to yours, in words only,
+  once you let them in. [Several agents in one chat](./apps/docs/content/features/agents.md#several-agents-in-one-chat)
 - **Work in the background.** Hand a job off and keep chatting, or have another
   provider do a part ("have Codex write the tests"). Every provider runs it as a
   Conch task you can see, answer and stop, with its chat's permissions and never

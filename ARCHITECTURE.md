@@ -137,6 +137,8 @@ src/
   tasks/                      background tasks and helpers side by side (`delegate`), queue, worktrees (ADR 0033)
   mcp/                        other apps using Conch: the MCP door at `/mcp`, the launcher's handshake, scopes,
                               a call as a turn of the app's own chat, pairing Claude Desktop, Cursor, VS Code (ADR 0073)
+  a2a/                        agents talking to agents over A2A (ADR 0112): outside agents (`client.ts`, `outside.ts`),
+                              the door for other agents (`door.ts`), Repair (`doctor.ts`)
   conchapps/                  Conch apps (ADR 0061): the maker's tools, drafts, the sealed runtime (`runtime/host.mjs`),
                               the quality bar, packages, signatures, GitHub, `ConchApps` (a hosted tool family)
   questions/                  `ask`: a question answered with a tap, the one waiting per chat, its answer route (ADR 0060)
@@ -533,6 +535,18 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   read and suggested directly, everything else is one turn of the app's chat (origin
   `client`) run by `CallEngine`, scoped to that tool. Pairing (`pairing.ts`, `targets.ts`)
   writes Claude Desktop's, Cursor's or VS Code's settings. Doctor check `mcp`.
+
+- **Agents that talk to each other** ([ADR 0112](./docs/adr/0112-agents-that-talk-to-each-other.md)).
+  A message that mentions agents (`mentionsIn`, protocol `agents-talk.ts`) starts a round:
+  the web's `conversation.send` goes through `RoundService.send` (`agents/rounds.ts`), which
+  lets the first answer and, as each reply ends, hands the floor on
+  (`ConversationManager.speak`: the same chat, mode, guard and limits, a turn with no new
+  message of yours), as `agents/talk.ts` decides within `ROUND_LIMITS`; `round`, `agent`
+  (`round`) and `peer.message` events log it, Nacre `AgentRound` draws it. Outside agents
+  (`a2a/outside.ts`) are A2A agents added by pasting their address, sent only the words of
+  the message that mentions them, their answers tainting the chat. The A2A door
+  (`a2a/door.ts`: `/.well-known/agent-card.json`, `/a2a/:agentId`) answers only keys from
+  Other apps' pairing with `agent:<id>` scopes, as a guest (origin `peer`): words only.
 
 - **Questions** ([ADR 0060](./docs/adr/0060-the-chat-knows-conch.md) §4). The host tool `ask`
   (`questions/tools.ts`; not offered when `ToolContext.unattended`: routines, tasks, chats
