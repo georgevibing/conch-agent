@@ -1,0 +1,1034 @@
+@layer nacre.components {
+  /* ── The card ────────────────────────────────────────────────────────── */
+  .cards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    min-inline-size: 0;
+  }
+
+  .card {
+    --rc-pad-x: var(--nc-space-4);
+    --rc-success: light-dark(
+      oklch(0.55 0.13 var(--nc-success-h)),
+      oklch(0.76 0.13 var(--nc-success-h))
+    );
+    --rc-tap: 2.25rem;
+
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    inline-size: 100%;
+    max-inline-size: var(--nc-chat-card-width);
+    overflow: hidden;
+    border-radius: var(--nc-chat-card-radius);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-chat-card-surface);
+    box-shadow: var(--nc-chat-card-shadow);
+    color: var(--nc-text);
+    animation: nc-surface-in var(--nc-duration-slow) var(--nc-ease-out) both;
+  }
+
+  @media (pointer: coarse) {
+    .card {
+      --rc-tap: 2.75rem;
+      --rc-pad-x: var(--nc-space-3-5);
+    }
+  }
+
+  /* ── The photo, and the title over its scrim ────────────────────────── */
+  .hero {
+    position: relative;
+    display: grid;
+    align-items: end;
+    aspect-ratio: 16 / 9;
+    max-block-size: 17rem;
+    min-block-size: 10rem;
+    overflow: hidden;
+    background: var(--nc-surface-sunken);
+    isolation: isolate;
+  }
+
+  .photo {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+    z-index: -2;
+    user-select: none;
+    animation: rc-photo calc(var(--nc-duration-slower) * 2) var(--nc-ease-out) both;
+  }
+
+  @keyframes rc-photo {
+    from {
+      transform: scale(1.04);
+      opacity: 0;
+    }
+  }
+
+  /* An opaque gradient, never a blur: dark enough at the foot for white type. */
+  .scrim {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+      linear-gradient(
+        180deg,
+        oklch(0 0 0 / 0) 30%,
+        oklch(0 0 0 / 0.28) 55%,
+        oklch(0 0 0 / 0.7) 100%
+      ),
+      linear-gradient(90deg, oklch(0 0 0 / 0.18), oklch(0 0 0 / 0) 70%);
+  }
+
+  .heroText {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    padding: var(--nc-space-4) var(--rc-pad-x) var(--nc-space-3-5);
+    min-inline-size: 0;
+  }
+
+  .hero .heroText {
+    color: oklch(1 0 0);
+    text-shadow: 0 1px 12px oklch(0 0 0 / 0.35);
+  }
+
+  .site {
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--nc-text-muted);
+  }
+
+  .hero .site {
+    color: oklch(1 0 0 / 0.86);
+  }
+
+  .title {
+    margin: 0;
+    font-family: var(--nc-font-display);
+    font-size: var(--nc-text-3xl);
+    font-weight: var(--nc-weight-regular);
+    line-height: var(--nc-leading-tight);
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+  }
+
+  /* No picture: the chef's mark on a pearl tile, the title beside it. */
+  .plainHead {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-4) var(--rc-pad-x) 0;
+  }
+
+  .plainHead .heroText {
+    padding: 0;
+  }
+
+  .plainHead .title {
+    font-size: var(--nc-text-2xl);
+  }
+
+  .mark {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    color: var(--nc-accent-11);
+    background:
+      radial-gradient(
+        120% 120% at 20% 10%,
+        color-mix(in oklab, var(--nc-pearl-2) 40%, transparent),
+        transparent 60%
+      ),
+      var(--nc-accent-3);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-accent-5),
+      var(--nc-glaze-edge);
+  }
+
+  .mark svg {
+    inline-size: 1.375rem;
+    block-size: 1.375rem;
+  }
+
+  /* ── At a glance ─────────────────────────────────────────────────────── */
+  .body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-3-5) var(--rc-pad-x) var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .fact {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    min-block-size: 1.75rem;
+    padding: 0 var(--nc-space-2-5);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-gray-3);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text);
+    white-space: nowrap;
+  }
+
+  .fact > svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    flex-shrink: 0;
+    color: var(--nc-text-muted);
+  }
+
+  .fact > svg.star {
+    color: light-dark(oklch(0.68 0.15 var(--nc-warning-h)), oklch(0.8 0.14 var(--nc-warning-h)));
+    fill: currentColor;
+  }
+
+  .factQuiet {
+    font-weight: var(--nc-weight-regular);
+    color: var(--nc-text-muted);
+  }
+
+  .description {
+    margin: 0;
+    font-size: var(--nc-text-md);
+    line-height: var(--nc-leading-relaxed);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .factLine {
+    margin: calc(var(--nc-space-1) * -1) 0 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  /* ── Sections ────────────────────────────────────────────────────────── */
+  .section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    padding-block-start: var(--nc-space-3);
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .sectionHead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-3);
+    min-block-size: var(--rc-tap);
+    margin-block-end: var(--nc-space-1);
+  }
+
+  .sectionTitle {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--nc-space-2);
+    margin: 0;
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: -0.003em;
+  }
+
+  .count {
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-regular);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-subtle);
+  }
+
+  .group {
+    display: block;
+    margin: var(--nc-space-2) 0 var(--nc-space-1);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--nc-text-muted);
+  }
+
+  .fold {
+    display: flex;
+    margin-inline-start: calc(var(--nc-space-2) * -1);
+  }
+
+  /* ── The servings stepper ───────────────────────────────────────────── */
+  .stepper {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    padding: var(--nc-space-0-5);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .stepperValue {
+    display: inline-flex;
+    align-items: baseline;
+    justify-content: center;
+    min-inline-size: 5.5rem;
+    padding-inline: var(--nc-space-1);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .stepperUnit {
+    font-weight: var(--nc-weight-regular);
+    color: var(--nc-text-muted);
+    white-space: pre;
+  }
+
+  .stepper[data-size='lg'] .stepperValue {
+    min-inline-size: 7rem;
+    font-size: var(--nc-text-lg);
+  }
+
+  @media (pointer: coarse) {
+    .stepper :global(button) {
+      min-inline-size: 2.5rem;
+      min-block-size: 2.5rem;
+    }
+  }
+
+  /* A number that rolls: the new one rises in (or drops in) on the bouncy spring. */
+  .roll {
+    display: inline-grid;
+    overflow: hidden;
+    vertical-align: bottom;
+    /* Room for the roll to travel without clipping the descenders. */
+    padding-block: 0.1em;
+    margin-block: -0.1em;
+  }
+
+  .rollValue {
+    grid-area: 1 / 1;
+  }
+
+  .rollValue[data-dir] {
+    animation: rc-roll-up var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) both;
+    animation-delay: min(
+      calc(var(--rc-i, 0) * var(--nc-duration-instant) / 5),
+      var(--nc-duration-base)
+    );
+  }
+
+  .rollValue[data-dir='down'] {
+    animation-name: rc-roll-down;
+  }
+
+  @keyframes rc-roll-up {
+    from {
+      transform: translateY(70%);
+      opacity: 0;
+    }
+  }
+
+  @keyframes rc-roll-down {
+    from {
+      transform: translateY(-70%);
+      opacity: 0;
+    }
+  }
+
+  /* ── Ingredients to tick off ────────────────────────────────────────── */
+  .ingredients {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .ingredient {
+    padding-inline: var(--nc-space-1);
+    margin-inline: calc(var(--nc-space-1) * -1);
+  }
+
+  .ingredient + .ingredient {
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .tick {
+    align-items: center;
+    min-block-size: var(--rc-tap);
+    padding-block: var(--nc-space-1);
+    cursor: pointer;
+  }
+
+  .tick :global(label) {
+    font-weight: var(--nc-weight-regular);
+    cursor: pointer;
+  }
+
+  .ingredientText {
+    font-size: var(--nc-text-md);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+    text-wrap: pretty;
+    /* The strike is drawn in, left to right, when it's ticked. */
+    background: linear-gradient(currentColor, currentColor) no-repeat 0 55% / 0% 1.5px;
+    transition:
+      background-size var(--nc-duration-slow) var(--nc-ease-out),
+      color var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .amount {
+    font-weight: var(--nc-weight-semibold);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .note {
+    color: var(--nc-text-muted);
+  }
+
+  .ingredient[data-checked] .ingredientText {
+    background-size: 100% 1.5px;
+    color: var(--nc-text-subtle);
+  }
+
+  .ingredient[data-checked] .note {
+    color: inherit;
+  }
+
+  /* Ticked just now: the row gives a small, happy bounce. */
+  .ingredient[data-fresh] .tick {
+    animation: rc-pop var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  @keyframes rc-pop {
+    30% {
+      transform: scale(1.015) translateX(2px);
+    }
+  }
+
+  @media (hover: hover) {
+    .ingredient:hover {
+      background: var(--nc-wash-1);
+    }
+  }
+
+  /* ── Method ──────────────────────────────────────────────────────────── */
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .stepRow {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-3);
+  }
+
+  .stepNumber {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    margin-block-start: calc((1lh - 1.5rem) / 2);
+    border-radius: 50%;
+    background: var(--nc-accent-3);
+    box-shadow: inset 0 0 0 1px var(--nc-accent-5);
+    color: var(--nc-accent-11);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-semibold);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stepText {
+    min-inline-size: 0;
+    font-size: var(--nc-text-md);
+    line-height: var(--nc-leading-relaxed);
+    text-wrap: pretty;
+    overflow-wrap: anywhere;
+  }
+
+  /* ── Timer chips, in the words ──────────────────────────────────────── */
+  .chipGroup {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    vertical-align: baseline;
+    white-space: nowrap;
+  }
+
+  .chip {
+    --rc-chip-h: 1.625rem;
+    --rc-chip-fg: var(--nc-accent-11);
+    --rc-chip-bg: var(--nc-accent-3);
+    --rc-chip-ring: var(--nc-accent-6);
+
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    block-size: var(--rc-chip-h);
+    margin-block: -0.25em;
+    padding: 0 var(--nc-space-2) 0 var(--nc-space-1-5);
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: var(--rc-chip-bg);
+    box-shadow: inset 0 0 0 1px var(--rc-chip-ring);
+    color: var(--rc-chip-fg);
+    font: inherit;
+    font-size: 0.9em;
+    font-weight: var(--nc-weight-medium);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    white-space: nowrap;
+    vertical-align: baseline;
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      box-shadow var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  @media (hover: hover) {
+    .chip:hover {
+      --rc-chip-bg: var(--nc-accent-4);
+      --rc-chip-ring: var(--nc-accent-7);
+    }
+  }
+
+  .chip:active {
+    transform: scale(0.95);
+    transition: transform 0s;
+  }
+
+  .chip:focus-visible,
+  .chipStop:focus-visible,
+  .trayMain:focus-visible,
+  .original:focus-visible,
+  .nutritionTrigger:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .chip[data-state='running'] {
+    --rc-chip-bg: var(--nc-accent-9);
+    --rc-chip-fg: var(--nc-accent-contrast);
+    --rc-chip-ring: transparent;
+    padding-inline-start: var(--nc-space-1);
+  }
+
+  .chip[data-state='paused'] {
+    --rc-chip-bg: var(--nc-gray-3);
+    --rc-chip-fg: var(--nc-text);
+    --rc-chip-ring: var(--nc-border);
+    padding-inline-start: var(--nc-space-1);
+  }
+
+  .chip[data-state='done'] {
+    --rc-chip-bg: color-mix(in oklch, var(--rc-success) 16%, var(--nc-surface));
+    --rc-chip-fg: light-dark(
+      oklch(0.42 0.11 var(--nc-success-h)),
+      oklch(0.84 0.12 var(--nc-success-h))
+    );
+    --rc-chip-ring: color-mix(in oklch, var(--rc-success) 55%, transparent);
+    animation: rc-ding calc(var(--nc-duration-slower) * 3) var(--nc-ease-in-out) 3;
+  }
+
+  /* Done: it calls, softly, three times, then waits to be put away. */
+  @keyframes rc-ding {
+    0%,
+    100% {
+      box-shadow: inset 0 0 0 1px var(--rc-chip-ring);
+    }
+    50% {
+      box-shadow:
+        inset 0 0 0 1px var(--rc-chip-ring),
+        0 0 0 5px color-mix(in oklch, var(--rc-success) 22%, transparent);
+    }
+  }
+
+  .chipIcon,
+  .chipGo {
+    inline-size: 0.875em;
+    block-size: 0.875em;
+    flex-shrink: 0;
+  }
+
+  .chipGo {
+    inline-size: 0.75em;
+    block-size: 0.75em;
+    fill: currentColor;
+    opacity: 0.85;
+  }
+
+  .chipClock {
+    min-inline-size: 2.6em;
+    text-align: start;
+  }
+
+  .chipStop {
+    appearance: none;
+    display: inline-grid;
+    place-items: center;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    margin-block: -0.25em;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--nc-text-muted);
+    cursor: pointer;
+    vertical-align: middle;
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .chipStop svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  @media (hover: hover) {
+    .chipStop:hover {
+      background: var(--nc-wash-2);
+      color: var(--nc-text);
+    }
+  }
+
+  /* The ring: the time still to go, emptying as it runs. */
+  .ring {
+    inline-size: 1.15em;
+    block-size: 1.15em;
+    flex-shrink: 0;
+    transform: rotate(-90deg);
+  }
+
+  .ringTrack,
+  .ringFill {
+    fill: none;
+    stroke-width: 2.5;
+  }
+
+  .ringTrack {
+    stroke: currentColor;
+    opacity: 0.25;
+  }
+
+  .ringFill {
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-dasharray: 1;
+    stroke-dashoffset: calc(1 - var(--rc-left));
+    transition: stroke-dashoffset var(--nc-duration-base) linear;
+  }
+
+  .chip[data-size='lg'] {
+    --rc-chip-h: 2.75rem;
+    padding-inline: var(--nc-space-2-5) var(--nc-space-3-5);
+    margin-block: 0;
+    font-size: 0.8em;
+  }
+
+  .chipStop[data-size='lg'] {
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+    margin-block: 0;
+  }
+
+  @media (pointer: coarse) {
+    .chip {
+      --rc-chip-h: 2rem;
+    }
+    .chipStop {
+      inline-size: 2rem;
+      block-size: 2rem;
+    }
+  }
+
+  /* ── Timers that are going, in one row ──────────────────────────────── */
+  .tray[data-empty] {
+    display: contents;
+  }
+
+  .trayList {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .trayItem {
+    display: inline-flex;
+    align-items: center;
+    padding-inline-end: 2px;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-1);
+    animation: rc-arrive var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) both;
+  }
+
+  @keyframes rc-arrive {
+    from {
+      transform: scale(0.8);
+      opacity: 0;
+    }
+  }
+
+  .trayMain {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    min-block-size: 2rem;
+    padding: 0 var(--nc-space-1) 0 var(--nc-space-2);
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    cursor: pointer;
+  }
+
+  .trayItem[data-state='running'] .ring {
+    color: var(--nc-accent-9);
+  }
+
+  .trayItem[data-state='done'] {
+    background: color-mix(in oklch, var(--rc-success) 14%, var(--nc-surface));
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--rc-success) 50%, transparent);
+  }
+
+  .trayItem[data-state='done'] .chipIcon {
+    color: var(--rc-success);
+  }
+
+  .trayLabel {
+    color: var(--nc-text-muted);
+  }
+
+  .trayClock {
+    font-weight: var(--nc-weight-semibold);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .trayItem[data-state='paused'] .trayClock {
+    color: var(--nc-text-muted);
+  }
+
+  /* ── Nutrition, quiet ───────────────────────────────────────────────── */
+  .nutrition {
+    padding-block-start: var(--nc-space-1-5);
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .nutritionTrigger {
+    min-block-size: var(--rc-tap);
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  .nutrients {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+    gap: var(--nc-space-1-5);
+    margin: var(--nc-space-1) 0 var(--nc-space-2);
+  }
+
+  .nutrient {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--nc-space-2) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+  }
+
+  .nutrient dt {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+  }
+
+  .nutrient dd {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Footer ──────────────────────────────────────────────────────────── */
+  .footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-3) var(--rc-pad-x) var(--nc-space-3-5);
+    border-block-start: 1px solid var(--nc-border-subtle);
+    background: color-mix(in oklch, var(--nc-surface-sunken) 55%, transparent);
+  }
+
+  .original {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    min-block-size: var(--rc-tap);
+    margin-inline-start: auto;
+    padding-inline: var(--nc-space-2);
+    border-radius: var(--nc-radius-sm);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    text-decoration: none;
+    transition:
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .original svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  .originalSite {
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  @media (hover: hover) {
+    .original:hover {
+      color: var(--nc-text);
+      background: var(--nc-wash-1);
+    }
+  }
+
+  /* ── Cook mode: one step at a time, large ───────────────────────────── */
+  .cook.cook[data-side='bottom'][data-size] {
+    --sheet-size: calc(var(--nc-visible-height, 100dvh) - 1.5rem);
+    max-inline-size: 46rem;
+    block-size: var(--sheet-size);
+  }
+
+  .cookTop {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2-5);
+    padding: var(--nc-space-3) var(--nc-space-5) 0;
+    padding-inline-end: var(--nc-space-12);
+  }
+
+  .cookTitle {
+    margin: 0;
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .cookProgress {
+    block-size: 3px;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-gray-4);
+    overflow: hidden;
+  }
+
+  .cookProgressFill {
+    display: block;
+    block-size: 100%;
+    background: var(--nc-accent-9);
+    transform: scaleX(var(--rc-progress));
+    transform-origin: left center;
+    transition: transform var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .cookProgressFill:dir(rtl) {
+    transform-origin: right center;
+  }
+
+  .cookTray .trayItem {
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .stage {
+    position: relative;
+    flex: 1;
+    min-block-size: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: safe center;
+    padding: var(--nc-space-6) var(--nc-space-5) var(--nc-space-8);
+    touch-action: pan-y;
+    overscroll-behavior: contain;
+  }
+
+  .cookStep {
+    inline-size: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-5);
+    max-inline-size: 38rem;
+    margin-inline: auto;
+    animation: rc-step-next var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  .cookStep:not([data-dir]) {
+    animation: none;
+  }
+
+  .cookStep[data-dir='back'] {
+    animation-name: rc-step-back;
+  }
+
+  @keyframes rc-step-next {
+    from {
+      transform: translateX(2.5rem);
+      opacity: 0;
+    }
+  }
+
+  @keyframes rc-step-back {
+    from {
+      transform: translateX(-2.5rem);
+      opacity: 0;
+    }
+  }
+
+  .cookCount {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: 0.02em;
+    color: var(--nc-accent-11);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cookSection {
+    font-weight: var(--nc-weight-regular);
+    color: var(--nc-text-muted);
+  }
+
+  .cookText {
+    margin: 0;
+    font-family: var(--nc-font-display);
+    font-size: clamp(var(--nc-text-2xl), 3.2vw + 1rem, 2.625rem);
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    text-wrap: pretty;
+    overflow-wrap: anywhere;
+  }
+
+  .cookText .chipGroup {
+    vertical-align: middle;
+    font-family: var(--nc-font-sans);
+  }
+
+  .uses {
+    padding: var(--nc-space-3-5) var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: color-mix(in oklch, var(--nc-accent-3) 55%, var(--nc-surface-overlay));
+    box-shadow: inset 0 0 0 1px var(--nc-accent-5);
+  }
+
+  .usesTitle {
+    margin: 0 0 var(--nc-space-2);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--nc-accent-11);
+  }
+
+  .usesList {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .use .ingredientText {
+    font-size: var(--nc-text-lg);
+  }
+
+  .cookNav {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-3) var(--nc-space-5) max(var(--nc-space-4), env(safe-area-inset-bottom));
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  /* ── Reduced motion: everything where it ends ───────────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    .card,
+    .photo,
+    .rollValue[data-dir],
+    .ingredient[data-fresh] .tick,
+    .chip[data-state='done'],
+    .trayItem,
+    .cookStep {
+      animation: none;
+    }
+    .ingredientText,
+    .ringFill,
+    .cookProgressFill {
+      transition: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .card,
+  :global([data-nacre-motion='reduced']) .photo,
+  :global([data-nacre-motion='reduced']) .rollValue[data-dir],
+  :global([data-nacre-motion='reduced']) .ingredient[data-fresh] .tick,
+  :global([data-nacre-motion='reduced']) .chip[data-state='done'],
+  :global([data-nacre-motion='reduced']) .trayItem,
+  :global([data-nacre-motion='reduced']) .cookStep {
+    animation: none;
+  }
+
+  :global([data-nacre-motion='reduced']) .ingredientText,
+  :global([data-nacre-motion='reduced']) .ringFill,
+  :global([data-nacre-motion='reduced']) .cookProgressFill {
+    transition: none;
+  }
+}
