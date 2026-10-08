@@ -130,6 +130,9 @@
   /* A thin ring on the edge itself: half outside, half over it. */
   .rim {
     z-index: 2;
+    /* The turning disc is bigger than the card: a mask hides it, but only this
+       keeps it from widening the chat (sideways scrolling on a phone). */
+    overflow: hidden;
     container-type: size;
     padding: calc(var(--im-rim) * 2);
     background: color-mix(in oklab, var(--im-edge-3) 18%, transparent);

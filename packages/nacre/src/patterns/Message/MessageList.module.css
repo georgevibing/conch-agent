@@ -11,6 +11,8 @@
     flex: 1;
     min-block-size: 0;
     overflow-y: auto;
+    /* A chat never scrolls sideways, whatever a card inside it draws. */
+    overflow-x: hidden;
     overscroll-behavior: contain;
     scrollbar-gutter: stable;
   }
