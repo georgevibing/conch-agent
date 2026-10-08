@@ -42,6 +42,10 @@ export async function fakeCodexApp(
      * then the byte's index), sent whole in base64 as Codex does.
      */
     picture?: number;
+    /** How much of the plan's five-hour window is used (85 unless set). */
+    usedPercent?: number;
+    /** The models the account lists, by name (one `account-model` unless set). */
+    models?: string[];
   } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), 'conch-app-server-'));
@@ -88,8 +92,8 @@ rl.createInterface({input:process.stdin}).on('line', line => {
  else if (m.method === 'test/lose') { fs.rmSync(auth,{force:true}); reply({}); }
  else if (m.method === 'test/token') { let t = null; try { t = JSON.parse(fs.readFileSync(auth,'utf8')).tokens.access_token; } catch {} reply({token: t}); }
  else if (m.method === 'test/refuse') send({id:m.id,error:{code:-32600,message:'Invalid request: unknown field "x" (Authorization: Bearer abc.def-123 sk-proj-ABCDEFGHIJKLMNOP)'}});
- else if (m.method === 'account/rateLimits/read') reply({rateLimits:{primary:{usedPercent:85,windowDurationMins:300,resetsAt:1791140000},secondary:{usedPercent:20,windowDurationMins:10080,resetsAt:1791600000},planType:'plus'}});
- else if (m.method === 'model/list') reply({data:[{id:'m',model:'account-model',displayName:'Account model',description:'Listed by this account',supportedReasoningEfforts:[{reasoningEffort:'high'}],inputModalities:['text','image']}],nextCursor:null});
+ else if (m.method === 'account/rateLimits/read') reply({rateLimits:{primary:{usedPercent:OPTIONS.usedPercent ?? 85,windowDurationMins:300,resetsAt:1791140000},secondary:{usedPercent:20,windowDurationMins:10080,resetsAt:1791600000},planType:'plus'}});
+ else if (m.method === 'model/list') reply({data:OPTIONS.models ? OPTIONS.models.map(name => ({id:name,model:name,displayName:name,description:'Listed by this account',supportedReasoningEfforts:[{reasoningEffort:'low'},{reasoningEffort:'high'}],inputModalities:['text']})) : [{id:'m',model:'account-model',displayName:'Account model',description:'Listed by this account',supportedReasoningEfforts:[{reasoningEffort:'high'}],inputModalities:['text','image']}],nextCursor:null});
  else if (m.method === 'thread/start') {
    // Like Codex 0.159: names starting mcp__ belong to its own MCP servers.
    const reserved = ((m.params && m.params.dynamicTools) || []).find(t => /^mcp__/.test(t.name));

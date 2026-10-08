@@ -540,6 +540,54 @@ describe('Codex app-server parity', () => {
     expect(caps.tools).toMatchObject({ host: true, files: true, approvals: true });
     expect(caps.models[0]).toMatchObject({ id: 'account-model', tools: true, efforts: ['high'] });
   });
+
+  it('answers one short prompt in a thread of its own: no tools, nothing kept, light thinking (ADR 0103)', async () => {
+    const { engine, fake } = await setup({
+      signedIn: true,
+      models: ['gpt-big', 'gpt-mini'],
+      tokenUsage: [
+        {
+          total: { inputTokens: 120, outputTokens: 8 },
+          last: { inputTokens: 120, outputTokens: 8 },
+        },
+      ],
+    });
+    const answer = await engine.complete({
+      system: 'Say why',
+      prompt: 'Why read the diary?',
+      model: 'gpt-mini',
+      signal: new AbortController().signal,
+    });
+    expect(answer).toEqual({ text: 'Finished.', usage: { inputTokens: 120, outputTokens: 8 } });
+    const calls = await fake.calls();
+    const thread = calls.find((c) => c.method === 'thread/start')?.params;
+    expect(thread).toMatchObject({
+      model: 'gpt-mini',
+      developerInstructions: 'Say why',
+      ephemeral: true,
+      dynamicTools: [],
+      approvalPolicy: 'untrusted',
+    });
+    expect(calls.find((c) => c.method === 'turn/start')?.params).toMatchObject({
+      input: [{ type: 'text', text: 'Why read the diary?' }],
+      effort: 'low',
+    });
+    // No files and no network for anything but the model.
+    const argv = calls.filter((c) => c.spawn).at(-1)?.argv as string[];
+    expect(argv.join(' ')).toContain('permissions.conch.network={enabled=false}');
+    expect(argv.join(' ')).toContain('features.shell_tool=false');
+  });
+
+  it('says a failed short answer failed, and asks nothing of a Codex that isn’t signed in', async () => {
+    const failing = await setup({ signedIn: true, fail: true });
+    await expect(
+      failing.engine.complete({ system: 's', prompt: 'p', signal: new AbortController().signal }),
+    ).rejects.toThrow(/Codex couldn’t answer/);
+    const out = await setup();
+    await expect(
+      out.engine.complete({ system: 's', prompt: 'p', signal: new AbortController().signal }),
+    ).rejects.toThrow();
+  });
 });
 
 describe('Codex CLI: Codex with its own tools, asking through Conch (ADR 0066)', () => {
