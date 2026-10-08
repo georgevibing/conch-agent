@@ -7,6 +7,7 @@ import styles from './ModelPicker.module.css';
 /**
  * `local`: a model on this computer (Ollama), drawn as the computer it runs on.
  * `server`: a server someone added themselves, drawn as a server.
+ * `cloud`: your company's cloud (Bedrock, Vertex, Azure: ADR 0109), drawn as a cloud.
  */
 export type ProviderId =
   | 'claude'
@@ -27,6 +28,7 @@ export type ProviderId =
   | 'lmstudio'
   | 'local'
   | 'server'
+  | 'cloud'
   | 'generic';
 
 export interface ProviderLogoProps extends Omit<ComponentProps<'svg'>, 'children'> {
@@ -120,6 +122,15 @@ export function ProviderLogo({
           <rect x="3" y="13.5" width="18" height="7" rx="2" />
           <path d="M7 7h.01M7 17h.01" />
         </g>
+      ) : provider === 'cloud' ? (
+        <path
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M7 19h10.5a4.5 4.5 0 0 0 .6-8.96A6.5 6.5 0 0 0 5.6 8.6 5 5 0 0 0 7 19Z"
+        />
       ) : marks[provider] ? (
         <path fill="currentColor" d={marks[provider]} />
       ) : (

@@ -1,0 +1,285 @@
+@layer nacre.components {
+  .list {
+    display: grid;
+    gap: var(--nc-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .row {
+    --nc-rim-rest: 0.12;
+    --nc-rim-hover: 0.6;
+    --nc-sheen-size: 260px;
+    --nc-sheen-hover: 0.14;
+
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-3);
+    min-inline-size: 0;
+    padding: var(--nc-space-3-5) var(--nc-space-4);
+    overflow: hidden;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+    animation-delay: calc(var(--ca-i, 0) * 34ms);
+    transition: box-shadow var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  /* The account in use wears the accent, the way a chosen card does. */
+  .row[data-chosen] {
+    box-shadow:
+      inset 0 0 0 1.5px color-mix(in oklch, var(--nc-accent-9) 70%, transparent),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-2);
+  }
+
+  /* Asking the cloud: a band of pearl light crosses the row until it answers. */
+  .row[data-checking]::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      100deg,
+      transparent 30%,
+      color-mix(in oklch, var(--nc-accent-9) 14%, transparent) 48%,
+      oklch(1 0 0 / 0.22) 50%,
+      color-mix(in oklch, var(--nc-accent-9) 14%, transparent) 52%,
+      transparent 70%
+    );
+    background-size: 220% 100%;
+    animation: nc-shimmer 1.6s var(--nc-ease-out) infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .row[data-checking]::after {
+      animation: none;
+      background: color-mix(in oklch, var(--nc-accent-9) 6%, transparent);
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .row[data-checking]::after {
+    animation: none;
+    background: color-mix(in oklch, var(--nc-accent-9) 6%, transparent);
+  }
+
+  .tile {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: 2.25rem;
+    block-size: 2.25rem;
+    border-radius: var(--nc-radius-md);
+    color: var(--nc-text-muted);
+    background: color-mix(in oklch, var(--nc-text) 6%, transparent);
+  }
+
+  .tile svg {
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+  }
+
+  .row[data-chosen] .tile {
+    color: var(--nc-accent-11);
+    background: color-mix(in oklch, var(--nc-accent-9) 14%, transparent);
+  }
+
+  /* The tick draws itself in once the account answers. */
+  .tick {
+    stroke-dasharray: 24;
+    stroke-dashoffset: 24;
+    animation: ca-draw var(--nc-duration-slower) var(--nc-ease-out) forwards;
+  }
+
+  @keyframes ca-draw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  .text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    min-inline-size: 0;
+  }
+
+  .heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .name {
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+    overflow-wrap: anywhere;
+  }
+
+  .detail {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-muted);
+    overflow-wrap: anywhere;
+  }
+
+  .state {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    margin: var(--nc-space-1) 0 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+  }
+
+  .dot {
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: 50%;
+    background: var(--nc-text-subtle);
+  }
+
+  .state[data-tone='success'] .dot {
+    background: light-dark(
+      oklch(0.6 0.15 var(--nc-success-h)),
+      oklch(0.72 0.14 var(--nc-success-h))
+    );
+  }
+
+  .state[data-tone='warning'] .dot {
+    background: light-dark(
+      oklch(0.7 0.15 var(--nc-warning-h)),
+      oklch(0.78 0.14 var(--nc-warning-h))
+    );
+  }
+
+  .broad {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    color: var(--nc-text-muted);
+  }
+
+  .broad svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  .result {
+    display: grid;
+    gap: var(--nc-space-2);
+    margin-block-start: var(--nc-space-2);
+    font-size: var(--nc-text-sm);
+  }
+
+  .asking {
+    color: var(--nc-text-muted);
+  }
+
+  .ready {
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .problem {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: var(--nc-space-1-5);
+    color: var(--nc-text);
+    text-wrap: pretty;
+  }
+
+  .problem svg {
+    flex-shrink: 0;
+    inline-size: 1rem;
+    block-size: 1rem;
+    margin-block-start: 0.125rem;
+    color: light-dark(oklch(0.62 0.16 var(--nc-warning-h)), oklch(0.78 0.14 var(--nc-warning-h)));
+  }
+
+  /* The models this account can use, arriving one after another. */
+  .models {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .model {
+    padding: var(--nc-space-0-5) var(--nc-space-2);
+    border-radius: var(--nc-radius-full);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text);
+    background: color-mix(in oklch, var(--nc-accent-9) 10%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--nc-accent-9) 22%, transparent);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+    animation-delay: calc(var(--ca-m, 0) * 70ms);
+  }
+
+  .actions {
+    display: flex;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--nc-space-2);
+  }
+
+  .keyIcon {
+    inline-size: 1em;
+    block-size: 1em;
+    margin-inline-end: var(--nc-space-1);
+  }
+
+  .using {
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-accent-11);
+  }
+
+  .empty {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+    background: var(--nc-surface);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .emptyIcon {
+    flex-shrink: 0;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+  }
+
+  @media (max-width: 30rem) {
+    .row {
+      flex-wrap: wrap;
+    }
+
+    .actions {
+      inline-size: 100%;
+      justify-content: flex-start;
+      padding-inline-start: calc(2.25rem + var(--nc-space-3));
+    }
+  }
+}
