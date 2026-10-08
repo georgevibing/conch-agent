@@ -4,7 +4,9 @@ import { ToolView } from '../chat-cards';
 import {
   changeWord,
   CompanyFundamentals,
+  CryptoMarketView,
   FundamentalsView,
+  homeCurrency,
   PriceSeries,
   Quote,
   QuotesView,
@@ -150,5 +152,101 @@ describe('a change in words', () => {
     expect(changeWord(-1.2)).toBe('down');
     expect(changeWord(0)).toBe('flat');
     expect(changeWord(undefined)).toBe('flat');
+  });
+});
+
+describe('a coin', () => {
+  const coin = {
+    symbol: 'BTC',
+    name: 'Bitcoin',
+    currency: 'USD',
+    class: 'crypto' as const,
+    price: 67_187,
+    change: -211.6,
+    changePercent: -0.31,
+    asOf: '2026-10-09T21:04:00Z',
+    dayState: 'always' as const,
+    source: 'CoinGecko',
+    crypto: {
+      id: 'bitcoin',
+      rank: 1,
+      marketCap: 1.32e12,
+      fullyDiluted: 1.41e12,
+      supply: { circulating: 19_610_806, total: 21e6, max: 21e6 },
+      ath: { price: 109_000, date: '2025-01-21T00:00:00Z', fromPercent: -38.4 },
+      atl: { price: 67.81, date: '2013-07-06T00:00:00Z', fromPercent: 98_987 },
+      changes: { '1h': 0.1, '24h': -0.31, '7d': 4.2, '30d': 12, '1y': 140 },
+      source: 'CoinGecko' as const,
+    },
+  };
+
+  it('trades 24/7 and carries what an aggregator says about it', () => {
+    const quote = Quote.parse(coin);
+    expect(quote.dayState).toBe('always');
+    expect(quote.crypto?.changes?.['1y']).toBe(140);
+    // A move from its low can be a thousandfold: that's still a number.
+    expect(quote.crypto?.atl?.fromPercent).toBe(98_987);
+  });
+
+  it('has no maximum supply said in so many words, never as zero', () => {
+    const quote = Quote.parse({
+      ...coin,
+      crypto: { ...coin.crypto, supply: { circulating: 1.4e11, unlimited: true } },
+    });
+    expect(quote.crypto?.supply?.max).toBeUndefined();
+    expect(quote.crypto?.supply?.unlimited).toBe(true);
+  });
+
+  it('refuses an id that isn’t CoinGecko’s shape, and any source but CoinGecko for its details', () => {
+    expect(Quote.safeParse({ ...coin, crypto: { ...coin.crypto, id: '../x' } }).success).toBe(
+      false,
+    );
+    expect(Quote.safeParse({ ...coin, crypto: { ...coin.crypto, source: 'Me' } }).success).toBe(
+      false,
+    );
+  });
+
+  it('can chart a day minute by minute, with the instant of each point', () => {
+    const series = PriceSeries.parse({
+      symbol: 'BTC',
+      period: '1D',
+      dates: ['2026-10-09', '2026-10-09'],
+      closes: [67_000, 67_187],
+      times: ['2026-10-09T20:59:00Z', '2026-10-09T21:04:00Z'],
+      source: 'CoinGecko (every five minutes)',
+    });
+    expect(series.times).toHaveLength(2);
+  });
+});
+
+describe('the crypto market', () => {
+  it('is one of the tool views, with at most ten coins', () => {
+    const one = { id: 'bitcoin', symbol: 'BTC', name: 'Bitcoin', price: 67_187, rank: 1 };
+    const view = {
+      kind: 'crypto-market',
+      currency: 'USD',
+      totalMarketCap: 2.41e12,
+      change24h: 1.2,
+      dominance: { btc: 54.1, eth: 13.2 },
+      coins: [one],
+      asOf: '2026-10-09T21:04:00Z',
+      source: 'CoinGecko',
+    };
+    expect(ToolView.parse(view).kind).toBe('crypto-market');
+    expect(CryptoMarketView.safeParse({ ...view, coins: Array(11).fill(one) }).success).toBe(false);
+  });
+});
+
+describe('the currency someone counts in', () => {
+  it('follows the time zone, and is dollars when it can’t tell', () => {
+    expect(homeCurrency('Europe/Berlin')).toBe('EUR');
+    expect(homeCurrency('Europe/Lisbon')).toBe('EUR');
+    expect(homeCurrency('Europe/London')).toBe('GBP');
+    expect(homeCurrency('Europe/Zurich')).toBe('CHF');
+    expect(homeCurrency('Asia/Tokyo')).toBe('JPY');
+    expect(homeCurrency('America/Toronto')).toBe('CAD');
+    expect(homeCurrency('America/New_York')).toBe('USD');
+    expect(homeCurrency('Europe/Warsaw')).toBe('USD');
+    expect(homeCurrency(undefined)).toBe('USD');
   });
 });

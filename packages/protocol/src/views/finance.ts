@@ -38,13 +38,20 @@ export const TickerSymbol = z
   .max(24)
   .regex(/^[A-Za-z0-9^.:=\-/]+$/, 'A ticker symbol.');
 
-/** The stretches of time a price chart draws. `MAX` is everything the source has. */
-export const FINANCE_PERIODS = ['1W', '1M', '3M', '6M', '1Y', '5Y', 'MAX'] as const;
+/**
+ * The stretches of time a price chart draws. `MAX` is everything the source
+ * has. `1D` is for what trades around the clock (a coin): its closes are
+ * minutes apart and carry `times`.
+ */
+export const FINANCE_PERIODS = ['1D', '1W', '1M', '3M', '6M', '1Y', '5Y', 'MAX'] as const;
 export const FinancePeriod = z.enum(FINANCE_PERIODS);
 export type FinancePeriod = z.infer<typeof FinancePeriod>;
 
-/** Where the market was when the price was read. `unknown` when the source doesn't say. */
-export const MarketState = z.enum(['open', 'closed', 'pre', 'post', 'unknown']);
+/**
+ * Where the market was when the price was read. `unknown` when the source
+ * doesn't say; `always` for what never closes (a coin trades 24/7).
+ */
+export const MarketState = z.enum(['open', 'closed', 'pre', 'post', 'always', 'unknown']);
 export type MarketState = z.infer<typeof MarketState>;
 
 /** What kind of thing it is, so the card uses the right words. */
@@ -77,7 +84,12 @@ export const PriceSeries = z.object({
   dates: z.array(LocalDate).max(SERIES_MAX),
   closes: z.array(Price).max(SERIES_MAX),
   currency: Currency.optional(),
-  /** "Stooq (daily closes)". */
+  /**
+   * The instant of each point, when they're closer than a day apart (a coin's
+   * last day, every five minutes): run with `dates`, oldest first.
+   */
+  times: z.array(When).max(SERIES_MAX).optional(),
+  /** "Stooq (daily closes)", "CoinGecko (hourly)". */
   source: z.string().min(1).max(80),
   /** How far the dates reach, in words: "daily closes since 8 October 2021". */
   note: z.string().max(200).optional(),
@@ -90,6 +102,87 @@ export const PriceSpark = z.object({
   values: z.array(Price).max(400),
 });
 export type PriceSpark = z.infer<typeof PriceSpark>;
+
+/** The stretches a coin's move is given over, shortest first. */
+export const COIN_CHANGES = ['1h', '24h', '7d', '30d', '1y'] as const;
+export type CoinChange = (typeof COIN_CHANGES)[number];
+
+/** A coin's id at CoinGecko: `bitcoin`, `matic-network`. */
+export const CoinId = z.string().regex(/^[a-z0-9][a-z0-9-]{0,79}$/, 'A CoinGecko coin id.');
+
+/** A move as a percentage. A coin can rise a thousandfold from its low. */
+const Move = z.number().finite().min(-100).max(1e9);
+/** An amount of coins, or money a whole coin's worth: bounded so a broken parse can't become a card. */
+const Big = z.number().finite().nonnegative().max(1e18);
+
+/** A price a coin reached once, the day it did, and how far today's is from it. */
+export const CoinExtreme = z.object({
+  price: Price,
+  /** When, as the source gave it. */
+  date: When,
+  /** Today's price as a change on that one, in percent: −38 is 38% below. */
+  fromPercent: Move.optional(),
+});
+export type CoinExtreme = z.infer<typeof CoinExtreme>;
+
+/** Another coin that answers to the same symbol, so the person can say which they meant. */
+export const CoinAlternative = z.object({
+  id: CoinId,
+  symbol: z.string().min(1).max(24),
+  name: z.string().min(1).max(140),
+  rank: z.number().int().positive().max(1e6).optional(),
+});
+export type CoinAlternative = z.infer<typeof CoinAlternative>;
+
+/**
+ * What an aggregator says about a coin, beside its price. Everything is in the
+ * quote's currency, as CoinGecko worked it out across the exchanges it reads:
+ * an average, not one exchange's price, and the card says so.
+ *
+ * `supply.max` is absent when the coin has no maximum (new coins keep being
+ * made), and `unlimited` says that in so many words — never a zero.
+ */
+export const CryptoDetails = z.object({
+  id: CoinId,
+  /** Its place by market value among every coin CoinGecko tracks. */
+  rank: z.number().int().positive().max(1e6).optional(),
+  marketCap: Big.optional(),
+  /** What it would be worth if every coin that can ever exist did, at this price. */
+  fullyDiluted: Big.optional(),
+  volume24h: Big.optional(),
+  supply: z
+    .object({
+      circulating: Big.optional(),
+      total: Big.optional(),
+      max: Big.optional(),
+      /** The source says there is no maximum. */
+      unlimited: z.boolean().optional(),
+    })
+    .optional(),
+  ath: CoinExtreme.optional(),
+  atl: CoinExtreme.optional(),
+  /** Its move over each stretch, in percent. A stretch the source didn't send is absent. */
+  changes: z
+    .object({
+      '1h': Move.optional(),
+      '24h': Move.optional(),
+      '7d': Move.optional(),
+      '30d': Move.optional(),
+      '1y': Move.optional(),
+    })
+    .optional(),
+  /** Other coins with the same symbol, when the one asked for was ambiguous. */
+  alternatives: z.array(CoinAlternative).max(5).optional(),
+  /** What it is, in the source's words: plain text, clipped. */
+  about: z.string().max(600).optional(),
+  /** The day its first block was made, as the source gives it. */
+  genesis: LocalDate.optional(),
+  /** "SHA-256", "Scrypt". */
+  algorithm: z.string().max(60).optional(),
+  categories: z.array(z.string().min(1).max(60)).max(4).optional(),
+  source: z.literal('CoinGecko'),
+});
+export type CryptoDetails = z.infer<typeof CryptoDetails>;
 
 /**
  * One instrument's price as a source last read it. `delayed` is on unless a
@@ -134,7 +227,11 @@ export const Quote = z.object({
     .optional(),
   dayState: MarketState.default('unknown'),
   spark: PriceSpark.optional(),
-  /** Who the price is from, for the card's small print: "Stooq". */
+  /** A coin's aggregator figures: rank, supply, its highs, its moves. */
+  crypto: CryptoDetails.optional(),
+  /** Something the card should say about where this came from: "CoinGecko is busy; prices from Stooq". */
+  notice: z.string().max(160).optional(),
+  /** Who the price is from, for the card's small print: "Stooq", "CoinGecko". */
   source: z.string().min(1).max(80),
 });
 export type Quote = z.infer<typeof Quote>;
@@ -236,10 +333,53 @@ export const FundamentalsView = z.object({
 });
 export type FundamentalsView = z.infer<typeof FundamentalsView>;
 
+/** The most coins the market overview lists. */
+export const MARKET_COINS_MAX = 10;
+
+/** One coin in the market overview's list. */
+export const MarketCoin = z.object({
+  id: CoinId,
+  symbol: TickerSymbol,
+  name: z.string().min(1).max(140),
+  rank: z.number().int().positive().max(1e6).optional(),
+  price: Price,
+  change24h: Move.optional(),
+  change7d: Move.optional(),
+  marketCap: Big.optional(),
+  /** The last week's shape, hourly. */
+  spark: z.array(Price).max(200).optional(),
+});
+export type MarketCoin = z.infer<typeof MarketCoin>;
+
+/**
+ * How crypto as a whole is doing (`crypto_market`): what every coin CoinGecko
+ * tracks is worth together, its move over a day, how much of it is bitcoin and
+ * ether, and the biggest coins. Only drawn when asked.
+ */
+export const CryptoMarketView = z.object({
+  kind: z.literal('crypto-market'),
+  currency: Currency,
+  totalMarketCap: Big,
+  change24h: Move.optional(),
+  volume24h: Big.optional(),
+  /** Shares of the whole, in percent, as the source gives them. */
+  dominance: z
+    .object({ btc: z.number().min(0).max(100), eth: z.number().min(0).max(100).optional() })
+    .optional(),
+  /** How many coins the total covers. */
+  coinsTracked: z.number().int().nonnegative().max(1e8).optional(),
+  coins: z.array(MarketCoin).max(MARKET_COINS_MAX),
+  asOf: When,
+  source: z.literal('CoinGecko'),
+  notice: z.string().max(160).optional(),
+});
+export type CryptoMarketView = z.infer<typeof CryptoMarketView>;
+
 // ── Reading them ────────────────────────────────────────────────────────────
 
 /** How many trading days a period covers, roughly: what to ask a source for. */
 export const PERIOD_DAYS: Record<FinancePeriod, number> = {
+  '1D': 1,
   '1W': 7,
   '1M': 31,
   '3M': 93,
@@ -251,6 +391,7 @@ export const PERIOD_DAYS: Record<FinancePeriod, number> = {
 
 /** The period in words, for a chart's caption: "the last three months". */
 export const PERIOD_WORDS: Record<FinancePeriod, string> = {
+  '1D': 'the last day',
   '1W': 'the last week',
   '1M': 'the last month',
   '3M': 'the last three months',
@@ -272,5 +413,35 @@ export const MARKET_WORDS: Record<MarketState, string> = {
   closed: 'Closed',
   pre: 'Before the open',
   post: 'After the close',
+  always: '24/7',
   unknown: '',
 };
+
+/** Currencies a coin's price can be given in, as CoinGecko and Stooq both know them. */
+export const COIN_CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD'] as const;
+export type CoinCurrency = (typeof COIN_CURRENCIES)[number];
+
+/** Euro-area time zones, by their city. */
+const EURO_ZONE =
+  /^Europe\/(?:Amsterdam|Andorra|Athens|Berlin|Bratislava|Brussels|Busingen|Dublin|Helsinki|Lisbon|Ljubljana|Luxembourg|Madrid|Malta|Monaco|Paris|Riga|Rome|San_Marino|Tallinn|Vatican|Vienna|Vilnius|Zagreb)$|^Atlantic\/(?:Azores|Madeira|Canary)$/;
+
+/**
+ * The currency someone most likely counts in, from their time zone, the way
+ * the weather card picks its units (`unitsForTimeZone`). Only the few a coin is
+ * commonly priced in; everyone else gets dollars, as most coin prices are.
+ */
+export function homeCurrency(timeZone: string | undefined): CoinCurrency {
+  if (!timeZone) return 'USD';
+  if (EURO_ZONE.test(timeZone)) return 'EUR';
+  if (/^Europe\/(?:London|Belfast|Guernsey|Isle_of_Man|Jersey)$/.test(timeZone)) return 'GBP';
+  if (/^Europe\/(?:Zurich|Vaduz)$/.test(timeZone)) return 'CHF';
+  if (timeZone === 'Asia/Tokyo') return 'JPY';
+  if (/^Australia\//.test(timeZone)) return 'AUD';
+  if (
+    /^America\/(?:Toronto|Vancouver|Edmonton|Winnipeg|Halifax|St_Johns|Regina|Moncton)$/.test(
+      timeZone,
+    )
+  )
+    return 'CAD';
+  return 'USD';
+}

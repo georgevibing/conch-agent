@@ -17,7 +17,7 @@ import { AudioView } from './views/audio';
 import { VideosView } from './views/video';
 import { BooksView, KnowledgeView, LinksView, ShowsView } from './views/knowledge';
 import { ChartView } from './views/chart';
-import { FundamentalsView, QuotesView } from './views/finance';
+import { CryptoMarketView, FundamentalsView, QuotesView } from './views/finance';
 
 const Hex = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 /** An ISO 8601 date or date-time, as a tool read it. */
@@ -299,5 +299,6 @@ export const ToolView = z.discriminatedUnion('kind', [
   ChartView,
   QuotesView,
   FundamentalsView,
+  CryptoMarketView,
 ]);
 export type ToolView = z.infer<typeof ToolView>;
