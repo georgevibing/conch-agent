@@ -178,17 +178,55 @@ describe('notification routes', () => {
     expect(response.statusCode).toBe(403);
   });
 
-  it('Deny from a notification only ever says no', async () => {
+  it('an answer without a decision is a no, as the first notifications sent it', async () => {
     const { app, services, cookie } = await setup();
     const respond = vi.spyOn(services.conversations, 'respond').mockResolvedValue(undefined);
     const response = await app.inject({
       method: 'POST',
       url: '/api/push/answer',
       headers: { cookie },
-      payload: { conversationId: 'c_1', permissionId: 'p_1', decision: 'allow' },
+      payload: { conversationId: 'c_1', permissionId: 'p_1' },
     });
     expect(response.statusCode).toBe(200);
     expect(respond).toHaveBeenCalledWith('c_1', 'p_1', 'deny');
+  });
+
+  it('never allows what isn’t waiting, nor with a made-up ticket (ADR 0108)', async () => {
+    const { app, services, cookie } = await setup();
+    const respond = vi.spyOn(services.conversations, 'respond').mockResolvedValue(undefined);
+    for (const payload of [
+      { conversationId: 'c_1', permissionId: 'p_1', decision: 'allow' },
+      {
+        conversationId: 'c_1',
+        permissionId: 'p_1',
+        decision: 'allow',
+        ticket: 'made-up-ticket-0123456789',
+      },
+    ]) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/push/answer',
+        headers: { cookie },
+        payload,
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ outcome: 'gone' });
+    }
+    expect(respond).not.toHaveBeenCalledWith('c_1', 'p_1', 'allow');
+    const looked = await app.inject({
+      method: 'GET',
+      url: '/api/push/approvals/c_1/p_1',
+      headers: { cookie },
+    });
+    expect(looked.json()).toEqual({ waiting: false });
+    // Another site can't post an answer with this browser's cookie.
+    const cross = await app.inject({
+      method: 'POST',
+      url: '/api/push/answer',
+      headers: { cookie, origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' },
+      payload: { conversationId: 'c_1', permissionId: 'p_1', decision: 'deny' },
+    });
+    expect(cross.statusCode).toBe(403);
   });
 });
 

@@ -15,6 +15,9 @@
  */
 import {
   taskFinishNotice,
+  type PushAnswerBody,
+  type PushAnswerResult,
+  type PushApproval,
   taskLink,
   type PushDevice,
   type PushPrefs,
@@ -27,6 +30,7 @@ import {
 } from '@conch/protocol';
 
 import { pausedWords } from '../routines/spend';
+import { APPROVAL_WAIT_MS, ApprovalTickets, lockScreenCheck, type LockScreen } from './approve';
 import type { PushStore, Subscription } from './store';
 import { sendPush, type Fetcher } from './webpush';
 
@@ -44,8 +48,12 @@ export interface PushMessage {
   /** Said even with previews off: "Open Conch to see what it needs." */
   quiet?: string;
   actions?: { action: string; title: string }[];
-  /** What the Deny action answers (`POST /api/push/answer`). */
-  deny?: { conversationId: string; permissionId: string };
+  /**
+   * The question Allow and Deny answer (`POST /api/push/answer`, ADR 0108):
+   * each device gets its own one-use ticket for it, and Allow only when a
+   * lock-screen tap may allow it (`quick`) and the device shows what it is.
+   */
+  answer?: { conversationId: string; permissionId: string; quick: boolean };
   requireInteraction?: boolean;
   urgency?: 'normal' | 'high';
 }
@@ -64,6 +72,8 @@ export interface PushDeps {
         taskId?: string;
         /** Another app's chat (ADR 0073): the app is who's asking. */
         app?: string;
+        /** Its work folder: changing files there is the work. */
+        workspace?: string;
       }
     | undefined
   >;
@@ -111,8 +121,17 @@ export class PushService {
   readonly #told = new Set<string>();
   /** What each conversation's assistant last said, for "Conch replied". */
   readonly #replies = new Map<string, string>();
+  /** The tickets a notification's Allow and Deny carry (ADR 0108). */
+  readonly tickets: ApprovalTickets;
+  /** Questions still waiting, and whether a lock-screen tap may allow each one. */
+  readonly #asked = new Map<
+    string,
+    { conversationId: string; check: LockScreen; expiresAt: number }
+  >();
 
-  constructor(private readonly deps: PushDeps) {}
+  constructor(private readonly deps: PushDeps) {
+    this.tickets = new ApprovalTickets(() => this.#now());
+  }
 
   get #now() {
     return this.deps.now ?? Date.now;
@@ -204,6 +223,90 @@ export class PushService {
     return sent;
   }
 
+  /**
+   * A question's buttons for this one device: Allow only when a lock-screen tap
+   * may allow it and the notification says what it is (previews on), and a
+   * ticket of its own for whatever it answers.
+   */
+  #answering(s: Subscription, message: PushMessage) {
+    if (!message.answer) return message.actions ? { actions: message.actions } : {};
+    const { conversationId, permissionId } = message.answer;
+    const quick = message.answer.quick && s.prefs.previews;
+    const ticket = this.tickets.issue(s.owner, conversationId, permissionId, quick);
+    return {
+      actions: quick
+        ? [
+            { action: 'allow', title: 'Allow' },
+            { action: 'deny', title: 'Deny' },
+          ]
+        : [
+            { action: 'open', title: 'Review' },
+            { action: 'deny', title: 'Deny' },
+          ],
+      answer: { conversationId, permissionId, ticket },
+      // What the first service worker read: it can only ever deny.
+      deny: { conversationId, permissionId },
+    };
+  }
+
+  /** What the approval sheet shows before it's answered (ADR 0108). */
+  approval(conversationId: string, permissionId: string): PushApproval {
+    const asked = this.#asked.get(permissionId);
+    if (!asked || asked.conversationId !== conversationId) return { waiting: false };
+    return {
+      waiting: true,
+      ...(!asked.check.quick && { confirm: asked.check.why }),
+      expiresAt: asked.expiresAt,
+    };
+  }
+
+  /**
+   * An answer from a notification or the approval sheet (ADR 0108).
+   *
+   * - With a ticket (a notification's button): spent whatever comes of it,
+   *   good only for this device's sign-in and this one question; Allow only
+   *   where a lock-screen tap may allow it.
+   * - Without (the sheet, in Conch): Deny always; Allow for a step that
+   *   matters only after a recent passkey or password (`verified`).
+   */
+  async answer(
+    owner: string | undefined,
+    body: PushAnswerBody,
+    options: {
+      verified: boolean;
+      respond: (
+        conversationId: string,
+        permissionId: string,
+        decision: 'allow' | 'deny',
+      ) => Promise<void>;
+    },
+  ): Promise<PushAnswerResult | 'verify'> {
+    const decision = body.decision ?? 'deny';
+    const asked = this.#asked.get(body.permissionId);
+    const waiting = asked?.conversationId === body.conversationId;
+    if (body.ticket) {
+      const spent = this.tickets.redeem(body.ticket, owner);
+      if (
+        !spent.ok ||
+        spent.ticket.permissionId !== body.permissionId ||
+        spent.ticket.conversationId !== body.conversationId
+      )
+        return { outcome: 'gone' };
+      if (decision === 'allow' && !spent.ticket.quick) return { outcome: 'open' };
+    } else if (decision === 'allow' && waiting && asked?.check.quick === false && !options.verified)
+      return 'verify';
+    if (!waiting) {
+      // A no to something that isn't waiting any more changes nothing; say so.
+      if (decision === 'deny')
+        await options
+          .respond(body.conversationId, body.permissionId, 'deny')
+          .catch(() => undefined);
+      return { outcome: 'gone' };
+    }
+    await options.respond(body.conversationId, body.permissionId, decision);
+    return { outcome: 'answered' };
+  }
+
   async #deliver(
     s: Subscription,
     message: PushMessage,
@@ -217,8 +320,7 @@ export class PushService {
       body,
       url: message.url,
       tag: message.tag,
-      ...(message.actions && { actions: message.actions }),
-      ...(message.deny && { deny: message.deny }),
+      ...this.#answering(s, message),
       ...(message.requireInteraction && { requireInteraction: true }),
       ...(options.always && { always: true }),
     });
@@ -330,8 +432,20 @@ export class PushService {
       this.#replies.set(e.conversationId, said.slice(-2_000));
       return;
     }
+    if (e.type === 'permission.resolved') {
+      // Answered anywhere (or it ran out): every ticket for it is spent.
+      this.#asked.delete(e.permissionId);
+      this.tickets.forget(e.permissionId);
+      return;
+    }
     if (e.type === 'permission.requested') {
       const chat = await this.deps.conversation(e.conversationId);
+      const check = lockScreenCheck(e, chat?.workspace ?? '');
+      this.#asked.set(e.permissionId, {
+        conversationId: e.conversationId,
+        check,
+        expiresAt: this.#now() + APPROVAL_WAIT_MS,
+      });
       // A task asking opens at it, in the chat it came from: answered there.
       const task = chat?.taskId ? await this.deps.task?.(chat.taskId) : undefined;
       // Another app asking through Conch says so: the OK is for it, not your assistant.
@@ -341,13 +455,14 @@ export class PushService {
         title: `${name} needs your OK`,
         body: clip(about ? `${e.summary} · ${about}` : e.summary),
         quiet: 'Open Conch to see what it’s asking.',
-        url: task ? taskLink(task) : url,
+        // Straight to the approval sheet; a task's opens in the chat it came from.
+        url: task ? taskLink(task) : `${url}?approve=${encodeURIComponent(e.permissionId)}`,
         tag: `ok-${e.permissionId}`,
-        actions: [
-          { action: 'open', title: 'Review' },
-          { action: 'deny', title: 'Deny' },
-        ],
-        deny: { conversationId: e.conversationId, permissionId: e.permissionId },
+        answer: {
+          conversationId: e.conversationId,
+          permissionId: e.permissionId,
+          quick: check.quick,
+        },
         requireInteraction: true,
         urgency: 'high',
       });

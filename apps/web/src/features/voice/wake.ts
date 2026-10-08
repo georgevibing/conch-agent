@@ -7,6 +7,28 @@
  * Nothing is recorded or kept: a burst lives in memory until it's sent.
  */
 
+/**
+ * What a person says to call it: "Hey" and the assistant's name, its first
+ * two words of letters (ADR 0108); "Hey Conch" when there's nothing sayable.
+ * The gateway hears "Hey Conch" too, always (`voice/wake.ts`).
+ */
+export function wakePhrase(name: string | undefined): string {
+  const said = (name ?? '')
+    .replace(/[^\p{L}\p{M}\s'-]/gu, ' ')
+    .split(/\s+/)
+    .filter((w) => /\p{L}/u.test(w))
+    .slice(0, 2)
+    .join(' ')
+    .slice(0, 40);
+  return `“Hey ${said || 'Conch'}”`;
+}
+
+/**
+ * On a phone it listens only while Conch is open and on screen, and stops by
+ * itself after this long without hearing the phrase, to spare the battery.
+ */
+export const OPEN_IDLE_MS = 5 * 60_000;
+
 /** A burst this long can be "Hey Conch"; shorter is a click, longer is talk. */
 export const BURST = { minMs: 350, maxMs: 3_600, quietMs: 350, prerollMs: 300 };
 

@@ -123,7 +123,10 @@ Each device chooses its topics and whether previews show:
   asking".
 
 **Deny, never Allow, from a notification.** Allowing always opens Conch,
-because a lock screen is not where a command gets approved.
+because a lock screen is not where a command gets approved. _Superseded in
+part by [ADR 0108](./0108-the-phone-without-native-apps.md): everyday steps
+can be allowed from the notification with a one-use ticket; a step that
+matters still opens Conch, now with a passkey first._
 `POST /api/push/answer` can only ever deny (the test sends `allow` and sees a
 deny), and it uses the device's own sign-in cookie.
 

@@ -25,7 +25,8 @@ import { recognitionClass } from './listen';
 import { languageOf, setVoicePrefs, useVoicePrefs } from './prefs';
 import { PrivateDictation } from './PrivateDictation';
 import { bestVoice, canSpeak, createSpeaker, hush } from './speak';
-import { useListenEngine, useVoiceStatus } from './useEngine';
+import { useListenEngine } from './useEngine';
+import { useWake } from './WakeWord';
 
 const LANGUAGES: [string, string][] = [
   ['en-US', 'English (US)'],
@@ -318,24 +319,36 @@ function NaturalVoices({
 }
 
 /**
- * "Hey Conch" (ADR 0078): only in the desktop app, off until it's turned on
- * here, and kept on this device. It needs private listening, which it uses.
+ * "Hey Conch" (ADR 0078, ADR 0108): off until it's turned on here, and kept
+ * on this device. In the desktop app it listens with the window closed;
+ * anywhere else (a phone) only while Conch is open and on screen, and it says
+ * plainly what a phone won't allow. It needs private listening, which it uses.
  */
 function HeyConch() {
   const prefs = useVoicePrefs();
-  const { data: status } = useVoiceStatus();
-  if (!status?.wake?.available) return null;
+  const { status, mode, possible, phrase } = useWake();
+  if (!status || !possible) return null;
   const ready = status.private.state === 'ready';
   return (
     <Section title="Hey Conch" description="Start talking without touching anything.">
       <Stack gap={4}>
-        <Switch
-          labelPosition="start"
-          checked={Boolean(prefs.wake)}
-          onCheckedChange={(wake) => setVoicePrefs({ wake })}
-          label="Listen for “Hey Conch”"
-          description="The microphone listens on this computer only: speech is checked here and thrown away, nothing is recorded or sent. While it’s on, the window and the tray say so, with Stop."
-        />
+        {mode === 'app' ? (
+          <Switch
+            labelPosition="start"
+            checked={Boolean(prefs.wake)}
+            onCheckedChange={(wake) => setVoicePrefs({ wake })}
+            label={`Listen for ${phrase}`}
+            description="The microphone listens on this computer only: speech is checked here and thrown away, nothing is recorded or sent. While it’s on, the window and the tray say so, with Stop."
+          />
+        ) : (
+          <Switch
+            labelPosition="start"
+            checked={Boolean(prefs.wake)}
+            onCheckedChange={(wake) => setVoicePrefs({ wake })}
+            label={`Listen for ${phrase} while Conch is open`}
+            description="Only while Conch is on screen here: it keeps the screen on, says so at the top with Stop, and stops by itself after 5 minutes without hearing it. What you say goes only to your own Conch, is checked there and thrown away. A phone doesn’t let a web page listen once the screen is off or another app is open, so it can’t wake a locked phone."
+          />
+        )}
         {prefs.wake && !ready && <PrivateDictation />}
       </Stack>
     </Section>

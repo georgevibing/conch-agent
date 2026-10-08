@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { Capabilities, ConversationEvent, EngineStatus } from '@conch/protocol';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { Engine, EngineEvent, TurnInput } from '../engines/types';
 import { MemoryStore } from '../memory/store';
@@ -281,5 +281,52 @@ describe('the answer, kept on its call', () => {
     );
     expect(finished(events, 'n1')).toMatchObject({ status: 'error', approval: 'refused' });
     expect(finished(events, 'n2')).not.toHaveProperty('approval');
+  });
+});
+
+describe('a question nobody answers (ADR 0108)', () => {
+  it('is a safe no after half an hour, said in the chat, never a yes', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
+    try {
+      const { manager, engine } = await setup();
+      engine.script.push(async function* (input) {
+        yield { type: 'tool-start', toolUseId: 't1', name: 'Bash', input: { command: 'make' } };
+        const decision = await input.requestPermission(
+          { toolName: 'Bash', toolUseId: 't1', input: { command: 'make' } },
+          input.signal,
+        );
+        yield {
+          type: 'tool-end',
+          toolUseId: 't1',
+          status: decision === 'deny' ? 'error' : 'success',
+          output: decision === 'deny' ? 'The user declined this action.' : 'ok',
+        };
+      });
+      const convo = await manager.send({ clientMessageId: 'u1', text: 'build it' });
+      const request = asked(
+        await settle(manager, convo.id, (e) => e.some((x) => x.type === 'permission.requested')),
+      );
+      vi.advanceTimersByTime(29 * 60 * 1000);
+      expect(
+        (await manager.detail(convo.id)).events.some((e) => e.type === 'permission.resolved'),
+      ).toBe(false);
+      vi.advanceTimersByTime(60 * 1000);
+      const events = await settle(manager, convo.id, (e) =>
+        e.some((x) => x.type === 'turn.completed'),
+      );
+      expect(events.find((e) => e.type === 'permission.resolved')).toMatchObject({
+        permissionId: request.permissionId,
+        decision: 'expired',
+        unanswered: 30,
+      });
+      expect(finished(events, 't1')).toMatchObject({ status: 'error', approval: 'expired' });
+      // Answered late: nothing happens.
+      await manager.respond(convo.id, request.permissionId, 'allow');
+      expect(
+        (await manager.detail(convo.id)).events.filter((e) => e.type === 'permission.resolved'),
+      ).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

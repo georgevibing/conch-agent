@@ -1,0 +1,224 @@
+@layer nacre.components {
+  /* One question, at the bottom of the screen: the answers where a thumb rests. */
+  .sheet {
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-5) var(--nc-space-4)
+      calc(var(--nc-space-4) + env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+  }
+
+  .who {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .asks {
+    min-inline-size: 0;
+    margin: 0;
+    overflow: hidden;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .name {
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  .dot {
+    color: var(--nc-text-subtle);
+  }
+
+  /* What will happen: the one thing to read, big, on a card of its own. */
+  .card {
+    --nc-rim-rest: 0;
+    --nc-rim-hover: 0.25;
+    --nc-sheen-hover: 0.12;
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-chat-card-surface);
+    box-shadow: var(--nc-chat-card-shadow);
+  }
+
+  .title {
+    margin: 0;
+    font-size: var(--nc-text-lg);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+  }
+
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 var(--nc-space-1-5);
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  .cost {
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  /* Exactly what it would do, as it would do it. */
+  .preview {
+    max-block-size: 9rem;
+    overflow: auto;
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+  }
+
+  .preview pre {
+    margin: 0;
+    padding: var(--nc-space-2-5) var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .line {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  .line > svg {
+    flex: none;
+    inline-size: 1rem;
+    block-size: 1rem;
+    margin-block-start: 0.0625rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .line > svg.warn {
+    color: light-dark(oklch(0.58 0.12 var(--nc-warning-h)), oklch(0.8 0.1 var(--nc-warning-h)));
+  }
+
+  /* Two big answers, side by side, Allow under the right thumb. */
+  .answers {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr;
+    gap: var(--nc-space-2);
+    margin-block-start: var(--nc-space-1);
+  }
+
+  .answers > button {
+    min-block-size: 3.25rem;
+  }
+
+  /* ── Answered: a pearl seal closes over the answer ──────────────── */
+  .done {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--nc-space-2);
+    padding-block: var(--nc-space-4) 0;
+    text-align: center;
+  }
+
+  .seal {
+    position: relative;
+    display: grid;
+    place-items: center;
+    inline-size: 4rem;
+    block-size: 4rem;
+    border-radius: var(--nc-radius-full);
+    color: light-dark(oklch(0.5 0.13 var(--nc-success-h)), oklch(0.8 0.13 var(--nc-success-h)));
+    background: color-mix(in oklch, oklch(0.7 0.13 var(--nc-success-h)) 14%, transparent);
+    animation: approval-seal var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) both;
+  }
+
+  .done[data-outcome='deny'] .seal,
+  .done[data-outcome='gone'] .seal {
+    color: var(--nc-text-muted);
+    background: var(--nc-surface-sunken);
+  }
+
+  .seal > svg:not(.ring) {
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+  }
+
+  /* The ring draws itself round once, closing over the answer. */
+  .ring {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    transform: rotate(-90deg);
+  }
+
+  .ring circle {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-dasharray: 139;
+    stroke-dashoffset: 0;
+    animation: approval-ring var(--nc-duration-slower) var(--nc-ease-out) both;
+  }
+
+  .doneWords {
+    margin: 0;
+    font-size: var(--nc-text-xl);
+    font-weight: var(--nc-weight-semibold);
+  }
+
+  .doneMore {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  .back {
+    align-self: stretch;
+    margin-block-start: var(--nc-space-3);
+    min-block-size: 3.25rem;
+  }
+
+  @keyframes approval-seal {
+    from {
+      transform: scale(0.6);
+      opacity: 0;
+    }
+  }
+
+  @keyframes approval-ring {
+    from {
+      stroke-dashoffset: 139;
+      opacity: 0.2;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .seal,
+    .ring circle {
+      animation: none;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .seal,
+  [data-nacre-motion='reduced'] .ring circle {
+    animation: none;
+  }
+}

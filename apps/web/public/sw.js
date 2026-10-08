@@ -6,7 +6,10 @@
  *    calm "Conch can't be reached" screen instead of the browser's error, and
  *    comes back by itself. Nothing else is cached: chats never sit in a cache.
  * 2. It shows notifications Conch sends (Web Push, encrypted end to end).
- * 3. A tap on one opens Conch where it matters; "Deny" answers right there.
+ * 3. A tap on one opens Conch where it matters. "Allow" and "Deny" answer right
+ *    there (ADR 0108), each with the one-use ticket this device was sent for
+ *    that one question; Allow is only offered for routine steps. Where a
+ *    browser shows no buttons (iPhone), the tap opens the approval sheet.
  */
 const SHELL = 'conch-shell-v1';
 const OFFLINE = ['/offline.html', '/offline.js', '/favicon.svg', '/icons/conch-192.png'];
@@ -61,8 +64,16 @@ self.addEventListener('push', (event) => {
     renotify: Boolean(data.tag),
     icon: '/icons/conch-192.png',
     badge: '/icons/conch-192.png',
-    data: { url: typeof data.url === 'string' ? data.url : '/', deny: data.deny },
-    actions: Array.isArray(data.actions) ? data.actions.slice(0, 2) : [],
+    data: {
+      url: typeof data.url === 'string' ? data.url : '/',
+      answer: data.answer,
+      deny: data.deny,
+    },
+    // Only where the browser shows buttons; elsewhere a tap opens the approval sheet.
+    actions:
+      Array.isArray(data.actions) && maxActions() > 0
+        ? data.actions.slice(0, Math.min(2, maxActions()))
+        : [],
     requireInteraction: Boolean(data.requireInteraction),
   };
   event.waitUntil(
@@ -75,37 +86,79 @@ self.addEventListener('push', (event) => {
   );
 });
 
+/** How many buttons this browser shows on a notification; one that doesn't say ignores them. */
+function maxActions() {
+  const N = self.Notification;
+  return N && typeof N.maxActions === 'number' ? N.maxActions : 2;
+}
+
+/** A short word back on the lock screen, replacing the question it answered. */
+function said(title, body, tag) {
+  return self.registration.showNotification(title, {
+    body,
+    tag,
+    icon: '/icons/conch-192.png',
+    badge: '/icons/conch-192.png',
+    silent: true,
+    data: { url: '/' },
+  });
+}
+
+/** Allow or Deny, right here, with the ticket for this one question and this device's sign-in. */
+function answer(data, decision, tag) {
+  const answer = data.answer;
+  const body = answer
+    ? {
+        conversationId: answer.conversationId,
+        permissionId: answer.permissionId,
+        ticket: answer.ticket,
+        decision,
+      }
+    : data.deny;
+  return fetch('/api/push/answer', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+    .then((response) => (response.ok ? response.json() : { outcome: 'failed' }))
+    .catch(() => ({ outcome: 'failed' }))
+    .then((result) => {
+      if (result.outcome === 'answered')
+        return decision === 'allow'
+          ? said('Allowed', 'It carries on.', tag)
+          : said('Denied', 'It won’t do that.', tag);
+      if (result.outcome === 'gone') return said('Already answered', 'Nothing more to do.', tag);
+      // Not from the lock screen, or Conch couldn't be reached: open the sheet.
+      return open(data.url);
+    });
+}
+
+function open(url) {
+  const target = new URL(url || '/', self.location.origin).href;
+  return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+    for (const w of windows) {
+      if (new URL(w.url).origin === self.location.origin && 'focus' in w) {
+        return w
+          .focus()
+          .then((focused) =>
+            focused && 'navigate' in focused ? focused.navigate(target) : undefined,
+          );
+      }
+    }
+    return self.clients.openWindow(target);
+  });
+}
+
 self.addEventListener('notificationclick', (event) => {
   const notification = event.notification;
   const data = notification.data || {};
   notification.close();
-  if (event.action === 'deny' && data.deny) {
-    // Answered right here, with this device's own sign-in; nothing opens.
-    event.waitUntil(
-      fetch('/api/push/answer', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(data.deny),
-      }).catch(() => undefined),
-    );
+  if ((event.action === 'allow' || event.action === 'deny') && (data.answer || data.deny)) {
+    event.waitUntil(answer(data, event.action, notification.tag));
     return;
   }
-  const target = new URL(data.url || '/', self.location.origin).href;
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
-      for (const w of windows) {
-        if (new URL(w.url).origin === self.location.origin && 'focus' in w) {
-          return w
-            .focus()
-            .then((focused) =>
-              focused && 'navigate' in focused ? focused.navigate(target) : undefined,
-            );
-        }
-      }
-      return self.clients.openWindow(target);
-    }),
-  );
+  event.waitUntil(open(data.url));
 });
 
 self.addEventListener('pushsubscriptionchange', (event) => {

@@ -1,4 +1,10 @@
-import { PushStatus, type PushPrefsPatch, type PushSubscriptionJson } from '@conch/protocol';
+import {
+  PushAnswerResult,
+  PushApproval,
+  PushStatus,
+  type PushPrefsPatch,
+  type PushSubscriptionJson,
+} from '@conch/protocol';
 import { z } from 'zod';
 
 import { request } from '../../api/client';
@@ -20,6 +26,18 @@ export const pushApi = {
     request(PushStatus, `/api/push/subscriptions/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   test: () =>
     request(z.object({ sent: z.number() }), '/api/push/test', { method: 'POST', body: {} }),
+  /** What the approval sheet shows before it's answered (ADR 0108). */
+  approval: (conversationId: string, permissionId: string) =>
+    request(
+      PushApproval,
+      `/api/push/approvals/${encodeURIComponent(conversationId)}/${encodeURIComponent(permissionId)}`,
+    ),
+  /** The approval sheet's answer; a step that matters asks to confirm it's you first. */
+  answer: (conversationId: string, permissionId: string, decision: 'allow' | 'deny') =>
+    request(PushAnswerResult, '/api/push/answer', {
+      method: 'POST',
+      body: { conversationId, permissionId, decision },
+    }),
 };
 
 export const pushKeys = {

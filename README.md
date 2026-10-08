@@ -120,7 +120,7 @@ your desktop and the chat apps you already use.
 - **Web and desktop.** An app for macOS, Windows and Linux, with the pearl in the
   menu bar, one-press updates and "Hey Conch" if you turn it on.
 - **Your phone.** An installable app over a private Tailscale address, with
-  notifications and voice. Add it from **Settings → Devices**. [On your phone](./apps/docs/content/start/phone.md)
+  notifications you can answer with one tap, and voice (“Hey Conch” while it's open). Add it from **Settings → Devices**. [On your phone](./apps/docs/content/start/phone.md)
 - **Your chat apps.** Telegram, Discord, Slack, WhatsApp, Signal, iMessage, email,
   Teams, Google Chat, Matrix and more, with the same commands as the app.
   [Chat apps](./apps/docs/content/channels)

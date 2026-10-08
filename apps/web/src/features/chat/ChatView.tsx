@@ -68,6 +68,7 @@ import { useNeed } from '../setup/useNeed';
 import { UsageComposerNotice } from '../usage/UsageComposerNotice';
 import { ChatSpend } from '../spend/Spend';
 import { useAgents, useChatAgent } from '../agents/api';
+import { ApprovalHere } from '../notifications/ApprovalHere';
 import { NewChatAgent } from '../agents/ChatAgent';
 import styles from './ChatView.module.css';
 import { ChatContext } from './ChatContext';
@@ -1093,6 +1094,13 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
       <RunBanner conversationId={conversationId} />
       <TaskBanner conversationId={conversationId} />
       {origin?.kind !== 'task' && <TaskSheetHere />}
+      <ApprovalHere
+        conversationId={conversationId}
+        view={view}
+        name={agent?.name ?? name}
+        avatar={agent?.avatar}
+        where={record?.title}
+      />
       <ClientBanner conversationId={conversationId} />
       <ChannelBanner conversationId={conversationId} />
       <ArchivedBanner conversationId={conversationId} />

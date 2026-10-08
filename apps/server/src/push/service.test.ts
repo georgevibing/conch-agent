@@ -109,9 +109,13 @@ describe('notifications', () => {
     expect(phone.read(sent[0]?.body ?? Buffer.alloc(0))).toMatchObject({
       title: 'Pearl needs your OK',
       body: 'Run `npm test` · Fix the build',
-      url: '/c/c_chat',
+      url: '/c/c_chat?approve=p_1',
       tag: 'ok-p_1',
-      deny: { conversationId: 'c_chat', permissionId: 'p_1' },
+      answer: { conversationId: 'c_chat', permissionId: 'p_1', ticket: expect.any(String) },
+      actions: [
+        { action: 'allow', title: 'Allow' },
+        { action: 'deny', title: 'Deny' },
+      ],
       requireInteraction: true,
     });
   });
@@ -135,7 +139,12 @@ describe('notifications', () => {
     } as ServerEvent);
     expect(phone.read(sent[0]?.body ?? Buffer.alloc(0))).toMatchObject({
       title: 'Claude Desktop needs your OK',
-      url: '/c/c_app',
+      url: '/c/c_app?approve=p_2',
+      // Another app's tool: Conch can't tell what it does, so it's for the app (ADR 0108).
+      actions: [
+        { action: 'open', title: 'Review' },
+        { action: 'deny', title: 'Deny' },
+      ],
     });
   });
 
@@ -486,10 +495,10 @@ describe('notifications', () => {
         title: 'A task needs your OK',
         body: 'Run `npm test` · Add dark mode',
         url: '/c/c_main?task=t_1',
-        // Deny answers the task's own chat, where it asked; Allow always opens Conch.
-        deny: { conversationId: 'c_t1', permissionId: 'p_t' },
+        // Allow and Deny answer the task's own chat, where it asked.
+        answer: { conversationId: 'c_t1', permissionId: 'p_t', ticket: expect.any(String) },
         actions: [
-          { action: 'open', title: 'Review' },
+          { action: 'allow', title: 'Allow' },
           { action: 'deny', title: 'Deny' },
         ],
         requireInteraction: true,
@@ -520,5 +529,167 @@ describe('notifications', () => {
     // Without a sealer registered (a test), the file is still only its owner's.
     const text = readFileSync(join(home, 'push.secrets.json'), 'utf8');
     expect(text).toContain('subscriptions');
+  });
+});
+
+describe('approving from the notification (ADR 0108)', () => {
+  const asked = (input: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
+    event({
+      type: 'permission.requested',
+      permissionId: 'p_1',
+      toolName: 'Bash',
+      input,
+      summary: 'Run it',
+      ...extra,
+    });
+
+  async function sentTo(extra: Record<string, unknown> = {}, prefs = {}) {
+    let now = 1_000;
+    const ctx = setup({ now: () => now });
+    const phone = browser();
+    const laptop = browser();
+    await ctx.push.subscribe('device:phone', 'iPhone', phone.subscription, prefs);
+    await ctx.push.subscribe('device:laptop', 'Mac', laptop.subscription);
+    await ctx.push.onEvent(asked({ command: 'npm test' }, extra));
+    const to = (b: ReturnType<typeof browser>) =>
+      b.read(ctx.sent.find((x) => x.url === b.subscription.endpoint)?.body ?? Buffer.alloc(0));
+    const shown = to(phone);
+    const other = to(laptop);
+    const ticket = (shown.answer as { ticket: string }).ticket;
+    const otherTicket = (other.answer as { ticket: string }).ticket;
+    const answers: string[] = [];
+    const respond = async (_c: string, _p: string, decision: string) => {
+      answers.push(decision);
+    };
+    const answer = (owner: string, body: Record<string, unknown>, verified = false) =>
+      ctx.push.answer(
+        owner,
+        { conversationId: 'c_chat', permissionId: 'p_1', ...body },
+        { verified, respond },
+      );
+    return {
+      ...ctx,
+      shown,
+      ticket,
+      otherTicket,
+      answers,
+      answer,
+      later: (ms: number) => (now += ms),
+    };
+  }
+
+  it('allows a routine step with one tap, once, from the device it was sent to', async () => {
+    const { ticket, answer, answers } = await sentTo();
+    expect(await answer('device:phone', { ticket, decision: 'allow' })).toEqual({
+      outcome: 'answered',
+    });
+    // Replayed: the ticket was spent.
+    expect(await answer('device:phone', { ticket, decision: 'allow' })).toEqual({
+      outcome: 'gone',
+    });
+    expect(answers).toEqual(['allow']);
+  });
+
+  it('gives each device its own ticket, and one answer spends them all', async () => {
+    const { ticket, otherTicket, answer, answers } = await sentTo();
+    expect(ticket).not.toBe(otherTicket);
+    // The phone's ticket is no good from the laptop's sign-in.
+    expect(await answer('device:laptop', { ticket, decision: 'allow' })).toEqual({
+      outcome: 'gone',
+    });
+    expect(await answer('device:laptop', { ticket: otherTicket, decision: 'allow' })).toEqual({
+      outcome: 'answered',
+    });
+    expect(answers).toEqual(['allow']);
+  });
+
+  it('a ticket answers only its own question', async () => {
+    const { ticket, push, answers } = await sentTo();
+    const result = await push.answer(
+      'device:phone',
+      { conversationId: 'c_chat', permissionId: 'p_other', ticket, decision: 'allow' },
+      { verified: true, respond: async (_c, _p, d) => void answers.push(d) },
+    );
+    expect(result).toEqual({ outcome: 'gone' });
+    expect(answers).toEqual([]);
+  });
+
+  it('is no good once answered elsewhere, or after half an hour', async () => {
+    const elsewhere = await sentTo();
+    await elsewhere.push.onEvent(
+      event({ type: 'permission.resolved', permissionId: 'p_1', decision: 'deny' }),
+    );
+    expect(
+      await elsewhere.answer('device:phone', { ticket: elsewhere.ticket, decision: 'allow' }),
+    ).toEqual({ outcome: 'gone' });
+    expect(elsewhere.answers).toEqual([]);
+
+    const late = await sentTo();
+    late.later(30 * 60 * 1000 + 1);
+    expect(await late.answer('device:phone', { ticket: late.ticket, decision: 'allow' })).toEqual({
+      outcome: 'gone',
+    });
+    expect(late.answers).toEqual([]);
+  });
+
+  it('offers only Review for a step that matters, and a ticket can’t allow it', async () => {
+    for (const extra of [
+      { input: { command: 'rm -rf build' } },
+      { toolName: 'mcp__conch__google_mail_send', input: { to: 'a@b.c' } },
+      { cost: 'Paid · about $0.04' },
+      { taint: 'This chat read a web page.' },
+      { toolName: 'mcp__github__delete_repo', input: {} },
+    ]) {
+      const { shown, ticket, answer, answers } = await sentTo(extra);
+      expect(shown.actions, JSON.stringify(extra)).toEqual([
+        { action: 'open', title: 'Review' },
+        { action: 'deny', title: 'Deny' },
+      ]);
+      expect(await answer('device:phone', { ticket, decision: 'allow' })).toEqual({
+        outcome: 'open',
+      });
+      expect(answers).toEqual([]);
+    }
+  });
+
+  it('never offers Allow when the notification doesn’t say what it is', async () => {
+    const { shown, ticket, answer, answers } = await sentTo({}, { previews: false });
+    expect(shown.body).toBe('Open Conch to see what it’s asking.');
+    expect(shown.actions).toEqual([
+      { action: 'open', title: 'Review' },
+      { action: 'deny', title: 'Deny' },
+    ]);
+    expect(await answer('device:phone', { ticket, decision: 'allow' })).toEqual({
+      outcome: 'open',
+    });
+    // Deny still works with one.
+    const again = await sentTo({}, { previews: false });
+    expect(await again.answer('device:phone', { ticket: again.ticket, decision: 'deny' })).toEqual({
+      outcome: 'answered',
+    });
+    expect([...answers, ...again.answers]).toEqual(['deny']);
+  });
+
+  it('the sheet allows a step that matters only after you confirm it’s you', async () => {
+    const { push, answer, answers } = await sentTo({ input: { command: 'git push --force' } });
+    expect(push.approval('c_chat', 'p_1')).toMatchObject({
+      waiting: true,
+      confirm: expect.stringMatching(/\w/),
+      expiresAt: 1_000 + 30 * 60 * 1000,
+    });
+    expect(push.approval('c_other', 'p_1')).toEqual({ waiting: false });
+    expect(await answer('device:phone', { decision: 'allow' })).toBe('verify');
+    expect(answers).toEqual([]);
+    expect(await answer('device:phone', { decision: 'allow' }, true)).toEqual({
+      outcome: 'answered',
+    });
+    expect(answers).toEqual(['allow']);
+  });
+
+  it('the sheet allows a routine step with a press', async () => {
+    const { push, answer, answers } = await sentTo();
+    expect(push.approval('c_chat', 'p_1')).not.toHaveProperty('confirm');
+    expect(await answer('device:phone', { decision: 'allow' })).toEqual({ outcome: 'answered' });
+    expect(answers).toEqual(['allow']);
   });
 });

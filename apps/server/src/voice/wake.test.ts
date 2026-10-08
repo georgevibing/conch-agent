@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { heardWake, PROMPT, WakeWord } from './wake';
+import { callable, heardWake, PROMPT, promptFor, WakeWord } from './wake';
 
 const wav = () => {
   const b = Buffer.alloc(44 + 32_000);
@@ -73,6 +73,7 @@ describe('listening for it in the desktop app', () => {
     await wake.state(true);
     const first = wake.check(wav());
     expect(await wake.check(wav())).toEqual({ heard: false });
+    await vi.waitFor(() => expect(transcribe).toHaveBeenCalled());
     finish('nothing much');
     expect(await first).toEqual({ heard: false });
     expect(await wake.check(Buffer.alloc(16_000 * 2 * 10))).toEqual({ heard: false });
@@ -94,5 +95,60 @@ describe('listening for it in the desktop app', () => {
     expect(wake.available).toBe(false);
     await wake.state(true);
     expect(await wake.check(wav())).toEqual({ heard: false });
+  });
+});
+
+describe('the phrase follows the assistant’s name (ADR 0108)', () => {
+  it('hears “Hey Pearl”, and “Hey Conch” still', () => {
+    expect(heardWake('Hey Pearl, what’s on today?', 'Pearl')).toEqual({
+      heard: true,
+      rest: 'what’s on today?',
+    });
+    expect(heardWake('Hey Conch.', 'Pearl')).toEqual({ heard: true });
+    expect(heardWake('Hey Pearly gates', 'Pearl')).toEqual({ heard: false });
+    expect(heardWake('Hey Pearl', undefined)).toEqual({ heard: false });
+    // Accents as written or not; names of two words; nothing sayable is Conch.
+    expect(heardWake('hey zoe', 'Zoë')).toEqual({ heard: true });
+    expect(heardWake('Hey Zoë!', 'Zoë')).toEqual({ heard: true });
+    expect(heardWake('Hi Mister Bean, hello', 'Mister Bean the 3rd')).toEqual({
+      heard: true,
+      rest: 'hello',
+    });
+    expect(callable('🦊 42')).toBeUndefined();
+    expect(callable('conch')).toBeUndefined();
+    // A name can't smuggle a pattern in.
+    expect(heardWake('Hey anything', '.*')).toEqual({ heard: false });
+    expect(promptFor('Pearl')).toBe('Talking to an assistant called Pearl:');
+    expect(promptFor('Conch')).toBe(PROMPT);
+  });
+});
+
+describe('listening while Conch is open on a phone (ADR 0108)', () => {
+  it('reads a burst only from a device that says it’s listening, for a minute after it last did', async () => {
+    let now = 0;
+    const transcribe = vi.fn(async () => 'Hey Pearl, lights');
+    const wake = new WakeWord({
+      voice: { transcribe },
+      name: async () => 'Pearl',
+      now: () => now,
+    });
+    expect(await wake.check(wav(), 'device:phone')).toEqual({ heard: false });
+    wake.open('device:phone', true);
+    expect(await wake.check(wav(), 'device:phone')).toEqual({ heard: true, rest: 'lights' });
+    expect(transcribe).toHaveBeenCalledWith(
+      expect.anything(),
+      'auto',
+      expect.any(Number),
+      'Talking to an assistant called Pearl:',
+    );
+    // Another device that never said so isn't read; nor is the desktop path.
+    expect(await wake.check(wav(), 'device:tablet')).toEqual({ heard: false });
+    expect(await wake.check(wav())).toEqual({ heard: false });
+    now += 2 * 60_000;
+    expect(await wake.check(wav(), 'device:phone')).toEqual({ heard: false });
+    wake.open('device:phone', true);
+    wake.open('device:phone', false);
+    expect(await wake.check(wav(), 'device:phone')).toEqual({ heard: false });
+    expect(transcribe).toHaveBeenCalledTimes(1);
   });
 });

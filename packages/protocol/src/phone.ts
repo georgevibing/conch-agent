@@ -128,7 +128,39 @@ export const UpdatePushBody = z.object({ prefs: PushPrefsPatch });
 export const PushAnswerBody = z.object({
   conversationId: z.string().max(128),
   permissionId: z.string().max(128),
+  /** Without it, a no (what the first notifications sent). */
+  decision: z.enum(['allow', 'deny']).optional(),
+  /**
+   * The one-use ticket a notification carries for this question and this
+   * device (ADR 0108). Without one, Allow needs the approval sheet and, for a
+   * step that matters, a recent passkey or password.
+   */
+  ticket: z.string().min(16).max(128).optional(),
 });
+export type PushAnswerBody = z.infer<typeof PushAnswerBody>;
+
+/** What came of an answer from a notification or the approval sheet. */
+export const PushAnswerResult = z.object({
+  outcome: z.enum([
+    /** Done as asked. */
+    'answered',
+    /** Already answered, or it ran out: nothing to do. */
+    'gone',
+    /** Not from the lock screen: open Conch to allow it. */
+    'open',
+  ]),
+});
+export type PushAnswerResult = z.infer<typeof PushAnswerResult>;
+
+/** What the approval sheet needs to know about a question before it's answered (ADR 0108). */
+export const PushApproval = z.object({
+  waiting: z.boolean(),
+  /** Allowing needs you to confirm it's you first, and why, in a few words. */
+  confirm: z.string().max(120).optional(),
+  /** When it becomes a no by itself (ms since the epoch). */
+  expiresAt: z.number().optional(),
+});
+export type PushApproval = z.infer<typeof PushApproval>;
 
 // ── Voice ───────────────────────────────────────────────────────────────────
 
@@ -146,8 +178,13 @@ export const VoiceStatus = z.object({
     z.object({ state: z.literal('downloading'), done: z.number(), total: z.number() }),
     z.object({ state: z.literal('ready') }),
   ]),
-  /** "Hey Conch" (ADR 0078): only in the desktop app, which this Conch runs in or not. */
-  wake: z.object({ available: z.boolean() }).optional(),
+  /**
+   * "Hey Conch" (ADR 0078, ADR 0108). `available`: this Conch runs in the
+   * desktop app, where it listens with the window closed; every other device
+   * listens only while Conch is open on it. `name`: the assistant's name,
+   * which the phrase follows ("Hey Pearl").
+   */
+  wake: z.object({ available: z.boolean(), name: z.string().max(80).optional() }).optional(),
 });
 export type VoiceStatus = z.infer<typeof VoiceStatus>;
 
@@ -155,8 +192,11 @@ export type VoiceStatus = z.infer<typeof VoiceStatus>;
 export const WakeResult = z.object({ heard: z.boolean(), rest: z.string().max(2000).optional() });
 export type WakeResult = z.infer<typeof WakeResult>;
 
-/** The window is listening for "Hey Conch", or has stopped (the tray says so too). */
-export const WakeStateBody = z.object({ on: z.boolean() });
+/**
+ * The window is listening for "Hey Conch", or has stopped (the tray says so
+ * too). `open`: a device listening only while Conch is open on it (ADR 0108).
+ */
+export const WakeStateBody = z.object({ on: z.boolean(), open: z.boolean().optional() });
 export type WakeStateBody = z.infer<typeof WakeStateBody>;
 
 export const Transcript = z.object({ text: z.string() });

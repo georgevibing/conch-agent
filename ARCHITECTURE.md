@@ -344,7 +344,9 @@ src/
   `tailscale status`/`serve status` and runs `tailscale serve --bg <port>` on one press
   (waiting on Tailscale's own OK page when it asks); `HostPolicy.urls()` only offers the
   https name once serve reaches Conch. `PushService` turns the live stream into Web
-  Push notifications (approvals with a Deny action, replies, routines, devices), never
+  Push notifications (approvals with Allow and Deny, each a one-use ticket per device
+  and question, Allow only for everyday steps: `push/approve.ts`, ADR 0108; replies,
+  routines, devices), never
   while a page reports `presence` visible; subscriptions belong to a device and end
   with it; endpoints are limited to the browsers' push services (SSRF). `VoiceService`
   reads 16 kHz WAVs with whisper.cpp and fetches its model (resumable, SHA-256). The
@@ -360,7 +362,9 @@ src/
   (`piper.ts`) or a connected provider's voice, for Read aloud and voice notes back
   (`ChannelConnection.voiceNotes`). Talk mode's barge-in and the desktop app's wake word run in
   the page (`vad.ts`, `WakeWord.tsx`); a wake burst is read by whisper.cpp on the same computer
-  (`WakeWord.check`) and the tray shows that it listens (`GatewayToApp` `wake`).
+  (`WakeWord.check`) and the tray shows that it listens (`GatewayToApp` `wake`). Any other
+  device listens only while Conch is open and visible on it, saying so per device
+  (`WakeWord.open`, ADR 0108); the phrase follows the default agent's name (`heardWake`).
 - **Safe hands** ([ADR 0028](./docs/adr/0028-safe-hands.md)). A chat that takes something
   in from outside (web, downloads, integrations, another person's message) gets a
   `taint` event; from then on `sinkReason` calls (commands, files outside the work

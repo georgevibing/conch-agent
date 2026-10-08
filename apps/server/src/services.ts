@@ -1637,6 +1637,8 @@ export class Services {
     this.wake = new WakeWord({
       ...(desktop && { app: { send: (message) => desktop.send(message) } }),
       voice: this.voice,
+      // "Hey Pearl": the phrase follows the default agent's name (ADR 0108).
+      name: async () => (await this.agents.default()).name,
     });
     // "Stop listening" in the tray: the window stops too.
     desktop?.listen((message) => {
@@ -2013,6 +2015,7 @@ export class Services {
           task: origin?.kind === 'task',
           ...(origin?.kind === 'task' && { taskId: origin.taskId }),
           ...(origin?.kind === 'client' && { app: origin.name }),
+          workspace: await this.settings.workspace(),
         };
       },
       tasks: async () => (await this.tasks.list()).tasks,

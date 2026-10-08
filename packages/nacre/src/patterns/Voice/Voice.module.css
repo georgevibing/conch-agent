@@ -218,6 +218,11 @@
     box-shadow: 0 0 0 3px color-mix(in oklch, var(--nc-accent-9) 30%, transparent);
   }
 
+  .listening[data-paused] .listeningDot {
+    color: var(--nc-text-muted);
+    background: var(--nc-surface-sunken);
+  }
+
   .listeningText {
     overflow: hidden;
     text-overflow: ellipsis;

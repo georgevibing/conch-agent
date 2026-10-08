@@ -659,6 +659,8 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     type: z.literal('permission.resolved'),
     permissionId: z.string(),
     decision: z.enum(['allow', 'allow-always', 'deny', 'expired']),
+    /** Nobody answered in this many minutes, so it's a no (ADR 0108). */
+    unanswered: z.number().int().positive().optional(),
   }),
   z.object({
     ...logged,

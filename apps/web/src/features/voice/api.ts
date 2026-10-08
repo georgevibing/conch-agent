@@ -24,9 +24,12 @@ export const voiceApi = {
     return Transcript.parse(await response.json());
   },
 
-  /** A burst of speech in: whether it said "Hey Conch" (ADR 0078). */
-  async wake(wav: Uint8Array): Promise<WakeResult> {
-    const response = await fetch('/api/voice/wake', {
+  /**
+   * A burst of speech in: whether it said "Hey Conch" (ADR 0078). `open`: from
+   * a device listening only while Conch is open on it (ADR 0108).
+   */
+  async wake(wav: Uint8Array, open = false): Promise<WakeResult> {
+    const response = await fetch(`/api/voice/wake${open ? '?open=1' : ''}`, {
       method: 'POST',
       headers: { 'content-type': 'audio/wav' },
       body: wav as BodyInit,
@@ -36,11 +39,11 @@ export const voiceApi = {
     return WakeResult.parse(await response.json());
   },
   /** The window is (or isn't) listening for "Hey Conch": the tray says so. */
-  wakeState: (on: boolean) =>
+  wakeState: (on: boolean, open = false) =>
     fetch('/api/voice/wake/state', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ on }),
+      body: JSON.stringify(open ? { on, open } : { on }),
       credentials: 'same-origin',
       keepalive: true,
     }).then(() => undefined),

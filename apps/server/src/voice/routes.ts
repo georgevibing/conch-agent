@@ -1,6 +1,8 @@
 import { SpeakBody, WakeStateBody } from '@conch/protocol';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 
+import { pushOwner } from '../push/routes';
+
 import { MAX_AUDIO_BYTES, VoiceError, type VoiceService } from './service';
 import { SpeechError, type SpeechService } from './speech';
 import type { WakeWord } from './wake';
@@ -28,7 +30,14 @@ export function registerVoiceRoutes(
   let reading = 0;
   let speaking = 0;
 
-  app.get('/api/voice', () => voice.status());
+  app.get('/api/voice', async () => {
+    const status = await voice.status();
+    // The phrase follows the assistant's name (ADR 0108); every device may listen while it's open.
+    return {
+      ...status,
+      wake: { available: Boolean(status.wake?.available), name: await wake.name() },
+    };
+  });
   app.post('/api/voice/model', () => voice.getModel());
   app.post('/api/voice/model/pause', () => {
     voice.pause();
@@ -67,6 +76,13 @@ export function registerVoiceRoutes(
   app.post('/api/voice/wake/state', async (request, reply) => {
     const body = WakeStateBody.safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: 'bad-request' });
+    // A phone (or any device) listening only while Conch is open on it, for itself.
+    if (body.data.open) {
+      const who = pushOwner(request.access);
+      if (!who) return reply.code(403).send({ error: 'forbidden' });
+      wake.open(who, body.data.on);
+      return { on: body.data.on };
+    }
     if (!wake.available)
       return reply
         .code(409)
@@ -74,21 +90,27 @@ export function registerVoiceRoutes(
     await wake.state(body.data.on);
     return { on: wake.listening };
   });
-  app.post('/api/voice/wake', { bodyLimit: MAX_AUDIO_BYTES + 1024 }, async (request, reply) => {
-    if (!Buffer.isBuffer(request.body))
-      return reply
-        .code(415)
-        .send({ error: 'bad-request', message: 'Send the recording as audio/wav.' });
-    try {
-      return await wake.check(request.body);
-    } catch (error) {
-      if (error instanceof VoiceError)
+  app.post<{ Querystring: { open?: string } }>(
+    '/api/voice/wake',
+    { bodyLimit: MAX_AUDIO_BYTES + 1024 },
+    async (request, reply) => {
+      if (!Buffer.isBuffer(request.body))
         return reply
-          .code(error.code === 'not-ready' ? 409 : 400)
-          .send({ error: `voice-${error.code}`, message: error.message });
-      throw error;
-    }
-  });
+          .code(415)
+          .send({ error: 'bad-request', message: 'Send the recording as audio/wav.' });
+      try {
+        const who = request.query.open ? pushOwner(request.access) : undefined;
+        if (request.query.open && !who) return reply.code(403).send({ error: 'forbidden' });
+        return await wake.check(request.body, who);
+      } catch (error) {
+        if (error instanceof VoiceError)
+          return reply
+            .code(error.code === 'not-ready' ? 409 : 400)
+            .send({ error: `voice-${error.code}`, message: error.message });
+        throw error;
+      }
+    },
+  );
 
   // ── Natural voices ───────────────────────────────────────────────────────
 
