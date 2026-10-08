@@ -1,0 +1,892 @@
+@layer nacre.components {
+  /*
+   * Places: a map of tiles with numbered pins, and the list beside or under it.
+   *
+   * Knobs:
+   *   --pm-ratio     the mosaic's width ÷ height (its columns and rows of tiles)
+   *   --pm-s         how far the map is zoomed in (set as it moves): pins keep their size
+   *   --pm-i         a pin's place in the list, for the stagger as they drop in
+   *   --pm-pin       a pin's head
+   *   --pm-move      how the map glides to a place
+   *   --pm-tiles     the treatment of the map's pictures, per scheme
+   */
+  .root {
+    --pm-pin: 1.625rem;
+    --pm-move: var(--nc-spring-soft-duration) var(--nc-spring-soft);
+    --pm-pad: var(--nc-space-2);
+
+    inline-size: min(100%, 40rem);
+    padding: var(--pm-pad);
+    border-radius: var(--nc-chat-card-radius);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-chat-card-surface);
+    box-shadow: var(--nc-chat-card-shadow);
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+  }
+
+  .body {
+    display: grid;
+    gap: 0;
+    min-inline-size: 0;
+  }
+
+  .empty {
+    margin: 0;
+    padding: var(--nc-space-2) var(--nc-space-2) var(--nc-space-1);
+    color: var(--nc-text-muted);
+  }
+
+  .footCredit {
+    padding: 0 var(--nc-space-2) var(--nc-space-1);
+    font-size: var(--nc-text-2xs);
+    color: var(--nc-text-subtle);
+  }
+
+  /* ── The map ────────────────────────────────────────────────────────── */
+  .map {
+    /* Light: the paper a touch quieter, so pins and words lead. */
+    --pm-tiles: saturate(0.78) contrast(0.96) brightness(1.01);
+
+    position: relative;
+    isolation: isolate;
+    min-inline-size: 0;
+    border-radius: calc(var(--nc-chat-card-radius) - var(--nc-space-1));
+    corner-shape: var(--nc-corner-shape);
+    overflow: hidden;
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  /*
+   * Dark: the light tiles turned over — inverted, the hues put back, the
+   * contrast eased and the colour drawn down — so the map sits in the dark
+   * page like the rest of it instead of glaring.
+   */
+  .map[data-scheme='dark'] {
+    --pm-tiles: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.82) saturate(0.55);
+  }
+
+  .frame {
+    position: relative;
+    aspect-ratio: var(--pm-ratio, 3 / 2);
+    overflow: hidden;
+    cursor: grab;
+    touch-action: pan-y;
+    user-select: none;
+    -webkit-user-select: none;
+    outline: none;
+  }
+
+  .frame[data-zoomed] {
+    touch-action: none;
+  }
+
+  .map[data-dragging] .frame {
+    cursor: grabbing;
+  }
+
+  .frame:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--nc-ring);
+  }
+
+  /* The mosaic and everything on it: one transform moves the lot. */
+  .world {
+    --pm-s: 1;
+
+    position: absolute;
+    inset: 0;
+    transform-origin: 0 0;
+    transition: transform var(--pm-move);
+    will-change: transform;
+  }
+
+  .map[data-dragging] .world,
+  .map[data-dragging] .spot {
+    transition: none;
+  }
+
+  .tiles {
+    position: absolute;
+    inset: 0;
+    display: grid;
+  }
+
+  .tile {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+    filter: var(--pm-tiles);
+    pointer-events: none;
+  }
+
+  /* A tile that couldn't be had: a quiet plan of streets, in the card's own ink. */
+  .blank {
+    background-color: var(--nc-surface-sunken);
+    background-image:
+      linear-gradient(var(--nc-border-subtle) 1px, transparent 1px),
+      linear-gradient(90deg, var(--nc-border-subtle) 1px, transparent 1px);
+    background-size: 2rem 2rem;
+    filter: none;
+  }
+
+  /* The place it was near: a ring, not a pin, so it never reads as a result. */
+  .home {
+    position: absolute;
+    z-index: 1;
+    inline-size: 0;
+    block-size: 0;
+    transform: scale(calc(1 / var(--pm-s)));
+    transform-origin: 0 0;
+    transition: transform var(--pm-move);
+  }
+
+  .homeRing {
+    position: absolute;
+    inset-inline-start: -0.5rem;
+    inset-block-start: -0.5rem;
+    inline-size: 1rem;
+    block-size: 1rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-text);
+    box-shadow:
+      0 0 0 3px var(--nc-surface),
+      0 0 0 7px color-mix(in oklab, var(--nc-text) 16%, transparent),
+      var(--nc-elevation-1);
+  }
+
+  .homeRing::after {
+    content: '';
+    position: absolute;
+    inset: 0.3125rem;
+    border-radius: inherit;
+    background: var(--nc-surface);
+  }
+
+  .homeName {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0.875rem;
+    translate: 0 -50%;
+    max-inline-size: 10rem;
+    padding: 0 var(--nc-space-1-5);
+    overflow: hidden;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface);
+    box-shadow: var(--nc-elevation-1);
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-semibold);
+    line-height: 1.5;
+    color: var(--nc-text);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .pins {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+  }
+
+  /* A pin's spot: a point that doesn't grow as the map does, so the pin keeps its size. */
+  .spot {
+    position: absolute;
+    inline-size: 0;
+    block-size: 0;
+    transform: scale(calc(1 / var(--pm-s)));
+    transform-origin: 0 0;
+    transition: transform var(--pm-move);
+  }
+
+  .pin {
+    position: absolute;
+    inset-inline-start: calc(var(--pm-pin) / -2);
+    inset-block-end: 0;
+    display: block;
+    inline-size: var(--pm-pin);
+    /* A turned square's point lies 0.707 of its side below its middle. */
+    block-size: calc(var(--pm-pin) * 1.207);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    transform-origin: 50% 100%;
+    transition: scale var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .spot[data-lit] .pin {
+    scale: 1.14;
+  }
+
+  .spot[data-selected] .pin {
+    scale: 1.3;
+  }
+
+  /* Drops in once, springy, each a beat after the one before. */
+  .pinDrop {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    transform-origin: 50% 100%;
+    animation: drop var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) both;
+    animation-delay: calc(140ms + var(--pm-i, 0) * 70ms);
+  }
+
+  .map[data-still] .pinDrop {
+    animation: none;
+  }
+
+  @keyframes drop {
+    from {
+      opacity: 0;
+      transform: translateY(-1.25rem) scale(0.6);
+    }
+    30% {
+      opacity: 1;
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* The head: a drop of the accent with its number, its point on the place. */
+  .pinHead {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-start: 0;
+    display: grid;
+    place-items: center;
+    block-size: var(--pm-pin);
+    border-radius: 50% 50% 50% 0;
+    rotate: -45deg;
+    background: var(--nc-accent-9);
+    box-shadow:
+      0 0 0 2px var(--nc-surface),
+      var(--nc-elevation-2);
+    color: var(--nc-accent-contrast);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-bold);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    transition:
+      box-shadow var(--nc-duration-fast) var(--nc-ease-out),
+      background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  /* The number (or glyph) stands upright inside the turned drop. */
+  .pinNum {
+    display: grid;
+    place-items: center;
+    rotate: 45deg;
+  }
+
+  .pinGlyph {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  .spot[data-lit] .pinHead {
+    box-shadow:
+      0 0 0 2px var(--nc-surface),
+      var(--nc-elevation-3);
+  }
+
+  .spot[data-selected] .pinHead {
+    background: var(--nc-accent-10);
+    box-shadow:
+      0 0 0 2px var(--nc-surface),
+      var(--nc-elevation-3);
+  }
+
+  .spot[data-lit]:not([data-selected]) .pinHead {
+    background: var(--nc-accent-10);
+  }
+
+  /* Where the chosen place is, on the ground: a soft ring that breathes out once. */
+  .spot[data-selected]::before {
+    content: '';
+    position: absolute;
+    inset-inline-start: -0.875rem;
+    inset-block-start: -0.4375rem;
+    inline-size: 1.75rem;
+    block-size: 0.875rem;
+    border-radius: 50%;
+    background: color-mix(in oklab, var(--nc-accent-9) 22%, transparent);
+    box-shadow: 0 0 0 1.5px color-mix(in oklab, var(--nc-accent-9) 45%, transparent);
+    animation: ground var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  @keyframes ground {
+    from {
+      opacity: 0;
+      transform: scale(0.4);
+    }
+  }
+
+  /* A soft shadow on the ground under each pin, so it stands on the map. */
+  .pin::after {
+    content: '';
+    position: absolute;
+    inset-inline-start: 50%;
+    inset-block-end: -0.1875rem;
+    inline-size: 0.625rem;
+    block-size: 0.25rem;
+    translate: -50% 0;
+    border-radius: 50%;
+    background: color-mix(in oklab, var(--nc-shadow-color, black) 35%, transparent);
+    filter: blur(1.5px);
+    z-index: -1;
+  }
+
+  /* The chosen place's name over its pin. */
+  .callout {
+    position: absolute;
+    inset-block-end: calc(var(--pm-pin) * 1.207 * 1.3 + var(--nc-space-1-5));
+    inset-inline-start: 0;
+    translate: -50% 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    inline-size: max-content;
+    max-inline-size: 13rem;
+    padding: var(--nc-space-1) var(--nc-space-2);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-overlay);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-3);
+    pointer-events: none;
+    animation: rise var(--nc-spring-snappy-duration) var(--nc-spring-snappy) both;
+  }
+
+  .callout[data-below] {
+    inset-block-end: auto;
+    inset-block-start: var(--nc-space-2);
+  }
+
+  .callout[data-edge='start'] {
+    translate: calc(-1 * var(--pm-pin)) 0;
+  }
+
+  .callout[data-edge='end'] {
+    translate: calc(-100% + var(--pm-pin)) 0;
+  }
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(0.25rem) scale(0.96);
+    }
+  }
+
+  .calloutName {
+    overflow: hidden;
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .calloutMeta,
+  .calloutOpen {
+    font-size: var(--nc-text-2xs);
+    color: var(--nc-text-muted);
+  }
+
+  /* ± in the corner: small, solid, out of the way. */
+  .controls {
+    position: absolute;
+    inset-block-start: var(--nc-space-2);
+    inset-inline-end: var(--nc-space-2);
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+  }
+
+  .controls > * {
+    box-shadow: var(--nc-elevation-1);
+  }
+
+  /* The credit the map's makers ask for, always in sight. */
+  .credit {
+    position: absolute;
+    inset-block-end: 0;
+    inset-inline-end: 0;
+    z-index: 3;
+    padding: 0.0625rem var(--nc-space-1-5);
+    border-start-start-radius: var(--nc-radius-sm);
+    background: color-mix(in oklab, var(--nc-surface) 86%, transparent);
+    font-size: var(--nc-text-2xs);
+    line-height: 1.5;
+    color: var(--nc-text-muted);
+    text-decoration: none;
+  }
+
+  @media (hover: hover) {
+    .credit:hover {
+      color: var(--nc-text);
+      text-decoration: underline;
+    }
+  }
+
+  .credit:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+
+  /* ── The list ───────────────────────────────────────────────────────── */
+  .side {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    padding-block-start: var(--nc-space-2);
+  }
+
+  .head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--nc-space-2);
+    padding: 0 var(--nc-space-2) var(--nc-space-1);
+  }
+
+  .title {
+    flex: 1;
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    text-wrap: balance;
+  }
+
+  .count {
+    flex: none;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+  }
+
+  .item {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .item[data-selected] {
+    background: var(--nc-wash-1);
+  }
+
+  .row {
+    --nc-rim-hover: 0.22;
+    --nc-sheen-hover: 0.05;
+    --nc-sheen-size: 140px;
+
+    position: relative;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: var(--nc-space-2-5);
+    inline-size: 100%;
+    margin: 0;
+    padding: var(--nc-space-1-5) var(--nc-space-2);
+    border: 0;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      scale var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .row[data-lit]:not([data-state='on']) {
+    background: var(--nc-wash-1);
+  }
+
+  .row:active {
+    scale: 0.985;
+    transition-duration: var(--nc-duration-instant);
+  }
+
+  .row:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 0;
+  }
+
+  .number {
+    display: grid;
+    place-items: center;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    margin-block-start: 0.0625rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-3);
+    color: var(--nc-accent-11);
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-bold);
+    font-variant-numeric: tabular-nums;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .row[data-lit] .number,
+  .row[data-state='on'] .number {
+    background: var(--nc-accent-9);
+    color: var(--nc-accent-contrast);
+  }
+
+  .rowGlyph {
+    display: grid;
+    place-items: center;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text-muted);
+  }
+
+  .rowGlyph svg {
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
+  }
+
+  .rowText {
+    display: flex;
+    flex-direction: column;
+    gap: 0.0625rem;
+    min-inline-size: 0;
+  }
+
+  .rowTop {
+    display: flex;
+    align-items: baseline;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .rowDistance {
+    flex: none;
+    margin-inline-start: auto;
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-subtle);
+  }
+
+  .rowName {
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .rowMeta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 var(--nc-space-2);
+    min-inline-size: 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+  }
+
+  .rowKind {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+  }
+
+  .rowKindGlyph {
+    display: inline-grid;
+    color: var(--nc-text-subtle);
+  }
+
+  .rowKindGlyph svg {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+
+  .more {
+    padding: var(--nc-space-1) 0 0;
+  }
+
+  .more svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  .rating {
+    color: var(--nc-text-muted);
+  }
+
+  .rowOpen {
+    font-size: var(--nc-text-xs);
+  }
+
+  /* Open now or closed: in words, with a mark beside them; the colour only agrees. */
+  .open {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 var(--nc-space-1);
+    min-inline-size: 0;
+    color: var(--nc-text-muted);
+  }
+
+  .openDot {
+    flex: none;
+    inline-size: 0.4375rem;
+    block-size: 0.4375rem;
+    border-radius: var(--nc-radius-full);
+    box-shadow: inset 0 0 0 1.5px var(--nc-text-subtle);
+  }
+
+  .open[data-open] .openDot {
+    background: light-dark(
+      oklch(0.6 0.15 var(--nc-success-h)),
+      oklch(0.74 0.15 var(--nc-success-h))
+    );
+    box-shadow: none;
+  }
+
+  .openState {
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .open[data-open] .openState {
+    color: light-dark(oklch(0.48 0.13 var(--nc-success-h)), oklch(0.8 0.13 var(--nc-success-h)));
+  }
+
+  /* ── A place, opened ────────────────────────────────────────────────── */
+  .details {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .opened {
+    padding: var(--nc-space-0-5) var(--nc-space-2) var(--nc-space-2-5)
+      calc(var(--nc-space-2) + var(--nc-space-2-5) + 1.25rem);
+    animation: open var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  @keyframes open {
+    from {
+      opacity: 0;
+      transform: translateY(-0.25rem);
+    }
+  }
+
+  .facts {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    margin: 0;
+  }
+
+  .fact {
+    display: grid;
+    grid-template-columns: 0.875rem minmax(0, 1fr);
+    align-items: start;
+    gap: var(--nc-space-2);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-snug);
+  }
+
+  .fact dt {
+    display: grid;
+    place-items: center;
+    block-size: calc(1em * 1.375);
+    color: var(--nc-text-subtle);
+  }
+
+  .fact dt svg {
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+  }
+
+  .fact dd {
+    display: flex;
+    flex-direction: column;
+    gap: 0.0625rem;
+    min-inline-size: 0;
+    margin: 0;
+    color: var(--nc-text);
+    overflow-wrap: anywhere;
+  }
+
+  .hours {
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-2xs);
+    color: var(--nc-text-muted);
+  }
+
+  .selectable {
+    user-select: text;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .link,
+  .onMap {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-0-5);
+    inline-size: fit-content;
+    border-radius: var(--nc-radius-xs);
+    color: var(--nc-text-accent);
+    text-decoration: none;
+  }
+
+  .link svg,
+  .onMap svg {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+
+  @media (hover: hover) {
+    .link:hover,
+    .onMap:hover {
+      text-decoration: underline;
+    }
+  }
+
+  .link:focus-visible,
+  .onMap:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .onMap {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+  }
+
+  .directions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-1);
+  }
+
+  .directionsLabel {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    margin-inline-end: var(--nc-space-1);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  .directionsLabel svg {
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+    color: var(--nc-accent-11);
+  }
+
+  /* ── One place: a large map, and its card ───────────────────────────── */
+  .hero {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2-5);
+    padding: var(--nc-space-3) var(--nc-space-2) var(--nc-space-1-5);
+  }
+
+  .heroHead {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+    min-inline-size: 0;
+  }
+
+  .heroName {
+    overflow-wrap: anywhere;
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-tight);
+    text-wrap: balance;
+  }
+
+  .hero .rowGlyph {
+    flex: none;
+    inline-size: 2.25rem;
+    block-size: 2.25rem;
+    background: var(--nc-accent-3);
+    box-shadow: inset 0 0 0 1px var(--nc-accent-5);
+    color: var(--nc-accent-11);
+  }
+
+  .hero .rowGlyph svg {
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+  }
+
+  /* A thumb gets room: bigger rows and buttons where the pointer is coarse. */
+  @media (pointer: coarse) {
+    .row {
+      padding-block: var(--nc-space-2-5);
+    }
+
+    .pin {
+      --pm-pin: 1.875rem;
+    }
+  }
+
+  /* Reduced motion: no drops, no glide; the map is simply where it's asked to be. */
+  @media (prefers-reduced-motion: reduce) {
+    .pinDrop,
+    .callout,
+    .opened,
+    .spot::before {
+      animation: none;
+    }
+
+    .world,
+    .spot,
+    .home,
+    .pin,
+    .pinHead,
+    .row {
+      transition: none;
+    }
+  }
+
+  [data-nacre-motion='reduced'] :is(.pinDrop, .callout, .opened) {
+    animation: none;
+  }
+
+  [data-nacre-motion='reduced'] .spot::before {
+    animation: none;
+  }
+
+  [data-nacre-motion='reduced'] :is(.world, .spot, .home, .pin, .pinHead, .row) {
+    transition: none;
+  }
+}
