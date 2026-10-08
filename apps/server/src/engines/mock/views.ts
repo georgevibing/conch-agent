@@ -357,6 +357,55 @@ function products(thing: string): PretendFind {
   };
 }
 
+/** Pretend cafés near a pretend hotel, on a map whose tiles weren't fetched (a drawn plan). */
+function places(near: string): PretendFind {
+  const at = { lat: 51.50715, lon: -0.14168 };
+  const cafe = (name: string, lat: number, lon: number, distance: number, open: boolean) => ({
+    name,
+    category: 'cafe',
+    lat,
+    lon,
+    distance,
+    hours: 'Mo-Fr 08:00-18:00; Sa 09:00-14:00',
+    openNow: open ? { open: true, at: '18:00' } : { open: false, at: '09:00', day: 'Sat' },
+    url: 'https://www.openstreetmap.org/node/1',
+    directions: {
+      apple: `https://maps.apple.com/?daddr=${lat},${lon}`,
+      google: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`,
+      osm: `https://www.openstreetmap.org/directions?to=${lat},${lon}`,
+    },
+  });
+  const view: ToolView = {
+    kind: 'places',
+    mode: 'nearby',
+    query: 'coffee',
+    origin: { name: near, ...at },
+    center: at,
+    zoom: 16,
+    map: {
+      zoom: 16,
+      x: 32741,
+      y: 21791,
+      cols: 3,
+      rows: 2,
+      tiles: [null, null, null, null, null, null],
+    },
+    attribution: '© OpenStreetMap contributors',
+    items: [
+      cafe('Pretend Kiosk', 51.5066, -0.1427, 120, true),
+      cafe('Make-Believe Beans', 51.5081, -0.1405, 180, true),
+      cafe('Imaginary Espresso', 51.5089, -0.1385, 260, false),
+    ],
+  };
+  return {
+    tool: 'places',
+    input: { what: 'coffee', near },
+    text: JSON.stringify({ places: view.items.map((p) => ({ name: p.name })) }),
+    view,
+    reply: 'Pretend Kiosk is closest and open now; Make-Believe Beans is a short walk further.',
+  };
+}
+
 /** What a prompt asks the pretend apps for, if anything. */
 export function pretendFind(prompt: string, now = Date.now()): PretendFind | undefined {
   const text = prompt.trim();
@@ -373,5 +422,7 @@ export function pretendFind(prompt: string, now = Date.now()): PretendFind | und
   if (dish) return recipe(dish);
   const shopping = /\bshop for (?:an? |some )?([\w-]+?)s?[.?!]*$/i.exec(text)?.[1];
   if (shopping) return products(shopping.toLowerCase());
+  const near = /\bcoffee near (.+?)[?.!]*$/i.exec(text)?.[1];
+  if (near) return places(near);
   return undefined;
 }

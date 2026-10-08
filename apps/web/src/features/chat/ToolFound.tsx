@@ -4,6 +4,7 @@ import {
   ChatMessages,
   FileList,
   MailList,
+  Places,
   RecipeCards,
   Sources,
   WeatherCard,
@@ -14,6 +15,7 @@ import { useUi } from '../../app/ui';
 import { SentAttachments } from './AttachmentViewer';
 import { recipeCards, recipeTimerDone } from './recipes';
 import { ShopShelf } from './ShopShelf';
+import { attachmentUrl } from './uploads';
 
 /**
  * Words for the open chat's composer, from anywhere in it: the same way ⌘K's
@@ -51,5 +53,18 @@ export function ToolFound({ view }: { view: ToolView }) {
       return <RecipeCards recipes={recipeCards(view.items)} onTimerDone={recipeTimerDone} />;
     case 'products':
       return <ShopShelf view={view} onAsk={insert} />;
+    case 'places': {
+      // The map's tiles are the chat's own pictures, served by Conch: never a remote image.
+      const { items, map, ...rest } = view;
+      return (
+        <Places
+          {...rest}
+          places={items}
+          {...(map && {
+            map: { ...map, tiles: map.tiles.map((t) => (t ? attachmentUrl(t.id) : null)) },
+          })}
+        />
+      );
+    }
   }
 }

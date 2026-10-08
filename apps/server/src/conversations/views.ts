@@ -22,6 +22,7 @@ const CAPS: Record<ToolView['kind'], number> = {
   weather: 0,
   recipe: 3,
   products: 12,
+  places: 12,
 };
 
 /** A web link worth opening: `http(s)`, parseable, and with no sign-in tucked into it. */

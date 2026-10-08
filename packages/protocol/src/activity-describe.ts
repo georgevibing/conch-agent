@@ -640,6 +640,29 @@ function productsDraft(input: Input): Draft {
   };
 }
 
+/** `places`: what's near somewhere, where one place is, or how far it is from another. */
+function placesDraft(input: Input): Draft {
+  const what = str(input, 'what');
+  const near = str(input, 'near') ?? '';
+  const from = str(input, 'from');
+  const place = clip(oneLine(near), 80);
+  const said = what
+    ? say('find', `${clip(oneLine(what), 60)}${place ? ` near ${place}` : ''}`)
+    : from
+      ? say('measure', `how far ${place || 'it'} is from ${clip(oneLine(from), 60)}`)
+      : say('look', `up ${place || 'a place'}`);
+  return {
+    family: 'research',
+    words: said,
+    ...(near && { subject: clip(oneLine(near), 300), chips: [textChip(near)] }),
+    finish: (output) => {
+      const found = record(parseJson(output));
+      const places = Array.isArray(found.places) ? found.places.length : undefined;
+      return what && places !== undefined ? { outcome: plural(places, 'place') } : {};
+    },
+  };
+}
+
 // ---------------------------------------------------------------- plans and helpers
 
 function planOutcome(
@@ -947,6 +970,7 @@ const CONCH: Record<string, (input: Input) => Draft> = {
   web_fetch: fetchDraft,
   recipe: recipeDraft,
   product_details: productsDraft,
+  places: placesDraft,
   read_file: (input) => readDraft(input),
   read_document: (input) => readDraft(input, 'document'),
   search_files: (input) => {

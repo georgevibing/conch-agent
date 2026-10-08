@@ -172,7 +172,7 @@ export function needs(
   }
   if (
     /(?:WebFetch|WebSearch|web_fetch|web_search|product_details)$/.test(toolName) ||
-    /^(?:mcp__conch__)?recipe$/.test(toolName) ||
+    /^(?:mcp__conch__)?(?:recipe|places)$/.test(toolName) ||
     BROWSER_READS.test(toolName)
   )
     return { capability: 'web' };
