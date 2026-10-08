@@ -18,6 +18,8 @@ const CAPS: Record<ToolView['kind'], number> = {
   messages: 30,
   sources: 10,
   downloads: 10,
+  // No rows of its own: its hours and days are capped by the protocol.
+  weather: 0,
 };
 
 /** A web link worth opening: `http(s)`, parseable, and with no sign-in tucked into it. */
