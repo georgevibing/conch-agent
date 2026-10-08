@@ -85,6 +85,12 @@ export function taintFrom(toolName: string, input: unknown, app?: string): Taint
     };
   if (BROWSER.test(toolName))
     return { kind: 'web', label: hostOf(args.url) ?? 'pages in the browser' };
+  // Shop pages read for their products: someone else's words, like web_fetch.
+  if (/^(?:mcp__conch__)?product_details$/.test(toolName))
+    return {
+      kind: 'web',
+      label: (Array.isArray(args.urls) ? hostOf(args.urls[0]) : undefined) ?? 'shop pages',
+    };
   if (
     (toolName === 'Bash' || /^(?:mcp__conch__)?process_(?:start|read)$/.test(toolName)) &&
     typeof args.command === 'string' &&
@@ -185,6 +191,12 @@ export function sinkReason(
   }
   if (/(?:WebSearch|web_search)$/.test(toolName)) return 'send a search query to the web';
   if (/(?:WebFetch|web_fetch)$/.test(toolName) && typeof args.url === 'string' && carries(args.url))
+    return 'open a web address that could carry what it read';
+  if (
+    /^(?:mcp__conch__)?product_details$/.test(toolName) &&
+    Array.isArray(args.urls) &&
+    args.urls.some((url) => typeof url === 'string' && carries(url))
+  )
     return 'open a web address that could carry what it read';
   // An app's picture fetched from an address (ADR 0090): the same way out as web_fetch.
   if (
