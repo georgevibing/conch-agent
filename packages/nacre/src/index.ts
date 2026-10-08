@@ -82,3 +82,4 @@ export * from './components/StatTile';
 export * from './patterns';
 export * from './patterns/DraftReview';
 export * from './patterns/Integrations/GoogleSetupGuide';
+export * from './patterns/Video';
