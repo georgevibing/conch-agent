@@ -76,6 +76,12 @@ export function taintFrom(toolName: string, input: unknown, app?: string): Taint
     return { kind: 'app', label: 'task results' };
   if (/^(?:mcp__conch__)?read_document$/.test(toolName))
     return { kind: 'download', label: 'document content' };
+  // Recipe pages (the recipe card): someone else's page, as web_fetch's is.
+  if (/^(?:mcp__conch__)?recipe$/.test(toolName))
+    return {
+      kind: 'web',
+      label: hostOf(Array.isArray(args.urls) ? args.urls[0] : undefined) ?? 'a recipe page',
+    };
   if (WEB_READERS.has(toolName))
     return {
       kind: 'web',
@@ -185,6 +191,12 @@ export function sinkReason(
   }
   if (/(?:WebSearch|web_search)$/.test(toolName)) return 'send a search query to the web';
   if (/(?:WebFetch|web_fetch)$/.test(toolName) && typeof args.url === 'string' && carries(args.url))
+    return 'open a web address that could carry what it read';
+  if (
+    /^(?:mcp__conch__)?recipe$/.test(toolName) &&
+    Array.isArray(args.urls) &&
+    args.urls.some((u) => typeof u === 'string' && carries(u))
+  )
     return 'open a web address that could carry what it read';
   // An app's picture fetched from an address (ADR 0090): the same way out as web_fetch.
   if (

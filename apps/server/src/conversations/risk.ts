@@ -1087,9 +1087,12 @@ export function assessRisk(
       : undefined;
   }
   if (
-    /^(?:WebFetch|web_fetch)$/.test(bare) &&
-    typeof args.url === 'string' &&
-    DROP_BOXES.test(args.url)
+    (/^(?:WebFetch|web_fetch)$/.test(bare) &&
+      typeof args.url === 'string' &&
+      DROP_BOXES.test(args.url)) ||
+    (bare === 'recipe' &&
+      Array.isArray(args.urls) &&
+      args.urls.some((u) => typeof u === 'string' && DROP_BOXES.test(u)))
   )
     return severe('exfiltration', 'send something to an address made for catching data');
   // An app's step (your MCP apps, Conch's own Google, Slack and apps): what it deletes stays deleted.

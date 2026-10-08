@@ -46,6 +46,7 @@ import { AttachmentStore } from './attachments/store';
 import { fileTools } from './files/tools';
 import { researchTools, publicWebFetcher } from './research/tools';
 import { weatherTool } from './research/weather';
+import { recipeTools } from './research/recipe';
 import { faviconFetcher, Favicons } from './favicons/favicons';
 import { ProcessService } from './processes/service';
 import { GatewayRecovery } from './recovery/gateway';
@@ -979,6 +980,7 @@ export class Services {
               ...this.files.tools(ctx, () => this.#fileAccess(ctx)),
               ...researchTools(ctx, fetchPublicWeb),
               weatherTool(ctx, fetchPublicWeb),
+              ...recipeTools(ctx, { fetcher: fetchPublicWeb, store: this.attachments }),
               ...this.processes.tools(ctx),
               ...this.images.tools(ctx, () => this.#fileAccess(ctx)),
               ...this.routines.tools(ctx),

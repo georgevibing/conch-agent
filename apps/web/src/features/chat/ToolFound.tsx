@@ -4,6 +4,7 @@ import {
   ChatMessages,
   FileList,
   MailList,
+  RecipeCards,
   Sources,
   WeatherCard,
   replyRequest,
@@ -11,6 +12,7 @@ import {
 
 import { useUi } from '../../app/ui';
 import { SentAttachments } from './AttachmentViewer';
+import { recipeCards, recipeTimerDone } from './recipes';
 
 /**
  * Words for the open chat's composer, from anywhere in it: the same way ⌘K's
@@ -44,5 +46,7 @@ export function ToolFound({ view }: { view: ToolView }) {
       return <ChatMessages messages={view.items} place={view.place} />;
     case 'weather':
       return <WeatherCard weather={view} />;
+    case 'recipe':
+      return <RecipeCards recipes={recipeCards(view.items)} onTimerDone={recipeTimerDone} />;
   }
 }
