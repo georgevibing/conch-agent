@@ -7,7 +7,7 @@ import {
   Text,
   useMediaQuery,
 } from '@conch/nacre';
-import { Menu, PanelLeftOpen, TextSearch } from 'lucide-react';
+import { Menu, PanelLeftOpen, Route, TextSearch } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 
@@ -25,6 +25,8 @@ import { RestartWatch } from '../features/health/RestartWatch';
 import { NeedWatcher } from '../features/setup/NeedWatcher';
 import { PushKeeper } from '../features/notifications/PushKeeper';
 import { UndoHost } from '../features/undo/UndoHost';
+import { useHowItDidIt } from '../features/trajectory/api';
+import { TrajectoryHost } from '../features/trajectory/TrajectoryHost';
 import { UpdateNotice } from '../features/updates/UpdateNotice';
 import { OpenFromLink } from '../features/pwa/OpenFromLink';
 import { RestoredNotice } from '../features/health/RestoredNotice';
@@ -315,6 +317,14 @@ export function Shell() {
               <TerminalToggle />
               {conversationId && (
                 <IconButton
+                  label="How it did it"
+                  onClick={() => useHowItDidIt.getState().openRun(conversationId)}
+                >
+                  <Route />
+                </IconButton>
+              )}
+              {conversationId && (
+                <IconButton
                   label="Find in chat"
                   shortcut="mod+f"
                   onClick={() => openFind(conversationId)}
@@ -389,6 +399,7 @@ export function Shell() {
       <RestoredNotice />
       <PushKeeper />
       <UndoHost />
+      <TrajectoryHost />
       <OpenFromLink />
     </div>
   );

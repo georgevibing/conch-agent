@@ -32,6 +32,7 @@ export * from './ScheduleEditor';
 export * from './TriggerEditor';
 export * from './RoutineCard';
 export * from './RunTimeline';
+export * from './RunReplay';
 export * from './RoutineSpending';
 export * from './Spend';
 export * from './ContextMeter';

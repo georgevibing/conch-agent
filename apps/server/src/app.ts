@@ -70,6 +70,8 @@ import { carriedIn, registerListenRoutes } from './research/listen';
 import { secretPlaces } from './conversations/sandbox';
 import { protectedPaths } from './lib/protect';
 import { folderRules } from './pick/folders';
+import { registerTrajectoryRoutes } from './trajectory/routes';
+import { TrajectoryService } from './trajectory/service';
 import { registerFolderRoutes, registerPickRoutes } from './pick/routes';
 import { registerVaultRoutes } from './vault/routes';
 import { AttachmentError } from './attachments/store';
@@ -241,7 +243,7 @@ export async function buildApp(services: Services) {
   registerVaultRoutes(app, services.vault, gate);
   registerPickRoutes(app);
   // Choosing a folder from any device: names only, never Conch's own or where keys are kept.
-  registerFolderRoutes(app, () =>
+  const folders = () =>
     folderRules({
       conchHome: services.config.CONCH_HOME,
       workspace: services.settings.workspaceDefault,
@@ -249,6 +251,19 @@ export async function buildApp(services: Services) {
         ...protectedPaths(services.config.CONCH_HOME),
         ...secretPlaces().map((place) => place.path),
       ],
+    });
+  registerFolderRoutes(app, folders);
+  // How I did it (ADR 0113): a chat's timeline, and saving chats as a trajectory on this computer.
+  registerTrajectoryRoutes(
+    app,
+    new TrajectoryService({
+      list: () => services.conversations.list(),
+      detail: (id) => services.conversations.detail(id),
+      agents: () => services.agents.list(),
+      profile: async () => (await services.settings.get()).profile,
+      known: () => services.vault.redactor(),
+      rules: folders,
+      version: SERVER_VERSION,
     }),
   );
   registerBackupRoutes(app, services.backups, gate);

@@ -67,6 +67,11 @@ your desktop and the chat apps you already use.
   of work is one line, like "Ran the tests · 241 passed", that opens into its steps
   and then the exact calls. Ask **Why?** about any step, and see what each reply
   changed, with Undo. [Your chats](./apps/docs/content/features/chats.md)
+- **See how it did it, and keep it.** Scrub or replay any chat, routine run or task step
+  by step: what it read, changed and cost, and where it waited for you. Save one chat
+  or many as a page to read, or as OpenAI, ShareGPT (Hermes) or ATIF files for
+  training, with keys and personal details taken out first. Nothing leaves your
+  computer. [How it did it](./apps/docs/content/features/how-it-did-it.md)
 - **It doesn't give up at the first error.** Every model reads what went wrong, tries
   another way and checks its work before it says done. [How Conch works on a problem](./apps/docs/content/features/working-on-a-problem.md)
 - **Long jobs that finish.** Long chats summarise their start, caching keeps costs

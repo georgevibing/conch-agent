@@ -97,7 +97,7 @@ export function offersPastChats(ctx: ToolContext): boolean {
  * pairs. Passwords' own values are caught by its redactor; these catch what a
  * person pasted or a command carried that Passwords never saw.
  */
-const SECRET_SHAPES: [RegExp, string][] = [
+export const SECRET_SHAPES: [RegExp, string][] = [
   [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g, '•••'],
   [/\b(?:sk|rk)-[A-Za-z0-9_-]{20,}/g, '•••'],
   [/\bgh[pousr]_[A-Za-z0-9]{20,}/g, '•••'],

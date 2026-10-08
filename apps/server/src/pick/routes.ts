@@ -35,6 +35,7 @@ export const PICK_PURPOSES: Record<PickPurpose, PickOptions> = {
   workspace: { prompt: 'Choose the folder your assistant works in', kind: 'folder' },
   'watch-folder': { prompt: 'Choose the folder to watch for changes', kind: 'folder' },
   'conch-app': { prompt: 'Choose the app to add', kind: 'file', extensions: ['conchapp'] },
+  'export-folder': { prompt: 'Choose where to save it', kind: 'folder' },
 };
 
 /** The desktop app's side of the Open dialog (ADR 0054): shown over its own window. */

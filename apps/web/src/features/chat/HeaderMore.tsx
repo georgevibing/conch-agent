@@ -1,10 +1,11 @@
 import { DropdownMenu, IconButton, Pearl } from '@conch/nacre';
-import { Globe, MoreHorizontal, SquareTerminal, TextSearch } from 'lucide-react';
+import { Globe, MoreHorizontal, Route, SquareTerminal, TextSearch } from 'lucide-react';
 
 import { useUi } from '../../app/ui';
 import { ChatAgentMenu } from '../agents/ChatAgent';
 import { useLiveStore } from '../../live/store';
 import { useTerminalStatus } from '../terminal/queries';
+import { useHowItDidIt } from '../trajectory/api';
 
 /**
  * A phone's header keeps the chat's name in view: the browser, the terminal
@@ -38,6 +39,12 @@ export function HeaderMore({ conversationId }: { conversationId: string }) {
         <ChatAgentMenu conversationId={conversationId} />
         <DropdownMenu.Item icon={<TextSearch />} onSelect={() => ui().openFind(conversationId)}>
           Find in chat
+        </DropdownMenu.Item>
+        <DropdownMenu.Item
+          icon={<Route />}
+          onSelect={() => useHowItDidIt.getState().openRun(conversationId)}
+        >
+          How it did it
         </DropdownMenu.Item>
         <DropdownMenu.Item
           icon={<Globe />}

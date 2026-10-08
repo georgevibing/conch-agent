@@ -27,6 +27,11 @@ const WORDS: Record<PickPurpose, { title: string; description?: string; kind: 'f
       kind: 'file',
     },
     'conch-app': { title: 'Choose the app to add', kind: 'file' },
+    'export-folder': {
+      title: 'Choose where to save it',
+      description: 'The file stays on this computer.',
+      kind: 'folder',
+    },
   };
 
 export interface ChooseOptions {

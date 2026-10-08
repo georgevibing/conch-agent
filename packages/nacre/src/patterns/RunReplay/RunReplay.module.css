@@ -1,0 +1,505 @@
+@layer nacre.components {
+  /*
+   * How it did it: a tally, the scrubber over its time axis, the step at hand,
+   * and every step below, lit up to where you are.
+   */
+  .replay {
+    --rr-thumb: 1.25rem;
+    --rr-mark: 0.375rem;
+    --rr-ink: var(--nc-text-muted);
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-4);
+    min-inline-size: 0;
+  }
+
+  .empty,
+  .more {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+  }
+
+  .tally {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tallyLabel {
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .deck {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+  }
+
+  /* The scrubber: Radix's slider, its value a point in time at work. */
+  .scrub {
+    position: relative;
+    display: flex;
+    flex: 1;
+    align-items: center;
+    block-size: calc(var(--rr-thumb) + var(--nc-space-4));
+    touch-action: none;
+    user-select: none;
+    cursor: pointer;
+  }
+
+  .track {
+    position: relative;
+    flex-grow: 1;
+    block-size: 0.25rem;
+    overflow: hidden;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-gray-4);
+  }
+
+  .range {
+    position: absolute;
+    block-size: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--nc-accent-6), var(--nc-accent-9));
+    transition: inline-size var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  /* The steps along it, lined up with the thumb's travel (Radix keeps it inside the track). */
+  .marks {
+    position: absolute;
+    inset-block: 0;
+    inset-inline: calc(var(--rr-thumb) / 2);
+    pointer-events: none;
+  }
+
+  .mark {
+    position: absolute;
+    inset-block-start: 50%;
+    inline-size: var(--rr-mark);
+    block-size: calc(var(--rr-mark) * 2.4);
+    margin-inline-start: calc(var(--rr-mark) / -2);
+    border-radius: var(--nc-radius-full);
+    background: var(--mark, var(--nc-gray-8));
+    translate: 0 -50%;
+    transition:
+      opacity var(--nc-duration-base) var(--nc-ease-out),
+      scale var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .mark[data-kind='asked'] {
+    --mark: var(--nc-text);
+
+    block-size: calc(var(--rr-mark) * 3.2);
+  }
+
+  .mark[data-kind='said'],
+  .mark[data-kind='thought'] {
+    --mark: var(--nc-gray-7);
+
+    block-size: var(--rr-mark);
+  }
+
+  .mark[data-kind='approval'] {
+    --mark: oklch(0.72 0.14 var(--nc-warning-h));
+
+    border-radius: 2px;
+    rotate: 45deg;
+    block-size: var(--rr-mark);
+  }
+
+  .mark[data-family='explore'],
+  .glyph[data-family='explore'] {
+    --mark: var(--nc-chart-1);
+  }
+
+  .mark[data-family='edit'],
+  .glyph[data-family='edit'] {
+    --mark: var(--nc-chart-2);
+  }
+
+  .mark[data-family='run'],
+  .mark[data-family='verify'],
+  .glyph[data-family='run'],
+  .glyph[data-family='verify'] {
+    --mark: var(--nc-chart-3);
+  }
+
+  .mark[data-family='ship'],
+  .glyph[data-family='ship'] {
+    --mark: var(--nc-chart-4);
+  }
+
+  .mark[data-family='research'],
+  .mark[data-family='browse'],
+  .glyph[data-family='research'],
+  .glyph[data-family='browse'] {
+    --mark: var(--nc-chart-5);
+  }
+
+  .mark[data-family='connect'],
+  .glyph[data-family='connect'] {
+    --mark: var(--nc-chart-6);
+  }
+
+  .mark[data-family='make'],
+  .mark[data-family='plan'],
+  .mark[data-family='delegate'],
+  .mark[data-family='remember'],
+  .glyph[data-family='make'],
+  .glyph[data-family='plan'],
+  .glyph[data-family='delegate'],
+  .glyph[data-family='remember'] {
+    --mark: var(--nc-chart-7);
+  }
+
+  .mark[data-status='failed'],
+  .mark[data-kind='problem'] {
+    --mark: light-dark(oklch(0.58 0.16 var(--nc-danger-h)), oklch(0.72 0.14 var(--nc-danger-h)));
+  }
+
+  /* Ahead of the scrubber: not happened yet. */
+  .mark[data-ahead] {
+    opacity: 0.35;
+    scale: 0.8;
+  }
+
+  /* A long wait folded to a short one: two quiet strokes. */
+  .break {
+    position: absolute;
+    inset-block-start: 50%;
+    inline-size: 0.5rem;
+    block-size: 0.875rem;
+    margin-inline-start: calc(-0.25rem - var(--rr-mark));
+    border-inline: 1.5px solid var(--nc-border-strong);
+    translate: 0 -50%;
+    skew: -18deg 0deg;
+  }
+
+  .thumb {
+    display: grid;
+    place-items: center;
+    inline-size: var(--rr-thumb);
+    block-size: var(--rr-thumb);
+    border-radius: 50%;
+    background: var(--nc-surface-hi);
+    box-shadow:
+      0 0 0 2px var(--nc-accent-9),
+      0 2px 8px -1px color-mix(in oklch, var(--nc-accent-9) 45%, transparent);
+    transition: box-shadow var(--nc-duration-base) var(--nc-ease-out);
+    cursor: grab;
+  }
+
+  .thumb:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 3px;
+  }
+
+  .thumb:active {
+    cursor: grabbing;
+  }
+
+  .bead {
+    inline-size: 0.375rem;
+    block-size: 0.375rem;
+    border-radius: 50%;
+    background: var(--nc-accent-9);
+  }
+
+  /* While it plays the thumb glides between steps; the pearl rides it. */
+  .replay[data-playing] :global(span[style*='--radix-slider-thumb-transform']) {
+    transition: inset-inline-start var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  /* The step at hand. */
+  .now {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-chat-card-radius);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-chat-card-surface);
+    box-shadow: var(--nc-chat-card-shadow);
+  }
+
+  .nowHead {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-3);
+  }
+
+  .glyph {
+    --mark: var(--nc-text-muted);
+
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    border-radius: var(--nc-radius-md);
+    background: color-mix(in oklch, var(--mark) 14%, transparent);
+    color: var(--mark);
+  }
+
+  .glyph svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .glyph[data-kind='asked'] {
+    --mark: var(--nc-text);
+  }
+
+  .glyph[data-kind='approval'] {
+    --mark: light-dark(oklch(0.55 0.13 var(--nc-warning-h)), oklch(0.8 0.12 var(--nc-warning-h)));
+  }
+
+  .glyph[data-kind='problem'] {
+    --mark: light-dark(oklch(0.52 0.15 var(--nc-danger-h)), oklch(0.8 0.12 var(--nc-danger-h)));
+  }
+
+  .nowText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    min-inline-size: 0;
+  }
+
+  .nowTitle {
+    margin: 0;
+    color: var(--nc-text);
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-medium);
+    line-height: var(--nc-leading-snug);
+    overflow-wrap: anywhere;
+  }
+
+  .nowMeta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-2);
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .status[data-status='failed'] {
+    color: light-dark(oklch(0.52 0.15 var(--nc-danger-h)), oklch(0.8 0.12 var(--nc-danger-h)));
+  }
+
+  .status[data-status='declined'],
+  .status[data-status='waiting'] {
+    color: light-dark(oklch(0.5 0.12 var(--nc-warning-h)), oklch(0.82 0.1 var(--nc-warning-h)));
+  }
+
+  .status[data-status='done'] {
+    color: light-dark(oklch(0.5 0.11 var(--nc-success-h)), oklch(0.8 0.1 var(--nc-success-h)));
+  }
+
+  .detail,
+  .words {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    overflow-wrap: anywhere;
+  }
+
+  .words {
+    color: var(--nc-text);
+    white-space: pre-wrap;
+  }
+
+  .shot {
+    display: block;
+    inline-size: 100%;
+    max-block-size: 16rem;
+    object-fit: cover;
+    object-position: top;
+    border-radius: var(--nc-radius-lg);
+    box-shadow: 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .diff {
+    max-block-size: 18rem;
+    overflow: auto;
+  }
+
+  .files {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--nc-text-sm);
+  }
+
+  .files li {
+    display: flex;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .fileKind {
+    flex-shrink: 0;
+    color: var(--nc-text-muted);
+  }
+
+  .filePath {
+    overflow: hidden;
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-relaxed);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .peek {
+    max-block-size: 14rem;
+    margin: 0;
+    padding: var(--nc-space-2-5) var(--nc-space-3);
+    overflow: auto;
+    border-radius: var(--nc-radius-lg);
+    background: var(--nc-surface-sunken);
+    color: var(--nc-text);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-relaxed);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  /* Thoughts and words read as words, not as a program's output. */
+  .peek[data-kind='thought'],
+  .peek[data-kind='said'] {
+    background: transparent;
+    padding: 0;
+    color: var(--nc-text-muted);
+    font-family: var(--nc-font-display);
+    font-size: var(--nc-text-sm);
+    font-style: italic;
+  }
+
+  .peek[data-kind='said'] {
+    color: var(--nc-text);
+    font-family: var(--nc-font-sans);
+    font-style: normal;
+  }
+
+  /* Every step: lit up to the scrubber, quiet after it. */
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    max-block-size: 22rem;
+    margin: 0;
+    padding: 0;
+    overflow: auto;
+    list-style: none;
+    scroll-padding-block: var(--nc-space-6);
+  }
+
+  .steps li[data-turn-start]:not(:first-child) {
+    margin-block-start: var(--nc-space-2);
+    padding-block-start: var(--nc-space-2);
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .row {
+    appearance: none;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+    inline-size: 100%;
+    min-block-size: 2.25rem;
+    margin: 0;
+    padding: var(--nc-space-1) var(--nc-space-2);
+    border: 0;
+    border-radius: var(--nc-radius-md);
+    background: transparent;
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    text-align: start;
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      opacity var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .row .glyph {
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+  }
+
+  .row .glyph svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  @media (hover: hover) {
+    .row:hover {
+      background-color: var(--nc-wash-1);
+    }
+  }
+
+  .row:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+
+  .row[aria-current='step'] {
+    background-color: var(--nc-wash-2);
+  }
+
+  .row[data-ahead] {
+    opacity: 0.5;
+  }
+
+  .rowTitle {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .row[data-status='failed'] .rowTitle {
+    color: light-dark(oklch(0.52 0.15 var(--nc-danger-h)), oklch(0.8 0.12 var(--nc-danger-h)));
+  }
+
+  .rowTime {
+    flex-shrink: 0;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mark,
+    .range,
+    .row,
+    .replay[data-playing] :global(span[style*='--radix-slider-thumb-transform']) {
+      transition: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .mark,
+  :global([data-nacre-motion='reduced']) .range,
+  :global([data-nacre-motion='reduced']) .row,
+  :global([data-nacre-motion='reduced'])
+    .replay[data-playing]
+    :global(span[style*='--radix-slider-thumb-transform']) {
+    transition: none;
+  }
+}

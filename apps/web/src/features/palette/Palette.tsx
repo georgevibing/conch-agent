@@ -22,6 +22,7 @@ import {
   Archive,
   Brain,
   CornerDownRight,
+  Download,
   Eraser,
   FoldVertical,
   Gauge,
@@ -29,6 +30,7 @@ import {
   MessageSquare,
   Moon,
   PanelLeft,
+  Route,
   Search,
   Settings,
   SquarePen,
@@ -49,6 +51,7 @@ import { isChat } from '../archive/useArchive';
 import { compactChat } from '../chat/compact';
 import { clearChat } from '../commands/context';
 import { useSearchPreview, useSearchResults } from '../search/useSearch';
+import { useHowItDidIt } from '../trajectory/api';
 import { useFindables } from './findables';
 import styles from './Palette.module.css';
 
@@ -291,8 +294,33 @@ export function Palette() {
             keywords: 'clear reset context forget conversation fresh start new memory wipe',
             run: () => void clearChat(currentId, assistant),
           },
+          // Its steps on a timeline to scrub and replay, and saved as a file (ADR 0113).
+          {
+            id: 'how-it-did-it',
+            label: 'How it did it',
+            icon: <Route />,
+            keywords:
+              'timeline replay steps trace trajectory what it did history tools run log scrub how',
+            run: () => useHowItDidIt.getState().openRun(currentId),
+          },
+          {
+            id: 'save-chat',
+            label: 'Save this chat as a file',
+            icon: <Download />,
+            keywords:
+              'export trajectory download jsonl sharegpt openai atif hermes training report html markdown',
+            run: () => useHowItDidIt.getState().openSave({ conversationId: currentId }),
+          },
         ]
       : []),
+    {
+      id: 'save-chats',
+      label: 'Save chats as a file',
+      icon: <Download />,
+      keywords:
+        'export all chats trajectories batch dataset download jsonl sharegpt openai atif hermes training',
+      run: () => useHowItDidIt.getState().openSave({}),
+    },
     // Into the message box, where the menu offers what comes next.
     {
       id: 'plan-mode',

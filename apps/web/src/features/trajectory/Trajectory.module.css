@@ -1,0 +1,38 @@
+/* Layout only: everything you see is Nacre's. */
+.sheet {
+  display: flex;
+  flex-direction: column;
+}
+
+.body {
+  flex: 1;
+  min-block-size: 0;
+  overflow: auto;
+}
+
+.waiting {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-4);
+}
+
+.waitTrack {
+  block-size: 2.5rem;
+}
+
+.waitCard {
+  block-size: 9rem;
+}
+
+.save {
+  min-inline-size: 0;
+}
+
+.filter {
+  flex: 1 1 10rem;
+  min-inline-size: 0;
+}
+
+.filterSwitch {
+  flex-basis: 100%;
+}
