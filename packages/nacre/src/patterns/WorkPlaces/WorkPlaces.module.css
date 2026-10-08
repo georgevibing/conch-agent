@@ -183,9 +183,38 @@
     color: light-dark(oklch(0.5 0.12 var(--nc-warning-h)), oklch(0.82 0.12 var(--nc-warning-h)));
   }
 
-  .action {
-    padding: 0 var(--nc-space-3) var(--nc-space-2)
-      calc(var(--nc-space-3) + 1.75rem + var(--nc-space-2-5));
+  /* Needs setting up: the row goes there. Its next step is a few words in the
+     accent's text colour, never a button; the arrow leans in on hover. */
+  .setup {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    color: var(--nc-accent-11);
+    font-weight: var(--nc-weight-medium);
+    white-space: nowrap;
+  }
+
+  .setupIcon {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    stroke-width: 2.25;
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  @media (hover: hover) {
+    .row[data-setup]:hover .setup {
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      text-decoration-thickness: 1px;
+    }
+
+    .row[data-setup]:hover .setupIcon {
+      transform: translateX(2px);
+    }
+  }
+
+  .row[data-setup]:focus-visible .setupIcon {
+    transform: translateX(2px);
   }
 
   /* ── On a command's row: where it ran ─────────────────────────────── */

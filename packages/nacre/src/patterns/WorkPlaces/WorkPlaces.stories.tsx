@@ -2,10 +2,9 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, userEvent, within } from 'storybook/test';
 
-import { Button } from '../../components/Button';
 import { Stack } from '../../components/Stack';
 import { Story as StoryRow } from '../Story/Story';
-import { notReady, places } from './fixtures';
+import { notReady, places, withSetup } from './fixtures';
 import { WorkedAt } from './WorkedAt';
 import { WorkPlacePicker, type WorkPlaceOption } from './WorkPlacePicker';
 
@@ -43,7 +42,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Where the chat’s work runs (ADR 0106): this computer’s sealed box, a container, a machine of yours over SSH, or a sandbox in the cloud. A calm chip beside the mode whose mark is the place. When the place changes the new mark glides up into the chip on a spring, with one glint, as if the work had just moved there (reduced motion: it simply changes). A place that isn’t ready wears a small dot — breathing while it gets ready — and its row offers the one next step. When the chat’s provider runs its own commands here whatever is chosen, the list says so first, plainly.',
+          'Where the chat’s work runs (ADR 0106): this computer’s sealed box, a container, a machine of yours over SSH, or a sandbox in the cloud. A calm chip beside the mode whose mark is the place. When the place changes the new mark glides up into the chip on a spring, with one glint, as if the work had just moved there (reduced motion: it simply changes). A place that isn’t ready wears a small dot — breathing while it gets ready. A place that needs setting up (a key, Docker or Podman) isn’t chosen: its row says what it needs and, in a few quiet words, the next step (“Add a key →”), and pressing the row takes the person to Settings with the box to type in ready. No button, nothing filled. When the chat’s provider runs its own commands here whatever is chosen, the list says so first, plainly.',
       },
     },
   },
@@ -77,25 +76,39 @@ export const Moving: Story = {
   },
 };
 
+/** Needs setting up: the row itself goes to Settings; the next step is a few quiet words. */
 export const NotReady: Story = {
-  render: () => (
-    <Stateful
-      open
-      initial="container"
-      options={notReady.map((o) =>
-        o.state === 'needs-setup'
-          ? {
-              ...o,
-              action: (
-                <Button size="sm" variant="soft">
-                  {o.kind === 'cloud' ? 'Add a key' : 'Install Podman'}
-                </Button>
-              ),
-            }
-          : o,
-      )}
-    />
-  ),
+  render: () => <Stateful open initial="computer" options={withSetup(notReady, () => {})} />,
+};
+
+function SettingUpDemo() {
+  const [went, setWent] = useState<string>();
+  return (
+    <Stack gap={3} align="start">
+      <Stateful options={withSetup(notReady, setWent)} />
+      <output>{went ? `Opened Settings for ${went}` : ''}</output>
+    </Stack>
+  );
+}
+
+/** Pressing a row that needs a key opens where it's added, and the list closes. */
+export const SettingUp: Story = {
+  render: () => <SettingUpDemo />,
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(page.getByRole('button', { name: /Where work runs: This computer/ }));
+    await userEvent.click(await page.findByRole('radio', { name: /Daytona/ }));
+    await expect(await page.findByText('Opened Settings for cloud')).toBeInTheDocument();
+    await expect(
+      page.getByRole('button', { name: /Where work runs: This computer/ }),
+    ).toBeInTheDocument();
+  },
+};
+
+/** On a phone the list is nearly the screen's width; the next step wraps under the message. */
+export const NotReadyOnAPhone: Story = {
+  globals: { viewport: { value: 'mobile1' } },
+  render: () => <Stateful open initial="computer" options={withSetup(notReady, () => {})} />,
 };
 
 export const Preparing: Story = {

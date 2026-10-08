@@ -28,18 +28,20 @@ or **cloud**. Commands that ran on this computer have no tag.
 
 ## Getting a place ready
 
-You don't set anything up by hand:
+You don't set anything up by hand. A place that needs something first says so in
+the list, with **Add a key** or **Set it up** after it. Press it and Settings opens
+at the right place, ready to use.
 
-- **A container** needs Docker or Podman. If neither is here, the list offers
+- **A container** needs Docker or Podman. If neither is here, Settings offers
   **Install Podman**, which needs no administrator. Docker Desktop, OrbStack and
   Podman are started for you when a command needs them. The first command fetches the
   container's system once, which takes a minute or two.
 - **Your machine** is any machine named in your SSH settings. Conch connects the way
   you do, with your own keys, and never asks for a password. If the machine is new
   to this computer, connect to it once from a terminal first.
-- **The cloud** needs a Daytona key. Open **Settings → Security → Advanced → Where
-  work runs**, paste the key and press **Use Daytona**. It's kept sealed on this
-  computer and never shown again.
+- **The cloud** needs a Daytona key. Press **Daytona** in the list, or open
+  **Settings → Security → Advanced → Where work runs**. Paste the key and press
+  **Use Daytona**. It's kept sealed on this computer and never shown again.
 
 If a place stops answering, the command doesn't run anywhere else. The chip shows
 a dot, the assistant tells you, and **Repair everything** in **Settings → Health**

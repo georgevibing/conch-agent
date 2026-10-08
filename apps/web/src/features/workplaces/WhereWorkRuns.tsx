@@ -22,7 +22,7 @@ import { useVerify } from '../auth/useVerify';
 import { Section } from '../settings/Section';
 import { GetIt } from '../setup/GetIt';
 import { useWorkPlaces, workPlacesApi, workPlacesKeys } from './api';
-import { WORKPLACES_FOCUS } from './words';
+import { CLOUD_KEY_FOCUS, CONTAINER_FOCUS, WORKPLACES_FOCUSES } from './words';
 
 const STATE: Record<
   Exclude<WorkPlaceState, 'ready'>,
@@ -46,14 +46,35 @@ export function WhereWorkRuns() {
   const ref = useRef<HTMLElement>(null);
   const focus = useUi((s) => s.settingsFocus);
 
+  // Brought here by ⌘K, or by a row in the chat's list that needs setting up:
+  // that place's box (the key, the install) comes into view ready to use, with
+  // a gentle glow so the eye finds it. Otherwise, the place that's chosen.
   useEffect(() => {
-    if (focus !== WORKPLACES_FOCUS || !status) return;
+    if (!focus || !WORKPLACES_FOCUSES.includes(focus) || !status) return;
     useUi.setState({ settingsFocus: undefined });
+    const section = ref.current;
+    if (!section) return;
     const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    ref.current?.scrollIntoView({ block: 'start', behavior: calm ? 'auto' : 'smooth' });
-    ref.current?.querySelector<HTMLElement>('[role="radio"][data-state="checked"]')?.focus({
-      preventScroll: true,
-    });
+    const setup =
+      focus === CLOUD_KEY_FOCUS
+        ? section.querySelector<HTMLElement>('[data-setup="cloud"]')
+        : focus === CONTAINER_FOCUS
+          ? section.querySelector<HTMLElement>('[data-setup="container"]')
+          : null;
+    if (!setup) {
+      section.scrollIntoView({ block: 'start', behavior: calm ? 'auto' : 'smooth' });
+      section
+        .querySelector<HTMLElement>('[role="radio"][data-state="checked"]')
+        ?.focus({ preventScroll: true });
+      return;
+    }
+    setup.scrollIntoView({ block: 'center', behavior: calm ? 'auto' : 'smooth' });
+    setup
+      .querySelector<HTMLElement>('input:not([type="hidden"]), button:not([disabled])')
+      ?.focus({ preventScroll: true });
+    // Outlives this effect (clearing the focus runs it again): the glow fades on its own.
+    setup.setAttribute('data-nc-flash', '');
+    setTimeout(() => setup.removeAttribute('data-nc-flash'), 2000);
   }, [focus, status]);
 
   const chosen = app?.preferences.place ?? 'computer';
@@ -103,10 +124,12 @@ export function WhereWorkRuns() {
             ))}
           </RadioGroup>
           {status.places.find((p) => p.id === 'container' && p.need) && (
-            <GetIt
-              needId="container"
-              lead="A container keeps the assistant’s commands in a fresh box that sees only the work folder. Podman installs without an administrator; Docker works too."
-            />
+            <div data-setup="container">
+              <GetIt
+                needId="container"
+                lead="A container keeps the assistant’s commands in a fresh box that sees only the work folder. Podman installs without an administrator; Docker works too."
+              />
+            </div>
           )}
           <CloudKey status={status} />
           {own.length > 0 && (
@@ -180,7 +203,7 @@ function CloudKey({ status }: { status: WorkPlacesStatus }) {
     </Stack>
   ) : (
     <Stack gap={2}>
-      <Field>
+      <Field data-setup="cloud">
         <Field.Label>Daytona key, for the cloud</Field.Label>
         <PasswordInput
           value={key}

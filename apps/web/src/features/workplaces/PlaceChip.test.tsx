@@ -5,7 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { appState, mockFetch, renderApp } from '../../test/harness';
 import { useTurnOptions } from '../models/useTurnOptions';
+import { useUi } from '../../app/ui';
 import { PlaceChip } from './PlaceChip';
+import { CLOUD_KEY_FOCUS } from './words';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -92,6 +94,25 @@ describe('the place chip', () => {
     expect(
       await screen.findByRole('button', { name: 'Where work runs: Docker' }),
     ).toBeInTheDocument();
+  });
+
+  it('takes a place that needs a key to Settings, with its box ready, instead of choosing it', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/models': () => catalog(true),
+      'GET /api/conversations': () => [],
+      'GET /api/workplaces': () => status(),
+    });
+    renderApp(<Chip />);
+    await user.click(await screen.findByRole('button', { name: /^Where work runs: / }));
+    const daytona = await screen.findByRole('radio', { name: /Daytona/ });
+    expect(daytona).toHaveAccessibleDescription('Needs a Daytona key. Add a key, opens Settings');
+    expect(screen.queryByRole('button', { name: 'Add a key' })).toBeNull();
+    await user.click(daytona);
+    expect(useUi.getState().settingsFocus).toBe(CLOUD_KEY_FOCUS);
+    expect(screen.queryByRole('radio', { name: /Daytona/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Where work runs: Daytona/ })).toBeNull();
   });
 
   it('says plainly when the chat’s provider runs its own commands here', async () => {

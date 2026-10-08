@@ -153,8 +153,13 @@ and the next step, and the model is told not to run it another way.
 
 A chip beside the mode (Nacre `WorkPlacePicker`), there once somewhere other than this
 computer is ready, or the chat already runs elsewhere: the place's mark, its name,
-**Make this my default**, a dot on a place that isn't ready and its one next step
-(**Install Podman**, **Add a key**). When the place changes, the new mark glides up
+**Make this my default**, and a dot on a place that isn't ready. A place that needs
+setting up isn't chosen: its row says what it needs and, in a few quiet words, the next
+step ("Add a key →", "Set it up →"; read out as "…, opens Settings"), never a button.
+Pressing the row (click, Space or Enter; arrow keys pass over it) opens Settings →
+Where work runs with that place's box focused (the key, or what installs Docker or
+Podman), scrolled into view under a brief `data-nc-flash` glow (a still ring with
+reduced motion). When the place changes, the new mark glides up
 into the chip on a spring with one glint (still, with reduced motion). Each
 `tool.finished` for a command run elsewhere carries `where`, and the row says it
 (Nacre `WorkedAt`): once on a story's row when every command ran there, per step when

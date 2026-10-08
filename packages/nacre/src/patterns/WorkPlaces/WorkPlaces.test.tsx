@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { expectAccessible, renderNacre } from '../../test/render';
 import { Story } from '../Story/Story';
-import { notReady, places } from './fixtures';
+import { notReady, places, withSetup } from './fixtures';
 import { WorkedAt } from './WorkedAt';
 import { WorkPlacePicker } from './WorkPlacePicker';
 
@@ -34,14 +34,10 @@ describe('WorkPlacePicker', () => {
     expect(onValueChange).toHaveBeenCalledWith('container');
   });
 
-  it('says when a place isn’t ready, and offers its next step', async () => {
+  it('says when a place isn’t ready, and its next step in words, not a button', async () => {
     renderNacre(
       <WorkPlacePicker
-        options={notReady.map((o) =>
-          o.value === 'container'
-            ? { ...o, action: <button type="button">Install Podman</button> }
-            : o,
-        )}
+        options={withSetup(notReady, () => {})}
         value="container"
         onValueChange={() => {}}
         isDefault={false}
@@ -53,8 +49,63 @@ describe('WorkPlacePicker', () => {
       screen.getByRole('button', { name: /Where work runs: A container, needs setting up/ }),
     ).toBeInTheDocument();
     expect(await screen.findByText('Needs Docker or Podman on this computer.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Install Podman' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Daytona/ })).toHaveAccessibleDescription(
+      'Needs a Daytona key. It’s free to start. Add a key, opens Settings',
+    );
+    expect(screen.queryByRole('button', { name: /Add a key/ })).toBeNull();
     expect(screen.getByRole('button', { name: 'Make this my default' })).toBeInTheDocument();
+  });
+
+  it('goes to set up a place when its row is pressed, instead of choosing it', async () => {
+    const onValueChange = vi.fn();
+    const onSetup = vi.fn();
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    renderNacre(
+      <WorkPlacePicker
+        options={withSetup(notReady, onSetup)}
+        value="computer"
+        onValueChange={onValueChange}
+        onOpenChange={onOpenChange}
+        isDefault
+        open
+      />,
+    );
+    await user.click(await screen.findByRole('radio', { name: /Daytona/ }));
+    expect(onSetup).toHaveBeenCalledWith('cloud');
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('passes over a row that needs setting up with the arrows, and opens it with Enter', async () => {
+    const onValueChange = vi.fn();
+    const onSetup = vi.fn();
+    const user = userEvent.setup();
+    renderNacre(
+      <WorkPlacePicker
+        options={withSetup(notReady, onSetup)}
+        value="computer"
+        onValueChange={onValueChange}
+        isDefault
+        open
+      />,
+    );
+    expect(await screen.findByRole('radio', { name: /This computer/ })).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('radio', { name: /A container/ })).toHaveFocus();
+    expect(onSetup).not.toHaveBeenCalled();
+    expect(onValueChange).not.toHaveBeenCalled();
+    await user.keyboard('{Enter}');
+    expect(onSetup).toHaveBeenCalledWith('container');
+    onSetup.mockClear();
+    await user.keyboard(' ');
+    expect(onSetup).toHaveBeenCalledWith('container');
+    onSetup.mockClear();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('radio', { name: /build-box/ })).toHaveFocus();
+    await user.keyboard(' ');
+    expect(onValueChange).toHaveBeenCalledWith('ssh:build-box');
+    expect(onSetup).not.toHaveBeenCalled();
   });
 
   it('says plainly when the provider runs its own commands here', async () => {
@@ -75,7 +126,13 @@ describe('WorkPlacePicker', () => {
 
   it('is accessible, open and closed', async () => {
     const { container } = renderNacre(
-      <WorkPlacePicker options={notReady} value="cloud" onValueChange={() => {}} isDefault open />,
+      <WorkPlacePicker
+        options={withSetup(notReady, () => {})}
+        value="computer"
+        onValueChange={() => {}}
+        isDefault
+        open
+      />,
     );
     await screen.findByRole('radiogroup');
     await expectAccessible(container.ownerDocument.body);

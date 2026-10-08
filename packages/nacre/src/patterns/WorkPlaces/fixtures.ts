@@ -48,3 +48,21 @@ export const notReady: WorkPlaceOption[] = places.map((p) =>
         ? { ...p, state: 'needs-setup', message: 'Needs a Daytona key. It’s free to start.' }
         : p,
 );
+
+/** The places that need setting up, each going where it's set up when pressed. */
+export function withSetup(
+  options: WorkPlaceOption[],
+  onSetup: (place: string) => void,
+): WorkPlaceOption[] {
+  return options.map((o) =>
+    o.state === 'needs-setup'
+      ? {
+          ...o,
+          setup: {
+            label: o.kind === 'cloud' ? 'Add a key' : 'Set it up',
+            onSetup: () => onSetup(o.value),
+          },
+        }
+      : o,
+  );
+}
