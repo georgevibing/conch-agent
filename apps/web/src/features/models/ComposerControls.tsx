@@ -3,6 +3,7 @@ import { ModelPicker, ModePicker } from '@conch/nacre';
 
 import { useUi } from '../../app/ui';
 import { useProviders } from '../providers/queries';
+import { PlaceChip } from '../workplaces/PlaceChip';
 import { availableModes, effortOptions, pickerProviders, providerLogo } from './catalog';
 import { modelKey, type useTurnOptions } from './useTurnOptions';
 
@@ -83,6 +84,7 @@ export function ComposerControls({
         disabled={disabled}
         name={name}
       />
+      <PlaceChip turn={turn} {...(disabled !== undefined && { disabled })} />
     </>
   );
 }

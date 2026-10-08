@@ -44,6 +44,7 @@ import type {
   PermissionMode,
   NarrationSource,
   ToolLabel,
+  WorkedAt,
 } from '@conch/protocol';
 
 import { latestReplies, type LatestReplies } from '../features/replies/latest';
@@ -107,6 +108,8 @@ export type TranscriptItem =
       label?: ToolLabel;
       /** It asked first, or a rule stopped it: how that went (from the decision, never its words). */
       approval?: ToolApproval;
+      /** Where the command ran, when it wasn't this computer (ADR 0106). */
+      where?: WorkedAt;
       /**
        * How far it has come while it runs (a picture being made): the latest
        * word, and when the first came (the request went out, past any approval).
@@ -676,6 +679,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         output: event.output,
         durationMs: event.durationMs,
         ...(event.view && { view: event.view }),
+        ...(event.where && { where: event.where }),
         // The finished words (with what it found) replace the running ones; without
         // them, the chat works them out from the result rather than keep `doing` words.
         label: event.label,

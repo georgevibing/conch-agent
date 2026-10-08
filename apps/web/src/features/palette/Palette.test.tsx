@@ -883,6 +883,24 @@ describe('Palette search', () => {
       }),
     );
     act(() => useUi.setState({ settingsFocus: undefined }));
+
+    // Where work runs (ADR 0106), by any of the words people use for it.
+    for (const words of ['where work runs', 'docker', 'ssh', 'daytona']) {
+      act(() => useUi.getState().setPalette(true));
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(
+        await screen.findByRole('option', { name: /Settings: Where work runs/ }),
+      ).toBeInTheDocument();
+    }
+    await user.keyboard('{Enter}');
+    await waitFor(() =>
+      expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
+        at: '/settings/security',
+        focus: 'workplaces',
+      }),
+    );
+    act(() => useUi.setState({ settingsFocus: undefined }));
   });
 
   it('backs up and restores by name, straight into Settings → Health', async () => {

@@ -24,6 +24,7 @@ import {
   VaultKindGlyph,
 } from '@conch/nacre';
 import {
+  Box,
   Cable,
   UserRoundPlus,
   UsersRound,
@@ -98,6 +99,7 @@ import { useOrganise } from '../chatlist/useOrganise';
 import { COME_HOME_FOCUS } from '../import/api';
 import { doctorApi } from '../health/api';
 import { LIVE_DATA_FOCUS } from '../artifacts/LiveDataSection';
+import { WORKPLACES_FOCUS } from '../workplaces/words';
 import {
   ADD_DEVICE_FOCUS,
   ADDRESS_FOCUS,
@@ -314,6 +316,14 @@ const settingsPlaces: {
     label: 'Security',
     keywords: 'password keys sign in checkup safe',
     icon: <ShieldCheck />,
+  },
+  {
+    tab: 'security',
+    focus: WORKPLACES_FOCUS,
+    label: 'Where work runs',
+    keywords:
+      'where work runs commands run container docker podman sandbox isolated box ssh remote machine server another computer cloud daytona vm devbox',
+    icon: <Box />,
   },
   {
     tab: 'security',

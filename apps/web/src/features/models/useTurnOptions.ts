@@ -5,6 +5,7 @@ import type {
   PermissionMode,
   ProviderModels,
   TurnOptions,
+  WorkPlaceId,
 } from '@conch/protocol';
 import { EngineId as EngineIdSchema, honouredMode } from '@conch/protocol';
 import { toast } from '@conch/nacre';
@@ -21,6 +22,8 @@ export interface ResolvedTurnOptions {
   effort: EffortChoice;
   fastMode: boolean;
   permissionMode: PermissionMode;
+  /** Where its commands run (ADR 0106). */
+  place: WorkPlaceId;
 }
 
 /** The engine's default model id (Claude Code calls it `default`). */
@@ -81,6 +84,7 @@ export function useTurnOptions(conversationId?: string) {
     effort: prefs?.effort ?? 'auto',
     fastMode: prefs?.fastMode ?? false,
     permissionMode: prefs?.permissionMode ?? 'default',
+    place: prefs?.place ?? 'computer',
   };
 
   const chosen = overrides.engine ?? defaultEngine;
@@ -109,6 +113,7 @@ export function useTurnOptions(conversationId?: string) {
     effort: overrides.effort ?? defaults.effort,
     fastMode: overrides.fastMode ?? defaults.fastMode,
     permissionMode: overrides.permissionMode ?? defaults.permissionMode,
+    place: overrides.place ?? defaults.place,
   };
   // Keep choices valid for the chosen model and provider: unsupported effort
   // falls back to auto, fast to off, and a mode it can't honour to its safest,
