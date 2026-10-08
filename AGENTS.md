@@ -563,6 +563,25 @@ threat model. Hold every change to the bar of a thorough professional security r
    `apps/server/src/auth/auth.test.ts` and `e2e/security.spec.ts`.
 10. **Warn people in their words.** Every security message says what could happen
     and what to do next, never jargon alone.
+11. **Auto is permissive; it asks only about real risk.** Auto is the mode most
+    people live in, and a question about routine work is a bug, not caution
+    ([ADR 0100](./docs/adr/0100-permission-modes-every-provider.md) § "Auto,
+    revisited"). In Auto, read-only and everyday work (reading, `git status`/
+    `pull`/`clone`, installs from the lockfile, builds, tests, edits in the work
+    folder, plain web reads) never asks, in or out of the sealed box, before or
+    after reading. Auto asks only for what is destructive or lasting, sends data
+    or secrets out, runs code fetched from the internet, needs admin rights,
+    spends money, or speaks for the person to others; the after-reading
+    ones only once the chat has read outside content. A new feature or tool must
+    not add a question in Auto any other way:
+    - Judge commands through `risk.ts` (the one policy), never with a new
+      blanket rule in `mustAsk`/`hostAsk` or an engine's own approval setting.
+    - Conch's own first-party tools (catalogs, model lists, its own pictures)
+      don't taint; only tools that bring someone else's words in do.
+    - The person's own plan at no extra charge never asks; a `cost` does.
+    - Add the new everyday steps to the benign half of `test/riskCorpus.ts`
+      (they must pass silently, before and after reading) alongside any new
+      risky ones. Making Auto stricter needs an ADR saying why.
 
 ## Secrets in a new feature
 
