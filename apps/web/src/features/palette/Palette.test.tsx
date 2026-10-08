@@ -9,6 +9,7 @@ import { useUi } from '../../app/ui';
 import { useLiveStore } from '../../live/store';
 import { appState, mockFetch, renderApp } from '../../test/harness';
 import { taskKeys } from '../tasks/queries';
+import { useHowItDidIt } from '../trajectory/api';
 import { Palette } from './Palette';
 
 // Search waits on a debounce and a round trip; under a full parallel run that takes longer than 1 s.
@@ -793,6 +794,33 @@ describe('Palette search', () => {
         calls.some((c) => c.method === 'POST' && c.path === '/api/conversations/c7/compact'),
       ).toBe(true),
     );
+  });
+
+  it('opens how the chat was done, and saves this chat or many as a file (ADR 0113)', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    renderApp(
+      <Routes>
+        <Route path="/c/:conversationId" element={<Palette />} />
+      </Routes>,
+      { route: '/c/c7' },
+    );
+    act(() => useUi.getState().setPalette(true));
+    await user.type(await screen.findByRole('combobox'), 'replay');
+    await user.click(await screen.findByRole('option', { name: /How it did it/ }));
+    expect(useHowItDidIt.getState().runFor).toBe('c7');
+
+    act(() => useUi.getState().setPalette(true));
+    const box = await screen.findByRole('combobox');
+    await user.clear(box);
+    await user.type(box, 'save chats as a file');
+    await user.click(await screen.findByRole('option', { name: /Save chats as a file/ }));
+    expect(useHowItDidIt.getState().saving).toEqual({});
+    act(() => useHowItDidIt.setState({ runFor: null, saving: null }));
   });
 
   it('starts the open chat afresh, and puts /plan and /goal in the message box (ADR 0098)', async () => {

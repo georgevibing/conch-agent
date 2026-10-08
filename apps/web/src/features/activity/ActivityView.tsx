@@ -23,10 +23,11 @@ import {
   Text,
 } from '@conch/nacre';
 import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
-import { History, Search, SearchX } from 'lucide-react';
+import { Download, History, Search, SearchX } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 
+import { useHowItDidIt } from '../trajectory/api';
 import styles from './Activity.module.css';
 import { useDebounced } from '../search/useSearch';
 
@@ -191,6 +192,14 @@ export function ActivityView() {
             </SegmentedControl.Item>
           ))}
         </SegmentedControl>
+        {/* Every chat's steps as a file: for training, research, or to read (ADR 0113). */}
+        <Button
+          variant="ghost"
+          leadingIcon={<Download />}
+          onClick={() => useHowItDidIt.getState().openSave({})}
+        >
+          Save as a file
+        </Button>
       </div>
       {query.isPending ? (
         <Skeleton lines={6} />
