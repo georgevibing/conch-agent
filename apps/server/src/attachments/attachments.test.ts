@@ -194,6 +194,20 @@ describe('AttachmentStore', () => {
     expect(await store.get('..')).toBeUndefined();
     expect(() => store.folder('../x')).toThrow();
   });
+
+  it('claimFresh takes on an upload nobody has, and never another chat’s', async () => {
+    const store = await tempStore();
+    const fresh = await store.save({ name: 'chart.png', bytes: PNG });
+    // Nobody's yet: this chat takes it on, and can find it afterwards.
+    expect(await store.claimFresh(fresh.id, 'c_1')).toMatchObject({ id: fresh.id });
+    expect(await store.inConversation(fresh.id, 'c_1')).toBeDefined();
+    // Already this chat's: given straight back, still only this chat's.
+    expect(await store.claimFresh(fresh.id, 'c_1')).toMatchObject({ id: fresh.id });
+    // Another chat's: refused rather than shared, and nothing changes.
+    expect(await store.claimFresh(fresh.id, 'c_2')).toBeUndefined();
+    expect(await store.inConversation(fresh.id, 'c_2')).toBeUndefined();
+    expect(await store.claimFresh('att_nothing', 'c_1')).toBeUndefined();
+  });
 });
 
 describe('forTurn', () => {

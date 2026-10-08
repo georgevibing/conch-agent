@@ -2,6 +2,7 @@ import type { Attachment, ToolView } from '@conch/protocol';
 import {
   AgendaView,
   BookShelf,
+  CardShare,
   ChatMessages,
   FileList,
   KnowledgeCard,
@@ -17,6 +18,7 @@ import {
 } from '@conch/nacre';
 
 import { useUi } from '../../app/ui';
+import { useCardShare } from './cardShare';
 import { SentAttachments } from './AttachmentViewer';
 import { MailSentItem } from './MailItems';
 import { recipeCards, recipeTimerDone } from './recipes';
@@ -141,8 +143,24 @@ export function ToolFound({ view }: { view: ToolView }) {
   }
 }
 
-/** A forecast in the units the person reads, with the card's switch changing them everywhere. */
+/**
+ * A forecast in the units the person reads, with the card's switch changing
+ * them everywhere — and its share bar: save the forecast as a picture, copy
+ * it, or send it to a chat app (ADR 0105).
+ */
 function WeatherFound({ view }: { view: Extract<ToolView, { kind: 'weather' }> }) {
   const [units, setUnits] = useWeatherUnits();
-  return <WeatherCard weather={view} units={units} onUnitsChange={setUnits} />;
+  const { ref, share } = useCardShare({
+    what: 'forecast',
+    title: `Weather in ${view.place.name}`,
+  });
+  return (
+    <WeatherCard
+      ref={ref}
+      weather={view}
+      units={units}
+      onUnitsChange={setUnits}
+      share={<CardShare {...share} />}
+    />
+  );
 }

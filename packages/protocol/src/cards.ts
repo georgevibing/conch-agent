@@ -16,8 +16,12 @@ import { ChannelKind } from './channels';
 /** What a person can write under the picture. A line or two, not an essay. */
 export const CARD_CAPTION_MAX = 400;
 
-/** A chat app this person can be reached on right now, for the Send menu. */
-export const ShareApp = z.object({
+/**
+ * A chat app this person can be reached on right now, for a card's Send menu.
+ * (Nacre's `ShareApp` is the same shape as a component's prop; this is the
+ * wire's own, so the two names don't collide in one file.)
+ */
+export const SendableApp = z.object({
   /** The channel's id. */
   id: Id,
   kind: ChannelKind,
@@ -26,15 +30,15 @@ export const ShareApp = z.object({
   /** Its brand colour, for the logo tile. */
   color: z.string().max(32).optional(),
 });
-export type ShareApp = z.infer<typeof ShareApp>;
+export type SendableApp = z.infer<typeof SendableApp>;
 
 /**
  * `GET /api/cards/apps` — the chat apps a card can be sent to, the one this
  * person wrote from last first (the one `message_user` would pick). Empty when
  * none is connected: then the card has no **Send** button at all.
  */
-export const ShareApps = z.object({ apps: z.array(ShareApp).default([]) });
-export type ShareApps = z.infer<typeof ShareApps>;
+export const SendableApps = z.object({ apps: z.array(SendableApp).default([]) });
+export type SendableApps = z.infer<typeof SendableApps>;
 
 /**
  * `POST /api/cards/send` — send a picture of a card to a chat app. The

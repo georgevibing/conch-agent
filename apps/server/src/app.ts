@@ -320,6 +320,7 @@ export async function buildApp(services: Services) {
   registerCardRoutes(app, {
     channels: services.channels,
     attachments: services.attachments,
+    knows: async (id) => (await services.conversations.list()).some((c) => c.id === id),
   });
   registerTaskRoutes(app, services.tasks);
   registerAgentRoutes(app, { agents: services.agents, faces: services.images });

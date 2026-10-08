@@ -202,6 +202,32 @@ export class AttachmentStore {
     });
   }
 
+  /**
+   * Hand an upload that belongs to nobody yet to a conversation, and give it
+   * back. Used by the one press that uploads something outside a message: a
+   * card's picture, on its way to a chat app (ADR 0105).
+   *
+   * An attachment that already belongs to another conversation is refused
+   * rather than shared, so this can never become a way for one chat to reach
+   * into another chat's files — the thing `inConversation` exists to prevent.
+   * One that already belongs to this conversation is simply returned.
+   */
+  claimFresh(id: string, conversationId: string): Promise<Attachment | undefined> {
+    return this.#mutex.run(async () => {
+      const found = await this.#read(id);
+      if (!found) return undefined;
+      const mine = found.conversations.includes(conversationId);
+      if (!mine && found.conversations.length) return undefined;
+      if (!mine || found.held) {
+        found.conversations = [...new Set([...found.conversations, conversationId])];
+        delete found.held;
+        await writeJson(join(this.folder(id), 'meta.json'), found);
+      }
+      const { file: _f, conversations: _c, held: _h, ...attachment } = found;
+      return Attachment.parse(attachment);
+    });
+  }
+
   /** A conversation was deleted: drop what only it used. */
   forget(conversationId: string, ids: readonly string[]): Promise<void> {
     return this.#mutex.run(async () => {

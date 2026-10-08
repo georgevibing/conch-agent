@@ -30,12 +30,20 @@ const notAPicture: Attachment = {
   kind: 'text',
 };
 
-/** The store only ever admits an attachment to the chat it belongs to. */
-const own = new Map<string, { attachment: Attachment; conversation: string }>([
+/**
+ * The store as `claimFresh` behaves: an attachment of this chat's comes back,
+ * one that belongs to nobody is taken on, and another chat's is refused.
+ */
+const own = new Map<string, { attachment: Attachment; conversation?: string }>([
   ['att_chart', { attachment: png, conversation: 'c_1' }],
   ['att_notes', { attachment: notAPicture, conversation: 'c_1' }],
   ['att_other', { attachment: { ...png, id: 'att_other' }, conversation: 'c_2' }],
+  // Just uploaded by the page, claimed by nobody yet.
+  ['att_fresh', { attachment: { ...png, id: 'att_fresh' } }],
 ]);
+
+const claimed: string[] = [];
+const chats = new Set(['c_1', 'c_2']);
 
 const sendable = vi.fn(async () => [
   { id: 'ch_1', kind: 'telegram' as const, name: 'Telegram', color: '#26A5E4' },
@@ -48,17 +56,20 @@ let app: FastifyInstance;
 beforeEach(async () => {
   sendable.mockClear();
   messageOwner.mockClear();
+  claimed.length = 0;
   app = Fastify({ logger: false });
   registerCardRoutes(app, {
     channels: { sendable, messageOwner },
     attachments: {
-      inConversation: async (id, conversationId) => {
+      claimFresh: async (id, conversationId) => {
         const found = own.get(id);
-        return found && found.conversation === conversationId
-          ? { attachment: found.attachment, path: `/tmp/${id}` }
-          : undefined;
+        if (!found) return undefined;
+        if (found.conversation && found.conversation !== conversationId) return undefined;
+        claimed.push(`${id}:${conversationId}`);
+        return found.attachment;
       },
     },
+    knows: async (id) => chats.has(id),
   });
   await app.ready();
 });
@@ -114,10 +125,25 @@ describe('POST /api/cards/send', () => {
     });
   });
 
+  it('takes on the picture the page has just uploaded, for this chat only', async () => {
+    const res = await send({ conversationId: 'c_1', attachmentId: 'att_fresh' });
+    expect(res.statusCode).toBe(200);
+    expect(claimed).toEqual(['att_fresh:c_1']);
+  });
+
   it('refuses another chat’s picture, and sends nothing', async () => {
     const res = await send({ conversationId: 'c_1', attachmentId: 'att_other' });
     expect(res.statusCode).toBe(404);
     expect(res.json().message).toMatch(/isn’t in this chat/);
+    expect(claimed).toEqual([]);
+    expect(messageOwner).not.toHaveBeenCalled();
+  });
+
+  it('refuses a chat this Conch doesn’t have, before touching the picture', async () => {
+    const res = await send({ conversationId: 'c_made_up', attachmentId: 'att_fresh' });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().message).toBe('There’s no such chat.');
+    expect(claimed).toEqual([]);
     expect(messageOwner).not.toHaveBeenCalled();
   });
 

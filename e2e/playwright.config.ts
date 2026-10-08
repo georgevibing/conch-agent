@@ -190,6 +190,9 @@ const scenarios = {
   stories: { port: 4338, env: { CONCH_MOCK_STATE: 'ready' } },
   // What a tool found, drawn as it is (ADR 0060): the mock's pretend calendar, mail, files and Slack.
   views: { port: 4353, env: { CONCH_MOCK_STATE: 'ready' } },
+  // A card in the chat, done something with (ADR 0105): the forecast saved as a real
+  // picture this browser drew, and sent to the pretend Telegram as a photo.
+  cards: { port: 4335, env: { CONCH_MOCK_STATE: 'ready' } },
   // Edit by hand and live data (ADR 0046), against a pretend data site on a port the system picks.
   canvas: {
     port: 4360,

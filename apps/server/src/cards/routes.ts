@@ -16,10 +16,12 @@
  *   phone number — so nothing in the chat, in a page it read or in a model's
  *   reply can redirect it. The worst a prompt injection could do with this
  *   route is write to the person it was already allowed to write to.
- * - **It only ever sends this chat's own picture.** The attachment must
- *   already belong to the conversation named in the body, which is only true
- *   of something the page uploaded and claimed. Another chat's attachment, or
- *   an id that was never uploaded, is refused before anything is sent.
+ * - **It only ever sends this chat's own picture.** The chat has to be one
+ *   this Conch really has, and the attachment has to be that chat's own or
+ *   belong to no chat at all — an upload the page has just this moment made.
+ *   One that belongs to *another* chat is refused rather than shared, so this
+ *   is never a way into another chat's files. Both checks happen before
+ *   anything is sent.
  * - **It is never the model's doing.** The route is reached from a press on
  *   the card's own **Send** button, after a question naming the app. The
  *   assistant has no tool that calls it; when it wants to send a picture
@@ -34,7 +36,7 @@
  * grants nobody any reach, it only writes a line to a chat the person already
  * writes to.
  */
-import { SendCardBody, SentCard, ShareApps } from '@conch/protocol';
+import { SendableApps, SendCardBody, SentCard } from '@conch/protocol';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 
 import type { AttachmentStore } from '../attachments/store';
@@ -42,7 +44,9 @@ import { ChannelServiceError, type ChannelService } from '../channels/service';
 
 export interface CardRouteDeps {
   channels: Pick<ChannelService, 'sendable' | 'messageOwner'>;
-  attachments: Pick<AttachmentStore, 'inConversation'>;
+  attachments: Pick<AttachmentStore, 'claimFresh'>;
+  /** Whether this Conch really has a chat by that id. */
+  knows: (conversationId: string) => Promise<boolean>;
 }
 
 const STATUS: Record<ChannelServiceError['code'], number> = {
@@ -53,7 +57,9 @@ const STATUS: Record<ChannelServiceError['code'], number> = {
 
 export function registerCardRoutes(app: FastifyInstance, deps: CardRouteDeps): void {
   /** The apps this card can be sent to: real, connected, most recent first. */
-  app.get('/api/cards/apps', async () => ShareApps.parse({ apps: await deps.channels.sendable() }));
+  app.get('/api/cards/apps', async () =>
+    SendableApps.parse({ apps: await deps.channels.sendable() }),
+  );
 
   app.post('/api/cards/send', async (request, reply: FastifyReply) => {
     const body = SendCardBody.safeParse(request.body);
@@ -63,15 +69,22 @@ export function registerCardRoutes(app: FastifyInstance, deps: CardRouteDeps): v
         .send({ error: 'bad-request', message: body.error.issues[0]?.message ?? 'Bad request.' });
     const { conversationId, attachmentId, caption, app: wanted } = body.data;
 
-    // The picture has to be this chat's own. Checked here, before anything is
-    // sent, so another chat's attachment can never leave the computer.
-    const found = await deps.attachments.inConversation(attachmentId, conversationId);
-    if (!found)
+    // It has to be a chat this Conch has, or an id out of nowhere would be
+    // enough to claim an upload and send it.
+    if (!(await deps.knows(conversationId)))
+      return reply.code(404).send({ error: 'not-found', message: 'There’s no such chat.' });
+
+    // The picture has to be this chat's own, or belong to nobody yet (the page
+    // has just this moment uploaded it). One that belongs to *another* chat is
+    // refused rather than shared, so this is never a way into another chat's
+    // files — and it's checked before anything is sent.
+    const attachment = await deps.attachments.claimFresh(attachmentId, conversationId);
+    if (!attachment)
       return reply.code(404).send({
         error: 'not-found',
         message: 'That picture isn’t in this chat any more. Make it again and send it.',
       });
-    if (found.attachment.kind !== 'image')
+    if (attachment.kind !== 'image')
       return reply
         .code(400)
         .send({ error: 'bad-request', message: 'Only a picture of a card can be sent this way.' });

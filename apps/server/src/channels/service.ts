@@ -37,7 +37,7 @@ import {
   parseGoalArg,
   parseSwitch,
   type PermissionMode,
-  type ShareApp,
+  type SendableApp,
   type TurnOptions,
   SLACK_APP_TOKEN,
   SLACK_BOT_TOKEN,
@@ -3443,7 +3443,7 @@ export class ChannelService {
    * person chooses from is the list that works — with none, the card has no
    * **Send** button rather than one that can't go anywhere.
    */
-  async sendable(): Promise<ShareApp[]> {
+  async sendable(): Promise<SendableApp[]> {
     const online = new Set(this.reachable().map((c) => c.id));
     const colours = new Map(CHANNEL_CATALOG.map((entry) => [entry.id, entry.color]));
     return (await this.deps.store.all())

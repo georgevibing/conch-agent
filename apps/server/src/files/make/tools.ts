@@ -607,7 +607,7 @@ export class FileMaker {
     if (format === 'svg') return { bytes: Buffer.from(svg), name, warnings };
     if (!this.deps.printer.by())
       throw new FileError(
-        'A PNG chart needs a browser to draw it, and none is set up. Make it as SVG (format: "svg"), which every browser and most apps open, or open Settings → Browser to set one up.',
+        'A PNG chart needs a browser to draw it, and none is set up. Make it as SVG (format: "svg"), which every browser and most apps open, or open Settings → Browser to set one up. If this was so you could send a picture of a chart to one of their chat apps: a chart card in the chat has its own Send button, which makes the picture in their browser and needs no browser here — tell them to use it.',
       );
     progress.by = this.deps.printer.by() ?? 'Conch';
     progress.working('Drawing the chart', 1500);
