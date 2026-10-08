@@ -24,6 +24,7 @@ const CAPS: Record<ToolView['kind'], number> = {
   products: 12,
   places: 12,
   audio: 12,
+  videos: 8,
 };
 
 /** A web link worth opening: `http(s)`, parseable, and with no sign-in tucked into it. */

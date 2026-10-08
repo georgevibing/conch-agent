@@ -2820,7 +2820,7 @@ export class ConversationManager {
         const routine =
           command ||
           ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(request.toolName) ||
-          (/(?:WebSearch|web_search)$/.test(request.toolName) &&
+          (/(?:WebSearch|web_search|video_search)$/.test(request.toolName) &&
             String(request.input.query ?? '').length <= 120);
         sink = riskAsks(risk, true) ? risk?.reason : routine ? undefined : sink;
         // Nothing the rules know, but unusual and able to reach out: a small model looks too.

@@ -10,6 +10,8 @@ export function summarizeToolUse(toolName: string, input: Record<string, unknown
     search_files: `Find files${str('text') ? ` containing “${str('text')}”` : str('name') ? ` named “${str('name')}”` : ''}`,
     web_search: `Search the web for “${str('query') ?? ''}”`,
     web_fetch: `Read ${str('url') ?? 'a web page'}`,
+    video_search: `Find videos of “${str('query') ?? ''}”`,
+    video_details: 'Look up videos',
     process_start: `Start “${(str('command') ?? '').slice(0, 160)}”`,
     process_read: 'Read command progress',
     process_write: 'Send input to a command',

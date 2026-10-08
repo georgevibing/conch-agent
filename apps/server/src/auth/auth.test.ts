@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readdir, readFile, stat, writeFile } from 'node:fs/prom
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { VIDEO_PLAYER_ORIGINS } from '@conch/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
@@ -709,6 +710,18 @@ describe('browser guards', () => {
     const res = await app.inject('/api/health');
     expect(res.headers['content-security-policy']).toContain("frame-ancestors 'none'");
     expect(res.headers['content-security-policy']).toContain("img-src 'self' data: blob:");
+    // Frames: our own pages and exactly two video players, nothing else (ADR 0060 §7).
+    const frames = /(?:^|;\s*)frame-src ([^;]*)/.exec(
+      String(res.headers['content-security-policy']),
+    );
+    expect(frames?.[1]?.split(/\s+/)).toEqual([
+      "'self'",
+      'https://www.youtube-nocookie.com',
+      'https://player.vimeo.com',
+    ]);
+    expect(res.headers['content-security-policy']).not.toMatch(/child-src|frame-src[^;]*\*/);
+    // The same two the web app builds players for, and no more.
+    expect(frames?.[1]?.split(/\s+/).slice(1)).toEqual([...VIDEO_PLAYER_ORIGINS]);
     expect(res.headers['x-frame-options']).toBe('DENY');
     expect(res.headers['x-content-type-options']).toBe('nosniff');
     expect(res.headers['referrer-policy']).toBe('no-referrer');

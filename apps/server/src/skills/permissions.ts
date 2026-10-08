@@ -171,7 +171,9 @@ export function needs(
     return { capability: path && !inside(context.workspace, path) ? 'files-anywhere' : 'files' };
   }
   if (
-    /(?:WebFetch|WebSearch|web_fetch|web_search|product_details)$/.test(toolName) ||
+    /(?:WebFetch|WebSearch|web_fetch|web_search|product_details|video_search|video_details)$/.test(
+      toolName,
+    ) ||
     /^(?:mcp__conch__)?(?:recipe|places)$/.test(toolName) ||
     BROWSER_READS.test(toolName)
   )

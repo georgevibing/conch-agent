@@ -684,6 +684,24 @@ function musicDraft(input: Input): Draft {
   };
 }
 
+/** Videos found to watch in the chat (`video_search`, `video_details`): the card is the answer. */
+function videoDraft(input: Input, details = false): Draft {
+  const query = details ? '' : (str(input, 'query', 'q') ?? '');
+  const urls = Array.isArray(input.urls) ? input.urls.length : 0;
+  return {
+    family: 'research',
+    words: details
+      ? say('look', urls > 1 ? `up ${urls} videos` : 'up a video')
+      : say('find', query ? `videos of ${quote(query)}` : 'videos'),
+    ...(query && { subject: clip(oneLine(query), 300), chips: [textChip(query)] }),
+    finish: (output) => {
+      const videos = record(parseJson(output)).videos;
+      const found = Array.isArray(videos) ? videos.length : 0;
+      return found ? { outcome: plural(found, 'video') } : {};
+    },
+  };
+}
+
 // ---------------------------------------------------------------- plans and helpers
 
 function planOutcome(
@@ -993,6 +1011,8 @@ const CONCH: Record<string, (input: Input) => Draft> = {
   product_details: productsDraft,
   places: placesDraft,
   music_search: musicDraft,
+  video_search: (input) => videoDraft(input),
+  video_details: (input) => videoDraft(input, true),
   read_file: (input) => readDraft(input),
   read_document: (input) => readDraft(input, 'document'),
   search_files: (input) => {

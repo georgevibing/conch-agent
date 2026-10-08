@@ -1,0 +1,703 @@
+@layer nacre.components {
+  /*
+   * A video found for the chat (see VideoCard.tsx, VideoShelf.tsx).
+   *
+   * Knobs:
+   *   --vc-width     how wide the card gets (the chat card's width; the
+   *                  transcript's in theater)
+   *   --vc-radius    the card's corners
+   *   --vc-inset     the porcelain round the picture
+   *   --vc-disc      the play button's size
+   *   --vc-ink       always dark, whatever the theme: what sits on a picture
+   *   --vc-paper     always light, the same way
+   *   --vc-wait, --vc-turn, --vc-pulse   the waiting disc's breath, its light's
+   *                  turn, and the live dot's pulse
+   */
+  .card {
+    --vc-width: var(--nc-chat-card-width);
+    --vc-radius: var(--nc-chat-card-radius);
+    --vc-inset: var(--nc-space-1-5);
+    --vc-inner-radius: max(var(--nc-radius-sm), calc(var(--vc-radius) - var(--vc-inset)));
+    --vc-disc: 3.75rem;
+    --vc-ink: light-dark(var(--nc-gray-12), var(--nc-gray-1));
+    --vc-paper: light-dark(var(--nc-gray-1), var(--nc-gray-12));
+    /* While the player is on its way: one breath of the disc, one turn of its light. */
+    --vc-wait: 1.4s;
+    --vc-turn: 2.4s;
+    --vc-pulse: 2s;
+    /* Lustre, barely: the rim catches the light as you pass, the sheen stays faint. */
+    --nc-rim-rest: 0.08;
+    --nc-rim-hover: 0.6;
+    --nc-sheen-size: 260px;
+    --nc-sheen-hover: 0.22;
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    margin: 0;
+    padding: var(--vc-inset);
+    padding-block-end: var(--nc-space-2-5);
+    inline-size: min(100%, var(--vc-width));
+    min-inline-size: 0;
+    border-radius: var(--vc-radius);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-chat-card-surface);
+    box-shadow: var(--nc-chat-card-shadow);
+    transition:
+      inline-size var(--nc-spring-soft-duration) var(--nc-spring-soft),
+      --nc-rim-near var(--nc-duration-slow) var(--nc-ease-out),
+      --nc-sheen var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  /* Theater: as wide as the transcript. */
+  .card[data-theater] {
+    --vc-width: 100%;
+  }
+
+  /* ── The stage: one 16:9 box, poster or player, nothing moves ─────── */
+  .stage {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    aspect-ratio: 16 / 9;
+    inline-size: 100%;
+    border-radius: var(--vc-inner-radius);
+    corner-shape: var(--nc-corner-shape);
+    clip-path: inset(0 round var(--vc-inner-radius));
+    background: var(--vc-ink);
+  }
+
+  @supports (corner-shape: squircle) {
+    .stage {
+      clip-path: none;
+    }
+  }
+
+  /* The hairline and glazed top edge, over the picture too. */
+  .stage::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+    border-radius: inherit;
+    corner-shape: inherit;
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge);
+  }
+
+  .stage:focus {
+    outline: none;
+  }
+
+  .stage:fullscreen {
+    border-radius: 0;
+    clip-path: none;
+  }
+
+  .card[data-arrived] .stage > .poster {
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  .player {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+  }
+
+  .player > iframe,
+  .player > * {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    border: 0;
+  }
+
+  /* ── The poster ──────────────────────────────────────────────────── */
+  .poster {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: block;
+    padding: 0;
+    border: 0;
+    background: var(--nc-surface-sunken);
+    color: inherit;
+    cursor: pointer;
+    border-radius: inherit;
+    corner-shape: inherit;
+    transition: opacity var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .poster:disabled {
+    cursor: default;
+  }
+
+  .poster:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -4px;
+  }
+
+  /* The player is there: the poster fades into it, in place. */
+  .card[data-ready] .poster {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .picture,
+  .blank {
+    position: absolute;
+    inset: 0;
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+    transition: scale var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  /* No picture: a quiet pearl ground with a film glyph. */
+  .blank {
+    display: grid;
+    place-items: center;
+    background:
+      radial-gradient(90% 120% at 18% 0%, var(--nc-pearl-2), transparent 60%),
+      radial-gradient(80% 110% at 100% 100%, var(--nc-pearl-4), transparent 62%),
+      linear-gradient(150deg, var(--nc-pearl-1), var(--nc-pearl-5));
+    color: color-mix(in oklab, var(--nc-gray-12) 38%, transparent);
+  }
+
+  .blank > svg {
+    inline-size: 2rem;
+    block-size: 2rem;
+    opacity: 0.7;
+  }
+
+  /* Enough shade at the foot for the length to read on any picture. */
+  .scrim {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(to top, color-mix(in oklab, var(--vc-ink) 42%, transparent), transparent 38%),
+      radial-gradient(
+        circle at 50% 50%,
+        color-mix(in oklab, var(--vc-ink) 14%, transparent),
+        transparent 46%
+      );
+    transition: opacity var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  /* ── The play button: a soft disc that blooms ───────────────────── */
+  .play {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
+    z-index: 3;
+    display: grid;
+    place-items: center;
+    inline-size: var(--vc-disc);
+    block-size: var(--vc-disc);
+    translate: -50% -50%;
+    border-radius: var(--nc-radius-full);
+    background: color-mix(in oklab, var(--vc-paper) 86%, transparent);
+    color: var(--vc-ink);
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--vc-paper) 40%, transparent),
+      0 0.5rem 1.5rem color-mix(in oklab, var(--vc-ink) 32%, transparent),
+      inset 0 1px 0 color-mix(in oklab, var(--vc-paper) 90%, transparent);
+    transition:
+      scale var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy),
+      background-color var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  /* The bloom: pearl light gathers round the disc. */
+  .halo {
+    position: absolute;
+    inset: -0.55rem;
+    z-index: -1;
+    border-radius: inherit;
+    background: conic-gradient(
+      from 210deg in oklab,
+      var(--nc-pearl-1),
+      var(--nc-pearl-2),
+      var(--nc-pearl-3),
+      var(--nc-pearl-4),
+      var(--nc-pearl-5),
+      var(--nc-pearl-1)
+    );
+    filter: blur(8px);
+    opacity: calc(0.35 * var(--nc-lustre));
+    scale: 0.82;
+    transition:
+      opacity var(--nc-duration-slow) var(--nc-ease-out),
+      scale var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy);
+  }
+
+  .playGlyph {
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    /* A triangle's weight sits left of its box: nudge it to look centred. */
+    translate: 0.09rem 0;
+    fill: currentColor;
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+  }
+
+  @media (hover: hover) {
+    .poster:not(:disabled):hover .play {
+      scale: 1.1;
+      background: var(--vc-paper);
+    }
+    .poster:not(:disabled):hover .halo {
+      opacity: calc(0.9 * var(--nc-lustre));
+      scale: 1.12;
+    }
+    .poster:not(:disabled):hover .picture {
+      scale: 1.025;
+    }
+  }
+
+  .poster:focus-visible .play {
+    scale: 1.06;
+    background: var(--vc-paper);
+  }
+
+  .poster:focus-visible .halo {
+    opacity: calc(0.75 * var(--nc-lustre));
+    scale: 1.08;
+  }
+
+  .poster:not(:disabled):active .play {
+    scale: 0.94;
+    transition-duration: var(--nc-duration-instant);
+  }
+
+  /* Pressed, and the player is on its way: the disc breathes, its light turns. */
+  .poster[data-loading] .play {
+    scale: 0.96;
+    animation: vc-wait var(--vc-wait) var(--nc-ease-in-out) infinite;
+  }
+
+  @keyframes vc-wait {
+    50% {
+      transform: scale(0.92);
+    }
+  }
+
+  .poster[data-loading] .halo {
+    opacity: calc(0.9 * var(--nc-lustre));
+    scale: 1.1;
+    animation: nc-spin var(--vc-turn) linear infinite;
+  }
+
+  /* ── Chips on a picture ─────────────────────────────────────────── */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    padding: 0.0625rem var(--nc-space-1-5);
+    border-radius: var(--nc-radius-sm);
+    background: color-mix(in oklab, var(--vc-ink) 78%, transparent);
+    color: var(--vc-paper);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    line-height: var(--nc-leading-snug);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+  }
+
+  .chip[data-live] {
+    background: oklch(0.56 0.19 var(--nc-danger-h));
+    color: oklch(0.99 0.005 var(--nc-danger-h));
+    text-transform: uppercase;
+    font-size: var(--nc-text-2xs);
+    letter-spacing: 0.06em;
+  }
+
+  .liveDot {
+    inline-size: 0.375rem;
+    block-size: 0.375rem;
+    border-radius: var(--nc-radius-full);
+    background: currentColor;
+    animation: nc-breathe var(--vc-pulse) var(--nc-ease-in-out) infinite;
+  }
+
+  .posterChip {
+    position: absolute;
+    inset-block-end: var(--nc-space-2);
+    inset-inline-end: var(--nc-space-2);
+    z-index: 3;
+  }
+
+  /* ── Under it ───────────────────────────────────────────────────── */
+  .caption {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+    padding-inline: var(--nc-space-1-5);
+  }
+
+  .titleRow {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .title {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    padding-block-start: var(--nc-space-0-5);
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    letter-spacing: -0.005em;
+    color: var(--nc-text);
+    text-wrap: pretty;
+  }
+
+  .controls {
+    display: flex;
+    flex-shrink: 0;
+    gap: var(--nc-space-0-5);
+    margin-inline-end: calc(-1 * var(--nc-space-1));
+    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out) both;
+  }
+
+  .controls [aria-pressed='true'] {
+    background: var(--nc-wash-2);
+    color: var(--nc-text);
+  }
+
+  .metaRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--nc-space-1) var(--nc-space-3);
+    min-inline-size: 0;
+  }
+
+  /* Inline, so a line only breaks inside a part: a dot never starts a line. */
+  .meta {
+    display: block;
+    flex: 1 1 12rem;
+    min-inline-size: 0;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  .metaPart {
+    white-space: nowrap;
+  }
+
+  .sep {
+    padding-inline: var(--nc-space-1-5) var(--nc-space-0-5);
+    color: var(--nc-text-subtle);
+  }
+
+  /* "Open on YouTube": quiet, and there on every screen (no hover needed). */
+  .out {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--nc-space-0-5);
+    margin-inline-start: auto;
+    border-radius: var(--nc-radius-sm);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+    text-decoration: none;
+    transition: color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .out > svg {
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+  }
+
+  @media (hover: hover) {
+    .out:hover {
+      color: var(--nc-text);
+      text-decoration: underline;
+      text-underline-offset: 0.2em;
+    }
+  }
+
+  .out:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+    color: var(--nc-text);
+  }
+
+  /* ── Chapters: a quiet row of moments to play from ──────────────── */
+  .chapters {
+    display: flex;
+    gap: var(--nc-space-1-5);
+    margin: var(--nc-space-1) calc(-1 * var(--nc-space-1-5)) 0;
+    padding: var(--nc-space-0-5) var(--nc-space-1-5);
+    list-style: none;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: var(--nc-space-1-5);
+    scrollbar-width: none;
+  }
+
+  .chapters > li {
+    flex-shrink: 0;
+    scroll-snap-align: start;
+  }
+
+  .chapter {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--nc-space-1-5);
+    max-inline-size: 15rem;
+    min-block-size: var(--nc-control-sm);
+    padding: var(--nc-space-1) var(--nc-space-2-5);
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-wash-1);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text-muted);
+    font: inherit;
+    font-size: var(--nc-text-xs);
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      scale var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .chapterAt {
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .chapterTitle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  @media (hover: hover) {
+    .chapter:hover {
+      background: var(--nc-wash-2);
+      color: var(--nc-text);
+    }
+  }
+
+  .chapter:active {
+    scale: 0.975;
+    transition-duration: var(--nc-duration-instant);
+  }
+
+  .chapter:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .chapter[data-current] {
+    background: var(--nc-accent-3);
+    box-shadow: inset 0 0 0 1px var(--nc-accent-6);
+    color: var(--nc-accent-11);
+  }
+
+  /* ── Rows that scroll sideways fade at the edge with more beyond ──── */
+  .chapters,
+  .shelf {
+    --vc-fade: var(--nc-space-8);
+    --vc-fade-start: 0px;
+    --vc-fade-end: 0px;
+
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 var(--vc-fade-start),
+      #000 calc(100% - var(--vc-fade-end)),
+      transparent 100%
+    );
+  }
+
+  .chapters:dir(rtl),
+  .shelf:dir(rtl) {
+    mask-image: linear-gradient(
+      to left,
+      transparent 0,
+      #000 var(--vc-fade-start),
+      #000 calc(100% - var(--vc-fade-end)),
+      transparent 100%
+    );
+  }
+
+  :is(.chapters, .shelf)[data-fade-start='true'] {
+    --vc-fade-start: var(--vc-fade);
+  }
+
+  :is(.chapters, .shelf)[data-fade-end='true'] {
+    --vc-fade-end: var(--vc-fade);
+  }
+
+  /* ── The shelf ──────────────────────────────────────────────────── */
+  .shelfRoot {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .shelf {
+    --vs-thumb: 9.5rem;
+
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: var(--vs-thumb);
+    gap: var(--nc-space-2-5);
+    margin: var(--nc-space-2) calc(-1 * var(--vc-inset)) 0;
+    padding: var(--nc-space-2-5) var(--vc-inset) var(--nc-space-1);
+    border-block-start: 1px solid var(--nc-border-subtle);
+    list-style: none;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: var(--vc-inset);
+    scrollbar-width: thin;
+  }
+
+  .card[data-theater] .shelf {
+    --vs-thumb: 11.5rem;
+  }
+
+  .shelfItem {
+    scroll-snap-align: start;
+    min-inline-size: 0;
+  }
+
+  .thumb {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    inline-size: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: var(--nc-radius-md);
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .thumbPicture {
+    position: relative;
+    display: block;
+    overflow: hidden;
+    aspect-ratio: 16 / 9;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    transition:
+      translate var(--nc-spring-snappy-duration) var(--nc-spring-snappy),
+      box-shadow var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .thumbPicture > .blank > svg {
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+  }
+
+  .thumbChip {
+    position: absolute;
+    inset-block-end: var(--nc-space-1);
+    inset-inline-end: var(--nc-space-1);
+    font-size: var(--nc-text-2xs);
+  }
+
+  .thumbTitle {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+  }
+
+  .thumbChannel {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-block-start: calc(-1 * var(--nc-space-0-5));
+    font-size: var(--nc-text-2xs);
+    color: var(--nc-text-subtle);
+  }
+
+  @media (hover: hover) {
+    .thumb:hover .thumbPicture {
+      translate: 0 -2px;
+      box-shadow:
+        inset 0 0 0 1px var(--nc-border),
+        var(--nc-elevation-2);
+    }
+    .thumb:hover .picture {
+      scale: 1.04;
+    }
+  }
+
+  .thumb:active .thumbPicture {
+    scale: 0.975;
+    transition-duration: var(--nc-duration-instant);
+  }
+
+  .thumb:focus-visible {
+    outline: none;
+  }
+
+  .thumb:focus-visible .thumbPicture {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  /* A phone: a touch shows the shelf's next one peeking, and the disc is a little bigger. */
+  @media (pointer: coarse) {
+    .card {
+      --vc-disc: 4.25rem;
+    }
+    .shelf {
+      --vs-thumb: 8.75rem;
+    }
+  }
+
+  /* ── Still ─────────────────────────────────────────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    .card,
+    .picture,
+    .play,
+    .halo,
+    .thumbPicture {
+      transition: none;
+    }
+    .poster[data-loading] :is(.play, .halo),
+    .liveDot,
+    .card[data-arrived] .stage > .poster {
+      animation: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced'])
+    :is(.card, .picture, .play, .halo, .thumbPicture, .poster) {
+    transition: none;
+  }
+
+  :global([data-nacre-motion='reduced']) :is(.play, .halo, .liveDot, .poster, .controls) {
+    animation: none;
+  }
+}

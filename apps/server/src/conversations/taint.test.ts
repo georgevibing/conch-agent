@@ -25,6 +25,15 @@ describe('what taints a chat', () => {
       expect(taintFrom(`${prefix}web_fetch`, { url: 'https://example.org' })).toMatchObject({
         kind: 'web',
       });
+      // Videos found: their titles are the uploaders' words; the search words leave for YouTube.
+      for (const tool of ['video_search', 'video_details'])
+        expect(taintFrom(`${prefix}${tool}`, { query: 'bread' })).toMatchObject({
+          kind: 'web',
+          label: 'video titles from YouTube and Vimeo',
+        });
+      expect(sinkReason(`${prefix}video_search`, { query: 'x' }, { workspace: '/w' })).toBe(
+        'send a search query to YouTube',
+      );
       expect(taintFrom(`${prefix}read_document`, {})).toMatchObject({ kind: 'download' });
       expect(taintFrom(`${prefix}task_status`, {})).toMatchObject({ kind: 'app' });
       // Conch's own picture catalog and the note of a picture it made bring no one's words in.

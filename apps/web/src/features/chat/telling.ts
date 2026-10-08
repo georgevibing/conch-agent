@@ -70,6 +70,7 @@ const STANDALONE = new Set<ToolView['kind']>([
   'products',
   'places',
   'audio',
+  'videos',
 ]);
 
 export const standsAlone = (view: ToolView | undefined): view is ToolView =>
