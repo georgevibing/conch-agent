@@ -85,7 +85,7 @@ import {
   GUESS_LIMIT,
   foundText,
   isLean,
-  leanSystem,
+  leanPrompt,
   remember,
   searchTools,
   toolTokens,
@@ -502,6 +502,8 @@ export class ApiEngine implements Engine {
   #toolLessons: ToolLessons = new Map();
   /** A `/compact` in progress, by session: a turn waits for it rather than racing it. */
   #compacting = new Map<string, Promise<unknown>>();
+  /** Chats already told this model reads a shortened version of their agent's instructions. */
+  #shortened = new Set<string>();
   /** Conch keeps the transcript, so Conch fits long chats into the window (ADR 0055). */
   readonly context: EngineContext = {
     compact: (input) => this.#compactNow(input),
@@ -879,8 +881,9 @@ export class ApiEngine implements Engine {
         spent,
       });
       // A small window goes lean by itself: a short prompt, tools loaded on demand (ADR 0086).
+      const window = await this.#window(model);
       const lean = isLean({
-        window: await this.#window(model),
+        window,
         system: estimateTokens(input.systemAppend),
         tools: toolTokens([...allTools.values()].map((tool) => tool.spec)),
       });
@@ -897,6 +900,8 @@ export class ApiEngine implements Engine {
         lessons: this.#toolLessons,
       });
       if (plan.notice) yield plan.notice;
+      /** The agent's instructions were too long for this model to read whole beside the chat. */
+      let shortened = false;
       const systemFor = () => {
         // Conch's browser is the one way out to the web; the note mustn't deny it when it's there.
         const note = capabilitiesNote({
@@ -906,7 +911,11 @@ export class ApiEngine implements Engine {
           ...(this.variant.where && { where: this.variant.where }),
         });
         const full = [input.systemAppend.trim(), note].filter(Boolean).join('\n\n');
-        if (lean) return plan.system(leanSystem(full, { tools: plan.usable }));
+        if (lean) {
+          const fitted = leanPrompt(full, { tools: plan.usable, window });
+          if (fitted.trimmed) shortened = true;
+          return plan.system(fitted.text);
+        }
         // No tools it can use after all: how it works on a problem is thinking it through (ADR 0102).
         return plan.system(plan.usable ? full : withResilience(full, 'words'));
       };
@@ -938,6 +947,16 @@ export class ApiEngine implements Engine {
         signal: input.signal,
         spent,
       };
+      // Never in silence (ADR 0101): once a chat, the person hears their instructions were shortened.
+      if (shortened && !this.#shortened.has(sessionId)) {
+        if (this.#shortened.size > 1_000) this.#shortened.clear();
+        this.#shortened.add(sessionId);
+        yield {
+          type: 'notice',
+          code: 'instructions-shortened',
+          message: `${listed?.label ?? model} reads only the start of this agent’s instructions: all of them leave it too little room for the chat. A model that reads more at once gets them whole.`,
+        };
+      }
       /** Asked again once, by itself, after the provider said "too long" (ADR 0055). */
       let healed = false;
       /** Asked again once without pictures, after the model refused them (ADR 0070). */

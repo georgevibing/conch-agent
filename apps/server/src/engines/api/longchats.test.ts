@@ -10,6 +10,7 @@ import type { ModelInfo } from '@conch/protocol';
 import { describe, expect, it } from 'vitest';
 
 import type { CompletionInput, EngineEvent, TurnInput } from '../types';
+import { agentLayers } from '../../agents/prompt';
 import { SUMMARY_SYSTEM } from './context';
 import { ApiEngine } from './engine';
 import { collect, fakeHome } from './fake';
@@ -42,6 +43,8 @@ interface Script {
   window?: number;
   local?: boolean;
   models?: string[];
+  /** What Conch sends as the system prompt (`systemAppend`). */
+  system?: string;
 }
 
 function said(text: string, inputTokens = 0): AsyncIterable<WireEvent> {
@@ -102,7 +105,7 @@ async function setup(script: Script = {}) {
       prompt,
       seq,
       ...(resumeId && { resumeId }),
-      systemAppend: 'You are Pearl.',
+      systemAppend: script.system ?? 'You are Pearl.',
       cwd: process.cwd(),
       tools: [],
       requestPermission: async () => 'allow',
@@ -406,5 +409,49 @@ describe('/compact', () => {
       }),
     ).rejects.toThrow(/couldn’t write a summary/);
     expect((await chat.stored()).messages).toHaveLength(6);
+  });
+});
+
+describe('an agent with long instructions (ADR 0101)', () => {
+  /** About 9,000 tokens of the person's own rules, each one numbered so its loss would show. */
+  const rules = Array.from(
+    { length: 300 },
+    (_, i) => `Rule ${i + 1}: keep the garden diary in order, one entry for each bed.`,
+  ).join('\n\n');
+  const system = agentLayers({
+    agent: { name: 'James Claw', persona: { tone: 'warm', personality: '' }, instructions: rules },
+  });
+
+  it('carries them whole on every request, through compactions, the same every time', async () => {
+    const chat = await setup({ system, window: 32_000 });
+    const all: EngineEvent[] = [];
+    for (let i = 0; i < 40; i++) all.push(...(await chat.ask(long(i), i)));
+    // The chat was folded, and its summary never took the place of the instructions.
+    expect(compactions(all).length).toBeGreaterThan(0);
+    for (const request of chat.requests) {
+      expect(request.system).toContain('Rule 1: keep');
+      expect(request.system).toContain('Rule 300: keep');
+    }
+    // One system prompt from first to last, so a provider's cache keeps it.
+    expect(new Set(chat.requests.map((r) => r.system)).size).toBe(1);
+    expect(all.some((e) => e.type === 'notice' && e.code === 'instructions-shortened')).toBe(false);
+  });
+
+  it('on a model that reads little, keeps their start, tells the model, and tells the person once', async () => {
+    const chat = await setup({ system, window: 8_192 });
+    const first = await chat.ask('Hello', 1);
+    const second = await chat.ask('And again', 2);
+    const sent = chat.requests[0]?.system ?? '';
+    expect(sent).toContain('Rule 1: keep');
+    expect(sent).not.toContain('Rule 300: keep');
+    expect(sent).toMatch(/only the start of the user’s instructions: about [\d,]+ more words/);
+    const told = (events: EngineEvent[]) =>
+      events.filter((e) => e.type === 'notice' && e.code === 'instructions-shortened');
+    expect(told(first)).toEqual([
+      expect.objectContaining({
+        message: expect.stringMatching(/^Acme Large reads only the start/),
+      }),
+    ]);
+    expect(told(second)).toEqual([]);
   });
 });

@@ -16,8 +16,15 @@
  *    Tools a chat has loaded stay loaded, up to a handful. A model that calls a
  *    tool by name without loading it first simply gets it.
  *
+ * The person's instructions to the agent (ADR 0101) are theirs, so they're
+ * never cut in silence: they keep a fifth of the window (`instructionsRoom`),
+ * which is all of them on most models. When they're longer still, the start
+ * is kept to a paragraph's end, the model is told the rest was left out, and
+ * the engine tells the person once a chat (`leanPrompt`'s `trimmed`).
+ *
  * Pure: the engine decides when, this file says what.
  */
+import { INSTRUCTIONS_HEADING } from '../../agents/prompt';
 import { withResilience } from '../../conversations/resilience';
 import { estimateTokens } from './context';
 import type { ToolSpec } from './types';
@@ -46,21 +53,68 @@ const KEEP: readonly { heading: RegExp; max: number }[] = [
   { heading: /^# Memory\b/, max: 1_800 },
   // How it works on a problem (ADR 0102), in its compact form by then.
   { heading: /^# How you work on a problem\b/, max: 700 },
-  // The agent answering (ADR 0101): its persona, and what it was asked always to do.
+  // The agent answering (ADR 0101): its persona, and what it was asked always to do
+  // (the instructions' size is the window's: `instructionsRoom`).
   { heading: /^# Your persona\b/, max: 1_000 },
-  { heading: /^# Your instructions\b/, max: 1_500 },
   { heading: /^# What you can do in this conversation\b/, max: 1_200 },
 ];
 
 /** Words before the first heading. */
 const PREAMBLE_MAX = 1_200;
 
+/** The share of a lean model's window the person's instructions may take. */
+export const LEAN_INSTRUCTIONS_SHARE = 0.2;
+/** However small the window, at least this much of them (characters). */
+const INSTRUCTIONS_MIN = 1_500;
+
+/** How many characters of the agent's instructions a lean turn keeps, for a window this size. */
+export function instructionsRoom(window: number = LEAN_WINDOW): number {
+  return Math.max(INSTRUCTIONS_MIN, Math.floor(window * LEAN_INSTRUCTIONS_SHARE) * 4);
+}
+
+/**
+ * The instructions layer within `room`: whole when it fits, else its start to
+ * a paragraph's end (else a line's, else a word's) and a line telling the
+ * model that more was left out and to say so when it may matter.
+ */
+function fitInstructions(block: string, room: number): { text: string; left?: number } {
+  if (block.length <= room) return { text: block };
+  const head = block.slice(0, room);
+  const cut =
+    [head.lastIndexOf('\n\n'), head.lastIndexOf('\n'), head.lastIndexOf(' ')].find(
+      (at) => at > room * 0.6,
+    ) ?? room;
+  const rest = block.slice(cut).trim();
+  const words = rest.split(/\s+/).filter(Boolean).length;
+  return {
+    text: `${block.slice(0, cut).trimEnd()}\n\n[That is only the start of the user’s instructions: about ${words.toLocaleString('en')} more words were left out so this model has room for the chat. Follow what’s here. If a request may depend on a rule you can’t see, say you’re working from a shortened version of their instructions.]`,
+    left: rest.length,
+  };
+}
+
+/** What a lean prompt kept of the agent's instructions, when it couldn't keep them all. */
+export interface LeanTrim {
+  /** Characters of the instructions layer kept. */
+  kept: number;
+  /** Characters left out. */
+  left: number;
+}
+
 /**
  * The system prompt, lean: only the sections every turn needs, each within a
  * size, and a word on how to load tools. Everything else is left to the tools'
  * own descriptions, which arrive when they're loaded.
  */
-export function leanSystem(system: string, options: { tools: boolean }): string {
+export function leanSystem(system: string, options: { tools: boolean; window?: number }): string {
+  return leanPrompt(system, options).text;
+}
+
+/** The same, saying whether the agent's instructions had to be shortened (`trimmed`). */
+export function leanPrompt(
+  system: string,
+  options: { tools: boolean; window?: number },
+): { text: string; trimmed?: LeanTrim } {
+  let trimmed: LeanTrim | undefined;
   const blocks: string[] = [];
   let current: string[] = [];
   const fitted = withResilience(system, options.tools ? 'compact' : 'words');
@@ -73,6 +127,11 @@ export function leanSystem(system: string, options: { tools: boolean }): string 
   }
   if (current.length) blocks.push(current.join('\n'));
   const kept = blocks.flatMap((block, i) => {
+    if (block.startsWith(`${INSTRUCTIONS_HEADING}\n`)) {
+      const fit = fitInstructions(block.trim(), instructionsRoom(options.window));
+      if (fit.left) trimmed = { kept: fit.text.length, left: fit.left };
+      return [fit.text];
+    }
     // Words before any heading are the caller's own preamble: kept, within a size.
     const rule =
       i === 0 && !/^#{1,2} /.test(block)
@@ -92,7 +151,7 @@ export function leanSystem(system: string, options: { tools: boolean }): string 
         `To leave room for the conversation, your tools load when you need them. Call ${FIND_TOOLS} with a few words about what you want to do (for example “open a web page”, “remember something”, “read my calendar”), then call the tool it gives you. Tools you’ve loaded stay loaded. Never say you did something unless a tool result shows it.`,
       ].join('\n'),
     );
-  return kept.join('\n\n');
+  return { text: kept.join('\n\n'), ...(trimmed && { trimmed }) };
 }
 
 /** The one tool a lean turn always has. */
