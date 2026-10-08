@@ -158,4 +158,15 @@ describe('ListeningIndicator', () => {
     expect(onStop).toHaveBeenCalled();
     await expectAccessible(container);
   });
+
+  it('says when it stopped by itself, and listens again in one press', async () => {
+    const onResume = vi.fn();
+    const { container } = renderNacre(
+      <ListeningIndicator phrase="“Hey Pearl”" paused onResume={onResume} onStop={vi.fn()} />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Stopped listening for “Hey Pearl”');
+    await userEvent.click(screen.getByRole('button', { name: 'Listen again' }));
+    expect(onResume).toHaveBeenCalled();
+    await expectAccessible(container);
+  });
 });

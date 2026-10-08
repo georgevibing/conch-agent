@@ -94,3 +94,18 @@ export const ListeningForHeyConch: StoryObj<typeof ListeningIndicator> = {
     </Stack>
   ),
 };
+
+/** On a phone it stops by itself to save the battery, says so, and listens again in one press (ADR 0108). */
+export const ListeningPausedOnAPhone: StoryObj<typeof ListeningIndicator> = {
+  render: () => (
+    <Stack direction="row" gap={4} style={{ padding: 32 }}>
+      <ListeningIndicator phrase="“Hey Pearl”" onStop={() => undefined} />
+      <ListeningIndicator
+        phrase="“Hey Pearl”"
+        paused
+        onResume={() => undefined}
+        onStop={() => undefined}
+      />
+    </Stack>
+  ),
+};
