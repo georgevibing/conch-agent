@@ -162,7 +162,9 @@ export const WhereItemsLive: Story = {
  */
 export const ChoosingSeveral: Story = {
   render: () => {
-    const [chosen, setChosen] = useState<Set<string>>(new Set(['Netflix', 'Old forum']));
+    const [chosen, setChosen] = useState<Set<string>>(
+      new Set(['Netflix', 'Old forum', 'Bank of Somewhere']),
+    );
     const toggle = (title: string) =>
       setChosen((before) => {
         const next = new Set(before);
