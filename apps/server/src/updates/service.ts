@@ -1161,7 +1161,11 @@ export class UpdatesService {
     void this.deps.releases?.prune(this.deps.keep ?? []).catch(() => undefined);
     this.#bootHead = await this.deps.conch?.head().catch(() => undefined);
     // The web app built from other code than is here (pulled by hand): built again, in the background.
-    if (this.deps.freshWeb) void this.freshenWeb();
+    if (this.deps.freshWeb) {
+      // What a build beside the app left last time goes first.
+      this.deps.conch?.tidyWeb();
+      void this.freshenWeb();
+    }
     // Where the folder is now against what the last fetch brought (an update may have just landed).
     await this.#checkConch(false);
     await this.#save();

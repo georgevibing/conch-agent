@@ -12,7 +12,7 @@
  * local would be lost.
  */
 import { spawn as nodeSpawn } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, rmSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 
 import type { ConchUpdateStep } from '@conch/protocol';
@@ -230,7 +230,8 @@ export type ConchResult =
 
 /** Building the web app again from the code that's here (`ConchCheckout.buildWeb`). */
 export type WebBuildResult =
-  { ok: true; ms: number } | { ok: false; why: 'no-pnpm' | 'updating' | 'install' | 'build' };
+  | { ok: true; ms: number }
+  | { ok: false; why: 'no-pnpm' | 'updating' | 'install' | 'build' | 'swap' };
 
 export interface CheckoutDeps {
   /** Finds git; tests may point at a particular one. */
@@ -343,19 +344,73 @@ export class ConchCheckout {
     return this.#updating;
   }
 
+  /** Folders beside `dist` for a background build: the new one, and the one it replaced. */
+  get distNext(): string {
+    return `${this.dist}.next`;
+  }
+
+  get distOld(): string {
+    return `${this.dist}.old`;
+  }
+
   /**
-   * Build the web app again from the code that's here, while the one built
-   * before keeps serving until the new one is written. One at a time, and
-   * never during an update (it builds the web app itself).
+   * What a background build left behind on the last run: a half-made new
+   * app, and the one it replaced (served only for its old parts, until now).
+   */
+  tidyWeb(): void {
+    if (this.#building || this.#updating) return;
+    for (const folder of [this.distNext, this.distOld]) {
+      try {
+        rmSync(folder, { recursive: true, force: true });
+      } catch {
+        // Still in use (Windows): next start.
+      }
+    }
+  }
+
+  /**
+   * Build the web app again from the code that's here, beside the one
+   * serving (`dist.next`), then swap it in with two renames: a page never
+   * sees half an app. The one replaced stays as `dist.old` until the next
+   * start, so an open page still gets the parts it asks for. One at a time,
+   * and never during an update (it builds the web app itself).
    */
   buildWeb(): Promise<WebBuildResult> {
     if (this.#updating) return Promise.resolve({ ok: false, why: 'updating' });
     this.#building ??= (async (): Promise<WebBuildResult> => {
       const pnpm = await (this.deps.pnpm ?? findPnpm)();
       if (!pnpm) return { ok: false, why: 'no-pnpm' };
-      return this.#build(pnpm, { install: false });
+      rmSync(this.distNext, { recursive: true, force: true });
+      const built = await this.#build(pnpm, { install: false, beside: true });
+      if (!built.ok || !isBuilt(this.distNext)) {
+        rmSync(this.distNext, { recursive: true, force: true });
+        return built.ok ? { ok: false, why: 'build' } : { ok: false, why: built.why };
+      }
+      return this.#swapWeb() ? { ok: true, ms: built.ms } : { ok: false, why: 'swap' };
     })().finally(() => (this.#building = undefined));
     return this.#building;
+  }
+
+  /** `dist` → `dist.old`, `dist.next` → `dist`; back as it was when the second can't. */
+  #swapWeb(): boolean {
+    try {
+      rmSync(this.distOld, { recursive: true, force: true });
+      renameSync(this.dist, this.distOld);
+    } catch {
+      rmSync(this.distNext, { recursive: true, force: true });
+      return false;
+    }
+    try {
+      renameSync(this.distNext, this.dist);
+      return true;
+    } catch {
+      try {
+        renameSync(this.distOld, this.dist);
+      } catch {
+        // Nothing more to try: the next start builds it again.
+      }
+      return false;
+    }
   }
 
   /**
@@ -368,10 +423,13 @@ export class ConchCheckout {
     pnpm: Launch,
     {
       install,
+      beside = false,
       say,
       buildMs = BUILD_GUESS_MS,
     }: {
       install: boolean;
+      /** Into `dist.next`, leaving the app that's serving alone. */
+      beside?: boolean;
       say?: (phase: ConchUpdateStep, label: string, step: number, percent?: number) => void;
       buildMs?: number;
     },
@@ -402,7 +460,9 @@ export class ConchCheckout {
           BUILD_TICK_MS,
         )
       : undefined;
-    const built = await run(pnpm, BUILD, { cwd: this.root }).finally(() => clearInterval(ticking));
+    const built = await run(pnpm, beside ? BUILD_BESIDE : BUILD, { cwd: this.root }).finally(() =>
+      clearInterval(ticking),
+    );
     if (built.code !== 0) return { ok: false, why: 'build', tail: built.tail };
     return { ok: true, ms: Date.now() - buildStart };
   }
@@ -737,3 +797,5 @@ export class ConchCheckout {
 /** Fixed arguments, never from input. `confirmModulesPurge` would otherwise ask a question. */
 export const INSTALL = ['install', '--frozen-lockfile', '--config.confirmModulesPurge=false'];
 export const BUILD = ['--filter', '@conch/web', 'build'];
+/** The same build into `apps/web/dist.next` (pnpm passes the rest to `vite build`). */
+export const BUILD_BESIDE = [...BUILD, '--outDir', 'dist.next', '--emptyOutDir'];

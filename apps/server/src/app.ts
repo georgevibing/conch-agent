@@ -1586,8 +1586,14 @@ export async function buildApp(services: Services) {
     // without restarting the gateway. Unknown app routes fall back to the SPA;
     // missing assets (anything with a file extension) stay a real 404.
     await app.register(fastifyStatic, { root: dist, wildcard: true });
+    // The app built just before a rebuild swapped it out (updates/conch.ts), kept
+    // until the next start: a page loaded from it still gets the parts it asks for.
+    const replaced = `${dist}.old`;
     app.setNotFoundHandler((request, reply) => {
       const path = request.url.split('?')[0] ?? '';
+      const part = /^\/assets\/([\w.-]+)$/.exec(path)?.[1];
+      if (part && !part.startsWith('.') && existsSync(join(replaced, 'assets', part)))
+        return reply.sendFile(`assets/${part}`, replaced);
       if (path.startsWith('/api') || /\.[a-z0-9]+$/i.test(path)) {
         return reply.code(404).send({ error: 'not-found' });
       }

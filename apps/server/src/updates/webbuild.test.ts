@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -106,18 +107,24 @@ async function checkout({ built }: { built?: string | null } = {}) {
       await writeFile(join(dist, 'build.json'), JSON.stringify({ commit: built, builtAt: 'old' }));
   }
   const runs: string[] = [];
+  const args: string[][] = [];
   let fail = false;
   let hold: Promise<void> | undefined;
   let letGo = () => {};
-  const stream: Stream = async (_program, args, { cwd }) => {
-    const step = args.includes('build') ? 'build' : 'install';
+  const stream: Stream = async (_program, given, { cwd }) => {
+    const step = given.includes('build') ? 'build' : 'install';
     runs.push(step);
+    args.push(given);
     if (hold) await hold;
     if (fail) return { code: 1, tail: 'ERR_PNPM something broke' };
     if (step === 'build') {
-      await writeFile(join(cwd, 'apps/web/dist/index.html'), '<p>new</p>');
+      // Where `vite build --outDir` would write, as `--emptyOutDir` leaves it.
+      const at = given.indexOf('--outDir');
+      const out = join(cwd, 'apps/web', at === -1 ? 'dist' : (given[at + 1] ?? 'dist'));
+      await mkdir(out, { recursive: true });
+      await writeFile(join(out, 'index.html'), '<p>new</p>');
       await writeFile(
-        join(cwd, 'apps/web/dist/build.json'),
+        join(out, 'build.json'),
         JSON.stringify({ commit: git(cwd, 'rev-parse', 'HEAD'), builtAt: 'new' }),
       );
     }
@@ -133,6 +140,7 @@ async function checkout({ built }: { built?: string | null } = {}) {
     dist,
     conch,
     runs,
+    args,
     failing: () => (fail = true),
     holding: () => {
       hold = new Promise((resolve) => (letGo = resolve));
@@ -248,6 +256,57 @@ describe('a web app older than the code that was pulled', () => {
     // Built from the code that's here by then: nothing more to build (and nowhere to update from).
     expect(await updating).toMatchObject({ kind: 'refused' });
     expect(web.runs).toEqual(['build']);
+  });
+});
+
+describe('swapping the new web app in', () => {
+  it('builds beside the one serving, which stays whole until two renames swap them', async () => {
+    const web = await checkout({ built: B });
+    const release = web.holding();
+    const building = web.conch.buildWeb();
+    await vi.waitFor(() => expect(web.runs).toEqual(['build']));
+    expect(web.args[0]).toEqual([
+      '--filter',
+      '@conch/web',
+      'build',
+      '--outDir',
+      'dist.next',
+      '--emptyOutDir',
+    ]);
+    // While it builds, the app serving is untouched.
+    expect(await readFile(join(web.dist, 'index.html'), 'utf8')).toBe('<p>old</p>');
+    release();
+    expect(await building).toMatchObject({ ok: true });
+    expect(await readFile(join(web.dist, 'index.html'), 'utf8')).toBe('<p>new</p>');
+    expect(readStamp(web.dist)?.commit).toBe(web.head);
+    // The one replaced stays for its old parts, until the next start.
+    expect(await readFile(join(web.conch.distOld, 'index.html'), 'utf8')).toBe('<p>old</p>');
+    expect(existsSync(web.conch.distNext)).toBe(false);
+  });
+
+  it('leaves the app serving as it was when the build fails', async () => {
+    const web = await checkout({ built: B });
+    web.failing();
+    expect(await web.conch.buildWeb()).toEqual({ ok: false, why: 'build' });
+    expect(await readFile(join(web.dist, 'index.html'), 'utf8')).toBe('<p>old</p>');
+    expect(existsSync(web.conch.distNext)).toBe(false);
+    expect(existsSync(web.conch.distOld)).toBe(false);
+  });
+
+  it('clears what the last run left beside the app when the gateway starts', async () => {
+    const web = await checkout({ built: null });
+    // Built from the code that's here: nothing to build again.
+    await writeFile(join(web.dist, 'build.json'), JSON.stringify({ commit: web.head }));
+    await mkdir(web.conch.distNext, { recursive: true });
+    await writeFile(join(web.conch.distNext, 'index.html'), '<p>half</p>');
+    await mkdir(web.conch.distOld, { recursive: true });
+    const { service } = await gateway(web.conch);
+    service.start();
+    await vi.waitFor(() => expect(existsSync(web.conch.distOld)).toBe(false));
+    service.stop();
+    expect(existsSync(web.conch.distNext)).toBe(false);
+    expect(await readFile(join(web.dist, 'index.html'), 'utf8')).toBe('<p>old</p>');
+    expect(web.runs).toEqual([]);
   });
 });
 

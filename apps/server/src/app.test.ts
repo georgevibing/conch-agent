@@ -970,3 +970,27 @@ describe('Passwords and the providers’ sign-ins', () => {
     await vi.waitFor(async () => expect(await titles(app)).toContain('Codex sign-in'));
   });
 });
+
+describe('the web app, just after a rebuild swapped it in', () => {
+  it('still serves the parts of the one it replaced, and nothing else from it', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'conch-dist-'));
+    const dist = join(base, 'dist');
+    await mkdir(join(dist, 'assets'), { recursive: true });
+    await writeFile(join(dist, 'index.html'), '<p>new</p>');
+    await writeFile(join(dist, 'assets', 'index-new.js'), 'new');
+    await mkdir(join(`${dist}.old`, 'assets'), { recursive: true });
+    await writeFile(join(`${dist}.old`, 'index.html'), '<p>old</p>');
+    await writeFile(join(`${dist}.old`, 'assets', 'index-old.js'), 'old');
+    await writeFile(join(base, 'secret.js'), 'secret');
+    const { app } = await setup({ CONCH_WEB_DIST: dist });
+    close = () => app.close();
+    expect((await app.inject('/assets/index-new.js')).body).toBe('new');
+    const old = await app.inject('/assets/index-old.js');
+    expect(old.statusCode).toBe(200);
+    expect(old.body).toBe('old');
+    expect((await app.inject('/assets/index-gone.js')).statusCode).toBe(404);
+    expect((await app.inject('/assets/..%2F..%2Fsecret.js')).body).not.toBe('secret');
+    // Pages always come from the new one.
+    expect((await app.inject('/chat/anything')).body).toBe('<p>new</p>');
+  });
+});

@@ -5,7 +5,16 @@ import tseslint from 'typescript-eslint';
 
 /** Shared baseline for every TypeScript package in the repo. */
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/storybook-static/**', '**/coverage/**', '**/.turbo/**'] },
+  {
+    ignores: [
+      '**/dist/**',
+      '**/dist.next/**',
+      '**/dist.old/**',
+      '**/storybook-static/**',
+      '**/coverage/**',
+      '**/.turbo/**',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.strict,
   ...tseslint.configs.stylistic,
