@@ -1539,6 +1539,28 @@ const TOOLS: Case[] = [
     },
   ],
   [
+    'product_details',
+    'mcp__conch__product_details',
+    { urls: ['https://www.lakeland.co.uk/a', 'https://shop.example/b'] },
+    ok(
+      JSON.stringify({
+        products: [
+          { url: 'https://www.lakeland.co.uk/a', found: true, title: 'Kettle' },
+          { url: 'https://shop.example/b', found: false, problem: 'The site returned 403.' },
+        ],
+      }),
+    ),
+    {
+      family: 'research',
+      done: 'Looked at 2 products',
+      outcome: '1 product',
+      chips: [
+        { kind: 'site', label: 'lakeland.co.uk' },
+        { kind: 'site', label: 'shop.example' },
+      ],
+    },
+  ],
+  [
     'web_fetch with a title',
     'web_fetch',
     { url: 'https://www.amazon.de/dp/B0CHWRXH8B' },

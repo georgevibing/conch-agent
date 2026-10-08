@@ -621,6 +621,25 @@ function searchWebDraft(input: Input): Draft {
   };
 }
 
+/** `product_details`: shop pages read for what they sell, drawn as a shelf of cards. */
+function productsDraft(input: Input): Draft {
+  const urls = (Array.isArray(input.urls) ? input.urls : []).filter(
+    (u): u is string => typeof u === 'string',
+  );
+  const { chips } = siteChips(JSON.stringify(urls.map((url) => ({ url }))), 3);
+  const host = urls.length === 1 && urls[0] ? hostOf(urls[0]) : undefined;
+  return {
+    family: 'research',
+    words: say('look', host ? `at a product on ${host}` : `at ${plural(urls.length, 'product')}`),
+    ...(chips.length && { chips }),
+    finish: (output) => {
+      const found = record(parseJson(output)).products;
+      const shown = Array.isArray(found) ? found.filter((p) => record(p).found === true) : [];
+      return shown.length ? { outcome: plural(shown.length, 'product') } : {};
+    },
+  };
+}
+
 // ---------------------------------------------------------------- plans and helpers
 
 function planOutcome(
@@ -927,6 +946,7 @@ const CONCH: Record<string, (input: Input) => Draft> = {
   web_search: searchWebDraft,
   web_fetch: fetchDraft,
   recipe: recipeDraft,
+  product_details: productsDraft,
   read_file: (input) => readDraft(input),
   read_document: (input) => readDraft(input, 'document'),
   search_files: (input) => {

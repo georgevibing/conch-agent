@@ -21,6 +21,7 @@ const CAPS: Record<ToolView['kind'], number> = {
   // No rows of its own: its hours and days are capped by the protocol.
   weather: 0,
   recipe: 3,
+  products: 12,
 };
 
 /** A web link worth opening: `http(s)`, parseable, and with no sign-in tucked into it. */

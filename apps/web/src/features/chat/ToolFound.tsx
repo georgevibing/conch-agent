@@ -13,6 +13,7 @@ import {
 import { useUi } from '../../app/ui';
 import { SentAttachments } from './AttachmentViewer';
 import { recipeCards, recipeTimerDone } from './recipes';
+import { ShopShelf } from './ShopShelf';
 
 /**
  * Words for the open chat's composer, from anywhere in it: the same way ⌘K's
@@ -48,5 +49,7 @@ export function ToolFound({ view }: { view: ToolView }) {
       return <WeatherCard weather={view} />;
     case 'recipe':
       return <RecipeCards recipes={recipeCards(view.items)} onTimerDone={recipeTimerDone} />;
+    case 'products':
+      return <ShopShelf view={view} onAsk={insert} />;
   }
 }

@@ -308,6 +308,55 @@ function recipe(dish: string): PretendFind {
   };
 }
 
+function products(thing: string): PretendFind {
+  const view: ToolView = {
+    kind: 'products',
+    compare: true,
+    items: [
+      {
+        title: `Pour-over ${thing}, matte black`,
+        url: 'https://shop.example.org/p/pour-over',
+        price: { amount: 149, currency: 'USD' },
+        was: { amount: 195, currency: 'USD' },
+        rating: { value: 4.6, count: 1840 },
+        store: 'Example Shop',
+        brand: 'Fellow',
+        availability: 'in_stock',
+        highlights: ['0.9 litres', 'Holds a temperature for an hour', 'Gooseneck spout'],
+      },
+      {
+        title: `Classic ${thing}, brushed steel`,
+        url: 'https://kitchen.example.org/classic',
+        price: { amount: 89.5, currency: 'USD' },
+        rating: { value: 4.2, count: 312 },
+        store: 'Kitchen Things',
+        brand: 'Smeg',
+        availability: 'limited',
+        highlights: ['1.7 litres', 'Boils in 3 minutes'],
+      },
+      {
+        title: `Travel ${thing}`,
+        url: 'https://outdoors.example.org/travel',
+        price: { amount: 39, currency: 'USD' },
+        rating: { value: 3.8, count: 57 },
+        store: 'Outdoors',
+        availability: 'out_of_stock',
+        highlights: ['0.5 litres', 'Folds flat'],
+      },
+    ],
+  };
+  return {
+    tool: 'product_details',
+    input: {
+      urls: view.items.flatMap((i) => (i.url ? [i.url] : [])),
+      compare: true,
+    },
+    text: JSON.stringify({ products: view.items.map((i) => ({ ...i, found: true })) }),
+    view,
+    reply: `The pour-over ${thing} is the one to get if you make coffee: it holds a temperature, and it’s 23% off. The classic boils more water at once, for less.`,
+  };
+}
+
 /** What a prompt asks the pretend apps for, if anything. */
 export function pretendFind(prompt: string, now = Date.now()): PretendFind | undefined {
   const text = prompt.trim();
@@ -322,5 +371,7 @@ export function pretendFind(prompt: string, now = Date.now()): PretendFind | und
     return weather(now, /\bin ([A-Z][\w-]+(?: [A-Z][\w-]+)?)/.exec(text)?.[1] ?? 'Lisbon');
   const dish = /\b(?:a )?recipe for (.+?)[.?!]*$/i.exec(text)?.[1];
   if (dish) return recipe(dish);
+  const shopping = /\bshop for (?:an? |some )?([\w-]+?)s?[.?!]*$/i.exec(text)?.[1];
+  if (shopping) return products(shopping.toLowerCase());
   return undefined;
 }

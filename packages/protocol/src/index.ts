@@ -72,6 +72,7 @@ export * from './artifacts';
 export * from './chat-cards';
 export * from './views/weather';
 export * from './views/recipe';
+export * from './views/products';
 export * from './chat-list';
 export * from './chat-context';
 export * from './commands';

@@ -80,6 +80,7 @@ export * from './components/StatTile';
 
 // Chat patterns
 export * from './patterns';
+export * from './patterns/Products';
 export * from './patterns/DraftReview';
 export * from './patterns/Recipe';
 export * from './patterns/Integrations/GoogleSetupGuide';
