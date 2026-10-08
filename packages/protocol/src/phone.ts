@@ -178,8 +178,13 @@ export const VoiceStatus = z.object({
     z.object({ state: z.literal('downloading'), done: z.number(), total: z.number() }),
     z.object({ state: z.literal('ready') }),
   ]),
-  /** "Hey Conch" (ADR 0078): only in the desktop app, which this Conch runs in or not. */
-  wake: z.object({ available: z.boolean() }).optional(),
+  /**
+   * "Hey Conch" (ADR 0078, ADR 0108). `available`: this Conch runs in the
+   * desktop app, where it listens with the window closed; every other device
+   * listens only while Conch is open on it. `name`: the assistant's name,
+   * which the phrase follows ("Hey Pearl").
+   */
+  wake: z.object({ available: z.boolean(), name: z.string().max(80).optional() }).optional(),
 });
 export type VoiceStatus = z.infer<typeof VoiceStatus>;
 
@@ -187,8 +192,11 @@ export type VoiceStatus = z.infer<typeof VoiceStatus>;
 export const WakeResult = z.object({ heard: z.boolean(), rest: z.string().max(2000).optional() });
 export type WakeResult = z.infer<typeof WakeResult>;
 
-/** The window is listening for "Hey Conch", or has stopped (the tray says so too). */
-export const WakeStateBody = z.object({ on: z.boolean() });
+/**
+ * The window is listening for "Hey Conch", or has stopped (the tray says so
+ * too). `open`: a device listening only while Conch is open on it (ADR 0108).
+ */
+export const WakeStateBody = z.object({ on: z.boolean(), open: z.boolean().optional() });
 export type WakeStateBody = z.infer<typeof WakeStateBody>;
 
 export const Transcript = z.object({ text: z.string() });
