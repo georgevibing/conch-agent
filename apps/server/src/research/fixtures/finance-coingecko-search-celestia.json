@@ -1,0 +1,26 @@
+{
+  "coins": [
+    {
+      "id": "celestia",
+      "name": "Celestia",
+      "api_symbol": "celestia",
+      "symbol": "TIA",
+      "market_cap_rank": 62,
+      "thumb": "",
+      "large": ""
+    },
+    {
+      "id": "celestia-bridged",
+      "name": "Bridged Celestia",
+      "api_symbol": "celestia-bridged",
+      "symbol": "TIA.B",
+      "market_cap_rank": null,
+      "thumb": "",
+      "large": ""
+    }
+  ],
+  "exchanges": [],
+  "icons": [],
+  "categories": [],
+  "nfts": []
+}

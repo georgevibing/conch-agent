@@ -103,7 +103,10 @@ export function taintFrom(toolName: string, input: unknown, app?: string): Taint
     return { kind: 'web', label: 'OpenStreetMap places' };
   // Prices and filings: someone else's numbers and company names, like a page.
   if (/^(?:mcp__conch__)?(?:quote|price_history)$/.test(toolName))
-    return { kind: 'web', label: 'market prices from Stooq' };
+    return { kind: 'web', label: 'market prices from Stooq and CoinGecko' };
+  // A coin's description and the market's coin names: anyone can list a coin.
+  if (/^(?:mcp__conch__)?crypto_market$/.test(toolName))
+    return { kind: 'web', label: 'crypto prices from CoinGecko' };
   if (/^(?:mcp__conch__)?fundamentals$/.test(toolName))
     return { kind: 'web', label: 'company filings from SEC EDGAR' };
   if (WEB_READERS.has(toolName))
@@ -302,9 +305,11 @@ export function sinkReason(
       .length > 120
   )
     return 'send a long place search to OpenStreetMap';
-  // `quote`, `price_history` and `fundamentals` are not sinks: only a symbol that already
-  // matches a ticker's shape ever reaches a service, and a company name is matched against
-  // the regulator's own list on this computer, so there's no way out to carry anything.
+  // `quote`, `price_history`, `fundamentals` and `crypto_market` are not sinks: only a
+  // symbol that already matches a ticker's shape ever reaches a service, a company name is
+  // matched against the regulator's own list on this computer, and a coin's name goes to
+  // CoinGecko's search only when it is a coin's shape (three short words at most, 32
+  // characters, `coinShaped`), so there's no way out to carry anything.
   // A card's lookup: the pages a preview opens, like web_fetch; a name sent to look up is
   // research, unless it's long enough to carry what was read.
   const card = CARDS.exec(toolName)?.[1];

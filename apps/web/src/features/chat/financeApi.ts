@@ -17,12 +17,16 @@ const Answer = z.object({ series: PriceSeries });
 export async function priceHistory(
   symbol: string,
   period: FinancePeriod,
+  coin?: { id: string; currency?: string },
 ): Promise<PriceSeries | undefined> {
   try {
-    const answer = await request(
-      Answer,
-      `/api/finance/history?symbol=${encodeURIComponent(symbol)}&period=${encodeURIComponent(period)}`,
-    );
+    const query = new URLSearchParams({ symbol, period });
+    // A coin's card asks for the very coin it shows, in the currency it shows it in.
+    if (coin) {
+      query.set('coin', coin.id);
+      if (coin.currency) query.set('currency', coin.currency);
+    }
+    const answer = await request(Answer, `/api/finance/history?${query.toString()}`);
     return answer.series;
   } catch {
     return undefined;

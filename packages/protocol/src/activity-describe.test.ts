@@ -1593,6 +1593,13 @@ const TOOLS: Case[] = [
     { family: 'research', done: 'Read Apple and Microsoft’s filings' },
   ],
   [
+    'crypto_market',
+    'mcp__conch__crypto_market',
+    {},
+    ok(JSON.stringify({ market: { totalMarketCap: 2.4e12, change24h: -1.234, currency: 'USD' } })),
+    { family: 'research', done: 'Checked how crypto is doing', outcome: 'Down 1.23% in 24h' },
+  ],
+  [
     'music_search',
     'mcp__conch__music_search',
     { query: 'bohemian rhapsody', kind: 'song' },

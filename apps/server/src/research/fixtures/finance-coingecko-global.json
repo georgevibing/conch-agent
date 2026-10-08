@@ -1,0 +1,29 @@
+{
+  "data": {
+    "active_cryptocurrencies": 17234,
+    "upcoming_icos": 0,
+    "ongoing_icos": 49,
+    "ended_icos": 3376,
+    "markets": 1212,
+    "total_market_cap": {
+      "usd": 2412345678901,
+      "eur": 2223456789012,
+      "gbp": 1901234567890,
+      "btc": 35912345
+    },
+    "total_volume": {
+      "usd": 81234567890,
+      "eur": 74912345678,
+      "gbp": 64012345678
+    },
+    "market_cap_percentage": {
+      "btc": 54.62,
+      "eth": 13.21,
+      "usdt": 4.62,
+      "bnb": 3.1,
+      "sol": 2.8
+    },
+    "market_cap_change_percentage_24h_usd": 1.234,
+    "updated_at": 1791666240
+  }
+}

@@ -79,6 +79,7 @@ const STANDALONE = new Set<ToolView['kind']>([
   'chart',
   'quotes',
   'fundamentals',
+  'crypto-market',
 ]);
 
 export const standsAlone = (view: ToolView | undefined): view is ToolView =>

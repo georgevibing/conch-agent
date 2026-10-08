@@ -142,3 +142,128 @@ describe('prices a tool found, in the chat', () => {
     expect(card).toHaveTextContent(/not financial advice/);
   });
 });
+
+const coin = {
+  symbol: 'UNI',
+  name: 'Uniswap',
+  currency: 'EUR',
+  class: 'crypto',
+  price: 9.12,
+  change: -0.14,
+  changePercent: -1.5,
+  asOf: '2026-10-09T21:04:11Z',
+  delayed: true,
+  dayState: 'always',
+  crypto: {
+    id: 'uniswap',
+    rank: 25,
+    marketCap: 5_480_000_000,
+    supply: { circulating: 600_483_073, max: 1e9 },
+    ath: { price: 41.5, date: '2021-05-03T05:25:04Z', fromPercent: -78 },
+    changes: { '1h': 0.05, '24h': -1.5, '7d': -3.1, '30d': 6.4, '1y': 22 },
+    alternatives: [{ id: 'unicorn-token', symbol: 'UNI', name: 'Unicorn Token', rank: 3412 }],
+    source: 'CoinGecko',
+  },
+  source: 'CoinGecko',
+};
+
+describe('coins a tool found, in the chat', () => {
+  it('is the coin’s own card, 24/7, and a chip asks for that very coin, in its currency', async () => {
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/finance/history': () => ({
+        series: { ...series('1W', [9.4, 9.2, 9.12]), symbol: 'UNI', currency: 'EUR' },
+      }),
+    });
+    renderApp(<ChatView conversationId="c3" />, { route: '/c/c3' });
+    await screen.findByRole('textbox', { name: 'Message Conch' });
+    act(() => {
+      push('c3', 0, { type: 'user.message', messageId: 'u1', text: 'What’s UNI at?' });
+      push('c3', 1, {
+        type: 'tool.started',
+        toolUseId: 't3',
+        name: 'mcp__conch__quote',
+        input: { symbols: ['UNI'] },
+      });
+      push('c3', 2, {
+        type: 'tool.finished',
+        toolUseId: 't3',
+        status: 'success',
+        output: '{"quotes":[]}',
+        view: {
+          kind: 'quotes',
+          items: [coin],
+          series: [
+            {
+              ...series('1M', [8.6, 8.9, 9.12]),
+              symbol: 'UNI',
+              currency: 'EUR',
+              source: 'CoinGecko (hourly)',
+            },
+          ],
+        },
+      });
+    });
+    const card = await screen.findByRole('region', { name: 'Uniswap price' });
+    expect(card).toHaveTextContent(/24\/7 · as of/);
+    expect(card).toHaveTextContent(/Also “UNI”: Unicorn Token/);
+    expect(card).toHaveTextContent(/not one exchange’s price · not live · not financial advice/);
+    // It keeps its share bar, as every money card does.
+    expect(within(card).getAllByRole('button').length).toBeGreaterThan(1);
+
+    const chips = within(card).getByRole('radiogroup', {
+      name: 'Moves, and the range the chart draws',
+    });
+    await userEvent.click(within(chips).getByRole('radio', { name: /Last 7 days/ }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.path.startsWith('/api/finance/history'))).toBe(true),
+    );
+    const asked = calls.find((c) => c.path.startsWith('/api/finance/history'))?.path ?? '';
+    expect(asked).toContain('symbol=UNI');
+    expect(asked).toContain('period=1W');
+    expect(asked).toContain('coin=uniswap');
+    expect(asked).toContain('currency=EUR');
+  });
+
+  it('draws crypto as a whole as its own card, standing in sight', async () => {
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+    });
+    renderApp(<ChatView conversationId="c4" />, { route: '/c/c4' });
+    await screen.findByRole('textbox', { name: 'Message Conch' });
+    act(() => {
+      push('c4', 0, { type: 'user.message', messageId: 'u1', text: 'How’s crypto doing?' });
+      push('c4', 1, {
+        type: 'tool.started',
+        toolUseId: 't4',
+        name: 'mcp__conch__crypto_market',
+        input: {},
+      });
+      push('c4', 2, {
+        type: 'tool.finished',
+        toolUseId: 't4',
+        status: 'success',
+        output: '{"market":{}}',
+        view: {
+          kind: 'crypto-market',
+          currency: 'USD',
+          totalMarketCap: 2.41e12,
+          change24h: 1.23,
+          dominance: { btc: 54.62, eth: 13.21 },
+          coins: [
+            { id: 'bitcoin', symbol: 'BTC', name: 'Bitcoin', rank: 1, price: 67_187 },
+            { id: 'ethereum', symbol: 'ETH', name: 'Ethereum', rank: 2, price: 2612.4 },
+          ],
+          asOf: '2026-10-09T21:04:11Z',
+          source: 'CoinGecko',
+        },
+      });
+    });
+    const card = await screen.findByRole('region', { name: 'The crypto market' });
+    expect(card).toHaveTextContent(/up 1\.23% in 24 hours/);
+    expect(within(card).getByRole('table', { name: 'The biggest coins' })).toBeInTheDocument();
+    expect(card).toHaveTextContent(/Everything else\s*32\.17%/);
+  });
+});

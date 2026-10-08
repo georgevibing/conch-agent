@@ -175,7 +175,9 @@ export function needs(
       toolName,
     ) ||
     /(?:knowledge_card|link_preview|book_search|show_search)$/.test(toolName) ||
-    /^(?:mcp__conch__)?(?:recipe|places|quote|price_history|fundamentals)$/.test(toolName) ||
+    /^(?:mcp__conch__)?(?:recipe|places|quote|price_history|fundamentals|crypto_market)$/.test(
+      toolName,
+    ) ||
     BROWSER_READS.test(toolName)
   )
     return { capability: 'web' };

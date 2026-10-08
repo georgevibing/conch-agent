@@ -38,15 +38,20 @@ describe('what taints a chat', () => {
       for (const tool of ['quote', 'price_history'])
         expect(taintFrom(`${prefix}${tool}`, { symbols: ['AAPL'] })).toMatchObject({
           kind: 'web',
-          label: 'market prices from Stooq',
+          label: 'market prices from Stooq and CoinGecko',
         });
       expect(taintFrom(`${prefix}fundamentals`, { companies: ['AAPL'] })).toMatchObject({
         kind: 'web',
         label: 'company filings from SEC EDGAR',
       });
+      expect(taintFrom(`${prefix}crypto_market`, {})).toMatchObject({
+        kind: 'web',
+        label: 'crypto prices from CoinGecko',
+      });
       // None of them is a sink: only a ticker's own shape ever reaches a service,
-      // and a company name is matched against the regulator's list on this computer.
-      for (const tool of ['quote', 'price_history', 'fundamentals'])
+      // a company name is matched against the regulator's list on this computer,
+      // and a coin's name is sent to search only when it's a coin's shape.
+      for (const tool of ['quote', 'price_history', 'fundamentals', 'crypto_market'])
         expect(
           sinkReason(
             `${prefix}${tool}`,

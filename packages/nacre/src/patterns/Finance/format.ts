@@ -31,6 +31,8 @@ export function priceDigits(value: number): number {
   const size = Math.abs(value);
   if (size === 0) return 2;
   if (size >= 10_000) return 0;
+  // A coin worth a fraction of a cent keeps three significant figures: $0.0000123.
+  if (size < 0.01) return Math.min(12, Math.ceil(-Math.log10(size)) + 2);
   if (size < 10 && !Number.isInteger(Math.round(value * 10_000) / 100)) return 4;
   return 2;
 }
@@ -172,17 +174,38 @@ export function axisDate(date: string, period: FinancePeriod, locale?: string): 
   return at.toLocaleDateString(locale, options);
 }
 
+/** The time of day, as the reader's own clock shows it: "21:04". */
+export function clockWords(when: string, locale?: string): string {
+  const at = new Date(when);
+  if (Number.isNaN(at.getTime())) return when;
+  return at.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+}
+
+/**
+ * A short axis label for a point a chart has the instant of: the time for a
+ * day or less, the weekday for a week, the date beyond.
+ */
+export function axisMoment(when: string, period: FinancePeriod, locale?: string): string {
+  const at = new Date(when);
+  if (Number.isNaN(at.getTime())) return when;
+  if (period === '1D') return clockWords(when, locale);
+  if (period === '1W') return at.toLocaleDateString(locale, { weekday: 'short', day: 'numeric' });
+  return at.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+}
+
 /** What the market's state says, in plain words. */
 export const MARKET_WORDS: Record<MarketState, string> = {
   open: 'Open',
   closed: 'Closed',
   pre: 'Before the open',
   post: 'After the close',
+  always: '24/7',
   unknown: '',
 };
 
 /** The period in words, for a caption: "the last three months". */
 export const PERIOD_WORDS: Record<FinancePeriod, string> = {
+  '1D': 'the last day',
   '1W': 'the last week',
   '1M': 'the last month',
   '3M': 'the last three months',
@@ -278,4 +301,56 @@ export function filedWords(
     figure.periodEnd ? `period ended ${dateWords(figure.periodEnd, locale)}` : undefined,
   ].filter(Boolean);
   return parts.join(' · ');
+}
+
+/**
+ * A coin's own hue for its lettermark, where it has one people know (bitcoin's
+ * orange, ether's indigo); any other coin gets one from its letters, the same
+ * every time. Decoration only: the symbol is always written beside it.
+ */
+const COIN_HUES: Record<string, number> = {
+  BTC: 62,
+  ETH: 272,
+  SOL: 298,
+  XRP: 245,
+  ADA: 252,
+  DOGE: 86,
+  LTC: 255,
+  BCH: 150,
+  DOT: 350,
+  AVAX: 25,
+  LINK: 262,
+  XMR: 48,
+  TRX: 22,
+  ETC: 150,
+  USDT: 168,
+  USDC: 248,
+  BNB: 90,
+  SHIB: 40,
+  XLM: 262,
+  TON: 232,
+  UNI: 345,
+  TIA: 292,
+};
+
+export function coinHue(symbol: string): number {
+  const known = COIN_HUES[symbol.toUpperCase()];
+  if (known !== undefined) return known;
+  return [...symbol].reduce((sum, c) => (sum * 31 + c.charCodeAt(0)) % 360, 7);
+}
+
+/** An amount of coins, short: "19.61M", "1.11B". */
+export function coinCount(value: number, locale?: string): string {
+  return formatter(locale, {
+    notation: 'compact',
+    maximumFractionDigits: value >= 1_000 ? 2 : 1,
+  }).format(value);
+}
+
+/** A whole-ish percentage for a gauge's words: "38%", "0.4%". */
+export function share(value: number, locale?: string): string {
+  return formatter(locale, {
+    style: 'percent',
+    maximumFractionDigits: Math.abs(value) < 10 ? 1 : 0,
+  }).format(value / 100);
 }

@@ -1,0 +1,44 @@
+{
+  "coins": [
+    {
+      "id": "uniswap",
+      "name": "Uniswap",
+      "api_symbol": "uniswap",
+      "symbol": "UNI",
+      "market_cap_rank": 25,
+      "thumb": "https://coin-images.coingecko.com/coins/images/12504/thumb/uni.jpg",
+      "large": "https://coin-images.coingecko.com/coins/images/12504/large/uni.jpg"
+    },
+    {
+      "id": "unicorn-token",
+      "name": "Unicorn Token",
+      "api_symbol": "unicorn-token",
+      "symbol": "UNI",
+      "market_cap_rank": 3412,
+      "thumb": "https://example.invalid/t.png",
+      "large": "https://example.invalid/l.png"
+    },
+    {
+      "id": "unification",
+      "name": "Unification",
+      "api_symbol": "unification",
+      "symbol": "FUND",
+      "market_cap_rank": 1203,
+      "thumb": "",
+      "large": ""
+    },
+    {
+      "id": "uni-coin",
+      "name": "UNI COIN",
+      "api_symbol": "uni-coin",
+      "symbol": "uni",
+      "market_cap_rank": null,
+      "thumb": "",
+      "large": ""
+    }
+  ],
+  "exchanges": [],
+  "icons": [],
+  "categories": [],
+  "nfts": []
+}

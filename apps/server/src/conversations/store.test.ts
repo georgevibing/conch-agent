@@ -31,6 +31,7 @@ describe('conversation helpers', () => {
     expect(summarizeToolUse('fundamentals', { companies: ['Apple'] })).toBe(
       'Look up filings for Apple',
     );
+    expect(summarizeToolUse('mcp__conch__crypto_market', {})).toBe('Look up how crypto is doing');
   });
 
   it('makes short titles', () => {
