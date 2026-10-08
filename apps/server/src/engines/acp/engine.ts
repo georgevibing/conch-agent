@@ -363,6 +363,8 @@ export class AcpEngine implements Engine {
     signInHint: 'Conch connects these apps itself — add them, and sign in to them, in Apps.',
   };
   readonly hostTools = true;
+  /** Its commands are the door's, so they run where the chat's work runs (ADR 0106). */
+  readonly places = true;
   readonly attachments = { images: true, files: true };
   #running = new Map<string, Promise<Running>>();
   #status?: { value: EngineStatus; at: number };

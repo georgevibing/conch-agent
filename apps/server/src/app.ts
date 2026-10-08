@@ -111,6 +111,7 @@ import { AvatarError, AvatarStore } from './profile/avatar';
 import { ProfileUnavailable, understandProfile } from './profile/understand';
 import { registerBackupRoutes } from './backup/routes';
 import { registerBrowserRoutes } from './browser/routes';
+import { registerWorkPlaceRoutes } from './workplaces/routes';
 import { registerChannelLinkRoutes } from './channels/link-routes';
 import { registerChannelRoutes } from './channels/routes';
 import { registerTerminalRoutes } from './terminal/routes';
@@ -234,6 +235,7 @@ export async function buildApp(services: Services) {
   registerMcpEndpoint(app, services.mcp, gate, services.mcpSessions);
   registerMcpRoutes(app, services.mcpPairing, gate);
   registerBrowserRoutes(app, services, gate);
+  registerWorkPlaceRoutes(app, services, gate);
   registerTerminalRoutes(app, services, gate);
   registerLocalRoutes(app, services, gate);
   registerComputerRoutes(app, services.computer);

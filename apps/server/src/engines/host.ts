@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { sandboxSupport, secretPlaces } from '../conversations/sandbox';
 import { PROTECTED_MESSAGE, touchesProtected } from '../lib/protect';
 import { SEALED_HINT } from './trust';
+import { PlaceUnavailable } from '../workplaces/types';
 import type { HostTool, TurnInput } from './types';
 
 const MAX_FILE = 1024 * 1024;
@@ -109,8 +110,52 @@ finally { await SandboxManager.reset(); }
 `;
 
 /** Commands in this turn run sealed: this computer can, and sealing is on (it hands the turn its box). */
-export function sealable(input: Pick<TurnInput, 'sandbox'>): boolean {
+export function sealable(input: Pick<TurnInput, 'sandbox' | 'place'>): boolean {
+  // Elsewhere (ADR 0106): the place says whether it can keep the sealed box's promise.
+  if (input.place) return input.place.seals;
   return Boolean(input.sandbox) && sandboxSupport().available;
+}
+
+/** A command, run where the chat's work runs (ADR 0106), with the same rules and words. */
+async function runElsewhere(
+  input: TurnInput,
+  place: NonNullable<TurnInput['place']>,
+  command: string,
+  timeoutMs: number,
+  open: boolean,
+): Promise<string> {
+  const forbidden = await forbiddenPlaces(input);
+  // Your keys are never named, wherever the command runs: there are keys there too.
+  if (touchesProtected({ command }, forbidden)) throw new Error(PROTECTED_MESSAGE);
+  const result = await place
+    .run({
+      command,
+      cwd: input.cwd,
+      timeoutMs: Math.max(timeoutMs, MIN_COMMAND_MS),
+      open: open || !place.seals,
+      signal: input.signal,
+      conversationId: input.conversationId,
+      forbidden,
+    })
+    .catch((error: unknown) => {
+      input.signal.throwIfAborted();
+      if (error instanceof PlaceUnavailable)
+        throw new Error(
+          `${error.message} The command didn’t run. Tell the person in one sentence (the “where work runs” chip under the message box has the fix), and don’t run it another way: they chose where this chat’s work runs.`,
+        );
+      throw error;
+    });
+  input.signal.throwIfAborted();
+  const note = result.note ? `\n(${result.note})` : '';
+  if (result.timedOut)
+    throw new Error(
+      `The command took longer than ${Math.round(timeoutMs / 1000)}s and was stopped. For a long one (a big clone, an install), set timeout_ms higher.${note}`,
+    );
+  if (result.code !== 0)
+    throw new Error(
+      `Command exited with code ${result.code ?? 'unknown'}.\n${result.output}${!open && place.seals ? SEALED_HINT : ''}${note}`,
+    );
+  return (result.output || 'Command completed with no output.') + note;
 }
 
 /**
@@ -127,6 +172,7 @@ export async function runHostCommand(
   { unsealed = false }: { unsealed?: boolean } = {},
 ): Promise<string> {
   input.signal.throwIfAborted();
+  if (input.place) return runElsewhere(input, input.place, command, timeoutMs, unsealed);
   // No box for this turn: this computer can't make one, or sealing is off in Settings.
   const unboxed = unsealed || !sealable(input);
   if (unboxed) {
@@ -337,9 +383,11 @@ export function hostComputerTools(input: TurnInput): HostTool[] {
     },
     {
       name: 'Bash',
-      description: sealable(input)
-        ? 'Run a command in the work folder, sealed by the operating system: no network, no secrets, and writes stay in the work folder (not .git). For a command that needs more (the network for git clone or an install, or files elsewhere), set dangerouslyDisableSandbox: true; it then runs with the person’s own access, and they are asked first unless they chose Full trust, where git, installs and work in their other folders run that way by themselves. Never tell the person the session is read-only: ask for what you need.'
-        : 'Run a command in the work folder. This computer can’t seal commands, so each one runs with the person’s own access (the network included), and they are asked first unless they chose Full trust.',
+      description: input.place
+        ? `Run a command. ${input.place.about} Never tell the person the session is read-only: ask for what you need.`
+        : sealable(input)
+          ? 'Run a command in the work folder, sealed by the operating system: no network, no secrets, and writes stay in the work folder (not .git). For a command that needs more (the network for git clone or an install, or files elsewhere), set dangerouslyDisableSandbox: true; it then runs with the person’s own access, and they are asked first unless they chose Full trust, where git, installs and work in their other folders run that way by themselves. Never tell the person the session is read-only: ask for what you need.'
+          : 'Run a command in the work folder. This computer can’t seal commands, so each one runs with the person’s own access (the network included), and they are asked first unless they chose Full trust.',
       input: {
         command: z.string().min(1).max(32_000),
         timeout_ms: z.number().int().min(100).max(600_000).default(30_000),

@@ -35,6 +35,8 @@ import type {
 import { checkHostArgs, lenientSchema, withNotes } from '../tools/args';
 import { detectClaude } from './detect';
 import { PROTECTED_MESSAGE, touchesProtected } from '../../lib/protect';
+import { openRelay } from '../../workplaces/relay';
+import { forbiddenPlaces } from '../host';
 import { childEnv } from './env';
 import { startClaudeLogin } from './login';
 import { Translator } from './translate';
@@ -143,6 +145,11 @@ export class ClaudeCodeEngine implements Engine {
     signInHint: 'In a terminal, run claude, then /mcp, to sign it in.',
     account: { label: 'your Claude account', url: 'https://claude.ai/settings/connectors' },
   };
+  /**
+   * Its own commands are handed to Conch (the hook rewrites each to the relay, `workplaces/relay.ts`),
+   * so they run where the chat's work runs (ADR 0106). Its file tools work here, on the work folder.
+   */
+  readonly places = true;
   /** Claude sees images, and Claude Code opens files (PDFs, spreadsheets…) with its own tools. */
   readonly attachments = { images: true, files: true };
   #cache?: { status: EngineStatus; at: number };
@@ -587,6 +594,24 @@ export class ClaudeCodeEngine implements Engine {
     /** The mode Claude Code runs in right now (it follows a mode picked mid-turn). */
     let sdkMode = this.#sdkMode(input.options.permissionMode, input.options.model);
     const asksItself = input.tools.some((t) => t.name === 'ask');
+    // Where work runs (ADR 0106): its Bash, handed to the place through this turn's relay.
+    const place = input.place;
+    const relay =
+      place &&
+      openRelay({
+        place,
+        conversationId: input.conversationId,
+        cwd: input.cwd,
+        forbidden: () => forbiddenPlaces(input),
+        refuses: (command, forbidden) =>
+          touchesProtected({ command }, forbidden) ? PROTECTED_MESSAGE : undefined,
+        signal: abort.signal,
+      });
+    /** Commands sent to the place: what the model wrote (shown and asked about), and what runs. */
+    const routed = new Map<
+      string,
+      { shown: Record<string, unknown>; runs: Record<string, unknown> }
+    >();
     let finished = false;
     try {
       const q = query({
@@ -671,12 +696,51 @@ export class ClaudeCodeEngine implements Engine {
                       if (hookInput.tool_use_id) refused.add(hookInput.tool_use_id);
                       return deny(PROTECTED_MESSAGE);
                     }
+                    const elsewhere =
+                      relay &&
+                      place &&
+                      toolName === 'Bash' &&
+                      typeof toolInput.command === 'string';
+                    // A place that can't seal runs every command as if it left the box: judged so.
+                    const judged =
+                      elsewhere && !place.seals
+                        ? { ...toolInput, dangerouslyDisableSandbox: true }
+                        : toolInput;
                     const verdict = await input.guard?.({
                       toolName,
                       toolUseId: hookInput.tool_use_id,
-                      input: toolInput,
+                      input: judged,
                     });
                     if (verdict?.decision === 'deny') return deny(verdict.message);
+                    if (elsewhere && hookInput.tool_use_id) {
+                      const timeout = Number(toolInput.timeout);
+                      const runs = {
+                        ...toolInput,
+                        command: await relay.wrap({
+                          command: String(toolInput.command),
+                          timeoutMs: Math.min(
+                            Number.isFinite(timeout) && timeout > 0 ? timeout : 120_000,
+                            600_000,
+                          ),
+                          open: judged.dangerouslyDisableSandbox === true,
+                        }),
+                        // The place is the box; the runner itself only reaches this computer's loopback.
+                        dangerouslyDisableSandbox: true,
+                      };
+                      routed.set(hookInput.tool_use_id, { shown: judged, runs });
+                      // Asked through Conch (canUseTool), which answers by the mode as for any command.
+                      return {
+                        hookSpecificOutput: {
+                          hookEventName: 'PreToolUse' as const,
+                          permissionDecision: 'ask' as const,
+                          permissionDecisionReason:
+                            verdict?.decision === 'ask'
+                              ? verdict.reason
+                              : 'Runs where this chat’s work runs.',
+                          updatedInput: runs,
+                        },
+                      };
+                    }
                     if (verdict?.decision === 'ask')
                       return {
                         hookSpecificOutput: {
@@ -700,13 +764,15 @@ export class ClaudeCodeEngine implements Engine {
               refused.add(toolUseID);
               return { behavior: 'deny', message: PROTECTED_MESSAGE };
             }
+            const route = routed.get(toolUseID);
             const decision = await input.requestPermission(
               {
                 toolName,
                 toolUseId: toolUseID,
-                input: toolInput,
-                // In its own auto mode Claude Code asks only when its classifier wants a person.
-                ...(sdkMode === 'auto' && { escalated: true }),
+                input: route?.shown ?? toolInput,
+                // In its own auto mode Claude Code asks only when its classifier wants a person;
+                // a command sent elsewhere was asked about by Conch, so its mode answers.
+                ...(sdkMode === 'auto' && !route && { escalated: true }),
               },
               signal,
             );
@@ -724,7 +790,7 @@ export class ClaudeCodeEngine implements Engine {
             // remembers it). Claude Code's suggested rules are deliberately not
             // forwarded: they'd be written to .claude/settings.local.json and
             // silently apply to every future chat and routine.
-            return { behavior: 'allow', updatedInput: toolInput };
+            return { behavior: 'allow', updatedInput: route?.runs ?? toolInput };
           },
         },
       });
@@ -800,6 +866,7 @@ export class ClaudeCodeEngine implements Engine {
       }
     } finally {
       input.signal.removeEventListener('abort', onAbort);
+      await relay?.close();
     }
   }
 }

@@ -475,6 +475,8 @@ export class ApiEngine implements Engine {
     mode: 'bridge',
     signInHint: 'Conch connects these apps itself — add them, and sign in to them, in Apps.',
   };
+  /** Its commands are Conch's, so they run where the chat's work runs (ADR 0106). */
+  readonly places = true;
   /** Models that can see get images; none of these can open files on this computer. */
   readonly attachments = { images: true, files: false };
   /** A model that sees can describe a screenshot for one that can't (ADR 0070). */

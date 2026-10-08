@@ -103,6 +103,8 @@ export class MockEngine implements Engine {
     mode: 'bridge',
     account: { label: 'your Claude account', url: 'https://claude.ai/settings/connectors' },
   };
+  /** Its commands are Conch's, so they run where the chat's work runs (ADR 0106). */
+  readonly places = true;
   /** Sees images, can't open files: the degraded file path gets exercised too. */
   readonly attachments = { images: true, files: false };
   /** In plan mode it asks to start as Claude Code does (`ExitPlanMode`), scripted below. */

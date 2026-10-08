@@ -55,6 +55,7 @@ import { VaultPermission, VaultRequest } from './vault';
 import { VoiceStatus } from './phone';
 import { ConchVoiceId } from './speech';
 import { ChangedFile } from './undo';
+import { WorkedAt, WorkPlaceId } from './workplaces';
 import { SkillPermissions } from './skills';
 import { Task, TaskKind, TaskStatus } from './tasks';
 import { UpdatesStatus } from './updates';
@@ -129,6 +130,7 @@ export * from './vault';
 export * from './passwords';
 export * from './pick';
 export * from './words';
+export * from './workplaces';
 
 export const PROTOCOL_VERSION = 7;
 
@@ -218,6 +220,8 @@ export const Preferences = z.object({
   effort: EffortChoice.default('auto'),
   fastMode: z.boolean().default(false),
   permissionMode: PermissionMode.default('default'),
+  /** Where new chats' commands run (ADR 0106): this computer's sealed box unless you choose. */
+  place: WorkPlaceId.default('computer'),
   /**
    * Offline, answer with a model on this computer (a `local` provider) instead
    * of holding messages until the internet is back. Only matters once one is set up.
@@ -353,6 +357,7 @@ export const UpdateSettingsBody = z.object({
       effort: EffortChoice,
       fastMode: z.boolean(),
       permissionMode: PermissionMode,
+      place: WorkPlaceId,
       offlineFallback: z.boolean(),
       /** `null` goes back to waiting for the limit to reset. */
       limitFallback: EngineId.nullable(),
@@ -579,6 +584,8 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     durationMs: z.number().nonnegative().optional(),
     /** What it found, drawn as it is (an agenda, emails, files): ADR 0060. */
     view: ToolView.optional(),
+    /** Where the command ran, when it wasn't this computer (ADR 0106). */
+    where: WorkedAt.optional(),
     /** It in plain words now it's done, with what it found and changed (ADR 0103). */
     label: ToolLabel.optional(),
     /**

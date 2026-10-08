@@ -1,4 +1,5 @@
 import { currentTimeTool } from './lib/time-tool';
+import { WorkPlaces } from './workplaces/service';
 import { createHash } from 'node:crypto';
 import type { Server as HttpServer } from 'node:http';
 import { join, resolve, sep } from 'node:path';
@@ -315,6 +316,8 @@ export class Services {
   /** Every offer to turn something on in a chat goes through here (ADR 0060). */
   readonly offers: OfferDesk;
   readonly browser: BrowserService;
+  /** Where a chat's commands run: this computer, a container, your machine, the cloud (ADR 0106). */
+  readonly workplaces: WorkPlaces;
   readonly terminal: TerminalService;
   readonly engines: Map<EngineId, Engine>;
   /** Where every provider's key lives, whether that's here or in 1Password. */
@@ -951,6 +954,12 @@ export class Services {
     this.files = new FileMaker({ store: this.attachments, printer: this.#printer });
     const fetchPublicWeb = publicWebFetcher(config.CONCH_PORT);
     this.favicons = new Favicons({ fetcher: faviconFetcher(config.CONCH_PORT) });
+    this.workplaces = new WorkPlaces({
+      home: config.CONCH_HOME,
+      defaultPlace: async () => (await this.settings.get()).preferences.place,
+      heal: (message) => void this.healed.note('terminal', message),
+    });
+    this.doctor.register(this.workplaces.doctorCheck());
     this.conversations = new ConversationManager({
       // Who each chat is with: its persona and instructions in every turn (ADR 0101).
       agents: this.agents,
@@ -1112,6 +1121,7 @@ export class Services {
               home: config.CONCH_HOME,
             })
           : undefined,
+      places: (id) => this.workplaces.forTurn(id),
       skillPermissions: (skillId) => this.skills.permissions(skillId),
       questions: this.questions,
       // A spend that can't be saved is lost, not fatal: an unhandled rejection would stop Conch.
@@ -2363,6 +2373,17 @@ export class Services {
         manage: { label: 'Open Browser settings', place: 'browser' },
         reveal: async () => key.value,
       });
+    // The cloud sandbox where chats' work can run (ADR 0106).
+    const daytona = await this.workplaces.cloudKey().catch(() => undefined);
+    if (daytona)
+      out.push({
+        id: id('workplaces', 'daytona'),
+        title: 'Daytona',
+        usedBy: 'Where work runs',
+        hint: tail(daytona),
+        manage: { label: 'Open Security', place: 'security' },
+        reveal: async () => daytona,
+      });
     for (const item of await this.integrations.store.all().catch(() => [])) {
       const secrets = await this.integrations.store.secrets(item.id).catch(() => undefined);
       for (const [key, value] of Object.entries(secrets?.values ?? {})) {
@@ -2485,6 +2506,8 @@ export class Services {
     await this.providers.loadServers().catch(() => undefined);
     await this.providers.load();
     this.network.start();
+    // Containers a crash left behind are removed; nothing is started for it (ADR 0106).
+    void this.workplaces.start();
     // Chats a restart cut off say so, and carry on by themselves.
     void this.conversations
       .recoverInterrupted()
@@ -2716,6 +2739,7 @@ export class Services {
     return {
       ...(await engine.capabilities({ force })),
       engine: engine.id,
+      places: engine.places === true,
       attachments: {
         images: engine.attachments?.images ?? false,
         files: engine.attachments?.files === true || engine.hostTools !== false,

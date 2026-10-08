@@ -1,4 +1,5 @@
 /** Schemas shared by conversations and routines. */
+import { WorkPlaceId } from './workplaces';
 import { z } from 'zod';
 
 /**
@@ -86,6 +87,8 @@ export const TurnOptions = z.object({
   effort: EffortChoice.optional(),
   fastMode: z.boolean().optional(),
   permissionMode: PermissionMode.optional(),
+  /** Where its commands run (ADR 0106). Unset = where new chats run (`preferences.place`). */
+  place: WorkPlaceId.optional(),
 });
 export type TurnOptions = z.infer<typeof TurnOptions>;
 

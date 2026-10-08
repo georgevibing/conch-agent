@@ -10,6 +10,7 @@ import { lmStudioInstall } from '../engines/api/lmstudio';
 import { findCodex } from '../engines/codex/detect';
 import { findExecutable, presentSync, run } from '../lib/proc';
 import { parseVersion } from '../updates/version';
+import { findContainerProgram } from '../workplaces/container';
 import type { InstallRecipe, LatestLookup, NeedSpec, Platform } from './needs';
 import { fetchedBin, fetchedTool } from './release';
 
@@ -838,6 +839,35 @@ list.push(
       darwin: 'https://www.docker.com/products/docker-desktop/',
       linux: 'https://docs.docker.com/engine/install/',
     },
+  },
+  {
+    // Where work runs (ADR 0106): a container needs Docker or Podman, whichever
+    // is here. Docker Desktop installs as an administrator; Podman doesn't, so
+    // it's the one Conch installs, and starts its machine itself on first use.
+    id: 'container',
+    name: 'Docker or Podman',
+    short: 'Podman',
+    find: async () => (await findContainerProgram())?.path,
+    install: {
+      darwin: { manager: 'brew', args: ['install', 'podman'] },
+      win32: winget('RedHat.Podman'),
+    },
+    version: versionOf,
+    download: {
+      win32: 'https://podman.io/docs/installation#windows',
+      darwin: 'https://podman.io/docs/installation#macos',
+      linux: 'https://podman.io/docs/installation#installing-on-linux',
+    },
+    hint: () =>
+      'Runs the assistant’s commands in a locked-down box that sees only the work folder.',
+    admin: (platform) =>
+      platform === 'linux'
+        ? {
+            command:
+              'if command -v apt-get >/dev/null; then sudo apt-get update && sudo apt-get install -y podman; elif command -v dnf >/dev/null; then sudo dnf install -y podman; elif command -v pacman >/dev/null; then sudo pacman -S --needed --noconfirm podman; elif command -v zypper >/dev/null; then sudo zypper --non-interactive install podman; fi',
+            what: 'Installs Podman with your system’s packages. It runs containers as you, with no service in the background.',
+          }
+        : undefined,
   },
 );
 
