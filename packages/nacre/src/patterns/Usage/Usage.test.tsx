@@ -13,6 +13,7 @@ import {
   planHealthy,
   planNoWindows,
   planWarning,
+  planWeeklyLow,
   planWithExtra,
   usageNow,
   usageUnknown,
@@ -223,6 +224,18 @@ describe('UsageNotice', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       '12% of your current session left · resets in 1 h 4 min',
     );
+    await expectAccessible(container);
+  });
+
+  it('carries a few words for a narrow line, so it never wraps', async () => {
+    const { container } = renderNacre(
+      <UsageNotice value={planWeeklyLow} now={usageNow} onOpen={() => {}} onDismiss={() => {}} />,
+    );
+    const long = container.querySelector('[data-length="long"]');
+    const short = container.querySelector('[data-length="short"]');
+    expect(long).toHaveTextContent('4% of your weekly limit left · resets in 23 h 24 min');
+    expect(short).toHaveTextContent('4% left · resets in 23 h');
+    expect(screen.getByRole('button', { name: /Details/ })).toBeInTheDocument();
     await expectAccessible(container);
   });
 

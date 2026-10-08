@@ -155,6 +155,77 @@ describe('the chat’s provider in the header', () => {
     expect(await screen.findByRole('status')).toHaveTextContent(/12% of your current session left/);
   });
 
+  it('puts the line away for that limit until it resets, saved for every device', async () => {
+    const calls = routes({
+      'GET /api/usage': () => plan(88),
+      'PATCH /api/settings': (body) =>
+        appState({
+          preferences: {
+            ...appState().preferences,
+            ...(body as { preferences: object }).preferences,
+          },
+        }),
+    });
+    renderApp(<NewChat />);
+    expect(await screen.findByRole('status')).toHaveTextContent(/12% of your current session/);
+    await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    const saved = calls.find((c) => c.method === 'PATCH' && c.path === '/api/settings');
+    expect(saved?.body).toEqual({
+      preferences: {
+        limitsPutAway: [{ engine: 'claude-code', window: 'session', resetsAt: expect.any(Number) }],
+      },
+    });
+    // Closer still, and then used up: it stays away this cycle.
+    act(() => FakeSocket.last?.push({ type: 'usage.changed', usage: plan(97) }));
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('stays away after a reload, and comes back in the next cycle', async () => {
+    const usage = plan(88);
+    const session = usage.windows[0];
+    if (!session) throw new Error('no session');
+    const put = { engine: 'claude-code', window: 'session', resetsAt: session.resetsAt };
+    const calls = routes({
+      'GET /api/state': () =>
+        appState({ preferences: { ...appState().preferences, limitsPutAway: [put] } }),
+      'GET /api/usage': () => usage,
+      'PATCH /api/settings': () => appState(),
+    });
+    renderApp(<NewChat />);
+    await screen.findByRole('button', { name: /^Claude Code\. Usage/ });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^Claude Code\. Usage/ })).toHaveTextContent(
+        '12% left',
+      ),
+    );
+    expect(screen.queryByRole('status')).toBeNull();
+    // The session reset (healthy again): the entry is let go, so the next one can speak.
+    act(() => FakeSocket.last?.push({ type: 'usage.changed', usage: plan(5) }));
+    await waitFor(() =>
+      expect(
+        calls.some(
+          (c) =>
+            c.method === 'PATCH' &&
+            JSON.stringify(c.body) === JSON.stringify({ preferences: { limitsPutAway: [] } }),
+        ),
+      ).toBe(true),
+    );
+    const next = plan(80);
+    act(() =>
+      FakeSocket.last?.push({
+        type: 'usage.changed',
+        usage: {
+          ...next,
+          windows: next.windows.map((w) =>
+            w.id === 'session' ? { ...w, resetsAt: (session.resetsAt ?? 0) + 5 * HOUR } : w,
+          ),
+        },
+      }),
+    );
+    expect(await screen.findByRole('status')).toHaveTextContent(/20% of your current session/);
+  });
+
   it('follows the model chosen for the chat to the other provider’s limits', async () => {
     const calls = routes({
       'GET /api/usage': () => plan(38),

@@ -188,8 +188,14 @@ export const PanelUnknown: Story = {
 export const NoticeStates: Story = {
   name: 'Notice states',
   render: () => (
-    <Stack gap={3} style={{ inlineSize: '36rem' }}>
+    <Stack gap={3} style={{ inlineSize: '44rem' }}>
       <UsageNotice value={usageFixtures.planWarning} now={usageNow} onOpen={() => {}} />
+      <UsageNotice
+        value={usageFixtures.planWeeklyLow}
+        now={usageNow}
+        onOpen={() => {}}
+        onDismiss={() => {}}
+      />
       <UsageNotice
         value={usageFixtures.planExhausted}
         now={usageNow}
@@ -208,6 +214,48 @@ export const NoticeStates: Story = {
       <Text size="xs" tone="subtle">
         Healthy plans and budget-free pay-as-you-go render nothing.
       </Text>
+    </Stack>
+  ),
+};
+
+/** A phone's composer column: 390 px less the page's padding. */
+export const NoticePhone: Story = {
+  name: 'Notice · phone',
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'At 390 px the line says it in a few words and Details becomes its chevron, so it never wraps. Quiet on purpose: the ring carries how close it is.',
+      },
+    },
+  },
+  render: () => (
+    <Stack gap={3} style={{ inlineSize: 366 }}>
+      <UsageNotice
+        value={usageFixtures.planWeeklyLow}
+        now={usageNow}
+        onOpen={() => {}}
+        onDismiss={() => {}}
+      />
+      <UsageNotice
+        value={usageFixtures.planWarning}
+        now={usageNow}
+        onOpen={() => {}}
+        onDismiss={() => {}}
+      />
+      <UsageNotice
+        value={usageFixtures.planExhausted}
+        now={usageNow}
+        carryOn="OpenRouter"
+        onOpen={() => {}}
+        onDismiss={() => {}}
+      />
+      <UsageNotice
+        value={usageFixtures.meteredCritical}
+        now={usageNow}
+        onOpen={() => {}}
+        onDismiss={() => {}}
+      />
     </Stack>
   ),
 };

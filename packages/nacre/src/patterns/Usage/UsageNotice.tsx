@@ -8,6 +8,7 @@ import {
   formatMoney,
   formatResetAt,
   formatResetIn,
+  formatResetInShort,
   headline,
   windowPhrase,
 } from './format';
@@ -74,8 +75,47 @@ export function usageNoticeText(
 }
 
 /**
- * A slim line above the composer that appears only when a limit is close.
- * Announced politely; opens the details when `onOpen` is given.
+ * The same in a few words, for a narrow line (a phone): "4% left · resets in 23 h".
+ * Which limit it is, and when exactly, are in the details.
+ */
+export function usageNoticeShortText(
+  value: UsageValue,
+  now: number,
+  carryOn?: string,
+): string | undefined {
+  if (value.kind === 'unknown') return undefined;
+  const head = headline(value);
+  if (head.severity === 'normal' && !value.blocked) return undefined;
+  const w = head.window;
+
+  if (value.kind === 'plan') {
+    if (value.blocked || head.severity === 'exhausted') {
+      if (carryOn) return `Limit reached · ${carryOn} answers`;
+      const until = value.blocked?.until ?? w?.resetsAt;
+      return `Limit reached${until != null ? ` · resets ${formatResetInShort(until, now)}` : ''}`;
+    }
+    if (!w) return undefined;
+    const tail = w.resetsAt != null ? ` · resets ${formatResetInShort(w.resetsAt, now)}` : '';
+    return `${formatLeft(w.usedPercent)}${tail}`;
+  }
+
+  const { budget, month } = value.spend;
+  if (value.blocked) {
+    const until = value.blocked.until;
+    return `Paused${until != null ? ` · try again ${formatResetInShort(until, now)}` : ''}`;
+  }
+  if (!budget) return undefined;
+  const left = budget - month;
+  return left < 0
+    ? `${formatMoney(-left)} over budget`
+    : `${formatMoney(left)} of ${formatMoney(budget)} left`;
+}
+
+/**
+ * A slim, quiet line above the composer that appears only when a limit is
+ * close. Always one line: on a narrow composer it says it in a few words and
+ * Details becomes its chevron. Announced politely; opens the details when
+ * `onOpen` is given. When to show it again is the app's call.
  */
 export function UsageNotice({
   value,
@@ -96,11 +136,19 @@ export function UsageNotice({
   // At the limit with someone to carry on, the question is answered anyway: say by whom.
   const text =
     carryOn && severity === 'exhausted' ? `${said} · ${carryOn} answers until then` : said;
+  const short = usageNoticeShortText(value, current, carryOn) ?? text;
 
+  // Both are drawn; the line's own width picks one (a container query), so it
+  // always fits on one line. The hidden one is out of the accessibility tree too.
   const content = (
     <>
       <UsageRing percentLeft={head.percentLeft} severity={severity} size={14} />
-      <span className={styles.noticeText}>{text}</span>
+      <span className={styles.noticeText} data-length="long">
+        {text}
+      </span>
+      <span className={styles.noticeText} data-length="short">
+        {short}
+      </span>
     </>
   );
 
@@ -110,7 +158,7 @@ export function UsageNotice({
         <button type="button" className={styles.noticeMain} onClick={onOpen}>
           {content}
           <span className={styles.noticeMore}>
-            Details
+            <span className={styles.noticeMoreLabel}>Details</span>
             <ChevronRight aria-hidden />
           </span>
         </button>

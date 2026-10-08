@@ -217,6 +217,18 @@ export const TurnLimits = z.object({
 });
 export type TurnLimits = z.infer<typeof TurnLimits>;
 
+/**
+ * A usage limit's line above the composer, put away (×) until that limit
+ * resets: which provider, which limit (`session`, `weekly`…, or `budget` for
+ * a monthly budget) and when it resets. A new cycle brings the line back.
+ */
+export const PutAwayLimit = z.object({
+  engine: z.string().max(200),
+  window: z.string().max(100),
+  resetsAt: z.number().optional(),
+});
+export type PutAwayLimit = z.infer<typeof PutAwayLimit>;
+
 export const Preferences = z.object({
   /** Folder Claude works in. Defaults to the Conch workspace. */
   workspace: z.string().max(4096).optional(),
@@ -243,6 +255,8 @@ export const Preferences = z.object({
    * resets. Unset: wait (the chat offers another provider, but never switches by itself).
    */
   limitFallback: EngineId.optional(),
+  /** Limits whose line above the composer was put away, until each resets (on every device). */
+  limitsPutAway: z.array(PutAwayLimit).max(50).default([]),
   /** Apps the chat never offers to connect ("Don't suggest Linear"), by catalog id. */
   mutedSuggestions: MutedSuggestions.default([]),
   /**
@@ -376,6 +390,8 @@ export const UpdateSettingsBody = z.object({
       offlineFallback: z.boolean(),
       /** `null` goes back to waiting for the limit to reset. */
       limitFallback: EngineId.nullable(),
+      /** The whole list, as the page last saw it (a new cycle's entries pruned). */
+      limitsPutAway: z.array(PutAwayLimit).max(50),
       mutedSuggestions: MutedSuggestions,
       /** Turning any of these off needs a recent password or key (ADR 0028, ADR 0087). */
       checkAfterReading: z.boolean(),

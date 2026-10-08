@@ -4,6 +4,7 @@ export {
   formatMoney,
   formatResetAt,
   formatResetIn,
+  formatResetInShort,
   formatUpdated,
   headline,
   headlineWindow,
@@ -22,6 +23,6 @@ export { UsageBar, UsageGauge } from './UsageBar';
 export type { UsageBarProps, UsageGaugeProps } from './UsageBar';
 export { UsagePanel } from './UsagePanel';
 export type { UsagePanelProps } from './UsagePanel';
-export { UsageNotice, usageNoticeText } from './UsageNotice';
+export { UsageNotice, usageNoticeShortText, usageNoticeText } from './UsageNotice';
 export type { UsageNoticeProps } from './UsageNotice';
 export type { UsageSeverity, UsageValue, UsageWindowValue } from './types';

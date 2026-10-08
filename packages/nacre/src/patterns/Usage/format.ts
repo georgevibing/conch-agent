@@ -47,6 +47,16 @@ export function formatResetIn(resetsAt: number, now: number): string {
   return `in ${days} ${days === 1 ? 'day' : 'days'}`;
 }
 
+/**
+ * The same, rounded for a narrow line: "in 38 min", "in 23 h", "in 3 days".
+ * Hours drop their minutes (rounded down, so it never promises late).
+ */
+export function formatResetInShort(resetsAt: number, now: number): string {
+  const diff = resetsAt - now;
+  if (diff > 0 && diff < DAY && diff >= HOUR) return `in ${Math.floor(diff / HOUR)} h`;
+  return formatResetIn(resetsAt, now);
+}
+
 /** Calendar parts of an instant in a given time zone. */
 function dayNumber(epoch: number, timeZone?: string): number {
   const parts = new Intl.DateTimeFormat('en-US', {

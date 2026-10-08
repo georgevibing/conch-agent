@@ -89,3 +89,23 @@ showed the wrong numbers in a chat answered by another. Now:
   connected provider's limits.
 - Codex reports its ChatGPT plan's five-hour and weekly windows
   (`account/rateLimits/read`, and `account/rateLimits/updated` during a turn).
+
+## Update (2026-10-08): the composer notice speaks once a cycle
+
+The notice above the composer reappeared on every chat and, dismissed, came back
+as soon as a limit got a little worse. Now:
+
+- It appears when a limit first nears its end (the gateway's `warning`, 75%
+  used) and stays until it's put away (×).
+- Put away, it stays away for that provider's limit (`session`, `weekly`…, or a
+  monthly `budget`) until the limit resets, even as it gets closer or runs out.
+  The header's meter, its details and a turn's own limit card still say so. The
+  next cycle starts quiet and speaks again only if it nears its end too.
+- What was put away is `preferences.limitsPutAway` (provider, limit, reset
+  time), so it holds on every device and across reloads. The page drops an
+  entry once its reset time passes or the limit reads healthy again
+  (`apps/web/src/features/usage/putAway.ts`). An older Conch ignores the field;
+  writing settings back, it only forgets what was put away.
+- It is one quiet line, neutral like a chat's goal: the ring and **Details**
+  carry the severity. On a narrow composer (a phone) it says it in a few words
+  ("4% left · resets in 23 h") and Details becomes its chevron, so it never wraps.
