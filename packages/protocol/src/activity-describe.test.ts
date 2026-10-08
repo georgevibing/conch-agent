@@ -1539,6 +1539,20 @@ const TOOLS: Case[] = [
     },
   ],
   [
+    'video_search',
+    'mcp__conch__video_search',
+    { query: 'sourdough shaping' },
+    ok(JSON.stringify({ query: 'sourdough shaping', videos: [{ title: 'a' }, { title: 'b' }] })),
+    { family: 'research', done: 'Found videos of “sourdough shaping”', outcome: '2 videos' },
+  ],
+  [
+    'video_details',
+    'video_details',
+    { urls: ['https://youtu.be/dQw4w9WgXcQ'] },
+    ok(JSON.stringify({ videos: [{ title: 'a' }] })),
+    { family: 'research', done: 'Looked up a video', outcome: '1 video' },
+  ],
+  [
     'web_fetch with a title',
     'web_fetch',
     { url: 'https://www.amazon.de/dp/B0CHWRXH8B' },
