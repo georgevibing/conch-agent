@@ -350,7 +350,7 @@
   }
 
   /* A phone: a smaller picture, beside the name only. */
-  @container (max-width: 24rem) {
+  @container (max-width: 27rem) {
     .knowledgeBody {
       padding: var(--nc-space-3-5) var(--nc-space-3-5) var(--nc-space-3);
     }
@@ -363,6 +363,10 @@
     }
     .portrait {
       inline-size: 5.5rem;
+    }
+    /* The name sits down by the words it names, not up by the picture's top. */
+    .knowledge:is([data-shape='portrait'], [data-shape='square']) .knowledgeHead {
+      align-self: end;
     }
     .extract {
       font-size: var(--nc-text-sm);
@@ -1236,8 +1240,10 @@
 
   .nextCode {
     margin-inline-start: var(--nc-space-1);
+    padding-inline-start: var(--nc-space-1-5);
+    border-inline-start: 1px solid var(--nc-accent-6);
+    font-weight: var(--nc-weight-regular);
     font-variant-numeric: tabular-nums;
-    opacity: 0.8;
   }
 
   .drawnPoster {
