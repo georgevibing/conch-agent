@@ -26,6 +26,7 @@ import { MemoryStore } from '../memory/store';
 import { SettingsStore } from '../settings/store';
 import { ConversationManager, type ToolProvider } from './manager';
 import { ConversationStore } from './store';
+import { sandboxSupport } from './sandbox';
 
 interface Step {
   toolName: string;
@@ -228,7 +229,10 @@ describe('Auto, permissive by default (ADR 0100)', () => {
     expect(serious.outcomes).toEqual(['declined', 'declined', 'declined']);
     const ask = await run('default', [sealed('git status'), unsealed('git pull --ff-only')]);
     expect(ask.asked).toHaveLength(2);
-    expect(ask.asked[1]?.taint).toMatch(/outside the sealed box/);
+    // Where commands can't be sealed (a CI machine without bubblewrap), it says that instead.
+    expect(ask.asked[1]?.taint).toMatch(
+      sandboxSupport().available ? /outside the sealed box/ : /can’t seal commands/,
+    );
   });
 
   it('with someone else’s words in the chat, leaving the box still asks', async () => {
