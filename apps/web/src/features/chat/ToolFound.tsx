@@ -3,6 +3,7 @@ import { AgendaView, ChatMessages, FileList, MailList, Sources, replyRequest } f
 
 import { useUi } from '../../app/ui';
 import { SentAttachments } from './AttachmentViewer';
+import { MusicFound } from './MusicFound';
 
 /**
  * Words for the open chat's composer, from anywhere in it: the same way ⌘K's
@@ -34,5 +35,7 @@ export function ToolFound({ view }: { view: ToolView }) {
       return <FileList files={view.items} />;
     case 'messages':
       return <ChatMessages messages={view.items} place={view.place} />;
+    case 'audio':
+      return <MusicFound view={view} />;
   }
 }
