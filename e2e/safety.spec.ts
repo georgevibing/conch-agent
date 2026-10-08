@@ -22,9 +22,7 @@ test('after reading a page, a command asks — saying why — and “Always allo
   await composer.fill('read https://news.example/today and summarise it');
   await composer.press('Enter');
   await expect(
-    page.getByText(
-      'From here on, I’ll check with you before running commands or sending anything.',
-    ),
+    page.getByText('From here on, I’ll check with you before anything risky.'),
   ).toBeVisible();
   await expect(page.getByText(/Read news\.example\./)).toBeVisible();
   // The answer finishes before the next message.

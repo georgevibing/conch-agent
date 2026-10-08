@@ -111,6 +111,57 @@ in Auto (Full trust skips it); an app tool that deletes asks unless the person s
 **Allow**, or the app to **Don't ask**. Leaving the sealed box is free in Auto until the
 chat reads something.
 
+### Auto, revisited (2026-10-08): permissive outside the box, judged after reading
+
+People still met questions about routine work in Auto. Two cases showed why:
+
+- **"Pull the latest code" with Codex.** Each step (`git -C … status; git remote -v`,
+  `git pull --ff-only origin main`, `git log/rev-list`) asked. Codex runs Conch's tools,
+  so a command that needs the network or a folder elsewhere leaves the sealed box
+  (`dangerouslyDisableSandbox`), and on a computer that can't seal every command does.
+  `mustAsk` let a command out of the box in Auto only while the chat had read nothing
+  and a person was there; once it had read anything, every such command asked "wants to
+  run outside the sealed box", whatever it was. The risk policy found nothing in them.
+- **A picture on the ChatGPT plan.** Conch's own `image_models` marked the chat as having
+  read "OpenRouter image service", and `image_generate` asks whenever the chat is marked,
+  so the next picture on the person's own plan asked.
+
+So:
+
+- **Leaving the box in Auto** is free until the chat reads something, whoever's there.
+  After reading, with a person here and only things read, the risk policy decides as
+  for any command (`riskAsks(risk, true)`): `git pull` runs, `git push` and `curl -d`
+  ask. Someone else's words in the chat, or nobody there, still ask as before. Codex
+  CLI's own sandbox keeps the network on the same terms (`reach: 'network'`), since
+  every command it asks about meets the same policy.
+- **Conch's own steps after reading** (`hostAsk`): a managed command, input to one, a
+  picture and carrying on a task go ahead in Auto unless the risk policy marks them.
+  Words to other people and app writes keep asking. A skill's list still asks.
+- **Spending money asks in Auto** (a request with a `cost`), with Always allow for the
+  chat; the person's own plan (no extra charge) never does.
+- **First-party catalogs don't taint.** `image_models` and `image_generate` bring no one
+  else's words in; old marks under their label stop holding the chat (`heldTaints`).
+- **More rules, both ways.** Severe and lasting now also: every setting or a project's
+  `.env` piped or attached to a network program, a key file or key folder handed to
+  `scp`/`rsync`/`tar`/`cp`, code from `$(curl …)` given to `python -c`, deleting `.git`,
+  stopping PID 1, every process or the processes a computer runs on (`launchd`,
+  `WindowServer`, `explorer.exe`…), shutting down or restarting, writing or changing
+  ownership of the computer's own files (`/etc`, `/usr` but `/usr/local`, `/System`,
+  `/Library`, `C:\Windows`). Moderate and lasting (asks after reading): a network
+  program given a command's output (`$(…)`, backticks) or an address that carries a
+  long query, and deleting a container's volumes. The corpus grew to 327 everyday
+  steps (including the git above), 56 ways out and 135 serious ones.
+- **A second look.** After reading, a command the rules found nothing in, that isn't
+  only everyday programs and could reach out (it leaves the box, names an address or
+  runs a network program: `wantsSecondLook`), goes past the person's own cheapest model
+  (`risk-look.ts`, `riskLook` = `cheapModel`), fenced and datamarked like the memory
+  check's (ADR 0087), once per command per turn, six seconds at most. It picks a kind;
+  Conch says it in its own words. It can only add a question: no model, a timeout or an
+  unreadable answer leaves the rules' verdict, and the command runs.
+
+Ask first, Edit freely, Plan only and Full trust are unchanged, as are the circuit
+breaker, protected paths, Conch's powers, tools turned Off and skill holds.
+
 ### Full trust: never asks, but for what no mode lifts
 
 Full trust lets everything through — commands, the sealed box, app approvals, the
@@ -145,8 +196,8 @@ a provider can't do into its first.
 | Provider                                                                                 | Plan only                                      | Ask first / Edit freely                       | Auto                                                                                                                                                                                                                               | Full trust                                                                                                               |
 | ---------------------------------------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | **Claude Code**                                                                          | `plan`                                         | `default` / `acceptEdits`                     | Its own `auto` (classifier) where the model has it, plus Conch's risk policy in the PreToolUse hook; otherwise `default`, with Conch answering each question. When its classifier wants a person (`escalated`), the person answers | `bypassPermissions`; the hook keeps the irreducible list; commands sealed, leaving the box free                          |
-| **Codex CLI** (its own tools)                                                            | approvals declined                             | approvals asked / changes accepted            | approvals accepted after the guard; its sandbox: the work folder **with the network** until the chat reads something                                                                                                               | approvals accepted after the guard; its sandbox: **your folders and the network** (`reach: 'open'`), Conch's keys denied |
-| **Codex**, **Copilot**, **Gemini CLI**, **Grok** (ACP), **model APIs**, **local models** | Conch's tools refuse changes                   | Conch's tools ask (`authorizeTool`)           | Conch's tools go ahead after the guard; commands leave the box for the network until the chat reads something                                                                                                                      | Conch's tools go ahead; commands needing the network or your folders run unsealed                                        |
+| **Codex CLI** (its own tools)                                                            | approvals declined                             | approvals asked / changes accepted            | approvals accepted after the guard; its sandbox: the work folder **with the network**, sealed with someone else's words, nobody there after reading, or a skill's hold                                                             | approvals accepted after the guard; its sandbox: **your folders and the network** (`reach: 'open'`), Conch's keys denied |
+| **Codex**, **Copilot**, **Gemini CLI**, **Grok** (ACP), **model APIs**, **local models** | Conch's tools refuse changes                   | Conch's tools ask (`authorizeTool`)           | Conch's tools go ahead after the guard; commands leave the box for the network, after reading only where the risk policy and second look see nothing                                                                               | Conch's tools go ahead; commands needing the network or your folders run unsealed                                        |
 | **Tasks and helpers**                                                                    | their chat's mode, never more (ADR 0033)       |                                               |                                                                                                                                                                                                                                    |                                                                                                                          |
 | **Chat apps**                                                                            | `/mode` lists the ladder; a raise asks to save | the owner answers in Conch or by notification | as in Conch; someone else's words check every way out                                                                                                                                                                              | its own warning before saving; the restore preview names it                                                              |
 

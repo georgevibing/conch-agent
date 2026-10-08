@@ -954,6 +954,8 @@ export class Services {
       memoryIndex: this.memoryIndex,
       // The memory check's second look (ADR 0087): the default provider's cheapest model.
       memoryLook: () => cheapModel(this.providers.engine()),
+      // Auto's second look at an unusual command after reading (ADR 0100): the same model.
+      riskLook: () => cheapModel(this.providers.engine()),
       engine: (id) => this.providers.engineFor(id),
       route: (engine, context) => this.route(engine, context),
       describe: (engine, model) => this.describer.for(engine, model),

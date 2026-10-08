@@ -1,6 +1,5 @@
 /** Bounded, stdio-only Codex app-server transport. Never exposes a listening port. */
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { StringDecoder } from 'node:string_decoder';
 
 import { z } from 'zod';
 
@@ -14,7 +13,55 @@ const Message = z.object({
   error: z.unknown().optional(),
 });
 export type RpcMessage = z.infer<typeof Message>;
-const MAX_LINE = 2_000_000;
+/**
+ * The longest message a connection reads, unless it was started for more: a
+ * picture comes back whole in one message (`pictures.ts`, `PICTURE_LINE`).
+ */
+export const MAX_LINE = 2_000_000;
+
+/** A message longer than its connection reads. Nothing more is read from it. */
+export class LineTooLong extends Error {
+  constructor(readonly max: number) {
+    super('Codex sent a message larger than Conch reads at once.');
+  }
+}
+
+/**
+ * Codex's messages, one per line, from the bytes as they come. Only the line
+ * being read is held, as the chunks it came in (joined and decoded once, when
+ * it ends), and it stops at `max` bytes: a long message costs its own size,
+ * never that again for each chunk. A newline byte is never part of a UTF-8
+ * character, so a line ends where one is, whatever the chunks split.
+ */
+export class Lines {
+  #parts: Buffer[] = [];
+  #size = 0;
+  constructor(readonly max: number = MAX_LINE) {}
+
+  /** The lines `chunk` finished. Throws `LineTooLong` once the line being read passes `max`. */
+  push(chunk: Buffer): string[] {
+    const lines: string[] = [];
+    let start = 0;
+    for (let at = chunk.indexOf(0x0a); at >= 0; at = chunk.indexOf(0x0a, start)) {
+      this.#take(chunk.subarray(start, at));
+      lines.push(Buffer.concat(this.#parts, this.#size).toString('utf8'));
+      this.#parts = [];
+      this.#size = 0;
+      start = at + 1;
+    }
+    if (start < chunk.length) this.#take(chunk.subarray(start));
+    return lines;
+  }
+
+  #take(part: Buffer) {
+    this.#size += part.length;
+    if (this.#size > this.max) {
+      this.#parts = [];
+      throw new LineTooLong(this.max);
+    }
+    if (part.length) this.#parts.push(part);
+  }
+}
 
 /**
  * What Codex said when it refused a request, safe to log and to show: anything
@@ -107,7 +154,13 @@ export class CodexRpc {
 
   constructor(
     executable: string,
-    options: { cwd: string; env: Record<string, string>; config?: string[] },
+    options: {
+      cwd: string;
+      env: Record<string, string>;
+      config?: string[];
+      /** The longest message this connection reads (`MAX_LINE` unless it's for a picture). */
+      maxLine?: number;
+    },
   ) {
     const { command, prefix } = launch(executable);
     this.child = spawn(
@@ -121,18 +174,20 @@ export class CodexRpc {
       ],
       { cwd: options.cwd, env: options.env, stdio: ['pipe', 'pipe', 'pipe'] },
     );
-    const decoder = new StringDecoder('utf8');
-    let pending = '';
+    const lines = new Lines(options.maxLine ?? MAX_LINE);
+    let overflowed = false;
     this.child.stdout.on('data', (chunk: Buffer) => {
-      pending += decoder.write(chunk);
-      if (Buffer.byteLength(pending) > MAX_LINE) {
-        this.#fail(new Error('Codex sent an oversized response.'));
+      // Past a message too long to read, the rest is the middle of it: nothing more is read.
+      if (overflowed) return;
+      let finished: string[];
+      try {
+        finished = lines.push(chunk);
+      } catch (error) {
+        overflowed = true;
+        this.#fail(error instanceof Error ? error : new LineTooLong(lines.max));
         return;
       }
-      let at: number;
-      while ((at = pending.indexOf('\n')) >= 0) {
-        const line = pending.slice(0, at);
-        pending = pending.slice(at + 1);
+      for (const line of finished) {
         if (!line.trim()) continue;
         let parsed;
         try {

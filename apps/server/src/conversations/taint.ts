@@ -69,8 +69,9 @@ export function taintFrom(toolName: string, input: unknown, app?: string): Taint
     return { kind: 'app', label: 'Google account content' };
   if (/^(?:mcp__conch__)?slack_(?:channels|search|read_channel)$/.test(toolName))
     return { kind: 'app', label: 'Slack messages' };
-  if (/^(?:mcp__conch__)?image_(?:models|generate)$/.test(toolName))
-    return { kind: 'app', label: 'OpenRouter image service' };
+  // Not `image_models` or `image_generate`: Conch's own catalog of picture routes and model
+  // names, and Conch's own note of a picture it made from the assistant's words. Neither
+  // brings anyone else's words into the chat, so neither marks it (ADR 0028, ADR 0100).
   if (/^(?:mcp__conch__)?task_status$/.test(toolName))
     return { kind: 'app', label: 'task results' };
   if (/^(?:mcp__conch__)?read_document$/.test(toolName))
@@ -96,6 +97,9 @@ export function taintFrom(toolName: string, input: unknown, app?: string): Taint
   return undefined;
 }
 
+/** The label `image_models` and `image_generate` once marked a chat with. */
+const OLD_PICTURE_MARK = 'OpenRouter image service';
+
 /**
  * What a chat's log says it read. A mark a command made is looked at again by
  * today's rule, so one an older rule got wrong (`git fetch` read as a download)
@@ -105,6 +109,8 @@ export function taintFrom(toolName: string, input: unknown, app?: string): Taint
 export function heldTaints(events: readonly ConversationEvent[]): TaintSource[] {
   return events.flatMap((e, i) => {
     if (e.type !== 'taint') return [];
+    // Conch's own picture tools marked chats under this label before they stopped marking.
+    if (e.source.kind === 'app' && e.source.label === OLD_PICTURE_MARK) return [];
     if (e.source.kind !== 'download') return [e.source];
     // The command that made it: named on the mark, or (older logs) the call finishing next.
     const next = events[i + 1];

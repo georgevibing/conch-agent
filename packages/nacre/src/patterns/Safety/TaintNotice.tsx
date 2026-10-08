@@ -26,7 +26,7 @@ export function TaintNotice({ read, first = true, className, ...props }: TaintNo
         {first && (
           <span className={styles.after}>
             {' '}
-            From here on, I’ll check with you before running commands or sending anything.
+            From here on, I’ll check with you before anything risky.
           </span>
         )}
       </span>
@@ -113,7 +113,7 @@ export interface TaintReadsProps extends Omit<ComponentProps<'div'>, 'children'>
   from?: 'chat' | 'task';
 }
 
-const CHECKS = 'check with you before running commands or sending anything';
+const CHECKS = 'check with you before anything risky';
 
 /**
  * What a chat read from outside, said once however much it was (ADR 0028): one

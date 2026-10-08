@@ -60,7 +60,9 @@ export type RiskKind =
   /** A dependency that runs its own code as it installs. */
   | 'install'
   /** An app's step that deletes. */
-  | 'app-delete';
+  | 'app-delete'
+  /** Stopping what the computer needs to keep running, or shutting it down. */
+  | 'disrupt';
 
 export interface Risk {
   kind: RiskKind;
@@ -184,6 +186,12 @@ const DROP_BOXES =
   /\b(?:webhook\.site|requestbin\.\w+|pipedream\.net|[\w-]+\.ngrok(?:-free)?\.(?:io|app|dev)|ngrok\.io|pastebin\.com|paste\.ee|hastebin\.com|transfer\.sh|0x0\.st|file\.io|termbin\.com|ix\.io|discord(?:app)?\.com\/api\/webhooks|interact\.sh|oast\.(?:fun|pro|live|site|online|me)|burpcollaborator\.net|canarytokens\.(?:com|org)|requestcatcher\.com|beeceptor\.com|hookbin\.com|webhook\.cool|postb\.in)\b/i;
 
 const DOWNLOADER = /\b(?:curl|wget|iwr|irm|Invoke-WebRequest|Invoke-RestMethod|fetch|aria2c)\b/i;
+/** A program in a pipeline that sends to another computer. */
+const SENDS =
+  /(?:^|[\s|;&(`]|\$\()(?:curl|wget|nc|ncat|netcat|socat|telnet|http|https|xh|ssh|scp|sftp|rsync|ftp|lftp|rclone|Invoke-WebRequest|Invoke-RestMethod|iwr|irm)(?=\s|$)/i;
+/** A project's `.env` (not its `.env.example`) being read, attached or uploaded. */
+const ENV_FILE =
+  /(?:@|<\s*|\b(?:cat|base64|xxd|od|gzip|tar|zip|openssl|gpg|head|tail|strings|type|Get-Content|gc)\s+(?:-\S+\s+)*|(?:-T|--upload-file|-F\s*\S+=@?)\s*)["']?(?:[^\s"']*[\\/])?\.env(?!\.(?:example|sample|template|dist|defaults?)\b)(?:\.[\w-]+)?["']?(?=$|[\s;|&)<>,])/i;
 /** Gone for good, whoever answers: Full trust asks too. */
 const WHOLE: Risk = {
   kind: 'wipe',
@@ -256,6 +264,9 @@ function rmRisk(words: string[], places: Places): Risk | undefined {
   const targets = words.slice(1).filter((w) => !w.startsWith('-'));
   if (!targets.length) return undefined;
   if (recursive && targets.some((t) => criticalTarget(t, places))) return WHOLE;
+  // A repository's history: Undo keeps the work folder's files, not `.git` (ADR 0030).
+  if (recursive && targets.some((t) => /(?:^|[\\/])\.git[\\/]?$/.test(t)))
+    return severe('history', 'delete the whole history of the repository');
   const outside = targets.some((t) => {
     const path = placeOf(t, places);
     return (
@@ -570,9 +581,18 @@ const AGENT_CONFIG =
 const HOOKS =
   /(?:^|[\\/])(?:\.git[\\/](?:hooks[\\/]|config$)|\.husky[\\/]|\.github[\\/]workflows[\\/])/;
 
+/**
+ * The computer's own files: what it starts from, its programs and settings.
+ * Not `/usr/local` or `/opt` (where installs put programs), `/var/folders`
+ * or `/var/tmp` (scratch), or `/dev`.
+ */
+const SYSTEM =
+  /^(?:\/(?:etc|bin|sbin|boot|lib|lib32|lib64|System|Library|private\/etc|usr\/(?!local(?:[\\/]|$))[^/]+|var\/(?!folders|tmp)[^/]+)(?:\/|$)|[A-Za-z]:[\\/](?:Windows|Program Files(?: \(x86\))?)(?:[\\/]|$))/i;
+
 /** Writing to a path: what that means beyond the file itself. */
 function writeRisk(path: string): Risk | undefined {
   if (ACCESS.test(path)) return severe('privilege', 'let someone sign in to this computer');
+  if (SYSTEM.test(path)) return severe('privilege', 'change the computer’s own system files');
   if (AGENT_CONFIG.test(path))
     return severe('privilege', 'change what an assistant is allowed to do', false);
   if (PERSISTENT.test(path))
@@ -609,6 +629,9 @@ const SECRET_PATHS: RegExp[] = [
 ];
 
 const isSecret = (path: string) => SECRET_PATHS.some((re) => re.test(path));
+/** A whole folder of keys or sign-ins, copied or packed up at once. */
+const SECRET_FOLDER =
+  /[\\/](?:\.ssh|\.aws|\.gnupg|\.azure|\.kube|\.password-store|\.config[\\/](?:gcloud|gh))[\\/]?$/;
 
 function secretsNamed(part: string, places: Places): boolean {
   if (SECRET_FILES.test(part)) return true;
@@ -616,6 +639,63 @@ function secretsNamed(part: string, places: Places): boolean {
     .slice(1)
     .map((w) => placeOf(w, places))
     .some((p) => p !== undefined && isSecret(p));
+}
+
+/** The processes a computer can't do without: stopping one logs you out, or worse. */
+const SYSTEM_PROCESSES =
+  /^(?:launchd|kernel_task|WindowServer|loginwindow|SystemUIServer|Finder|Dock|coreaudiod|mds|systemd|init|sshd|dbus-daemon|Xorg|Xwayland|gnome-shell|plasmashell|kwin\w*|gdm\w*|explorer(?:\.exe)?|csrss(?:\.exe)?|winlogon(?:\.exe)?|lsass(?:\.exe)?|svchost(?:\.exe)?|wininit(?:\.exe)?|smss(?:\.exe)?|services(?:\.exe)?|dwm(?:\.exe)?)$/i;
+
+/** Stopping what the computer runs on, or shutting it down: unsaved work anywhere is lost. */
+function disruptRisk(prog: string, words: string[], part: string): Risk | undefined {
+  const args = words.slice(1);
+  if (prog === 'kill') {
+    // `kill -9 -1` is every program you run; `kill 1` is the one everything else starts from.
+    // The signal first (`-9`, `-KILL`, `-s KILL`), then what it's sent to.
+    let i = 0;
+    if (args[0] === '-s' || args[0] === '-n') i = 2;
+    else if (/^-(?:\d+|[A-Za-z]+)$/.test(args[0] ?? '')) i = 1;
+    if (args[i] === '--') i++;
+    if (args.slice(i).some((w) => w === '1' || w === '-1'))
+      return severe('disrupt', 'stop every program on this computer, or the one it runs on');
+  }
+  if (/^(?:killall|pkill|taskkill)$/i.test(prog)) {
+    const names = args.filter((w) => !/^[-/]/.test(w));
+    if (names.some((n) => SYSTEM_PROCESSES.test(n.replace(/^["']|["']$/g, ''))))
+      return severe('disrupt', 'stop a program this computer needs to keep running');
+    if (prog === 'pkill' && /\s-\w*u\s*(?:root|0)\b/.test(part))
+      return severe('disrupt', 'stop a program this computer needs to keep running');
+  }
+  if (
+    /^(?:shutdown|reboot|halt|poweroff)$/.test(prog) ||
+    (prog === 'systemctl' && /\b(?:reboot|poweroff|halt|kexec|suspend|hibernate)\b/.test(part)) ||
+    (prog === 'init' && /^[06]$/.test(args[0] ?? '')) ||
+    /\b(?:Stop|Restart)-Computer\b/i.test(part) ||
+    (prog === 'osascript' && /\b(?:shut down|restart|log out)\b/i.test(part))
+  )
+    return severe('disrupt', 'restart or shut down this computer');
+  return undefined;
+}
+
+/** Programs that reach another computer, by address or by name. */
+const NETWORK =
+  /^(?:curl|wget|http|https|xh|httpie|aria2c|nc|ncat|netcat|socat|telnet|ssh|scp|sftp|rsync|ftp|lftp|rclone|dig|nslookup|host|ping|ping6|traceroute|Invoke-WebRequest|Invoke-RestMethod|iwr|irm)$/i;
+
+/** A word that's an address on the internet, with a long query or path that could carry something. */
+function carriesData(word: string): boolean {
+  if (!/^https?:\/\//i.test(word)) return false;
+  try {
+    const u = new URL(word);
+    return (
+      u.search.length > 80 ||
+      u.hash.length > 80 ||
+      u.pathname.split('/').some((segment) => segment.length > 60) ||
+      /[?&](?:q|data|d|payload|text|content|body|msg|token|key|secret|env)=[^&]{24,}/i.test(
+        u.search,
+      )
+    );
+  } catch {
+    return false;
+  }
 }
 
 /** One piece of a command line. */
@@ -654,8 +734,20 @@ function partRisk(part: string, places: Places): Risk | undefined {
     if (targets.some((t) => criticalTarget(t, places, false)))
       return { ...WHOLE, reason: 'change who owns every file in a whole folder like your home' };
   }
+  if (/^(?:chmod|chown|chgrp|chflags|setfacl|icacls|takeown)$/i.test(prog)) {
+    const targets = words.slice(prog === 'takeown' || prog === 'icacls' ? 1 : 2);
+    if (
+      targets.some((t) => {
+        const path = placeOf(t, places);
+        return path !== undefined && SYSTEM.test(path);
+      })
+    )
+      return severe('privilege', 'change who may use the computer’s own system files');
+  }
   if (prog === 'chmod' && /(?:^|\s)(?:[ugoa]*\+[rwx]*s|[2467][0-7]{3})(?:\s|$)/.test(part))
     return severe('privilege', 'make a program run with more power than you');
+  const disrupt = disruptRisk(prog, words, part);
+  if (disrupt) return disrupt;
   if (/^(?:su|runas|gsudo|run0)$/.test(prog) || /-Verb\s+RunAs\b/i.test(part))
     return severe('privilege', 'run something as the computer’s administrator');
   if (/^(?:visudo|dscl|usermod|useradd|adduser|passwd|chpasswd|net)$/.test(prog)) {
@@ -711,6 +803,21 @@ function partRisk(part: string, places: Places): Risk | undefined {
     /169\.254\.169\.254|metadata\.google\.internal|fd00:ec2::254/.test(part)
   )
     return severe('credentials', 'print a sign-in token into the chat');
+  // Keys handed to a copy as what's copied, not as the key it signs in with (`-i`): a file,
+  // or a whole folder of them.
+  if (/^(?:scp|sftp|rsync|rclone|tar|zip|7z|7za|ditto|cp)$/.test(prog)) {
+    const copied = words
+      .slice(1)
+      .filter((w, i, all) => !/^-(?:i|F)$/.test(all[i - 1] ?? '') && !/IdentityFile/i.test(w));
+    const folder = copied.some((w) => {
+      const path = placeOf(w, places);
+      return path !== undefined && SECRET_FOLDER.test(path);
+    });
+    if (folder || secretsNamed(['x', ...copied].join(' '), places))
+      return /^(?:scp|sftp|rsync|rclone)$/.test(prog)
+        ? severe('exfiltration', 'send your keys or saved sign-ins to another computer')
+        : severe('credentials', 'read your keys or saved sign-ins');
+  }
   if (
     secretsNamed(part, places) &&
     !/^(?:ssh|scp|sftp|ssh-keygen|ssh-add|ssh-copy-id|chmod|chown|ls|stat|test|\[|git|gpg-agent|keychain)$/.test(
@@ -731,6 +838,21 @@ function partRisk(part: string, places: Places): Risk | undefined {
   if (publish) return publish;
   const install = installRisk(prog, words, places);
   if (install) return install;
+  if (
+    /^(?:docker|podman)$/.test(prog) &&
+    (/\b(?:system|volume)\s+prune\b.*(?:--volumes|-a\b|--all\b)|\bvolume\s+(?:rm|remove)\b/.test(
+      part,
+    ) ||
+      /\bcompose\b.*\bdown\b.*(?:\s-v\b|--volumes)/.test(part))
+  )
+    return moderate('wipe', 'delete the data a container kept, like a database’s');
+  if (NETWORK.test(prog)) {
+    // What a command prints, put in an address or a name to look up: a way out for anything.
+    if (/\$\(|`/.test(part))
+      return moderate('egress', 'send what a command printed to another computer');
+    if (words.some(carriesData))
+      return moderate('egress', 'send something in a web address that could carry what it read');
+  }
   if (/^(?:curl|wget|http|https|xh|httpie)$/.test(prog)) {
     if (
       /\s(?:-d|--data(?:-raw|-binary|-urlencode|-ascii)?|-F|--form(?:-string)?|-T|--upload-file|--json|--post-(?:data|file)|--body-(?:data|file))\b|\s-X\s*(?:POST|PUT|PATCH|DELETE)\b|--request\s+(?:POST|PUT|PATCH|DELETE)\b|--method=(?:POST|PUT|PATCH|DELETE)\b/i.test(
@@ -799,6 +921,9 @@ export function commandRisk(command: string, context: RiskContext): Risk | undef
       /(?:^|[\s;&|])(?:(?:ba|z|da|k)?sh|eval)\s+(?:-c\s+)?["']?\$\(\s*(?:curl|wget)\b/.test(
         script,
       ) ||
+      /(?:^|[\s;&|])(?:python\d?(?:\.\d+)?|node|deno|bun|perl|ruby|php)\s+-[ce]\s+["']?\$\(\s*(?:curl|wget)\b/.test(
+        script,
+      ) ||
       /base64\s+(?:-d|--decode|-D)\b[^|;&]*\|\s*(?:sudo\s+)?(?:(?:ba|z|da|k)?sh|python\d?|perl|node)\b/.test(
         script,
       ) ||
@@ -830,6 +955,23 @@ export function commandRisk(command: string, context: RiskContext): Risk | undef
       );
     if (DROP_BOXES.test(script))
       risks.push(severe('exfiltration', 'send something to an address made for catching data'));
+    // Sign-ins on their way out, in one pipeline: every setting, or a project's `.env`.
+    for (const pipeline of script.split(/\|\||&&|;|\n/)) {
+      if (!SENDS.test(pipeline)) continue;
+      if (
+        /(?:^|[|(`]\s*|\$\(\s*)(?:env|printenv|set|export\s+-p|(?:Get-ChildItem|gci|dir|ls)\s+env:)\s*(?:$|[|)`])/i.test(
+          pipeline.trim(),
+        )
+      )
+        risks.push(
+          severe(
+            'exfiltration',
+            'send every setting this computer has, sign-in tokens included, to another computer',
+          ),
+        );
+      if (ENV_FILE.test(pipeline))
+        risks.push(severe('exfiltration', 'send the keys in your .env file to another computer'));
+    }
     if (
       /\/dev\/(?:tcp|udp)\/|\bnc\b[^|;&]*\s-\w*e\b|socat\b[^|;&]*\bexec:|bash\s+-i\s*>&/.test(
         script,
@@ -848,6 +990,55 @@ export function commandRisk(command: string, context: RiskContext): Risk | undef
     }
   }
   return worst(risks);
+}
+
+/**
+ * Programs whose everyday use is reading, building, testing and tidying a
+ * project, and the tools whose risky uses the rules above already read. A
+ * second look (`risk-look.ts`) adds nothing for a line made only of these.
+ */
+const EVERYDAY = new Set([
+  ...'ls pwd cd pushd popd cat bat head tail less more grep egrep fgrep rg ag find fd wc tree echo printf which whereis type date cal true false sleep test [ stat file du df basename dirname realpath readlink sort uniq cut tr sed awk jq yq diff cmp comm column paste fmt nl rev tee mkdir touch cp mv rm rmdir ln chmod tar unzip zip gzip gunzip bzip2 xz zstd ps lsof top htop pgrep kill pkill killall open code cursor vim nano export source . unset set printenv history clear time wait'.split(
+    ' ',
+  ),
+  ...'git gh npm pnpm yarn bun npx bunx corepack nvm volta node tsc tsx ts-node vitest jest mocha eslint prettier biome oxlint turbo nx vite next playwright cypress storybook'.split(
+    ' ',
+  ),
+  ...'python python3 pip pip3 pipx poetry uv uvx pytest ruff black mypy pyright tox nox virtualenv'.split(
+    ' ',
+  ),
+  ...'cargo rustc rustup rustfmt go gofmt make cmake ninja meson bazel gradle gradlew mvn mvnw java javac kotlin kotlinc dotnet swift swiftc xcodebuild xcrun flutter dart deno ruby bundle rails rake rspec gem php composer elixir mix erl ghc stack cabal zig clang gcc g++ cc ld'.split(
+    ' ',
+  ),
+  ...'docker podman kubectl helm terraform tofu pulumi aws gcloud az fly vercel netlify firebase brew apt apt-get dnf yum pacman sqlite3 psql mysql redis-cli mongosh ffmpeg ffprobe convert magick sips pandoc hugo jekyll'.split(
+    ' ',
+  ),
+]);
+
+/** Interpreters given code on the line itself, not a file of the project's. */
+const INLINE_CODE =
+  /^(?:python\d?(?:\.\d+)?|node|deno|bun|perl|ruby|php|pwsh|powershell|osascript|lua|Rscript)$/i;
+
+/**
+ * Whether a command is worth a second look by a small model, once the chat
+ * has read something (`risk-look.ts`): the rules found nothing, and it isn't
+ * only everyday work, and it can reach the internet or your sign-ins (it
+ * runs outside the sealed box, or names an address or a program that sends).
+ */
+export function wantsSecondLook(command: string, unsealed: boolean): boolean {
+  const parts = commandParts(command);
+  const unusual = parts.some((part) => {
+    const prog = program(part);
+    if (!prog) return false;
+    if (INLINE_CODE.test(prog)) return /\s-(?:c|e|r|E|Command)\b|\seval\b/i.test(part);
+    return !EVERYDAY.has(prog);
+  });
+  if (!unusual) return false;
+  return (
+    unsealed ||
+    /https?:\/\/|\/dev\/(?:tcp|udp)\//i.test(command) ||
+    parts.some((part) => NETWORK.test(program(part)))
+  );
 }
 
 // ── Any step ──────────────────────────────────────────────────────────────

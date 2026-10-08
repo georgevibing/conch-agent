@@ -9,7 +9,7 @@ describe('TaintNotice and GuardNote', () => {
   it('say what was read and what changes, quietly', async () => {
     const { container, rerender } = renderNacre(<TaintNotice read="news.example" />);
     expect(container).toHaveTextContent(
-      'Read news.example. From here on, I’ll check with you before running commands or sending anything.',
+      'Read news.example. From here on, I’ll check with you before anything risky.',
     );
     rerender(<TaintNotice read="things in Gmail" first={false} />);
     expect(container).toHaveTextContent('Read things in Gmail.');

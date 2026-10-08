@@ -158,12 +158,18 @@ describe('Auto (ADR 0100)', () => {
     // What it read can be waived for the rest of the chat.
     expect(asked.every((a) => a.lasting)).toBe(true);
     expect(outcomes).toEqual(['ran', 'ran', 'ran', 'ran', 'declined', 'declined', 'declined']);
-    expect(reach).toBe('sealed');
+    // A person here and only a page read: Codex CLI keeps the network; what it asks about meets
+    // the risk policy, as above.
+    expect(reach).toBe('network');
   });
 
   it('with someone else’s words in the chat, every command asks', async () => {
-    const { asked } = await run('auto', ROUTINE.slice(0, 2), { kind: 'person', label: 'Bo' });
+    const { asked, reach } = await run('auto', ROUTINE.slice(0, 2), {
+      kind: 'person',
+      label: 'Bo',
+    });
     expect(asked).toHaveLength(2);
+    expect(reach).toBe('sealed');
   });
 });
 

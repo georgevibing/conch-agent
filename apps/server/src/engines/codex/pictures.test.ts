@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PictureLimit } from '../types';
 import { makeCodexPicture, pictureText } from './pictures';
-import type { CodexRpc, RpcMessage } from './rpc';
+import { LineTooLong, type CodexRpc, type RpcMessage } from './rpc';
 
 const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aXe0AAAAASUVORK5CYII=',
@@ -17,8 +17,14 @@ afterEach(async () => {
 });
 
 /** An app server that answers as Codex does, then plays `script` once the turn starts. */
-function server(script: (say: (message: RpcMessage) => void) => void) {
+function server(
+  script: (say: (message: RpcMessage) => void, fail: (error: Error) => void) => void,
+) {
   const listeners = new Set<(message: RpcMessage) => void>();
+  const failures = new Set<(error: Error) => void>();
+  const fail = (error: Error) => {
+    for (const listener of failures) listener(error);
+  };
   const say = (message: RpcMessage) => {
     for (const listener of listeners) listener(message);
   };
@@ -26,7 +32,7 @@ function server(script: (say: (message: RpcMessage) => void) => void) {
   const request = vi.fn(async (method: string, _params?: unknown) => {
     if (method === 'thread/start') return { thread: { id: 'th' } };
     if (method === 'turn/start') {
-      setTimeout(() => script(say), 0);
+      setTimeout(() => script(say, fail), 0);
       return { turn: { id: 'tu' } };
     }
     throw new Error(`unexpected ${method}`);
@@ -36,7 +42,10 @@ function server(script: (say: (message: RpcMessage) => void) => void) {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    onFailure: () => () => {},
+    onFailure: (listener: (error: Error) => void) => {
+      failures.add(listener);
+      return () => failures.delete(listener);
+    },
     send: (message: unknown) => sent.push(message),
     request,
   } as unknown as CodexRpc;
@@ -47,9 +56,9 @@ const item = (method: string, fields: Record<string, unknown>): RpcMessage => ({
   method,
   params: { threadId: 'th', turnId: 'tu', item: { type: 'imageGeneration', id: 'ig', ...fields } },
 });
-const completed = (status = 'completed'): RpcMessage => ({
+const completed = (status = 'completed', error?: Record<string, unknown>): RpcMessage => ({
   method: 'turn/completed',
-  params: { threadId: 'th', turn: { id: 'tu', status } },
+  params: { threadId: 'th', turn: { id: 'tu', status, ...(error && { error }) } },
 });
 
 describe('a picture on the ChatGPT plan', () => {
@@ -129,6 +138,36 @@ describe('a picture on the ChatGPT plan', () => {
     await expect(
       makeCodexPicture(rpc, { prompt: 'x', signal: new AbortController().signal }, '/'),
     ).rejects.toThrow('didn’t make a picture');
+  });
+
+  it('says why a failed turn made nothing, in plain words', async () => {
+    const turn = (error: Record<string, unknown>) =>
+      makeCodexPicture(
+        server((say) => say(completed('failed', error))).rpc,
+        { prompt: 'x', signal: new AbortController().signal },
+        '/',
+      );
+    await expect(
+      turn({ message: 'You have hit your usage limit', codexErrorInfo: 'usageLimitExceeded' }),
+    ).rejects.toBeInstanceOf(PictureLimit);
+    await expect(turn({ message: 'nope', codexErrorInfo: 'unauthorized' })).rejects.toThrow(
+      'Reconnect ChatGPT',
+    );
+    await expect(
+      turn({ message: 'Image generation is unavailable for this account (Bearer abc123secret)' }),
+    ).rejects.toThrow(
+      /couldn’t make this picture: Image generation is unavailable(?!.*abc123secret)/,
+    );
+  });
+
+  it('never says “oversized response” when the picture was too big to bring back', async () => {
+    const { rpc } = server((_say, fail) => fail(new LineTooLong(10)));
+    const failed = makeCodexPicture(
+      rpc,
+      { prompt: 'x', signal: new AbortController().signal },
+      '/',
+    );
+    await expect(failed).rejects.toThrow('larger than Conch can bring back');
   });
 
   it('declines anything else Codex asks for', async () => {

@@ -19,7 +19,12 @@ Change it from the composer, or with `/mode`; set where new chats start in **Set
 - tear down or change production infrastructure, wipe a database, publish a package;
 - delete something in one of your apps.
 
-These questions offer no **Always allow**. Once the chat has [read something from outside](../security/signing-in.md#when-the-assistant-reads-something-untrusted), Auto also asks before the usual ways out: a push, a new package, sending data, an app's change. With Claude Code, Auto uses Claude Code's own auto mode as well, where the model has it.
+- stop programs your computer runs on, restart it, or change its own system files;
+- delete a repository's history, or the data a container kept.
+
+These questions offer no **Always allow**. Everyday work never asks, outside the sealed box too: checking, pulling and fetching with git, installing what the project lists, building, testing, tidying the work folder. Spending money asks (a paid picture); your own plan, at no extra charge, doesn't.
+
+Once the chat has [read something from outside](../security/signing-in.md#when-the-assistant-reads-something-untrusted), Auto still gets on with everyday work, and asks only before the ways something could leave: a push, a new package, sending data or what a command printed, an app's change, words to other people. An unusual command that could reach the internet or your sign-ins also gets a second look from a small model you already have; the look can only add a question. Conch's own lists of models and the pictures it makes don't count as reading something from outside. With Claude Code, Auto uses Claude Code's own auto mode as well, where the model has it.
 
 ## Full trust
 
@@ -33,4 +38,4 @@ These questions offer no **Always allow**. Once the chat has [read something fro
 
 ## In every mode
 
-In **Ask first**, **Edit freely** and **Plan only**, anything that sends, spends or deletes asks first once the chat has [read something from outside](../security/signing-in.md#when-the-assistant-reads-something-untrusted); **Always allow** on that question lets it through for the rest of the chat. A command that wants out of the sealed box (to clone a repository or install something) asks too, with **Always allow**, except in Full trust, and in Auto until the chat reads something. Whatever the mode, paying or deleting in [the browser](../features/browser.md) asks. A [task](../features/tasks.md) never has more than its chat.
+In **Ask first**, **Edit freely** and **Plan only**, anything that sends, spends or deletes asks first once the chat has [read something from outside](../security/signing-in.md#when-the-assistant-reads-something-untrusted); **Always allow** on that question lets it through for the rest of the chat. A command that wants out of the sealed box (to clone a repository or install something) asks too, with **Always allow**, except in Full trust and Auto. In Auto it asks only for what Auto would stop anyway, or, with someone else's words in the chat or nobody there, once the chat reads something. Whatever the mode, paying or deleting in [the browser](../features/browser.md) asks. A [task](../features/tasks.md) never has more than its chat.

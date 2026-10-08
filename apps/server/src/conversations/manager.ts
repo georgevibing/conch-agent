@@ -70,7 +70,8 @@ import type { ConversationRecord, ConversationStore } from './store';
 import { summarizeToolUse, titleFrom } from './summarize';
 import { allows, missing, needs } from '../skills/permissions';
 import { sandboxSupport } from './sandbox';
-import { assessRisk, breaksCircuit, riskAsks, riskWords } from './risk';
+import { assessRisk, breaksCircuit, riskAsks, riskWords, wantsSecondLook } from './risk';
+import { lookAtCommand } from './risk-look';
 import { describeTaint, heldTaints, leavesSandbox, sinkReason, taintFrom } from './taint';
 import { cautionFrom } from './provenance';
 import { CONCH_POWER_MESSAGE, runsConchPower } from '../lib/protect';
@@ -169,6 +170,15 @@ function trustAllows(mode: PermissionMode, toolName: string): boolean {
 function autoAllows(mode: PermissionMode, toolName: string, explicit = false): boolean {
   return mode === 'auto' && toolName !== 'ExitPlanMode' && !explicit;
 }
+
+/**
+ * Conch's own steps that are routine work in Auto even after the chat read
+ * something (ADR 0100): a command (the risk policy reads it), input to one, a
+ * picture, a task carried on under its own guard. Words going to other people
+ * and an app's writes aren't here: they keep asking after reading.
+ */
+const AUTO_AFTER_READING =
+  /^(?:mcp__conch__)?(?:process_start|process_write|image_generate|task_control)$/;
 
 /** A question a host tool puts to the user, through the same prompt as any permission. */
 export interface AskRequest {
@@ -820,6 +830,11 @@ export class ConversationManager {
       };
       /** A cheap model for the memory check's second look (ADR 0087); it can only raise a flag. */
       memoryLook?: () => Promise<LookModel | undefined>;
+      /**
+       * A cheap model for Auto's second look at an unusual command after reading
+       * (ADR 0100, `risk-look.ts`); it can only add a question.
+       */
+      riskLook?: () => Promise<LookModel | undefined>;
       /** The provider for a turn: the one a conversation chose, else the default. */
       engine: (id?: EngineId) => Engine;
       tools?: ToolProvider;
@@ -2418,7 +2433,8 @@ export class ConversationManager {
           const risk = assessRisk(request.toolName, request.input, { workspace });
           if (riskAsks(risk, false))
             return askUser({ ...request, taint: riskWords(risk), remember: false }, abort.signal);
-          if (autoAllows(mode, request.toolName, request.explicit)) return 'allow';
+          // Spending money still asks (a paid picture); the person's own plan never does.
+          if (!request.cost && autoAllows(mode, request.toolName, request.explicit)) return 'allow';
         }
         if (request.once) return askUser({ ...request, remember: false }, abort.signal);
         if (live.alwaysAllow.has(request.toolName)) return 'allow';
@@ -2428,6 +2444,37 @@ export class ConversationManager {
         this.#tainted(live).every((source) => source.kind !== 'person') &&
         ![...limitsSaid].some((limit) => request.taint?.includes(limit));
       if (!lifts) return askUser({ ...request, remember: false }, abort.signal);
+      // Auto after reading, a person here (ADR 0100): Conch's own commands and pictures on
+      // the person's own plan are routine work. Only what the risk policy or the second look
+      // marks asks; spending money and words going to other people asked above or still ask.
+      if (
+        resolved.permissionMode === 'auto' &&
+        personTrusts &&
+        !request.cost &&
+        !request.explicit &&
+        AUTO_AFTER_READING.test(request.toolName)
+      ) {
+        const risk = assessRisk(request.toolName, request.input, { workspace });
+        const command = typeof request.input.command === 'string' ? request.input.command : '';
+        const why = riskAsks(risk, true)
+          ? risk?.reason
+          : command
+            ? await secondLook(
+                command,
+                request.input.dangerouslyDisableSandbox === true,
+                this.#tainted(live),
+              )
+            : undefined;
+        if (!why) return 'allow';
+        return askUser(
+          {
+            ...request,
+            taint: `${request.taint.replace(/\s*So I’m checking.*$/, '')} So I’m checking before I ${why}.`,
+            remember: false,
+          },
+          abort.signal,
+        );
+      }
       const waive = `read:${request.toolName}`;
       if (live.waived.has(waive)) return Promise.resolve('allow');
       return askUser({ ...request, remember: true, waive }, abort.signal);
@@ -2668,6 +2715,24 @@ export class ConversationManager {
       return answer;
     };
 
+    /** Each command's second look, once a turn (ADR 0100): it can only add a question. */
+    const looked = new Map<string, Promise<string | undefined>>();
+    const secondLook = (
+      command: string,
+      unsealed: boolean,
+      read: readonly TaintSource[],
+    ): Promise<string | undefined> => {
+      if (!this.deps.riskLook || !wantsSecondLook(command, unsealed))
+        return Promise.resolve(undefined);
+      const key = `${unsealed ? 1 : 0}:${command}`;
+      let look = looked.get(key);
+      if (!look) {
+        look = lookAtCommand(command, read, this.deps.riskLook, { signal: abort.signal });
+        looked.set(key, look);
+      }
+      return look;
+    };
+
     const mustAsk = async (request: {
       toolName: string;
       input: Record<string, unknown>;
@@ -2697,10 +2762,13 @@ export class ConversationManager {
       /** Auto, with only things read in the chat (no one else's words), and a person here. */
       const readOnly = this.#tainted(live).every((source) => source.kind !== 'person');
       const autoHere = mode === 'auto' && personTrusts && readOnly;
-      if (leavesSandbox(request.toolName, request.input)) {
+      const unsealed = leavesSandbox(request.toolName, request.input);
+      if (unsealed) {
         const key = `box:${request.toolName}`;
-        // Auto leaves the box for routine work (an install, a push) until the chat reads something.
-        const autoOut = autoHere && !(guardOn && this.#tainted(live).length);
+        // Auto leaves the box for routine work (a pull, an install, a push) until the chat reads
+        // something, whoever's there; after that, with a person here and only things read, the
+        // risk policy and the second look below decide, as for any command (ADR 0100).
+        const autoOut = mode === 'auto' && (autoHere || !(guardOn && this.#tainted(live).length));
         if (!trusted && !autoOut && !live.waived.has(key))
           return {
             reason: !sandboxSupport().available
@@ -2748,12 +2816,16 @@ export class ConversationManager {
           workspace,
           ...(described?.destructive && { destructive: true }),
         });
+        const command = request.toolName === 'Bash' || request.toolName === 'PowerShell';
         const routine =
-          request.toolName === 'Bash' ||
+          command ||
           ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(request.toolName) ||
           (/(?:WebSearch|web_search)$/.test(request.toolName) &&
             String(request.input.query ?? '').length <= 120);
         sink = riskAsks(risk, true) ? risk?.reason : routine ? undefined : sink;
+        // Nothing the rules know, but unusual and able to reach out: a small model looks too.
+        if (!sink && command && typeof request.input.command === 'string')
+          sink = await secondLook(request.input.command, unsealed, tainted);
       }
       return sink
         ? {
@@ -2950,14 +3022,18 @@ export class ConversationManager {
         signal: abort.signal,
       });
       // How far a provider's own sandbox reaches (ADR 0100): Full trust opens it, Auto adds
-      // the network until the chat reads something, a skill's list or reading seals it.
+      // the network. After reading, Auto keeps it while a person is here and only things were
+      // read (each command it asks about still meets the risk policy); someone else's words,
+      // nobody there, or a skill's list seal it.
       const tightened = await skillTightens();
       const read = guardOn && this.#tainted(live).length > 0;
+      const thingsOnly =
+        personTrusts && this.#tainted(live).every((source) => source.kind !== 'person');
       const reach: TurnInput['reach'] = tightened
         ? 'sealed'
         : resolved.permissionMode === 'bypassPermissions' && (trusting() || !read)
           ? 'open'
-          : resolved.permissionMode === 'auto' && !read
+          : resolved.permissionMode === 'auto' && (!read || thingsOnly)
             ? 'network'
             : 'sealed';
       const stream = abort.signal.aborted

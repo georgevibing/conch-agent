@@ -29,8 +29,8 @@ If none of your providers can make pictures, Conch offers a card in the chat to
 connect OpenRouter. Press **Connect**, finish connecting, and the request
 carries on. Your chat model stays the same.
 
-A picture on your ChatGPT plan goes without asking, unless the chat read
-something from outside. Before a paid picture, Conch asks unless you chose
+A picture on your ChatGPT plan costs nothing extra, so in **Auto** it goes
+without asking, even after the chat read something from outside. Before a paid picture, Conch asks unless you chose
 **Full trust**. The approval names the service and the model, and about what
 it costs. The prompt and any source picture are sent to that service.
 

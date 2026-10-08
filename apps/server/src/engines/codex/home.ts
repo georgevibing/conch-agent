@@ -180,6 +180,8 @@ export class CodexHome {
     options: {
       signal?: AbortSignal;
       config?: string[];
+      /** The longest message this run reads from Codex (`rpc.ts`, `MAX_LINE` unless set). */
+      maxLine?: number;
       /** This run signs out: a sign-in that's gone afterwards is forgotten. */
       signOut?: boolean;
       /** Before Codex starts, with the run's home (put a kept thread back: `threads.ts`). */
@@ -232,6 +234,7 @@ export class CodexHome {
         cwd: current.dir,
         env: { ...hostEnvironment(), CODEX_HOME: current.dir },
         config: ['cli_auth_credentials_store="file"', ...(options.config ?? [])],
+        ...(options.maxLine && { maxLine: options.maxLine }),
       });
       options.signal?.addEventListener('abort', stop, { once: true });
       await rpc.initialize();

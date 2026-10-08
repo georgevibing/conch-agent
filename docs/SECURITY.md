@@ -475,13 +475,18 @@ by itself, or a chat where someone else is talking to the assistant (a chat
 app), still asks, and so does a step a skill's list doesn't cover
 ([ADR 0100](./adr/0100-permission-modes-every-provider.md) lists them all).
 
-**Auto** gets on with routine work without asking and stops only for something
-serious: running downloaded code, reading your keys, deleting outside the work
-folder, force-pushing a shared branch, running as administrator, production
-infrastructure, publishing. Once the chat reads something from outside it also
-asks before the usual ways out (a push, a new package, data sent out, an app's
-change). It is a careful reader, not a wall: the sealed box and protected paths are
-what hold.
+**Auto** gets on with routine work without asking, outside the sealed box too (git
+status, fetch and pull, installs from the lockfile, builds, tests), and stops only
+for something serious: running downloaded code, reading your keys or sending them
+(an `.env`, every setting, a key folder) anywhere, deleting outside the work folder or
+a repository's history, force-pushing a shared branch, running as administrator,
+stopping the programs the computer runs on, changing its system files, production
+infrastructure, publishing, spending money. Once the chat reads something from
+outside it also asks before the ways something could leave (a push, a new package,
+data or a command's output sent out, an app's change); everyday commands still run.
+An unusual command that could reach out after reading gets a second look from a small
+model, which can only add a question and never writes the card's words. It is a
+careful reader, not a wall: the sealed box and protected paths are what hold.
 
 Your assistant can look through your earlier chats. When what it finds comes
 from a chat that read something from outside, or has someone else's words, this
@@ -493,7 +498,8 @@ Commands also run **sealed**: they can change your work folder and the caches
 installs use, and can't read your SSH keys, cloud sign-ins, keychains or
 browsers' saved passwords. A command that needs out (the network for a clone or
 an install) asks first, with **Always allow** for the rest of the chat; in Full
-trust it just runs. Where commands can't be sealed, or you turn sealing off,
+trust it just runs, and in Auto it asks only for what Auto would stop anyway (with
+someone else's words in the chat, or nobody there, once the chat reads something). Where commands can't be sealed, or you turn sealing off,
 every command runs with your own access and asks the same way. Unsealed, a
 command can reach what you can: Conch refuses one that names its keys or your
 sign-ins, but only a sandbox really keeps them out.

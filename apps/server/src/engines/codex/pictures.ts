@@ -7,14 +7,16 @@
  * shell, nothing kept. The tool's answer is the app server's `imageGeneration`
  * item (`codex app-server generate-ts`: `ImageGenerationItem` — `result` in
  * base64, or `savedPath` under the run's `CODEX_HOME/generated_images`, and a
- * `failure` when the plan's allowance is used up).
+ * `failure` when the plan's allowance is used up). The base64 always comes,
+ * saved or not, in one `item/completed` line: a 1024×1024 PNG is 2–4 MB of it,
+ * past what a chat's connection reads, so this one reads up to `PICTURE_LINE`.
  */
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { relative, isAbsolute } from 'node:path';
 
 import { PictureLimit, type PictureRequest } from '../types';
-import type { CodexRpc, RpcMessage } from './rpc';
+import { LineTooLong, redact, type CodexRpc, type RpcMessage } from './rpc';
 
 /** What the picture thread is told: one picture, nothing else. */
 export const PICTURE_INSTRUCTIONS =
@@ -43,8 +45,49 @@ const object = (value: unknown): Record<string, unknown> =>
     ? (value as Record<string, unknown>)
     : {};
 
-/** Limit the picture's size as the other image services do (`images/service.ts`). */
+/** Limit the picture's size as the other image services do (`images/backends.ts`). */
 const MAX_BASE64 = 42_000_000;
+
+/**
+ * The longest message a picture's connection reads: the picture in base64 and
+ * room for the rest of its item. Held only while it's read, once (`Lines`).
+ */
+export const PICTURE_LINE = MAX_BASE64 + 2_000_000;
+
+/** Why a failed turn made no picture, in words a person and a model can act on. */
+function turnFailure(error: Record<string, unknown>): Error {
+  const info = error.codexErrorInfo;
+  const status =
+    info && typeof info === 'object'
+      ? Object.values(info)
+          .map((v) => object(v).httpStatusCode)
+          .find((s) => typeof s === 'number')
+      : undefined;
+  if (
+    ['usageLimitExceeded', 'rateLimitExceeded', 'sessionBudgetExceeded'].includes(String(info)) ||
+    status === 429
+  )
+    return new PictureLimit('Your ChatGPT plan has made all the pictures it can for now.');
+  if (info === 'unauthorized' || status === 401 || status === 403)
+    return new Error('Reconnect ChatGPT in Settings → Providers, then ask for the picture again.');
+  if (info === 'serverOverloaded' || info === 'internalServerError')
+    return new Error('ChatGPT is busy just now and made no picture. Try once more in a minute.');
+  const said = typeof error.message === 'string' ? redact(error.message) : '';
+  return new Error(
+    said
+      ? `ChatGPT couldn’t make this picture: ${said}`
+      : 'ChatGPT couldn’t make this picture. Check your ChatGPT connection in Settings → Providers.',
+  );
+}
+
+/** What went wrong with the connection, said for a picture. */
+function connectionFailure(error: Error): Error {
+  if (error instanceof LineTooLong)
+    return new Error(
+      'The picture ChatGPT made was larger than Conch can bring back. Nothing was saved; ask for a smaller one.',
+    );
+  return error;
+}
 
 /**
  * One picture from an initialised app server whose run home is `home`. Every
@@ -132,18 +175,18 @@ export async function makeCodexPicture(
       setTimeout(
         () =>
           finish(
-            new Error(
-              turn.status === 'completed'
-                ? 'ChatGPT didn’t make a picture this time. Nothing was saved; describe it more plainly and try once more.'
-                : 'ChatGPT couldn’t make this picture. Check your ChatGPT connection in Settings → Providers.',
-            ),
+            turn.status === 'completed'
+              ? new Error(
+                  'ChatGPT didn’t make a picture this time. Nothing was saved; describe it more plainly and try once more.',
+                )
+              : turnFailure(object(turn.error)),
           ),
         250,
       ).unref();
     }
   };
   const stopListening = rpc.listen(onMessage);
-  const stopFailing = rpc.onFailure((error) => finish(error));
+  const stopFailing = rpc.onFailure((error) => finish(connectionFailure(error)));
   const abort = () => {
     if (threadId && turnId)
       try {

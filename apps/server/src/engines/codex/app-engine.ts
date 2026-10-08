@@ -47,7 +47,7 @@ import {
 } from '../types';
 import { DOCS_URL, MIN_VERSION, findCodex, installHints, isAtLeast, parseVersion } from './detect';
 import { CodexHome } from './home';
-import { makeCodexPicture } from './pictures';
+import { makeCodexPicture, PICTURE_LINE } from './pictures';
 import type { RpcMessage } from './rpc';
 import { ToolQueue } from './tool-queue';
 import { CodexToolEvents } from './tool-events';
@@ -398,6 +398,8 @@ export class CodexEngine implements Engine {
           home = dir;
         },
         config: PICTURE_CONFIG,
+        // The picture comes back whole, in one message.
+        maxLine: PICTURE_LINE,
       },
     );
   }

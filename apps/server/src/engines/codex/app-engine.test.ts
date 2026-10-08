@@ -1086,3 +1086,17 @@ describe('observed provider utilities', () => {
     ]);
   });
 });
+
+describe('a picture on the ChatGPT plan, through the app server', () => {
+  it('reads a multi-megabyte picture sent whole in one message', async () => {
+    // 4 MB of picture is about 5.6 MB of base64: past what a chat's connection reads.
+    const { engine } = await setup({ signedIn: true, picture: 4_000_000 });
+    const made = await engine.pictures.make({
+      prompt: 'A fox',
+      signal: new AbortController().signal,
+    });
+    expect(made.bytes.length).toBe(4_000_000);
+    expect(made.bytes.subarray(0, 4).toString('latin1')).toBe('\x89PNG');
+    expect(made.bytes[4_000_000 - 1]).toBe((4_000_000 - 1) % 251);
+  }, 30_000);
+});

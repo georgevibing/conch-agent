@@ -37,6 +37,11 @@ export async function fakeCodexApp(
     native?: { command?: string; paths?: string[]; network?: boolean };
     /** `thread/resume` fails, as for a thread Codex can't read back. */
     resumeFails?: boolean;
+    /**
+     * Codex's image tool makes a picture of this many bytes (a PNG signature,
+     * then the byte's index), sent whole in base64 as Codex does.
+     */
+    picture?: number;
   } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), 'conch-app-server-'));
@@ -116,6 +121,14 @@ rl.createInterface({input:process.stdin}).on('line', line => {
    else if (OPTIONS.native && OPTIONS.native.command) {
      note('item/started',{threadId:TID,turnId:'turn1',item:{type:'commandExecution',id:'cmd1',command:OPTIONS.native.command,cwd:'/work',status:'inProgress',aggregatedOutput:null,exitCode:null}});
      send({id:'approve1',method:'item/commandExecution/requestApproval',params:{kind:'command',threadId:TID,turnId:'turn1',itemId:'cmd1',startedAtMs:1,environmentId:null,command:OPTIONS.native.command,cwd:'/work',...(OPTIONS.native.network ? {networkApprovalContext:{host:'x.example',protocol:'https'}} : {})}});
+   }
+   else if (OPTIONS.picture) {
+     const bytes = Buffer.alloc(OPTIONS.picture, 0);
+     for (let i = 0; i < bytes.length; i++) bytes[i] = i % 251;
+     Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]).copy(bytes);
+     note('item/started',{threadId:TID,turnId:'turn1',item:{type:'imageGeneration',id:'ig1',status:'inProgress',revisedPrompt:null,result:'',failure:null}});
+     note('item/completed',{threadId:TID,turnId:'turn1',item:{type:'imageGeneration',id:'ig1',status:'completed',revisedPrompt:null,result:bytes.toString('base64'),failure:null}});
+     note('turn/completed',{threadId:TID,turn:{id:'turn1',status:'completed'}});
    }
    else if (OPTIONS.native && OPTIONS.native.paths) {
      note('item/started',{threadId:TID,turnId:'turn1',item:{type:'fileChange',id:'fc1',status:'inProgress',changes:OPTIONS.native.paths.map(p=>({path:p,kind:{type:'update',move_path:null},diff:''}))}});
