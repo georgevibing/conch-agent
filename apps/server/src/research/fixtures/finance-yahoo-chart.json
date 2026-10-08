@@ -1,0 +1,24 @@
+{
+  "chart": {
+    "result": [
+      {
+        "meta": {
+          "currency": "EUR",
+          "symbol": "AIR.PA",
+          "fullExchangeName": "Paris",
+          "regularMarketPrice": 214.3,
+          "chartPreviousClose": 211.8,
+          "regularMarketTime": 1791489600,
+          "regularMarketDayHigh": 215.1,
+          "regularMarketDayLow": 212.4,
+          "regularMarketVolume": 912345
+        },
+        "timestamp": [1791230400, 1791316800, 1791403200, 1791489600],
+        "indicators": {
+          "quote": [{ "close": [209.5, 210.8, 211.8, 214.3] }]
+        }
+      }
+    ],
+    "error": null
+  }
+}
