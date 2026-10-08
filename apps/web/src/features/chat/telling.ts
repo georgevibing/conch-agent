@@ -115,6 +115,8 @@ export function stepViews(
       }
       const far = live ? progressOf(tool) : undefined;
       if (far && !asking) view.outcome = far;
+      // Where the command ran, when it wasn't here (ADR 0106).
+      if (tool.where) view.where = tool.where;
     }
     return view;
   });

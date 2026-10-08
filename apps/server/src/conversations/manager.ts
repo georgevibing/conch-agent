@@ -2,6 +2,7 @@ import { resolve } from 'node:path';
 
 import type {
   Agent,
+  WorkPlaceId,
   ChatSpend,
   ConchAppOffer,
   Attachment,
@@ -71,6 +72,7 @@ import type { ConversationRecord, ConversationStore } from './store';
 import { summarizeToolUse, titleFrom } from './summarize';
 import { allows, missing, needs } from '../skills/permissions';
 import { sandboxSupport } from './sandbox';
+import type { WorkPlace } from '../workplaces/types';
 import { assessRisk, breaksCircuit, riskAsks, riskWords, wantsSecondLook } from './risk';
 import { lookAtCommand } from './risk-look';
 import { describeTaint, heldTaints, leavesSandbox, sinkReason, taintFrom } from './taint';
@@ -913,6 +915,8 @@ export class ConversationManager {
        * where commands may write, and where they may never read.
        */
       sandbox?: (workspace: string) => { allowWrite: string[]; denyRead: string[] } | undefined;
+      /** Where a chat's commands run, when it isn't this computer (ADR 0106). */
+      places?: (id: WorkPlaceId | undefined) => WorkPlace | undefined;
       /** Undo (ADR 0030): keeps what each turn changes, so it can be put back. */
       undo?: UndoService;
       /** Every offer goes through here (ADR 0060); without it, cue offers only. */
@@ -3143,6 +3147,11 @@ export class ConversationManager {
           : resolved.permissionMode === 'auto' && (!read || thingsOnly)
             ? 'network'
             : 'sealed';
+      // Where work runs (ADR 0106): the chat's place, for a provider that can send commands there.
+      const place =
+        engine.places && !guest
+          ? this.deps.places?.(live.record.options?.place ?? settings.preferences.place)
+          : undefined;
       const stream = abort.signal.aborted
         ? nothing()
         : engine.runTurn({
@@ -3211,6 +3220,7 @@ export class ConversationManager {
             tainted: guardOn && this.#tainted(live).length > 0 ? true : tightened,
             reach,
             ...(settings.preferences.sealedCommands && { sandbox: this.deps.sandbox?.(workspace) }),
+            ...(place && { place }),
           });
 
       for await (const event of windDown(pace.events(stream), abort.signal)) {
@@ -3339,6 +3349,8 @@ export class ConversationManager {
               status: event.status,
               output: event.output,
               durationMs: Date.now() - at,
+              // The row says where the command ran, when it wasn't here (ADR 0106).
+              ...(place && call?.name === 'Bash' && !event.refused && { where: place.where }),
             });
             await settle();
             await tracker?.after(event.toolUseId).catch(() => undefined);

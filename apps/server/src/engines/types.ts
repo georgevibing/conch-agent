@@ -18,6 +18,8 @@ import type {
   UsageKind,
   UsageWindow,
 } from '@conch/protocol';
+
+import type { WorkPlace } from '../workplaces/types';
 import type { z } from 'zod';
 
 import type { TurnBudget } from './budget';
@@ -368,6 +370,12 @@ export interface TurnInput {
    */
   sandbox?: { allowWrite: string[]; denyRead: string[] };
   /**
+   * Where this turn's commands run, when it isn't this computer (ADR 0106): a
+   * container, an SSH machine, the cloud. Engines that can route commands
+   * (`Engine.places`) hand each one to `place.run`; the rest never get it.
+   */
+  place?: WorkPlace;
+  /**
    * Answer in words only (a guest in a group chat, ADR 0075): engines that
    * bring tools of their own leave them out, and their own system prompt
    * (which describes this computer) too. The guard refuses any tool anyway.
@@ -589,6 +597,12 @@ export interface Engine {
    * can't do.
    */
   readonly hostTools?: boolean;
+  /**
+   * Its commands can run where the person chooses (ADR 0106): it runs them with
+   * Conch's tools, or hands Conch each one. Absent: they run on this computer,
+   * whatever the chat chose, and the picker says so.
+   */
+  readonly places?: boolean;
   /**
    * The engine keeps a plan of its own and reports it as `plan` events
    * (ADR 0060). Absent: Conch offers its `update_plan` tool instead, when the

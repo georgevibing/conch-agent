@@ -102,6 +102,8 @@ src/
   files/                      bounded file/document reading, search and finished-file delivery (ADR 0088)
   research/                   public web search and SSRF-checked page reading (ADR 0088)
   processes/                  conversation-owned command supervisors, logs and stdin (ADR 0088)
+  workplaces/                 where work runs: a container (Docker/Podman), an SSH machine, the cloud (Daytona);
+                              the work folder carried there and back (`mirror.ts`), Claude Code's relay (ADR 0106)
   images/                     image model discovery, approved generation/editing and downloads (ADR 0088)
   attachments/                uploads: sniffing, storage + sweep, per-engine prompt, sandboxed serving (ADR 0017)
   vault/                      Passwords: encrypted vault, keychain, other managers, import, fills (ADR 0025)
@@ -378,7 +380,11 @@ src/
   PreToolUse hook, so it holds in Full trust; API and Codex shared host execution),
   and channel guard questions go to the owner. `TurnInput.sandbox` seals
   Claude Code's commands (`conversations/sandbox.ts`: writable caches, denied secret
-  places). `Activity` serves `/api/activity` from the logs. `skills/scan.ts` reviews
+  places). `TurnInput.place` sends a chat's commands elsewhere instead
+  ([ADR 0106](./docs/adr/0106-where-work-runs.md)): `runHostCommand` hands them to the
+  place for Conch's own tools, and Claude Code's PreToolUse hook swaps each `Bash` for
+  the turn's loopback relay (`workplaces/relay.ts`); the guard judges the command the
+  model wrote, as leaving the box where the place can't seal. `Activity` serves `/api/activity` from the logs. `skills/scan.ts` reviews
   every skill; `danger` ones stay off until acknowledged by hash, and other apps'
   skills are pinned when turned on.
 - **Undo** ([ADR 0030](./docs/adr/0030-undo.md)). `ConversationManager` gives each turn a

@@ -64,6 +64,8 @@ import { usePasskeyPlatform } from './usePasskeyPlatform';
 import { useVerify } from './useVerify';
 import { LIVE_DATA_FOCUS, LiveDataSection } from '../artifacts/LiveDataSection';
 import { SafetySection } from '../safety/SafetySection';
+import { WhereWorkRuns } from '../workplaces/WhereWorkRuns';
+import { WORKPLACES_FOCUS } from '../workplaces/words';
 
 /** A part of this tab a checkup fix can bring you to (devices and reaching Conch are Settings → Devices). */
 type Place = Exclude<CheckupPlace, 'models' | 'channels' | 'other-apps' | 'devices' | 'reach'>;
@@ -653,7 +655,7 @@ export function SecurityTab() {
   const fix = useCheckupFix(guard);
   // The checks that are already right, and the two ways out of this computer,
   // wait under Advanced — and open by themselves when ⌘K or a fix points there.
-  const [advanced, setAdvanced] = useAdvanced(LIVE_DATA_FOCUS, ADDRESS_FOCUS);
+  const [advanced, setAdvanced] = useAdvanced(LIVE_DATA_FOCUS, ADDRESS_FOCUS, WORKPLACES_FOCUS);
   const asked = fix.focus?.place;
   useEffect(() => {
     if (asked === 'live-data' || asked === 'address') setAdvanced(true);
@@ -734,6 +736,7 @@ export function SecurityTab() {
       <SignInSection access={data} guard={guard} focus={fix.focus} />
       <SettingsAdvanced open={advanced} onOpenChange={setAdvanced}>
         <SafetySection />
+        <WhereWorkRuns />
         <LiveDataSection focus={fix.focus} />
         <AddressSection guard={guard} focus={fix.focus} />
       </SettingsAdvanced>

@@ -25,6 +25,7 @@ export * from './QuestionCard';
 export * from './Offer';
 export * from './PlanChecklist';
 export * from './ModePicker';
+export * from './WorkPlaces';
 export * from './Routines';
 export * from './LineGroup';
 export * from './Safety';

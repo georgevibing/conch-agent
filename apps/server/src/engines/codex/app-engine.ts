@@ -316,6 +316,8 @@ export class CodexEngine implements Engine {
   readonly commandSandbox?: 'conch';
   readonly integrations = { mode: 'bridge' as const };
   readonly hostTools = true;
+  /** Codex's commands are Conch's, so they run where the chat's work runs; Codex CLI's are its own (ADR 0106). */
+  readonly places: boolean;
   /** Its plan updates (`turn/plan/updated`) are drawn as Conch's checklist. */
   readonly plans = 'native' as const;
   /** A plan update's explanation, when it gives one, is said as narration (ADR 0103). */
@@ -353,6 +355,7 @@ export class CodexEngine implements Engine {
     this.#home = new CodexHome(home);
     this.#threads = new CodexThreads(join(home, 'codex-sessions'));
     this.id = variant === 'agent' ? 'codex-agent' : 'codex-cli';
+    this.places = variant !== 'agent';
     this.label = variant === 'agent' ? 'Codex CLI' : 'Codex';
     if (variant === 'tools') this.commandSandbox = 'conch';
   }

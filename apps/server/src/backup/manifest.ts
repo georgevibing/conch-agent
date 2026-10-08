@@ -85,6 +85,11 @@ export const RULES: readonly BackupRule[] = [
 
   // ── Derived: rebuilt by itself, or only about this computer ────────────
   {
+    match: 'workplaces/**',
+    class: 'derived',
+    why: 'Where work runs (ADR 0106): SSH’s shared connections and the empty file laid over keys in a container. Made again when needed.',
+  },
+  {
     match: 'recovery/**',
     class: 'derived',
     why: 'This computer’s bounded recovery history and restart budget; never carried into a restore.',
@@ -565,6 +570,12 @@ export const RULES: readonly BackupRule[] = [
     class: 'secret',
     group: 'secrets',
     why: 'The keys and addresses of a browser in the cloud, or elsewhere, that Conch uses (ADR 0080).',
+  },
+  {
+    match: 'workplaces.secrets.json',
+    class: 'secret',
+    group: 'secrets',
+    why: 'The key for the cloud sandbox where chats’ work can run (Daytona, ADR 0106).',
   },
   {
     match: 'onepassword.secrets.json',

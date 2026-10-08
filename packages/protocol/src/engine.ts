@@ -158,6 +158,8 @@ export const Capabilities = z.object({
    * a spreadsheet) with its own tools. Absent means neither.
    */
   attachments: z.object({ images: z.boolean(), files: z.boolean() }).optional(),
+  /** Its commands run where the chat chooses (ADR 0106); absent or false: on this computer. */
+  places: z.boolean().optional(),
 });
 export type Capabilities = z.infer<typeof Capabilities>;
 

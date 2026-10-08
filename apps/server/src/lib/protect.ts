@@ -33,6 +33,9 @@ export function protectedPaths(home: string): string[] {
     join(home, 'onepassword.secrets.json'),
     // A cloud browser's key, or the address of a browser elsewhere (ADR 0080).
     join(home, 'browser.secrets.json'),
+    // The cloud sandbox's key, and SSH's shared connections to your machines (ADR 0106).
+    join(home, 'workplaces.secrets.json'),
+    join(home, 'workplaces'),
     join(home, 'channels.secrets.json'),
     // The secrets other apps sign their messages to routines with (ADR 0056).
     join(home, 'routines.secrets.json'),

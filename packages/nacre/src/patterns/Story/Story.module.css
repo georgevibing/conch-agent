@@ -866,6 +866,11 @@
     color: var(--nc-text-subtle);
   }
 
+  .stepWhere {
+    flex-shrink: 0;
+    align-self: center;
+  }
+
   .stepTime {
     flex-shrink: 0;
     font-size: var(--nc-text-xs);

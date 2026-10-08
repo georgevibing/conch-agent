@@ -264,6 +264,7 @@ export class ProviderService {
             ...capabilities,
             engine: engine.id,
             local: Boolean(engine.local),
+            places: engine.places === true,
             ...(engine.attachments && { attachments: engine.attachments }),
           };
         } catch (error) {
@@ -271,6 +272,7 @@ export class ProviderService {
             engine: engine.id,
             label: engine.label,
             local: Boolean(engine.local),
+            places: engine.places === true,
             ...(engine.attachments && { attachments: engine.attachments }),
             models: [],
             commands: [],

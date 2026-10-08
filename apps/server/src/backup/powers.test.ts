@@ -39,6 +39,18 @@ describe('what in a backup can act for you', () => {
     ).toContainEqual({ kind: 'chats-go-ahead' });
   });
 
+  it('discloses new chats running their work on another machine or in the cloud (ADR 0106)', () => {
+    const of = (place: string) =>
+      powersOf(['settings.json'], reader({ 'settings.json': { preferences: { place } } }));
+    expect(of('ssh:build-box')).toContainEqual({ kind: 'work-runs-elsewhere', where: 'build-box' });
+    expect(of('cloud')).toContainEqual({
+      kind: 'work-runs-elsewhere',
+      where: 'the cloud (Daytona)',
+    });
+    // A container stays on this computer: nothing leaves it.
+    expect(of('container').some((p) => p.kind === 'work-runs-elsewhere')).toBe(false);
+  });
+
   it('discloses an agent whose chats start in Auto, once (ADR 0101)', () => {
     const found = powersOf(
       ['settings.json', 'agents/agents.json'],

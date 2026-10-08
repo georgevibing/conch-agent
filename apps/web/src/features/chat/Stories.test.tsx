@@ -107,6 +107,31 @@ describe('a run of steps, told as stories', () => {
     expect(steps.textContent).toContain('"/p/src/app.ts"');
   });
 
+  it('says on a command’s row where it ran, when that wasn’t this computer (ADR 0106)', async () => {
+    const user = userEvent.setup();
+    open(
+      reduceAll(
+        log(
+          asked,
+          { type: 'tool.started', toolUseId: 'w1', name: 'Bash', input: { command: 'npm test' } },
+          {
+            type: 'tool.finished',
+            toolUseId: 'w1',
+            status: 'success',
+            output: '12 passed',
+            durationMs: 900,
+            where: { kind: 'ssh', name: 'build-box' },
+          },
+          done,
+        ),
+      ),
+    );
+    // Said on the row itself, and read out with it.
+    const row = await screen.findByRole('button', { name: /ran on build-box/ });
+    expect(row.querySelector('[aria-label="Ran on build-box"]')).not.toBeNull();
+    await user.click(row);
+  });
+
   it('takes a small model’s headline once it comes, after the turn', () => {
     const events = log(
       asked,

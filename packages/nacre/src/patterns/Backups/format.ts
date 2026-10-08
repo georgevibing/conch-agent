@@ -29,6 +29,7 @@ export type BackupPowerInfo =
   | { kind: 'tools-never-ask'; name: string; tools: string[]; more?: number }
   | { kind: 'chats-never-ask' }
   | { kind: 'chats-go-ahead' }
+  | { kind: 'work-runs-elsewhere'; where: string }
   | { kind: 'safety-off'; checks: string[] }
   | { kind: 'routine-never-asks'; name: string }
   | { kind: 'routines-spend'; limitUsd: number | null }
@@ -84,6 +85,11 @@ export function powerWords(power: BackupPowerInfo): PowerWords {
       return {
         subject: 'New chats',
         text: 'Let Conch get on with routine work, asking only before something serious',
+      };
+    case 'work-runs-elsewhere':
+      return {
+        subject: 'New chats',
+        text: `Run their commands on ${power.where}, with the work folder copied there`,
       };
     case 'safety-off':
       return {

@@ -154,6 +154,13 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
   const mode = record(settings?.preferences)?.permissionMode;
   if (mode === 'bypassPermissions') powers.push({ kind: 'chats-never-ask' });
   if (mode === 'auto') powers.push({ kind: 'chats-go-ahead' });
+  // Work running elsewhere sends the work folder there (ADR 0106): a machine of the backup's, or its cloud.
+  const place = record(settings?.preferences)?.place;
+  if (typeof place === 'string' && (place.startsWith('ssh:') || place === 'cloud'))
+    powers.push({
+      kind: 'work-runs-elsewhere',
+      where: text(place === 'cloud' ? 'the cloud (Daytona)' : place.slice(4), 'another machine'),
+    });
   // An agent whose new chats start in Auto (ADR 0101); none can carry Full trust.
   const agents = record(json(read, 'agents/agents.json'))?.agents;
   if (
