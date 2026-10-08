@@ -520,6 +520,55 @@ function shows(now: number): PretendFind {
   };
 }
 
+/**
+ * A pie chart of made-up spending, drawn live in the chat. Numbers only: a
+ * chart carries no words for a model to follow and no addresses.
+ */
+function pieChart(about: string): PretendFind {
+  const labels = ['Rent', 'Food', 'Travel', 'Tools', 'Health'];
+  const values = [1450, 620, 310, 185, 96];
+  const view: ToolView = {
+    kind: 'chart',
+    type: 'pie',
+    title: `Where the ${about} went`,
+    subtitle: 'Last month, by category',
+    labels,
+    series: [{ name: 'Spend', values }],
+    prefix: '$',
+  };
+  return {
+    tool: 'chart_show',
+    input: { type: 'pie', title: view.title, labels, series: view.series, prefix: '$' },
+    text: 'Drawn in the chat: a pie chart — “Where the money went”, 5 parts of one whole.',
+    view,
+    reply: 'Rent is over half of it; everything else together is less than the rent.',
+  };
+}
+
+/** A column chart of made-up weekly numbers, drawn live in the chat. */
+function columnChart(about: string): PretendFind {
+  const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  const view: ToolView = {
+    kind: 'chart',
+    type: 'column',
+    title: `${about.charAt(0).toUpperCase()}${about.slice(1)} by day`,
+    subtitle: 'Last week',
+    labels,
+    series: [
+      { name: 'This week', values: [18, 24, 31, 27, 12] },
+      { name: 'The week before', values: [15, 21, 22, 25, 14] },
+    ],
+    goal: { value: 25, label: 'Target' },
+  };
+  return {
+    tool: 'chart_show',
+    input: { type: 'column', title: view.title, labels, series: view.series },
+    text: `Drawn in the chat: a column chart — “${view.title}”, 2 series over 5 points.`,
+    view,
+    reply: 'Wednesday was the peak both weeks, and only Wednesday and Thursday beat the target.',
+  };
+}
+
 /** What a prompt asks the pretend apps for, if anything. */
 export function pretendFind(prompt: string, now = Date.now()): PretendFind | undefined {
   const text = prompt.trim();
@@ -533,6 +582,12 @@ export function pretendFind(prompt: string, now = Date.now()): PretendFind | und
   // Only the plain question: a routine's "weather briefing" or other journeys' prompts stay theirs.
   if (/^(?:what(?:'|’)?s the weather in\b|will it rain in\b)/i.test(text))
     return weather(now, /\bin ([A-Z][\w-]+(?: [A-Z][\w-]+)?)/.exec(text)?.[1] ?? 'Lisbon');
+  // Only these two openings: "chart" and "pie chart" turn up in plenty of
+  // other journeys' prompts, and last round a wide pattern stole them.
+  const pie = /^make me a pie chart of (?:my |the )?(.+?)[.?!]*$/i.exec(text)?.[1];
+  if (pie) return pieChart(pie.toLowerCase());
+  const charted = /^chart (?:my |the )?(.+?)[.?!]*$/i.exec(text)?.[1];
+  if (charted) return columnChart(charted.toLowerCase());
   const dish = /\b(?:a )?recipe for (.+?)[.?!]*$/i.exec(text)?.[1];
   if (dish) return recipe(dish);
   const shopping = /\bshop for (?:an? |some )?([\w-]+?)s?[.?!]*$/i.exec(text)?.[1];

@@ -18,6 +18,8 @@ describe('the mock’s pretend app finds', () => {
     ['Who was Ada Lovelace?', 'knowledge_card', 'knowledge'],
     ['Find books by Ursula K. Le Guin', 'book_search', 'books'],
     ['What’s on with Severance?', 'show_search', 'shows'],
+    ['Make me a pie chart of my spending', 'chart_show', 'chart'],
+    ['Chart last week’s orders', 'chart_show', 'chart'],
   ])('“%s” finds a %s with a view that logs as it is', (prompt, tool, kind) => {
     const found = pretendFind(prompt);
     expect(found?.tool).toBe(tool);
@@ -32,5 +34,8 @@ describe('the mock’s pretend app finds', () => {
     // Other journeys' prompts that only mention the weather.
     expect(pretendFind('Every morning, give me a weather briefing')).toBeUndefined();
     expect(pretendFind('What is the weather like in Lisbon tomorrow')).toBeUndefined();
+    // Other journeys' prompts that only mention a chart.
+    expect(pretendFind('Put a chart of the numbers in the deck')).toBeUndefined();
+    expect(pretendFind('Can you make a pie chart file for the deck?')).toBeUndefined();
   });
 });
