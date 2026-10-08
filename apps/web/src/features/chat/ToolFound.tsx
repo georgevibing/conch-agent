@@ -3,6 +3,7 @@ import { AgendaView, ChatMessages, FileList, MailList, Sources, replyRequest } f
 
 import { useUi } from '../../app/ui';
 import { SentAttachments } from './AttachmentViewer';
+import { MailSentItem } from './MailItems';
 
 /**
  * Words for the open chat's composer, from anywhere in it: the same way ⌘K's
@@ -30,6 +31,8 @@ export function ToolFound({ view }: { view: ToolView }) {
       return <AgendaView events={view.items} from={view.from} to={view.to} />;
     case 'mail':
       return <MailList messages={view.items} onReply={(m) => insert(replyRequest(m))} />;
+    case 'mail-sent':
+      return <MailSentItem view={view} />;
     case 'files':
       return <FileList files={view.items} />;
     case 'messages':

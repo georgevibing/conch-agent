@@ -14,6 +14,7 @@ import { rowState, withAnswer } from './approval';
 import { explainStep } from './explain';
 import { headlineOf, liveOf, quietFollowers, standsAlone, stepViews, storyStatus } from './telling';
 import { ToolFound } from './ToolFound';
+import { mailMoment } from './MailItems';
 import { formatInput, managedProcessSummary, toolDiff, toolSummary } from './tools';
 import styles from './Transcript.module.css';
 import { useArrivedLive } from './TranscriptItems';
@@ -179,16 +180,21 @@ export function RunStories({
   };
   for (const story of stories) {
     stack.push(story);
-    const found = story.steps.flatMap((s) => {
-      const view = byId.get(s.id)?.view;
-      return standsAlone(view) ? [{ id: s.id, view }] : [];
+    const found = story.steps.flatMap((s): { id: string; kind: string; node: ReactNode }[] => {
+      const tool = byId.get(s.id);
+      const view = tool?.view;
+      if (standsAlone(view))
+        return [{ id: s.id, kind: view.kind, node: <ToolFound view={view} /> }];
+      // An email on its way, or one that didn't go or may have: its card, from the call.
+      const moment = tool && mailMoment(tool, asked.get(s.id));
+      return moment ? [{ id: s.id, kind: 'mail-sent', node: moment }] : [];
     });
     if (!found.length) continue;
     flush();
-    for (const { id, view } of found)
+    for (const { id, kind, node } of found)
       parts.push(
-        <div key={`found-${id}`} className={styles.found}>
-          <ToolFound view={view} />
+        <div key={`found-${id}`} className={styles.found} data-view={kind}>
+          {node}
         </div>,
       );
   }

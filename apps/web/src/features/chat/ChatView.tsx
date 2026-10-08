@@ -4,6 +4,7 @@ import {
   type Attachment,
   type EngineId,
   type EngineStatus,
+  type MailEdit,
   type TurnOptions,
 } from '@conch/protocol';
 import {
@@ -814,8 +815,8 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
 
   // The transcript draws again only when the chat does, not with every keystroke here.
   const onRespond = useStable(
-    (permissionId: string, decision: 'allow' | 'allow-always' | 'deny') =>
-      conversationId && live.respond(conversationId, permissionId, decision),
+    (permissionId: string, decision: 'allow' | 'allow-always' | 'deny', edit?: MailEdit) =>
+      conversationId && live.respond(conversationId, permissionId, decision, edit),
   );
   const onRetry = useStable(() => {
     const last = lastUserMessage(view);
