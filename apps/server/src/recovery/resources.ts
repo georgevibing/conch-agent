@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { readFile } from 'node:fs/promises';
 import { availableParallelism, freemem, loadavg, totalmem } from 'node:os';
+import { cgroupMemory, type CgroupMemory } from './cgroup';
 
 export interface ResourceSnapshot {
   at: number;
@@ -10,6 +11,8 @@ export interface ResourceSnapshot {
   cpuCount: number;
   loadPerCpu: number;
   memoryPressure: number | null;
+  cgroupMemoryLimitBytes?: number;
+  cgroupMemoryAvailableBytes?: number;
   level: 'healthy' | 'busy' | 'critical';
   concurrency: number;
   reason: string;
@@ -67,6 +70,7 @@ export function darwinAvailableMemory(text: string): number | undefined {
 export async function sampleResources(): Promise<ResourceSnapshot> {
   let availableBytes = freemem();
   let memoryPressure: number | null = null;
+  let cgroup: CgroupMemory = {};
   if (process.platform === 'darwin') {
     try {
       const { stdout } = await execute('/usr/bin/vm_stat', [], {
@@ -81,9 +85,10 @@ export async function sampleResources(): Promise<ResourceSnapshot> {
     }
   }
   if (process.platform === 'linux') {
-    const [memory, pressure] = await Promise.allSettled([
-      readFile('/proc/meminfo', 'utf8'),
-      readFile('/proc/pressure/memory', 'utf8'),
+    const [memory, pressure, group] = await Promise.allSettled([
+      readFile('/proc/meminfo', { encoding: 'utf8', signal: AbortSignal.timeout(1_000) }),
+      readFile('/proc/pressure/memory', { encoding: 'utf8', signal: AbortSignal.timeout(1_000) }),
+      cgroupMemory(),
     ]);
     if (memory.status === 'fulfilled') {
       const match = /^MemAvailable:\s+(\d+)\s+kB$/m.exec(memory.value);
@@ -93,11 +98,21 @@ export async function sampleResources(): Promise<ResourceSnapshot> {
       const match = /^full avg10=([\d.]+)/m.exec(pressure.value);
       if (match) memoryPressure = Number(match[1]);
     }
+    if (group.status === 'fulfilled') cgroup = group.value;
+    else availableBytes = 0;
+    if (cgroup.availableBytes !== undefined)
+      availableBytes = Math.min(availableBytes, cgroup.availableBytes);
+    if (cgroup.pressure !== undefined)
+      memoryPressure = Math.max(memoryPressure ?? 0, cgroup.pressure);
   }
   // libuv accounts for cgroup limits; host-wide free memory alone over-admits
   // work inside a container. Zero means no discoverable constraint.
   const constrained = process.constrainedMemory();
-  const totalBytes = constrained > 0 ? Math.min(totalmem(), constrained) : totalmem();
+  const totalBytes = Math.min(
+    totalmem(),
+    constrained > 0 ? constrained : Infinity,
+    cgroup.limitBytes ?? Infinity,
+  );
   if (totalBytes < totalmem()) availableBytes = Math.min(availableBytes, process.availableMemory());
   const cpuCount = availableParallelism();
   return resourcePolicy({
@@ -107,5 +122,9 @@ export async function sampleResources(): Promise<ResourceSnapshot> {
     cpuCount,
     loadPerCpu: (loadavg()[0] ?? 0) / cpuCount,
     memoryPressure,
+    ...(cgroup.limitBytes !== undefined && { cgroupMemoryLimitBytes: cgroup.limitBytes }),
+    ...(cgroup.availableBytes !== undefined && {
+      cgroupMemoryAvailableBytes: cgroup.availableBytes,
+    }),
   });
 }

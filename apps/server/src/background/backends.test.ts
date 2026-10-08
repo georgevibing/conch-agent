@@ -199,3 +199,17 @@ describe('windows', () => {
     expect(runValueName('app.conch.gateway.1a2b3c4d')).toBe('Conch 1a2b3c4d');
   });
 });
+
+describe('refreshing an installed watchdog', () => {
+  it('queues a restart without waiting for its own process to stop or starting a stopped service', async () => {
+    const { exec, calls } = fakeExec(() => ({}));
+    const backend = systemdBackend('app.conch.gateway', { config: home, exec });
+    await backend.refreshSupervisor?.();
+    expect(calls).toEqual(['systemctl --user --no-block try-restart conch.service']);
+  });
+  it('reports a rejected restart so the existing gateway can keep serving', async () => {
+    const { exec } = fakeExec(() => ({ code: 1 }));
+    const backend = systemdBackend('app.conch.gateway', { config: home, exec });
+    await expect(backend.refreshSupervisor?.()).rejects.toThrow('could not refresh');
+  });
+});

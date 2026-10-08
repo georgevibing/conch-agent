@@ -41,6 +41,11 @@ export function serviceLabel(home: string, defaultHome = join(homedir(), '.conch
   return `app.conch.gateway.${createHash('sha256').update(home).digest('hex').slice(0, 8)}`;
 }
 
+/** `app.conch.gateway` → `conch`; another home's label keeps its suffix. */
+export function unitName(label: string): string {
+  return label === 'app.conch.gateway' ? 'conch' : `conch-${label.split('.').pop() ?? 'other'}`;
+}
+
 /**
  * Environment worth carrying into a login. Proxies and certificates often
  * only exist in a shell's profile, and without them nothing reaches the
@@ -261,6 +266,8 @@ ExecStart=/bin/sh ${systemdQuote(launcher)}
 Restart=on-failure
 RestartSec=10
 RestartPreventExitStatus=78
+KillMode=mixed
+TimeoutStopSec=25
 
 [Install]
 WantedBy=default.target

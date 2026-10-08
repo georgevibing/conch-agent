@@ -250,10 +250,14 @@ describe('the conversation', () => {
       });
     const manager = make();
     const idle = async (id: string) => {
-      await vi.waitFor(async () => {
-        const { conversation } = await manager.detail(id);
-        expect(conversation.status).toBe('idle');
-      });
+      await vi.waitFor(
+        async () => {
+          const { conversation } = await manager.detail(id);
+          expect(conversation.status).toBe('idle');
+        },
+        // Shared runners may need more than the default second to finish a turn.
+        { timeout: 5_000 },
+      );
     };
     let n = 0;
     const say = async (text: string, conversationId?: string) => {

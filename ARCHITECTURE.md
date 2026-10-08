@@ -961,9 +961,14 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   as a child with `CONCH_SUPERVISED=1`. Exit code 75 means "start me again"
   (`POST /api/gateway/restart`, after an update or a restore: it cuts every
   device off, so it needs a recent password or key and waits while a chat is
-  working); any other exit is a
-  crash, restarted after 1 s, 3 s, 10 s, then 30 s, and given up after five crashes
-  in ten minutes. A restart after a crash leaves a note in "Fixed on its own".
+  working). Unexpected failures restart after 1 s, 3 s, 10 s, then 30 s;
+  intentional Quit stays stopped. An outside watchdog detects freezes and cleans
+  up the gateway's owned children. A durable failure budget starts recovery mode
+  after repeated trouble and adds cooldown instead of abandoning recovery.
+  Recovery checks HTTP health and effective resource headroom, including Linux
+  ancestor memory budgets. After a healthy minute it resumes safe waiting work;
+  ten healthy minutes clear the automatic recovery budget. A restart after a
+  crash leaves a note in "Fixed on its own".
   `/api/health` carries the run's `bootId` and whether it's `restartable`; the web
   app shows a calm "Starting again…" screen and reloads when the `bootId` changes.
 - **Repair everything** (`doctor/`). Each part registers a `DoctorCheck {id,

@@ -143,3 +143,99 @@ describe('gateway recovery', () => {
     expect(deps.send).not.toHaveBeenCalledWith({ type: 'conch.recovered' });
   });
 });
+
+describe('automatic recovery without a restart loop', () => {
+  it('automatically resumes after sustained health but retains the crash budget through probation', async () => {
+    vi.useFakeTimers();
+    const { recovery, deps } = setup(true);
+    await recovery.start(async () => true);
+    await vi.advanceTimersByTimeAsync(59_999);
+    expect(deps.resume).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(deps.resume).toHaveBeenCalledOnce();
+    expect(recovery.allowsWork).toBe(true);
+    expect(deps.send).not.toHaveBeenCalledWith({ type: 'conch.recovered' });
+    await vi.advanceTimersByTimeAsync(540_000);
+    expect(deps.send).toHaveBeenCalledWith({ type: 'conch.recovered' });
+    recovery.stop();
+  });
+
+  it('requires a fresh continuous healthy interval after renewed pressure', async () => {
+    vi.useFakeTimers();
+    const { recovery, deps } = setup(true);
+    await recovery.start(async () => true);
+    await vi.advanceTimersByTimeAsync(55_000);
+    deps.sample.mockResolvedValue(resourcePolicy({ ...healthy(), availableBytes: 1 }));
+    await vi.advanceTimersByTimeAsync(5_000);
+    deps.sample.mockResolvedValue(healthy());
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(deps.resume).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(deps.resume).toHaveBeenCalledOnce();
+    recovery.stop();
+  });
+
+  it('keeps heartbeats running and retries failed repairs with backoff', async () => {
+    vi.useFakeTimers();
+    const { recovery, deps } = setup(true);
+    deps.recovered.mockRejectedValueOnce(new Error('transient'));
+    await recovery.start(async () => true);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(recovery.allowsWork).toBe(false);
+    await vi.advanceTimersByTimeAsync(55_000);
+    expect(deps.recovered).toHaveBeenCalledOnce();
+    expect(deps.send).toHaveBeenLastCalledWith(expect.objectContaining({ healthy: true }));
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(deps.recovered).toHaveBeenCalledTimes(2);
+    expect(recovery.allowsWork).toBe(true);
+    recovery.stop();
+  });
+
+  it('a hanging resource sampler holds work without declaring a working listener dead', async () => {
+    vi.useFakeTimers();
+    const { recovery, deps } = setup();
+    deps.sample.mockImplementation(() => new Promise(() => {}));
+    const starting = recovery.start(async () => true);
+    await vi.advanceTimersByTimeAsync(2_500);
+    await starting;
+    expect(recovery.allowsWork).toBe(false);
+    expect(deps.send).toHaveBeenLastCalledWith(expect.objectContaining({ healthy: true }));
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(deps.send.mock.calls.length).toBeGreaterThan(1);
+    recovery.stop();
+  });
+
+  it('a hanging probe reports failure within a deadline and can recover on a later poll', async () => {
+    vi.useFakeTimers();
+    const { recovery, deps } = setup();
+    const probe = vi
+      .fn<() => Promise<boolean>>()
+      .mockImplementationOnce(() => new Promise(() => {}))
+      .mockResolvedValue(true);
+    const starting = recovery.start(probe);
+    await vi.advanceTimersByTimeAsync(2_500);
+    await starting;
+    expect(deps.send).toHaveBeenLastCalledWith(expect.objectContaining({ healthy: false }));
+    await recovery.poll();
+    expect(recovery.allowsWork).toBe(true);
+    recovery.stop();
+  });
+});
+
+it('rechecks health after a slow repair before reopening admission', async () => {
+  vi.useFakeTimers();
+  const { recovery, deps } = setup(true);
+  await recovery.start(async () => true);
+  await vi.advanceTimersByTimeAsync(15_000);
+  deps.recovered.mockImplementation(async () => {
+    deps.sample.mockResolvedValue(resourcePolicy({ ...healthy(), availableBytes: 1 }));
+  });
+  const items = await recovery
+    .doctorCheck()
+    .run({ repair: true, signal: new AbortController().signal });
+  expect(items[0]?.state).toBe('info');
+  expect(recovery.recoveryMode).toBe(true);
+  expect(deps.resume).not.toHaveBeenCalled();
+  expect(deps.send).not.toHaveBeenCalledWith({ type: 'conch.recovered' });
+  recovery.stop();
+});

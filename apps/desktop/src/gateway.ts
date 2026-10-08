@@ -150,10 +150,12 @@ export class Gateway extends EventEmitter<{
       },
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       windowsHide: true,
+      detached: process.platform !== 'win32',
     });
     this.#child = child;
     const watch = watchGateway(child, {
       ...this.deps.watchdog,
+      processGroup: process.platform !== 'win32',
       now: this.deps.now,
       stopping: () => this.#stopping,
       incident: (reason, resource) => this.#record(reason, resource),

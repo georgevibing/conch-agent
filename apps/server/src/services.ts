@@ -543,13 +543,15 @@ export class Services {
         this.tidy.start();
         this.learning.stop();
         this.learning.start();
+        this.checkins.stop();
+        this.checkins.start();
       },
     });
     this.doctor.register(this.recovery.doctorCheck());
     this.doctor.register(recoveryHistoryCheck(config.CONCH_HOME));
     if (this.recovery.recoveryMode)
       this.processes.pauseAdmission(
-        'Conch is recovering. Open Settings → Health and choose Repair everything.',
+        'Conch is recovering. Waiting work will carry on once it stays responsive.',
       );
     this.vault = new VaultService({
       home: config.CONCH_HOME,

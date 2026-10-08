@@ -22,6 +22,26 @@ export interface GatewayRecoveryDeps {
   recoveryMode?: boolean;
   now?: () => number;
   intervalMs?: number;
+  checkMs?: number;
+  autoRepairMs?: number;
+  probationMs?: number;
+}
+
+/** A stalled optional reader must not suppress proof that HTTP still answers. */
+async function within<T>(read: () => Promise<T>, ms: number): Promise<T | undefined> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      Promise.resolve()
+        .then(read)
+        .catch(() => undefined),
+      new Promise<undefined>((resolve) => {
+        timer = setTimeout(() => resolve(undefined), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
@@ -39,6 +59,9 @@ export class GatewayRecovery {
   #repairing?: Promise<boolean>;
   #probe: () => Promise<boolean> = async () => false;
   #lastRelief = -Infinity;
+  #lastRepair = -Infinity;
+  #probation = false;
+  #lastPoll?: number;
 
   constructor(private readonly deps: GatewayRecoveryDeps) {
     this.#mode = deps.recoveryMode ?? false;
@@ -57,8 +80,8 @@ export class GatewayRecovery {
     if (this.#timer || this.#stopping) return;
     this.#probe = probe;
     if (this.#mode) {
-      this.deps.pause('Conch is recovering. Open Settings → Health and choose Repair everything.');
-      this.deps.note('Paused background work to stay responsive. Repair everything carries it on.');
+      this.deps.pause('Conch is recovering. Waiting work will carry on once it stays responsive.');
+      this.deps.note('Paused background work to recover. It will carry on after a healthy check.');
     }
     await this.poll();
     if (!this.#stopping)
@@ -74,20 +97,26 @@ export class GatewayRecovery {
     if (this.#stopping) return;
     const started = performance.now();
     try {
-      const [resources, response] = await Promise.allSettled([
-        Promise.resolve().then(() => this.deps.sample()),
-        Promise.resolve().then(() => this.#probe()),
+      const [snapshot, response] = await Promise.all([
+        within(() => this.deps.sample(), this.deps.checkMs ?? 2_500),
+        within(() => this.#probe(), this.deps.checkMs ?? 2_500),
       ]);
       if (this.#stopping) return;
-      const snapshot = resources.status === 'fulfilled' ? resources.value : undefined;
-      const answering = response.status === 'fulfilled' && response.value;
+      const answering = response === true;
       this.#snapshot = snapshot;
       this.#answering = answering;
       // Pressure holds work and sheds managed jobs; do not restart a responsive
       // gateway just because an unrelated application is using this computer.
       const healthy = answering;
-      if (answering && snapshot?.level === 'healthy')
-        this.#healthySince ??= (this.deps.now ?? Date.now)();
+      const now = (this.deps.now ?? (() => performance.now()))();
+      // A suspended laptop or a stalled poll is not evidence of continuous health.
+      if (
+        this.#lastPoll !== undefined &&
+        now - this.#lastPoll > (this.deps.intervalMs ?? 5_000) * 3
+      )
+        this.#healthySince = undefined;
+      this.#lastPoll = now;
+      if (answering && snapshot?.level === 'healthy') this.#healthySince ??= now;
       else this.#healthySince = undefined;
       this.#send({
         type: 'conch.heartbeat',
@@ -97,11 +126,28 @@ export class GatewayRecovery {
             memoryAvailableBytes: snapshot.availableBytes,
             memoryTotalBytes: snapshot.totalBytes,
             loadPerCpu: snapshot.loadPerCpu,
+            ...(snapshot.memoryPressure !== null && { memoryPressure: snapshot.memoryPressure }),
+            ...(snapshot.cgroupMemoryLimitBytes !== undefined && {
+              cgroupMemoryLimitBytes: snapshot.cgroupMemoryLimitBytes,
+              cgroupMemoryAvailableBytes: snapshot.cgroupMemoryAvailableBytes,
+            }),
           }),
           gatewayRssBytes: process.memoryUsage.rss(),
           probeMs: Math.max(0, performance.now() - started),
         },
       });
+      if (this.#healthySince !== undefined) {
+        if (
+          this.#mode &&
+          now - this.#healthySince >= (this.deps.autoRepairMs ?? 60_000) &&
+          now - this.#lastRepair >= (this.deps.autoRepairMs ?? 60_000)
+        )
+          void this.#attemptRepair(true);
+        if (this.#probation && now - this.#healthySince >= (this.deps.probationMs ?? 600_000)) {
+          this.#probation = false;
+          this.#send({ type: 'conch.recovered' });
+        }
+      }
     } catch {
       if (this.#stopping) return;
       this.#snapshot = undefined;
@@ -150,19 +196,42 @@ export class GatewayRecovery {
     }
   }
 
-  async #repair(): Promise<boolean> {
+  #attemptRepair(automatic = false): Promise<boolean> {
+    this.#repairing ??= this.#repair(automatic)
+      .catch(() => false)
+      .finally(() => (this.#repairing = undefined));
+    return this.#repairing;
+  }
+
+  async #repair(automatic: boolean): Promise<boolean> {
+    const now = (this.deps.now ?? (() => performance.now()))();
+    if (
+      this.#stopping ||
+      !this.#mode ||
+      this.#healthySince === undefined ||
+      now - this.#healthySince < (automatic ? (this.deps.autoRepairMs ?? 60_000) : 15_000)
+    )
+      return false;
+    this.#lastRepair = now;
+    await this.deps.recovered?.();
+    if (this.#stopping) return false;
     await this.poll();
     if (
       this.#stopping ||
+      !this.#answering ||
+      this.#snapshot?.level !== 'healthy' ||
       this.#healthySince === undefined ||
-      (this.deps.now ?? Date.now)() - this.#healthySince < 15_000
+      (this.deps.now ?? (() => performance.now()))() - this.#healthySince <
+        (automatic ? (this.deps.autoRepairMs ?? 60_000) : 15_000)
     )
       return false;
-    await this.deps.recovered?.();
-    if (this.#stopping) return false;
     this.#mode = false;
     this.deps.resume();
-    this.#send({ type: 'conch.recovered' });
+    // Automatic repair cannot erase the durable crash budget after a brief lull.
+    if (automatic) {
+      this.#probation = true;
+      this.deps.note('Resumed waiting work after checking that Conch stays responsive');
+    } else this.#send({ type: 'conch.recovered' });
     return true;
   }
 
@@ -175,8 +244,7 @@ export class GatewayRecovery {
         await this.poll();
         let fixed = false;
         if (repair && this.#mode) {
-          this.#repairing ??= this.#repair().finally(() => (this.#repairing = undefined));
-          fixed = await this.#repairing;
+          fixed = await this.#attemptRepair();
         }
         const item: DoctorItem = {
           id: 'recovery',
@@ -198,9 +266,9 @@ export class GatewayRecovery {
               ? !this.#answering || this.#snapshot?.level !== 'healthy'
                 ? 'Background work is paused after repeated trouble. Conch is waiting for this computer to recover before it can carry on.'
                 : this.#healthySince === undefined ||
-                    (this.deps.now ?? Date.now)() - this.#healthySince < 15_000
-                  ? 'Conch is checking that it stays responsive. Wait a moment, then choose Repair everything to carry on.'
-                  : 'Conch is ready to continue. Choose Repair everything to let waiting work carry on.'
+                    (this.deps.now ?? (() => performance.now()))() - this.#healthySince < 15_000
+                  ? 'Conch is checking that it stays responsive. Waiting work will carry on automatically.'
+                  : 'Conch is checking before it resumes waiting work. Repair everything can check now.'
               : this.#stopping
                 ? 'Conch is saving your place before it stops.'
                 : !this.#answering

@@ -1,4 +1,5 @@
 import type { ChildProcess } from 'node:child_process';
+import { gatewayChildren } from './children';
 
 import { recoveryResource, type RecoveryResource } from './supervisor-state';
 
@@ -11,6 +12,10 @@ export interface WatchdogOptions {
   recoverMs?: number;
   pollMs?: number;
   stopMs?: number;
+  /** The launcher created a private POSIX process group for this gateway. */
+  processGroup?: boolean;
+  /** Only members of this registered service, excluding the supervisor's baseline. */
+  serviceMembers?: () => number[];
   stopping: () => boolean;
   incident: (
     reason: 'unresponsive' | 'reduced-workload' | 'responsive',
@@ -36,10 +41,19 @@ export function watchGateway(
   let failed = false;
   let resource: RecoveryResource | undefined;
   let forced: NodeJS.Timeout | undefined;
+  const children = child.pid
+    ? gatewayChildren(child.pid, options.processGroup === true, {
+        serviceMembers: options.serviceMembers,
+      })
+    : undefined;
   const armShutdown = () => {
     if (terminating) return false;
     terminating = true;
-    forced = setTimeout(() => child.kill('SIGKILL'), options.stopMs ?? 15_000);
+    children?.sample();
+    forced = setTimeout(() => {
+      children?.close();
+      child.kill('SIGKILL');
+    }, options.stopMs ?? 15_000);
     return true;
   };
   const stop = (signal: NodeJS.Signals = 'SIGTERM') => {
@@ -97,6 +111,7 @@ export function watchGateway(
       clearInterval(timer);
       clearTimeout(forced);
       child.off('message', message);
+      children?.close();
     },
   };
 }

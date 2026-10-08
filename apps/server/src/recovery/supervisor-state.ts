@@ -24,6 +24,9 @@ const resourceFields = [
   'queued',
   'gatewayRssBytes',
   'probeMs',
+  'memoryPressure',
+  'cgroupMemoryLimitBytes',
+  'cgroupMemoryAvailableBytes',
 ] as const;
 export type RecoveryResource = Partial<Record<(typeof resourceFields)[number], number>>;
 export function recoveryResource(value: unknown): RecoveryResource | undefined {

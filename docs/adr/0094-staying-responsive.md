@@ -17,6 +17,46 @@ add another scheduler, another dashboard or a model-driven repair loop.
 
 ## Decisions
 
+### October 8 incident: inherited limits and surviving children
+
+The live gateway stopped answering while Linux held it and replacement gateways
+in `mem_cgroup_handle_over_high`. Its service had no local memory limit, but the
+ancestor `app.slice` throttled at 7 GiB and capped memory at 7.5 GiB. Host readings
+still advertised over 4 GiB available. Abandoned Storybook and test processes
+inside the service retained about 2 GiB across gateway restarts. A service restart
+removed them and restored a two-millisecond local health response.
+
+Read cgroup v2 limits, usage and pressure from every visible ancestor, including
+`memory.high`, before admitting work. Available memory is the smallest remaining
+budget, including sibling usage, rather than the leaf's usage subtracted from a
+parent limit. Keep the operating system's limits intact. Bound health sampling;
+a stuck resource reader must hold admission without hiding a working listener.
+The common tool guard also holds provider-native Bash and PowerShell under
+pressure and directs them to the managed queue. Reads and stopping work remain
+available; a command held before dispatch never acquires an uncertain-action marker.
+
+Give each POSIX gateway its own process group and clean it up on exit. On Linux,
+also track descendant identities outside the gateway, including detached children,
+and verify kernel start times before terminating them. Never select processes by
+their name, command, workspace or memory use. A registered Linux service also
+uses its exact cgroup membership, excluding the supervisor's pre-launch helpers:
+this catches programs that double-fork or detach between observations. Never use
+a shared session or slice as an ownership boundary. Tests exercise actual child
+trees in temporary homes. Outside a service, a program that deliberately escapes
+ownership between observations still requires operating-system containment.
+
+Recovery mode now attempts its existing repair automatically after a full minute
+of continuous HTTP health and resource headroom. Failed repair backs off, shutdown
+wins, and work stays paused throughout verification. The failure budget is retained
+until a longer stable probation completes, so brief recovery cannot reset a crash
+loop. Repair everything remains available. No approval or uncertain action is
+released by this availability repair.
+
+The resource semantics follow the [Linux cgroup v2 documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html):
+limits are hierarchical, `memory.high` throttles, and `memory.current` includes
+descendants. Diagnostics retain only numbers and reason codes, never `/proc`
+command lines or environments.
+
 ### Admit work only when there is room
 
 `ProcessService` owns a bounded queue: at most 32 waiting commands globally and
@@ -91,10 +131,21 @@ exhaustion causes cooldown rather than an unbounded operating-system restart loo
 
 Recovery mode preserves chat and settings access while automatic resumption,
 queued tasks, scheduled routines, quiet learning and managed commands are held.
-Its latch does not expire just because time passes. The existing **Repair everything**
-checks for stable HTTP responsiveness and resource headroom, then releases work
-gradually and clears the supervisor's budget. No permissions, sign-ins or data are
-reset to repair availability.
+Its latch does not expire just because time passes. A repair after continuous
+HTTP responsiveness and resource headroom releases work gradually: automatically
+after a minute, or sooner through **Repair everything**. Automatic repair retains
+the supervisor's budget until ten healthy minutes have passed. No permissions,
+sign-ins or data are reset to repair availability.
+
+Each new supervisor marks its revision in its child's environment. When an updated
+Linux background gateway finds an older supervisor, it first heals the service
+definition, then queues a nonblocking systemd restart of its registered service.
+This replaces the in-memory watcher and clears historical service descendants
+without a terminal command. `KillMode=mixed` lets the supervisor save the gateway's
+checkpoints first; systemd bounds final cleanup at 25 seconds. Desktop updates
+replace the supervising app. Other launchers acquire these watcher changes when
+their supervising process is restarted; their updated gateway still gets the new
+resource checks and automatic repair immediately.
 
 ### Save first; uncertainty survives a restart
 

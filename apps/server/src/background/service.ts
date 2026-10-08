@@ -425,6 +425,15 @@ export class BackgroundService {
     return 'ok';
   }
 
+  /** An update must replace a stale Linux supervisor, not just its gateway. */
+  async refreshSupervisor(): Promise<boolean> {
+    if (this.deps.running !== 'background') return false;
+    const backend = await this.deps.backend;
+    if (!backend?.refreshSupervisor || !(await backend.registered())) return false;
+    await backend.refreshSupervisor();
+    return true;
+  }
+
   async #launcherText(): Promise<string | undefined> {
     const dir = backgroundDir(this.deps.home);
     const name = (this.deps.platform ?? process.platform) === 'win32' ? 'conch.cmd' : 'Conch';

@@ -17,7 +17,8 @@ import type { BackgroundKind } from '@conch/protocol';
 
 import { writeFileAtomic } from '../lib/fs';
 import { run, type RunResult } from '../lib/proc';
-import { autostartEntry, launchdPlist, systemdUnit } from './files';
+import { autostartEntry, launchdPlist, systemdUnit, unitName } from './files';
+export { unitName } from './files';
 
 export type Exec = (file: string, args: string[]) => Promise<RunResult>;
 const exec: Exec = (file, args) => run(file, args, { timeout: 15_000 });
@@ -42,6 +43,8 @@ export interface Backend {
   install(launcher: Launcher): Promise<{ changed: boolean }>;
   /** Start it now. A Conch that's already running is left alone. */
   start(launcher: Launcher): Promise<void>;
+  /** Queue a service-manager restart, including the in-memory supervisor. */
+  refreshSupervisor?(): Promise<void>;
   /** Unregister. `stop`: also stop the one the computer started (only when it isn't the one answering). */
   remove(options: { stop: boolean }): Promise<void>;
   /** It's registered to start at login. */
@@ -124,11 +127,6 @@ export function launchdBackend(
 
 // ── Linux ─────────────────────────────────────────────────────────────────
 
-/** `app.conch.gateway` → `conch`; another home's label keeps its suffix. */
-export function unitName(label: string): string {
-  return label === 'app.conch.gateway' ? 'conch' : `conch-${label.split('.').pop() ?? 'other'}`;
-}
-
 /** Linux with a systemd user manager. */
 export async function hasSystemdUser(runner: Exec = exec): Promise<boolean> {
   return (await runner('systemctl', ['--user', 'show-environment'])).code === 0;
@@ -160,6 +158,12 @@ export function systemdBackend(
         throw new Error(
           `systemd couldn't start Conch: ${result.stderr.trim() || 'no reason given'}`,
         );
+    },
+    async refreshSupervisor() {
+      // Waiting for our own restart would deadlock shutdown. systemd retains the
+      // queued job after this gateway and its old supervisor have exited.
+      const result = await ctl('--no-block', 'try-restart', name);
+      if (result.code !== 0) throw new Error('Conch could not refresh its background supervisor.');
     },
     async remove({ stop }) {
       await ctl('disable', name);

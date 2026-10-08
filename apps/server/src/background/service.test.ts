@@ -433,3 +433,24 @@ describe('lastWords', () => {
     expect(await lastWords(home)).toBeUndefined();
   });
 });
+
+describe('activating an updated background watchdog', () => {
+  it('refreshes only its registered background service', async () => {
+    const backend = computer().backend;
+    const refreshSupervisor = vi.fn(async () => {});
+    backend.refreshSupervisor = refreshSupervisor;
+    const { service: background } = service({ running: 'background', backend });
+    expect(await background.refreshSupervisor()).toBe(false);
+    await background.enable();
+    expect(await background.refreshSupervisor()).toBe(true);
+    expect(refreshSupervisor).toHaveBeenCalledOnce();
+    const { service: window } = service({ running: 'window', backend });
+    expect(await window.refreshSupervisor()).toBe(false);
+    expect(refreshSupervisor).toHaveBeenCalledOnce();
+  });
+  it('leaves unsupported launchers running', async () => {
+    const { service: background } = service({ running: 'background' });
+    await background.enable();
+    expect(await background.refreshSupervisor()).toBe(false);
+  });
+});

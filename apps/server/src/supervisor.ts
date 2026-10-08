@@ -18,6 +18,8 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { serviceChildren } from './recovery/children';
+import { serviceLabel, unitName } from './background/files';
 
 import {
   clearRecovery,
@@ -38,6 +40,7 @@ import { currentFolder, goBack, PROVE_WITHIN_MS, readState } from './updates/lay
 
 /** "Start me again": the gateway exits with this to be restarted (EX_TEMPFAIL). */
 export const RESTART_CODE = 75;
+export const SUPERVISOR_REVISION = '2';
 
 /** Crashes this close together mean something's really wrong: stop, and say so. */
 const CRASH_WINDOW_MS = 10 * 60_000;
@@ -209,12 +212,18 @@ export async function supervise(deps: SuperviseDeps = {}): Promise<never> {
         reason = 'restart';
         continue;
       }
+      const serviceMembers =
+        process.env.CONCH_BACKGROUND === '1'
+          ? serviceChildren(`${unitName(serviceLabel(home))}.service`)
+          : undefined;
       child = start(process.execPath, launch.args, {
         stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
+        detached: process.platform !== 'win32',
         ...(launch.cwd && { cwd: launch.cwd }),
         env: {
           ...process.env,
           CONCH_SUPERVISED: '1',
+          CONCH_SUPERVISOR_REVISION: SUPERVISOR_REVISION,
           CONCH_RECOVERY_MODE: recoveryMode ? '1' : '0',
           CONCH_STARTED_BECAUSE: reason,
           ...(launch.folder && { CONCH_RELEASE_ROOT: launch.folder }),
@@ -230,6 +239,8 @@ export async function supervise(deps: SuperviseDeps = {}): Promise<never> {
           !launch.folder ||
           existsSync(join(launch.folder, 'apps', 'server', 'src', 'recovery', 'gateway.ts')),
         ...deps.watchdog,
+        processGroup: process.platform !== 'win32',
+        serviceMembers,
         now: deps.now,
         stopping: () => stopping,
         incident: record,

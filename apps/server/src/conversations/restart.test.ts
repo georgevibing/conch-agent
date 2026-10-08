@@ -390,3 +390,53 @@ describe('Conch restarting under a running chat', () => {
     },
   );
 });
+
+describe('native commands share resource admission', () => {
+  it.each(['Bash', 'PowerShell'])(
+    'holds %s under pressure without blocking reads or creating an uncertain action',
+    async (toolName) => {
+      const home = await mkdtemp(join(tmpdir(), 'conch-command-admission-'));
+      const guarded: unknown[] = [];
+      let allowed = false;
+      const engine = new Scripted(async function* (input) {
+        guarded.push(
+          await input.guard?.({
+            toolName,
+            toolUseId: 'held-command',
+            input: { command: 'echo hello' },
+          }),
+        );
+        guarded.push(
+          await input.guard?.({
+            toolName: 'Read',
+            toolUseId: 'read',
+            input: { file_path: join(home, 'example.txt') },
+          }),
+        );
+        allowed = true;
+        guarded.push(
+          await input.guard?.({
+            toolName,
+            toolUseId: 'admitted-command',
+            input: { command: 'echo hello' },
+          }),
+        );
+        yield { type: 'done', outcome: 'success' };
+      });
+      const manager = await open(home, engine, { allowed: () => allowed });
+      const conversation = await manager.send({ clientMessageId: 'u1', text: 'Run a command' });
+      await until(manager, conversation.id, (events) =>
+        events.some((e) => e.type === 'turn.completed'),
+      );
+      expect(guarded[0]).toMatchObject({
+        decision: 'deny',
+        message: expect.stringContaining('process_start'),
+      });
+      expect(guarded[1]).not.toEqual(expect.objectContaining({ decision: 'deny' }));
+      expect(guarded[2]).not.toEqual(expect.objectContaining({ decision: 'deny' }));
+      const record = await new ConversationStore(join(home, 'conversations')).get(conversation.id);
+      expect(record?.pendingToolCalls ?? []).not.toContain('held-command');
+      await manager.drain();
+    },
+  );
+});

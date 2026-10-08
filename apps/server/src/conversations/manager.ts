@@ -3333,6 +3333,16 @@ export class ConversationManager {
       const refuse = (message: string) =>
         refused(request.toolUseId, { decision: 'deny' as const, message });
       if (guest) return refuse(GUEST_TOOL_MESSAGE);
+      // Provider-native shells must not bypass the same resource gate used by
+      // managed commands. Reads and Stop remain usable while the host recovers.
+      if (
+        (request.toolName === 'Bash' || request.toolName === 'PowerShell') &&
+        this.deps.recovery &&
+        !this.deps.recovery.allowed()
+      )
+        return refuse(
+          'Conch is holding new commands while this computer recovers. Use process_start to queue this command; it will start when there is room. Use process_read to check progress and process_stop to stop existing work.',
+        );
       const blocked = await extras?.beforeTool?.(
         request.toolName,
         request.input,

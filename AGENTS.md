@@ -331,7 +331,9 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
       resource headroom, one at a time. Automatic tasks use the same admission
       signal. Repeated crashes or rapid requested restarts share a persisted budget;
       recovery mode keeps the UI available while background work is paused. Only a
-      healthy repair releases its latch. Intentional Quit stays quit.
+      healthy repair releases its latch. Automatic repair requires sustained
+      health, keeps the crash budget through probation, and never clears pending
+      permissions or uncertain actions. Intentional Quit stays quit.
     - **Leave useful, bounded evidence.** `recovery/` contains only allowlisted
       timestamps, reasons and numeric resource measurements, never commands, tool
       arguments, transcripts or credentials. It is protected from agent tools and

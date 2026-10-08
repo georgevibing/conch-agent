@@ -21,7 +21,7 @@ import {
   whoHolds,
 } from './port';
 import { SERVER_VERSION, Services } from './services';
-import { RESTART_CODE } from './supervisor';
+import { RESTART_CODE, SUPERVISOR_REVISION } from './supervisor';
 import { prove, readState } from './updates/layout';
 import { sandboxSupport } from './conversations/sandbox';
 
@@ -174,7 +174,18 @@ if (releaseRoot && readState(config.CONCH_HOME).pending) {
     console.warn(`\n  🐚  Conch ${services.updates.version} is running.`);
 }
 // Always on: the file that starts Conch at login still fits where Conch is now.
-void services.background.heal().catch(() => undefined);
+void services.background
+  .heal()
+  .then(async () => {
+    if (
+      background &&
+      !desktop &&
+      process.env.CONCH_SUPERVISED === '1' &&
+      process.env.CONCH_SUPERVISOR_REVISION !== SUPERVISOR_REVISION
+    )
+      await services.background.refreshSupervisor();
+  })
+  .catch(() => undefined);
 // The menu bar helper and keeping a Mac awake (ADR 0029): with Conch itself, never a dev server.
 if (desktop) {
   // The app's own icon is the menu bar: shown when it's wanted.

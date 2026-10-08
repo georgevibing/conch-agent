@@ -53,13 +53,15 @@ Commands can say **Waiting to start**, with a reason. They keep their place unti
 
 If memory pressure stays high, Conch may stop one of its managed commands to protect the rest of your work. Its output stays available in the chat. Conch does not stop other applications or automatically run that command again.
 
+On Linux, Conch also checks memory limits shared with other services. Free memory elsewhere on the computer does not mean its own services have room. When a gateway stops, its supervisor cleans up the programs that belonged to it so they do not keep consuming resources after a restart.
+
 After a restart, interrupted chats carry on gradually. When Conch cannot tell whether an action finished, it keeps that uncertainty and asks you to check before continuing. It does not automatically repeat a possibly completed change or approve a question for you.
 
 ## After repeated trouble
 
 Conch starts with background work paused so you can still open your chats and settings. Scheduled routines, automatic learning and managed commands wait. **Settings → Health** explains what happened.
 
-Once this computer has settled, press **Repair everything**. Conch checks that it has been responding with room to work before letting waiting work continue. A restart does not silently clear that pause. If Conch cannot start even with background work paused, its supervisor waits before trying again, rather than restarting continuously.
+Once Conch has responded with room to work for a full minute, it checks its recovery and lets waiting work continue automatically. **Repair everything** can check sooner. Conch keeps its recent crash history through a longer period of stable operation, so brief recoveries do not cause endless restarts. If Conch cannot start even with background work paused, its supervisor waits before trying again.
 
 Freeze detection runs in the supervisor used by the installed background service, `pnpm start`, and the desktop app. A development gateway started directly has resource protection, but no outside process to restart it if its event loop freezes.
 

@@ -161,7 +161,9 @@ your desktop and the chat apps you already use.
 - **See it, undo it.** **Activity** shows everything the assistant did; **Undo** puts
   files back. [Undo](./apps/docs/content/care/undo.md)
 - **It fixes itself.** **Repair everything** checks every part of Conch, with daily
-  backups and signed updates that roll back on failure. **Settings → This computer**
+  backups and signed updates that roll back on failure. Conch watches for freezes,
+  cleans up programs left behind by a crash, and resumes waiting work after a healthy
+  recovery. **Settings → This computer**
   shows the machine live, and what each provider uses. [Health](./apps/docs/content/care/health.md)
 - **Sign in with your device.** Touch ID, Windows Hello or Face ID; a new device waits
   for your OK in **Settings → Devices**.
