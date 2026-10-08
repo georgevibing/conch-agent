@@ -10,6 +10,8 @@ export interface Sniffed {
   height?: number;
   /** For text: how it decoded. */
   text?: string;
+  /** The text wasn't UTF-8 (Excel's CSV, Notepad's UTF-16): keep it as `text`, in UTF-8. */
+  transcoded?: boolean;
 }
 
 /**
@@ -21,11 +23,43 @@ export interface Sniffed {
 export function sniff(bytes: Buffer, name: string, claimed: string | undefined): Sniffed {
   const image = sniffImage(bytes);
   if (image) return { kind: 'image', ...image };
+  const picture = sniffOtherPicture(bytes);
+  if (picture) return { kind: 'file', mimeType: picture };
   if (bytes.subarray(0, 5).toString('latin1') === '%PDF-')
     return { kind: 'file', mimeType: 'application/pdf' };
   const text = decodeText(bytes);
   if (text !== undefined) return { kind: 'text', mimeType: textType(name, claimed), text };
+  const legacy = decodeLegacyText(bytes, name);
+  if (legacy !== undefined)
+    return { kind: 'text', mimeType: textType(name, claimed), text: legacy, transcoded: true };
   return { kind: 'file', mimeType: fileType(name, claimed) };
+}
+
+/** Text files whose name says so, which Windows programs still save in other encodings. */
+const LEGACY_TEXT = new Set(['csv', 'tsv', 'txt', 'text', 'log', 'md', 'markdown', 'ini']);
+
+/**
+ * Text that isn't UTF-8: UTF-16 with its byte-order mark (Notepad's "Unicode"),
+ * or a CSV or a text file in Windows-1252 (Excel's "CSV (Comma delimited)").
+ * Only for names that say it's text, so a binary file is never read as words.
+ */
+export function decodeLegacyText(bytes: Buffer, name: string): string | undefined {
+  const utf16 =
+    bytes[0] === 0xff && bytes[1] === 0xfe
+      ? 'utf-16le'
+      : bytes[0] === 0xfe && bytes[1] === 0xff
+        ? 'utf-16be'
+        : undefined;
+  try {
+    if (utf16) {
+      const text = new TextDecoder(utf16, { fatal: true }).decode(bytes);
+      return text.includes('\0') ? undefined : text;
+    }
+    if (!LEGACY_TEXT.has(extension(name)) || bytes.includes(0)) return undefined;
+    return new TextDecoder('windows-1252').decode(bytes);
+  } catch {
+    return undefined;
+  }
 }
 
 /** UTF-8 (a BOM is fine) without NUL bytes, or undefined for binary data. */
@@ -64,6 +98,7 @@ const FILE_TYPES: Record<string, string> = {
   tar: 'application/x-tar',
   heic: 'image/heic',
   heif: 'image/heif',
+  avif: 'image/avif',
   tiff: 'image/tiff',
   tif: 'image/tiff',
   bmp: 'image/bmp',
@@ -124,6 +159,35 @@ function sniffImage(b: Buffer): ImageInfo | undefined {
   if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) {
     return { mimeType: 'image/jpeg', ...jpegSize(b) };
   }
+  return undefined;
+}
+
+const HEIC_BRANDS = new Set(['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis']);
+const HEIF_BRANDS = new Set(['mif1', 'msf1']);
+const AVIF_BRANDS = new Set(['avif', 'avis']);
+
+/**
+ * A picture no provider reads (an iPhone's HEIC, AVIF, TIFF, BMP), from its
+ * header, whatever it's called: Conch turns these into a JPEG (`fit.ts`).
+ */
+export function sniffOtherPicture(b: Buffer): string | undefined {
+  if (b.length >= 12 && b.subarray(4, 8).toString('latin1') === 'ftyp') {
+    const brand = b.subarray(8, 12).toString('latin1');
+    if (HEIC_BRANDS.has(brand)) return 'image/heic';
+    if (AVIF_BRANDS.has(brand)) return 'image/avif';
+    if (HEIF_BRANDS.has(brand)) return 'image/heif';
+    return undefined;
+  }
+  const head = b.subarray(0, 4).toString('latin1');
+  if (head === 'II*\0' || head === 'MM\0*') return 'image/tiff';
+  // "BM", the file's size, then a reserved zero: not text that happens to start "BM".
+  if (
+    b.length >= 26 &&
+    head.startsWith('BM') &&
+    b.readUInt32LE(2) === b.length &&
+    b.readUInt32LE(6) === 0
+  )
+    return 'image/bmp';
   return undefined;
 }
 

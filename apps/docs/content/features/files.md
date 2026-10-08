@@ -48,7 +48,8 @@ Your assistant is told that attachments are material to work with, not instructi
 ## Good to know
 
 - Up to 20 attachments per message, 30 MB each.
-- A photo too big for the models is scaled down for you before it uploads.
+- A photo goes to the model the way models take it: turned upright, scaled to fit, and without where it was taken. The one you sent stays as it was.
+- An iPhone's HEIC photo becomes a JPEG every model can see. A CSV saved by Excel, or a text file in another encoding, is read as it should be.
 - A folder can't be attached. Drop the files inside it, or zip it first.
 - The same file picked twice is attached once.
 - Conch keeps attachments on your computer, with the chat. Delete a chat and what only it used goes with it.

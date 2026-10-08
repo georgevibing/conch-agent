@@ -46,6 +46,11 @@ export async function fakeCodexApp(
     usedPercent?: number;
     /** The models the account lists, by name (one `account-model` unless set). */
     models?: string[];
+    /**
+     * Codex echoes the person's message back with a photo in it, as base64
+     * this long (as it does for a picture sent by URL, and when it replays a thread).
+     */
+    echoBytes?: number;
   } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), 'conch-app-server-'));
@@ -109,6 +114,7 @@ rl.createInterface({input:process.stdin}).on('line', line => {
  }
  else if (m.method === 'turn/start') {
    reply({turn:{id:'turn1'}});
+   if (OPTIONS.echoBytes) note('item/started',{threadId:TID,turnId:'turn1',item:{type:'userMessage',id:'u1',content:[...m.params.input,{type:'image',url:'data:image/jpeg;base64,'+'A'.repeat(OPTIONS.echoBytes)}]}});
    const file = findRollout(TID);
    if (file) fs.appendFileSync(path.join(process.env.CODEX_HOME, 'sessions', file), JSON.stringify({type:'user', input:m.params.input})+'\\n');
    if (OPTIONS.malformed) process.stdout.write('not-json\\n');

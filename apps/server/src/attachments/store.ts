@@ -5,7 +5,8 @@ import { ATTACHMENT_LIMITS, Attachment, countLines, Id } from '@conch/protocol';
 
 import { Mutex, readJson, safeJoin, writeJson } from '../lib/fs';
 import { newId } from '../lib/ids';
-import { cleanName, sniff } from './sniff';
+import { CONVERTIBLE, fitPicture, toJpeg, type PictureConverter } from './fit';
+import { cleanName, extension, sniff, type ImageType } from './sniff';
 
 /** An attachment on disk, and the conversations it was sent in. */
 interface Stored extends Attachment {
@@ -34,6 +35,8 @@ export const UNSENT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 export const HELD_MAX_AGE_MS = 8 * 24 * 60 * 60 * 1000;
 
 const PASTED_NAME = 'Pasted text';
+/** The picture as models get it, beside the original (`forModels`). */
+const FITTED = '.for-models';
 
 /**
  * `~/.conch/attachments/<id>/` — one folder per attachment: `meta.json` and
@@ -47,7 +50,13 @@ const PASTED_NAME = 'Pasted text';
 export class AttachmentStore {
   readonly #mutex = new Mutex();
 
-  constructor(readonly dir: string) {}
+  constructor(
+    readonly dir: string,
+    private readonly options: {
+      /** What turns a HEIC photo into a JPEG (`fit.ts`; tests pretend). */
+      converters?: readonly PictureConverter[];
+    } = {},
+  ) {}
 
   /** The folder an attachment lives in (for engines that open files themselves). */
   folder(id: string): string {
@@ -66,7 +75,7 @@ export class AttachmentStore {
     /** What Conch knows of a file it made: pages, sheets, slides, its preview picture. */
     facts?: Pick<Attachment, 'pages' | 'sheets' | 'slides' | 'preview'>;
   }): Promise<Attachment> {
-    const { bytes } = input;
+    let { bytes } = input;
     if (bytes.length > ATTACHMENT_LIMITS.maxBytes)
       throw new AttachmentError(
         'too-large',
@@ -74,8 +83,23 @@ export class AttachmentStore {
       );
     if (!bytes.length) throw new AttachmentError('empty', 'That file is empty.');
     const pasted = Boolean(input.pasted);
-    const shown = pasted ? PASTED_NAME : cleanName(input.name, ATTACHMENT_LIMITS.maxName);
-    const found = sniff(bytes, shown, input.claimedType);
+    let shown = pasted ? PASTED_NAME : cleanName(input.name, ATTACHMENT_LIMITS.maxName);
+    let found = sniff(bytes, shown, input.claimedType);
+    // A photo no model reads (an iPhone's HEIC) is kept as the JPEG every one does, and every
+    // browser shows. When this computer can't convert it, it stays a file, said so in the chat.
+    if (!pasted && found.kind === 'file' && CONVERTIBLE.has(found.mimeType)) {
+      const jpeg = await toJpeg(bytes, extension(shown), this.options.converters);
+      if (jpeg) {
+        bytes = jpeg;
+        shown = cleanName(
+          `${shown.replace(/\.[a-z0-9]{1,5}$/i, '')}.jpg`,
+          ATTACHMENT_LIMITS.maxName,
+        );
+        found = sniff(bytes, shown, 'image/jpeg');
+      }
+    }
+    // Text that wasn't UTF-8 is kept as UTF-8, so every model and every program reads it.
+    if (found.transcoded && found.text !== undefined) bytes = Buffer.from(found.text, 'utf8');
     // A paste is text by definition; if the bytes disagree, it's treated as a file.
     const kind = pasted && found.kind !== 'text' ? 'file' : found.kind;
     const id = newId('att');
@@ -162,6 +186,31 @@ export class AttachmentStore {
       if (parsed.success) items.push(parsed.data);
     }
     return items;
+  }
+
+  /**
+   * A picture as it goes to a model (`fit.ts`): upright, scaled to fit, no
+   * location in it. Made once and kept beside the original, so a chat that
+   * carries on doesn't make it again; the original stays as it was sent.
+   */
+  async forModels(
+    id: string,
+  ): Promise<{ bytes: Buffer; mimeType: ImageType; path: string } | undefined> {
+    const found = await this.get(id);
+    if (found?.attachment.kind !== 'image') return undefined;
+    const original = await readFile(found.path).catch(() => undefined);
+    if (!original) return undefined;
+    const mimeType = found.attachment.mimeType as ImageType;
+    for (const ext of ['jpeg', 'png', 'webp']) {
+      const kept = join(this.folder(id), `${FITTED}.${ext}`);
+      const bytes = await readFile(kept).catch(() => undefined);
+      if (bytes?.length) return { bytes, mimeType: `image/${ext}` as ImageType, path: kept };
+    }
+    const fitted = await fitPicture(original, mimeType);
+    if (!fitted.changed) return { bytes: original, mimeType, path: found.path };
+    const path = join(this.folder(id), `${FITTED}.${fitted.mimeType.slice('image/'.length)}`);
+    await writeFile(path, fitted.bytes, { mode: 0o600 }).catch(() => undefined);
+    return { bytes: fitted.bytes, mimeType: fitted.mimeType, path };
   }
 
   /** Bytes of an attachment, or undefined if it's gone. */

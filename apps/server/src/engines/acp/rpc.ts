@@ -3,14 +3,16 @@
  * program's stdin and stdout (ADR 0053). Both sides ask: Conch asks the agent
  * to start a session or answer a prompt; the agent asks Conch for permission.
  *
- * Bounded like Codex's transport (`codex/rpc.ts`): a line too long is a
- * failure, a line that isn't JSON is a failure, nothing the agent writes to
- * stderr is kept, and every pending request ends when the program does.
+ * Bounded like Codex's transport (`codex/rpc.ts`, `lib/json-lines.ts`): the
+ * photos an agent sends back are set aside as they're read, a line still too
+ * long is skipped (never the connection), nothing the agent writes to stderr
+ * is kept, and every pending request ends when the program does.
  */
 import type { Readable, Writable } from 'node:stream';
-import { StringDecoder } from 'node:string_decoder';
 
 import { z } from 'zod';
+
+import { answeredId, JsonLines } from '../../lib/json-lines';
 
 const Message = z.object({
   jsonrpc: z.literal('2.0').optional(),
@@ -23,9 +25,6 @@ const Message = z.object({
     .optional(),
 });
 export type AcpMessage = z.infer<typeof Message>;
-
-/** A line longer than this is a runaway, not a message. */
-const MAX_LINE = 4_000_000;
 
 /** An error the agent answered with, kept with its code so callers can tell "signed out" apart. */
 export class AcpError extends Error {
@@ -74,18 +73,26 @@ export class AcpConnection {
     private readonly streams: AcpStreams,
     private readonly label: string,
   ) {
-    const decoder = new StringDecoder('utf8');
-    let pending = '';
+    // The photos an agent echoes or replays (`session/load`) are set aside as they're read,
+    // and a message that's still too long is skipped, never the connection (`json-lines.ts`).
+    const lines = new JsonLines();
     streams.output.on('data', (chunk: Buffer | string) => {
-      pending += typeof chunk === 'string' ? chunk : decoder.write(chunk);
-      if (pending.length > MAX_LINE) {
-        this.fail(new Error(`${label} sent a message too large for Conch to read.`));
-        return;
+      if (this.#closed) return;
+      const { lines: finished, skipped } = lines.push(
+        typeof chunk === 'string' ? Buffer.from(chunk) : chunk,
+      );
+      for (const line of skipped) {
+        console.error(`[acp] ${label}: skipped a ${Math.ceil(line.size / 1024 / 1024)} MB message`);
+        const id = answeredId(line.head);
+        const waiting = id === undefined ? undefined : this.#pending.get(id);
+        if (id !== undefined && waiting) {
+          this.#pending.delete(id);
+          if (waiting.timer) clearTimeout(waiting.timer);
+          waiting.reject(new Error(`${label}’s answer was too large for Conch to read.`));
+        }
       }
-      let at: number;
-      while ((at = pending.indexOf('\n')) >= 0) {
-        const line = pending.slice(0, at).trim();
-        pending = pending.slice(at + 1);
+      for (const raw of finished) {
+        const line = raw.trim();
         if (line) this.#receive(line);
       }
     });

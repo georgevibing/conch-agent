@@ -79,7 +79,8 @@ const IMAGE_TARGET_EDGE = 4096;
 export async function fitImage(file: File): Promise<File> {
   if (!IMAGE_TYPES.has(file.type) || file.type === 'image/gif') return file;
   try {
-    const bitmap = await createImageBitmap(file);
+    // Upright as the photo says (EXIF), the way the gateway turns it for models too.
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
     const edge = Math.max(bitmap.width, bitmap.height);
     if (file.size <= IMAGE_MAX_BYTES && edge <= IMAGE_MAX_EDGE) {
       bitmap.close();

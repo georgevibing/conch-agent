@@ -283,6 +283,11 @@ export interface TurnImage {
   mimeType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
   /** Base64, no data-URL prefix. */
   data: string;
+  /**
+   * The same picture as a file on this computer, for an engine whose program
+   * reads pictures by path (Codex's `localImage`). Already fitted for models.
+   */
+  path?: string;
 }
 
 export interface TurnInput {

@@ -85,6 +85,25 @@ describe('sniff', () => {
 });
 
 describe('AttachmentStore', () => {
+  it('keeps Excel’s Windows-1252 CSV and Notepad’s UTF-16 as UTF-8 text', async () => {
+    const store = await tempStore();
+    const csv = await store.save({
+      name: 'prices.csv',
+      bytes: Buffer.from('name,price\ncaf\xe9,3\x80\n', 'latin1'),
+    });
+    expect(csv).toMatchObject({ kind: 'text', mimeType: 'text/csv', lines: 2 });
+    expect((await store.bytes(csv.id))?.toString('utf8')).toBe('name,price\ncafé,3€\n');
+    const utf16 = await store.save({
+      name: 'notes.txt',
+      bytes: Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('héllo', 'utf16le')]),
+    });
+    expect(utf16.kind).toBe('text');
+    expect((await store.bytes(utf16.id))?.toString('utf8')).toBe('héllo');
+    // A binary file that only calls itself text stays a file.
+    const binary = await store.save({ name: 'data.csv', bytes: Buffer.from([1, 0, 2, 0xff]) });
+    expect(binary.kind).toBe('file');
+  });
+
   it('saves, claims, and frees what only a deleted chat used', async () => {
     const store = await tempStore();
     const a = await store.save({ name: 'notes.md', bytes: Buffer.from('# Hi\nthere\n') });
@@ -257,7 +276,7 @@ describe('forTurn', () => {
       bytes: Buffer.from('x'.repeat(TEXT_INLINE_MAX + 10)),
     });
     const turn = await forTurn(store, [big], { images: false, files: true });
-    expect(turn.block).toContain('Read the whole file from its path');
+    expect(turn.block).toContain(`Read the rest with read_file and file_path "${big.id}"`);
     expect((turn.block ?? '').length).toBeLessThan(TEXT_INLINE_MAX);
   });
 
