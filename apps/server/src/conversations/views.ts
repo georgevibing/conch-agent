@@ -18,6 +18,10 @@ const CAPS: Record<ToolView['kind'], number> = {
   messages: 30,
   sources: 10,
   downloads: 10,
+  knowledge: 0,
+  links: 8,
+  books: 12,
+  shows: 10,
 };
 
 /** A web link worth opening: `http(s)`, parseable, and with no sign-in tucked into it. */
