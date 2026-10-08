@@ -104,6 +104,32 @@ You don't have to wait to say what's next. Write it and press <kbd>enter</kbd>: 
 - The pencil takes one back into the box to change it, and the cross doesn't send it.
 - If you stop the reply, or it fails, the queue waits for you instead of going on, and each one offers to send now.
 
+## What it did, in plain words
+
+Your assistant often takes many steps for one answer: it reads files, runs commands, looks at pages. The chat doesn't list them one by one. It tells them in a few short lines, each saying what that part of the work did and what it came to: **Ran the tests · 241 passed**, **Searched the web and read 3 pages**, **Pushed the fixes to main**. A small picture beside each line says what kind of work it was, and moves a little while the work goes on. The sites it looked at show their icons.
+
+While a line is still going, the words under it say the step at hand, like "Reading the settings file". Some providers say this in their own words. Those are set in italics.
+
+- **Press a line** to see its steps, each in plain words, with what it found and how long it took.
+- **Press a step** to see exactly what ran: the command, what came back, the change made. Nothing is hidden, only folded away.
+- **Why?** beside a step asks why your assistant did it and what it learned. The answer takes a moment and comes from what's in the chat. Your assistant keeps working meanwhile. Asking again about a finished step costs nothing.
+
+When a step is done again with the same result and nothing changed in between, it shows once, with **×2**. When something failed and then worked, the line says so: "Worked on the second try". When your assistant is going round in circles, the line says that too, like "The same command failed 3 times", so you can step in.
+
+Once a part of the work is done, a small model may rewrite its line in better words. **Why?** asks it too. It follows the rules of [learning by itself](./memory.md#learning-by-itself). It asks the chat's own provider first, then one on this computer, then any other you connected. A chat marked **Don't learn from this chat** only goes to its own provider or one on this computer. Each answer costs a fraction of a cent on pay-as-you-go providers. It counts toward **Learning from your chats** in **Settings → Usage**, and stops when your [budget for the month](../care/what-it-costs.md#a-budget-for-the-month) is spent. To keep the lines as they are, turn off **Name new chats automatically** in **Settings → Models**.
+
+### What changed
+
+At the end of a reply, one line sums up what it changed outside the chat: **Changed 4 files · committed · pushed to main**. Press it to see each change. Messages sent, money spent and things deleted come first. A change to your files has **Undo** beside it, and then **Redo**, as in [Undo](../care/undo.md).
+
+### While you were away
+
+If you leave a chat while it works and come back later, a card says **While you were away** and what happened, one line for each part of the work. Press a line to go to it in the chat. Close the card with **Dismiss**.
+
+### Site icons
+
+The icons of the sites your assistant visited come through Conch. Conch asks each site for its own icon, so no other company learns which sites you visit. A site without one shows its first letter. [Passwords](./passwords.md) never show site icons, so no site learns you have an account there.
+
 ## When it asks you something
 
 Sometimes your assistant needs your choice before it can go on: which day suits you, how you'd like to talk, how many people are coming. It asks with a card in the chat, and the reply waits for you.

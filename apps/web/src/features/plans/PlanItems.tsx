@@ -68,7 +68,7 @@ export function PlanApprovalItem({
       busy={asking ? busy : undefined}
       steps={text ? undefined : steps}
       startRef={startRef}
-      note={item.taint && <GuardNote>{item.taint}</GuardNote>}
+      note={item.taint && <GuardNote>{item.caution ?? item.taint}</GuardNote>}
       onStart={() => {
         setBusy('start');
         onRespond('allow');

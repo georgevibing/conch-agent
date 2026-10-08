@@ -28,9 +28,13 @@ test('a calendar comes back as days, with today first', async ({ page }) => {
     'noopener noreferrer',
   );
   await expect(page.getByText('Today you have standup at 9:30')).toBeVisible();
-  // What the model read is still there, behind the row.
+  // What the model read is still there, behind the story and its step (ADR 0103).
   await expect(page.getByText('"summary":"Standup"')).toHaveCount(0);
-  await page.getByRole('button', { name: /Looked at your calendar/ }).click();
+  await page
+    .getByRole('button', { name: /Looked at your calendar/ })
+    .first()
+    .click();
+  await page.getByRole('list', { name: 'Steps' }).getByRole('button').first().click();
   await expect(page.getByRole('region', { name: 'Output' })).toContainText('Standup');
 });
 

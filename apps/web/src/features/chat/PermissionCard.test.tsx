@@ -36,6 +36,31 @@ describe('a question asked because of what the chat read', () => {
     expect(respond).toHaveBeenCalledExactlyOnceWith('allow-always');
   });
 
+  it('says the short caution when there is one, never the long reason beside it', () => {
+    renderApp(
+      <PermissionCard
+        item={asked({
+          title: 'Edit your picture with Gemini on OpenRouter',
+          cost: 'Paid',
+          detail: 'Your picture goes to OpenRouter',
+          taint:
+            'This chat read things in GitHub and read things in Yazio content and 8 more, which could be trying to steer me.',
+          caution: 'This chat read GitHub and Yazio content. Check this is what you asked for.',
+          lasting: true,
+        })}
+        name="Conch"
+        onRespond={() => {}}
+      />,
+    );
+    const card = screen.getByRole('group', {
+      name: 'Conch asks first: Edit your picture with Gemini on OpenRouter',
+    });
+    expect(card).toHaveTextContent('Paid·Your picture goes to OpenRouter');
+    expect(card).toHaveTextContent('This chat read GitHub and Yazio content.');
+    expect(card).not.toHaveTextContent('steer me');
+    expect(screen.getByRole('button', { name: 'Allow' })).toHaveFocus();
+  });
+
   it('is this once when it asks for leaving the sealed box', () => {
     renderApp(
       <PermissionCard

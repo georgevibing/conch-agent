@@ -66,9 +66,25 @@ const LABEL = 'Anthropic API';
 /** Thinking said as progress notes for the person watching (ADR 0103). */
 const UPDATES_BETA = 'thinking-display-updates-2026-08-18';
 
-/** A 400 that refuses `display: 'updates'` or its beta, not something else about the request. */
+/**
+ * A 400 that refuses thinking's `display: 'updates'` or its beta, not
+ * something else about the request: the beta's own name, `thinking.display`,
+ * `display` said with thinking or updates, or the beta header said with
+ * thinking. A 400 that only mentions a beta, a display or updates in passing
+ * (another beta, a tool's `display_name`) isn't this, and is said as it is.
+ */
 export function updatesRefused(detail: string): boolean {
-  return /\bdisplay\b|\bupdates\b|anthropic-beta|\bbeta\b/i.test(detail);
+  const text = detail.slice(0, 2_000);
+  return (
+    text.includes(UPDATES_BETA) ||
+    /thinking[-._ ]display|thinking-display-updates/i.test(text) ||
+    /\bthinking\b[^\n]{0,80}\bdisplay\b|\bdisplay\b[^\n]{0,80}\b(?:thinking|updates)\b/i.test(
+      text,
+    ) ||
+    /\banthropic-beta\b[^\n]{0,120}\bthinking\b|\bthinking\b[^\n]{0,120}\banthropic-beta\b/i.test(
+      text,
+    )
+  );
 }
 
 /** A block of thinking updates, as the lines to say: one note a line. */

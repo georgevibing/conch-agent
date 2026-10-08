@@ -48,7 +48,9 @@ test('connect Notion in a popup, use it in a chat, fix it when it breaks', async
   // Changing something asks first, in plain words.
   await page.getByRole('textbox').first().fill('create a page in notion');
   await page.keyboard.press('Enter');
-  await expect(page.getByText('would like to create a page in Notion')).toBeVisible();
+  await expect(
+    page.getByRole('group', { name: /asks first: Create a page in Notion/ }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Allow', exact: true }).click();
   await expect(page.getByText('I created Notes from Conch')).toBeVisible();
 
@@ -151,7 +153,9 @@ test('Full trust takes precedence over app questions and leaving it restores the
   await expect(page.getByRole('button', { name: 'Mode: Ask first', exact: true })).toBeVisible();
   await composer.fill('create a page in github');
   await composer.press('Enter');
-  await expect(page.getByText('would like to create a page in GitHub')).toBeVisible();
+  await expect(
+    page.getByRole('group', { name: /asks first: Create a page in GitHub/ }),
+  ).toBeVisible();
 
   // A deliberate mode change answers the waiting question immediately.
   await page.getByRole('button', { name: 'Mode: Ask first', exact: true }).click();

@@ -36,6 +36,33 @@ describe('ToolCall', () => {
     expect(screen.getByText(/Running/)).toBeInTheDocument();
   });
 
+  it('a call that was declined is neutral and says why, in place of its time', async () => {
+    const { container } = renderNacre(
+      <ToolCall
+        name="Bash"
+        summary="curl x"
+        status="declined"
+        outcome="You said no"
+        duration={30}
+        output="The user declined this action."
+      />,
+    );
+    const root = container.querySelector('[data-status="declined"]');
+    expect(root).not.toBeNull();
+    expect(screen.getByRole('button', { name: /Bash.*curl x.*You said no/ })).toBeInTheDocument();
+    expect(screen.queryByText('30ms')).toBeNull();
+    await expectAccessible(container);
+  });
+
+  it('keeps a quiet note about the answer in its details', async () => {
+    const user = userEvent.setup();
+    renderNacre(
+      <ToolCall name="Bash" summary="git push" status="success" note="You allowed this" />,
+    );
+    await user.click(screen.getByRole('button', { name: /git push/ }));
+    expect(screen.getByText('You allowed this')).toBeInTheDocument();
+  });
+
   it('labels errors and supports controlled open state', () => {
     renderNacre(<ToolCall name="Bash" status="error" output="boom" open />);
     expect(screen.getByRole('region', { name: 'Error' })).toHaveTextContent('boom');

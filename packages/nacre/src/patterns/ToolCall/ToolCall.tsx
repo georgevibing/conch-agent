@@ -1,4 +1,5 @@
 import {
+  Ban,
   Bot,
   Check,
   ChevronRight,
@@ -22,7 +23,11 @@ import { cx } from '../../utils/cx';
 import { CodeBlock } from '../CodeBlock';
 import styles from './ToolCall.module.css';
 
-export type ToolCallStatus = 'pending' | 'running' | 'success' | 'error' | 'cancelled';
+/**
+ * `declined`: it asked first and didn't run, because the answer was no (or a
+ * rule of Conch's said no). Neutral, never the red of a failure.
+ */
+export type ToolCallStatus = 'pending' | 'running' | 'success' | 'error' | 'cancelled' | 'declined';
 
 export interface ToolCallProps extends Omit<
   ComponentProps<'div'>,
@@ -52,6 +57,13 @@ export interface ToolCallProps extends Omit<
   icon?: LucideIcon;
   /** Replaces the icon and server name — e.g. an integration's logo and name. */
   leading?: ReactNode;
+  /**
+   * A word at the row's end in place of its time, quiet: why a `declined` call
+   * didn't run ("You said no", "Not allowed").
+   */
+  outcome?: ReactNode;
+  /** One quiet line at the top of its details: "You allowed this", "Always allowed". */
+  note?: ReactNode;
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -95,6 +107,7 @@ const statusLabel: Record<ToolCallStatus, string> = {
   success: 'Completed',
   error: 'Failed',
   cancelled: 'Cancelled',
+  declined: 'Not run',
 };
 
 function StatusGlyph({ status }: { status: ToolCallStatus }) {
@@ -105,6 +118,7 @@ function StatusGlyph({ status }: { status: ToolCallStatus }) {
       {status === 'success' && <Check />}
       {status === 'error' && <X />}
       {status === 'cancelled' && <Minus />}
+      {status === 'declined' && <Ban />}
     </span>
   );
 }
@@ -155,6 +169,8 @@ export function ToolCall({
   view,
   icon,
   leading,
+  outcome,
+  note,
   open,
   defaultOpen,
   onOpenChange,
@@ -162,7 +178,7 @@ export function ToolCall({
   ...props
 }: ToolCallProps) {
   const { server, tool } = parseToolName(name);
-  const hasBody = input != null || output != null || children != null;
+  const hasBody = input != null || output != null || children != null || note != null;
 
   const header = (
     <>
@@ -181,8 +197,15 @@ export function ToolCall({
       </span>
       {summary != null && <span className={styles.summary}>{summary}</span>}
       <span className={styles.trailing}>
-        <span className="nc-visually-hidden">, {statusLabel[status]}</span>
-        {duration !== undefined && status !== 'running' && (
+        {outcome != null ? (
+          <span className={styles.outcome}>
+            <span className="nc-visually-hidden">, </span>
+            {outcome}
+          </span>
+        ) : (
+          <span className="nc-visually-hidden">, {statusLabel[status]}</span>
+        )}
+        {outcome == null && duration !== undefined && status !== 'running' && (
           <span className={styles.duration}>{formatDuration(duration)}</span>
         )}
         {hasBody && <ChevronRight aria-hidden className={styles.chevron} />}
@@ -215,6 +238,7 @@ export function ToolCall({
         {hasBody && (
           <Collapsible.Content className={styles.content}>
             <div className={styles.body}>
+              {note != null && <p className={styles.note}>{note}</p>}
               {input != null && (
                 <Section label="Input" language={inputLanguage}>
                   {input}

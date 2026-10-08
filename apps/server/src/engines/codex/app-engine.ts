@@ -40,11 +40,14 @@ import {
   type EngineUsage,
   type LoginHandle,
   type PermissionRequest,
+  type PictureMaker,
+  type PictureRequest,
   type ToolImage,
   type TurnInput,
 } from '../types';
 import { DOCS_URL, MIN_VERSION, findCodex, installHints, isAtLeast, parseVersion } from './detect';
 import { CodexHome } from './home';
+import { makeCodexPicture } from './pictures';
 import type { RpcMessage } from './rpc';
 import { ToolQueue } from './tool-queue';
 import { CodexToolEvents } from './tool-events';
@@ -208,6 +211,19 @@ const TOOL_CONFIG = [
   'sandbox_mode="read-only"',
 ];
 
+// A picture on the ChatGPT plan (`pictures.ts`): Codex's image tool and nothing else,
+// no files to read or write and no network for anything but the model.
+const PICTURE_CONFIG = [
+  ...TOOL_CONFIG.filter((line) => !line.startsWith('features.image_generation=')),
+  'features.image_generation=true',
+  'permissions.conch.extends=":read-only"',
+  'permissions.conch.filesystem={}',
+  'permissions.conch.network={enabled=false}',
+];
+
+/** How long whether the plan makes pictures is believed before asking Codex again. */
+const PICTURES_MS = 10 * 60_000;
+
 // Codex CLI (ADR 0066): its own shell and file edits, in a sandbox that writes
 // only where Conch allows, reads nowhere secrets live, and has no network.
 const AGENT_CONFIG = SHARED_CONFIG;
@@ -305,6 +321,15 @@ export class CodexEngine implements Engine {
   /** A plan update's explanation, when it gives one, is said as narration (ADR 0103). */
   readonly narration = 'provider' as const;
   readonly attachments = { images: true, files: true };
+  /**
+   * Codex's own image tool, on the ChatGPT plan, for Conch's `image_generate`
+   * (its chats keep the tool off: their pictures go through Conch's).
+   */
+  readonly pictures: PictureMaker = {
+    available: () => this.#picturesAvailable(),
+    make: (request) => this.#picture(request),
+  };
+  #canPicture?: { at: number; account: string; value: boolean };
   readonly #home: CodexHome;
   /** Threads carried on from one turn to the next (ADR 0066 § Carrying on). */
   readonly #threads: CodexThreads;
@@ -330,6 +355,51 @@ export class CodexEngine implements Engine {
     this.id = variant === 'agent' ? 'codex-agent' : 'codex-cli';
     this.label = variant === 'agent' ? 'Codex CLI' : 'Codex';
     if (variant === 'tools') this.commandSandbox = 'conch';
+  }
+
+  /** The plan makes pictures when Codex says its provider can (`modelProvider/capabilities/read`). */
+  async #picturesAvailable() {
+    const status = await this.detect().catch(() => undefined);
+    if (status?.state !== 'ready' || !status.executablePath || !status.auth) return undefined;
+    const account = `${status.auth.method}:${status.auth.email ?? ''}`;
+    const known = this.#canPicture;
+    let value =
+      known && known.account === account && Date.now() - known.at < PICTURES_MS
+        ? known.value
+        : undefined;
+    if (value === undefined) {
+      const executable = status.executablePath;
+      value = await this.#home
+        .withClient(executable, async (rpc) => {
+          const caps = await rpc.request('modelProvider/capabilities/read', {}, 15_000);
+          return (caps as { imageGeneration?: unknown } | null)?.imageGeneration === true;
+        })
+        // A Codex that can't say (older, or offline) isn't counted on for pictures.
+        .catch(() => false);
+      this.#canPicture = { at: Date.now(), account, value };
+    }
+    if (!value) return undefined;
+    return status.auth.method === 'subscription'
+      ? { cost: 'included' as const, by: 'your ChatGPT plan', to: 'OpenAI' }
+      : { cost: 'paid' as const, by: 'OpenAI, through Codex', to: 'OpenAI' };
+  }
+
+  async #picture(request: PictureRequest) {
+    const status = await this.detect();
+    if (status.state !== 'ready' || !status.executablePath)
+      throw new Error(status.message ?? 'Reconnect ChatGPT in Settings → Providers.');
+    let home = '';
+    return this.#home.withClient(
+      status.executablePath,
+      (rpc) => makeCodexPicture(rpc, request, home),
+      {
+        signal: request.signal,
+        prepare: async (dir) => {
+          home = dir;
+        },
+        config: PICTURE_CONFIG,
+      },
+    );
   }
 
   async detect({ force = false } = {}): Promise<EngineStatus> {
@@ -992,6 +1062,7 @@ export class CodexEngine implements Engine {
                       item.status === 'declined' && kind === 'commandExecution'
                         ? 'Not run: it wasn’t allowed.'
                         : output,
+                    ...(item.status === 'declined' && { refused: true as const }),
                   });
                   items.delete(id);
                 }

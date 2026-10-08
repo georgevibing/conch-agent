@@ -134,3 +134,21 @@ export function turnCost(
     }),
   };
 }
+
+/**
+ * A small model's spend for the month (story headlines, Why?, quiet
+ * learning): priced the way its provider charges, like a chat's turn. Usage
+ * carries no price of its own for most providers, so without this a
+ * pay-as-you-go key's small calls would count nothing against the budget; on
+ * a plan or this computer they cost no money.
+ */
+export async function recordSmallSpend(
+  record: (usage: Usage, priced?: TurnCost) => Promise<unknown>,
+  billings: Pick<Billings, 'of'>,
+  usage: Usage,
+  engine: Engine,
+  model?: string,
+): Promise<void> {
+  const info = await billings.of(engine).catch((): BillingInfo => ({}));
+  await record(usage, turnCost(usage, info, model));
+}

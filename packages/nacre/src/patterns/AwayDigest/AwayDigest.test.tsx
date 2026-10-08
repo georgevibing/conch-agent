@@ -23,6 +23,20 @@ const ITEMS: AwayDigestItem[] = [
 ];
 
 describe('AwayDigest', () => {
+  it('counts what got done and what didn’t run, never steps', () => {
+    renderNacre(
+      <AwayDigest
+        items={[
+          { id: 'a', headline: 'Ran the tests', family: 'verify', status: 'done' },
+          { id: 'b', headline: 'Committed and pushed to main', family: 'ship', status: 'done' },
+          { id: 'c', headline: 'Didn’t send an email', family: 'connect', status: 'declined' },
+        ]}
+        durationMs={120_000}
+      />,
+    );
+    expect(screen.getByText('Worked 2m 00s · 2 done · 1 not run')).toBeInTheDocument();
+  });
+
   it('says what happened while you were away, a press from each story', async () => {
     const user = userEvent.setup();
     const onJump = vi.fn();
@@ -31,7 +45,7 @@ describe('AwayDigest', () => {
     );
     expect(screen.getByRole('region', { name: 'While you were away' })).toBeInTheDocument();
     expect(
-      screen.getByText('Worked 12m · 3 steps · 1 didn’t work · still going'),
+      screen.getByText('Worked 12m · 1 done · 1 didn’t work · still going'),
     ).toBeInTheDocument();
     await user.click(
       screen.getByRole('button', { name: /^Ran the server tests 3 failed, didn’t work/ }),
@@ -61,7 +75,10 @@ describe('AwayDigest', () => {
       status: 'done' as const,
     }));
     renderNacre(<AwayDigest items={many} />);
-    expect(screen.getByText('3 earlier steps')).toBeInTheDocument();
+    expect(screen.getByText('3 more before these')).toBeInTheDocument();
+    // Each line is a thing done, never counted as "steps".
+    expect(screen.getByText('8 done')).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/\bsteps?\b/);
     expect(screen.queryByText('Story 2')).toBeNull();
     expect(screen.getByText('Story 7')).toBeInTheDocument();
   });

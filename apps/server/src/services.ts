@@ -205,7 +205,7 @@ import { lookup } from './updates/latest';
 import { mockPrograms } from './updates/mock';
 import { UpdatesService } from './updates/service';
 import { UsageService } from './usage/service';
-import { Billings, turnCost } from './usage/billing';
+import { Billings, recordSmallSpend, turnCost } from './usage/billing';
 import { ChatSpendDesk } from './usage/desk';
 import { REPOSITORY, SERVER_VERSION, SERVER_BUILD } from './version';
 import { theApp } from './desktop/app';
@@ -905,14 +905,20 @@ export class Services {
     // How each provider charges, asked once a minute at most: chats and routines share it.
     const billings = new Billings();
     this.images = new ImageService({
-      key: (signal) => this.keys.value('openrouter', { signal }),
-      hasKey: () => this.keys.has('openrouter'),
+      key: (id, signal) => this.keys.value(id, { signal }),
+      hasKey: (id) => this.keys.has(id),
+      // The person's own providers that make pictures themselves (ChatGPT through Codex) go first.
+      makers: async () =>
+        (await this.providers.ready()).flatMap((engine) =>
+          engine.pictures ? [{ engine: engine.id, maker: engine.pictures }] : [],
+        ),
+      healed: (message) => void this.healed.note('providers', message),
       store: this.attachments,
       overBudget: async () => {
         const { usd, budgetUsd } = await this.usage.month();
         return budgetUsd !== undefined && usd >= budgetUsd;
       },
-      spend: (usage) => this.usage.recordTurn(usage, undefined, { engine: 'openrouter' }),
+      spend: (usage, provider) => this.usage.recordTurn(usage, undefined, { engine: provider }),
       offer: async (ctx) => {
         const result = await this.offers.propose({
           conversationId: ctx.conversationId,
@@ -920,13 +926,13 @@ export class Services {
           unattended: ctx.unattended,
           kind: 'provider',
           target: 'openrouter',
-          why: 'Make and edit pictures from this chat.',
+          why: 'None of your providers can make pictures. OpenRouter can, for about $0.04 each.',
         });
         if ('offer' in result) {
           ctx.append({ type: 'offer', offer: result.offer });
-          return 'A card to connect OpenRouter is under this reply. Once connected, the image request carries on. Image generation is billed separately through its API key.';
+          return 'None of their connected providers can make pictures (a ChatGPT plan through Codex, or an OpenAI or Gemini API key, would). A card to connect OpenRouter, which bills about $0.04 a picture, is under this reply; once connected, the image request carries on. Signing in with ChatGPT in Settings → Providers works too.';
         }
-        return 'Image generation needs an OpenRouter API key. It can be connected in Settings → Providers. No image was generated.';
+        return 'None of their connected providers can make pictures. Signing in with ChatGPT, or adding an OpenAI, Gemini or OpenRouter API key, in Settings → Providers makes it possible. No image was generated.';
       },
     });
     const fetchPublicWeb = publicWebFetcher(config.CONCH_PORT);
@@ -1263,7 +1269,14 @@ export class Services {
       changed: () => this.broadcast.emit({ type: 'learning.changed' }),
       meaning,
       redact: this.vault.redactor(),
-      onSpend: (usage) => void this.usage.recordTurn(usage).catch(() => undefined),
+      // Priced the way its provider charges, so a key's calls count against the budget.
+      onSpend: (usage, engine) =>
+        void recordSmallSpend(
+          (u, priced) => this.usage.recordTurn(u, priced),
+          billings,
+          usage,
+          engine,
+        ).catch(() => undefined),
       heal,
       // The mock engine's chats go quiet in seconds, so tests and `pnpm dev:mock` see it.
       ...(mock && { idleMs: 8_000, sweepMs: 2_000 }),
@@ -1319,7 +1332,13 @@ export class Services {
         return allowed.ok ? allowed : { ok: false, reason: allowed.reason };
       },
       spent: (usage, engine, model) => {
-        void this.usage.recordTurn(usage).catch(() => undefined);
+        void recordSmallSpend(
+          (u, priced) => this.usage.recordTurn(u, priced),
+          billings,
+          usage,
+          engine,
+          model,
+        ).catch(() => undefined);
         void this.learningSpend.record(usage, engine, model).catch(() => 0);
       },
     };

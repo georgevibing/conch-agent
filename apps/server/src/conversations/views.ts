@@ -95,6 +95,19 @@ export class HostToolRows {
     return this.#open.has(toolUseId);
   }
 
+  /**
+   * The one call of this tool still running (`image_generate` or its
+   * `mcp__conch__` name), when there's exactly one: whose question a host
+   * tool's `ask` is. Two at once can't be told apart, so neither is named.
+   */
+  running(toolName: string): string | undefined {
+    const bare = toolName.replace(/^mcp__conch__/, '');
+    const ids = [...this.#open].flatMap(([id, call]) =>
+      call.name.replace(/^mcp__conch__/, '') === bare ? [id] : [],
+    );
+    return ids.length === 1 ? ids[0] : undefined;
+  }
+
   /** The events that draw it, if it found something to show; none otherwise. */
   end(call: {
     toolUseId: string;

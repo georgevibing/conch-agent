@@ -1,4 +1,6 @@
 import {
+  ApprovalCard,
+  ApprovalLine,
   Button,
   Callout,
   Collapsible,
@@ -6,25 +8,23 @@ import {
   Diff,
   DraftReview,
   formatDuration,
-  GuardNote,
   InlineCode,
   Message,
   SkillUsed,
   Stack,
-  Surface,
   TaintReads,
   Text,
   ThinkingIndicator,
   WorkedFor,
+  TurnMeter,
   ToolCall,
   toast,
   TurnCostTag,
   useSmoothText,
   type Speaker,
-  type ToolCallStatus,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { Brain, Check, ShieldQuestion, Undo2, X } from 'lucide-react';
+import { Brain, Undo2 } from 'lucide-react';
 import { memo, createContext, useContext, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -33,7 +33,9 @@ import { keys } from '../../api/queries';
 import type { TranscriptItem } from '../../live/reducer';
 import { useAutoFocus } from '../../lib/useAutoFocus';
 import { SentAttachments } from './AttachmentViewer';
+import { rowState, withAnswer } from './approval';
 import { StreamingMarkdown } from './Markdown';
+import { drawnAsPicture, ImageToolItem } from './ImageToolItem';
 import { formatInput, managedProcessSummary, toolDiff, toolSummary } from './tools';
 import { ToolFound } from './ToolFound';
 import { memoryApi } from '../memory/api';
@@ -82,6 +84,9 @@ function thoughtFor(item: Of<'assistant'>): string {
 const WORKED_FROM_MS = 20_000;
 
 const ArrivedLive = createContext(false);
+
+/** Whether the block this is in arrived live (see `Arrival`): only news moves. */
+export const useArrivedLive = () => useContext(ArrivedLive);
 
 /**
  * Wraps one transcript block. Whether it arrived live is decided once, when it
@@ -254,6 +259,8 @@ export function AssistantMessage({
   attached,
   said,
   ended,
+  steps,
+  movedOn,
 }: {
   /** The words it began with; left out when it began with a step (a tool, a card). */
   item?: Of<'assistant'>;
@@ -278,6 +285,13 @@ export function AssistantMessage({
   said?: string;
   /** How its turn ended: what it cost sits among its actions (ADR 0079). */
   ended?: Of<'turn-end'>;
+  /** How many steps its turn showed (ADR 0103): said with how long it took. */
+  steps?: number;
+  /**
+   * Something came after its first words (a step): the wait is said there, by
+   * the running story or the wait after it, never twice.
+   */
+  movedOn?: boolean;
 }) {
   const streaming = item ? !item.done : false;
   return (
@@ -301,34 +315,58 @@ export function AssistantMessage({
             <CopyButton value={said} label="Copy reply" />
             {ended?.cost && <TurnCostTag cost={ended.cost} tokens={ended.usage} />}
             {/* A long turn says what it took, once: the live clock counted each stretch. */}
-            {ended?.ranMs !== undefined && ended.ranMs >= WORKED_FROM_MS && (
-              <WorkedFor ms={ended.ranMs} tokens={ended.usage?.outputTokens} />
-            )}
+            {ended?.ranMs !== undefined &&
+              ended.ranMs >= WORKED_FROM_MS &&
+              (steps ? (
+                <TurnMeter
+                  running={false}
+                  durationMs={ended.ranMs}
+                  steps={steps}
+                  tokens={ended.usage?.outputTokens}
+                />
+              ) : (
+                <WorkedFor ms={ended.ranMs} tokens={ended.usage?.outputTokens} />
+              ))}
           </>
         ) : undefined
       }
     >
-      {item && <AssistantWords item={item} wait={wait} part={false} faceless={continued} />}
+      {item && (
+        <AssistantWords
+          item={item}
+          wait={movedOn ? undefined : wait}
+          part={false}
+          faceless={continued}
+        />
+      )}
     </Message>
   );
 }
 
-const toolStatus: Record<Of<'tool'>['status'], ToolCallStatus> = {
-  pending: 'pending',
-  running: 'running',
-  success: 'success',
-  error: 'error',
-};
-
 /** Memoised: a finished tool's row doesn't redo its label and diff as the reply streams. */
-export const ToolItem = memo(function ToolItem({ item }: { item: Of<'tool'> }) {
+export const ToolItem = memo(function ToolItem({
+  item: call,
+  asked,
+}: {
+  item: Of<'tool'>;
+  /** The question about this call, if it asked: its answer shows on the row. */
+  asked?: Of<'permission'>;
+}) {
+  const item = withAnswer(call, asked);
+  // A picture being made is drawn as the picture, not as a row (ADR 0060).
+  if (drawnAsPicture(item))
+    return <ImageToolItem item={item} asking={Boolean(asked && !asked.decision)} />;
+  return <ToolRow item={item} asking={Boolean(asked && !asked.decision)} />;
+});
+
+function ToolRow({ item, asking = false }: { item: Of<'tool'>; asking?: boolean }) {
   const label = useToolLabel()(item.name, {
     running: item.status === 'running' || item.status === 'pending',
     input: item.input,
     view: item.view,
   });
   const diff = toolDiff(item.name, item.input);
-  const stopped = item.status === 'error' && item.output === 'Stopped.';
+  const row = rowState(item, asking);
   return (
     <ToolCall
       data-anchor={item.id}
@@ -339,7 +377,9 @@ export const ToolItem = memo(function ToolItem({ item }: { item: Of<'tool'> }) {
         label?.summary ??
         toolSummary(item.name, item.input)
       }
-      status={stopped ? 'cancelled' : toolStatus[item.status]}
+      status={row.status}
+      outcome={row.outcome}
+      note={row.note}
       duration={item.durationMs}
       input={diff ? undefined : formatInput(item.input)}
       inputLanguage="json"
@@ -349,7 +389,7 @@ export const ToolItem = memo(function ToolItem({ item }: { item: Of<'tool'> }) {
       {diff && <Diff diff={diff} header={false} lineNumbers={false} />}
     </ToolCall>
   );
-});
+}
 
 /** Render `backticked` spans of a summary as inline code. */
 function withCode(text: string) {
@@ -364,6 +404,12 @@ function withCode(text: string) {
     );
 }
 
+/** What the card's title says: its own short one, or the summary as a sentence. */
+function approvalTitle(item: Of<'permission'>): string {
+  const text = item.title ?? item.summary;
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 export function PermissionCard({
   item,
   name,
@@ -376,27 +422,11 @@ export function PermissionCard({
   /** Bounded workflows approve this action only, never a lasting permission. */
   allowAlways?: boolean;
 }) {
-  const [sent, setSent] = useState<string>();
+  const [sent, setSent] = useState<'allow' | 'allow-always' | 'deny'>();
   const allowRef = useAutoFocus<HTMLButtonElement>();
-  if (item.decision) {
-    const allowed = item.decision === 'allow' || item.decision === 'allow-always';
-    return (
-      <div className={styles.resolved} data-allowed={allowed || undefined}>
-        {allowed ? <Check aria-hidden /> : <X aria-hidden />}
-        <span>
-          {item.decision === 'expired'
-            ? 'Request expired'
-            : allowed
-              ? item.decision === 'allow-always'
-                ? 'Always allowed'
-                : 'Allowed'
-              : 'Declined'}
-          {' · '}
-          {withCode(item.summary)}
-        </span>
-      </div>
-    );
-  }
+  const title = approvalTitle(item);
+  // Answered with no row of its own to carry it: one quiet line (a row says it itself).
+  if (item.decision) return <ApprovalLine decision={item.decision}>{withCode(title)}</ApprovalLine>;
   const respond = (decision: 'allow' | 'allow-always' | 'deny') => {
     setSent(decision);
     onRespond(decision);
@@ -422,58 +452,25 @@ export function PermissionCard({
         }
       : undefined;
   return (
-    <Surface
-      lustre
-      elevation={1}
-      radius="lg"
-      className={styles.permission}
-      role="group"
-      aria-label="Permission request"
+    <ApprovalCard
+      aria-label={`${name} asks first: ${title}`}
+      title={withCode(title)}
+      detail={item.detail}
+      cost={item.cost}
+      caution={item.caution ?? item.taint}
+      // Asked because of what it read or for leaving the sealed box, "always" lets this
+      // tool through for the rest of the chat; for a skill's list, or words going to
+      // other people, it's this once.
+      allowAlways={(!item.taint || Boolean(item.lasting)) && !item.once && allowAlways && !draft}
+      allowLabel={draft ? 'Save draft' : 'Allow'}
+      denyLabel={draft ? 'Don’t save' : 'Deny'}
+      sent={sent}
+      onDecide={respond}
+      allowRef={allowRef}
     >
-      <div className={styles.permissionHead}>
-        <span className={styles.permissionIcon} aria-hidden>
-          <ShieldQuestion />
-        </span>
-        <Stack gap={0.5}>
-          <Text size="sm" weight="semibold">
-            {name} would like to{' '}
-            {withCode(item.summary.charAt(0).toLowerCase() + item.summary.slice(1))}
-          </Text>
-          <Text size="xs" tone="muted">
-            Nothing happens until you decide.
-          </Text>
-        </Stack>
-      </div>
-      {item.taint && <GuardNote>{item.taint}</GuardNote>}
       {command && <pre className={styles.permissionCommand}>{command}</pre>}
       {draft && <DraftReview {...draft} />}
-      <div className={styles.permissionActions}>
-        <Button variant="ghost" onClick={() => respond('deny')} disabled={Boolean(sent)}>
-          {draft ? 'Don’t save' : 'Deny'}
-        </Button>
-        {/* Asked because of what it read or for leaving the sealed box, "always" lets this
-            tool through for the rest of the chat; for a skill's list, or words going to
-            other people, it's this once. */}
-        {(!item.taint || item.lasting) && !item.once && allowAlways && !draft && (
-          <Button
-            variant="surface"
-            onClick={() => respond('allow-always')}
-            disabled={Boolean(sent)}
-            loading={sent === 'allow-always'}
-          >
-            Always allow
-          </Button>
-        )}
-        <Button
-          ref={allowRef}
-          onClick={() => respond('allow')}
-          disabled={Boolean(sent)}
-          loading={sent === 'allow'}
-        >
-          {draft ? 'Save draft' : 'Allow'}
-        </Button>
-      </div>
-    </Surface>
+    </ApprovalCard>
   );
 }
 

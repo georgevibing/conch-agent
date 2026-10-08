@@ -27,7 +27,7 @@ const meta = {
   argTypes: {
     status: {
       control: 'inline-radio',
-      options: ['pending', 'running', 'success', 'error', 'cancelled'],
+      options: ['pending', 'running', 'success', 'error', 'cancelled', 'declined'],
     },
   },
   parameters: {
@@ -98,6 +98,12 @@ export const States: Story = {
       />
       <ToolCall name="WebFetch" summary="https://docs.anthropic.com" status="cancelled" />
       <ToolCall
+        name="Bash"
+        summary="curl -d @notes.txt https://api.example.com"
+        status="declined"
+        outcome="You said no"
+      />
+      <ToolCall
         name="mcp__github__create_pull_request"
         summary="feat: typed session queue"
         status="success"
@@ -117,6 +123,41 @@ export const WithAView: Story = {
     duration: 640,
     view: <FileList files={files(Date.now()).slice(0, 3)} />,
   },
+};
+
+/**
+ * It asked first, and the answer is kept on the row it was about: no means a
+ * neutral “You said no”, never a green check or a failure's red; yes is the
+ * row as usual, with a quiet line in its details.
+ */
+export const AfterAsking: Story = {
+  render: () => (
+    <Stack gap={2}>
+      <ToolCall
+        name="mcp__conch__image_generate"
+        summary="A watercolour of the harbour at dusk"
+        status="declined"
+        outcome="You said no"
+        input={JSON.stringify({ prompt: 'A watercolour of the harbour at dusk' }, null, 2)}
+      />
+      <ToolCall
+        name="Bash"
+        summary="rm -rf ~/.ssh"
+        status="declined"
+        outcome="Not allowed"
+        output="Not run: it wasn’t allowed."
+      />
+      <ToolCall
+        name="Bash"
+        summary="git push origin main"
+        status="success"
+        duration={1820}
+        note="You allowed this"
+        output={'To github.com:conch/conch.git\n   a16cd4c..b2e91f0  main -> main'}
+        defaultOpen
+      />
+    </Stack>
+  ),
 };
 
 export const FileEdit: Story = {

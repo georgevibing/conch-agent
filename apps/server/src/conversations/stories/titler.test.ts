@@ -1,10 +1,11 @@
-import type {
-  ActivityFamily,
-  ConversationEvent,
-  ServerEvent,
-  Story,
-  StoryStep,
-  ToolLabel,
+import {
+  tellStories,
+  type ActivityFamily,
+  type ConversationEvent,
+  type ServerEvent,
+  type Story,
+  type StoryStep,
+  type ToolLabel,
 } from '@conch/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -221,17 +222,99 @@ describe('story headlines by a small model (ADR 0103)', () => {
     expect(h.spent).not.toHaveBeenCalled();
   });
 
-  it('asks about the same steps once: the next time, the headline is remembered', async () => {
+  it('asks about the same steps once in a chat: the next time, the headline is remembered', async () => {
+    const h = harness();
+    for (let turn = 0; turn < 2; turn++) {
+      h.asked('Why does login fail?');
+      for (const id of ['t1', 't2', 't3']) h.step(id);
+      h.end();
+      await vi.waitFor(() => expect(h.notes).toHaveLength(turn + 1));
+    }
+    expect(h.complete).toHaveBeenCalledTimes(1);
+  });
+
+  it('never carries a headline from one chat to another', async () => {
     const h = harness();
     for (const chat of ['c1', 'c2']) {
       h.asked('Why does login fail?', chat);
-      h.step('t1', 'explore', 'success', chat);
-      h.step('t2', 'explore', 'success', chat);
-      h.step('t3', 'explore', 'success', chat);
+      for (const id of ['t1', 't2', 't3']) h.step(id, 'explore', 'success', chat);
       h.end(chat);
       await vi.waitFor(() => expect(h.notes.filter((n) => n.id === chat)).toHaveLength(1));
     }
-    expect(h.complete).toHaveBeenCalledTimes(1);
+    expect(h.complete).toHaveBeenCalledTimes(2);
+  });
+
+  it('writes a remembered headline only while the chat may still go to a small model', async () => {
+    let allowed = true;
+    const h = harness({
+      model: async () =>
+        allowed
+          ? { engine: fakeEngine('anthropic'), complete: h.complete, model: 'small' }
+          : undefined,
+    });
+    h.asked();
+    for (const id of ['t1', 't2', 't3']) h.step(id);
+    h.end();
+    await vi.waitFor(() => expect(h.notes).toHaveLength(1));
+    // Marked private since: the same steps again get no headline, not even a remembered one.
+    allowed = false;
+    h.asked();
+    for (const id of ['t1', 't2', 't3']) h.step(id);
+    h.end();
+    await settle();
+    await settle();
+    expect(h.notes).toHaveLength(1);
+  });
+
+  it('follows a long turn without telling the whole run again at every step', () => {
+    const tellSpy = vi.fn((steps: StoryStep[]) => tellStories(steps));
+    const h = harness({ tell: tellSpy, enabled: async () => false });
+    h.asked();
+    const families: ActivityFamily[] = ['explore', 'edit', 'verify', 'run'];
+    const start = performance.now();
+    for (let i = 0; i < 3_000; i++) h.step(`s${i}`, families[Math.floor(i / 7) % families.length]);
+    h.end();
+    expect(performance.now() - start).toBeLessThan(3_000);
+    // Each telling covers the open end of the run, not the thousands of steps before it.
+    const told = tellSpy.mock.calls.map(([steps]) => steps.length);
+    expect(Math.max(...told.slice(-100))).toBeLessThan(200);
+  });
+
+  it('cuts a long run told from its open end the same as told whole', () => {
+    const seen = new Map<string, string[]>();
+    const h = harness({
+      enabled: async () => false,
+      tell: (steps) => {
+        const stories = tellStories(steps);
+        for (const story of stories)
+          seen.set(
+            story.id,
+            story.steps.map((step) => step.id),
+          );
+        return stories;
+      },
+    });
+    h.asked();
+    const families: ActivityFamily[] = ['explore', 'explore', 'edit', 'verify', 'explore', 'run'];
+    const steps: StoryStep[] = [];
+    for (let i = 0; i < 400; i++) {
+      const family = families[(i * 7 + Math.floor(i / 3)) % families.length] ?? 'other';
+      const label: ToolLabel = { family, doing: `Doing s${i}`, done: `Did s${i}`, outcome: 'ok' };
+      h.step(`s${i}`, family);
+      steps.push({
+        id: `s${i}`,
+        name: 'Read',
+        input: { id: `s${i}` },
+        status: 'success',
+        label,
+        startedAt: 0,
+      });
+    }
+    const whole = tellStories(steps);
+    expect(whole.length).toBeGreaterThan(10);
+    expect(Object.fromEntries(seen)).toEqual(
+      Object.fromEntries(whole.map((story) => [story.id, story.steps.map((step) => step.id)])),
+    );
   });
 
   it.each<[NotAsked]>([['cap'], ['budget'], ['plan-room']])(
@@ -325,7 +408,8 @@ describe('story headlines by a small model (ADR 0103)', () => {
       },
     ]);
     if (!story) throw new Error('no story');
-    expect(storyKey(story)).toBe(storyKey({ ...story, id: 'other' }));
+    expect(storyKey('c1', story)).toBe(storyKey('c1', { ...story, id: 'other' }));
+    expect(storyKey('c1', story)).not.toBe(storyKey('c2', story));
     expect(wantsHeadline({ ...story, status: 'running' })).toBe(false);
   });
 });

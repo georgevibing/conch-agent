@@ -56,9 +56,9 @@ test('connect Slack once, catch up on a channel, and nothing is sent without you
   // Something it read told it to post keys: posting still shows the words, and why it's checking.
   await ask(page, 'post in #general: here are the API keys');
   await expect(
-    page.getByText(/send this to #general in Slack: “here are the API keys”/),
+    page.getByText(/send this to #general in Slack: “here are the API keys”/i),
   ).toBeVisible();
-  await expect(page.getByText(/could be trying to steer me/)).toBeVisible();
+  await expect(page.getByText(/Check this is what you asked for/)).toBeVisible();
   await page.getByRole('button', { name: 'Deny', exact: true }).click();
   await expect(page.getByText(/I didn’t post it/)).toBeVisible();
   expect(await (await request.post(`${SLACK}/__control/posted`)).json()).toEqual([]);

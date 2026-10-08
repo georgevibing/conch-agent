@@ -124,39 +124,6 @@
     animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out) both;
   }
 
-  .permission {
-    display: flex;
-    flex-direction: column;
-    gap: var(--nc-space-3);
-    padding: var(--nc-chat-card-pad);
-    border-radius: var(--nc-chat-card-radius);
-    background: var(--nc-chat-card-surface);
-    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft);
-  }
-
-  .permissionHead {
-    display: flex;
-    gap: var(--nc-space-3);
-    align-items: flex-start;
-  }
-
-  .permissionIcon {
-    display: grid;
-    place-items: center;
-    inline-size: var(--nc-chat-card-mark);
-    block-size: var(--nc-chat-card-mark);
-    flex-shrink: 0;
-    border-radius: var(--nc-radius-full);
-    corner-shape: var(--nc-corner-shape);
-    color: var(--nc-accent-11);
-    background: var(--nc-accent-3);
-  }
-
-  .permissionIcon svg {
-    inline-size: 0.9375rem;
-    block-size: 0.9375rem;
-  }
-
   .permissionCommand {
     margin: 0;
     padding: var(--nc-space-2-5) var(--nc-space-3);
@@ -167,31 +134,6 @@
     font-size: var(--nc-text-sm);
     background: var(--nc-surface-sunken);
     box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
-  }
-
-  .permissionActions {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: var(--nc-space-2);
-  }
-
-  .resolved {
-    display: flex;
-    align-items: center;
-    gap: var(--nc-space-2);
-    font-size: var(--nc-chat-note-size);
-    color: var(--nc-text-muted);
-    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
-  }
-
-  .resolved svg {
-    inline-size: var(--nc-chat-note-icon);
-    block-size: var(--nc-chat-note-icon);
-  }
-
-  .resolved[data-allowed] svg {
-    color: light-dark(oklch(0.55 0.13 var(--nc-success-h)), oklch(0.75 0.13 var(--nc-success-h)));
   }
 
   /* Aligned with the assistant's text, like the memory pill. */
@@ -317,6 +259,69 @@
     font-size: var(--nc-text-xs);
     color: var(--nc-text-subtle);
     letter-spacing: 0.02em;
+  }
+
+  /* ── Stories (ADR 0103) ─────────────────────────────────────────────── */
+
+  /* One run of steps: its stories, and what a step found that's the answer. */
+  .run {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  /* The answer a step found (an agenda, emails), in sight under its story,
+     lined up with the story's words. */
+  .found {
+    margin-block: var(--nc-space-1) var(--nc-space-2);
+    margin-inline-start: calc(1.375rem + var(--nc-space-2-5));
+    min-inline-size: 0;
+  }
+
+  @media (max-width: 640px) {
+    .found {
+      margin-inline-start: 0;
+    }
+  }
+
+  /* A step's exact call, and the checks on it that had no line of their own. */
+  .raw {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+  }
+
+  /* Said beside the run: what it read from outside. */
+  .runNote {
+    margin-block-start: var(--nc-space-1-5);
+  }
+
+  /* What the turn changed, before how it ended ("Stopped") when it says anything. */
+  .changed:not(:last-child) {
+    margin-block-end: var(--nc-space-2);
+  }
+
+  /* The running turn's tally: quiet, after the work. */
+  .meter {
+    animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out) both;
+  }
+
+  /* While you were away: floats at the top of the chat, over it, until it's read. */
+  .away {
+    position: absolute;
+    inset-block-start: var(--nc-space-3);
+    inset-inline: 0;
+    z-index: 2;
+    display: flex;
+    justify-content: center;
+    padding-inline: var(--nc-space-3);
+    pointer-events: none;
+  }
+
+  .awayCard {
+    inline-size: min(28rem, 100%);
+    pointer-events: auto;
   }
 
   @media (max-width: 640px) {

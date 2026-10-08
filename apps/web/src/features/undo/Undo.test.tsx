@@ -8,7 +8,8 @@ import { reduceAll } from '../../live/reducer';
 import { appState, mockFetch, renderApp } from '../../test/harness';
 import { ActivityView } from '../activity/ActivityView';
 import { Palette } from '../palette/Palette';
-import { ChatFiles, turnChanges } from './ChatFiles';
+import { turnChanges } from '../chat/telling';
+import { TurnChanges } from './TurnChanges';
 import { UndoHost } from './UndoHost';
 
 afterEach(() => {
@@ -29,7 +30,7 @@ const changed = (id: string, path: string): ConversationEventInput => ({
 });
 
 describe('changes in the chat', () => {
-  it('each change is a line that can be undone, and says when it was', () => {
+  it('each change set says whether it’s undone, from the chat’s log', () => {
     const view = reduceAll(
       log(
         { type: 'user.message', messageId: 'u1', text: 'tidy' },
@@ -51,25 +52,56 @@ describe('changes in the chat', () => {
       ['cs_b', 'applied'],
       ['cs_c', 'applied'],
     ]);
-    const turns = turnChanges(view.items);
-    expect([...turns.keys()]).toEqual(['cs_b', 'cs_c']);
-    expect(turns.get('cs_b')?.map((f) => f.id)).toEqual(['cs_a', 'cs_b']);
   });
 
-  it('offers Undo for one change and for everything the turn did', async () => {
+  it('a turn’s changes say what changed, with Undo for each and for all of them', async () => {
     const user = userEvent.setup();
-    const item = (id: string) => ({
+    const set = (id: string, path: string) => ({
       kind: 'files' as const,
       id,
-      label: 'Changed x',
-      files: [{ path: `${id}.md`, kind: 'changed' as const }],
+      label: `Changed ${path}`,
+      files: [{ path, kind: 'changed' as const }],
       state: 'applied' as const,
     });
-    renderApp(<ChatFiles item={item('b')} turn={[item('a'), item('b')]} />);
-    await user.click(screen.getByRole('button', { name: 'Undo all 2 changes from this turn' }));
-    expect(useUi.getState().undoing).toEqual({ ids: ['a', 'b'], direction: 'undo' });
-    await user.click(screen.getByRole('button', { name: 'Undo' }));
-    expect(useUi.getState().undoing).toEqual({ ids: ['b'], direction: 'undo' });
+    // One file changed twice goes back whole: both its change sets.
+    const { groups, undone } = turnChanges(
+      [],
+      [set('a', 'notes/a.md'), set('b', 'b.md'), set('c', 'notes/a.md')],
+    );
+    renderApp(<TurnChanges groups={groups} undone={undone} />);
+    await user.click(screen.getByRole('button', { name: /^Changed 2 files/ }));
+    await user.click(screen.getByRole('button', { name: 'Undo all 2 changes' }));
+    await waitFor(() =>
+      expect(useUi.getState().undoing).toEqual({ ids: ['a', 'c', 'b'], direction: 'undo' }),
+    );
+    act(() => useUi.setState({ undoing: undefined }));
+    await user.click(screen.getByRole('button', { name: 'Undo: Changed b.md' }));
+    await waitFor(() =>
+      expect(useUi.getState().undoing).toEqual({ ids: ['b'], direction: 'undo' }),
+    );
+  });
+
+  it('an undone change says so and offers Redo', async () => {
+    const user = userEvent.setup();
+    const { groups, undone } = turnChanges(
+      [],
+      [
+        {
+          kind: 'files',
+          id: 'cs_a',
+          label: 'Created note.md',
+          files: [{ path: 'note.md', kind: 'created' }],
+          state: 'undone',
+        },
+      ],
+    );
+    renderApp(<TurnChanges groups={groups} undone={undone} />);
+    await user.click(screen.getByRole('button', { name: /Created note\.md/ }));
+    expect(screen.getAllByText('Undone ·', { exact: false }).length).toBeGreaterThan(0);
+    await user.click(screen.getByRole('button', { name: 'Redo: Created note.md' }));
+    await waitFor(() =>
+      expect(useUi.getState().undoing).toEqual({ ids: ['cs_a'], direction: 'redo' }),
+    );
   });
 });
 

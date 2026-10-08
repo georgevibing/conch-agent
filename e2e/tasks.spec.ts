@@ -101,11 +101,11 @@ test('a task stops when you say, runs again with one press, and goes when you re
   ).toHaveCount(1);
   const card = page.getByRole('article', { name: 'Keep checking for a while' });
   await expect(card).toContainText('Working');
-  await expect(card).toContainText('Running npm run watch');
+  await expect(card).toContainText('Starting the watcher');
   await card.getByRole('button', { name: 'Stop' }).click();
   await expect(card).toContainText('Stopped');
   await card.getByRole('button', { name: 'Resume safely' }).click();
-  await expect(card).toContainText('Running npm run watch');
+  await expect(card).toContainText('Starting the watcher');
   await card.getByRole('button', { name: 'Stop' }).click();
   await card.getByRole('button', { name: 'Remove' }).click();
   await expect(card).toHaveCount(0);
@@ -178,7 +178,7 @@ test('a chat’s tasks sit under it in the sidebar, and open from there', async 
   await expect(toggle).toHaveAccessibleName(/1 task · 1 working/);
   const tasks = row.getByRole('list', { name: /^Tasks from/ });
   await expect(tasks).toContainText('Keep checking for a while');
-  await expect(tasks).toContainText('npm run watch');
+  await expect(tasks).toContainText('Starting the watcher');
   // Stopped from the list, and it opens from there, over the chat.
   await tasks.getByRole('button', { name: 'Stop' }).click();
   await expect(tasks).toContainText('Stopped');

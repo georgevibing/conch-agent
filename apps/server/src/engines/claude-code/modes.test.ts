@@ -6,6 +6,7 @@ import type { PermissionRequest, TurnInput } from '../types';
 
 interface Options {
   permissionMode?: string;
+  env?: Record<string, string>;
   allowDangerouslySkipPermissions?: boolean;
   canUseTool?: (
     name: string,
@@ -180,5 +181,18 @@ describe('Claude Code’s permission modes (ADR 0100)', () => {
     change?.('bypassPermissions');
     await new Promise((r) => setTimeout(r, 0));
     expect(switched).toEqual(['auto', 'default']);
+  });
+});
+
+describe('Claude Code’s notes on each round of steps (ADR 0103)', () => {
+  it('asks for its tool-use summaries only when small-model naming is on', async () => {
+    const engine = engineFor();
+    await engine.capabilities({ force: true });
+    const on = await run(engine, turn({ narrate: true }));
+    expect(on?.env?.['CLAUDE_CODE_EMIT_TOOL_USE_SUMMARIES']).toBe('1');
+    const off = await run(engine, turn());
+    expect(off?.env?.['CLAUDE_CODE_EMIT_TOOL_USE_SUMMARIES']).toBe(
+      process.env['CLAUDE_CODE_EMIT_TOOL_USE_SUMMARIES'],
+    );
   });
 });

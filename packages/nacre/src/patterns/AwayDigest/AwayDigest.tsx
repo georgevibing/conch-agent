@@ -33,11 +33,17 @@ export interface AwayDigestProps extends Omit<ComponentProps<'section'>, 'childr
 /** How long the card takes to fold away before `onDismiss`. */
 const LEAVE_MS = 260;
 
-/** "Worked 12m · 6 steps · 1 didn’t work". */
+/**
+ * "Worked 12m · 2 done · 1 didn’t work". Each line is a story (a run of
+ * steps told as one thing), so it counts what got done, never "steps".
+ */
 function digestLine(items: AwayDigestItem[], durationMs?: number): string {
   const parts: string[] = [];
   if (durationMs !== undefined) parts.push(`Worked ${formatWorked(durationMs)}`);
-  parts.push(`${items.length} ${items.length === 1 ? 'step' : 'steps'}`);
+  const done = items.filter((i) => i.status === 'done').length;
+  if (done) parts.push(`${done} done`);
+  const skipped = items.filter((i) => i.status === 'declined').length;
+  if (skipped) parts.push(`${skipped} not run`);
   const failed = items.filter((i) => i.status === 'failed').length;
   if (failed) parts.push(`${failed} didn’t work`);
   const running = items.some((i) => i.status === 'running');
@@ -99,7 +105,7 @@ export function AwayDigest({
         <ol className={styles.items}>
           {earlier > 0 && (
             <li className={styles.earlier} style={{ '--i': 0 } as CSSProperties}>
-              {earlier} earlier {earlier === 1 ? 'step' : 'steps'}
+              {earlier} more before these
             </li>
           )}
           {shown.map((item, i) => {

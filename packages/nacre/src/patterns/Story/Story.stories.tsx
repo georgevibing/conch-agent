@@ -204,6 +204,35 @@ export const Failed: S = {
   },
 };
 
+/**
+ * Not run: you said no (or a rule did). A quiet gray slash on the well and the
+ * step, the words a shade softer: neither the check of done nor a failure's note.
+ */
+export const Declined: S = {
+  args: {
+    headline: 'Pushed to main',
+    outcome: 'You said no',
+    family: 'ship',
+    status: 'declined',
+    steps: [{ ...push, outcome: 'You said no', status: 'declined', durationMs: undefined }],
+    durationMs: undefined,
+    defaultOpen: true,
+  },
+};
+
+/** Some steps ran and one you said no to: the story is done, the step says it didn't run. */
+export const PartlyDeclined: S = {
+  args: {
+    headline: 'Committed “Fix the login test”',
+    outcome: undefined,
+    family: 'ship',
+    status: 'done',
+    steps: [commit, { ...push, outcome: 'Not allowed', status: 'declined', durationMs: undefined }],
+    durationMs: 1_400,
+    defaultOpen: true,
+  },
+};
+
 /** Taking longer than it should: a gentle sentence in place of the live line. */
 export const Stuck: S = {
   args: {

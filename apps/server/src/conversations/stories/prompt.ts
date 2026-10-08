@@ -7,6 +7,8 @@
  */
 import type { ToolLabel } from '@conch/protocol';
 
+import { scrubSecrets } from '../../search/past';
+
 /** The person's request, as much as says what it's about. */
 export const REQUEST_CHARS = 300;
 /** All the steps' outputs together, at most. */
@@ -53,14 +55,62 @@ export function trimmed(text: string, max: number): string {
   return `${flat.slice(0, head)} … ${flat.slice(-tail)}`;
 }
 
-/** Text that can't close the fence it's put in. */
+/** What's scrubbed at most: a step's words and output never come near; a pasted log keeps its ends. */
+const SCRUB_CHARS = 20_000;
+
+/**
+ * What a command carries that a password manager never saw: a header's
+ * credentials, `FOO=secret cmd`, a password flag or a database's `-pHunter2`,
+ * a user and password for curl. Keys and `password: x` pairs are `scrubSecrets`'.
+ */
+const COMMAND_SECRETS: [RegExp, string][] = [
+  // -H "Authorization: Bearer …", -H 'X-Api-Key: …', a cookie.
+  [
+    /\b((?:proxy-)?authorization|x-[a-z-]*(?:key|token|secret|auth)|api-key|cookie|set-cookie)(\s*:\s*)[^"'\r\n]+/gi,
+    '$1$2•••',
+  ],
+  // An environment variable set for a command, or exported: FOO=secret cmd.
+  [
+    /(^|[\s;&|(`"])([A-Z_][A-Z0-9_]*=)(?:\\"[^"\n]*\\"|"[^"\n]*"|'[^'\n]*'|[^\s;&|)`]+)/g,
+    '$1$2•••',
+  ],
+  // --password=…, --token …, --api-key …
+  [
+    /(--?(?:password|passwd|pass|token|api[-_]?key|secret|access[-_]?key|client[-_]?secret|auth)(?:=|\s+))(?!-)("[^"\n]*"|'[^'\n]*'|\S+)/gi,
+    '$1•••',
+  ],
+  // mysql -pHunter2: a password written right after -p.
+  [/\b((?:mysql|mysqldump|mysqladmin|mariadb)\b[^\n;&|]*?\s-p)[^\s;&|]+/g, '$1•••'],
+  // curl -u me:secret, --user me:secret.
+  [/((?:^|\s)(?:-u|--user)(?:=|\s+)["']?[^\s:"']+:)[^\s"']+/g, '$1•••'],
+];
+
+/**
+ * Prompt material without anything that looks like a secret. Passwords' own
+ * values are gone from the log already; a step's subject comes from its
+ * input, which isn't redacted, so what a command carried goes here.
+ */
+export function secretless(text: string): string {
+  let out =
+    text.length > SCRUB_CHARS
+      ? `${text.slice(0, SCRUB_CHARS / 2)} … ${text.slice(-SCRUB_CHARS / 2)}`
+      : text;
+  out = scrubSecrets(out);
+  for (const [shape, by] of COMMAND_SECRETS) out = out.replace(shape, by);
+  return out;
+}
+
+/**
+ * Text that can't close the fence it's put in, scrubbed again: material is
+ * scrubbed before it's cut too, so a cut can't leave half a secret behind.
+ */
 const fenced = (text: string) =>
-  text.replace(/<\/?(?:request|steps|output|said|step|input)\b/gi, '‹');
+  secretless(text).replace(/<\/?(?:request|steps|output|said|step|input)\b/gi, '‹');
 
 export function stepLine(label: ToolLabel, index: number): string {
   const parts = [
     `${index + 1}. [${label.family}] ${label.done}`,
-    label.subject && `about: ${trimmed(label.subject, 120)}`,
+    label.subject && `about: ${trimmed(secretless(label.subject), 120)}`,
     label.outcome && `outcome: ${label.outcome}`,
     label.failed && 'went wrong',
   ].filter(Boolean);
@@ -86,7 +136,7 @@ function outputs(steps: readonly PromptStep[]): string[] {
   const out: { index: number; text: string }[] = [];
   for (const { step, index } of order) {
     if (left < 60) break;
-    const text = trimmed(step.output ?? '', Math.min(share, left));
+    const text = trimmed(secretless(step.output ?? ''), Math.min(share, left));
     left -= text.length;
     out.push({ index, text });
   }
@@ -97,7 +147,7 @@ function outputs(steps: readonly PromptStep[]): string[] {
 
 export function storyPrompt(request: string, steps: readonly PromptStep[]): string {
   return [
-    `<request>${fenced(trimmed(request, REQUEST_CHARS))}</request>`,
+    `<request>${fenced(trimmed(secretless(request), REQUEST_CHARS))}</request>`,
     `<steps>\n${steps.map((step, i) => fenced(stepLine(step.label, i))).join('\n')}\n</steps>`,
     ...outputs(steps),
   ].join('\n');
@@ -113,13 +163,14 @@ export function explainPrompt(input: {
   status?: string;
 }): string {
   return [
-    `<request>${fenced(trimmed(input.request, 500))}</request>`,
-    input.said && `<said>${fenced(trimmed(input.said, 600))}</said>`,
+    `<request>${fenced(trimmed(secretless(input.request), 500))}</request>`,
+    input.said && `<said>${fenced(trimmed(secretless(input.said), 600))}</said>`,
     `<step>${fenced(stepLine(input.label, 0).replace(/^1\. /, ''))} | tool: ${fenced(input.name)}${
       input.status ? ` | ${input.status}` : ''
     }</step>`,
-    `<input>${fenced(trimmed(input.input, 600))}</input>`,
-    input.output !== undefined && `<output>${fenced(trimmed(input.output, 1_200))}</output>`,
+    `<input>${fenced(trimmed(secretless(input.input), 600))}</input>`,
+    input.output !== undefined &&
+      `<output>${fenced(trimmed(secretless(input.output), 1_200))}</output>`,
     'Why did the assistant do this step, and what did it learn?',
   ]
     .filter(Boolean)

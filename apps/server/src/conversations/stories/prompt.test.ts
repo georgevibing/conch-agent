@@ -6,6 +6,7 @@ import {
   OUTPUTS_CHARS,
   readExplanation,
   readHeadline,
+  secretless,
   storyPrompt,
   trimmed,
 } from './prompt';
@@ -118,5 +119,49 @@ describe('a headline is shown only when it’s good', () => {
     const long = readExplanation(`${'It looked at the file. '.repeat(60)}`);
     expect(long?.length).toBeLessThanOrEqual(600);
     expect(long?.endsWith('.')).toBe(true);
+  });
+});
+
+describe('secrets a command carried stay out of the small model’s prompts', () => {
+  const commands = [
+    ['curl -H "Authorization: Bearer abc123def456ghi789" https://api.test', 'abc123def456ghi789'],
+    ["curl -H 'X-Api-Key: k3y' https://api.test", 'k3y'],
+    ["curl -H 'Authorization: token abc' https://api.test", 'abc'],
+    ['FOO=hunter2 npm run deploy', 'hunter2'],
+    ['export API_TOKEN="sup3r s3cret"', 's3cret'],
+    ['mysql -u root -pHunter2 shop', 'Hunter2'],
+    ['psql --password=Hunter2 shop', 'Hunter2'],
+    ['gh auth login --token ghx_short_tok', 'ghx_short_tok'],
+    ['curl -u me:Hunter2 https://api.test', 'Hunter2'],
+  ] as const;
+
+  it('scrubs each shape and keeps the rest of the command', () => {
+    for (const [command, secret] of commands) {
+      const out = secretless(command);
+      expect(out, command).not.toContain(secret);
+      expect(out).toContain('•••');
+    }
+    expect(secretless('mkdir -p src/app && ls')).toBe('mkdir -p src/app && ls');
+    expect(secretless('npm test')).toBe('npm test');
+  });
+
+  it('keeps them out of a story’s prompt and a Why? prompt', () => {
+    for (const [command, secret] of commands) {
+      const story = storyPrompt(`Deploy with ${command}`, [
+        { label: label('Ran a command', { family: 'run', subject: command }), output: command },
+        { label: label('Ran it again', { family: 'run', subject: command }) },
+      ]);
+      expect(story, command).not.toContain(secret);
+      const why = explainPrompt({
+        request: `Please run ${command}`,
+        said: `I'll run ${command}`,
+        label: label('Ran a command', { family: 'run', subject: command }),
+        name: 'Bash',
+        input: JSON.stringify({ command }),
+        output: `ran ${command}`,
+        status: 'success',
+      });
+      expect(why, command).not.toContain(secret);
+    }
   });
 });

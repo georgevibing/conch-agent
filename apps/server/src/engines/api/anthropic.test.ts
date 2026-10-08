@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { AnthropicWire, anthropicApiVariant } from './anthropic';
+import { AnthropicWire, anthropicApiVariant, updatesRefused } from './anthropic';
 import { fakeFetch, jsonResponse, namedFrames, sseResponse, failure } from './fake';
 import type { WireEvent, WireRequest } from './types';
 
@@ -566,5 +566,29 @@ describe('Anthropic attachments', () => {
         { type: 'text', text: 'what is this?' },
       ],
     });
+  });
+});
+
+describe('a 400 about thinking updates (ADR 0103)', () => {
+  it('is one that names thinking’s display or its beta', () => {
+    for (const detail of [
+      'thinking.display: updates is not available for this model',
+      'thinking.display: Extra inputs are not permitted',
+      'Unexpected value(s) `thinking-display-updates-2026-08-18` for the `anthropic-beta` header.',
+      "display: 'updates' is not supported",
+      'anthropic-beta: this account cannot use the thinking beta',
+    ])
+      expect(updatesRefused(detail), detail).toBe(true);
+  });
+
+  it('isn’t one that only mentions a beta, a display or updates in passing', () => {
+    for (const detail of [
+      'messages.0.content.1: unexpected beta field `cache_control` in tool result',
+      'Unexpected value(s) `files-api-2025-04-14` for the `anthropic-beta` header.',
+      'tools.0.input_schema: display_name is not allowed',
+      'Your credit balance is too low. Please go to Plans & Billing to purchase credits or see updates.',
+      'max_tokens: must be at most 8192 for this model; display units are tokens',
+    ])
+      expect(updatesRefused(detail), detail).toBe(false);
   });
 });

@@ -683,3 +683,73 @@ describe('an approval, answered at once (decided)', () => {
     expect(expired.items.find((i) => i.kind === 'permission')).toMatchObject({ decision: 'deny' });
   });
 });
+
+describe('what the assistant is doing, in words (ADR 0103)', () => {
+  const doing = { family: 'verify' as const, doing: 'Running the tests', done: 'Ran the tests' };
+  const done = { ...doing, outcome: '241 passed' };
+
+  it('keeps each call’s words: the running ones, then the finished ones', () => {
+    const events = log(
+      { type: 'user.message', messageId: 'u1', text: 'test it' },
+      { type: 'tool.started', toolUseId: 't1', name: 'Bash', input: {}, label: doing },
+      { type: 'tool.finished', toolUseId: 't1', status: 'success', output: 'ok', label: done },
+    );
+    expect(reduceAll(events.slice(0, 2)).items.at(-1)).toMatchObject({ label: doing });
+    expect(reduceAll(events).items.at(-1)).toMatchObject({ label: done });
+  });
+
+  it('drops the running words when the finish brings none, so they’re worked out from the result', () => {
+    const view = reduceAll(
+      log(
+        { type: 'tool.started', toolUseId: 't1', name: 'Bash', input: {}, label: doing },
+        { type: 'tool.finished', toolUseId: 't1', status: 'success', output: 'ok' },
+      ),
+    );
+    const tool = view.items.at(-1);
+    expect(tool?.kind === 'tool' && tool.label).toBeUndefined();
+  });
+
+  it('holds the provider’s latest note while the turn runs, and lets it go when it ends', () => {
+    const events = log(
+      { type: 'user.message', messageId: 'u1', text: 'look around' },
+      { type: 'narration', text: 'Looking at the layout', source: 'provider' },
+      { type: 'narration', text: 'Reading the tests', toolUseId: 't2', source: 'provider' },
+      { type: 'turn.completed', outcome: 'success' },
+    );
+    expect(reduceAll(events.slice(0, 3)).narration).toEqual({
+      text: 'Reading the tests',
+      toolUseId: 't2',
+      source: 'provider',
+      at: 1200,
+    });
+    expect(reduceAll(events).narration).toBeUndefined();
+    expect(stoppedView(reduceAll(events.slice(0, 3)), 2000).narration).toBeUndefined();
+  });
+
+  it('keeps story headlines by their first call, even when they come after the turn', () => {
+    const view = reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: 'look around' },
+        { type: 'turn.completed', outcome: 'success' },
+        {
+          type: 'story.titled',
+          storyId: 't1',
+          headline: 'Looked around the project',
+          source: 'model',
+        },
+        { type: 'user.message', messageId: 'u2', text: 'more' },
+        {
+          type: 'story.titled',
+          storyId: 't9',
+          headline: 'Fixed the test',
+          outcome: '3 passed',
+          source: 'model',
+        },
+      ),
+    );
+    expect(view.titles).toEqual({
+      t1: { headline: 'Looked around the project', source: 'model' },
+      t9: { headline: 'Fixed the test', outcome: '3 passed', source: 'model' },
+    });
+  });
+});

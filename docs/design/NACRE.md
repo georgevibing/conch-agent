@@ -239,7 +239,8 @@ does all of this instead.
 Secrets are dots until you ask, and go back to dots by themselves
 (`VaultFieldRow`): after thirty seconds, or when you switch away. A login wears
 its site's monogram, never a favicon fetched from the web (that would tell the
-site you have an account). Other kinds wear a glyph tinted by kind. A
+site you have an account; a chat's site chips do get icons, from the gateway,
+ADR 0103). Other kinds wear a glyph tinted by kind. A
 one-time code is split for reading ("123 456") beside a ring that empties and
 turns amber in its last five seconds (`TotpCode`). The generator shows its
 password as you change it, digits and symbols coloured so it can be read back
@@ -326,19 +327,19 @@ Agents are people you meet, so they're shown as faces, never as rows of settings
 
 ### A reply and what belongs to it (chat)
 
-A reply is one piece: its words, then everything that belongs to it (tool
-rows, more words, a plan, a question, an offer, an artifact, replies to send
-next), then its actions. `Message attached` holds those parts, so the hover
+A reply is one piece: its words, then everything that belongs to it (stories
+of its steps, more words, a plan, a question, an offer, an artifact, what
+changed, replies to send next), then its actions. `Message attached` holds those parts, so the hover
 actions (Copy, Read aloud) come once, at the end, and never sit as an empty
 row between the words and their card.
 
 - **One step, one edge.** Each part sits `--nc-chat-step` under what's above
   it and starts where the words do: the column's edge (`--nc-chat-indent`, 0).
-  Tool rows, task cards, thinking, plans, and the lines across the chat
+  Stories, task cards, thinking, plans, and the lines across the chat
   (`/clear`, a goal, a summary) all share that edge, on a phone as on a
   computer. A part reads `--nc-chat-flow-gap` and `--nc-chat-indent`, so the
-  same rule fits in the transcript and inside a reply. Tool rows stack closer,
-  a stack of their own.
+  same rule fits in the transcript and inside a reply. The stories of one run
+  of steps stack closer, a stack of their own (`StoryStack`).
 - **One card.** Every card in a reply takes its shape from the `--nc-chat-card-*`
   tokens: radius, surface, ring with glaze and a soft shadow, padding, the
   1.75rem mark beside a small semibold title, and one width.
@@ -346,6 +347,67 @@ row between the words and their card.
   row like a tool's (`--nc-chat-row-*`). One that only says what happened
   becomes a line (`--nc-chat-note-*`). One that's dismissed closes the gap it
   sat in as it goes.
+
+### Stories: what the assistant did (chat)
+
+Steps are told, not listed (ADR 0103). A run of tool calls between two pieces of
+the reply's words becomes one to three stories (`tellStories` cuts them, the same
+in the gateway and the chat), each told at three depths, one press apart:
+
+1. **The line** (`Story`). Its family's glyph, the headline, a quiet outcome
+   after a dot ("Ran the server tests · 241 passed"), the faces of what it
+   touched (`ChipStack`: favicons and photos, up to three, then "+N"), how many
+   steps, and how long. While it runs, a `LiveLine` under it says the step at
+   hand, or the provider's own narration in the reasoning trail's serif italic.
+2. **The steps.** Opened, a thin timeline of each step in plain words, its
+   outcome and its time, **Why?** beside it, and pills for what it looked at.
+3. **The call.** A step opens once more to the exact call (`renderRaw`): input,
+   output, diff. Nothing is ever hidden, only folded.
+
+A long run keeps its latest few stories in view and folds the earlier ones into
+one quiet line with their glyphs (`StoryStack`, four by default). At the end of
+the turn, `WhatChanged` is one line ("Changed 4 files · committed · pushed to
+main") that opens to each change, what others see or what costs money first,
+with **Undo** where a change set can put it back. `AwayDigest` greets someone
+back at a chat that kept working without them, a line per story, each a jump.
+`TurnMeter` is the turn's tally: "1m 04s · 12 steps · $0.04 · 41.2k tokens".
+
+**Copy.** Every line follows the same rules, whoever wrote it: past tense once
+done, `-ing` while running; sentence case; 60 characters at most for a
+headline; no jargon and no raw shell (the command is the subject, never the
+words); the outcome over a count ("Fixed the login test", not "Ran 6 tools"),
+and when a count is all there is, what was counted ("Read 6 files"). A model's
+words are drawn as plain text only, never Markdown or links. Failing is calm: a
+warm note and "Didn't work", never a red flood; a step put right says "Worked
+on the second try"; a story going round in circles says so in a sentence, with
+an hourglass, while there's time to step in.
+
+**Glyphs.** One per family (`FamilyGlyph`), drawn on lucide's grid so they sit
+with every other icon, each with exactly one part that moves while the work
+runs: explore (a lens scans the page), edit (a pen writes), run (a cursor
+blinks), verify (a shield's tick draws), ship (an arrow lifts from its tray),
+research (the globe turns), browse (a pointer taps), connect (one of three
+tiles breathes), make (a spark twinkles), plan (a line is ticked), delegate (a
+paper plane flies), remember (a bookmark), other (three dots in turn). They're
+decorative; the words say what happened. Once a story ends, its status lands
+on the glyph's well as a badge, and a passing check glints once.
+
+**Motion.** Only a story arriving in a live turn moves (`arriving`); history is
+drawn still. A headline that changes, "Running" to "Ran" or the rules' words to
+a small model's, morphs in place (`MorphText`): the words before the change
+hold still, the rest rise out of the line and are gone (130ms) before the new
+ones rise into it word by word (the last lands by 345ms), clipped to the line's
+own box, so two texts never sit on one baseline and nothing around it moves. The live line reserves its height, coalesces
+changes faster than the eye can read, and lets a band of light cross it while
+the work goes on. A story is announced once when it starts and once when it
+ends, never per step. Reduced motion stills all of it: no orbit, no glint, no
+morph, the new words simply there.
+
+**When a view stands alone.** What a step found (a `ToolView`: an agenda,
+emails, files) is drawn under its step whenever the story is open
+(`renderFound`), never only behind the raw call. When that view is the answer
+(a story of one step that returned it, the day's agenda the person asked for),
+it isn't folded away: it stays in sight under the line, as below.
 
 ### What a tool found (chat)
 
@@ -358,6 +420,24 @@ plain text from outside, and only web links open, in a new tab. A row's next
 step is quiet (Reply waits for the pointer) and only ever fills the composer.
 An artifact's card shows a small, inert picture of a chart, table, diagram or
 picture above its line; pressing anywhere still opens it.
+
+### Making a picture (chat)
+
+A picture being made is drawn where the picture will be (`ImageMaking`), never as
+a tool row. The frame already has the picture's shape (its aspect ratio from the
+request), and slow pearl light moves inside it: a turning film of
+`--nc-pearl-spectrum`, four soft shapes wandering, a sheen that crosses now and
+then, fine grain. How far it got sits in a small pill on the frame: a ring that
+fills, the percent, and "about 12s left" once there's enough to tell; with no
+number the ring just turns. A rough picture from the service shows through,
+blurred, under the sheen. While its approval waits, the light holds still.
+When it's ready it _develops_: it sharpens out of the light from the middle as
+one glint crosses it, and only when it arrived live; a picture already there
+just shows. Then it rests as a quiet card: the picture, its name, **Look closer**,
+**Download**, **Copy picture**, **Change it**, and **Details** (what was asked for,
+the model, who made it; never a path or the raw call). Not made (you said no, it
+failed, it was stopped) is a calm line with an image-off glyph, never a tick.
+Reduced motion keeps the light still and the percent.
 
 ### The browser (chat)
 

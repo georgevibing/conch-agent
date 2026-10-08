@@ -19,7 +19,7 @@ import {
   type StoryStep,
 } from '@conch/protocol';
 
-import { Limiter, Recent, type SmallModelDeps } from './ask';
+import { Limiter, Recent, type SmallModel, type SmallModelDeps } from './ask';
 import { readHeadline, STORY_SYSTEM, storyPrompt, type PromptStep } from './prompt';
 
 /** At most this many headlines a turn: a long turn's later stories keep the rules' words. */
@@ -55,6 +55,16 @@ interface Turn {
   request: string;
   /** Steps since the assistant last said something: a reply between them ends their stories. */
   run: StoryStep[];
+  /** The run's steps by id. */
+  byId: Map<string, StoryStep>;
+  /**
+   * Where the run is told from (ADR 0103): the first step of a story of two or
+   * more steps at or before the first one not yet closed. Cuts never move once
+   * a story is followed by another, and from such a story on they come out
+   * the same told alone (only a run's first two steps join whatever they are),
+   * so each event tells only the open end of the run, not all of it again.
+   */
+  from: number;
   outputs: Map<string, string>;
   /** Stories already closed, by id: each is looked at once. */
   closed: Set<string>;
@@ -75,15 +85,17 @@ export function wantsHeadline(story: Story): boolean {
   return story.family === 'other' || families.size > 1 || GENERIC.test(story.headline);
 }
 
-/** The same steps, said the same way, are asked about once. */
-export function storyKey(story: Story): string {
+/** The same steps, said the same way in the same chat, are asked about once. */
+export function storyKey(conversationId: string, story: Story): string {
   const words = story.steps.map(({ label }) => [
     label.family,
     label.done,
     label.outcome ?? '',
     label.subject ?? '',
   ]);
-  return createHash('sha256').update(JSON.stringify(words)).digest('base64url');
+  return createHash('sha256')
+    .update(JSON.stringify([conversationId, words]))
+    .digest('base64url');
 }
 
 export class StoryTitler {
@@ -116,6 +128,8 @@ export class StoryTitler {
         this.#turns.set(id, {
           request: e.text,
           run: [],
+          byId: new Map(),
+          from: 0,
           outputs: new Map(),
           closed: new Set(),
           asked: 0,
@@ -125,26 +139,30 @@ export class StoryTitler {
         // Words between the steps end the run they follow.
         const turn = this.#turns.get(id);
         if (e.kind !== 'text' || !e.delta.trim() || !turn?.run.length) return;
-        this.#close(id, turn, this.#tell(turn.run));
+        this.#close(id, turn, this.#tell(turn));
         turn.run = [];
+        turn.byId.clear();
+        turn.from = 0;
         return;
       }
       case 'tool.started': {
         const turn = this.#turn(id);
-        turn.run.push({
+        const step: StoryStep = {
           id: e.toolUseId,
           name: e.name,
           input: e.input,
           status: 'running',
           label: e.label ?? describeTool(e.name, e.input),
           startedAt: e.at,
-        });
+        };
+        turn.run.push(step);
+        turn.byId.set(step.id, step);
         this.#settle(id, turn);
         return;
       }
       case 'tool.finished': {
         const turn = this.#turns.get(id);
-        const step = turn?.run.find((s) => s.id === e.toolUseId);
+        const step = turn?.byId.get(e.toolUseId);
         if (!turn || !step) return;
         step.status = e.status;
         if (e.durationMs !== undefined) step.durationMs = e.durationMs;
@@ -162,7 +180,7 @@ export class StoryTitler {
       case 'turn.completed': {
         const turn = this.#turns.get(id);
         this.#turns.delete(id);
-        if (turn?.run.length) this.#close(id, turn, this.#tell(turn.run));
+        if (turn?.run.length) this.#close(id, turn, this.#tell(turn));
         return;
       }
       default:
@@ -174,15 +192,24 @@ export class StoryTitler {
     let turn = this.#turns.get(id);
     if (!turn) {
       // A turn that began before Conch was watching (or with no message: a task's).
-      turn = { request: '', run: [], outputs: new Map(), closed: new Set(), asked: 0 };
+      turn = {
+        request: '',
+        run: [],
+        byId: new Map(),
+        from: 0,
+        outputs: new Map(),
+        closed: new Set(),
+        asked: 0,
+      };
       this.#turns.set(id, turn);
     }
     return turn;
   }
 
-  #tell(steps: StoryStep[]): Story[] {
+  /** The run's stories from `turn.from` on: the ones before it are closed and stay as they were. */
+  #tell(turn: Turn): Story[] {
     try {
-      return (this.deps.tell ?? tellStories)(steps.map((s) => ({ ...s })));
+      return (this.deps.tell ?? tellStories)(turn.run.slice(turn.from).map((s) => ({ ...s })));
     } catch {
       return [];
     }
@@ -190,12 +217,22 @@ export class StoryTitler {
 
   /** Stories no longer the last one, with every step done, have ended. */
   #settle(id: string, turn: Turn) {
-    const stories = this.#tell(turn.run);
+    const stories = this.#tell(turn);
     this.#close(
       id,
       turn,
       stories.slice(0, -1).filter((story) => story.status !== 'running'),
     );
+    // Tell from later next time: the latest story of two or more steps at or
+    // before the first that's still open (the one told from, if none is).
+    let at = turn.from;
+    let anchor = turn.from;
+    for (const story of stories) {
+      if (story.steps.length >= 2) anchor = at;
+      if (!turn.closed.has(story.id)) break;
+      at += story.steps.length;
+    }
+    turn.from = anchor;
   }
 
   #close(id: string, turn: Turn, stories: Story[]) {
@@ -218,10 +255,14 @@ export class StoryTitler {
   async #title(id: string, story: Story, request: string, steps: PromptStep[]): Promise<void> {
     if (!(await this.deps.enabled().catch(() => false))) return;
     if (this.deps.watched && !(await this.deps.watched(id).catch(() => false))) return;
-    const key = storyKey(story);
+    // Who may be asked is settled first, every time: a remembered answer
+    // never stands in for a chat that may no longer go to a small model.
+    const small = await this.deps.model(id).catch(() => undefined);
+    if (!small) return;
+    const key = storyKey(id, story);
     let found = this.#cache.get(key);
     if (found === undefined) {
-      found = await this.#limit.run(() => this.#ask(id, story, request, steps));
+      found = await this.#limit.run(() => this.#ask(small, story, request, steps));
       if (found === undefined) return;
       this.#cache.set(key, found);
     }
@@ -240,13 +281,11 @@ export class StoryTitler {
    * wasn't good enough (the rules' words stand for these steps).
    */
   async #ask(
-    id: string,
+    small: SmallModel,
     story: Story,
     request: string,
     steps: PromptStep[],
   ): Promise<{ headline: string; outcome?: string } | null | undefined> {
-    const small = await this.deps.model(id).catch(() => undefined);
-    if (!small) return undefined;
     const allowed = await this.deps.allow(small.engine).catch(() => ({ ok: false as const }));
     if (!allowed.ok) return undefined;
     let reply;

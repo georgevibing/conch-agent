@@ -457,6 +457,13 @@ that kind of step through for the rest of the chat, as it does anywhere else,
 your apps and an app being made included. A message or a draft for other
 people shows you its words each time.
 
+The question is short: what will happen ("Edit your picture with Gemini on
+OpenRouter"), what it costs and where things go, and one quiet line naming
+each place the chat read once ("This chat read GitHub and Yazio content.
+Check this is what you asked for."). Once you answer, it folds into the step
+it was about: a step you said no to reads **You said no**, never as a failure,
+and one you allowed keeps a quiet note in its details.
+
 **Full trust** is the one mode that doesn't stop to ask: you chose to let the
 assistant act, and a web page it reads could trick it (the mode picker says so).
 It overrides ordinary app and tool **Ask** settings, including **Ask before changes**,

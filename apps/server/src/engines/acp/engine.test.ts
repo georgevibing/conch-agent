@@ -958,6 +958,7 @@ describe('the program’s own tools, shown like every provider’s', () => {
         toolUseId: expect.stringMatching(/_x1$/),
         status: 'error',
         output: expect.stringContaining('Not run'),
+        refused: true,
       },
     ]);
   });

@@ -475,6 +475,53 @@ export type CompactResult = z.infer<typeof CompactResult>;
 export const ToolStatus = z.enum(['pending', 'running', 'success', 'error']);
 export type ToolStatus = z.infer<typeof ToolStatus>;
 
+/** Where a long tool call is: waiting its turn, at work, or checking what came back. */
+export const ToolProgressStage = z.enum(['queued', 'generating', 'finishing']);
+export type ToolProgressStage = z.infer<typeof ToolProgressStage>;
+
+/**
+ * How far a long tool call has come (a picture being made), between its
+ * `tool.started` and `tool.finished`. The finish is `tool.finished`, never a
+ * progress of 1. Without `toolUseId` it belongs to the newest unfinished call
+ * of `toolName` in the chat (only one runs at a time per chat).
+ */
+export const ToolProgress = z.object({
+  toolName: z.string().min(1).max(200),
+  toolUseId: z.string().optional(),
+  /** 0 to 1, never going back within one call. */
+  progress: z.number().min(0).max(1).optional(),
+  stage: ToolProgressStage.optional(),
+  /** `progress` is a guess from how long this usually takes, not the provider's word. */
+  estimated: z.literal(true).optional(),
+  /** A rough picture so far, as an attachment id; gone once the call ends. */
+  preview: z.string().max(200).optional(),
+  /** Who is doing it, in a few words ("your ChatGPT plan", "OpenRouter"). */
+  by: z.string().max(80).optional(),
+});
+export type ToolProgress = z.infer<typeof ToolProgress>;
+
+/**
+ * How a question about one tool call went, kept on the call itself so its row
+ * can say so: `allowed` once, `always` (for the rest of the chat), `declined`
+ * (the person said no), `expired` (no answer before the turn ended), or
+ * `refused` (one of Conch's rules said no without asking: a tool turned off
+ * in Apps, a provider's own tool that Conch can't seal). Read from what was
+ * decided, never from the tool's words.
+ */
+export const ToolApproval = z.enum(['allowed', 'always', 'declined', 'expired', 'refused']);
+export type ToolApproval = z.infer<typeof ToolApproval>;
+
+/** A permission's answer, as its tool call keeps it. */
+export function approvalOf(decision: 'allow' | 'allow-always' | 'deny' | 'expired'): ToolApproval {
+  return decision === 'allow'
+    ? 'allowed'
+    : decision === 'allow-always'
+      ? 'always'
+      : decision === 'deny'
+        ? 'declined'
+        : 'expired';
+}
+
 /** Fields shared by every event in a conversation's ordered log. */
 const logged = {
   conversationId: z.string(),
@@ -523,7 +570,15 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     view: ToolView.optional(),
     /** It in plain words now it's done, with what it found and changed (ADR 0103). */
     label: ToolLabel.optional(),
+    /**
+     * It asked first, or a rule stopped it: how that went. `declined`,
+     * `expired` and `refused` mean it didn't do what it asked to, whatever
+     * `status` the tool reported.
+     */
+    approval: ToolApproval.optional(),
   }),
+  /** A long tool call's progress (a picture being made): the newest one stands. */
+  z.object({ ...logged, type: z.literal('tool.progress'), ...ToolProgress.shape }),
   /**
    * The provider said, for the person watching, what it's doing (ADR 0103):
    * a progress note between tool calls, never its reasoning. The chat's live
@@ -548,6 +603,21 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     input: z.unknown(),
     /** One-line human summary, e.g. "Run `npm test`". */
     summary: z.string(),
+    /**
+     * What will happen, short, as the card's title: "Edit your picture with
+     * Gemini on OpenRouter". Without it, the card says `summary`.
+     */
+    title: z.string().max(160).optional(),
+    /** One quiet line of what matters beside it: where things go. "Your picture goes to OpenRouter". */
+    detail: z.string().max(200).optional(),
+    /** What it costs, when it costs money: "Paid", "Paid · about $0.04". */
+    cost: z.string().max(60).optional(),
+    /**
+     * Why to look twice, in one short line, each place named once: "This chat
+     * read GitHub and Yazio content. Check this is what you asked for." The
+     * long reason stays in `taint` for older clients and chat apps.
+     */
+    caution: z.string().max(240).optional(),
     /** The browser asks about a site or a significant action: show the site and the control. */
     browser: BrowserPermission.optional(),
     /** The agent asks to read or fill something from Passwords (ADR 0025). */

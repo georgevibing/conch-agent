@@ -41,9 +41,9 @@ Every agent has a face. It's shown beside its name above every answer, in the pi
 
 - **One of Conch's faces.** Eighteen of them: a shell, a fox, an owl, a moon, a little robot and more.
 - **Upload a picture.** It opens in **Frame the picture**: drag it, zoom, then press **Use this picture**. PNG, JPEG and WebP all work.
-- **Create with AI.** Say **What it looks like** ("a fox in a raincoat") and press **Create**. It only shows when [OpenRouter](../providers/openrouter.md) is connected, which makes the picture.
+- **Create with AI.** Say **What it looks like** ("a fox in a raincoat") and press **Create**. It only shows when one of your providers can make pictures: your ChatGPT plan first, then an OpenAI or Gemini key, then [OpenRouter](../providers/openrouter.md) (see [Make and edit pictures](./pictures.md)).
 
-**Where the pictures go.** A picture you upload stays on your computer, framed and shrunk, without what a camera writes into it, like where and when it was taken. **Create with AI** sends OpenRouter only the words you wrote, never your chats or memories, and the picture it sends back is kept the same way. Faces are part of every [backup](../care/backups.md).
+**Where the pictures go.** A picture you upload stays on your computer, framed and shrunk, without what a camera writes into it, like where and when it was taken. **Create with AI** sends the service that makes it only the words you wrote, never your chats or memories, and the picture it sends back is kept the same way. Faces are part of every [backup](../care/backups.md).
 
 ## Who answers
 

@@ -89,7 +89,7 @@ export function BrowserApprovalItem({
       box={detail.box}
       name={name}
       decision={item.decision}
-      guard={item.taint}
+      guard={item.caution ?? item.taint}
       ownChrome={detail.ownChrome}
       busy={busy}
       onDecide={(decision) => {

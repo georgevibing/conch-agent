@@ -3,11 +3,20 @@ import {
   MessageList,
   SkillHoldEnded,
   SummaryDivider,
+  TurnMeter,
   type AgentFace,
   type Speaker,
 } from '@conch/nacre';
 import type { EngineId } from '@conch/protocol';
-import { memo, useMemo, useState, type ReactNode, type Ref } from 'react';
+import {
+  memo,
+  useCallback,
+  useMemo,
+  useState,
+  type ReactNode,
+  type Ref,
+  type RefCallback,
+} from 'react';
 
 import {
   isTurnStart,
@@ -16,6 +25,7 @@ import {
   type TranscriptItem,
 } from '../../live/reducer';
 import { familyOf, verbsFor, type ToolFamily } from './verbs';
+import { foldedAnswers, questionsByCall } from './approval';
 import {
   AssistantMessage,
   AssistantWords,
@@ -44,7 +54,11 @@ import { LearnedChatLine } from '../learning/LearnedChatLine';
 import { HeldItem, RoutedItem } from './OfflineBits';
 import { ArtifactChatCard } from '../artifacts/ArtifactChatCard';
 import { RoutineChatCard } from '../routines/RoutineChatCard';
-import { ChatFiles, turnChanges } from '../undo/ChatFiles';
+import { TurnChanges } from '../undo/TurnChanges';
+import { AwayCard, useAway, type AwayStory } from './Away';
+import { isImageTool } from './ImageToolItem';
+import { RunStories } from './Stories';
+import { headlineOf, stepViews, stepsShown, storiesOf, storyStatus, turnChanges } from './telling';
 import { TaskChatCard } from '../tasks/TaskChatCard';
 import { RoutineInstruction } from '../routines/RunBanner';
 import { NextReplies } from '../replies/NextReplies';
@@ -100,20 +114,71 @@ interface Block {
   browser?: Extract<TranscriptItem, { kind: 'browser' }>[];
   /** What it read from outside, one after another: said as one line. */
   taints?: Extract<TranscriptItem, { kind: 'taint' }>[];
+  /**
+   * Said while a run of steps went on, without ending it (ADR 0103): what
+   * it read from outside (one line after its stories), the files it changed
+   * (said at the turn's end, with Undo), thinking between the steps.
+   */
+  runTaints?: Extract<TranscriptItem, { kind: 'taint' }>[];
+  /** The latest thinking between its steps, which the wait after them shows while it streams. */
+  thought?: Extract<TranscriptItem, { kind: 'assistant' }>;
   item?: TranscriptItem;
 }
+
+/** A turn's calls and change sets. */
+interface Turn {
+  tools: Extract<TranscriptItem, { kind: 'tool' }>[];
+  files: Extract<TranscriptItem, { kind: 'files' }>[];
+}
+
+/** Each turn's calls and change sets, by the line where it ended; and the one still going. */
+function turnsOf(items: readonly TranscriptItem[]): { ended: Map<string, Turn>; current: Turn } {
+  const ended = new Map<string, Turn>();
+  let turn: Turn = { tools: [], files: [] };
+  for (const item of items) {
+    if (isTurnStart(item)) turn = { tools: [], files: [] };
+    else if (item.kind === 'tool' && !isImageTool(item.name)) turn.tools.push(item);
+    else if (item.kind === 'files') turn.files.push(item);
+    else if (item.kind === 'turn-end') {
+      ended.set(item.id, turn);
+      turn = { tools: [], files: [] };
+    }
+  }
+  return { ended, current: turn };
+}
+
+/** Assign a ref the transcript was given, whichever kind it is. */
+function assign<T>(ref: Ref<T> | undefined, value: T | null) {
+  if (typeof ref === 'function') ref(value);
+  else if (ref) ref.current = value as T;
+}
+
+/**
+ * What goes on beside a run of steps without ending it: the run is the steps
+ * between two of the reply's words, as the gateway cuts its stories.
+ */
+const besideRun = (item: TranscriptItem) =>
+  item.kind === 'files' ||
+  item.kind === 'taint' ||
+  // Thinking between steps (no words yet): the live line and the wait say it.
+  (item.kind === 'assistant' && !item.text);
 
 /** Said between browser steps, without ending the trail: an answered site question, a page read. */
 const aside = (block: Block) =>
   Boolean(block.taints) ||
   (block.item?.kind === 'permission' && Boolean(block.item.browser && block.item.decision));
 
-/** Consecutive tool calls are grouped into one tight stack; browser steps into one trail. */
+/**
+ * Consecutive tool calls are grouped into one run, told as stories (what it
+ * read and changed meanwhile goes with it); browser steps into one trail.
+ */
 function blocks(items: TranscriptItem[]): Block[] {
   const out: Block[] = [];
   let at = 0;
   let turn = '';
   let ends = 0;
+  // The run of steps still growing, if the last thing was one.
+  let run: Block | undefined;
   for (const item of items) {
     at = timeOf(item) ?? at;
     const last = out.at(-1);
@@ -121,13 +186,26 @@ function blocks(items: TranscriptItem[]): Block[] {
       turn = item.id;
       ends = 0;
     }
+    // A picture being made is drawn as the picture, on its own (ADR 0060).
+    if (item.kind === 'tool' && !isImageTool(item.name)) {
+      if (run?.tools) run.tools.push(item);
+      else out.push((run = { key: `tools-${item.id}`, tools: [item], at }));
+      continue;
+    }
+    if (run && besideRun(item)) {
+      if (item.kind === 'taint') (run.runTaints ??= []).push(item);
+      if (item.kind === 'assistant') run.thought = item;
+      continue;
+    }
+    run = undefined;
     if (item.kind === 'turn-end') {
       // Keyed by its turn, so "Stopped" drawn the moment Stop is pressed is the
       // same line the gateway's own end replaces, not a second one arriving.
       out.push({ key: `turn-end-${turn}-${ends++}`, item, at });
     } else if (item.kind === 'tool') {
-      if (last?.tools) last.tools.push(item);
-      else out.push({ key: `tools-${item.id}`, tools: [item], at });
+      out.push({ key: `tool-${item.id}`, item, at });
+    } else if (item.kind === 'files') {
+      // Said at the turn's end, with what else it changed.
     } else if (item.kind === 'taint') {
       // Read one after another (a task starting with what its chat had read, a
       // page and its download): one line, not a wall of them.
@@ -351,7 +429,7 @@ export const Transcript = memo(function Transcript({
   const lastErrorId = [...items].reverse().find((i) => i.kind === 'turn-end')?.id;
   // The first time a chat reads something from outside says what changes; the rest are brief.
   const firstTaint = items.find((i) => i.kind === 'taint')?.id;
-  const turns = turnChanges(items);
+  const turns = turnsOf(items);
   const turnStart = items.findLastIndex(isTurnStart);
   const position = new Map(items.map((item, n) => [item, n]));
   const started = items[turnStart];
@@ -402,7 +480,6 @@ export const Transcript = memo(function Transcript({
       : undefined;
   const lastUserId = items.findLast((i) => i.kind === 'user')?.id;
   const turnRunning = running || pending.length > 0;
-  const lastFilesId = items.findLast((i) => i.kind === 'files')?.id;
   // A plan folds to one line once its turn ends (ADR 0060).
   const ended = endedPlans(items);
   // `/clear` can be undone from its line until something new is sent.
@@ -415,6 +492,7 @@ export const Transcript = memo(function Transcript({
       last?.kind === 'memory' ||
       last?.kind === 'looked' ||
       last?.kind === 'files' ||
+      last?.kind === 'taint' ||
       last?.kind === 'skill' ||
       last?.kind === 'skill-ended' ||
       last?.kind === 'routine' ||
@@ -429,9 +507,115 @@ export const Transcript = memo(function Transcript({
       (last?.kind === 'question' && last.answer !== undefined) ||
       (last?.kind === 'assistant' && last.done));
 
-  const rows = replies(blocks(placeSuggestions(withoutPlanTools(items), turnRunning)));
+  // An answered question folds into the row of the call it was about (ADR 0028).
+  const shown = withoutPlanTools(items);
+  const folded = foldedAnswers(shown);
+  const asks = questionsByCall(shown);
+  const all = blocks(
+    placeSuggestions(
+      shown.filter((i) => !folded.has(i.id) || i.kind !== 'permission'),
+      turnRunning,
+    ),
+  );
+  const rows = replies(all);
   const lastRow = rows.at(-1);
   const live = (block: Block) => block.at >= openedAt - CLOCK_SLACK_MS;
+
+  // Each run of steps, told as stories (ADR 0103).
+  const told = new Map(
+    all.flatMap((b) => (b.tools ? [[b.key, storiesOf(b.tools, asks)] as const] : [])),
+  );
+  const stories = [...told.values()].flat();
+  // Thinking between steps, still streaming: the wait after them shows it.
+  const lastBlock = all.at(-1);
+  const thinking =
+    busy && !placeholder && lastBlock?.thought !== undefined && lastBlock.thought === last;
+  const lastTool = lastBlock?.tools?.at(-1);
+  // The provider's note since the last step ended, said in the wait (its own words, ADR 0103).
+  const note =
+    view.narration &&
+    (!lastTool || view.narration.at >= (stepEndedAt(lastTool) ?? lastTool.startedAt))
+      ? view.narration.text
+      : undefined;
+  const waitTrail = thinking && !lastBlock.thought?.done ? lastBlock.thought?.thinking : note;
+  // The turn's tally, while it runs: quiet, and only once there's something to count.
+  const doing = stepsShown(storiesOf(turns.current.tools));
+  const lastCost = items.findLast((i) => i.kind === 'turn-end' && i.cost);
+  const meter = turnRunning && doing >= 2 && (
+    <TurnMeter
+      running
+      startedAt={startedAt}
+      steps={doing}
+      // Money only where the chat is paid for by use: a plan's price is nobody's bill.
+      {...(lastCost?.kind === 'turn-end' &&
+        lastCost.cost?.billing === 'metered' &&
+        view.working?.costUsd !== undefined && { costUsd: view.working.costUsd })}
+    />
+  );
+  /** How many steps the turn that ended here showed. */
+  const stepsOf = (end: string) => {
+    const turn = turns.ended.get(end);
+    return turn ? stepsShown(storiesOf(turn.tools)) : 0;
+  };
+
+  // Stories opened by a press or a jump, kept here so a jump can open one.
+  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
+  const onOpen = useCallback(
+    (id: string, open: boolean) =>
+      setOpened((was) => {
+        if (was.has(id) === open) return was;
+        const next = new Set(was);
+        if (open) next.add(id);
+        else next.delete(id);
+        return next;
+      }),
+    [],
+  );
+  const [column, setColumn] = useState<HTMLDivElement | null>(null);
+  const holdColumn: RefCallback<HTMLDivElement> = useCallback(
+    (el) => {
+      setColumn(el);
+      assign(columnRef, el);
+    },
+    [columnRef],
+  );
+
+  // While you were away (ADR 0103): what finished with the tab hidden, or another chat open.
+  const callsById = new Map(all.flatMap((b) => b.tools ?? []).map((t) => [t.id, t]));
+  const awayStories: AwayStory[] = stories.map((story) => {
+    const words = headlineOf(story, view.titles?.[story.id]);
+    const status = storyStatus(story, stepViews(story, callsById, asks));
+    return {
+      id: story.id,
+      headline: words.headline,
+      ...(words.outcome && { outcome: words.outcome }),
+      family: story.family,
+      status,
+      finished: story.status !== 'running',
+    };
+  });
+  const { away, dismiss } = useAway({
+    conversationId,
+    stories: awayStories,
+    running: turnRunning,
+    ready: !opening,
+  });
+  // Something new sent: what happened while away is old news.
+  const [awayFor, setAwayFor] = useState(lastUserId);
+  if (awayFor !== lastUserId) {
+    setAwayFor(lastUserId);
+    if (away) dismiss();
+  }
+  const jump = (id: string) => {
+    dismiss();
+    onOpen(id, true);
+    const quoted = id.replace(/["\\]/g, '\\$&');
+    requestAnimationFrame(() =>
+      column
+        ?.querySelector(`[data-story="${quoted}"]`)
+        ?.scrollIntoView?.({ block: 'start', behavior: 'smooth' }),
+    );
+  };
   // What comes after the latest reply, once it's over: drawn as parts of it when it's a reply.
   const tail = {
     alsoTry: alsoTry && onSend && <OfferAlsoTryItem target={alsoTry} onSend={onSend} />,
@@ -482,6 +666,8 @@ export const Transcript = memo(function Transcript({
         }
         said={latest && turnRunning ? undefined : saidIn(reply)}
         ended={ended}
+        steps={ended && stepsOf(ended.id)}
+        movedOn={reply.parts.length > 0}
       />
     );
   };
@@ -489,11 +675,29 @@ export const Transcript = memo(function Transcript({
   const render = (block: Block) => (
     <>
       {block.tools && (
-        <div className={styles.tools}>
-          {block.tools.map((t) => (
-            <ToolItem key={t.id} item={t} />
-          ))}
+        <RunStories
+          tools={block.tools}
+          stories={told.get(block.key) ?? []}
+          titles={view.titles}
+          narration={view.narration}
+          asked={asks}
+          conversationId={conversationId}
+          opened={opened}
+          onOpen={onOpen}
+        />
+      )}
+      {block.runTaints && (
+        <div className={styles.runNote}>
+          <TaintItems
+            items={block.runTaints}
+            first={block.runTaints.some((t) => t.id === firstTaint)}
+            taskChat={Boolean(taskChat)}
+          />
         </div>
+      )}
+      {/* A picture being made, drawn as the picture. */}
+      {block.item?.kind === 'tool' && (
+        <ToolItem item={block.item} asked={asks.get(block.item.id)} />
       )}
       {block.item?.kind === 'user' &&
         (block.item.id === firstUserId ? (
@@ -571,12 +775,6 @@ export const Transcript = memo(function Transcript({
           taskChat={Boolean(taskChat)}
         />
       )}
-      {block.item?.kind === 'files' && (
-        <ChatFiles
-          item={block.item}
-          turn={turnRunning && block.item.id === lastFilesId ? undefined : turns.get(block.item.id)}
-        />
-      )}
       {block.item?.kind === 'memory' && <MemoryPill item={block.item} />}
       {block.item?.kind === 'learned' && (
         <LearnedChatLine items={block.item.items} decided={block.item.decided} />
@@ -651,6 +849,7 @@ export const Transcript = memo(function Transcript({
         />
       )}
       {block.item?.kind === 'conch-app-share' && <AppShareItem item={block.item} />}
+      {block.item?.kind === 'turn-end' && <ChangedIn turn={turns.ended.get(block.item.id)} />}
       {block.item?.kind === 'turn-end' && (
         <TurnEnd
           item={block.item}
@@ -677,15 +876,17 @@ export const Transcript = memo(function Transcript({
   let current: Speaker = before
     ? { name: before.name, avatar: agentOf?.(before.agentId)?.avatar }
     : speaker;
-  const drawn = rows.map((row) => {
+  const drawn: ReactNode[] = [];
+  for (const row of rows) {
     if ('parts' in row) {
       const continued = spoke;
       spoke = true;
-      return (
+      drawn.push(
         <Arrival key={row.key} live={live(openingOf(row))}>
           {renderReply(row, continued, current)}
-        </Arrival>
+        </Arrival>,
       );
+      continue;
     }
     const item = row.item;
     if (item?.kind === 'agent') {
@@ -693,50 +894,69 @@ export const Transcript = memo(function Transcript({
       current = { name: item.name, avatar: agentOf?.(item.agentId)?.avatar };
       spoke = false;
       // Who the chat is with from its start isn't news: only a change is drawn.
-      if (item.opening) return null;
-      return (
+      if (item.opening) continue;
+      drawn.push(
         <Arrival key={row.key} live={live(row)}>
           <AgentChange
             speaker={current}
             from={item.from?.name ?? previous.name}
             className={styles.summary}
           />
-        </Arrival>
+        </Arrival>,
       );
+      continue;
     }
     if (item?.kind === 'user' || (item && isContextLine(item))) spoke = false;
     else if (item?.kind !== 'turn-end' && item?.kind !== 'assistant') spoke = true;
-    return (
+    drawn.push(
       <Arrival key={row.key} live={live(row)} part={isPart(row)}>
         {render(row)}
-      </Arrival>
+      </Arrival>,
     );
-  });
+  }
 
   return (
     <MessageList
       className={styles.list}
       aria-label="Conversation"
-      overlay={overlay}
+      overlay={
+        <>
+          {overlay}
+          {away && <AwayCard away={away} column={column} onJump={jump} onDismiss={dismiss} />}
+        </>
+      }
       // What you just sent is what you want to see, wherever you'd scrolled to.
       follow={pending.at(-1)?.clientMessageId}
       loading={opening}
     >
-      <div ref={columnRef} className={styles.column}>
+      <div ref={holdColumn} className={styles.column}>
         {drawn}
         {placeholder && <AssistantPlaceholder speaker={current} wait={wait} continued={spoke} />}
         {!tailAttached && tail.alsoTry && <div className={styles.part}>{tail.alsoTry}</div>}
-        {between && (
+        {(between || thinking) && (
           <div className={`${styles.part} ${styles.between}`}>
-            <Waiting wait={afterTool} compact />
+            <Waiting wait={afterTool} trail={waitTrail} compact />
           </div>
         )}
+        {meter && <div className={`${styles.part} ${styles.meter}`}>{meter}</div>}
         {!tailAttached && tail.replies && <div className={styles.part}>{tail.replies}</div>}
         {!tailAttached && tail.footer && <div className={styles.part}>{tail.footer}</div>}
       </div>
     </MessageList>
   );
 });
+
+/** What a turn changed (ADR 0103), at its end, with Undo: nothing when it changed nothing. */
+function ChangedIn({ turn }: { turn: Turn | undefined }) {
+  if (!turn) return null;
+  const { groups, undone } = turnChanges(turn.tools, turn.files);
+  if (!groups.length) return null;
+  return (
+    <div className={styles.changed}>
+      <TurnChanges groups={groups} undone={undone} />
+    </div>
+  );
+}
 
 /** What the wait after a step talks about: the tool, page or memory that just went by. */
 function familyAfter(item: TranscriptItem | undefined): ToolFamily {

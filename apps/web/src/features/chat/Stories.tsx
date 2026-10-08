@@ -1,0 +1,197 @@
+import type { Story } from '@conch/protocol';
+import {
+  Diff,
+  StoryStack,
+  ToolCall,
+  type StoryExplanation,
+  type StoryStackItem,
+} from '@conch/nacre';
+import { memo, type ReactNode } from 'react';
+
+import type { Narration, StoryHeadline, TranscriptItem } from '../../live/reducer';
+import { useToolLabel } from '../integrations/ChatBits';
+import { rowState, withAnswer } from './approval';
+import { explainStep } from './explain';
+import { headlineOf, liveOf, quietFollowers, standsAlone, stepViews, storyStatus } from './telling';
+import { ToolFound } from './ToolFound';
+import { formatInput, managedProcessSummary, toolDiff, toolSummary } from './tools';
+import styles from './Transcript.module.css';
+import { useArrivedLive } from './TranscriptItems';
+
+type Tool = Extract<TranscriptItem, { kind: 'tool' }>;
+type Permission = Extract<TranscriptItem, { kind: 'permission' }>;
+
+/**
+ * The exact call behind a step (ADR 0103's third layer): its tool's own name
+ * (an app's logo and name), the command or file, how long, then its input,
+ * output and diff, already open. What it found is drawn by the step, not here.
+ */
+const RawCall = memo(function RawCall({
+  item: call,
+  asked,
+  open = true,
+}: {
+  item: Tool;
+  asked?: Permission;
+  open?: boolean;
+}) {
+  const item = withAnswer(call, asked);
+  const label = useToolLabel()(item.name, {
+    running: item.status === 'running' || item.status === 'pending',
+    input: item.input,
+    view: item.view,
+  });
+  const diff = toolDiff(item.name, item.input);
+  const row = rowState(item, Boolean(asked && !asked.decision));
+  return (
+    <ToolCall
+      defaultOpen={open}
+      name={label ? label.title : item.name}
+      leading={label?.leading}
+      summary={
+        managedProcessSummary(item.name, item.output) ??
+        label?.summary ??
+        toolSummary(item.name, item.input)
+      }
+      status={row.status}
+      outcome={row.outcome}
+      note={row.note}
+      duration={item.durationMs}
+      input={diff ? undefined : formatInput(item.input)}
+      inputLanguage="json"
+      output={item.output || undefined}
+    >
+      {diff && <Diff diff={diff} header={false} lineNumbers={false} />}
+    </ToolCall>
+  );
+});
+
+export interface RunStoriesProps {
+  /** The run's calls, in order. */
+  tools: Tool[];
+  /** Them, told as stories (`storiesOf(tools)`). */
+  stories: Story[];
+  titles?: Readonly<Record<string, StoryHeadline>>;
+  narration?: Narration;
+  /** Each call's question, if it asked one. */
+  asked: ReadonlyMap<string, Permission>;
+  conversationId?: string;
+  /** Stories opened (by a jump from the away digest, or a press). */
+  opened: ReadonlySet<string>;
+  onOpen: (storyId: string, open: boolean) => void;
+}
+
+/**
+ * One run of the assistant's steps, told as stories (ADR 0103): a line each,
+ * the steps in plain words beneath, the exact calls beneath those. What a
+ * step found that's the answer itself (an agenda, emails) stays in sight
+ * under its story; the rest is drawn by its step.
+ */
+export function RunStories({
+  tools,
+  stories,
+  titles,
+  narration,
+  asked,
+  conversationId,
+  opened,
+  onOpen,
+}: RunStoriesProps) {
+  const arriving = useArrivedLive();
+  const byId = new Map(tools.map((t) => [t.id, t]));
+  const quiet = new Map<string, string[]>();
+  for (const story of stories)
+    for (const [owner, ids] of quietFollowers(story)) quiet.set(owner, ids);
+
+  const renderRaw = (stepId: string) => {
+    const tool = byId.get(stepId);
+    if (!tool) return undefined;
+    const after = (quiet.get(stepId) ?? []).flatMap((id) => byId.get(id) ?? []);
+    return (
+      <div className={styles.raw}>
+        <RawCall item={tool} asked={asked.get(stepId)} />
+        {after.map((t) => (
+          <RawCall key={t.id} item={t} asked={asked.get(t.id)} open={false} />
+        ))}
+      </div>
+    );
+  };
+  const renderFound = (stepId: string) => {
+    const view = byId.get(stepId)?.view;
+    return view && !standsAlone(view) ? <ToolFound view={view} /> : undefined;
+  };
+  const onExplain = conversationId
+    ? (stepId: string): Promise<StoryExplanation> => explainStep(conversationId, stepId)
+    : undefined;
+
+  const item = (story: Story): StoryStackItem => {
+    const words = headlineOf(story, titles?.[story.id]);
+    const live = liveOf(story, narration, asked, byId);
+    const steps = stepViews(story, byId, asked);
+    const status = storyStatus(story, steps);
+    // Not run because you said no: that's what it came to.
+    const outcome =
+      status !== story.status && !titles?.[story.id]
+        ? steps.find((s) => s.status === 'declined')?.outcome
+        : words.outcome;
+    return {
+      id: story.id,
+      // Nothing in it ran: its words say so already ("Didn’t run the tests").
+      headline: words.headline,
+      ...(outcome && { outcome }),
+      headlineSource: words.source,
+      family: story.family,
+      status,
+      steps,
+      // A site once, however many of its pages were read.
+      chips: story.chips.filter(
+        (c, i, all) =>
+          c.kind !== 'site' || all.findIndex((o) => o.kind === 'site' && o.label === c.label) === i,
+      ),
+      repeats: story.repeats,
+      ...(story.stuck && { stuck: story.stuck }),
+      startedAt: story.startedAt,
+      ...(story.durationMs !== undefined && { durationMs: story.durationMs }),
+      ...(live && { live: live.text, liveSource: live.source }),
+      open: opened.has(story.id),
+      onOpenChange: (open: boolean) => onOpen(story.id, open),
+      // Where a jump lands (the away digest, find).
+      ...({ 'data-story': story.id } as object),
+    };
+  };
+
+  // A story whose step found the answer ends its stack; the answer follows it.
+  const parts: ReactNode[] = [];
+  let stack: Story[] = [];
+  const flush = () => {
+    if (!stack.length) return;
+    parts.push(
+      <StoryStack
+        key={`stack-${stack[0]?.id}`}
+        stories={stack.map(item)}
+        renderRaw={renderRaw}
+        renderFound={renderFound}
+        onExplain={onExplain}
+        arriving={arriving}
+      />,
+    );
+    stack = [];
+  };
+  for (const story of stories) {
+    stack.push(story);
+    const found = story.steps.flatMap((s) => {
+      const view = byId.get(s.id)?.view;
+      return standsAlone(view) ? [{ id: s.id, view }] : [];
+    });
+    if (!found.length) continue;
+    flush();
+    for (const { id, view } of found)
+      parts.push(
+        <div key={`found-${id}`} className={styles.found}>
+          <ToolFound view={view} />
+        </div>,
+      );
+  }
+  flush();
+  return <div className={styles.run}>{parts}</div>;
+}

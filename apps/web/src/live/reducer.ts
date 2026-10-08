@@ -1,4 +1,4 @@
-import { foldHolds } from '@conch/protocol';
+import { approvalOf, foldHolds } from '@conch/protocol';
 import type {
   AgentId,
   Memory,
@@ -26,6 +26,8 @@ import type {
   OfferOutcome,
   TaskKind,
   TaskStatus,
+  ToolProgress,
+  ToolApproval,
   ToolStatus,
   ToolView,
   TurnOptions,
@@ -40,6 +42,8 @@ import type {
   LearnedItem,
   MemoryHold,
   PermissionMode,
+  NarrationSource,
+  ToolLabel,
 } from '@conch/protocol';
 
 import { latestReplies, type LatestReplies } from '../features/replies/latest';
@@ -95,12 +99,33 @@ export type TranscriptItem =
       startedAt: number;
       /** What it found, drawn under its row (ADR 0060). */
       view?: ToolView;
+      /**
+       * It in plain words (ADR 0103), as the gateway wrote it: `doing` words
+       * while it runs, then the finished words with what it found. A chat
+       * logged before labels has none; the chat works them out (`stepFromTool`).
+       */
+      label?: ToolLabel;
+      /** It asked first, or a rule stopped it: how that went (from the decision, never its words). */
+      approval?: ToolApproval;
+      /**
+       * How far it has come while it runs (a picture being made): the latest
+       * word, and when the first came (the request went out, past any approval).
+       */
+      progress?: Omit<ToolProgress, 'toolName' | 'toolUseId'> & { at: number; since: number };
     }
   | {
       kind: 'permission';
       id: string;
       toolName: string;
+      /** The call it's about, when it has a row: the answer folds into that row. */
+      toolUseId?: string;
       summary: string;
+      /** The card's short title, and its quiet line of facts (ADR 0028). */
+      title?: string;
+      detail?: string;
+      cost?: string;
+      /** Why to look twice, short, each place named once. */
+      caution?: string;
       input: unknown;
       decision?: 'allow' | 'allow-always' | 'deny' | 'expired';
       /** The browser asking about a site or a significant action. */
@@ -436,6 +461,29 @@ export interface ConversationView {
   clears?: readonly number[];
   /** In plan mode: the mode it had before (`null`: it followed your default), for `/plan off`. */
   beforePlan?: PermissionMode | null;
+  /**
+   * What the provider last said it's doing, for the running story's live line
+   * (ADR 0103). Gone when the turn ends or a new message starts one.
+   */
+  narration?: Narration;
+  /** Story headlines written once a story ended (ADR 0103), by the story's first tool call. */
+  titles?: Readonly<Record<string, StoryHeadline>>;
+}
+
+/** The provider's latest note for the person watching (ADR 0103). */
+export interface Narration {
+  text: string;
+  /** The tool call it's about, when it's about one. */
+  toolUseId?: string;
+  source: NarrationSource;
+  at: number;
+}
+
+/** A story's headline from `story.titled`. */
+export interface StoryHeadline {
+  headline: string;
+  outcome?: string;
+  source: NarrationSource;
 }
 
 export const emptyView: ConversationView = { lastSeq: -1, items: [], status: 'idle' };
@@ -543,6 +591,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         ...base,
         turnStartedAt: event.at,
         working: undefined,
+        narration: undefined,
         items: [
           // A message waiting at a spending limit goes with this one, or is let go (ADR 0079).
           ...settleCapped(withoutPending, 'moved-on'),
@@ -614,6 +663,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             input: event.input,
             status: 'running',
             startedAt: event.at,
+            ...(event.label && { label: event.label }),
           },
         ],
       };
@@ -624,8 +674,46 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         output: event.output,
         durationMs: event.durationMs,
         ...(event.view && { view: event.view }),
+        // The finished words (with what it found) replace the running ones; without
+        // them, the chat works them out from the result rather than keep `doing` words.
+        label: event.label,
+        ...(event.approval && { approval: event.approval }),
       }));
       return updated ? { ...base, items: updated } : base;
+    }
+    case 'tool.progress': {
+      // Without an id it's the newest unfinished call of that tool (one at a time per chat).
+      const bare = (name: string) => name.replace(/^mcp__[^_]+__/, '');
+      const target = event.toolUseId
+        ? items.findLastIndex((i) => i.kind === 'tool' && i.id === event.toolUseId)
+        : items.findLastIndex(
+            (i) =>
+              i.kind === 'tool' &&
+              (i.status === 'running' || i.status === 'pending') &&
+              bare(i.name) === bare(event.toolName),
+          );
+      const item = items[target];
+      if (item?.kind !== 'tool' || (item.status !== 'running' && item.status !== 'pending'))
+        return base;
+      const { at, progress, stage, estimated, preview, by } = event;
+      const word = { progress, stage, estimated, preview, by };
+      const next = items.slice();
+      next[target] = {
+        ...item,
+        progress: {
+          ...word,
+          // Never going back, whatever order a replay brings.
+          ...(word.progress !== undefined && {
+            progress: Math.max(word.progress, item.progress?.progress ?? 0),
+          }),
+          // The latest rough picture wins; a word without one keeps the last.
+          preview: word.preview ?? item.progress?.preview,
+          by: word.by ?? item.progress?.by,
+          at,
+          since: item.progress?.since ?? at,
+        },
+      };
+      return { ...base, items: next };
     }
     case 'permission.requested':
       return {
@@ -636,7 +724,12 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             kind: 'permission',
             id: event.permissionId,
             toolName: event.toolName,
+            ...(event.toolUseId && { toolUseId: event.toolUseId }),
             summary: event.summary,
+            ...(event.title && { title: event.title }),
+            ...(event.detail && { detail: event.detail }),
+            ...(event.cost && { cost: event.cost }),
+            ...(event.caution && { caution: event.caution }),
             input: event.input,
             browser: event.browser,
             ...(event.vault && { vault: event.vault }),
@@ -696,11 +789,20 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
       };
     }
     case 'permission.resolved': {
-      const updated = updateItem(items, 'permission', event.permissionId, (item) => ({
-        ...item,
-        decision: event.decision,
-      }));
-      return updated ? { ...base, items: updated } : base;
+      let about: string | undefined;
+      const updated = updateItem(items, 'permission', event.permissionId, (item) => {
+        about = item.toolUseId;
+        return { ...item, decision: event.decision };
+      });
+      if (!updated) return base;
+      // The answer belongs to the call it was about: its row says so from now on.
+      const call =
+        about &&
+        updateItem(updated, 'tool', about, (item) => ({
+          ...item,
+          approval: approvalOf(event.decision),
+        }));
+      return { ...base, items: call || updated };
     }
     case 'memory.saved': {
       const item = {
@@ -928,6 +1030,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         ...base,
         turnStartedAt: undefined,
         working: undefined,
+        narration: undefined,
         context: event.context ?? view.context,
         items: [
           ...closed,
@@ -982,10 +1085,30 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
           },
         ],
       };
-    // Told by the activity layer (ADR 0103); folded in by the stories work.
+    // What the assistant is doing, in words (ADR 0103): the newest note stands.
     case 'narration':
+      return {
+        ...base,
+        narration: {
+          text: event.text,
+          ...(event.toolUseId && { toolUseId: event.toolUseId }),
+          source: event.source,
+          at: event.at,
+        },
+      };
+    // A story's headline, often after its turn ended: kept for as long as the chat is.
     case 'story.titled':
-      return base;
+      return {
+        ...base,
+        titles: {
+          ...view.titles,
+          [event.storyId]: {
+            headline: event.headline,
+            ...(event.outcome && { outcome: event.outcome }),
+            source: event.source,
+          },
+        },
+      };
     case 'title':
       return { ...base, title: event.title };
     case 'notice':
@@ -1352,6 +1475,7 @@ export function stoppedView(
     status: 'idle',
     turnStartedAt: undefined,
     notice: undefined,
+    narration: undefined,
     items: ended
       ? items
       : [...items, { kind: 'turn-end', id: 'end-stopping', outcome: 'interrupted' }],

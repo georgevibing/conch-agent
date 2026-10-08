@@ -1,0 +1,536 @@
+@layer nacre.components {
+  /*
+   * A picture being made, then the picture (see ImageMaking.tsx).
+   *
+   * Knobs:
+   *   --im-ratio      width ÷ height of the frame (set from the aspect)
+   *   --im-max-w      widest the frame gets (a chat card)
+   *   --im-max-h      tallest it gets, so a portrait doesn't fill the screen
+   *   --im-drift      how long the slowest light takes to wander
+   *   --im-sweep      how often the sheen crosses
+   *   --im-develop    how long the finished picture takes to come out of the light
+   */
+  .root {
+    --im-ratio: 1;
+    --im-max-w: var(--nc-chat-card-width);
+    --im-max-h: min(28rem, 64svh);
+    --im-radius: var(--nc-chat-card-radius);
+    --im-drift: 26s;
+    --im-sweep: 3.6s;
+    --im-develop: 1.1s;
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    margin: 0;
+    inline-size: min(100%, var(--im-max-w), calc(var(--im-max-h) * var(--im-ratio)));
+    min-inline-size: min(100%, 15rem);
+  }
+
+  /* ── The frame ──────────────────────────────────────────────────────── */
+  .frame {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    aspect-ratio: var(--im-ratio);
+    inline-size: 100%;
+    border-radius: var(--im-radius);
+    corner-shape: var(--nc-corner-shape);
+    background:
+      radial-gradient(120% 90% at 20% 10%, var(--nc-surface-hi), transparent 70%),
+      linear-gradient(160deg, var(--nc-surface-sunken), var(--nc-gray-3));
+    box-shadow: var(--nc-chat-card-shadow);
+  }
+
+  .frame > * {
+    position: absolute;
+  }
+
+  /* Slow pearl light: a turning film and four soft shapes wandering under it. */
+  .nacre {
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    opacity: calc(0.55 + var(--nc-lustre) * 0.45);
+    transition: opacity var(--nc-duration-slower) var(--nc-ease-out);
+  }
+
+  .film {
+    position: absolute;
+    inset: -60%;
+    background: conic-gradient(from 30deg in oklab, var(--nc-pearl-spectrum));
+    opacity: 0.28;
+    filter: blur(32px);
+    mix-blend-mode: soft-light;
+    will-change: transform;
+    animation: nc-spin calc(var(--im-drift) * 1.6) linear infinite;
+  }
+
+  .blob {
+    position: absolute;
+    inline-size: 78%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: radial-gradient(
+      closest-side,
+      var(--im-hue) 0%,
+      color-mix(in oklab, var(--im-hue) 45%, transparent) 46%,
+      transparent 100%
+    );
+    opacity: 0.9;
+    will-change: transform;
+    animation: var(--im-path) var(--im-time) var(--nc-ease-in-out) infinite alternate;
+  }
+
+  .blob[data-n='1'] {
+    --im-hue: var(--nc-pearl-1);
+    --im-path: wander-1;
+    --im-time: calc(var(--im-drift) * 0.7);
+    inset-block-start: -22%;
+    inset-inline-start: -18%;
+  }
+  .blob[data-n='2'] {
+    --im-hue: var(--nc-pearl-2);
+    --im-path: wander-2;
+    --im-time: calc(var(--im-drift) * 0.86);
+    inset-block-start: -10%;
+    inset-inline-end: -26%;
+  }
+  .blob[data-n='3'] {
+    --im-hue: var(--nc-pearl-3);
+    --im-path: wander-3;
+    --im-time: var(--im-drift);
+    inset-block-end: -30%;
+    inset-inline-start: 8%;
+  }
+  .blob[data-n='4'] {
+    --im-hue: var(--nc-pearl-5);
+    --im-path: wander-4;
+    --im-time: calc(var(--im-drift) * 0.62);
+    inline-size: 56%;
+    inset-block-end: -8%;
+    inset-inline-end: -10%;
+  }
+
+  @keyframes wander-1 {
+    to {
+      transform: translate(34%, 26%) rotate(70deg) scale(1.18, 0.86);
+    }
+  }
+  @keyframes wander-2 {
+    to {
+      transform: translate(-30%, 30%) rotate(-50deg) scale(0.84, 1.16);
+    }
+  }
+  @keyframes wander-3 {
+    to {
+      transform: translate(22%, -34%) rotate(40deg) scale(1.12);
+    }
+  }
+  @keyframes wander-4 {
+    to {
+      transform: translate(-44%, -30%) rotate(-80deg) scale(1.24, 0.9);
+    }
+  }
+
+  /* A partial picture on the way: soft, as if seen through the shell. */
+  .preview {
+    inset: 0;
+    z-index: 1;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+    filter: blur(14px) saturate(1.15);
+    transform: scale(1.08);
+    opacity: 0;
+    transition: opacity var(--nc-duration-slower) var(--nc-ease-out);
+  }
+
+  .preview[data-loaded] {
+    opacity: 0.92;
+  }
+
+  /* A band of pearl light crossing every few seconds, then resting. */
+  .sheen {
+    inset: 0;
+    z-index: 2;
+    background: linear-gradient(
+      105deg in oklab,
+      transparent 34%,
+      color-mix(in oklab, var(--nc-pearl-2) 70%, transparent) 44%,
+      color-mix(in oklab, var(--nc-surface-hi) 80%, transparent) 50%,
+      color-mix(in oklab, var(--nc-pearl-4) 70%, transparent) 56%,
+      transparent 66%
+    );
+    background-size: 260% 100%;
+    background-repeat: no-repeat;
+    background-position: 160% 0;
+    mix-blend-mode: soft-light;
+    opacity: calc(0.9 * var(--nc-lustre));
+    animation: sweep var(--im-sweep) var(--nc-ease-in-out) infinite;
+  }
+
+  @keyframes sweep {
+    0% {
+      background-position: 160% 0;
+    }
+    62%,
+    100% {
+      background-position: -60% 0;
+    }
+  }
+
+  /* Fine grain, so the light reads as a surface rather than a gradient. */
+  .grain {
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+    mix-blend-mode: overlay;
+    opacity: 0.3;
+    transition: opacity var(--nc-duration-slower) var(--nc-ease-out);
+  }
+
+  .root[data-shown] .grain {
+    opacity: 0;
+  }
+
+  /* ── How far it got ─────────────────────────────────────────────────── */
+  .meter {
+    inset-block-end: var(--nc-space-2-5);
+    inset-inline-start: var(--nc-space-2-5);
+    z-index: 6;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    max-inline-size: calc(100% - var(--nc-space-5));
+    padding: var(--nc-space-1) var(--nc-space-2-5) var(--nc-space-1) var(--nc-space-1-5);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface-overlay);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-1);
+    font-size: var(--nc-text-xs);
+    line-height: 1.25rem;
+    color: var(--nc-text);
+    white-space: nowrap;
+  }
+
+  .meterValue {
+    font-weight: var(--nc-weight-semibold);
+    font-variant-numeric: tabular-nums;
+    min-inline-size: 3ch;
+  }
+
+  .meterWords {
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .meterLeft {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--nc-text-muted);
+  }
+
+  .ring {
+    flex-shrink: 0;
+    inline-size: 1rem;
+    block-size: 1rem;
+    transform: rotate(-90deg);
+  }
+
+  .ring circle {
+    fill: none;
+    stroke-width: 2.5;
+  }
+
+  .ringTrack {
+    stroke: var(--nc-gray-5);
+  }
+
+  .ringFill {
+    stroke: var(--nc-accent-9);
+    stroke-linecap: round;
+    stroke-dasharray: var(--im-ring) 100;
+    /* Between the server's words, the ring keeps moving (they come about twice a second). */
+    transition: stroke-dasharray var(--nc-duration-slower) linear;
+  }
+
+  .ring[data-indeterminate] {
+    animation: nc-spin 1.4s linear infinite;
+  }
+
+  /* ── The picture ────────────────────────────────────────────────────── */
+  .open {
+    inset: 0;
+    z-index: 4;
+    display: block;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: zoom-in;
+    border-radius: inherit;
+  }
+
+  .open:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+
+  .final {
+    inset: 0;
+    z-index: 4;
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+    opacity: 0;
+  }
+
+  .open > .final {
+    position: absolute;
+  }
+
+  .root[data-shown] .final {
+    opacity: 1;
+  }
+
+  /* It develops: out of the light, from soft to sharp, opening from the middle. */
+  .root[data-develop] .final {
+    animation: develop var(--im-develop) var(--nc-ease-out) both;
+  }
+
+  @keyframes develop {
+    from {
+      opacity: 0;
+      filter: blur(18px) saturate(1.35) brightness(1.06);
+      transform: scale(1.04);
+      mask-size: 0% 0%;
+    }
+    45% {
+      opacity: 1;
+    }
+    to {
+      opacity: 1;
+      filter: none;
+      transform: none;
+      mask-size: 300% 300%;
+    }
+  }
+
+  .root[data-develop] .final {
+    mask-image: radial-gradient(closest-side, #000 72%, transparent 100%);
+    mask-repeat: no-repeat;
+    mask-position: 50% 50%;
+    mask-size: 300% 300%;
+  }
+
+  /* One turn of light across it as it lands. */
+  .glint {
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+    background: linear-gradient(
+      100deg in oklab,
+      transparent 30%,
+      color-mix(in oklab, var(--nc-pearl-3) 60%, transparent) 46%,
+      color-mix(in oklab, var(--nc-pearl-5) 60%, transparent) 56%,
+      transparent 70%
+    );
+    background-size: 260% 100%;
+    background-repeat: no-repeat;
+    mix-blend-mode: soft-light;
+    opacity: 0;
+    animation: land calc(var(--im-develop) * 1.2) var(--nc-ease-out) calc(var(--im-develop) * 0.35)
+      both;
+  }
+
+  @keyframes land {
+    from {
+      background-position: 160% 0;
+      opacity: var(--nc-lustre);
+    }
+    to {
+      background-position: -60% 0;
+      opacity: 0;
+    }
+  }
+
+  .broken {
+    inset: 0;
+    z-index: 6;
+    display: grid;
+    place-items: center;
+    margin: 0;
+    padding: var(--nc-space-4);
+    text-align: center;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text-muted);
+  }
+
+  /* ── Under it ───────────────────────────────────────────────────────── */
+  .caption {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+    min-block-size: var(--nc-control-sm);
+    padding-inline-start: var(--nc-space-1);
+  }
+
+  .title {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .root[data-state='making'] .title {
+    color: var(--nc-text-muted);
+  }
+
+  .by {
+    flex-shrink: 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: var(--nc-space-0-5);
+    margin-inline-end: calc(-1 * var(--nc-space-1));
+  }
+
+  /* ── Details ────────────────────────────────────────────────────────── */
+  .details {
+    padding-inline-start: var(--nc-space-1);
+  }
+
+  .detailsTrigger {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+  }
+
+  .detailList {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: var(--nc-space-1) var(--nc-space-3);
+    margin: var(--nc-space-2) 0 0;
+    font-size: var(--nc-text-xs);
+  }
+
+  .detail {
+    display: contents;
+  }
+
+  .detail dt {
+    color: var(--nc-text-muted);
+  }
+
+  .detail dd {
+    margin: 0;
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+    color: var(--nc-text);
+  }
+
+  .prompt {
+    white-space: pre-wrap;
+    max-block-size: 12rem;
+    overflow: auto;
+  }
+
+  /* ── Not made: a calm line ──────────────────────────────────────────── */
+  .note {
+    inline-size: min(100%, var(--im-max-w));
+    gap: var(--nc-space-1);
+  }
+
+  .noteLine {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+    font-size: var(--nc-chat-note-size);
+    color: var(--nc-text-muted);
+  }
+
+  .noteIcon {
+    flex-shrink: 0;
+    inline-size: var(--nc-chat-note-icon);
+    block-size: var(--nc-chat-note-icon);
+    margin-block-start: 0.2em;
+  }
+
+  .noteText {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .noteWords {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    color: var(--nc-text);
+  }
+
+  .noteTitle {
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--nc-text-subtle);
+  }
+
+  .note .details {
+    padding-inline-start: calc(var(--nc-chat-note-icon) + var(--nc-space-2));
+  }
+
+  /* Asked first: the light holds where it is until you answer. */
+  .root[data-waiting] :is(.film, .blob) {
+    animation-play-state: paused;
+  }
+
+  .root[data-waiting] .sheen {
+    display: none;
+  }
+
+  .meter[data-waiting] {
+    padding-inline-start: var(--nc-space-2-5);
+    color: var(--nc-text-muted);
+  }
+
+  /* ── Still ─────────────────────────────────────────────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    .film,
+    .blob,
+    .sheen,
+    .glint,
+    .ring[data-indeterminate],
+    .root[data-develop] .final {
+      animation: none;
+    }
+    .sheen,
+    .glint {
+      display: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) :is(.film, .blob, .sheen, .glint, .ring, .final) {
+    animation: none;
+  }
+
+  :global([data-nacre-motion='reduced']) :is(.sheen, .glint) {
+    display: none;
+  }
+}

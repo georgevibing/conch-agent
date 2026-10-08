@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { expectAccessible, renderNacre } from '../../test/render';
-import { codingRun, files, readSteps, shirts, shopSteps, testSteps } from './fixtures';
+import { codingRun, files, readSteps, shipSteps, shirts, shopSteps, testSteps } from './fixtures';
 import { storyDuration } from './format';
 import { Story, type StoryProps } from './Story';
 import { StoryStack } from './StoryStack';
@@ -154,6 +154,26 @@ describe('Story', () => {
     expect(hidden).toContain('Ran 2 git commands');
   });
 
+  it('moves only the words that changed, and is done with the old ones within 360ms', () => {
+    vi.useFakeTimers();
+    try {
+      const { rerender, container } = renderNacre(
+        <Story {...tests} headline="Read 3 files" headlineSource="rule" arriving />,
+      );
+      rerender(<Story {...tests} headline="Read 4 files" headlineSource="rule" arriving />);
+      const fresh = [...container.querySelectorAll('[data-fresh]')].map((el) => el.textContent);
+      // "Read" holds still; the rest rises in, in the line's own box.
+      expect(fresh).toEqual(['4', 'files']);
+      expect(container.querySelector('[data-same]')?.textContent).toBe('Read');
+      act(() => vi.advanceTimersByTime(360));
+      expect(container.querySelector('[aria-hidden] [data-same]')).toBeNull();
+      expect(container.querySelector('[data-fresh]')).toBeNull();
+      expect(container.querySelector('[class*="morphOut"]')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('shows the live line while running, and the stuck note in its place', () => {
     const { rerender } = renderNacre(
       <Story {...tests} status="running" live="Running 241 test files" />,
@@ -182,6 +202,15 @@ describe('Story', () => {
       'https://www.amazon.de/dp/B0C1OXFORD',
     ]);
     for (const a of links) expect(a).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('marks a line ×N only when it’s one thing done again', () => {
+    const { container, rerender } = renderNacre(
+      <Story {...tests} steps={tests.steps?.slice(0, 1)} repeats={1} />,
+    );
+    expect(container.textContent).toContain('×2');
+    rerender(<Story {...tests} steps={readSteps} repeats={1} />);
+    expect(container.textContent).not.toContain('×2');
   });
 
   it('folds repeats and says so', () => {
@@ -245,5 +274,31 @@ describe('StoryStack', () => {
     const [first] = screen.getAllByRole('button', { name: 'Why?' });
     if (first) await user.click(first);
     expect(onExplain).toHaveBeenCalledWith('toolu_search');
+  });
+
+  it('says a step you said no to was not run, neither done nor failed', async () => {
+    const push = shipSteps[1] as (typeof shipSteps)[number];
+    const { container } = renderNacre(
+      <Story
+        headline="Pushed to main"
+        outcome="You said no"
+        family="ship"
+        status="declined"
+        steps={[{ ...push, status: 'declined', outcome: 'You said no' }]}
+        defaultOpen
+      />,
+    );
+    const row = screen.getByRole('button', { name: /^Pushed to main/ });
+    expect(row).toHaveAccessibleName(expect.stringContaining('not run') as unknown as string);
+    expect(row).not.toHaveAccessibleName(
+      expect.stringContaining('didn’t work') as unknown as string,
+    );
+    const step = container.querySelector('li[data-status="declined"]');
+    expect(step).not.toBeNull();
+    expect(step).not.toHaveAttribute('data-failed');
+    expect(step).toHaveTextContent('You said no');
+    expect(container.querySelector('[data-status="failed"]')).toBeNull();
+    expect(container.querySelector('[data-status="done"]')).toBeNull();
+    await expectAccessible(container);
   });
 });

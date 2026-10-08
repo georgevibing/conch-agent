@@ -1,207 +1,168 @@
 import { z } from 'zod';
-import type { Usage } from '@conch/protocol';
+import type { EngineId, ToolProgress, Usage } from '@conch/protocol';
 
 import { sniff } from '../attachments/sniff';
 import type { AttachmentStore } from '../attachments/store';
 import type { ToolContext } from '../conversations/manager';
 import { trustsFully } from '../engines/trust';
 import type { FileAccess } from '../engines/host';
-import type { HostTool, HostToolResult, ToolImage } from '../engines/types';
+import type {
+  HostTool,
+  HostToolResult,
+  Picture,
+  PictureMaker,
+  ToolImage,
+  TurnImage,
+} from '../engines/types';
 import { fileBytes } from '../files/read';
-
-const BASE = 'https://openrouter.ai/api/v1';
-const Models = z.object({
-  data: z
-    .array(
-      z.object({
-        id: z.string().max(200),
-        name: z.string().max(200).optional(),
-        architecture: z.object({
-          input_modalities: z.array(z.string()),
-          output_modalities: z.array(z.string()),
-        }),
-        supported_parameters: z.record(z.string(), z.unknown()).optional(),
-      }),
-    )
-    .max(1000),
-});
-const Generated = z.object({
-  data: z
-    .array(z.object({ b64_json: z.string().max(42_000_000), media_type: z.string().optional() }))
-    .min(1)
-    .max(10),
-  usage: z
-    .object({
-      prompt_tokens: z.number().int().nonnegative().optional(),
-      completion_tokens: z.number().int().nonnegative().optional(),
-      cost: z.number().nonnegative().optional(),
-    })
-    .optional(),
-});
-const MESSAGE =
-  'Image creation uses your OpenRouter API key and is billed separately from your chat model.';
-
-/** Limit decoded response bytes too; Content-Length alone does not bound streamed or compressed JSON. */
-async function json(response: Response, max: number) {
-  if (!response.body) throw new Error('The image service sent an empty response.');
-  const reader = response.body.getReader();
-  let length = 0;
-  const chunks: Uint8Array[] = [];
-  try {
-    for (;;) {
-      const part = await reader.read();
-      if (part.done) break;
-      length += part.value.length;
-      if (length > max)
-        throw new Error('The image service returned more than Conch can safely read.');
-      chunks.push(part.value);
-    }
-  } finally {
-    await reader.cancel().catch(() => {});
-    reader.releaseLock();
-  }
-  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown;
-}
+import { paidPictureAsk } from './ask';
+import {
+  NotMade,
+  Unfit,
+  geminiBackend,
+  openAiBackend,
+  openRouterBackend,
+  planBackend,
+  type ImageBackend,
+  type ImageKeyId,
+  type Made,
+  type MakeInput,
+} from './backends';
+import { PictureProgress } from './progress';
 
 export interface ImageDeps {
-  key: (signal: AbortSignal) => Promise<string | undefined>;
-  hasKey: () => Promise<boolean>;
+  key: (id: ImageKeyId, signal: AbortSignal) => Promise<string | undefined>;
+  hasKey: (id: ImageKeyId) => Promise<boolean>;
+  /**
+   * Connected providers that make pictures themselves (Codex on a ChatGPT
+   * plan), the default first. Asked before any key.
+   */
+  makers?: () => Promise<{ engine: EngineId; maker: PictureMaker }[]>;
   overBudget: () => Promise<boolean>;
-  spend: (usage: Usage) => Promise<unknown>;
+  /** What a paid picture cost, recorded against the provider that made it. */
+  spend: (usage: Usage, provider: EngineId) => Promise<unknown>;
   store: AttachmentStore;
   fetch?: typeof fetch;
+  /** Nothing the person has can make pictures: the card to connect a way that can. */
   offer: (ctx: ToolContext) => Promise<string>;
+  /** Say quietly what was worked around (another way made the picture). */
+  healed?: (message: string) => void;
 }
 
 /** The one picture for a face being made at a time (beside one per chat). */
 const FACE = ' face';
+const KEYS: readonly ImageKeyId[] = ['openai', 'gemini', 'openrouter'];
+const RASTER = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+
+/** A picture's bytes are a real raster image, or nothing is kept. */
+function raster(bytes: Buffer) {
+  const type = sniff(bytes, 'image', undefined);
+  if (type.kind !== 'image' || !RASTER.includes(type.mimeType))
+    throw new Error('The service returned a file that is not a supported raster image.');
+  return type.mimeType as TurnImage['mimeType'];
+}
 
 export class ImageService {
   readonly #running = new Set<string>();
   constructor(private readonly deps: ImageDeps) {}
-  async #models(signal: AbortSignal) {
-    const response = await (this.deps.fetch ?? fetch)(`${BASE}/images/models`, {
-      redirect: 'error',
-      signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
-    });
-    if (!response.ok) throw new Error('The image model list is unavailable. Try again shortly.');
-    return Models.parse(await json(response, 2_000_000)).data.filter((m) =>
-      m.architecture.output_modalities.includes('image'),
+
+  /**
+   * Every way to make a picture now, in the order to try them: a plan the
+   * person already pays for, then a provider of theirs that bills per
+   * picture (Codex on an API key, OpenAI, Gemini), and OpenRouter last.
+   */
+  async backends(): Promise<ImageBackend[]> {
+    const fetcher = this.deps.fetch ?? fetch;
+    const makers = await (this.deps.makers?.() ?? Promise.resolve([])).catch(() => []);
+    const offers = await Promise.all(
+      makers.map(async (m) => ({ ...m, offer: await m.maker.available().catch(() => undefined) })),
     );
-  }
-  /** One picture from OpenRouter: the request, the bounded answer, its cost recorded. */
-  async #generate(input: {
-    model: string;
-    prompt: string;
-    reference?: string;
-    aspect_ratio?: string;
-    background?: string;
-    signal: AbortSignal;
-  }): Promise<{ bytes: Buffer; type: { mimeType: string }; usage: Usage }> {
-    const key = await this.deps.key(input.signal);
-    if (!key) throw new Error('OpenRouter needs reconnecting in Settings → Providers.');
-    let response: Response;
-    try {
-      response = await (this.deps.fetch ?? fetch)(`${BASE}/images`, {
-        method: 'POST',
-        redirect: 'error',
-        signal: AbortSignal.any([input.signal, AbortSignal.timeout(180_000)]),
-        headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
-        body: JSON.stringify({
-          model: input.model,
-          prompt: input.prompt,
-          n: 1,
-          stream: false,
-          ...(input.reference && {
-            input_references: [{ type: 'image_url', image_url: { url: input.reference } }],
-          }),
-          ...(input.aspect_ratio !== undefined && { aspect_ratio: input.aspect_ratio }),
-          ...(input.background !== undefined && { background: input.background }),
-        }),
-      });
-    } catch {
-      throw new Error(
-        'The image request did not finish. Check OpenRouter’s activity before requesting another image.',
-      );
+    const said = new Set<string>();
+    const plans: ImageBackend[] = [];
+    for (const { engine, maker, offer } of offers) {
+      // Codex and Codex CLI share one ChatGPT sign-in: one way, not two.
+      if (!offer || said.has(offer.by)) continue;
+      said.add(offer.by);
+      plans.push(planBackend(engine, maker, offer));
     }
-    if (!response.ok) {
-      await response.body?.cancel();
-      throw new Error(
-        response.status === 401
-          ? 'Reconnect OpenRouter in Settings → Providers.'
-          : response.status === 402
-            ? 'OpenRouter needs API credit before it can make this picture.'
-            : response.status === 429
-              ? 'OpenRouter is busy or at its limit. Wait before trying again.'
-              : `The image service returned ${response.status}. No image was received.`,
-      );
-    }
-    const result = Generated.parse(await json(response, 43_000_000));
-    const usage: Usage = {
-      inputTokens: result.usage?.prompt_tokens ?? 0,
-      outputTokens: result.usage?.completion_tokens ?? 0,
-      ...(result.usage?.cost !== undefined && { costUsd: result.usage.cost }),
-    };
-    await this.deps.spend(usage).catch(() => undefined);
-    const first = result.data[0];
-    if (!first) throw new Error('The image service returned no image.');
-    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(first.b64_json))
-      throw new Error('The image service returned invalid image data.');
-    const bytes = Buffer.from(first.b64_json, 'base64');
-    const type = sniff(bytes, 'image', undefined);
-    if (
-      type.kind !== 'image' ||
-      !['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(type.mimeType)
-    )
-      throw new Error('The service returned a file that is not a supported raster image.');
-    return { bytes, type, usage };
+    const keyed = await Promise.all(
+      KEYS.map(async (id) => ((await this.deps.hasKey(id).catch(() => false)) ? id : undefined)),
+    );
+    const key = (id: ImageKeyId) => (signal: AbortSignal) => this.deps.key(id, signal);
+    const built = keyed.flatMap((id) =>
+      id === 'openai'
+        ? [openAiBackend(key(id), fetcher)]
+        : id === 'gemini'
+          ? [geminiBackend(key(id), fetcher)]
+          : id === 'openrouter'
+            ? [openRouterBackend(key(id), fetcher)]
+            : [],
+    );
+    return [
+      ...plans.filter((b) => b.cost === 'included'),
+      ...plans.filter((b) => b.cost === 'paid'),
+      ...built,
+    ];
   }
 
-  /** Whether a picture can be made at all (an agent's face, ADR 0101): an OpenRouter key. */
+  /** Whether a picture can be made at all (an agent's face, ADR 0101). */
   async canMake(): Promise<boolean> {
-    return this.deps.hasKey().catch(() => false);
+    return (await this.backends().catch(() => [])).length > 0;
   }
 
   /**
    * A square picture for an agent's face (ADR 0101), asked for by a person on
-   * the page, never by the assistant. Over the monthly budget it doesn't go.
-   * One at a time; the bytes go back to the page and are kept nowhere.
+   * the page, never by the assistant. Over the monthly budget a paid one
+   * doesn't go. One at a time; the bytes go back to the page and are kept nowhere.
    */
   async face(
     prompt: string,
     signal: AbortSignal,
   ): Promise<{ bytes: Buffer; mimeType: string; costUsd?: number }> {
-    if (!(await this.canMake()))
-      throw new Error('Connect OpenRouter in Settings → Providers to make a picture.');
-    if (await this.deps.overBudget())
-      throw new Error('Your monthly budget has been reached. Review it in Settings first.');
+    const all = await this.backends();
+    if (!all.length)
+      throw new Error('Connect a provider that makes pictures in Settings → Providers first.');
     if (this.#running.has(FACE)) throw new Error('A picture is already being made. Wait for it.');
     this.#running.add(FACE);
     try {
-      const models = await this.#models(signal);
-      const preferred = ['google/gemini-2.5-flash-image', 'openai/gpt-image-1'];
-      const model =
-        preferred.map((id) => models.find((m) => m.id === id)).find(Boolean) ?? models[0];
-      if (!model) throw new Error('No image model is available just now. Try again later.');
-      const square = z
-        .object({ values: z.array(z.string()).optional() })
-        .safeParse(model.supported_parameters?.aspect_ratio);
-      const made = await this.#generate({
-        model: model.id,
-        prompt,
-        ...(square.success && (!square.data.values || square.data.values.includes('1:1'))
-          ? { aspect_ratio: '1:1' }
-          : {}),
-        signal,
-      });
-      return {
-        bytes: made.bytes,
-        mimeType: made.type.mimeType,
-        ...(made.usage.costUsd !== undefined && { costUsd: made.usage.costUsd }),
-      };
+      let last: Error | undefined;
+      for (const backend of all) {
+        if (backend.cost === 'paid' && (await this.deps.overBudget()))
+          throw new Error('Your monthly budget has been reached. Review it in Settings first.');
+        // A square, or the shape left to a model that has none.
+        const prepared = await backend
+          .prepare({ prompt, aspect_ratio: '1:1' }, signal)
+          .catch((error: unknown) => {
+            if (error instanceof Unfit) return backend.prepare({ prompt }, signal);
+            throw error;
+          })
+          .catch((error: unknown) => {
+            if (error instanceof Unfit) return undefined;
+            throw error;
+          });
+        if (!prepared) continue;
+        try {
+          const made = await prepared.run({ prompt, aspect_ratio: '1:1', signal });
+          await this.#spend(backend, made);
+          return {
+            bytes: made.bytes,
+            mimeType: raster(made.bytes),
+            ...(made.usage?.costUsd !== undefined && { costUsd: made.usage.costUsd }),
+          };
+        } catch (error) {
+          if (!(error instanceof NotMade)) throw error;
+          last = error;
+        }
+      }
+      throw last ?? new Error('No image model is available just now. Try again later.');
     } finally {
       this.#running.delete(FACE);
     }
+  }
+
+  async #spend(backend: ImageBackend, made: Made) {
+    if (backend.cost !== 'paid' || !made.usage) return;
+    if (backend.spendAs) await this.deps.spend(made.usage, backend.spendAs).catch(() => undefined);
   }
 
   tools(ctx: ToolContext, access: () => Promise<FileAccess>): HostTool[] {
@@ -211,23 +172,32 @@ export class ImageService {
         effect: 'read',
         row: true,
         description:
-          'List available image-generation models and supported settings from OpenRouter. Works independently of the model answering this chat. Image generation needs an OpenRouter API key and is billed separately; image_generate offers connection when missing.',
+          'List the ways this person can make pictures now, in the order image_generate tries them, with each one’s models and settings: their own plan first (no extra charge), then their own API keys, then OpenRouter. Works whichever model answers this chat.',
         input: {},
-        run: async () =>
-          JSON.stringify(
-            (await this.#models(ctx.signal)).map((m) => ({
-              id: m.id,
-              name: m.name,
-              canEdit: m.architecture.input_modalities.includes('image'),
-              settings: m.supported_parameters,
+        run: async () => {
+          const all = await this.backends();
+          const listed = await Promise.all(
+            all.map(async (b) => ({
+              by: b.by,
+              cost: b.cost === 'included' ? 'included in their plan' : 'paid per picture',
+              models: await b.models(ctx.signal).catch(() => []),
             })),
-          ),
+          );
+          return JSON.stringify(
+            listed.length
+              ? listed
+              : {
+                  message:
+                    'None of their providers can make pictures yet. image_generate offers a way.',
+                },
+          );
+        },
       },
       {
         name: 'image_generate',
         row: true,
         description:
-          'Create or edit one raster image and show it as a preview/download card. Describe the image in prompt. For editing, pass a source image path from this work folder or chat attachments. Uses a connected OpenRouter API key, regardless of the chat model, and is billed separately. Offers setup when missing. Discover optional model/settings with image_models. Never retry a generation automatically after an uncertain failure.',
+          'Create or edit one raster image and show it as a preview/download card. Describe the image in prompt. For editing, pass a source image path from this work folder or chat attachments. Uses the person’s own providers first (a ChatGPT plan makes pictures at no extra charge), then their API keys, and offers a paid way only when none can. Leave model out unless the person asked for one (image_models lists them). Never retry a generation automatically after an uncertain failure.',
         input: {
           prompt: z.string().trim().min(1).max(12_000),
           name: z.string().min(1).max(200).default('Generated image'),
@@ -239,10 +209,13 @@ export class ImageService {
         run: async (args) => {
           if (ctx.permissionMode === 'plan')
             throw new Error('Leave plan mode before generating an image.');
-          if (!(await this.deps.hasKey())) return this.deps.offer(ctx);
-          if (await this.deps.overBudget())
+          const all = await this.backends();
+          if (!all.length) return this.deps.offer(ctx);
+          const named = typeof args.model === 'string' ? args.model : undefined;
+          const candidates = named ? all.filter((b) => b.claims(named)) : all;
+          if (!candidates.length)
             throw new Error(
-              'Your monthly budget has been reached. Review it in Settings before creating more images.',
+              'That image model is not available for this request. Use image_models to choose an available model.',
             );
           if (this.#running.has(ctx.conversationId))
             throw new Error('An image is already being made in this chat. Wait for it to finish.');
@@ -251,48 +224,7 @@ export class ImageService {
           this.#running.add(ctx.conversationId);
           try {
             const editing = typeof args.source === 'string';
-            const models = (await this.#models(ctx.signal)).filter(
-              (m) => !editing || m.architecture.input_modalities.includes('image'),
-            );
-            const preferred = [
-              'google/gemini-2.5-flash-image',
-              'black-forest-labs/flux.2-pro',
-              'openai/gpt-image-1',
-            ];
-            const model = args.model
-              ? models.find((m) => m.id === args.model)
-              : (preferred.map((id) => models.find((m) => m.id === id)).find(Boolean) ?? models[0]);
-            if (!model)
-              throw new Error(
-                'That image model is not available for this request. Use image_models to choose an available model.',
-              );
-            for (const field of ['aspect_ratio', 'background']) {
-              if (args[field] === undefined) continue;
-              const descriptor = z
-                .object({ type: z.string(), values: z.array(z.string()).optional() })
-                .safeParse(model.supported_parameters?.[field]);
-              if (
-                !descriptor.success ||
-                (descriptor.data.values && !descriptor.data.values.includes(String(args[field])))
-              )
-                throw new Error(
-                  `This model does not support the requested ${field.replace('_', ' ')}. Choose another model with image_models.`,
-                );
-            }
-            const restricted = await ctx.restricted?.('apps', 'openrouter');
-            if (!trustsFully(ctx) || ctx.untrusted?.() || restricted) {
-              const answer = await ctx.ask({
-                toolName: 'image_generate',
-                input: { ...args, model: model.id },
-                summary: `${editing ? 'Send the source picture to OpenRouter and edit it' : 'Create a picture with OpenRouter'} using ${model.id}. This is a paid API request.`,
-                ...((restricted || ctx.untrusted?.()) && {
-                  taint: restricted || ctx.untrusted?.(),
-                }),
-              });
-              if (answer === 'deny') return 'The user declined. No image request was sent.';
-            }
-            ctx.signal.throwIfAborted();
-            let reference: string | undefined;
+            let source: Picture | undefined;
             if (editing) {
               const bytes = await fileBytes(
                 await access(),
@@ -303,49 +235,187 @@ export class ImageService {
               const type = sniff(bytes, 'source', undefined);
               if (type.kind !== 'image')
                 throw new Error('Choose a PNG, JPEG, WebP or GIF source picture.');
-              reference = `data:${type.mimeType};base64,${bytes.toString('base64')}`;
+              source = {
+                mimeType: type.mimeType as TurnImage['mimeType'],
+                data: bytes.toString('base64'),
+              };
             }
-            const { bytes, type, usage } = await this.#generate({
-              model: model.id,
+            const request = {
               prompt: String(args.prompt),
-              ...(reference && { reference }),
+              ...(source && { source }),
               ...(args.aspect_ratio !== undefined && { aspect_ratio: String(args.aspect_ratio) }),
-              ...(args.background !== undefined && { background: String(args.background) }),
-              signal: ctx.signal,
-            });
-            const extension = type.mimeType === 'image/jpeg' ? 'jpg' : type.mimeType.split('/')[1];
-            const attachment = await this.deps.store.save({
-              name: `${String(args.name).replace(/\.(?:png|jpe?g|webp|gif)$/i, '')}.${extension}`,
-              bytes,
-            });
-            try {
-              await this.deps.store.claim([attachment.id], ctx.conversationId);
-            } catch (error) {
-              await this.deps.store.discard(attachment.id);
-              throw error;
-            }
-            const image: ToolImage = {
-              mimeType: type.mimeType as ToolImage['mimeType'],
-              data: bytes.toString('base64'),
-            };
-            const out: HostToolResult = {
-              text: JSON.stringify({
-                id: attachment.id,
-                name: attachment.name,
-                path: (await this.deps.store.get(attachment.id))?.path,
-                model: model.id,
-                costUsd: usage.costUsd ?? null,
-                message: 'The image is shown with a preview and Download. ' + MESSAGE,
+              ...(args.background !== undefined && {
+                background: args.background as MakeInput['background'] & string,
               }),
-              view: { kind: 'downloads', items: [attachment] },
-              images: [image],
             };
-            return out;
+            const unfit: string[] = [];
+            let fellBack: string | undefined;
+            for (const [index, backend] of candidates.entries()) {
+              if (backend.cost === 'paid' && (await this.deps.overBudget()))
+                throw new Error(
+                  'Your monthly budget has been reached. Review it in Settings before creating more images.',
+                );
+              let prepared;
+              try {
+                prepared = await backend.prepare(
+                  { ...request, ...(named && { model: named }) },
+                  ctx.signal,
+                );
+              } catch (error) {
+                // This way can't do what's asked (a setting): the next one may, before anything is sent.
+                if (error instanceof Unfit && !named) {
+                  unfit.push(error.message);
+                  continue;
+                }
+                throw error;
+              }
+              const restricted = await ctx.restricted?.('apps', backend.spendAs ?? backend.id);
+              const caution = restricted || ctx.untrusted?.();
+              // A plan the person has anyway costs nothing more: asked only for a reason that
+              // holds in every mode. A paid picture is spending: asked unless Full trust.
+              if (caution || (backend.cost === 'paid' && !trustsFully(ctx))) {
+                const words =
+                  backend.cost === 'paid'
+                    ? paidPictureAsk({
+                        editing,
+                        model: { id: prepared.model },
+                        service: backend.by,
+                        ...(prepared.costUsd !== undefined && { estimateUsd: prepared.costUsd }),
+                      })
+                    : {
+                        title: editing
+                          ? `Edit your picture with ${backend.by}`
+                          : `Make a picture with ${backend.by}`,
+                        summary: editing
+                          ? `Edit your picture with ${backend.by} (no extra charge)`
+                          : `Make a picture with ${backend.by} (no extra charge)`,
+                        detail: editing
+                          ? `Your picture and what you asked for go to ${backend.to ?? backend.by}`
+                          : `What you asked for goes to ${backend.to ?? backend.by}`,
+                      };
+                const answer = await ctx.ask({
+                  toolName: 'image_generate',
+                  input: { ...args, model: prepared.model },
+                  ...words,
+                  ...(caution && { taint: caution }),
+                });
+                if (answer === 'deny') return 'The user declined. No image request was sent.';
+              }
+              ctx.signal.throwIfAborted();
+              const made = await this.#make(ctx, backend, prepared.run, {
+                ...request,
+                signal: ctx.signal,
+              }).catch((error: unknown) => {
+                // Certainly nothing made (a used-up plan, a refused key): the next way may try.
+                if (error instanceof NotMade && !named && index < candidates.length - 1)
+                  return error;
+                throw error;
+              });
+              if (made instanceof Error) {
+                fellBack ??= made.message;
+                continue;
+              }
+              if (fellBack) this.deps.healed?.(`Made the picture another way. ${fellBack}`);
+              return await this.#keep(ctx, backend, prepared.model, String(args.name), made);
+            }
+            throw new Error(
+              unfit[0] ??
+                'None of the ways to make pictures can do this request. Use image_models to choose another model.',
+            );
           } finally {
             this.#running.delete(ctx.conversationId);
           }
         },
       },
     ];
+  }
+
+  /** One request, with its progress in the chat and its rough pictures kept only while it runs. */
+  async #make(
+    ctx: ToolContext,
+    backend: ImageBackend,
+    run: (input: MakeInput) => Promise<Made>,
+    input: MakeInput,
+  ): Promise<Made> {
+    const progress = new PictureProgress({
+      emit: (p: ToolProgress) => ctx.append({ type: 'tool.progress', ...p }),
+      toolName: 'image_generate',
+      by: backend.by,
+      typicalMs: backend.typicalMs,
+    });
+    const previews: string[] = [];
+    const saving: Promise<unknown>[] = [];
+    let over = false;
+    progress.queued();
+    if (!backend.startsLater) progress.generating();
+    try {
+      const made = await run({
+        ...input,
+        onStarted: () => progress.generating(),
+        onPartial: (bytes, index, of) => {
+          // The step is real at once; the rough picture follows once it's kept.
+          if (!over) progress.partial(index, of);
+          saving.push(
+            (async () => {
+              raster(bytes);
+              const saved = await this.deps.store.save({ name: 'Picture so far.png', bytes });
+              previews.push(saved.id);
+              await this.deps.store.claim([saved.id], ctx.conversationId);
+              if (!over) progress.partial(index, of, saved.id);
+            })().catch(() => undefined),
+          );
+        },
+      });
+      over = true;
+      progress.finishing();
+      return made;
+    } finally {
+      over = true;
+      progress.stop();
+      await Promise.allSettled(saving);
+      if (previews.length)
+        await this.deps.store.forget(ctx.conversationId, previews).catch(() => undefined);
+    }
+  }
+
+  /** The picture checked, kept with the chat, and shown. */
+  async #keep(
+    ctx: ToolContext,
+    backend: ImageBackend,
+    model: string,
+    name: string,
+    made: Made,
+  ): Promise<HostToolResult> {
+    const mimeType = raster(made.bytes);
+    await this.#spend(backend, made);
+    const extension = mimeType === 'image/jpeg' ? 'jpg' : mimeType.split('/')[1];
+    const attachment = await this.deps.store.save({
+      name: `${name.replace(/\.(?:png|jpe?g|webp|gif)$/i, '')}.${extension}`,
+      bytes: made.bytes,
+    });
+    try {
+      await this.deps.store.claim([attachment.id], ctx.conversationId);
+    } catch (error) {
+      await this.deps.store.discard(attachment.id);
+      throw error;
+    }
+    const image: ToolImage = { mimeType, data: made.bytes.toString('base64') };
+    return {
+      text: JSON.stringify({
+        id: attachment.id,
+        name: attachment.name,
+        path: (await this.deps.store.get(attachment.id))?.path,
+        model,
+        by: backend.by,
+        costUsd: made.usage?.costUsd ?? null,
+        message:
+          'The image is shown with a preview and Download. ' +
+          (backend.cost === 'included'
+            ? `Made with ${backend.by}, at no extra charge.`
+            : `Made with ${backend.by} and billed by it separately from the chat model.`),
+      }),
+      view: { kind: 'downloads', items: [attachment] },
+      images: [image],
+    };
   }
 }

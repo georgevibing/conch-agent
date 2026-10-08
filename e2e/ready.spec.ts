@@ -61,7 +61,8 @@ test('first run to first conversation', async ({ page, request }) => {
   await expect(page).toHaveURL(/\/c\/c_/);
   await expect(page.getByText(/Remembered/)).toBeVisible();
   await page.getByRole('button', { name: 'Allow', exact: true }).click();
-  await expect(page.getByText(/Allowed/)).toBeVisible();
+  // The answer folds into the call's story: the card goes.
+  await expect(page.getByRole('group', { name: /asks first/ })).toHaveCount(0);
   await expect(page.getByText("Got it — I'll remember that.", { exact: false })).toBeVisible();
 
   // History survives a reload.

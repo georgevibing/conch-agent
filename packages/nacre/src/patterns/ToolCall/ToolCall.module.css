@@ -127,6 +127,23 @@
     background: var(--nc-gray-4);
   }
 
+  /* It asked and the answer was no: neutral, a ring and a quiet mark, never red. */
+  .status[data-status='declined'] {
+    color: var(--nc-text-muted);
+    box-shadow: inset 0 0 0 1.5px var(--nc-gray-7);
+  }
+
+  .status[data-status='declined'] > svg {
+    inline-size: 0.625rem;
+    block-size: 0.625rem;
+    stroke-width: 2.5;
+  }
+
+  /* What it would have done reads quieter: it didn't happen. */
+  .root[data-status='declined'] .name {
+    color: var(--nc-text-muted);
+  }
+
   @keyframes settle {
     from {
       transform: scale(0.3);
@@ -223,6 +240,18 @@
     gap: var(--nc-space-2);
     margin-inline-start: auto;
     flex-shrink: 0;
+  }
+
+  .outcome {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+    white-space: nowrap;
+  }
+
+  .note {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
   }
 
   .duration {

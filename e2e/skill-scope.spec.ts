@@ -70,7 +70,7 @@ test('a chat stays held to a skill’s list until you stop it, and Activity says
   await expect(line.getByRole('button', { name: held })).toBeVisible();
   await composer.fill('now run the tests');
   await composer.press('Enter');
-  const card = page.getByRole('group', { name: 'Permission request' });
+  const card = page.getByRole('group', { name: /asks first/ });
   await expect(card).toContainText(
     'This chat is held to the “Quick setup” skill’s list, and it doesn’t say it needs to run this command. So I’m checking first.',
   );
@@ -78,7 +78,8 @@ test('a chat stays held to a skill’s list until you stop it, and Activity says
   // While it's waiting on you, stopping waits too.
   await expect(line.getByRole('button', { name: stop })).toBeDisabled();
   await card.getByRole('button', { name: 'Deny' }).click();
-  await expect(page.getByText(/Declined · Run/)).toBeVisible();
+  // The call's story says so (ADR 0103).
+  await expect(page.getByRole('button', { name: /You said no/ }).first()).toBeVisible();
   await expect(line.getByRole('button', { name: stop })).toBeEnabled({ timeout: 20_000 });
 
   // On a phone, the line and its button fit.
@@ -110,11 +111,11 @@ test('a chat stays held to a skill’s list until you stop it, and Activity says
   // The same command now asks only the way this chat's mode does: with "Always allow".
   await composer.fill('run the tests again');
   await composer.press('Enter');
-  const again = page.getByRole('group', { name: 'Permission request' }).last();
+  const again = page.getByRole('group', { name: /asks first/ }).last();
   await expect(again.getByRole('button', { name: 'Always allow' })).toBeVisible();
   await expect(again).not.toContainText('held to');
   await again.getByRole('button', { name: 'Deny' }).click();
-  await expect(page.getByText(/Declined · Run/)).toHaveCount(2);
+  await expect(page.getByText('You said no')).toHaveCount(2);
 
   // Activity has both.
   await page.goto('/activity');

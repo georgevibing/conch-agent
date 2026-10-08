@@ -65,11 +65,13 @@ export function StoryStack({
   );
 
   const failed = earlier.filter((s) => s.status === 'failed').length;
+  // A story asked to be open (a jump to it) is never left folded away.
+  const shown = showEarlier || earlier.some((s) => s.open);
 
   return (
     <div className={cx(styles.stack, className)} {...props}>
       {folded > 0 && (
-        <Collapsible.Root open={showEarlier} onOpenChange={setShowEarlier} asChild>
+        <Collapsible.Root open={shown} onOpenChange={setShowEarlier} asChild>
           <div className={styles.earlier}>
             <Collapsible.Trigger className={styles.fold}>
               <span className={styles.fwell} aria-hidden>

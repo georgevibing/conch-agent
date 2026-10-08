@@ -664,6 +664,8 @@ describe('Codex CLI: Codex with its own tools, asking through Conch (ADR 0066)',
       toolUseId: 'cmd1',
       status: 'error',
       output: 'Not run: it wasn’t allowed.',
+      // Conch said no, without asking: the row says not allowed, not failed.
+      refused: true,
     });
   });
 

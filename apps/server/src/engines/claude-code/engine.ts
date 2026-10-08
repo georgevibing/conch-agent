@@ -521,6 +521,8 @@ export class ClaudeCodeEngine implements Engine {
 
     // What host tools found for the person, by tool call, until their row closes.
     const views = new Map<string, ToolView>();
+    /** Calls Conch said no to itself (Passwords, its keys): their rows say not allowed. */
+    const refused = new Set<string>();
     const conch = createSdkMcpServer({
       name: 'conch',
       version: '1.0.0',
@@ -597,8 +599,10 @@ export class ClaudeCodeEngine implements Engine {
           env: childEnv({
             ANTHROPIC_API_KEY: anthropicApiKey,
             // After each round of tool calls its small model says, in a few words, what
-            // they did: for the person watching (ADR 0103), drawn as narration.
-            CLAUDE_CODE_EMIT_TOOL_USE_SUMMARIES: '1',
+            // they did: for the person watching (ADR 0103), drawn as narration. That's a
+            // small-model call per round of tool calls, on the person's own plan or key,
+            // so only with Settings' "name things with a small model" on (`narrate`).
+            CLAUDE_CODE_EMIT_TOOL_USE_SUMMARIES: input.narrate ? '1' : undefined,
           }),
           abortController: abort,
           includePartialMessages: true,
@@ -662,8 +666,10 @@ export class ClaudeCodeEngine implements Engine {
                         permissionDecisionReason: reason,
                       },
                     });
-                    if (touchesProtected(toolInput, input.protectedPaths ?? []))
+                    if (touchesProtected(toolInput, input.protectedPaths ?? [])) {
+                      if (hookInput.tool_use_id) refused.add(hookInput.tool_use_id);
                       return deny(PROTECTED_MESSAGE);
+                    }
                     const verdict = await input.guard?.({
                       toolName,
                       toolUseId: hookInput.tool_use_id,
@@ -689,8 +695,10 @@ export class ClaudeCodeEngine implements Engine {
             if (toolName.startsWith('mcp__conch__'))
               return { behavior: 'allow', updatedInput: toolInput };
             // Passwords and Conch's keys are never read or changed with files or commands.
-            if (touchesProtected(toolInput, input.protectedPaths ?? []))
+            if (touchesProtected(toolInput, input.protectedPaths ?? [])) {
+              refused.add(toolUseID);
               return { behavior: 'deny', message: PROTECTED_MESSAGE };
+            }
             const decision = await input.requestPermission(
               {
                 toolName,
@@ -762,7 +770,11 @@ export class ClaudeCodeEngine implements Engine {
           this.#limits.emit(limitSignal(message.rate_limit_info));
           continue;
         }
-        for (const event of translator.translate(message)) {
+        for (const translated of translator.translate(message)) {
+          const event =
+            translated.type === 'tool-end' && refused.delete(translated.toolUseId)
+              ? { ...translated, refused: true as const }
+              : translated;
           if (event.type === 'done') finished = true;
           const view = event.type === 'tool-end' ? views.get(event.toolUseId) : undefined;
           if (view && event.type === 'tool-end') {

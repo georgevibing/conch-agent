@@ -33,14 +33,17 @@ test('after reading a page, a command asks — saying why — and “Always allo
 
   await composer.fill('now run the tests');
   await composer.press('Enter');
-  const card = page.getByRole('group', { name: 'Permission request' });
+  const card = page.getByRole('group', { name: /asks first/ });
   await expect(card).toContainText(
-    'This chat read news.example, which could be trying to steer me. So I’m checking before I run a command.',
+    'This chat read news.example. Check this is what you asked for.',
   );
   // "Always" is true here: it lets this tool through for the rest of the chat (ADR 0028).
   await expect(card.getByRole('button', { name: 'Always allow' })).toHaveCount(1);
   await card.getByRole('button', { name: 'Deny' }).click();
-  await expect(page.getByText(/Declined · Run/)).toBeVisible();
+  // The call's story says it didn't run, neither done nor failed (ADR 0103).
+  await expect(
+    page.getByRole('button', { name: /^Didn’t run the tests.*You said no/ }),
+  ).toBeVisible();
   // The timeline reads what's been saved: the reply finishes first.
   await expect(page.getByText(/Ask me to/)).toHaveCount(2);
 

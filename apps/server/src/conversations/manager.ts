@@ -31,6 +31,7 @@ import type {
 
 import {
   FIRST_AGENT_ID,
+  approvalOf,
   chatGoal,
   contextStart,
   honouredMode,
@@ -38,6 +39,7 @@ import {
   undoableClear,
   type PermissionMode,
   type SkillHold,
+  type ToolApproval,
 } from '@conch/protocol';
 
 import type {
@@ -70,6 +72,7 @@ import { allows, missing, needs } from '../skills/permissions';
 import { sandboxSupport } from './sandbox';
 import { assessRisk, breaksCircuit, riskAsks, riskWords } from './risk';
 import { describeTaint, heldTaints, leavesSandbox, sinkReason, taintFrom } from './taint';
+import { cautionFrom } from './provenance';
 import { CONCH_POWER_MESSAGE, runsConchPower } from '../lib/protect';
 import { didWhat } from '../activity/service';
 import { changedFiles, type UndoService } from '../undo/service';
@@ -86,8 +89,8 @@ import { generateTitle } from './title';
 import { unansweredOnRestart, type QuestionDesk } from '../questions/desk';
 import { type CarryOn, OfferDesk, offerState, openOffers } from '../offers/desk';
 import { HostToolRows } from './views';
-import { NarrationPacer } from './stories/narration';
-import { toolLabel } from './stories/labels';
+import { cleanNarration, NarrationPacer } from './stories/narration';
+import { redactLabel, toolLabel } from './stories/labels';
 import type { BillingInfo } from '../usage/billing';
 import {
   addTurn,
@@ -173,6 +176,12 @@ export interface AskRequest {
   input: Record<string, unknown>;
   /** One line, e.g. "use booking.com". */
   summary: string;
+  /** The card's short title, when `summary` says more than fits: "Edit your picture with Gemini on OpenRouter". */
+  title?: string;
+  /** One quiet line beside it: where things go. */
+  detail?: string;
+  /** What it costs, when it costs money: "Paid". */
+  cost?: string;
   browser?: BrowserPermission;
   /** Reading or filling something from Passwords (ADR 0025). */
   vault?: VaultPermission;
@@ -501,6 +510,8 @@ interface Live {
   saving?: Promise<void>;
   /** Later events cannot overtake a turn's closing events while they are saved. */
   broadcasts?: { event: ConversationEvent; deferred: boolean }[];
+  /** Calls one of Conch's rules said no to without asking (a tool off in Apps, a guest). */
+  refused?: Set<string>;
 }
 
 /** How often a running turn's log is saved: a crash loses this much, not the whole turn. */
@@ -2308,10 +2319,19 @@ export class ConversationManager {
         remember: boolean;
         waive?: string;
         explicit?: boolean;
+        /** What the chat read that made it ask: said once, short, on the card. */
+        sources?: readonly TaintSource[];
       },
       signal: AbortSignal,
     ): Promise<PermissionDecision> => {
       const permissionId = newId('perm');
+      // The card's quiet line: where what it read came from, each place once, when that's
+      // why it asks; any other reason (a skill's list, a risk) is short already.
+      const caution = request.taint
+        ? request.sources?.length && request.taint.includes(describeTaint(request.sources))
+          ? cautionFrom(request.sources)
+          : request.taint
+        : undefined;
       return new Promise<PermissionDecision>((resolve) => {
         live.permissions.set(permissionId, {
           resolve,
@@ -2344,9 +2364,13 @@ export class ConversationManager {
           toolName: request.toolName,
           input: request.input,
           summary: request.summary,
+          ...(request.title && { title: request.title }),
+          ...(request.detail && { detail: request.detail }),
+          ...(request.cost && { cost: request.cost }),
           browser: request.browser,
           ...(request.vault && { vault: request.vault }),
           ...(request.taint && { taint: request.taint }),
+          ...(caution && { caution: caution.slice(0, 240) }),
           ...(request.waive && { lasting: true }),
           ...(request.once && { once: true }),
         });
@@ -2365,9 +2389,19 @@ export class ConversationManager {
      * keep their own, words going to other people are shown each time, and
      * someone else's words in the chat or a skill's list ask every time.
      */
-    const hostAsk = async (request: AskRequest): Promise<PermissionDecision> => {
-      if (request.browser || request.vault)
-        return askUser({ ...request, remember: false }, abort.signal);
+    const hostAsk = async (asked: AskRequest): Promise<PermissionDecision> => {
+      if (asked.browser || asked.vault) return askUser({ ...asked, remember: false }, abort.signal);
+      // The call asking, so its row can carry the answer; and what it read, as the tools see it.
+      const toolUseId = hostRows.running(asked.toolName);
+      const read =
+        asked.taint && settings.preferences.checkAfterReading
+          ? this.#tainted(live).filter((source) => !trusting() || source.kind === 'person')
+          : [];
+      const request = {
+        ...asked,
+        ...(toolUseId && { toolUseId }),
+        ...(read.length && { sources: read }),
+      };
       // Words going to other people, after reading or with someone else's words in the chat:
       // shown each time, in every mode.
       if (
@@ -2628,10 +2662,16 @@ export class ConversationManager {
       return false;
     };
 
+    /** One of Conch's rules said no without asking: the call's row says so (`approval`). */
+    const refused = <T>(toolUseId: string | undefined, answer: T): T => {
+      if (toolUseId) (live.refused ??= new Set()).add(toolUseId);
+      return answer;
+    };
+
     const mustAsk = async (request: {
       toolName: string;
       input: Record<string, unknown>;
-    }): Promise<{ reason: string; waive?: string } | undefined> => {
+    }): Promise<{ reason: string; waive?: string; sources?: TaintSource[] } | undefined> => {
       // One that runs by itself (a routine, a chat app) still checks, and so
       // does one where someone else is talking to the assistant.
       const trusted = trusting();
@@ -2718,6 +2758,7 @@ export class ConversationManager {
       return sink
         ? {
             reason: `${describeTaint(tainted)} So I’m checking before I ${sink}.`,
+            sources: tainted,
             // What it read can be waived; someone else talking to the assistant can't.
             ...(tainted.every((source) => source.kind !== 'person') && { waive: readKey }),
           }
@@ -2733,17 +2774,18 @@ export class ConversationManager {
       },
       signal: AbortSignal,
     ): Promise<PermissionDecision> => {
-      if (guest) return 'deny';
-      if (extras?.toolAllowed && !extras.toolAllowed(request.toolName)) return 'deny';
-      if (runsConchPower(request.toolName, request.input)) return 'deny';
+      const refuse = () => refused(request.toolUseId, 'deny' as const);
+      if (guest) return refuse();
+      if (extras?.toolAllowed && !extras.toolAllowed(request.toolName)) return refuse();
+      if (runsConchPower(request.toolName, request.input)) return refuse();
       if (
         await extras?.beforeTool?.(request.toolName, request.input, request.toolUseId, 'permission')
       )
-        return 'deny';
+        return refuse();
       await keepBefore(request.toolUseId, request.toolName, request.input);
       // Off is absolute. Full trust overrides ordinary Ask policies, after the guards.
       const policy = await integrations?.decide(request.toolName).catch(() => undefined);
-      if (policy === 'off') return 'deny';
+      if (policy === 'off') return refuse();
       const described = await integrations?.describeTool(request.toolName).catch(() => undefined);
       const asked = await mustAsk(request);
       const taint = asked?.reason;
@@ -2772,6 +2814,7 @@ export class ConversationManager {
           remember: !asked || Boolean(asked.waive),
           ...(asked?.waive && { waive: asked.waive }),
           ...(taint && { taint }),
+          ...(asked?.sources && { sources: asked.sources }),
           ...((described?.asks || request.escalated) && { explicit: true }),
         },
         signal,
@@ -2786,24 +2829,22 @@ export class ConversationManager {
     }): Promise<GuardDecision | undefined> => {
       if (this.#draining)
         return { decision: 'deny', message: 'Conch is saving progress before restarting.' };
-      if (guest) return { decision: 'deny', message: GUEST_TOOL_MESSAGE };
+      const refuse = (message: string) =>
+        refused(request.toolUseId, { decision: 'deny' as const, message });
+      if (guest) return refuse(GUEST_TOOL_MESSAGE);
       const blocked = await extras?.beforeTool?.(
         request.toolName,
         request.input,
         request.toolUseId,
         'guard',
       );
-      if (blocked) return { decision: 'deny', message: blocked };
+      if (blocked) return refuse(blocked);
       // Your keys, whose skills you trust and who may sign in are yours to use (ADR 0047,
       // ADR 0063), in every mode.
-      if (runsConchPower(request.toolName, request.input))
-        return { decision: 'deny', message: CONCH_POWER_MESSAGE };
+      if (runsConchPower(request.toolName, request.input)) return refuse(CONCH_POWER_MESSAGE);
       await keepBefore(request.toolUseId, request.toolName, request.input);
       if ((await integrations?.decide(request.toolName).catch(() => undefined)) === 'off')
-        return {
-          decision: 'deny',
-          message: 'The user turned this tool off in Apps.',
-        };
+        return refuse('The user turned this tool off in Apps.');
       if (!restartReadOnly(request.toolName)) {
         const id = request.toolUseId ?? newId('pending');
         live.record = {
@@ -2978,6 +3019,8 @@ export class ConversationManager {
             mcpServers: engine.integrations.mode === 'native' ? loaded?.servers : undefined,
             disallowedTools: guest ? GUEST_DISALLOWED : loaded?.disallowedTools,
             ...(guest && { wordsOnly: true }),
+            // A provider's own notes on each round of steps cost a small-model call: only when asked.
+            ...(settings.preferences.autoTitle && { narrate: true }),
             bridgedTools,
             signal: pace.signal,
             requestPermission,
@@ -3030,7 +3073,9 @@ export class ConversationManager {
             this.#append(live, { type: 'assistant.done', messageId: event.messageId });
             break;
           case 'narration':
-            if (!abort.signal.aborted) narrator.say(event.text, event.toolUseId);
+            // Redacted before it's cleaned and cut, so a password cut in two can't slip by.
+            if (!abort.signal.aborted)
+              narrator.say(this.deps.redact?.(event.text) ?? event.text, event.toolUseId);
             break;
           case 'tool-start':
             if (!abort.signal.aborted)
@@ -3070,6 +3115,8 @@ export class ConversationManager {
             });
             break;
           case 'tool-end': {
+            // The provider's own tool, not run because Conch wouldn't let it (ADR 0028).
+            if (event.refused) refused(event.toolUseId, true);
             if (!abort.signal.aborted && (event.status === 'success' || event.status === 'error'))
               await extras?.afterTool?.(event.toolUseId, event.status, event.output);
             const settle = async () => {
@@ -3578,6 +3625,15 @@ export class ConversationManager {
       else if (input.type === 'assistant.delta') input = { ...input, delta: redact(input.delta) };
       else if (input.type === 'context.compacted')
         input = { ...input, summary: redact(input.summary) };
+      // The provider's notes are redacted before they're paced; again here, kept within the cap.
+      else if (input.type === 'narration')
+        input = { ...input, text: cleanNarration(redact(input.text)) };
+    }
+    // It asked first, or a rule said no: its row says how that went, from what was decided.
+    // Before its words, so a call that never ran is said so ("Didn’t run the tests").
+    if (input.type === 'tool.finished' && !input.approval) {
+      const approval = this.#approvalOf(live, input.toolUseId);
+      if (approval) input = { ...input, approval };
     }
     // Every tool call in plain words (ADR 0103), from what's logged: after redaction.
     if (input.type === 'tool.started' && !input.label) {
@@ -3592,9 +3648,13 @@ export class ConversationManager {
           status: input.status,
           ...(input.output !== undefined && { output: input.output }),
           ...(input.view && { viewKind: input.view.kind }),
+          ...(input.approval && { approval: input.approval }),
         });
       if (label) input = { ...input, label };
     }
+    // A label is worked out from the call's input, which isn't redacted: its words are.
+    if (redact && (input.type === 'tool.started' || input.type === 'tool.finished') && input.label)
+      input = { ...input, label: redactLabel(input.label, redact) };
     const event = {
       ...input,
       conversationId: live.record.id,
@@ -3614,6 +3674,20 @@ export class ConversationManager {
       defer?.push(event);
       this.#broadcast(live);
     } else this.events.emit({ type: 'conversation.event', event });
+  }
+
+  /** How the question about one call went, if it asked: the last answer counts. */
+  #approvalOf(live: Live, toolUseId: string): ToolApproval | undefined {
+    const asked = live.events.findLast(
+      (e) => e.type === 'permission.requested' && e.toolUseId === toolUseId,
+    );
+    const answer =
+      asked?.type === 'permission.requested' &&
+      live.events.findLast(
+        (e) => e.type === 'permission.resolved' && e.permissionId === asked.permissionId,
+      );
+    if (answer && answer.type === 'permission.resolved') return approvalOf(answer.decision);
+    return live.refused?.has(toolUseId) ? 'refused' : undefined;
   }
 
   /** Preserve sequence order across async saves, title generation and subsequent turns. */

@@ -1,0 +1,156 @@
+@layer nacre.components {
+  /* ── The card: one shape with every card in a reply ──────────────── */
+  .card {
+    --nc-rim-rest: 0;
+    --nc-rim-hover: 0.35;
+    --nc-sheen-hover: 0.16;
+
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-3);
+    max-inline-size: var(--nc-chat-card-width);
+    padding: var(--nc-chat-card-pad);
+    border-radius: var(--nc-chat-card-radius);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-chat-card-surface);
+    box-shadow: var(--nc-chat-card-shadow);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  .mark {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--nc-chat-card-mark);
+    block-size: var(--nc-chat-card-mark);
+    border-radius: var(--nc-radius-full);
+    corner-shape: var(--nc-corner-shape);
+    color: var(--nc-accent-11);
+    background: var(--nc-accent-3);
+  }
+
+  .mark > svg {
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
+  }
+
+  .body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-2-5);
+    min-inline-size: 0;
+  }
+
+  .text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-inline-size: 0;
+    /* Its first line sits level with the middle of the mark. */
+    padding-block-start: 0.25rem;
+  }
+
+  .title {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+  }
+
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 var(--nc-space-1-5);
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-muted);
+  }
+
+  /* What it costs reads first, a touch firmer than the rest. */
+  .cost {
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .dot {
+    color: var(--nc-text-subtle);
+  }
+
+  .preview {
+    min-inline-size: 0;
+  }
+
+  /* Why to look twice: one quiet line, a small tinted shield, no box. */
+  .caution {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  .caution > svg {
+    flex: none;
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+    margin-block-start: 0.0625rem;
+    color: light-dark(oklch(0.58 0.12 var(--nc-warning-h)), oklch(0.8 0.1 var(--nc-warning-h)));
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--nc-space-2);
+  }
+
+  /* No is always there, never loud. */
+  .deny {
+    color: var(--nc-text-muted);
+  }
+
+  /* ── The line an answer folds to, when no row carries it ─────────── */
+  .line {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+    margin: 0;
+    font-size: var(--nc-chat-note-size);
+    color: var(--nc-text-muted);
+    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .line > svg {
+    flex: none;
+    inline-size: var(--nc-chat-note-icon);
+    block-size: var(--nc-chat-note-icon);
+    color: var(--nc-text-subtle);
+  }
+
+  .line[data-decision='allow'] > svg,
+  .line[data-decision='allow-always'] > svg {
+    color: light-dark(oklch(0.55 0.13 var(--nc-success-h)), oklch(0.75 0.13 var(--nc-success-h)));
+  }
+
+  .line > span {
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .lineWords {
+    color: var(--nc-text);
+  }
+}

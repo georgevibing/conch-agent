@@ -186,6 +186,8 @@ const scenarios = {
   'chat-list': { port: 4349, env: { CONCH_MOCK_STATE: 'ready' } },
   // Show me: things made beside the chat, sealed pages, pinned apps (ADR 0034).
   'show-me': { port: 4371, env: { CONCH_MOCK_STATE: 'ready' } },
+  // The chat tells what it's doing (ADR 0103): stories of steps, the provider's words, Why?, the raw call.
+  stories: { port: 4338, env: { CONCH_MOCK_STATE: 'ready' } },
   // What a tool found, drawn as it is (ADR 0060): the mock's pretend calendar, mail, files and Slack.
   views: { port: 4353, env: { CONCH_MOCK_STATE: 'ready' } },
   // Edit by hand and live data (ADR 0046), against a pretend data site on a port the system picks.

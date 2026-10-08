@@ -124,6 +124,49 @@ export type DescribeImages = (
   },
 ) => Promise<{ text?: string; usage?: Usage }>;
 
+/** A picture to make (or a source picture to edit) with a provider's own image tool. */
+export interface PictureRequest {
+  prompt: string;
+  /** The picture to change, when editing. */
+  source?: Picture;
+  aspectRatio?: string;
+  background?: 'auto' | 'transparent' | 'opaque';
+  signal: AbortSignal;
+  /** The provider started on it (after waiting its turn). */
+  onStarted?: () => void;
+}
+
+/**
+ * Pictures a provider makes with what the person already has (Codex's image
+ * tool on a ChatGPT plan), so Conch's `image_generate` uses that before a
+ * paid key. `available` is undefined when it can't right now.
+ */
+export interface PictureMaker {
+  available(): Promise<
+    | {
+        /** `included` in a plan the person pays for anyway, or `paid` per picture. */
+        cost: 'included' | 'paid';
+        /** Who makes it, in a few words: "your ChatGPT plan". */
+        by: string;
+        /** Where the prompt and any source picture go: "OpenAI". */
+        to?: string;
+      }
+    | undefined
+  >;
+  /** Throws `PictureLimit` when the plan's picture allowance is used up (nothing was made). */
+  make(request: PictureRequest): Promise<{ bytes: Buffer; revisedPrompt?: string }>;
+}
+
+/** The plan's pictures are used up for now: nothing was made, so another way may try. */
+export class PictureLimit extends Error {
+  constructor(
+    message: string,
+    readonly resetsAt?: number,
+  ) {
+    super(message);
+  }
+}
+
 /** A host tool's result as plain text, for engines (and logs) that only take text. */
 export function hostToolText(result: string | HostToolResult): string {
   return typeof result === 'string' ? result : result.text;
@@ -319,6 +362,13 @@ export interface TurnInput {
    */
   wordsOnly?: boolean;
   /**
+   * Say what each round of tool calls did, by the provider's own small model
+   * (ADR 0103): on with Settings' "name things with a small model"
+   * (`preferences.autoTitle`). Engines whose narration costs a call of its own
+   * (Claude Code's tool-use summaries) leave it off when this is unset.
+   */
+  narrate?: boolean;
+  /**
    * How much this turn may do before it pauses to check in (ADR 0085): more
    * for a routine or a task, less over the monthly budget. Unset: the
    * engine's own default for someone watching (`turnBudget({})`).
@@ -360,6 +410,11 @@ export type EngineEvent =
       output?: string;
       /** A host tool's `HostToolResult.view`, passed on for the person (ADR 0060). */
       view?: ToolView;
+      /**
+       * Not run because Conch said no to the provider's own tool, without asking
+       * (a command it can't seal): the row shows it as not allowed, not as failed.
+       */
+      refused?: true;
     }
   | { type: 'notice'; code: string; message: string }
   /**
@@ -542,6 +597,11 @@ export interface Engine {
    * the chat's live line uses the rules' words for each step.
    */
   readonly narration?: 'provider';
+  /**
+   * It makes pictures itself with what the person already has (Codex's image
+   * tool on a ChatGPT plan). Conch's `image_generate` asks it first.
+   */
+  readonly pictures?: PictureMaker;
   /** Commands are always sealed by Conch, independent of the native-provider toggle. */
   readonly commandSandbox?: 'conch';
   /** Conch fits long chats for it by summarising their start (ADR 0055). Absent: the provider does. */

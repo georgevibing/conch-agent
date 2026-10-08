@@ -207,6 +207,7 @@ export class AcpCalls {
       toolUseId: this.prefix + known.call.toolCallId,
       status: 'error',
       output: 'Not run: it wasn’t allowed. Conch’s own tools do this here.',
+      refused: true,
     });
   }
 

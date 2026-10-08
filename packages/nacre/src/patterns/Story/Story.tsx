@@ -21,8 +21,17 @@ import { MorphText } from './MorphText';
 import styles from './Story.module.css';
 import type { StoryChip, StoryFamily, StorySource } from './types';
 
-export type StoryStatus = 'running' | 'done' | 'failed';
-export type StoryStepStatus = 'pending' | 'running' | 'success' | 'error';
+/**
+ * `declined`: its only steps that mattered were ones you said no to (or a
+ * rule stopped): over, and neutral. Neither the check of done nor the warm
+ * note of a failure.
+ */
+export type StoryStatus = 'running' | 'done' | 'failed' | 'declined';
+/**
+ * `declined`: it asked first and didn't run, because the answer was no (or a
+ * rule said no). Neutral, never the warm note of a failure.
+ */
+export type StoryStepStatus = 'pending' | 'running' | 'success' | 'error' | 'declined';
 
 /** One tool call inside a story, in words (the protocol's `ToolLabel`, resolved for its status). */
 export interface StoryStepView {
@@ -89,6 +98,16 @@ export interface StoryProps extends Omit<ComponentProps<'div'>, 'children'> {
   arriving?: boolean;
 }
 
+/** Asked and not run: a circle with a slash, quiet gray. */
+function NotRun() {
+  return (
+    <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={1.6}>
+      <circle cx="6" cy="6" r="4.6" />
+      <path d="M2.8 9.2 9.2 2.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 /** The last value something had, so a line that's leaving keeps its words as it folds away. */
 function useLast<T>(value: T | undefined): T | undefined {
   const [last, setLast] = useState(value);
@@ -100,6 +119,7 @@ const SPOKEN: Record<StoryStatus, string> = {
   running: 'working',
   done: 'done',
   failed: 'didn’t work',
+  declined: 'not run',
 };
 
 export interface StoryMarkProps {
@@ -130,6 +150,8 @@ export function StoryMark({ family, status, arriving = false, className }: Story
           <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeLinecap="round">
             {status === 'done' ? (
               <path d="M3.4 6.3 5.2 8.1 8.7 4.2" strokeLinejoin="round" pathLength={1} />
+            ) : status === 'declined' ? (
+              <path d="M3.9 8.1 8.1 3.9" />
             ) : (
               <path d="M6 3.4v3.1M6 8.7v.01" />
             )}
@@ -253,6 +275,7 @@ function StepRow({
           </>
         )}
         {wrong && <span className="nc-visually-hidden">, didn’t work</span>}
+        {step.status === 'declined' && <span className="nc-visually-hidden">, not run</span>}
       </span>
       {step.subject && (
         <>
@@ -281,7 +304,9 @@ function StepRow({
         data-raw={raw != null || undefined}
         data-arriving={arriving || undefined}
       >
-        <span className={styles.stepDot} aria-hidden />
+        <span className={styles.stepDot} aria-hidden>
+          {step.status === 'declined' && <NotRun />}
+        </span>
         <div className={styles.stepMain}>
           <div className={styles.stepHead}>
             {raw != null ? (
@@ -385,7 +410,9 @@ export function Story({
         ? `Started: ${headline}`
         : status === 'done'
           ? `Done: ${headline}${outcome ? `, ${outcome}` : ''}`
-          : `Didn’t work: ${headline}`,
+          : status === 'declined'
+            ? `Not run: ${headline}${outcome ? `, ${outcome}` : ''}`
+            : `Didn’t work: ${headline}`,
     );
   }, [arriving, status, headline, outcome]);
 
@@ -414,7 +441,9 @@ export function Story({
           <StoryMark family={family} status={status} arriving={arriving} />
           <span className={styles.title}>
             <MorphText text={headline} animate={arriving} className={styles.headline} />
-            {repeats > 0 && (
+            {/* "×3" only where the line is one thing done again: beside "Read 3 pages" it
+                would say the whole story happened twice. Opened, the fold says it. */}
+            {repeats > 0 && steps.length <= 1 && (
               <span className={styles.times} aria-hidden>
                 ×{repeats + 1}
               </span>

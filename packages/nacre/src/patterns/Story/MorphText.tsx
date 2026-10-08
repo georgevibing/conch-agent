@@ -10,17 +10,18 @@ export interface MorphTextProps {
   className?: string;
 }
 
-/** How long the old words take to leave: then they're gone from the page. */
-const LEAVE_MS = 520;
+/** How long the change takes in the CSS (the last new word lands by 345ms), with a frame to spare. */
+const LEAVE_MS = 360;
 
 /** The words, and the spaces between them. */
 const split = (text: string) => text.split(/(\s+)/).filter(Boolean);
 const isSpace = (w: string) => !/\S/.test(w);
 
 /**
- * A line whose words change in place: the words before the change stay still, the
- * rest blur away and the new ones come into focus one after another,
- * all in the same box, so nothing around it moves. For a headline that the
+ * A line whose words change in place: the words before the change stay still,
+ * the rest rise out of the line and fade, and the new ones rise into it a beat
+ * later, one after another, all clipped to the same box, so the two never
+ * overlap and nothing around it moves. 350ms in all. For a headline that the
  * rules wrote and a small model rewrote, or "Running" turning into "Ran".
  */
 export function MorphText({ text, animate = true, className }: MorphTextProps) {

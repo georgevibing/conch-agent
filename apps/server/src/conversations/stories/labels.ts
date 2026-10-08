@@ -29,3 +29,34 @@ export function toolLabel(
     return undefined;
   }
 }
+
+/**
+ * A label with a saved password nowhere in its words: what it's about, what
+ * it did and came to, its effects and chips. Labels are worked out from a
+ * call's input, which isn't redacted, so each is passed through `redact` as
+ * it's logged, and kept within the protocol's lengths after.
+ */
+export function redactLabel(label: ToolLabel, redact: (text: string) => string): ToolLabel {
+  const r = (text: string, max: number) => redact(text).slice(0, max);
+  return {
+    ...label,
+    doing: r(label.doing, 160),
+    done: r(label.done, 160),
+    ...(label.outcome !== undefined && { outcome: r(label.outcome, 160) }),
+    ...(label.subject !== undefined && { subject: r(label.subject, 300) }),
+    ...(label.effects && {
+      effects: label.effects.map((effect) => ({
+        ...effect,
+        text: r(effect.text, 200),
+        ...(effect.target !== undefined && { target: r(effect.target, 300) }),
+      })),
+    }),
+    ...(label.chips && {
+      chips: label.chips.map((chip) => ({
+        ...chip,
+        label: r(chip.label, 120),
+        ...(chip.href !== undefined && { href: r(chip.href, 2000) }),
+      })),
+    }),
+  };
+}
