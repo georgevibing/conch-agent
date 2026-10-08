@@ -85,6 +85,35 @@ describe('WeatherCard', () => {
     expect(screen.getByRole('region')).toHaveTextContent(/°F/);
   });
 
+  it('switches between °C and °F on the card, converting every reading', async () => {
+    const user = userEvent.setup();
+    const changes: string[] = [];
+    renderNacre(
+      <WeatherCard
+        weather={sampleWeather({ units: 'metric' })}
+        locale="en-GB"
+        onUnitsChange={(u) => changes.push(u)}
+      />,
+    );
+    const card = screen.getByRole('region');
+    expect(card).toHaveTextContent(/Now \d+°C/);
+    const units = screen.getByRole('radiogroup', { name: 'Units' });
+    await user.click(within(units).getByRole('radio', { name: '°F' }));
+    expect(changes).toEqual(['imperial']);
+    expect(card).toHaveTextContent(/Now \d+°F/);
+    expect(screen.getAllByText('mph', { exact: false }).length).toBeGreaterThan(0);
+  });
+
+  it('follows the units the app holds', () => {
+    renderNacre(
+      <WeatherCard weather={sampleWeather({ units: 'metric' })} units="imperial" locale="en-US" />,
+    );
+    expect(screen.getByRole('region')).toHaveTextContent(/°F/);
+    expect(
+      within(screen.getByRole('radiogroup', { name: 'Units' })).getByRole('radio', { name: '°F' }),
+    ).toHaveAttribute('aria-checked', 'true');
+  });
+
   it('shows an alert in words', async () => {
     const { container } = renderNacre(
       <WeatherCard

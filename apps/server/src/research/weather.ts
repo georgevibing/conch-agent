@@ -9,7 +9,7 @@
  * fetcher's SSRF guard. Everything that comes back is data, never words for
  * the model to follow, and every string the card keeps is drawn as text.
  */
-import { WeatherView, type WeatherUnits } from '@conch/protocol';
+import { unitsForTimeZone, WeatherView, type WeatherUnits } from '@conch/protocol';
 import { z } from 'zod';
 
 import type { ToolContext } from '../conversations/manager';
@@ -56,18 +56,13 @@ const WORDS: Record<number, string> = {
 };
 export const weatherWords = (code: number) => WORDS[code] ?? 'Unsettled';
 
-/** Countries whose people read °F and mph. */
-const IMPERIAL = new Set(['US', 'LR', 'MM']);
-
-/** The units this computer's own locale reads: the person's, since Conch runs on their computer. */
-export function localeUnits(locale = Intl.DateTimeFormat().resolvedOptions().locale): WeatherUnits {
-  try {
-    const region = new Intl.Locale(locale).maximize().region;
-    return region && IMPERIAL.has(region) ? 'imperial' : 'metric';
-  } catch {
-    return 'metric';
-  }
-}
+/**
+ * The units the person reads when they didn't say: from this computer's time
+ * zone (Conch runs on their computer), not its language, which is often
+ * English (US) far from the US.
+ */
+export const homeUnits = (timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone) =>
+  unitsForTimeZone(timeZone);
 
 const Place = z.object({
   name: z.string(),
@@ -315,7 +310,7 @@ const Input = {
 };
 
 export interface WeatherOptions {
-  /** The units when the model doesn't say: this computer's locale's. */
+  /** The units when the model doesn't say: this computer's time zone's. */
   units?: () => WeatherUnits;
   /** The language place names are given in. */
   language?: () => string;
@@ -380,12 +375,12 @@ export function weatherTool(
     row: true,
     searchHint: 'weather forecast rain snow temperature wind sunrise sunset uv air quality',
     description:
-      'The weather for a place: now, the next 24 hours, and up to 10 days, with sunrise, sunset, UV and air quality. Use it whenever the person asks about the weather, the temperature, rain or snow, what to wear, whether to take an umbrella or go out, or when the sun rises or sets. Give a place name ("Lisbon", "Paris, Texas" — add the region or country when it could be another place) or latitude and longitude. The person sees the forecast as a card, so reply in a sentence or two that answers their question; don’t list the forecast. Only the place name or coordinates are sent, to Open-Meteo.',
+      'The weather for a place: now, the next 24 hours, and up to 10 days, with sunrise, sunset, UV and air quality. Use it whenever the person asks about the weather, the temperature, rain or snow, what to wear, whether to take an umbrella or go out, or when the sun rises or sets. Give a place name ("Lisbon", "Paris, Texas" — add the region or country when it could be another place) or latitude and longitude. Leave units out unless the person asked for °C or °F or you know which they read: Conch picks them from where they are, and the card has a °C/°F switch. The person sees the forecast as a card, so reply in a sentence or two that answers their question; don’t list the forecast. Only the place name or coordinates are sent, to Open-Meteo.',
     aliases: { place: ['location', 'city', 'query', 'q', 'name'] },
     input: Input,
     run: async (raw) => {
       const args = z.object(Input).parse(raw);
-      const units = args.units ?? options.units?.() ?? localeUnits();
+      const units = args.units ?? options.units?.() ?? homeUnits();
       const language = (options.language?.() ?? Intl.DateTimeFormat().resolvedOptions().locale)
         .slice(0, 2)
         .toLowerCase();

@@ -24,6 +24,7 @@ import { ShopShelf } from './ShopShelf';
 import { attachmentUrl } from './uploads';
 import { MusicFound } from './MusicFound';
 import { FoundVideos } from './FoundVideos';
+import { useWeatherUnits } from './weatherUnits';
 
 /** A picture the gateway fetched and keeps for this chat: drawn from Conch, never the web. */
 const picture = (a: Attachment | undefined): CardPicture | undefined =>
@@ -80,7 +81,7 @@ export function ToolFound({ view }: { view: ToolView }) {
     case 'messages':
       return <ChatMessages messages={view.items} place={view.place} />;
     case 'weather':
-      return <WeatherCard weather={view} />;
+      return <WeatherFound view={view} />;
     case 'recipe':
       return <RecipeCards recipes={recipeCards(view.items)} onTimerDone={recipeTimerDone} />;
     case 'products':
@@ -138,4 +139,10 @@ export function ToolFound({ view }: { view: ToolView }) {
         />
       );
   }
+}
+
+/** A forecast in the units the person reads, with the card's switch changing them everywhere. */
+function WeatherFound({ view }: { view: Extract<ToolView, { kind: 'weather' }> }) {
+  const [units, setUnits] = useWeatherUnits();
+  return <WeatherCard weather={view} units={units} onUnitsChange={setUnits} />;
 }

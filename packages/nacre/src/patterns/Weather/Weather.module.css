@@ -826,9 +826,22 @@
     translate: -50% -50%;
   }
 
+  /* The source and time, with the °C / °F switch at the end of the line. */
+  .foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-2) var(--nc-space-3) var(--nc-space-3) var(--nc-space-4);
+  }
+
+  .units {
+    flex: none;
+  }
+
   .small {
     margin: 0;
-    padding: var(--nc-space-2) var(--nc-space-4) var(--nc-space-3);
+    min-inline-size: 0;
     font-size: var(--nc-text-2xs);
     color: var(--nc-text-subtle);
   }

@@ -1,6 +1,14 @@
 import { TriangleAlert } from 'lucide-react';
-import { useEffect, useRef, useState, type ComponentProps, type CSSProperties } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type CSSProperties,
+} from 'react';
 
+import { SegmentedControl } from '../../components/SegmentedControl';
 import { cx } from '../../utils/cx';
 import { ShowAll, useShowAll } from '../ToolViews/shared';
 import { HourStrip } from './HourStrip';
@@ -20,6 +28,7 @@ import {
   type Condition,
 } from './sky';
 import type { WeatherData, WeatherDay } from './types';
+import { inUnits, type WeatherUnits } from './units';
 import { ConditionGlyph, WeatherArt } from './WeatherArt';
 import styles from './Weather.module.css';
 
@@ -29,6 +38,14 @@ export interface WeatherCardProps extends Omit<ComponentProps<'section'>, 'child
   locale?: string;
   /** Days shown before **Show all**. */
   days?: number;
+  /**
+   * The units it's shown in, when the app holds the person's choice: °C with
+   * km/h and mm, or °F with mph and inches. Left out, the forecast's own, and
+   * the card's switch changes them for this card.
+   */
+  units?: WeatherUnits;
+  /** The person chose the other units on the card's switch. */
+  onUnitsChange?: (units: WeatherUnits) => void;
 }
 
 /** The sky's mood, for its colours: bright, between, grey, milky, snowy or stormy. */
@@ -60,7 +77,22 @@ const wetWord = (code: number) => (conditionOf(code) === 'snow' ? 'snow' : 'rain
  * nothing is told by colour alone, and the whole card is one sentence for a
  * screen reader.
  */
-export function WeatherCard({ weather, locale, days = 7, className, ...props }: WeatherCardProps) {
+export function WeatherCard({
+  weather: given,
+  locale,
+  days = 7,
+  units: unitsProp,
+  onUnitsChange,
+  className,
+  ...props
+}: WeatherCardProps) {
+  const [ownUnits, setOwnUnits] = useState<WeatherUnits>(given.units);
+  const units = unitsProp ?? ownUnits;
+  const weather = useMemo(() => inUnits(given, units), [given, units]);
+  const chooseUnits = (next: WeatherUnits) => {
+    if (unitsProp === undefined) setOwnUnits(next);
+    onUnitsChange?.(next);
+  };
   const { current, hourly, daily, place } = weather;
   const imperial = weather.units === 'imperial';
   const unit = imperial ? 'F' : 'C';
@@ -246,10 +278,22 @@ export function WeatherCard({ weather, locale, days = 7, className, ...props }: 
         />
       )}
 
-      <p className={styles.small}>
-        {weather.source ? `${weather.source} · ` : ''}
-        {timeLabel(weather.at, clock)} in {placeName}
-      </p>
+      <div className={styles.foot}>
+        <p className={styles.small}>
+          {weather.source ? `${weather.source} · ` : ''}
+          {timeLabel(weather.at, clock)} in {placeName}
+        </p>
+        <SegmentedControl
+          size="sm"
+          aria-label="Units"
+          className={styles.units}
+          value={units}
+          onValueChange={(next) => chooseUnits(next === 'imperial' ? 'imperial' : 'metric')}
+        >
+          <SegmentedControl.Item value="metric">°C</SegmentedControl.Item>
+          <SegmentedControl.Item value="imperial">°F</SegmentedControl.Item>
+        </SegmentedControl>
+      </div>
     </section>
   );
 }

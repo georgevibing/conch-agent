@@ -22,6 +22,19 @@ const Uv = z.number().min(0).max(30);
 export const WeatherUnits = z.enum(['metric', 'imperial']);
 export type WeatherUnits = z.infer<typeof WeatherUnits>;
 
+/** Time zones of the places that read °F and mph: the United States and its territories, Liberia, Myanmar. */
+const IMPERIAL_ZONE =
+  /^(?:US\/|America\/(?:New_York|Detroit|Kentucky\/|Indiana\/|Chicago|Menominee|North_Dakota\/|Denver|Boise|Phoenix|Los_Angeles|Anchorage|Juneau|Sitka|Metlakatla|Yakutat|Nome|Adak|Puerto_Rico|St_Thomas)|Pacific\/(?:Honolulu|Guam|Saipan|Pago_Pago)|Africa\/Monrovia|Asia\/(?:Yangon|Rangoon))/;
+
+/**
+ * The units someone reads, from where they are: their time zone says the
+ * country better than a language setting does (plenty of people outside the US
+ * run English, US). Unknown, it's metric, as most of the world reads.
+ */
+export function unitsForTimeZone(timeZone: string | undefined): WeatherUnits {
+  return timeZone && IMPERIAL_ZONE.test(timeZone) ? 'imperial' : 'metric';
+}
+
 export const WeatherNow = z.object({
   temp: Temp,
   feels: Temp,

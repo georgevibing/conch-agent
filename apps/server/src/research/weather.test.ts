@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AppFetchRequest, AppFetcher } from '../conchapps/types';
 import type { ToolContext } from '../conversations/manager';
 import { cleanView } from '../conversations/views';
-import { localeUnits, pickPlace, placeQuery, weatherTool } from './weather';
+import { homeUnits, pickPlace, placeQuery, weatherTool } from './weather';
 
 const fixture = (name: string) =>
   readFileSync(new URL(`./fixtures/weather-${name}.json`, import.meta.url), 'utf8');
@@ -118,11 +118,12 @@ describe('the weather tool', () => {
     expect(text.units).toMatchObject({ temperature: '°F' });
   });
 
-  it('takes the units from this computer’s locale', () => {
-    expect(localeUnits('en-US')).toBe('imperial');
-    expect(localeUnits('en-GB')).toBe('metric');
-    expect(localeUnits('de-DE')).toBe('metric');
-    expect(localeUnits('not a locale!')).toBe('metric');
+  it('takes the units from this computer’s time zone, not its language', () => {
+    expect(homeUnits('America/Chicago')).toBe('imperial');
+    expect(homeUnits('Pacific/Honolulu')).toBe('imperial');
+    expect(homeUnits('Europe/Berlin')).toBe('metric');
+    expect(homeUnits('America/Toronto')).toBe('metric');
+    expect(homeUnits('')).toBe('metric');
   });
 
   it('goes straight to the forecast for coordinates', async () => {
