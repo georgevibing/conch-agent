@@ -219,3 +219,22 @@ describe('the row’s state, from what was decided', () => {
     expect([...foldedAnswers(reduceAll(log(sent, started, asked)).items)]).toEqual([]);
   });
 });
+
+describe('a question nobody answered (ADR 0108)', () => {
+  it('says so on the row, in minutes', () => {
+    const view = reduceAll(
+      log(sent, started, asked, {
+        type: 'permission.resolved',
+        permissionId: 'p1',
+        decision: 'expired',
+        unanswered: 30,
+      }),
+    );
+    const row = view.items.find((i) => i.kind === 'tool');
+    if (row?.kind !== 'tool') throw new Error('no row');
+    expect(rowState(row, false)).toEqual({
+      status: 'cancelled',
+      outcome: 'No answer in 30 minutes, so it didn’t',
+    });
+  });
+});

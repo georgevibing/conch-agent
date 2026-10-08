@@ -107,6 +107,8 @@ export type TranscriptItem =
       label?: ToolLabel;
       /** It asked first, or a rule stopped it: how that went (from the decision, never its words). */
       approval?: ToolApproval;
+      /** Nobody answered its question in this many minutes, so it didn't run (ADR 0108). */
+      unanswered?: number;
       /**
        * How far it has come while it runs (a picture being made): the latest
        * word, and when the first came (the request went out, past any approval).
@@ -799,6 +801,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         about = item.toolUseId;
         return { ...item, decision: event.decision };
       });
+      const unanswered = event.decision === 'expired' ? event.unanswered : undefined;
       if (!updated) return base;
       // The answer belongs to the call it was about: its row says so from now on.
       const call =
@@ -806,6 +809,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         updateItem(updated, 'tool', about, (item) => ({
           ...item,
           approval: approvalOf(event.decision),
+          ...(unanswered && { unanswered }),
         }));
       return { ...base, items: call || updated };
     }

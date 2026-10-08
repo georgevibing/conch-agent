@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useUi } from '../../app/ui';
 import { appState, mockFetch, renderApp } from '../../test/harness';
 import { setVoicePrefs, voicePrefs } from './prefs';
-import { BURST, BurstCutter } from './wake';
+import { BURST, BurstCutter, OPEN_IDLE_MS, wakePhrase } from './wake';
 import { WakeWord } from './WakeWord';
 import { VoiceTab } from './VoiceTab';
 
@@ -48,11 +48,20 @@ describe('cutting what it hears into bursts of speech', () => {
 });
 
 /** A microphone and an audio graph, pretending: the test plays what it "hears". */
-function fakeAudio() {
+function fakeAudio({ app = false, locks = [] as string[] } = {}) {
   const stopped: string[] = [];
   let processor: { onaudioprocess: ((e: unknown) => void) | null } | undefined;
+  vi.stubGlobal('isSecureContext', true);
   vi.stubGlobal('navigator', {
     ...navigator,
+    // The desktop app's window is Electron's (`inDesktopApp`); a phone's browser isn't.
+    userAgent: app ? 'Mozilla/5.0 Conch/1.0 Electron/37.0.0' : 'Mozilla/5.0 (iPhone) Safari/605',
+    wakeLock: {
+      request: vi.fn(async () => {
+        locks.push('on');
+        return { release: async () => void locks.push('off') };
+      }),
+    },
     mediaDevices: {
       getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: () => stopped.push('mic') }] })),
     },
@@ -92,7 +101,7 @@ afterEach(() => {
 
 describe('“Hey Conch” in the desktop app', () => {
   it('says it’s listening, hears the phrase, and opens talk with what came after it', async () => {
-    const audio = fakeAudio();
+    const audio = fakeAudio({ app: true });
     const calls = mockFetch({
       'GET /api/state': () => appState(),
       'GET /api/voice': () => status(),
@@ -130,7 +139,7 @@ describe('“Hey Conch” in the desktop app', () => {
   });
 
   it('stops in one press: the microphone goes, and the tray is told', async () => {
-    const audio = fakeAudio();
+    const audio = fakeAudio({ app: true });
     const calls = mockFetch({
       'GET /api/state': () => appState(),
       'GET /api/voice': () => status(),
@@ -151,20 +160,20 @@ describe('“Hey Conch” in the desktop app', () => {
     expect(screen.queryByRole('status')).toBeNull();
   });
 
-  it('never listens outside the desktop app, or before it’s turned on', async () => {
-    const audio = fakeAudio();
+  it('never listens before it’s turned on', async () => {
+    const audio = fakeAudio({ app: true });
     mockFetch({
       'GET /api/state': () => appState(),
-      'GET /api/voice': () => status({ wake: { available: false } }),
+      'GET /api/voice': () => status(),
     });
-    setVoicePrefs({ wake: true });
     renderApp(<WakeWord onChat />);
     await new Promise((r) => setTimeout(r, 100));
     expect(screen.queryByRole('status')).toBeNull();
     expect(audio.ready()).toBe(false);
   });
 
-  it('is a switch in Settings → Voice only in the desktop app, off by default', async () => {
+  it('is a switch in Settings → Voice, off by default', async () => {
+    fakeAudio({ app: true });
     mockFetch({
       'GET /api/state': () => appState(),
       'GET /api/voice': () => status(),
@@ -177,5 +186,88 @@ describe('“Hey Conch” in the desktop app', () => {
     expect(screen.getByText(/nothing is recorded or sent/)).toBeInTheDocument();
     await userEvent.click(wake);
     expect(voicePrefs().wake).toBe(true);
+  });
+});
+
+describe('“Hey Pearl” on a phone, while Conch is open (ADR 0108)', () => {
+  const routes = () => ({
+    'GET /api/state': () => appState(),
+    'GET /api/voice': () => status({ wake: { available: false, name: 'Pearl' } }),
+    'POST /api/voice/wake/state': () => ({ on: true }),
+    'GET /api/voice/speech': () => ({ piper: 'missing', voices: [], cloud: [] }),
+    'GET /api/needs/piper': () => ({ ready: false, needs: [] }),
+  });
+  const hide = (hidden: boolean) => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => (hidden ? 'hidden' : 'visible'),
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+  };
+  afterEach(() => {
+    hide(false);
+    vi.useRealTimers();
+  });
+
+  it('follows the assistant’s name', () => {
+    expect(wakePhrase('Pearl')).toBe('“Hey Pearl”');
+    expect(wakePhrase('Mister Bean the 3rd')).toBe('“Hey Mister Bean”');
+    expect(wakePhrase('🦊')).toBe('“Hey Conch”');
+    expect(wakePhrase(undefined)).toBe('“Hey Conch”');
+  });
+
+  it('listens while it’s on screen, keeps the screen awake, and stops when you leave', async () => {
+    const locks: string[] = [];
+    const audio = fakeAudio({ locks });
+    const calls = mockFetch(routes());
+    setVoicePrefs({ wake: true });
+    renderApp(<WakeWord onChat />);
+    expect(await screen.findByRole('status')).toHaveTextContent('Listening for “Hey Pearl”');
+    await waitFor(() => expect(audio.ready()).toBe(true));
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/api/voice/wake/state')?.body).toEqual({
+        on: true,
+        open: true,
+      }),
+    );
+    await waitFor(() => expect(locks).toEqual(['on']));
+    act(() => hide(true));
+    await waitFor(() => expect(audio.stopped).toEqual(['mic', 'context']));
+    await waitFor(() => expect(locks).toEqual(['on', 'off']));
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(calls.filter((c) => c.path === '/api/voice/wake/state').at(-1)?.body).toEqual({
+      on: false,
+      open: true,
+    });
+  });
+
+  it('stops by itself after five minutes unheard, and listens again in one press', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
+    const audio = fakeAudio();
+    mockFetch(routes());
+    setVoicePrefs({ wake: true });
+    renderApp(<WakeWord onChat />);
+    await screen.findByRole('status');
+    await waitFor(() => expect(audio.ready()).toBe(true));
+    act(() => void vi.advanceTimersByTime(OPEN_IDLE_MS));
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Stopped listening for “Hey Pearl”',
+    );
+    await waitFor(() => expect(audio.stopped).toEqual(['mic', 'context']));
+    await userEvent.click(screen.getByRole('button', { name: 'Listen again' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Listening for “Hey Pearl”');
+    // Still on: it's the person's switch, not the battery's.
+    expect(voicePrefs().wake).toBe(true);
+  });
+
+  it('says plainly in Settings → Voice what a phone won’t allow', async () => {
+    fakeAudio();
+    mockFetch(routes());
+    renderApp(<VoiceTab />, { route: '/settings/voice' });
+    const wake = await screen.findByRole('switch', {
+      name: /Listen for “Hey Pearl” while Conch is open/,
+    });
+    expect(wake).not.toBeChecked();
+    expect(screen.getByText(/can’t wake a locked phone/)).toBeInTheDocument();
   });
 });

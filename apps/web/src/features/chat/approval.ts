@@ -46,7 +46,14 @@ export function rowState(
   const approval = item.approval;
   if (approval === 'declined' || approval === 'refused')
     return { status: 'declined', outcome: OUTCOME[approval] };
-  if (approval === 'expired') return { status: 'cancelled', outcome: OUTCOME.expired };
+  // Nobody answered in time (ADR 0108): a no, and the chat says why.
+  if (approval === 'expired')
+    return {
+      status: 'cancelled',
+      outcome: item.unanswered
+        ? `No answer in ${item.unanswered} minutes, so it didn’t`
+        : OUTCOME.expired,
+    };
   const stopped = item.status === 'error' && item.output === 'Stopped.';
   const note = approval && NOTE[approval];
   return { status: stopped ? 'cancelled' : BASE[item.status], ...(note && { note }) };
