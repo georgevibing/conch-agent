@@ -24,7 +24,26 @@ Change it from the composer, or with `/mode`; set where new chats start in **Set
 
 These questions offer no **Always allow**. Everyday work never asks, outside the sealed box too: checking, pulling and fetching with git, installing what the project lists, building, testing, tidying the work folder. Spending money asks (a paid picture); your own plan, at no extra charge, doesn't.
 
-Once the chat has [read something from outside](../security/signing-in.md#when-the-assistant-reads-something-untrusted), Auto still gets on with everyday work, and asks only before the ways something could leave: a push, a new package, sending data or what a command printed, an app's change, words to other people. An unusual command that could reach the internet or your sign-ins also gets a second look from a small model you already have; the look can only add a question. Conch's own lists of models and the pictures it makes don't count as reading something from outside. With Claude Code, Auto uses Claude Code's own auto mode as well, where the model has it.
+Once the chat has [read something from outside](../security/signing-in.md#when-the-assistant-reads-something-untrusted), Auto still gets on with everyday work, and asks only before the ways something could leave: a push, a new package, sending data or what a command printed, a change in an app you connected, words to other people. An unusual command that could reach the internet or your sign-ins also gets a second look from a small model you already have; the look can only add a question. Conch's own lists of models and the pictures it makes don't count as reading something from outside. With Claude Code, Auto uses Claude Code's own auto mode as well, where the model has it.
+
+What still goes ahead after reading, in Auto:
+
+- **Apps you made in Conch.** Looking things up doesn’t ask after reading, in any mode, and in Auto neither does an ordinary change, like logging a meal. They ask before they'd pay, send something to other people, delete, or send pages of text to the app's site. An app you added from someone else asks as before.
+- **Reading pages and shopping around.** Searching, reading another page, sorting and filtering a shop, typing a search and filling a basket in [the browser](../features/browser.md) don't ask. Buying, sending or deleting on a site does, in German, French, Spanish, Portuguese, Italian and Dutch shops too. So do an address that looks like it carries data, a long text typed into a page, an upload and a download.
+
+## What a chat does, watched
+
+Some things only look wrong in numbers. Conch counts what each chat does in your apps and asks, saying why, when it sees:
+
+- one message to 20 people or more, every 20th message in one go, or every 100th in a day;
+- after reading something from outside, a message to an address nobody gave in the chat;
+- every 10th thing deleted in one go, or 25 deleted at once;
+- a payment of 1,000 or more, or the fifth in a day;
+- the very same change made again and again.
+
+One message to 500 people or more, or the 500th message from a chat in a day, looks like a spam campaign: Conch stops it in every mode, says why, and suggests a mailing service instead. The bigger of the others ask in Full trust too.
+
+**Always allow** holds for that tool for the rest of the chat, also after Conch restarts. To never be asked about a tool in any chat, set it to **Allow** in **Apps**.
 
 ## Full trust
 
@@ -34,6 +53,7 @@ Once the chat has [read something from outside](../security/signing-in.md#when-t
 - Passwords and Conch's own keys stay out of reach, and the assistant can't change who may use Conch;
 - a tool you turned **Off** stays off;
 - someone else's words in the chat, a routine or a chat app that read something, and a skill's list still ask;
+- a message to 500 people or more stops, and the bigger patterns above ask;
 - paying or deleting on a website asks.
 
 ## In every mode
