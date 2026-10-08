@@ -100,6 +100,8 @@ import { registerTaskRoutes } from './tasks/routes';
 import { registerAgentRoutes } from './agents/routes';
 import { AgentError } from './agents/store';
 import { registerMcpEndpoint } from './mcp/endpoint';
+import { registerA2aDoor } from './a2a/door';
+import { registerOutsideRoutes } from './a2a/routes';
 import { registerMcpRoutes } from './mcp/routes';
 import { registerQuestionRoutes } from './questions/routes';
 import { registerFirstJobRoutes } from './onboarding/first-job';
@@ -233,6 +235,13 @@ export async function buildApp(services: Services) {
   // Other apps using Conch (ADR 0073): the door they knock on, and pairing them from Settings.
   registerMcpEndpoint(app, services.mcp, gate, services.mcpSessions);
   registerMcpRoutes(app, services.mcpPairing, gate);
+  // Agents talking to each other (ADR 0112): the door for other agents, and outside agents.
+  registerA2aDoor(app, gate, {
+    store: services.mcp.store,
+    agents: services.agents,
+    chats: services.conversations,
+  });
+  registerOutsideRoutes(app, { outside: services.outside, rounds: services.rounds });
   registerBrowserRoutes(app, services, gate);
   registerTerminalRoutes(app, services, gate);
   registerLocalRoutes(app, services, gate);
@@ -1550,7 +1559,8 @@ export async function buildApp(services: Services) {
                 folder && !command.conversationId && (await services.folders.has(folder))
                   ? folder
                   : undefined;
-              await services.conversations.send({ ...rest, ...(filed && { folder: filed }) });
+              // Mentioning agents starts a round (ADR 0112); anything else is sent as it is.
+              await services.rounds.send({ ...rest, ...(filed && { folder: filed }) });
             } finally {
               unsubscribeCreated();
             }

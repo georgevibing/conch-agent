@@ -93,6 +93,8 @@ export interface McpDeps {
   search?: (query: string) => Promise<{ memory: Memory }[]>;
   skills: { list(): Promise<SkillsList> };
   apps: McpApps;
+  /** Your agents, which another agent may be let talk to over A2A (ADR 0112). */
+  agents?: () => Promise<{ id: string }[]>;
 }
 
 const textOf = (result: string): CallResult => ({ text: result, isError: false });
@@ -140,6 +142,15 @@ export class McpService {
           ...(app.color && { color: app.color }),
         })),
     ];
+  }
+
+  /**
+   * Your agents as scopes (`agent:<id>`): another agent may talk to them over
+   * A2A (ADR 0112). Not among an app's `choices`: they're chosen in Settings → Agents.
+   */
+  async agentScopes(): Promise<McpScope[]> {
+    const agents = (await this.deps.agents?.().catch(() => [])) ?? [];
+    return agents.map((a) => `agent:${a.id}` as McpScope);
   }
 
   /** Conch's own tools, as a turn in this app's chat would be offered them. */

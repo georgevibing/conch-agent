@@ -156,14 +156,16 @@ interface Look {
   appliedThisLook: number;
 }
 
-/** Not a chat a person had: a routine's run, a task, a page fetching its data, a guest (ADR 0075). */
+/** Not a chat a person had: a routine's run, a task, a page fetching its data, a guest (ADR 0075), another agent (ADR 0112). */
 export function notYours(origin: Origin): boolean {
   if (!origin) return false;
   if (
     origin.kind === 'routine' ||
     origin.kind === 'task' ||
     origin.kind === 'artifact' ||
-    origin.kind === 'client'
+    origin.kind === 'client' ||
+    // Another agent talking to one of yours (ADR 0112): someone else's chat.
+    origin.kind === 'peer'
   )
     return true;
   return origin.kind === 'channel' && origin.guest === true;

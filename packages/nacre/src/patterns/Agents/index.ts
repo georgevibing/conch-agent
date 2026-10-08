@@ -13,3 +13,13 @@ export type {
 } from './AgentPicker';
 export { ToneChips } from './ToneChips';
 export type { ToneChipsProps, ToneChoice } from './ToneChips';
+export { AgentRound } from './AgentRound';
+export type { AgentRoundProps, RoundFace } from './AgentRound';
+export { OutsideReply } from './OutsideReply';
+export type { OutsideReplyProps } from './OutsideReply';
+export { OutsideAgentList, OutsideAgentPreview } from './OutsideAgents';
+export type {
+  OutsideAgentItem,
+  OutsideAgentListProps,
+  OutsideAgentPreviewProps,
+} from './OutsideAgents';

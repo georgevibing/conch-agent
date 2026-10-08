@@ -128,7 +128,10 @@ export class McpPairing {
 
   /** Only scopes that name something there is now: an app id that isn't yours pairs nothing. */
   async #checkScopes(scopes: readonly McpScope[]): Promise<McpScope[]> {
-    const known = new Set((await this.deps.mcp.choices()).map((c) => c.scope));
+    const known = new Set([
+      ...(await this.deps.mcp.choices()).map((c) => c.scope),
+      ...(await this.deps.mcp.agentScopes()),
+    ]);
     const unknown = scopes.filter((s) => !known.has(s));
     if (unknown.length)
       throw new McpError('invalid', 'One of those apps isn’t connected in Conch any more.');

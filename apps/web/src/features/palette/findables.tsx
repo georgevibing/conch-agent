@@ -187,6 +187,19 @@ const settingsPlaces: {
     keywords: 'agents assistants personality persona name face avatar tone voice instructions',
     icon: <UsersRound />,
   },
+  // Agents that talk to each other (ADR 0112).
+  {
+    tab: 'agents',
+    label: 'Outside agents',
+    keywords: 'outside agents a2a agent2agent other agent add paste address remote peer talk',
+    icon: <UsersRound />,
+  },
+  {
+    tab: 'agents',
+    label: 'Let another agent in',
+    keywords: 'let agent in a2a share my agent pair peer another agent talk to my agent key',
+    icon: <UsersRound />,
+  },
   { tab: 'about', label: 'About you', keywords: 'profile me', icon: <User /> },
   { tab: 'memory', label: 'Memory', keywords: 'remember forget', icon: <Brain /> },
   {

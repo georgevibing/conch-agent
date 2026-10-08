@@ -37,6 +37,8 @@ export const SEALED_FILES = new Set([
   'skills.signing.json',
   // The keys your Conch apps use (ADR 0061).
   'conch-apps.secrets.json',
+  // The keys outside agents gave you (ADR 0112).
+  'a2a.secrets.json',
 ]);
 
 const MAGIC = 'conch-sealed';

@@ -18,7 +18,13 @@ export const ARCHIVE_PATH = '/archived';
 export function isChat(c: ConversationSummary): boolean {
   const origin = c.origin;
   if (origin?.kind === 'task') return origin.standalone === true;
-  return origin?.kind !== 'routine' && origin?.kind !== 'artifact' && origin?.kind !== 'client';
+  return (
+    origin?.kind !== 'routine' &&
+    origin?.kind !== 'artifact' &&
+    origin?.kind !== 'client' &&
+    // Another agent talking to one of yours (ADR 0112): opened from Settings → Agents.
+    origin?.kind !== 'peer'
+  );
 }
 
 /** The chats in the archive, most recently archived first. */

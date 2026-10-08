@@ -523,6 +523,28 @@ describe('Palette search', () => {
     await waitFor(() => expect(where()).toBe('/settings/other-apps'));
   });
 
+  it('finds outside agents and letting another agent in, straight into Settings → Agents (ADR 0112)', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    const { where } = renderApp(<Palette />);
+    act(() => useUi.getState().setPalette(true));
+    for (const [words, name] of [
+      ['a2a', /Settings: Outside agents/],
+      ['outside agent', /Settings: Outside agents/],
+      ['let agent in', /Settings: Let another agent in/],
+    ] as const) {
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(await screen.findByRole('option', { name })).toBeInTheDocument();
+    }
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(where()).toBe('/settings/agents'));
+  });
+
   it('finds your own address by domain, certificate or HTTPS, straight to its section', async () => {
     const user = userEvent.setup();
     mockFetch({

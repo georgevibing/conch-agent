@@ -1,6 +1,8 @@
 import { approvalOf, foldHolds } from '@conch/protocol';
 import type {
   AgentId,
+  RoundEnd,
+  RoundSpeaker,
   Memory,
   AppNeed,
   AppsModel,
@@ -388,6 +390,35 @@ export type TranscriptItem =
       from?: { agentId: AgentId; name: string };
       /** Before anything was said: who the chat is with from its start, not a change (no divider). */
       opening: boolean;
+      /** Handed the floor in a round (ADR 0112): by whom (absent: you asked). */
+      round?: { roundId: string; turn: number; by?: string };
+    }
+  | {
+      /**
+       * Agents taking turns (ADR 0112): one card where the round began, kept
+       * up to date as the floor passes (`passes`, by id), until it ends.
+       */
+      kind: 'round';
+      id: string;
+      seq: number;
+      roundId: string;
+      speakers: RoundSpeaker[];
+      passes: string[];
+      /** An outside agent being asked right now. */
+      asking?: string;
+      ended?: { reason: RoundEnd; turns: number };
+      /** When anything last happened in it: a round that went quiet long ago ended with Conch. */
+      at: number;
+    }
+  | {
+      /** What an outside agent said (ADR 0112): someone else's words, shown as theirs. */
+      kind: 'peer';
+      id: string;
+      seq: number;
+      outsideId: string;
+      name: string;
+      text: string;
+      failed?: boolean;
     }
   | {
       /** Where the chat's goal (`/goal`) was set, or cleared (no `goal`). */
@@ -950,12 +981,29 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         items: at === -1 ? [...kept, line] : [...kept.slice(0, at), line, ...kept.slice(at)],
       };
     }
-    case 'agent':
+    case 'agent': {
+      // The round's card hears of each pass of the floor (ADR 0112).
+      const round = event.round;
+      const passed: TranscriptItem[] = round
+        ? items.map((item) =>
+            item.kind === 'round' && item.roundId === round.roundId
+              ? {
+                  ...item,
+                  asking: undefined,
+                  at: event.at,
+                  passes:
+                    item.passes.at(-1) === event.agentId
+                      ? item.passes
+                      : [...item.passes, event.agentId],
+                }
+              : item,
+          )
+        : items;
       return {
         ...base,
         speaker: { agentId: event.agentId, name: event.name },
         items: [
-          ...items,
+          ...passed,
           {
             kind: 'agent',
             id: `agent-${event.seq}`,
@@ -963,7 +1011,75 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             agentId: event.agentId,
             name: event.name,
             ...(event.from && { from: event.from }),
+            ...(round && { round }),
             opening: !items.some((i) => i.kind === 'user'),
+          },
+        ],
+      };
+    }
+    case 'round': {
+      if (event.state === 'started') {
+        const first = event.speakers?.[0];
+        return {
+          ...base,
+          items: [
+            ...items,
+            {
+              kind: 'round',
+              id: `round-${event.roundId}`,
+              seq: event.seq,
+              roundId: event.roundId,
+              speakers: event.speakers ?? [],
+              // Your agent answers your message at once; an outside one is asked first.
+              passes: first && !first.outside ? [first.id] : [],
+              at: event.at,
+            },
+          ],
+        };
+      }
+      return {
+        ...base,
+        items: items.map((item) => {
+          if (item.kind !== 'round' || item.roundId !== event.roundId) return item;
+          if (event.state === 'asking') {
+            const asked = event.speakers?.[0];
+            if (!asked) return item;
+            return {
+              ...item,
+              asking: asked.id,
+              at: event.at,
+              passes: [...item.passes, asked.id],
+              speakers: item.speakers.some((s) => s.id === asked.id)
+                ? item.speakers
+                : [...item.speakers, asked],
+            };
+          }
+          return {
+            ...item,
+            asking: undefined,
+            at: event.at,
+            ended: { reason: event.reason ?? 'done', turns: event.turns ?? item.passes.length },
+          };
+        }),
+      };
+    }
+    case 'peer.message':
+      return {
+        ...base,
+        items: [
+          ...items.map((item) =>
+            item.kind === 'round' && item.roundId === event.roundId
+              ? { ...item, asking: undefined, at: event.at }
+              : item,
+          ),
+          {
+            kind: 'peer',
+            id: `peer-${event.seq}`,
+            seq: event.seq,
+            outsideId: event.outsideId,
+            name: event.name,
+            text: event.text,
+            ...(event.failed && { failed: true }),
           },
         ],
       };

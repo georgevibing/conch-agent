@@ -16,6 +16,7 @@ import {
   VERIFY_WINDOW_MS,
 } from './auth/store';
 import { cliName } from './cli/command';
+import { A2A_ENDPOINTS } from './a2a/door';
 
 /** How a request was let in. */
 export type Access =
@@ -63,7 +64,10 @@ const OAUTH_CALLBACKS = new Set([
   '/oauth/google/callback',
 ]);
 
-/** Other apps authenticate inside their own routes, but share HTTP admission limits. */
+/**
+ * Other apps and other agents (ADR 0073, ADR 0112) authenticate inside their
+ * own routes, but share HTTP admission limits.
+ */
 const MCP_ENDPOINTS = new Set(['/mcp', '/mcp/hello', '/mcp/session']);
 
 const COOKIE = 'conch_session';
@@ -572,7 +576,7 @@ export function registerSecurity(app: FastifyInstance, gate: Gatekeeper): void {
     }
 
     const oauthCallback = OAUTH_CALLBACKS.has(path);
-    const mcpEndpoint = MCP_ENDPOINTS.has(path);
+    const mcpEndpoint = MCP_ENDPOINTS.has(path) || A2A_ENDPOINTS.has(path);
     if (!isApi && !oauthCallback && !mcpEndpoint) return;
     // Only this computer's proof gets its own recovery budget. A loopback
     // socket, a claimed proxy address or an unverified cookie is not enough.

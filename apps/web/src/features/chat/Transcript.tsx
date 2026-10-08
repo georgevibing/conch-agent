@@ -62,6 +62,7 @@ import { isImageTool } from './ImageToolItem';
 import { RunStories } from './Stories';
 import { headlineOf, stepViews, stepsShown, storiesOf, storyStatus, turnChanges } from './telling';
 import { TaskChatCard } from '../tasks/TaskChatCard';
+import { PeerItem, RoundItem } from '../agents/RoundItem';
 import { RoutineInstruction } from '../routines/RunBanner';
 import { NextReplies } from '../replies/NextReplies';
 import { endedPlans } from '../plans/fold';
@@ -274,7 +275,10 @@ const isContextLine = (item: TranscriptItem) =>
   item.kind === 'cleared' ||
   item.kind === 'goal-note' ||
   // Another agent answering from here (ADR 0101): a line across the chat, too.
-  item.kind === 'agent';
+  item.kind === 'agent' ||
+  // Agents taking turns, and an outside agent's words (ADR 0112): theirs, not a reply's part.
+  item.kind === 'round' ||
+  item.kind === 'peer';
 
 /** Plan mode's question is its own card: the row of the tool that asked would say it twice. */
 function withoutPlanTools(items: TranscriptItem[]): TranscriptItem[] {
@@ -796,6 +800,10 @@ export const Transcript = memo(function Transcript({
       {block.item?.kind === 'skill-ended' && (
         <SkillHoldEnded title={block.item.title} className={styles.skillUsed} />
       )}
+      {block.item?.kind === 'round' && (
+        <RoundItem item={block.item} conversationId={conversationId} running={running} />
+      )}
+      {block.item?.kind === 'peer' && <PeerItem item={block.item} />}
       {block.item?.kind === 'routine' && (
         <RoutineChatCard
           routineId={block.item.routineId}
@@ -910,6 +918,7 @@ export const Transcript = memo(function Transcript({
           <AgentChange
             speaker={current}
             from={item.from?.name ?? previous.name}
+            {...(item.round && { round: item.round.by ? { by: item.round.by } : {} })}
             className={styles.summary}
           />
         </Arrival>,

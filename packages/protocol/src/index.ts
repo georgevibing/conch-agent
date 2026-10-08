@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { NarrationSource, StoryTitle, ToolLabel } from './activity';
 import { AddressStatus } from './address';
 import { AgentId, AgentList, Tone } from './agents';
+import { OutsideAgentId, RoundEnd, RoundSpeaker } from './agents-talk';
 import { AppNeed, AppsModel } from './apps';
 import { Artifact, ArtifactKind } from './artifacts';
 import { ATTACHMENT_LIMITS, Attachment } from './attachments';
@@ -66,6 +67,7 @@ export * from './activity';
 export * from './activity-describe';
 export * from './activity-stories';
 export * from './agents';
+export * from './agents-talk';
 export * from './profile';
 export * from './address';
 export * from './apps';
@@ -421,6 +423,11 @@ export const ConversationSummary = z.object({
       }),
       /** What another app did through Conch (ADR 0073): Claude Desktop, Cursor… */
       z.object({ kind: z.literal('client'), clientId: z.string(), name: z.string().max(60) }),
+      /**
+       * Another agent talking to one of yours over A2A (ADR 0112), as someone
+       * you let in: words only, like a guest in a group, whoever continues it.
+       */
+      z.object({ kind: z.literal('peer'), clientId: z.string(), name: z.string().max(60) }),
     ])
     .optional(),
   /**
@@ -892,6 +899,46 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     agentId: AgentId,
     name: z.string().max(40),
     from: z.object({ agentId: AgentId, name: z.string().max(40) }).optional(),
+    /**
+     * Handed the floor in a round (ADR 0112): which round, its turn, and who
+     * passed it (absent: you, by mentioning it).
+     */
+    round: z
+      .object({
+        roundId: z.string().max(40),
+        turn: z.number().int().min(1).max(64),
+        by: z.string().max(60).optional(),
+      })
+      .optional(),
+  }),
+  /**
+   * Agents talking in turn (ADR 0112): a round starts with who was mentioned,
+   * says when an outside agent is being asked (`asking`, with it as the one
+   * speaker), and ends saying why. A round with no end in the log ended with Conch.
+   */
+  z.object({
+    ...logged,
+    type: z.literal('round'),
+    roundId: z.string().max(40),
+    state: z.enum(['started', 'asking', 'ended']),
+    /** Who was mentioned, in order, on `started`; who's being asked, on `asking`. */
+    speakers: z.array(RoundSpeaker).max(12).optional(),
+    /** Replies in the round: on `ended`. */
+    turns: z.number().int().nonnegative().optional(),
+    reason: RoundEnd.optional(),
+  }),
+  /**
+   * What an outside agent answered (ADR 0112): someone else's words, shown as
+   * theirs. `failed`: it couldn't be reached, and `text` says why.
+   */
+  z.object({
+    ...logged,
+    type: z.literal('peer.message'),
+    roundId: z.string().max(40).optional(),
+    outsideId: OutsideAgentId,
+    name: z.string().max(60),
+    text: z.string().max(20_000),
+    failed: z.boolean().optional(),
   }),
   /** Passwords needs the person: to unlock it, or to type in a credential (ADR 0025). Later ones with the same id replace it. */
   z.object({ ...logged, type: z.literal('vault.request'), request: VaultRequest }),
