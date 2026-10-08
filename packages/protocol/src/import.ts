@@ -117,6 +117,26 @@ export const ImportStatus = z.object({
 });
 export type ImportStatus = z.infer<typeof ImportStatus>;
 
+/**
+ * `GET /api/import/rest`: agents an older Conch brought with the end of their
+ * instructions cut off, whose app still has the rest (ADR 0101). Most are
+ * brought in by themselves; these are what's left to offer.
+ */
+export const ImportRestAgent = z.object({
+  agentId: z.string().max(60),
+  name: z.string().max(AGENT_LIMITS.name),
+  source: ImportSourceId,
+  /** “OpenClaw”. */
+  label: z.string().max(80),
+  /** How much is still to come, in characters. */
+  chars: z.number().int().nonnegative(),
+  /** The rest reads like orders to the assistant: read it in Come home first. */
+  review: z.boolean(),
+});
+export type ImportRestAgent = z.infer<typeof ImportRestAgent>;
+export const ImportRest = z.object({ agents: z.array(ImportRestAgent) });
+export type ImportRest = z.infer<typeof ImportRest>;
+
 export const RunImportBody = z.object({
   source: ImportSourceId,
   /** The ids of the items to bring over. */
