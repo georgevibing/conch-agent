@@ -1,0 +1,35 @@
+{
+  "resultCount": 3,
+  "results": [
+    {
+      "wrapperType": "artist",
+      "artistType": "Artist",
+      "artistName": "Queen",
+      "artistLinkUrl": "https://music.apple.com/us/artist/queen/3296287?uo=4",
+      "artistId": 3296287,
+      "amgArtistId": 5205,
+      "primaryGenreName": "Rock",
+      "primaryGenreId": 21
+    },
+    {
+      "wrapperType": "artist",
+      "artistType": "Artist",
+      "artistName": "Freddie Mercury",
+      "artistLinkUrl": "https://music.apple.com/us/artist/freddie-mercury/3915743?uo=4",
+      "artistId": 3915743,
+      "amgArtistId": 4899,
+      "primaryGenreName": "Rock",
+      "primaryGenreId": 21
+    },
+    {
+      "wrapperType": "artist",
+      "artistType": "Artist",
+      "artistName": "Adam Lambert",
+      "artistLinkUrl": "https://music.apple.com/us/artist/adam-lambert/305371030?uo=4",
+      "artistId": 305371030,
+      "amgArtistId": 1152615,
+      "primaryGenreName": "Pop",
+      "primaryGenreId": 14
+    }
+  ]
+}

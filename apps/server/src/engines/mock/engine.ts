@@ -1003,6 +1003,13 @@ export class MockEngine implements Engine {
         yield* speak(`Here’s what I found:\n\n${found}`);
         return;
       }
+      // Music in the chat: Conch's own music_search, for real (it asks Apple).
+      const song = /^play me (.+?)[.?!]*$/i.exec(input.prompt.trim())?.[1];
+      if (song && !chatOnly && input.tools.some((t) => t.name === 'music_search')) {
+        yield* hostTool('music_search', { query: song, kind: 'song', limit: 6 });
+        yield* speak('Here it is. Press play to hear a preview.');
+        return;
+      }
       // What a tool found, drawn as it is (ADR 0060): the pretend apps' calendar,
       // emails, files and messages, each with its view beside the text.
       const found = chatOnly ? undefined : pretendFind(input.prompt);
