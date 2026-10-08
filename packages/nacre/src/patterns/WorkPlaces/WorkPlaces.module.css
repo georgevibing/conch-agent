@@ -1,0 +1,249 @@
+@layer nacre.components {
+  /* ── The chip: the place's mark, a word, and its arrival ─────────────── */
+  .chip {
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 1;
+  }
+
+  .chipIcon {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+  }
+
+  .chipIcon > svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    stroke-width: 2;
+  }
+
+  /* Elsewhere than here: the mark takes the accent, quietly. */
+  .chip:not([data-kind='computer']) .chipIcon {
+    color: var(--nc-accent-11);
+  }
+
+  /* The work moved: the new mark glides up into place on a spring. */
+  .chip[data-moved] .chipIcon {
+    animation: wp-arrive var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) both;
+  }
+
+  .chipGlint {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(100deg, transparent 30%, var(--nc-pearl-4) 50%, transparent 70%);
+    opacity: 0;
+    animation: wp-glint var(--nc-panel-glint-duration) var(--nc-ease-out) both;
+  }
+
+  /* Not ready yet: a small dot on the mark, breathing while it gets ready. */
+  .chipDot {
+    position: absolute;
+    inset-block-start: -2px;
+    inset-inline-end: -3px;
+    inline-size: 6px;
+    block-size: 6px;
+    border-radius: var(--nc-radius-full);
+    background: oklch(0.72 0.15 var(--nc-warning-h));
+    box-shadow: 0 0 0 1.5px var(--nc-surface);
+  }
+
+  .chip[data-waiting='preparing'] .chipDot {
+    background: var(--nc-accent-9);
+    animation: wp-breathe 1.6s var(--nc-ease-in-out) infinite;
+  }
+
+  @keyframes wp-arrive {
+    from {
+      transform: translateY(70%) scale(0.6);
+      opacity: 0;
+    }
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
+
+  @keyframes wp-glint {
+    0% {
+      opacity: 0;
+      transform: translateX(-100%);
+    }
+    40% {
+      opacity: calc(0.9 * var(--nc-lustre));
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(100%);
+    }
+  }
+
+  @keyframes wp-breathe {
+    50% {
+      transform: scale(0.6);
+      opacity: 0.55;
+    }
+  }
+
+  /* ── The list ─────────────────────────────────────────────────────── */
+  .panel {
+    inline-size: min(23rem, calc(100vw - 24px));
+  }
+
+  .panel [role='radiogroup'] {
+    max-block-size: min(26rem, 60vh);
+  }
+
+  .heading {
+    margin: 0;
+    padding: var(--nc-space-3) var(--nc-space-3) var(--nc-space-1);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text-muted);
+    letter-spacing: 0.01em;
+  }
+
+  .note {
+    display: flex;
+    gap: var(--nc-space-2);
+    align-items: flex-start;
+    margin: var(--nc-space-1) var(--nc-space-3) var(--nc-space-2);
+    padding: var(--nc-space-2) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-wash-1);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+  }
+
+  .noteIcon {
+    flex-shrink: 0;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    margin-block-start: 1px;
+  }
+
+  .option {
+    display: grid;
+  }
+
+  .row {
+    align-items: flex-start;
+  }
+
+  .row > span:last-child {
+    align-self: center;
+  }
+
+  .icon {
+    display: grid;
+    place-items: center;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    flex-shrink: 0;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-wash-2);
+    color: var(--nc-text-muted);
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .icon > svg {
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
+  }
+
+  .row[data-state='checked'] .icon {
+    background: var(--nc-accent-3);
+    color: var(--nc-accent-11);
+  }
+
+  .row[data-place-state='needs-setup'] .icon,
+  .row[data-place-state='unavailable'] .icon {
+    opacity: 0.7;
+  }
+
+  .state {
+    margin-inline-start: var(--nc-space-1-5);
+    padding: 0 var(--nc-space-1-5);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-wash-2);
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-muted);
+    vertical-align: 1px;
+  }
+
+  .state[data-place-state='unavailable'] {
+    color: light-dark(oklch(0.5 0.12 var(--nc-warning-h)), oklch(0.82 0.12 var(--nc-warning-h)));
+  }
+
+  .action {
+    padding: 0 var(--nc-space-3) var(--nc-space-2)
+      calc(var(--nc-space-3) + 1.75rem + var(--nc-space-2-5));
+  }
+
+  /* ── On a command's row: where it ran ─────────────────────────────── */
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    padding: 0 var(--nc-space-1-5);
+    block-size: 1.125rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-3);
+    color: var(--nc-accent-11);
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-medium);
+    line-height: 1;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+
+  .tagIcon {
+    inline-size: 0.6875rem;
+    block-size: 0.6875rem;
+    stroke-width: 2.25;
+  }
+
+  .tagLabel {
+    max-inline-size: 10rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chip[data-moved] .chipIcon,
+    .chipGlint,
+    .chip[data-waiting='preparing'] .chipDot {
+      animation: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .chip[data-moved] .chipIcon,
+  :global([data-nacre-motion='reduced']) .chipGlint,
+  :global([data-nacre-motion='reduced']) .chip[data-waiting='preparing'] .chipDot {
+    animation: none;
+  }
+
+  /* A narrow composer (a phone): the place is its mark, in a round button. */
+  @container composer (max-width: 34rem) {
+    .chip[data-kind] {
+      justify-content: center;
+      gap: 0;
+      inline-size: var(--nc-control-sm);
+      padding: 0;
+      border-radius: var(--nc-radius-full);
+      corner-shape: round;
+    }
+
+    .chip[data-kind] > :not(.chipIcon):not(.chipGlint) {
+      display: none;
+    }
+  }
+}

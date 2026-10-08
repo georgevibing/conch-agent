@@ -18,6 +18,7 @@ import { ChipList, ChipStack, chipsSaid } from './Chips';
 import { FamilyGlyph } from './FamilyGlyph';
 import { storyDuration, stepsLabel, useNow } from './format';
 import { MorphText } from './MorphText';
+import { WorkedAt } from '../WorkPlaces/WorkedAt';
 import styles from './Story.module.css';
 import type { StoryChip, StoryFamily, StorySource } from './types';
 
@@ -49,6 +50,8 @@ export interface StoryStepView {
   startedAt?: number;
   /** It went wrong in a way worth saying, beyond its status (a test that failed). */
   failed?: boolean;
+  /** Where the command ran, when it wasn't this computer (ADR 0106): a tag on its row. */
+  where?: { kind: 'container' | 'ssh' | 'cloud'; name: string };
 }
 
 /**
@@ -287,6 +290,9 @@ function StepRow({
   );
   const trail = (
     <>
+      {step.where && (
+        <WorkedAt kind={step.where.kind} name={step.where.name} className={styles.stepWhere} />
+      )}
       {step.durationMs !== undefined && step.status !== 'running' && (
         <span className={styles.stepTime}>{storyDuration(step.durationMs)}</span>
       )}
@@ -398,6 +404,15 @@ export function Story({
   // The row's stack shows faces worth seeing (favicons, photos); files are said by the headline.
   const faces = chips?.filter((c) => c.image || c.kind === 'site') ?? [];
   const expandable = steps.length > 0 || hasChips;
+  // Its commands ran elsewhere, all in one place (ADR 0106): said on the row itself.
+  const placed = steps.filter((s) => s.where);
+  const where =
+    placed[0]?.where &&
+    placed.every(
+      (s) => s.where?.kind === placed[0]?.where?.kind && s.where?.name === placed[0]?.where?.name,
+    )
+      ? placed[0].where
+      : undefined;
 
   // Said once when it starts and once when it ends, never for each step.
   const [said, setSaid] = useState('');
@@ -419,7 +434,7 @@ export function Story({
   const time = !running && durationMs !== undefined ? `, took ${storyDuration(durationMs)}` : '';
   const spokenTail = `, ${stepsLabel(steps.length)}${repeats ? `, ${repeats} repeats folded` : ''}${
     hasChips ? `, ${chipsSaid(chips)}` : ''
-  }, ${SPOKEN[status]}${time}`;
+  }${where ? `, ${where.kind === 'ssh' ? `ran on ${where.name}` : where.kind === 'container' ? 'ran in a container' : 'ran in the cloud'}` : ''}, ${SPOKEN[status]}${time}`;
 
   return (
     <Collapsible.Root
@@ -459,6 +474,7 @@ export function Story({
             )}
           </span>
           <span className={styles.meta} aria-hidden>
+            {where && <WorkedAt kind={where.kind} name={where.name} />}
             {faces.length > 0 && <ChipStack chips={faces} />}
             {steps.length > 1 && <span className={styles.count}>{stepsLabel(steps.length)}</span>}
             <Clock status={status} startedAt={startedAt} durationMs={durationMs} />
@@ -500,7 +516,8 @@ export function Story({
                   {steps.map((step, i) => (
                     <StepRow
                       key={step.id}
-                      step={step}
+                      // Said once on the row when every command ran there; per step when they differ.
+                      step={where && step.where ? { ...step, where: undefined } : step}
                       last={i === steps.length - 1}
                       arriving={arriving}
                       renderRaw={renderRaw}
