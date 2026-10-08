@@ -40,6 +40,8 @@ function setup(options: { found?: TargetApp[] } = {}) {
       (['memory.read', 'memory.write', 'skills', 'browser', 'app:gmail'] as McpScope[]).map(
         (scope) => ({ scope, title: scope }),
       ),
+    // Your agents, which another agent may be let talk to (ADR 0112).
+    agentScopes: async () => ['agent:ag_conch'] as McpScope[],
   } as unknown as McpService;
   const sessions = new McpSessions();
   const healed: string[] = [];
@@ -142,6 +144,21 @@ describe('connecting an app in one press', () => {
       /isn’t on this computer/,
     );
     expect(await store.list()).toHaveLength(0);
+  });
+
+  it('another agent can be given one of yours to talk to, and only one that exists (ADR 0112)', async () => {
+    const { pairing } = setup();
+    const paired = await pairing.pair({
+      app: 'other',
+      name: 'Ana’s agent',
+      scopes: ['agent:ag_conch'],
+      http: true,
+    });
+    expect(paired.client.scopes).toEqual(['agent:ag_conch']);
+    expect(paired.setup?.key).toMatch(/^cmcp\./);
+    await expect(
+      pairing.pair({ app: 'other', scopes: ['agent:ag_gonegone'], http: true }),
+    ).rejects.toThrow(/isn’t connected/);
   });
 
   it('connecting again starts afresh: the old pairing goes', async () => {

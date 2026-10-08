@@ -10,6 +10,12 @@ import { z } from 'zod';
 const AppScope = z.templateLiteral(['app:', z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/)]);
 
 /**
+ * One of your agents, as a scope (ADR 0112): another agent may talk to it over
+ * A2A, in words only. Nothing else comes with it.
+ */
+const AgentScope = z.templateLiteral(['agent:ag_', z.string().regex(/^[A-Za-z0-9_-]{4,40}$/)]);
+
+/**
  * What a paired app may use. Nothing is implied: an app with `memory.read`
  * can't add memories, and one with `app:gmail` can't reach Slack.
  */
@@ -25,6 +31,7 @@ export const McpScope = z.union([
     'browser',
   ]),
   AppScope,
+  AgentScope,
 ]);
 export type McpScope = z.infer<typeof McpScope>;
 

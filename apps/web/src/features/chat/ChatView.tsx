@@ -48,6 +48,7 @@ import {
 import { NEW, useLiveStore } from '../../live/store';
 import { setChatGoal } from '../commands/context';
 import { useSlashCommands } from '../commands/useSlashCommands';
+import { useMentions } from '../agents/useMentions';
 import { ArchivedBanner } from '../archive/ArchivedBanner';
 import { ChannelBanner } from '../channels/ChannelBanner';
 import { useChannels } from '../channels/queries';
@@ -726,6 +727,9 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
     background: (text) => sendAway(text),
     chooseFolder: () => chooseFolder(),
   });
+  // `@` brings in another agent (ADR 0112): its list takes the slash menu's place while it's open.
+  const mentions = useMentions({ draft, setDraft });
+  const menu = mentions.open ? mentions.menu : slash.menu;
   const recover = useTurnRecovery(view, turn, send);
   const chosenReady = Boolean(
     turn.catalog?.providers.some((p) => p.engine === turn.options.engine),
@@ -947,7 +951,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
             sendAway();
             return;
           }
-          slash.menu.onKeyDown(e);
+          menu.onKeyDown(e);
           if (e.defaultPrevented) return;
           // ⌘↩ while it works: send this now, steering the reply, instead of queueing it.
           const steerable =
@@ -957,8 +961,8 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
             steerDraft();
           }
         }}
-        textareaProps={slash.menu.inputProps}
-        overlay={<CommandMenu {...slash.menu.menuProps} />}
+        textareaProps={menu.inputProps}
+        overlay={<CommandMenu {...menu.menuProps} />}
         onStop={() => live.interrupt(conversationId)}
         running={busy}
         placeholder={

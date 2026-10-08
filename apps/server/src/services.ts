@@ -125,6 +125,9 @@ import { ConversationManager, type TurnRoute, type ToolContext } from './convers
 import { ConversationStore } from './conversations/store';
 import { ChatFolders } from './conversations/folders';
 import { AgentStore } from './agents/store';
+import { RoundService } from './agents/rounds';
+import { OutsideAgents } from './a2a/outside';
+import { outsideCheck } from './a2a/doctor';
 import { registerAgentsDoctor } from './agents/doctor';
 import type { ApiEngine } from './engines/api';
 import { builtInEngines, serverEngine } from './engines/registry';
@@ -334,6 +337,10 @@ export class Services {
   readonly folders: ChatFolders;
   /** The agents you talk to: personas of the same Conch (ADR 0101). */
   readonly agents: AgentStore;
+  /** Agents elsewhere that speak A2A, added by pasting their address (ADR 0112). */
+  readonly outside: OutsideAgents;
+  /** Agents taking turns in a chat when you mention them (ADR 0112). */
+  readonly rounds: RoundService;
   /** Questions the assistant asked, waiting for your answer (ADR 0060 §4). */
   readonly questions = new QuestionDesk();
   /** Every offer to turn something on in a chat goes through here (ADR 0060). */
@@ -499,6 +506,10 @@ export class Services {
       this.broadcast.emit({ type: 'agents.changed', list }),
     );
     registerAgentsDoctor(this.doctor, this.agents);
+    this.outside = new OutsideAgents({
+      home: config.CONCH_HOME,
+      heal: (message) => heal('agents', message),
+    });
     this.access = new AccessStore(config.CONCH_HOME, heal);
     // "This computer", proven (ADR 0063): the key only your account can read.
     this.here = new ThisComputer(config.CONCH_HOME, {
@@ -1316,10 +1327,18 @@ export class Services {
       ready: () => this.providers.ready(),
     });
     this.doctor.register(tasksCheck(this.tasks));
+    this.rounds = new RoundService({
+      chats: this.conversations,
+      agents: this.agents,
+      outside: this.outside,
+    });
+    this.doctor.register(outsideCheck(this.outside));
     this.doctor.register(this.processes.doctorCheck());
     // Your other apps, reaching Conch through its door (ADR 0073).
     this.mcp = new McpService({
       store: new McpClientStore(config.CONCH_HOME),
+      // Another agent may be given one of yours to talk to (ADR 0112).
+      agents: () => this.agents.list().then((list) => list.agents),
       conversations: this.conversations,
       engineId: () => this.engine().id,
       memory: this.memory,
@@ -2604,6 +2623,21 @@ export class Services {
             ),
         });
     }
+    // Outside agents' keys (ADR 0112): listed so you know they're here, never shown.
+    for (const { agent, hint } of await this.outside.keyed().catch(() => []))
+      out.push({
+        id: id('outside', agent.id),
+        title: `${agent.name} key`,
+        usedBy: `${agent.name}, an outside agent`,
+        hint,
+        manage: { label: 'Open Agents', place: 'agents' },
+        reveal: () =>
+          Promise.reject(
+            new Error(
+              'This key is kept by Conch for that agent. Paste it again in Agents to change it.',
+            ),
+          ),
+      });
     for (const channel of (await this.#channelStore?.all().catch(() => [])) ?? []) {
       const secrets = await this.#channelStore?.secrets(channel.id).catch(() => undefined);
       if (!secrets) continue;
@@ -2745,6 +2779,7 @@ export class Services {
     void this.#printer.close();
     this.computer.stop();
     this.tasks.close();
+    this.rounds.close();
     await this.conversations
       .drain()
       .catch(() => console.warn('[shutdown] Could not save all chat checkpoints.'));

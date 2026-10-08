@@ -62,6 +62,7 @@ Whoever has that app's key can then use what you let it use, from anywhere. Keep
 
 ## Good to know
 
+- Another agent you let talk to yours, in [Settings → Agents](./agents.md#let-another-agent-talk-to-yours), is listed here too, as **Talking to your agents**. It's paired the same way, and removed the same way.
 - Conch has to be running for other apps to use it.
 - The apps an app can use are the ones connected in Conch, so they work the same with every model that app runs.
 - A backup doesn't carry paired apps. On a new computer, connect them again.

@@ -47,6 +47,7 @@ import {
 } from './api';
 import { asPreset } from './face';
 import { FaceSources } from './FaceSources';
+import { LetAgentsInSection, OutsideAgentsSection } from './OtherAgents';
 import styles from './Agents.module.css';
 import { useRemoveAgent } from './remove';
 import { STARTERS, TONE_CHOICES, agentHello } from './words';
@@ -75,32 +76,37 @@ export function AgentsTab({ item }: { item?: string }) {
   const agents = list?.agents ?? [];
   const full = agents.length >= AGENT_LIMITS.count;
   return (
-    <Section title="Agents" description="Who you talk to. Each has its own name, face and voice.">
-      <AgentGallery
-        label="Your agents"
-        agents={agents}
-        onOpen={(id) => openSettings('agents', id)}
-        {...(!full && { onCreate: () => openNewAgent() })}
-        onReorder={(ids) =>
-          reorder.mutate(ids, {
-            onError: (error) => toast.error(error.message || 'The order didn’t change.'),
-          })
-        }
-        onMakeDefault={(id) =>
-          setDefault.mutate(id, {
-            onSuccess: (next) => {
-              const named = next.agents.find((a) => a.id === id)?.name;
-              toast.success(`New chats start with ${named ?? 'it'}`);
-            },
-            onError: (error) => toast.error(error.message || 'That didn’t change.'),
-          })
-        }
-        onDelete={(id) => {
-          const gone = agents.find((a) => a.id === id);
-          if (gone) remove(gone);
-        }}
-      />
-    </Section>
+    <Stack gap={6}>
+      <Section title="Agents" description="Who you talk to. Each has its own name, face and voice.">
+        <AgentGallery
+          label="Your agents"
+          agents={agents}
+          onOpen={(id) => openSettings('agents', id)}
+          {...(!full && { onCreate: () => openNewAgent() })}
+          onReorder={(ids) =>
+            reorder.mutate(ids, {
+              onError: (error) => toast.error(error.message || 'The order didn’t change.'),
+            })
+          }
+          onMakeDefault={(id) =>
+            setDefault.mutate(id, {
+              onSuccess: (next) => {
+                const named = next.agents.find((a) => a.id === id)?.name;
+                toast.success(`New chats start with ${named ?? 'it'}`);
+              },
+              onError: (error) => toast.error(error.message || 'That didn’t change.'),
+            })
+          }
+          onDelete={(id) => {
+            const gone = agents.find((a) => a.id === id);
+            if (gone) remove(gone);
+          }}
+        />
+      </Section>
+      {/* Agents talking to each other (ADR 0112): agents elsewhere, and other agents let in. */}
+      <OutsideAgentsSection />
+      <LetAgentsInSection />
+    </Stack>
   );
 }
 

@@ -22,7 +22,14 @@ const SHORT: Record<string, string> = {
 /** "Your memory, Gmail and the browser". */
 export function usesWords(scopes: readonly McpScope[], choices: readonly McpChoice[]): string {
   const named = new Map(choices.map((c) => [c.scope, c.title]));
-  const words = scopes.map((s) => SHORT[s] ?? named.get(s) ?? 'an app that’s gone');
+  // Another agent let talk to yours (ADR 0112): said once, however many of yours.
+  const agents = scopes.some((s) => s.startsWith('agent:')) ? ['talking to your agents'] : [];
+  const words = [
+    ...scopes
+      .filter((s) => !s.startsWith('agent:'))
+      .map((s) => SHORT[s] ?? named.get(s) ?? 'an app that’s gone'),
+    ...agents,
+  ];
   if (!words.length) return 'Nothing yet';
   const joined =
     words.length === 1

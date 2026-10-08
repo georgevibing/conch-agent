@@ -1,0 +1,219 @@
+@layer nacre.components {
+  /*
+   * Agents taking turns: a card with the faces in a row and, above them, an
+   * arc of pearl light for every pass of the floor. The geometry is in slot
+   * units (one face is one slot), so the picture keeps its shape at any size
+   * and the pearl stays round.
+   */
+  .round {
+    --ar-slot: calc(var(--nc-space-16) + var(--nc-space-4));
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    max-inline-size: 36rem;
+    padding: var(--nc-space-3) var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(180deg, var(--nc-surface-hi), var(--nc-surface));
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .round[data-state='ended'] {
+    gap: var(--nc-space-1);
+    padding-block: var(--nc-space-2);
+    background: var(--nc-wash-1);
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    min-inline-size: 0;
+  }
+
+  .title {
+    margin: 0;
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+  }
+
+  .meta {
+    margin: 0;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stop {
+    margin-inline-start: auto;
+  }
+
+  .stage {
+    display: grid;
+    justify-items: center;
+    overflow-x: auto;
+    padding-block-start: var(--nc-space-1);
+  }
+
+  .arcs {
+    inline-size: calc(var(--ar-count) * var(--ar-slot));
+    block-size: calc(var(--ar-slot) * 0.84);
+    margin-block-end: calc(var(--nc-space-1) * -1);
+    overflow: visible;
+  }
+
+  .arc {
+    fill: none;
+    stroke: var(--nc-accent-8);
+    stroke-width: 0.22;
+    stroke-linecap: round;
+    opacity: max(0.18, calc(0.7 - var(--ar-age) * 0.16));
+    transition: opacity var(--nc-duration-slow) var(--nc-ease-out);
+  }
+
+  .arc[data-latest] {
+    stroke: var(--nc-accent-9);
+    stroke-width: 0.3;
+    opacity: 1;
+    stroke-dasharray: 1;
+    animation: ar-draw var(--nc-duration-slower) var(--nc-ease-out) both;
+  }
+
+  .pearl {
+    fill: var(--nc-surface-hi);
+    stroke: var(--nc-accent-9);
+    stroke-width: 0.32;
+  }
+
+  .faces {
+    display: grid;
+    grid-template-columns: repeat(var(--ar-count), var(--ar-slot));
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .face {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+    padding-inline: var(--nc-space-0-5);
+    opacity: 0.72;
+    transition:
+      opacity var(--nc-duration-base) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .face[data-spoke] {
+    opacity: 0.9;
+  }
+
+  .face[data-speaking] {
+    opacity: 1;
+    transform: translateY(calc(var(--nc-space-0-5) * -1));
+  }
+
+  .name {
+    max-inline-size: 100%;
+    overflow: hidden;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .face[data-speaking] .name {
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-semibold);
+  }
+
+  .tag {
+    padding: 0 var(--nc-space-1);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-wash-2);
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-2xs);
+    line-height: var(--nc-leading-snug);
+  }
+
+  .live {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    text-align: center;
+  }
+
+  .folded {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .stack {
+    display: inline-flex;
+    flex-shrink: 0;
+  }
+
+  .stack > * + * {
+    margin-inline-start: calc(var(--nc-space-1-5) * -1);
+    box-shadow: 0 0 0 2px var(--nc-surface);
+    border-radius: var(--nc-radius-full);
+  }
+
+  .line {
+    min-inline-size: 0;
+    margin: 0;
+    overflow: hidden;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .count {
+    color: var(--nc-text-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .why {
+    margin: 0;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+  }
+
+  @keyframes ar-draw {
+    from {
+      stroke-dashoffset: 1;
+    }
+
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .round,
+    .arc[data-latest] {
+      animation: none;
+    }
+
+    .face {
+      transition: none;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .round,
+  [data-nacre-motion='reduced'] .arc[data-latest] {
+    animation: none;
+  }
+
+  [data-nacre-motion='reduced'] .face {
+    transition: none;
+  }
+}

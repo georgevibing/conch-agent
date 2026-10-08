@@ -55,6 +55,38 @@ The new agent answers from your next message, and reads the whole chat first, so
 
 In <kbd>mod+k</kbd>, type an agent's name for **New chat with ‹name›** or **Edit ‹name›**.
 
+## Several agents in one chat
+
+Mention agents in a message and they take turns: "@Researcher find three options, @Writer draft an email about the best one". Type `@` in the message box to see who you can bring in, and press one to write its name.
+
+- **The first one you name answers your message**, then the next. Each reads everything said before it.
+- **An agent can hand over** by writing `@` and another agent's name. That agent goes next.
+- **A card shows who's talking to whom**: every face in the chat, an arc each time one passes to another, and **‹name› is answering** with how many replies so far. Press **Stop** to end it. Once they're done, it folds to one line.
+- **Writing in the chat ends it.** Your message goes as soon as the reply that's running finishes.
+- **They stop by themselves for you** after 8 replies, after 3 from any one agent, when two keep handing it back and forth, or once the round has spent $1. The card says why. Your spending limits count too.
+
+Every agent in the chat works with the chat's own model, [permission mode](../reference/modes.md) and safety settings. Handing over can't change any of them. After the round, the last agent to speak answers your next message.
+
+## Outside agents
+
+An outside agent lives somewhere else, on another computer or a service, and speaks **A2A**, the open protocol agents use to talk to each other. Another Conch can be one.
+
+1. Open **Settings → Agents**, and under **Outside agents**, paste its address into **Add an outside agent**. If it gave you a key, paste the two together. Another Conch gives you both in one copy.
+2. Conch reads who it is and shows it: its name, what it says it can do, and where it answers. Press **Add ‹name›**.
+3. Mention it in a chat, like your own agents: "@Travel Agent find flights to Lisbon on 3 May".
+
+It's sent only the message you mention it in, nothing else from the chat. Your own agents can't send it anything: if one tries, the chat says only you can. What it answers appears under **Outside agent**, in a frame of its own. Your agents read it as someone else's words, never as instructions, and Conch is more careful for the rest of the chat, as it is after reading a web page (see [Auto](../reference/modes.md#auto)). An outside agent's row says if it didn't answer last time. **Repair** in Settings → Health tries it again. **Remove** forgets it and its key.
+
+## Let another agent talk to yours
+
+Nobody else's agent can reach yours until you let it in.
+
+1. Open **Settings → Agents**, and under **Agents that can talk to yours**, press **Let another agent in**.
+2. Say **Whose agent is it?**, tick which of your agents it may talk to, and, if it's on another computer, turn on **It's on another computer** (this needs [your own address](../start/server.md)).
+3. Press **Let it in** and confirm it's you. Copy **Its address and key** and give it to the other agent. It's shown once.
+
+It gets your agent's name and voice, in words only. It can't use tools, your apps or anything Conch knows about you, never sees your instructions, and nothing it says can give your agent permission for anything. Each key can send a few messages a minute, and what its answers cost stops at $1 a day. **What it said** shows the conversation. **Remove** shuts it out at once. It also shows in [Other apps](./other-apps.md).
+
 ## In chat apps
 
 In [Telegram, WhatsApp, Slack](../channels/index.md) and the others, send `/agent` to see your agents, the one answering ticked, and tap another (in an app without buttons, reply with its number). `/agent atlas` chooses by name. The choice stays for that chat app.
@@ -99,4 +131,4 @@ Deleting says **‹name› deleted**, with **Undo**. Its chats stay, and carry o
 - Up to 50 agents. A name is up to 40 characters, what it's for 120, its own words on personality 2,000, and its instructions 8,000.
 - Instructions are read before every answer, so long ones cost a little on every message. A few lines is plenty.
 - Old links to **Settings → Personality** open **Settings → Agents**.
-- Agents are kept in `~/.conch/agents`: `agents.json`, and their pictures in `avatars`.
+- Agents are kept in `~/.conch/agents`: `agents.json`, their pictures in `avatars`, and outside agents in `outside.json`. Outside agents' keys are kept sealed in `~/.conch/a2a.secrets.json`, and come back only from a backup with a passphrase.

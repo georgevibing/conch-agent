@@ -252,6 +252,12 @@ export const RULES: readonly BackupRule[] = [
     why: 'Your agents: each one’s name, persona, instructions and which is the default.',
   },
   {
+    match: 'agents/outside.json',
+    class: 'kept',
+    group: 'settings',
+    why: 'Agents elsewhere you added by their address (ADR 0112): who they are and where to reach them, never their keys.',
+  },
+  {
     match: 'agents/avatars/*',
     class: 'kept',
     group: 'settings',
@@ -606,6 +612,12 @@ export const RULES: readonly BackupRule[] = [
     class: 'secret',
     group: 'secrets',
     why: 'Your bots’ keys, and your email’s app password.',
+  },
+  {
+    match: 'a2a.secrets.json',
+    class: 'secret',
+    group: 'secrets',
+    why: 'The keys outside agents gave you to talk to them (ADR 0112).',
   },
   {
     match: 'conch-apps.secrets.json',
