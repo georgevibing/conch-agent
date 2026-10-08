@@ -83,6 +83,15 @@ export function percent(value: number, locale?: string, signed = true): string {
   }).format(value / 100);
 }
 
+/** A percentage for an axis, where the ticks are already round: "+10%". */
+export function percentTick(value: number, locale?: string): string {
+  return formatter(locale, {
+    style: 'percent',
+    maximumFractionDigits: Math.abs(value) < 1 ? 2 : 0,
+    signDisplay: 'exceptZero',
+  }).format(value / 100);
+}
+
 /** A signed amount: "+1.70", "−1.70" (a real minus sign, as Intl writes it). */
 export function signed(value: number, locale?: string, digits?: number): string {
   const places = digits ?? priceDigits(value);

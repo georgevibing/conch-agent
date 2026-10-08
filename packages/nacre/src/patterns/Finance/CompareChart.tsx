@@ -11,7 +11,16 @@ import {
 
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { cx } from '../../utils/cx';
-import { axisDate, dateWords, money, niceTicks, percent, PERIOD_WORDS, signed } from './format';
+import {
+  axisDate,
+  dateWords,
+  money,
+  niceTicks,
+  percent,
+  percentTick,
+  PERIOD_WORDS,
+  signed,
+} from './format';
 import { FINANCE_PERIODS, type FinancePeriod, type PriceSeries } from './types';
 import styles from './Finance.module.css';
 
@@ -198,7 +207,7 @@ export function CompareChart({
                 className={styles.yTick}
                 style={{ '--y': yOf(value) / H } as CSSProperties}
               >
-                {percent(value, locale)}
+                {percentTick(value, locale)}
               </span>
             ))}
           </div>
