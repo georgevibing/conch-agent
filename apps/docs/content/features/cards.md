@@ -1,7 +1,7 @@
 ---
 title: Cards in the chat
 nav: Cards
-description: Products, songs, videos, weather, recipes, places, people and books, shown in the chat as cards you can press, play and compare.
+description: Products, songs, videos, weather, recipes, places, prices, charts, people and books, as cards in the chat you can press, play, compare, keep and send.
 order: 18.5
 ---
 
@@ -49,6 +49,9 @@ temperature, the next 24 hours and up to 10 days. Drag along the hours (or use t
 arrow keys) to see any hour; let go and it returns to now. UV, air quality, wind,
 sunrise and sunset are there too, each in words as well as colour.
 
+The switch at the bottom shows it in **°C** or **°F**. Conch starts with the one used
+where you are, and remembers what you choose for every weather card after.
+
 ## Recipes
 
 "A recipe for tomato rice." The card has the photo, the times and how many it serves.
@@ -69,6 +72,46 @@ Maps or OpenStreetMap. Drag the map to move it, and zoom with the buttons, a pin
 <kbd>+</kbd> and <kbd>−</kbd>.
 
 "How far is Brighton from London?" shows both, and the distance as the crow flies.
+
+## Share prices and companies
+
+"What's Apple at?" The card shows the price, how much it moved today (in words as well
+as colour), and a chart of the last month. Drag along the chart, or use the arrow keys,
+to see the price on any day and how far it moved since the start; let go and it returns
+to the latest. **1W** to **5Y** change the range. Below are the day's range, the open,
+the previous close, volume and market value.
+
+- **Several at once**: "AAPL, MSFT and NVDA" shows a row of them; choose one to see it large.
+- **Compare**: "Compare Apple and Microsoft" draws them on one chart, each as the change
+  since the start of the range, with a table of who moved most.
+- **How a company is doing**: revenue, profit, margins and earnings per share from its
+  filings with the SEC, year by year or quarter by quarter, side by side for up to four
+  companies. Press a figure to see which filing it came from.
+
+Prices are delayed, and every card says from when and from where. Filings cover
+companies that file with the SEC in the US; for others, Conch says so instead of guessing.
+None of it is financial advice.
+
+## Charts
+
+"Make me a pie chart of where my money went this month." Conch draws the chart in the
+chat: pie, donut, bars, lines, areas or a scatter, chosen for the question. Point at it
+(or use the arrow keys) to read every value; press a name in the legend to hide or show
+that series; press a slice or a bar to pick it out. **Show the numbers** opens the same
+data as a table.
+
+For a chart as a file for a document or a deck, ask for a PNG or SVG file instead.
+
+## Keep and send a card
+
+Charts, prices, filings and the weather have three buttons at the bottom:
+
+- **Save as image** downloads a picture of the card.
+- **Copy** puts the picture on your clipboard, ready to paste.
+- **Send** sends the picture to you in a chat app you connected (Telegram, WhatsApp,
+  Slack…). Choose the app, then confirm. It only ever goes to your own chat there.
+
+The picture is made in your browser, so no extra setup is needed.
 
 ## People, things, links, books and shows
 
@@ -91,6 +134,8 @@ nothing about you:
 | Music and podcasts              | Apple (the search, and your country); a preview only when you play it |
 | Videos                          | YouTube or Vimeo (the search); the player only when you press play    |
 | Weather                         | Open-Meteo (the place)                                                |
+| Share prices, companies         | Stooq and Yahoo Finance (the ticker), the SEC (the company)           |
+| Charts                          | Nothing: Conch draws them from what's in the chat                     |
 | Places                          | OpenStreetMap (the place, and what you're looking for)                |
 | People and things, books, shows | Wikipedia, Open Library, TVmaze (the name)                            |
 
