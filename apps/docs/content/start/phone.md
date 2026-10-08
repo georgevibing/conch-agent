@@ -25,15 +25,28 @@ On a phone, Conch keeps the chat's name in view and folds the rest away. The hea
 
 ## Let it reach you
 
-Turn on **Allow notifications** in **Settings → Notifications**. Conch tells you when it needs your OK (with **Deny** right there) or has a question for you, when an answer is ready while you're away, and when a routine has run. It never notifies you while you're looking at it.
+Turn on **Allow notifications** in **Settings → Notifications**. Conch tells you when it needs your OK or has a question for you, when an answer is ready while you're away, and when a routine has run. It never notifies you while you're looking at it.
 
 While it's on, **Tell me when** lists what this device hears about, one switch each. Turn off **Show what it's about** and a notification only says to open Conch. **Send a test** sends one now, to see it arrive.
+
+### Answer from the notification
+
+When your assistant needs your OK, the notification says what it wants to do.
+
+- **Allow** and **Deny** are right on it for everyday steps: running the tests, building, changing a file in the work folder. One tap, and it carries on. The notification says **Allowed** or **Denied**.
+- **Review** is there instead for a step that matters: anything that deletes, sends something to other people, spends money, acts in one of your apps, or comes after the chat read something from outside. It opens Conch at the question.
+- Tapping the notification opens the question in a sheet at the bottom of the screen: who's asking, exactly what it would do, and two big buttons. For a step that matters, **Confirm and allow** asks for your passkey (Face ID, a fingerprint) or your password first.
+- On an iPhone, notifications have no buttons, so a tap opens the sheet.
+- With **Show what it's about** off, there's no **Allow**: you'd be allowing something you can't see.
+- Each tap works once, only on the phone it was sent to, and only while the question waits. Answered somewhere else first, the notification says **Already answered**.
+
+A question nobody answers in 30 minutes is a no, and the chat says so.
 
 **Settings → Devices** lists every phone, tablet and browser signed in to Conch. A bell beside one means it gets notifications; press **Stop notifications** to quiet it and leave it signed in, or **Sign out** to send it away.
 
 ## Talk to it
 
-Dictate into any message, have answers read aloud, or talk hands free. Your voice can stay on your own devices: on the phone itself, or on the computer Conch runs on. See [Voice](../features/voice.md).
+Dictate into any message, have answers read aloud, or talk hands free. Your voice can stay on your own devices: on the phone itself, or on the computer Conch runs on. Say **“Hey Conch”** (or your assistant's name) while Conch is open on the phone, too. See [Voice](../features/voice.md).
 
 ## Or skip the browser
 

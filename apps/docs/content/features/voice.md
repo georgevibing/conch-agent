@@ -34,13 +34,22 @@ To interrupt, just start talking: Conch stops, drops the rest of its answer and 
 
 ## “Hey Conch”
 
-In the desktop app, you can start talking without touching anything: say **“Hey Conch”**. Conch comes to the front and listens; say what you want in the same breath (“Hey Conch, what's on tomorrow?”) and it goes straight to your assistant.
+You can start talking without touching anything: say **“Hey Conch”**. If your assistant has a name of its own, say that: **“Hey Pearl”** (“Hey Conch” works too). Conch listens; say what you want in the same breath (“Hey Pearl, what's on tomorrow?”) and it goes straight to your assistant.
 
-It's off until you turn it on, in **Settings → Voice → Hey Conch**, on that computer only. It uses private listening, so it needs whisper.cpp and its speech model (Conch offers to get them).
+It's off until you turn it on, in **Settings → Voice → Hey Conch**, on each device on its own. It uses private listening, so the computer Conch runs on needs whisper.cpp and its speech model (Conch offers to get them).
+
+**In the desktop app**, it listens even with the window closed, and Conch comes to the front when you call.
+
+**On your phone** (or in any browser), it listens only while Conch is open and on screen:
+
+- It keeps the screen on while it listens, and stops by itself after 5 minutes without hearing it, to spare the battery. **Listen again** starts it again.
+- Leave Conch or lock the phone, and it stops. Come back, and it listens again.
+- A phone doesn't let a web page listen with the screen off or from another app, so “Hey Conch” can't wake a locked phone. That needs an app from the app store, which Conch doesn't have.
+- What it hears goes only to your own Conch, over your secure address, is checked there and thrown away.
 
 While it's on:
 
-- **It stays on your computer.** The microphone listens for short bursts of speech, and each one is checked on your computer and thrown away. Nothing is recorded, kept or sent anywhere.
+- **It stays on your computers.** The microphone listens for short bursts of speech, and each one is checked on the computer Conch runs on and thrown away. Nothing is recorded, kept or sent anywhere else.
 - **You can always tell.** **Listening for “Hey Conch”** shows at the top of the window, and in the tray (or menu bar) even with the window closed, each with **Stop**. Your computer's own microphone light is on too.
 - It pauses while you're talking to Conch.
 

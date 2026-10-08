@@ -67,4 +67,6 @@ about two seconds on a laptop's processor, most of it loading the model; keeping
   private listening.
 - Nothing about it reaches a backup, another device, or the web.
 - **Not done:** the phrase follows the persona's name; a wake word on phones (a page in a mobile
-  browser can't listen in the background); a faster engine (above).
+  browser can't listen in the background); a faster engine (above). _The first two are done in
+  [ADR 0108](./0108-the-phone-without-native-apps.md): the phrase follows the default agent's
+  name, and any device listens while Conch is open and on screen on it._
