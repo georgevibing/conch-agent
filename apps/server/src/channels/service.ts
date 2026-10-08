@@ -37,6 +37,7 @@ import {
   parseGoalArg,
   parseSwitch,
   type PermissionMode,
+  type ShareApp,
   type TurnOptions,
   SLACK_APP_TOKEN,
   SLACK_BOT_TOKEN,
@@ -56,7 +57,7 @@ import { pausedWords } from '../routines/spend';
 import type { AgentStore } from '../agents/store';
 import type { SettingsStore } from '../settings/store';
 import { VoiceError, type Hearing } from '../voice/service';
-import { CHANNEL_NAMES, catalogFor } from './catalog';
+import { CHANNEL_CATALOG, CHANNEL_NAMES, catalogFor } from './catalog';
 import { isLinked, ownAccount } from './linked';
 import { normalizeMatrix } from './matrix';
 import type { ChannelStore, StoredChannel } from './store';
@@ -3433,6 +3434,27 @@ export class ChannelService {
     return [...this.#live]
       .filter(([, live]) => live.health.state === 'online')
       .map(([id, live]) => ({ id, kind: live.kind, name: CHANNEL_NAMES[live.kind] }));
+  }
+
+  /**
+   * The apps `messageOwner` can actually reach you on, in the order it would
+   * pick them: on, connected, with you in them, the one you wrote from last
+   * first. It's what a card's **Send** menu shows (ADR 0105), so the list a
+   * person chooses from is the list that works — with none, the card has no
+   * **Send** button rather than one that can't go anywhere.
+   */
+  async sendable(): Promise<ShareApp[]> {
+    const online = new Set(this.reachable().map((c) => c.id));
+    const colours = new Map(CHANNEL_CATALOG.map((entry) => [entry.id, entry.color]));
+    return (await this.deps.store.all())
+      .filter((c) => c.enabled && c.people.length && online.has(c.id))
+      .sort((a, b) => (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0))
+      .map((c) => ({
+        id: c.id,
+        kind: c.kind,
+        name: CHANNEL_NAMES[c.kind],
+        ...(colours.get(c.kind) && { color: colours.get(c.kind) }),
+      }));
   }
 
   /**
