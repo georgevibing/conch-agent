@@ -31,6 +31,18 @@ async function setup() {
       CONCH_WEB_DIST: '/nonexistent',
     }),
   );
+  // Background tasks wait for room on this computer: don't depend on the host's load.
+  vi.spyOn(services.processes, 'resourceSnapshot').mockResolvedValue({
+    at: Date.now(),
+    totalBytes: 8 * 1024 ** 3,
+    availableBytes: 6 * 1024 ** 3,
+    cpuCount: 4,
+    loadPerCpu: 0,
+    memoryPressure: 0,
+    level: 'healthy',
+    concurrency: 3,
+    reason: 'The test computer has room to work.',
+  });
   const app = onThisComputer(await buildApp(services), services);
   open.push(app);
   await app.ready();
@@ -170,13 +182,16 @@ describe('the assistant looks through earlier chats', () => {
         text: 'Look through my chats for anything',
         ...(scope && { toolScope: scope }),
       });
-      for (let i = 0; i < 200; i++) {
-        const now = (await services.tasks.list()).tasks.find((t) => t.id === task.id);
-        if (now && !['queued', 'running'].includes(now.status)) break;
-        await new Promise((r) => setTimeout(r, 20));
-      }
+      // A task waits for a free slot: wait for it to finish.
+      await vi.waitFor(
+        async () => {
+          const now = (await services.tasks.list()).tasks.find((t) => t.id === task.id);
+          expect(now && !['queued', 'running'].includes(now.status)).toBe(true);
+        },
+        { timeout: 30_000, interval: 20 },
+      );
     }
     expect(turns).toHaveLength(2);
     noLookingBack(turns);
-  });
+  }, 60_000);
 });
