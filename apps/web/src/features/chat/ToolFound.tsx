@@ -1,5 +1,13 @@
 import type { ToolView } from '@conch/protocol';
-import { AgendaView, ChatMessages, FileList, MailList, Sources, replyRequest } from '@conch/nacre';
+import {
+  AgendaView,
+  ChatMessages,
+  FileList,
+  MailList,
+  Sources,
+  WeatherCard,
+  replyRequest,
+} from '@conch/nacre';
 
 import { useUi } from '../../app/ui';
 import { SentAttachments } from './AttachmentViewer';
@@ -34,5 +42,7 @@ export function ToolFound({ view }: { view: ToolView }) {
       return <FileList files={view.items} />;
     case 'messages':
       return <ChatMessages messages={view.items} place={view.place} />;
+    case 'weather':
+      return <WeatherCard weather={view} />;
   }
 }
