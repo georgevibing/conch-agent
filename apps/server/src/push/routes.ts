@@ -33,12 +33,18 @@ function parse<T extends z.ZodType>(schema: T, value: unknown, reply: FastifyRep
  * Notifications (ADR 0027). Under `/api`, behind the gateway's host, origin
  * and sign-in checks: a device turns its own notifications on, and any
  * signed-in device can see and change them all (Settings → Notifications).
- * Deny from a notification answers with that device's own sign-in; allowing
- * always opens Conch, so nothing is approved from a lock screen.
+ * Allow and Deny from a notification answer with that device's own sign-in
+ * and a one-use ticket for that one question (ADR 0108); a step that matters
+ * is never allowed from a lock screen.
  */
 export function registerPushRoutes(
   app: FastifyInstance,
-  deps: { push: PushService; conversations: ConversationManager },
+  deps: {
+    push: PushService;
+    conversations: ConversationManager;
+    /** A recent passkey or password ("sudo mode"): `Gatekeeper.verified`. */
+    verified: (access: Access | undefined) => boolean;
+  },
 ): void {
   const { push, conversations } = deps;
   const ownerOf = (request: FastifyRequest, reply: FastifyReply) => {
@@ -100,13 +106,27 @@ export function registerPushRoutes(
     return { sent: await push.test(owner) };
   });
 
-  // The Deny button on a notification: only ever a no, and only to what's still asked.
+  // What the approval sheet shows before it's answered (ADR 0108).
+  app.get<{ Params: { conversationId: string; permissionId: string } }>(
+    '/api/push/approvals/:conversationId/:permissionId',
+    (request) => push.approval(request.params.conversationId, request.params.permissionId),
+  );
+
+  // Allow and Deny on a notification, and the approval sheet (ADR 0108). A ticket
+  // answers one question once, from the device it was sent to; without one, a step
+  // that matters is allowed only after a recent passkey or password.
   app.post('/api/push/answer', async (request, reply) => {
     const body = parse(PushAnswerBody, request.body, reply);
     if (!body) return;
-    await conversations
-      .respond(body.conversationId, body.permissionId, 'deny')
-      .catch(() => undefined);
-    return { ok: true };
+    const result = await push.answer(pushOwner(request.access), body, {
+      verified: deps.verified(request.access),
+      respond: (conversationId, permissionId, decision) =>
+        conversations.respond(conversationId, permissionId, decision),
+    });
+    if (result === 'verify')
+      return reply
+        .code(403)
+        .send({ error: 'verify-required', message: 'Confirm it’s you to allow this.' });
+    return { ok: true, ...result };
   });
 }

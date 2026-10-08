@@ -2013,6 +2013,7 @@ export class Services {
           task: origin?.kind === 'task',
           ...(origin?.kind === 'task' && { taskId: origin.taskId }),
           ...(origin?.kind === 'client' && { app: origin.name }),
+          workspace: await this.settings.workspace(),
         };
       },
       tasks: async () => (await this.tasks.list()).tasks,

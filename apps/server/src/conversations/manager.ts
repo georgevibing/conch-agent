@@ -83,6 +83,7 @@ import { TurnReplies } from '../replies/turn';
 import { turnBudget } from '../engines/budget';
 import { guardTurn } from './turn-guard';
 import { TurnPlan } from '../plans/turn';
+import { APPROVAL_WAIT_MS } from '../push/approve';
 import { PLAN_APPROVAL, PLAN_MODE_PROMPT, exitPlanModeTool, needsPlanTool } from '../plans/mode';
 import { goalPrompt } from './goal';
 
@@ -781,6 +782,12 @@ const MAX_LIVE = 50;
 
 /** How long an unattended run (a routine) waits for a permission answer. */
 const UNATTENDED_PERMISSION_MS = 60 * 60 * 1000;
+
+/**
+ * How long a chat someone is in waits for an answer before it's a safe no,
+ * said in the chat (ADR 0108). A notification's ticket lasts no longer.
+ */
+const ATTENDED_PERMISSION_MS = APPROVAL_WAIT_MS;
 
 /**
  * How long a turn waits to learn which modes its provider honours. The answer
@@ -2385,22 +2392,30 @@ export class ConversationManager {
           ...(request.explicit && { explicit: true }),
           ...(request.edit && { edit: request.edit }),
         });
-        const expire = () => {
+        const expire = (waited?: number) => {
+          clearTimeout(timer);
           if (!live.permissions.delete(permissionId)) return;
           this.#append(live, {
             type: 'permission.resolved',
             permissionId,
             decision: 'expired',
+            ...(waited && { unanswered: Math.round(waited / 60_000) }),
           });
+          if (
+            waited &&
+            live.permissions.size === 0 &&
+            !this.deps.questions?.waiting(live.record.id)
+          )
+            this.#setStatus(live, 'running');
           resolve('deny');
         };
-        signal.addEventListener('abort', expire, { once: true });
-        abort.signal.addEventListener('abort', expire, { once: true });
-        // Nobody is watching an unattended run: after an hour, the answer is no.
-        if (extras) {
-          const timer = setTimeout(expire, UNATTENDED_PERMISSION_MS);
-          timer.unref();
-        }
+        signal.addEventListener('abort', () => expire(), { once: true });
+        abort.signal.addEventListener('abort', () => expire(), { once: true });
+        // Nobody answered: a no, said in the chat. An unattended run waits an hour;
+        // a chat someone is in, half an hour (ADR 0108). Never a yes by itself.
+        const wait = extras ? UNATTENDED_PERMISSION_MS : ATTENDED_PERMISSION_MS;
+        const timer = setTimeout(() => expire(wait), wait);
+        timer.unref();
         this.#append(live, {
           type: 'permission.requested',
           permissionId,

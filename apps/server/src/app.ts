@@ -296,7 +296,11 @@ export async function buildApp(services: Services) {
     meaningState: () => services.onDevice.status(),
   });
   registerPhoneRoutes(app, { tailscale: services.tailscale, gate });
-  registerPushRoutes(app, { push: services.push, conversations: services.conversations });
+  registerPushRoutes(app, {
+    push: services.push,
+    conversations: services.conversations,
+    verified: (access) => gate.verified(access),
+  });
   registerVoiceRoutes(app, services.voice, services.speech, services.wake);
   registerSafetyRoutes(app, services.activity, {
     providers: () => services.providers.ready(),

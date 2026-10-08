@@ -128,7 +128,39 @@ export const UpdatePushBody = z.object({ prefs: PushPrefsPatch });
 export const PushAnswerBody = z.object({
   conversationId: z.string().max(128),
   permissionId: z.string().max(128),
+  /** Without it, a no (what the first notifications sent). */
+  decision: z.enum(['allow', 'deny']).optional(),
+  /**
+   * The one-use ticket a notification carries for this question and this
+   * device (ADR 0108). Without one, Allow needs the approval sheet and, for a
+   * step that matters, a recent passkey or password.
+   */
+  ticket: z.string().min(16).max(128).optional(),
 });
+export type PushAnswerBody = z.infer<typeof PushAnswerBody>;
+
+/** What came of an answer from a notification or the approval sheet. */
+export const PushAnswerResult = z.object({
+  outcome: z.enum([
+    /** Done as asked. */
+    'answered',
+    /** Already answered, or it ran out: nothing to do. */
+    'gone',
+    /** Not from the lock screen: open Conch to allow it. */
+    'open',
+  ]),
+});
+export type PushAnswerResult = z.infer<typeof PushAnswerResult>;
+
+/** What the approval sheet needs to know about a question before it's answered (ADR 0108). */
+export const PushApproval = z.object({
+  waiting: z.boolean(),
+  /** Allowing needs you to confirm it's you first, and why, in a few words. */
+  confirm: z.string().max(120).optional(),
+  /** When it becomes a no by itself (ms since the epoch). */
+  expiresAt: z.number().optional(),
+});
+export type PushApproval = z.infer<typeof PushApproval>;
 
 // ── Voice ───────────────────────────────────────────────────────────────────
 
