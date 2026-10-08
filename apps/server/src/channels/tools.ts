@@ -37,6 +37,11 @@ export function channelTools(
       `Send the user a message in one of their chat apps: ${names.join(', ')}. It goes to their own private chat with you there, nobody else.`,
       'Use it when they ask to be messaged, texted, pinged or told there ("telegram me…", "send it to my WhatsApp"), or when a routine’s instructions say to send something there. Write the message itself, in Markdown, as they should read it.',
       `To send pictures or files, put their ids in \`attachments\` (the \`id\` image_generate, publish_file or list_attachments gave, like att_…): pictures arrive as photos with \`text\` as their caption, other files as documents. Never paste a file’s path into the text: they can’t open it.`,
+      // The chat's rich cards (a forecast, a chart, a share price) are drawn in
+      // the browser, so only the browser can make a picture of one. Rather than
+      // let the model promise something it can't do, tell it the two real paths:
+      // the card's own Send button, or a file it makes itself (ADR 0105).
+      'A card already in the chat — a forecast, a chart, a share price — can’t be attached by id: there’s no file, only something drawn on their screen. Each of those cards has its own share bar (Save as image, Copy, Send), and its Send sends a picture of it to a chat app with nothing to set up. So when they ask for a card that’s already in the chat, say that the card’s **Send** does it. To send the same thing as a file yourself, make one with file_make (`chart` as `format: "svg"` always works; `format: "png"` needs a browser set up) and put its id in `attachments`.',
       `Leave out \`app\` to use the app they wrote from last${names.length === 1 ? '' : ', or name one'}.`,
       from
         ? 'This chat already came from a chat app: your ordinary reply reaches them there, and pictures and files you make here (image_generate, file_make, publish_file…) are sent there with it, so use this only for a different app.'

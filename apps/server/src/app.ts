@@ -96,6 +96,7 @@ import { registerUndoRoutes } from './undo/routes';
 import { registerStoryRoutes } from './conversations/stories/routes';
 import { registerFaviconRoutes } from './favicons/routes';
 import { registerArtifactRoutes } from './artifacts/routes';
+import { registerCardRoutes } from './cards/routes';
 import { registerMarketRoutes } from './skills/market/routes';
 import { registerConchAppRoutes } from './conchapps/routes';
 import { registerTaskRoutes } from './tasks/routes';
@@ -363,6 +364,13 @@ export async function buildApp(services: Services) {
     gatewayPort: config.CONCH_PORT,
   });
   registerArtifactRoutes(app, services.artifacts);
+  // Save, copy or send a card in the chat as a picture (ADR 0105): only this
+  // chat's own picture, and only ever to this person's own chat app.
+  registerCardRoutes(app, {
+    channels: services.channels,
+    attachments: services.attachments,
+    knows: async (id) => (await services.conversations.list()).some((c) => c.id === id),
+  });
   registerTaskRoutes(app, services.tasks);
   registerAgentRoutes(app, { agents: services.agents, faces: services.images });
   registerQuestionRoutes(app, services.questions);

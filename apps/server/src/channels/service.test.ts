@@ -939,3 +939,30 @@ describe('Channel settings through Telegram', () => {
     );
   });
 });
+
+describe('ChannelService — the apps a card can be sent to (ADR 0105)', () => {
+  it('lists the app the owner is reachable on, with its colour', async () => {
+    const { s } = await paired();
+    const apps = await until(async () => {
+      const found = await s.channels.sendable();
+      return found.length ? found : undefined;
+    }, 'a sendable app');
+    expect(apps).toEqual([
+      { id: expect.any(String), kind: 'telegram', name: 'Telegram', color: '#26A5E4' },
+    ]);
+  });
+
+  it('lists nothing while the channel is off, so a card shows no Send button', async () => {
+    const { s, channel } = await paired();
+    await until(async () => (await s.channels.sendable()).length === 1, 'listed');
+    await s.channels.update(channel.id, { enabled: false });
+    expect(await s.channels.sendable()).toEqual([]);
+  });
+
+  it('lists nothing before anyone has said hello: there’s no own chat to write to', async () => {
+    const { s } = await setup();
+    const channel = await s.channels.create({ kind: 'telegram', token: MockTelegram.TOKEN });
+    await until(() => state(s, channel.id).then((st) => st === 'online'), 'online');
+    expect(await s.channels.sendable()).toEqual([]);
+  });
+});

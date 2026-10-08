@@ -1,0 +1,190 @@
+@layer nacre.components {
+  .bar {
+    --cs-gap: var(--nc-space-1);
+
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--cs-gap);
+    min-inline-size: 0;
+  }
+
+  /* Quiet until it's wanted: the icons warm on hover and press in. */
+  .action {
+    color: var(--nc-text-subtle);
+    transition:
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  @media (hover: hover) {
+    .action:hover {
+      color: var(--nc-text);
+    }
+  }
+
+  .action:focus-visible {
+    color: var(--nc-text);
+  }
+
+  .action:active {
+    transform: scale(0.9);
+  }
+
+  .action[data-done] {
+    color: light-dark(oklch(0.48 0.12 var(--nc-success-h)), oklch(0.8 0.11 var(--nc-success-h)));
+  }
+
+  /* Fingers, not a pointer: each icon becomes a full-size target. */
+  @media (pointer: coarse) {
+    .bar {
+      --cs-gap: var(--nc-space-2);
+    }
+
+    .action {
+      --btn-h: var(--nc-control-md);
+      --btn-icon: 1.125rem;
+    }
+  }
+
+  /* ── What just happened ────────────────────────────────────────────── */
+
+  .said {
+    overflow: hidden;
+    max-inline-size: 0;
+    font-size: var(--nc-text-2xs);
+    color: var(--nc-text-subtle);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    opacity: 0;
+    transition:
+      opacity var(--nc-duration-base) var(--nc-ease-out),
+      max-inline-size var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .said[data-shown] {
+    max-inline-size: 14rem;
+    margin-inline-start: var(--nc-space-1);
+    opacity: 1;
+  }
+
+  .said[data-tone='bad'] {
+    color: light-dark(oklch(0.52 0.18 var(--nc-danger-h)), oklch(0.78 0.13 var(--nc-danger-h)));
+  }
+
+  /* ── The apps, and the question ────────────────────────────────────── */
+
+  .menu {
+    inline-size: 15rem;
+    max-inline-size: calc(100vw - 2rem);
+    padding: var(--nc-space-2);
+  }
+
+  .heading {
+    margin: 0;
+    padding: var(--nc-space-1) var(--nc-space-2) var(--nc-space-2);
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-subtle);
+  }
+
+  .apps {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .app {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+    inline-size: 100%;
+    min-block-size: 2.25rem;
+    padding: var(--nc-space-1-5) var(--nc-space-2);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape, round);
+    background: transparent;
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    text-align: start;
+    cursor: pointer;
+    transition:
+      background var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  @media (hover: hover) {
+    .app:hover {
+      background: var(--nc-wash-1);
+    }
+  }
+
+  .app:focus-visible {
+    background: var(--nc-wash-1);
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+
+  .app:active {
+    transform: scale(0.985);
+  }
+
+  @media (pointer: coarse) {
+    .app {
+      min-block-size: var(--nc-control-md);
+    }
+  }
+
+  .appName {
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .confirm {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    padding: var(--nc-space-2);
+  }
+
+  .question {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .note {
+    margin: 0;
+    font-size: var(--nc-text-2xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--nc-space-2);
+    margin-block-start: var(--nc-space-2);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .action,
+    .app,
+    .said {
+      transition: none;
+    }
+
+    .action:active,
+    .app:active {
+      transform: none;
+    }
+  }
+}

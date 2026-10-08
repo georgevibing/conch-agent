@@ -57,6 +57,7 @@ import { RoutineChatCard } from '../routines/RoutineChatCard';
 import { StandingOrderChatCard } from '../checkins/StandingOrderChatCard';
 import { TurnChanges } from '../undo/TurnChanges';
 import { AwayCard, useAway, type AwayStory } from './Away';
+import { ChatIdProvider } from './cardShare';
 import { MusicDock } from './MusicFound';
 import { isFileTool } from './FileToolItem';
 import { isImageTool } from './ImageToolItem';
@@ -940,34 +941,38 @@ export const Transcript = memo(function Transcript({
   }
 
   return (
-    <MessageList
-      className={styles.list}
-      aria-label="Conversation"
-      overlay={
-        <>
-          {overlay}
-          <MusicDock />
-          {away && <AwayCard away={away} column={column} onJump={jump} onDismiss={dismiss} />}
-        </>
-      }
-      // What you just sent is what you want to see, wherever you'd scrolled to.
-      follow={pending.at(-1)?.clientMessageId}
-      loading={opening}
-    >
-      <div ref={holdColumn} className={styles.column}>
-        {drawn}
-        {placeholder && <AssistantPlaceholder speaker={current} wait={wait} continued={spoke} />}
-        {!tailAttached && tail.alsoTry && <div className={styles.part}>{tail.alsoTry}</div>}
-        {(between || thinking) && (
-          <div className={`${styles.part} ${styles.between}`}>
-            <Waiting wait={afterTool} trail={waitTrail} compact />
-          </div>
-        )}
-        {meter && <div className={`${styles.part} ${styles.meter}`}>{meter}</div>}
-        {!tailAttached && tail.replies && <div className={styles.part}>{tail.replies}</div>}
-        {!tailAttached && tail.footer && <div className={styles.part}>{tail.footer}</div>}
-      </div>
-    </MessageList>
+    // A card drawn deep in a tool view needs to know which chat it's in before
+    // its share bar can send a picture of itself anywhere (ADR 0105).
+    <ChatIdProvider conversationId={conversationId}>
+      <MessageList
+        className={styles.list}
+        aria-label="Conversation"
+        overlay={
+          <>
+            {overlay}
+            <MusicDock />
+            {away && <AwayCard away={away} column={column} onJump={jump} onDismiss={dismiss} />}
+          </>
+        }
+        // What you just sent is what you want to see, wherever you'd scrolled to.
+        follow={pending.at(-1)?.clientMessageId}
+        loading={opening}
+      >
+        <div ref={holdColumn} className={styles.column}>
+          {drawn}
+          {placeholder && <AssistantPlaceholder speaker={current} wait={wait} continued={spoke} />}
+          {!tailAttached && tail.alsoTry && <div className={styles.part}>{tail.alsoTry}</div>}
+          {(between || thinking) && (
+            <div className={`${styles.part} ${styles.between}`}>
+              <Waiting wait={afterTool} trail={waitTrail} compact />
+            </div>
+          )}
+          {meter && <div className={`${styles.part} ${styles.meter}`}>{meter}</div>}
+          {!tailAttached && tail.replies && <div className={styles.part}>{tail.replies}</div>}
+          {!tailAttached && tail.footer && <div className={styles.part}>{tail.footer}</div>}
+        </div>
+      </MessageList>
+    </ChatIdProvider>
   );
 });
 

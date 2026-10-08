@@ -2,6 +2,7 @@ import type { Attachment, ToolView } from '@conch/protocol';
 import {
   AgendaView,
   BookShelf,
+  CardShare,
   ChartCard,
   ChatMessages,
   FileList,
@@ -18,6 +19,7 @@ import {
 } from '@conch/nacre';
 
 import { useUi } from '../../app/ui';
+import { useCardShare } from './cardShare';
 import { SentAttachments } from './AttachmentViewer';
 import { MailSentItem } from './MailItems';
 import { recipeCards, recipeTimerDone } from './recipes';
@@ -139,16 +141,37 @@ export function ToolFound({ view }: { view: ToolView }) {
           shows={view.items.map(({ poster, ...s }) => ({ ...s, poster: picture(poster) }))}
         />
       );
-    case 'chart': {
-      // Numbers only, drawn by Nacre: nothing in a chart is markup or a link.
-      const { kind, ...chart } = view;
-      return <ChartCard chart={chart} />;
-    }
+    case 'chart':
+      return <ChartFound view={view} />;
   }
 }
 
-/** A forecast in the units the person reads, with the card's switch changing them everywhere. */
+/**
+ * A forecast in the units the person reads, with the card's switch changing
+ * them everywhere — and its share bar: save the forecast as a picture, copy
+ * it, or send it to a chat app (ADR 0105).
+ */
 function WeatherFound({ view }: { view: Extract<ToolView, { kind: 'weather' }> }) {
   const [units, setUnits] = useWeatherUnits();
-  return <WeatherCard weather={view} units={units} onUnitsChange={setUnits} />;
+  const { ref, share } = useCardShare({
+    what: 'forecast',
+    title: `Weather in ${view.place.name}`,
+  });
+  return (
+    <WeatherCard
+      ref={ref}
+      weather={view}
+      units={units}
+      onUnitsChange={setUnits}
+      share={<CardShare {...share} />}
+    />
+  );
+}
+
+/** A chart drawn in the chat, with its own share bar: save it, copy it, send it. */
+function ChartFound({ view }: { view: Extract<ToolView, { kind: 'chart' }> }) {
+  // Numbers only, drawn by Nacre: nothing in a chart is markup or a link.
+  const { kind: _kind, ...chart } = view;
+  const { ref, share } = useCardShare({ what: 'chart', title: chart.title });
+  return <ChartCard ref={ref} chart={chart} actions={<CardShare {...share} />} />;
 }
