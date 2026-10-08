@@ -70,8 +70,29 @@ pearly near-white instead of mud.
 
 - **Geist** (variable) for UI, **Geist Mono** for code, **Instrument Serif** for
   editorial display moments (`<Heading display>` — empty states, onboarding).
-- Base size 14 px. Tracking tightens as size grows (optical sizing by hand).
+- **The reader's size is the root.** `<html>` keeps the browser's own size, so
+  `1rem` is 16px (or more, if someone chose more) and every token is the size it's
+  written as. UI text is 14px from the `<body>` (`--nc-text-md`). Never set a size on
+  the root.
+- **Two kinds of text.** _UI_ text is for glancing at: rows, labels, settings, the
+  sidebar, cards and tool rows, at `--nc-text-sm`/`md` (13/14px), with meta lines at
+  `--nc-text-xs` (12px). These stay dense. _Reading_ text is for reading through: a
+  reply, your own message, the composer you write it in, and a document. It uses
+  `--nc-text-read` (16px) with `--nc-leading-read` (1.6), at most
+  `--nc-measure-read` (70ch) wide. A long-form page (the documentation, `Prose
+size="lg"`) uses `--nc-text-read-lg` (17px). Code beside reading text is
+  `--nc-text-code` (14px), since a mono reads large.
+- **The chat is one size.** `--nc-chat-text`/`--nc-chat-leading` set a reply, the
+  bubble and the composer, so what you type is the size it will be read at. A reply
+  reads 16 / 13 / 12: the words, the steps, the when. Each level is about 1.2× the
+  next, so they never blur together. The 46rem column holds about 65 characters a
+  line.
+- **Headings** in prose are em steps over the body (1.6 / 1.3 / 1.1), set
+  `--nc-leading-tight`/`snug`. Numbers that change or line up (times, counts,
+  durations, costs) use `font-variant-numeric: tabular-nums`.
+- Tracking tightens as size grows (optical sizing by hand).
 - `text-wrap: pretty` for body and `balance` for headings.
+- Why, and what it was before: [ADR 0116](../adr/0116-type-at-the-size-it-says.md).
 
 ## Space, size, shape
 
@@ -683,10 +704,10 @@ stories and an axe test). `<input type="date|time|number|range|color">` and bare
 
 **On a phone, one size.** A phone zooms into any field typed in under 16px, so on a
 touch screen every field is 16px to the browser (`base.css`). `Input` and `NumberField`
-lay their text out at that and draw it at the well's size, one step up (`text-lg`);
-`Select`, `DatePicker` and `TimePicker` show their value at that size too, and `Field`'s
-label and description step up with them. A field never looks a size too big for the
-words around it. `Textarea` stays at 16px: it holds writing, like the composer.
+lay their text out at that and draw it at the well's own size (`--well-type`, the
+well's size over 16px: 14/16 for `md`), so a field, its unit, `Field`'s label and a
+`Select` beside it read on a phone as they do with a pointer. A field never looks a
+size too big for the words around it. `Textarea` stays at 16px: it holds writing, like the composer.
 
 **One exception, and only one: a Conch app's page.** It is HTML in a sealed frame with
 no React in it, so there is no Nacre component to reach for, and a hand-rolled listbox
