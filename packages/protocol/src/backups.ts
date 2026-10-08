@@ -143,6 +143,12 @@ export const BackupPower = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('browser-own-chrome') }),
   /** Other devices can open a terminal on this computer. */
   z.object({ kind: z.literal('terminal-remote') }),
+  /** The assistant may use this computer's apps, and these without asking (ADR 0110). */
+  z.object({
+    kind: z.literal('computer-use'),
+    apps: z.array(PowerText).max(20),
+    more: z.number().int().nonnegative().default(0),
+  }),
   /** Publishers whose signed skills carry on updating without being turned off (ADR 0031). */
   z.object({
     kind: z.literal('trusted-publishers'),

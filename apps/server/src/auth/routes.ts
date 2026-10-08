@@ -202,6 +202,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
         trustedIntegrations: await services.integrations.store.trusted(),
         browserLocal: (await services.browser.store.settings()).allowLocal,
         browserOwnChrome: (await services.browser.store.settings()).backend === 'chrome',
+        computerUse: await services.computerUse.store.enabled(),
         pagesLocal: [
           ...new Set(
             (await services.artifacts.live.access.list().catch(() => []))

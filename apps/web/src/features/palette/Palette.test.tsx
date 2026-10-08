@@ -337,6 +337,14 @@ describe('Palette search', () => {
         await screen.findByRole('option', { name: /Settings: This computer/ }),
       ).toBeInTheDocument();
     }
+    // Letting the assistant use the computer's apps (ADR 0110), by the words people use.
+    for (const words of ['computer use', 'control my mac', 'screen recording']) {
+      await user.clear(screen.getByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(
+        await screen.findByRole('option', { name: /Settings: Use your apps/ }),
+      ).toBeInTheDocument();
+    }
     // Offline, or at a limit: "offline" finds where to choose what happens.
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'offline');

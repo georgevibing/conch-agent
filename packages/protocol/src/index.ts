@@ -101,6 +101,7 @@ export * from './quiet-learning';
 export * from './linking';
 export * from './local';
 export * from './computer';
+export * from './computer-use';
 export * from './memory';
 export * from './mcp';
 export * from './common';

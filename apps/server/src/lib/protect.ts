@@ -30,6 +30,8 @@ export function protectedPaths(home: string): string[] {
     join(home, 'onepassword.secrets.json'),
     // A cloud browser's key, or the address of a browser elsewhere (ADR 0080).
     join(home, 'browser.secrets.json'),
+    // Whether the assistant may use your apps, and the ones it always may (ADR 0110).
+    join(home, 'computer-use.json'),
     join(home, 'channels.secrets.json'),
     // The secrets other apps sign their messages to routines with (ADR 0056).
     join(home, 'routines.secrets.json'),

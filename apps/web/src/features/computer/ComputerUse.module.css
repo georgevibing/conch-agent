@@ -1,0 +1,41 @@
+/* The apps you always allow: the same quiet rows as the browser's sites (BrowserSettings). */
+@layer nacre.components {
+  .apps {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .app {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-1-5) var(--nc-space-1-5) var(--nc-space-1-5) var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-surface-sunken);
+  }
+
+  .appIcon {
+    flex-shrink: 0;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .appName {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .live {
+    margin-block-end: var(--nc-space-2);
+  }
+}

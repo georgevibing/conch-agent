@@ -30,6 +30,7 @@ import { useMemo, type ReactNode } from 'react';
 import { providerLogo } from '../models/catalog';
 import { Section } from '../settings/Section';
 import { useComputer } from './api';
+import { ComputerUseSection } from './ComputerUseSection';
 import styles from './Computer.module.css';
 import { batteryWords, disk, duration, memory, percent, rate, statusOf } from './words';
 
@@ -75,6 +76,16 @@ function history(samples: readonly ComputerSample[]) {
  * it belongs to. Conch only looks while this page is open.
  */
 export function ComputerTab() {
+  return (
+    <Stack gap={8}>
+      <ComputerReadings />
+      {/* The assistant using this computer's apps (ADR 0110). */}
+      <ComputerUseSection />
+    </Stack>
+  );
+}
+
+function ComputerReadings() {
   const { data, error, refetch, isFetching } = useComputer();
   if (!data) {
     return error ? (

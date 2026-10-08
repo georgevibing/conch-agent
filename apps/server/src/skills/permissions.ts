@@ -180,6 +180,12 @@ export function needs(
   )
     return { capability: 'web' };
   if (BROWSER_ACTS.test(toolName)) return { capability: 'browser' };
+  // Clicking and typing in your apps (ADR 0110) is using apps; looking isn't limited.
+  if (
+    /^(?:mcp__conch__)?computer$/.test(toolName) &&
+    !['screenshot', 'wait', 'list_apps'].includes(String(args.action))
+  )
+    return { capability: 'apps', detail: 'computer' };
   if (/^(?:mcp__conch__)?passwords_/.test(toolName)) return { capability: 'passwords' };
   const integration = /^mcp__([a-z0-9_-]+?)__/.exec(toolName)?.[1];
   if (integration && integration !== 'conch') return { capability: 'apps', detail: integration };

@@ -76,6 +76,10 @@ export async function runFix(
       await services.browser.updateSettings({ allowLocal: false });
       return 'The browser can’t open local apps now.';
 
+    case 'computer-use-off':
+      await services.computerUse.setEnabled(false);
+      return 'The assistant can’t use your apps now.';
+
     case 'browser-own-chrome-off':
       await services.browser.setBackend({ kind: 'local' });
       return 'The browser is Conch’s own again; your Chrome is left alone.';
