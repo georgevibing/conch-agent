@@ -1,62 +1,30 @@
 /**
  * The small model that writes a story's headline and answers "Why?" on a step
- * (ADR 0103), and what it may cost: the same rules as quiet learning. The
- * provider that answered the chat first (it has read it already), else one on
- * this computer, else any connected one, but a chat that's private (marked
- * "Don't learn from this chat", a guest's, a routine's or a task's) goes only
- * to its own provider or one on this computer. Only pay-as-you-go money
- * counts, against learning's monthly cap, and nothing is asked past the
- * month's budget.
+ * (ADR 0103), chosen for the chat by the shared rule (`providers/small.ts`):
+ * the chat's own provider on its cheapest model, then another connected one
+ * with room, then one on this computer; a private chat only its own or one on
+ * this computer. What it costs counts against learning's monthly cap, and
+ * nothing that costs money is asked past the month's budget.
  */
 import type { Usage } from '@conch/protocol';
 
-import type { Completion, CompletionInput, Engine } from '../../engines/types';
+import type { Engine } from '../../engines/types';
+import type { SmallPick } from '../../providers/small';
 
-export interface SmallModel {
-  engine: Engine;
-  complete: (input: CompletionInput) => Promise<Completion>;
-  model?: string;
-}
-
-/** Why there's no one to ask now. */
-export type NotAsked = 'none' | 'budget' | 'cap' | 'plan-room';
+export {
+  NOT_ASKED_WORDS,
+  notAskedWords,
+  type NotAsked,
+  type SmallModel,
+  type SmallPick,
+} from '../../providers/small';
 
 export interface SmallModelDeps {
-  /** The provider for this chat by the rule above, and its cheapest model. */
-  model(conversationId: string): Promise<SmallModel | undefined>;
-  /** May this provider be asked now (learning's cap, a plan with room, the month's budget)? */
-  allow(engine: Engine): Promise<{ ok: true } | { ok: false; reason: NotAsked }>;
+  /** The model for this chat that may be asked now, or why none may. */
+  pick(conversationId: string): Promise<SmallPick>;
   /** What it cost, for the month's spend and learning's cap. */
   spent(usage: Usage, engine: Engine, model?: string): void;
 }
-
-/**
- * The provider for a short answer about a chat (`shortAnswerEngine`'s rule),
- * kept to the chat's own provider or one on this computer when the chat is
- * private.
- */
-export function smallModelEngine(
-  answered: Engine | undefined,
-  ready: readonly Engine[],
-  options: { private: boolean },
-): Engine | undefined {
-  const able = ready.filter((engine) => engine.complete);
-  return (
-    able.find((engine) => engine.id === answered?.id) ??
-    able.find((engine) => engine.local) ??
-    (options.private ? undefined : able[0])
-  );
-}
-
-/** Words for each reason there's no answer, for the "Why?" card. */
-export const NOT_ASKED_WORDS: Record<NotAsked | 'busy' | 'failed', string> = {
-  none: 'None of your providers can answer this. Connect one in Settings → Providers.',
-  budget: 'This month’s budget is spent, so Conch isn’t asking a model now.',
-  cap: 'Small questions like this reached this month’s limit. Change it in Settings → Usage.',
-  'plan-room': 'Your plan is nearly used up, so Conch is saving it for your chats.',
-  busy: 'That’s a lot of questions at once. Ask again in a minute.',
-  failed: 'Couldn’t get an answer just now. Try again in a moment.',
-};
 
 /** At most `size` at once; the rest wait their turn, and at most `queue` wait. */
 export class Limiter {

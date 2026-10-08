@@ -78,8 +78,10 @@ are read the same way: the log is Conch's, not the provider's.
 
 The cheapest model of **the provider that answered the chat** writes the
 draft (`engine.complete`, as the tidy-up and titles do). That provider has
-seen the chat already, so nothing goes to a company that hadn't. Without one
-that can complete, a model on this computer may; otherwise there's no offer.
+seen the chat already. Without one that can complete or has room now, another
+connected provider with room may, then a model on this computer (the shared rule
+for small jobs about a chat, `providers/small.ts`, ADR 0103); otherwise there's no
+offer.
 The cheap model gets one retry with the provider's own default model; the
 chat is then marked, so a model is asked at most once per chat.
 

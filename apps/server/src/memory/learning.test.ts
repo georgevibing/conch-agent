@@ -9,8 +9,7 @@ import { SkillSuggester, habits } from '../skills/suggest';
 import { cosine, ollamaEmbedder, stem, wordsVector, type Embedder } from './embed';
 import { bm25, distance, forgive, MemoryIndex } from './index';
 import { mintConsent } from './consent';
-import type { Engine } from '../engines/types';
-import { chatWords, shortAnswerEngine, yourWords } from './learning';
+import { chatWords, yourWords } from './learning';
 import { MemoryStore } from './store';
 import { keepsDetail, MemoryTidy, parseReply, repeats, type Said } from './tidy';
 import { memoryTools } from './tools';
@@ -919,32 +918,4 @@ describe('owner evidence boundaries for all learning passes', () => {
       ).toEqual([]);
     },
   );
-});
-
-describe('the provider for a short answer', () => {
-  const engine = (id: string, options: { complete?: boolean; local?: boolean } = {}) =>
-    ({
-      id,
-      ...(options.local && { local: true }),
-      ...(options.complete !== false && { complete: async () => ({ text: '' }) }),
-    }) as unknown as Engine;
-  const codex = engine('codex', { complete: false });
-  const copilot = engine('copilot', { complete: false });
-  const claude = engine('claude-code');
-  const ollama = engine('ollama', { local: true });
-
-  it('the provider that answered the chat, when it can write one', () => {
-    expect(shortAnswerEngine(claude, [ollama, claude])?.id).toBe('claude-code');
-  });
-
-  it('else one on this computer, else any connected provider that can', () => {
-    expect(shortAnswerEngine(codex, [codex, claude, ollama])?.id).toBe('ollama');
-    expect(shortAnswerEngine(copilot, [codex, copilot, claude])?.id).toBe('claude-code');
-    expect(shortAnswerEngine(undefined, [claude])?.id).toBe('claude-code');
-  });
-
-  it('never one that isn’t connected; none when nothing connected can', () => {
-    expect(shortAnswerEngine(claude, [])).toBeUndefined();
-    expect(shortAnswerEngine(codex, [codex, copilot])).toBeUndefined();
-  });
 });

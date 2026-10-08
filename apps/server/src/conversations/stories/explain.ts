@@ -12,7 +12,7 @@ import {
   type ToolLabel,
 } from '@conch/protocol';
 
-import { NOT_ASKED_WORDS, Recent, type SmallModelDeps } from './ask';
+import { NOT_ASKED_WORDS, notAskedWords, Recent, type SmallModelDeps, type SmallPick } from './ask';
 import { EXPLAIN_SYSTEM, explainPrompt, readExplanation } from './prompt';
 
 export const EXPLAIN_TIMEOUT_MS = 15_000;
@@ -103,12 +103,12 @@ export class StoryExplainer {
     this.#asked.set(conversationId, recent);
     if (this.#asked.size > 1_000) this.#asked.delete(this.#asked.keys().next().value ?? '');
 
-    const small = await this.deps.model(conversationId).catch(() => undefined);
-    if (!small) return { unavailable: NOT_ASKED_WORDS.none };
-    const allowed = await this.deps
-      .allow(small.engine)
-      .catch(() => ({ ok: false as const, reason: 'none' as const }));
-    if (!allowed.ok) return { unavailable: NOT_ASKED_WORDS[allowed.reason] };
+    // The chat's own provider, else another with room, else one on this computer.
+    const picked: SmallPick = await this.deps
+      .pick(conversationId)
+      .catch((): SmallPick => ({ not: 'none' }));
+    if (!('small' in picked)) return { unavailable: notAskedWords(picked.not, picked.plans) };
+    const { small } = picked;
     try {
       const reply = await small.complete({
         system: EXPLAIN_SYSTEM,

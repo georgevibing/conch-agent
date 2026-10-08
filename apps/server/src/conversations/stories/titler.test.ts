@@ -10,7 +10,7 @@ import {
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Completion, CompletionInput, Engine } from '../../engines/types';
-import { smallModelEngine, type NotAsked } from './ask';
+import type { NotAsked } from './ask';
 import { StoryTitler, storyKey, wantsHeadline, type StoryTitlerDeps } from './titler';
 
 /** Consecutive steps of one family are a story; its headline counts its steps. */
@@ -58,8 +58,7 @@ function harness(
   const notes: { id: string; storyId: string; headline: string; outcome?: string }[] = [];
   const spent = vi.fn();
   const titler = new StoryTitler({
-    model: async () => ({ engine, complete, model: 'small' }),
-    allow: async () => ({ ok: true }),
+    pick: async () => ({ small: { engine, complete, model: 'small' } }),
     spent,
     enabled: async () => true,
     note: async (id, event) => {
@@ -247,10 +246,10 @@ describe('story headlines by a small model (ADR 0103)', () => {
   it('writes a remembered headline only while the chat may still go to a small model', async () => {
     let allowed = true;
     const h = harness({
-      model: async () =>
+      pick: async () =>
         allowed
-          ? { engine: fakeEngine('anthropic'), complete: h.complete, model: 'small' }
-          : undefined,
+          ? { small: { engine: fakeEngine('anthropic'), complete: h.complete, model: 'small' } }
+          : { not: 'none' },
     });
     h.asked();
     for (const id of ['t1', 't2', 't3']) h.step(id);
@@ -320,7 +319,7 @@ describe('story headlines by a small model (ADR 0103)', () => {
   it.each<[NotAsked]>([['cap'], ['budget'], ['plan-room']])(
     'asks nothing when the spend rules say no (%s)',
     async (reason) => {
-      const h = harness({ allow: async () => ({ ok: false, reason }) });
+      const h = harness({ pick: async () => ({ not: reason }) });
       h.asked();
       h.step('t1');
       h.step('t2');
@@ -336,7 +335,7 @@ describe('story headlines by a small model (ADR 0103)', () => {
   it('asks nothing when it’s turned off, no provider can answer, or nobody watches the chat', async () => {
     for (const overrides of [
       { enabled: async () => false },
-      { model: async () => undefined },
+      { pick: async () => ({ not: 'none' as const }) },
       { watched: async () => false },
     ] satisfies Partial<StoryTitlerDeps>[]) {
       const h = harness(overrides);
@@ -411,26 +410,5 @@ describe('story headlines by a small model (ADR 0103)', () => {
     expect(storyKey('c1', story)).toBe(storyKey('c1', { ...story, id: 'other' }));
     expect(storyKey('c1', story)).not.toBe(storyKey('c2', story));
     expect(wantsHeadline({ ...story, status: 'running' })).toBe(false);
-  });
-});
-
-describe('who writes the headline', () => {
-  const answering = fakeEngine('codex-cli');
-  const local = fakeEngine('ollama', { local: true, complete: vi.fn() });
-  const other = fakeEngine('anthropic', { complete: vi.fn() });
-
-  it('is the provider that answered, when it can write one', () => {
-    const able = fakeEngine('claude-code', { complete: vi.fn() });
-    expect(smallModelEngine(able, [other, able], { private: false })).toBe(able);
-  });
-
-  it('is one on this computer, else any other, when the one that answered can’t', () => {
-    expect(smallModelEngine(answering, [answering, other, local], { private: false })).toBe(local);
-    expect(smallModelEngine(answering, [answering, other], { private: false })).toBe(other);
-  });
-
-  it('is never another provider for a private chat, only one on this computer', () => {
-    expect(smallModelEngine(answering, [answering, other], { private: true })).toBeUndefined();
-    expect(smallModelEngine(answering, [answering, other, local], { private: true })).toBe(local);
   });
 });

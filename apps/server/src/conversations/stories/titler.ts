@@ -257,8 +257,9 @@ export class StoryTitler {
     if (this.deps.watched && !(await this.deps.watched(id).catch(() => false))) return;
     // Who may be asked is settled first, every time: a remembered answer
     // never stands in for a chat that may no longer go to a small model.
-    const small = await this.deps.model(id).catch(() => undefined);
-    if (!small) return;
+    const picked = await this.deps.pick(id).catch(() => undefined);
+    if (!picked || !('small' in picked)) return;
+    const { small } = picked;
     const key = storyKey(id, story);
     let found = this.#cache.get(key);
     if (found === undefined) {
@@ -286,8 +287,6 @@ export class StoryTitler {
     request: string,
     steps: PromptStep[],
   ): Promise<{ headline: string; outcome?: string } | null | undefined> {
-    const allowed = await this.deps.allow(small.engine).catch(() => ({ ok: false as const }));
-    if (!allowed.ok) return undefined;
     let reply;
     try {
       reply = await small.complete({
