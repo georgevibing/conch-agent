@@ -1,6 +1,6 @@
 /**
  * What the mock's pretend app tools find (ADR 0060): a calendar, emails,
- * files and messages, so `pnpm dev:mock` and e2e can show every tool view
+ * files, messages and videos, so `pnpm dev:mock` and e2e can show every tool view
  * without Google or Slack. Everything here is plainly made up.
  */
 import type { ToolView } from '@conch/protocol';
@@ -178,6 +178,34 @@ function messages(now: number, channel: string): PretendFind {
   };
 }
 
+/** Pretend videos: ids of the right shape, no pictures (nothing is fetched). */
+function videos(topic: string): PretendFind {
+  const items = [
+    ['aaaaaaaaaaa', `${topic}: a step-by-step guide`, 'Harbour Kitchen', 713],
+    ['bbbbbbbbbbb', `The one thing to know about ${topic}`, 'The Flour Room', 504],
+    ['ccccccccccc', `${topic}, explained in a talk`, 'Food Lab Talks', 3725],
+  ] as const;
+  const view: ToolView = {
+    kind: 'videos',
+    query: topic,
+    items: items.map(([id, title, channel, duration]) => ({
+      provider: 'youtube' as const,
+      id,
+      title,
+      channel,
+      duration,
+      url: `https://www.youtube.com/watch?v=${id}`,
+    })),
+  };
+  return {
+    tool: 'video_search',
+    input: { query: topic },
+    text: JSON.stringify({ query: topic, videos: view.items.map((v) => ({ title: v.title })) }),
+    view,
+    reply: 'The first one is the best place to start; it plays right here.',
+  };
+}
+
 /** What a prompt asks the pretend apps for, if anything. */
 export function pretendFind(prompt: string, now = Date.now()): PretendFind | undefined {
   const text = prompt.trim();
@@ -188,5 +216,7 @@ export function pretendFind(prompt: string, now = Date.now()): PretendFind | und
   if (file) return files(now, file.replace(/^.*\s/, ''));
   const said = /\bwhat did #([\w-]+) say\b/i.exec(text)?.[1];
   if (said) return messages(now, said);
+  const topic = /\b(?:show|find) me (?:a )?videos? (?:of|on|about) (.+?)[?.!]*$/i.exec(text)?.[1];
+  if (topic) return videos(topic);
   return undefined;
 }

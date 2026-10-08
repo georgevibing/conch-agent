@@ -28,6 +28,10 @@ const WEB_READERS = new Set([
   'web_search',
   'mcp__conch__web_fetch',
   'mcp__conch__web_search',
+  'video_search',
+  'video_details',
+  'mcp__conch__video_search',
+  'mcp__conch__video_details',
 ]);
 /** Conch's browser: every look at a page is the outside coming in. */
 const BROWSER =
@@ -81,7 +85,9 @@ export function taintFrom(toolName: string, input: unknown, app?: string): Taint
       kind: 'web',
       label: /(?:WebSearch|web_search)$/.test(toolName)
         ? 'web search results'
-        : (hostOf(args.url) ?? 'a web page'),
+        : /video_(?:search|details)$/.test(toolName)
+          ? 'video titles from YouTube and Vimeo'
+          : (hostOf(args.url) ?? 'a web page'),
     };
   if (BROWSER.test(toolName))
     return { kind: 'web', label: hostOf(args.url) ?? 'pages in the browser' };
@@ -184,6 +190,7 @@ export function sinkReason(
       : undefined;
   }
   if (/(?:WebSearch|web_search)$/.test(toolName)) return 'send a search query to the web';
+  if (/^(?:mcp__conch__)?video_search$/.test(toolName)) return 'send a search query to YouTube';
   if (/(?:WebFetch|web_fetch)$/.test(toolName) && typeof args.url === 'string' && carries(args.url))
     return 'open a web address that could carry what it read';
   // An app's picture fetched from an address (ADR 0090): the same way out as web_fetch.
