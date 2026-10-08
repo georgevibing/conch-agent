@@ -178,6 +178,79 @@ function messages(now: number, channel: string): PretendFind {
   };
 }
 
+/** A pretend forecast: a mild, showery week, the same shape every run. */
+function weather(now: number, place: string): PretendFind {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const wall = (t: number) => {
+    const d = new Date(t);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+  const hour = new Date(now);
+  hour.setMinutes(0, 0, 0);
+  const codes = [2, 2, 3, 3, 80, 61, 61, 3, 2, 1, 0, 0];
+  const hourly = Array.from({ length: 24 }, (_, i) => {
+    const t = hour.getTime() + i * HOUR;
+    const h = new Date(t).getHours();
+    const temp = Math.round((14 + 5 * Math.sin(((h - 9) / 24) * 2 * Math.PI)) * 10) / 10;
+    const code = codes[Math.floor(i / 2)] ?? 2;
+    return {
+      time: wall(t),
+      temp,
+      code,
+      precipProb: code >= 61 ? 70 : code === 3 ? 20 : 5,
+      isDay: h >= 7 && h < 19,
+    };
+  });
+  const daily = Array.from({ length: 7 }, (_, i) => {
+    const date = day(now, i);
+    return {
+      date,
+      min: [9, 8, 10, 7, 6, 8, 9][i] ?? 8,
+      max: [17, 14, 18, 13, 15, 19, 20][i] ?? 16,
+      code: [80, 61, 2, 63, 3, 1, 0][i] ?? 2,
+      precipProb: [70, 85, 10, 90, 25, 5, 0][i] ?? 0,
+      sunrise: `${date}T07:${pad(19 + i)}`,
+      sunset: `${date}T18:${pad(27 - i)}`,
+      uvMax: [2, 1, 4, 1, 3, 4, 5][i] ?? 2,
+    };
+  });
+  const first = hourly[0] ?? { temp: 14, code: 2, precipProb: 5, isDay: true };
+  const view: ToolView = {
+    kind: 'weather',
+    place: { name: place, country: 'Pretendland' },
+    at: wall(now),
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    units: 'metric',
+    current: {
+      temp: first.temp,
+      feels: Math.round((first.temp - 1.5) * 10) / 10,
+      code: first.code,
+      isDay: first.isDay,
+      wind: 14,
+      windDir: 250,
+      gusts: 31,
+      humidity: 72,
+      precipProb: first.precipProb,
+      uv: 2,
+      pressure: 1012,
+    },
+    hourly,
+    daily,
+    airQuality: { european: 28, us: 41 },
+    source: 'Open-Meteo',
+  };
+  return {
+    tool: 'weather',
+    input: { place },
+    text: JSON.stringify({
+      summary: `${place}: ${Math.round(first.temp)}°C now; showers this afternoon.`,
+      now: { temp: first.temp, sky: 'Partly cloudy' },
+    }),
+    view,
+    reply: `Take an umbrella: showers are likely in ${place} this afternoon, then it clears.`,
+  };
+}
+
 /** What a prompt asks the pretend apps for, if anything. */
 export function pretendFind(prompt: string, now = Date.now()): PretendFind | undefined {
   const text = prompt.trim();
@@ -188,5 +261,7 @@ export function pretendFind(prompt: string, now = Date.now()): PretendFind | und
   if (file) return files(now, file.replace(/^.*\s/, ''));
   const said = /\bwhat did #([\w-]+) say\b/i.exec(text)?.[1];
   if (said) return messages(now, said);
+  if (/\b(?:weather|will it rain)\b/i.test(text))
+    return weather(now, /\bin ([A-Z][\w-]+(?: [A-Z][\w-]+)?)/.exec(text)?.[1] ?? 'Lisbon');
   return undefined;
 }

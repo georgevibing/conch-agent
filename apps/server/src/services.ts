@@ -45,6 +45,7 @@ import { QUESTIONS_PROMPT, questionTools } from './questions/tools';
 import { AttachmentStore } from './attachments/store';
 import { fileTools } from './files/tools';
 import { researchTools, publicWebFetcher } from './research/tools';
+import { weatherTool } from './research/weather';
 import { faviconFetcher, Favicons } from './favicons/favicons';
 import { ProcessService } from './processes/service';
 import { GatewayRecovery } from './recovery/gateway';
@@ -977,6 +978,7 @@ export class Services {
               ...publishTools(ctx, () => this.#fileAccess(ctx), this.attachments),
               ...this.files.tools(ctx, () => this.#fileAccess(ctx)),
               ...researchTools(ctx, fetchPublicWeb),
+              weatherTool(ctx, fetchPublicWeb),
               ...this.processes.tools(ctx),
               ...this.images.tools(ctx, () => this.#fileAccess(ctx)),
               ...this.routines.tools(ctx),
