@@ -1,0 +1,162 @@
+@layer nacre.components {
+  .save {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-5);
+    min-inline-size: 0;
+  }
+
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-3);
+  }
+
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2-5);
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .legend {
+    margin-block-end: var(--nc-space-2);
+    padding: 0;
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .removed {
+    padding-inline-start: var(--nc-space-12);
+  }
+
+  .removedWait {
+    inline-size: 60%;
+    block-size: 1.25rem;
+  }
+
+  .removedNone {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+  }
+
+  .removedLine {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    text-align: start;
+  }
+
+  .removedLine svg {
+    flex-shrink: 0;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  .examples {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    margin: var(--nc-space-2) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .examples code {
+    display: block;
+    padding: var(--nc-space-1) var(--nc-space-2);
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-surface-sunken);
+    color: var(--nc-text-muted);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xs);
+    overflow-wrap: anywhere;
+  }
+
+  .where {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+    padding: var(--nc-space-2) var(--nc-space-2) var(--nc-space-2) var(--nc-space-3);
+    border-radius: var(--nc-radius-lg);
+    background: var(--nc-surface-sunken);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+  }
+
+  .where > svg {
+    flex-shrink: 0;
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .folder {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--nc-text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--nc-space-3);
+  }
+
+  .summary {
+    flex: 1;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+  }
+
+  /* Saved: the pearl turns once, the name of the file beside it. */
+  .saved {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--nc-space-4);
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-chat-card-radius);
+    background: var(--nc-chat-card-surface);
+    box-shadow: var(--nc-chat-card-shadow);
+  }
+
+  .savedText {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    min-inline-size: 0;
+  }
+
+  .savedTitle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    color: var(--nc-text);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .savedTitle svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    color: light-dark(oklch(0.5 0.11 var(--nc-success-h)), oklch(0.8 0.1 var(--nc-success-h)));
+  }
+
+  .fileName {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    overflow-wrap: anywhere;
+  }
+}
