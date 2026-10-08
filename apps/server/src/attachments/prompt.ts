@@ -4,7 +4,7 @@ import type { Attachment } from '@conch/protocol';
 
 import type { EngineAttachments, TurnImage } from '../engines/types';
 import { extractDocument } from '../files/documents';
-import type { ImageType } from './sniff';
+import { CONVERTIBLE } from './fit';
 import { decodeText } from './sniff';
 import type { AttachmentStore } from './store';
 
@@ -132,7 +132,7 @@ export async function forTurn(
         const head = can.files ? Math.min(TEXT_HEAD, room) : room;
         budget -= head;
         const rest = can.files
-          ? `[Cut off here: ${text.length - head} more characters. Read the whole file from its path.]`
+          ? `[Cut off here: ${text.length - head} more characters. Read the rest with read_file and file_path "${attr(attachment.id)}", page by page.]`
           : `[Cut off here: ${text.length - head} more characters didn't fit.]`;
         parts.push(
           `<attachment name="${name}" type="${type}"${lines}${path}>\n${fenced(text.slice(0, head))}\n${rest}\n</attachment>`,
@@ -142,12 +142,14 @@ export async function forTurn(
     }
 
     if (attachment.kind === 'image' && can.images && IMAGE_TYPES.has(attachment.mimeType)) {
-      const bytes = await store.bytes(attachment.id);
-      if (bytes) {
+      // Upright, scaled to what models take, and without where it was taken (`fit.ts`).
+      const picture = await store.forModels(attachment.id);
+      if (picture) {
         images.push({
           name: attachment.name,
-          mimeType: attachment.mimeType as ImageType,
-          data: bytes.toString('base64'),
+          mimeType: picture.mimeType,
+          data: picture.bytes.toString('base64'),
+          path: picture.path,
         });
         parts.push(
           `<attachment name="${name}" type="${type}"${path}>(Shown to you as an image.)</attachment>`,
@@ -184,6 +186,13 @@ export async function forTurn(
       }
     }
 
+    // A HEIC photo this computer had nothing to convert with (`fit.ts`): said plainly.
+    if (CONVERTIBLE.has(attachment.mimeType)) {
+      parts.push(
+        `<attachment name="${name}" type="${type}"${path}>(A photo in a format models can't see, and this computer has nothing to convert it with. If the message depends on it, ask for it as a JPEG or a screenshot.)</attachment>`,
+      );
+      continue;
+    }
     const what = attachment.kind === 'image' ? 'an image' : `a ${bytesLabel(attachment.size)} file`;
     const note = can.files
       ? `(${what[0]?.toUpperCase()}${what.slice(1)}. Use read_document for PDF, DOCX, XLSX or PPTX text, or read_file for text. Other formats need an appropriate tool.)`

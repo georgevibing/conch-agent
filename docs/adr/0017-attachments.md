@@ -59,7 +59,7 @@ are cleaned (no folders, control or bidi characters, Windows-reserved names).
 | Provider      | images                               | files (by path)                     |
 | ------------- | ------------------------------------ | ----------------------------------- |
 | Claude Code   | content blocks                       | yes (`additionalDirectories`)       |
-| Codex CLI     | by path (it looks)                   | yes                                 |
+| Codex CLI     | by path (`localImage`)               | yes                                 |
 | Anthropic API | content blocks                       | no                                  |
 | OpenRouter    | data URLs, if the model says it sees | no                                  |
 | Mock          | yes                                  | no (keeps the degraded path tested) |
@@ -74,7 +74,29 @@ a card whose provider can't use it gets a dot and a sentence.
 **Limits.** 20 attachments per message, 30 MB each, checked in the browser
 first (with the reason on the card) and again by the gateway. Pictures larger
 than 5 MB or 8 000 px are scaled down to 4 096 px in the browser before upload
-(GIFs are left alone). The same file picked twice is attached once. Folders are
+(GIFs are left alone).
+
+**Pictures as models take them** (`attachments/fit.ts`, sharp). Before an
+image goes to any provider the gateway turns it upright from its EXIF flag,
+scales it to 2 000 px on its long edge and 3.7 MB at most (Claude's 5 MB of
+base64; OpenAI reads 2 048 px), and drops its metadata, so a photo's location
+never leaves with it. One that already fits and carries none goes as it is.
+The fitted copy is kept beside the original as `.for-models.<ext>`, made once;
+Codex gets it by path (`localImage`), so a photo isn't carried through its
+connection as base64. HEIC, HEIF, AVIF, TIFF and BMP become a JPEG when saved
+(sharp, else macOS `sips`, libheif's `heif-convert` or ImageMagick); when
+nothing here converts one, the model is told plainly and asks for a JPEG.
+Text that isn't UTF-8 (UTF-16 with a BOM, a Windows-1252 CSV) is stored as
+UTF-8.
+
+**Programs that echo pictures** (`lib/json-lines.ts`). Codex's app server and
+ACP agents send the photo back (an echoed message, a replayed conversation)
+inside one JSON line. Their readers set any long base64 string aside as it's
+read, keeping only its `data:…;base64,` start, so a 20 MB echo costs a few
+kilobytes; a line still over 64 MB is skipped, never the connection, and a
+request it answered ends with a sentence instead of waiting.
+
+The same file picked twice is attached once. Folders are
 refused, with what to do instead. A file dropped next to the chat no longer
 navigates the tab away.
 

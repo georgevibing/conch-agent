@@ -171,6 +171,42 @@ test('files attach from the picker and a drop, show previews, and survive a relo
   await expect(page.getByRole('dialog', { name: 'team.csv' })).toBeVisible();
 });
 
+test('a 12 MP phone photo reaches the model fitted, and the one you sent stays whole', async ({
+  page,
+}) => {
+  await page.goto('/');
+  // A phone photo, 4032 × 3024 of detail that doesn't compress away, dropped on the chat.
+  await page.evaluate(async () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 4032;
+    canvas.height = 3024;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('no canvas');
+    const pixels = context.createImageData(canvas.width, canvas.height);
+    for (let i = 0; i < pixels.data.length; i++)
+      pixels.data[i] = i % 4 === 3 ? 255 : (i * 2654435761) >>> 24;
+    context.putImageData(pixels, 0, 0);
+    const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, 'image/jpeg', 0.92));
+    if (!blob) throw new Error('no photo');
+    const data = new DataTransfer();
+    data.items.add(new File([blob], 'IMG_0001.jpg', { type: 'image/jpeg' }));
+    const target = document.querySelector('textarea') ?? document.body;
+    for (const type of ['dragenter', 'dragover', 'drop'])
+      target.dispatchEvent(
+        new DragEvent(type, { dataTransfer: data, bubbles: true, cancelable: true }),
+      );
+  });
+  await expect(
+    page.getByRole('button', { name: /IMG_0001\.jpg, JPE?G, 4032 × 3024/ }),
+  ).toBeVisible();
+  const composer = page.getByRole('textbox', { name: /Message/ });
+  await composer.fill('What is this?');
+  await expect(page.getByRole('button', { name: 'Send message' })).toBeEnabled();
+  await composer.press('Enter');
+  await expect(page.getByText('I can see the image.')).toBeVisible();
+  await expect(page.getByText('IMG_0001.jpg came 2000 × 1500.')).toBeVisible();
+});
+
 test('a pasted screenshot attaches as a picture', async ({ page }) => {
   await page.goto('/');
   const field = page.getByRole('textbox', { name: /Message/ });

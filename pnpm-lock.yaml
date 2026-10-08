@@ -413,6 +413,9 @@ importers:
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2
+      sharp:
+        specifier: ^0.35.5
+        version: 0.35.5(@types/node@24.19.0)
       tldts:
         specifier: 7.4.16
         version: 7.4.16

@@ -15,6 +15,7 @@ import { installHints } from '../claude-code/detect';
 import { friendlyError } from '../claude-code/translate';
 import { readPastChatRead, readPastChatsFound, severityFor } from '@conch/protocol';
 
+import { sniff } from '../../attachments/sniff';
 import { Emitter } from '../../lib/emitter';
 import { hostToolText } from '../types';
 import { TALLY_ID, tallyFiles } from './tally';
@@ -2042,6 +2043,13 @@ export class MockEngine implements Engine {
                 ? [
                     '',
                     `I can see ${input.images.length === 1 ? 'the image' : `${input.images.length} images`}.`,
+                    // What arrived, so a journey can tell a photo was fitted for models.
+                    ...input.images.flatMap((image) => {
+                      const seen = sniff(Buffer.from(image.data, 'base64'), image.name, undefined);
+                      return seen.width
+                        ? [`${image.name} came ${seen.width} × ${seen.height}.`]
+                        : [];
+                    }),
                   ]
                 : []),
               ...(said.trim() ? ['', `And you said: “${said.trim().slice(0, 80)}”.`] : []),
