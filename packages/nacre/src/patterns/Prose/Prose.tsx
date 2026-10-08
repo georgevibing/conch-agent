@@ -6,7 +6,7 @@ import styles from './Prose.module.css';
 
 export interface ProseProps extends ComponentProps<'div'> {
   size?: 'sm' | 'md' | 'lg';
-  /** Cap line length at a comfortable reading measure (~68ch). */
+  /** Cap line length at a comfortable reading measure (`--nc-measure-read`, ~70ch). */
   measure?: boolean;
   as?: 'div' | 'article' | 'section';
   asChild?: boolean;
