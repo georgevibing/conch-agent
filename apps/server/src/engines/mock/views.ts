@@ -520,6 +520,159 @@ function shows(now: number): PretendFind {
   };
 }
 
+/**
+ * Pretend prices: a made-up instrument with a made-up week, the same shape
+ * every run. Nothing is fetched, and the card says Stooq the way a real one
+ * would, so the demo shows the real card and not a different one.
+ */
+function quotes(now: number, symbols: string[], compare: boolean): PretendFind {
+  const shapes: Record<string, { name: string; price: number; drift: number }> = {
+    AAPL: { name: 'APPLE', price: 257.2, drift: 0.9 },
+    MSFT: { name: 'MICROSOFT', price: 512.4, drift: -0.4 },
+  };
+  const closes = (price: number, drift: number) =>
+    Array.from({ length: 22 }, (_, i) => {
+      const wave = Math.sin((i / 21) * Math.PI * 1.6) * price * 0.018;
+      return Math.round((price - drift * (21 - i) + wave) * 100) / 100;
+    });
+  const items = symbols.map((symbol) => {
+    const shape = shapes[symbol] ?? { name: symbol, price: 100, drift: 0.2 };
+    const series = closes(shape.price, shape.drift);
+    const price = series.at(-1) ?? shape.price;
+    const previous = series.at(-2) ?? price;
+    return {
+      symbol,
+      name: shape.name,
+      currency: 'USD',
+      class: 'stock' as const,
+      price,
+      change: Math.round((price - previous) * 100) / 100,
+      changePercent: Math.round(((price - previous) / previous) * 10000) / 100,
+      asOf: new Date(now - 10 * HOUR).toISOString(),
+      delayed: true,
+      dayRange: {
+        low: Math.round(price * 0.991 * 100) / 100,
+        high: Math.round(price * 1.006 * 100) / 100,
+      },
+      previousClose: previous,
+      open: previous,
+      volume: 41_234_567,
+      marketCap: {
+        value: Math.round(price * 14_840_390_000),
+        shares: 14_840_390_000,
+        filed: day(now, -343),
+        source: 'SEC EDGAR',
+      },
+      dayState: 'closed' as const,
+      spark: { period: '1M' as const, values: series },
+      source: 'Stooq',
+    };
+  });
+  const view: ToolView = {
+    kind: 'quotes',
+    items,
+    ...(compare && items.length > 1 && { compare: true }),
+    series: symbols.map((symbol, k) => ({
+      symbol,
+      period: '1M' as const,
+      dates: Array.from({ length: 22 }, (_, i) => day(now, i - 21)),
+      closes: items[k]?.spark.values ?? [],
+      currency: 'USD',
+      source: 'Stooq (daily closes)',
+      note: `Daily closes from ${day(now, -21)} to ${day(now, 0)}.`,
+    })),
+  };
+  return {
+    tool: 'quote',
+    input: { symbols, period: '1M', compare },
+    text: JSON.stringify({ quotes: items.map((q) => ({ symbol: q.symbol, price: q.price })) }),
+    view,
+    reply: compare
+      ? `Over the month ${symbols[0]} is the stronger of the two; ${symbols[1]} has drifted. Delayed closes, and not advice.`
+      : `${symbols[0]} closed a touch up on the day. These are delayed closes, not live prices.`,
+  };
+}
+
+/** Pretend filings, in the shape SEC EDGAR really answers in. */
+function fundamentals(now: number, company: string): PretendFind {
+  const figure = (value: number, year: number) => ({
+    value,
+    period: `CY${year}`,
+    periodEnd: `${year}-09-27`,
+    form: '10-K',
+    filed: `${year}-10-30`,
+  });
+  const years = [2023, 2024, 2025];
+  const view: ToolView = {
+    kind: 'fundamentals',
+    source: 'SEC EDGAR',
+    items: [
+      {
+        symbol: 'AAPL',
+        name: `${company} Inc.`,
+        cik: '320193',
+        currency: 'USD',
+        basis: 'annual',
+        revenue: {
+          label: 'Revenue',
+          unit: 'currency',
+          tag: 'RevenueFromContractWithCustomerExcludingAssessedTax',
+          points: [383_285_000_000, 391_035_000_000, 416_161_000_000].map((v, i) =>
+            figure(v, years[i] ?? 2025),
+          ),
+        },
+        grossProfit: {
+          label: 'Gross profit',
+          unit: 'currency',
+          tag: 'GrossProfit',
+          points: [169_148_000_000, 180_683_000_000, 198_900_000_000].map((v, i) =>
+            figure(v, years[i] ?? 2025),
+          ),
+        },
+        netIncome: {
+          label: 'Net income',
+          unit: 'currency',
+          tag: 'NetIncomeLoss',
+          points: [96_995_000_000, 93_736_000_000, 112_010_000_000].map((v, i) =>
+            figure(v, years[i] ?? 2025),
+          ),
+        },
+        eps: {
+          label: 'Earnings per share',
+          unit: 'perShare',
+          tag: 'EarningsPerShareDiluted',
+          points: [6.13, 6.08, 7.48].map((v, i) => figure(v, years[i] ?? 2025)),
+        },
+        dividendPerShare: {
+          label: 'Dividend per share',
+          unit: 'perShare',
+          tag: 'CommonStockDividendsPerShareDeclared',
+          points: [0.94, 0.98, 1.04].map((v, i) => figure(v, years[i] ?? 2025)),
+        },
+        employees: {
+          value: 164_000,
+          period: 'CY2025',
+          periodEnd: '2025-09-27',
+          filed: '2025-10-30',
+        },
+        priceEarnings: {
+          value: 34.39,
+          price: 257.2,
+          asOf: new Date(now - 10 * HOUR).toISOString(),
+          period: 'CY2025',
+        },
+      },
+    ],
+  };
+  return {
+    tool: 'fundamentals',
+    input: { companies: [company], basis: 'annual' },
+    text: JSON.stringify({ companies: [{ symbol: 'AAPL', name: `${company} Inc.` }] }),
+    view,
+    reply: `Revenue grew about 6% last year and profit rather more, so margins widened. From its filings, not advice.`,
+  };
+}
+
 /** What a prompt asks the pretend apps for, if anything. */
 export function pretendFind(prompt: string, now = Date.now()): PretendFind | undefined {
   const text = prompt.trim();
@@ -544,5 +697,13 @@ export function pretendFind(prompt: string, now = Date.now()): PretendFind | und
   if (/\bwho (?:was|is) ada lovelace\b/i.test(text)) return knowledge();
   if (/\bbooks by (?:ursula k\.? )?le guin\b/i.test(text)) return books();
   if (/\bwhat(?:'|’)?s on with severance\b/i.test(text)) return shows(now);
+  // Money: only a plain ticker in capitals, so "compare the two kettles" and
+  // "how is the build doing" stay with the journeys they belong to.
+  const at = /^[Ww]hat(?:'|’)?s ([A-Z][A-Z0-9.^-]{0,11}) at\b/.exec(text)?.[1];
+  if (at) return quotes(now, [at], false);
+  const pair = /^[Cc]ompare ([A-Z][A-Z0-9.^-]{0,11}) and ([A-Z][A-Z0-9.^-]{0,11})\b/.exec(text);
+  if (pair?.[1] && pair[2]) return quotes(now, [pair[1], pair[2]], true);
+  const doing = /^[Hh]ow is ([A-Z][A-Za-z.]{1,19}) doing financially\b/.exec(text)?.[1];
+  if (doing) return fundamentals(now, doing);
   return undefined;
 }

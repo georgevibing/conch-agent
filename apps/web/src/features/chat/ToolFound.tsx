@@ -4,10 +4,12 @@ import {
   BookShelf,
   ChatMessages,
   FileList,
+  Fundamentals,
   KnowledgeCard,
   LinkCards,
   MailList,
   Places,
+  QuotesCard,
   RecipeCards,
   ShowCards,
   Sources,
@@ -25,6 +27,7 @@ import { attachmentUrl } from './uploads';
 import { MusicFound } from './MusicFound';
 import { FoundVideos } from './FoundVideos';
 import { useWeatherUnits } from './weatherUnits';
+import { priceHistory } from './financeApi';
 
 /** A picture the gateway fetched and keeps for this chat: drawn from Conch, never the web. */
 const picture = (a: Attachment | undefined): CardPicture | undefined =>
@@ -132,6 +135,11 @@ export function ToolFound({ view }: { view: ToolView }) {
       return (
         <BookShelf books={view.items.map(({ cover, ...b }) => ({ ...b, cover: picture(cover) }))} />
       );
+    case 'quotes':
+      // The range switch asks the gateway for more closes (`financeApi.ts`).
+      return <QuotesCard quotes={view} onRange={priceHistory} />;
+    case 'fundamentals':
+      return <Fundamentals fundamentals={view} />;
     case 'shows':
       return (
         <ShowCards

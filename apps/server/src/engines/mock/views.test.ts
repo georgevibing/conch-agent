@@ -18,6 +18,9 @@ describe('the mock’s pretend app finds', () => {
     ['Who was Ada Lovelace?', 'knowledge_card', 'knowledge'],
     ['Find books by Ursula K. Le Guin', 'book_search', 'books'],
     ['What’s on with Severance?', 'show_search', 'shows'],
+    ['What’s AAPL at?', 'quote', 'quotes'],
+    ['Compare AAPL and MSFT', 'quote', 'quotes'],
+    ['How is Apple doing financially?', 'fundamentals', 'fundamentals'],
   ])('“%s” finds a %s with a view that logs as it is', (prompt, tool, kind) => {
     const found = pretendFind(prompt);
     expect(found?.tool).toBe(tool);
@@ -32,5 +35,10 @@ describe('the mock’s pretend app finds', () => {
     // Other journeys' prompts that only mention the weather.
     expect(pretendFind('Every morning, give me a weather briefing')).toBeUndefined();
     expect(pretendFind('What is the weather like in Lisbon tomorrow')).toBeUndefined();
+    // Money's phrases are narrow on purpose: only a ticker in capitals.
+    expect(pretendFind('compare the two kettles')).toBeUndefined();
+    expect(pretendFind('compare apples and oranges')).toBeUndefined();
+    expect(pretendFind('what’s the plan at this point')).toBeUndefined();
+    expect(pretendFind('how is the build doing financially? joke')).toBeUndefined();
   });
 });
