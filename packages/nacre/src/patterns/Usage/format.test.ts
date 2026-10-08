@@ -7,6 +7,7 @@ import {
   planExhausted,
   planHealthy,
   planNoWindows,
+  planWeeklyLow,
   usageNow,
   usageUnknown,
 } from './fixtures';
@@ -16,13 +17,14 @@ import {
   formatMoney,
   formatResetAt,
   formatResetIn,
+  formatResetInShort,
   formatUpdated,
   headline,
   usageSeverityFor,
   windowPhrase,
 } from './format';
 import type { UsageValue, UsageWindowValue } from './types';
-import { usageNoticeText } from './UsageNotice';
+import { usageNoticeShortText, usageNoticeText } from './UsageNotice';
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -47,6 +49,13 @@ describe('formatResetIn', () => {
     expect(formatResetIn(usageNow + 5 * HOUR, usageNow)).toBe('in 5 h');
     expect(formatResetIn(usageNow + 26 * HOUR, usageNow)).toBe('in 1 day');
     expect(formatResetIn(usageNow + 3 * DAY, usageNow)).toBe('in 3 days');
+  });
+
+  it('rounds hours down for a narrow line', () => {
+    expect(formatResetInShort(usageNow + 23 * HOUR + 24 * MIN, usageNow)).toBe('in 23 h');
+    expect(formatResetInShort(usageNow + 38 * MIN, usageNow)).toBe('in 38 min');
+    expect(formatResetInShort(usageNow + 3 * DAY, usageNow)).toBe('in 3 days');
+    expect(formatResetInShort(usageNow - MIN, usageNow)).toBe('now');
   });
 
   it('says now once the time has passed', () => {
@@ -188,6 +197,25 @@ describe('copy', () => {
     );
     expect(describeUsage(meteredNoBudget, usageNow)).toBe('Usage: $4.20 today, $38.10 this month');
     expect(describeUsage(meteredBudget, usageNow)).toBe('Usage: $11.90 left of $50 monthly budget');
+  });
+
+  it('says it in a few words for a phone', () => {
+    expect(usageNoticeText(planWeeklyLow, usageNow)).toBe(
+      '4% of your weekly limit left · resets in 23 h 24 min',
+    );
+    expect(usageNoticeShortText(planWeeklyLow, usageNow)).toBe('4% left · resets in 23 h');
+    expect(usageNoticeShortText(planHealthy, usageNow)).toBeUndefined();
+    expect(usageNoticeShortText(planExhausted, usageNow)).toBe('Limit reached · resets in 38 min');
+    expect(usageNoticeShortText(planExhausted, usageNow, 'OpenRouter')).toBe(
+      'Limit reached · OpenRouter answers',
+    );
+    expect(usageNoticeShortText(meteredOverBudget, usageNow)).toBe('$2.40 over budget');
+    expect(
+      usageNoticeShortText(
+        { ...meteredBudget, spend: { ...meteredBudget.spend, month: 46.9 } },
+        usageNow,
+      ),
+    ).toBe('$3.10 of $50 left');
   });
 
   it('writes notices only when tight', () => {

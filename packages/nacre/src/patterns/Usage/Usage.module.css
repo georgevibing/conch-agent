@@ -456,19 +456,20 @@
   }
 
   /* ── Notice ─────────────────────────────────────────────────────────── */
+  /* One quiet line, the family of a chat's goal and holds: there, not loud.
+     The ring and the Details link carry the severity; the line itself stays
+     neutral, so a low limit reads as information, not an alarm. */
   .notice {
+    container: usage-notice / inline-size;
     display: flex;
     align-items: center;
-    gap: var(--nc-space-1);
-    min-block-size: var(--nc-control-sm);
-    padding: var(--nc-space-0-5);
+    gap: var(--nc-space-0-5);
+    min-inline-size: 0;
     border-radius: var(--nc-radius-md);
     corner-shape: var(--nc-corner-shape);
-    background: var(--usage-wash);
-    box-shadow:
-      inset 0 0 0 1px color-mix(in oklch, var(--usage-edge) 70%, transparent),
-      var(--nc-glaze-edge);
-    color: var(--nc-text);
+    background: var(--nc-wash-1);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text-muted);
     font-size: var(--nc-text-sm);
     animation: nc-surface-in var(--nc-duration-slow) var(--nc-ease-out);
   }
@@ -483,13 +484,14 @@
     min-block-size: var(--nc-control-sm);
     padding: var(--nc-space-1) var(--nc-space-2-5);
     border: 0;
-    border-radius: calc(var(--nc-radius-md) - 2px);
+    border-radius: var(--nc-radius-md);
     corner-shape: var(--nc-corner-shape);
     background: transparent;
     color: inherit;
     font: inherit;
     text-align: start;
     font-variant-numeric: tabular-nums;
+    -webkit-tap-highlight-color: transparent;
   }
 
   button.noticeMain {
@@ -499,8 +501,12 @@
 
   @media (hover: hover) {
     button.noticeMain:hover {
-      background: var(--nc-wash-1);
+      background: var(--nc-wash-2);
     }
+  }
+
+  button.noticeMain:active {
+    background: var(--nc-wash-3);
   }
 
   button.noticeMain:focus-visible {
@@ -508,10 +514,37 @@
     outline-offset: 0;
   }
 
+  /* Never wraps: the short words fit a phone; the ellipsis is a last resort. */
   .noticeText {
     flex: 1;
     min-inline-size: 0;
-    text-wrap: pretty;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .noticeText[data-length='short'] {
+    display: none;
+  }
+
+  /* A narrow line (a phone): a few words, and Details is its chevron. */
+  @container usage-notice (max-width: 40rem) {
+    .noticeText[data-length='long'] {
+      display: none;
+    }
+
+    .noticeText[data-length='short'] {
+      display: block;
+    }
+
+    .noticeMoreLabel {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
   }
 
   .noticeMore {

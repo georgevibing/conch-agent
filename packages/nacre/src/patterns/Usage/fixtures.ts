@@ -53,6 +53,13 @@ export const planHealthy = plan([session(38, 2 * HOUR + 14 * MIN), weekly, weekl
 
 export const planWarning = plan([session(88, HOUR + 4 * MIN), weekly, weeklyOpus]);
 
+/** The weekly limit nearly gone, a day before it resets. */
+export const planWeeklyLow = plan([
+  session(20, 3 * HOUR),
+  { ...weekly, usedPercent: 96, resetsAt: usageNow + 23 * HOUR + 24 * MIN, severity: 'critical' },
+  weeklyOpus,
+]);
+
 export const planExhausted = plan([session(100, 38 * MIN), weekly, weeklyOpus], {
   blocked: { until: usageNow + 38 * MIN, windowId: 'session' },
   updatedAt: usageNow - 10_000,
@@ -90,6 +97,7 @@ export const usageUnknown: UsageValue = {
 export const usageFixtures = {
   planHealthy,
   planWarning,
+  planWeeklyLow,
   planExhausted,
   planWithExtra,
   planNoWindows,
