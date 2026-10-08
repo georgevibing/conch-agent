@@ -170,10 +170,28 @@ upstream.
   a real checkout unless `CONCH_CHECKOUT` names one; `CONCH_UPDATE_CHECKS=off`
   stops the daily look.
 
+## The web app's stamp
+
+Code pulled by hand (`git pull` in the checkout) and a restart gave the
+gateway new code but left the old web app: nothing had rebuilt `apps/web/dist`,
+and Update said Conch was current. Every web build now writes
+`dist/build.json` (`{ commit, builtAt }`, from a Vite plugin; no commit
+without git). A gateway that serves its own checkout's build under
+`pnpm start` (never a dev server, a release folder or the desktop app)
+compares it with `HEAD` when it starts: a stamp naming another commit, or
+none beside a built app, rebuilds it in the background while the old one
+serves, with a note under Fixed on its own (`updates/webbuild.ts`). Pages
+compare their own `builtAt` with `UpdatesStatus.webBuilt` and offer to
+reload. Update with nothing new installs and builds instead of saying
+current, and Repair everything offers the same rebuild.
+
 ## Known limits
 
 - Between the build and the restart (a few seconds), a page that loads gets
   the new web app from the old gateway.
+- A rebuild writes the new web app over the old one in place: a page loading
+  in that second, or an open page fetching a part the old build had, may need
+  the reload it's offered.
 - On Windows, `pnpm install` may be unable to replace a native module the
   running gateway has loaded (node-pty); that update then goes back to the
   version you had, and says so.

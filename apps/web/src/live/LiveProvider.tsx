@@ -123,6 +123,8 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         void client.invalidateQueries({ queryKey: keys.conversations });
         // Tasks carry on while the page is away: catch up on what they did meanwhile.
         void client.invalidateQueries({ queryKey: taskKeys.all });
+        // A web app built again meanwhile (or an update waiting): a woken phone hears of it.
+        void client.invalidateQueries({ queryKey: updateKeys.status });
       },
     });
     socketRef.current = socket;

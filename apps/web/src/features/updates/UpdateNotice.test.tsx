@@ -1,7 +1,7 @@
 import type { UpdatesStatus } from '@conch/protocol';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useUi } from '../../app/ui';
 import { mockFetch, renderApp } from '../../test/harness';
@@ -60,5 +60,44 @@ describe('the new-release banner', () => {
     renderApp(<UpdateNotice />);
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.queryByRole('region')).toBeNull();
+  });
+});
+
+describe('a newer web app under an open page', () => {
+  const built = (webBuilt?: string): UpdatesStatus => ({
+    ...status(false),
+    ...(webBuilt && { webBuilt }),
+  });
+
+  it('offers to reload when the app was built again since this page loaded', async () => {
+    const user = userEvent.setup();
+    const reload = vi.fn();
+    mockFetch({ 'GET /api/updates': () => built('2026-10-08T10:00:00.000Z') });
+    renderApp(<UpdateNotice ownBuild="2026-10-01T09:00:00.000Z" reload={reload} />);
+    const banner = await screen.findByRole('region', { name: 'A newer Conch is ready' });
+    await user.click(within(banner).getByRole('button', { name: 'Reload' }));
+    expect(reload).toHaveBeenCalledOnce();
+    await user.click(within(banner).getByRole('button', { name: 'Not now' }));
+    await waitFor(() => expect(screen.queryByRole('region')).toBeNull());
+  });
+
+  it('reloads by itself when a page nobody was looking at is opened again', async () => {
+    const reload = vi.fn();
+    mockFetch({ 'GET /api/updates': () => built('2026-10-08T10:00:00.000Z') });
+    renderApp(<UpdateNotice ownBuild="2026-10-01T09:00:00.000Z" reload={reload} />);
+    await screen.findByRole('region', { name: 'A newer Conch is ready' });
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it('stays quiet on the same build, and in development', async () => {
+    const reload = vi.fn();
+    mockFetch({ 'GET /api/updates': () => built('2026-10-08T10:00:00.000Z') });
+    renderApp(<UpdateNotice ownBuild="2026-10-08T10:00:00.000Z" reload={reload} />);
+    renderApp(<UpdateNotice reload={reload} />);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByRole('region')).toBeNull();
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(reload).not.toHaveBeenCalled();
   });
 });

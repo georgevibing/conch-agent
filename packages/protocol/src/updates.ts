@@ -236,6 +236,12 @@ export const UpdatesStatus = z.object({
   bootId: z.string().optional(),
   /** Conch can start itself again (it runs under `pnpm start`), so an update finishes by itself. */
   restartable: z.boolean().default(false),
+  /**
+   * When the web app being served was built (its `build.json`), for a copy
+   * that keeps it built from its own folder's code. A page built at another
+   * time offers to reload onto it.
+   */
+  webBuilt: z.string().max(64).optional(),
 });
 export type UpdatesStatus = z.infer<typeof UpdatesStatus>;
 

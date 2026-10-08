@@ -278,6 +278,42 @@ describe('updating Conch itself', () => {
     expect(await log()).toBe('');
   });
 
+  it('with nothing new, builds a web app older than its code (pulled by hand), and calls it an update', async () => {
+    const { checkout, conch, log } = await world();
+    const head = git(conch, 'rev-parse', 'HEAD');
+    const dist = join(conch, 'apps/web/dist');
+    await mkdir(dist, { recursive: true });
+    await writeFile(join(dist, 'index.html'), '<p>old</p>');
+    await writeFile(join(dist, 'build.json'), JSON.stringify({ commit: 'b'.repeat(40) }));
+    const { seen, onProgress } = steps();
+    expect(await checkout.update(onProgress)).toMatchObject({
+      kind: 'updated',
+      from: head,
+      to: head,
+      improvements: 0,
+      whatsNew: [],
+    });
+    expect(await log()).toBe('install 1\nbuild 1');
+    expect(seen.map((s) => s.phase)).toContain('build');
+    expect(git(conch, 'rev-parse', 'HEAD')).toBe(head);
+    // Stamped at the commit that's here: nothing to do the next time.
+    await writeFile(join(dist, 'build.json'), JSON.stringify({ commit: head }));
+    expect(await checkout.update(() => undefined)).toEqual({ kind: 'current' });
+  });
+
+  it('says what to run when building the web app at the commit that’s here doesn’t work', async () => {
+    const { checkout, conch } = await world();
+    const dist = join(conch, 'apps/web/dist');
+    await mkdir(dist, { recursive: true });
+    await writeFile(join(dist, 'index.html'), '<p>old</p>');
+    await writeFile(join(conch, 'fail-build'), '');
+    expect(await checkout.update(() => undefined)).toMatchObject({
+      kind: 'failed',
+      message: expect.stringContaining('The app you have keeps working'),
+      command: expect.stringContaining('pnpm --filter @conch/web build'),
+    });
+  });
+
   it('refuses over local changes and leaves them exactly as they were', async () => {
     const { checkout, conch, release, log } = await world();
     await release('feat: something new', { 'version.txt': '2\n' });

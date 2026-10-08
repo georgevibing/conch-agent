@@ -1712,10 +1712,23 @@ export class Services {
         (mock && !config.CONCH_CHECKOUT
           ? undefined
           : findCheckout(import.meta.dirname, config.CONCH_CHECKOUT));
+    const conch = root ? new ConchCheckout(root) : undefined;
+    // The web app served is this checkout's own, under `pnpm start` (a window or at
+    // login): it's kept built from the code that's there. Never a dev server's, a
+    // release folder's (ADR 0051), the desktop app's, or one served from elsewhere.
+    const running = runningAs();
+    const freshWeb = Boolean(
+      conch &&
+      !process.env.CONCH_RELEASE_ROOT?.trim() &&
+      !config.CONCH_WEB_DIST &&
+      (running === 'window' || running === 'background') &&
+      resolve(conch.dist) === resolve(import.meta.dirname, '../../web/dist'),
+    );
     return new UpdatesService({
       home: config.CONCH_HOME,
       ...programs,
-      conch: root ? new ConchCheckout(root) : undefined,
+      conch,
+      freshWeb,
       releases: root
         ? new ReleaseFollower(root, {
             home: config.CONCH_HOME,

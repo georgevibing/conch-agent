@@ -19,6 +19,7 @@ import type { ConchUpdateStep } from '@conch/protocol';
 
 import { agentEnv, findExecutable, launch, run, type Launch, type RunResult } from '../lib/proc';
 import { missingNativeBuildTools, requiresNativeBuild } from './prerequisites';
+import { freshness, isBuilt, readStamp, type WebFreshness } from './webbuild';
 import { whatsNew } from './whatsnew';
 
 /** How long one git or pnpm step may take. */
@@ -227,6 +228,10 @@ export type ConchResult =
   | { kind: 'rolled-back'; message: string }
   | { kind: 'failed'; message: string; command?: string };
 
+/** Building the web app again from the code that's here (`ConchCheckout.buildWeb`). */
+export type WebBuildResult =
+  { ok: true; ms: number } | { ok: false; why: 'no-pnpm' | 'updating' | 'install' | 'build' };
+
 export interface CheckoutDeps {
   /** Finds git; tests may point at a particular one. */
   git?: () => Promise<string | undefined>;
@@ -263,6 +268,10 @@ export function explainFetch(result: RunResult, remoteUrl = ''): string {
   return 'Conch couldn’t check for updates just now.';
 }
 
+/** An install that failed for want of the network. */
+const downloadFailed = (tail = '') =>
+  /ENOTFOUND|ETIMEDOUT|ECONNRESET|EAI_AGAIN|network|fetch failed/i.test(tail);
+
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /**
@@ -284,6 +293,9 @@ export function overwritten(output: string): string[] {
 /** Conch's own folder: checking it for updates, and moving it forward. */
 export class ConchCheckout {
   #git?: Promise<Git | undefined>;
+  /** The web app being built again, outside an update: one build at a time. */
+  #building?: Promise<WebBuildResult>;
+  #updating = false;
 
   constructor(
     readonly root: string,
@@ -305,6 +317,94 @@ export class ConchCheckout {
       return own.trim() ? bare : gitIn(this.root, git, 'ssh -o BatchMode=yes');
     })();
     return this.#git;
+  }
+
+  /** Where the web app is built: what `BUILD` writes, and what the gateway serves. */
+  get dist(): string {
+    return join(this.root, 'apps', 'web', 'dist');
+  }
+
+  /** Whether the web app was built from the commit that's here. */
+  async webFreshness(): Promise<WebFreshness> {
+    return freshness({
+      built: isBuilt(this.dist),
+      stamp: readStamp(this.dist),
+      head: await this.head(),
+    });
+  }
+
+  /** The web app is being built again right now. */
+  get webBuilding(): boolean {
+    return Boolean(this.#building);
+  }
+
+  /** An update is running (and builds the web app itself). */
+  get updating(): boolean {
+    return this.#updating;
+  }
+
+  /**
+   * Build the web app again from the code that's here, while the one built
+   * before keeps serving until the new one is written. One at a time, and
+   * never during an update (it builds the web app itself).
+   */
+  buildWeb(): Promise<WebBuildResult> {
+    if (this.#updating) return Promise.resolve({ ok: false, why: 'updating' });
+    this.#building ??= (async (): Promise<WebBuildResult> => {
+      const pnpm = await (this.deps.pnpm ?? findPnpm)();
+      if (!pnpm) return { ok: false, why: 'no-pnpm' };
+      return this.#build(pnpm, { install: false });
+    })().finally(() => (this.#building = undefined));
+    return this.#building;
+  }
+
+  /**
+   * Install (when asked) and build the web app, with progress told as steps 2
+   * and 3 of an update. The build says nothing as it goes: its progress is
+   * how long the last one took, slowing as it nears the end so it never
+   * claims to be done.
+   */
+  async #build(
+    pnpm: Launch,
+    {
+      install,
+      say,
+      buildMs = BUILD_GUESS_MS,
+    }: {
+      install: boolean;
+      say?: (phase: ConchUpdateStep, label: string, step: number, percent?: number) => void;
+      buildMs?: number;
+    },
+  ): Promise<WebBuildResult & { tail?: string }> {
+    const run = this.deps.stream ?? stream;
+    if (install) {
+      say?.('install', 'Installing', 2, 0);
+      const installed = await run(pnpm, INSTALL, {
+        cwd: this.root,
+        onLine: (line) => {
+          const percent = installProgress(line);
+          if (percent !== undefined) say?.('install', 'Installing', 2, percent);
+        },
+      });
+      if (installed.code !== 0) return { ok: false, why: 'install', tail: installed.tail };
+    }
+    say?.('build', 'Getting the new look ready', 3, 0);
+    const buildStart = Date.now();
+    const ticking = say
+      ? setInterval(
+          () =>
+            say(
+              'build',
+              'Getting the new look ready',
+              3,
+              buildProgress(Date.now() - buildStart, buildMs),
+            ),
+          BUILD_TICK_MS,
+        )
+      : undefined;
+    const built = await run(pnpm, BUILD, { cwd: this.root }).finally(() => clearInterval(ticking));
+    if (built.code !== 0) return { ok: false, why: 'build', tail: built.tail };
+    return { ok: true, ms: Date.now() - buildStart };
   }
 
   /** The commit Conch's folder is on now. */
@@ -440,7 +540,21 @@ export class ConchCheckout {
    */
   async update(
     onProgress: (progress: UpdateProgressReport) => void,
-    { buildMs = BUILD_GUESS_MS }: { buildMs?: number } = {},
+    options: { buildMs?: number } = {},
+  ): Promise<ConchResult> {
+    this.#updating = true;
+    try {
+      // A build started by itself (at start) finishes first: two never write the web app at once.
+      await this.#building;
+      return await this.#update(onProgress, options);
+    } finally {
+      this.#updating = false;
+    }
+  }
+
+  async #update(
+    onProgress: (progress: UpdateProgressReport) => void,
+    { buildMs = BUILD_GUESS_MS }: { buildMs?: number },
   ): Promise<ConchResult> {
     const steps = 3;
     const say = (phase: ConchUpdateStep, label: string, step: number, percent?: number) =>
@@ -458,6 +572,11 @@ export class ConchCheckout {
         command: this.byHand('git pull --ff-only', 'pnpm install'),
       };
     const check = await this.check({ fetch: true });
+    // Nothing to move to (or no way to move), but the web app was built from
+    // other code (pulled by hand): building it again is the update.
+    const moving = !check.problem && !check.blocked && check.behind > 0;
+    if (!moving && check.head && (await this.webFreshness()).state === 'stale')
+      return this.#refreshWeb(check.head, pnpm, say, buildMs);
     if (check.problem) return { kind: 'failed', message: check.problem };
     if (check.blocked) return { kind: 'refused', ...check.blocked };
     if (check.behind === 0 || !check.head) return { kind: 'current' };
@@ -514,39 +633,14 @@ export class ConchCheckout {
       });
     }
 
-    say('install', 'Installing', 2, 0);
-    const run = this.deps.stream ?? stream;
-    const installed = await run(pnpm, INSTALL, {
-      cwd: this.root,
-      onLine: (line) => {
-        const percent = installProgress(line);
-        if (percent !== undefined) say('install', 'Installing', 2, percent);
-      },
-    });
-    if (installed.code !== 0)
+    const built = await this.#build(pnpm, { install: true, say, buildMs });
+    if (!built.ok && built.why === 'install')
       return this.#rollback(git, pnpm, from, { install: true, build: false }, onProgress, {
-        why: /ENOTFOUND|ETIMEDOUT|ECONNRESET|EAI_AGAIN|network|fetch failed/i.test(installed.tail)
+        why: downloadFailed(built.tail)
           ? 'a part couldn’t be downloaded'
           : 'installing its parts didn’t work',
       });
-
-    // The build says nothing as it goes: its progress is how long the last
-    // one took, slowing as it nears the end so it never claims to be done.
-    say('build', 'Getting the new look ready', 3, 0);
-    const buildStart = Date.now();
-    const ticking = setInterval(
-      () =>
-        say(
-          'build',
-          'Getting the new look ready',
-          3,
-          buildProgress(Date.now() - buildStart, buildMs),
-        ),
-      BUILD_TICK_MS,
-    );
-    const built = await run(pnpm, BUILD, { cwd: this.root }).finally(() => clearInterval(ticking));
-    const builtMs = Date.now() - buildStart;
-    if (built.code !== 0)
+    if (!built.ok)
       return this.#rollback(git, pnpm, from, { install: true, build: true }, onProgress, {
         why: 'the new version wouldn’t build',
       });
@@ -557,7 +651,41 @@ export class ConchCheckout {
       to,
       improvements: check.improvements,
       whatsNew: check.whatsNew,
-      builtMs,
+      builtMs: built.ms,
+    };
+  }
+
+  /**
+   * The folder's code is newer than its web app (pulled by hand): install and
+   * build at the commit that's here. Nothing moves in git, so a failure has
+   * nothing to go back from; it says what to run instead.
+   */
+  async #refreshWeb(
+    head: string,
+    pnpm: Launch,
+    say: (phase: ConchUpdateStep, label: string, step: number, percent?: number) => void,
+    buildMs: number,
+  ): Promise<ConchResult> {
+    const built = await this.#build(pnpm, { install: true, say, buildMs });
+    if (built.ok)
+      return {
+        kind: 'updated',
+        from: head,
+        to: head,
+        improvements: 0,
+        whatsNew: [],
+        builtMs: built.ms,
+      };
+    const why =
+      built.why === 'install'
+        ? downloadFailed(built.tail)
+          ? 'a part couldn’t be downloaded'
+          : 'installing its parts didn’t work'
+        : 'it wouldn’t build';
+    return {
+      kind: 'failed',
+      message: `Conch couldn’t bring its app up to date with its code (${why}). The app you have keeps working.`,
+      command: this.byHand('pnpm install', `pnpm ${BUILD.join(' ')}`),
     };
   }
 

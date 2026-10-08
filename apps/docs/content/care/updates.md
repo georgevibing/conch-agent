@@ -64,6 +64,8 @@ To go back a version in the app, install the one you want from its release page.
 
 A copy of Conch on another branch, or with changes of its own, follows every change on its branch instead of releases, as it always did. The card says why. If you changed files in Conch's own folder, it doesn't update by itself. It says why and shows the commands to run by hand, ready to copy.
 
+If you get new code into Conch's folder by hand, with `git pull`, Conch rebuilds its app to match when it next starts, and open pages offer **Reload**.
+
 Contributors can turn on **Every change on main** to follow `main` instead of releases. It's only shown on a developer's copy.
 
 Updates never ask for your computer's administrator password in the background. The native terminal library is optional: if it cannot build, Conch uses its terminal fallback. If a Linux release requires that build, Conch checks its tools before changing any files. When tools are missing, it leaves the running version untouched and asks you to rerun the [installer](../start/install.md) from a terminal on that computer.

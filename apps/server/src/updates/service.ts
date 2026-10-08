@@ -30,6 +30,7 @@ import type { LatestLookup, NeedSpec, Setup } from '../setup/needs';
 import { downloadReason, type AppReleases } from './app';
 import type { ConchCheckout, ConchResult, UpdateProgressReport } from './conch';
 import { currentFolder, readState, swapIn, writeState } from './layout';
+import { readStamp, type WebFreshness } from './webbuild';
 import type { Offer, ReleaseFollower } from './releases';
 import { DAY, MINUTE, firstLook, lookDue, nextConchLook, nextLook, overnight } from './schedule';
 import { compareVersions, isNewer } from './version';
@@ -150,6 +151,12 @@ export interface UpdatesDeps {
   lookup: LatestLookup;
   /** Conch's own checkout, when it runs from one it can update. */
   conch?: ConchCheckout;
+  /**
+   * The gateway serves the web app built in that checkout (`pnpm start` from
+   * a git checkout; never the desktop app, a release folder or a dev server):
+   * it's kept built from the code that's there.
+   */
+  freshWeb?: boolean;
   /** The same folder, following releases (ADR 0051). */
   releases?: ReleaseFollower;
   /** The desktop app's releases, instead of a folder (ADR 0054). */
@@ -181,6 +188,9 @@ export interface UpdatesDeps {
   restartDelayMs?: number;
 }
 
+/** What building the web app again by itself came to. */
+export type WebRefresh = 'fresh' | 'unknown' | 'rebuilt' | 'failed';
+
 interface Job {
   state: 'queued' | 'updating';
   progress?: UpdateProgress;
@@ -203,8 +213,15 @@ export class UpdatesService {
   #stopped = false;
   /** The channel the installer chose (`git config conch.channel`). */
   #installed?: ReleaseChannel;
+  /** When the web app being served was built (`build.json`): pages built at another time reload. */
+  #webBuilt?: string;
+  /** The last build of the web app made by itself didn't work. */
+  #webFailed = false;
+  #freshening?: Promise<WebRefresh>;
 
-  constructor(private readonly deps: UpdatesDeps) {}
+  constructor(private readonly deps: UpdatesDeps) {
+    this.#readWebBuilt();
+  }
 
   #now(): number {
     return (this.deps.now ?? Date.now)();
@@ -284,7 +301,62 @@ export class UpdatesService {
       auto: this.#cache.auto,
       bootId: this.deps.bootId,
       restartable: this.deps.restartable(),
+      ...(this.#webBuilt && { webBuilt: this.#webBuilt }),
     };
+  }
+
+  // ── The web app ─────────────────────────────────────────────────────────
+
+  #readWebBuilt(): void {
+    const conch = this.deps.conch;
+    if (this.deps.freshWeb && conch) this.#webBuilt = readStamp(conch.dist)?.builtAt;
+  }
+
+  /**
+   * The web app, when this gateway keeps it built from its folder's code:
+   * whether it is, and whether it's being built again now.
+   */
+  async web(): Promise<
+    { freshness: WebFreshness; building: boolean; failed: boolean; command: string } | undefined
+  > {
+    const conch = this.deps.conch;
+    if (!this.deps.freshWeb || !conch) return undefined;
+    return {
+      freshness: await conch.webFreshness(),
+      building: conch.webBuilding || conch.updating,
+      failed: this.#webFailed,
+      command: conch.byHand('pnpm install', 'pnpm --filter @conch/web build'),
+    };
+  }
+
+  /**
+   * Build the web app again when it was built from other code (pulled by
+   * hand, then a restart), while the old one keeps serving. When it's done,
+   * open pages see the new `webBuilt` and offer to reload. One at a time.
+   */
+  freshenWeb(): Promise<WebRefresh> {
+    const conch = this.deps.conch;
+    if (!this.deps.freshWeb || !conch) return Promise.resolve('unknown');
+    this.#freshening ??= (async (): Promise<WebRefresh> => {
+      const before = await conch.webFreshness();
+      if (before.state !== 'stale') return before.state;
+      const built = await conch.buildWeb();
+      // An update started meanwhile builds it itself.
+      if (!built.ok && built.why === 'updating') return 'unknown';
+      this.#webFailed = !built.ok;
+      if (!built.ok) return 'failed';
+      this.#readWebBuilt();
+      this.deps.heal(
+        before.why === 'commit'
+          ? 'Rebuilt the app to match the code that was pulled. Open pages offer to reload.'
+          : 'Rebuilt the app to match Conch’s code. Open pages offer to reload.',
+      );
+      this.#emit();
+      return 'rebuilt';
+    })()
+      .catch((): WebRefresh => 'failed')
+      .finally(() => (this.#freshening = undefined));
+    return this.#freshening;
   }
 
   /** This copy's version: what its folder says, else `SERVER_VERSION`. */
@@ -966,6 +1038,8 @@ export class UpdatesService {
     const now = this.#now();
     switch (result.kind) {
       case 'updated': {
+        this.#webFailed = false;
+        this.#readWebBuilt();
         this.#cache.conch = {
           ...this.#cache.conch,
           head: result.to,
@@ -980,7 +1054,11 @@ export class UpdatesService {
         };
         this.#cache.outcome = {
           kind: 'updated',
-          message: 'Conch was updated.',
+          // Nothing new arrived: the app was built again to match the code that's here.
+          message:
+            result.from === result.to
+              ? 'Conch’s app was brought up to date with its code.'
+              : 'Conch was updated.',
           at: now,
           whatsNew: result.whatsNew,
           releases: [],
@@ -1082,6 +1160,8 @@ export class UpdatesService {
     // Versions nobody needs any more go, quietly.
     void this.deps.releases?.prune(this.deps.keep ?? []).catch(() => undefined);
     this.#bootHead = await this.deps.conch?.head().catch(() => undefined);
+    // The web app built from other code than is here (pulled by hand): built again, in the background.
+    if (this.deps.freshWeb) void this.freshenWeb();
     // Where the folder is now against what the last fetch brought (an update may have just landed).
     await this.#checkConch(false);
     await this.#save();

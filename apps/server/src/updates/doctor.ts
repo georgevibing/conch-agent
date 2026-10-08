@@ -69,6 +69,43 @@ export function updatesCheck(updates: UpdatesService, home: string): DoctorCheck
             : 'Conch’s note of which version to run names one that’s gone. Repair puts it right.',
         });
       }
+      // The web app built from other code than is here (pulled by hand): built again.
+      const web = await updates.web();
+      if (web?.building)
+        items.push({
+          id: 'updates:web',
+          group: GROUP,
+          title: 'Conch’s app',
+          state: 'info',
+          message: 'Conch is rebuilding its app to match its code. Open pages offer to reload.',
+        });
+      else if (web?.freshness.state === 'stale') {
+        if (repair) void updates.freshenWeb();
+        items.push({
+          id: 'updates:web',
+          group: GROUP,
+          title: 'Conch’s app',
+          ...(repair
+            ? {
+                state: 'info' as const,
+                message:
+                  'Conch is rebuilding its app to match its code. Open pages offer to reload.',
+              }
+            : web.failed
+              ? {
+                  state: 'warning' as const,
+                  message:
+                    'Conch’s app is older than its code, and rebuilding it didn’t work. Run this in Conch’s folder.',
+                  action: { kind: 'command' as const, label: 'Rebuild it', command: web.command },
+                }
+              : {
+                  state: 'warning' as const,
+                  repairable: true,
+                  message:
+                    'Conch’s app is older than its code, so some of what’s new isn’t showing. Repair rebuilds it.',
+                }),
+        });
+      }
       for (const program of status.programs) {
         if (!program.available || !program.latest) continue;
         items.push({

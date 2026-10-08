@@ -1,11 +1,12 @@
 /// <reference types="vitest/config" />
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { nacreCssModules } from '@conch/nacre/vite';
 import react from '@vitejs/plugin-react';
-import { createLogger, defineConfig, type Logger, type ProxyOptions } from 'vite';
+import { createLogger, defineConfig, type Logger, type Plugin, type ProxyOptions } from 'vite';
 
 const USUAL = '127.0.0.1:4317';
 let known = { at: 0, address: USUAL };
@@ -74,9 +75,45 @@ function quietProxyLogger(): Logger {
   return logger;
 }
 
+/**
+ * Every build says what it was built from: `dist/build.json`, `{ commit,
+ * builtAt }` (no commit without git). A gateway whose code was pulled by
+ * hand sees its web app is older and builds it again
+ * (apps/server/src/updates/webbuild.ts); the page knows its own `builtAt`
+ * and offers to reload onto a newer one.
+ */
+function buildStamp(): Plugin {
+  const builtAt = new Date().toISOString();
+  let commit: string | undefined;
+  try {
+    const head = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: import.meta.dirname,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 10_000,
+    }).trim();
+    if (/^[0-9a-f]{40,64}$/.test(head)) commit = head;
+  } catch {
+    // Not a git checkout (or no git): the stamp says when, not what.
+  }
+  return {
+    name: 'conch-build-stamp',
+    config: (_config, { command }) => ({
+      define: { __CONCH_WEB_BUILT_AT__: JSON.stringify(command === 'build' ? builtAt : null) },
+    }),
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'build.json',
+        source: `${JSON.stringify({ ...(commit && { commit }), builtAt })}\n`,
+      });
+    },
+  };
+}
+
 export default defineConfig({
   customLogger: quietProxyLogger(),
-  plugins: [react()],
+  plugins: [react(), buildStamp()],
   css: { modules: nacreCssModules },
   server: {
     // Loopback only: `vite --host` would let LAN visitors reach the gateway
