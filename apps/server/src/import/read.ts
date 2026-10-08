@@ -20,6 +20,16 @@ export async function readText(path: string): Promise<string | undefined> {
   }
 }
 
+/** When the newest of these regular files last changed (ms), or undefined when none is there. */
+export async function changedAt(...paths: string[]): Promise<number | undefined> {
+  let newest: number | undefined;
+  for (const path of paths) {
+    const info = await lstat(path).catch(() => undefined);
+    if (info?.isFile()) newest = Math.max(newest ?? 0, info.mtimeMs);
+  }
+  return newest;
+}
+
 /**
  * A file's bytes, but only from inside `root`: a relative path with no `..`,
  * every folder on the way a real one (never a link), the file a regular one

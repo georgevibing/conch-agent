@@ -43,6 +43,7 @@ import {
 } from './found';
 import { openClawModel } from './model';
 import {
+  changedAt,
   entries,
   frontMatter,
   get,
@@ -209,6 +210,7 @@ async function readWorkspace(workspace: string): Promise<{
   identity: IdentityFields;
   soul?: string;
   conventions?: string;
+  wordsAt?: number;
   about?: { text: string; from: string };
   memories: FoundAgent['memories'];
   skills: FoundAgent['skills'];
@@ -225,6 +227,8 @@ async function readWorkspace(workspace: string): Promise<{
   if (soul) out.soul = soul;
   const conventions = agentsText ? ownConventions(agentsText) : undefined;
   if (conventions) out.conventions = conventions;
+  const wordsAt = await changedAt(join(workspace, 'SOUL.md'), join(workspace, 'AGENTS.md'));
+  if (wordsAt) out.wordsAt = wordsAt;
 
   const user = await readText(join(workspace, 'USER.md'));
   const about = user ? prose(user) : undefined;
@@ -439,6 +443,7 @@ export async function readOpenClaw(home = homedir()): Promise<Found | undefined>
       ...(vibe && { vibe }),
       ...(read.soul && { soul: { text: read.soul, from: 'SOUL.md' } }),
       ...(read.conventions && { conventions: { text: read.conventions, from: 'AGENTS.md' } }),
+      ...(read.wordsAt && { wordsAt: read.wordsAt }),
       ...(model && { model }),
       ...(effort && { effort }),
       channels: [],

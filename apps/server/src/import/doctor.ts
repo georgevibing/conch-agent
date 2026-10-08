@@ -26,7 +26,7 @@ export function importCheck(imports: ImportService): DoctorCheck {
           message: `${s.label} is on this computer, with ${s.summary}. Bring them over whenever you like.`,
           action: { kind: 'open', label: 'Take a look', place: 'memory', focus: 'come-home' },
         }));
-      const brought = repair ? await imports.finishCutShort().catch(() => []) : [];
+      const brought = repair ? await imports.finishCutShort({ changed: true }).catch(() => []) : [];
       for (const one of brought)
         items.push({
           id: `import:rest:${one.agentId}`,
@@ -43,7 +43,7 @@ export function importCheck(imports: ImportService): DoctorCheck {
           title: one.name,
           state: 'warning',
           message: one.review
-            ? `The end of ${one.name}’s instructions stayed in ${one.label}, and some of it reads like orders to the assistant. Read it before bringing it.`
+            ? `The end of ${one.name}’s instructions stayed in ${one.label}, and some of it asks for keys, to send things away or to turn safety checks off. Read it before bringing it.`
             : `The end of ${one.name}’s instructions stayed in ${one.label}. Repair brings the rest in.`,
           ...(one.review
             ? {

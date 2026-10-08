@@ -118,7 +118,7 @@ Whichever you pick, an agent doesn't give up at the first error. When something 
 
 ## Bring them from OpenClaw or Hermes
 
-Your agents there come over with their names, faces (their picture, or one of Conch's that matches), personalities, instructions, models, which one was the default, and the bots they answered in. Bringing them again brings them up to date instead of making them twice. Instructions come over whole. If an earlier Conch kept only the start of an agent's instructions, Conch brings the rest in by itself; if some of it reads like orders to the assistant, the agent's page says **The end of its instructions stayed in OpenClaw** and **Take a look** opens Come home to read it first. See [Coming from another assistant](../care/come-home.md#what-comes-over).
+Your agents there come over with their names, faces (their picture, or one of Conch's that matches), personalities, instructions, models, which one was the default, and the bots they answered in. Bringing them again brings them up to date instead of making them twice. Instructions come over whole. If an earlier Conch kept only the start of an agent's instructions, Conch brings the rest in by itself. If you changed the file there since, the agent's page says **The end of its instructions stayed in OpenClaw**, with **Bring the rest in**. Only if the rest asks for keys or passwords, to send things away, or to turn safety checks off does **Take a look** open Come home to read it first. See [Coming from another assistant](../care/come-home.md#what-comes-over).
 
 ## Order and delete
 

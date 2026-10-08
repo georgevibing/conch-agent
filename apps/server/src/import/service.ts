@@ -348,6 +348,20 @@ export function cutShort(here: string, there: string): boolean {
   return cutShortLength(kept) && there.length > kept.length && there.startsWith(kept);
 }
 
+/**
+ * What in the rest of someone's own instructions holds it back for a look
+ * (ADR 0101). Instructions are orders to the assistant by nature, and these
+ * are the person's own, from their own computer, so "always", "never" or
+ * "don't tell the user" are theirs to give. Only what reaches beyond words
+ * waits: keys and passwords, sending things away, running downloads,
+ * turning safety checks off.
+ */
+const REACHES = new Set(['secrets', 'exfiltration', 'download-run', 'binary']);
+export const reachesFurther = (text: string) =>
+  scanText(text, 'its instructions').findings.some(
+    (f) => REACHES.has(f.kind) || (f.kind === 'deception' && f.severity === 'warning'),
+  );
+
 /** An agent that came over cut short, and what of it is still in the app it came from. */
 export interface RestOfInstructions {
   agentId: string;
@@ -357,8 +371,14 @@ export interface RestOfInstructions {
   label: string;
   /** Characters still to come. */
   chars: number;
-  /** The rest reads like orders to the assistant: a person reads it in Come home first. */
+  /**
+   * The rest reaches further than words can: for keys or passwords, to send
+   * things away, to run what it downloads, or to turn safety checks off. A
+   * person reads it in Come home first.
+   */
   review: boolean;
+  /** Its files there changed since it came over: brought with one press, not by itself. */
+  changed: boolean;
   /** The whole of its instructions now, ready to keep. */
   instructions: string;
 }
@@ -720,7 +740,9 @@ export class ImportService {
           source,
           label: found.label,
           chars: more.trim().length,
-          review: scanText(more, 'its instructions').findings.length > 0,
+          review: reachesFurther(more),
+          // Unchanged since it came over: the same file the start was read from.
+          changed: !who.wordsAt || who.wordsAt > (agent.imported?.at ?? 0),
           instructions: draft.instructions,
         });
       }
@@ -730,8 +752,8 @@ export class ImportService {
 
   /**
    * The rest of one agent's instructions, brought in: only its instructions
-   * change, to the whole of what it has there. Words that read like orders are
-   * read in Come home first, unless `reviewed`.
+   * change, to the whole of what it has there. A rest that reaches further
+   * than words (`reachesFurther`) is read in Come home first, unless `reviewed`.
    */
   bringRest(agentId: string, options: { reviewed?: boolean } = {}): Promise<Agent | undefined> {
     return this.#mutex.run(async () => {
@@ -741,7 +763,7 @@ export class ImportService {
       if (one.review && !options.reviewed)
         throw new ImportError(
           'nothing',
-          'Some of the rest reads like orders to the assistant. Read it in Come home before bringing it.',
+          'Some of the rest asks for keys, to send things away or to turn safety checks off. Read it in Come home before bringing it.',
         );
       return agents.update(agentId, { instructions: one.instructions });
     });
@@ -749,13 +771,15 @@ export class ImportService {
 
   /**
    * At start, by itself (working agreement 11): the rest of every agent that
-   * came over cut short, when it reads clean. Returns the ones brought in; the
-   * others are offered on their page.
+   * came over cut short, when its files there haven't changed since (the
+   * same words the start came from). `changed` brings those too (Repair
+   * everything, a person's press). Returns the ones brought in; the others
+   * are offered on their page.
    */
-  async finishCutShort(): Promise<RestOfInstructions[]> {
+  async finishCutShort(options: { changed?: boolean } = {}): Promise<RestOfInstructions[]> {
     const done: RestOfInstructions[] = [];
     for (const one of await this.rest()) {
-      if (one.review) continue;
+      if (one.review || (one.changed && !options.changed)) continue;
       const agent = await this.bringRest(one.agentId).catch(() => undefined);
       if (agent) done.push(one);
     }

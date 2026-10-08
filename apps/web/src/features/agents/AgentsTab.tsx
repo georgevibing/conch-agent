@@ -492,8 +492,8 @@ function RestOfInstructions({
       }
     >
       {rest.review
-        ? `Some of it reads like orders to the assistant, so read it in Come home before bringing it.`
-        : `An earlier Conch kept only the start. ${rest.label} still has the rest, about ${rest.chars.toLocaleString()} characters.`}
+        ? 'Some of it asks for keys, to send things away or to turn safety checks off, so read it in Come home before bringing it.'
+        : `An earlier Conch kept only the start. ${rest.label} still has the rest, about ${rest.chars.toLocaleString()} characters${rest.changed ? `, changed there since it came over` : ''}.`}
     </Callout>
   );
 }

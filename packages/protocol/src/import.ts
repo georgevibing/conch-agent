@@ -130,8 +130,13 @@ export const ImportRestAgent = z.object({
   label: z.string().max(80),
   /** How much is still to come, in characters. */
   chars: z.number().int().nonnegative(),
-  /** The rest reads like orders to the assistant: read it in Come home first. */
+  /**
+   * The rest asks for keys or passwords, to send things away, to run what it
+   * downloads or to turn safety checks off: read it in Come home first.
+   */
   review: z.boolean(),
+  /** Its files there changed since it came over: one press brings it, never by itself. */
+  changed: z.boolean().default(false),
 });
 export type ImportRestAgent = z.infer<typeof ImportRestAgent>;
 export const ImportRest = z.object({ agents: z.array(ImportRestAgent) });

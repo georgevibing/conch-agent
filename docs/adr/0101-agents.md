@@ -209,10 +209,15 @@ handbook, still a bound on what every turn carries.
 - **The rest comes home.** An agent an older Conch brought cut short (its instructions
   between 4,800 and 8,000 characters, the start of what its app has now, unchanged here
   since) gets the rest by itself when Conch starts, with a quiet note under Fixed on its
-  own, when the rest reads clean. When some of it reads like orders, its page says the
-  end stayed behind and opens Come home to read it first, and Repair everything says so
-  too. Bringing it again in Come home says "the rest comes in". Only the instructions
-  change: a name or a face chosen here since stays.
+  own, when the files it came from haven't changed since it came over: the same words
+  the start was read from. If they changed there since, its page offers **Bring the rest
+  in**, one press (Repair everything does it too). Instructions are orders to the
+  assistant by nature, and these are the person's own, from their own computer, so
+  "always", "never" or "don't tell the user" never hold the rest back. Only what reaches
+  beyond words does (`reachesFurther`): asking for keys or passwords, sending things to
+  a drop box, running what it downloads, turning safety checks off. Then its page opens
+  Come home to read it first. Bringing it again in Come home says "the rest comes in".
+  Only the instructions change: a name or a face chosen here since stays.
 
 Precedence is also enforced where words can't be relied on: every permission, mode,
 guard and hold is checked in code (ADR 0028, ADR 0100), and nothing in an agent grants
