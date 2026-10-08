@@ -1,0 +1,259 @@
+@layer nacre.components {
+  /*
+   * Standing orders (ADR 0107): a calm list of your own words. Each line is
+   * what you said, a small label for its kind, and the two things you can do.
+   */
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .rows {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--nc-border-subtle);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    overflow: hidden;
+  }
+
+  .row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2-5);
+    padding: var(--nc-space-2-5) var(--nc-space-2) var(--nc-space-2-5) var(--nc-space-3);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  .row + .row {
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .row[data-state='draft'] {
+    background: var(--nc-accent-1);
+  }
+
+  .row[data-state='off'] .text {
+    color: var(--nc-text-subtle);
+  }
+
+  /* One width for both kinds, so the words beside them line up. */
+  .kind {
+    flex-shrink: 0;
+    min-inline-size: 4.5rem;
+    margin-block-start: 0.125rem;
+    text-align: center;
+    padding: 0 var(--nc-space-1-5);
+    border-radius: var(--nc-radius-full);
+    font-size: var(--nc-text-2xs, 0.6875rem);
+    font-weight: var(--nc-weight-medium);
+    line-height: 1.25rem;
+    white-space: nowrap;
+    color: var(--nc-text-muted);
+    background: var(--nc-wash-2);
+  }
+
+  .kind[data-kind='tell'] {
+    color: var(--nc-accent-11);
+    background: var(--nc-accent-3);
+  }
+
+  .words {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .text {
+    color: var(--nc-text);
+    font-size: var(--nc-text-sm);
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+
+  .meta {
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+  }
+
+  /* The warning's ink, as Callout mixes it: readable in light and dark. */
+  .power {
+    color: light-dark(oklch(0.46 0.133 var(--nc-warning-h)), oklch(0.84 0.091 var(--nc-warning-h)));
+    font-size: var(--nc-text-xs);
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    flex-shrink: 0;
+  }
+
+  .edit {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .edit > :first-child {
+    flex: 1 1 14rem;
+  }
+
+  .add {
+    display: flex;
+    gap: var(--nc-space-2);
+  }
+
+  .add > :first-child {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .hint {
+    margin: 0;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+  }
+
+  /* The card in the chat: your words, in quotes, and two buttons. */
+  .offer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    max-inline-size: var(--nc-chat-card-width);
+    padding: var(--nc-chat-card-pad);
+    border-radius: var(--nc-chat-card-radius);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-chat-card-surface);
+    box-shadow: var(--nc-chat-card-shadow);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  .offerHead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+  }
+
+  .eyebrow {
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .quote {
+    position: relative;
+    margin: 0;
+    padding-inline-start: var(--nc-space-3);
+    color: var(--nc-text);
+    font-size: var(--nc-text-lg);
+    font-weight: var(--nc-weight-medium);
+    line-height: 1.4;
+    letter-spacing: -0.005em;
+    overflow-wrap: anywhere;
+  }
+
+  /* A thread of nacre down the side of your words. */
+  .quote::before {
+    content: '';
+    position: absolute;
+    inset-block: 0.15em;
+    inset-inline-start: 0;
+    inline-size: 3px;
+    border-radius: var(--nc-radius-full);
+    background: linear-gradient(180deg, var(--nc-accent-7), var(--nc-accent-4));
+  }
+
+  .offerNote {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+  }
+
+  .offerActions {
+    display: flex;
+    gap: var(--nc-space-1-5);
+  }
+
+  /* Once answered: one quiet line, with a check that draws itself. */
+  .settled {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    max-inline-size: var(--nc-chat-card-width);
+    min-block-size: 2rem;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out) both;
+  }
+
+  .settledText {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .tick {
+    flex-shrink: 0;
+    inline-size: 1rem;
+    block-size: 1rem;
+    fill: none;
+    stroke: var(--nc-accent-10);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 16;
+    stroke-dashoffset: 16;
+    animation: so-draw var(--nc-duration-slower) var(--nc-ease-out) 120ms forwards;
+  }
+
+  .cross {
+    flex-shrink: 0;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-subtle);
+  }
+
+  @keyframes so-draw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .row,
+    .offer,
+    .settled {
+      animation: none;
+    }
+    .tick {
+      animation: none;
+      stroke-dashoffset: 0;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .row,
+  :global([data-nacre-motion='reduced']) .offer,
+  :global([data-nacre-motion='reduced']) .settled {
+    animation: none;
+  }
+
+  :global([data-nacre-motion='reduced']) .tick {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
