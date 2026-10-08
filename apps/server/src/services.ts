@@ -53,6 +53,7 @@ import { AttachmentStore } from './attachments/store';
 import { fileTools } from './files/tools';
 import { placesTools } from './research/places';
 import { knowledgeTools } from './research/knowledge';
+import { FinanceSource, financeTools } from './research/finance';
 import { researchTools, publicWebFetcher } from './research/tools';
 import { weatherTool } from './research/weather';
 import { chartTools } from './research/charts';
@@ -315,6 +316,8 @@ export class Services {
   readonly explainer: StoryExplainer;
   /** Site icons for chips, from each site itself (ADR 0103). */
   readonly favicons: Favicons;
+  /** Prices and filings, cached across chats and the finance card's range switch. */
+  readonly finance: FinanceSource;
   /** When each skill was last used, for the tidy shelf (ADR 0058). */
   readonly skillUsage: SkillUsage;
   readonly commands: CommandStore;
@@ -1030,6 +1033,7 @@ export class Services {
     });
     this.files = new FileMaker({ store: this.attachments, printer: this.#printer });
     const fetchPublicWeb = publicWebFetcher(config.CONCH_PORT);
+    this.finance = new FinanceSource({ fetcher: fetchPublicWeb });
     this.favicons = new Favicons({ fetcher: faviconFetcher(config.CONCH_PORT) });
     this.workplaces = new WorkPlaces({
       home: config.CONCH_HOME,
@@ -1078,6 +1082,7 @@ export class Services {
               ...musicTools(ctx, { fetcher: fetchPublicWeb, store: this.attachments }),
               ...videoTools(ctx, { fetcher: fetchPublicWeb, store: this.attachments }),
               ...knowledgeTools(ctx, { fetcher: fetchPublicWeb, store: this.attachments }),
+              ...financeTools(ctx, { source: this.finance }),
               ...this.processes.tools(ctx),
               ...this.images.tools(ctx, () => this.#fileAccess(ctx)),
               ...this.routines.tools(ctx),

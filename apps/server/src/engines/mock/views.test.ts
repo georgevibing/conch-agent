@@ -20,6 +20,9 @@ describe('the mock’s pretend app finds', () => {
     ['What’s on with Severance?', 'show_search', 'shows'],
     ['Make me a pie chart of my spending', 'chart_show', 'chart'],
     ['Chart last week’s orders', 'chart_show', 'chart'],
+    ['What’s AAPL at?', 'quote', 'quotes'],
+    ['Compare AAPL and MSFT', 'quote', 'quotes'],
+    ['How is Apple doing financially?', 'fundamentals', 'fundamentals'],
   ])('“%s” finds a %s with a view that logs as it is', (prompt, tool, kind) => {
     const found = pretendFind(prompt);
     expect(found?.tool).toBe(tool);
@@ -37,5 +40,10 @@ describe('the mock’s pretend app finds', () => {
     // Other journeys' prompts that only mention a chart.
     expect(pretendFind('Put a chart of the numbers in the deck')).toBeUndefined();
     expect(pretendFind('Can you make a pie chart file for the deck?')).toBeUndefined();
+    // Money's phrases are narrow on purpose: only a ticker in capitals.
+    expect(pretendFind('compare the two kettles')).toBeUndefined();
+    expect(pretendFind('compare apples and oranges')).toBeUndefined();
+    expect(pretendFind('what’s the plan at this point')).toBeUndefined();
+    expect(pretendFind('how is the build doing financially? joke')).toBeUndefined();
   });
 });

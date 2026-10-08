@@ -6,10 +6,12 @@ import {
   ChartCard,
   ChatMessages,
   FileList,
+  Fundamentals,
   KnowledgeCard,
   LinkCards,
   MailList,
   Places,
+  QuotesCard,
   RecipeCards,
   ShowCards,
   Sources,
@@ -28,6 +30,7 @@ import { attachmentUrl } from './uploads';
 import { MusicFound } from './MusicFound';
 import { FoundVideos } from './FoundVideos';
 import { useWeatherUnits } from './weatherUnits';
+import { priceHistory } from './financeApi';
 
 /** A picture the gateway fetched and keeps for this chat: drawn from Conch, never the web. */
 const picture = (a: Attachment | undefined): CardPicture | undefined =>
@@ -135,6 +138,10 @@ export function ToolFound({ view }: { view: ToolView }) {
       return (
         <BookShelf books={view.items.map(({ cover, ...b }) => ({ ...b, cover: picture(cover) }))} />
       );
+    case 'quotes':
+      return <QuotesFound view={view} />;
+    case 'fundamentals':
+      return <FundamentalsFound view={view} />;
     case 'shows':
       return (
         <ShowCards
@@ -174,4 +181,31 @@ function ChartFound({ view }: { view: Extract<ToolView, { kind: 'chart' }> }) {
   const { kind: _kind, ...chart } = view;
   const { ref, share } = useCardShare({ what: 'chart', title: chart.title });
   return <ChartCard ref={ref} chart={chart} actions={<CardShare {...share} />} />;
+}
+
+/** Prices in the chat, with their share bar. The range switch asks the gateway for more closes (`financeApi.ts`). */
+function QuotesFound({ view }: { view: Extract<ToolView, { kind: 'quotes' }> }) {
+  const first = view.items[0];
+  const { ref, share } = useCardShare({
+    what: 'chart',
+    title: view.items.length === 1 && first ? `${first.symbol} · ${first.name}` : 'Prices',
+  });
+  return (
+    <div ref={ref}>
+      <QuotesCard quotes={view} onRange={priceHistory} share={<CardShare {...share} />} />
+    </div>
+  );
+}
+
+/** Filed figures in the chat, with their share bar. */
+function FundamentalsFound({ view }: { view: Extract<ToolView, { kind: 'fundamentals' }> }) {
+  const { ref, share } = useCardShare({
+    what: 'chart',
+    title: view.items.map((c) => c.name).join(', ') || 'Fundamentals',
+  });
+  return (
+    <div ref={ref}>
+      <Fundamentals fundamentals={view} share={<CardShare {...share} />} />
+    </div>
+  );
 }

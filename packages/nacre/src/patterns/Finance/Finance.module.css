@@ -1,0 +1,1248 @@
+@layer nacre.components {
+  /*
+   * The finance cards (see QuoteCard.tsx, CompareChart.tsx, Fundamentals.tsx).
+   *
+   * Knobs:
+   *   --fi-up / --fi-down / --fi-flat   direction, always beside a word and a caret
+   *   --fi-end-room                     the gutter the compare chart's end labels sit in
+   *   --pc-h                            a plot's height
+   *
+   * Rules this file keeps:
+   *   - A series' colour comes from --nc-chart-1…8, in their fixed order, and
+   *     never changes with the value. Direction is a status colour, used only
+   *     on text that also carries a caret and the word.
+   *   - Grid and axes are solid hairlines one step off the surface. Never dashed.
+   *   - Only transform and opacity move, and nothing moves under reduced motion.
+   */
+
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    inline-size: 100%;
+    min-inline-size: 0;
+    max-inline-size: var(--nc-chat-card-width);
+  }
+
+  .card {
+    --fi-up: light-dark(oklch(0.52 0.14 var(--nc-success-h)), oklch(0.79 0.15 var(--nc-success-h)));
+    --fi-down: light-dark(oklch(0.53 0.19 var(--nc-danger-h)), oklch(0.77 0.16 var(--nc-danger-h)));
+    --fi-flat: var(--nc-text-muted);
+    --fi-end-room: 9%;
+    --fi-axis-room: 3.5rem;
+
+    container-type: inline-size;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    inline-size: 100%;
+    min-inline-size: 0;
+    max-inline-size: var(--nc-chat-card-width);
+    padding: var(--nc-space-4) var(--nc-space-4) var(--nc-space-3);
+    overflow: hidden;
+    border-radius: var(--nc-chat-card-radius);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-chat-card-surface);
+    box-shadow: var(--nc-glaze-edge), var(--nc-elevation-1);
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text);
+  }
+
+  .card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    corner-shape: inherit;
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    pointer-events: none;
+  }
+
+  /* ── Who it is ─────────────────────────────────────────────────────── */
+
+  .head {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+  }
+
+  .mark {
+    display: grid;
+    place-items: center;
+    inline-size: 2.25rem;
+    block-size: 2.25rem;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: linear-gradient(
+      160deg,
+      oklch(0.72 0.1 var(--fm-h, 240)),
+      oklch(0.58 0.12 var(--fm-h, 240))
+    );
+    box-shadow: var(--nc-glaze-edge);
+    color: oklch(0.99 0.01 var(--fm-h, 240));
+    font-size: var(--nc-text-xs);
+    font-weight: 650;
+    letter-spacing: 0.02em;
+  }
+
+  .who {
+    min-inline-size: 0;
+  }
+
+  .symbol {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: 650;
+    letter-spacing: -0.005em;
+  }
+
+  .name,
+  .columnSymbol {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .where {
+    margin: 0;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    text-align: end;
+    white-space: nowrap;
+  }
+
+  /* ── The price ─────────────────────────────────────────────────────── */
+
+  .hero {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+  }
+
+  .priceRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--nc-space-2-5);
+  }
+
+  .price {
+    font-size: clamp(1.75rem, 8cqi, 2.5rem);
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    /* A roller needs equal-width slots, so the digits can't shuffle sideways. */
+    font-variant-numeric: tabular-nums;
+  }
+
+  .roll {
+    display: inline-flex;
+    align-items: baseline;
+  }
+
+  .rollSlot {
+    display: inline-block;
+    overflow: hidden;
+    animation: nc-finance-roll var(--nc-duration-base) var(--nc-spring-snappy) both;
+  }
+
+  .roll[data-way='down'] .rollSlot {
+    animation-name: nc-finance-roll-down;
+  }
+
+  @keyframes nc-finance-roll {
+    from {
+      transform: translateY(0.7em);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes nc-finance-roll-down {
+    from {
+      transform: translateY(-0.7em);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  .move {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    padding: var(--nc-space-0-5) var(--nc-space-2);
+    border-radius: var(--nc-radius-full);
+    background: color-mix(in oklab, currentcolor 10%, transparent);
+    color: var(--fi-flat);
+    font-size: var(--nc-text-xs);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    transition: color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .move[data-way='up'],
+  .barsGrowth[data-way='up'] {
+    color: var(--fi-up);
+  }
+
+  .move[data-way='down'],
+  .barsGrowth[data-way='down'] {
+    color: var(--fi-down);
+  }
+
+  .caret {
+    inline-size: 0.6em;
+    block-size: 0.6em;
+    fill: currentcolor;
+  }
+
+  .moveWord {
+    text-transform: none;
+  }
+
+  .movePercent {
+    font-weight: 650;
+  }
+
+  .moveAmount {
+    color: var(--nc-text-muted);
+    font-weight: 500;
+  }
+
+  .when {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+  }
+
+  /* ── A plot ────────────────────────────────────────────────────────── */
+
+  .chart {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  /* New closes on their way: hold this render, never a skeleton or a jump. */
+  .chart[data-loading] {
+    opacity: 0.55;
+  }
+
+  .plot {
+    position: relative;
+    display: flex;
+    block-size: var(--pc-h, 152px);
+    inline-size: 100%;
+    min-inline-size: 0;
+    touch-action: none;
+  }
+
+  /* The axis has a gutter of its own; everything drawn lives beside it. */
+  .plotArea {
+    position: relative;
+    flex: 1 1 auto;
+    min-inline-size: 0;
+  }
+
+  .plotSvg {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    overflow: visible;
+  }
+
+  .grid {
+    stroke: var(--nc-border-subtle);
+    stroke-width: 1;
+    fill: none;
+  }
+
+  .zero {
+    stroke: var(--nc-border);
+    stroke-width: 1;
+    fill: none;
+  }
+
+  .area {
+    animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out) both;
+  }
+
+  .line {
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 1;
+    animation: nc-finance-draw 820ms var(--nc-ease-out) both;
+  }
+
+  @keyframes nc-finance-draw {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  .yAxis {
+    position: relative;
+    flex: none;
+    inline-size: var(--fi-axis-room);
+    pointer-events: none;
+  }
+
+  .yTick {
+    position: absolute;
+    inset-inline-end: var(--nc-space-1-5);
+    top: calc(var(--y) * 100%);
+    transform: translateY(-50%);
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-2xs);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .cross {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: var(--x);
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+
+  .crossLine {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 50%;
+    inline-size: 1px;
+    background: var(--nc-border);
+    opacity: 0;
+    transition: opacity var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .cross[data-away] .crossLine {
+    opacity: 1;
+  }
+
+  .crossDot,
+  .endDot {
+    position: absolute;
+    inset-inline-start: 50%;
+    top: calc(var(--y) * 100%);
+    inline-size: 0.5625rem;
+    block-size: 0.5625rem;
+    border-radius: var(--nc-radius-full);
+    /* A 2 px ring of the surface, so a dot stays legible over the line. */
+    box-shadow: 0 0 0 2px var(--nc-surface);
+    transform: translate(-50%, -50%);
+    transition: top var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .endDot {
+    inset-inline-start: var(--x);
+    pointer-events: none;
+  }
+
+  /* The whole plot is the slider, so dragging it anywhere reads a day. */
+  .scrub {
+    position: absolute;
+    inset: 0;
+    display: block;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .scrubTrack {
+    position: absolute;
+    inset: 0;
+  }
+
+  .scrubThumb {
+    display: block;
+    inline-size: 1.5rem;
+    block-size: 100%;
+    border-radius: var(--nc-radius-sm);
+    outline: none;
+  }
+
+  .scrubThumb:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .xAxis {
+    display: flex;
+    padding-inline-start: var(--fi-axis-room);
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-2xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .xAt {
+    color: var(--nc-text);
+    font-weight: 600;
+  }
+
+  .range {
+    inline-size: 100%;
+  }
+
+  /* ── The day's range ──────────────────────────────────────────────── */
+
+  .dayRange {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+  }
+
+  .dayRangeLabel {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+  }
+
+  .dayRangeRow {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--nc-space-2);
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dayRangeEnd {
+    color: var(--nc-text-muted);
+  }
+
+  .dayRangeTrack {
+    position: relative;
+    block-size: 0.375rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .dayRangeFill {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    inline-size: calc(var(--to) * 100%);
+    border-radius: inherit;
+    background: linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--nc-chart-1) 30%, transparent),
+      color-mix(in oklab, var(--nc-chart-1) 85%, transparent)
+    );
+  }
+
+  .dayRangePrev {
+    position: absolute;
+    inset-block: -0.125rem;
+    inset-inline-start: calc(var(--at) * 100%);
+    inline-size: 2px;
+    background: var(--nc-text-subtle);
+    transform: translateX(-50%);
+  }
+
+  .dayRangeNow {
+    position: absolute;
+    top: 50%;
+    inset-inline-start: calc(var(--at) * 100%);
+    inline-size: 0.625rem;
+    block-size: 0.625rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-chart-1);
+    box-shadow: 0 0 0 2px var(--nc-surface);
+    transform: translate(-50%, -50%);
+  }
+
+  /* ── The numbers beside the chart ─────────────────────────────────── */
+
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+    gap: var(--nc-space-2);
+    margin: 0;
+  }
+
+  .tile {
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    gap: 0.125rem;
+    padding: var(--nc-space-2) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    min-inline-size: 0;
+  }
+
+  .tileLabel,
+  .factLabel,
+  .meterLabel {
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-2xs);
+    text-transform: none;
+  }
+
+  .tileValue {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tileDetail {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-2xs);
+    font-weight: 400;
+    line-height: 1.35;
+    text-wrap: pretty;
+  }
+
+  /* ── The small print, and where sharing lands ─────────────────────── */
+
+  .foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+    padding-block-start: var(--nc-space-2);
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .small {
+    margin: 0;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-2xs);
+    text-wrap: pretty;
+  }
+
+  /* ── The shelf of instruments ─────────────────────────────────────── */
+
+  .shelf {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+  }
+
+  .chips {
+    display: flex;
+    gap: var(--nc-space-2);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    padding-block-end: var(--nc-space-1);
+    scrollbar-width: none;
+  }
+
+  .chips::-webkit-scrollbar {
+    display: none;
+  }
+
+  .chip {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'head head'
+      'name name'
+      'spark spark'
+      'price move';
+    row-gap: 0.125rem;
+    column-gap: var(--nc-space-2);
+    flex: 0 0 auto;
+    inline-size: 9.25rem;
+    padding: var(--nc-space-2) var(--nc-space-2-5);
+    border: none;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-chat-card-surface);
+    box-shadow:
+      var(--nc-glaze-edge),
+      inset 0 0 0 1px var(--nc-border-subtle);
+    scroll-snap-align: start;
+    text-align: start;
+    font: inherit;
+    color: var(--nc-text);
+    cursor: pointer;
+    transition:
+      transform var(--nc-duration-fast) var(--nc-spring-snappy),
+      box-shadow var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .chip:hover {
+      box-shadow:
+        var(--nc-glaze-edge),
+        inset 0 0 0 1px var(--nc-border),
+        var(--nc-elevation-1);
+    }
+  }
+
+  .chip:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .chip[data-state='active'] {
+    box-shadow:
+      var(--nc-glaze-edge),
+      inset 0 0 0 1.5px var(--nc-accent-8),
+      var(--nc-elevation-1);
+  }
+
+  .chipHead {
+    grid-area: head;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+  }
+
+  .chipMark {
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    border-radius: var(--nc-radius-sm);
+    font-size: 0.5rem;
+  }
+
+  .chipSymbol {
+    font-size: var(--nc-text-xs);
+    font-weight: 650;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .chipName {
+    grid-area: name;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-2xs);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .chipSpark {
+    grid-area: spark;
+    display: block;
+    block-size: 22px;
+    margin-block: var(--nc-space-1);
+  }
+
+  .chipPrice {
+    grid-area: price;
+    font-size: var(--nc-text-xs);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .chipMove {
+    grid-area: move;
+    color: var(--fi-flat);
+    font-size: var(--nc-text-2xs);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .chip[data-way='up'] .chipMove {
+    color: var(--fi-up);
+  }
+
+  .chip[data-way='down'] .chipMove {
+    color: var(--fi-down);
+  }
+
+  .panel:focus {
+    outline: none;
+  }
+
+  .panel[data-state='inactive'] {
+    display: none;
+  }
+
+  .missing {
+    margin: 0;
+    padding: var(--nc-space-2) var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    text-wrap: pretty;
+  }
+
+  /* ── Comparing ────────────────────────────────────────────────────── */
+
+  .compareHead {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+  }
+
+  .compareTitle {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--nc-space-2);
+    margin: 0;
+    font-size: var(--nc-text-base);
+    font-weight: 650;
+    letter-spacing: -0.01em;
+  }
+
+  .compareKicker {
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-2xs);
+    font-weight: 400;
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1) var(--nc-space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .legend li {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    font-size: var(--nc-text-xs);
+  }
+
+  .legendKey {
+    display: inline-block;
+    inline-size: 0.75rem;
+    block-size: 0.1875rem;
+    border-radius: var(--nc-radius-full);
+    flex: none;
+  }
+
+  .legendName {
+    color: var(--nc-text-muted);
+  }
+
+  .legendValue {
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .compare .scrub,
+  .compare .plotSvg {
+    inset-inline-end: var(--fi-end-room);
+  }
+
+  .ends {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: 0;
+    inline-size: var(--fi-end-room);
+    pointer-events: none;
+  }
+
+  .end {
+    position: absolute;
+    inset-inline-start: var(--nc-space-1);
+    top: calc(var(--y) * 100%);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    transform: translateY(-50%);
+    color: var(--nc-text);
+    font-size: var(--nc-text-2xs);
+    font-weight: 650;
+    white-space: nowrap;
+  }
+
+  .endKey {
+    display: inline-block;
+    inline-size: 0.5rem;
+    block-size: 0.1875rem;
+    border-radius: var(--nc-radius-full);
+    flex: none;
+  }
+
+  .table {
+    inline-size: 100%;
+    border-collapse: collapse;
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .table th,
+  .table td {
+    padding: var(--nc-space-1-5) var(--nc-space-1);
+    text-align: end;
+    white-space: nowrap;
+  }
+
+  .table thead th:first-child {
+    text-align: start;
+  }
+
+  .table thead th {
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-2xs);
+    font-weight: 500;
+    border-block-end: 1px solid var(--nc-border-subtle);
+  }
+
+  .table tbody th {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    text-align: start;
+    font-weight: 650;
+  }
+
+  .table tbody tr + tr th,
+  .table tbody tr + tr td {
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .tableNote {
+    padding: 0 var(--nc-space-1);
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-surface-sunken);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-2xs);
+    font-weight: 500;
+  }
+
+  /* ── Filed figures ────────────────────────────────────────────────── */
+
+  .columns {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--nc-space-3);
+  }
+
+  .fundamentals[data-many] .columns {
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  }
+
+  .column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    min-inline-size: 0;
+  }
+
+  .fundamentals[data-many] .column {
+    padding: var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+  }
+
+  .columnHead {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .columnMark {
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    font-size: 0.5625rem;
+  }
+
+  .columnName {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: 650;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .unavailable {
+    margin: 0;
+    padding: var(--nc-space-2-5) var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    text-wrap: pretty;
+  }
+
+  .bars {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    min-inline-size: 0;
+  }
+
+  .barsHead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--nc-space-1) var(--nc-space-2);
+  }
+
+  .barsHead .barsValue {
+    margin-inline-start: auto;
+  }
+
+  .barsLabel {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    font-weight: 500;
+  }
+
+  .barsValue {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .barsPeriod {
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-2xs);
+    font-weight: 400;
+  }
+
+  .barsGrowth {
+    margin: 0;
+    color: var(--fi-flat);
+    font-size: var(--nc-text-2xs);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .barsList {
+    display: flex;
+    align-items: flex-end;
+    justify-content: start;
+    /* Two pixels of the surface between neighbours: the gap separates, not a stroke. */
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .bar {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.1875rem;
+    min-inline-size: 0;
+    max-inline-size: 2.75rem;
+  }
+
+  .barTrack {
+    position: relative;
+    display: block;
+    block-size: 2.5rem;
+    /* Never wider than 24 px: the band's leftover is air. */
+    max-inline-size: 1.25rem;
+    inline-size: 100%;
+    margin-inline: auto;
+  }
+
+  /* Zero is a real line when anything went below it. */
+  .barsList[data-negative] .barTrack::before {
+    content: '';
+    position: absolute;
+    inset-inline: -1px;
+    top: calc(var(--zero) * 100%);
+    block-size: 1px;
+    background: var(--nc-border);
+  }
+
+  .barFill {
+    position: absolute;
+    inset-inline: 0;
+    top: calc(var(--top) * 100%);
+    block-size: calc(var(--h) * 100%);
+    min-block-size: 2px;
+    /* A rounded data end, square where it meets the baseline. */
+    border-start-start-radius: 4px;
+    border-start-end-radius: 4px;
+    background: var(--nc-chart-1);
+    animation: nc-finance-grow var(--nc-duration-slow) var(--nc-spring-snappy) both;
+    transform-origin: bottom;
+  }
+
+  .barFill[data-way='down'] {
+    border-radius: 0 0 4px 4px;
+    background: var(--fi-down);
+    transform-origin: top;
+  }
+
+  @keyframes nc-finance-grow {
+    from {
+      transform: scaleY(0.04);
+    }
+    to {
+      transform: scaleY(1);
+    }
+  }
+
+  .barPeriod {
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-2xs);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .margins {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+  }
+
+  .marginNote,
+  .factTag {
+    margin: 0;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-2xs);
+    text-wrap: pretty;
+  }
+
+  .meterRow {
+    display: grid;
+    grid-template-columns: minmax(5.5rem, auto) minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  .meterTrack {
+    position: relative;
+    block-size: 0.375rem;
+    border-radius: var(--nc-radius-full);
+    /* The unfilled track is a lighter step of the fill's own ramp. */
+    background: color-mix(in oklab, var(--nc-chart-1) 16%, var(--nc-surface-sunken));
+    overflow: hidden;
+  }
+
+  .meterFill {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    inline-size: calc(var(--at) * 100%);
+    border-radius: inherit;
+    background: var(--nc-chart-1);
+    transform-origin: left;
+    animation: nc-finance-fill var(--nc-duration-slow) var(--nc-spring-snappy) both;
+  }
+
+  @keyframes nc-finance-fill {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+
+  .meterLoss {
+    color: var(--fi-down);
+    font-size: var(--nc-text-2xs);
+    font-weight: 600;
+  }
+
+  .meterRow[data-way='down'] .meterValue {
+    color: var(--fi-down);
+  }
+
+  .meterValue {
+    font-size: var(--nc-text-xs);
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+    gap: var(--nc-space-2);
+    margin: 0;
+  }
+
+  .fact {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-inline-size: 0;
+  }
+
+  .factLabel {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .factValue {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .factPeriod {
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-2xs);
+    font-weight: 400;
+    white-space: nowrap;
+  }
+
+  .factWhere {
+    display: grid;
+    place-items: center;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    margin-inline-start: auto;
+    padding: 0;
+    border: none;
+    border-radius: var(--nc-radius-full);
+    background: none;
+    color: var(--nc-text-subtle);
+    cursor: pointer;
+  }
+
+  .factWhere svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  @media (hover: hover) {
+    .factWhere:hover {
+      background: var(--nc-wash-1);
+      color: var(--nc-text);
+    }
+  }
+
+  .factWhere:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .factPanel {
+    max-inline-size: 18rem;
+    font-size: var(--nc-text-xs);
+  }
+
+  .factPanel p {
+    margin: 0;
+    text-wrap: pretty;
+  }
+
+  .factPanel p + p {
+    margin-block-start: var(--nc-space-1-5);
+  }
+
+  /* ── A narrow card (a phone, a split pane) ────────────────────────── */
+
+  @container (max-width: 25rem) {
+    .card {
+      padding: var(--nc-space-3) var(--nc-space-3) var(--nc-space-2-5);
+      gap: var(--nc-space-2-5);
+    }
+
+    .tiles {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .where {
+      display: none;
+    }
+
+    .priceRow {
+      gap: var(--nc-space-1-5);
+    }
+
+    .moveAmount {
+      display: none;
+    }
+
+    .facts {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .barTrack {
+      block-size: 2.5rem;
+    }
+  }
+
+  /* ── A thumb instead of a pointer ─────────────────────────────────── */
+
+  @media (pointer: coarse) {
+    .scrubThumb {
+      inline-size: 2.75rem;
+    }
+
+    .chip {
+      inline-size: 10.5rem;
+      padding: var(--nc-space-2-5) var(--nc-space-3);
+    }
+
+    .factWhere {
+      inline-size: 2.75rem;
+      block-size: 2.75rem;
+    }
+  }
+
+  /* ── Still ────────────────────────────────────────────────────────── */
+
+  @media (prefers-reduced-motion: reduce) {
+    .rollSlot,
+    .line,
+    .area,
+    .barFill,
+    .meterFill {
+      animation: none;
+    }
+
+    .line {
+      stroke-dasharray: none;
+    }
+
+    .crossDot,
+    .endDot,
+    .move,
+    .chip {
+      transition: none;
+    }
+  }
+}

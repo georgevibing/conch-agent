@@ -1561,6 +1561,38 @@ const TOOLS: Case[] = [
     },
   ],
   [
+    'quote',
+    'mcp__conch__quote',
+    { symbols: ['AAPL'], period: '1M' },
+    ok(
+      JSON.stringify({
+        quotes: [{ symbol: 'AAPL', price: 257.2, changePercent: 0.67, direction: 'up' }],
+      }),
+    ),
+    { family: 'research', done: 'Checked what AAPL is at', outcome: '257.2, up 0.67%' },
+  ],
+  [
+    'quote for several, nothing back yet',
+    'quote',
+    { symbols: ['AAPL', 'MSFT'] },
+    undefined,
+    { family: 'research', doing: 'Checking what AAPL and MSFT are at' },
+  ],
+  [
+    'price_history',
+    'mcp__conch__price_history',
+    { symbol: 'aapl', period: '5Y' },
+    ok('{}'),
+    { family: 'research', done: 'Charted AAPL price over 5Y' },
+  ],
+  [
+    'fundamentals',
+    'mcp__conch__fundamentals',
+    { companies: ['Apple', 'Microsoft'] },
+    ok('{}'),
+    { family: 'research', done: 'Read Apple and Microsoft’s filings' },
+  ],
+  [
     'music_search',
     'mcp__conch__music_search',
     { query: 'bohemian rhapsody', kind: 'song' },

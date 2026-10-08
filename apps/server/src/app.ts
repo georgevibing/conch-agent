@@ -95,6 +95,7 @@ import { registerSafetyRoutes } from './conversations/safety-routes';
 import { registerUndoRoutes } from './undo/routes';
 import { registerStoryRoutes } from './conversations/stories/routes';
 import { registerFaviconRoutes } from './favicons/routes';
+import { registerFinanceRoutes } from './research/finance-routes';
 import { registerArtifactRoutes } from './artifacts/routes';
 import { registerCardRoutes } from './cards/routes';
 import { registerMarketRoutes } from './skills/market/routes';
@@ -357,6 +358,8 @@ export async function buildApp(services: Services) {
   registerStoryRoutes(app, services.explainer);
   // Site icons for chips, from each site itself, never a third party (ADR 0103).
   registerFaviconRoutes(app, services.favicons);
+  // What a finance card's range switch asks for: daily closes, from the same cached reader.
+  registerFinanceRoutes(app, services.finance);
   // What a music card plays, streamed through Conch: only what that chat's own card carries.
   registerListenRoutes(app, {
     carried: async (chat, src) =>

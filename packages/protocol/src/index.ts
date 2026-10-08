@@ -85,6 +85,7 @@ export * from './views/audio';
 export * from './views/video';
 export * from './views/knowledge';
 export * from './views/chart';
+export * from './views/finance';
 export * from './chat-list';
 export * from './chat-context';
 export * from './commands';

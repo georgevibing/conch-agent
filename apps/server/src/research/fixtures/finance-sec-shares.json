@@ -1,0 +1,26 @@
+{
+  "cik": 320193,
+  "taxonomy": "dei",
+  "tag": "EntityCommonStockSharesOutstanding",
+  "entityName": "Apple Inc.",
+  "units": {
+    "shares": [
+      {
+        "end": "2024-10-18",
+        "val": 15115823000,
+        "fy": 2024,
+        "fp": "FY",
+        "form": "10-K",
+        "filed": "2024-11-01"
+      },
+      {
+        "end": "2025-10-17",
+        "val": 14840390000,
+        "fy": 2025,
+        "fp": "FY",
+        "form": "10-K",
+        "filed": "2025-10-30"
+      }
+    ]
+  }
+}

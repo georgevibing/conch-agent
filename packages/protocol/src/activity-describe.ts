@@ -114,6 +114,20 @@ function str(input: Input, ...keys: string[]): string | undefined {
   return undefined;
 }
 
+/** "AAPL and MSFT": the symbols a finance tool was asked about, as a list in words. */
+function tickers(input: Input, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = input[key];
+    const list = (typeof value === 'string' ? [value] : Array.isArray(value) ? value : [])
+      .flatMap((s) => (typeof s === 'string' && s.trim() ? [clip(oneLine(s).trim(), 24)] : []))
+      .slice(0, 3);
+    if (!list.length) continue;
+    if (list.length === 1) return list[0];
+    return `${list.slice(0, -1).join(', ')} and ${list.at(-1)}`;
+  }
+  return undefined;
+}
+
 const fileChip = (path: string): ActivityChip => ({
   kind: 'file',
   label: baseName(path),
@@ -1336,6 +1350,46 @@ const CONCH: Record<string, (input: Input) => Draft> = {
         const outcome = [temp, sky].filter(Boolean).join(' and ');
         return outcome ? { outcome: clip(outcome, 60) } : undefined;
       },
+    };
+  },
+  quote: (input) => {
+    const named = tickers(input, 'symbols', 'symbol', 'tickers', 'ticker', 'companies');
+    return {
+      family: 'research',
+      words: say(
+        'check',
+        named ? `what ${named} ${named.includes(' and ') ? 'are' : 'is'} at` : 'prices',
+      ),
+      finish: (output) => {
+        const first = record((record(parseJson(output)).quotes as unknown[] | undefined)?.[0]);
+        const price = typeof first.price === 'number' ? first.price : undefined;
+        if (price === undefined) return undefined;
+        const percent = typeof first.changePercent === 'number' ? first.changePercent : undefined;
+        const direction = typeof first.direction === 'string' ? first.direction : '';
+        const move =
+          percent !== undefined && direction && direction !== 'flat'
+            ? `, ${direction} ${Math.abs(percent).toFixed(2)}%`
+            : '';
+        return { outcome: clip(`${price}${move}`, 60) };
+      },
+    };
+  },
+  price_history: (input) => {
+    const symbol = str(input, 'symbol', 'ticker', 'company');
+    const period = str(input, 'period', 'range');
+    return {
+      family: 'research',
+      words: say(
+        'chart',
+        `${symbol ? clip(oneLine(symbol), 24).toUpperCase() : 'a'} price${period ? ` over ${clip(oneLine(period), 8)}` : ''}`,
+      ),
+    };
+  },
+  fundamentals: (input) => {
+    const named = tickers(input, 'companies', 'company', 'symbols', 'symbol', 'tickers');
+    return {
+      family: 'research',
+      words: say('read', named ? `${named}’s filings` : 'company filings'),
     };
   },
   use_skill: (input) => skillDraft(str(input, 'name')),
