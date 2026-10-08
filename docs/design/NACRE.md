@@ -449,6 +449,35 @@ never a tick; a long reason keeps to three lines there and is in full in Details
 Reduced motion keeps the light still (a resting mesh, the edge lit) and the
 percent.
 
+### Making a file (chat)
+
+A file being made is drawn where the file will be (`FileMaking`), never as a
+tool row or a story: the same family as a picture being made, suited to
+documents. On a slow wash of pearl light tinted by the file's type, the file's
+own shape draws itself: a page's heading and lines are written in, a sheet's
+cells fill in a diagonal wave, slides stack from the back, papers drop into a
+box for an archive, a window's blocks settle in for a web page, code lines are
+written light on ink, a waveform breathes for audio. Two arcs of light go round
+the edge, a sheen crosses now and then, the type's badge sits in the corner,
+and a pill says how far it got and the step it's on ("Laying out pages"), or
+its ring just turns. It surfaces after a breath (300 ms), since most files take
+less, so nothing flashes. When it's ready, the picture of the file rises out
+of the light once, only when it arrived live: its first page or slide (the
+gateway's thumbnail; a PDF without one shows its first page in an inert
+frame), its first rows or words set small, or, with nothing to show, its drawn
+shape at rest as a cover with its badge. A web page is drawn as its title and
+words, never run: what the assistant writes runs only in `SealedFrame`. Then
+it rests as a card: the type's tile (PDF red, documents blue, sheets green,
+tables teal, slides orange, Markdown violet, web pages azure, code indigo,
+archives khaki, audio magenta, video rose), its name, one quiet line ("PDF ·
+3 pages · 242 KB"), and **Look closer**, **Download**, **Copy link** (where it
+has one), **Send to…** and **Details** in one row. Not made is the picture's
+calm line, with a file glyph. A file on a message is a `FileTile`: the same
+tile, name and line, small, with **Download**. Every layer bigger than the
+card sits inside an `overflow: hidden` box and the edge light stays on the
+edge, so a card never widens a phone's chat. Reduced motion draws the file
+whole and still.
+
 ### The browser (chat)
 
 The browser panel shows someone else's page, so Nacre stays out of its way. The page

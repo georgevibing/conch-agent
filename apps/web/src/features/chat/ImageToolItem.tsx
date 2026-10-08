@@ -90,13 +90,13 @@ export function reasonWords(output: string | undefined): string | undefined {
  * answered, or a rule said no. Read from what was decided (the call keeps it),
  * and, for chats from before that, from the tool's own words.
  */
-const unasked = (item: Tool) =>
+export const unasked = (item: Tool) =>
   item.approval === 'declined' ||
   item.approval === 'expired' ||
   item.approval === 'refused' ||
   (typeof item.output === 'string' && /^the user declined\b/i.test(item.output.trim()));
 
-const notMadeWords: Partial<Record<NonNullable<Tool['approval']>, string>> = {
+export const notMadeWords: Partial<Record<NonNullable<Tool['approval']>, string>> = {
   expired: 'Not made: no answer in time',
   refused: 'Not made: Conch’s rules didn’t allow it',
 };

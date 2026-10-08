@@ -695,8 +695,8 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
       const item = items[target];
       if (item?.kind !== 'tool' || (item.status !== 'running' && item.status !== 'pending'))
         return base;
-      const { at, progress, stage, estimated, preview, by } = event;
-      const word = { progress, stage, estimated, preview, by };
+      const { at, progress, stage, estimated, preview, by, detail } = event;
+      const word = { progress, stage, estimated, preview, by, detail };
       const next = items.slice();
       next[target] = {
         ...item,
@@ -709,6 +709,8 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
           // The latest rough picture wins; a word without one keeps the last.
           preview: word.preview ?? item.progress?.preview,
           by: word.by ?? item.progress?.by,
+          // The step it's on: a word without one keeps the last.
+          detail: word.detail ?? item.progress?.detail,
           at,
           since: item.progress?.since ?? at,
         },

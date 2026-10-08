@@ -51,6 +51,36 @@ export async function fileBytes(
   }
 }
 
+/** Something an attachment store can answer for one chat. */
+export interface ChatFiles {
+  inConversation(id: string, conversationId: string): Promise<{ path: string } | undefined>;
+}
+
+/**
+ * The bytes of a file the model named: one of this chat's attachments by id
+ * (`att_…`, so a provider that never sees paths can still read what it was
+ * sent), or a path in the work folder.
+ */
+export async function namedBytes(
+  access: () => Promise<FileAccess>,
+  raw: string,
+  signal: AbortSignal,
+  chat?: { files: ChatFiles; conversationId: string },
+  max = FILE_LIMIT,
+) {
+  const ref = raw.trim();
+  if (chat && /^att_[A-Za-z0-9_-]+$/.test(ref)) {
+    const found = await chat.files.inConversation(ref, chat.conversationId);
+    if (!found)
+      throw new Error(
+        `There’s no attachment “${ref.slice(0, 60)}” in this chat. Use list_attachments to find this chat’s files.`,
+      );
+    // Its real path: the access check compares real paths (macOS's /var is /private/var).
+    return fileBytes(await access(), await realpath(found.path), signal, max);
+  }
+  return fileBytes(await access(), raw, signal, max);
+}
+
 export function textPage(text: string, offset = 0, limit = 200) {
   const selected: string[] = [];
   let chars = 0;
@@ -89,13 +119,15 @@ export function textPage(text: string, offset = 0, limit = 200) {
 }
 
 export async function readTextPage(
-  access: FileAccess,
+  access: FileAccess | (() => Promise<FileAccess>),
   path: string,
   signal: AbortSignal,
   offset = 0,
   limit = 200,
+  chat?: { files: ChatFiles; conversationId: string },
 ) {
-  const decoded = decodeText(await fileBytes(access, path, signal));
+  const getAccess = typeof access === 'function' ? access : () => Promise.resolve(access);
+  const decoded = decodeText(await namedBytes(getAccess, path, signal, chat));
   if (decoded === undefined)
     throw new Error('This is a binary file. Use read_document for a PDF or Office document.');
   return textPage(decoded, offset, limit);

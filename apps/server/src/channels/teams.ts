@@ -2,7 +2,12 @@ import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { type ChannelBot, type ChannelSecrets, TEAMS_APP_ID } from '@conch/protocol';
+import {
+  ATTACHMENT_LIMITS,
+  type ChannelBot,
+  type ChannelSecrets,
+  TEAMS_APP_ID,
+} from '@conch/protocol';
 import { convert } from 'html-to-text';
 
 import type { ChannelEndpoints } from './adapters';
@@ -38,7 +43,8 @@ type TeamsSecrets = Extract<ChannelSecrets, { kind: 'microsoftteams' }>;
 export const MICROSOFT_LOGIN = 'https://login.microsoftonline.com';
 /** Teams takes messages up to 100 KB; parts this long stay far below it as HTML. */
 const PART = 12_000;
-const FILE_LIMIT = 50 * 1024 * 1024;
+/** What Conch keeps of one file (ATTACHMENT_LIMITS): more would only be refused after downloading it. */
+const FILE_LIMIT = ATTACHMENT_LIMITS.maxBytes;
 /**
  * A picture a bot puts in a personal chat goes inside the message itself
  * (a data: address), which Teams takes up to 1 MB, in PNG, JPEG or GIF. Any

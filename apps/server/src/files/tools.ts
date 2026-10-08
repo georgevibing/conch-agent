@@ -3,16 +3,20 @@ import { z } from 'zod';
 import type { ToolContext } from '../conversations/manager';
 import type { HostTool } from '../engines/types';
 import type { FileAccess } from '../engines/host';
-import { readTextPage, searchFiles } from './read';
+import { readTextPage, searchFiles, type ChatFiles } from './read';
 
-export function fileTools(ctx: ToolContext, access: () => Promise<FileAccess>): HostTool[] {
+export function fileTools(
+  ctx: ToolContext,
+  access: () => Promise<FileAccess>,
+  files?: ChatFiles,
+): HostTool[] {
   return [
     {
       name: 'read_file',
       effect: 'read',
       row: true,
       description:
-        'Read a UTF-8 text file in the work folder or this chat’s attachments, up to 30 MB. Returns numbered lines and nextOffset; repeat with offset to continue. Binary PDF and Office files use read_document. Long lines are explicitly shortened.',
+        'Read a UTF-8 text file in the work folder or this chat’s attachments (by path, or by its id: att_…), up to 30 MB. Returns numbered lines and nextOffset; repeat with offset to continue. Binary PDF and Office files use read_document. Long lines are explicitly shortened.',
       input: {
         file_path: z.string().min(1).max(4096),
         offset: z.number().int().min(0).max(30_000_000).default(0),
@@ -21,11 +25,12 @@ export function fileTools(ctx: ToolContext, access: () => Promise<FileAccess>): 
       run: async (args) =>
         JSON.stringify(
           await readTextPage(
-            await access(),
+            access,
             String(args.file_path),
             ctx.signal,
             Number(args.offset),
             Number(args.limit),
+            files && { files, conversationId: ctx.conversationId },
           ),
         ),
     },

@@ -1,4 +1,4 @@
-import type { ChannelBot, ChannelCheck } from '@conch/protocol';
+import { ATTACHMENT_LIMITS, type ChannelBot, type ChannelCheck } from '@conch/protocol';
 
 import { fit, toSlackMrkdwn } from './format';
 import type { SlackCheck } from './service';
@@ -26,7 +26,8 @@ const SLACK_APP_ID = /^A[A-Z0-9]{6,20}$/;
 
 /** A section of mrkdwn holds 3000 characters; parts this long stay under it once formatted. */
 const PART = 2800;
-const FILE_LIMIT = 50 * 1024 * 1024;
+/** What Conch keeps of one file (ATTACHMENT_LIMITS): more would only be refused after downloading it. */
+const FILE_LIMIT = ATTACHMENT_LIMITS.maxBytes;
 /** The most one file Conch sends may be (Slack takes up to 1 GB). */
 const UPLOAD_LIMIT = 1024 * 1024 * 1024;
 /** Open a fresh socket this often, so one that died quietly is replaced. */
@@ -669,7 +670,8 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
         messageId: event.ts,
         user: await this.#person(event.user),
         text: (me ? (event.text ?? '').replaceAll(`<@${me}>`, '') : (event.text ?? '')).trim(),
-        files: [],
+        // A file shared with the mention comes with it (a PDF to read, a sheet to sum up).
+        files: slackFiles(event.files),
         direct: false,
         mentioned: true,
         group: await this.#place(event.channel),
@@ -684,19 +686,7 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
       messageId: event.ts,
       user: await this.#person(event.user),
       text: event.text ?? '',
-      files: (event.files ?? []).flatMap((file) =>
-        file.url_private_download
-          ? [
-              {
-                name: file.name ?? 'file',
-                ref: file.url_private_download,
-                ...(file.subtype === 'slack_audio' && { voice: true }),
-                ...(file.mimetype && { mimeType: file.mimetype }),
-                ...(file.size !== undefined && { size: file.size }),
-              },
-            ]
-          : [],
-      ),
+      files: slackFiles(event.files),
       direct: event.channel_type === 'im',
     });
   }
@@ -756,4 +746,31 @@ export class SlackAdapter implements ChannelAdapter, SlackCheck {
       ack: () => Promise.resolve(),
     });
   }
+}
+
+/** The files of a Slack message, as Conch takes them. */
+function slackFiles(
+  files:
+    | {
+        name?: string;
+        url_private_download?: string;
+        mimetype?: string;
+        size?: number;
+        subtype?: string;
+      }[]
+    | undefined,
+): ChannelFile[] {
+  return (files ?? []).flatMap((file) =>
+    file.url_private_download
+      ? [
+          {
+            name: file.name ?? 'file',
+            ref: file.url_private_download,
+            ...(file.subtype === 'slack_audio' && { voice: true }),
+            ...(file.mimetype && { mimeType: file.mimetype }),
+            ...(file.size !== undefined && { size: file.size }),
+          },
+        ]
+      : [],
+  );
 }

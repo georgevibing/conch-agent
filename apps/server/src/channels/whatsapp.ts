@@ -80,12 +80,13 @@ export interface WaSocket {
   /** `id`: the message's id, chosen beforehand so its echo is known as Conch's own. */
   send(chat: string, text: string, options?: { edit?: string; id?: string }): Promise<string>;
   /**
-   * A picture (shown in the chat) or a file (to download), with a caption.
-   * `id` as for `send`, so its echo is known as Conch's own.
+   * A picture (shown in the chat), a video (played in it), or a file (to
+   * download, with its name), with a caption. `id` as for `send`, so its
+   * echo is known as Conch's own.
    */
   file(
     chat: string,
-    file: { bytes: Buffer; name: string; mimeType: string; image: boolean },
+    file: { bytes: Buffer; name: string; mimeType: string; image: boolean; video?: boolean },
     caption: string | undefined,
     options: { id: string },
   ): Promise<string>;
@@ -375,12 +376,15 @@ export class WhatsAppAdapter implements ChannelAdapter {
             // Known as Conch's own before it goes, so its echo is never read as you writing.
             const chosen = messageId();
             sent.add(chosen);
+            // WebP arrives as a sticker on WhatsApp, so only PNG and JPEG are shown as pictures.
             const image =
               file.image &&
               file.bytes.length <= PICTURE_LIMIT &&
-              /^image\/(?:png|jpeg|webp)$/.test(file.mimeType);
+              /^image\/(?:png|jpeg)$/.test(file.mimeType);
+            // MP4 plays in the chat (16 MB at most); anything else goes as a document with its name.
+            const video = file.mimeType === 'video/mp4' && file.bytes.length <= PICTURE_LIMIT;
             const id = await withRetry(() =>
-              live().file(chatId, { ...file, image }, words, { id: chosen }),
+              live().file(chatId, { ...file, image, video }, words, { id: chosen }),
             );
             sent.add(id);
             refs.push({ chatId, messageId: id });

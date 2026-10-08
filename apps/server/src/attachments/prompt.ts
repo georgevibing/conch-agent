@@ -3,6 +3,7 @@ import { dirname } from 'node:path';
 import type { Attachment } from '@conch/protocol';
 
 import type { EngineAttachments, TurnImage } from '../engines/types';
+import { extractDocument } from '../files/documents';
 import type { ImageType } from './sniff';
 import { decodeText } from './sniff';
 import type { AttachmentStore } from './store';
@@ -24,6 +25,44 @@ export interface TurnAttachments {
 }
 
 const IMAGE_TYPES = new Set<string>(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+
+/** Documents whose words Conch can take out itself (the sealed reader, `files/documents.ts`). */
+const DOCUMENT_TYPES = new Set<string>([
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+]);
+/** Most of one document's words given inline to a provider that can't open files. */
+export const DOCUMENT_INLINE_MAX = 60_000;
+
+/**
+ * A document's words for a provider that can't open files itself, so every
+ * provider can read a PDF or an Office file it was sent. Undefined when there
+ * are none (a scanned PDF, a locked file): the plain note stands.
+ */
+async function documentWords(
+  bytes: Buffer,
+  name: string,
+  room: number,
+): Promise<{ text: string; more: boolean; warnings: string[] } | undefined> {
+  const signal = AbortSignal.timeout(30_000);
+  const read = await extractDocument(bytes, name, 0, 20, signal).catch(() => undefined);
+  if (!read) return undefined;
+  let text = '';
+  let more = read.nextOffset !== null;
+  for (const section of read.sections) {
+    const part = `[${section.label}]\n${section.text}\n`;
+    if (text.length + part.length > room) {
+      text += part.slice(0, Math.max(0, room - text.length));
+      more = true;
+      break;
+    }
+    text += part;
+    if (section.truncated) more = true;
+  }
+  return text.trim() ? { text: text.trim(), more, warnings: read.warnings.slice(0, 3) } : undefined;
+}
 
 /** An attribute value that can't close its tag or open another. */
 function attr(value: string): string {
@@ -112,6 +151,34 @@ export async function forTurn(
         });
         parts.push(
           `<attachment name="${name}" type="${type}"${path}>(Shown to you as an image.)</attachment>`,
+        );
+        continue;
+      }
+    }
+
+    // A PDF or an Office file, for a provider that can't open it: its words, read here.
+    if (
+      !can.files &&
+      attachment.kind === 'file' &&
+      DOCUMENT_TYPES.has(attachment.mimeType) &&
+      budget > 1000
+    ) {
+      const bytes = await store.bytes(attachment.id);
+      const words =
+        bytes &&
+        (await documentWords(bytes, attachment.name, Math.min(DOCUMENT_INLINE_MAX, budget)));
+      if (words) {
+        budget -= words.text.length;
+        const notes = [
+          ...words.warnings,
+          ...(words.more
+            ? [
+                `Only the start is here. For the rest, use read_document with file_path "${attachment.id}" and the next offset.`,
+              ]
+            : []),
+        ];
+        parts.push(
+          `<attachment name="${name}" type="${type}" id="${attr(attachment.id)}">\n(The text of this document, taken out by Conch. Pictures and layout are not included.)\n${fenced(words.text)}${notes.length ? `\n[${notes.join(' ')}]` : ''}\n</attachment>`,
         );
         continue;
       }

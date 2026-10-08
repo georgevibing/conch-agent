@@ -18,6 +18,10 @@ export function summarizeToolUse(toolName: string, input: Record<string, unknown
     task_control: `${str('action') ?? 'Update'} a task`,
     publish_file: `Offer ${str('name') ?? file ?? 'a finished file'} to download`,
     image_models: 'Find image models',
+    file_make: `Make ${str('name') ?? 'a file'}${str('format') ? ` (${String(str('format')).toUpperCase()})` : ''}`,
+    file_convert: `Convert ${str('source')?.startsWith('att_') ? 'a file' : (str('source') ?? 'a file')} to ${String(str('to') ?? 'another format').toUpperCase()}`,
+    file_combine: `Combine files into ${str('name') ?? `one ${String(str('to') ?? 'file').toUpperCase()}`}`,
+    file_unzip: `Unpack ${str('source')?.startsWith('att_') ? 'an archive' : (str('source') ?? 'an archive')}`,
     image_generate: str('source') ? 'Edit a picture' : 'Create a picture',
   };
   if (labels[conch]) return labels[conch];

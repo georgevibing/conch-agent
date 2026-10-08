@@ -1,0 +1,27 @@
+@layer nacre.components {
+  /* A PDF's first page on its card, set like the drawn page (measured in the
+     card's frame, which is a size container), its foot cut off by the frame. */
+  .pdf {
+    position: absolute;
+    inset-block-start: 12cqh;
+    left: 50%;
+    overflow: hidden;
+    block-size: 112cqh;
+    inline-size: min(calc(112cqh * 0.773), 86cqw);
+    border-radius: var(--nc-radius-sm);
+    background: white;
+    box-shadow:
+      0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-2);
+    transform: translateX(-50%);
+  }
+
+  /* Nothing in it to press or scroll: the card opens the file. */
+  .pdfFrame {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    border: 0;
+    pointer-events: none;
+  }
+}

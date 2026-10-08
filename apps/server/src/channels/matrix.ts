@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 
-import type { ChannelBot, ChannelSecrets } from '@conch/protocol';
+import { ATTACHMENT_LIMITS, type ChannelBot, type ChannelSecrets } from '@conch/protocol';
 
 import { botAvatar } from './assets';
 import type { ChannelEndpoints } from './adapters';
@@ -44,7 +44,8 @@ type Olm = InstanceType<Sdk['OlmMachine']>;
 
 /** A Matrix event is at most 64 KiB; parts this long stay well under it with their HTML. */
 const PART = 12_000;
-const FILE_LIMIT = 50 * 1024 * 1024;
+/** What Conch keeps of one file (ATTACHMENT_LIMITS): more would only be refused after downloading it. */
+const FILE_LIMIT = ATTACHMENT_LIMITS.maxBytes;
 /** How long one /sync waits for news (ms). */
 const POLL_MS = 30_000;
 /** Messages older than this when Conch comes back (it was off) aren't answered. */
@@ -1035,7 +1036,8 @@ class MatrixSession {
       const url = typeof content.url === 'string' ? content.url : file?.url;
       if (url)
         files.push({
-          name: text || 'file',
+          // With a caption (MSC2530) the body is the caption and `filename` the file's name.
+          name: (typeof content.filename === 'string' && content.filename.trim()) || text || 'file',
           ref: JSON.stringify(file ? { file } : { url }),
           // Element marks what was recorded in the room (MSC3245).
           ...(msgtype === 'm.audio' && 'org.matrix.msc3245.voice' in content && { voice: true }),
@@ -1153,8 +1155,10 @@ class MatrixSession {
   }
 
   /**
-   * Pictures as `m.image` (with their size, so clients lay them out), the
-   * rest as `m.file`; the caption first, as its own message. In an encrypted
+   * Pictures as `m.image` (with their size, so clients lay them out), audio
+   * as `m.audio` and video as `m.video` (played in the room), the rest (a
+   * PDF, a workbook) as `m.file` with its name and type; the caption first,
+   * as its own message. In an encrypted
    * room the file is encrypted before it's uploaded (Matrix spec § Sending
    * encrypted attachments), so the homeserver never holds it in the clear.
    */
@@ -1180,7 +1184,13 @@ class MatrixSession {
         where = { file: { ...encrypted, url } };
       } else where = { url: await this.adapter.upload(file.bytes, file.mimeType, file.name) };
       const id = await this.#post(chatId, {
-        msgtype: file.image ? 'm.image' : 'm.file',
+        msgtype: file.image
+          ? 'm.image'
+          : /^audio\//.test(file.mimeType)
+            ? 'm.audio'
+            : /^video\//.test(file.mimeType)
+              ? 'm.video'
+              : 'm.file',
         body: file.name,
         filename: file.name,
         info,

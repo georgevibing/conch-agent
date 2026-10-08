@@ -345,6 +345,10 @@ export const ROUTINE: Step[] = [
   ['Write', { file_path: `${workspace}/.env.local`, content: 'PORT=3000' }],
   ['Read', { file_path: '/etc/hosts' }],
   ['mcp__conch__image_models', {}],
+  ['mcp__conch__file_make', { format: 'pdf', name: 'Q3 report', markdown: '# Q3' }],
+  ['mcp__conch__file_convert', { source: 'att_abc123', to: 'docx' }],
+  ['mcp__conch__file_combine', { sources: ['att_a', 'att_b'], to: 'zip', name: 'Bundle' }],
+  ['mcp__conch__file_unzip', { source: 'att_zip1' }],
   ['mcp__conch__process_start', { command: 'pnpm dev' }],
   ['mcp__conch__process_start', { command: 'git pull --ff-only', dangerouslyDisableSandbox: true }],
 ];

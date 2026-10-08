@@ -63,6 +63,8 @@ export class AttachmentStore {
     transcript?: string;
     /** It waits for something before it's sent: kept until then. */
     held?: boolean;
+    /** What Conch knows of a file it made: pages, sheets, slides, its preview picture. */
+    facts?: Pick<Attachment, 'pages' | 'sheets' | 'slides' | 'preview'>;
   }): Promise<Attachment> {
     const { bytes } = input;
     if (bytes.length > ATTACHMENT_LIMITS.maxBytes)
@@ -87,6 +89,10 @@ export class AttachmentStore {
       ...(found.text !== undefined && { lines: countLines(found.text) }),
       ...(found.width && found.height && { width: found.width, height: found.height }),
       ...(input.transcript && { transcript: input.transcript.slice(0, 20_000) }),
+      ...(input.facts?.pages && { pages: input.facts.pages }),
+      ...(input.facts?.sheets && { sheets: input.facts.sheets }),
+      ...(input.facts?.slides && { slides: input.facts.slides }),
+      ...(input.facts?.preview && { preview: input.facts.preview }),
       createdAt: Date.now(),
     };
     const file = pasted ? 'pasted-text.txt' : cleanName(shown);

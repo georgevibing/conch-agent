@@ -97,8 +97,10 @@ your desktop and the chat apps you already use.
 - **A browser you can watch** and take over, and a real terminal a keystroke away.
   [Browser](./apps/docs/content/features/browser.md) ·
   [Terminal](./apps/docs/content/features/terminal.md)
-- **Research, files and pictures.** Sources with references, PDF and Office files,
-  pictures from any chat model, and charts and documents that open beside the chat.
+- **Research, files and pictures.** Sources with references, PDF and Office files
+  read and made (PDF, Word, Excel, CSV, PowerPoint, charts) with any chat model and
+  sent to your chat apps, pictures from any chat model, and charts and documents
+  that open beside the chat.
 
 ### Apps and integrations
 

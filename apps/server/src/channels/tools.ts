@@ -39,7 +39,7 @@ export function channelTools(
       `To send pictures or files, put their ids in \`attachments\` (the \`id\` image_generate, publish_file or list_attachments gave, like att_…): pictures arrive as photos with \`text\` as their caption, other files as documents. Never paste a file’s path into the text: they can’t open it.`,
       `Leave out \`app\` to use the app they wrote from last${names.length === 1 ? '' : ', or name one'}.`,
       from
-        ? 'This chat already came from a chat app: your ordinary reply reaches them there, and pictures and files you make here (image_generate, publish_file) are sent there with it, so use this only for a different app.'
+        ? 'This chat already came from a chat app: your ordinary reply reaches them there, and pictures and files you make here (image_generate, file_make, publish_file…) are sent there with it, so use this only for a different app.'
         : '',
     ]
       .filter(Boolean)

@@ -149,12 +149,14 @@ export const baileysConnect: WaConnect = async (session, handlers) => {
         chat,
         file.image
           ? { image: file.bytes, mimetype: file.mimeType, ...(caption && { caption }) }
-          : {
-              document: file.bytes,
-              mimetype: file.mimeType,
-              fileName: file.name,
-              ...(caption && { caption }),
-            },
+          : file.video
+            ? { video: file.bytes, mimetype: file.mimeType, ...(caption && { caption }) }
+            : {
+                document: file.bytes,
+                mimetype: file.mimeType,
+                fileName: file.name,
+                ...(caption && { caption }),
+              },
         { messageId: options.id },
       );
       if (sent) keep(sent);

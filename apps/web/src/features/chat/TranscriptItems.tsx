@@ -35,6 +35,7 @@ import { useAutoFocus } from '../../lib/useAutoFocus';
 import { SentAttachments } from './AttachmentViewer';
 import { rowState, withAnswer } from './approval';
 import { StreamingMarkdown } from './Markdown';
+import { drawnAsFile, FileToolItem } from './FileToolItem';
 import { drawnAsPicture, ImageToolItem } from './ImageToolItem';
 import { formatInput, managedProcessSummary, toolDiff, toolSummary } from './tools';
 import { ToolFound } from './ToolFound';
@@ -356,6 +357,9 @@ export const ToolItem = memo(function ToolItem({
   // A picture being made is drawn as the picture, not as a row (ADR 0060).
   if (drawnAsPicture(item))
     return <ImageToolItem item={item} asking={Boolean(asked && !asked.decision)} />;
+  // So is a file being made or offered: drawn as its file.
+  if (drawnAsFile(item))
+    return <FileToolItem item={item} asking={Boolean(asked && !asked.decision)} />;
   return <ToolRow item={item} asking={Boolean(asked && !asked.decision)} />;
 });
 

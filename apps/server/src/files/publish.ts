@@ -22,9 +22,12 @@ export function publishTools(
         'Find this chat’s attached files and finished downloads, including pictures generated here. Returns names, paths for read_file/read_document or image editing, and preview cards. Other chats’ files are never listed.',
       input: { offset: z.number().int().min(0).default(0) },
       run: async (args) => {
-        const all = (await store.forConversation(ctx.conversationId)).sort(
-          (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id),
-        );
+        const found = await store.forConversation(ctx.conversationId);
+        // A made file's preview picture belongs to its card, not to the list.
+        const previews = new Set(found.flatMap((a) => (a.preview ? [a.preview] : [])));
+        const all = found
+          .filter((a) => !previews.has(a.id))
+          .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
         const offset = Number(args.offset);
         const items = all.slice(offset, offset + 10);
         return {

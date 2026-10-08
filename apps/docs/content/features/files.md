@@ -29,7 +29,7 @@ Click any card for a closer look. Pictures are shown large, PDFs open in your br
 
 With several cards, <kbd>left</kbd> and <kbd>right</kbd> move between them. To take one off, press the cross on its corner. A card that didn't upload says why and offers to try again.
 
-After you send, the cards sit above your message and open the same way.
+After you send, the cards sit above your message and open the same way. A file shows its type, name and size, with **Download** beside it.
 
 ## What your assistant gets
 
@@ -37,7 +37,8 @@ Each provider gets an attachment in the way it can use:
 
 - Text goes along with your words.
 - Pictures go to models that can see. A model that can't gets a description, written by one of your models that can.
-- PDF, DOCX, XLSX and PPTX text can be read with any provider that supports tools. The assistant can continue through pages, sheets and slides. Scanned pages without text are identified; they need visual or OCR reading.
+- PDF, DOCX, XLSX and PPTX text can be read with any provider. A provider that can't open files gets the text with your message; any provider that uses tools can read on through pages, sheets and slides. Scanned pages without text are identified; they need visual or OCR reading.
+- A ZIP can be unpacked into separate files of the chat, to read, convert or send on.
 - Older Office files need saving as DOCX, XLSX or PPTX first. Formulas, macros and external document links are never executed.
 
 When the provider or model you picked can't use something, its card shows a small dot before you send, with the reason. A file it can't open only gets its name. Choose another in the model picker, or send it anyway. [Compare providers](../providers/index.md).
@@ -75,6 +76,55 @@ Long lines and incomplete searches are marked, with a continuation when availabl
 ## Get finished work
 
 Ask for the finished file when the assistant creates a report, spreadsheet,
-presentation, picture or archive. Its card opens a preview and offers **Download**.
+presentation, picture or archive. While it's made, its card shows the file taking
+shape and how far it got. Once it's there, the card shows its first page, rows or
+words, its size and how many pages, sheets or slides it has. Press it, or
+**Look closer**, for a preview. **Download** saves it, and **Details** says what
+made it and when. With a chat app set up, **Send to** writes the request in the
+message box for you to send.
 The file is kept with this chat even if the original in the work folder changes.
 Ask to list this chat’s files to find attachments and finished downloads again.
+
+## Ask for a file in any format
+
+Ask in your own words: “make that a PDF”, “put these numbers in a spreadsheet”,
+“turn my notes into slides”, “chart this”. Conch makes the file itself, with any
+chat model and nothing to install:
+
+- **PDF**, laid out for print with headings, tables, page numbers and your
+  chat's pictures. Conch prints it with the browser it already uses, sealed off
+  from the internet. Without a browser it still makes the PDF, plainer.
+- **Word (DOCX)**, with real headings, lists, tables and pictures, to edit in
+  Word, Pages or Google Docs.
+- **Excel (XLSX)** and **CSV**, with real numbers, dates and formulas, and a
+  header row that stays in view and filters.
+- **PowerPoint (PPTX)**: a title slide, then a slide for each point, with a
+  picture beside the points when you give one.
+- **Charts** as PNG or SVG: bars, lines, areas or a pie.
+- **Markdown**, **text**, **HTML** and **JSON**.
+
+It can also change a file you already have:
+
+- **Convert** Markdown, text, Word or HTML to PDF or Word, a spreadsheet to CSV
+  or JSON and back, photos to a PDF, and an SVG to a PNG. The text of a PDF or
+  a presentation comes out as text or Markdown.
+- **Combine** several PDFs and photos into one PDF, in the order you say, or
+  any files into a ZIP.
+
+A file is made one at a time in each chat, at most 30 MB. A PDF made from a web
+page never loads anything from the internet and runs none of its scripts.
+
+## Files in your chat apps
+
+Ask to have a file sent to you (“send me the PDF on Telegram”) and it arrives in
+the app you chose. In a chat you started from an app, what Conch makes comes back
+there with the answer. Each app gets it the way it shows files:
+
+- pictures as photos, with the message as their caption;
+- PDFs, documents, spreadsheets and archives as files with their own names;
+- music and video in the app's own player, where the app has one (Telegram,
+  Matrix, WhatsApp for video).
+
+Some apps take only pictures from Conch, or no files at all; Conch says so
+instead of pretending it sent them. Each app's limits are on its page in
+[Chat apps](../channels/index.md).

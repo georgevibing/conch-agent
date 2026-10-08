@@ -238,8 +238,40 @@ describe('Matrix', { timeout: 40_000 }, () => {
       async () => (await matrix.seen()).find((m) => m.msgtype === 'm.file'),
       'the file',
     );
-    expect(file).toMatchObject({ text: 'notes.pdf', encrypted: false });
+    expect(file).toMatchObject({
+      text: 'notes.pdf',
+      encrypted: false,
+      info: expect.objectContaining({ mimetype: 'application/pdf' }),
+    });
     expect(matrix.media(file.url ?? '')?.bytes.toString()).toBe('%PDF-1.4 x');
+    // Music and video play in the room: m.audio and m.video, with their type.
+    const song = await s.attachments.save({
+      name: 'song.mp3',
+      bytes: Buffer.from('4944330300000000000a', 'hex'),
+    });
+    const clip = await s.attachments.save({
+      name: 'clip.mp4',
+      bytes: Buffer.from('00000018667479706d703432', 'hex'),
+    });
+    await s.attachments.claim([song.id, clip.id], 'c_files');
+    await s.channels.messageOwner('', {
+      attachments: [song.id, clip.id],
+      conversationId: 'c_files',
+    });
+    const media = await until(async () => {
+      const seen = await matrix.seen();
+      const audio = seen.find((m) => m.msgtype === 'm.audio');
+      const video = seen.find((m) => m.msgtype === 'm.video');
+      return audio && video ? { audio, video } : undefined;
+    }, 'the music and the video');
+    expect(media.audio).toMatchObject({
+      text: 'song.mp3',
+      info: expect.objectContaining({ mimetype: 'audio/mpeg' }),
+    });
+    expect(media.video).toMatchObject({
+      text: 'clip.mp4',
+      info: expect.objectContaining({ mimetype: 'video/mp4' }),
+    });
     await expect(
       s.channels.messageOwner('hi', { attachments: [notes.id], conversationId: 'c_other' }),
     ).rejects.toThrow(/no file/);

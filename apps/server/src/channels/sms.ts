@@ -419,7 +419,7 @@ export class TwilioSmsAdapter implements ChannelAdapter {
         const type = field(`MediaContentType${i}`);
         if (ref)
           files.push({
-            name: `picture-${i + 1}.${type?.split('/')[1]?.replace(/[^a-z0-9]/g, '') || 'jpg'}`,
+            name: mmsName(i, type),
             ref,
             ...(type && { mimeType: type }),
           });
@@ -531,4 +531,27 @@ export class TwilioSmsAdapter implements ChannelAdapter {
       }),
     };
   }
+}
+
+/** An MMS file's name from its type: a picture, a contact card, a PDF… (Twilio sends no names). */
+export function mmsName(index: number, type: string | undefined): string {
+  const base = type?.split(';')[0]?.trim().toLowerCase() ?? '';
+  const known: Record<string, string> = {
+    'application/pdf': 'pdf',
+    'text/vcard': 'vcf',
+    'text/x-vcard': 'vcf',
+    'text/plain': 'txt',
+    'image/jpeg': 'jpg',
+  };
+  const ext = known[base] ?? (base.split('/')[1]?.replace(/[^a-z0-9]/g, '') || 'jpg');
+  const what = base.startsWith('image/')
+    ? 'picture'
+    : base.startsWith('video/')
+      ? 'video'
+      : base.startsWith('audio/')
+        ? 'audio'
+        : ext === 'vcf'
+          ? 'contact'
+          : 'file';
+  return `${what}-${index + 1}.${ext}`;
 }

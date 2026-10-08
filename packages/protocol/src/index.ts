@@ -497,6 +497,8 @@ export const ToolProgress = z.object({
   preview: z.string().max(200).optional(),
   /** Who is doing it, in a few words ("your ChatGPT plan", "OpenRouter"). */
   by: z.string().max(80).optional(),
+  /** The step it's on, in a few words ("Laying out pages", "Page 2 of 5"). */
+  detail: z.string().max(80).optional(),
 });
 export type ToolProgress = z.infer<typeof ToolProgress>;
 

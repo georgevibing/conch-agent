@@ -69,6 +69,9 @@ async function linked() {
 const texts = (wa: MockWhatsApp, chat = MockWhatsApp.SELF_CHAT) =>
   wa.sent.filter((m) => m.chat === chat && m.kind === 'text').map((m) => m.text ?? '');
 
+/** A 1×1 lossless WebP. */
+const WEBP = Buffer.from('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', 'base64');
+
 describe('WhatsApp, linked by QR code', () => {
   it('shows codes, links when the phone scans, and the account is the owner', async () => {
     const { s, wa, links, channelId } = await linked();
@@ -321,5 +324,25 @@ describe('WhatsApp, sending pictures and files', () => {
     // The echoes are Conch's own: nothing starts a turn, nothing is answered.
     await new Promise((r) => setTimeout(r, 200));
     expect(wa.sent.slice(before).filter((m) => m.kind === 'text')).toEqual([]);
+  });
+
+  it('plays a video in the chat, and sends a WebP as a file (WhatsApp shows WebP as a sticker)', async () => {
+    const { s, wa } = await linked();
+    // A video plays in the chat; a WebP would arrive as a sticker, so it goes as a file.
+    const clip = await s.attachments.save({
+      name: 'clip.mp4',
+      bytes: Buffer.from('00000018667479706d703432', 'hex'),
+    });
+    const webp = await s.attachments.save({ name: 'logo.webp', bytes: WEBP });
+    await s.attachments.claim([clip.id, webp.id], 'c_files');
+    const next = wa.sent.length;
+    await s.channels.messageOwner('', {
+      attachments: [clip.id, webp.id],
+      conversationId: 'c_files',
+    });
+    expect(wa.sent.slice(next).map((m) => [m.kind, m.file?.name])).toEqual([
+      ['video', 'clip.mp4'],
+      ['document', 'logo.webp'],
+    ]);
   });
 });

@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 import { MockTwilio } from './mock/twilio';
-import { e164, normalizeSms, signedByTwilio, twilioSignature } from './sms';
+import { e164, mmsName, normalizeSms, signedByTwilio, twilioSignature } from './sms';
 import { personId } from './types';
 
 let services: Services | undefined;
@@ -275,5 +275,15 @@ describe('SMS pieces', () => {
     const kept = normalizeSms({ ...keys });
     expect(kept.hookId).toMatch(/^[\w-]{24}$/);
     expect(normalizeSms({ ...keys }, kept).hookId).toBe(kept.hookId);
+  });
+});
+
+describe('MMS file names', () => {
+  it('names a file by what it is, not always a picture', () => {
+    expect(mmsName(0, 'image/jpeg')).toBe('picture-1.jpg');
+    expect(mmsName(1, 'application/pdf')).toBe('file-2.pdf');
+    expect(mmsName(2, 'text/vcard')).toBe('contact-3.vcf');
+    expect(mmsName(3, 'video/mp4')).toBe('video-4.mp4');
+    expect(mmsName(4, undefined)).toBe('file-5.jpg');
   });
 });

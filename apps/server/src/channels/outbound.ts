@@ -16,20 +16,24 @@ import type { ChannelConnection, OutboundFile, SentRef } from './types';
 export const MAX_FILES = 10;
 
 /** The tools whose finished files go with the reply in a chat app's chat. */
-export const MAKES_FILES = /^(?:mcp__conch__)?(?:image_generate|publish_file)$/;
+export const MAKES_FILES =
+  /^(?:mcp__conch__)?(?:image_generate|publish_file|file_(?:make|convert|combine|unzip))$/;
 
 export class OutboundError extends Error {}
 
 /**
  * Whether what a tool made goes back with the answer to this chat: a picture
- * made from words goes to whoever the answer goes to; an edit of a file here,
- * or a published file, only to the owner. Someone else's chat never carries
- * out a file of yours.
+ * or a document made from words (`file_make`, which reads only what it was
+ * told and this chat's own pictures) goes to whoever the answer goes to; an
+ * edit, a published, converted, combined or unpacked file (which may come
+ * from your work folder) only to the owner. Someone else's chat never
+ * carries out a file of yours.
  */
 export function mayCarry(made: { name: string; input: unknown }, fromOwner: boolean): boolean {
   if (!MAKES_FILES.test(made.name)) return false;
   if (fromOwner) return true;
   const input = made.input as { source?: unknown } | undefined;
+  if (/file_make$/.test(made.name)) return true;
   return /image_generate$/.test(made.name) && input?.source === undefined;
 }
 
@@ -56,7 +60,7 @@ export async function filesOf(
     const bytes = found && (await readFile(found.path).catch(() => undefined));
     if (!found || !bytes)
       throw new OutboundError(
-        `There’s no file “${id.slice(0, 60)}” in this chat. Use the id (att_…) that image_generate, publish_file or list_attachments gave, never a path.`,
+        `There’s no file “${id.slice(0, 60)}” in this chat. Use the id (att_…) that image_generate, file_make, publish_file or list_attachments gave, never a path.`,
       );
     const { attachment } = found;
     files.push({

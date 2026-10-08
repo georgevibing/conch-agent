@@ -298,10 +298,12 @@ export class TelegramAdapter implements ChannelAdapter {
   }
 
   /**
-   * Pictures as photos (with the caption under them), anything else as a
-   * document; several of a kind together as an album. A picture over
-   * Telegram's 10 MB for photos, or too long and thin to be one, goes as a
-   * document instead, so it still arrives whole.
+   * Pictures as photos (with the caption under them), MP3 and M4A music in
+   * Telegram's player, MP4 video to play in the chat, anything else (a PDF,
+   * a workbook, a zip) as a document with its name; several of a kind
+   * together as an album. A picture over Telegram's 10 MB for photos, or too
+   * long and thin to be one, goes as a document instead, so it still arrives
+   * whole.
    */
   async #sendFiles(chatId: string, files: OutboundFile[], caption?: string): Promise<SentRef[]> {
     const sent: SentRef[] = [];
@@ -311,12 +313,10 @@ export class TelegramAdapter implements ChannelAdapter {
       sent.push(...(await this.#send(chatId, words)));
       words = undefined;
     }
-    const photos = files.filter(asPhoto);
-    const documents = files.filter((f) => !asPhoto(f));
-    for (const [kind, group] of [
-      ['photo', photos],
-      ['document', documents],
-    ] as const) {
+    const kinds = ['photo', 'video', 'audio', 'document'] as const;
+    for (const [kind, group] of kinds.map(
+      (kind) => [kind, files.filter((f) => mediaKind(f) === kind)] as const,
+    )) {
       for (let i = 0; i < group.length; i += ALBUM) {
         const batch = group.slice(i, i + ALBUM);
         const refs = await this.#withRetry(() => this.#upload(chatId, kind, batch, words));
@@ -327,10 +327,10 @@ export class TelegramAdapter implements ChannelAdapter {
     return sent;
   }
 
-  /** One `sendPhoto`/`sendDocument`, or a `sendMediaGroup` for several; plain words if HTML is refused. */
+  /** One `sendPhoto`/`sendVideo`/`sendAudio`/`sendDocument`, or a `sendMediaGroup` for several; plain words if HTML is refused. */
   async #upload(
     chatId: string,
-    kind: 'photo' | 'document',
+    kind: MediaKind,
     files: OutboundFile[],
     caption?: string,
   ): Promise<SentRef[]> {
@@ -342,8 +342,9 @@ export class TelegramAdapter implements ChannelAdapter {
         new Blob([new Uint8Array(file.bytes)], { type: file.mimeType });
       let method: string;
       if (files.length === 1 && files[0]) {
-        method = kind === 'photo' ? 'sendPhoto' : 'sendDocument';
+        method = SEND[kind];
         form.set(kind, blob(files[0]), files[0].name);
+        if (kind === 'video') form.set('supports_streaming', 'true');
         if (text) form.set('caption', text);
         if (text && html) form.set('parse_mode', 'HTML');
       } else {
@@ -353,6 +354,7 @@ export class TelegramAdapter implements ChannelAdapter {
           return {
             type: kind,
             media: `attach://f${index}`,
+            ...(kind === 'video' && { supports_streaming: true }),
             ...(index === 0 && text && { caption: text, ...(html && { parse_mode: 'HTML' }) }),
           };
         });
@@ -771,6 +773,23 @@ export class TelegramAdapter implements ChannelAdapter {
       );
     }
   }
+}
+
+type MediaKind = 'photo' | 'video' | 'audio' | 'document';
+
+const SEND: Record<MediaKind, string> = {
+  photo: 'sendPhoto',
+  video: 'sendVideo',
+  audio: 'sendAudio',
+  document: 'sendDocument',
+};
+
+/** Bots may send 50 MB, but Telegram plays only MP4 as video and MP3/M4A as music. */
+export function mediaKind(file: OutboundFile): MediaKind {
+  if (asPhoto(file)) return 'photo';
+  if (file.mimeType === 'video/mp4') return 'video';
+  if (/^audio\/(?:mpeg|mp3|mp4|x-m4a|m4a)$/.test(file.mimeType)) return 'audio';
+  return 'document';
 }
 
 /**

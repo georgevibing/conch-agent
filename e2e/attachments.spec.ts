@@ -205,9 +205,10 @@ test('reads an Office attachment through the shared tool and returns a durable d
   await composer.fill('Read and publish this document');
   await composer.press('Enter');
   await expect(page.getByText('The document says: A document read by Conch.')).toBeVisible();
+  // Drawn as its file's card, with its own Look closer.
   const file = page
-    .getByRole('list', { name: 'Finished files' })
-    .getByRole('button', { name: /^Finished document\.docx,/ });
+    .getByRole('figure', { name: 'Finished document.docx' })
+    .getByRole('button', { name: 'Look closer', exact: true });
   await expect(file).toBeVisible();
   await page.reload();
   await expect(file).toBeVisible();

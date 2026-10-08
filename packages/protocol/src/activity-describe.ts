@@ -273,6 +273,45 @@ function processFinish(view: ProcessView, how: 'start' | 'read' | 'stop'): Finis
   }
 }
 
+/** A file's name with the extension of what it's made as: `Q3 report` + `pdf` → `Q3 report.pdf`. */
+function withFormat(name: string, format: string | undefined): string {
+  const clean = oneLine(name).trim();
+  if (!format || !/^[a-z0-9]{1,6}$/.test(format)) return clean;
+  return clean.toLowerCase().endsWith(`.${format}`) ? clean : `${clean}.${format}`;
+}
+
+/** A source by its name: a chat's file (`att_…`) has none worth saying. */
+const sourceName = (source: string | undefined) =>
+  source && !/^att_/i.test(source) ? baseName(source) : undefined;
+
+/**
+ * A file Conch made, converted, combined or unpacked (the `file_*` tools):
+ * shown as its card, offered to download, so What changed says it.
+ */
+function fileDraft(said: Words): Draft {
+  return {
+    family: 'make',
+    words: said,
+    effects: [{ kind: 'publish', text: said.done }],
+    finish: (output, result) => {
+      if (result.status === 'error') return undefined;
+      const made = record(parseJson(output));
+      const n = (key: string) => (typeof made[key] === 'number' ? (made[key] as number) : 0);
+      const files = Array.isArray(made.files) ? made.files.length : 0;
+      const outcome = n('pages')
+        ? plural(n('pages'), 'page')
+        : n('sheets')
+          ? plural(n('sheets'), 'sheet')
+          : n('slides')
+            ? plural(n('slides'), 'slide')
+            : files
+              ? plural(files + n('more'), 'file')
+              : undefined;
+      return outcome ? { outcome, handled: true } : { handled: true };
+    },
+  };
+}
+
 function processDraft(how: 'start' | 'read' | 'write' | 'stop', input: Input): Draft {
   if (how === 'start') {
     const command = str(input, 'command') ?? '';
@@ -905,6 +944,35 @@ const CONCH: Record<string, (input: Input) => Draft> = {
       effects: [{ kind: 'publish', text: said.done, ...(path && { target: path.slice(0, 300) }) }],
     };
   },
+  file_make: (input) => {
+    const named = str(input, 'name') ?? str(input, 'title');
+    const format = str(input, 'format')?.replace(/^\./, '').toLowerCase();
+    const name = named
+      ? withFormat(named, format)
+      : format
+        ? `a ${format.toUpperCase()}`
+        : 'a file';
+    return fileDraft(say('make', clip(name, 60)));
+  },
+  file_convert: (input) => {
+    const to = str(input, 'to')?.replace(/^\./, '').toLowerCase();
+    const named = str(input, 'name');
+    const source = sourceName(str(input, 'source'));
+    const rest = named
+      ? `${source ?? 'a file'} to ${clip(withFormat(named, to), 60)}`
+      : `${source ?? 'a file'}${to ? ` to ${to.toUpperCase()}` : ''}`;
+    return fileDraft(say('convert', rest));
+  },
+  file_combine: (input) => {
+    const sources = Array.isArray(input.sources) ? input.sources.length : 0;
+    const to = str(input, 'to')?.toLowerCase();
+    const named = str(input, 'name');
+    const into = named ? clip(withFormat(named, to), 60) : to === 'zip' ? 'a ZIP' : 'one PDF';
+    const what = sources ? plural(sources, 'file', 'files') : 'files';
+    return fileDraft(say(to === 'zip' ? 'pack' : 'combine', `${what} into ${into}`));
+  },
+  file_unzip: (input) =>
+    fileDraft(say('unpack', clip(sourceName(str(input, 'source')) ?? 'an archive', 60))),
   process_start: (input) => processDraft('start', input),
   process_read: (input) => processDraft('read', input),
   process_write: (input) => processDraft('write', input),

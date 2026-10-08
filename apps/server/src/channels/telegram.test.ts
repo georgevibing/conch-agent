@@ -156,6 +156,38 @@ describe('TelegramAdapter — pictures and files', () => {
     connection.close();
   });
 
+  it('sends documents with their name and type, music and video in Telegram’s players', async () => {
+    const connection = adapter.connect(quiet);
+    const file = (name: string, mimeType: string) => ({
+      id: `att_${name.replace(/\W/g, '')}`,
+      name,
+      mimeType,
+      bytes: Buffer.from('x'),
+      image: false,
+    });
+    await connection.files?.send('4242', [
+      file('Q3 report.pdf', 'application/pdf'),
+      file('Budget.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+    ]);
+    await connection.files?.send('4242', [file('song.mp3', 'audio/mpeg')], 'A song');
+    await connection.files?.send('4242', [file('clip.mp4', 'video/mp4')]);
+    await connection.files?.send('4242', [file('memo.ogg', 'audio/ogg')]);
+    expect(telegram.uploads.map((u) => [u.method, u.kind, u.name, u.type])).toEqual([
+      ['sendMediaGroup', 'document', 'Q3 report.pdf', 'application/pdf'],
+      [
+        'sendMediaGroup',
+        'document',
+        'Budget.xlsx',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ],
+      ['sendAudio', 'audio', 'song.mp3', 'audio/mpeg'],
+      ['sendVideo', 'video', 'clip.mp4', 'video/mp4'],
+      ['sendDocument', 'document', 'memo.ogg', 'audio/ogg'],
+    ]);
+    expect(telegram.uploads[2]?.caption).toBe('A song');
+    connection.close();
+  });
+
   it('puts several pictures in one album, the caption on the first', async () => {
     const connection = adapter.connect(quiet);
     const refs = await connection.files?.send('4242', [picture('a.png'), picture('b.png')], 'Two');

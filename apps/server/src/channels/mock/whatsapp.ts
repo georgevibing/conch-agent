@@ -7,7 +7,7 @@ import { WA_CLOSE } from '../whatsapp';
 import type { WaIdentity, WaSessionHandle } from '../whatsapp-sessions';
 
 export interface MockWaSent {
-  kind: 'text' | 'edit' | 'react' | 'presence' | 'read' | 'voice' | 'image' | 'document';
+  kind: 'text' | 'edit' | 'react' | 'presence' | 'read' | 'voice' | 'image' | 'video' | 'document';
   chat: string;
   id?: string;
   text?: string;
@@ -111,7 +111,7 @@ export class MockWhatsApp {
       file: (chat, file, caption, options) => {
         if (!live.open) return Promise.reject(new Error('Connection Closed'));
         this.sent.push({
-          kind: file.image ? 'image' : 'document',
+          kind: file.image ? 'image' : file.video ? 'video' : 'document',
           chat,
           id: options.id,
           file: {

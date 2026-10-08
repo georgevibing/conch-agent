@@ -25,7 +25,7 @@ export interface MockUpload {
   method: string;
   chat_id: string;
   message_id: number;
-  kind: 'photo' | 'document';
+  kind: 'photo' | 'document' | 'video' | 'audio';
   name: string;
   type: string;
   size: number;
@@ -399,8 +399,17 @@ export class MockTelegram {
         return ok({ message_id: this.#nextMessage++, chat: { id: Number(params.chat_id) } });
       }
       case 'sendPhoto':
+      case 'sendVideo':
+      case 'sendAudio':
       case 'sendDocument': {
-        const kind = method === 'sendPhoto' ? 'photo' : 'document';
+        const kind = (
+          {
+            sendPhoto: 'photo',
+            sendVideo: 'video',
+            sendAudio: 'audio',
+            sendDocument: 'document',
+          } as const
+        )[method];
         const file = params[kind] as FormFile | undefined;
         if (!file) return badRequest(res, `Bad Request: there is no ${kind} in the request`);
         if (params.parse_mode === 'HTML' && this.refuseHtml)
@@ -421,7 +430,7 @@ export class MockTelegram {
       }
       case 'sendMediaGroup': {
         const media = JSON.parse(String(params.media ?? '[]')) as {
-          type: 'photo' | 'document';
+          type: 'photo' | 'document' | 'video' | 'audio';
           media: string;
           caption?: string;
           parse_mode?: string;

@@ -41,6 +41,17 @@ export const Attachment = z.object({
    * message carries them too; this says the recording and the words are one.
    */
   transcript: z.string().max(20_000).optional(),
+  /** Pages in a PDF, when known (made, converted or merged by Conch, or read once). */
+  pages: z.number().int().positive().optional(),
+  /** Sheets in a spreadsheet Conch made. */
+  sheets: z.number().int().positive().optional(),
+  /** Slides in a presentation Conch made. */
+  slides: z.number().int().positive().optional(),
+  /**
+   * A small picture of it (a PDF's first page, a chart), as another attachment
+   * of the same chat: shown on the file's card, never sent anywhere by itself.
+   */
+  preview: Id.optional(),
   createdAt: z.number(),
 });
 export type Attachment = z.infer<typeof Attachment>;

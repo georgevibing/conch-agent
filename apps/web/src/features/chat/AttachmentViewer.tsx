@@ -8,6 +8,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { SentFileTile } from './FileCard';
 import { attachmentText, attachmentUrl } from './uploads';
 
 /** Something the preview can show: a sent attachment, or a card on the draft. */
@@ -95,7 +96,25 @@ function useExcerpt(attachment: Attachment) {
   return data?.slice(0, 4096);
 }
 
+/**
+ * A file (not a picture, a paste or a voice note) is drawn as its file, small:
+ * the same glyph, tint and words as the card the file tools draw.
+ */
+const drawnAsFile = (a: Attachment) =>
+  a.kind !== 'image' && !a.pasted && a.transcript === undefined;
+
 function SentCard({ attachment, onOpen }: { attachment: Attachment; onOpen: () => void }) {
+  if (drawnAsFile(attachment)) return <SentFileTile attachment={attachment} onOpen={onOpen} />;
+  return <SentAttachmentCard attachment={attachment} onOpen={onOpen} />;
+}
+
+function SentAttachmentCard({
+  attachment,
+  onOpen,
+}: {
+  attachment: Attachment;
+  onOpen: () => void;
+}) {
   const excerpt = useExcerpt(attachment);
   const { id: _id, createdAt: _at, transcript, ...info } = attachment;
   return (

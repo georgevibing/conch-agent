@@ -50,6 +50,8 @@ import { ProcessService } from './processes/service';
 import { GatewayRecovery } from './recovery/gateway';
 import { recoveryHistoryCheck } from './recovery/doctor';
 import { ImageService } from './images/service';
+import { ChromiumPrinter } from './files/make/printer';
+import { FileMaker } from './files/make/tools';
 import { documentTools } from './files/documents';
 import { publishTools } from './files/publish';
 import { type SystemKey, VaultService } from './vault/service';
@@ -287,6 +289,9 @@ export class Services {
   readonly attachments: AttachmentStore;
   readonly processes: ProcessService;
   readonly images: ImageService;
+  /** Documents, spreadsheets, slides and charts made for any provider; a browser prints them. */
+  readonly files: FileMaker;
+  readonly #printer = new ChromiumPrinter();
   /** Passwords: Conch's own vault and the managers it reads (ADR 0025). */
   readonly vault: VaultService;
   readonly routines: RoutineService;
@@ -935,6 +940,7 @@ export class Services {
         return 'None of their connected providers can make pictures. Signing in with ChatGPT, or adding an OpenAI, Gemini or OpenRouter API key, in Settings → Providers makes it possible. No image was generated.';
       },
     });
+    this.files = new FileMaker({ store: this.attachments, printer: this.#printer });
     const fetchPublicWeb = publicWebFetcher(config.CONCH_PORT);
     this.favicons = new Favicons({ fetcher: faviconFetcher(config.CONCH_PORT) });
     this.conversations = new ConversationManager({
@@ -965,9 +971,10 @@ export class Services {
           ? []
           : [
               currentTimeTool(),
-              ...fileTools(ctx, () => this.#fileAccess(ctx)),
-              ...documentTools(ctx, () => this.#fileAccess(ctx)),
+              ...fileTools(ctx, () => this.#fileAccess(ctx), this.attachments),
+              ...documentTools(ctx, () => this.#fileAccess(ctx), this.attachments),
               ...publishTools(ctx, () => this.#fileAccess(ctx), this.attachments),
+              ...this.files.tools(ctx, () => this.#fileAccess(ctx)),
               ...researchTools(ctx, fetchPublicWeb),
               ...this.processes.tools(ctx),
               ...this.images.tools(ctx, () => this.#fileAccess(ctx)),
@@ -2479,6 +2486,7 @@ export class Services {
 
   async stop() {
     this.recovery.stop();
+    void this.#printer.close();
     this.computer.stop();
     this.tasks.close();
     await this.conversations

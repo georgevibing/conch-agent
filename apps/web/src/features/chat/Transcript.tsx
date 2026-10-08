@@ -56,6 +56,7 @@ import { ArtifactChatCard } from '../artifacts/ArtifactChatCard';
 import { RoutineChatCard } from '../routines/RoutineChatCard';
 import { TurnChanges } from '../undo/TurnChanges';
 import { AwayCard, useAway, type AwayStory } from './Away';
+import { isFileTool } from './FileToolItem';
 import { isImageTool } from './ImageToolItem';
 import { RunStories } from './Stories';
 import { headlineOf, stepViews, stepsShown, storiesOf, storyStatus, turnChanges } from './telling';
@@ -186,8 +187,9 @@ function blocks(items: TranscriptItem[]): Block[] {
       turn = item.id;
       ends = 0;
     }
-    // A picture being made is drawn as the picture, on its own (ADR 0060).
-    if (item.kind === 'tool' && !isImageTool(item.name)) {
+    // A picture being made is drawn as the picture, on its own (ADR 0060); a
+    // file as its file. Both still count in the turn's tally and What changed.
+    if (item.kind === 'tool' && !isImageTool(item.name) && !isFileTool(item.name)) {
       if (run?.tools) run.tools.push(item);
       else out.push((run = { key: `tools-${item.id}`, tools: [item], at }));
       continue;

@@ -1,0 +1,1692 @@
+@layer nacre.components {
+  /*
+   * A file being made, then the file (see FileMaking.tsx).
+   *
+   * Knobs:
+   *   --fm-ratio      width ÷ height of the picture of the file
+   *   --fm-max-w      widest the card gets (a chat card)
+   *   --fm-radius     the frame's corners: every layer is cut to them
+   *   --fm-rim        how wide the light round the edge is
+   *   --fm-bloom      how far that light glows out
+   *   --fm-orbit      how long the edge light takes to go round once
+   *   --fm-cycle      one round of the shape drawing itself
+   *   --fm-sweep      how often the sheen crosses
+   *   --fm-develop    how long the finished file takes to rise out of the light
+   *   --fm-h / --fm-c the type's hue and chroma (set per type below)
+   *
+   * Only transform and opacity move (and one short blur as it lands), so the
+   * light runs on the compositor and costs a phone almost nothing. Every
+   * layer that is bigger than the card is cut by an `overflow: hidden` box,
+   * never by a mask alone, so nothing can widen the chat.
+   */
+  .root,
+  .fileTile {
+    /* Each type's hue and how strong it is: from the semantic hues, so a
+       theme that moves them moves these too. */
+    --fm-h-pdf: var(--nc-danger-h);
+    --fm-h-slides: calc(var(--nc-danger-h) + 35);
+    --fm-h-archive: var(--nc-warning-h);
+    --fm-h-image: calc(var(--nc-warning-h) + 35);
+    --fm-h-sheet: var(--nc-success-h);
+    --fm-h-csv: calc(var(--nc-success-h) + 23);
+    --fm-h-html: calc(var(--nc-info-h) - 30);
+    --fm-h-doc: var(--nc-info-h);
+    --fm-h-code: calc(var(--nc-info-h) + 25);
+    --fm-h-data: calc(var(--nc-info-h) + 25);
+    --fm-h-markdown: calc(var(--nc-info-h) + 50);
+    --fm-h-audio: calc(var(--nc-info-h) + 85);
+    --fm-h-video: calc(var(--nc-danger-h) + 330);
+    --fm-h-text: var(--nc-neutral-h);
+    --fm-h-file: var(--nc-neutral-h);
+    --fm-h: var(--fm-h-file);
+    --fm-c: 0.13;
+
+    --fm-tint-fg: light-dark(
+      oklch(0.5 calc(var(--fm-c) * 0.95) var(--fm-h)),
+      oklch(0.83 calc(var(--fm-c) * 0.7) var(--fm-h))
+    );
+    --fm-tint-bg: light-dark(
+      oklch(0.95 calc(var(--fm-c) * 0.28) var(--fm-h)),
+      oklch(0.3 calc(var(--fm-c) * 0.4) var(--fm-h))
+    );
+    --fm-tint-line: light-dark(
+      oklch(0.72 calc(var(--fm-c) * 0.7) var(--fm-h)),
+      oklch(0.62 calc(var(--fm-c) * 0.6) var(--fm-h))
+    );
+    --fm-ink: light-dark(
+      oklch(0.28 calc(var(--fm-c) * 0.18) var(--fm-h)),
+      oklch(0.19 calc(var(--fm-c) * 0.16) var(--fm-h))
+    );
+  }
+
+  :is(.root, .fileTile)[data-type='pdf'] {
+    --fm-c: 0.17;
+  }
+  :is(.root, .fileTile)[data-type='slides'] {
+    --fm-c: 0.15;
+  }
+  :is(.root, .fileTile)[data-type='archive'] {
+    --fm-c: 0.06;
+  }
+  :is(.root, .fileTile):is([data-type='code'], [data-type='data']) {
+    --fm-c: 0.08;
+  }
+  :is(.root, .fileTile)[data-type='markdown'] {
+    --fm-c: 0.12;
+  }
+  :is(.root, .fileTile):is([data-type='text'], [data-type='file']) {
+    --fm-c: var(--nc-neutral-c);
+  }
+
+  .root {
+    --fm-ratio: 2.1;
+    --fm-max-w: var(--nc-chat-card-width);
+    --fm-radius: var(--nc-chat-card-radius);
+    --fm-rim: 1px;
+    --fm-bloom: 10px;
+    --fm-orbit: 7s;
+    --fm-cycle: 5.6s;
+    --fm-sweep: 4.6s;
+    --fm-develop: 0.9s;
+
+    --fm-edge-1: oklch(from var(--nc-pearl-1) calc(l * 0.9) calc(c * 2) h / 1);
+    --fm-edge-2: oklch(from var(--nc-pearl-2) calc(l * 0.9) calc(c * 2) h / 1);
+    --fm-edge-3: oklch(from var(--nc-pearl-3) calc(l * 0.9) calc(c * 2) h / 1);
+    --fm-edge-4: oklch(from var(--nc-pearl-4) calc(l * 0.9) calc(c * 2) h / 1);
+    --fm-edge-5: oklch(from var(--nc-pearl-5) calc(l * 0.9) calc(c * 2) h / 1);
+    --fm-comet: conic-gradient(
+      from 0deg in oklab,
+      var(--fm-edge-1) 0deg,
+      var(--fm-edge-2) 46deg,
+      transparent 120deg,
+      transparent 160deg,
+      var(--fm-edge-3) 200deg,
+      var(--fm-edge-4) 250deg,
+      var(--fm-edge-5) 290deg,
+      transparent 340deg,
+      var(--fm-edge-1) 360deg
+    );
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    margin: 0;
+    inline-size: min(100%, var(--fm-max-w));
+    min-inline-size: min(100%, 15rem);
+    /* Nothing inside may make the chat wider than the card. */
+    max-inline-size: 100%;
+  }
+
+  /* While it's made it surfaces gently, after a breath: most files take well
+     under a second, and a card that flashes past reads as a glitch. */
+  .root[data-state='making'] .frame {
+    animation: arrive var(--nc-duration-slow) var(--nc-ease-out) 0.3s both;
+  }
+
+  @keyframes arrive {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+
+  /* ── The frame ──────────────────────────────────────────────────────── */
+  .frame {
+    position: relative;
+    isolation: isolate;
+    aspect-ratio: var(--fm-ratio);
+    inline-size: 100%;
+    border-radius: var(--fm-radius);
+    corner-shape: var(--nc-corner-shape);
+    box-shadow: var(--nc-elevation-1);
+  }
+
+  /*
+   * Everything inside is cut to the corners here (`clip-path` as well as
+   * `overflow`: Safari lets moving, blurred layers out of a rounded overflow
+   * clip). It is also the size container the drawn file is measured in.
+   */
+  .clip {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    overflow: hidden;
+    isolation: isolate;
+    container-type: size;
+    border-radius: inherit;
+    corner-shape: inherit;
+    clip-path: inset(0 round var(--fm-radius));
+    background:
+      radial-gradient(120% 90% at 18% 8%, var(--nc-surface-hi), transparent 70%),
+      linear-gradient(
+        160deg,
+        var(--nc-surface-sunken),
+        color-mix(in oklab, var(--fm-tint-bg) 65%, var(--nc-gray-3))
+      );
+  }
+
+  @supports (corner-shape: squircle) {
+    .clip {
+      clip-path: none;
+    }
+  }
+
+  .clip > * {
+    position: absolute;
+  }
+
+  /* The card's hairline and glazed top edge, over everything. */
+  .clip::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 8;
+    pointer-events: none;
+    border-radius: inherit;
+    corner-shape: inherit;
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge);
+  }
+
+  /* ── Light round the edge (while it's made) ────────────────────────── */
+  .rim,
+  .bloom {
+    position: absolute;
+    /* On the edge, never past it: a layer past the card widens a phone's chat. */
+    inset: 0;
+    pointer-events: none;
+    border-radius: var(--fm-radius);
+    corner-shape: var(--nc-corner-shape);
+    transition: opacity var(--nc-duration-slower) var(--nc-ease-out);
+  }
+
+  .rim {
+    z-index: 2;
+    /* The turning disc is bigger than the card: only this keeps it from
+       widening the chat (a mask hides it, but still counts it). */
+    overflow: hidden;
+    container-type: size;
+    padding: calc(var(--fm-rim) * 2);
+    background: color-mix(in oklab, var(--fm-edge-3) 18%, transparent);
+    opacity: calc(0.3 + var(--nc-lustre) * 0.55);
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask-composite: exclude;
+  }
+
+  .bloom {
+    z-index: 0;
+    filter: blur(var(--fm-bloom));
+    opacity: calc(var(--nc-lustre) * 0.6);
+  }
+
+  .band {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    container-type: size;
+    border-radius: inherit;
+    corner-shape: inherit;
+    clip-path: inset(0 round var(--fm-radius));
+  }
+
+  .spin {
+    position: absolute;
+    inset-block-start: 50%;
+    left: 50%;
+    inline-size: max(150cqw, 150cqh);
+    aspect-ratio: 1;
+    background: var(--fm-comet);
+    transform: translate(-50%, -50%);
+    will-change: transform;
+    animation: orbit var(--fm-orbit) linear infinite;
+  }
+
+  @keyframes orbit {
+    to {
+      transform: translate(-50%, -50%) rotate(1turn);
+    }
+  }
+
+  /* ── The pearl behind the file ─────────────────────────────────────── */
+  .backdrop {
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    opacity: calc(0.35 + var(--nc-lustre) * 0.35);
+  }
+
+  .root[data-state='making'] .backdrop {
+    opacity: calc(0.55 + var(--nc-lustre) * 0.45);
+  }
+
+  .blob {
+    position: absolute;
+    inline-size: 70%;
+    aspect-ratio: 1.6;
+    border-radius: 50%;
+    background: radial-gradient(
+      closest-side,
+      var(--fm-hue) 0%,
+      color-mix(in oklab, var(--fm-hue) 50%, transparent) 45%,
+      transparent 100%
+    );
+    animation-timing-function: var(--nc-ease-in-out);
+    animation-iteration-count: infinite;
+    animation-direction: alternate;
+  }
+
+  .root[data-state='making'] .blob {
+    will-change: transform;
+  }
+
+  .blob[data-n='1'] {
+    --fm-hue: color-mix(in oklab, var(--nc-pearl-1) 55%, var(--fm-tint-line));
+    inset-block-start: -40%;
+    inset-inline-start: -18%;
+    animation-name: drift-1;
+    animation-duration: 13s;
+  }
+  .blob[data-n='2'] {
+    --fm-hue: color-mix(in oklab, var(--nc-pearl-3) 60%, var(--fm-edge-2));
+    inset-block-end: -46%;
+    inset-inline-end: -16%;
+    animation-name: drift-2;
+    animation-duration: 17s;
+  }
+  .blob[data-n='3'] {
+    --fm-hue: color-mix(in oklab, var(--nc-pearl-4) 60%, var(--fm-edge-5));
+    inset-block-start: 10%;
+    inset-inline-start: 40%;
+    inline-size: 46%;
+    animation-name: drift-3;
+    animation-duration: 19s;
+  }
+
+  @keyframes drift-1 {
+    to {
+      transform: translate(30%, 26%) rotate(30deg) scale(1.12, 0.92);
+    }
+  }
+  @keyframes drift-2 {
+    to {
+      transform: translate(-34%, -20%) rotate(-36deg) scale(0.9, 1.1);
+    }
+  }
+  @keyframes drift-3 {
+    to {
+      transform: translate(-40%, 18%) rotate(70deg) scale(1.2);
+    }
+  }
+
+  /* At rest the pearl holds still: only something being made moves. */
+  .root:not([data-state='making']):not([data-develop]) .blob {
+    animation: none;
+  }
+
+  .film {
+    position: absolute;
+    inset: -60%;
+    background: conic-gradient(from 30deg in oklab, var(--nc-pearl-spectrum));
+    opacity: 0.22;
+    filter: blur(32px);
+    mix-blend-mode: soft-light;
+  }
+
+  .root[data-state='making'] .film {
+    will-change: transform;
+    animation: nc-spin 40s linear infinite;
+  }
+
+  /* ── The shape of the file ─────────────────────────────────────────── */
+  .making,
+  .rest {
+    inset: 0;
+    overflow: hidden;
+  }
+
+  .making {
+    z-index: 1;
+  }
+
+  .rest {
+    z-index: 2;
+  }
+
+  .silhouette {
+    position: absolute;
+    inset: 0;
+  }
+
+  /* A page, rising from the bottom edge: its foot is cut off by the frame. */
+  .paper {
+    position: absolute;
+    inset-block-start: 13cqh;
+    left: 50%;
+    display: flex;
+    flex-direction: column;
+    gap: 3.4cqh;
+    box-sizing: border-box;
+    block-size: 112cqh;
+    inline-size: min(calc(112cqh * 0.74), 86cqw);
+    padding: 9cqh 7%;
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-surface-hi);
+    box-shadow:
+      0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-2);
+    transform: translateX(-50%);
+    transition: transform var(--nc-spring-soft);
+  }
+
+  .heading {
+    flex-shrink: 0;
+    inline-size: 52%;
+    block-size: 5cqh;
+    margin-block-end: 1.4cqh;
+    border-radius: var(--nc-radius-full);
+    background: var(--fm-tint-fg);
+    opacity: 0.85;
+    transform-origin: left center;
+  }
+
+  .line {
+    flex-shrink: 0;
+    inline-size: var(--w, 90%);
+    block-size: 2.6cqh;
+    margin-inline-start: calc(var(--indent, 0) * 8%);
+    border-radius: var(--nc-radius-full);
+    background: color-mix(in oklab, var(--nc-text-subtle) 34%, transparent);
+    transform-origin: left center;
+  }
+
+  .gap {
+    flex-shrink: 0;
+    block-size: 1.6cqh;
+  }
+
+  /* Written in, line by line, then wiped for the next round. */
+  .silhouette:not([data-still]) :is(.heading, .line) {
+    animation: write var(--fm-cycle) var(--nc-ease-out) infinite;
+    animation-delay: calc(var(--i) * 0.24s);
+  }
+
+  @keyframes write {
+    0% {
+      opacity: 0;
+      transform: scaleX(0);
+    }
+    12% {
+      opacity: 1;
+      transform: scaleX(1);
+    }
+    80% {
+      opacity: 1;
+      transform: scaleX(1);
+    }
+    92%,
+    100% {
+      opacity: 0;
+      transform: scaleX(1);
+    }
+  }
+
+  /* Markdown: a hash before the heading, bullets in the body. */
+  .root[data-type='markdown'] .silhouette .line:nth-of-type(n + 7) {
+    margin-inline-start: 6%;
+  }
+
+  /* Code: light on ink, indented. */
+  .codePaper {
+    gap: 4cqh;
+    background: var(--fm-ink);
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--fm-ink) 60%, var(--nc-border-subtle)),
+      var(--nc-elevation-2);
+  }
+
+  .codePaper .line {
+    block-size: 2.4cqh;
+    background: color-mix(in oklab, var(--nc-pearl-3) 55%, transparent);
+  }
+
+  .codePaper .line[data-tone='1'] {
+    background: color-mix(in oklab, var(--fm-tint-line) 80%, transparent);
+  }
+
+  .codePaper .line[data-tone='2'] {
+    background: color-mix(in oklab, var(--nc-pearl-5) 50%, transparent);
+  }
+
+  /* A sheet: a grid whose cells fill in a diagonal wave. */
+  .sheetCard {
+    position: absolute;
+    inset-block-start: 13cqh;
+    left: 50%;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-rows: 8.4cqh;
+    gap: 1px;
+    box-sizing: border-box;
+    block-size: 112cqh;
+    inline-size: min(150cqh, 88cqw);
+    padding: 1px;
+    border-radius: var(--nc-radius-sm);
+    overflow: hidden;
+    align-content: start;
+    background: color-mix(in oklab, var(--nc-border) 80%, var(--nc-surface-hi));
+    box-shadow: var(--nc-elevation-2);
+    transform: translateX(-50%);
+    transition: transform var(--nc-spring-soft);
+  }
+
+  .gridHead {
+    grid-column: 1 / -1;
+    background: color-mix(in oklab, var(--fm-tint-bg) 70%, var(--nc-surface-hi));
+  }
+
+  .cell {
+    background: var(--nc-surface-hi);
+    position: relative;
+  }
+
+  .cell::after {
+    content: '';
+    position: absolute;
+    inset-block: 34%;
+    inset-inline: 14% 30%;
+    border-radius: var(--nc-radius-full);
+    background: color-mix(in oklab, var(--fm-tint-line) 55%, transparent);
+    transform-origin: left center;
+  }
+
+  .cell:nth-child(4n + 2)::after {
+    inset-inline: 14% 50%;
+    background: color-mix(in oklab, var(--nc-text-subtle) 34%, transparent);
+  }
+
+  .silhouette:not([data-still]) .cell::after {
+    animation: fill var(--fm-cycle) var(--nc-ease-out) infinite;
+    animation-delay: calc(var(--i) * 0.2s);
+  }
+
+  @keyframes fill {
+    0% {
+      opacity: 0;
+      transform: scaleX(0.2);
+    }
+    10% {
+      opacity: 1;
+      transform: scaleX(1);
+    }
+    80% {
+      opacity: 1;
+      transform: scaleX(1);
+    }
+    92%,
+    100% {
+      opacity: 0;
+      transform: scaleX(1);
+    }
+  }
+
+  /* Slides, stacking: the back ones arrive first, the front one last. */
+  .slides {
+    position: absolute;
+    inset: 0;
+  }
+
+  .slide {
+    position: absolute;
+    inset-block-start: 50%;
+    left: 50%;
+    display: flex;
+    flex-direction: column;
+    gap: 5cqh;
+    box-sizing: border-box;
+    block-size: 62cqh;
+    inline-size: min(110cqh, 70cqw);
+    padding: 7cqh 6%;
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-surface-hi);
+    box-shadow:
+      0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-2);
+    --fm-at: translate(-50%, -44%);
+    transform: var(--fm-at);
+  }
+
+  .slide[data-n='3'] {
+    --fm-at: translate(-36%, -66%) scale(0.86);
+    background: color-mix(in oklab, var(--fm-tint-bg) 60%, var(--nc-surface-hi));
+  }
+  .slide[data-n='2'] {
+    --fm-at: translate(-43%, -55%) scale(0.93);
+  }
+
+  .slideTitle {
+    inline-size: 46%;
+    block-size: 5cqh;
+    border-radius: var(--nc-radius-full);
+    background: var(--fm-tint-fg);
+    opacity: 0.8;
+  }
+
+  .slide:not([data-n='1']) .slideTitle {
+    opacity: 0.35;
+  }
+
+  .bars {
+    display: flex;
+    flex: 1;
+    align-items: flex-end;
+    gap: 6%;
+    padding-inline: 4%;
+  }
+
+  .bar {
+    flex: 1;
+    block-size: calc(var(--h) * 100%);
+    border-radius: var(--nc-radius-xs) var(--nc-radius-xs) 0 0;
+    background: color-mix(in oklab, var(--fm-tint-line) 80%, var(--nc-pearl-3));
+    transform-origin: bottom;
+  }
+
+  .silhouette:not([data-still]) .slide {
+    animation: stack var(--fm-cycle) var(--nc-ease-out) infinite;
+    animation-delay: calc((3 - var(--n, 0)) * 0.3s);
+  }
+  .slide[data-n='1'] {
+    --n: 1;
+  }
+  .slide[data-n='2'] {
+    --n: 2;
+  }
+  .slide[data-n='3'] {
+    --n: 3;
+  }
+
+  .silhouette:not([data-still]) .bar {
+    animation: grow var(--fm-cycle) var(--nc-ease-out) infinite;
+    animation-delay: calc(0.9s + var(--i) * 0.14s);
+  }
+
+  @keyframes stack {
+    0% {
+      opacity: 0;
+      transform: var(--fm-at) translateY(30%);
+    }
+    14% {
+      opacity: 1;
+      transform: var(--fm-at);
+    }
+    82% {
+      opacity: 1;
+      transform: var(--fm-at);
+    }
+    94%,
+    100% {
+      opacity: 0;
+      transform: var(--fm-at);
+    }
+  }
+
+  @keyframes grow {
+    0% {
+      transform: scaleY(0);
+    }
+    12%,
+    74% {
+      transform: scaleY(1);
+    }
+    86%,
+    100% {
+      transform: scaleY(0);
+    }
+  }
+
+  /* An archive: papers dropping into a box. */
+  .boxWrap {
+    position: absolute;
+    inset: 0;
+  }
+
+  .box {
+    position: absolute;
+    inset-block-end: 12cqh;
+    left: 50%;
+    z-index: 2;
+    block-size: 36cqh;
+    inline-size: 62cqh;
+    border-radius: var(--nc-radius-xs) var(--nc-radius-xs) var(--nc-radius-sm) var(--nc-radius-sm);
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--fm-tint-bg) 60%, var(--nc-surface-hi)),
+      color-mix(in oklab, var(--fm-tint-line) 40%, var(--nc-surface-hi))
+    );
+    box-shadow:
+      0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-2);
+    transform: translateX(-50%);
+  }
+
+  .boxLid {
+    position: absolute;
+    inset-inline: -4%;
+    inset-block-start: -1cqh;
+    block-size: 7cqh;
+    border-radius: var(--nc-radius-xs);
+    background: color-mix(in oklab, var(--fm-tint-line) 55%, var(--nc-surface-hi));
+    box-shadow: 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .box::after {
+    content: '';
+    position: absolute;
+    inset-block-start: 40%;
+    left: 50%;
+    inline-size: 22%;
+    block-size: 6cqh;
+    border-radius: var(--nc-radius-full);
+    background: color-mix(in oklab, var(--fm-tint-fg) 50%, transparent);
+    transform: translateX(-50%);
+  }
+
+  .leaf {
+    position: absolute;
+    inset-block-start: 14cqh;
+    left: 50%;
+    z-index: 1;
+    block-size: 40cqh;
+    inline-size: 30cqh;
+    border-radius: var(--nc-radius-xs);
+    background:
+      repeating-linear-gradient(
+          180deg,
+          transparent 0 4cqh,
+          color-mix(in oklab, var(--nc-text-subtle) 26%, transparent) 4cqh 5.6cqh
+        )
+        content-box,
+      var(--nc-surface-hi);
+    padding: 6cqh 4cqh;
+    box-sizing: border-box;
+    box-shadow:
+      0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-1);
+    --fm-at: translateX(-50%);
+    transform: var(--fm-at);
+  }
+
+  .leaf[data-n='1'] {
+    --fm-at: translateX(-95%) rotate(-8deg);
+  }
+  .leaf[data-n='3'] {
+    --fm-at: translateX(-5%) rotate(7deg);
+  }
+
+  .silhouette:not([data-still]) .leaf {
+    animation: drop var(--fm-cycle) var(--nc-ease-in-out) infinite;
+  }
+  .leaf[data-n='2'] {
+    animation-delay: 0.5s;
+  }
+  .leaf[data-n='3'] {
+    animation-delay: 1s;
+  }
+
+  @keyframes drop {
+    0% {
+      opacity: 0;
+      transform: var(--fm-at) translateY(-30cqh);
+    }
+    14% {
+      opacity: 1;
+      transform: var(--fm-at);
+    }
+    52% {
+      opacity: 1;
+      transform: var(--fm-at);
+    }
+    72%,
+    100% {
+      opacity: 0;
+      transform: var(--fm-at) translateY(34cqh);
+    }
+  }
+
+  /* A web page: a window whose blocks settle in. */
+  .window {
+    position: absolute;
+    inset-block-start: 12cqh;
+    left: 50%;
+    display: flex;
+    flex-direction: column;
+    gap: 4cqh;
+    box-sizing: border-box;
+    block-size: 112cqh;
+    inline-size: min(170cqh, 86cqw);
+    padding: 0 6% 6cqh;
+    border-radius: var(--nc-radius-sm);
+    overflow: hidden;
+    background: var(--nc-surface-hi);
+    box-shadow:
+      0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-2);
+    transform: translateX(-50%);
+    transition: transform var(--nc-spring-soft);
+  }
+
+  .windowBar {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 2.4cqh;
+    block-size: 10cqh;
+    margin-inline: -7%;
+    padding-inline: 4cqh;
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 -1px 0 var(--nc-border-subtle);
+  }
+
+  .windowBar > span:not(.windowTitle) {
+    flex-shrink: 0;
+    inline-size: 3cqh;
+    block-size: 3cqh;
+    border-radius: 50%;
+    background: color-mix(in oklab, var(--nc-text-subtle) 40%, transparent);
+  }
+
+  .windowTitle {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    padding-inline-start: 2cqh;
+    font-size: 4.4cqh;
+    color: var(--nc-text-muted);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .hero {
+    flex-shrink: 0;
+    block-size: 26cqh;
+    border-radius: var(--nc-radius-xs);
+    background: linear-gradient(
+      120deg in oklab,
+      color-mix(in oklab, var(--fm-tint-line) 70%, var(--nc-surface-hi)),
+      color-mix(in oklab, var(--nc-pearl-4) 60%, var(--nc-surface-hi))
+    );
+  }
+
+  .blocks {
+    display: grid;
+    flex-shrink: 0;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4%;
+    block-size: 16cqh;
+  }
+
+  .block {
+    border-radius: var(--nc-radius-xs);
+    background: color-mix(in oklab, var(--fm-tint-bg) 80%, var(--nc-gray-4));
+  }
+
+  .silhouette:not([data-still]) :is(.hero, .block, .window .line) {
+    animation: settle-in var(--fm-cycle) var(--nc-ease-out) infinite;
+    animation-delay: calc(var(--i) * 0.28s);
+  }
+
+  @keyframes settle-in {
+    0% {
+      opacity: 0;
+      transform: translateY(5cqh) scale(0.97);
+    }
+    14%,
+    80% {
+      opacity: 1;
+      transform: none;
+    }
+    92%,
+    100% {
+      opacity: 0;
+      transform: none;
+    }
+  }
+
+  /* Audio: a waveform breathing. */
+  .wave {
+    position: absolute;
+    inset: 22cqh 12%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2.2%;
+  }
+
+  .waveBar {
+    flex: 0 0 auto;
+    inline-size: 2.4%;
+    block-size: calc(var(--h) * 100%);
+    border-radius: var(--nc-radius-full);
+    background: linear-gradient(180deg in oklab, var(--fm-tint-fg), var(--nc-pearl-3));
+    opacity: 0.85;
+  }
+
+  .silhouette:not([data-still]) .waveBar {
+    animation: pulse 1.8s var(--nc-ease-in-out) infinite alternate;
+    animation-delay: calc(var(--i) * -0.13s);
+  }
+
+  @keyframes pulse {
+    from {
+      transform: scaleY(0.3);
+    }
+    to {
+      transform: scaleY(1);
+    }
+  }
+
+  /* A picture or a film: a frame with a sun and hills. */
+  .film2 {
+    position: absolute;
+    inset-block-start: 50%;
+    left: 50%;
+    overflow: hidden;
+    block-size: 68cqh;
+    inline-size: min(120cqh, 76cqw);
+    border-radius: var(--nc-radius-sm);
+    background: linear-gradient(
+      180deg in oklab,
+      color-mix(in oklab, var(--nc-pearl-2) 50%, var(--nc-surface-hi)),
+      color-mix(in oklab, var(--fm-tint-bg) 80%, var(--nc-surface-hi))
+    );
+    box-shadow:
+      0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-2);
+    transform: translate(-50%, -50%);
+  }
+
+  .sun {
+    position: absolute;
+    inset-block-start: 16%;
+    inset-inline-end: 18%;
+    inline-size: 16cqh;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: color-mix(in oklab, var(--nc-pearl-1) 70%, var(--nc-surface-hi));
+  }
+
+  .hill {
+    position: absolute;
+    inset-block-end: -30%;
+    inline-size: 90%;
+    aspect-ratio: 1.6;
+    border-radius: 50%;
+    background: color-mix(in oklab, var(--fm-tint-line) 70%, var(--nc-surface-hi));
+  }
+
+  .hill[data-n='1'] {
+    inset-inline-start: -20%;
+  }
+
+  .hill[data-n='2'] {
+    inset-inline-end: -30%;
+    inset-block-end: -40%;
+    background: color-mix(in oklab, var(--fm-tint-fg) 55%, var(--nc-surface-hi));
+  }
+
+  .silhouette:not([data-still]) :is(.sun, .hill) {
+    animation: settle-in var(--fm-cycle) var(--nc-ease-out) infinite;
+  }
+  .silhouette:not([data-still]) .hill[data-n='2'] {
+    animation-delay: 0.3s;
+  }
+  .silhouette:not([data-still]) .sun {
+    animation-delay: 0.6s;
+  }
+
+  /* At rest, with no picture of it: the drawn shape is its cover, with its badge. */
+  .coverBadge {
+    position: absolute;
+    inset-block-end: var(--nc-space-2-5);
+    inset-inline-end: var(--nc-space-2-5);
+    z-index: 3;
+    padding: var(--nc-space-0-5) var(--nc-space-2);
+    border-radius: var(--nc-radius-full);
+    background: var(--fm-tint-bg);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--fm-tint-fg) 25%, transparent);
+    color: var(--fm-tint-fg);
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: 0.04em;
+  }
+
+  /* ── A real picture of the file ─────────────────────────────────────── */
+  .face {
+    position: absolute;
+  }
+
+  span.face:not(.paper, .sheetCard, .window) {
+    inset: 0;
+  }
+
+  /* Its first page (or slide, or chart) as a picture. */
+  .thumb {
+    inset-block-start: 12cqh;
+    left: 50%;
+    block-size: 112cqh;
+    inline-size: auto;
+    max-inline-size: 88cqw;
+    object-fit: cover;
+    object-position: top;
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-surface-hi);
+    box-shadow:
+      0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-2);
+    transform: translateX(-50%);
+    transition: transform var(--nc-spring-soft);
+  }
+
+  /* A slide, a picture or a chart shows whole, in the middle. */
+  .thumb:is([data-shape='slides'], [data-shape='film'], [data-shape='wave']) {
+    inset-block-start: 50%;
+    block-size: 80cqh;
+    max-inline-size: 90cqw;
+    object-fit: contain;
+    transform: translate(-50%, -50%);
+  }
+
+  /* The first words, set small on the page. */
+  .real {
+    font-size: 4.3cqh;
+    line-height: 1.38;
+    color: var(--nc-text);
+  }
+
+  .realText {
+    display: flex;
+    flex-direction: column;
+    gap: 1.6cqh;
+    min-inline-size: 0;
+    overflow: hidden;
+  }
+
+  .window .realText {
+    padding-block-start: 1cqh;
+  }
+
+  .realText > span {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    overflow-wrap: anywhere;
+  }
+
+  .realH1 {
+    font-size: 1.7em;
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-tight);
+    color: var(--nc-text);
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  .realH2 {
+    margin-block-start: 1cqh;
+    font-size: 1.25em;
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-tight);
+  }
+
+  .realP {
+    color: var(--nc-text-muted);
+  }
+
+  .realLi {
+    position: relative;
+    padding-inline-start: 1.1em;
+    color: var(--nc-text-muted);
+  }
+
+  .realLi::before {
+    content: '';
+    position: absolute;
+    inset-block-start: 0.55em;
+    inset-inline-start: 0.3em;
+    inline-size: 0.32em;
+    block-size: 0.32em;
+    border-radius: 50%;
+    background: var(--fm-tint-fg);
+  }
+
+  .realQuote {
+    padding-inline-start: 0.8em;
+    box-shadow: inset 2px 0 0 var(--fm-tint-line);
+    color: var(--nc-text-muted);
+    font-style: italic;
+  }
+
+  .realCode {
+    overflow: hidden;
+    white-space: pre;
+    font-family: var(--nc-font-mono);
+    font-size: 0.92em;
+    line-height: 1.5;
+    color: color-mix(in oklab, var(--nc-pearl-2) 40%, white);
+  }
+
+  .table {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+    gap: 1px;
+  }
+
+  .sheetCard.real {
+    display: block;
+    background: var(--nc-surface-hi);
+  }
+
+  .td {
+    overflow: hidden;
+    padding: 1.4cqh 2.4cqh;
+    background: var(--nc-surface-hi);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-muted);
+  }
+
+  .td[data-head] {
+    background: color-mix(in oklab, var(--fm-tint-bg) 70%, var(--nc-surface-hi));
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  /* Pointing at it lifts the page a little: it can be opened. */
+  @media (hover: hover) {
+    .frame:has(.open:hover)
+      .rest
+      :is(
+        .paper,
+        .sheetCard,
+        .window,
+        .thumb:not([data-shape='slides'], [data-shape='film'], [data-shape='wave'])
+      ) {
+      transform: translateX(-50%) translateY(-3cqh);
+    }
+  }
+
+  .open {
+    inset: 0;
+    z-index: 7;
+    display: block;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: zoom-in;
+    border-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  .open:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -3px;
+  }
+
+  /* ── While it's made ───────────────────────────────────────────────── */
+  .sheen {
+    inset-block: -10%;
+    left: 0;
+    z-index: 3;
+    inline-size: 50%;
+    background: linear-gradient(
+      90deg in oklab,
+      transparent,
+      color-mix(in oklab, var(--nc-pearl-2) 12%, transparent) 18%,
+      color-mix(in oklab, var(--nc-pearl-2) 36%, transparent) 34%,
+      color-mix(in oklab, var(--nc-surface-hi) 55%, transparent) 50%,
+      color-mix(in oklab, var(--nc-pearl-4) 36%, transparent) 66%,
+      color-mix(in oklab, var(--nc-pearl-4) 12%, transparent) 82%,
+      transparent
+    );
+    opacity: calc(0.6 * var(--nc-lustre));
+    transform: translateX(-130%) skewX(-16deg);
+    will-change: transform;
+    animation: sweep var(--fm-sweep) var(--nc-ease-in-out) infinite;
+  }
+
+  @keyframes sweep {
+    0% {
+      transform: translateX(-130%) skewX(-16deg);
+    }
+    60%,
+    100% {
+      transform: translateX(260%) skewX(-16deg);
+    }
+  }
+
+  .typeBadge {
+    inset-block-start: var(--nc-space-2-5);
+    inset-inline-end: var(--nc-space-2-5);
+    z-index: 6;
+    padding: var(--nc-space-0-5) var(--nc-space-2);
+    border-radius: var(--nc-radius-full);
+    background: var(--fm-tint-bg);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, var(--fm-tint-fg) 25%, transparent),
+      var(--nc-elevation-1);
+    color: var(--fm-tint-fg);
+    font-size: var(--nc-text-2xs);
+    font-weight: var(--nc-weight-semibold);
+    letter-spacing: 0.04em;
+  }
+
+  .meter {
+    inset-block-end: var(--nc-space-2-5);
+    inset-inline-start: var(--nc-space-2-5);
+    z-index: 6;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    max-inline-size: calc(100% - var(--nc-space-5));
+    padding: var(--nc-space-1) var(--nc-space-2-5) var(--nc-space-1) var(--nc-space-1-5);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface-overlay);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+    font-size: var(--nc-text-xs);
+    line-height: 1.25rem;
+    color: var(--nc-text);
+    white-space: nowrap;
+  }
+
+  .meterValue {
+    font-weight: var(--nc-weight-semibold);
+    font-variant-numeric: tabular-nums;
+    min-inline-size: 3ch;
+  }
+
+  .meterWords {
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .meterDetail {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--nc-text-muted);
+  }
+
+  .ring {
+    flex-shrink: 0;
+    inline-size: 1rem;
+    block-size: 1rem;
+    transform: rotate(-90deg);
+  }
+
+  .ring circle {
+    fill: none;
+    stroke-width: 2.5;
+  }
+
+  .ringTrack {
+    stroke: var(--nc-gray-5);
+  }
+
+  .ringFill {
+    stroke: var(--nc-accent-9);
+    stroke-linecap: round;
+    stroke-dasharray: var(--fm-ring) 100;
+    transition: stroke-dasharray var(--nc-duration-slower) linear;
+  }
+
+  .ring[data-indeterminate] {
+    animation: nc-spin 1.4s linear infinite;
+  }
+
+  .meter[data-waiting] {
+    padding-inline-start: var(--nc-space-2-5);
+    color: var(--nc-text-muted);
+  }
+
+  /* ── It lands ──────────────────────────────────────────────────────── */
+  .root[data-develop] .rest {
+    animation: rise var(--fm-develop) var(--nc-ease-out) both;
+  }
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(10cqh) scale(0.98);
+      filter: blur(8px) brightness(1.08);
+    }
+    40% {
+      opacity: 1;
+    }
+    to {
+      opacity: 1;
+      transform: none;
+      filter: none;
+    }
+  }
+
+  .root[data-develop] .making {
+    animation: fade-away calc(var(--fm-develop) * 0.6) var(--nc-ease-out) both;
+  }
+
+  @keyframes fade-away {
+    to {
+      opacity: 0;
+    }
+  }
+
+  .iris {
+    inset: -40%;
+    z-index: 5;
+    pointer-events: none;
+    background: radial-gradient(
+      closest-side in oklab,
+      transparent 38%,
+      color-mix(in oklab, var(--fm-edge-2) 40%, transparent) 54%,
+      color-mix(in oklab, var(--nc-surface-hi) 70%, transparent) 63%,
+      color-mix(in oklab, var(--fm-edge-4) 40%, transparent) 74%,
+      transparent 100%
+    );
+    mix-blend-mode: screen;
+    opacity: 0;
+    will-change: transform, opacity;
+    animation: iris calc(var(--fm-develop) * 0.9) var(--nc-ease-out) both;
+  }
+
+  @keyframes iris {
+    from {
+      transform: scale(1.5);
+      opacity: 0;
+    }
+    12% {
+      opacity: calc(0.8 * var(--nc-lustre));
+    }
+    to {
+      transform: scale(0.45);
+      opacity: 0;
+    }
+  }
+
+  .root[data-develop] :is(.rim, .bloom) {
+    animation: flare var(--fm-develop) var(--nc-ease-out) both;
+  }
+
+  @keyframes flare {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  /* ── Under it ───────────────────────────────────────────────────────── */
+  .caption {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .captionRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-1) var(--nc-space-2-5);
+    min-inline-size: 0;
+    padding-inline-start: var(--nc-space-0-5);
+  }
+
+  .tile {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: var(--nc-control-sm);
+    block-size: var(--nc-control-sm);
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--fm-tint-bg);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--fm-tint-fg) 18%, transparent);
+    color: var(--fm-tint-fg);
+  }
+
+  .tile > svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  .names {
+    display: flex;
+    flex: 1 1 7rem;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+  }
+
+  .meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-snug);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-muted);
+  }
+
+  .root[data-state='making'] .title {
+    color: var(--nc-text-muted);
+  }
+
+  .actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: var(--nc-space-0-5);
+    margin-inline-start: auto;
+  }
+
+  .detailsButton[data-open] {
+    background: var(--nc-wash-2);
+    color: var(--nc-text);
+  }
+
+  .detailsBody {
+    display: grid;
+    gap: var(--nc-space-2-5);
+    margin-block-start: var(--nc-space-2);
+    padding: var(--nc-space-3) var(--nc-space-3-5);
+    border-radius: var(--nc-chat-row-radius);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+  }
+
+  .prompt {
+    display: grid;
+    gap: var(--nc-space-0-5);
+    margin: 0;
+    max-block-size: 9rem;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text);
+  }
+
+  .promptLabel,
+  .detail dt {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+  }
+
+  .detailList {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: var(--nc-space-1) var(--nc-space-4);
+    margin: 0;
+  }
+
+  .detail {
+    display: contents;
+  }
+
+  .detail dd {
+    margin: 0;
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+    color: var(--nc-text);
+  }
+
+  /* ── Not made: a calm line ──────────────────────────────────────────── */
+  .note {
+    inline-size: min(100%, var(--fm-max-w));
+  }
+
+  .noteCaption {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .noteLine {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+    font-size: var(--nc-chat-note-size);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+  }
+
+  .noteIcon {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    block-size: 1lh;
+  }
+
+  .noteIcon > svg {
+    inline-size: var(--nc-chat-note-icon);
+    block-size: var(--nc-chat-note-icon);
+  }
+
+  .noteText {
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    column-gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .noteWords {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    overflow-wrap: anywhere;
+    color: var(--nc-text);
+  }
+
+  .noteTitle {
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--nc-text-subtle);
+  }
+
+  .noteActions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    block-size: 1lh;
+  }
+
+  /* ── A file on a message, small ─────────────────────────────────────── */
+  .fileTile {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    box-sizing: border-box;
+    inline-size: min(100%, 17.5rem);
+    min-inline-size: 0;
+    padding: var(--nc-space-1);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-chat-card-surface);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge),
+      var(--nc-elevation-1);
+  }
+
+  .tileOpen {
+    position: relative;
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+    min-inline-size: 0;
+    padding: var(--nc-space-1);
+    border: 0;
+    border-radius: calc(var(--nc-radius-md) - var(--nc-space-1));
+    corner-shape: var(--nc-corner-shape);
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    --nc-rim-rest: 0;
+    --nc-sheen-hover: 0.35;
+  }
+
+  button.tileOpen {
+    cursor: pointer;
+  }
+
+  .tileOpen:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 1px;
+  }
+
+  @media (hover: hover) {
+    button.tileOpen:hover {
+      background: var(--nc-wash-1);
+    }
+  }
+
+  .tileBig {
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+    border-radius: var(--nc-radius-sm);
+  }
+
+  .tileBig > svg {
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+  }
+
+  .tileThumb {
+    flex-shrink: 0;
+    overflow: hidden;
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-hi);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .tileThumb > img {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+    object-position: top;
+  }
+
+  .tileActions {
+    display: flex;
+    flex-shrink: 0;
+    padding-inline-end: var(--nc-space-0-5);
+  }
+
+  /* A caveat waits as a small amber dot, the way attachments say it. */
+  .fileTile[data-note]::after {
+    content: '';
+    position: absolute;
+    inset-block-start: var(--nc-space-1-5);
+    inset-inline-start: var(--nc-space-1-5);
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: 50%;
+    background: var(--nc-warning-9);
+    box-shadow: 0 0 0 2px var(--nc-surface);
+  }
+
+  /* Asked first: the light holds where it is until you answer. */
+  .root[data-waiting] :is(.blob, .film, .spin, .silhouette *),
+  .root[data-waiting] .silhouette *::after {
+    animation-play-state: paused;
+  }
+
+  .root[data-waiting] .sheen {
+    display: none;
+  }
+
+  .root[data-waiting] .rim {
+    opacity: calc(0.2 + var(--nc-lustre) * 0.3);
+  }
+
+  .root[data-waiting] .bloom {
+    opacity: calc(var(--nc-lustre) * 0.25);
+  }
+
+  /* ── Still ─────────────────────────────────────────────────────────── */
+  /* The light holds still: the file drawn whole, the edge lit, the percent. */
+  @media (prefers-reduced-motion: reduce) {
+    .root[data-state='making'] .frame,
+    .blob,
+    .root[data-state='making'] .film,
+    .spin,
+    .sheen,
+    .iris,
+    .ring[data-indeterminate],
+    .silhouette *,
+    .silhouette *::after,
+    .root[data-develop] :is(.rest, .making, .rim, .bloom) {
+      animation: none;
+    }
+    .sheen,
+    .iris {
+      display: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced'])
+    :is(
+      .frame,
+      .blob,
+      .film,
+      .spin,
+      .sheen,
+      .iris,
+      .ring,
+      .silhouette *,
+      .rest,
+      .making,
+      .rim,
+      .bloom
+    ),
+  :global([data-nacre-motion='reduced']) .silhouette *::after {
+    animation: none;
+  }
+
+  :global([data-nacre-motion='reduced']) :is(.sheen, .iris) {
+    display: none;
+  }
+}
