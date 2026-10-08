@@ -246,6 +246,36 @@ describe('Codex app-server parity', () => {
     ]);
     expect(describe).not.toHaveBeenCalled();
   });
+  it('finishes the turn when Codex echoes a 20 MB photo back', async () => {
+    const { engine, turn } = await setup({ signedIn: true, echoBytes: 20_000_000 });
+    const events = await collect(
+      engine.runTurn(
+        turn({ images: [{ name: 'me.jpg', mimeType: 'image/jpeg', data: '/9j/AAAA' }] }),
+      ),
+    );
+    expect(events).toContainEqual(expect.objectContaining({ type: 'done', outcome: 'success' }));
+    expect(events).toContainEqual(expect.objectContaining({ type: 'text', delta: 'Finished.' }));
+  }, 30_000);
+  it('sends a photo on this computer by its path, not as base64', async () => {
+    const { engine, turn, fake } = await setup({ signedIn: true });
+    await collect(
+      engine.runTurn(
+        turn({
+          images: [
+            { name: 'me.jpg', mimeType: 'image/jpeg', data: '/9j/AAAA', path: '/photos/me.jpg' },
+            { name: 'pasted.png', mimeType: 'image/png', data: 'iVBORw0K' },
+          ],
+        }),
+      ),
+    );
+    const started = (await fake.calls()).find((c) => c.method === 'turn/start')?.params as {
+      input: unknown[];
+    };
+    expect(started.input.slice(1)).toEqual([
+      { type: 'localImage', path: '/photos/me.jpg' },
+      { type: 'image', url: 'data:image/png;base64,iVBORw0K' },
+    ]);
+  });
   it('never runs a denied tool, including in full trust', async () => {
     const { engine, turn } = await setup({
       signedIn: true,

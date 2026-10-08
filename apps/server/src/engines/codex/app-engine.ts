@@ -415,6 +415,7 @@ export class CodexEngine implements Engine {
         config: PICTURE_CONFIG,
         // The picture comes back whole, in one message.
         maxLine: PICTURE_LINE,
+        keepPictures: true,
       },
     );
   }
@@ -1274,10 +1275,13 @@ export class CodexEngine implements Engine {
                 }),
               input: [
                 { type: 'text', text },
-                ...(input.images ?? []).map((image) => ({
-                  type: 'image',
-                  url: `data:${image.mimeType};base64,${image.data}`,
-                })),
+                // A picture on this computer goes by its path: Codex reads it itself, so a
+                // phone photo isn't carried both ways through the connection as base64.
+                ...(input.images ?? []).map((image) =>
+                  image.path
+                    ? { type: 'localImage', path: image.path }
+                    : { type: 'image', url: `data:${image.mimeType};base64,${image.data}` },
+                ),
               ],
               ...(input.options.effort !== 'auto' ? { effort: input.options.effort } : {}),
             }),

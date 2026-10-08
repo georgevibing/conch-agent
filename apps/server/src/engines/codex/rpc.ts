@@ -3,6 +3,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 
 import { z } from 'zod';
 
+import { answeredId, JsonLines, MAX_KEPT } from '../../lib/json-lines';
 import { launch } from '../../lib/proc';
 
 const Message = z.object({
@@ -14,52 +15,17 @@ const Message = z.object({
 });
 export type RpcMessage = z.infer<typeof Message>;
 /**
- * The longest message a connection reads, unless it was started for more: a
- * picture comes back whole in one message (`pictures.ts`, `PICTURE_LINE`).
+ * The longest message a chat's connection keeps once the pictures in it are
+ * set aside (`lib/json-lines.ts`): Codex echoes every photo it was sent, and
+ * replays them all when a conversation carries on. A connection reading a
+ * picture back keeps it whole instead (`pictures.ts`, `PICTURE_LINE`).
  */
-export const MAX_LINE = 2_000_000;
+export const MAX_LINE = MAX_KEPT;
 
-/** A message longer than its connection reads. Nothing more is read from it. */
+/** A message longer than a picture's connection reads. Nothing more is read from it. */
 export class LineTooLong extends Error {
   constructor(readonly max: number) {
-    super('Codex sent a message larger than Conch reads at once.');
-  }
-}
-
-/**
- * Codex's messages, one per line, from the bytes as they come. Only the line
- * being read is held, as the chunks it came in (joined and decoded once, when
- * it ends), and it stops at `max` bytes: a long message costs its own size,
- * never that again for each chunk. A newline byte is never part of a UTF-8
- * character, so a line ends where one is, whatever the chunks split.
- */
-export class Lines {
-  #parts: Buffer[] = [];
-  #size = 0;
-  constructor(readonly max: number = MAX_LINE) {}
-
-  /** The lines `chunk` finished. Throws `LineTooLong` once the line being read passes `max`. */
-  push(chunk: Buffer): string[] {
-    const lines: string[] = [];
-    let start = 0;
-    for (let at = chunk.indexOf(0x0a); at >= 0; at = chunk.indexOf(0x0a, start)) {
-      this.#take(chunk.subarray(start, at));
-      lines.push(Buffer.concat(this.#parts, this.#size).toString('utf8'));
-      this.#parts = [];
-      this.#size = 0;
-      start = at + 1;
-    }
-    if (start < chunk.length) this.#take(chunk.subarray(start));
-    return lines;
-  }
-
-  #take(part: Buffer) {
-    this.#size += part.length;
-    if (this.#size > this.max) {
-      this.#parts = [];
-      throw new LineTooLong(this.max);
-    }
-    if (part.length) this.#parts.push(part);
+    super('Codex sent a picture larger than Conch reads at once.');
   }
 }
 
@@ -158,8 +124,10 @@ export class CodexRpc {
       cwd: string;
       env: Record<string, string>;
       config?: string[];
-      /** The longest message this connection reads (`MAX_LINE` unless it's for a picture). */
+      /** The longest message this connection keeps (`MAX_LINE` unless it's for a picture). */
       maxLine?: number;
+      /** Keep long base64 whole, and stop past `maxLine`: this connection reads a picture back. */
+      keepPictures?: boolean;
     },
   ) {
     const { command, prefix } = launch(executable);
@@ -174,18 +142,29 @@ export class CodexRpc {
       ],
       { cwd: options.cwd, env: options.env, stdio: ['pipe', 'pipe', 'pipe'] },
     );
-    const lines = new Lines(options.maxLine ?? MAX_LINE);
+    // A chat's connection sets the pictures Codex echoes aside and skips what's still too
+    // long; a picture's connection keeps the picture it waits for, and stops past it.
+    const keep = Boolean(options.keepPictures);
+    const lines = new JsonLines({ max: options.maxLine ?? MAX_LINE, keepLong: keep });
     let overflowed = false;
     this.child.stdout.on('data', (chunk: Buffer) => {
-      // Past a message too long to read, the rest is the middle of it: nothing more is read.
       if (overflowed) return;
-      let finished: string[];
-      try {
-        finished = lines.push(chunk);
-      } catch (error) {
-        overflowed = true;
-        this.#fail(error instanceof Error ? error : new LineTooLong(lines.max));
-        return;
+      const { lines: finished, skipped } = lines.push(chunk);
+      for (const line of skipped) {
+        if (keep) {
+          overflowed = true;
+          this.#fail(new LineTooLong(lines.max));
+          return;
+        }
+        console.error(`[codex] skipped a ${Math.ceil(line.size / 1024 / 1024)} MB message`);
+        // The request it answered ends now, rather than waiting for an answer that came.
+        const id = answeredId(line.head);
+        const waiting = id === undefined ? undefined : this.#pending.get(id);
+        if (id !== undefined && waiting) {
+          this.#pending.delete(id);
+          clearTimeout(waiting.timer);
+          waiting.reject(new Error('Codex’s answer was too large for Conch to read.'));
+        }
       }
       for (const line of finished) {
         if (!line.trim()) continue;
