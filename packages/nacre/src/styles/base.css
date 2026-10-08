@@ -29,6 +29,18 @@
     overflow-wrap: anywhere;
   }
 
+  /* The page's root keeps the reader's own size (16px unless they chose
+     otherwise), so `1rem` is what the browser says it is and every token is
+     the size it's written as. The 14px UI text starts at the body instead:
+     set on `<html>`, it would shrink every rem in the app by an eighth. */
+  :where(html[data-nacre-root]) {
+    font-size: 100%;
+  }
+
+  :where(html[data-nacre-root]) > body {
+    font-size: var(--nc-text-md);
+  }
+
   :where([data-nacre-root]) ::selection {
     background-color: var(--nc-selection);
   }
@@ -59,7 +71,7 @@
   }
 
   /* A phone zooms the whole page into any field typed in under 16px, and
-     leaves it zoomed. Nacre's rem is 14px, so on a touch screen every field
+     leaves it zoomed. Nacre's UI text is 14px, so on a touch screen every field
      is 16 real pixels. Important, so neither a component's own size nor an
      app's unlayered one can take it back down. A field set larger than that
      on purpose (a name typed at display size) marks itself
