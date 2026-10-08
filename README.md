@@ -134,6 +134,9 @@ your desktop and the chat apps you already use.
   **Full trust**. [Permission modes](./apps/docs/content/reference/modes.md)
 - **Careful after reading.** Once a chat has read a web page or an email, anything
   risky asks first. Commands run sealed off from your keys.
+- **Choose where work runs.** This computer, a locked-down container (Docker or
+  Podman, installed for you), a machine you reach with SSH, or a sandbox in the
+  cloud that sleeps when idle. Each command's row says where it ran. [Where work runs](./apps/docs/content/features/where-work-runs.md)
 - **See it, undo it.** **Activity** shows everything the assistant did; **Undo** puts
   files back. [Undo](./apps/docs/content/care/undo.md)
 - **It fixes itself.** **Repair everything** checks every part of Conch, with daily
