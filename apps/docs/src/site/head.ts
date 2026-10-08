@@ -182,6 +182,8 @@ function tags(head: Head): { tag: 'meta' | 'link'; key: string; attrs: Record<st
     meta('name', 'twitter:description', head.description),
     meta('name', 'twitter:image', image),
     meta('name', 'twitter:image:alt', SOCIAL_IMAGE.alt),
+    // The commit the page was built from, whatever the page shows (the Website check reads it).
+    meta('name', 'conch-commit', publication.commit),
   ];
 }
 
