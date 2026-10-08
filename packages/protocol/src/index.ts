@@ -128,6 +128,7 @@ export * from './spend';
 export * from './vault';
 export * from './passwords';
 export * from './pick';
+export * from './trajectory';
 export * from './words';
 
 export const PROTOCOL_VERSION = 7;

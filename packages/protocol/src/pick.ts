@@ -13,6 +13,8 @@ export const PickPurpose = z.enum([
   'watch-folder',
   /** A `.conchapp` file, or a folder with a `conch-app.json`, to add (ADR 0061). */
   'conch-app',
+  /** The folder a chat's trajectory or report is saved in (ADR 0113). */
+  'export-folder',
 ]);
 export type PickPurpose = z.infer<typeof PickPurpose>;
 
