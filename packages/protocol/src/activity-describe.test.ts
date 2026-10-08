@@ -1556,6 +1556,32 @@ const TOOLS: Case[] = [
     },
   ],
   [
+    'places nearby',
+    'mcp__conch__places',
+    { what: 'coffee', near: 'the Ritz, London' },
+    ok(JSON.stringify({ places: [{ name: 'a' }, { name: 'b' }, { name: 'c' }] })),
+    {
+      family: 'research',
+      done: 'Found coffee near the Ritz, London',
+      outcome: '3 places',
+      chips: [{ kind: 'text' }],
+    },
+  ],
+  [
+    'places, one place',
+    'places',
+    { near: 'the Louvre' },
+    ok(JSON.stringify({ places: [{ name: 'Louvre' }] })),
+    { family: 'research', done: 'Looked up the Louvre' },
+  ],
+  [
+    'places, how far',
+    'places',
+    { near: 'Brighton', from: 'London' },
+    ok(JSON.stringify({ places: [{ name: 'Brighton' }] })),
+    { done: 'Measured how far Brighton is from London' },
+  ],
+  [
     'read_file',
     'mcp__conch__read_file',
     { file_path: '/x/README.md' },

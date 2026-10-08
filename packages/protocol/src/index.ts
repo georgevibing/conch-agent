@@ -70,6 +70,7 @@ export * from './address';
 export * from './apps';
 export * from './artifacts';
 export * from './chat-cards';
+export * from './views/places';
 export * from './chat-list';
 export * from './chat-context';
 export * from './commands';
