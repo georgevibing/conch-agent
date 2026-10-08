@@ -1,5 +1,5 @@
 import { Eye, Pencil } from 'lucide-react';
-import { useId, useState, type ComponentProps } from 'react';
+import { useId, useLayoutEffect, useRef, useState, type ComponentProps } from 'react';
 
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
@@ -92,6 +92,9 @@ function ToolRow({
   assistant: string;
 }) {
   const [expanded, setExpanded] = useState(false);
+  /** The description runs past its two lines: only then is there more to show. */
+  const [clamped, setClamped] = useState(false);
+  const descriptionRef = useRef<HTMLParagraphElement>(null);
   /** Just allowed to speak for you: what that means, and the way back. */
   const [undo, setUndo] = useState<ToolPermission>();
   const labelId = useId();
@@ -99,7 +102,26 @@ function ToolRow({
   const fallback = defaultPermission(tool, policy);
   const value = tool.policy ?? fallback;
   const title = tool.title ?? humanizeTool(tool.name);
-  const long = (tool.description?.length ?? 0) > 110;
+  const descriptionId = useId();
+
+  useLayoutEffect(() => {
+    const el = descriptionRef.current;
+    if (!el) return;
+    // Measured folded only: open, the box is as tall as the words.
+    const measure = () => {
+      if (!el.dataset.expanded) setClamped(el.scrollHeight > el.clientHeight + 1);
+    };
+    measure();
+    // A web font arriving rewraps the words without resizing the folded box.
+    const fonts = typeof document !== 'undefined' ? document.fonts : undefined;
+    fonts?.addEventListener?.('loadingdone', measure);
+    const watch = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
+    watch?.observe(el);
+    return () => {
+      fonts?.removeEventListener?.('loadingdone', measure);
+      watch?.disconnect();
+    };
+  }, [tool.description, expanded]);
   const choose = (choice: ToolPermission) =>
     onChange?.(tool.name, choice === fallback ? null : choice);
   return (
@@ -119,12 +141,23 @@ function ToolRow({
           )}
         </p>
         {tool.description && (
-          <p className={styles.description} data-expanded={expanded || undefined}>
+          <p
+            ref={descriptionRef}
+            id={descriptionId}
+            className={styles.description}
+            data-expanded={expanded || undefined}
+          >
             {tool.description}
           </p>
         )}
-        {long && (
-          <button type="button" className={styles.more} onClick={() => setExpanded((e) => !e)}>
+        {(clamped || expanded) && (
+          <button
+            type="button"
+            className={styles.more}
+            aria-expanded={expanded}
+            aria-controls={descriptionId}
+            onClick={() => setExpanded((e) => !e)}
+          >
             {expanded ? 'Less' : 'More'}
           </button>
         )}
@@ -188,9 +221,10 @@ function ToolRow({
 
 /**
  * Every tool an integration offers, split into what only looks and what
- * changes things, each with Allow · Ask · Off. Descriptions are shown in
- * full on request — they come from the integration, so you should be able
- * to read exactly what it claims a tool does.
+ * changes things, each with Allow · Ask · Off. A description folds at two
+ * lines, and only one that runs longer offers More — it comes from the
+ * integration, so you should be able to read exactly what it claims a tool
+ * does, and a More that shows nothing new is noise.
  */
 export function ToolPermissionList({
   tools,

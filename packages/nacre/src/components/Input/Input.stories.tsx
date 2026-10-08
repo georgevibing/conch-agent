@@ -112,3 +112,31 @@ export const States: Story = {
     </Stack>
   ),
 };
+
+/**
+ * A unit before the amount, a placeholder for "nothing set", under a label and
+ * over a description: Settings → Usage's monthly budget. On a phone the input
+ * is 16px to the browser, so the page never zooms into it, and is drawn at the
+ * well's size, so the placeholder reads at the size of the words around it
+ * (snap it with `--touch`).
+ */
+export const Amount: Story = {
+  render: () => (
+    <Stack gap={5}>
+      <Field>
+        <Field.Label>Budget per month (USD)</Field.Label>
+        <Input inputMode="decimal" leading="$" placeholder="No budget" />
+        <Field.Description>Leave empty for no budget.</Field.Description>
+      </Field>
+      <Field>
+        <Field.Label>Budget per month (USD)</Field.Label>
+        <Input inputMode="decimal" leading="$" defaultValue="50" trailing="a month" />
+        <Field.Description>Leave empty for no budget.</Field.Description>
+      </Field>
+      <Field>
+        <Field.Label>Small</Field.Label>
+        <Input size="sm" leading="$" placeholder="No budget" />
+      </Field>
+    </Stack>
+  ),
+};

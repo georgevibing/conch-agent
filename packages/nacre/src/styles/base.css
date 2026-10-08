@@ -75,7 +75,9 @@
      is 16 real pixels. Important, so neither a component's own size nor an
      app's unlayered one can take it back down. A field set larger than that
      on purpose (a name typed at display size) marks itself
-     `data-nc-large-type` and keeps its own size: it never drops below 16px. */
+     `data-nc-large-type` and keeps its own size: it never drops below 16px.
+     Input and NumberField draw their 16px text at the well's size (see
+     Input.module.css), so a field never looks bigger than the words by it. */
   @media (pointer: coarse) {
     :where([data-nacre-root])
       :is(

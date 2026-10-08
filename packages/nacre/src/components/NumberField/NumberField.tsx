@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type ComponentProps,
+  type CSSProperties,
   type KeyboardEvent,
   type MouseEvent,
   type PointerEvent,
@@ -197,7 +198,7 @@ export function NumberField({
           aria-valuemin={min > Number.MIN_SAFE_INTEGER ? min : undefined}
           aria-valuemax={max < Number.MAX_SAFE_INTEGER ? max : undefined}
           className={cx(inputStyles.input, styles.input)}
-          style={{ inlineSize: `${Math.max(2, text.length) + 0.5}ch` }}
+          style={{ '--nf-chars': Math.max(2, text.length) + 0.5 } as CSSProperties}
           value={text}
           onChange={(event) => {
             const raw = event.target.value.replace(/[^\d.-]/g, '');
