@@ -25,7 +25,7 @@ The card says what the app does, and **what it can do** in plain words:
 - **Keeps its own notes on this computer.** Each app has a place for its own data, and nothing else.
 - **Reaches** and the names of websites, or **Reaches no websites**. These are the only places it can send or fetch anything.
 - **Needs from you**, when it needs something only you have, such as an API key. Type it into the card. Your assistant never sees it.
-- What it **looks up** and what it **changes**. Changes ask first, until you say otherwise.
+- What it **looks up** and what it **changes**. Changes ask first, until you say otherwise. In **Auto** they go ahead, even after the chat read something from outside, except a change that pays, sends something to other people or deletes: those still ask ([Permission modes](../reference/modes.md#auto)).
 
 Press **Open the page** to try its page first. Press **Add to my apps** when you're happy. The card then shows a few things to say to it, such as "I watered the fern", and **Open** with the app's name.
 

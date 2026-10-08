@@ -688,6 +688,12 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     decision: z.enum(['allow', 'allow-always', 'deny', 'expired']),
     /** Nobody answered in this many minutes, so it's a no (ADR 0108). */
     unanswered: z.number().int().positive().optional(),
+    /**
+     * What "Always allow" lets through for the rest of the chat: the tool, and
+     * the reason to ask it lifted (`read:<tool>`, `box:Bash`). Kept in the log,
+     * so it still holds after a restart (ADR 0117).
+     */
+    kept: z.object({ tool: z.string().max(200), waive: z.string().max(220).optional() }).optional(),
   }),
   z.object({
     ...logged,

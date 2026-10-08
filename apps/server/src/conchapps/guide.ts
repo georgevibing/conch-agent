@@ -254,7 +254,7 @@ Export plain tool definitions, with no imports and no dependencies (other files 
 
     export const tools = { name: { title, description, input, changes, async run(input, app) { … } } }
 
-- **name**: lowercase letters, numbers and underscores, at most 20 characters. A verb: \`log_watering\`, \`due\`, \`find_trains\`.
+- **name**: lowercase letters, numbers and underscores, at most 20 characters. A verb: \`log_watering\`, \`due\`, \`find_trains\`. Say what a change does with money or people: a tool that pays starts \`pay_\` (or \`buy_\`, \`transfer_\`), one that writes to others \`send_\` (or \`post_\`, \`share_\`, \`invite_\`), one that removes \`delete_\`. Auto asks before those, so the person is asked about exactly what matters and nothing else.
 - **title**: a few words for people. **description**: what it does, then "Use when …", so a model picks it at the right moment.
 - **input**: a JSON Schema object, a \`description\` on every property, \`required\`, and bounds (\`minLength\`, \`maximum\`, \`enum\`). Conch checks what the model sends against it before \`run\` sees it.
 - **changes**: \`true\` when it keeps durable app records, sends or deletes anything; leave it out when it only looks. Be honest: the person's choices (Ask before changes) rely on it.

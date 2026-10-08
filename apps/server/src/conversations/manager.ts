@@ -56,6 +56,7 @@ import type {
   EngineMcpServer,
   GuardDecision,
   HostTool,
+  HostToolResult,
   PermissionDecision,
   ResolvedOptions,
   TurnInput,
@@ -78,7 +79,22 @@ import { sandboxSupport } from './sandbox';
 import type { WorkPlace } from '../workplaces/types';
 import { assessRisk, breaksCircuit, riskAsks, riskWords, wantsSecondLook } from './risk';
 import { lookAtCommand } from './risk-look';
-import { describeTaint, heldTaints, leavesSandbox, sinkReason, taintFrom } from './taint';
+import {
+  carriesData,
+  describeTaint,
+  heldTaints,
+  leavesSandbox,
+  sinkReason,
+  taintFrom,
+} from './taint';
+import {
+  patternWords,
+  stepsOf,
+  stopWords,
+  watch as watchPattern,
+  watchable,
+  type Pattern,
+} from './behaviour';
 import { cautionFrom } from './provenance';
 import { CONCH_POWER_MESSAGE, runsConchPower } from '../lib/protect';
 import { didWhat } from '../activity/service';
@@ -218,6 +234,19 @@ export interface AskRequest {
   chosen?: boolean;
   /** The person set this one tool to Ask in Apps: Auto keeps asking (Full trust doesn't). */
   explicit?: boolean;
+  /**
+   * A step in one of the person's Conch apps (ADR 0117). `own`: made in this
+   * Conch, so what it sends goes only to the sites the person added it with.
+   * In Auto, after reading, such a step goes ahead unless the risk policy marks
+   * it (it pays, speaks for the person to others, deletes, or sends pages of
+   * text). `marks`: what the app itself brought into the chat; its own next
+   * step isn't held by its own answers.
+   */
+  appStep?: {
+    access: 'read' | 'write';
+    own: boolean;
+    marks?: (source: TaintSource) => boolean;
+  };
   /**
    * The person may change it before allowing it (an email's words and who it
    * goes to). Called with their change before the answer is given: it checks
@@ -465,7 +494,7 @@ export interface ToolContext {
    * In Full trust, in a chat someone is in, only someone else's words count:
    * what it read alone doesn't stop it.
    */
-  untrusted?: () => string | undefined;
+  untrusted?: (besides?: (source: TaintSource) => boolean) => string | undefined;
   /**
    * Everything untrusted this chat has read so far (ADR 0028), whether or not
    * the guard is on: a `person` among them means someone else's words are in it.
@@ -720,6 +749,21 @@ function onlyApps<T extends { servers: Record<string, EngineMcpServer> }>(
       Object.entries(loaded.servers).filter(([name]) => wanted.has(name)),
     ),
   };
+}
+
+/** "Always allow" for one tool, and the reason to ask it lifted. */
+function keep(live: Live, kept: { tool: string; waive?: string }) {
+  live.alwaysAllow.add(kept.tool);
+  if (kept.waive) live.waived.add(kept.waive);
+}
+
+/**
+ * "Always allow" said in this chat before, read back from its log, so it holds
+ * after a restart or once the chat was set aside (ADR 0117). A task run again
+ * starts from its chat's answers instead (`grant`).
+ */
+function keptIn(live: Live) {
+  for (const e of live.events) if (e.type === 'permission.resolved' && e.kept) keep(live, e.kept);
 }
 
 /** "Always allow" said in the chat a task came from holds in the task too (ADR 0033). */
@@ -1909,11 +1953,17 @@ export class ConversationManager {
         decision = 'deny';
       }
     }
-    if (decision === 'allow-always' && pending.remember) {
-      live.alwaysAllow.add(pending.toolName);
-      if (pending.waive) live.waived.add(pending.waive);
-    }
-    this.#append(live, { type: 'permission.resolved', permissionId, decision });
+    const kept =
+      decision === 'allow-always' && pending.remember
+        ? { tool: pending.toolName, ...(pending.waive && { waive: pending.waive }) }
+        : undefined;
+    if (kept) keep(live, kept);
+    this.#append(live, {
+      type: 'permission.resolved',
+      permissionId,
+      decision,
+      ...(kept && { kept }),
+    });
     // Start on a plan (`/plan`): plan mode is over, from this step on, for every provider.
     if (pending.toolName === PLAN_APPROVAL && (decision === 'allow' || decision === 'allow-always'))
       await this.#leavePlan(live).catch(() => undefined);
@@ -2658,10 +2708,15 @@ export class ConversationManager {
       if (asked.browser || asked.vault) return askUser({ ...asked, remember: false }, abort.signal);
       // The call asking, so its row can carry the answer; and what it read, as the tools see it.
       const toolUseId = hostRows.running(asked.toolName);
+      // What the app itself brought in doesn't hold its own next step (ADR 0117).
+      const besides = asked.appStep?.own ? asked.appStep.marks : undefined;
       const read =
         asked.taint && settings.preferences.checkAfterReading
-          ? this.#tainted(live).filter((source) => !trusting() || source.kind === 'person')
+          ? this.#tainted(live).filter(
+              (source) => (!trusting() || source.kind === 'person') && !besides?.(source),
+            )
           : [];
+      const access = asked.appStep && { access: asked.appStep.access };
       const request = {
         ...asked,
         ...(toolUseId && { toolUseId }),
@@ -2680,7 +2735,7 @@ export class ConversationManager {
         if ((request.chosen || request.once) && trustAllows(mode, request.toolName)) return 'allow';
         if (mode === 'auto') {
           // Auto stops only for something serious, and says what (ADR 0100).
-          const risk = assessRisk(request.toolName, request.input, { workspace });
+          const risk = assessRisk(request.toolName, request.input, { workspace, ...access });
           if (riskAsks(risk, false))
             return askUser({ ...request, taint: riskWords(risk), remember: false }, abort.signal);
           // Spending money still asks (a paid picture); the person's own plan never does.
@@ -2695,16 +2750,17 @@ export class ConversationManager {
         ![...limitsSaid].some((limit) => request.taint?.includes(limit));
       if (!lifts) return askUser({ ...request, remember: false }, abort.signal);
       // Auto after reading, a person here (ADR 0100): Conch's own commands and pictures on
-      // the person's own plan are routine work. Only what the risk policy or the second look
-      // marks asks; spending money and words going to other people asked above or still ask.
+      // the person's own plan are routine work, and so is a step in an app the person made
+      // here (ADR 0117). Only what the risk policy or the second look marks asks; spending
+      // money and words going to other people asked above or still ask.
       if (
         resolved.permissionMode === 'auto' &&
         personTrusts &&
         !request.cost &&
         !request.explicit &&
-        AUTO_AFTER_READING.test(request.toolName)
+        (AUTO_AFTER_READING.test(request.toolName) || request.appStep?.own)
       ) {
-        const risk = assessRisk(request.toolName, request.input, { workspace });
+        const risk = assessRisk(request.toolName, request.input, { workspace, ...access });
         const command = typeof request.input.command === 'string' ? request.input.command : '';
         const why = riskAsks(risk, true)
           ? risk?.reason
@@ -2819,9 +2875,11 @@ export class ConversationManager {
             ...(live.record.origin && { origin: live.record.origin }),
             ...(resolved.model && { model: resolved.model }),
             waitingForYou: (waiting) => this.#waitingForYou(live, waiting),
-            untrusted: () => {
+            untrusted: (besides) => {
               const tainted = settings.preferences.checkAfterReading
-                ? this.#tainted(live).filter((source) => !trusting() || source.kind === 'person')
+                ? this.#tainted(live).filter(
+                    (source) => (!trusting() || source.kind === 'person') && !besides?.(source),
+                  )
                 : [];
               return tainted.length ? describeTaint(tainted) : undefined;
             },
@@ -2857,6 +2915,19 @@ export class ConversationManager {
           this.#taint(live, read);
           this.#noteRead(live, read.label, hostToolText(result));
           return result;
+        },
+      };
+    }
+    // The behaviour guard for Conch's own tools (ADR 0117), where a provider calls them without
+    // the guard (Claude Code runs them as its own MCP server's): judged as they start, once.
+    for (const [i, tool] of tools.entries()) {
+      const name = `mcp__conch__${tool.name}`;
+      if (!watchable(name)) continue;
+      tools[i] = {
+        ...tool,
+        run: async (args, context) => {
+          const stopped = await watchBefore(name, args);
+          return stopped ?? tool.run(args, context);
         },
       };
     }
@@ -2983,8 +3054,97 @@ export class ConversationManager {
       return look;
     };
 
+    /**
+     * What this step looks like beside what the chat did before it (ADR 0117): a thousand
+     * emails, fifty deletes, the same change again and again. Judged once per call, where
+     * every call passes first (`guard`), and remembered for the question that follows.
+     */
+    const patterns = new Map<string, Pattern | undefined>();
+    const callKey = (request: { toolName: string; input: Record<string, unknown> }) =>
+      `${request.toolName}\n${JSON.stringify(request.input)}`;
+    const watchStep = (
+      request: { toolName: string; toolUseId?: string; input: Record<string, unknown> },
+      fresh: boolean,
+    ): Pattern | undefined => {
+      if (!watchable(request.toolName)) return undefined;
+      const keys = [request.toolUseId, callKey(request)].filter((k): k is string => Boolean(k));
+      if (!fresh) for (const k of keys) if (patterns.has(k)) return patterns.get(k);
+      const pattern = watchPattern(
+        {
+          ...(request.toolUseId && { id: request.toolUseId }),
+          name: request.toolName,
+          input: request.input,
+        },
+        stepsOf(live.events, turnFrom),
+        {
+          now: Date.now(),
+          read: guardOn && this.#tainted(live).length > 0,
+          said: this.#yourWords(live),
+        },
+      );
+      for (const k of keys) patterns.set(k, pattern);
+      return pattern;
+    };
+
+    /**
+     * A Conch tool's own check, as it starts (ADR 0117): what the guard already judged for this
+     * call goes by; anything else is judged here, a stop refused and a question asked.
+     */
+    const watchBefore = async (
+      toolName: string,
+      input: Record<string, unknown>,
+    ): Promise<HostToolResult | undefined> => {
+      const key = callKey({ toolName, input });
+      if (patterns.has(key)) {
+        patterns.delete(key);
+        return undefined;
+      }
+      // This call's own row, when the provider logged it before running it: not an earlier step.
+      const json = JSON.stringify(input);
+      const finished = new Set(
+        live.events.flatMap((e) => (e.type === 'tool.finished' ? [e.toolUseId] : [])),
+      );
+      const own = live.events.findLast(
+        (e) =>
+          e.type === 'tool.started' &&
+          e.name === toolName &&
+          !finished.has(e.toolUseId) &&
+          JSON.stringify(e.input) === json,
+      );
+      const pattern = watchStep(
+        {
+          toolName,
+          input,
+          ...(own?.type === 'tool.started' && { toolUseId: own.toolUseId }),
+        },
+        true,
+      );
+      patterns.delete(key);
+      if (own?.type === 'tool.started') patterns.delete(own.toolUseId);
+      if (!pattern) return undefined;
+      if (pattern.level === 'stop') return { text: stopWords(pattern), effect: 'not-executed' };
+      if (trusting() && !pattern.trust) return undefined;
+      const answer = await askUser(
+        {
+          toolName: toolName.replace(/^mcp__conch__/, ''),
+          input,
+          summary: summarizeToolUse(toolName, input),
+          taint: patternWords(pattern),
+          remember: false,
+        },
+        abort.signal,
+      );
+      return answer === 'deny'
+        ? {
+            text: 'The person said no, so nothing was done. Ask them what they’d like instead.',
+            effect: 'not-executed',
+          }
+        : undefined;
+    };
+
     const mustAsk = async (request: {
       toolName: string;
+      toolUseId?: string;
       input: Record<string, unknown>;
     }): Promise<{ reason: string; waive?: string; sources?: TaintSource[] } | undefined> => {
       // One that runs by itself (a routine, a chat app) still checks, and so
@@ -2994,6 +3154,11 @@ export class ConversationManager {
       // The circuit breaker (ADR 0100): a whole folder or disk gone asks in every mode.
       const critical = breaksCircuit(request.toolName, request.input, { workspace });
       if (critical) return { reason: riskWords(critical) };
+      // A pattern worth a question (ADR 0117): in every mode below Full trust, and in Full
+      // trust too for the few no one's trust should reach without a look.
+      const pattern = watchStep(request, false);
+      if (pattern?.level === 'ask' && (mode !== 'bypassPermissions' || pattern.trust))
+        return { reason: patternWords(pattern) };
       // Something serious asks in every mode but Full trust, whatever was allowed before
       // (an app's tool that deletes, unless you set that tool to Allow in Apps).
       if (mode !== 'bypassPermissions') {
@@ -3071,7 +3236,12 @@ export class ConversationManager {
           command ||
           ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(request.toolName) ||
           (/(?:WebSearch|web_search|video_search)$/.test(request.toolName) &&
-            String(request.input.query ?? '').length <= 120);
+            String(request.input.query ?? '').length <= 120) ||
+          // Reading another page, a shop's search with its filters among them (ADR 0117); an
+          // address that looks like it carries data still asks.
+          (/(?:WebFetch|web_fetch)$/.test(request.toolName) &&
+            typeof request.input.url === 'string' &&
+            !carriesData(request.input.url));
         sink = riskAsks(risk, true) ? risk?.reason : routine ? undefined : sink;
         // Nothing the rules know, but unusual and able to reach out: a small model looks too.
         if (!sink && command && typeof request.input.command === 'string')
@@ -3167,6 +3337,9 @@ export class ConversationManager {
       await keepBefore(request.toolUseId, request.toolName, request.input);
       if ((await integrations?.decide(request.toolName).catch(() => undefined)) === 'off')
         return refuse('The user turned this tool off in Apps.');
+      // A pattern no mode lets through (ADR 0117): a thousand people at once is a spam campaign.
+      const pattern = watchStep(request, true);
+      if (pattern?.level === 'stop') return refuse(stopWords(pattern));
       if (!restartReadOnly(request.toolName)) {
         const id = request.toolUseId ?? newId('pending');
         live.record = {
@@ -4238,6 +4411,7 @@ export class ConversationManager {
       alwaysAllow: new Set(),
       waived: new Set(),
     };
+    keptIn(live);
     // Conch restarted while a question waited: its answer went with the reply.
     for (const skipped of unansweredOnRestart(events)) this.#append(live, skipped);
     this.#live.set(id, live);

@@ -35,6 +35,11 @@ const pages: Record<string, string> = {
     <label>Password <input type="password" name="password"></label>
     <button>Sign in</button></form>`,
   '/welcome': `<title>Welcome</title><h1>Welcome back</h1>`,
+  '/otto': `<title>Gant T-Shirts</title><h1>Gant T-Shirts</h1>
+    <label>Suche <input aria-label="Suche" name="q"></label>
+    <button onclick="document.title='Sortiert'">Preis aufsteigend</button>
+    <button onclick="document.title='Im Korb'">In den Warenkorb</button>
+    <button onclick="document.title='Gekauft'">Jetzt kaufen</button>`,
   '/hands': `<title>Hands</title>
     <nav><span id="m" role="button" tabindex="0" onmouseenter="document.getElementById('sub').hidden=false">Products</span>
     <div id="sub" hidden><a href="/shop">Mugs</a></div></nav>
@@ -486,6 +491,59 @@ describe.skipIf(!hasBrowser)('your turn, for real', () => {
       expect(t.control).toBe('user');
       t.setControl('idle');
       expect(await waiting).toContain('The user is done');
+    },
+  );
+});
+
+describe.skipIf(!hasBrowser)('shopping in Auto after reading, for real (ADR 0117)', () => {
+  const READ = 'This chat read web search results, which could be trying to steer me.';
+
+  it(
+    'sorts, searches and fills a basket without asking, and still stops before buying',
+    { timeout: 90_000 },
+    async () => {
+      const { call, asked } = harness('conv_otto', ['deny'], 'auto', READ);
+      const page = await call('browser_open', { url: `${origin}/otto` });
+      await call('browser_click', {
+        ref: refOf(page, /Preis aufsteigend/),
+        element: 'Preis aufsteigend',
+      });
+      await call('browser_type', {
+        ref: refOf(page, /textbox "Suche"/),
+        element: 'Suche',
+        text: 'gant t-shirt herren weiss',
+      });
+      await call('browser_click', {
+        ref: refOf(page, /In den Warenkorb/),
+        element: 'In den Warenkorb',
+      });
+      expect(asked).toEqual([]);
+      // “Jetzt kaufen” is buying, in German as in English: it asks, with what was read.
+      const text = await call('browser_click', {
+        ref: refOf(page, /Jetzt kaufen/),
+        element: 'Jetzt kaufen',
+      });
+      expect(asked).toHaveLength(1);
+      expect(asked[0]?.browser).toMatchObject({ kind: 'high-stakes' });
+      expect(text).toMatch(/said no/);
+    },
+  );
+
+  it(
+    'a long text typed in after reading still asks: it could carry what was read',
+    {
+      timeout: 90_000,
+    },
+    async () => {
+      const { call, asked } = harness('conv_otto_long', ['deny'], 'auto', READ);
+      const text = await call('browser_open', { url: `${origin}/otto` });
+      await call('browser_type', {
+        ref: refOf(text, /textbox "Suche"/),
+        element: 'Suche',
+        text: 'x'.repeat(400),
+      });
+      expect(asked).toHaveLength(1);
+      expect(asked[0]?.taint).toContain('act on');
     },
   );
 });

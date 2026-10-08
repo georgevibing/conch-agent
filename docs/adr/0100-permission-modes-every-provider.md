@@ -162,6 +162,13 @@ So:
 Ask first, Edit freely, Plan only and Full trust are unchanged, as are the circuit
 breaker, protected paths, Conch's powers, tools turned Off and skill holds.
 
+Revisited again in [ADR 0117](./0117-auto-asks-about-what-matters.md): the person's own
+Conch apps read and change things in Auto after reading (asking before paying, speaking for
+them, deleting or sending pages of text), reading pages and acting on a site go ahead until
+the order or the message, **Always allow** holds after a restart, and a behaviour guard
+watches for spam-sized sends, runs of deletes, big payments and loops, in Full trust too for
+the largest.
+
 ### Full trust: never asks, but for what no mode lifts
 
 Full trust lets everything through — commands, the sealed box, app approvals, the
@@ -177,13 +184,16 @@ because the person's trust can't reach it:
    sign-ins (protected paths), and changing who may reach Conch or whose skills it
    trusts (`runsConchPower`). The agent can't raise its own privileges (AGENTS.md).
 3. **Tools turned Off** in Apps stay off.
-4. **Someone else's words.** A message from someone who isn't you (a group, a chat
+4. **A spam-sized send** (ADR 0117): one message to 500 people or more, or a chat's 500th
+   message in a day, is refused with the reason and a next step; one to 100 or more, the
+   50th delete in a turn, a payment of 1,000 or more and a loop of the same change ask.
+5. **Someone else's words.** A message from someone who isn't you (a group, a chat
    app's guest) can't borrow your trust: its steps ask you.
-5. **Nobody there after reading.** A routine or a chat-app chat that read something
+6. **Nobody there after reading.** A routine or a chat-app chat that read something
    untrusted asks you, by notification, because no one is watching.
-6. **A skill's list.** A chat held to a skill (ADR 0031, ADR 0047) asks for what the
+7. **A skill's list.** A chat held to a skill (ADR 0031, ADR 0047) asks for what the
    skill didn't say it needs; the skill's author isn't you.
-7. **Paying or deleting on a website** (`high-stakes` in the browser), and each site in
+8. **Paying or deleting on a website** (`high-stakes` in the browser), and each site in
    your own signed-in Chrome (ADR 0080).
 
 Spending limits (ADR 0079) stop a reply; they never ask.

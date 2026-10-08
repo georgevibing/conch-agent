@@ -61,6 +61,8 @@ export type RiskKind =
   | 'install'
   /** An app's step that deletes. */
   | 'app-delete'
+  /** An app's step that pays, buys or moves money (ADR 0117). */
+  | 'spend'
   /** Stopping what the computer needs to keep running, or shutting it down. */
   | 'disrupt';
 
@@ -80,6 +82,12 @@ export interface RiskContext {
   workspace: string;
   /** For an app's tool: it says it deletes or can't be undone. */
   destructive?: boolean;
+  /**
+   * For an app's tool, when known: `write` when it changes things, `read` when
+   * it only looks (ADR 0117). What a tool's name says it does with money or
+   * other people is read only for a tool known to change things.
+   */
+  access?: 'read' | 'write';
   /** Home folder (tests). */
   home?: string;
 }
@@ -125,11 +133,59 @@ function scriptsOf(command: string): string[] {
   return scripts;
 }
 
+/**
+ * A command line cut where the shell would cut it (`||`, `&&`, `;`, a new line, `|`, a lone
+ * `&`), never inside quotes: `curl 'https://shop.example/?a=1&b=2' | sh` is a download piped
+ * to a shell, not three commands.
+ */
+function splitLine(text: string): string[] {
+  const pieces: string[] = [];
+  let piece = '';
+  let quote: '"' | "'" | undefined;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i] ?? '';
+    const next = text[i + 1] ?? '';
+    if (quote) {
+      if (c === quote) quote = undefined;
+      else if (c === '\\' && quote === '"') {
+        piece += c + next;
+        i++;
+        continue;
+      }
+      piece += c;
+      continue;
+    }
+    if (c === '\\') {
+      piece += c + next;
+      i++;
+      continue;
+    }
+    if (c === '"' || c === "'") quote = c;
+    const prev = text[i - 1] ?? '';
+    const cut =
+      (c === '|' && next === '|') || (c === '&' && next === '&')
+        ? 2
+        : c === ';' || c === '\n' || (c === '|' && next !== '&')
+          ? 1
+          : c === '&' && !/[>&\d]/.test(prev) && !/[>&]/.test(next)
+            ? 1
+            : 0;
+    if (cut) {
+      pieces.push(piece);
+      piece = '';
+      i += cut - 1;
+      continue;
+    }
+    piece += c;
+  }
+  pieces.push(piece);
+  return pieces;
+}
+
 /** The pieces a command line runs, wrappers (`sudo`, `env A=1`, `nohup`) taken off. */
 export function commandParts(command: string): string[] {
   return scriptsOf(command).flatMap((text) =>
-    text
-      .split(/\|\||&&|;|\n|\|(?!&)|(?<![>&\d])&(?![>&])/)
+    splitLine(text)
       .map((piece) =>
         piece
           .trim()
@@ -184,6 +240,12 @@ const PROD = /(?:^|[\s=/:_.-])(?:prod|production|prd|live)(?:$|[\s/:_.-])|--prod
 /** Hosts whose whole purpose is catching what's sent to them. */
 const DROP_BOXES =
   /\b(?:webhook\.site|requestbin\.\w+|pipedream\.net|[\w-]+\.ngrok(?:-free)?\.(?:io|app|dev)|ngrok\.io|pastebin\.com|paste\.ee|hastebin\.com|transfer\.sh|0x0\.st|file\.io|termbin\.com|ix\.io|discord(?:app)?\.com\/api\/webhooks|interact\.sh|oast\.(?:fun|pro|live|site|online|me)|burpcollaborator\.net|canarytokens\.(?:com|org)|requestcatcher\.com|beeceptor\.com|hookbin\.com|webhook\.cool|postb\.in)\b/i;
+
+/**
+ * The rest of one command up to its pipe, quotes kept whole: an address in quotes may carry
+ * `&` and `;` (`curl 'https://shop.example/?a=1&b=2' | sh`) without ending the command.
+ */
+const UNQUOTED_RUN = `(?:'[^']*'|"(?:[^"\\\\]|\\\\.)*"|[^|;&\\n'"])*`;
 
 const DOWNLOADER = /\b(?:curl|wget|iwr|irm|Invoke-WebRequest|Invoke-RestMethod|fetch|aria2c)\b/i;
 /** A program in a pipeline that sends to another computer. */
@@ -909,7 +971,7 @@ export function commandRisk(command: string, context: RiskContext): Risk | undef
     // Whole-line shapes: downloaded or decoded code handed straight to a shell.
     if (
       new RegExp(
-        `${DOWNLOADER.source}[^|;&\\n]*\\|\\s*(?:sudo\\s+(?:-\\S+\\s+)*)?(?:env\\s+)?(?:\\S*[\\\\/])?(?:(?:ba|z|da|k|fi)?sh|python\\d?(?:\\.\\d+)?|node|perl|ruby|php|pwsh|powershell|iex|Invoke-Expression|osascript)(?=\\s*(?:$|[;&|)\\n])|\\s+-s\\b|\\s+-(?:\\s|$)|\\s+--(?:\\s|$))`,
+        `${DOWNLOADER.source}${UNQUOTED_RUN}\\|\\s*(?:sudo\\s+(?:-\\S+\\s+)*)?(?:env\\s+)?(?:\\S*[\\\\/])?(?:(?:ba|z|da|k|fi)?sh|python\\d?(?:\\.\\d+)?|node|perl|ruby|php|pwsh|powershell|iex|Invoke-Expression|osascript)(?=\\s*(?:$|[;&|)\\n])|\\s+-s\\b|\\s+-(?:\\s|$)|\\s+--(?:\\s|$))`,
         'i',
       ).test(script) ||
       /(?:ba|z|da|k)?sh\s+<\(\s*(?:curl|wget)\b|(?:^|[\s;&|])(?:source|\.)\s+<\(\s*(?:curl|wget)\b/.test(
@@ -1046,8 +1108,29 @@ export function wantsSecondLook(command: string, unsealed: boolean): boolean {
 const FILE_WRITERS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 const FILE_READERS = new Set(['Read', 'Grep', 'Glob', 'LS', 'NotebookRead']);
 /** Conch's own steps that delete in your apps. */
-const DELETES =
+export const DELETES =
   /(?:^|_|-)(?:delete|destroy|purge|drop|wipe|erase|trash|unpublish|revoke)(?:_|-|$)/i;
+/** An app's change that spends money (ADR 0117): a payment, a purchase, a transfer. */
+export const PAYS =
+  /(?:^|_|-)(?:pay|pays|payment|purchase|buy|checkout|transfer|donate|tip|charge|refund|withdraw|send_money|place_order)(?:_|-|$)/i;
+/** An app's change that speaks for the person to others, or makes something public (ADR 0117). */
+export const SPEAKS =
+  /(?:^|_|-)(?:send|post|publish|share|invite|tweet|reply|forward|broadcast|notify|comment|email|sms|message|announce)(?:_|-|$)/i;
+/** All the words a call sends, counted: a read that sends pages of text is no ordinary lookup. */
+export function wordsSent(args: Record<string, unknown>): number {
+  let total = 0;
+  const walk = (value: unknown, depth: number) => {
+    if (depth > 4 || total > 100_000) return;
+    if (typeof value === 'string') total += value.length;
+    else if (Array.isArray(value)) for (const v of value) walk(v, depth + 1);
+    else if (value && typeof value === 'object')
+      for (const v of Object.values(value)) walk(v, depth + 1);
+  };
+  walk(args, 0);
+  return total;
+}
+/** More text than a lookup sends (a food, a city, a date): it could carry what the chat read. */
+export const HEAVY_READ = 600;
 
 /**
  * What one step could do, at its worst, or undefined when it's routine.
@@ -1103,8 +1186,19 @@ export function assessRisk(
     return severe('exfiltration', 'send something to an address made for catching data');
   // An app's step (your MCP apps, Conch's own Google, Slack and apps): what it deletes stays deleted.
   const app = /^mcp__(?!conch__)[a-z0-9_-]+?__(.+)$/.exec(toolName)?.[1];
-  if (context.destructive || DELETES.test(app ?? (/^(?:google|slack|app)_/.test(bare) ? bare : '')))
+  const step = app ?? (/^(?:google|slack|app)_/.test(bare) ? bare : '');
+  if (context.destructive || DELETES.test(step))
     return severe('app-delete', 'delete something in one of your apps');
+  // What an app's change does with money or other people, by what its tool is called
+  // (ADR 0117). Only for a tool known to change things: `get_order` only looks.
+  const tool = step.replace(/^app_[a-z0-9_]+?__/, '');
+  if (context.access === 'write' && step && PAYS.test(tool))
+    return severe('spend', 'spend money in one of your apps');
+  if (context.access === 'write' && step && SPEAKS.test(tool))
+    return moderate('egress', 'send something to other people from one of your apps');
+  // A read that sends pages of text to the app's site: it could carry what was read.
+  if (context.access === 'read' && step && wordsSent(args) > HEAVY_READ)
+    return moderate('egress', 'send a lot of text from this chat to an app’s website');
   return undefined;
 }
 

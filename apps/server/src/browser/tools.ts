@@ -52,6 +52,8 @@ const CLOSED =
 
 /** How long the agent's cursor lingers before acting, when someone is watching. */
 const WATCHED_PAUSE_MS = 420;
+/** More than a search, a size or a name: typed after reading, it could carry what was read. */
+const LONG_TYPING = 300;
 
 /** How long a handoff waits for you before the agent is told to move on. */
 const HANDOFF_WAIT_MS = 30 * 60_000;
@@ -293,6 +295,8 @@ export function browserTools(
       highStakes: boolean;
       box?: BrowserBox;
       kind?: 'download' | 'upload';
+      /** Typing a long text: after reading, it could carry what was read (ADR 0117). */
+      carries?: boolean;
     },
   ): Promise<void> => {
     check();
@@ -308,10 +312,10 @@ export function browserTools(
     // Read something untrusted (ADR 0028): even a trusted site asks once per site (Full trust
     // doesn't, in a chat you're in: `untrusted` is empty there unless someone else spoke).
     // An upload sends the person's files out: it carries the same note when the chat read something.
-    const untrusted =
-      kind === 'site' || kind === 'upload' || kind === 'download'
-        ? (ctx.untrusted?.() ?? (await ctx.restricted?.('browser')))
-        : undefined;
+    const looked = kind === 'site' || kind === 'upload' || kind === 'download';
+    const read = looked ? ctx.untrusted?.() : undefined;
+    const held = looked ? await ctx.restricted?.('browser') : undefined;
+    const untrusted = read ?? held;
     // Your own Chrome is signed in to your life (ADR 0080): each site asks once per chat, always.
     const own = service.runtime.backend.shared;
     // Full trust and Auto use a site, and download or upload there, without asking until the
@@ -321,9 +325,21 @@ export function browserTools(
       !untrusted &&
       !own &&
       (ctx.permissionMode === 'bypassPermissions' || ctx.permissionMode === 'auto');
+    // Auto after reading, a person here and only things read (ADR 0117): clicking, choosing
+    // and typing on a site is reading it further: a filter, a size, a search. What matters
+    // still asks: paying, sending or deleting (`high-stakes`, in every mode), a long text
+    // typed in (it could carry what was read), an upload and a download.
+    const someone = ctx.taints?.().some((source) => source.kind === 'person') ?? false;
+    const browsing =
+      ctx.permissionMode === 'auto' &&
+      !ctx.unattended &&
+      !someone &&
+      !held &&
+      !own &&
+      !request.carries;
     if (kind === 'site') {
       if (tab.sites.has(site)) return;
-      if (goesAhead) return;
+      if (goesAhead || browsing) return;
       if (!untrusted && !own && (await service.store.trusts(site))) return;
     }
     if ((kind === 'download' || kind === 'upload') && goesAhead) return;
@@ -844,6 +860,7 @@ export function browserTools(
                 : `Type in “${element}”`,
             highStakes: Boolean(submit) && isHighStakes(formButton),
             box,
+            carries: text.length > LONG_TYPING,
           });
           await point(tab, 'type', `Typing in “${element}”`, box);
           try {

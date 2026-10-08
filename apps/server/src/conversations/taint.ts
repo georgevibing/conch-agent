@@ -205,6 +205,50 @@ const carries = (url: string) => {
 };
 
 /**
+ * A web address that looks like it carries data rather than asks for a page
+ * (ADR 0117): a long encoded blob (base64, hex) anywhere in it, a long text in
+ * one value, or a great deal of query. Words, filters and slugs — a shop's
+ * search for "gant t-shirt herren", sorted by price — don't.
+ */
+export function carriesData(url: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  if (u.search.length + u.hash.length > 400) return true;
+  const decode = (part: string) => {
+    try {
+      return decodeURIComponent(part.replace(/\+/g, ' '));
+    } catch {
+      return part;
+    }
+  };
+  const values = [
+    ...u.pathname.split('/'),
+    ...[...u.searchParams.values()],
+    ...u.hash.replace(/^#/, '').split(/[&=]/),
+  ].map(decode);
+  return values.some(
+    (value) =>
+      value.length > 120 ||
+      value
+        .split(/[\s\-_.,;:/&=]+/)
+        .some(
+          (token) =>
+            (token.length >= 24 &&
+              /^[A-Za-z0-9+/=]+$/.test(token) &&
+              /\d/.test(token) &&
+              /[A-Za-z]/.test(token) &&
+              /[A-Z]/.test(token) &&
+              /[a-z]/.test(token)) ||
+            /^[0-9a-f]{32,}$/i.test(token),
+        ),
+  );
+}
+
+/**
  * What this call could do with what was read, in the words of the card
  * ("run a command"), when it's something that should ask. Undefined: let it be.
  */
