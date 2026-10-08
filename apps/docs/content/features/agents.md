@@ -118,7 +118,7 @@ Whichever you pick, an agent doesn't give up at the first error. When something 
 
 ## Bring them from OpenClaw or Hermes
 
-Your agents there come over with their names, faces (their picture, or one of Conch's that matches), personalities, instructions, models, which one was the default, and the bots they answered in. Bringing them again brings them up to date instead of making them twice. See [Coming from another assistant](../care/come-home.md#what-comes-over).
+Your agents there come over with their names, faces (their picture, or one of Conch's that matches), personalities, instructions, models, which one was the default, and the bots they answered in. Bringing them again brings them up to date instead of making them twice. Instructions come over whole. If an earlier Conch kept only the start of an agent's instructions, Conch brings the rest in by itself; if some of it reads like orders to the assistant, the agent's page says **The end of its instructions stayed in OpenClaw** and **Take a look** opens Come home to read it first. See [Coming from another assistant](../care/come-home.md#what-comes-over).
 
 ## Order and delete
 
@@ -128,7 +128,8 @@ Deleting says **‹name› deleted**, with **Undo**. Its chats stay, and carry o
 
 ## Good to know
 
-- Up to 50 agents. A name is up to 40 characters, what it's for 120, its own words on personality 2,000, and its instructions 8,000.
-- Instructions are read before every answer, so long ones cost a little on every message. A few lines is plenty.
+- Up to 50 agents. A name is up to 40 characters, what it's for 120, its own words on personality 2,000, and its instructions 100,000.
+- Instructions are read before every answer, so long ones cost a little on every message. When yours are long, the page says so under them, with their size, and names the model if they crowd it. They're never cut.
+- A model that reads only a little at once (often one on this computer) may read just the start of very long instructions. The chat says so once, and the model knows to tell you when that might matter. A model that reads more gets them whole.
 - Old links to **Settings → Personality** open **Settings → Agents**.
 - Agents are kept in `~/.conch/agents`: `agents.json`, their pictures in `avatars`, and outside agents in `outside.json`. Outside agents' keys are kept sealed in `~/.conch/a2a.secrets.json`, and come back only from a backup with a passphrase.

@@ -57,7 +57,8 @@ a path), a **name** (at most 40 characters, unique whatever its case: it's shown
 every reply and is what the agent calls itself), a **face** (one of Conch's preset
 pictures in a colour, or a picture of your own), a **role** (one line, at most 120: what
 it's for), a **persona** (a tone from seven, each with its words in `TONES`, and a
-personality in your own words, at most 2,000), **instructions** (at most 8,000), and
+personality in your own words, at most 2,000), **instructions** (at most 100,000; see
+[Long instructions](#long-instructions)), and
 optional **defaults** for the chats it starts (provider, model, thinking, mode). There
 are at most 50, always at least one, and exactly one is the **default**: new chats,
 chat apps and routines start with it unless they choose another.
@@ -163,8 +164,55 @@ API's system message. It is layered, and the order is the precedence
    memory, the chat's goal, plan mode.
 
 The first four stay the same turn after turn, so prompt caches keep them. Lean mode
-(ADR 0086) keeps all four, the persona and instructions within a size, and swaps in the
-compact resilience by its heading.
+(ADR 0086) keeps all four, the persona within a size and the instructions within a fifth
+of the window, and swaps in the compact resilience by its heading. The person's own
+headings in their personality and instructions are moved two levels down in the prompt
+(`nested`), so nothing that reads the prompt by its top headings mistakes one of theirs
+for one of Conch's.
+
+### Long instructions
+
+Instructions were at most 8,000 characters at first. People bringing an agent from
+OpenClaw found theirs cut, with "the end stays in OpenClaw": an AGENTS.md that has grown
+for months is often 20,000 to 40,000 characters, and every rule in it was put there for
+a reason. They are now at most **100,000** (about 25,000 tokens): room for a whole
+handbook, still a bound on what every turn carries.
+
+- **Never cut, only noted.** The editor and Come home say so quietly when they're long:
+  from about 4,000 tokens (`LONG_INSTRUCTIONS_TOKENS`) whatever the model, since every
+  reply carries them ("These instructions are long (≈9k tokens). Every reply carries
+  them, so small models may struggle."), and from a tenth of the window of the model
+  the agent's chats start with, when the provider says what it is
+  (`instructionsWeight`), naming that model. Saving never waits on it.
+- **Paid for once a chat.** They sit in the first four layers, before anything that
+  changes turn to turn (memory, the chat's goal), so the providers that cache a prompt
+  (Anthropic's breakpoint on the system prompt, OpenRouter's, OpenAI's and DeepSeek's
+  automatic prefix caches, Claude Code's and Codex's own) keep them after the first
+  request of a chat.
+- **Compaction never eats them.** Summarising a long chat (ADR 0055) folds the
+  messages, never the system prompt: the window it fits the chat into is what's left
+  after the instructions.
+- **A small model reads their start, and everyone is told.** In lean mode the
+  instructions keep a fifth of the window (`instructionsRoom`): all of them on most
+  models. Past that, the start is kept to a paragraph's end, the model is told how
+  much was left out and to say it's working from a shortened version when a request
+  may depend on it, and the chat says once, as a notice (`instructions-shortened`),
+  that this model reads only their start and a model that reads more gets them whole.
+  Conch doesn't summarise them: a model's summary of someone's rules can drop or bend
+  one without anyone seeing.
+- **Readable by the version before (ADR 0051).** `agents.json` keeps `instructions` as
+  the start, at most 8,000 characters cut where a paragraph ends, and `instructionsRest`
+  as the rest, exactly (`splitInstructions`). A Conch from before reads the start where
+  it always looked, instead of finding the field too long and losing all of it; if it
+  rewrites the file it drops the rest, and the agent reads as its start again. Come
+  home's ledger keeps what an import replaced the same way.
+- **The rest comes home.** An agent an older Conch brought cut short (its instructions
+  between 4,800 and 8,000 characters, the start of what its app has now, unchanged here
+  since) gets the rest by itself when Conch starts, with a quiet note under Fixed on its
+  own, when the rest reads clean. When some of it reads like orders, its page says the
+  end stayed behind and opens Come home to read it first, and Repair everything says so
+  too. Bringing it again in Come home says "the rest comes in". Only the instructions
+  change: a name or a face chosen here since stays.
 
 Precedence is also enforced where words can't be relied on: every permission, mode,
 guard and hold is checked in code (ADR 0028, ADR 0100), and nothing in an agent grants
@@ -183,7 +231,7 @@ web client and hooks are `apps/web/src/features/agents/api.ts`, kept fresh by
 - Someone who never makes a second agent sees no change: the same name, voice and
   instructions, read from the agents now.
 - A second agent costs nothing until it answers; what an agent adds to a turn is
-  bounded by its limits.
+  bounded by its limits, and said when it's a lot.
 - The assistant can't make, change or remove an agent, or edit one's file. Bringing
   agents from OpenClaw and Hermes (Come home) goes through the same store
   (`AgentStore.create` with `imported`, `uniqueName`), screened as Come home screens
