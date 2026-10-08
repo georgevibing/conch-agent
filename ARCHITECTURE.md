@@ -93,6 +93,8 @@ src/
                               (index, embed), the tidy-up, What Conch knows (ADR 0032)
   learning/                   quiet learning: each chat read once it goes quiet, the gate, the
                               record and the never-list, preferences near the question (ADR 0088)
+  checkins/                   standing orders (words, never power) and the check-in that looks
+                              with the pulse's sources and tells only what an order asks (ADR 0107)
   conversations/              manager (turns, permissions, events) + JSONL store
   conversations/stories/      the work in plain words: labels on the wire, narration paced, story
                               headlines and "Why?" by a small model (ADR 0103)
@@ -457,7 +459,7 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   `floor` and `same`. It serves
   `recall` and `forPrompt` (all memories while they fit in 6,000 characters, else the
   relevant ones, then the newest). Model vectors are cached in `memory-index.db`
-  (derived, healed). `MemoryTidy` (on request, or nightly with `preferences.tidyMemory`)
+  (derived, healed). `MemoryTidy` (on request, or nightly with `preferences.tidyMemory`, on by default and within learning's spending since ADR 0107)
   asks the cheapest model to merge, update and add. It applies changes with Undo, or
   leaves them `pending` when they came from a tainted chat or `autoMemory` is off. An
   update supersedes (`MemoryStore.supersede`); a merge that loses a number or a name
@@ -835,7 +837,7 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   [ADR 0059 — Looking through earlier chats](./docs/adr/0059-looking-through-earlier-chats.md).
 - Local data lives in `~/.conch/` (`CONCH_HOME`): `settings.json`, `secrets.json`
   (the API key and a key per provider, or a 1Password reference to one),
-  `memory/*.md` (+ `memory/superseded/*.md`, `learning/*.json`, `learning-spend.json`; derived `memory-index.db`, `memory-tidy.json`, `models/`; `skill-suggestions.json`, `skill-learned.json`, `skill-usage.json`), `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`, `routines/when/*.json`; derived `routines/when/*.seen.json`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `search.db`,
+  `memory/*.md` (+ `memory/superseded/*.md`, `learning/*.json`, `learning-spend.json`; derived `memory-index.db`, `memory-tidy.json`, `models/`; `skill-suggestions.json`, `skill-learned.json`, `skill-usage.json`), `commands/*.md`, `routines/*.json` (+ `.runs.jsonl`, `routines/when/*.json`; derived `routines/when/*.seen.json`), `standing-orders.json` + `checkin.json` (derived `checkin/state.json`), `usage.json`, `conversations/index.json` + `<id>.jsonl`, `search.db`,
   `integrations.json` + `integrations.secrets.json`, `skills/<name>/SKILL.md` +
   `skills.json` (modes for skills Conch doesn't own), `local.json` (the local model chosen, the last download speed), `api-sessions/<id>.json` (the
   transcript a plain model API needs, since it keeps no session of its own),

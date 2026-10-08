@@ -87,11 +87,17 @@ Say "like last time", "the Lisbon plan" or "what did we decide about the venue?"
 
 ## Tidy up
 
-Memories pile up. A tidy-up merges repeats, updates what has changed, and picks up lasting things you said in recent chats. Turn on **Tidy up every night** in **Settings → Memory** and it happens once a night, between 2 and 5 in the morning, when nothing else is running. **Tidy up now** in the **⋯** menu starts one straight away.
+Memories pile up. A tidy-up merges repeats, updates what has changed, and picks up lasting things you said in recent chats. It happens once a night, between 2 and 5 in the morning, when nothing else is running. To stop it, turn off **Tidy up every night** in **Settings → Memory**. **Tidy up now** in the **⋯** menu starts one straight away.
+
+## The morning's note
+
+In the morning, a short note says what Conch learned from your chats and how it tidied its memory overnight: **While you slept**. It's on the new chat's screen until noon, and at the top of this page. Each line has **Undo**, which takes back just that one. **×** puts the note away until there's something new.
+
+The note never asks you anything. Anything held because it looks planted is a [card of its own](#when-a-memory-looks-off), never a line in the note.
 
 It works quietly: there's no report and nothing to approve. **Undo the last tidy-up** in the **⋯** menu puts back exactly what was there. It never makes a merge that would lose a number or a name. Long wording is shortened only when every detail is kept. A change that would look planted isn't made at all.
 
-A tidy-up asks the cheapest model you have. With no model to ask, it still merges exact repeats. With **Learn from your chats** off, it only tidies what's already there.
+A tidy-up asks the cheapest model you have, and counts toward what learning may spend. With no model to ask, or at the cap, it still merges exact repeats. With **Learn from your chats** off, it only tidies what's already there.
 
 When a long chat is [summarised](./chats.md#long-chats), Conch first reads what you said in the part being summarised, the way it reads a chat that went quiet.
 

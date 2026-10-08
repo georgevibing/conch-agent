@@ -83,7 +83,8 @@ your desktop and the chat apps you already use.
   Conch task you can see, answer and stop, with its chat's permissions and never
   more. Tasks check for a saved answer or the tool receipts set before work starts, with recorded results you can inspect. [Hand it off](./apps/docs/content/features/tasks.md)
 - **Memory that looks after itself.** Conch learns what will still matter from a chat
-  and tidies its memories quietly. They're Markdown you can read, edit or forget. A
+  and tidies its memories overnight, then says what it learned in a short morning note,
+  each line with Undo. They're Markdown you can read, edit or forget. A
   memory a web page tries to plant is held and asked about. [Memory](./apps/docs/content/features/memory.md)
 - **Skills.** Agent Skills (`SKILL.md`) for every model, from what worked, from a
   sentence, or from **Discover**. [Skills](./apps/docs/content/features/skills.md)
@@ -94,6 +95,9 @@ your desktop and the chat apps you already use.
 
 - **Routines.** Every weekday at 7:30, or when an email arrives, before a meeting,
   when a page changes. [Routines](./apps/docs/content/features/routines.md)
+- **Standing orders and check-ins.** Say once "always tell me if a flight changes";
+  Conch looks now and then, for free until something's new, and tells you only then,
+  with why. Outside quiet hours, and never a permission. [Check-ins](./apps/docs/content/features/check-ins.md)
 - **A browser you can watch** and take over, and a real terminal a keystroke away.
   [Browser](./apps/docs/content/features/browser.md) ·
   [Terminal](./apps/docs/content/features/terminal.md)
