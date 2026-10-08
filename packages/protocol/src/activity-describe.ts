@@ -702,6 +702,70 @@ function videoDraft(input: Input, details = false): Draft {
   };
 }
 
+/** A site's chip from a JSON field of the output (`"url": "https://…"`), when it has one. */
+function outputSite(output: string): ActivityChip | undefined {
+  const url = /"url"\s*:\s*"(https:\/\/[^"\s]{1,1900})"/.exec(output.slice(0, 200_000))?.[1];
+  const host = url ? hostOf(url) : undefined;
+  return url && host ? siteChip(url, host) : undefined;
+}
+
+/** How many a card's output lists under `key`. */
+function listed(output: string, key: string): number | undefined {
+  const list = record(parseJson(output))[key];
+  return Array.isArray(list) ? list.length : undefined;
+}
+
+/** A knowledge card (Wikipedia): "Looked up “Ada Lovelace”", its title once found. */
+function knowledgeDraft(input: Input, film = false): Draft {
+  const query = str(input, 'query') ?? '';
+  return {
+    family: 'research',
+    words: say('look', `up ${film ? 'the film ' : ''}${query ? quote(query) : 'it'}`),
+    ...(query && { subject: clip(oneLine(query), 300) }),
+    finish: (output) => {
+      const found = record(parseJson(output));
+      const title = typeof found.title === 'string' ? oneLine(found.title) : '';
+      const site = outputSite(output);
+      return { ...(title && { outcome: clip(title, 60) }), ...(site && { chips: [site] }) };
+    },
+  };
+}
+
+/** Link previews: "Read github.com", or "Previewed 3 links" with their sites. */
+function linksDraft(input: Input): Draft {
+  const urls = (Array.isArray(input.urls) ? input.urls : []).filter(
+    (u): u is string => typeof u === 'string',
+  );
+  const sites = urls.flatMap((url) => {
+    const host = hostOf(url);
+    return host && !isLocal(host) ? [{ url, host }] : [];
+  });
+  const hosts = [...new Map(sites.map((s) => [s.host, s])).values()].slice(0, 6);
+  return {
+    family: 'research',
+    words:
+      urls.length === 1 && hosts[0]
+        ? say('read', hosts[0].host)
+        : say('preview', urls.length ? plural(urls.length, 'link') : 'links'),
+    ...(urls[0] && { subject: clip(urls[0], 300) }),
+    ...(hosts.length && { chips: hosts.map((s) => siteChip(s.url, s.host)) }),
+  };
+}
+
+/** A search of a catalogue (Open Library, TVmaze): "Searched books for “Le Guin”", "6 books". */
+function catalogueDraft(input: Input, what: string, key: string, one: string): Draft {
+  const query = str(input, 'query') ?? '';
+  return {
+    family: 'research',
+    words: say('search', `${what}${query ? ` for ${quote(query)}` : ''}`),
+    ...(query && { subject: clip(oneLine(query), 300), chips: [textChip(query)] }),
+    finish: (output) => {
+      const found = listed(output, key);
+      return found !== undefined ? { outcome: plural(found, one) } : undefined;
+    },
+  };
+}
+
 // ---------------------------------------------------------------- plans and helpers
 
 function planOutcome(
@@ -1013,6 +1077,13 @@ const CONCH: Record<string, (input: Input) => Draft> = {
   music_search: musicDraft,
   video_search: (input) => videoDraft(input),
   video_details: (input) => videoDraft(input, true),
+  knowledge_card: (input) => knowledgeDraft(input),
+  link_preview: linksDraft,
+  book_search: (input) => catalogueDraft(input, 'books', 'books', 'book'),
+  show_search: (input) =>
+    input.kind === 'movie'
+      ? knowledgeDraft(input, true)
+      : catalogueDraft(input, 'TV shows', 'shows', 'show'),
   read_file: (input) => readDraft(input),
   read_document: (input) => readDraft(input, 'document'),
   search_files: (input) => {

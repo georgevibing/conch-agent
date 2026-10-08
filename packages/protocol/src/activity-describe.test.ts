@@ -1632,6 +1632,61 @@ const TOOLS: Case[] = [
     { done: 'Measured how far Brighton is from London' },
   ],
   [
+    'knowledge_card',
+    'mcp__conch__knowledge_card',
+    { query: 'Ada Lovelace', lang: 'en' },
+    ok(
+      JSON.stringify({ title: 'Ada Lovelace', url: 'https://en.wikipedia.org/wiki/Ada_Lovelace' }),
+    ),
+    {
+      family: 'research',
+      done: 'Looked up “Ada Lovelace”',
+      outcome: 'Ada Lovelace',
+      chips: [{ kind: 'site', label: 'en.wikipedia.org' }],
+    },
+  ],
+  [
+    'link_preview, one link',
+    'link_preview',
+    { urls: ['https://github.com/vitejs/vite'] },
+    ok(JSON.stringify({ links: [{ url: 'https://github.com/vitejs/vite' }] })),
+    { family: 'research', done: 'Read github.com', chips: [{ kind: 'site', label: 'github.com' }] },
+  ],
+  [
+    'link_preview, several',
+    'link_preview',
+    { urls: ['https://a.example/1', 'https://a.example/2', 'https://b.example/'] },
+    undefined,
+    {
+      doing: 'Previewing 3 links',
+      chips: [
+        { kind: 'site', label: 'a.example' },
+        { kind: 'site', label: 'b.example' },
+      ],
+    },
+  ],
+  [
+    'book_search',
+    'mcp__conch__book_search',
+    { query: 'Le Guin', limit: 6 },
+    ok(JSON.stringify({ books: [{ title: 'A' }, { title: 'B' }] })),
+    { family: 'research', done: 'Searched books for “Le Guin”', outcome: '2 books' },
+  ],
+  [
+    'show_search',
+    'show_search',
+    { query: 'Severance', kind: 'tv' },
+    ok(JSON.stringify({ shows: [{ title: 'Severance' }] })),
+    { done: 'Searched TV shows for “Severance”', outcome: '1 show' },
+  ],
+  [
+    'show_search for a film',
+    'show_search',
+    { query: 'Dune', kind: 'movie' },
+    ok(JSON.stringify({ title: 'Dune (2021 film)' })),
+    { done: 'Looked up the film “Dune”', outcome: 'Dune (2021 film)' },
+  ],
+  [
     'read_file',
     'mcp__conch__read_file',
     { file_path: '/x/README.md' },

@@ -124,4 +124,58 @@ describe('what a tool found, in the chat (ADR 0060)', () => {
       'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0&modestbranding=1&playsinline=1',
     );
   });
+
+  it('draws a knowledge card in sight, its picture from Conch and never the web', async () => {
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+    });
+    // A chat of its own: the last test's chat is still in the store.
+    renderApp(<ChatView conversationId="c2" />, { route: '/c/c2' });
+    await screen.findByRole('textbox', { name: 'Message Conch' });
+    act(() => {
+      const say = (seq: number, event: Record<string, unknown>) => push(seq, event, 'c2');
+      say(0, { type: 'user.message', messageId: 'u1', text: 'Who was Ada Lovelace?' });
+      say(1, {
+        type: 'tool.started',
+        toolUseId: 't1',
+        name: 'mcp__conch__knowledge_card',
+        input: { query: 'Ada Lovelace' },
+      });
+      say(2, {
+        type: 'tool.finished',
+        toolUseId: 't1',
+        status: 'success',
+        output: '{"title":"Ada Lovelace"}',
+        view: {
+          kind: 'knowledge',
+          title: 'Ada Lovelace',
+          description: 'English mathematician',
+          extract: 'Augusta Ada King was an English mathematician.',
+          picture: {
+            id: 'att_ada',
+            name: 'Ada Lovelace.jpg',
+            mimeType: 'image/jpeg',
+            size: 2048,
+            kind: 'image',
+            width: 600,
+            height: 760,
+            createdAt: 1,
+          },
+          facts: [{ label: 'Born', value: '10 December 1815' }],
+          url: 'https://en.wikipedia.org/wiki/Ada_Lovelace',
+          lang: 'en',
+        },
+      });
+    });
+    const card = await screen.findByRole('article', { name: 'Ada Lovelace' });
+    const picture = card.querySelector('img[src^="/api/attachments/"]');
+    expect(picture).toHaveAttribute('src', '/api/attachments/att_ada');
+    expect(within(card).getByRole('link', { name: 'Read on Wikipedia' })).toHaveAttribute(
+      'href',
+      'https://en.wikipedia.org/wiki/Ada_Lovelace',
+    );
+    for (const img of card.querySelectorAll('img'))
+      expect(img.getAttribute('src')).toMatch(/^\/api\//);
+  });
 });

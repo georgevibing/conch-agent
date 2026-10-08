@@ -45,6 +45,7 @@ import { QUESTIONS_PROMPT, questionTools } from './questions/tools';
 import { AttachmentStore } from './attachments/store';
 import { fileTools } from './files/tools';
 import { placesTools } from './research/places';
+import { knowledgeTools } from './research/knowledge';
 import { researchTools, publicWebFetcher } from './research/tools';
 import { weatherTool } from './research/weather';
 import { recipeTools } from './research/recipe';
@@ -989,6 +990,7 @@ export class Services {
               ...placesTools(ctx, fetchPublicWeb, this.attachments),
               ...musicTools(ctx, { fetcher: fetchPublicWeb, store: this.attachments }),
               ...videoTools(ctx, { fetcher: fetchPublicWeb, store: this.attachments }),
+              ...knowledgeTools(ctx, { fetcher: fetchPublicWeb, store: this.attachments }),
               ...this.processes.tools(ctx),
               ...this.images.tools(ctx, () => this.#fileAccess(ctx)),
               ...this.routines.tools(ctx),

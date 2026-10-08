@@ -33,6 +33,18 @@ const WEB_READERS = new Set([
   'mcp__conch__video_search',
   'mcp__conch__video_details',
 ]);
+/** Conch's cards of what's known (ADR 0060 §7): someone else's words, like a page. */
+const CARDS = /^(?:mcp__conch__)?(knowledge_card|link_preview|book_search|show_search)$/;
+const CARD_SOURCES: Record<string, string> = {
+  knowledge_card: 'Wikipedia',
+  book_search: 'Open Library',
+  show_search: 'TVmaze',
+};
+/** The sites a link preview opened: one by name, several together. */
+const linksLabel = (urls: unknown): string => {
+  const hosts = [...new Set((Array.isArray(urls) ? urls : []).flatMap((u) => hostOf(u) ?? []))];
+  return hosts.length === 1 && hosts[0] ? hosts[0] : 'web pages';
+};
 /** Conch's browser: every look at a page is the outside coming in. */
 const BROWSER =
   /^(?:mcp__conch__)?browser_(?:open|read|screenshot|click|click_at|back|scroll|wait|select|press|type|tabs|upload)$/;
@@ -105,6 +117,17 @@ export function taintFrom(toolName: string, input: unknown, app?: string): Taint
     return {
       kind: 'web',
       label: (Array.isArray(args.urls) ? hostOf(args.urls[0]) : undefined) ?? 'shop pages',
+    };
+  const card = CARDS.exec(toolName)?.[1];
+  if (card)
+    return {
+      kind: 'web',
+      label:
+        card === 'link_preview'
+          ? linksLabel(args.urls)
+          : card === 'show_search' && args.kind === 'movie'
+            ? 'Wikipedia'
+            : (CARD_SOURCES[card] ?? 'web pages'),
     };
   if (
     (toolName === 'Bash' || /^(?:mcp__conch__)?process_(?:start|read)$/.test(toolName)) &&
@@ -227,6 +250,14 @@ export function sinkReason(
       .length > 120
   )
     return 'send a long place search to OpenStreetMap';
+  // A card's lookup: the pages a preview opens, like web_fetch; a name sent to look up is
+  // research, unless it's long enough to carry what was read.
+  const card = CARDS.exec(toolName)?.[1];
+  if (card === 'link_preview')
+    return Array.isArray(args.urls) && args.urls.some((u) => typeof u === 'string' && carries(u))
+      ? 'open a web address that could carry what it read'
+      : undefined;
+  if (card && String(args.query ?? '').length > 120) return 'send a search query to the web';
   // An app's picture fetched from an address (ADR 0090): the same way out as web_fetch.
   if (
     /^(?:mcp__conch__)?app_icon$/.test(toolName) &&

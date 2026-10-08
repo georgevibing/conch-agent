@@ -174,6 +174,7 @@ export function needs(
     /(?:WebFetch|WebSearch|web_fetch|web_search|product_details|video_search|video_details)$/.test(
       toolName,
     ) ||
+    /(?:knowledge_card|link_preview|book_search|show_search)$/.test(toolName) ||
     /^(?:mcp__conch__)?(?:recipe|places)$/.test(toolName) ||
     BROWSER_READS.test(toolName)
   )
