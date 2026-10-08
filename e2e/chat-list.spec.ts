@@ -155,6 +155,8 @@ test.describe('on a phone', () => {
     const nav = list(page);
     const holidays = await makeFolder(page, 'Holidays', 'Plane');
     const folder = nav.getByRole('region', { name: 'Holidays' });
+    // A phone's rows are full-size targets, so the chat may sit below the fold.
+    await rowOf(page, only.id).scrollIntoViewIfNeeded();
     const from = await rowOf(page, only.id).boundingBox();
     const onto = await folder.getByRole('button', { name: /^Holidays/ }).boundingBox();
     if (!from || !onto) throw new Error('the row and the folder');
