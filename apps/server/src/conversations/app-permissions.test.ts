@@ -65,6 +65,7 @@ async function setup({
   toolPolicy,
   destructive = false,
   host,
+  home: given,
 }: {
   transport?: 'native' | 'bridge';
   mode?: PermissionMode;
@@ -72,8 +73,10 @@ async function setup({
   toolPolicy?: ToolPolicy;
   destructive?: boolean;
   host?: Partial<AskRequest>;
+  /** The same Conch again, as after a restart. */
+  home?: string;
 } = {}) {
-  const home = await mkdtemp(join(tmpdir(), 'conch-app-permissions-'));
+  const home = given ?? (await mkdtemp(join(tmpdir(), 'conch-app-permissions-')));
   const engine = new AppEngine(transport);
   const settings = new SettingsStore(home);
   await settings.update({
@@ -160,7 +163,7 @@ async function setup({
     }
     yield { type: 'text', messageId: 'm', delta: 'Done' };
   };
-  return { manager, call, integrations };
+  return { manager, call, integrations, home };
 }
 
 async function eventsUntil(
@@ -176,11 +179,16 @@ async function eventsUntil(
   return (await manager.detail(id)).events;
 }
 
-async function answer(manager: ConversationManager, id: string, count = 1) {
+async function answer(
+  manager: ConversationManager,
+  id: string,
+  count = 1,
+  decision: 'deny' | 'allow-always' = 'deny',
+) {
   const events = await eventsUntil(manager, id, 'permission.requested', count);
   const request = events.findLast((e) => e.type === 'permission.requested');
   if (request?.type !== 'permission.requested') throw new Error('No question');
-  await manager.respond(id, request.permissionId, 'deny');
+  await manager.respond(id, request.permissionId, decision);
 }
 
 describe.each(['native', 'bridge'] as const)('app permissions over %s', (transport) => {
@@ -367,6 +375,102 @@ describe('apps hosted by Conch', () => {
       expect(call).not.toHaveBeenCalled();
     },
   );
+});
+
+describe('steps in your own apps, after reading (ADR 0117)', () => {
+  const READ = 'This chat read evil.example, which could be trying to steer me.';
+  const own = (toolName: string, access: 'read' | 'write' = 'write') => ({
+    toolName,
+    taint: `${READ} So I’m checking before I change things in Yazio.`,
+    chosen: true,
+    appStep: { access, own: true },
+  });
+
+  it('Auto lets an ordinary change in an app you made go ahead after reading', async () => {
+    const { manager, call } = await setup({ host: own('app_yazio__add_food'), mode: 'auto' });
+    const convo = await manager.send({
+      clientMessageId: 'u1',
+      text: 'log my lunch',
+      untrusted: { kind: 'web', label: 'evil.example' },
+    });
+    const events = await eventsUntil(manager, convo.id, 'turn.completed');
+    expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
+    expect(call).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['app_yazio__send_weekly_report', 'send something to other people'],
+    ['app_yazio__delete_entries', 'delete something in one of your apps'],
+    ['app_shop__pay_invoice', 'spend money in one of your apps'],
+  ])('Auto still asks before %s after reading, with the reason', async (toolName, reason) => {
+    const { manager, call } = await setup({ host: own(toolName), mode: 'auto' });
+    const convo = await manager.send({
+      clientMessageId: 'u1',
+      text: 'do it',
+      untrusted: { kind: 'web', label: 'evil.example' },
+    });
+    const events = await eventsUntil(manager, convo.id, 'permission.requested');
+    expect(events.find((e) => e.type === 'permission.requested')).toMatchObject({
+      taint: expect.stringContaining(reason),
+    });
+    await answer(manager, convo.id);
+    await eventsUntil(manager, convo.id, 'turn.completed');
+    expect(call).not.toHaveBeenCalled();
+  });
+
+  it('a stranger’s app, or someone else’s words, still ask as before', async () => {
+    const stranger = await setup({
+      host: { ...own('app_weather__save_city'), appStep: { access: 'write', own: false } },
+      mode: 'auto',
+    });
+    const one = await stranger.manager.send({
+      clientMessageId: 'u1',
+      text: 'save it',
+      untrusted: { kind: 'web', label: 'evil.example' },
+    });
+    await answer(stranger.manager, one.id);
+    await eventsUntil(stranger.manager, one.id, 'turn.completed');
+    expect(stranger.call).not.toHaveBeenCalled();
+    const guest = await setup({ host: own('app_yazio__add_food'), mode: 'auto' });
+    const two = await guest.manager.send({
+      clientMessageId: 'u1',
+      text: 'log it',
+      untrusted: { kind: 'person', label: 'someone else' },
+    });
+    await answer(guest.manager, two.id);
+    await eventsUntil(guest.manager, two.id, 'turn.completed');
+    expect(guest.call).not.toHaveBeenCalled();
+  });
+
+  it('“Always allow” holds for that tool after Conch restarts', async () => {
+    const first = await setup({ host: {}, mode: 'default' });
+    const convo = await first.manager.send({ clientMessageId: 'u1', text: 'make a change' });
+    await answer(first.manager, convo.id, 1, 'allow-always');
+    await eventsUntil(first.manager, convo.id, 'turn.completed');
+    expect(first.call).toHaveBeenCalledOnce();
+    const again = await setup({ host: {}, mode: 'default', home: first.home });
+    await again.manager.send({ conversationId: convo.id, clientMessageId: 'u2', text: 'again' });
+    const events = await eventsUntil(again.manager, convo.id, 'turn.completed', 2);
+    expect(events.filter((e) => e.type === 'permission.requested')).toHaveLength(1);
+    expect(again.call).toHaveBeenCalledOnce();
+  });
+
+  it('“Always allow” after reading holds after a restart too, for that tool only', async () => {
+    const host = { toolName: 'app_weather__save_city', taint: `${READ} So I’m checking.` };
+    const first = await setup({ host, mode: 'default' });
+    const convo = await first.manager.send({
+      clientMessageId: 'u1',
+      text: 'save it',
+      untrusted: { kind: 'web', label: 'evil.example' },
+    });
+    await answer(first.manager, convo.id, 1, 'allow-always');
+    await eventsUntil(first.manager, convo.id, 'turn.completed');
+    const again = await setup({ host, mode: 'default', home: first.home });
+    await again.manager.send({ conversationId: convo.id, clientMessageId: 'u2', text: 'again' });
+    const events = await eventsUntil(again.manager, convo.id, 'turn.completed', 2);
+    expect(events.filter((e) => e.type === 'permission.requested')).toHaveLength(1);
+    expect(again.call).toHaveBeenCalledOnce();
+  });
 });
 
 describe('an email the person changes before allowing it', () => {

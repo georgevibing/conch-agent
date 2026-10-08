@@ -7,10 +7,12 @@ import type {
   ConversationEvent,
   ConversationEventInput,
   ServerEvent,
+  TaintSource,
 } from '@conch/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import type { ToolContext } from '../conversations/manager';
+import type { AskRequest, ToolContext } from '../conversations/manager';
+import { describeTaint } from '../conversations/taint';
 import { toJsonSchema } from '../engines/api/jsonschema';
 import { tallyFiles } from '../engines/mock/tally';
 import {
@@ -810,14 +812,14 @@ describe('its tools, for every model', () => {
     return h;
   }
   const context = (answers: ('allow' | 'deny')[] = [], tainted?: string) => {
-    const asked: { summary: string; taint?: string }[] = [];
+    const asked: { summary: string; taint?: string; appStep?: AskRequest['appStep'] }[] = [];
     const taints: unknown[] = [];
     const ctx = {
       conversationId: 'c_chat',
       append: () => undefined,
       engine: {} as ToolContext['engine'],
       permissionMode: 'default',
-      ask: async (request: { summary: string; taint?: string }) => {
+      ask: async (request: AskRequest) => {
         asked.push(request);
         return answers.shift() ?? 'allow';
       },
@@ -868,12 +870,23 @@ describe('its tools, for every model', () => {
     });
   });
 
-  it('after reading something untrusted, even a read of an app that reaches the web asks first; one that doesn’t, doesn’t', async () => {
+  it('after reading something untrusted, a read of a stranger’s app that reaches the web asks first; one made here, or one that reaches nothing, doesn’t', async () => {
     const h = await harness();
     const manifest = JSON.parse(tallyFiles()['conch-app.json'] ?? '{}') as Record<string, unknown>;
     manifest.reaches = ['api.example.com'];
-    const { offer } = await makeTally(h, '1.0.0', { 'conch-app.json': JSON.stringify(manifest) });
-    await h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' });
+    const preview = await h.service.preview({
+      file: fakePack(
+        textFiles({ ...tallyFiles(), 'conch-app.json': JSON.stringify(manifest) }),
+      ).toString('base64'),
+      name: 'tally.conchapp',
+    });
+    if (!preview?.apps[0]) throw new Error('nothing');
+    await h.service.install({
+      packageId: preview.packageId,
+      appId: 'tally',
+      hash: preview.apps[0].hash,
+      settings: {},
+    });
     await h.service.hosted.update('capp_tally', { policy: 'trust' });
     const { ctx, asked, taints } = context(
       [],
@@ -881,15 +894,26 @@ describe('its tools, for every model', () => {
     );
     const tools = h.service.hosted.tools(ctx);
     await tools.find((t) => t.name === 'app_tally__read_count')?.run({});
-    // What it's asked for goes to the web: the guard asks, in its own words.
+    // What it's asked for goes to its maker's sites: the guard asks, in its own words.
     expect(asked[0]?.taint).toBe(
       'This chat read evil.example, which could be trying to steer me. So I’m checking before I send what it asks for to api.example.com.',
     );
-    expect(taints).toEqual([{ kind: 'app', label: 'Tally content' }]);
+    expect(asked[0]?.appStep).toEqual({ access: 'read', own: false });
+    expect(taints).toContainEqual({ kind: 'app', label: 'Tally content' });
     await tools.find((t) => t.name === 'app_tally__count')?.run({});
     expect(asked[1]?.taint).toBe(
       'This chat read evil.example, which could be trying to steer me. So I’m checking before I change things in Tally.',
     );
+    // Made here, the same look goes by itself: its sites are the person's own choice.
+    const mine = await harness();
+    const ours = await makeTally(mine, '1.0.0', { 'conch-app.json': JSON.stringify(manifest) });
+    await mine.service.acceptOffer(ours.offer.offerId, { conversationId: 'c_chat' });
+    const looked = context([], 'This chat read evil.example, which could be trying to steer me.');
+    await mine.service.hosted
+      .tools(looked.ctx)
+      .find((t) => t.name === 'app_tally__read_count')
+      ?.run({});
+    expect(looked.asked).toEqual([]);
     // An app that reaches nothing: its reads go by themselves, even now.
     const plain = await harness();
     const made = await makeTally(plain);
@@ -900,6 +924,56 @@ describe('its tools, for every model', () => {
       .find((t) => t.name === 'app_tally__read_count')
       ?.run({});
     expect(quiet.asked).toEqual([]);
+  });
+
+  it('an app made here that reaches its own site reads by itself after reading, its own answers never hold it, and its changes go as steps in your own app (ADR 0117)', async () => {
+    // The Yazio case: a nutrition diary made in this Conch, reaching its own service. The chat
+    // read GitHub first; then each look at the diary asked, and each answer marked the chat
+    // again, so the next look asked too.
+    const h = await harness();
+    const manifest = JSON.parse(tallyFiles()['conch-app.json'] ?? '{}') as Record<string, unknown>;
+    manifest.reaches = ['api.yazio.example'];
+    const { offer } = await makeTally(h, '1.0.0', { 'conch-app.json': JSON.stringify(manifest) });
+    await h.service.acceptOffer(offer.offerId, { conversationId: 'c_chat' });
+    const read: TaintSource[] = [{ kind: 'web', label: 'github.com' }];
+    const asked: AskRequest[] = [];
+    const ctx = {
+      conversationId: 'c_chat',
+      append: () => undefined,
+      engine: {} as ToolContext['engine'],
+      permissionMode: 'auto',
+      ask: async (request: AskRequest) => {
+        asked.push(request);
+        return 'allow';
+      },
+      signal: new AbortController().signal,
+      untrusted: (besides?: (source: TaintSource) => boolean) => {
+        const left = read.filter((source) => !besides?.(source));
+        return left.length ? describeTaint(left) : undefined;
+      },
+      taints: () => read,
+      taint: (source: TaintSource) => void read.push(source),
+    } as unknown as ToolContext;
+    const tools = h.service.hosted.tools(ctx);
+    const look = tools.find((t) => t.name === 'app_tally__read_count');
+    await look?.run({});
+    await look?.run({});
+    expect(asked).toEqual([]);
+    // What it answers still marks the chat, for every other way out (a mail, a command).
+    expect(read).toContainEqual({ kind: 'app', label: 'Tally content' });
+    // A change is a step in your own app: it says what the chat read, not its own answers.
+    await tools.find((t) => t.name === 'app_tally__count')?.run({ by: 1 });
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toMatchObject({ appStep: { access: 'write', own: true } });
+    expect(asked[0]?.taint).toContain('github.com');
+    expect(asked[0]?.taint).not.toContain('Tally content');
+    expect(asked[0]?.appStep?.marks?.({ kind: 'app', label: 'Tally content' })).toBe(true);
+    // A look that sends pages of text is no ordinary lookup: it asks, as a read.
+    await look?.run({ note: 'x'.repeat(700) });
+    expect(asked[1]).toMatchObject({
+      appStep: { access: 'read', own: true },
+      taint: expect.stringContaining('send a lot of text to api.yazio.example'),
+    });
   });
 
   it('lists the apps for the prompt, with what they’re for in their maker’s words', async () => {

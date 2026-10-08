@@ -89,8 +89,10 @@ export function markSecretsInPage(attr: string): number {
 
 /**
  * Words on a control that make clicking it a significant, often irreversible
- * act. English only for now; other languages fall back to the per-site
- * question. Plain "Submit" is left out on purpose — it's every search box.
+ * act, in English and the languages shops most often speak (German,
+ * French, Spanish, Portuguese, Italian, Dutch). Others fall back to the
+ * per-site question outside Auto. Plain "Submit" is left out on purpose —
+ * it's every search box.
  */
 const HIGH_STAKES = new RegExp(
   [
@@ -129,6 +131,69 @@ const HIGH_STAKES = new RegExp(
     'sign(?: and)? submit',
     'accept (?:offer|terms and pay)',
     'merge',
+    // The same acts in the languages shops most often speak (ADR 0117): with these, Auto
+    // can act on a shop's site after reading it and still stop before the order.
+    // German
+    '(?:jetzt )?kaufen',
+    '(?:jetzt |kostenpflichtig |zahlungspflichtig )?bestellen',
+    '(?:jetzt )?(?:bezahlen|zahlen)',
+    'zur kasse',
+    'kaufen und bezahlen',
+    'abonnieren',
+    'spenden',
+    'überweisen',
+    '(?:jetzt )?buchen',
+    'reservieren',
+    '(?:ab)?senden',
+    'abschicken',
+    'antworten',
+    'veröffentlichen',
+    'teilen',
+    'löschen',
+    'endgültig löschen',
+    'konto löschen',
+    // French
+    'acheter',
+    'payer',
+    'commander',
+    'valider (?:la |ma )?commande',
+    'passer (?:la )?commande',
+    "s'abonner",
+    'réserver',
+    'envoyer',
+    'publier',
+    'partager',
+    'supprimer',
+    // Spanish and Portuguese
+    'comprar',
+    'pagar',
+    'realizar pedido',
+    'finalizar (?:compra|pedido)',
+    'tramitar pedido',
+    'suscribirse',
+    'reservar',
+    'enviar',
+    'publicar',
+    'compartir',
+    'eliminar',
+    'borrar',
+    'excluir',
+    // Italian
+    'acquista(?: ora)?',
+    'paga(?: ora)?',
+    'ordina',
+    'conferma ordine',
+    'prenota',
+    'invia',
+    'pubblica',
+    'elimina',
+    // Dutch
+    'kopen',
+    'betalen',
+    'nu kopen',
+    'afrekenen',
+    'verzenden',
+    'verwijderen',
   ]
     .map((p) => `^\\s*${p}\\b`)
     .join('|'),

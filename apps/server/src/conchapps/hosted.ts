@@ -17,6 +17,7 @@ import {
   type IntegrationHealth,
   type IntegrationTool,
   POLICY_LABELS,
+  type TaintSource,
   toolDecision,
   type ToolPolicy,
   type UpdateIntegrationBody,
@@ -24,6 +25,7 @@ import {
 import { z } from 'zod';
 
 import type { ToolContext } from '../conversations/manager';
+import { HEAVY_READ, wordsSent } from '../conversations/risk';
 import type { HostTool, HostToolResult } from '../engines/types';
 import { IntegrationError, type HostedApps } from '../integrations/service';
 import type { AppRecord } from './store';
@@ -240,16 +242,26 @@ export class ConchApps implements HostedApps {
         text: 'The user turned this off in Apps (or its app isn’t set up). Nothing was done; say so if it matters.',
         effect: 'not-executed',
       };
-    // The guard after reading (ADR 0028): once the chat has read something from outside, a
-    // change asks, and so does any tool of an app that reaches the web, even one that only
-    // looks: what it's asked for goes to those sites.
+    // The guard after reading (ADR 0028, ADR 0117). Once the chat has read something from
+    // outside, a change asks (in Auto, an app made here goes ahead unless the risk policy
+    // marks it). A look sends what it's asked for to the app's sites: for an app made here
+    // those are the person's own choice, so a look goes by itself unless it sends pages of
+    // text; a stranger's sites are its maker's, so a look there asks.
+    const made = madeHere(app.source);
     const reaches = app.manifest.reaches;
+    const heavy = wordsSent(args) > HEAVY_READ;
     const sink = tool.changes
       ? `change things in ${plainLine(app.manifest.name, 40)}`
-      : reaches.length
-        ? `send what it asks for to ${reaches.join(', ')}`
+      : reaches.length && (!made || heavy)
+        ? `send ${made ? 'a lot of text' : 'what it asks for'} to ${reaches.join(', ')}`
         : undefined;
-    const untrusted = sink ? ctx.untrusted?.() : undefined;
+    // What this app itself answered came from the sites its next step goes back to: an app
+    // made here isn't held by its own answers. A stranger's could steer its own way out.
+    const label = `${plainLine(app.manifest.name, 60)} content`;
+    const marks = made
+      ? (source: TaintSource) => source.kind === 'app' && source.label === label
+      : undefined;
+    const untrusted = sink ? ctx.untrusted?.(marks) : undefined;
     const tainted = untrusted && `${untrusted} So I’m checking before I ${sink}.`;
     const restricted = await ctx.restricted?.('apps', id);
     const why = [tainted, restricted].filter(Boolean).join(' ');
@@ -262,6 +274,11 @@ export class ConchApps implements HostedApps {
         summary: `use ${plainLine(app.manifest.name, 40)} to ${inSentence(plainLine(tool.title || tool.name, 80))}${what ? `: ${what}` : ''}`,
         ...(why && { taint: why }),
         ...(decision === 'ask' && { chosen: true }),
+        appStep: {
+          access: tool.changes ? 'write' : 'read',
+          own: made,
+          ...(marks && { marks }),
+        },
         // This one tool set to Ask by the person: Auto keeps asking (ADR 0100).
         ...(decision === 'ask' && own(app.toolPolicies, tool.name) === 'ask' && { explicit: true }),
       });
@@ -273,8 +290,10 @@ export class ConchApps implements HostedApps {
     }
     const outcome = await this.host.call(id, toolName, args, ctx.signal);
     // What it fetched came from outside (ADR 0028): the chat reads on, and acts carefully.
-    if (app.manifest.reaches.length)
-      ctx.taint?.({ kind: 'app', label: `${plainLine(app.manifest.name, 60)} content` });
+    // It still marks the chat for every other way out (a mail, a command, another app): an
+    // app that reaches the web can bring anyone's words back (a food someone named in a
+    // shared database), ADR 0117.
+    if (reaches.length) ctx.taint?.({ kind: 'app', label });
     // A stranger's app: what it answers is its maker's, wherever it got it.
     if (!madeHere(app.source))
       ctx.taint?.({
