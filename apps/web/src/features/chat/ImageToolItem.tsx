@@ -97,8 +97,8 @@ const unasked = (item: Tool) =>
   (typeof item.output === 'string' && /^the user declined\b/i.test(item.output.trim()));
 
 const notMadeWords: Partial<Record<NonNullable<Tool['approval']>, string>> = {
-  expired: 'Not made — no answer in time',
-  refused: 'Not made — Conch’s rules didn’t allow it',
+  expired: 'Not made: no answer in time',
+  refused: 'Not made: Conch’s rules didn’t allow it',
 };
 
 const pictureOf = (item: Tool): Attachment | undefined =>

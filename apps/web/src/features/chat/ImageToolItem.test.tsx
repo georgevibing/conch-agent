@@ -128,7 +128,7 @@ describe('the picture tool in the chat', () => {
         output: 'The user declined. No image request was sent.',
       }),
     );
-    expect(screen.getByText('Not made — you said no')).toBeInTheDocument();
+    expect(screen.getByText('Not made: you said no')).toBeInTheDocument();
     expect(screen.queryByRole('progressbar')).toBeNull();
   });
 

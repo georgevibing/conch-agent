@@ -52,7 +52,7 @@ export interface ImageMakingProps extends Omit<ComponentProps<'figure'>, 'title'
   alt?: string;
   /** Why it couldn't be made, in plain words. */
   reason?: string;
-  /** Not made, in other words than the state's own (“Not made — no answer in time”). */
+  /** Not made, in other words than the state's own (“Not made: no answer in time”). */
   notMade?: string;
   /** What was asked for, in full: the first line of Details. */
   prompt?: string;
@@ -323,7 +323,7 @@ export function ImageMaking({
     const words =
       notMade ??
       (state === 'declined'
-        ? 'Not made — you said no'
+        ? 'Not made: you said no'
         : state === 'stopped'
           ? 'Stopped before it was made'
           : `Couldn’t make it${reason ? `: ${reason}` : ''}`);

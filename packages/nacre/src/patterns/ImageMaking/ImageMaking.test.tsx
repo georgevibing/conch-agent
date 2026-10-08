@@ -120,7 +120,7 @@ describe('ImageMaking', () => {
   });
 
   it.each([
-    ['declined', undefined, 'Not made — you said no'],
+    ['declined', undefined, 'Not made: you said no'],
     ['failed', 'OpenRouter is out of credit.', 'Couldn’t make it: OpenRouter is out of credit.'],
     ['stopped', undefined, 'Stopped before it was made'],
   ] as const)('not made (%s) is a calm line, never a frame', async (state, reason, words) => {
