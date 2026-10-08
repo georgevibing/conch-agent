@@ -59,7 +59,17 @@ export function storiesOf(
  * emails, the files): drawn in sight under its story, not folded inside it.
  * Sources stay with their step, and the story's chips show the sites.
  */
-const STANDALONE = new Set<ToolView['kind']>(['agenda', 'mail', 'files', 'messages', 'downloads']);
+const STANDALONE = new Set<ToolView['kind']>([
+  'agenda',
+  'mail',
+  'files',
+  'messages',
+  'downloads',
+  'knowledge',
+  'links',
+  'books',
+  'shows',
+]);
 
 export const standsAlone = (view: ToolView | undefined): view is ToolView =>
   view !== undefined && STANDALONE.has(view.kind);

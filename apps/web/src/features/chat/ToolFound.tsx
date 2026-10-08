@@ -1,8 +1,43 @@
-import type { ToolView } from '@conch/protocol';
-import { AgendaView, ChatMessages, FileList, MailList, Sources, replyRequest } from '@conch/nacre';
+import type { Attachment, ToolView } from '@conch/protocol';
+import {
+  AgendaView,
+  BookShelf,
+  ChatMessages,
+  FileList,
+  KnowledgeCard,
+  LinkCards,
+  MailList,
+  ShowCards,
+  Sources,
+  replyRequest,
+  type CardPicture,
+} from '@conch/nacre';
 
 import { useUi } from '../../app/ui';
 import { SentAttachments } from './AttachmentViewer';
+import { attachmentUrl } from './uploads';
+
+/** A picture the gateway fetched and keeps for this chat: drawn from Conch, never the web. */
+const picture = (a: Attachment | undefined): CardPicture | undefined =>
+  a?.kind === 'image'
+    ? {
+        src: attachmentUrl(a.id),
+        ...(a.width && { width: a.width }),
+        ...(a.height && { height: a.height }),
+      }
+    : undefined;
+
+/** A site's own small picture, asked of the site by the gateway (`GET /api/favicon`). */
+function siteIcon(url: string): string | undefined {
+  try {
+    const host = new URL(url).hostname;
+    return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(host)
+      ? `/api/favicon?host=${encodeURIComponent(host)}`
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Words for the open chat's composer, from anywhere in it: the same way ⌘K's
@@ -34,5 +69,40 @@ export function ToolFound({ view }: { view: ToolView }) {
       return <FileList files={view.items} />;
     case 'messages':
       return <ChatMessages messages={view.items} place={view.place} />;
+    case 'knowledge':
+      return (
+        <KnowledgeCard
+          title={view.title}
+          description={view.description}
+          extract={view.extract}
+          picture={picture(view.picture)}
+          facts={view.facts}
+          url={view.url}
+          lang={view.lang}
+          source={view.source}
+          sourceIcon={siteIcon(view.url)}
+          related={view.related}
+        />
+      );
+    case 'links':
+      return (
+        <LinkCards
+          links={view.items.map(({ picture: p, ...link }) => ({
+            ...link,
+            picture: picture(p),
+            icon: siteIcon(link.url),
+          }))}
+        />
+      );
+    case 'books':
+      return (
+        <BookShelf books={view.items.map(({ cover, ...b }) => ({ ...b, cover: picture(cover) }))} />
+      );
+    case 'shows':
+      return (
+        <ShowCards
+          shows={view.items.map(({ poster, ...s }) => ({ ...s, poster: picture(poster) }))}
+        />
+      );
   }
 }
