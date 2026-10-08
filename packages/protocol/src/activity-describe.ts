@@ -663,6 +663,27 @@ function placesDraft(input: Input): Draft {
   };
 }
 
+/** `music_search`: songs, albums, artists, podcasts and episodes from Apple's catalogue. */
+function musicDraft(input: Input): Draft {
+  const query = str(input, 'query') ?? '';
+  const kind = str(input, 'kind');
+  const podcasts = kind === 'podcast' || kind === 'episode';
+  return {
+    family: 'research',
+    words: query
+      ? say('find', quote(clip(oneLine(query), 60)))
+      : say('look', podcasts ? 'for podcasts' : 'for music'),
+    ...(query && { subject: clip(oneLine(query), 300), chips: [textChip(query)] }),
+    finish: (output) => {
+      const found = record(parseJson(output));
+      const items = Array.isArray(found.results) ? found.results.length : undefined;
+      if (items === undefined) return undefined;
+      const one = podcasts ? (kind === 'episode' ? 'episode' : 'podcast') : (kind ?? 'song');
+      return { outcome: items ? plural(items, one) : 'Nothing found', handled: true };
+    },
+  };
+}
+
 // ---------------------------------------------------------------- plans and helpers
 
 function planOutcome(
@@ -971,6 +992,7 @@ const CONCH: Record<string, (input: Input) => Draft> = {
   recipe: recipeDraft,
   product_details: productsDraft,
   places: placesDraft,
+  music_search: musicDraft,
   read_file: (input) => readDraft(input),
   read_document: (input) => readDraft(input, 'document'),
   search_files: (input) => {

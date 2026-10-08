@@ -83,4 +83,5 @@ export * from './WhatChanged';
 export * from './AwayDigest';
 export * from './TurnMeter';
 export * from './ImageMaking';
+export * from './Music';
 export * from './FileMaking';

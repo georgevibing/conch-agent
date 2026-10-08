@@ -16,6 +16,7 @@ import { SentAttachments } from './AttachmentViewer';
 import { recipeCards, recipeTimerDone } from './recipes';
 import { ShopShelf } from './ShopShelf';
 import { attachmentUrl } from './uploads';
+import { MusicFound } from './MusicFound';
 
 /**
  * Words for the open chat's composer, from anywhere in it: the same way ⌘K's
@@ -66,5 +67,7 @@ export function ToolFound({ view }: { view: ToolView }) {
         />
       );
     }
+    case 'audio':
+      return <MusicFound view={view} />;
   }
 }

@@ -1,0 +1,104 @@
+{
+  "resultCount": 3,
+  "results": [
+    {
+      "artworkUrl160": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/23/42/3e/23423e96-ac27-7a59-8533-74018a7f3a4b/mza_138612886103554653.jpeg/160x160bb.jpg",
+      "episodeFileExtension": "mp3",
+      "episodeContentType": "audio",
+      "previewUrl": "https://sphinx.acast.com/p/open/s/6a421e657407a2671fa85d37/e/6ac23e0052f9e4485fc3ba23/media.mp3",
+      "artistIds": [],
+      "genres": [
+        {
+          "name": "History",
+          "id": "1487"
+        }
+      ],
+      "episodeGuid": "6ac23e0052f9e4485fc3ba23",
+      "trackId": 1000793095439,
+      "trackName": "Boring History For Sleep | 24 Hours in Ancient Rome (A Day in the Life)",
+      "releaseDate": "2026-10-04T11:52:32Z",
+      "shortDescription": "Wind down tonight with a sleep story designed to calm your thoughts and transport you back to the second century. This video combines the ambient crackle of a cozy fireplace and the distant, muffled echoes of an ancient city with soft-spoken storytellin",
+      "feedUrl": "https://feeds.acast.com/public/shows/6a421e657407a2671fa85d37",
+      "closedCaptioning": "none",
+      "collectionId": 6785416406,
+      "collectionName": "The Lore Vault: Hardcore History & Mythology",
+      "kind": "podcast-episode",
+      "wrapperType": "podcastEpisode",
+      "description": "Wind down tonight with a sleep story designed to calm your thoughts and transport you back to the second century. This video combines the ambient crackle of a cozy fireplace and the distant, muffled echoes of an ancient city with soft-spoken storytelling, guiding you safely through a day in the life of a Roman plebeian. Wander through the flickering shadows of a cramped Roman apartment, feel the warm steam of the grand public baths, and watch the sun set over the towering Colosseum—all from the comfort and safety of your bed. Uncover the gritty, hidden truths behind daily life in the ancient world, exploring a majestic empire stripped of its Hollywood myths, all within the tranquil glow of a flickering fire. Ideal for sleep meditation, adult relaxation, or simply drifting off peacefully, the dark, atmospheric visuals and immersive historical storytelling set the perfect scene for undisturbed rest. Let the gentle fireplace sounds and the distant history of ancient Rome lull you into a serene night’s sleep. Hosted on Acast. See acast.com/privacy for more information.",
+      "country": "USA",
+      "artworkUrl600": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/23/42/3e/23423e96-ac27-7a59-8533-74018a7f3a4b/mza_138612886103554653.jpeg/600x600bb.jpg",
+      "collectionViewUrl": "https://itunes.apple.com/us/podcast/the-lore-vault-hardcore-history-mythology/id6785416406?mt=2&uo=4",
+      "trackViewUrl": "https://podcasts.apple.com/us/podcast/boring-history-for-sleep-24-hours-in-ancient-rome-a/id6785416406?i=1000793095439&uo=4",
+      "artworkUrl60": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/23/42/3e/23423e96-ac27-7a59-8533-74018a7f3a4b/mza_138612886103554653.jpeg/60x60bb.jpg",
+      "trackTimeMillis": 2771000,
+      "contentAdvisoryRating": "Clean",
+      "episodeUrl": "https://sphinx.acast.com/p/open/s/6a421e657407a2671fa85d37/e/6ac23e0052f9e4485fc3ba23/media.mp3"
+    },
+    {
+      "artworkUrl160": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/e4/07/2d/e4072d61-b874-8373-5dc2-eae8efa2f375/mza_3324729999438524195.jpeg/160x160bb.jpg",
+      "episodeFileExtension": "mp3",
+      "episodeContentType": "audio",
+      "previewUrl": "https://sphinx.acast.com/p/open/s/69740bc29252830699e63d52/e/6ac09a17ab90e256c37bc084/media.mp3",
+      "artistIds": [],
+      "genres": [
+        {
+          "name": "History",
+          "id": "1487"
+        }
+      ],
+      "episodeGuid": "6ac09a17ab90e256c37bc084",
+      "trackId": 1000793011621,
+      "trackName": "Encore: The History of AI",
+      "releaseDate": "2026-10-03T20:08:00Z",
+      "shortDescription": "Hosted on Acast. See acast.com/privacy for more information.",
+      "feedUrl": "https://feeds.acast.com/public/shows/69740bc29252830699e63d52",
+      "closedCaptioning": "none",
+      "collectionId": 1859545563,
+      "collectionName": "Hardcore Stories",
+      "kind": "podcast-episode",
+      "wrapperType": "podcastEpisode",
+      "description": "Hosted on Acast. See acast.com/privacy for more information.",
+      "country": "USA",
+      "artworkUrl600": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/e4/07/2d/e4072d61-b874-8373-5dc2-eae8efa2f375/mza_3324729999438524195.jpeg/600x600bb.jpg",
+      "collectionViewUrl": "https://itunes.apple.com/us/podcast/hardcore-stories/id1859545563?mt=2&uo=4",
+      "trackViewUrl": "https://podcasts.apple.com/us/podcast/encore-the-history-of-ai/id1859545563?i=1000793011621&uo=4",
+      "artworkUrl60": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/e4/07/2d/e4072d61-b874-8373-5dc2-eae8efa2f375/mza_3324729999438524195.jpeg/60x60bb.jpg",
+      "trackTimeMillis": 952000,
+      "contentAdvisoryRating": "Clean",
+      "episodeUrl": "https://sphinx.acast.com/p/open/s/69740bc29252830699e63d52/e/6ac09a17ab90e256c37bc084/media.mp3"
+    },
+    {
+      "artworkUrl160": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/c0/92/f9/c092f95e-0b80-1dd1-cd10-6a6f9b9fc184/mza_5377022997916681712.jpg/160x160bb.jpg",
+      "episodeFileExtension": "mp3",
+      "episodeContentType": "audio",
+      "previewUrl": "https://dts.podtrac.com/redirect.mp3/traffic.libsyn.com/dancarlinhh/dchha71_Mania_for_Subjugation.mp3",
+      "artistIds": [],
+      "genres": [
+        {
+          "name": "History",
+          "id": "1487"
+        }
+      ],
+      "episodeGuid": "http://traffic.libsyn.com/dancarlinhh/dchha71_Mania_for_Subjugation.mp3",
+      "trackId": 1000658235879,
+      "trackName": "Mania for Subjugation",
+      "releaseDate": "2024-06-07T20:14:53Z",
+      "shortDescription": "What's the recipe for making a historically world-class apex predator? In the case of Alexander the Great, it might be the three Ns: Nature, Nurture, and Nepotism.",
+      "feedUrl": "https://feeds.feedburner.com/dancarlin/history?format=xml",
+      "closedCaptioning": "none",
+      "collectionId": 173001861,
+      "collectionName": "Dan Carlin's Hardcore History",
+      "kind": "podcast-episode",
+      "wrapperType": "podcastEpisode",
+      "description": "What's the recipe for making a historically world-class apex predator? In the case of Alexander the Great, it might be the three Ns: Nature, Nurture, and Nepotism.",
+      "country": "USA",
+      "artworkUrl600": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/c0/92/f9/c092f95e-0b80-1dd1-cd10-6a6f9b9fc184/mza_5377022997916681712.jpg/600x600bb.jpg",
+      "collectionViewUrl": "https://itunes.apple.com/us/podcast/dan-carlins-hardcore-history/id173001861?mt=2&uo=4",
+      "trackViewUrl": "https://podcasts.apple.com/us/podcast/mania-for-subjugation/id173001861?i=1000658235879&uo=4",
+      "artworkUrl60": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/c0/92/f9/c092f95e-0b80-1dd1-cd10-6a6f9b9fc184/mza_5377022997916681712.jpg/60x60bb.jpg",
+      "trackTimeMillis": 15099000,
+      "contentAdvisoryRating": "Clean",
+      "episodeUrl": "https://dts.podtrac.com/redirect.mp3/traffic.libsyn.com/dancarlinhh/dchha71_Mania_for_Subjugation.mp3"
+    }
+  ]
+}

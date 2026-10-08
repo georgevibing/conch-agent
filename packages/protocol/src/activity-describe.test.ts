@@ -1561,6 +1561,20 @@ const TOOLS: Case[] = [
     },
   ],
   [
+    'music_search',
+    'mcp__conch__music_search',
+    { query: 'bohemian rhapsody', kind: 'song' },
+    ok(JSON.stringify({ query: 'bohemian rhapsody', results: [{ title: 'a' }, { title: 'b' }] })),
+    { family: 'research', done: 'Found “bohemian rhapsody”', outcome: '2 songs' },
+  ],
+  [
+    'music_search for podcasts, nothing found',
+    'music_search',
+    { query: 'zzz', kind: 'podcast' },
+    ok(JSON.stringify({ query: 'zzz', results: [] })),
+    { family: 'research', outcome: 'Nothing found' },
+  ],
+  [
     'web_fetch with a title',
     'web_fetch',
     { url: 'https://www.amazon.de/dp/B0CHWRXH8B' },
