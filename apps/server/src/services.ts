@@ -48,6 +48,7 @@ import { placesTools } from './research/places';
 import { knowledgeTools } from './research/knowledge';
 import { researchTools, publicWebFetcher } from './research/tools';
 import { weatherTool } from './research/weather';
+import { chartTools } from './research/charts';
 import { recipeTools } from './research/recipe';
 import { productTools } from './research/products';
 import { musicTools } from './research/music';
@@ -985,6 +986,7 @@ export class Services {
               ...this.files.tools(ctx, () => this.#fileAccess(ctx)),
               ...researchTools(ctx, fetchPublicWeb),
               weatherTool(ctx, fetchPublicWeb),
+              ...chartTools(),
               ...recipeTools(ctx, { fetcher: fetchPublicWeb, store: this.attachments }),
               ...productTools(ctx, { fetcher: fetchPublicWeb, store: this.attachments }),
               ...placesTools(ctx, fetchPublicWeb, this.attachments),
