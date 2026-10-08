@@ -28,6 +28,7 @@ export function summarizeToolUse(toolName: string, input: Record<string, unknown
     book_search: `Search Open Library for “${str('query') ?? ''}”`,
     quote: `Look up prices${symbols(input, 'symbols') ? ` for ${symbols(input, 'symbols')}` : ''}`,
     price_history: `Look up ${str('symbol') ?? 'a'} price history`,
+    crypto_market: 'Look up how crypto is doing',
     fundamentals: `Look up filings${symbols(input, 'companies') ? ` for ${symbols(input, 'companies')}` : ''}`,
     show_search: `Search ${input.kind === 'movie' ? 'films' : 'TV shows'} for “${str('query') ?? ''}”`,
     process_start: `Start “${(str('command') ?? '').slice(0, 160)}”`,

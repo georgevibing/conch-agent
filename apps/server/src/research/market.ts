@@ -374,6 +374,7 @@ export function parseYahooChart(body: unknown): { quote?: MarketQuote; history?:
 
 /** Yahoo's own word for a range, for each of ours. */
 const YAHOO_RANGE: Record<FinancePeriod, string> = {
+  '1D': '1d',
   '1W': '5d',
   '1M': '1mo',
   '3M': '3mo',

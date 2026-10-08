@@ -94,3 +94,72 @@ nothing anywhere.
 - `fundamentals` can make about 20 EDGAR requests for four companies (cached, four at a time).
 - The picture is checked by eye in Chromium; Firefox can't copy an image to the clipboard,
   so Copy falls back to the card's text there.
+
+## Crypto
+
+Coins were priced like shares (Stooq closes against the dollar) and only by a dozen
+hard-coded tickers: "bitcoin" wasn't understood, a coin outside the list wasn't found, the
+card spoke of a market that closes, and nothing said how much of a coin exists.
+
+### Source
+
+**CoinGecko's public API** (`api.coingecko.com/api/v3`), keyless, read by
+`apps/server/src/research/coingecko.ts`: `/search` (a name or symbol to a coin's id),
+`/coins/markets` (price, rank, market value, fully diluted value, supply, all-time high
+and low, 24 h volume and range, the moves over 1 h to 1 y, the week's shape), `/coins/{id}`
+(its description as plain text, clipped; its first day, algorithm and kinds),
+`/coins/{id}/market_chart` (every five minutes for a day, hourly to three months, daily to a
+year) and `/global` (the total, its day, bitcoin's and ether's share).
+
+- **Names.** The coins people name most are known on this computer ("bitcoin", "doge",
+  `BTC`, `ETH-EUR`), so nothing is searched for them. Any other lower-case name no company
+  is called, a `SYMBOL-USD` pair, or a ticker no market has as a share, is looked up with
+  `/search`.
+- **A shared symbol.** Several coins often answer to one symbol. The one with the best
+  market-value rank is shown, the others travel with it (`alternatives`), the card names
+  them, and the model is told to ask if the person might have meant another. A name that
+  is only close is never taken for it.
+- **Three tools, as before, plus one.** `quote` and `price_history` take coins; a coin's
+  quote carries `crypto` details and its `dayState` is `always` (24/7); a chart can be `1D`
+  with the instant of each point (`times`). `fundamentals` asked only about coins answers
+  with each coin's own card, since a coin files no accounts. `crypto_market` draws the
+  `crypto-market` view: only when the person asks about the market as a whole.
+- **Currency.** Dollars, unless the person asks for one of USD, EUR, GBP, JPY, CHF, CAD or
+  AUD, or this computer's time zone suggests one (`homeCurrency`, as the weather picks its
+  units). The card's range switch asks for the same coin by its id, in the same currency.
+
+### Rate limits and the fallback
+
+Keyless is about thirty calls a minute, shared with anything else on this network. An
+in-process limiter allows 24 a minute. Answers are cached: markets and the global figures
+60 s, a coin's profile 10 min, history 5 min (a day), 10 (a week) or 15 (longer), search
+24 h, and a card's coins are asked for in one `/coins/markets` call. On a 429 (or a spent
+limiter) no call is made until CoinGecko has rested (its `Retry-After`, else a minute);
+what was already read is served as it was, its own time on it (up to six hours), and with
+nothing kept the price and the chart come from **Stooq** (Yahoo behind it), and the card
+says "CoinGecko is busy; prices from Stooq". The keyless API reaches back a year, so 5Y and
+MAX are Stooq's daily closes where it has the coin. The market overview has no stand-in:
+busy with nothing kept is a sentence, never figures from elsewhere.
+
+### Honesty
+
+An aggregator's price is an average across the exchanges it reads, refreshed about every
+minute: not the price on any one exchange, and not live. Every coin card, the overview and
+every tool text say so. A figure CoinGecko didn't send is absent (a market value of zero
+is a gap); no maximum supply is said in words ("No maximum: new coins keep being made") and
+never drawn as a full meter; "everything else" in dominance is marked as worked out. There
+is no field for a rating or a prediction, every card ends "not financial advice", and the
+tools' descriptions forbid buy, sell or hold.
+
+### What leaves this computer
+
+- **api.coingecko.com**: a coin's id or symbol and a currency; a name sent to `/search` only
+  when it is a coin's shape (three short words, 32 characters at most: `coinShaped`), so
+  nothing a chat read can ride along. A User-Agent naming Conch, no key, no cookies, through
+  the SSRF-guarded public fetcher.
+- **stooq.com** (and Yahoo as its fallback): the coin's symbol against USD or EUR, when
+  CoinGecko is busy or for five years and more.
+
+The tools taint the chat as reading the web (anyone can list a coin and write its
+description), and need the skill capability `web`; none is a sink. Coin logos are never
+fetched: the card's mark is a lettermark in the coin's hue. No new dependency.

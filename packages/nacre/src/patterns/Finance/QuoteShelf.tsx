@@ -55,7 +55,11 @@ export function QuoteShelf({
               data-way={way}
             >
               <span className={styles.chipHead}>
-                <Lettermark symbol={quote.symbol} className={styles.chipMark} />
+                <Lettermark
+                  symbol={quote.symbol}
+                  coin={quote.class === 'crypto'}
+                  className={styles.chipMark}
+                />
                 <span className={styles.chipSymbol}>{quote.symbol}</span>
               </span>
               <span className={styles.chipName}>{quote.name ?? ' '}</span>

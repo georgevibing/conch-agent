@@ -642,6 +642,175 @@ function quotes(now: number, symbols: string[], compare: boolean): PretendFind {
   };
 }
 
+/** The coins the demo knows, with made-up figures in CoinGecko's shapes. */
+const COINS: Record<
+  string,
+  {
+    id: string;
+    name: string;
+    price: number;
+    rank: number;
+    circulating: number;
+    max?: number;
+    ath: number;
+    athDaysAgo: number;
+    changes: Record<'1h' | '24h' | '7d' | '30d' | '1y', number>;
+  }
+> = {
+  BTC: {
+    id: 'bitcoin',
+    name: 'Bitcoin',
+    price: 67_187,
+    rank: 1,
+    circulating: 19_610_806,
+    max: 21_000_000,
+    ath: 109_000,
+    athDaysAgo: 627,
+    changes: { '1h': 0.12, '24h': -0.31, '7d': 4.2, '30d': 12.08, '1y': 140.4 },
+  },
+  ETH: {
+    id: 'ethereum',
+    name: 'Ethereum',
+    price: 2_612.4,
+    rank: 2,
+    circulating: 120_412_345,
+    ath: 4_878.26,
+    athDaysAgo: 1_795,
+    changes: { '1h': -0.08, '24h': 1.42, '7d': 6.1, '30d': -3.4, '1y': 38.2 },
+  },
+};
+
+/**
+ * A pretend coin: CoinGecko's figures for a made-up month, hour by hour, the
+ * same shape every run. Nothing is fetched; the card is the real one.
+ */
+function cryptoQuote(now: number, symbol: string): PretendFind {
+  const coin = COINS[symbol] ?? COINS.BTC;
+  if (!coin) throw new Error('no demo coin');
+  const hours = 30 * 24;
+  const start = coin.price / (1 + coin.changes['30d'] / 100);
+  const points = Array.from({ length: 180 }, (_, i) => {
+    const f = i / 179;
+    const wave = Math.sin(i / 7) * coin.price * 0.012 + Math.sin(i / 23 + 1) * coin.price * 0.02;
+    return {
+      at: new Date(now - (1 - f) * hours * HOUR).toISOString(),
+      price:
+        Math.round((start + (coin.price - start) * f + wave * Math.sin(f * Math.PI)) * 100) / 100,
+    };
+  });
+  const asOf = new Date(now - 2 * 60_000).toISOString();
+  const quote = {
+    symbol,
+    name: coin.name,
+    currency: 'USD',
+    class: 'crypto' as const,
+    price: coin.price,
+    change: Math.round(coin.price * coin.changes['24h']) / 100,
+    changePercent: coin.changes['24h'],
+    asOf,
+    delayed: true,
+    dayRange: {
+      low: Math.round(coin.price * 0.988 * 100) / 100,
+      high: Math.round(coin.price * 1.009 * 100) / 100,
+    },
+    dayState: 'always' as const,
+    spark: { period: '1W' as const, values: points.slice(-42).map((p) => p.price) },
+    crypto: {
+      id: coin.id,
+      rank: coin.rank,
+      marketCap: Math.round(coin.price * coin.circulating),
+      fullyDiluted: Math.round(coin.price * (coin.max ?? coin.circulating)),
+      volume24h: Math.round(coin.price * coin.circulating * 0.024),
+      supply: {
+        circulating: coin.circulating,
+        ...(coin.max ? { total: coin.max, max: coin.max } : { unlimited: true }),
+      },
+      ath: {
+        price: coin.ath,
+        date: new Date(now - coin.athDaysAgo * 24 * HOUR).toISOString(),
+        fromPercent: Math.round(((coin.price - coin.ath) / coin.ath) * 10_000) / 100,
+      },
+      changes: coin.changes,
+      source: 'CoinGecko' as const,
+    },
+    source: 'CoinGecko',
+  };
+  const view: ToolView = {
+    kind: 'quotes',
+    items: [quote],
+    series: [
+      {
+        symbol,
+        period: '1M',
+        dates: points.map((p) => p.at.slice(0, 10)),
+        times: points.map((p) => p.at),
+        closes: points.map((p) => p.price),
+        currency: 'USD',
+        source: 'CoinGecko (hourly)',
+      },
+    ],
+  };
+  return {
+    tool: 'quote',
+    input: { symbols: [symbol], period: '1M' },
+    text: JSON.stringify({ quotes: [{ symbol, price: coin.price, source: 'CoinGecko' }] }),
+    view,
+    reply: `${coin.name} is a little ${coin.changes['24h'] < 0 ? 'down' : 'up'} on the day and up over the month. That’s CoinGecko’s average across exchanges, not one exchange’s price, and not advice.`,
+  };
+}
+
+/** Pretend crypto as a whole: the total, its day, dominance and the biggest coins. */
+function cryptoMarket(now: number): PretendFind {
+  const coins = [
+    ['bitcoin', 'BTC', 'Bitcoin', 67_187, -0.31, 4.2],
+    ['ethereum', 'ETH', 'Ethereum', 2_612.4, 1.42, 6.1],
+    ['tether', 'USDT', 'Tether', 1.0002, 0.01, 0],
+    ['binancecoin', 'BNB', 'BNB', 581.2, 0.8, 2.2],
+    ['solana', 'SOL', 'Solana', 148.73, 3.12, 11.4],
+    ['usd-coin', 'USDC', 'USDC', 0.9999, 0, 0],
+    ['ripple', 'XRP', 'XRP', 0.5312, -1.12, -2.4],
+    ['dogecoin', 'DOGE', 'Dogecoin', 0.1123, 2.41, 8.8],
+    ['the-open-network', 'TON', 'Toncoin', 5.21, -0.42, 1.2],
+    ['tron', 'TRX', 'TRON', 0.1563, 0.32, 0.9],
+  ] as const;
+  const view: ToolView = {
+    kind: 'crypto-market',
+    currency: 'USD',
+    totalMarketCap: 2_412_345_678_901,
+    change24h: 1.23,
+    volume24h: 81_234_567_890,
+    dominance: { btc: 54.62, eth: 13.21 },
+    coinsTracked: 17_234,
+    coins: coins.map(([id, symbol, name, price, c24, c7], i) => ({
+      id,
+      symbol,
+      name,
+      rank: i + 1,
+      price,
+      change24h: c24,
+      change7d: c7,
+      spark: Array.from({ length: 42 }, (_, k) => {
+        const f = k / 41;
+        const wave = Math.sin(k / 3 + i) * price * 0.008;
+        return (
+          Math.round((price / (1 + c7 / 100) + (price - price / (1 + c7 / 100)) * f + wave) * 1e6) /
+          1e6
+        );
+      }),
+    })),
+    asOf: new Date(now - 2 * 60_000).toISOString(),
+    source: 'CoinGecko',
+  };
+  return {
+    tool: 'crypto_market',
+    input: {},
+    text: JSON.stringify({ market: { totalMarketCap: 2_412_345_678_901, change24h: 1.23 } }),
+    view,
+    reply:
+      'A quiet, slightly green day: the whole market is up about 1%, and bitcoin is still more than half of it. CoinGecko’s averages, not advice.',
+  };
+}
+
 /** Pretend filings, in the shape SEC EDGAR really answers in. */
 function fundamentals(now: number, company: string): PretendFind {
   const figure = (value: number, year: number) => ({
@@ -755,7 +924,9 @@ export function pretendFind(prompt: string, now = Date.now()): PretendFind | und
   // Money: only a plain ticker in capitals, so "compare the two kettles" and
   // "how is the build doing" stay with the journeys they belong to.
   const at = /^[Ww]hat(?:'|’)?s ([A-Z][A-Z0-9.^-]{0,11}) at\b/.exec(text)?.[1];
-  if (at) return quotes(now, [at], false);
+  if (at) return COINS[at] ? cryptoQuote(now, at) : quotes(now, [at], false);
+  // Crypto as a whole: only the plain question, from its first word.
+  if (/^how(?:'|’)?s crypto doing\b|^how is crypto doing\b/i.test(text)) return cryptoMarket(now);
   const pair = /^[Cc]ompare ([A-Z][A-Z0-9.^-]{0,11}) and ([A-Z][A-Z0-9.^-]{0,11})\b/.exec(text);
   if (pair?.[1] && pair[2]) return quotes(now, [pair[1], pair[2]], true);
   const doing = /^[Hh]ow is ([A-Z][A-Za-z.]{1,19}) doing financially\b/.exec(text)?.[1];

@@ -1172,6 +1172,468 @@
     margin-block-start: var(--nc-space-1-5);
   }
 
+  /* ── Coins ────────────────────────────────────────────────────────── */
+
+  /*
+   * A coin's lettermark is round, like a coin, in the coin's own hue, with a
+   * faint rim struck into it. Decoration only: the symbol is written beside it.
+   */
+  .mark[data-coin] {
+    border-radius: var(--nc-radius-full);
+    corner-shape: round;
+    background: radial-gradient(
+      120% 120% at 30% 20%,
+      oklch(0.7 0.15 var(--fm-h, 240)),
+      oklch(0.52 0.15 var(--fm-h, 240))
+    );
+    box-shadow:
+      inset 0 0 0 2px oklch(1 0 0 / 0.2),
+      inset 0 -1px 0 2px oklch(0 0 0 / 0.08),
+      var(--nc-glaze-edge);
+  }
+
+  .mark[data-long] {
+    font-size: 0.5625rem;
+    letter-spacing: 0;
+  }
+
+  .chipMark[data-long],
+  .topMark[data-long] {
+    font-size: 0.4375rem;
+  }
+
+  /* A long symbol is one letter, set larger, as a coin's face is. */
+  .mark[data-one] {
+    font-size: var(--nc-text-base);
+    font-weight: 700;
+  }
+
+  .chipMark[data-one],
+  .topMark[data-one] {
+    font-size: var(--nc-text-xs);
+  }
+
+  .moveSince {
+    color: var(--nc-text-muted);
+    font-weight: 500;
+  }
+
+  /* What the card says about where its figures came from, above it. */
+  .notice {
+    margin: 0;
+    padding: var(--nc-space-1-5) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    text-wrap: pretty;
+  }
+
+  /* Its place by market value: a quiet chip, never a medal. */
+  .rank {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 1px;
+    margin: 0;
+    padding: var(--nc-space-0-5) var(--nc-space-2);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text);
+    font-size: var(--nc-text-xs);
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .rankHash {
+    color: var(--nc-text-subtle);
+    font-weight: 500;
+  }
+
+  .alternatives {
+    margin: calc(var(--nc-space-1) * -1) 0 0;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-2xs);
+    text-wrap: pretty;
+  }
+
+  /* The moves, as chips that are also the range: a label over its move. */
+  .card .changeSwitch[data-size] {
+    --h: 2.875rem;
+  }
+
+  /* The switch's track is a step darker than the card: so are its words for up and down. */
+  .changeSwitch,
+  .changes {
+    --fi-up: light-dark(oklch(0.45 0.13 var(--nc-success-h)), oklch(0.79 0.15 var(--nc-success-h)));
+    --fi-down: light-dark(oklch(0.49 0.19 var(--nc-danger-h)), oklch(0.77 0.16 var(--nc-danger-h)));
+  }
+
+  .change {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.0625rem;
+    line-height: 1.15;
+  }
+
+  .changeLabel {
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-2xs);
+    font-weight: 500;
+  }
+
+  .changeValue {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.1875rem;
+    color: var(--fi-flat);
+    font-size: var(--nc-text-xs);
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .changeValue[data-way='up'],
+  .marketMove[data-way='up'],
+  .gaugeValue[data-way='up'] {
+    color: var(--fi-up);
+  }
+
+  .changeValue[data-way='down'],
+  .marketMove[data-way='down'] {
+    color: var(--fi-down);
+  }
+
+  .changes {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 2px;
+    margin: 0;
+    padding: 3px;
+    list-style: none;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+  }
+
+  .changeStatic {
+    display: grid;
+    place-items: center;
+    padding-block: var(--nc-space-1);
+  }
+
+  /* Supply and the all-time high: two gauges, side by side where there's room. */
+  .gauges {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    gap: var(--nc-space-3) var(--nc-space-4);
+  }
+
+  .gauge {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+  }
+
+  .gaugeHead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+    margin: 0;
+  }
+
+  .gaugeLabel {
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+  }
+
+  .gaugeValue {
+    font-size: var(--nc-text-xs);
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .gaugeTrack {
+    position: relative;
+    display: block;
+    block-size: 0.5rem;
+    border-radius: var(--nc-radius-full);
+    /* The unfilled track is a lighter step of the fill's own ramp. */
+    background: color-mix(in oklab, var(--nc-chart-1) 16%, var(--nc-surface-sunken));
+  }
+
+  .gaugeFill {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    inline-size: calc(var(--at) * 100%);
+    min-inline-size: 0.5rem;
+    border-radius: inherit;
+    background: var(--nc-chart-1);
+    transform-origin: left;
+    animation: nc-finance-fill var(--nc-duration-slow) var(--nc-spring-snappy) both;
+  }
+
+  /* No maximum: the track runs out into nothing rather than ending. */
+  .gauge[data-open] .gaugeTrack {
+    mask-image: linear-gradient(90deg, #000 72%, transparent);
+  }
+
+  /* The high itself: a mark at the end of the track the price is measured against. */
+  .highMark {
+    position: absolute;
+    inset-inline-end: -1px;
+    top: 50%;
+    inline-size: 2px;
+    block-size: 0.875rem;
+    border-radius: 1px;
+    background: var(--nc-text-subtle);
+    transform: translateY(-50%);
+  }
+
+  .gaugeWords {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-2xs);
+    line-height: 1.4;
+    text-wrap: pretty;
+  }
+
+  .gaugeAside {
+    color: var(--nc-text-subtle);
+  }
+
+  /* What the coin is, in its source's words: three lines, then More. */
+  .about {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+    padding: var(--nc-space-2-5) var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+  }
+
+  .aboutHead {
+    margin: 0;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    font-weight: 500;
+  }
+
+  .aboutText {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: 1.5;
+    text-wrap: pretty;
+  }
+
+  .aboutText[data-open] {
+    display: block;
+  }
+
+  .aboutFoot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-1) var(--nc-space-2);
+  }
+
+  .aboutFacts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .aboutFacts li {
+    padding: 0 var(--nc-space-1-5);
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-chat-card-surface);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-2xs);
+    line-height: 1.6;
+    white-space: nowrap;
+  }
+
+  .aboutMore {
+    margin-inline-start: auto;
+  }
+
+  /* ── The crypto market ───────────────────────────────────────────── */
+
+  .marketHead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+  }
+
+  .marketTitle {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: 650;
+    letter-spacing: -0.005em;
+  }
+
+  .marketMove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.1875rem;
+    color: var(--fi-flat);
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .dominance {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+  }
+
+  /* One bar split in three, two pixels of the surface between the parts. */
+  .dominanceBar {
+    display: flex;
+    gap: 2px;
+    block-size: 0.625rem;
+    overflow: hidden;
+    border-radius: var(--nc-radius-full);
+  }
+
+  .dominancePart {
+    flex: var(--share) 0 0;
+    min-inline-size: 2px;
+    transform-origin: left;
+    animation: nc-finance-fill var(--nc-duration-slow) var(--nc-spring-snappy) both;
+  }
+
+  .dominanceKey {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1) var(--nc-space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .dominanceKey li {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    font-size: var(--nc-text-xs);
+  }
+
+  .dominanceSwatch {
+    display: inline-block;
+    inline-size: 0.625rem;
+    block-size: 0.625rem;
+    border-radius: 3px;
+    flex: none;
+  }
+
+  .topCoins {
+    inline-size: 100%;
+    border-collapse: collapse;
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .topCaption {
+    padding-block-end: var(--nc-space-1);
+    caption-side: top;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    text-align: start;
+  }
+
+  .topCoins td,
+  .topCoins th {
+    padding: var(--nc-space-1-5) var(--nc-space-1);
+    vertical-align: middle;
+  }
+
+  .topCoins tbody tr + tr > * {
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .topRank {
+    inline-size: 1.5rem;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    padding-inline-start: 0;
+    color: var(--nc-text-subtle);
+    text-align: end;
+  }
+
+  .topCoinCell {
+    font-weight: 400;
+    text-align: start;
+  }
+
+  .topCoin {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .topMark {
+    flex: none;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    font-size: 0.5rem;
+  }
+
+  .topName {
+    overflow: hidden;
+    font-weight: 600;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .topSymbol {
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-2xs);
+  }
+
+  .topSpark {
+    inline-size: 22%;
+    min-inline-size: 3.5rem;
+  }
+
+  .topSpark svg {
+    display: block;
+    inline-size: 100%;
+  }
+
+  .topPrice {
+    font-weight: 600;
+    text-align: end;
+    white-space: nowrap;
+  }
+
+  .topMove {
+    inline-size: 4.25rem;
+    padding-inline-end: 0;
+    text-align: end;
+  }
+
   /* ── A narrow card (a phone, a split pane) ────────────────────────── */
 
   @container (max-width: 25rem) {
@@ -1203,6 +1665,33 @@
     .barTrack {
       block-size: 2.5rem;
     }
+
+    /* The week's shape gives way first; the coin, its price and its day stay. */
+    .topSpark {
+      display: none;
+    }
+
+    .topSymbol {
+      display: none;
+    }
+
+    .card .changeSwitch[data-size] {
+      --h: 2.75rem;
+    }
+
+    /* A coin's three figures stay one row of three, tighter, rather than two and an orphan. */
+    .coin .tiles {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--nc-space-1-5);
+    }
+
+    .coin .tile {
+      padding: var(--nc-space-1-5) var(--nc-space-2);
+    }
+
+    .coin .tileValue {
+      font-size: var(--nc-text-xs);
+    }
   }
 
   /* ── A thumb instead of a pointer ─────────────────────────────────── */
@@ -1230,7 +1719,9 @@
     .line,
     .area,
     .barFill,
-    .meterFill {
+    .meterFill,
+    .gaugeFill,
+    .dominancePart {
       animation: none;
     }
 

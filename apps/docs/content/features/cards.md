@@ -92,6 +92,23 @@ Prices are delayed, and every card says from when and from where. Filings cover
 companies that file with the SEC in the US; for others, Conch says so instead of guessing.
 None of it is financial advice.
 
+### Crypto
+
+"What's bitcoin at?", "How's solana doing?" or "doge in euros". A coin's card shows its
+rank, its price "24/7 · as of 21:04" (coins never close), and its move over the last hour,
+day, week, month and year. Press one of those to see that stretch on the chart. Below are
+what the coin is worth beside what it would be worth if every coin that can exist did, how
+much of it exists (or that there's no maximum), and how far it is below its all-time high.
+
+- **The same symbol, several coins**: Conch shows the one worth the most and names the
+  others, so you can say which you meant.
+- **How's crypto doing?**: what every coin is worth together and how it moved today, how
+  much of that is bitcoin and ether, and the ten biggest coins with their week.
+
+Coin figures come from CoinGecko. Its price is an average across many exchanges, not what
+any one exchange charges. When CoinGecko is busy, the card says so and shows Stooq's price
+instead. Prices are in your own currency, or the one you ask for.
+
 ## Charts
 
 "Make me a pie chart of where my money went this month." Conch draws the chart in the
@@ -135,6 +152,7 @@ nothing about you:
 | Videos                          | YouTube or Vimeo (the search); the player only when you press play    |
 | Weather                         | Open-Meteo (the place)                                                |
 | Share prices, companies         | Stooq and Yahoo Finance (the ticker), the SEC (the company)           |
+| Crypto                          | CoinGecko (the coin and a currency); Stooq when CoinGecko is busy     |
 | Charts                          | Nothing: Conch draws them from what's in the chat                     |
 | Places                          | OpenStreetMap (the place, and what you're looking for)                |
 | People and things, books, shows | Wikipedia, Open Library, TVmaze (the name)                            |

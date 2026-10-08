@@ -1392,6 +1392,20 @@ const CONCH: Record<string, (input: Input) => Draft> = {
       words: say('read', named ? `${named}’s filings` : 'company filings'),
     };
   },
+  crypto_market: () => ({
+    family: 'research',
+    words: say('check', 'how crypto is doing'),
+    finish: (output) => {
+      const market = record(record(parseJson(output)).market);
+      const change = typeof market.change24h === 'number' ? market.change24h : undefined;
+      if (change === undefined) return undefined;
+      const way = change > 0 ? 'up' : change < 0 ? 'down' : 'flat';
+      return {
+        outcome:
+          way === 'flat' ? 'flat on the day' : `${way} ${Math.abs(change).toFixed(2)}% in 24h`,
+      };
+    },
+  }),
   use_skill: (input) => skillDraft(str(input, 'name')),
   list_skills: () => ({ family: 'other', words: say('look', 'at the skills') }),
   find_skills: (input) => {

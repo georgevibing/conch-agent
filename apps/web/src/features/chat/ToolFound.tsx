@@ -1,10 +1,12 @@
-import type { Attachment, ToolView } from '@conch/protocol';
+import type { Attachment, FinancePeriod, ToolView } from '@conch/protocol';
+import { useCallback } from 'react';
 import {
   AgendaView,
   BookShelf,
   CardShare,
   ChartCard,
   ChatMessages,
+  CryptoMarket,
   FileList,
   Fundamentals,
   KnowledgeCard,
@@ -142,6 +144,8 @@ export function ToolFound({ view }: { view: ToolView }) {
       return <QuotesFound view={view} />;
     case 'fundamentals':
       return <FundamentalsFound view={view} />;
+    case 'crypto-market':
+      return <CryptoMarketFound view={view} />;
     case 'shows':
       return (
         <ShowCards
@@ -190,9 +194,35 @@ function QuotesFound({ view }: { view: Extract<ToolView, { kind: 'quotes' }> }) 
     what: 'chart',
     title: view.items.length === 1 && first ? `${first.symbol} · ${first.name}` : 'Prices',
   });
+  // A coin's range switch names the coin by its CoinGecko id, so another coin with
+  // the same symbol can't answer for it, and keeps the currency the card is in.
+  const onRange = useCallback(
+    (symbol: string, period: FinancePeriod) => {
+      const quote = view.items.find((q) => q.symbol === symbol);
+      return priceHistory(
+        symbol,
+        period,
+        quote?.crypto
+          ? { id: quote.crypto.id, ...(quote.currency && { currency: quote.currency }) }
+          : undefined,
+      );
+    },
+    [view.items],
+  );
   return (
     <div ref={ref}>
-      <QuotesCard quotes={view} onRange={priceHistory} share={<CardShare {...share} />} />
+      <QuotesCard quotes={view} onRange={onRange} share={<CardShare {...share} />} />
+    </div>
+  );
+}
+
+/** Crypto as a whole, with its share bar. */
+function CryptoMarketFound({ view }: { view: Extract<ToolView, { kind: 'crypto-market' }> }) {
+  const { kind: _kind, ...market } = view;
+  const { ref, share } = useCardShare({ what: 'card', title: 'The crypto market' });
+  return (
+    <div ref={ref}>
+      <CryptoMarket market={market} share={<CardShare {...share} />} />
     </div>
   );
 }

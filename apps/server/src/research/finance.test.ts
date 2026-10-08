@@ -425,7 +425,7 @@ describe('the fundamentals tool', () => {
     const { view } = await run(tools, 'fundamentals', { companies: ['^SPX', 'BTC-USD'] });
     if (view.kind !== 'fundamentals') throw new Error('no fundamentals');
     expect(view.items[0]?.unavailable).toMatch(/no fundamentals for an index/);
-    expect(view.items[1]?.unavailable).toMatch(/no fundamentals for a crypto/);
+    expect(view.items[1]?.unavailable).toMatch(/is a coin: it files no accounts/);
   });
 
   it('says a US filer with nothing filed yet has nothing, and keeps no figures', async () => {
