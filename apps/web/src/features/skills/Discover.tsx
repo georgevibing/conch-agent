@@ -160,7 +160,13 @@ export function DiscoverPanel() {
           // A lazy route may take longer than the debounce to mount. Cancel now,
           // before navigation, so a pending search cannot take us back to the shelf.
           clearTimeout(searchTimer.current);
-          void navigate(listingPath(listing.id), { state: { shelf: search } });
+          // The shelf as it looks, with what was typed even if the pause hadn't sent it yet.
+          const shelf = new URLSearchParams(search);
+          const words = typed.trim();
+          if (words) shelf.set('q', words);
+          else shelf.delete('q');
+          const kept = shelf.toString();
+          void navigate(listingPath(listing.id), { state: { shelf: kept ? `?${kept}` : '' } });
         }}
         emptyAction={
           q ? (
