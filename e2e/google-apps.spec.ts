@@ -87,7 +87,8 @@ test('connect Gmail with an app password, use it in a chat, turn a tool off, fix
   const sentBefore = (await (await request.post(`${MAIL}/__control/sent`)).json()).length as number;
   await page.goto('/');
   await ask(page, 'email sam@example.org saying Noon works for lunch');
-  const review = page.getByRole('region', { name: 'Email to review' });
+  // The email to approve, as a letter: from the Gmail account, to Sam.
+  const review = page.getByRole('group', { name: /^Email to sam@example.org/ });
   await expect(review.getByText('ada@gmail.com', { exact: true })).toBeVisible();
   await expect(review.getByText('sam@example.org', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Send', exact: true }).click();
