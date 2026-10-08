@@ -120,7 +120,7 @@ describe('holding a skill to it', () => {
     const usual = readPermissions(undefined);
     const nothing = readPermissions('allowed-tools: Read');
     for (const prefix of ['', 'mcp__conch__'])
-      for (const tool of ['quote', 'price_history', 'fundamentals']) {
+      for (const tool of ['quote', 'price_history', 'fundamentals', 'crypto_market']) {
         expect(must(needs(`${prefix}${tool}`, { symbols: ['AAPL'] }, ws))).toEqual({
           capability: 'web',
         });

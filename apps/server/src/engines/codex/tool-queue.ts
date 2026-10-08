@@ -23,6 +23,7 @@ const READS = new Set([
   'mcp__conch__quote',
   'mcp__conch__price_history',
   'mcp__conch__fundamentals',
+  'mcp__conch__crypto_market',
 ]);
 
 export class ToolQueue {
