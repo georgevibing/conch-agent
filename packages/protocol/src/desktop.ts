@@ -72,6 +72,15 @@ export const GatewayToApp = z.discriminatedUnion('type', [
     kind: z.enum(['file', 'folder']),
     extensions: z.array(z.string().regex(/^[A-Za-z0-9]{1,10}$/)).max(10),
   }),
+  /**
+   * The assistant is using this computer's apps (ADR 0110): draw the glowing
+   * edge and listen for the Stop keys while `on`, saying `label` beside Stop.
+   */
+  z.object({
+    type: z.literal('computer'),
+    on: z.boolean(),
+    label: z.string().max(160).optional(),
+  }),
   /** Download this release and replace the app with it (Settings → Health → Updates). */
   z.object({
     type: z.literal('update'),
@@ -85,6 +94,8 @@ export type GatewayToApp = z.infer<typeof GatewayToApp>;
 export const AppToGateway = z.discriminatedUnion('type', [
   /** "Stop listening for Hey Conch", pressed in the tray (ADR 0078). */
   z.object({ type: z.literal('wake.stop') }),
+  /** Stop, pressed on the glowing edge or with its keys (ADR 0110): the assistant lets go. */
+  z.object({ type: z.literal('computer.stop') }),
   /** What the Open dialog chose. No path: cancelled. `failed`: it couldn't show. */
   z.object({
     type: z.literal('picked'),

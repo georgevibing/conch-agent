@@ -53,6 +53,7 @@ import {
   Globe,
   HeartPulse,
   Laptop,
+  MousePointerClick,
   ListChecks,
   ListPlus,
   History,
@@ -261,6 +262,14 @@ const settingsPlaces: {
     keywords:
       'this computer machine system cpu processor cores memory ram disk storage space free network download upload gpu graphics battery temperature load uptime activity monitor task manager performance resources busy slow processes',
     icon: <Laptop />,
+  },
+  {
+    // The assistant using this computer's apps (ADR 0110): its switch is on This computer.
+    tab: 'computer',
+    label: 'Use your apps',
+    keywords:
+      'use my apps computer use control my computer mac desktop apps click type keyboard mouse screen screenshot screen recording accessibility automate keynote notes finder glowing edge stop',
+    icon: <MousePointerClick />,
   },
   {
     tab: 'health',

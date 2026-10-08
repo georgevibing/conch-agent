@@ -25,6 +25,7 @@ export function previewReads(path: string): boolean {
     path === 'agents/agents.json' ||
     path === 'browser.json' ||
     path === 'terminal.json' ||
+    path === 'computer-use.json' ||
     path === 'channels.json' ||
     path === 'skills.trust.json' ||
     path === 'artifacts/access.json' ||
@@ -247,6 +248,20 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
 
   if (record(json(read, 'terminal.json')?.settings)?.allowRemote === true)
     powers.push({ kind: 'terminal-remote' });
+
+  // Using your apps (ADR 0110): on, and the apps it may always use.
+  const computer = json(read, 'computer-use.json');
+  if (computer?.enabled === true) {
+    const apps = (Array.isArray(computer.apps) ? computer.apps : [])
+      .map((app) => record(app)?.name)
+      .filter((name): name is string => typeof name === 'string' && name.trim() !== '')
+      .map((name) => text(name, 'an app'));
+    powers.push({
+      kind: 'computer-use',
+      apps: apps.slice(0, MAX_LISTED),
+      more: Math.max(0, apps.length - MAX_LISTED),
+    });
+  }
 
   // Pages that read live data (ADR 0046): an old backup mustn't quietly bring back a
   // site you took a page's OK from since.

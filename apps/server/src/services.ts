@@ -150,6 +150,10 @@ import type { Heal } from './lib/recover';
 import { CloudService } from './clouds/service';
 import { LocalService } from './local/service';
 import { ComputerSampler } from './computer/sampler';
+import { computerUseCheck } from './computer-use/routes';
+import { pretendComputer } from './computer-use/pretend';
+import { ComputerUseService } from './computer-use/service';
+import { computerPrompt, computerTools } from './computer-use/tools';
 import { KNOWN_NEEDS } from './setup/known';
 import { Setup } from './setup/needs';
 import { setToolsHome } from './setup/release';
@@ -279,6 +283,8 @@ export class Services {
   readonly clouds: CloudService;
   /** This computer, looked at only while someone has Settings → This computer open. */
   readonly computer: ComputerSampler;
+  /** The assistant using this computer's apps, while you watch (ADR 0110). Off until you turn it on. */
+  readonly computerUse: ComputerUseService;
   readonly settings: SettingsStore;
   /** Who may sign in (`~/.conch/access.json`). */
   readonly access: AccessStore;
@@ -555,6 +561,16 @@ export class Services {
     );
     this.keys = new ProviderKeys(this.settings, new SecretVault());
     this.computer = new ComputerSampler({ home: config.CONCH_HOME });
+    const desktopApp = theApp();
+    this.computerUse = new ComputerUseService({
+      home: config.CONCH_HOME,
+      ...(desktopApp && { app: desktopApp }),
+      // The mock engine's computer is a pretend Mac: nothing real is ever looked at or clicked.
+      ...(config.CONCH_ENGINE === 'mock' && { driver: pretendComputer() }),
+      // Stop on the glowing edge stops the chat's turn, as its own Stop does.
+      interrupt: (conversationId) => this.conversations.interrupt(conversationId),
+      heal: (area, message) => void this.healed.note(area, message),
+    });
     this.local = new LocalService({
       home: config.CONCH_HOME,
       setup: this.setup,
@@ -1056,6 +1072,7 @@ export class Services {
               ...standingOrderTools(this.standingOrders, ctx),
               ...this.skills.tools(ctx),
               ...this.browser.tools(ctx),
+              ...computerTools(this.computerUse, ctx),
               ...vaultTools(this.vault, ctx),
               ...this.artifacts.tools(ctx),
               // A routine's run hands nothing off: what it starts would spend past its own
@@ -1116,6 +1133,12 @@ export class Services {
             .catch(() => ''),
           await this.skills.promptSection(engine).catch(() => ''),
           await this.browser.promptSection(engine).catch(() => ''),
+          // Your apps (ADR 0110): only where the tool is, in a chat someone is watching.
+          engine.hostTools === false ||
+          (await this.conversations.detail(conversationId).catch(() => undefined))?.conversation
+            .origin
+            ? ''
+            : computerPrompt(this.computerUse),
           await this.integrations.promptSection(),
           // The map, beside the apps: only for providers that can call `offer` (ADR 0060).
           engine.hostTools === false
@@ -1362,7 +1385,10 @@ export class Services {
     this.broadcast.on((event) => this.tasks.onEvent(event));
     // A deleted chat takes its browser tab and thumbnails with it.
     this.conversations.events.on((event) => {
-      if (event.type === 'conversation.deleted') void this.browser.forget(event.conversationId);
+      if (event.type === 'conversation.deleted') {
+        void this.browser.forget(event.conversationId);
+        this.computerUse.forgetChat(event.conversationId);
+      }
     });
     this.memory.changed.on(() => this.broadcast.emit({ type: 'memory.changed' }));
     this.usage = new UsageService({
@@ -1764,6 +1790,7 @@ export class Services {
       void this.wake.state(false);
       this.broadcast.emit({ type: 'wake.stop' });
     });
+    this.doctor.register(computerUseCheck(this.computerUse));
     this.doctor.register(this.artifacts.doctorCheck());
     this.doctor.register(this.artifacts.liveDataCheck());
     // A reply from a provider without Conch's tools may carry ```artifact blocks.

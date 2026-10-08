@@ -179,7 +179,12 @@ export class AppReleases {
         resolve(result);
       };
       const stop = app.listen((message) => {
-        if (message.type === 'wake.stop' || message.type === 'picked') return;
+        if (
+          message.type === 'wake.stop' ||
+          message.type === 'picked' ||
+          message.type === 'computer.stop'
+        )
+          return;
         if (message.version !== offer.version) return;
         if (message.type === 'update.progress') progress(message.percent);
         else if (message.type === 'update.ready') done({ kind: 'ready' });

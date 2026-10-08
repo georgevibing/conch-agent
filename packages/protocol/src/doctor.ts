@@ -60,6 +60,8 @@ export const DoctorPlace = z.enum([
   'other-apps',
   /** Settings → Agents: their names and pictures (ADR 0101). */
   'agents',
+  /** Settings → This computer: using its apps and the macOS switches (ADR 0110). */
+  'computer',
 ]);
 export type DoctorPlace = z.infer<typeof DoctorPlace>;
 

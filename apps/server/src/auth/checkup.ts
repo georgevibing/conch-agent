@@ -176,6 +176,8 @@ export interface CheckupInput {
   browserLocal?: boolean;
   /** The agent's browser is your own signed-in Chrome (ADR 0080). */
   browserOwnChrome?: boolean;
+  /** The assistant may use this computer's apps (ADR 0110). */
+  computerUse?: boolean;
   /** Pages allowed to read live data from this computer (ADR 0046), by host. */
   pagesLocal?: string[];
   /** A connected provider, and whether Conch can ask you before each step with it (the one that can't, if any). */
@@ -590,6 +592,17 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       detail:
         'It uses your Chrome, where you’re signed in to your accounts. It only touches the tabs it opens, and asks before acting on each site, but a page it reads there could try to trick it. If you don’t need your sign-ins, go back to Conch’s own browser.',
       fix: { kind: 'act', label: 'Use Conch’s browser', action: 'browser-own-chrome-off' },
+    });
+  }
+
+  if (input.computerUse) {
+    items.push({
+      id: 'computer-use',
+      level: 'warn',
+      title: 'The assistant can use your apps',
+      detail:
+        'In a chat you’re watching, it can click and type in the apps on this computer. Each app asks once per chat, password managers, System Settings and banking stay out of reach, and the glowing edge’s Stop takes it back. Something it reads on the screen could still try to trick it. If you don’t need it, turn it off.',
+      fix: { kind: 'act', label: 'Turn off', action: 'computer-use-off' },
     });
   }
 

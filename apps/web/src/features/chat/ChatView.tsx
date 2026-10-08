@@ -88,6 +88,7 @@ import { type Draft, useDraftAttachments } from './useDraftAttachments';
 import { useIntegrations } from '../integrations/queries';
 import { ArtifactDock } from '../artifacts/ArtifactDock';
 import { BrowserDock } from '../browser/BrowserDock';
+import { ComputerUseNowCard } from '../computer/ComputerUseNow';
 import { Dictate } from '../voice/Dictate';
 import { canSpeak } from '../voice/speak';
 import { Talk } from '../voice/Talk';
@@ -860,6 +861,8 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
           {view.notice.message}
         </Callout>
       )}
+      {/* Using your computer's apps (ADR 0110): what it's doing, and Stop. */}
+      <ComputerUseNowCard conversationId={conversationId} running={running} />
       {/* What this chat is held to (ADR 0047): quiet, and one press to stop. */}
       {conversationId && (
         <ChatHolds conversationId={conversationId} holds={view.holds ?? []} running={busy} />

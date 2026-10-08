@@ -735,6 +735,27 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
 /api/browser/repair`, `POST /api/browser/wipe`, `POST /api/browser/:id/control`
     (hand back from the transcript), and `GET /api/browser/shots/:id/:shot`.
     `browser.status` is broadcast on every change, install progress included.
+- **Your apps** (`computer-use/`, [ADR 0110](./docs/adr/0110-using-your-apps.md)). Off
+  until a person turns it on (`computer-use.json`, protected from the agent's file tools).
+  - **Driver** (`driver.ts` the interface, `mac.ts` macOS). No addon: `screencapture` for the
+    picture, and fixed JavaScript for Automation calling Core Graphics and AppKit for mouse and
+    key events, the window list and the two TCC switches. Pictures pass through a private
+    temporary folder removed once read. Other systems get `UNSUPPORTED` and say so; the mock
+    engine gets `pretend.ts`.
+  - **The tool** (`tools.ts`). One `computer` host tool for every engine with host tools and
+    sight, in Anthropic's computer-use vocabulary (actions, pixel coordinates of the last
+    screenshot, about a megapixel). Every action: on? the switches? Plan only? one chat at a
+    time and `MAX_STEPS`; then the app it would touch (`policy.ts` `keptAway`: never password
+    managers, System Settings and security prompts, terminals, banking, Conch itself — covered
+    over in every picture too), asked once per chat with `explicit`, so Auto asks; Full trust
+    and "Always" skip it unless the chat read something besides the screen. Each action returns
+    a fresh picture and taints the chat (`taint.ts`); acting is `apps` for skill holds.
+  - **The edge** (`service.ts`). The session sends `computer` to the desktop app, which draws
+    `apps/desktop/src/overlay.ts`: a click-through, content-protected glow on every display and
+    a Stop card, with ⌘⎋ registered while on. `computer.stop` (or `POST /api/computer-use/stop`)
+    interrupts the chat's turn. The latest picture is kept in memory for `GET
+/api/computer-use/shot/:id` until the turn ends; the chat's card polls `GET
+/api/computer-use/live` while a turn runs.
 - **The terminal** (`terminal/`, [ADR 0015](./docs/adr/0015-terminal.md)).
   - **Backends** (`backend.ts`). `node-pty` where it loads, else a small Python PTY
     bridge (POSIX), else a basic pipe-backed shell. `shells.ts` finds the shells
@@ -883,7 +904,7 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   transcript a plain model API needs, since it keeps no session of its own),
   `updates.json` (what the last look for updates found, and automatic updates on or
   off), `browser.json` (browser settings, sites you always allow) + `browser/profile/` +
-  `browser/shots/`, `terminal.json` (terminal settings; terminals themselves are never
+  `browser/shots/`, `computer-use.json` (using your apps on or off, apps you always allow), `terminal.json` (terminal settings; terminals themselves are never
   written to disk), `channels.json` + `channels.secrets.json` (bots, who may talk to
   them, their keys) + `channels/` (a Matrix session's encryption store, where
   Teams chats live) + `door.json` (the public door: Funnel or your own address), `gateway.json` (where it's listening, while it runs), `workspace/`

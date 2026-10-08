@@ -1287,6 +1287,34 @@ const CONCH: Record<string, (input: Input) => Draft> = {
     };
   },
   current_time: () => ({ family: 'other', words: say('check', 'the time') }),
+  // Using the computer's apps (ADR 0110): what it did, never what it typed.
+  computer: (input) => {
+    const app = str(input, 'app');
+    const key = str(input, 'text');
+    const c = (said: Words): Draft => ({ family: 'connect', words: said });
+    switch (str(input, 'action')) {
+      case 'screenshot':
+        return c(words('Looking at the screen', 'Looked at the screen'));
+      case 'type':
+        return c(words('Typing on the computer', 'Typed on the computer'));
+      case 'key':
+        return c(say('press', key ? clip(oneLine(key), 30) : 'a key'));
+      case 'scroll':
+        return c(words('Scrolling on the screen', 'Scrolled on the screen'));
+      case 'wait':
+        return c(say('wait', 'a moment'));
+      case 'open_app':
+        return c(say('open', app ? clip(oneLine(app), 40) : 'an app'));
+      case 'list_apps':
+        return c(say('check', 'which apps are open'));
+      case 'mouse_move':
+        return c(words('Pointing on the screen', 'Pointed on the screen'));
+      case 'left_click_drag':
+        return c(words('Dragging on the screen', 'Dragged on the screen'));
+      default:
+        return c(words('Clicking on the screen', 'Clicked on the screen'));
+    }
+  },
   weather: (input) => {
     const place = str(input, 'place', 'location', 'city');
     return {

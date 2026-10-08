@@ -122,6 +122,7 @@ import { registerTerminalRoutes } from './terminal/routes';
 import { registerLocalRoutes } from './local/routes';
 import { registerCloudRoutes } from './clouds/routes';
 import { registerComputerRoutes } from './computer/routes';
+import { registerComputerUseRoutes } from './computer-use/routes';
 import { ProviderError } from './providers/service';
 import { SkillError } from './skills/store';
 import { UpdatesError } from './updates/service';
@@ -255,6 +256,7 @@ export async function buildApp(services: Services) {
   registerLocalRoutes(app, services, gate);
   registerComputerRoutes(app, services.computer);
   registerCloudRoutes(app, services.clouds);
+  registerComputerUseRoutes(app, services.computerUse, gate);
   registerAttachmentRoutes(app, services.attachments);
   registerVaultRoutes(app, services.vault, gate);
   registerPickRoutes(app);

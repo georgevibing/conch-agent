@@ -18,6 +18,17 @@ describe('the desktop app and its gateway', () => {
       expect(LoopbackUrl.safeParse(url).success).toBe(false);
   });
 
+  it('lights the glowing edge with a short label, and hears Stop (ADR 0110)', () => {
+    expect(GatewayToApp.safeParse({ type: 'computer', on: true, label: 'Typing' }).success).toBe(
+      true,
+    );
+    expect(GatewayToApp.safeParse({ type: 'computer', on: false }).success).toBe(true);
+    expect(
+      GatewayToApp.safeParse({ type: 'computer', on: true, label: 'x'.repeat(161) }).success,
+    ).toBe(false);
+    expect(AppToGateway.safeParse({ type: 'computer.stop' }).success).toBe(true);
+  });
+
   it('only downloads a release from GitHub', () => {
     expect(
       ReleaseFeed.safeParse('https://github.com/georgevibing/conch-agent/releases/download/v0.3.0')

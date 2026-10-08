@@ -112,6 +112,9 @@ export function taintFrom(toolName: string, input: unknown, app?: string): Taint
     };
   if (BROWSER.test(toolName))
     return { kind: 'web', label: hostOf(args.url) ?? 'pages in the browser' };
+  // Your screen (ADR 0110): an email, a page or a message on it is someone else's words.
+  if (/^(?:mcp__conch__)?computer$/.test(toolName))
+    return { kind: 'app', label: 'what was on your screen' };
   // Shop pages read for their products: someone else's words, like web_fetch.
   if (/^(?:mcp__conch__)?product_details$/.test(toolName))
     return {

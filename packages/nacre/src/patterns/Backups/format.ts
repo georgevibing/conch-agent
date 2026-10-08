@@ -40,6 +40,7 @@ export type BackupPowerInfo =
   | { kind: 'browser-local' }
   | { kind: 'browser-own-chrome' }
   | { kind: 'terminal-remote' }
+  | { kind: 'computer-use'; apps: string[]; more?: number }
   | { kind: 'channel-people'; name: string; people: string[]; more?: number }
   | { kind: 'trusted-publishers'; names: string[]; more?: number }
   | { kind: 'conch-apps'; names: string[]; more?: number }
@@ -138,6 +139,13 @@ export function powerWords(power: BackupPowerInfo): PowerWords {
       return { subject: 'The browser', text: 'Uses your own Chrome, where you’re signed in' };
     case 'terminal-remote':
       return { text: 'Other devices can open a terminal on this computer' };
+    case 'computer-use':
+      return {
+        subject: 'Your apps',
+        text: power.apps.length
+          ? `The assistant uses this computer’s apps, and ${named(power.apps, power.more)} without asking`
+          : 'The assistant uses this computer’s apps, asking first in each chat',
+      };
     case 'page-data-sites':
       return {
         subject: 'Pages',

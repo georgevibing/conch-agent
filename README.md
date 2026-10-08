@@ -110,6 +110,9 @@ your desktop and the chat apps you already use.
 - **A browser you can watch** and take over, and a real terminal a keystroke away.
   [Browser](./apps/docs/content/features/browser.md) ·
   [Terminal](./apps/docs/content/features/terminal.md)
+- **Your apps, while you watch.** On a Mac, it can look at the screen and click and
+  type in the apps you allow, one app at a time, with a glowing edge and Stop one
+  press away. [Use your apps](./apps/docs/content/features/use-your-apps.md)
 - **Research, files and pictures.** Sources with references, PDF and Office files
   read and made (PDF, Word, Excel, CSV, PowerPoint, charts) with any chat model and
   sent to your chat apps, pictures from any chat model, and charts and documents

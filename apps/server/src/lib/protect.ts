@@ -36,6 +36,8 @@ export function protectedPaths(home: string): string[] {
     // The cloud sandbox's key, and SSH's shared connections to your machines (ADR 0106).
     join(home, 'workplaces.secrets.json'),
     join(home, 'workplaces'),
+    // Whether the assistant may use your apps, and the ones it always may (ADR 0110).
+    join(home, 'computer-use.json'),
     join(home, 'channels.secrets.json'),
     // The secrets other apps sign their messages to routines with (ADR 0056).
     join(home, 'routines.secrets.json'),

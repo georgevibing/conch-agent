@@ -104,6 +104,7 @@ export * from './linking';
 export * from './local';
 export * from './clouds';
 export * from './computer';
+export * from './computer-use';
 export * from './memory';
 export * from './mcp';
 export * from './common';

@@ -441,6 +441,8 @@ export const CheckupAction = z.enum([
   'browser-own-chrome-off',
   /** Other devices can no longer open a terminal. */
   'terminal-remote-off',
+  /** The assistant stops using this computer's apps (ADR 0110). */
+  'computer-use-off',
   /** The work folder's own Claude Code rules are set aside (renamed, never deleted). */
   'workspace-rules-off',
   /** `~/.conch` is made readable by you alone. */

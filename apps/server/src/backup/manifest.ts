@@ -271,6 +271,12 @@ export const RULES: readonly BackupRule[] = [
   },
   { match: 'terminal.json', class: 'kept', group: 'settings', why: 'The terminal’s settings.' },
   {
+    match: 'computer-use.json',
+    class: 'kept',
+    group: 'settings',
+    why: 'Whether the assistant may use this computer’s apps, and the apps you always let it use.',
+  },
+  {
     match: 'backups.json',
     class: 'kept',
     group: 'settings',
