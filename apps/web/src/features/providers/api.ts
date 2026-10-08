@@ -1,9 +1,13 @@
 import {
+  CloudPicker,
   Provider,
   ProviderSignIn,
   ProvidersList,
   ServerProbe,
   type AddServerBody,
+  type ChooseCloudBody,
+  type ClaudeCloudBody,
+  type CloudProviderId,
   type UpdateServerBody,
 } from '@conch/protocol';
 import { z } from 'zod';
@@ -63,6 +67,15 @@ export const providersApi = {
       method: 'POST',
       body: {},
     }),
+  /** The cloud accounts found on this computer for a provider (ADR 0109). */
+  cloud: (id: CloudProviderId, via?: 'bedrock' | 'vertex') =>
+    request(CloudPicker, `/api/clouds/${id}${via ? `?via=${via}` : ''}`),
+  /** Use one of them. */
+  chooseCloud: (id: Exclude<CloudProviderId, 'claude-code'>, body: ChooseCloudBody) =>
+    request(CloudPicker, `/api/clouds/${id}`, { method: 'PUT', body }),
+  /** Where Claude Code runs: Anthropic's own sign-in, Bedrock or Vertex. */
+  claudeCloud: (body: ClaudeCloudBody) =>
+    request(CloudPicker, '/api/clouds/claude-code', { method: 'PUT', body }),
   login: (id: string, method: 'subscription' | 'console') =>
     request(Ok, `/api/providers/${encodeURIComponent(id)}/login`, {
       method: 'POST',

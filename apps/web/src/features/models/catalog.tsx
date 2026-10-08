@@ -89,6 +89,10 @@ const providerLogos: Record<BuiltInEngineId, ProviderId> = {
   minimax: 'minimax',
   qwen: 'qwen',
   'ollama-cloud': 'ollama',
+  // Your company's cloud (ADR 0109).
+  bedrock: 'cloud',
+  vertex: 'cloud',
+  'azure-openai': 'cloud',
   ollama: 'local',
   'lm-studio': 'lmstudio',
   mock: 'claude',

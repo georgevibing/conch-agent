@@ -43,12 +43,13 @@ export function FoundHere({ found }: { found: Found[] }) {
               color={item.color}
               tagline={item.detail}
               action={{
-                label: item.kind === 'key' ? 'Use this key' : 'Add',
+                label:
+                  item.kind === 'key' ? 'Use this key' : item.kind === 'cloud' ? 'Use this' : 'Add',
                 onClick: () =>
                   use.mutate(item.id, {
                     onSuccess: () =>
                       toast.success(
-                        `${item.name} is ${item.kind === 'key' ? 'connected' : 'added'}. Its models are in the picker.`,
+                        `${item.name} is ${item.kind === 'server' ? 'added' : 'connected'}. Its models are in the picker.`,
                       ),
                   }),
                 loading: use.isPending && use.variables === item.id,

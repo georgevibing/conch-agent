@@ -64,6 +64,8 @@ export function setupLabel(provider: Provider): string {
   const { state, fix } = provider.status;
   // Ollama's own page starts it when it's stuck; any other program here can only be looked at again.
   if (provider.local && (state !== 'error' || provider.id === 'ollama')) return 'Set up';
+  // A cloud's page picks an account found here (ADR 0109).
+  if (provider.cloud && state !== 'error') return 'Set up';
   if (fix?.kind === 'install') return 'Install';
   if (fix?.kind === 'update') return 'Update';
   if (state === 'not-installed') return 'How to install';
