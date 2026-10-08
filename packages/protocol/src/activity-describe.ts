@@ -580,6 +580,31 @@ function fetchDraft(input: Input): Draft {
   };
 }
 
+/** `recipe`: one to three recipe pages, read for the recipe card. */
+function recipeDraft(input: Input): Draft {
+  const urls = Array.isArray(input.urls)
+    ? input.urls.filter((u): u is string => typeof u === 'string')
+    : [];
+  const sites = urls.flatMap((url) => {
+    const host = hostOf(url);
+    return host && !isLocal(host) ? [siteChip(url, host)] : [];
+  });
+  const host = urls[0] ? hostOf(urls[0]) : undefined;
+  return {
+    family: 'research',
+    words: say(
+      'find',
+      urls.length > 1 ? `${urls.length} recipes` : host ? `a recipe on ${host}` : 'a recipe',
+    ),
+    ...(sites.length && { chips: sites }),
+    finish: (output) => {
+      const recipes = record(parseJson(output)).recipes;
+      const first = Array.isArray(recipes) ? record(recipes[0]).title : undefined;
+      return typeof first === 'string' && first ? { outcome: clip(oneLine(first), 60) } : {};
+    },
+  };
+}
+
 function searchWebDraft(input: Input): Draft {
   const query = str(input, 'query', 'q', 'search_query') ?? '';
   return {
@@ -901,6 +926,7 @@ function serverTool(server: string | undefined, tool: string): Draft {
 const CONCH: Record<string, (input: Input) => Draft> = {
   web_search: searchWebDraft,
   web_fetch: fetchDraft,
+  recipe: recipeDraft,
   read_file: (input) => readDraft(input),
   read_document: (input) => readDraft(input, 'document'),
   search_files: (input) => {
