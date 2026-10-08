@@ -82,19 +82,4 @@
     block-size: 0.875rem;
     stroke-width: 2;
   }
-
-  /* On a touch screen a field's text is a step up (Input's well, which keeps
-     a phone from zooming into it): the words around it step up with it. */
-  @media (pointer: coarse) {
-    .label {
-      font-size: var(--nc-text-md);
-    }
-
-    .label[data-size='sm'],
-    .optional,
-    .description,
-    .error {
-      font-size: var(--nc-text-sm);
-    }
-  }
 }

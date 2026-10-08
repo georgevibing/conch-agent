@@ -59,15 +59,6 @@
     --icon: 1.125rem;
   }
 
-  /* On a touch screen a chosen value reads at the size a typed one does
-     (Input's well is a step up there): a form keeps one size. */
-  @media (pointer: coarse) {
-    .trigger[data-size] {
-      --font: var(--nc-text-lg);
-      --icon: 1.125rem;
-    }
-  }
-
   @media (hover: hover) {
     .trigger[data-variant='field']:hover:not(:disabled, [data-state='open']) {
       --border: var(--nc-border-strong);

@@ -87,20 +87,25 @@
   }
 
   /*
-   * A phone zooms the page into any field typed in under 16px, and Nacre's
-   * rem is 14px, so base.css holds every field at 16 real pixels on a touch
-   * screen. Left at that, a field reads 1.3× the words around it: a 16px
-   * placeholder under a 11px label. So on a touch screen the well is set one
-   * step up (text-lg, which is 14px), and the input inside it, still 16px to
-   * the phone, is drawn at 14/16 of that (`--well-type`): what you type, the
-   * unit beside it and Field's label over it read as one size.
+   * A phone zooms the page into any field typed in under 16px, so base.css
+   * holds every field at 16 real pixels on a touch screen. Left at that, a
+   * field reads bigger than the words around it (a 16px placeholder under a
+   * 13px label). So on a touch screen the input, still 16px to the phone, is
+   * drawn at the well's own size: `--well-type` is that size over 16px
+   * (14/16 for the 14px `md` well), so what you type, the unit beside it and
+   * Field's label over it read as they do with a pointer.
    */
   @media (pointer: coarse) {
     .well[data-size] {
-      --well-font: var(--nc-text-lg);
-      --well-slot-font: var(--nc-text-md);
-      --well-icon: 1.125rem;
-      --well-type: 0.875;
+      --well-type: 0.875; /* --nc-text-md / 16px */
+    }
+
+    .well[data-size='sm'] {
+      --well-type: 0.8125; /* --nc-text-sm / 16px */
+    }
+
+    .well[data-size='lg'] {
+      --well-type: 1; /* --nc-text-lg is 16px */
     }
 
     /* The text box: as wide and tall as the input looks, while the input
