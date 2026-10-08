@@ -135,6 +135,10 @@ export function ItemDetail({
     if (place === 'channels')
       return void navigate(focus ? `/channels/${focus}` : '/apps?show=talk');
     if (place === 'skills') return void navigate('/skills', { state: { focus: 'publishers' } });
+    if (place === 'passwords')
+      return void navigate('/passwords', {
+        state: focus === '1password' ? { manage: focus } : { sources: true },
+      });
     openSettings(place as SettingsTab, focus);
   };
   const refresh = () => {

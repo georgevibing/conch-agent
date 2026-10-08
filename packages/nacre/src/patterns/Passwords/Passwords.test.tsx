@@ -205,6 +205,20 @@ describe('VaultSourceRow', () => {
     await expectAccessible(container);
   });
 
+  it('says how Conch reaches it, beside the count', async () => {
+    const { container } = renderNacre(
+      <VaultSourceRow
+        source="1password"
+        state="ready"
+        count={12}
+        via="Service account · 2 vaults"
+      />,
+    );
+    expect(screen.getByText('12 items')).toBeInTheDocument();
+    expect(screen.getByText('· Service account · 2 vaults')).toBeInTheDocument();
+    await expectAccessible(container);
+  });
+
   it('shows no hint when it is connected', () => {
     renderNacre(<VaultSourceRow source="bitwarden" state="ready" count={2} message="Old news" />);
     expect(screen.getByText('2 items')).toBeInTheDocument();

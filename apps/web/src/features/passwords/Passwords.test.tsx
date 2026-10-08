@@ -508,3 +508,86 @@ describe('where items live, and doing things to several', () => {
     await waitFor(() => expect(where()).toBe('/passwords/op_v_1'));
   });
 });
+
+describe('1Password on a computer without its app', () => {
+  // Written in two parts, so no scanner takes it for a real one.
+  const token = 'ops_' + 'eyJzaWduSW5BZGRyZXNzIjoibXkuMXBhc3N3b3JkLmNvbSJ9WEBWEBWEB';
+  const vaults = [
+    { id: 'vlt1', name: 'Servers' },
+    { id: 'vlt2', name: 'Shared' },
+  ];
+  const onePassword = (over: Partial<VaultSource>) =>
+    source({ id: '1password', name: '1Password', writable: false, unlock: 'app', ...over });
+
+  it('connects with a service account token, says what it found, and lets the token go', async () => {
+    const user = userEvent.setup();
+    const connected = onePassword({
+      state: 'ready',
+      access: { mode: 'service-account', vaults },
+    });
+    const { calls } = open([], {
+      route: '/passwords?manage=1password',
+      sources: [source({}), onePassword({ state: 'off', access: { mode: 'app' } })],
+      routes: {
+        'PUT /api/vault/sources/1password/token': () => ({
+          vaults,
+          sources: [source({}), connected],
+        }),
+      },
+    });
+    const dialog = await screen.findByRole('dialog', { name: 'Connect 1Password' });
+    await user.click(within(dialog).getByRole('radio', { name: /Use a service account token/ }));
+    expect(within(dialog).getByText(/Developer › Service accounts/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: /1Password’s guide/ })).toHaveAttribute(
+      'href',
+      expect.stringContaining('developer.1password.com'),
+    );
+    const connect = within(dialog).getByRole('button', { name: 'Connect' });
+    const field = within(dialog).getByLabelText('Service account token');
+    await user.type(field, 'not-a-token');
+    expect(connect).toBeDisabled();
+    await user.clear(field);
+    await user.type(field, token);
+    await user.click(connect);
+    expect(await screen.findByText('Connected · 2 vaults')).toBeInTheDocument();
+    const put = calls.find((c) => c.path === '/api/vault/sources/1password/token');
+    expect(put).toMatchObject({ method: 'PUT', body: { token } });
+    // Gone from the page once sent.
+    expect(document.body.innerHTML).not.toContain(token);
+  });
+
+  it('says it’s a service account, chooses its vaults, and switches back to the app', async () => {
+    const user = userEvent.setup();
+    const { calls } = open([], {
+      sources: [
+        source({}),
+        onePassword({ state: 'ready', count: 3, access: { mode: 'service-account', vaults } }),
+      ],
+      routes: {
+        'PUT /api/vault/sources/1password/vaults': () => [source({})],
+        'DELETE /api/vault/sources/1password/token': () => [source({})],
+      },
+    });
+    await user.click(await screen.findByRole('button', { name: 'Manage password managers' }));
+    const managers = await screen.findByRole('dialog', { name: 'Password managers' });
+    // Its row says how Conch reaches 1Password.
+    expect(within(managers).getByText('· Service account · 2 vaults')).toBeInTheDocument();
+    await user.click(within(managers).getByRole('button', { name: 'Settings' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Connect 1Password' });
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Shared' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Save vaults' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/api/vault/sources/1password/vaults')).toMatchObject({
+        method: 'PUT',
+        body: { vaults: ['vlt1'] },
+      }),
+    );
+    await user.click(within(dialog).getByRole('radio', { name: /Use the 1Password app/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Use the app instead' }));
+    await waitFor(() =>
+      expect(
+        calls.find((c) => c.method === 'DELETE' && c.path === '/api/vault/sources/1password/token'),
+      ).toBeDefined(),
+    );
+  });
+});

@@ -544,6 +544,12 @@ export const RULES: readonly BackupRule[] = [
     why: 'The keys and addresses of a browser in the cloud, or elsewhere, that Conch uses (ADR 0080).',
   },
   {
+    match: 'onepassword.secrets.json',
+    class: 'secret',
+    group: 'secrets',
+    why: 'A 1Password service account’s token, and which of its vaults Passwords shows.',
+  },
+  {
     match: 'slack.secrets.json',
     class: 'secret',
     group: 'secrets',

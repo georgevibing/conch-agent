@@ -26,6 +26,23 @@ Turn one on in **More → Password managers…**. Conch reads it through that ma
 
 A manager that asks for your OK in its own window, such as 1Password, is only asked while you have **Passwords** open. Anywhere else in Conch you see what it showed last, and nothing pops up. How long its OK lasts is the manager's to decide: 1Password asks again after ten minutes without use, and on Windows each time Conch restarts.
 
+### 1Password on a computer without the app
+
+1Password connects two ways. Choose one with **Turn on** (or **Settings**) beside 1Password in **More → Password managers…**:
+
+- **Use the 1Password app on this computer.** Unlock with Touch ID or Windows Hello. In the 1Password app, turn on **Settings › Developer › Integrate with 1Password CLI**.
+- **Use a service account token.** For a computer without the 1Password app, such as a server. Conch reads only the vaults you give the service account, and asks nobody for an OK.
+
+To make a token:
+
+1. On 1Password.com, open **Developer › Service accounts**.
+2. Create a service account. Choose the vaults Conch may see, with read access.
+3. Copy the token it shows (it starts with `ops_`) and paste it in Conch.
+
+Conch tries the token first and says what it found: **Connected · 2 vaults**. It keeps the token sealed on this computer, hands it only to 1Password's command line, and never shows it again. 1Password's own steps are in [its guide](https://developer.1password.com/docs/service-accounts/get-started/).
+
+The row then says **Service account · 2 vaults**. **Settings** chooses which of its vaults Passwords shows, replaces the token, switches back to the app, or disconnects, which forgets the token. If the token stops working, **Repair everything** says so, with **Replace the token**. Both ways need 1Password's command line tool; Conch offers to get it.
+
 Each of these managers is an app in **Apps** too, under **Passwords**. One you turned on has a card there, and its page has the same switch: **Fill sign-ins from** and its name. 1Password has a second switch, **Manage Environments**, for developers. See [Apps](./apps.md#1password). A manager this computer can't run, such as the macOS Keychain on Windows, isn't offered.
 
 **Copy into Conch** makes a manager's items Conch's own, so they are in your vault and your backups. Copy them all from **More → Password managers…**, where Conch can keep them up to date, one way, every 30 minutes. Or copy one or a few: right-click an item, or press **Copy into Conch** on its page. No export file is made.

@@ -80,6 +80,26 @@ export const YourName: Story = {
   },
 };
 
+/** A long name shrinks to fit its line instead of running out of sight; try it at phone width. */
+export const LongName: Story = {
+  render: function Render() {
+    const [name, setName] = useState('Maximiliane Alexandra-Konstantinopoulou');
+    return (
+      <WelcomeStage>
+        <Heading level={1} display size="4xl">
+          First, what should I call you?
+        </Heading>
+        <WelcomeName
+          label="Your name"
+          placeholder="Your name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </WelcomeStage>
+    );
+  },
+};
+
 const choices = [
   { value: 'writing', label: 'Writing', icon: <PenLine /> },
   { value: 'coding', label: 'Coding', icon: <Code /> },

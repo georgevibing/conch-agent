@@ -946,6 +946,14 @@ export function useFindables(query: string, conversationId: string | undefined):
       run: () => void navigate('/passwords', { state: { import: true } }),
     },
     {
+      id: 'onepassword-settings',
+      label: 'Connect 1Password',
+      keywords:
+        '1password one password service account token ops server headless remote vaults op cli app desktop',
+      icon: <KeyRound />,
+      run: () => void navigate('/passwords', { state: { manage: '1password' } }),
+    },
+    {
       id: 'password-check',
       label: 'Check my passwords',
       keywords: 'security check breach breached leaked pwned weak reused health',

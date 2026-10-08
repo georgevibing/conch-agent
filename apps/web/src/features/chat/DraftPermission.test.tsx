@@ -33,3 +33,32 @@ describe('review a draft before saving', () => {
     expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
   });
 });
+
+describe('review an email before it goes', () => {
+  it('shows From, To, the files and the words, and sends only this once', async () => {
+    const respond = vi.fn();
+    const item: Extract<TranscriptItem, { kind: 'permission' }> = {
+      kind: 'permission',
+      id: 'permission_send',
+      toolName: 'mcp__conch__google_mail_send',
+      summary: 'send an email from pro@example.com to sam@example.org, with subject “Invoice”',
+      once: true,
+      input: {
+        accountEmail: 'pro@example.com',
+        to: ['sam@example.org'],
+        subject: 'Invoice',
+        body: 'Here it is.',
+        files: ['invoice.pdf'],
+      },
+    };
+    renderApp(<PermissionCard item={item} name="Conch" onRespond={respond} />);
+    expect(screen.getByRole('region', { name: 'Email to review' })).toBeInTheDocument();
+    expect(screen.getByText('From')).toBeInTheDocument();
+    expect(screen.getByText('pro@example.com')).toBeInTheDocument();
+    expect(screen.getByText('invoice.pdf')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Always allow' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Don’t send' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(respond).toHaveBeenCalledExactlyOnceWith('allow');
+  });
+});

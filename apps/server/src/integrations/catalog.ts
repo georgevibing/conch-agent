@@ -101,7 +101,7 @@ const raw: CatalogItem[] = [
     homepage: 'https://mail.google.com',
     featured: true,
     examples: ['What did I miss in my inbox today?', 'Draft a reply to the latest email from Sam'],
-    access: ['Read and search email', 'Create drafts'],
+    access: ['Read and search email', 'Save drafts', 'Send email, showing you each one first'],
     cues: {
       match: [
         coined('Gmail'),

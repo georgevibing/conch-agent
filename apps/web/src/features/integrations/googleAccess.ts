@@ -34,7 +34,7 @@ export const PRODUCTS: ProductInfo[] = [
     describe: {
       off: 'Not used with this account.',
       read: 'Search and read your mail.',
-      write: 'Also save drafts and send email. It asks you every time.',
+      write: 'Also save drafts and send email. Shows you each email first.',
     },
   },
   {
@@ -45,7 +45,7 @@ export const PRODUCTS: ProductInfo[] = [
     describe: {
       off: 'Not used with this account.',
       read: 'See your events.',
-      write: 'Also add, move and delete events. It asks you every time.',
+      write: 'Also add, move and delete events. Asks you first every time.',
     },
   },
   {
@@ -73,6 +73,19 @@ export const grantedOf = (account: GoogleAccount, product: GoogleProduct): Googl
 /** Choosing this needs Google's consent again (a sign-in), not just a switch. */
 export const needsConsent = (account: GoogleAccount, product: GoogleProduct, level: GoogleLevel) =>
   levelRank(level) > levelRank(grantedOf(account, product));
+
+/**
+ * What a way of signing in can do, in one line: an app password is Gmail
+ * alone (reading and sending); Calendar and Drive need Google sign-in.
+ */
+export function methodLine(account: GoogleAccount): string {
+  if (account.via === 'app-password')
+    return 'App password · Gmail: read and send. Calendar and Drive need Google sign-in.';
+  const gmail = grantedOf(account, 'gmail');
+  return gmail === 'read'
+    ? 'Google sign-in · Gmail read only: this sign-in can’t send yet. Calendar and Drive too.'
+    : 'Google sign-in · Gmail, Calendar and Drive.';
+}
 
 /** An app password reaches Gmail and nothing else. */
 export const reachable = (account: GoogleAccount, product: GoogleProduct) =>
@@ -153,10 +166,16 @@ export function serviceRows(
     if (account.via === 'google' && levelRank(granted) < 2)
       return {
         ...base,
+        ...(p.id === 'gmail' &&
+          granted === 'read' && {
+            describe: { ...p.describe, read: 'Read only: this sign-in can’t send.' },
+          }),
         note:
           granted === 'off'
             ? 'Choosing Read or Read & write asks Google once.'
-            : 'Read & write asks Google once.',
+            : p.id === 'gmail'
+              ? 'Read & write asks Google once, so it can send.'
+              : 'Read & write asks Google once.',
       };
     return base;
   });

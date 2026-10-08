@@ -24,7 +24,14 @@ import type { HostTool, HostToolResult } from '../engines/types';
 import { SendUncertain } from './imap';
 import { gmailLink, replyEnvelope, viaImap } from './mail';
 import { GoogleError, type GoogleService } from './service';
-import { accountRef, composeRaw, pickAccount } from './accounts';
+import {
+  accountRef,
+  composeRaw,
+  MAIL_FILES_MAX_BYTES,
+  pickAccount,
+  pickSender,
+  type MailFile,
+} from './accounts';
 import { agendaView, filesView, mailView } from './views';
 
 type Reconciled =
@@ -37,6 +44,8 @@ interface Receipt {
 }
 
 const email = z.email().max(254);
+/** The biggest message Gmail's API takes in a JSON body (its 5 MB limit, with room for base64). */
+const JSON_SEND_MAX_BYTES = 3_500_000;
 const resourceId = z.string().regex(/^[A-Za-z0-9_-]{1,200}$/);
 /** Google's event ids: base32hex letters, and `_` with a time for one occurrence of a series. */
 const eventId = z.string().regex(/^[A-Za-z0-9_]{1,1024}$/);
@@ -144,7 +153,7 @@ const eventView = (event: Event): ToolView | undefined => {
 };
 /** The email that just went, drawn like the ones a search finds. */
 const sentView = (
-  args: { to: string[]; subject: string; body: string },
+  args: { to: string[]; subject: string; body: string; attachments?: string[] },
   account: GoogleAccount,
   url?: string,
 ): ToolView | undefined =>
@@ -155,7 +164,7 @@ const sentView = (
       snippet: args.body.replace(/\s+/g, ' ').trim().slice(0, 300),
       date: new Date().toISOString(),
       unread: false,
-      attachments: false,
+      attachments: Boolean(args.attachments?.length),
       ...(url && { url }),
     },
   ]);
@@ -165,6 +174,14 @@ interface WriteSpec<Shape extends z.ZodRawShape, Prepared> {
   description: string;
   input: Shape;
   capability: GoogleCapability;
+  /**
+   * Which account, when it isn't the one account that can (sending: the one
+   * named, else the first that can send). `guessed` means Conch chose it, so
+   * the person sees it first even when they allowed the tool.
+   */
+  pick?: (ref: string | undefined) => Promise<{ account: GoogleAccount; guessed: boolean }>;
+  /** More for the card to show beside the arguments (the names of the files going). */
+  shows?: (prepared: Prepared) => Record<string, unknown>;
   /** What it changes, as a person would name it, for the "nothing was …" lines. */
   noun: string;
   /** The fields that make two calls the same action, never the model's wording. */
@@ -193,8 +210,42 @@ interface WriteSpec<Shape extends z.ZodRawShape, Prepared> {
   ) => Promise<Reconciled>;
 }
 
+export interface GoogleWriteOptions {
+  /**
+   * What the person chose in Apps for a tool that speaks for them (sending):
+   * `allow` goes without the question while the chat has read nothing from
+   * outside; `ask` is their own Ask, which Auto keeps asking. Left out, it asks.
+   */
+  chosen?: (toolName: string) => 'allow' | 'ask' | undefined;
+  /** The chat's own files by id (`att_…`), for an email to carry. Never a path. */
+  files?: (ids: readonly string[]) => Promise<MailFile[]>;
+}
+
+/**
+ * Whether a change may go without the question: only one the person set to
+ * Allow, to an account they named, while nothing from outside is in the chat
+ * (an email it read, a web page) and no skill limits it. Anything else asks.
+ */
+function mayGoUnasked(
+  ctx: ToolContext,
+  chosen: 'allow' | 'ask' | undefined,
+  why: { warning: string; guessed: boolean },
+): boolean {
+  return (
+    chosen === 'allow' &&
+    !why.warning &&
+    !why.guessed &&
+    !ctx.untrusted?.() &&
+    !(ctx.taints?.() ?? []).length
+  );
+}
+
 /** Google's write tools: each one asks, checks the account twice, and can be found again. */
-export function googleWriteTools(service: GoogleService, ctx: ToolContext): HostTool[] {
+export function googleWriteTools(
+  service: GoogleService,
+  ctx: ToolContext,
+  options: GoogleWriteOptions = {},
+): HostTool[] {
   /** Operations started in a chat, not a task: their own id, never reused. */
   const fresh = () => `chat-${randomBytes(18).toString('base64url')}`;
 
@@ -205,8 +256,10 @@ export function googleWriteTools(service: GoogleService, ctx: ToolContext): Host
     const resolve = async (raw: Record<string, unknown>) => {
       const parsed = schema.parse(raw);
       const ref = accountRef.parse((parsed as { accountId?: unknown }).accountId);
-      const account = await pickAccount(service, ref, spec.capability);
-      return { args: { ...parsed, accountId: account.id }, account };
+      const { account, guessed } = spec.pick
+        ? await spec.pick(ref)
+        : { account: await pickAccount(service, ref, spec.capability), guessed: false };
+      return { args: { ...parsed, accountId: account.id }, account, guessed };
     };
     const notDone = (why: string): HostToolResult => ({
       text: `${why} Nothing was ${spec.noun}.`,
@@ -243,7 +296,7 @@ export function googleWriteTools(service: GoogleService, ctx: ToolContext): Host
         },
       },
       async run(raw, context) {
-        const { args, account } = await resolve(raw);
+        const { args, account, guessed } = await resolve(raw);
         const operationId = context?.operationId ?? fresh();
         // In a task, what an earlier try already did is found, not done again.
         if (context?.operationId) {
@@ -256,14 +309,19 @@ export function googleWriteTools(service: GoogleService, ctx: ToolContext): Host
         const prepared = (await spec.prepare?.(args, account)) as Prepared;
         const restricted = await ctx.restricted?.('apps', 'google');
         const warning = [ctx.untrusted?.(), restricted].filter(Boolean).join(' ');
-        const decision = await ctx.ask({
-          toolName: spec.name,
-          input: { ...args, accountEmail: account.email },
-          summary: spec.summary(args, account, prepared),
-          ...(warning ? { taint: warning } : {}),
-          // Exactly this, this time: never "always".
-          once: true,
-        });
+        const chosen = options.chosen?.(spec.name);
+        const decision = mayGoUnasked(ctx, chosen, { warning, guessed })
+          ? 'allow'
+          : await ctx.ask({
+              toolName: spec.name,
+              input: { ...args, accountEmail: account.email, ...spec.shows?.(prepared) },
+              summary: spec.summary(args, account, prepared),
+              ...(warning ? { taint: warning } : {}),
+              // Exactly this, this time: never "always".
+              once: true,
+              // The person's own Ask on this tool: Auto keeps asking (Full trust doesn't).
+              ...(chosen === 'ask' && { explicit: true }),
+            });
         if (decision === 'deny') return notDone('The person said no.');
         if (ctx.signal.aborted) return notDone('Stopped before it started.');
         let current;
@@ -299,34 +357,77 @@ export function googleWriteTools(service: GoogleService, ctx: ToolContext): Host
     messages: z.array(z.object({ id: resourceId })).optional(),
     nextPageToken: z.string().optional(),
   });
-  const send = write({
+  const send = write<
+    {
+      accountId: typeof accountRef;
+      to: z.ZodArray<typeof email>;
+      cc: z.ZodOptional<z.ZodArray<typeof email>>;
+      subject: ReturnType<typeof oneLine>;
+      body: z.ZodString;
+      attachments: z.ZodOptional<z.ZodArray<z.ZodString>>;
+      sourceMessageId: z.ZodOptional<typeof resourceId>;
+      threadId: z.ZodOptional<typeof resourceId>;
+    },
+    MailFile[]
+  >({
     name: 'google_mail_send',
     noun: 'sent',
     capability: 'mail-send',
     description:
-      'Send an email from a connected Gmail account, as the person, after they approve this exact email. For a reply, pass sourceMessageId from google_mail_read: the recipients and subject must match the original, and it is threaded. Plain text only, no attachments. Prefer google_mail_create_draft when the person may want to edit first. Never retry an uncertain send.',
+      'Send an email from a connected Gmail account, as the person. Use it whenever the person asks you to send an email (an app-password account sends too). accountId is the account it goes from: the one the person names (an email from google_accounts); left out, the first account that can send is used and shown to them. The person sees this exact email (From, To, subject, text and files) before it goes, unless they allowed sending in Apps. To attach files, put their ids in attachments (the att_… ids file_make, image_generate, publish_file or list_attachments gave), never a path. For a reply, pass sourceMessageId from google_mail_read: the recipients and subject must match the original, and it is threaded. Plain text. Use google_mail_create_draft instead only when the person wants to edit or send it themselves. Never retry an uncertain send.',
     input: {
-      accountId: accountRef,
+      accountId: accountRef.describe(
+        'The account it goes from: its email address or id from google_accounts. The one the person names; left out, the first account that can send.',
+      ),
       to: z.array(email).min(1).max(20),
       cc: z.array(email).max(20).optional(),
       subject: oneLine(500),
       body: z.string().max(100_000),
+      attachments: z
+        .array(z.string().min(1).max(200))
+        .max(10)
+        .optional()
+        .describe('Files from this chat to attach, by their ids (att_…).'),
       sourceMessageId: resourceId.optional(),
       threadId: resourceId.optional(),
     },
+    pick: (ref) => pickSender(service, ref),
     identity: (a) => [
       a.accountId,
       a.sourceMessageId ?? a.threadId ?? null,
       a.to.map((v) => v.toLowerCase()).sort(),
       (a.cc ?? []).map((v) => v.toLowerCase()).sort(),
       a.subject.trim().toLowerCase(),
+      [...(a.attachments ?? [])].sort(),
     ],
-    summary: (a, account) =>
-      `send an email from ${account.email} to ${a.to.join(', ')}${a.cc?.length ? `, copying ${a.cc.join(', ')}` : ''}, with subject “${a.subject}”`,
+    async prepare(a) {
+      if (!a.attachments?.length) return [];
+      if (!options.files)
+        throw new GoogleError('invalid', 'Files can only be attached from a chat they belong to.');
+      let files: MailFile[];
+      try {
+        files = await options.files(a.attachments);
+      } catch (error) {
+        throw new GoogleError(
+          'invalid',
+          `${error instanceof Error ? error.message : 'Those files couldn’t be found.'} Nothing was sent.`,
+        );
+      }
+      const size = files.reduce((sum, f) => sum + f.bytes.length, 0);
+      if (size > MAIL_FILES_MAX_BYTES)
+        throw new GoogleError(
+          'invalid',
+          `Those files come to ${Math.ceil(size / 1024 / 1024)} MB, and Gmail takes about ${MAIL_FILES_MAX_BYTES / 1024 / 1024} MB in one email. Nothing was sent: send fewer, or share a link instead.`,
+        );
+      return files;
+    },
+    shows: (files) => (files.length ? { files: files.map((f) => f.name) } : {}),
+    summary: (a, account, files) =>
+      `send an email from ${account.email} to ${a.to.join(', ')}${a.cc?.length ? `, copying ${a.cc.join(', ')}` : ''}, with subject “${a.subject}”${files.length ? `, with ${files.map((f) => f.name).join(', ')}` : ''}`,
     async perform(a, account, run) {
       const reply = await replyEnvelope(service, a);
       const messageId = sendMessageId(run.operationId, account.email);
-      const raw = composeRaw(a, { messageId, from: account.email, reply });
+      const raw = composeRaw(a, { messageId, from: account.email, reply, files: run.prepared });
       if (account.via === 'app-password') {
         try {
           await viaImap(
@@ -359,16 +460,40 @@ export function googleWriteTools(service: GoogleService, ctx: ToolContext): Host
           ...(sentView(a, account) && { view: sentView(a, account) }),
         };
       }
+      // Gmail's API takes a message in JSON up to 5 MB; a bigger one (files) is uploaded whole.
+      const boundary = `conch-${randomBytes(12).toString('hex')}`;
       const sent = Mail.parse(
-        await service.api(account.id, 'mail-send', '/gmail/v1/users/me/messages/send', {
-          method: 'POST',
-          signal: run.signal,
-          authorization: run.authorization,
-          body: {
-            raw: Buffer.from(raw).toString('base64url'),
-            ...(reply ? { threadId: reply.threadId } : {}),
-          },
-        }),
+        Buffer.byteLength(raw) <= JSON_SEND_MAX_BYTES
+          ? await service.api(account.id, 'mail-send', '/gmail/v1/users/me/messages/send', {
+              method: 'POST',
+              signal: run.signal,
+              authorization: run.authorization,
+              body: {
+                raw: Buffer.from(raw).toString('base64url'),
+                ...(reply ? { threadId: reply.threadId } : {}),
+              },
+            })
+          : await service.api(account.id, 'mail-send', '/upload/gmail/v1/users/me/messages/send', {
+              method: 'POST',
+              signal: run.signal,
+              authorization: run.authorization,
+              query: { uploadType: 'multipart' },
+              raw: {
+                contentType: `multipart/related; boundary=${boundary}`,
+                body: [
+                  `--${boundary}`,
+                  'Content-Type: application/json; charset=UTF-8',
+                  '',
+                  JSON.stringify(reply ? { threadId: reply.threadId } : {}),
+                  `--${boundary}`,
+                  'Content-Type: message/rfc822',
+                  '',
+                  raw,
+                  `--${boundary}--`,
+                  '',
+                ].join('\r\n'),
+              },
+            }),
       );
       return {
         receipt: {

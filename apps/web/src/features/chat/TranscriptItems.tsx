@@ -441,20 +441,28 @@ export function PermissionCard({
       : undefined;
   const draftInput =
     item.input && typeof item.input === 'object' ? (item.input as Record<string, unknown>) : {};
+  const tool = item.toolName.replace(/^mcp__conch__/, '');
+  const strings = (value: unknown) =>
+    Array.isArray(value) && value.every((v) => typeof v === 'string') ? (value as string[]) : [];
+  // An email to save or to send: the exact one, From, To, Cc, its files and words.
   const draft =
-    item.toolName.replace(/^mcp__conch__/, '') === 'google_mail_create_draft' &&
+    (tool === 'google_mail_create_draft' || tool === 'google_mail_send') &&
     typeof draftInput.body === 'string' &&
     typeof draftInput.subject === 'string' &&
     Array.isArray(draftInput.to) &&
     draftInput.to.every((to) => typeof to === 'string')
       ? {
+          kind: tool === 'google_mail_send' ? ('send' as const) : ('draft' as const),
           to: draftInput.to as string[],
+          cc: strings(draftInput.cc),
+          files: strings(draftInput.files),
           subject: draftInput.subject,
           body: draftInput.body,
           account:
             typeof draftInput.accountEmail === 'string' ? draftInput.accountEmail : undefined,
         }
       : undefined;
+  const sending = draft?.kind === 'send';
   return (
     <ApprovalCard
       aria-label={`${name} asks first: ${title}`}
@@ -466,8 +474,8 @@ export function PermissionCard({
       // tool through for the rest of the chat; for a skill's list, or words going to
       // other people, it's this once.
       allowAlways={(!item.taint || Boolean(item.lasting)) && !item.once && allowAlways && !draft}
-      allowLabel={draft ? 'Save draft' : 'Allow'}
-      denyLabel={draft ? 'Don’t save' : 'Deny'}
+      allowLabel={sending ? 'Send' : draft ? 'Save draft' : 'Allow'}
+      denyLabel={sending ? 'Don’t send' : draft ? 'Don’t save' : 'Deny'}
       sent={sent}
       onDecide={respond}
       allowRef={allowRef}

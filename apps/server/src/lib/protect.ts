@@ -26,6 +26,8 @@ export function protectedPaths(home: string): string[] {
     join(home, 'integrations.secrets.json'),
     join(home, 'google.secrets.json'),
     join(home, 'slack.secrets.json'),
+    // A 1Password service account's token: whoever has it reads those vaults.
+    join(home, 'onepassword.secrets.json'),
     // A cloud browser's key, or the address of a browser elsewhere (ADR 0080).
     join(home, 'browser.secrets.json'),
     join(home, 'channels.secrets.json'),

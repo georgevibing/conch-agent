@@ -12,6 +12,7 @@ import {
   type VaultFieldKind,
   type VaultFieldRole,
   KeePassDatabase,
+  OnePasswordConnected,
   VaultCopyOutResult,
   VaultSource,
   type VaultSourceId,
@@ -69,6 +70,24 @@ export const vaultApi = {
     request(z.array(VaultSource), `/api/vault/sources/${id}/unlock`, {
       method: 'POST',
       body: { password, remember },
+    }),
+  /** A 1Password service account: tried, then kept sealed. It's never sent back. */
+  connectOnePassword: (token: string) =>
+    request(OnePasswordConnected, '/api/vault/sources/1password/token', {
+      method: 'PUT',
+      body: { token },
+    }),
+  /** Forget the token: back to the 1Password app, or (`disconnect`) off too. */
+  forgetOnePassword: (disconnect = false) =>
+    request(
+      z.array(VaultSource),
+      `/api/vault/sources/1password/token${disconnect ? '?disconnect=1' : ''}`,
+      { method: 'DELETE' },
+    ),
+  setOnePasswordVaults: (vaults: string[]) =>
+    request(z.array(VaultSource), '/api/vault/sources/1password/vaults', {
+      method: 'PUT',
+      body: { vaults },
     }),
   lockSource: (id: VaultSourceId) =>
     request(Ok, `/api/vault/sources/${id}/lock`, { method: 'POST', body: {} }),

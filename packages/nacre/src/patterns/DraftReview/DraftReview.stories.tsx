@@ -37,3 +37,12 @@ export const LiteralContent: Story = {
     body: '<script>not code</script>\n[Not a link](https://example.com)\nUnicode is preserved: Καλημέρα.',
   },
 };
+/** An email that goes when approved: From, To, Cc, the files it carries, and the words. */
+export const Sending: Story = {
+  args: {
+    kind: 'send',
+    account: 'kaltsikis.software@gmail.com',
+    cc: ['team@example.com'],
+    files: ['Invoice-0412.pdf', 'Timesheet.xlsx'],
+  },
+};

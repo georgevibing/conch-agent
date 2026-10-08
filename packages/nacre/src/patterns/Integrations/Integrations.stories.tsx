@@ -383,9 +383,27 @@ function AlwaysAsksPermissions() {
     {
       name: 'google_mail_create_draft',
       title: 'Save a draft',
-      description:
-        'Saves a new email or a reply in your Drafts, for you to send yourself. It never sends, and asks you every time.',
+      description: 'Saves a new email or a reply in your Drafts without sending it.',
       access: 'write',
+      asksFirst: true,
+      allowWarning: 'Conch will save drafts without showing you first.',
+    },
+    {
+      name: 'google_mail_send',
+      title: 'Send an email',
+      description:
+        'Sends an email or a reply from the account you choose. Shows you the exact email first.',
+      access: 'write',
+      asksFirst: true,
+      allowWarning: 'Conch will send emails without showing you first.',
+      policy: 'off',
+    },
+    {
+      name: 'google_calendar_delete_event',
+      title: 'Delete an event',
+      description: 'Removes an event from your calendar.',
+      access: 'write',
+      destructive: true,
       alwaysAsks: true,
     },
   ]);
@@ -393,6 +411,7 @@ function AlwaysAsksPermissions() {
     <div style={{ maxWidth: 640 }}>
       <ToolPermissionList
         tools={tools}
+        assistant="Conch"
         policy="trust"
         onChange={(name, policy) =>
           setTools((all) =>

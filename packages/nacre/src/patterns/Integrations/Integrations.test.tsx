@@ -258,8 +258,8 @@ describe('ToolPermissionList', () => {
       <ToolPermissionList
         tools={[
           {
-            name: 'google_mail_create_draft',
-            title: 'Save a draft',
+            name: 'google_calendar_create_event',
+            title: 'Add an event',
             access: 'write',
             alwaysAsks: true,
           },
@@ -268,14 +268,94 @@ describe('ToolPermissionList', () => {
         onChange={onChange}
       />,
     );
-    const group = screen.getByRole('radiogroup', { name: 'Save a draft' });
+    const group = screen.getByRole('radiogroup', { name: 'Add an event' });
     expect(within(group).queryByRole('radio', { name: 'Allow' })).not.toBeInTheDocument();
     expect(within(group).getByRole('radio', { checked: true })).toHaveTextContent('Ask');
     expect(screen.getByText('Always asks')).toBeInTheDocument();
     await userEvent.click(within(group).getByRole('radio', { name: 'Off' }));
-    expect(onChange).toHaveBeenLastCalledWith('google_mail_create_draft', 'off');
+    expect(onChange).toHaveBeenLastCalledWith('google_calendar_create_event', 'off');
     expect(defaultPermission({ access: 'write', alwaysAsks: true }, 'trust')).toBe('ask');
     await expectAccessible(container);
+  });
+
+  it('says what each choice means under it, so Off never reads as “don’t ask”', async () => {
+    const { container } = renderNacre(
+      <ToolPermissionList
+        assistant="Conch"
+        tools={[
+          { name: 'search', title: 'Search', access: 'read' },
+          { name: 'send', title: 'Send an email', access: 'write', asksFirst: true },
+          { name: 'post', title: 'Post', access: 'write', policy: 'off' },
+        ]}
+        policy="ask-writes"
+        onChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('radiogroup', { name: 'Search' })).toHaveAccessibleDescription(
+      'Uses it without asking.',
+    );
+    expect(screen.getByRole('radiogroup', { name: 'Send an email' })).toHaveAccessibleDescription(
+      'Asks you each time.',
+    );
+    expect(screen.getByRole('radiogroup', { name: 'Post' })).toHaveAccessibleDescription(
+      'You turned this off. Conch can’t use it.',
+    );
+    // No unexplained dot: the words say whose choice it is.
+    expect(screen.queryByTitle('You changed this')).not.toBeInTheDocument();
+    await expectAccessible(container);
+  });
+
+  it('turns a tool you switched off back on in one press', async () => {
+    const onChange = vi.fn();
+    renderNacre(
+      <ToolPermissionList
+        tools={[
+          { name: 'send', title: 'Send an email', access: 'write', asksFirst: true, policy: 'off' },
+        ]}
+        policy="ask-writes"
+        onChange={onChange}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Turn on Send an email' }));
+    expect(onChange).toHaveBeenLastCalledWith('send', null);
+  });
+
+  it('lets a tool that speaks for you be allowed, says what that means, and undoes it', async () => {
+    const onChange = vi.fn();
+    const send = {
+      name: 'google_mail_send',
+      title: 'Send an email',
+      access: 'write' as const,
+      asksFirst: true,
+      allowWarning: 'Conch will send emails without showing you first.',
+    };
+    const { container, rerender } = renderNacre(
+      <ToolPermissionList tools={[send]} policy="trust" onChange={onChange} assistant="Conch" />,
+    );
+    const group = screen.getByRole('radiogroup', { name: 'Send an email' });
+    // Don't ask on the app doesn't make it send unasked: Ask until this one tool says Allow.
+    expect(within(group).getByRole('radio', { checked: true })).toHaveTextContent('Ask');
+    expect(screen.queryByText('Always asks')).not.toBeInTheDocument();
+    await userEvent.click(within(group).getByRole('radio', { name: 'Allow' }));
+    expect(onChange).toHaveBeenLastCalledWith('google_mail_send', 'allow');
+    rerender(
+      <ToolPermissionList
+        tools={[{ ...send, policy: 'allow' }]}
+        policy="trust"
+        onChange={onChange}
+        assistant="Conch"
+      />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Conch will send emails without showing you first.',
+    );
+    expect(screen.getByRole('radiogroup', { name: 'Send an email' })).toHaveAccessibleDescription(
+      'Doesn’t ask. Still asks if the chat read something from outside.',
+    );
+    await expectAccessible(container);
+    await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(onChange).toHaveBeenLastCalledWith('google_mail_send', null);
+    expect(defaultPermission({ access: 'write', asksFirst: true }, 'trust')).toBe('ask');
   });
 
   it('matches the protocol’s defaults', () => {

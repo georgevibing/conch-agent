@@ -108,36 +108,48 @@
   }
 
   /* ── A name, typed large ───────────────────────────────────────────────── */
+  /* Display-size, close to the heading's scale on a phone and a touch larger on a
+     wide screen. The floor stays well above 16px, so a phone never zooms into it
+     (the input opts out of base.css's 16px touch rule with data-nc-large-type). */
   .name {
+    --wn-size: clamp(var(--nc-text-3xl), 2rem + 3vw, var(--nc-text-5xl));
     position: relative;
     display: grid;
-    inline-size: min(26rem, 100%);
+    inline-size: min(32rem, 100%);
+    min-inline-size: 0;
+    font-size: var(--wn-size);
   }
 
   .nameInput {
     inline-size: 100%;
-    padding: var(--nc-space-2) 0 var(--nc-space-3);
+    min-inline-size: 0;
+    min-block-size: var(--nc-control-lg);
+    padding: 0.15em 0 0.25em;
     border: 0;
     outline: 0;
     background: transparent;
     color: var(--nc-text);
     caret-color: var(--nc-accent-9);
     font-family: var(--nc-font-display);
-    font-size: clamp(var(--nc-text-3xl), 7vw, var(--nc-text-5xl));
-    font-weight: var(--nc-weight-semibold);
-    letter-spacing: -0.02em;
+    /* --wn-fit is set from the component when a long name overruns the line. */
+    font-size: max(16px, calc(var(--wn-size) * var(--wn-fit, 1)));
+    font-weight: var(--nc-weight-regular);
+    letter-spacing: -0.015em;
     line-height: var(--nc-leading-tight);
     text-align: center;
+    text-overflow: ellipsis;
   }
 
   .nameInput::placeholder {
     color: var(--nc-text-disabled);
+    opacity: 1;
   }
 
   /* At rest a faint pearl line; while typing it widens and warms to the accent. */
   .nameRule {
     position: relative;
-    block-size: 2px;
+    /* Scales with the type: about 3px at a phone's size, 4px on a wide screen. */
+    block-size: max(2px, 0.075em);
     border-radius: var(--nc-radius-full);
     background: linear-gradient(90deg, transparent, var(--nc-pearl-spectrum), transparent);
     opacity: 0.6;
@@ -176,7 +188,7 @@
   /* A keyboard path has a ring, like every other control. */
   .name:has(.nameInput:focus-visible) {
     outline: 2px solid var(--nc-ring);
-    outline-offset: 6px;
+    outline-offset: 0.2em;
     border-radius: var(--nc-radius-md);
   }
 

@@ -82,13 +82,30 @@ export function vaultCheck(vault: VaultService): DoctorCheck {
         );
       for (const source of status.sources) {
         if (source.id === 'conch' || source.state === 'off') continue;
+        // A service account whose token stopped working: only a new token fixes it.
+        const serviceAccount = source.access?.mode === 'service-account';
+        if (serviceAccount && source.state === 'locked') {
+          out.push(
+            item(source.id, source.name, {
+              state: 'needs-you',
+              message: source.message ?? '1Password’s service account isn’t working.',
+              action: {
+                kind: 'open',
+                label: 'Replace the token',
+                place: 'passwords',
+                focus: '1password',
+              },
+            }),
+          );
+          continue;
+        }
         out.push(
           item(source.id, source.name, {
             state:
               source.state === 'ready' ? 'ok' : source.state === 'error' ? 'warning' : 'needs-you',
             message:
               source.state === 'ready'
-                ? `Shown in Passwords${source.count !== undefined ? ` · ${source.count} items` : ''}.`
+                ? `Shown in Passwords${source.count !== undefined ? ` · ${source.count} items` : ''}${serviceAccount ? ' · through a service account' : ''}.`
                 : (source.message ?? `${source.name} isn’t ready.`),
             action:
               source.state === 'missing' && source.need

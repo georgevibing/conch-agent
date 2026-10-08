@@ -42,6 +42,7 @@ import { APP_PASSWORDS_URL, GmailPassword } from './GmailPassword';
 import {
   capabilitiesWith,
   levelOf,
+  methodLine,
   needsConsent,
   PRODUCTS,
   productInfo,
@@ -81,6 +82,7 @@ export function GoogleAccountCard({
   only,
   onRaised,
   onUseGoogle,
+  onUsePassword,
 }: {
   account: GoogleAccount;
   focus?: GoogleProduct;
@@ -88,6 +90,8 @@ export function GoogleAccountCard({
   onRaised?: (product: GoogleProduct) => void;
   /** An app-password account wants Calendar or Drive: add it with Google sign-in instead. */
   onUseGoogle?: (account: GoogleAccount, product: GoogleProduct) => void;
+  /** A Google sign-in account would rather send through an app password. */
+  onUsePassword?: (account: GoogleAccount) => void;
 }) {
   const auth = useAuth();
   const { guard, dialog } = useVerify(auth.data?.method ?? 'none');
@@ -182,7 +186,7 @@ export function GoogleAccountCard({
       <AccountAccessCard
         email={account.email}
         name={account.name}
-        method={password ? 'App password' : 'Google sign-in'}
+        method={methodLine(account)}
         state={checking ? 'checking' : account.state}
         message={
           account.state === 'unavailable'
@@ -240,6 +244,16 @@ export function GoogleAccountCard({
                 Check now
               </Button>
             )}
+            {password && onUseGoogle && (
+              <Button size="sm" variant="ghost" onClick={() => onUseGoogle(account, 'gmail')}>
+                Switch to Google sign-in
+              </Button>
+            )}
+            {!password && onUsePassword && (
+              <Button size="sm" variant="ghost" onClick={() => onUsePassword(account)}>
+                Use an app password instead
+              </Button>
+            )}
             <Button
               size="sm"
               variant="ghost"
@@ -291,6 +305,7 @@ export function GoogleAccountCard({
 export function AddGoogleAccount({
   start,
   email,
+  prefer,
   onDone,
   onCancel,
 }: {
@@ -298,6 +313,8 @@ export function AddGoogleAccount({
   start: Wanted;
   /** The address, when it's known (moving an app-password account to Google sign-in). */
   email?: string;
+  /** The way to connect someone asked for ("Switch to Google sign-in"). */
+  prefer?: 'password' | 'google';
   onDone: (accountId: string) => void;
   onCancel?: () => void;
 }) {
@@ -318,7 +335,7 @@ export function AddGoogleAccount({
     }
     return 0;
   });
-  const [picked, setPicked] = useState<'password' | 'google'>();
+  const [picked, setPicked] = useState<'password' | 'google' | undefined>(prefer);
   const configured = status.data?.configured ?? false;
   const chosen = wantedAccess(wanted);
   const products = Object.keys(chosen) as GoogleProduct[];
@@ -473,13 +490,19 @@ function GoogleMark() {
 export function GoogleAccountsSection({ app }: { app: GoogleAppId }) {
   const status = useGoogleStatus();
   const refresh = useGoogleRefresh();
-  const [adding, setAdding] = useState<{ start: Wanted; email?: string }>();
+  const [adding, setAdding] = useState<{
+    start: Wanted;
+    email?: string;
+    prefer?: 'google';
+  }>();
+  /** A Google sign-in's address, to connect Gmail with an app password instead. */
+  const [password, setPassword] = useState<string>();
   const focus = PRODUCTS.find((p) => p.app === app)?.id;
   const accounts = [...(status.data?.accounts ?? [])].sort((a, b) =>
     focus ? levelRank(levelOf(b, focus)) - levelRank(levelOf(a, focus)) : 0,
   );
   const add = (start: Wanted = focus ? { [focus]: 'read' } : {}, email?: string) =>
-    setAdding({ start, ...(email && { email }) });
+    setAdding({ start, ...(email && { email, prefer: 'google' as const }) });
   return (
     <section className={styles.section} aria-labelledby="google-accounts">
       <div className={styles.sectionHead}>
@@ -489,7 +512,7 @@ export function GoogleAccountsSection({ app }: { app: GoogleAppId }) {
           </Heading>
           <Text size="sm" tone="muted">
             Add as many as you like. Each can be off, read only, or read & write in Gmail, Calendar
-            and Drive — and every change it makes asks you first.
+            and Drive. Read & write in Gmail can send, and shows you each email first.
           </Text>
         </Stack>
         <Button size="sm" variant="surface" leadingIcon={<Plus />} onClick={() => add()}>
@@ -507,10 +530,13 @@ export function GoogleAccountsSection({ app }: { app: GoogleAppId }) {
                 {...(focus && { focus })}
                 onUseGoogle={(a, product) =>
                   add(
-                    { ...(a.access?.gmail && { gmail: a.access.gmail }), [product]: 'read' },
+                    product === 'gmail'
+                      ? { gmail: a.access?.gmail ?? 'write' }
+                      : { ...(a.access?.gmail && { gmail: a.access.gmail }), [product]: 'read' },
                     a.email,
                   )
                 }
+                onUsePassword={(a) => setPassword(a.email)}
               />
             </li>
           ))}
@@ -528,6 +554,30 @@ export function GoogleAccountsSection({ app }: { app: GoogleAppId }) {
           }
         />
       )}
+      <Dialog.Root open={!!password} onOpenChange={(open) => !open && setPassword(undefined)}>
+        <Dialog.Content size="md">
+          <Dialog.Header>
+            <Dialog.Title>Use an app password for Gmail</Dialog.Title>
+            <Dialog.Description>
+              Gmail then reads and sends with the app password, and shows you each email first.
+              Calendar and Drive keep using Google sign-in.
+            </Dialog.Description>
+          </Dialog.Header>
+          <Dialog.Body>
+            {password && (
+              <GmailPassword
+                address={password}
+                access="write"
+                onConnected={() => {
+                  setPassword(undefined);
+                  refresh();
+                  toast.success('Gmail uses the app password now');
+                }}
+              />
+            )}
+          </Dialog.Body>
+        </Dialog.Content>
+      </Dialog.Root>
       <Dialog.Root open={!!adding} onOpenChange={(open) => !open && setAdding(undefined)}>
         <Dialog.Content size="md" aria-describedby={undefined}>
           <Dialog.Header>
@@ -538,6 +588,7 @@ export function GoogleAccountsSection({ app }: { app: GoogleAppId }) {
               <AddGoogleAccount
                 start={adding.start}
                 {...(adding.email && { email: adding.email })}
+                {...(adding.prefer && { prefer: adding.prefer })}
                 onCancel={() => setAdding(undefined)}
                 onDone={() => {
                   setAdding(undefined);

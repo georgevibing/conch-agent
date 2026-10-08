@@ -1,6 +1,16 @@
 import { ArrowRight, Check } from 'lucide-react';
 import { ToggleGroup } from 'radix-ui';
-import { useId, type ComponentProps, type CSSProperties, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  type ComponentProps,
+  type CSSProperties,
+  type ReactNode,
+  type Ref,
+} from 'react';
 
 import { Pearl } from '../../components/Pearl';
 import { cx } from '../../utils/cx';
@@ -108,19 +118,66 @@ export interface WelcomeNameProps extends Omit<ComponentProps<'input'>, 'size'> 
   label: string;
 }
 
+/** The smallest a long name shrinks to, as a share of the field's own size. */
+const NAME_MIN_FIT = 0.45;
+
+function assignRef<T>(ref: Ref<T> | undefined, value: T | null) {
+  if (typeof ref === 'function') ref(value);
+  else if (ref) ref.current = value;
+}
+
 /**
  * One big line to type into, set like the heading above it: no box, a soft
  * glowing rule that brightens while you type. For the one question a screen asks.
+ * It is display-size on a phone too (never under 16px, so iOS doesn't zoom), and a
+ * name too long for the line shrinks to fit it rather than scrolling out of sight.
  */
-export function WelcomeName({ label, className, ...props }: WelcomeNameProps) {
+export function WelcomeName({ label, className, ref, onInput, ...props }: WelcomeNameProps) {
+  const input = useRef<HTMLInputElement | null>(null);
+  const setRef = useCallback(
+    (el: HTMLInputElement | null) => {
+      input.current = el;
+      assignRef(ref, el);
+    },
+    [ref],
+  );
+
+  // Measure at full size, then shrink by however much the words overrun the line.
+  const fit = useCallback(() => {
+    const el = input.current;
+    if (!el) return;
+    el.style.removeProperty('--wn-fit');
+    const { scrollWidth, clientWidth } = el;
+    if (clientWidth > 0 && scrollWidth > clientWidth + 1) {
+      const scale = Math.max(NAME_MIN_FIT, (clientWidth / scrollWidth) * 0.98);
+      el.style.setProperty('--wn-fit', scale.toFixed(3));
+    }
+  }, []);
+
+  useLayoutEffect(fit, [fit, props.value, props.defaultValue, props.placeholder]);
+
+  useEffect(() => {
+    const el = input.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => fit());
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [fit]);
+
   return (
     <div className={cx(styles.name, className)}>
       <input
+        ref={setRef}
         aria-label={label}
         autoComplete="given-name"
         autoCapitalize="words"
         spellCheck={false}
+        data-nc-large-type=""
         className={styles.nameInput}
+        onInput={(e) => {
+          fit();
+          onInput?.(e);
+        }}
         {...props}
       />
       <span aria-hidden className={styles.nameRule} />

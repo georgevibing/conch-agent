@@ -1,6 +1,7 @@
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import { createRef } from 'react';
 
 import { expectAccessible, renderNacre } from '../../test/render';
 import {
@@ -41,6 +42,14 @@ describe('Welcome', () => {
     await user.type(screen.getByRole('textbox', { name: 'Your name' }), 'Ada');
     expect(onChange).toHaveBeenCalledTimes(3);
     await expectAccessible(container);
+  });
+
+  it('sets a name at display size, kept out of the touch 16px rule, and forwards its ref', () => {
+    const ref = createRef<HTMLInputElement>();
+    renderNacre(<WelcomeName ref={ref} label="Your name" defaultValue="George" />);
+    const field = screen.getByRole('textbox', { name: 'Your name' });
+    expect(ref.current).toBe(field);
+    expect(field).toHaveAttribute('data-nc-large-type');
   });
 
   it('chooses several, by pointer or keys, and takes one back', async () => {

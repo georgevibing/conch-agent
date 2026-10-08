@@ -23,4 +23,26 @@ describe('DraftReview', () => {
     await userEvent.tab();
     expect(screen.getByRole('textbox', { name: 'Draft message' })).toHaveFocus();
   });
+
+  it('shows who an email goes from, its copies and its files, and says it sends', async () => {
+    const { container } = renderNacre(
+      <DraftReview
+        kind="send"
+        account="pro@example.com"
+        to={['sam@example.org']}
+        cc={['ana@example.org']}
+        subject="Invoice"
+        body="Attached."
+        files={['invoice.pdf']}
+      />,
+    );
+    expect(screen.getByRole('region', { name: 'Email to review' })).toBeInTheDocument();
+    expect(screen.getByText('From')).toBeInTheDocument();
+    expect(screen.getByText('pro@example.com')).toBeInTheDocument();
+    expect(screen.getByText('ana@example.org')).toBeInTheDocument();
+    expect(screen.getByText('invoice.pdf')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Email message' })).toHaveValue('Attached.');
+    expect(screen.getByText('Sends this email as it is from pro@example.com.')).toBeInTheDocument();
+    await expectAccessible(container);
+  });
 });

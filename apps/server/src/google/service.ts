@@ -134,8 +134,8 @@ export function notAllowed(account: GoogleAccount, capability: GoogleCapability)
   return new GoogleError(
     'scope',
     granted >= needed
-      ? `${account.email} is set so Conch can’t ${DOING[capability]}. The person can change that in Apps → ${PRODUCT_NAMES[product]} → Accounts.`
-      : `Google hasn’t allowed Conch to ${DOING[capability]} for ${account.email} yet. The person can allow it in Apps → ${PRODUCT_NAMES[product]} → Accounts.`,
+      ? `${account.email} is set so Conch can’t ${DOING[capability]}. The person can change that in Apps → ${PRODUCT_NAMES[product]} → Google accounts (Read & write).${capability === 'mail-send' ? ' Offer that, or a draft instead.' : ''}`
+      : `Google hasn’t allowed Conch to ${DOING[capability]} for ${account.email} yet${granted === 1 ? ': this sign-in is read only' : ''}. The person can allow it in Apps → ${PRODUCT_NAMES[product]} → Google accounts (Read & write asks Google once).${capability === 'mail-send' ? ' Offer that, or a draft instead.' : ''}`,
   );
 }
 /** An app-password account's id: the same address is the same account. */
@@ -312,6 +312,12 @@ const SEGMENT = '[A-Za-z0-9_.%@-]{1,1100}';
 const WRITES: { method: ApiOptions['method']; path: RegExp; capability: GoogleCapability }[] = [
   { method: 'POST', path: /^\/gmail\/v1\/users\/me\/drafts$/, capability: 'mail-draft' },
   { method: 'POST', path: /^\/gmail\/v1\/users\/me\/messages\/send$/, capability: 'mail-send' },
+  // The same send, for an email too big for JSON (files): uploaded whole.
+  {
+    method: 'POST',
+    path: /^\/upload\/gmail\/v1\/users\/me\/messages\/send$/,
+    capability: 'mail-send',
+  },
   {
     method: 'POST',
     path: new RegExp(`^/calendar/v3/calendars/${SEGMENT}/events$`),
@@ -466,6 +472,12 @@ export class GoogleService {
       level =
         input.access ?? (Object.hasOwn(data.passwords, id) ? known?.gmail : undefined) ?? 'read';
       data.limits[id] = { ...known, gmail: level };
+      // "Use an app password instead": a Google sign-in for the same address stops using
+      // Gmail, so Gmail has one account for it; its Calendar and Drive carry on.
+      if (level !== 'off')
+        for (const [googleId, google] of Object.entries(data.accounts))
+          if (google.profile.email.toLowerCase() === input.address.toLowerCase())
+            data.limits[googleId] = { ...data.limits[googleId], gmail: 'off' };
       data.passwords[id] = {
         profile: {
           id,

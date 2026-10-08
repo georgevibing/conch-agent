@@ -840,6 +840,36 @@ export class MockEngine implements Engine {
         );
         return;
       }
+      // Sending an email (ADR 0104): "email sam@example.org from pro@gmail.com saying …".
+      const mail = /\bemail (\S+@[^\s]+?)(?: from (\S+@[^\s]+?))? saying (.+?)[.!]*$/i.exec(
+        input.prompt.trim(),
+      );
+      if (mail?.[1] && mail[3]) {
+        if (!input.tools.some((t) => t.name === 'google_mail_send')) {
+          yield* speak('Sending email is turned off for me, so I can only save a draft.');
+          return;
+        }
+        let said: string;
+        try {
+          said = yield* hostTool('google_mail_send', {
+            ...(mail[2] && { accountId: mail[2] }),
+            to: [mail[1]],
+            subject: 'A note from Conch',
+            body: mail[3],
+          });
+        } catch (error) {
+          yield* speak(
+            `I didn’t send it: ${error instanceof Error ? error.message : 'it failed.'}`,
+          );
+          return;
+        }
+        yield* speak(
+          /"confirmed"/.test(said)
+            ? `Sent it to ${mail[1]}.`
+            : `I didn’t send it. ${said.slice(0, 200)}`,
+        );
+        return;
+      }
       // Slack with every model (ADR 0049): catch up on a channel, search, or post to one.
       const slack = (name: string) => input.tools.some((t) => t.name === name);
       const slackChannel = async function* (wanted: string) {
