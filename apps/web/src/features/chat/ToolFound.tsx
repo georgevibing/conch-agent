@@ -1,8 +1,17 @@
 import type { ToolView } from '@conch/protocol';
-import { AgendaView, ChatMessages, FileList, MailList, Sources, replyRequest } from '@conch/nacre';
+import {
+  AgendaView,
+  ChatMessages,
+  FileList,
+  MailList,
+  Places,
+  Sources,
+  replyRequest,
+} from '@conch/nacre';
 
 import { useUi } from '../../app/ui';
 import { SentAttachments } from './AttachmentViewer';
+import { attachmentUrl } from './uploads';
 
 /**
  * Words for the open chat's composer, from anywhere in it: the same way ⌘K's
@@ -34,5 +43,18 @@ export function ToolFound({ view }: { view: ToolView }) {
       return <FileList files={view.items} />;
     case 'messages':
       return <ChatMessages messages={view.items} place={view.place} />;
+    case 'places': {
+      // The map's tiles are the chat's own pictures, served by Conch: never a remote image.
+      const { items, map, ...rest } = view;
+      return (
+        <Places
+          {...rest}
+          places={items}
+          {...(map && {
+            map: { ...map, tiles: map.tiles.map((t) => (t ? attachmentUrl(t.id) : null)) },
+          })}
+        />
+      );
+    }
   }
 }
