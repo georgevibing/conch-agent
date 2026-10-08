@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import { MarketTrust } from './market-basics';
 import { Attachment } from './attachments';
+import { MailSentView } from './views/mail';
 
 const Hex = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 /** An ISO 8601 date or date-time, as a tool read it. */
@@ -267,6 +268,8 @@ export const ToolView = z.discriminatedUnion('kind', [
     to: When.optional(),
   }),
   z.object({ kind: z.literal('mail'), items: z.array(MailItem).max(30) }),
+  /** An email Conch sent or saved to Drafts for the person (`views/mail.ts`). */
+  MailSentView,
   z.object({ kind: z.literal('files'), items: z.array(FileItem).max(30) }),
   z.object({
     kind: z.literal('messages'),

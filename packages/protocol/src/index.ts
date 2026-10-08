@@ -24,6 +24,7 @@ import {
   ReplySuggestion,
   ToolView,
 } from './chat-cards';
+import { MailEdit } from './views/mail';
 import { BrowserHandoff, BrowserPermission, BrowserStatus, BrowserStep } from './browser';
 import { Channel, ChannelDoor, ChannelOrigin } from './channels';
 import { ChatChange, ChatFolder, FolderId } from './chat-list';
@@ -70,6 +71,7 @@ export * from './address';
 export * from './apps';
 export * from './artifacts';
 export * from './chat-cards';
+export * from './views/mail';
 export * from './chat-list';
 export * from './chat-context';
 export * from './commands';
@@ -639,6 +641,11 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     afterReading: z.boolean().optional(),
     /** Shows exactly what goes to other people, so it's asked each time: no "Always allow". */
     once: z.boolean().optional(),
+    /**
+     * The person may change it before allowing it (an email's words and who
+     * it goes to): the answer carries the change (`permission.respond` `edit`).
+     */
+    editable: z.boolean().optional(),
   }),
   z.object({
     ...logged,
@@ -1114,6 +1121,11 @@ export const ClientCommand = z.discriminatedUnion('type', [
     conversationId: Id,
     permissionId: Id,
     decision: z.enum(['allow', 'allow-always', 'deny']),
+    /**
+     * Allowed as the person changed it, on a question that's `editable`: the
+     * tool checks it again and does exactly this, or nothing.
+     */
+    edit: MailEdit.optional(),
   }),
   z.object({ type: z.literal('ping') }),
   /** This page is in front of someone, or isn't: nothing is pushed while one is (ADR 0027). */
