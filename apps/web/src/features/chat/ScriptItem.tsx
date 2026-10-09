@@ -84,16 +84,21 @@ export function ScriptItem({
   const { run } = item;
   const running = run.state === 'running';
 
-  // Each kind of call, in words from its first call: "Read an email" ×300.
-  const first = new Map<string, ScriptCall>();
-  for (const call of item.calls) if (!first.has(call.tool)) first.set(call.tool, call);
+  // Each kind of call in words of its own, not any one call's: "Wrote a file" ×30, not
+  // "Wrote day-01.md" ×30, and the kind's glyph, not its first call's.
   const tally: ScriptRunTally[] = run.tally.map((t) => {
-    const call = first.get(t.tool);
-    const words = call ? told({ ...call, status: 'success' }) : undefined;
+    const kind = told({
+      runId: run.runId,
+      callId: `kind-${t.tool}`,
+      step: 1,
+      tool: t.tool,
+      input: '{}',
+      status: 'success',
+    });
     return {
       tool: t.tool,
-      label: words?.done ?? t.tool.replaceAll('_', ' '),
-      family: (words?.family ?? 'other') as StoryFamily,
+      label: kind.done,
+      family: (kind.family ?? 'other') as StoryFamily,
       calls: t.calls,
       ...(t.running && { running: t.running }),
       ...(t.failed && { failed: t.failed }),
@@ -118,7 +123,8 @@ export function ScriptItem({
   const asks: ScriptRunAsk[] = asked.map((p) => ({
     id: p.id,
     step: p.script?.step ?? 0,
-    text: p.title ?? p.summary,
+    // The card's words, without the marks that set a command in code there.
+    text: (p.title ?? p.summary).replaceAll('`', ''),
     answer: p.decision ? ANSWERS[p.decision] : 'waiting',
   }));
   const waiting = asked.findLast((p) => !p.decision);
