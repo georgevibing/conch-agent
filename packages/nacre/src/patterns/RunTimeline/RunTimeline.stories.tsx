@@ -122,6 +122,38 @@ export const Spending: Story = {
   ),
 };
 
+/** Long words on a phone: an id or a link in what a run did breaks inside its row. */
+export const LongWords: Story = {
+  args: {
+    runs: [
+      {
+        id: 'l1',
+        status: 'succeeded',
+        at: now - 20 * 60_000,
+        trigger: 'schedule',
+        outcome:
+          'Read app_yazio__read_diary_entries_for_the_whole_week and https://connect.example.com/modern/activities?activityType=running&limit=50.',
+        durationMs: 64_000,
+        cost: '$0.42',
+      },
+      {
+        id: 'l2',
+        status: 'failed',
+        at: now - 26 * hour,
+        trigger: 'schedule',
+        error:
+          'mcp__app_yazio__read_diary_entries_for_the_whole_week_including_snacks didn’t answer.',
+        durationMs: 3_000,
+      },
+    ],
+  },
+  render: (args) => (
+    <div style={{ maxInlineSize: '20rem' }}>
+      <RunTimeline {...args} />
+    </div>
+  ),
+};
+
 /** Runs something started (ADR 0056): what it was, and where. */
 export const StartedByEvents: Story = {
   args: {

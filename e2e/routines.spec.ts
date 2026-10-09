@@ -1,4 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { join } from 'node:path';
+
+import { expect, test, type Page } from '@playwright/test';
 
 test.beforeEach(async ({ request }) => {
   await request.patch('/api/settings', { data: { onboarded: true, profile: { name: 'Ada' } } });
@@ -99,3 +101,82 @@ test('the editor prevents mistakes', async ({ page }) => {
     .fill('Remind me to water the plants.');
   await expect(editor.getByRole('button', { name: 'Turn on' })).toBeEnabled();
 });
+
+test('a routine’s page fits a phone, details open, however long its words', async ({
+  browser,
+  request,
+}, info) => {
+  const long =
+    'Read my food diary with app_yazio__read_diary_entries_for_the_whole_week_including_snacks, ' +
+    'then my runs from https://connect.example.com/modern/activities?activityType=running&sortOrder=desc&limit=50, ' +
+    'and write the recap.\n' +
+    'Keep the totals in ~/Documents/fitness/weekly-recaps/2026/recap-with-a-rather-long-file-name.md';
+  const made = [
+    await request.post('/api/routines', {
+      data: {
+        title: 'Weekly fitness recap',
+        summary: 'Food, runs and sleep from the week, in a few lines.',
+        prompt: long,
+        schedule: { type: 'weekly', days: ['sun'], time: '18:00' },
+        timezone: 'America/Argentina/ComodRivadavia',
+        status: 'active',
+        runLimitUsd: 3,
+      },
+    }),
+    await request.post('/api/routines', {
+      data: {
+        title: 'When the shop calls in',
+        prompt: long,
+        when: { kind: 'hook' },
+        status: 'active',
+        timezone: 'Europe/Berlin',
+      },
+    }),
+  ];
+  const phone = await browser.newContext({
+    baseURL: info.project.use.baseURL,
+    storageState: info.project.use.storageState,
+    locale: 'en-US',
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  const page = await phone.newPage();
+  for (const [i, res] of made.entries()) {
+    expect(res.ok()).toBe(true);
+    const { id } = (await res.json()) as { id: string };
+    await page.goto(`/routines/${id}`);
+    await page.getByRole('button', { name: 'Details' }).click();
+    await expect(page.getByText('Permissions')).toBeVisible();
+    // Nothing on it scrolls the page sideways: long words wrap, code scrolls in its own box.
+    // The page is the title's scroller and everything around it, up to the window.
+    const sideways = await page.evaluate(() => {
+      const out: string[] = [];
+      for (let el = document.querySelector('h1'); el; el = el.parentElement)
+        if (el.scrollWidth > el.clientWidth + 1)
+          out.push(`${el.tagName}.${el.className}: ${el.scrollWidth} > ${el.clientWidth}`);
+      return out;
+    });
+    expect(sideways).toEqual([]);
+    // The page scrolls inside itself: a tall phone shows all of it in one picture.
+    await page.setViewportSize({ width: 390, height: 2600 });
+    await shot(page, `routine-${i}-phone.png`);
+    await page.setViewportSize({ width: 390, height: 844 });
+  }
+  await phone.close();
+});
+
+/** Light and dark, kept beside the test's own results (or `CONCH_SHOTS`). */
+async function shot(page: Page, name: string) {
+  const dir = process.env.CONCH_SHOTS ?? test.info().outputDir;
+  await page.waitForTimeout(400);
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.waitForTimeout(200);
+    await page.screenshot({
+      path: join(dir, scheme === 'light' ? name : name.replace('.png', '-dark.png')),
+      fullPage: true,
+    });
+  }
+  await page.emulateMedia({ colorScheme: 'light' });
+}

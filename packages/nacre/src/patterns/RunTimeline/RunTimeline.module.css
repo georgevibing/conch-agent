@@ -193,6 +193,7 @@
   .note {
     font-size: var(--nc-text-xs);
     color: var(--nc-text-subtle);
+    overflow-wrap: anywhere;
   }
 
   .outcome {
@@ -200,6 +201,8 @@
     line-height: var(--nc-leading-normal);
     color: var(--nc-text);
     text-wrap: pretty;
+    /* An id or a link in what a run did breaks, so the row never outgrows its column. */
+    overflow-wrap: anywhere;
   }
 
   .outcome[data-status='skipped'],

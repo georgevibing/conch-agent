@@ -38,6 +38,11 @@
     block-size: 0.875rem;
   }
 
+  .text,
+  .message {
+    overflow-wrap: anywhere;
+  }
+
   .text {
     margin: 0;
     font-size: var(--nc-text-sm);

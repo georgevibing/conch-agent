@@ -114,7 +114,7 @@
   /* ── Detail ──────────────────────────────────────────────────────── */
   .detailHeader {
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: flex-start;
     gap: var(--nc-space-4);
   }
@@ -130,8 +130,10 @@
     block-size: 1.5rem;
   }
 
+  /* A long word (an id, a timezone) breaks rather than pushing the page wider. */
   .detailTitle {
     min-inline-size: 0;
+    overflow-wrap: anywhere;
   }
 
   /* Who does it, in the line under the title: its face sits on the text. */
@@ -143,11 +145,18 @@
     white-space: nowrap;
   }
 
+  /* Both columns may be narrower than what's in them (a code block's longest
+     line, an unbroken word): the code scrolls in its own box, never the page. */
   .detailGrid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(15rem, 20rem);
     align-items: start;
     gap: var(--nc-space-8);
+  }
+
+  .section,
+  .side {
+    min-inline-size: 0;
   }
 
   .side {
@@ -178,11 +187,14 @@
   }
 
   .details {
+    min-inline-size: 0;
     padding-block-start: var(--nc-space-3);
+    overflow-wrap: anywhere;
   }
 
   .instruction {
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
     padding: var(--nc-space-3);
     border-radius: var(--nc-radius-md);
     corner-shape: var(--nc-corner-shape);
@@ -262,6 +274,7 @@
   }
 
   .instructionNote p {
+    overflow-wrap: anywhere;
     margin: var(--nc-space-2) 0 0;
     padding: var(--nc-space-3);
     border-radius: var(--nc-radius-md);
@@ -273,7 +286,7 @@
 
   @media (max-width: 820px) {
     .detailHeader {
-      grid-template-columns: auto 1fr;
+      grid-template-columns: auto minmax(0, 1fr);
     }
 
     .detailActions {
@@ -281,7 +294,7 @@
     }
 
     .detailGrid {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 
