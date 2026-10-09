@@ -11,7 +11,7 @@ It's in **Settings → Other apps**.
 
 ## Connect an app in one press
 
-1. Open **Settings → Other apps**. Claude Desktop, Cursor and VS Code are listed, and each says whether it's on this computer.
+1. Open **Settings → Other apps** and press **Pair an app**. Claude Desktop, Cursor and VS Code are listed, and each says whether it's on this computer.
 2. Press **Connect** beside the app.
 3. Tick what it may use. It starts with your memory and your skills, which only look.
 4. Press **Connect**, and confirm it's you. Conch adds itself to that app's settings, and keeps the old copy of the file beside it.
@@ -21,9 +21,9 @@ Nothing else in the app's settings changes, and no key is written there. If Conc
 
 ## Any other app
 
-Press **Another app**, give it a name, tick what it may use, and press **Pair**. Conch shows the settings to paste into that app. They start Conch's launcher, which most apps can do.
+Press **Pair an app**, then **Another app**. Give it a name, tick what it may use, and press **Pair**. Conch shows the settings to paste into that app. They start Conch's launcher, which most apps can do.
 
-An app that can only connect over HTTP gets a key instead. Turn on **It connects over HTTP, with a key** before you press **Pair**. Conch shows the key once, with the address to use.
+An app that can't start Conch by itself gets a key instead. Turn on **Give it a key instead** before you press **Pair**. Conch shows the key once, with the address to use. The address is under **For developers** too.
 
 ## What an app may use
 
@@ -49,14 +49,14 @@ Each paired app has its own chat in Conch, **What it did**. It lists each thing 
 
 ## Remove an app
 
-Press **Remove** beside it. Conch takes itself out of the app's settings, and the app can't use Conch any more, at once.
+Press **Remove** beside it, and **Remove** again to be sure. Conch takes itself out of the app's settings, and the app can't use Conch any more, at once.
 
 ## From another computer
 
 An app on another computer can reach Conch only through [your own address](../start/server.md), and only if you allow it:
 
-1. Turn on **Let apps you mark in through your address** in **Settings → Other apps → From your own address**.
-2. Pair the app with **It connects over HTTP, with a key**, and turn on **It may come in through your address**.
+1. Open **For developers** in **Settings → Other apps**, and turn on **Let apps on other computers in**.
+2. Pair the app with **Give it a key instead**, and turn on **Let it in from another computer**.
 
 Whoever has that app's key can then use what you let it use, from anywhere. Keep it like a password, and remove the app when you stop using it. Your security checkup says while this is on.
 

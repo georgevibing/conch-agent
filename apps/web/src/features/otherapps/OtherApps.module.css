@@ -17,3 +17,49 @@
 .banner button {
   margin-inline-start: auto;
 }
+
+/* Settings → Other apps, as a section that can sit inside another place. */
+.place {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nc-space-5);
+  min-inline-size: 0;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nc-space-4);
+}
+
+.head > :first-child {
+  min-inline-size: 0;
+}
+
+.head > button {
+  flex-shrink: 0;
+}
+
+/*
+ * Loading holds the room the empty splash takes, so when it turns out
+ * nothing is paired, nothing below moves.
+ */
+.region[data-state='loading'],
+.region[data-state='empty'] {
+  min-block-size: 17rem;
+}
+
+.region[data-state='empty'] {
+  display: grid;
+  align-content: center;
+}
+
+.developers {
+  margin-inline-start: calc(-1 * var(--nc-space-1-5));
+}
+
+.developersBody {
+  padding-block-start: var(--nc-space-3);
+  padding-inline-start: var(--nc-space-1-5);
+}

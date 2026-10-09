@@ -38,13 +38,14 @@ export function usesWords(scopes: readonly McpScope[], choices: readonly McpChoi
   return joined.charAt(0).toUpperCase() + joined.slice(1);
 }
 
-/** "Paired 3 Oct · used 2 minutes ago". */
+/** "Used 2 minutes ago · paired 3 Oct": when it last did something comes first. */
 export function pairedWords(client: McpClient, now = Date.now()): string {
   const paired = new Date(client.createdAt).toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
   });
-  return `Paired ${paired} · ${client.lastUsedAt ? `used ${relativeTime(client.lastUsedAt, now)}` : 'not used yet'}`;
+  const used = client.lastUsedAt ? `Used ${relativeTime(client.lastUsedAt, now)}` : 'Not used yet';
+  return `${used} · paired ${paired}`;
 }
 
 /** The pairing card's choices, in Nacre's shape. */

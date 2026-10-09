@@ -7,34 +7,41 @@ import type {
   PairedMcpClient,
 } from '@conch/protocol';
 import {
+  AlertDialog,
   Button,
   Callout,
   CodeBlock,
+  Collapsible,
   Dialog,
+  EmptyState,
   Field,
+  Heading,
   Input,
   IntegrationHandshake,
   McpScopePicker,
+  OtherAppsArt,
   OtherAppTargets,
   PairedAppList,
+  PairedAppListSkeleton,
   SecretReveal,
   Stack,
   Switch,
   Text,
   toast,
   type OtherAppTarget,
+  type PairedAppItem,
 } from '@conch/nacre';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
-import { useState } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
+import { useId, useState } from 'react';
 import { useNavigate } from 'react-router';
 
 import { api } from '../../api/client';
 import { keys } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { useVerify } from '../auth/useVerify';
-import { Section } from '../settings/Section';
 import { otherAppsApi, otherAppsKeys, useOtherApps } from './api';
+import styles from './OtherApps.module.css';
 import { APP_LOOK, pairedWords, scopeChoices, usesWords } from './words';
 
 type Guard = ReturnType<typeof useVerify>['guard'];
@@ -46,15 +53,28 @@ const fail = (error: unknown) => toast.error((error as Error).message);
 
 /** Who's being paired, or changed. */
 type Editing =
-  | { kind: 'pair'; app: McpClientApp; name: string; file?: string }
+  | { kind: 'choose' }
+  | { kind: 'pair'; app: McpClientApp; name: string; file?: string; back?: boolean }
   | { kind: 'change'; client: McpClient };
+
+export interface OtherAppsTabProps {
+  /**
+   * The level of this place's own heading: 3 under a settings page's title,
+   * 4 when it's a section inside another section. Its parts sit one below.
+   */
+  headingLevel?: 2 | 3 | 4 | 5;
+}
 
 /**
  * Settings → Other apps (ADR 0073): Claude Desktop, Cursor, VS Code and any
  * app that speaks MCP, using Conch's memory, skills, your apps and its
  * browser — each paired by you, each held to what you ticked.
+ *
+ * It's drawn as a section, not a page: it brings its own heading (at
+ * `headingLevel`) and nothing that assumes the whole window, so it can sit
+ * inside another place.
  */
-export function OtherAppsTab() {
+export function OtherAppsTab({ headingLevel = 3 }: OtherAppsTabProps = {}) {
   const overview = useOtherApps();
   const access = useQuery({ queryKey: keys.access, queryFn: api.access, staleTime: 10_000 });
   const { guard, dialog } = useVerify(access.data?.method ?? 'none');
@@ -63,28 +83,15 @@ export function OtherAppsTab() {
   const closeSettings = useUi((s) => s.closeSettings);
   const [editing, setEditing] = useState<Editing>();
   const [removing, setRemoving] = useState<string>();
+  const [confirming, setConfirming] = useState<PairedAppItem>();
   const data = overview.data;
   const refresh = () => void client.invalidateQueries({ queryKey: otherAppsKeys.overview });
+  const inner = (headingLevel + 1) as 3 | 4 | 5 | 6;
+  const paired = data?.clients ?? [];
+  const choose = () => setEditing({ kind: 'choose' });
+  const titleId = useId();
 
-  if (!data)
-    return (
-      <Stack gap={6}>
-        <Section title="Other apps" description="Loading…">
-          {null}
-        </Section>
-      </Stack>
-    );
-
-  const clientsById = new Map(data.clients.map((c) => [c.id, c]));
-  const targets: OtherAppTarget[] = data.targets.map((t) => ({
-    app: t.app,
-    name: t.name,
-    state: t.connected ? 'connected' : t.found ? 'ready' : 'missing',
-    ...(t.clientId && {
-      detail: usesWords(clientsById.get(t.clientId)?.scopes ?? [], data.choices),
-    }),
-    ...APP_LOOK[t.app],
-  }));
+  const clientsById = new Map(paired.map((c) => [c.id, c]));
 
   const remove = async (id: string) => {
     setRemoving(id);
@@ -109,45 +116,45 @@ export function OtherAppsTab() {
     }
   };
 
-  return (
-    <Stack gap={8}>
-      <Section
-        title="Use Conch from other apps"
-        description="They use your memory, skills, apps and browser — only what you tick, and anything that changes something asks you first."
-      >
-        <OtherAppTargets
-          targets={targets}
-          onConnect={(t) => {
-            const target = data.targets.find((x) => x.app === t.app);
-            setEditing({
-              kind: 'pair',
-              app: t.app as McpClientApp,
-              name: t.name,
-              file: target?.file,
-            });
-          }}
-          onManage={(t) => {
-            const paired = data.targets.find((x) => x.app === t.app)?.clientId;
-            const found = paired ? clientsById.get(paired) : undefined;
-            if (found) setEditing({ kind: 'change', client: found });
-          }}
-        />
-        <div>
-          <Button
-            variant="surface"
-            size="sm"
-            leadingIcon={<Plus />}
-            onClick={() => setEditing({ kind: 'pair', app: 'other', name: 'Another app' })}
-          >
-            Another app
-          </Button>
-        </div>
-      </Section>
+  // The apps on this computer, for the picture: what you'd pair first.
+  const here = (data?.targets ?? [])
+    .filter((t) => t.found)
+    .map((t) => ({ name: t.name, ...APP_LOOK[t.app] }));
 
-      {data.clients.length > 0 && (
-        <Section title="Paired with Conch" description="What each may use.">
+  return (
+    <section className={styles.place} aria-labelledby={titleId}>
+      <div className={styles.head}>
+        <Stack gap={0.5}>
+          <Heading id={titleId} level={headingLevel} size="lg">
+            Apps that use Conch
+          </Heading>
+          <Text size="sm" tone="muted">
+            Programs like Claude Desktop or Cursor can use your memory, skills and apps. Each gets
+            only what you choose.
+          </Text>
+        </Stack>
+        {paired.length > 0 && (
+          <Button variant="surface" size="sm" leadingIcon={<Plus />} onClick={choose}>
+            Pair an app
+          </Button>
+        )}
+      </div>
+
+      <div
+        className={styles.region}
+        data-state={!data ? 'loading' : paired.length ? 'list' : 'empty'}
+        aria-busy={!data}
+      >
+        {!data ? (
+          <>
+            <PairedAppListSkeleton rows={2} />
+            <span className="nc-visually-hidden" role="status">
+              Loading the apps paired with Conch…
+            </span>
+          </>
+        ) : paired.length ? (
           <PairedAppList
-            apps={data.clients.map((c) => ({
+            apps={paired.map((c) => ({
               id: c.id,
               name: c.name,
               uses: usesWords(c.scopes, data.choices),
@@ -158,7 +165,7 @@ export function OtherAppsTab() {
             busy={removing}
             onOpen={(app) => {
               const chat = clientsById.get(app.id)?.conversationId;
-              if (!chat) return toast('It hasn’t used anything that needs a chat yet.');
+              if (!chat) return toast('Nothing to show yet. It hasn’t done anything here.');
               closeSettings();
               void navigate(`/c/${chat}`);
             }}
@@ -166,34 +173,95 @@ export function OtherAppsTab() {
               const found = clientsById.get(app.id);
               if (found) setEditing({ kind: 'change', client: found });
             }}
-            onRemove={(app) => void remove(app.id)}
+            onRemove={setConfirming}
           />
-        </Section>
-      )}
+        ) : (
+          <EmptyState
+            size="sm"
+            headingLevel={inner}
+            media={<OtherAppsArt apps={here} />}
+            title="Nothing paired yet"
+            description="Pair an app, and it can use what you choose. It asks you before it changes anything."
+            actions={
+              <Button leadingIcon={<Plus />} onClick={choose}>
+                Pair an app
+              </Button>
+            }
+          />
+        )}
+      </div>
 
-      {data.address && (
-        <Section
-          title="From your own address"
-          description="An app on another computer, reaching Conch over the internet."
-        >
-          <Switch
-            checked={data.remote}
-            onCheckedChange={(on) => void setRemote(on)}
-            label="Let apps you mark in through your address"
-            description={`They connect to ${data.address} with their key. Whoever has that key can use what you let the app use.`}
-          />
-        </Section>
-      )}
+      {data && <ForDevelopers overview={data} onRemote={(on) => void setRemote(on)} />}
 
       <PairDialog
         editing={editing}
         overview={data}
         guard={guard}
+        onEdit={setEditing}
         onClose={() => setEditing(undefined)}
         onDone={refresh}
       />
+      <AlertDialog.Root
+        open={Boolean(confirming)}
+        onOpenChange={(open) => !open && setConfirming(undefined)}
+      >
+        <AlertDialog.Content icon={<Trash2 />}>
+          <AlertDialog.Header>
+            <AlertDialog.Title>Remove {confirming?.name}?</AlertDialog.Title>
+            <AlertDialog.Description>
+              It stops using Conch at once. You can pair it again any time.
+            </AlertDialog.Description>
+          </AlertDialog.Header>
+          <AlertDialog.Footer>
+            <AlertDialog.Cancel />
+            <AlertDialog.Action
+              onClick={() => {
+                if (confirming) void remove(confirming.id);
+              }}
+            >
+              Remove
+            </AlertDialog.Action>
+          </AlertDialog.Footer>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
       {dialog}
-    </Stack>
+    </section>
+  );
+}
+
+/**
+ * How it works underneath, for the few who want it: the protocol's name, the
+ * address, and whether apps on other computers may come in. Open by itself
+ * while they may, so that's never out of sight.
+ */
+function ForDevelopers({
+  overview,
+  onRemote,
+}: {
+  overview: McpOverview;
+  onRemote: (on: boolean) => void;
+}) {
+  return (
+    <Collapsible defaultOpen={overview.remote} className={styles.developers}>
+      <Collapsible.Trigger>For developers</Collapsible.Trigger>
+      <Collapsible.Content>
+        <Stack gap={4} className={styles.developersBody}>
+          <Text size="sm" tone="muted">
+            Conch is an MCP server. Pairing an app writes its launcher into that app’s settings. An
+            app that can’t run it gets a key, and connects over HTTP here:
+          </Text>
+          <CodeBlock code={overview.endpoint} language="text" filename="Conch’s MCP address" />
+          {overview.address && (
+            <Switch
+              checked={overview.remote}
+              onCheckedChange={onRemote}
+              label="Let apps on other computers in"
+              description={`Only apps you allow, through ${overview.address}, each with its own key. Whoever has a key can use what that app may use.`}
+            />
+          )}
+        </Stack>
+      </Collapsible.Content>
+    </Collapsible>
   );
 }
 
@@ -201,30 +269,115 @@ function PairDialog({
   editing,
   overview,
   guard,
+  onEdit,
   onClose,
   onDone,
 }: {
   editing: Editing | undefined;
-  overview: McpOverview;
+  overview: McpOverview | undefined;
   guard: Guard;
+  onEdit: (next: Editing) => void;
   onClose: () => void;
   onDone: () => void;
 }) {
+  const key = !editing
+    ? ''
+    : editing.kind === 'choose'
+      ? 'choose'
+      : editing.kind === 'pair'
+        ? editing.app
+        : editing.client.id;
   return (
-    <Dialog.Root open={Boolean(editing)} onOpenChange={(open) => !open && onClose()}>
+    <Dialog.Root open={Boolean(editing && overview)} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Content size="md" aria-describedby={undefined}>
-        {editing && (
-          <PairFlow
-            key={editing.kind === 'pair' ? editing.app : editing.client.id}
-            editing={editing}
-            overview={overview}
-            guard={guard}
-            onClose={onClose}
-            onDone={onDone}
-          />
-        )}
+        {editing &&
+          overview &&
+          (editing.kind === 'choose' ? (
+            <ChooseApp overview={overview} onEdit={onEdit} onClose={onClose} />
+          ) : (
+            <PairFlow
+              key={key}
+              editing={editing}
+              overview={overview}
+              guard={guard}
+              onBack={() => onEdit({ kind: 'choose' })}
+              onClose={onClose}
+              onDone={onDone}
+            />
+          ))}
       </Dialog.Content>
     </Dialog.Root>
+  );
+}
+
+/** The first step of Pair an app: which one. The ones on this computer connect in one press. */
+function ChooseApp({
+  overview,
+  onEdit,
+  onClose,
+}: {
+  overview: McpOverview;
+  onEdit: (next: Editing) => void;
+  onClose: () => void;
+}) {
+  const clientsById = new Map(overview.clients.map((c) => [c.id, c]));
+  const targets: OtherAppTarget[] = overview.targets.map((t) => ({
+    app: t.app,
+    name: t.name,
+    state: t.connected ? 'connected' : t.found ? 'ready' : 'missing',
+    ...(t.clientId && {
+      detail: usesWords(clientsById.get(t.clientId)?.scopes ?? [], overview.choices),
+    }),
+    ...APP_LOOK[t.app],
+  }));
+  return (
+    <>
+      <Dialog.Header>
+        <Dialog.Title>Pair an app</Dialog.Title>
+      </Dialog.Header>
+      <Dialog.Body>
+        <Stack gap={4}>
+          <Text tone="muted">
+            Choose the app. Conch adds itself to it, and you choose what it may use.
+          </Text>
+          <OtherAppTargets
+            targets={targets}
+            onConnect={(t) => {
+              const target = overview.targets.find((x) => x.app === t.app);
+              onEdit({
+                kind: 'pair',
+                app: t.app as McpClientApp,
+                name: t.name,
+                file: target?.file,
+                back: true,
+              });
+            }}
+            onManage={(t) => {
+              const id = overview.targets.find((x) => x.app === t.app)?.clientId;
+              const found = id ? clientsById.get(id) : undefined;
+              if (found) onEdit({ kind: 'change', client: found });
+            }}
+          />
+          <div>
+            <Button
+              variant="surface"
+              size="sm"
+              leadingIcon={<Plus />}
+              onClick={() =>
+                onEdit({ kind: 'pair', app: 'other', name: 'Another app', back: true })
+              }
+            >
+              Another app
+            </Button>
+          </div>
+        </Stack>
+      </Dialog.Body>
+      <Dialog.Footer>
+        <Button variant="ghost" onClick={onClose}>
+          Cancel
+        </Button>
+      </Dialog.Footer>
+    </>
   );
 }
 
@@ -232,18 +385,21 @@ function PairFlow({
   editing,
   overview,
   guard,
+  onBack,
   onClose,
   onDone,
 }: {
-  editing: Editing;
+  editing: Exclude<Editing, { kind: 'choose' }>;
   overview: McpOverview;
   guard: Guard;
+  onBack: () => void;
   onClose: () => void;
   onDone: () => void;
 }) {
   const changing = editing.kind === 'change' ? editing.client : undefined;
   const app = changing?.app ?? (editing.kind === 'pair' ? editing.app : 'other');
   const shownName = changing?.name ?? (editing.kind === 'pair' ? editing.name : '');
+  const back = editing.kind === 'pair' && editing.back;
   const [scopes, setScopes] = useState<McpScope[]>(changing?.scopes ?? START);
   const [name, setName] = useState('');
   const [http, setHttp] = useState(false);
@@ -308,16 +464,16 @@ function PairFlow({
             ) : done.next ? (
               <Callout tone="warning">{done.next}</Callout>
             ) : (
-              <Text>Add Conch to the app’s MCP servers with these settings.</Text>
+              <Text>Paste this into the app’s settings, where it lists its tools or servers.</Text>
             )}
             {done.setup && (
-              <CodeBlock code={done.setup.json} language="json" filename="Its MCP settings" />
+              <CodeBlock code={done.setup.json} language="json" filename="Settings to paste" />
             )}
             {done.setup?.key && (
               <Stack gap={2}>
                 <Text size="sm" tone="muted">
-                  Or, for an app that connects over HTTP: {done.setup.url}, with this key as its
-                  bearer token.
+                  If the app asks for an address and a key instead, use {done.setup.url} and this
+                  key. You’ll only see it now.
                 </Text>
                 <SecretReveal secret={done.setup.key} title="Its key" />
               </Stack>
@@ -326,9 +482,8 @@ function PairFlow({
         ) : (
           <Stack gap={5}>
             <Text tone="muted">
-              {changing
-                ? 'It can use exactly what’s ticked. Anything that changes something asks you first, here in Conch.'
-                : 'It can use what you tick, through Conch. Anything that changes something asks you first, here in Conch.'}
+              It gets only what you tick. Anything that changes something asks you first, here in
+              Conch.
             </Text>
             {app === 'other' && !changing && (
               <Field>
@@ -351,22 +506,22 @@ function PairFlow({
               <Switch
                 checked={http}
                 onCheckedChange={setHttp}
-                label="It connects over HTTP, with a key"
-                description="For an app that can’t start Conch’s launcher. Conch shows the key once."
+                label="Give it a key instead"
+                description="For an app that can’t start Conch by itself. You’ll see the key once."
               />
             )}
             {overview.address && ((app === 'other' && http && !changing) || changing?.http) && (
               <Switch
                 checked={remote}
                 onCheckedChange={setRemote}
-                label="It may come in through your address"
-                description="Only while “From your own address” is on in Other apps."
+                label="Let it in from another computer"
+                description="Only while apps on other computers are let in, under For developers."
               />
             )}
             {target && !changing && (
               <Text size="sm" tone="subtle">
-                Conch adds itself to {target.name}’s settings ({target.file}). Nothing else in that
-                file changes, and its old copy is kept beside it.
+                Conch adds itself to {target.file} and keeps a copy of the old one. Nothing else in
+                it changes.
               </Text>
             )}
           </Stack>
@@ -377,8 +532,8 @@ function PairFlow({
           <Button onClick={onClose}>Done</Button>
         ) : (
           <>
-            <Button variant="ghost" onClick={onClose}>
-              Cancel
+            <Button variant="ghost" onClick={back ? onBack : onClose}>
+              {back ? 'Back' : 'Cancel'}
             </Button>
             <Button loading={busy} disabled={!scopes.length} onClick={() => void submit()}>
               {changing ? 'Save' : app === 'other' ? 'Pair' : 'Connect'}
