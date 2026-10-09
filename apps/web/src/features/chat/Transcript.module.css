@@ -224,9 +224,13 @@
     background: linear-gradient(to left, transparent, var(--nc-border-subtle));
   }
 
+  /* The mark never outgrows the column: its words end in an ellipsis instead. */
   .stoppedMark {
     display: inline-flex;
+    flex: 0 1 auto;
     align-items: center;
+    min-inline-size: 0;
+    max-inline-size: 100%;
     gap: var(--nc-space-1-5);
     padding: var(--nc-space-0-5) var(--nc-space-2-5);
     border-radius: var(--nc-radius-full);
@@ -238,7 +242,41 @@
     white-space: nowrap;
   }
 
+  .stoppedText {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* A note between the hairlines (a pause the chat has moved past) wraps. */
+  .stoppedLine {
+    min-inline-size: 0;
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+
+  /* The mark, and what to do about it on a line of its own under it. */
+  .stoppedNote {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+  }
+
+  .stoppedNote > .stopped {
+    margin-block-end: 0;
+  }
+
+  .stoppedWhy {
+    margin: 0 0 var(--nc-space-1);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+    text-align: center;
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+  }
+
   .stoppedGlyph {
+    flex-shrink: 0;
     inline-size: 7px;
     block-size: 7px;
     border-radius: 1.5px;
@@ -246,6 +284,7 @@
   }
 
   .stoppedAfter {
+    flex-shrink: 0;
     font-weight: var(--nc-weight-regular);
     color: var(--nc-text-subtle);
     font-variant-numeric: tabular-nums;
@@ -255,6 +294,8 @@
     display: inline-flex;
     align-items: center;
     align-self: center;
+    max-inline-size: 100%;
+    overflow-wrap: anywhere;
     gap: var(--nc-space-1);
     font-size: var(--nc-text-xs);
     color: var(--nc-text-subtle);

@@ -449,6 +449,40 @@ describe('a reply and what belongs to it (ADR 0060)', () => {
     expect(reply).toHaveTextContent('GPT-5 mini');
   });
 
+  it('marks a turn a restart stopped in a few words, and says what to do on a line of its own', () => {
+    show({
+      items: [
+        user,
+        assistant('Working on it.', true),
+        { kind: 'turn-end', id: 'end-1', outcome: 'interrupted', restarted: { resumed: false } },
+        user,
+        assistant('Looking again.', true),
+        {
+          kind: 'turn-end',
+          id: 'end-2',
+          outcome: 'interrupted',
+          restarted: { resumed: false },
+          error: 'Conch saved your progress. Check its result before continuing.',
+        },
+        {
+          kind: 'turn-end',
+          id: 'end-3',
+          outcome: 'interrupted',
+          restarted: { resumed: true },
+        },
+      ],
+    });
+    // Short enough for a phone's column; the longer words go under it.
+    expect(screen.getAllByText('Stopped when Conch restarted')).toHaveLength(2);
+    expect(screen.getByText('Say “carry on” to pick it up again.')).toBeVisible();
+    // Why it didn't carry on by itself, when Conch knows.
+    expect(
+      screen.getByText('Conch saved your progress. Check its result before continuing.'),
+    ).toBeVisible();
+    expect(screen.getByText('Picked up after Conch restarted')).toBeVisible();
+    expect(screen.queryByText(/restarted while this was running/)).toBeNull();
+  });
+
   it('goes on in the same voice, without a second speaker line, when nothing of yours came between', () => {
     show({
       items: [

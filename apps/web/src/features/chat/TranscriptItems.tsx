@@ -649,7 +649,12 @@ export function TurnEnd({
 }) {
   if (item.outcome === 'success' && item.paused) {
     // Once the chat has moved on, a pause is a quiet note in its history.
-    if (!onCarryOn) return <div className={styles.stopped}>{item.paused.message}</div>;
+    if (!onCarryOn)
+      return (
+        <div className={styles.stopped}>
+          <span className={styles.stoppedLine}>{item.paused.message}</span>
+        </div>
+      );
     return (
       <Callout
         tone="neutral"
@@ -665,14 +670,23 @@ export function TurnEnd({
     );
   }
   if (item.outcome === 'interrupted' && item.restarted) {
+    // A few words on the mark; what to do about it on a line of its own, so the
+    // mark stays short enough for a phone's column.
+    const { resumed } = item.restarted;
     return (
-      <div className={styles.stopped}>
-        <span className={styles.stoppedMark}>
-          <span aria-hidden className={styles.stoppedGlyph} />
-          {item.restarted.resumed
-            ? 'Conch restarted while this was running. Picking it up again.'
-            : 'Conch restarted while this was running, so it stopped here. Say “carry on” to continue.'}
-        </span>
+      <div className={styles.stoppedNote}>
+        <div className={styles.stopped}>
+          <span className={styles.stoppedMark}>
+            <span aria-hidden className={styles.stoppedGlyph} />
+            <span className={styles.stoppedText}>
+              {resumed ? 'Picked up after Conch restarted' : 'Stopped when Conch restarted'}
+            </span>
+          </span>
+        </div>
+        {!resumed && (
+          // Why it didn't carry on by itself, when Conch knows (an action to check first).
+          <p className={styles.stoppedWhy}>{item.error ?? 'Say “carry on” to pick it up again.'}</p>
+        )}
       </div>
     );
   }
@@ -683,7 +697,7 @@ export function TurnEnd({
       <div className={styles.stopped}>
         <span className={styles.stoppedMark}>
           <span aria-hidden className={styles.stoppedGlyph} />
-          Stopped
+          <span className={styles.stoppedText}>Stopped</span>
           {after ? (
             <span className={styles.stoppedAfter}>after {formatDuration(after)}</span>
           ) : null}
