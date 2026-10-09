@@ -28,6 +28,50 @@ not a size limit and always runs: a model repeating itself is still told, then p
 Routines, tasks and guests keep their own budget (200, 4M, an hour) whatever the
 switch says, because nobody is there to press Carry on and ADR 0057 depends on it.
 
+## Amendment (2026-10-09): every provider that caches is told which chat a request is for
+
+Automatic prefix caching works best when a provider's router sends a chat's requests to
+the machine that already holds its prefix. Some providers take a hint for that, and
+Conch now gives it, the same way for every one of them:
+
+- **The contract.** `WireRequest.cacheKey` and `WireCompletion.cacheKey` carry an opaque
+  key: for a turn, an HMAC-SHA256 of the chat's id; for a small job (a title, a summary),
+  of the job's instructions, so jobs that share a prefix share a key. The HMAC's salt is
+  random, made once per install (`api-sessions/cache-key.salt`, mode 0600, derived in
+  backups), so the key is never personal data, can't be turned back into the id, and is
+  different on every computer (`engines/api/cachekey.ts`). A wire sends it only where its
+  provider declares how (`ChatPreset.cacheKey`, agreement 9): a body field or a header.
+  Everyone else ignores it, and a server that refuses the field is asked again without
+  it, once, and never sent it again.
+- **Who is told** (each from the provider's own documentation, checked 2026-10-09):
+  OpenAI, Mistral and Cerebras by `prompt_cache_key` on Chat Completions; xAI by the
+  `x-grok-conv-id` header. DeepSeek, Kimi, Z.ai, MiniMax, Qwen, Groq and Gemini document
+  no key and cache by the prefix alone, so nothing is sent; nor to a server of your own,
+  which may refuse fields it doesn't know. Codex, Claude Code and the ACP programs run
+  their own requests and keep their own caches.
+- **Retention is left as each provider has it.** OpenAI already keeps cached prefixes for
+  24 hours unless an organisation keeps no data, and from GPT-5.6 its
+  `prompt_cache_options.ttl` only takes `"30m"`, the default; `prompt_cache_retention` is
+  deprecated. Kimi's one-hour cache (`prompt_cache_options.ttl: "1h"`) bills writes at
+  twice the input price, which only pays back if a chat comes back within the hour often
+  enough, so it isn't asked for. No explicit caches (Gemini's `cachedContents`, Qwen's
+  `cache_control`): they cost storage or a write premium on every request.
+- **Counted.** Cache writes are read from `prompt_tokens_details.cache_write_tokens`
+  (OpenAI from GPT-5.6, OpenRouter, Kimi) and `cache_creation_input_tokens` (Qwen),
+  beside the reads already counted.
+
+**The prefix, checked again.** Nothing in the system prompt or the tool list changes by
+the clock, by a random id or by key order: the tools come from the same lists in the same
+order, bodies are built from fixed object literals, and a chat's second turn sends its
+first byte for byte with the new messages after it (`cachekey.test.ts`). What still
+changes is the system prompt's tail, after everything stable: the memories, once there
+are more than fit and the most relevant to each message are chosen; a goal, plan mode,
+the apps not yet connected, a routine's or an artefact's brief, a round's room, and the
+note to slow down when this computer is short of memory. Each sits before the chat's
+messages, so a change there makes that turn's first request read the chat again in full
+(the steps after it still hit). Moving them after the chat would change how the model
+reads them, so they stay where they are.
+
 ## Context
 
 On the model APIs, Conch runs the agent loop itself (`engines/api/engine.ts`).
