@@ -1,6 +1,7 @@
 import {
   ATTACHMENT_LIMITS,
   shouldFoldPaste,
+  waitHeadline,
   type Attachment,
   type EngineId,
   type EngineStatus,
@@ -27,6 +28,7 @@ import {
   useFileDrop,
 } from '@conch/nacre';
 import { Folder, ListPlus } from 'lucide-react';
+import { waitingFor } from '../waits/waiting';
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router';
@@ -378,6 +380,8 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
   const busy = running || pending.length > 0;
   // A question waits (ADR 0060): what's typed here answers it.
   const asking = running && Boolean(pendingQuestion(view));
+  // Something Conch waits for here (ADR 0124): the box says so, and that the chat is yours meanwhile.
+  const waitingOn = waitingFor(view.items);
   const isEmpty = view.items.length === 0 && pending.length === 0;
   // A chat this tab hasn't seen yet: its log is on its way, and it shows whole when it's here.
   const opening = Boolean(conversationId) && isEmpty && !view.loaded;
@@ -931,8 +935,12 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
           asking
             ? 'Answer above, or type it here'
             : busy
-              ? `${name} is working… Write what’s next`
-              : `Message ${name}, or type / for commands`
+              ? waitingOn && !waitingOn.wakes
+                ? `${waitHeadline(waitingOn)}… Write what’s next`
+                : `${name} is working… Write what’s next`
+              : waitingOn?.wakes
+                ? `${waitHeadline(waitingOn)} · you can keep chatting`
+                : `Message ${name}, or type / for commands`
         }
         label={`Message ${name}`}
         // An empty box's one button is Talk; typing turns it into Send.

@@ -137,6 +137,30 @@ describe('transcript reducer', () => {
     });
   });
 
+  it('keeps one row per wait, brought up to date where it first appeared (ADR 0124)', () => {
+    const wait = {
+      waitId: 'w1',
+      kind: 'ci',
+      title: 'CI for conch #482',
+      startedAt: 1000,
+      deadline: 9_000_000,
+      wakes: true,
+    } as const;
+    const view = reduceAll(
+      log(
+        { type: 'wait', wait: { ...wait, state: 'watching', status: 'No checks yet' } },
+        { type: 'user.message', messageId: 'u1', text: 'Meanwhile, what’s 2+2?' },
+        { type: 'wait', wait: { ...wait, state: 'watching', status: '3 of 7 checks done' } },
+        {
+          type: 'wait',
+          wait: { ...wait, state: 'done', tone: 'bad', status: 'CI finished: 1 failed — e2e' },
+        },
+      ),
+    );
+    expect(view.items.map((i) => i.kind)).toEqual(['wait', 'user']);
+    expect(view.items[0]).toMatchObject({ wait: { state: 'done', tone: 'bad' } });
+  });
+
   it('keeps chronological order when tools interleave with text', () => {
     const view = reduceAll(
       log(
