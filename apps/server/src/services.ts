@@ -1348,6 +1348,7 @@ export class Services {
       recovery: {
         allowed: () => this.recovery.allowsWork,
         allowedPlanned: () => this.recovery.allowsPlanned,
+        holding: () => this.recovery.holding,
         workload: () => this.processes.workload,
       },
       redact: this.vault.redactor(),

@@ -102,6 +102,16 @@ export class GatewayRecovery {
     );
   }
 
+  /** Why work waits right now, in a few words (for the log when a paused chat can't go on). */
+  get holding(): string {
+    if (this.#stopping) return 'Conch is stopping';
+    if (this.#mode) return 'Conch is recovering';
+    if (!this.#answering) return 'Conch isn’t answering yet';
+    if (!this.#snapshot) return 'this computer hasn’t been looked at yet';
+    if (this.deps.admit && !this.deps.admit()) return 'background work is held';
+    return `${this.#snapshot.level}: ${this.#snapshot.reason}`;
+  }
+
   async start(probe: () => Promise<boolean>): Promise<void> {
     if (this.#timer || this.#stopping) return;
     this.#probe = probe;

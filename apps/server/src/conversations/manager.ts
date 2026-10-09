@@ -984,6 +984,8 @@ export class ConversationManager {
         allowed: () => boolean;
         /** Whether a chat paused on purpose (an update) may carry on now; `allowed` when absent. */
         allowedPlanned?: () => boolean;
+        /** Why work waits, in a few words, for the log. */
+        holding?: () => string;
         workload?: () => WorkloadPace;
         intervalMs?: number;
       };
@@ -2312,6 +2314,9 @@ export class ConversationManager {
     return this.#recoveryRunning;
   }
 
+  /** Why a paused chat last waited, so the log says it once. */
+  #heldFor?: string;
+
   async #recoverInterrupted(): Promise<number> {
     await this.deps.store.list();
     this.#recoveryQueue.push(...this.deps.store.interrupted.splice(0));
@@ -2326,7 +2331,16 @@ export class ConversationManager {
         const room = planned
           ? (this.deps.recovery.allowedPlanned ?? this.deps.recovery.allowed)()
           : this.deps.recovery.allowed() && !this.busy();
-        if (!room) break;
+        if (!room) {
+          // Said once per wait: a paused chat that can't go on is worth a line in the log.
+          const why = this.deps.recovery.holding?.() ?? '';
+          if (planned && why !== this.#heldFor) {
+            this.#heldFor = why;
+            console.warn(`[conversations] a chat paused for ${planned} waits to carry on: ${why}`);
+          }
+          break;
+        }
+        this.#heldFor = undefined;
       }
       this.#recoveryQueue.shift();
       try {
