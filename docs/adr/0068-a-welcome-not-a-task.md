@@ -94,12 +94,22 @@ What was dropped, and where it went:
   the three for anyone.
 - **Who it is** (name, face, voice) is no longer asked. The first agent keeps its defaults (Conch,
   warm) and Settings → Agents changes them.
-- **The apps you live in** is no longer a screen. The new chat's "Connect Gmail, Notion, GitHub
-  and more" line and the chat's own offers (ADR 0060) carry it.
+- **The apps you live in** is no longer a screen. The new chat's "Connect Gmail, GitHub and
+  more" tip and the chat's own offers (ADR 0060) carry it.
 - **Come home** (ADR 0035) and **your past chats** (ADR 0111) are offered on the new chat
-  instead, one quiet line each under the composer (`features/import/BringHints`), only while
-  there's something to bring, each opening its place in Settings → Memory where nothing moves
-  until the person says so.
+  instead, as tips under the composer (`features/import/BringHints`), only while there's
+  something to bring, each opening its place in Settings → Memory where nothing moves until
+  the person says so.
+
+**Amended: one tip at a time.** Shown side by side, the tips asked for attention several at
+once and spilled past a phone's edges. Now `features/chat/NewChatTips` shows one, in the order
+of `NEW_CHAT_TIPS`: connect apps (it gives the assistant its reach in every chat), another
+assistant's things (they change every answer), past chats (history; nothing waits on it), chat
+apps. A tip still being found out holds the later ones back, so nothing shows and is then
+swapped. Each line fits about 360px; what it leaves out (which apps the chats are from) is in
+its name and tooltip. Each has a × that puts it away for good in `preferences.tipsPutAway`,
+so every device knows, with Undo; the row then stays quiet for that chat, and the next tip
+waits for a later one. Settings → General → **Show tips again** clears the list.
 
 Progress shows three dots on every screen; Back appears from the second. A step remembered from
 the longer welcome starts again at the hello. `WelcomeChoices`, `WelcomeApps` and the

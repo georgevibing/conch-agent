@@ -29,11 +29,14 @@ To see the welcome again, use **Replay welcome** in **Settings → General**.
 
 ## What the new chat offers next
 
-The welcome doesn't stop for anything else. Under the box on a new chat, Conch offers what it can do for you next, one quiet line each, until it's done:
+The welcome doesn't stop for anything else. Under the box on a new chat, Conch offers what it can do for you next: one short tip at a time, each only until it's done. They come in this order:
 
-- **Connect Gmail, Notion, GitHub and more**: the [apps](../features/apps.md) you live in. You don't have to go looking: when an app would help in a chat, Conch offers it right there.
-- **Bring your things from OpenClaw** (or Hermes), when Conch finds another assistant on your computer: [its agents, memories and the rest](../care/come-home.md), after you've looked at what would come over.
-- **Bring in 1,284 past chats from Claude Code** (with your own count and apps), when Conch finds conversations you had in other apps on this computer: [your past chats](../care/past-chats.md), to search and carry on here.
+1. **Connect Gmail, GitHub and more**: the [apps](../features/apps.md) you live in. You don't have to go looking: when an app would help in a chat, Conch offers it right there.
+2. **Bring your things from OpenClaw** (or Hermes), when Conch finds another assistant on your computer: [its agents, memories and the rest](../care/come-home.md), after you've looked at what would come over.
+3. **Bring in 1,284 past chats** (with your own count), when Conch finds conversations you had in other apps on this computer: [your past chats](../care/past-chats.md), to search and carry on here. Point at it to see which apps they're from.
+4. **Talk to it from your chat apps**: [your assistant on WhatsApp, Telegram and the rest](../channels/index.md).
+
+Not interested? Press the **×** beside a tip and it won't come back, on any of your devices. **Undo** brings it straight back. The next tip waits for your next new chat. To see every tip again, use **Show tips again** in **Settings → General**.
 
 ## Say hello
 
