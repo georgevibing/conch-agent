@@ -127,7 +127,7 @@ describe('a chat as a timeline', () => {
     expect(long?.split('\n').at(-1)).toBe('@@ 60 more lines @@');
   });
 
-  it('tells each call a script made as a step of its own, said to be the script’s (ADR 0119)', () => {
+  it('tells each call a script made as a step of its own, said to be the script’s (ADR 0123)', () => {
     const call = { runId: 'run_1', tool: 'google_mail_read' };
     const timeline = timelineOf(
       chatOf('c1'),

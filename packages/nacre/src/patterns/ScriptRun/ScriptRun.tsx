@@ -217,7 +217,7 @@ const ANSWER: Record<ScriptRunAsk['answer'], string> = {
 };
 
 /**
- * A script the assistant wrote to call its tools (ADR 0119), told as one
+ * A script the assistant wrote to call its tools (ADR 0123), told as one
  * story: what it's for, how far it is and how many calls of each kind it has
  * made while it runs, what it came to once it's over. Open it for the script
  * itself, every call it made grouped by tool (each opening to its input and

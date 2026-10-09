@@ -1,6 +1,6 @@
 @layer nacre.components {
   /*
-   * A script's run (ADR 0119): a story's row, the same well, words and meta,
+   * A script's run (ADR 0123): a story's row, the same well, words and meta,
    * with what a run has that a story doesn't beneath it while it works: a
    * thin bar, the live line with Stop, and a counter for each kind of call.
    */

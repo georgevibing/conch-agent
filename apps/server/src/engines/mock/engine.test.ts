@@ -121,7 +121,7 @@ describe('the mock engine makes Conch apps (ADR 0061)', () => {
   });
 });
 
-describe('the mock engine runs a script that calls tools (ADR 0119)', () => {
+describe('the mock engine runs a script that calls tools (ADR 0123)', () => {
   const run = async (prompt: string) => {
     const calls: Record<string, unknown>[] = [];
     const tools = [

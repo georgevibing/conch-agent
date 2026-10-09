@@ -1,5 +1,5 @@
 /**
- * A script that calls tools, in the chat (ADR 0119): one story for the whole
+ * A script that calls tools, in the chat (ADR 0123): one story for the whole
  * run, not a row per call; its question waits under its line, naming the
  * step; one Undo for everything it changed.
  */

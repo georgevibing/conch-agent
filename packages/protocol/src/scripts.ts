@@ -1,5 +1,5 @@
 /**
- * Scripts that call tools (ADR 0119): the assistant writes one short
+ * Scripts that call tools (ADR 0123): the assistant writes one short
  * JavaScript program that loops over Conch's tools (`await
  * tools.google_mail_search({…})`), and Conch runs it sealed off, every call
  * through the same gate as a call the model made itself. The chat tells the

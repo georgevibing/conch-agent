@@ -14,7 +14,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'A script the assistant wrote to call its tools (ADR 0119), told as one story instead of hundreds of rows. While it runs: what it’s for, a hairline that fills as it says how far it is, the live line with Stop, and a counter for each kind of call that turns as the calls go. A question it waits on sits right under its line. Once over: what it came to, in the script’s own last note, with Undo for everything it changed. Open it for the script, every call grouped by tool (each opening to its input and output), the questions it asked, and what it gave back.',
+          'A script the assistant wrote to call its tools (ADR 0123), told as one story instead of hundreds of rows. While it runs: what it’s for, a hairline that fills as it says how far it is, the live line with Stop, and a counter for each kind of call that turns as the calls go. A question it waits on sits right under its line. Once over: what it came to, in the script’s own last note, with Undo for everything it changed. Open it for the script, every call grouped by tool (each opening to its input and output), the questions it asked, and what it gave back.',
       },
     },
   },

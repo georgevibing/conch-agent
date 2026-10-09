@@ -1407,7 +1407,7 @@ const CONCH: Record<string, (input: Input) => Draft> = {
     },
   }),
   use_skill: (input) => skillDraft(str(input, 'name')),
-  // A script that calls tools (ADR 0119): its calls are told by its own story, so the
+  // A script that calls tools (ADR 0123): its calls are told by its own story, so the
   // step is the run itself, what it's for in the assistant's words, and how many calls.
   run_script: (input) => {
     const title = str(input, 'title');

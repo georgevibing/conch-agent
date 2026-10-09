@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 /**
- * A script that calls tools (ADR 0119), end to end: the mock's script makes a
+ * A script that calls tools (ADR 0123), end to end: the mock's script makes a
  * folder and writes a note for each day of the month in it (each call through the
  * real gate), then tries to send one to a drop box, which asks. The whole run is one story; the
  * question waits inside it, naming the step; a no is carried on from; and one

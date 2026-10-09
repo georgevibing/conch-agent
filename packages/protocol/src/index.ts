@@ -638,7 +638,7 @@ export const ConversationEvent = z.discriminatedUnion('type', [
   /** A long tool call's progress (a picture being made): the newest one stands. */
   z.object({ ...logged, type: z.literal('tool.progress'), ...ToolProgress.shape }),
   /**
-   * A script that calls tools (ADR 0119), as it stands: started, how far, how it
+   * A script that calls tools (ADR 0123), as it stands: started, how far, how it
    * ended. A later one with the same `runId` replaces it.
    */
   z.object({ ...logged, type: z.literal('script.run'), ...ScriptRun.shape }),
@@ -707,7 +707,7 @@ export const ConversationEvent = z.discriminatedUnion('type', [
      * it goes to): the answer carries the change (`permission.respond` `edit`).
      */
     editable: z.boolean().optional(),
-    /** Asked from inside a script (ADR 0119): which run, and which of its calls. */
+    /** Asked from inside a script (ADR 0123): which run, and which of its calls. */
     script: ScriptAsk.optional(),
   }),
   z.object({

@@ -1,5 +1,5 @@
 /**
- * `run_script` (ADR 0119): one short JavaScript program that calls the
+ * `run_script` (ADR 0123): one short JavaScript program that calls the
  * tools, for work that takes many similar calls. Every provider that runs
  * Conch's tools gets it (ADR 0072), and every call it makes meets the gate a
  * call from the model would (`ScriptTurn.authorize`, built by the turn).

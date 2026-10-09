@@ -14,7 +14,7 @@ const read = 'mcp__conch__read_file';
 const browser = 'mcp__conch__browser_open';
 
 describe('Codex tool ordering', () => {
-  it('orders a script like a write: reads after it wait for it (ADR 0119)', async () => {
+  it('orders a script like a write: reads after it wait for it (ADR 0123)', async () => {
     const queue = new ToolQueue();
     const script = deferred<undefined>();
     const first = queue.run('mcp__conch__run_script', () => script.promise);

@@ -1,5 +1,5 @@
 /**
- * The module a script runs as (ADR 0119). The sealed runtime (ADR 0061 §2)
+ * The module a script runs as (ADR 0123). The sealed runtime (ADR 0061 §2)
  * loads `tools.mjs` from a folder and calls its tools; for a script, that
  * folder holds one generated module: the script inside an async function,
  * with `tools`, `progress`, `note` and a `console` that keeps what it logs.
@@ -93,7 +93,7 @@ const literal = (value: unknown) => JSON.stringify(value);
  * it returned, what it logged and how it ended.
  */
 export function moduleFor(code: string): string {
-  return `// Made by Conch for one run of a script (ADR 0119).
+  return `// Made by Conch for one run of a script (ADR 0123).
 async function __script(${PARAMS.join(', ')}) {
 ${code}
 }

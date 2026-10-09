@@ -1208,7 +1208,7 @@ export function assessRisk(
   input: unknown,
   context: RiskContext,
 ): Risk | undefined {
-  // A script (ADR 0119) is judged by what each of its calls does, at that call, never as a
+  // A script (ADR 0123) is judged by what each of its calls does, at that call, never as a
   // whole: its words are code, and any of it could be anything.
   if (isRunScript(toolName)) return undefined;
   const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;

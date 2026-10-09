@@ -150,12 +150,12 @@ export type TranscriptItem =
       once?: boolean;
       /** The person may change it before allowing it (an email's words): the answer carries it. */
       editable?: boolean;
-      /** Asked from inside a script (ADR 0119): which run, and which of its calls. */
+      /** Asked from inside a script (ADR 0123): which run, and which of its calls. */
       script?: ScriptAsk;
     }
   | {
       /**
-       * A script that calls tools (ADR 0119): the run as it stands, and the
+       * A script that calls tools (ADR 0123): the run as it stands, and the
        * calls it made, latest word for each. One story, however many calls.
        */
       kind: 'script';

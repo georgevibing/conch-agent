@@ -112,7 +112,7 @@ export interface TranscriptProps {
   focusComposer?: () => void;
   /** Send a reply chip's words (ADR 0060), as the message box would. */
   onReply?: (text: string) => void;
-  /** Stop the running turn (a script's Stop, ADR 0119). */
+  /** Stop the running turn (a script's Stop, ADR 0123). */
   onStop?: () => void;
 }
 
@@ -309,7 +309,7 @@ interface ScriptPart {
 }
 
 /**
- * A script's run is one story (ADR 0119): its own `run_script` row and the
+ * A script's run is one story (ADR 0123): its own `run_script` row and the
  * questions it asked are told inside it, not beside it. What it changed is
  * gathered for its Undo too (and still said at the turn's end, as everything is).
  */
@@ -887,7 +887,7 @@ export const Transcript = memo(function Transcript({
           />
         </div>
       )}
-            {block.item?.kind === 'memory' && <HeldMemoryItem item={block.item} />}
+      {block.item?.kind === 'memory' && <HeldMemoryItem item={block.item} />}
       {block.item?.kind === 'learned' && (
         <LearnedChatLine items={block.item.items} decided={block.item.decided} />
       )}

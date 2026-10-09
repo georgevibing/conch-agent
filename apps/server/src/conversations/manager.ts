@@ -534,7 +534,7 @@ export interface ToolContext {
   /** This turn's work folder (a task's own, or the chat's). */
   workspace?: () => Promise<string>;
   /**
-   * For scripts that call tools (ADR 0119): this turn's tools, and the gate each
+   * For scripts that call tools (ADR 0123): this turn's tools, and the gate each
    * call meets, the same as a call the model made itself.
    */
   script?: ScriptTurn;
@@ -2678,7 +2678,7 @@ export class ConversationManager {
         : undefined;
       // A command's heading says what it does in a few words; the command itself goes under it.
       const title = request.title ?? titleOfToolUse(request.toolName, request.input, workspace);
-      // Asked from inside a script (ADR 0119): the card names the run and the step, and
+      // Asked from inside a script (ADR 0123): the card names the run and the step, and
       // the run's clock stops while the person thinks.
       const step = scriptStep.getStore();
       const answer = new Promise<PermissionDecision>((resolve) => {
@@ -2906,7 +2906,7 @@ export class ConversationManager {
         ]
       : [];
 
-    // Scripts that call tools (ADR 0119): Conch's tools as this turn has them (with the
+    // Scripts that call tools (ADR 0123): Conch's tools as this turn has them (with the
     // guard after reading on each), the computer's own, and the gate every call meets, as
     // if the model had made it: `authorizeTool`, against this turn's own input.
     let scriptInput: TurnInput | undefined;

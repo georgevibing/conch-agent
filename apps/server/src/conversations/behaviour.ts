@@ -179,7 +179,7 @@ export function stepsOf(events: readonly ConversationEvent[], turnFrom: number):
   return events.flatMap((e) =>
     e.type === 'tool.started'
       ? [{ id: e.toolUseId, name: e.name, input: e.input, at: e.at, thisTurn: e.seq > turnFrom }]
-      : // A call a script made (ADR 0119) counts the same, so a loop can't hide a crowd.
+      : // A call a script made (ADR 0123) counts the same, so a loop can't hide a crowd.
         e.type === 'script.call' && e.status === 'running'
         ? [
             {

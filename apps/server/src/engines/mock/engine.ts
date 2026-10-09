@@ -75,7 +75,7 @@ function bursts(text: string): { text: string; pause: number }[] {
 const EVENT_RULE = '\n---\n';
 
 /**
- * The mock's script (ADR 0119): a folder, thirty notes in it, one call each, then an
+ * The mock's script (ADR 0123): a folder, thirty notes in it, one call each, then an
  * upload of one to a drop box (what an injected script would try), which asks in every
  * mode but Full trust, and a no it carries on from.
  */
@@ -1276,7 +1276,7 @@ export class MockEngine implements Engine {
         return;
       }
 
-      // A script that calls tools (ADR 0119): "run a script to tidy my notes" writes a
+      // A script that calls tools (ADR 0123): "run a script to tidy my notes" writes a
       // note for each day of the month with one script, then tries to upload the first,
       // which asks (the answer is the person's); every call through the real gate.
       if (

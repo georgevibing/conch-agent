@@ -17,7 +17,7 @@ import {
 import { compact } from '../conversations/store';
 
 const PEEK = 1200;
-/** The tools a script reaches by their own names (ADR 0119); the rest are Conch's. */
+/** The tools a script reaches by their own names (ADR 0123); the rest are Conch's. */
 const COMPUTER = new Set(['Read', 'LS', 'Write', 'Edit', 'Bash']);
 const DIFF_LINES = 240;
 
@@ -185,7 +185,7 @@ export function timelineOf(
         break;
       }
       case 'script.call': {
-        // Each call a script made (ADR 0119), told like any step, and said to be the script's.
+        // Each call a script made (ADR 0123), told like any step, and said to be the script's.
         if (turn < 0) openTurn(e.at);
         const name = COMPUTER.has(e.tool) ? e.tool : `mcp__conch__${e.tool}`;
         let input: unknown = {};

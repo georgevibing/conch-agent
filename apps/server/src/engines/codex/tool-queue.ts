@@ -27,7 +27,7 @@ const READS = new Set([
 ]);
 
 /**
- * Not a read, so ordered like a write: a script (ADR 0119) may change things,
+ * Not a read, so ordered like a write: a script (ADR 0123) may change things,
  * and each of its own calls is gated inside it, one at a time.
  */
 export const ORDERED = new Set(['mcp__conch__run_script']);

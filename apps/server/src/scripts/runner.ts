@@ -1,5 +1,5 @@
 /**
- * Running a script that calls tools (ADR 0119).
+ * Running a script that calls tools (ADR 0123).
  *
  * The script runs in the sealed runtime Conch apps use (ADR 0061 §2,
  * `conchapps/runtime.ts`, unchanged): a Node process of its own under the
@@ -59,7 +59,7 @@ export interface ScriptHost {
   /** The tools a script may call, by the name the model knows them. */
   tools(): ReadonlyMap<string, ScriptTool>;
   /**
-   * The gate, as if the model had made the call (ADR 0119): undefined to go
+   * The gate, as if the model had made the call (ADR 0123): undefined to go
    * ahead, or why not, and whether that's because the person said no.
    */
   authorize(

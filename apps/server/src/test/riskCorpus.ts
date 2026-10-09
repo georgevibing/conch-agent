@@ -359,7 +359,7 @@ export const ROUTINE: Step[] = [
   ['mcp__conch__file_unzip', { source: 'att_zip1' }],
   ['mcp__conch__process_start', { command: 'pnpm dev' }],
   ['mcp__conch__process_start', { command: 'git pull --ff-only', dangerouslyDisableSandbox: true }],
-  // A script that calls tools (ADR 0119): never judged as a whole; each of its calls is.
+  // A script that calls tools (ADR 0123): never judged as a whole; each of its calls is.
   [
     'mcp__conch__run_script',
     {

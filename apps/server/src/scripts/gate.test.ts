@@ -1,5 +1,5 @@
 /**
- * A script is never a way around a question (ADR 0119), proved end to end:
+ * A script is never a way around a question (ADR 0123), proved end to end:
  * the real conversation manager, its real gate, a sealed process per run.
  * The provider here calls Conch's tools the way an API engine does
  * (`authorizeTool`, then the tool), so a script and a step can be compared.

@@ -19,7 +19,7 @@ import { ConversationStore } from './store';
 import { describeTaint, heldTaints, leavesSandbox, sinkReason, taintFrom } from './taint';
 
 describe('what taints a chat', () => {
-  it('leaves a script to its calls: it neither marks the chat nor is a way out itself (ADR 0119)', () => {
+  it('leaves a script to its calls: it neither marks the chat nor is a way out itself (ADR 0123)', () => {
     for (const name of ['run_script', 'mcp__conch__run_script']) {
       const input = {
         title: 'Send them all',

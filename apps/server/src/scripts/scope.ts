@@ -1,5 +1,5 @@
 /**
- * Which script step is running, wherever a question gets asked (ADR 0119).
+ * Which script step is running, wherever a question gets asked (ADR 0123).
  * A tool a script calls asks the person the way it always does (`ctx.ask`,
  * or the gate's own question); the chat's question reads this, so its card
  * can say "step 48 of the script", and the run's clock stops while the

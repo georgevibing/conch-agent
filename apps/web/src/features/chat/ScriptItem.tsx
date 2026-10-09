@@ -1,5 +1,5 @@
 /**
- * A script that calls tools (ADR 0119), in the chat: one story for the whole
+ * A script that calls tools (ADR 0123), in the chat: one story for the whole
  * run, however many calls it makes. Its calls are told by the same rules as
  * every other step (`stepFromTool`), its question waits under its line, and
  * Undo takes back everything it changed at once.

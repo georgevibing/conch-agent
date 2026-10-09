@@ -155,7 +155,7 @@ export function needs(
   input: unknown,
   context: { workspace: string; server?: string },
 ): { capability: SkillCapability; detail?: string } | undefined {
-  // A script (ADR 0119) needs nothing itself: each tool it calls is held to the skill's list.
+  // A script (ADR 0123) needs nothing itself: each tool it calls is held to the skill's list.
   if (isRunScript(toolName)) return undefined;
   const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
   if (/^(?:mcp__conch__)?image_generate$/.test(toolName))

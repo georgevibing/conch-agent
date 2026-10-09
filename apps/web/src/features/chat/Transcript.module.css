@@ -272,7 +272,7 @@
     min-inline-size: 0;
   }
 
-  /* A script's run (ADR 0119): one story, on the column's edge like every story. */
+  /* A script's run (ADR 0123): one story, on the column's edge like every story. */
   .script {
     min-inline-size: 0;
   }

@@ -43,7 +43,7 @@ describe('what the assistant did', () => {
     expect(didWhat('mcp__linear__create_issue', {})).toBe('Used create_issue in linear');
   });
 
-  it('lists each call a script made, with its own Undo, and the run itself once (ADR 0119)', () => {
+  it('lists each call a script made, with its own Undo, and the run itself once (ADR 0123)', () => {
     seq = 0;
     const call = { runId: 'run_1', tool: 'Write', input: '{"file_path":"notes/a.md"}' };
     const events = [

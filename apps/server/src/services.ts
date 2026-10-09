@@ -1187,7 +1187,7 @@ export class Services {
                   )?.events.findLast((e) => e.type === 'user.message')?.text,
               }),
               ...questionTools(this.questions, ctx),
-              // One script that calls the tools above, every call through the same gate (ADR 0119).
+              // One script that calls the tools above, every call through the same gate (ADR 0123).
               ...scriptTools(ctx),
               // Offer what this request is missing (ADR 0060): never to nobody.
               ...(ctx.unattended ? [] : offerTools(this.offers, ctx)),

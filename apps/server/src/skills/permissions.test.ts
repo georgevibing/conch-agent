@@ -65,7 +65,7 @@ describe('holding a skill to it', () => {
   const ws = { workspace: '/work' };
   const gitOnly = readPermissions('allowed-tools: Bash(git:*) Edit');
 
-  it('holds each of a script’s calls to the list, not the script itself (ADR 0119)', () => {
+  it('holds each of a script’s calls to the list, not the script itself (ADR 0123)', () => {
     expect(needs('mcp__conch__run_script', { title: 'x', script: 'return 1' }, ws)).toBeUndefined();
     // What it calls is: a script that runs a command needs what a command needs.
     expect(
