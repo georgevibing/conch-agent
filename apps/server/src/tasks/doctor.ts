@@ -1,5 +1,5 @@
 /** Repair everything's look at tasks (ADR 0033). */
-import { assessTask, type DoctorItem, type Task } from '@conch/protocol';
+import { assessTask, taskWorth, type DoctorItem, type Task } from '@conch/protocol';
 
 import type { DoctorCheck } from '../doctor/service';
 import type { TaskService } from './service';
@@ -15,19 +15,58 @@ const chatOf = (task: Task | undefined) =>
     ? (task.conversationId ?? task.parentConversationId)
     : (task?.parentConversationId ?? task?.conversationId);
 
-/** Opens the one task's chat, or (several) the likeliest one's with the pearl's list. */
+/**
+ * Opens the one task's chat, or (several) the newest one's: where its card is.
+ * Never the pearl's list alone, which shows only work still going.
+ */
 function open(label: string, tasks: Task[]): DoctorItem['action'] {
-  const focus = tasks.length === 1 ? chatOf(tasks[0]) : undefined;
+  const focus = chatOf(tasks[0]);
   return { kind: 'open', label, place: 'tasks', ...(focus && { focus }) };
 }
 
-export function tasksCheck(tasks: TaskService): DoctorCheck {
+/** “Title” (why it's worth a look), for the first few; the rest counted. */
+function named(tasks: Task[]): string {
+  const shown = tasks.slice(0, 3).map((t) => {
+    const why = taskWorth(t);
+    return why ? `“${t.title}” (${why.replace(/\.$/, '').toLowerCase()})` : `“${t.title}”`;
+  });
+  const more = tasks.length - shown.length;
+  return more > 0 ? `${shown.join(', ')} and ${more} more` : shown.join(', ');
+}
+
+export function tasksCheck(
+  tasks: Pick<TaskService, 'list' | 'remove'> & Partial<Pick<TaskService, 'orphans'>>,
+): DoctorCheck {
   return {
     id: 'tasks',
     group: GROUP,
     title: 'Tasks',
-    async run() {
-      const { tasks: all } = await tasks.list();
+    async run({ repair }) {
+      const items: DoctorItem[] = [];
+      // Cards whose chat was deleted have nowhere to be seen or removed: not
+      // the person's to check. Repair puts them away (receipts stay).
+      const orphans = (await tasks.orphans?.().catch(() => [])) ?? [];
+      const orphaned = new Set(orphans.map((t) => t.id));
+      if (orphans.length && repair) {
+        let cleared = 0;
+        for (const task of orphans)
+          await tasks.remove(task.id).then(
+            () => cleared++,
+            () => undefined,
+          );
+        if (cleared)
+          items.push({
+            id: 'tasks:orphaned',
+            group: GROUP,
+            title: 'Tasks',
+            state: 'fixed',
+            message:
+              cleared === 1
+                ? 'Put away 1 finished task from a chat you deleted.'
+                : `Put away ${cleared} finished tasks from chats you deleted.`,
+          });
+      }
+      const all = (await tasks.list()).tasks.filter((t) => !orphaned.has(t.id));
       const stuck = all.filter((t) => t.kind === 'background' && t.status === 'interrupted');
       // Worth a look only for a concrete reason, as on their cards: an action it
       // couldn't confirm worked, or something asked for that isn't confirmed.
@@ -39,7 +78,6 @@ export function tasksCheck(tasks: TaskService): DoctorCheck {
               (t.modelCompleted || !!t.expectations?.length))),
       );
       const waiting = all.filter((t) => t.status === 'needs-you');
-      const items: DoctorItem[] = [];
       if (stuck.length)
         items.push({
           id: 'tasks:interrupted',
@@ -73,11 +111,11 @@ export function tasksCheck(tasks: TaskService): DoctorCheck {
           state: 'warning',
           message:
             uncertain.length === 1
-              ? `“${uncertain[0]?.title}” needs a quick check of what it did. Remove its card once you have.`
-              : `${uncertain.length} tasks need a quick check of what they did. Remove each card once you have.`,
+              ? `${named(uncertain)} needs a quick check of what it did. Remove its card once you have.`
+              : `${uncertain.length} tasks need a quick check of what they did: ${named(uncertain)}. Remove each card once you have.`,
           action: open(uncertain.length === 1 ? 'Review it' : 'Review tasks', uncertain),
         });
-      if (!items.length) {
+      if (!items.some((item) => item.state !== 'fixed')) {
         const working = all.filter((t) => t.status === 'running' || t.status === 'queued').length;
         items.push({
           id: 'tasks',

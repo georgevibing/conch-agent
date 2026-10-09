@@ -464,6 +464,35 @@ export class TaskService {
     this.deps.emit({ type: 'task.deleted', taskId: id });
   }
 
+  /**
+   * A deleted chat takes its tasks' cards with it: the ones it started, and the
+   * one whose own chat it was. Work still going is stopped first and its card
+   * goes once it has stopped (`orphans`). Receipts stay, as with `remove`.
+   */
+  async forgetChat(conversationId: string): Promise<void> {
+    const { tasks } = await this.list();
+    for (const task of tasks) {
+      if (task.parentConversationId !== conversationId && task.conversationId !== conversationId)
+        continue;
+      await this.stop(task.id).catch(() => undefined);
+      await this.remove(task.id).catch(() => undefined);
+    }
+  }
+
+  /**
+   * Finished tasks whose chat is gone: the one they came from, or (from none)
+   * their own. Nowhere to see or remove their cards, so nothing to ask of anyone.
+   */
+  async orphans(): Promise<Task[]> {
+    const chats = new Set((await this.deps.conversations.list()).map((chat) => chat.id));
+    const gone = (id: string | undefined) => id !== undefined && !chats.has(id);
+    return (await this.list()).tasks.filter(
+      (task) =>
+        FINISHED.includes(task.status) &&
+        (task.parentConversationId ? gone(task.parentConversationId) : gone(task.conversationId)),
+    );
+  }
+
   /** Resolves once every one of `ids` has finished (or `signal` stops them all). */
   async waitFor(ids: string[], signal?: AbortSignal): Promise<Task[]> {
     const one = (id: string) =>

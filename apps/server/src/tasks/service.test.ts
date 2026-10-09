@@ -229,6 +229,38 @@ describe('a task sent to the background', () => {
     expect(cards.at(-1)).toMatchObject({ summary: 'Scripted did: tidy the README' });
   });
 
+  it('a deleted chat takes its tasks’ cards with it, and any it left before are orphans', async () => {
+    const { tasks, conversations } = await setup();
+    const chat = await conversations.send({ clientMessageId: 'u1', text: 'hello' });
+    await until(
+      () => conversations.detail(chat.id),
+      (d) => d.conversation.status === 'idle',
+    );
+    const task = await tasks.create({
+      kind: 'background',
+      text: 'tidy the README',
+      parentConversationId: chat.id,
+    });
+    await until(
+      () => tasks.get(task.id),
+      (t) => t.status === 'done',
+    );
+    // Its last card is in the chat it came from before that chat goes.
+    await until(
+      () => conversations.detail(chat.id),
+      (d) => d.events.some((e) => e.type === 'task' && e.state === 'done'),
+    );
+    expect(await tasks.orphans()).toEqual([]);
+
+    // Deleted before chats took their tasks along: the card is left with nowhere to be.
+    await conversations.remove(chat.id);
+    expect((await tasks.orphans()).map((t) => t.id)).toEqual([task.id]);
+
+    await tasks.forgetChat(chat.id);
+    expect((await tasks.list()).tasks.map((t) => t.id)).not.toContain(task.id);
+    expect(await tasks.orphans()).toEqual([]);
+  });
+
   it('a few at a time: the rest wait their turn', async () => {
     const { tasks, engines } = await setup({ background: 1 });
     const first = await tasks.create({ kind: 'background', text: 'slow one' });

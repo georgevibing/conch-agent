@@ -1470,11 +1470,12 @@ export class Services {
     this.conversations.events.on((event) => this.broadcast.emit(event));
     // Each task follows its own chat: what it's doing, what it did (ADR 0033).
     this.broadcast.on((event) => this.tasks.onEvent(event));
-    // A deleted chat takes its browser tab and thumbnails with it.
+    // A deleted chat takes its browser tab, thumbnails and tasks' cards with it.
     this.conversations.events.on((event) => {
       if (event.type === 'conversation.deleted') {
         void this.browser.forget(event.conversationId);
         this.computerUse.forgetChat(event.conversationId);
+        void this.tasks.forgetChat(event.conversationId).catch(() => undefined);
       }
     });
     this.memory.changed.on(() => this.broadcast.emit({ type: 'memory.changed' }));
