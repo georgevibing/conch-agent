@@ -1,4 +1,4 @@
-import { ChevronRight, ShieldQuestion } from 'lucide-react';
+import { Check, ChevronRight, ShieldQuestion } from 'lucide-react';
 import { useId, type ComponentProps, type ReactNode } from 'react';
 
 import { Button } from '../../components/Button';
@@ -34,6 +34,8 @@ export interface TaskGroupItem {
   finishedAt?: number;
   /** Answered right on its line while it waits for your OK. */
   asking?: TaskCardAsking;
+  /** Worth a look: you've looked, so its card can go (offered only then). */
+  onChecked?: () => void;
 }
 
 export interface TaskGroupCardProps extends Omit<ComponentProps<'article'>, 'title'> {
@@ -186,6 +188,19 @@ function GroupLine({ task, onOpen }: { task: TaskGroupItem; onOpen?: (id: string
         </button>
       ) : (
         <div className={styles.line}>{inner}</div>
+      )}
+      {taskLook(status, task.worth) === 'check' && task.onChecked && (
+        <div className={styles.checked}>
+          <Button
+            size="sm"
+            variant="ghost"
+            leadingIcon={<Check />}
+            aria-label={`Mark “${task.title}” checked`}
+            onClick={task.onChecked}
+          >
+            Checked
+          </Button>
+        </div>
       )}
       {status === 'needs-you' && asking && (
         <div className={styles.asking} role="group" aria-label={`${task.title} is asking`}>

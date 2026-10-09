@@ -339,6 +339,12 @@ export function TaskCard({
                 Remove
               </Button>
             )}
+            {/* In the chat, one worth a look goes once you've looked. */}
+            {!live && onRemove && variant !== 'full' && look === 'check' && (
+              <Button size="sm" variant="ghost" onClick={onRemove} leadingIcon={<Check />}>
+                Checked
+              </Button>
+            )}
           </div>
         )}
       </Collapsible>

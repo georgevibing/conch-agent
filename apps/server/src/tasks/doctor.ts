@@ -1,5 +1,5 @@
 /** Repair everything's look at tasks (ADR 0033). */
-import { assessTask, taskWorth, type DoctorItem, type Task } from '@conch/protocol';
+import { assessTask, type DoctorItem, type Task } from '@conch/protocol';
 
 import type { DoctorCheck } from '../doctor/service';
 import type { TaskService } from './service';
@@ -22,16 +22,6 @@ const chatOf = (task: Task | undefined) =>
 function open(label: string, tasks: Task[]): DoctorItem['action'] {
   const focus = chatOf(tasks[0]);
   return { kind: 'open', label, place: 'tasks', ...(focus && { focus }) };
-}
-
-/** “Title” (why it's worth a look), for the first few; the rest counted. */
-function named(tasks: Task[]): string {
-  const shown = tasks.slice(0, 3).map((t) => {
-    const why = taskWorth(t);
-    return why ? `“${t.title}” (${why.replace(/\.$/, '').toLowerCase()})` : `“${t.title}”`;
-  });
-  const more = tasks.length - shown.length;
-  return more > 0 ? `${shown.join(', ')} and ${more} more` : shown.join(', ');
 }
 
 export function tasksCheck(
@@ -111,8 +101,8 @@ export function tasksCheck(
           state: 'warning',
           message:
             uncertain.length === 1
-              ? `${named(uncertain)} needs a quick check of what it did. Remove its card once you have.`
-              : `${uncertain.length} tasks need a quick check of what they did: ${named(uncertain)}. Remove each card once you have.`,
+              ? `“${uncertain[0]?.title}” couldn’t confirm what it did. Look, then mark it checked.`
+              : `${uncertain.length} tasks couldn’t confirm what they did. Look, then mark each checked.`,
           action: open(uncertain.length === 1 ? 'Review it' : 'Review tasks', uncertain),
         });
       if (!items.some((item) => item.state !== 'fixed')) {

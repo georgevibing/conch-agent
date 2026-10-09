@@ -78,4 +78,23 @@ describe('TaskGroupCard', () => {
       batchSummary([{ status: 'needs-you' }, { status: 'needs-you' }, { status: 'queued' }]),
     ).toBe('2 need you\u00a0· 1 waiting');
   });
+
+  it('offers Checked only on a line worth a look, and says which task it is for', async () => {
+    const user = userEvent.setup();
+    const onChecked = vi.fn();
+    const tasks: TaskGroupItem[] = [
+      {
+        id: 'a',
+        title: 'Send the report',
+        status: 'unverified',
+        worth: 'Couldn’t confirm one of its actions worked.',
+        onChecked,
+      },
+      { id: 'b', title: 'Tidy the README', status: 'done', onChecked: vi.fn() },
+    ];
+    renderNacre(<TaskGroupCard tasks={tasks} now={NOW} />);
+    expect(screen.getAllByRole('button', { name: /checked$/ })).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: 'Mark “Send the report” checked' }));
+    expect(onChecked).toHaveBeenCalledTimes(1);
+  });
 });

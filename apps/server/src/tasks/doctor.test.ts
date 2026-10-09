@@ -39,15 +39,13 @@ describe('tasks in Repair everything', () => {
     expect(one).toMatchObject({
       id: 'tasks:unverified',
       state: 'warning',
-      message:
-        '“Send report a” (couldn’t confirm one of its actions worked) needs a quick check of what it did. Remove its card once you have.',
+      message: '“Send report a” couldn’t confirm what it did. Look, then mark it checked.',
       action: { kind: 'open', label: 'Review it', place: 'tasks', focus: 'c_a' },
     });
     const [many] = await check([unsure('a'), unsure('b'), unsure('c'), unsure('d')]);
     expect(many).toMatchObject({
       state: 'warning',
-      message:
-        '4 tasks need a quick check of what they did: “Send report a” (couldn’t confirm one of its actions worked), “Send report b” (couldn’t confirm one of its actions worked), “Send report c” (couldn’t confirm one of its actions worked) and 1 more. Remove each card once you have.',
+      message: '4 tasks couldn’t confirm what they did. Look, then mark each checked.',
       // The newest one's chat, where its card is: the pearl's list shows only work still going.
       action: { kind: 'open', label: 'Review tasks', place: 'tasks', focus: 'c_a' },
     });

@@ -193,6 +193,11 @@
     background: var(--nc-wash-3);
   }
 
+  /* Under the line's words, past its mark. */
+  .checked {
+    padding-inline-start: calc(var(--nc-space-2) + 1rem + var(--nc-space-3) - var(--nc-space-2));
+  }
+
   .lineMark {
     --ct-icon: var(--tg-mark);
 

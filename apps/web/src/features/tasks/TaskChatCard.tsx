@@ -6,7 +6,7 @@ import type { TaskNote } from '../../live/reducer';
 import { useLive } from '../../live/LiveProvider';
 import { LiveTaskCard, withCode } from './LiveTaskCard';
 import { useOpenTask } from './open';
-import { useTasks } from './queries';
+import { useRemoveTask, useTasks } from './queries';
 import styles from './Tasks.module.css';
 
 /**
@@ -61,6 +61,7 @@ function BatchCard({
   onOpen: (id: string) => void;
 }) {
   const socket = useLive();
+  const remove = useRemoveTask();
   // The answer is on its way: its buttons wait for it to land.
   const [answered, setAnswered] = useState<string>();
   const items: TaskGroupItem[] = notes.map((note, i) => {
@@ -87,6 +88,8 @@ function BatchCard({
       error: task.error,
       startedAt: task.startedAt,
       finishedAt: task.finishedAt,
+      // Looked at: its line goes, and so does Health's ask to check it.
+      onChecked: () => remove.mutate(task.id),
       ...(asking &&
         conversation && {
           asking: {
