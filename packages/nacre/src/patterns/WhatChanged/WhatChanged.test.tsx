@@ -42,13 +42,13 @@ function Live({ onUndo }: { onUndo: (id: string) => void }) {
 
 describe('WhatChanged', () => {
   it('says the turn in one line, in the order it happened', () => {
-    expect(changesSaid(GROUPS)).toBe('Changed 2 files · committed · pushed to main');
+    expect(changesSaid(GROUPS)).toBe('Changed 2 files\u00a0· committed\u00a0· pushed to main');
     expect(
       changesSaid([
         { kind: 'send', text: 'Sent an email to Ana', items: [] },
         { kind: 'other', text: 'PR opened', items: [] },
       ]),
-    ).toBe('Sent an email to Ana · PR opened');
+    ).toBe('Sent an email to Ana\u00a0· PR opened');
   });
 
   it('opens to every change, consequential first, with Undo and Redo', async () => {
@@ -56,7 +56,7 @@ describe('WhatChanged', () => {
     const onUndo = vi.fn();
     const { container } = renderNacre(<Live onUndo={onUndo} />);
     const card = screen.getByRole('region', { name: 'What changed' });
-    const row = within(card).getByRole('button', { name: /^Changed 2 files · committed/ });
+    const row = within(card).getByRole('button', { name: /^Changed 2 files\s· committed/ });
     expect(row).toHaveAttribute('aria-expanded', 'false');
     await expectAccessible(container);
 
@@ -87,7 +87,7 @@ describe('WhatChanged', () => {
     await user.click(screen.getByRole('button', { name: /Undo all 2 changes/ }));
     expect(onUndo.mock.calls.map(([id]) => id as string)).toEqual(['cs-1', 'cs-2']);
     await user.click(screen.getByRole('button', { name: /Changed 2 files/ }));
-    expect(screen.getByRole('button', { name: /^Undone · Changed 2 files/ })).toBeVisible();
+    expect(screen.getByRole('button', { name: /^Undone\s· Changed 2 files/ })).toBeVisible();
   });
 
   it('says when an undo didn’t go through', async () => {

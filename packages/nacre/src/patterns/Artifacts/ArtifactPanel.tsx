@@ -26,6 +26,7 @@ import { Diff } from '../Diff';
 import styles from './Artifacts.module.css';
 import { ARTIFACT_KINDS, type ArtifactKindName } from './kinds';
 import { lineDiff } from './lineDiff';
+import { META_SEP } from '../../components/MetaList';
 
 export interface ArtifactPanelVersion {
   n: number;
@@ -290,7 +291,7 @@ export function ArtifactPanel({
                       v.refreshed ? 'fresh data' : v.edited ? 'edited by you' : v.note,
                     ]
                       .filter(Boolean)
-                      .join(' · ')}
+                      .join(META_SEP)}
                   >
                     Version {v.n}
                     {v.n === versions.at(-1)?.n ? ' (latest)' : ''}

@@ -15,6 +15,7 @@ import {
   type ShelfPrice,
 } from './format';
 import styles from './Products.module.css';
+import { META_SEP } from '../../components/MetaList';
 
 /** A picture of a product, served by Conch itself (never a remote address). */
 export interface ShelfPicture {
@@ -170,7 +171,7 @@ export function ProductCard({
   const photo = pictures[0];
   const off = discountOf(product.price, product.was);
   const link = shopLink(product.url);
-  const from = [product.brand, product.store].filter(Boolean).join(' · ');
+  const from = [product.brand, product.store].filter(Boolean).join(META_SEP);
   const shop = product.store ?? 'the shop';
   const hero = layout === 'hero';
 

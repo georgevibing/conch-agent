@@ -6,6 +6,7 @@ import { cx } from '../../utils/cx';
 import { CopyButton } from '../CopyButton';
 import { formatWhenInline } from '../Routines/time';
 import styles from './WatchStatus.module.css';
+import { META_SEP } from '../../components/MetaList';
 
 export type WatchStateValue = 'watching' | 'needs-you' | 'trouble' | 'off';
 
@@ -77,7 +78,7 @@ export function WatchStatus({
     count(woke, 'run started', 'runs started'),
     ...(passed ? [`${passed} passed over by “only if”`] : []),
     ...(waiting ? [`${waiting} waiting for the next run`] : []),
-  ].join(' · ');
+  ].join(META_SEP);
 
   const make = async () => {
     if (!onNewSecret) return;

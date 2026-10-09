@@ -90,6 +90,12 @@ size="lg"`) uses `--nc-text-read-lg` (17px). Code beside reading text is
 - **Headings** in prose are em steps over the body (1.6 / 1.3 / 1.1), set
   `--nc-leading-tight`/`snug`. Numbers that change or line up (times, counts,
   durations, costs) use `font-variant-numeric: tabular-nums`.
+- **A line of facts never starts with a dot.** "Ubuntu 24.04 · 8 cores · Up 29
+  days" wraps between facts on a phone, and the next line starts with a fact. A
+  line of nodes is a `MetaList` (the dot in front of a fact that starts a line is
+  tucked away); a line of words is `joinMeta(parts)`, whose dot is bound to the
+  fact before it by a no-break space (`META_SEP`). Never join facts with a bare
+  `' · '`.
 - Tracking tightens as size grows (optical sizing by hand).
 - `text-wrap: pretty` for body and `balance` for headings.
 - Why, and what it was before: [ADR 0116](../adr/0116-type-at-the-size-it-says.md).
@@ -132,6 +138,21 @@ the place's name and on every width (`usePageTrail` in
 focus on the page's name in the trail, so the way back is one Shift+Tab away;
 stepping back out — or choosing a place from the menu — puts it on the place's
 heading.
+
+### A menu inside a menu
+
+With a pointer, a submenu opens beside its menu, as people expect on a desktop:
+hovering steers into it, and there's room. On a phone or a touch screen there's
+neither, so `DropdownMenu` and `ContextMenu` drill in instead (`submenus="auto"`,
+the default; `side` or `drill` choose one always): choosing "Answering: Conch ›"
+slides the same menu over to the choices inside it, its height following on the
+snappy spring, with a back row ("‹ Answering", `backLabel`) at its top. Never a
+second popup over the first. Left or Escape steps back a level before Escape closes
+the menu, and the focus lands on the row that opened it; going in by keyboard puts
+it on the first choice. The menu only ever holds the level you're on, so arrows,
+typeahead and a screen reader see that level alone (a `group` named for it); the
+level you left slides away as a still picture of itself. Reduced motion swaps the
+levels at once.
 
 ### Settings
 

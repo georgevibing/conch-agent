@@ -13,6 +13,7 @@ import { RollNumber, ServingsStepper, servingsWords } from './Servings';
 import { formatDuration } from './time';
 import { TimerTray } from './TimerChips';
 import type { KitchenTimer } from './timers';
+import { META_SEP } from '../../components/MetaList';
 
 /** Only the page itself leaves the chat, and only over https, in a tab that knows nothing of Conch. */
 const pageLink = (url: string) => (/^https:\/\//i.test(url) ? url : undefined);
@@ -158,7 +159,7 @@ export function RecipeCard({
           )}
         </ul>
         {recipe.description && <p className={styles.description}>{recipe.description}</p>}
-        {facts.length > 0 && <p className={styles.factLine}>{facts.join(' · ')}</p>}
+        {facts.length > 0 && <p className={styles.factLine}>{facts.join(META_SEP)}</p>}
 
         <TimerTray recipe={key} className={styles.cardTray} />
 

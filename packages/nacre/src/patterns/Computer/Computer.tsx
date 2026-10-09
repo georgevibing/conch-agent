@@ -1,6 +1,7 @@
 import type { ComponentProps, CSSProperties, ReactNode } from 'react';
 
 import { Sparkline, type SparklineProps } from '../../components/LiveChart/Sparkline';
+import { MetaList } from '../../components/MetaList';
 import { cx } from '../../utils/cx';
 import { OsMark, type OsName } from '../Docs/OsMark';
 import styles from './Computer.module.css';
@@ -47,13 +48,7 @@ export function ComputerHeader({
         <span className={styles.live} data-live={live || undefined} aria-hidden />
       </span>
       <Heading className={styles.status}>{status}</Heading>
-      {facts.length > 0 && (
-        <ul className={styles.facts}>
-          {facts.map((fact, i) => (
-            <li key={i}>{fact}</li>
-          ))}
-        </ul>
-      )}
+      <MetaList items={facts} className={styles.facts} />
     </header>
   );
 }

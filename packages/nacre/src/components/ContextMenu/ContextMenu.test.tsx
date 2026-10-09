@@ -45,4 +45,30 @@ describe('ContextMenu', () => {
     expect(onCopy).toHaveBeenCalledOnce();
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
   });
+
+  it('drills into a submenu on a phone, in the same menu', async () => {
+    const onPick = vi.fn();
+    const user = userEvent.setup();
+    renderNacre(
+      <ContextMenu.Root>
+        <ContextMenu.Trigger>Password</ContextMenu.Trigger>
+        <ContextMenu.Content submenus="drill">
+          <ContextMenu.Sub>
+            <ContextMenu.SubTrigger>Copy to</ContextMenu.SubTrigger>
+            <ContextMenu.SubContent>
+              <ContextMenu.Item onSelect={onPick}>1Password</ContextMenu.Item>
+            </ContextMenu.SubContent>
+          </ContextMenu.Sub>
+          <ContextMenu.Item>Delete</ContextMenu.Item>
+        </ContextMenu.Content>
+      </ContextMenu.Root>,
+    );
+    fireEvent.contextMenu(screen.getByText('Password'), { clientX: 20, clientY: 20 });
+    await user.click(await screen.findByRole('menuitem', { name: 'Copy to' }));
+    expect(screen.getAllByRole('menu')).toHaveLength(1);
+    expect(screen.getByRole('menuitem', { name: 'Back from Copy to' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Delete' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('menuitem', { name: '1Password' }));
+    expect(onPick).toHaveBeenCalledOnce();
+  });
 });

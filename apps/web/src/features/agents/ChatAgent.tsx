@@ -118,7 +118,7 @@ export function ChatAgentMenu({ conversationId }: { conversationId: string }) {
       >
         Answering: {now?.name}
       </DropdownMenu.SubTrigger>
-      <DropdownMenu.SubContent>
+      <DropdownMenu.SubContent backLabel="Answering">
         <DropdownMenu.RadioGroup
           value={answering}
           onValueChange={(id) => {

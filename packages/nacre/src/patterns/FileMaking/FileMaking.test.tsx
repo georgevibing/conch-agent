@@ -118,7 +118,7 @@ describe('FileMaking', () => {
     fireEvent.load(container.querySelector('img') as HTMLImageElement);
     expect(screen.getByText('PDF · 3 pages · 242 KB')).toBeInTheDocument();
     expect(screen.getByRole('figure', { name: 'Q3 report.pdf' })).toHaveAccessibleDescription(
-      'PDF · 3 pages · 242 KB',
+      'PDF\u00a0· 3 pages\u00a0· 242 KB',
     );
     await userEvent.click(screen.getByRole('button', { name: 'Look closer at Q3 report.pdf' }));
     await userEvent.click(screen.getByRole('button', { name: 'Look closer' }));
@@ -209,7 +209,7 @@ describe('FileTile', () => {
     );
     expect(container.querySelector('[data-type="sheet"]')).not.toBeNull();
     await userEvent.click(
-      screen.getByRole('button', { name: 'Budget.xlsx, XLSX · 3 sheets · 18 KB' }),
+      screen.getByRole('button', { name: 'Budget.xlsx, XLSX\u00a0· 3 sheets\u00a0· 18 KB' }),
     );
     expect(onOpen).toHaveBeenCalled();
     expect(screen.getByRole('link', { name: 'Download Budget.xlsx' })).toHaveAttribute(
@@ -232,7 +232,7 @@ describe('fileKind', () => {
     expect(badgeFor('a.markdown', 'markdown')).toBe('MD');
     expect(withExtension('Q3 report', 'pdf')).toBe('Q3 report.pdf');
     expect(withExtension('Q3 report.pdf', 'pdf')).toBe('Q3 report.pdf');
-    expect(fileMeta({ badge: 'PDF', pages: 1, size: 2048 })).toBe('PDF · 1 page · 2 KB');
+    expect(fileMeta({ badge: 'PDF', pages: 1, size: 2048 })).toBe('PDF\u00a0· 1 page\u00a0· 2 KB');
   });
 
   it('reads Markdown and HTML as plain words', () => {

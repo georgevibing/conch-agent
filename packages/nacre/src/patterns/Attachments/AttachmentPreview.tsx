@@ -20,6 +20,7 @@ import {
   parseDelimited,
   previewModeOf,
 } from './fileType';
+import { META_SEP } from '../../components/MetaList';
 
 export interface AttachmentPreviewProps {
   open: boolean;
@@ -133,7 +134,7 @@ export function AttachmentPreview({
       : undefined,
   ]
     .filter(Boolean)
-    .join(' · ');
+    .join(META_SEP);
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!onNavigate || !position || position.count < 2) return;

@@ -1,4 +1,5 @@
 import { formatBytes } from '../Attachments/fileType';
+import { META_SEP } from '../../components/MetaList';
 
 /** What a backup holds, counted (mirrors `BackupContents` in `@conch/protocol`). */
 export interface BackupContentsInfo {
@@ -195,7 +196,7 @@ export function describeBackup(contents: BackupContentsInfo, size?: number): str
     contents.chats && plural(contents.chats, 'chat'),
     size !== undefined && formatBytes(size),
   ].filter(Boolean);
-  return parts.length ? parts.join(' · ') : 'Settings only';
+  return parts.length ? parts.join(META_SEP) : 'Settings only';
 }
 
 /** “Tuesday 30 Sept, 14:02” (in the reader's own words for dates). */

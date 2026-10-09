@@ -7,6 +7,7 @@ import { cx } from '../../utils/cx';
 import { formatMoney, usageSeverityFor } from '../Usage/format';
 import { UsageGauge } from '../Usage/UsageBar';
 import styles from './RoutineSpending.module.css';
+import { META_SEP } from '../../components/MetaList';
 
 /** "November 1". */
 function dayWords(at: number, locale: string, timeZone?: string): string {
@@ -73,7 +74,7 @@ export function RoutineSpendingGauge({
     limitUsd !== null && `Starts again ${dayWords(resetsAt, locale, timeZone)}`,
   ]
     .filter(Boolean)
-    .join(' · ');
+    .join(META_SEP);
   return (
     <UsageGauge
       label={label}

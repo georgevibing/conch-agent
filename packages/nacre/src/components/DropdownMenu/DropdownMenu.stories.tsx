@@ -1,19 +1,24 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import {
   Archive,
+  Bot,
   ChevronDown,
   Copy,
   Cpu,
   Download,
   FolderInput,
+  Globe,
   MoreHorizontal,
   Pencil,
   Pin,
+  Route,
   Share2,
+  SquareTerminal,
+  TextSearch,
   Trash2,
 } from 'lucide-react';
 import { useState } from 'react';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 
 import { Button } from '../Button';
 import { IconButton } from '../IconButton';
@@ -25,7 +30,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Action menu with full keyboard support. A single highlight wash glides between items on a spring as you move with the pointer or arrow keys.',
+          'Action menu with full keyboard support. A single highlight wash glides between items on a spring as you move with the pointer or arrow keys. A submenu opens beside the menu with a pointer; on a phone or a touch screen (`submenus="auto"`, the default) the same menu slides over to it, with a back row at its top: Left or Escape goes back, the height follows, and reduced motion swaps it at once.',
       },
     },
   },
@@ -158,5 +163,99 @@ export const KeyboardNavigation: Story = {
     await expect(within(menu).getByRole('menuitem', { name: /Copy transcript/ })).toHaveFocus();
     await userEvent.keyboard('{Escape}');
     await expect(trigger).toHaveFocus();
+  },
+};
+
+const AGENTS = ['Conch', 'Scout', 'Ledger', 'Quill'];
+
+/** A chat's header "More" menu on a phone, the menu that has a choice nested in it. */
+function ChatMore({
+  defaultOpen,
+  submenus,
+}: {
+  defaultOpen?: boolean;
+  submenus?: 'auto' | 'side' | 'drill';
+}) {
+  const [agent, setAgent] = useState('Conch');
+  return (
+    <DropdownMenu.Root defaultOpen={defaultOpen}>
+      <DropdownMenu.Trigger asChild>
+        <IconButton label="More" variant="surface">
+          <MoreHorizontal />
+        </IconButton>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Content align="end" submenus={submenus}>
+        <DropdownMenu.Sub>
+          <DropdownMenu.SubTrigger icon={<Bot />}>Answering: {agent}</DropdownMenu.SubTrigger>
+          <DropdownMenu.SubContent backLabel="Answering">
+            <DropdownMenu.RadioGroup value={agent} onValueChange={setAgent}>
+              {AGENTS.map((name) => (
+                <DropdownMenu.RadioItem key={name} value={name}>
+                  {name}
+                </DropdownMenu.RadioItem>
+              ))}
+            </DropdownMenu.RadioGroup>
+          </DropdownMenu.SubContent>
+        </DropdownMenu.Sub>
+        <DropdownMenu.Item icon={<TextSearch />}>Find in chat</DropdownMenu.Item>
+        <DropdownMenu.Item icon={<Route />}>How it did it</DropdownMenu.Item>
+        <DropdownMenu.Item icon={<Globe />}>Show the browser</DropdownMenu.Item>
+        <DropdownMenu.Item icon={<SquareTerminal />}>Show the terminal</DropdownMenu.Item>
+      </DropdownMenu.Content>
+    </DropdownMenu.Root>
+  );
+}
+
+/**
+ * On a phone a submenu doesn't open beside the menu, where there's no room:
+ * the same menu slides over to it, its height following, with a back row at
+ * its top. Press "Answering" to go in, the back row (or Left, or Escape) to
+ * come out.
+ */
+export const DrillInOnAPhone: Story = {
+  render: () => (
+    <div style={{ blockSize: 340, display: 'flex', justifyContent: 'flex-end' }}>
+      <ChatMore submenus="drill" defaultOpen />
+    </div>
+  ),
+};
+
+/** The same menu opened at its nested level, as a picture. */
+export const DrillInOpened: Story = {
+  tags: ['!autodocs'],
+  render: () => (
+    <div style={{ blockSize: 340, display: 'flex', justifyContent: 'flex-end' }}>
+      <ChatMore submenus="drill" defaultOpen />
+    </div>
+  ),
+  play: async () => {
+    const body = within(document.body);
+    await userEvent.click(await body.findByRole('menuitem', { name: /Answering/ }));
+    await expect(body.getAllByRole('menu')).toHaveLength(1);
+    await waitFor(() =>
+      expect(body.getByRole('menuitem', { name: 'Back from Answering' })).toBeVisible(),
+    );
+  },
+};
+
+/** Keyboard: Right or Enter goes in, Left or Escape comes back to the row that opened it. */
+export const DrillInKeyboard: Story = {
+  tags: ['!autodocs'],
+  render: () => (
+    <div style={{ blockSize: 340, display: 'flex', justifyContent: 'flex-end' }}>
+      <ChatMore submenus="drill" />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    canvas.getByRole('button', { name: 'More' }).focus();
+    await userEvent.keyboard('{Enter}');
+    const body = within(document.body);
+    const trigger = await body.findByRole('menuitem', { name: /Answering/ });
+    await expect(trigger).toHaveFocus();
+    await userEvent.keyboard('{ArrowRight}');
+    await expect(body.getByRole('menuitemradio', { name: 'Conch' })).toHaveFocus();
+    await userEvent.keyboard('{ArrowLeft}');
+    await expect(body.getByRole('menuitem', { name: /Answering/ })).toHaveFocus();
   },
 };

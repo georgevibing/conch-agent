@@ -4,6 +4,7 @@ import {
   ComputerHeader,
   CoreStrip,
   HelperList,
+  joinMeta,
   LiveChart,
   ProviderLogo,
   Skeleton,
@@ -215,7 +216,10 @@ export function ComputerPage({ status, live = true }: { status: ComputerStatus; 
               label="Disk"
               icon={<HardDrive />}
               value={percent(diskShare)}
-              detail={`${diskTone === 'normal' ? '' : 'Running low · '}${disk(last.disk.totalBytes - last.disk.usedBytes)} free`}
+              detail={joinMeta([
+                diskTone !== 'normal' && 'Running low',
+                `${disk(last.disk.totalBytes - last.disk.usedBytes)} free`,
+              ])}
               meter={diskShare}
               tone={diskTone}
             />

@@ -159,7 +159,7 @@ describe('a file tool in the chat', () => {
     );
     const list = screen.getByRole('list', { name: 'Attached' });
     expect(
-      within(list).getByRole('button', { name: 'Q3 report.pdf, PDF · 3 pages · 242 KB' }),
+      within(list).getByRole('button', { name: 'Q3 report.pdf, PDF\u00a0· 3 pages\u00a0· 242 KB' }),
     ).toBeInTheDocument();
   });
 });

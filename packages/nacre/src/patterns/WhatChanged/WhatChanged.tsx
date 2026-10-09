@@ -22,6 +22,7 @@ import { cx } from '../../utils/cx';
 import { continuing } from '../Story/format';
 import type { StoryEffect, StoryEffectKind } from '../Story/types';
 import styles from './WhatChanged.module.css';
+import { META_SEP } from '../../components/MetaList';
 
 export interface WhatChangedGroup {
   kind: StoryEffectKind;
@@ -87,7 +88,7 @@ export function orderChanges(groups: WhatChangedGroup[]): WhatChangedGroup[] {
 
 /** "Changed 4 files · committed · pushed to main". */
 export function changesSaid(groups: WhatChangedGroup[]): string {
-  return groups.map((g, i) => (i === 0 ? g.text : continuing(g.text))).join(' · ');
+  return groups.map((g, i) => (i === 0 ? g.text : continuing(g.text))).join(META_SEP);
 }
 
 type Pending = Record<string, 'undo' | 'redo' | 'failed' | undefined>;

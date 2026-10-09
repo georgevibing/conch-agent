@@ -12,6 +12,7 @@ import { Button } from '../../components/Button';
 import { IconButton } from '../../components/IconButton';
 import { cx } from '../../utils/cx';
 import styles from './MorningDigest.module.css';
+import { META_SEP } from '../../components/MetaList';
 
 /*
  * The morning's note (ADR 0107): what Conch learned from your chats and how it
@@ -67,7 +68,7 @@ export function digestLine(items: readonly DigestLine[]): string {
   const parts: string[] = [];
   if (learned) parts.push(`Learned ${learned} thing${learned === 1 ? '' : 's'}`);
   if (tidied) parts.push(`${parts.length ? 'tidied' : 'Tidied'} ${tidied}`);
-  return parts.join(' · ') || 'Nothing left to show';
+  return parts.join(META_SEP) || 'Nothing left to show';
 }
 
 /**

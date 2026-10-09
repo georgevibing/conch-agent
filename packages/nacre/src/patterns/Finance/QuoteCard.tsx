@@ -21,6 +21,7 @@ import {
 import { PriceChart } from './PriceChart';
 import { FINANCE_PERIODS, type FinancePeriod, type PriceSeries, type Quote } from './types';
 import styles from './Finance.module.css';
+import { META_SEP } from '../../components/MetaList';
 
 /** A letter tile instead of a logo: nothing is ever fetched from a brand's site. */
 export function Lettermark({
@@ -202,7 +203,7 @@ export function QuoteCard({
           {quote.name && <p className={styles.name}>{quote.name}</p>}
         </div>
         <p className={styles.where} aria-hidden>
-          {[kind, quote.exchange, currency].filter(Boolean).join(' · ')}
+          {[kind, quote.exchange, currency].filter(Boolean).join(META_SEP)}
         </p>
       </header>
 
@@ -239,7 +240,7 @@ export function QuoteCard({
                 quote.delayed === false ? undefined : 'delayed',
               ]
                 .filter(Boolean)
-                .join(' · ')}
+                .join(META_SEP)}
         </p>
       </div>
 

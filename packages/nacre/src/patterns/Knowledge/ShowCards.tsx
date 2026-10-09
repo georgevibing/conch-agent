@@ -7,6 +7,7 @@ import styles from './Knowledge.module.css';
 import { Picture } from './Picture';
 import { useScrollEdges } from './useScrollEdges';
 import { outside, secureLink, tintOf, type CardPicture } from './shared';
+import { META_SEP } from '../../components/MetaList';
 
 export interface ShowNextEpisode {
   /** When it airs (ISO). */
@@ -132,11 +133,13 @@ export function ShowCards({
               </span>
               <span className={styles.posterTitle}>{show.title}</span>
               <span className={styles.posterMeta}>
-                {[show.year, show.network].filter(Boolean).join(' · ') ||
+                {[show.year, show.network].filter(Boolean).join(META_SEP) ||
                   (show.kind === 'movie' ? 'Film' : 'Show')}
               </span>
               {show.genres && show.genres.length > 0 && (
-                <span className={styles.posterGenres}>{show.genres.slice(0, 3).join(' · ')}</span>
+                <span className={styles.posterGenres}>
+                  {show.genres.slice(0, 3).join(META_SEP)}
+                </span>
               )}
               {next && (
                 <span className={styles.nextChip}>
@@ -224,7 +227,7 @@ function ShowOne({
       </span>
       <div className={styles.showOneText}>
         <p className={styles.showOneTitle}>{show.title}</p>
-        {meta.length > 0 && <p className={styles.bookMeta}>{meta.join(' · ')}</p>}
+        {meta.length > 0 && <p className={styles.bookMeta}>{meta.join(META_SEP)}</p>}
         {show.rating !== undefined && (
           <p className={styles.showOneRating}>
             <Star aria-hidden />

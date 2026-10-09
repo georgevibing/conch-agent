@@ -23,6 +23,7 @@ import {
 } from './format';
 import { FINANCE_PERIODS, type FinancePeriod, type PriceSeries } from './types';
 import styles from './Finance.module.css';
+import { META_SEP } from '../../components/MetaList';
 
 const W = 1000;
 const H = 220;
@@ -170,7 +171,7 @@ export function CompareChart({
       className={cx(styles.card, styles.compare, className)}
     >
       <header className={styles.compareHead}>
-        <h3 className={styles.compareTitle}>{drawn.map((d) => d.series.symbol).join(' · ')}</h3>
+        <h3 className={styles.compareTitle}>{drawn.map((d) => d.series.symbol).join(META_SEP)}</h3>
         <p className={styles.small}>
           Each line is how far it has moved since {dateWords(dates[0] ?? '', locale)} — percentages,
           not prices, so they share one scale.
@@ -414,7 +415,7 @@ export function CompareChart({
 
       <footer className={styles.foot}>
         <p className={styles.small}>
-          {[...new Set(series.map((s) => s.source))].join(' · ')} · delayed, not live · not
+          {[...new Set(series.map((s) => s.source))].join(META_SEP)} · delayed, not live · not
           financial advice
         </p>
         {/* TODO(share): agent C's <CardShare> mounts right here. */}
