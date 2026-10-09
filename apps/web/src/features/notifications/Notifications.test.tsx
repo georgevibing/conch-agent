@@ -301,7 +301,7 @@ describe('Settings → Notifications', () => {
     expect(screen.queryByText(/Registration failed/)).toBeNull();
   });
 
-  it('says how many other devices get them, and leaves them to Settings → Devices', async () => {
+  it('says how many other devices get them, and leaves them to Settings → Access', async () => {
     const user = userEvent.setup();
     pushableBrowser();
     const others = status({
@@ -324,7 +324,7 @@ describe('Settings → Notifications', () => {
       // No list of devices here any more: one place for them.
       expect(screen.queryByRole('list', { name: 'Devices that get notifications' })).toBeNull();
       await user.click(screen.getByRole('button', { name: 'Your devices' }));
-      expect(openSettings).toHaveBeenCalledWith('devices');
+      expect(openSettings).toHaveBeenCalledWith('access', 'devices');
     } finally {
       useUi.setState({ openSettings: real });
     }
