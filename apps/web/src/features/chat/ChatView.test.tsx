@@ -199,27 +199,23 @@ describe('ChatView', () => {
             label: 'Codex',
             models: [],
             commands: [],
-            // It can't ask first, so "Ask first" isn't on offer: Plan only is in effect.
-            permissionModes: ['plan', 'acceptEdits', 'bypassPermissions'],
+            // It can't ask first, so "Ask first" isn't on offer: Read only is in effect.
+            permissionModes: ['plan', 'auto', 'bypassPermissions'],
           },
         ],
       }),
     });
     renderApp(<ChatView />);
-    expect(await screen.findByRole('button', { name: 'Mode: Plan only' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Mode: Read only$/ })).toBeInTheDocument();
     expect(
-      screen.getByText(
-        'Conch can make mistakes, and only reads and plans: it won’t change anything.',
-      ),
+      screen.getByText('Conch can make mistakes, and only looks and plans.'),
     ).toBeInTheDocument();
     expect(screen.queryByText(/always asks/)).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Mode: Plan only' }));
-    await userEvent.click(await screen.findByRole('radio', { name: /Edit freely/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Mode: Read only$/ }));
+    await userEvent.click(await screen.findByRole('radio', { name: /Auto/ }));
     expect(
-      await screen.findByText(
-        'Conch can make mistakes, and changes files in this folder without asking.',
-      ),
+      await screen.findByText('Conch can make mistakes, and asks only before risky steps.'),
     ).toBeInTheDocument();
   });
 
@@ -292,7 +288,7 @@ describe('ChatView', () => {
               model('fable', 'Fable 5.1'),
             ],
             commands: [],
-            permissionModes: ['default', 'acceptEdits', 'plan', 'bypassPermissions'],
+            permissionModes: ['default', 'plan', 'bypassPermissions'],
           },
           {
             engine: 'openrouter',
@@ -317,7 +313,7 @@ describe('ChatView', () => {
     await userEvent.type(screen.getByRole('searchbox', { name: 'Search models' }), 'qwen');
     await userEvent.keyboard('{Enter}');
     expect(
-      await screen.findByRole('button', { name: 'Model: Qwen: Qwen3 Coder (OpenRouter)' }),
+      await screen.findByRole('button', { name: /^Model: Qwen: Qwen3 Coder \(OpenRouter\)\./ }),
     ).toBeInTheDocument();
 
     await userEvent.type(screen.getByRole('textbox', { name: 'Message Conch' }), 'Hi{Enter}');
