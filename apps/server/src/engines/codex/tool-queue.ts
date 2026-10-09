@@ -26,13 +26,19 @@ const READS = new Set([
   'mcp__conch__crypto_market',
 ]);
 
+/**
+ * Not a read, so ordered like a write: a script (ADR 0123) may change things,
+ * and each of its own calls is gated inside it, one at a time.
+ */
+export const ORDERED = new Set(['mcp__conch__run_script']);
+
 export class ToolQueue {
   #reads: Promise<void> = Promise.resolve();
   #browser: Promise<void> = Promise.resolve();
   #barrier: Promise<void> = Promise.resolve();
 
   run(name: string | undefined, work: () => Promise<void>): Promise<void> {
-    const read = name !== undefined && READS.has(name);
+    const read = name !== undefined && READS.has(name) && !ORDERED.has(name);
     const browser = name?.startsWith('mcp__conch__browser_') ?? false;
     const before = read
       ? [this.#reads, this.#barrier]

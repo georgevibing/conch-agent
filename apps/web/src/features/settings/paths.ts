@@ -18,6 +18,7 @@ export const SETTINGS_TABS = [
   'access',
   'security',
   'health',
+  'dashboards',
 ] as const;
 
 export type SettingsTab = (typeof SETTINGS_TABS)[number];

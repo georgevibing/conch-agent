@@ -1,0 +1,702 @@
+@layer nacre.components {
+  /*
+   * A script's run (ADR 0123): a story's row, the same well, words and meta,
+   * with what a run has that a story doesn't beneath it while it works: a
+   * thin bar, the live line with Stop, and a counter for each kind of call.
+   */
+  .root {
+    --sr-well: 1.375rem;
+    --sr-gap: var(--nc-space-2-5);
+    --sr-bleed: var(--nc-space-2);
+    --sr-indent: calc(var(--sr-well) + var(--sr-gap));
+    --sr-warning-text: light-dark(
+      oklch(0.47 0.1 var(--nc-warning-h)),
+      oklch(0.84 0.09 var(--nc-warning-h))
+    );
+    --sr-warning-wash: light-dark(
+      oklch(0.97 0.025 var(--nc-warning-h)),
+      oklch(0.28 0.04 var(--nc-warning-h))
+    );
+
+    container: script / inline-size;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  /* ── The row ──────────────────────────────────────────────────────── */
+  .header {
+    --nc-rim-rest: 0;
+    --nc-rim-hover: 0.45;
+    --nc-sheen-hover: 0.12;
+    --nc-sheen-size: 180px;
+
+    appearance: none;
+    display: flex;
+    align-items: center;
+    gap: var(--sr-gap);
+    inline-size: calc(100% + 2 * var(--sr-bleed));
+    min-block-size: var(--nc-chat-row-height);
+    margin: 0 calc(-1 * var(--sr-bleed));
+    padding: 0 var(--sr-bleed);
+    border: 0;
+    border-radius: var(--nc-chat-row-radius);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    text-align: start;
+    cursor: pointer;
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .header:hover {
+      background-color: var(--nc-wash-1);
+    }
+  }
+
+  .header:active {
+    background-color: var(--nc-wash-2);
+  }
+
+  .header:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 0;
+  }
+
+  .title {
+    display: flex;
+    align-items: baseline;
+    gap: var(--nc-space-1-5);
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
+  }
+
+  .headline {
+    flex: 0 1 auto;
+    font-weight: var(--nc-weight-medium);
+    letter-spacing: -0.003em;
+  }
+
+  .outcome {
+    display: flex;
+    align-items: baseline;
+    gap: var(--nc-space-1-5);
+    flex: 0 100 auto;
+    min-inline-size: 2.5rem;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--nc-text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .root[data-state-run='failed'] .outcome {
+    color: var(--sr-warning-text);
+  }
+
+  .dot {
+    flex-shrink: 0;
+    color: var(--nc-text-subtle);
+  }
+
+  .meta {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+    margin-inline-start: auto;
+    flex-shrink: 0;
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-subtle);
+  }
+
+  /* "Script": what kind of story this is, said quietly as a tag. */
+  .kind {
+    padding: 0 var(--nc-space-1-5);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-gray-3);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-2xs);
+    line-height: 1.6;
+    letter-spacing: 0.01em;
+    color: var(--nc-text-muted);
+  }
+
+  .chevron {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .root[data-state='open'] > .header .chevron {
+    transform: rotate(90deg);
+  }
+
+  @container script (inline-size < 28rem) {
+    .kind {
+      display: none;
+    }
+  }
+
+  /* Narrow, the outcome is said whole or not at all, as a story's is: it wraps onto a
+     second line the row never shows. The bar and the counters say how far anyway. */
+  @container script (inline-size < 30rem) {
+    .title {
+      flex-wrap: wrap;
+      block-size: 1lh;
+      line-height: var(--nc-leading-normal);
+    }
+    .outcome {
+      flex-shrink: 0;
+      min-inline-size: 0;
+    }
+  }
+
+  /* ── While it runs ────────────────────────────────────────────────── */
+  .live {
+    display: grid;
+    gap: var(--nc-space-1-5);
+    padding: var(--nc-space-1) 0 var(--nc-space-2) var(--sr-indent);
+  }
+
+  /* A hairline that fills as the script says how far it is: calm, never a gauge. */
+  .bar {
+    position: relative;
+    block-size: 3px;
+    overflow: hidden;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-gray-4);
+  }
+
+  .fill {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--nc-accent-8), var(--nc-accent-9));
+    transition: inline-size var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  /* A band of pearl light runs along what's done, while the work goes on. */
+  .fill::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklch, var(--nc-pearl-2) 70%, transparent) 50%,
+      transparent
+    );
+    opacity: calc(0.8 * var(--nc-lustre));
+    transform: translateX(-100%);
+    animation: sr-sheen 2.2s var(--nc-ease-out) infinite;
+  }
+
+  @keyframes sr-sheen {
+    to {
+      transform: translateX(100%);
+    }
+  }
+
+  .liveRow {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .liveLine {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+  }
+
+  .counters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .counter {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    min-block-size: 1.5rem;
+    padding: 0 var(--nc-space-2) 0 var(--nc-space-1-5);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-glaze-edge);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+  }
+
+  .counter[data-running] {
+    color: var(--nc-text);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-accent-5),
+      var(--nc-glaze-edge);
+  }
+
+  .counterGlyph {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    stroke-width: 2.1;
+    color: var(--nc-text-subtle);
+  }
+
+  .counter[data-running] .counterGlyph {
+    color: var(--nc-accent-11);
+  }
+
+  .counterLabel {
+    max-inline-size: 16rem;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .counterCount {
+    display: inline-flex;
+    align-items: baseline;
+    font-weight: var(--nc-weight-medium);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text);
+  }
+
+  .counterMore {
+    align-self: center;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  /* The question it waits on, right under its line: the run holds until it's answered. */
+  .approval {
+    padding: var(--nc-space-1) 0 var(--nc-space-2) var(--sr-indent);
+  }
+
+  .undo {
+    display: flex;
+    padding: 0 0 var(--nc-space-1) calc(var(--sr-indent) - var(--nc-space-2));
+  }
+
+  /* ── Opened ───────────────────────────────────────────────────────── */
+  .content {
+    overflow: hidden;
+  }
+
+  .content[data-state='open'] {
+    animation: sr-open var(--nc-spring-soft-duration) var(--nc-spring-soft);
+  }
+
+  .content[data-state='closed'] {
+    animation: sr-close var(--nc-duration-fast) var(--nc-ease-in);
+  }
+
+  @keyframes sr-open {
+    from {
+      block-size: 0;
+      opacity: 0;
+    }
+    to {
+      block-size: var(--radix-collapsible-content-height);
+      opacity: 1;
+    }
+  }
+
+  @keyframes sr-close {
+    from {
+      block-size: var(--radix-collapsible-content-height);
+    }
+    to {
+      block-size: 0;
+      opacity: 0;
+    }
+  }
+
+  .panel {
+    display: grid;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-1) 0 var(--nc-space-3) var(--sr-indent);
+  }
+
+  .section {
+    display: grid;
+    gap: var(--nc-space-1-5);
+    min-inline-size: 0;
+  }
+
+  .heading {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-muted);
+  }
+
+  .error {
+    margin: 0;
+    padding: var(--nc-space-2) var(--nc-space-2-5);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--sr-warning-wash);
+    font-size: var(--nc-text-sm);
+    color: var(--sr-warning-text);
+    text-wrap: pretty;
+  }
+
+  .groups,
+  .calls,
+  .asks {
+    display: grid;
+    gap: var(--nc-space-0-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .groupHead {
+    appearance: none;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    inline-size: calc(100% + var(--sr-bleed));
+    min-block-size: 1.875rem;
+    margin: 0 0 0 calc(-1 * var(--sr-bleed));
+    padding: 0 var(--sr-bleed);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    text-align: start;
+    cursor: pointer;
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .groupHead:disabled {
+    cursor: default;
+  }
+
+  @media (hover: hover) {
+    .groupHead:not(:disabled):hover {
+      background-color: var(--nc-wash-1);
+    }
+  }
+
+  .groupHead:focus-visible,
+  .callHead:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+
+  /* Stop is a square, filled, as the composer's is: never mistaken for a checkbox. */
+  .stopIcon {
+    fill: currentColor;
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+
+  .groupGlyph {
+    flex-shrink: 0;
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+    stroke-width: 2.1;
+    color: var(--nc-text-subtle);
+  }
+
+  .groupLabel {
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .groupCount {
+    flex-shrink: 0;
+    font-weight: var(--nc-weight-medium);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .groupQuiet {
+    flex-shrink: 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+  }
+
+  .group[data-failed] .groupQuiet {
+    color: var(--sr-warning-text);
+  }
+
+  .groupTool {
+    margin-inline-start: auto;
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-2xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .groupChevron {
+    flex-shrink: 0;
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+    color: var(--nc-text-subtle);
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .group[data-state='open'] .groupChevron {
+    transform: rotate(90deg);
+  }
+
+  @container script (inline-size < 30rem) {
+    .groupTool {
+      display: none;
+    }
+  }
+
+  .groupBody {
+    display: grid;
+    gap: var(--nc-space-1);
+    padding: var(--nc-space-1) 0 var(--nc-space-2) calc(0.8125rem + var(--nc-space-2));
+  }
+
+  /* ── One call ──────────────────────────────────────────────────── */
+  .call {
+    min-inline-size: 0;
+  }
+
+  .callHead {
+    appearance: none;
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+    inline-size: calc(100% + var(--sr-bleed));
+    min-block-size: 1.625rem;
+    margin: 0 0 0 calc(-1 * var(--sr-bleed));
+    padding: 0 var(--sr-bleed);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: var(--nc-text-muted);
+    font: inherit;
+    font-size: var(--nc-text-xs);
+    text-align: start;
+    cursor: pointer;
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  @media (hover: hover) {
+    .callHead:hover {
+      background-color: var(--nc-wash-1);
+      color: var(--nc-text);
+    }
+  }
+
+  .callDot {
+    flex-shrink: 0;
+    inline-size: 0.375rem;
+    block-size: 0.375rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-gray-7);
+  }
+
+  .call[data-status='running'] .callDot {
+    background: var(--nc-accent-9);
+    box-shadow: 0 0 0 3px var(--nc-accent-4);
+  }
+
+  .call[data-status='error'] .callDot {
+    background: light-dark(
+      oklch(0.6 0.13 var(--nc-warning-h)),
+      oklch(0.8 0.12 var(--nc-warning-h))
+    );
+  }
+
+  /* Not run: a hollow dot, quiet gray. */
+  .call[data-status='declined'] .callDot {
+    background: transparent;
+    box-shadow: inset 0 0 0 1.5px var(--nc-gray-8);
+  }
+
+  .callStep {
+    flex-shrink: 0;
+    min-inline-size: 3.25ch;
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-subtle);
+  }
+
+  .callSummary {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--nc-text);
+  }
+
+  .call[data-status='declined'] .callSummary {
+    color: var(--nc-text-muted);
+    text-decoration: line-through;
+    text-decoration-color: var(--nc-gray-7);
+  }
+
+  .callTime {
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-subtle);
+  }
+
+  .callChevron {
+    flex-shrink: 0;
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    color: var(--nc-text-subtle);
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .call[data-state='open'] .callChevron {
+    transform: rotate(90deg);
+  }
+
+  /* Closed, Radix keeps it in the page, hidden: it takes no room. */
+  .groupBody[hidden],
+  .callBody[hidden] {
+    display: none;
+  }
+
+  .callBody {
+    display: grid;
+    gap: var(--nc-space-1);
+    padding: var(--nc-space-1) 0 var(--nc-space-2) calc(0.375rem + var(--nc-space-2));
+  }
+
+  .ioLabel {
+    font-size: var(--nc-text-2xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .io {
+    max-block-size: 12rem;
+    margin: 0;
+    padding: var(--nc-space-1-5) var(--nc-space-2);
+    overflow: auto;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-2xs);
+    line-height: var(--nc-leading-normal);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: var(--nc-text);
+  }
+
+  .hidden {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+  }
+
+  .link {
+    appearance: none;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--nc-accent-11);
+    font: inherit;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+    cursor: pointer;
+  }
+
+  .link:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+    border-radius: var(--nc-radius-xs);
+  }
+
+  .ask {
+    display: flex;
+    align-items: baseline;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+    font-size: var(--nc-text-sm);
+  }
+
+  .askStep {
+    flex-shrink: 0;
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-subtle);
+  }
+
+  .askText {
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .askAnswer {
+    margin-inline-start: auto;
+    flex-shrink: 0;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+  }
+
+  .ask[data-answer='waiting'] .askAnswer {
+    color: var(--nc-accent-11);
+  }
+
+  .result {
+    max-block-size: 16rem;
+    margin: 0;
+    padding: var(--nc-space-2) var(--nc-space-2-5);
+    overflow: auto;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: var(--nc-text);
+  }
+
+  .result:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fill,
+    .chevron,
+    .groupChevron,
+    .callChevron {
+      transition: none;
+    }
+    .fill::after,
+    .content[data-state='open'],
+    .content[data-state='closed'] {
+      animation: none;
+    }
+  }
+}

@@ -73,10 +73,17 @@ your desktop and the chat apps you already use.
   or many as a page to read, or as OpenAI, ShareGPT (Hermes) or ATIF files for
   training, with keys and personal details taken out first. Nothing leaves your
   computer. [How it did it](./apps/docs/content/features/how-it-did-it.md)
+- **Big jobs in one go.** For 300 emails or 40 pages, your assistant writes one short
+  script that uses its tools, sealed off, every step asking what it would ask anyway.
+  The chat shows it as one line with live counts, and one Undo puts it all back. [Big jobs in one go](./apps/docs/content/features/scripts.md)
 - **It doesn't give up at the first error.** Every model reads what went wrong, tries
   another way and checks its work before it says done. [How Conch works on a problem](./apps/docs/content/features/working-on-a-problem.md)
 - **Long jobs that finish.** Long chats summarise their start, caching keeps costs
   down, and each reply says what it cost. [What it costs](./apps/docs/content/care/what-it-costs.md)
+- **On your own dashboard.** Turns, tokens, spending, tools and this computer in
+  Grafana, Honeycomb, Datadog, New Relic, Langfuse, Phoenix or Prometheus: paste
+  the key the service shows and press Send a test. Numbers only, never the words of
+  your chats. [Dashboards](./apps/docs/content/care/dashboards.md)
 
 ### Agents
 
@@ -133,6 +140,11 @@ your desktop and the chat apps you already use.
   Conch app: tools every model can use and pages that look like Conch, sealed off
   from your files. Added when you say so, shared on GitHub in one press.
   [Make apps](./apps/docs/content/features/make-apps.md)
+- **Any provider, any chat app.** Name one Conch doesn't list ("add Fireworks as a
+  provider", "connect me on Zulip") and it reads the docs, makes it, tests it with
+  your key on a card, and adds it when you press Add. Or add one from a link.
+  [Add any provider](./apps/docs/content/providers/any-provider.md),
+  [Add any chat app](./apps/docs/content/channels/any-chat-app.md)
 - **Your other tools.** Claude Desktop, Cursor and VS Code can use your memory,
   skills, apps and browser, each only what you tick. [Other apps](./apps/docs/content/features/other-apps.md)
 

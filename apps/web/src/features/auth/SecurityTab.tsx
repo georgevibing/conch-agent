@@ -49,6 +49,7 @@ function useCheckupFix(guard: Guard) {
     if (fix.kind === 'open') {
       // Which provider new chats start with is Providers (their mode is the composer's).
       if (fix.place === 'models') openSettings('providers');
+      else if (fix.place === 'dashboards') openSettings('dashboards');
       // The ways in — devices, your phone, passkeys, sign-in, keys, other apps — are Access.
       else if (fix.place === 'other-apps') openSettings('access', OTHER_APPS_FOCUS);
       else if (fix.place === 'devices') openSettings('access', DEVICES_FOCUS);

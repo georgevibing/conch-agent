@@ -2,6 +2,8 @@ import { createServer, type Server } from 'node:http';
 
 import { expect, test } from '@playwright/test';
 
+import { askFirst, autoAgain } from './app';
+
 /**
  * The browser, end to end: the gateway drives a real headless browser (the
  * one on this machine) against a little site served here, and the mock
@@ -58,8 +60,16 @@ test.beforeEach(async ({ request }) => {
   expect(res.ok()).toBe(true);
   if (process.env.CI) expect(await res.json()).toMatchObject({ browser: { id: 'downloaded' } });
 });
+test.afterEach(async ({ request }) => {
+  await autoAgain(request);
+});
 
-test('watch it browse, allow the site once, and find it all in the chat', async ({ page }) => {
+test('watch it browse, allow the site once, and find it all in the chat', async ({
+  page,
+  request,
+}) => {
+  // The site's question is Ask first's: in Auto, acting on a site goes ahead (ADR 0117).
+  await askFirst(request);
   await page.goto('/');
   const composer = page.getByRole('textbox', { name: /^Message/ });
   await composer.fill(`Open ${origin}/ and click “See availability”`);
@@ -116,9 +126,9 @@ test('hand over to sign in: you type, the assistant never sees it', async ({ pag
 test('a link to a new tab is a tab you can see and switch', async ({ page }) => {
   await page.goto('/');
   const composer = page.getByRole('textbox', { name: /^Message/ });
+  // In Auto, acting on a site goes ahead without its question (ADR 0117).
   await composer.fill(`Open ${origin}/ and click “Our blog”, then go back to the first tab`);
   await composer.press('Enter');
-  await page.getByRole('button', { name: 'Allow in this chat' }).click();
   await expect(
     page.getByText(/it opened in a new tab, then went back to the first tab/),
   ).toBeVisible();

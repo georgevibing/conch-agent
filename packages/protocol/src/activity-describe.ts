@@ -1407,6 +1407,24 @@ const CONCH: Record<string, (input: Input) => Draft> = {
     },
   }),
   use_skill: (input) => skillDraft(str(input, 'name')),
+  // A script that calls tools (ADR 0123): its calls are told by its own story, so the
+  // step is the run itself, what it's for in the assistant's words, and how many calls.
+  run_script: (input) => {
+    const title = str(input, 'title');
+    return {
+      family: 'run',
+      words: say('run', title ? `a script to ${lowerFirst(clip(oneLine(title), 70))}` : 'a script'),
+      finish: (output) => {
+        const calls = /(\d[\d,]*) tool calls?\b/.exec(output)?.[1];
+        return calls
+          ? {
+              outcome: plural(Number(calls.replaceAll(',', '')), 'tool call', 'tool calls'),
+              handled: true,
+            }
+          : undefined;
+      },
+    };
+  },
   list_skills: () => ({ family: 'other', words: say('look', 'at the skills') }),
   find_skills: (input) => {
     const want = str(input, 'words');

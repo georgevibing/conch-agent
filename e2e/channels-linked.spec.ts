@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
+import { askFirst, autoAgain } from './app';
+
 /**
  * WhatsApp and Signal, linked by QR code (ADR 0043). With the mock engine
  * Conch talks to a pretend WhatsApp and a pretend signal-cli on this machine
@@ -37,11 +39,16 @@ test.beforeEach(async ({ request }) => {
     await request.delete(`/api/channels/${c.id}`);
   }
 });
+test.afterEach(async ({ request }) => {
+  await autoAgain(request);
+});
 
 test('link WhatsApp by scanning, chat in Message yourself, and approve with a number', async ({
   page,
   request,
 }) => {
+  // The question from the phone is Ask first's: Auto runs the tests without one (ADR 0119).
+  await askFirst(request);
   await page.goto('/');
   await page.getByRole('button', { name: 'Apps', exact: true }).click();
   await page.getByRole('radio', { name: 'Talk to me here' }).click();

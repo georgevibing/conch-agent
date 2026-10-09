@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
+import { askFirst, autoAgain } from './app';
+
 /**
  * Teams, Matrix and WeChat (ADR 0045), against the pretend apps the mock
  * engine starts (`GET /api/channels/mock`): a pretend Bot Framework that
@@ -25,6 +27,9 @@ test.beforeEach(async ({ request }) => {
     await request.delete(`/api/channels/${c.id}`);
   await request.delete('/api/channels/door');
 });
+test.afterEach(async ({ request }) => {
+  await autoAgain(request);
+});
 
 const control = (request: APIRequestContext, base: string, action: string, data: object = {}) =>
   request.post(`${base}/__control/${action}`, { data });
@@ -38,6 +43,8 @@ test('Matrix: sign in once, then an encrypted DM where a reaction approves', asy
   page,
   request,
 }) => {
+  // The question from the phone is Ask first's: Auto runs the tests without one (ADR 0119).
+  await askFirst(request);
   await page.goto('/apps?show=talk');
   await page.getByRole('button', { name: 'Matrix', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Connect Matrix', level: 1 })).toBeVisible();

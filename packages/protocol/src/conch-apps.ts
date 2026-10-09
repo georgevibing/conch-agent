@@ -6,6 +6,7 @@
  */
 import { z } from 'zod';
 
+import { AppChannelPart, AppPartValues, AppProviderPart } from './app-parts';
 import { SkillSignature } from './skills';
 
 // ── Pictures ────────────────────────────────────────────────────────────────
@@ -266,6 +267,10 @@ export const ConchAppManifest = z
       .optional(),
     /** Where it's published; set by Conch when it publishes. */
     repository: WebLink.optional(),
+    /** It answers chats: a provider in the model picker and Settings → Providers (ADR 0122). */
+    provider: AppProviderPart.optional(),
+    /** A chat app to talk to your assistant on, in Apps → Talk to me here (ADR 0122). */
+    channel: AppChannelPart.optional(),
   })
   .strict();
 export type ConchAppManifest = z.infer<typeof ConchAppManifest>;
@@ -490,6 +495,12 @@ export const ConchApp = z.object({
   published: z.string().optional(),
   /** Its picture (ADR 0090), drawn instead of the glyph: an address under `/api/conch-apps`. */
   picture: z.string().max(300).optional(),
+  /**
+   * Just added, and its provider or chat app couldn't be connected with what
+   * was typed (ADR 0122): why, in one sentence. The app is in; the key can be
+   * typed again where it's kept.
+   */
+  partProblem: z.string().max(500).optional(),
 });
 export type ConchApp = z.infer<typeof ConchApp>;
 
@@ -561,6 +572,8 @@ export const AcceptAppOfferBody = z
   .object({
     conversationId: z.string(),
     settings: z.record(z.string(), z.string().max(4096)).default({}),
+    /** A provider's key, a chat app's fields: kept by Conch with its own, never in the app (ADR 0122). */
+    parts: AppPartValues.optional(),
   })
   .strict();
 export type AcceptAppOfferBody = z.infer<typeof AcceptAppOfferBody>;
@@ -617,6 +630,8 @@ export const InstallAppBody = z
     /** The files the person saw: a package that changed since is refused. */
     hash: z.string(),
     settings: z.record(z.string(), z.string().max(4096)).default({}),
+    /** A provider's key, a chat app's fields (ADR 0122). */
+    parts: AppPartValues.optional(),
   })
   .strict();
 export type InstallAppBody = z.infer<typeof InstallAppBody>;

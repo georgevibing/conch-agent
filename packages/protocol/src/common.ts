@@ -53,13 +53,32 @@ export type BuiltInEngineId = z.infer<typeof BuiltInEngineId>;
 export const ServerId = z.templateLiteral(['server-', z.string().regex(/^[a-z0-9]{8}$/)]);
 export type ServerId = z.infer<typeof ServerId>;
 
-/** Engines Conch can drive: the ones it knows by name, and the servers you added. */
-export const EngineId = z.union([BuiltInEngineId, ServerId]);
+/**
+ * A provider a Conch app brings (ADR 0122): `app-` and the app's id, so a chat
+ * that used it still finds it after an update, and loses it with the app.
+ */
+export const AppProviderId = z.templateLiteral([
+  'app-',
+  z
+    .string()
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+    .min(2)
+    .max(24),
+]);
+export type AppProviderId = z.infer<typeof AppProviderId>;
+
+/** Engines Conch can drive: the ones it knows by name, the servers you added, and those apps bring. */
+export const EngineId = z.union([BuiltInEngineId, ServerId, AppProviderId]);
 export type EngineId = z.infer<typeof EngineId>;
 
 /** Whether a provider id names a server you added, rather than one Conch knows. */
 export function isServerId(id: string): id is ServerId {
   return ServerId.safeParse(id).success;
+}
+
+/** Whether a provider id names one a Conch app brings (ADR 0122). */
+export function isAppProviderId(id: string): id is AppProviderId {
+  return AppProviderId.safeParse(id).success;
 }
 
 /** How hard the model thinks. `auto` lets the model decide (engine default). */

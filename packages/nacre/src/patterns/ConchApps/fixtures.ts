@@ -1,3 +1,4 @@
+import type { PartChannelView, PartProviderView } from './PartReview';
 import type {
   AppManifestView,
   AppToolView,
@@ -194,4 +195,100 @@ export const samplePictures = {
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAD5UlEQVR42u2dQY7TMBSGe4QeIUfoEbLMstwgK8QKFQkWCCFVKPseoeIEWXCAnABlxzYXCIoEEkIsKDKyUQc1baYTx89+3ye9xcx0mjb/H9t5fnZWKwAAAAAAAAAAAAAAAAAAAIDI6Ytq3RdVPhJrzlCagpd9UR37our6ojrdiM6+tsQQcQufWSFPTwzzHhlnVJ/wGCFC8Xd9UQ0exHdh3nvHmZbZzx89Cn+pNWB8IEj8dkHxXbSYQK/4mECIAZqA4rtoUCKM+HsB4rvYo8iy4ueCxHeRo8xyBmgFGqBFmWXELwWK76JEIf8G6AQboEMhv+JvBYvvYotS/gxwjMAAR5TyZ4AhAgMMKOVH/E0E4rvYoNh9ad3cJnhM1DbT15z9HIsBavuZ3eevz74XlUdnomd2CreNSNw55xF2KmsMPBZtxBo6ik1sM39A8NE4JNs92L5vQORJVUd5auKXCKs0rUxfrzipJGzOPtbY0+wTZWziZwz4Zh8YZjEZoEE0pbWHNP3KuwLhBRuxR8fVT5T0/YwFxOb5EWiZWNP80w2Q8r0nvr1+d/pxeHP69enlgzC/M38jRZxg///12Ye/Av/+/OJ0+vL8apjXmNea/2Ec8DgDiDxZ39+/nST8JSOY/5X6vTDAhPj58dWjhf8/zHtggAgNMIf4kk2AAW40+3OJ70Jad4ABrgz47unzp4wJJA0MMcBImBH83OK7MO+NAcYNIKK238fVf94KsBfBuAFqCUkeX+K7EJIsqiUaYJdy8y+sG9hJNEAW+sSYlK5vA5hjCDCAzPKw0OMAJQaQuxdR6BlBJQYQXRCyDlkNrMAAg/i1gyEXgygYBMaxSCRUYWjit4Hx7EAWcifPhBNBca0YDtUVJJoKjnZ94JHJIFYIH5kOVr7nYAgTJFAQktaGkyHmCiIuCUvzwVR2s8dm6e4goqLQRsUmk0vnCSIpC9ex03joLV+FLwxRcfWzT+CVfQJp/ln/T/OvPDYpG4AVxJqfO8S+gcqfQcgOIsqfRIoBMAAGwACIjAEItQZg63jNzx3kNpDbwByBEyv+vMMEiBzTun8PBqgROqJl38wHMA/gwwQ8TeTCur+VFrgbUDb6v2CANYUhDwtB1D1Qui+qLcL/i+1KI2QGE8/8TewKWsXit+qa/hETaLwrGNSLf2aCTaBBYRuoBepUrAEQ3h009pjrhaepafZvGOEQ4p57odzEAYWnzxo2nq76zY2uyNdxc5S9L1fQLC3AjAZs1N7jz2yEzO4v0Dzy5O+esq1qqOPCtCs0t/32eeQ+R9e2ixg7Lk08AAAAAAAAAAAAAAAAAAAAAAAAAACE4Q/vaP5EVx4X6gAAAABJRU5ErkJggg==',
   /** An address that never loads: the glyph stays. */
   broken: 'data:image/png;base64,AAAA',
+};
+
+/** A provider made with Conch (ADR 0122): Fireworks, declared, no code. */
+export const fireworks: AppManifestView = {
+  id: 'fireworks',
+  name: 'Fireworks AI',
+  tagline: 'Fast open models, in every chat',
+  version: '1.0.0',
+  icon: { glyph: 'zap', color: 'violet' },
+};
+
+export const fireworksProvider: PartProviderView = {
+  name: 'Fireworks AI',
+  speaks: 'openai',
+  reaches: ['api.fireworks.ai'],
+  key: {
+    label: 'Fireworks API key',
+    help: 'Account → API Keys → Create API key.',
+    link: 'https://fireworks.ai/account/api-keys',
+  },
+  models: [
+    {
+      id: 'accounts/fireworks/models/llama4-maverick-instruct-basic',
+      name: 'Llama 4 Maverick',
+      context: 1_000_000,
+      price: { input: 0.22, output: 0.88 },
+    },
+    {
+      id: 'accounts/fireworks/models/qwen3-235b-a22b',
+      name: 'Qwen3 235B',
+      context: 128_000,
+      price: { input: 0.22, output: 0.88 },
+    },
+  ],
+};
+
+export const fireworksWords: AppWords = {
+  from: 'Made by you',
+  abilities: [
+    {
+      kind: 'provider',
+      text: 'Answers chats as Fireworks AI (OpenAI’s chat, 2 models)',
+    },
+    { kind: 'reach', text: 'Reaches api.fireworks.ai' },
+    { kind: 'nothing-else', text: 'Can’t read your files, run programs or see your other apps' },
+    { kind: 'needs', text: 'Needs from you: Fireworks API key (kept by Conch, never in the app)' },
+  ],
+};
+
+/** A chat app made with Conch (ADR 0122): Zulip, its bot polled from this computer. */
+export const zulip: AppManifestView = {
+  id: 'zulip',
+  name: 'Zulip',
+  tagline: 'Talk to your assistant on Zulip',
+  version: '1.0.0',
+  icon: { glyph: 'message-circle', color: 'teal' },
+};
+
+export const zulipChannel: PartChannelView = {
+  name: 'Zulip',
+  receives: 'poll',
+  steps: [
+    'In Zulip, open Personal settings → Bots and press Add a new bot.',
+    'Choose Generic bot, name it after your assistant, and press Create bot.',
+  ],
+  fields: [
+    {
+      key: 'site',
+      label: 'Your Zulip address',
+      placeholder: 'https://yourteam.zulipchat.com',
+      secret: false,
+    },
+    { key: 'email', label: 'The bot’s email', secret: false },
+    {
+      key: 'apiKey',
+      label: 'The bot’s API key',
+      help: 'Shown beside the bot in Personal settings → Bots.',
+      secret: true,
+    },
+  ],
+};
+
+export const zulipWords: AppWords = {
+  from: 'Made by you',
+  abilities: [
+    {
+      kind: 'channel',
+      text: 'Lets you talk to your assistant on Zulip; only delivers messages, can’t read your chats or use your apps',
+    },
+    { kind: 'reach', text: 'Reaches yourteam.zulipchat.com' },
+    { kind: 'nothing-else', text: 'Can’t read your files, run programs or see your other apps' },
+    {
+      kind: 'needs',
+      text: 'Needs from you: Your Zulip address, The bot’s email, The bot’s API key (kept by Conch, never in the app)',
+    },
+  ],
 };

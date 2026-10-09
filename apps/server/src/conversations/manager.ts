@@ -62,6 +62,9 @@ import type {
   TurnInput,
 } from '../engines/types';
 import { hostToolText } from '../engines/types';
+import { authorizeTool, DECLINED, hostComputerTools } from '../engines/host';
+import type { ScriptTool } from '../scripts/runner';
+import type { ScriptTurn } from '../scripts/tool';
 import { forTurn as attachmentsForTurn } from '../attachments/prompt';
 import type { AttachmentStore } from '../attachments/store';
 import { Emitter } from '../lib/emitter';
@@ -104,6 +107,7 @@ import {
   type Pattern,
 } from './behaviour';
 import { cautionFrom } from './provenance';
+import { askedFromScript, scriptStep } from '../scripts/scope';
 import { CONCH_POWER_MESSAGE, runsConchPower } from '../lib/protect';
 import { didWhat } from '../activity/service';
 import { changedFiles, type UndoService } from '../undo/service';
@@ -530,6 +534,11 @@ export interface ToolContext {
   waitingForYou?: (waiting: boolean) => Promise<void>;
   /** This turn's work folder (a task's own, or the chat's). */
   workspace?: () => Promise<string>;
+  /**
+   * For scripts that call tools (ADR 0123): this turn's tools, and the gate each
+   * call meets, the same as a call the model made itself.
+   */
+  script?: ScriptTurn;
 }
 
 /** Tools every conversation gets from other parts of Conch (e.g. routines, skills, the browser). */
@@ -922,6 +931,8 @@ export class ConversationManager {
   constructor(
     private readonly deps: {
       store: ConversationStore;
+      /** Counts each step Auto judges, for dashboards (ADR 0121). Numbers only. */
+      judged?: (verdict: 'went_ahead' | 'asked', risk?: string) => void;
       /** Resource admission for automatic recovery; manual chats remain available. */
       recovery?: { allowed: () => boolean; workload?: () => WorkloadPace; intervalMs?: number };
       settings: SettingsStore;
@@ -2685,7 +2696,10 @@ export class ConversationManager {
         : undefined;
       // A command's heading says what it does in a few words; the command itself goes under it.
       const title = request.title ?? titleOfToolUse(request.toolName, request.input, workspace);
-      return new Promise<PermissionDecision>((resolve) => {
+      // Asked from inside a script (ADR 0123): the card names the run and the step, and
+      // the run's clock stops while the person thinks.
+      const step = scriptStep.getStore();
+      const answer = new Promise<PermissionDecision>((resolve) => {
         live.permissions.set(permissionId, {
           resolve,
           toolName: request.toolName,
@@ -2736,9 +2750,11 @@ export class ConversationManager {
           ...(request.waive && { lasting: true }),
           ...(request.once && { once: true }),
           ...(request.edit && { editable: true }),
+          ...(step && { script: { runId: step.runId, step: step.step, title: step.title } }),
         });
         this.#setStatus(live, 'awaiting-permission');
       });
+      return askedFromScript(step, answer);
     };
 
     /** Full trust is yours to give (ADR 0028): a chat you're in doesn't stop to check. */
@@ -2803,10 +2819,15 @@ export class ConversationManager {
         if (mode === 'auto') {
           // Auto stops only for something serious, and says what (ADR 0100).
           const risk = assessRisk(request.toolName, request.input, { workspace, ...access });
-          if (riskAsks(risk, false))
+          if (riskAsks(risk, false)) {
+            this.deps.judged?.('asked', risk?.kind);
             return askUser({ ...request, taint: riskWords(risk), remember: false }, abort.signal);
+          }
           // Spending money still asks (a paid picture); the person's own plan never does.
-          if (!request.cost && autoAllows(mode, request.toolName, request.explicit)) return 'allow';
+          if (!request.cost && autoAllows(mode, request.toolName, request.explicit)) {
+            this.deps.judged?.('went_ahead');
+            return 'allow';
+          }
         }
         if (request.once) return askUser({ ...request, remember: false }, abort.signal);
         if (live.alwaysAllow.has(request.toolName)) return 'allow';
@@ -2858,6 +2879,10 @@ export class ConversationManager {
           else if (look) why = look;
         }
         if (judged) {
+          this.deps.judged?.(
+            why ? 'asked' : 'went_ahead',
+            why ? (riskAsks(risk, true) ? risk?.kind : 'second-look') : undefined,
+          );
           if (!why) return 'allow';
           return askUser(
             {
@@ -2898,6 +2923,49 @@ export class ConversationManager {
           }),
         ]
       : [];
+
+    // Scripts that call tools (ADR 0123): Conch's tools as this turn has them (with the
+    // guard after reading on each), the computer's own, and the gate every call meets, as
+    // if the model had made it: `authorizeTool`, against this turn's own input.
+    let scriptInput: TurnInput | undefined;
+    const scriptTurn: ScriptTurn = {
+      tools: () => {
+        const found = new Map<string, ScriptTool>();
+        const turn = scriptInput;
+        // A scoped run's list holds inside a script too (its guard holds it again at each call).
+        if (turn)
+          for (const tool of hostComputerTools(turn))
+            if (!extras?.toolAllowed || extras.toolAllowed(tool.name))
+              found.set(tool.name, { tool: turn.wrapTool?.(tool) ?? tool, display: tool.name });
+        for (const tool of tools)
+          found.set(tool.name, { tool, display: `mcp__conch__${tool.name}` });
+        return found;
+      },
+      authorize: async (display, input, callId) => {
+        const turn = scriptInput;
+        if (!turn) return { message: 'This turn hasn’t started yet.', declined: false };
+        const refused = await authorizeTool(turn, display, input, callId);
+        return refused === undefined
+          ? undefined
+          : { message: refused, declined: refused === DECLINED };
+      },
+      settle: async (callId, ran) => {
+        // What the computer's own tools brought in marks the chat, as their rows would.
+        if (ran?.ok && !isHostTool(ran.display)) {
+          const source = taintFrom(ran.display, ran.input);
+          if (source) this.#taint(live, source);
+        }
+        await tracker?.after(callId).catch(() => undefined);
+        if (live.record.pendingToolCalls?.includes(callId)) {
+          live.record = {
+            ...live.record,
+            pendingToolCalls: live.record.pendingToolCalls.filter((id) => id !== callId),
+          };
+          await this.#persist(live);
+        }
+      },
+      running: () => hostRows.running('run_script'),
+    };
 
     const tools = memoryTools({
       store: this.deps.memory,
@@ -2975,6 +3043,7 @@ export class ConversationManager {
             taint: (source) => this.#taint(live, source),
             workspace: () =>
               extras?.cwd ? Promise.resolve(extras.cwd) : this.deps.settings.workspace(),
+            script: scriptTurn,
           }) ?? [])),
       ...(extras?.tools ?? []),
       ...replies.tools,
@@ -3661,64 +3730,62 @@ export class ConversationManager {
       const aheadFresh = told ? lead(told.fresh, told.freshMemories) : '';
       let sessionSeen = false;
       const withLead = ahead ? `${ahead}\n\n${prompt}` : prompt;
-      const stream = abort.signal.aborted
-        ? nothing()
-        : engine.runTurn({
-            conversationId,
-            prompt: missed ? `${missed}\n\n${withLead}` : withLead,
-            ...(attached?.images.length && { images: attached.images }),
-            ...(this.deps.describe && { describe: this.deps.describe(engine, resolved.model) }),
-            ...(readableDirs.length && { readableDirs }),
-            ...(this.deps.protectedPaths?.length && { protectedPaths: this.deps.protectedPaths }),
-            resumeId: session?.resumeId,
-            ...(session?.resumeId && {
-              freshPrompt: [everything, aheadFresh, prompt].filter(Boolean).join('\n\n'),
-            }),
-            seq: asked,
-            systemAppend: (guest
-              ? [
-                  buildSystemAppend({
-                    // Your instructions to it stay yours: a guest meets only its persona.
-                    ...(agent
-                      ? { agent: { ...agent, instructions: '' } }
-                      : { persona: { ...settings.persona, instructions: '' } }),
-                    profile: { name: '', about: '', facts: [] },
-                    memories: [],
-                    total: 0,
-                    autoMemory: false,
-                    tools: false,
-                  }),
-                  // A guest's turn has no tools: its resilience is thinking it through (ADR 0102).
-                  guestPrompt(live.record.origin),
-                ]
-              : [told?.system]
-            )
-              .filter(Boolean)
-              .join('\n\n'),
-            cwd: workspace,
-            tools: pace.tools,
-            budget: pace.budget,
-            wrapTool: extras?.wrapTool,
-            resourceFeedback: feedback ? () => feedback.take() : undefined,
-            options: resolved,
-            onModeChange: (listener) => modeListeners.push(listener),
-            mcpServers: engine.integrations.mode === 'native' ? loaded?.servers : undefined,
-            disallowedTools: guest ? GUEST_DISALLOWED : loaded?.disallowedTools,
-            ...(guest && { wordsOnly: true }),
-            // A provider's own notes on each round of steps cost a small-model call: only when
-            // asked, and only where someone may be watching (not a routine, a task or a chat app).
-            ...(settings.preferences.autoTitle &&
-              !extras &&
-              !live.record.origin && { narrate: true }),
-            bridgedTools,
-            signal: pace.signal,
-            requestPermission,
-            guard,
-            tainted: guardOn && this.#tainted(live).length > 0 ? true : tightened,
-            reach,
-            ...(settings.preferences.sealedCommands && { sandbox: this.deps.sandbox?.(workspace) }),
-            ...(place && { place }),
-          });
+      const turnInput: TurnInput = {
+        conversationId,
+        prompt: missed ? `${missed}\n\n${withLead}` : withLead,
+        ...(attached?.images.length && { images: attached.images }),
+        ...(this.deps.describe && { describe: this.deps.describe(engine, resolved.model) }),
+        ...(readableDirs.length && { readableDirs }),
+        ...(this.deps.protectedPaths?.length && { protectedPaths: this.deps.protectedPaths }),
+        resumeId: session?.resumeId,
+        ...(session?.resumeId && {
+          freshPrompt: [everything, aheadFresh, prompt].filter(Boolean).join('\n\n'),
+        }),
+        seq: asked,
+        systemAppend: (guest
+          ? [
+              buildSystemAppend({
+                // Your instructions to it stay yours: a guest meets only its persona.
+                ...(agent
+                  ? { agent: { ...agent, instructions: '' } }
+                  : { persona: { ...settings.persona, instructions: '' } }),
+                profile: { name: '', about: '', facts: [] },
+                memories: [],
+                total: 0,
+                autoMemory: false,
+                tools: false,
+              }),
+              // A guest's turn has no tools: its resilience is thinking it through (ADR 0102).
+              guestPrompt(live.record.origin),
+            ]
+          : [told?.system]
+        )
+          .filter(Boolean)
+          .join('\n\n'),
+        cwd: workspace,
+        tools: pace.tools,
+        budget: pace.budget,
+        wrapTool: extras?.wrapTool,
+        resourceFeedback: feedback ? () => feedback.take() : undefined,
+        options: resolved,
+        onModeChange: (listener) => modeListeners.push(listener),
+        mcpServers: engine.integrations.mode === 'native' ? loaded?.servers : undefined,
+        disallowedTools: guest ? GUEST_DISALLOWED : loaded?.disallowedTools,
+        ...(guest && { wordsOnly: true }),
+        // A provider's own notes on each round of steps cost a small-model call: only when
+        // asked, and only where someone may be watching (not a routine, a task or a chat app).
+        ...(settings.preferences.autoTitle && !extras && !live.record.origin && { narrate: true }),
+        bridgedTools,
+        signal: pace.signal,
+        requestPermission,
+        guard,
+        tainted: guardOn && this.#tainted(live).length > 0 ? true : tightened,
+        reach,
+        ...(settings.preferences.sealedCommands && { sandbox: this.deps.sandbox?.(workspace) }),
+        ...(place && { place }),
+      };
+      scriptInput = turnInput;
+      const stream = abort.signal.aborted ? nothing() : engine.runTurn(turnInput);
 
       for await (const event of windDown(pace.events(stream), abort.signal)) {
         // Stopped: the reply ends where Stop was pressed, while the provider winds down.

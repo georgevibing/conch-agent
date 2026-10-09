@@ -179,8 +179,28 @@ export function stepsOf(events: readonly ConversationEvent[], turnFrom: number):
   return events.flatMap((e) =>
     e.type === 'tool.started'
       ? [{ id: e.toolUseId, name: e.name, input: e.input, at: e.at, thisTurn: e.seq > turnFrom }]
-      : [],
+      : // A call a script made (ADR 0123) counts the same, so a loop can't hide a crowd.
+        e.type === 'script.call' && e.status === 'running'
+        ? [
+            {
+              id: e.callId,
+              name: e.tool,
+              input: scriptInput(e.input),
+              at: e.at,
+              thisTurn: e.seq > turnFrom,
+            },
+          ]
+        : [],
   );
+}
+
+/** A script call's input as the log keeps it (JSON, cut to fit): what can still be read. */
+function scriptInput(kept: string): unknown {
+  try {
+    return JSON.parse(kept) as unknown;
+  } catch {
+    return {};
+  }
 }
 
 const counted = (n: number, one: string, many = `${one}s`) =>

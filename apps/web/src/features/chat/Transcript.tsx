@@ -7,7 +7,7 @@ import {
   type AgentFace,
   type Speaker,
 } from '@conch/nacre';
-import type { EngineId, MailEdit } from '@conch/protocol';
+import { isRunScript, type EngineId, type MailEdit } from '@conch/protocol';
 import {
   memo,
   useCallback,
@@ -63,6 +63,7 @@ import { MusicDock } from './MusicFound';
 import { isFileTool } from './FileToolItem';
 import { isImageTool } from './ImageToolItem';
 import { RunStories } from './Stories';
+import { ScriptItem } from './ScriptItem';
 import { headlineOf, stepViews, stepsShown, storiesOf, storyStatus, turnChanges } from './telling';
 import { TaskChatCard } from '../tasks/TaskChatCard';
 import { PeerItem, RoundItem } from '../agents/RoundItem';
@@ -111,6 +112,8 @@ export interface TranscriptProps {
   focusComposer?: () => void;
   /** Send a reply chip's words (ADR 0060), as the message box would. */
   onReply?: (text: string) => void;
+  /** Stop the running turn (a script's Stop, ADR 0123). */
+  onStop?: () => void;
 }
 
 /** Tolerance for the gateway's clock running a little behind this device's. */
@@ -299,6 +302,58 @@ function withoutPlanTools(items: TranscriptItem[]): TranscriptItem[] {
   return items.filter((i) => !(i.kind === 'tool' && i.name === 'ExitPlanMode'));
 }
 
+interface ScriptPart {
+  /** Each run's questions, and the change sets of its calls, by run. */
+  asked: Map<string, Extract<TranscriptItem, { kind: 'permission' }>[]>;
+  files: Map<string, Extract<TranscriptItem, { kind: 'files' }>[]>;
+}
+
+/**
+ * A script's run is one story (ADR 0123): its own `run_script` row and the
+ * questions it asked are told inside it, not beside it. What it changed is
+ * gathered for its Undo too (and still said at the turn's end, as everything is).
+ */
+function withScripts(items: TranscriptItem[]): { items: TranscriptItem[] } & ScriptPart {
+  const runs = items.filter(
+    (i): i is Extract<TranscriptItem, { kind: 'script' }> => i.kind === 'script',
+  );
+  const asked: ScriptPart['asked'] = new Map();
+  const files: ScriptPart['files'] = new Map();
+  if (!runs.length) return { items, asked, files };
+  const byRun = new Map(runs.map((r) => [r.id, r]));
+  // Its row: the one it names, else the run_script call just before it.
+  const rows = new Set<string>();
+  for (const run of runs) {
+    if (run.run.toolUseId) {
+      rows.add(run.run.toolUseId);
+      continue;
+    }
+    const at = items.indexOf(run);
+    const row = items
+      .slice(0, at)
+      .findLast((i) => i.kind === 'tool' && isRunScript(i.name) && !rows.has(i.id));
+    if (row) rows.add(row.id);
+  }
+  const owner = new Map<string, string>();
+  for (const run of runs) {
+    if (run.run.toolUseId) owner.set(run.run.toolUseId, run.id);
+    for (const call of run.calls) owner.set(call.callId, run.id);
+  }
+  const kept = items.filter((i) => {
+    if (i.kind === 'tool' && isRunScript(i.name) && rows.has(i.id)) return false;
+    if (i.kind === 'permission' && i.script && byRun.has(i.script.runId)) {
+      asked.set(i.script.runId, [...(asked.get(i.script.runId) ?? []), i]);
+      return false;
+    }
+    if (i.kind === 'files' && i.toolUseId && owner.has(i.toolUseId)) {
+      const run = owner.get(i.toolUseId) ?? '';
+      files.set(run, [...(files.get(run) ?? []), i]);
+    }
+    return true;
+  });
+  return { items: kept, asked, files };
+}
+
 /** The plan drawn in the same turn before an item, if any. */
 function planBefore(items: TranscriptItem[], id: string) {
   const at = items.findIndex((i) => i.id === id);
@@ -417,6 +472,7 @@ export const Transcript = memo(function Transcript({
   onSend,
   focusComposer,
   onReply,
+  onStop,
 }: TranscriptProps & {
   /** This conversation is a routine run: its first message is the routine's instruction. */
   routineRun?: boolean;
@@ -518,6 +574,7 @@ export const Transcript = memo(function Transcript({
       last?.kind === 'memory' ||
       last?.kind === 'looked' ||
       last?.kind === 'files' ||
+      (last?.kind === 'script' && last.run.state !== 'running') ||
       last?.kind === 'taint' ||
       last?.kind === 'skill' ||
       last?.kind === 'skill-ended' ||
@@ -535,7 +592,8 @@ export const Transcript = memo(function Transcript({
       (last?.kind === 'assistant' && last.done));
 
   // An answered question folds into the row of the call it was about (ADR 0028).
-  const shown = withoutPlanTools(items);
+  const scripts = withScripts(withoutPlanTools(items));
+  const shown = scripts.items;
   const folded = foldedAnswers(shown);
   const asks = questionsByCall(shown);
   /** Each call by its id: an email's card follows its call while it goes. */
@@ -816,6 +874,18 @@ export const Transcript = memo(function Transcript({
           first={block.taints.some((t) => t.id === firstTaint)}
           taskChat={Boolean(taskChat)}
         />
+      )}
+      {block.item?.kind === 'script' && (
+        <div className={styles.script}>
+          <ScriptItem
+            item={block.item}
+            asked={scripts.asked.get(block.item.id) ?? []}
+            files={scripts.files.get(block.item.id) ?? []}
+            name={name}
+            onRespond={onRespond}
+            {...(onStop && { onStop })}
+          />
+        </div>
       )}
       {block.item?.kind === 'memory' && <HeldMemoryItem item={block.item} />}
       {block.item?.kind === 'learned' && (

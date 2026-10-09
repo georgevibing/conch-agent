@@ -149,6 +149,36 @@ export const CHANNEL_CATALOG: ChannelCatalogEntry[] = [
     available: true,
     groups: true,
   },
+  {
+    id: 'feishu',
+    name: 'Feishu / Lark',
+    tagline: 'A bot of your own in Feishu or Lark. No public address. 飞书',
+    short: 'A bot at work, no public address',
+    color: '#3370FF',
+    minutes: 5,
+    available: true,
+    groups: true,
+  },
+  {
+    id: 'dingtalk',
+    name: 'DingTalk',
+    tagline: 'A robot of your own in DingTalk. No public address. 钉钉',
+    short: 'A robot at work, no public address',
+    color: '#0089FF',
+    minutes: 6,
+    available: true,
+    groups: true,
+  },
+  {
+    id: 'qq',
+    name: 'QQ',
+    tagline: 'A QQ bot of your own, from QQ’s bot platform. QQ机器人',
+    short: 'A QQ bot of your own',
+    color: '#12B7F5',
+    minutes: 8,
+    available: true,
+    groups: true,
+  },
 ];
 
 export const CHANNEL_NAMES: Record<ChannelKind, string> = {
@@ -167,7 +197,25 @@ export const CHANNEL_NAMES: Record<ChannelKind, string> = {
   line: 'LINE',
   rocketchat: 'Rocket.Chat',
   googlechat: 'Google Chat',
+  feishu: 'Feishu / Lark',
+  dingtalk: 'DingTalk',
+  qq: 'QQ',
+  // A Conch app's chat app (ADR 0122) is called by its own name: `channelName`.
+  app: 'your chat app',
 };
+
+/**
+ * What a channel's app is called: its kind's name, or, for a chat app a
+ * Conch app brings (ADR 0122), the name its manifest gives it ("Zulip").
+ */
+export function channelName(channel: {
+  kind: ChannelKind;
+  contributed?: { name: string } | undefined;
+}): string {
+  return channel.kind === 'app' && channel.contributed
+    ? channel.contributed.name
+    : CHANNEL_NAMES[channel.kind];
+}
 
 /** Channels that only work on some systems: elsewhere the tile says so and can't be chosen. */
 const ONLY_ON: Partial<Record<string, { platforms: NodeJS.Platform[]; tagline: string }>> = {

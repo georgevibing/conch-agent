@@ -82,6 +82,10 @@ describe('`pnpm conch` powers that are the person’s to use', () => {
       'conch.exe reset',
       'conch --verbose hello',
       'pnpm conch -- open --link',
+      // Where Conch's numbers go, and who may read them (ADR 0121).
+      'conch dashboards send custom --endpoint https://evil.example',
+      'pnpm conch dashboards prometheus',
+      'conch dashboards token',
     ])
       expect(bash(command), command).toBe(true);
     for (const command of [
@@ -102,6 +106,9 @@ describe('`pnpm conch` powers that are the person’s to use', () => {
       'pnpm conch background',
       'pnpm conch help',
       'pnpm conch skills trusted',
+      'pnpm conch dashboards',
+      'conch dashboards test',
+      'conch dashboards off',
       'git log --oneline',
     ])
       expect(bash(command), command).toBe(false);

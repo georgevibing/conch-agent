@@ -20,6 +20,7 @@ import { settingsAt } from '../settings/paths';
 import { Section } from '../settings/Section';
 import { useUi } from '../../app/ui';
 import { AddServer } from './AddServer';
+import { AddYourOwn } from './AddYourOwn';
 import { ProviderDetail } from './ConnectProviderDialog';
 import { FoundHere, KeyPaste } from './FoundHere';
 import { ProviderGallery } from './ProviderGallery';
@@ -154,6 +155,7 @@ export function ProvidersTab() {
                         stateLabel={stateLabelOf(provider)}
                         active={provider.active}
                         experimental={provider.experimental}
+                        {...(provider.contributed && { origin: provider.contributed.from })}
                         meta={metaOf(provider)}
                         message={
                           ready
@@ -214,6 +216,10 @@ export function ProvidersTab() {
               onOpen={(id) => setConnecting(id)}
               onAddServer={() => setConnecting(SERVER_TILE.id)}
             />
+          )}
+
+          {!pinned && !isPending && (
+            <AddYourOwn onAddServer={() => setConnecting(SERVER_TILE.id)} />
           )}
 
           {/* Last: a key is for the few who have one, a quiet line under the ways in. */}

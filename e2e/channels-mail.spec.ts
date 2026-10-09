@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
+import { askFirst, autoAgain } from './app';
+
 /**
  * iMessage and email (ADR 0044), against a pretend Messages (a real chat.db
  * that Conch reads, and the send script played by the gateway) and a pretend
@@ -41,6 +43,9 @@ test.beforeEach(async ({ request }) => {
   await request.delete('/api/integrations/gmail');
   await request.post(`${MAIL}/__control/reset`);
   await request.post(`${MESSAGES}/__control/show`);
+});
+test.afterEach(async ({ request }) => {
+  await autoAgain(request);
 });
 
 test('connect email with an app password, write from the phone, get the answer in the thread', async ({
@@ -197,6 +202,8 @@ test('connect iMessage: Full Disk Access first, then text yourself and answer wi
   page,
   request,
 }) => {
+  // The question from the phone is Ask first's: Auto runs the tests without one (ADR 0119).
+  await askFirst(request);
   // macOS hasn't let Conch read Messages yet.
   await request.post(`${MESSAGES}/__control/hide`);
   await page.goto('/channels/new/imessage');

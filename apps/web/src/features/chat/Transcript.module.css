@@ -272,6 +272,11 @@
     min-inline-size: 0;
   }
 
+  /* A script's run (ADR 0123): one story, on the column's edge like every story. */
+  .script {
+    min-inline-size: 0;
+  }
+
   /* Said beside the run: what it read from outside. */
   .runNote {
     margin-block-start: var(--nc-space-1-5);

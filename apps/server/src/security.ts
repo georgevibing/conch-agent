@@ -70,6 +70,12 @@ const OAUTH_CALLBACKS = new Set([
  */
 const MCP_ENDPOINTS = new Set(['/mcp', '/mcp/hello', '/mcp/session']);
 
+/**
+ * The page Prometheus reads (ADR 0121): it checks its own scrape token, and
+ * shares the request budgets. Off, it isn't there at all.
+ */
+const SCRAPE_ENDPOINTS = new Set(['/metrics']);
+
 const COOKIE = 'conch_session';
 /** `__Host-` cookies must be Secure, host-only and Path=/ — browsers enforce it. */
 const SECURE_COOKIE = `__Host-${COOKIE}`;
@@ -576,7 +582,8 @@ export function registerSecurity(app: FastifyInstance, gate: Gatekeeper): void {
     }
 
     const oauthCallback = OAUTH_CALLBACKS.has(path);
-    const mcpEndpoint = MCP_ENDPOINTS.has(path) || A2A_ENDPOINTS.has(path);
+    const mcpEndpoint =
+      MCP_ENDPOINTS.has(path) || A2A_ENDPOINTS.has(path) || SCRAPE_ENDPOINTS.has(path);
     if (!isApi && !oauthCallback && !mcpEndpoint) return;
     // Only this computer's proof gets its own recovery budget. A loopback
     // socket, a claimed proxy address or an unverified cookie is not enough.
@@ -589,7 +596,8 @@ export function registerSecurity(app: FastifyInstance, gate: Gatekeeper): void {
       (publicRoute && isWrite) ||
       path === '/api/access/verify' ||
       oauthCallback ||
-      (mcpEndpoint && path !== '/mcp')
+      // A scraper's wrong tokens count like wrong passwords, in its own route.
+      (mcpEndpoint && path !== '/mcp' && !SCRAPE_ENDPOINTS.has(path))
     ) {
       const credentialWait = limits.credentials(client);
       if (credentialWait) return rateLimited(reply, credentialWait);

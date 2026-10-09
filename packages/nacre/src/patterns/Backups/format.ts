@@ -47,7 +47,9 @@ export type BackupPowerInfo =
   | { kind: 'conch-apps'; names: string[]; more?: number }
   | { kind: 'page-data-sites'; sites: string[]; more?: number }
   | { kind: 'provider-servers'; servers: string[]; more?: number }
-  | { kind: 'own-address'; name: string };
+  | { kind: 'own-address'; name: string }
+  | { kind: 'dashboards-send'; name: string; content?: boolean }
+  | { kind: 'dashboards-scrape' };
 
 /** What it is (“Files”, “The browser”), when the words need one. */
 export interface PowerWords {
@@ -177,6 +179,15 @@ export function powerWords(power: BackupPowerInfo): PowerWords {
         subject: 'Your address',
         text: `Answers at ${power.name} from anywhere, once you turn it on on this computer`,
       };
+    case 'dashboards-send':
+      return {
+        subject: 'Dashboards',
+        text: power.content
+          ? `Sends Conch’s numbers to ${power.name}, with the words of your chats`
+          : `Sends Conch’s numbers to ${power.name}`,
+      };
+    case 'dashboards-scrape':
+      return { subject: 'Dashboards', text: 'Prometheus can read Conch’s numbers with its token' };
   }
 }
 

@@ -14,6 +14,12 @@ export interface StarterSeed {
   /** What it does, in a line. */
   tagline?: string;
   description?: string;
+  /**
+   * What it is (ADR 0122): an app with tools and a page (the default), a
+   * provider (declared: an address, its key and models), or a chat app (its
+   * `channel` functions). Each starts from a draft that already reads.
+   */
+  kind?: 'app' | 'provider' | 'channel';
 }
 
 /** An id from a name: "Plant diary" → `plant-diary`. */
@@ -32,9 +38,141 @@ export function idFrom(name: string): string {
 const escapeHtml = (text: string) =>
   text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 
+/**
+ * A provider, declared (ADR 0122): an address that speaks OpenAI's chat, how
+ * its key is sent, and its models read live. The maker changes the address,
+ * the host in `reaches`, the key's words and, when the company says, its
+ * models and their prices.
+ */
+function providerStarter(name: string, id: string, seed: StarterSeed): Map<string, string> {
+  const manifest: ConchAppManifest = {
+    conch: 1,
+    id,
+    name,
+    tagline: (seed.tagline?.trim() || `${name}’s models, in every chat`).slice(0, 80),
+    description: (seed.description?.trim() ?? '').slice(0, 600),
+    version: '0.1.0',
+    icon: { glyph: 'sparkles', color: 'violet' },
+    kind: 'developer',
+    pages: [],
+    reaches: ['api.example.com'],
+    settings: [],
+    instructions: '',
+    examples: [],
+    provider: {
+      speaks: 'openai',
+      address: 'https://api.example.com/v1',
+      auth: 'bearer',
+      key: {
+        label: `${name} API key`,
+        help: `Make one on ${name}’s API keys page.`,
+        link: 'https://api.example.com/keys',
+        optional: false,
+      },
+      models: [],
+    },
+  };
+  return new Map([
+    ['conch-app.json', `${JSON.stringify(manifest, null, 2)}\n`],
+    [
+      'README.md',
+      `# ${name}\n\n${manifest.tagline}\n\nA provider for Conch. To add it, paste this repository's address into **Settings → Providers → Add your own → From a link**.\n`,
+    ],
+  ]);
+}
+
+/**
+ * A chat app (ADR 0122): `channel.identify`, `poll` and `send` against its
+ * bot API with `app.fetch`, and the token the person types (`app.keys`). The
+ * maker changes the address, the paths and the shapes to the app's own.
+ */
+function channelStarter(name: string, id: string, seed: StarterSeed): Map<string, string> {
+  const manifest: ConchAppManifest = {
+    conch: 1,
+    id,
+    name,
+    tagline: (seed.tagline?.trim() || `Talk to your assistant on ${name}`).slice(0, 80),
+    description: (seed.description?.trim() ?? '').slice(0, 600),
+    version: '0.1.0',
+    icon: { glyph: 'message-circle', color: 'teal' },
+    kind: 'personal',
+    tools: 'channel.mjs',
+    pages: [],
+    reaches: ['chat.example.com'],
+    settings: [],
+    instructions: '',
+    examples: [],
+    channel: {
+      name,
+      receives: 'poll',
+      fields: [
+        {
+          key: 'token',
+          label: `${name} bot token`,
+          help: `${name} shows it once, when you make the bot.`,
+          link: 'https://chat.example.com/bots',
+          secret: true,
+          optional: false,
+        },
+      ],
+      steps: [`In ${name}, make a bot for your assistant.`, 'Copy its token.'],
+      buttons: false,
+    },
+  };
+  const code = `// ${name}, as a chat app for Conch. Conch keeps the token (app.keys.token) and calls these.
+const API = 'https://chat.example.com/api';
+
+async function ask(app, path, init = {}) {
+  const res = await app.fetch(API + path, {
+    ...init,
+    headers: { authorization: 'Bearer ' + app.keys.token, 'content-type': 'application/json' },
+  });
+  if (res.status === 401) throw new Error('${name} refused the token: make a new one and paste it again.');
+  if (!res.ok) throw new Error('${name} said ' + res.status + '.');
+  return res.json();
+}
+
+export const channel = {
+  /** Who the bot is. */
+  async identify(app) {
+    const me = await ask(app, '/me');
+    return { id: me.id, name: me.name, username: me.username };
+  },
+  /** New messages since \`cursor\`; Conch calls this again and again. */
+  async poll({ cursor }, app) {
+    const { messages } = await ask(app, '/updates?after=' + encodeURIComponent(cursor ?? '0'));
+    return {
+      messages: messages.map((m) => ({
+        chatId: m.chat,
+        messageId: String(m.id),
+        user: { id: m.from.id, name: m.from.name },
+        text: m.text,
+      })),
+      cursor: messages.length ? String(messages.at(-1).id) : cursor ?? undefined,
+    };
+  },
+  /** One message out, in Markdown. */
+  async send({ chatId, text }, app) {
+    const sent = await ask(app, '/messages', { method: 'POST', body: JSON.stringify({ chat: chatId, text }) });
+    return { messageId: sent.id };
+  },
+};
+`;
+  return new Map([
+    ['conch-app.json', `${JSON.stringify(manifest, null, 2)}\n`],
+    ['channel.mjs', code],
+    [
+      'README.md',
+      `# ${name}\n\n${manifest.tagline}\n\nA chat app for Conch. To add it, paste this repository's address into **Apps → Talk to me here → Add your own → From a link**.\n`,
+    ],
+  ]);
+}
+
 export function starterFiles(seed: StarterSeed): Map<string, string> {
   const name = seed.name.trim().slice(0, 40) || 'My app';
   const id = seed.id && AppId.safeParse(seed.id).success ? seed.id : idFrom(name);
+  if (seed.kind === 'provider') return providerStarter(name, id, seed);
+  if (seed.kind === 'channel') return channelStarter(name, id, seed);
   const manifest: ConchAppManifest = {
     conch: 1,
     id,

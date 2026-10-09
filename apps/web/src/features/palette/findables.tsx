@@ -44,6 +44,7 @@ import {
   Bell,
   Blocks,
   Brain,
+  ChartLine,
   CircleArrowUp,
   Cpu,
   Download,
@@ -339,6 +340,14 @@ const settingsPlaces: {
     keywords:
       'use my apps computer use control my computer mac desktop apps click type keyboard mouse screen screenshot screen recording accessibility automate keynote notes finder glowing edge stop',
     icon: <MousePointerClick />,
+  },
+  {
+    // Dashboards (ADR 0121): Conch's numbers for Grafana, Prometheus and the rest.
+    tab: 'dashboards',
+    label: 'Dashboards',
+    keywords:
+      'dashboards grafana prometheus metrics scrape opentelemetry otel otlp telemetry observability monitoring traces spans honeycomb datadog new relic langfuse phoenix arize collector export send numbers',
+    icon: <ChartLine />,
   },
   {
     tab: 'health',
@@ -1334,7 +1343,7 @@ export function useFindables(query: string, conversationId: string | undefined):
       id: 'talk',
       label: 'Talk to me here',
       keywords:
-        'channels chat apps telegram discord slack whatsapp signal imessage email teams matrix wechat sms text mattermost line rocketchat google chat phone mobile message reach bot remote',
+        'channels chat apps telegram discord slack whatsapp signal imessage email teams matrix wechat sms text mattermost line rocketchat googlechat feishu lark dingtalk qq google chat phone mobile message reach bot remote',
       icon: <MessagesSquare />,
       run: () => void navigate('/apps?show=talk'),
     },
@@ -1346,6 +1355,23 @@ export function useFindables(query: string, conversationId: string | undefined):
         'make build create new app my own custom tool maker describe conch app track remember log counter',
       icon: <WandSparkles />,
       run: () => void navigate('/apps?add=describe'),
+    },
+    {
+      // A provider or a chat app made with Conch (ADR 0122): Add your own, where each lives.
+      id: 'make-provider',
+      label: 'Add any provider with Conch',
+      keywords:
+        'add make new provider model api company openai compatible anthropic compatible custom endpoint fireworks baseten my own',
+      icon: <WandSparkles />,
+      run: () => openSettings('providers'),
+    },
+    {
+      id: 'make-chat-app',
+      label: 'Add any chat app with Conch',
+      keywords:
+        'add make new chat app channel talk to me here bot messenger zulip threema revolt my own connect',
+      icon: <WandSparkles />,
+      run: () => void navigate('/apps?show=talk'),
     },
     {
       id: 'add-app-link',

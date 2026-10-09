@@ -14,6 +14,9 @@
  * public, so it asks too.
  */
 import {
+  type AppPartTest,
+  type AppPartValues,
+  TestAppPartBody,
   AcceptAppOfferBody,
   AppId,
   AppCallBody,
@@ -51,6 +54,17 @@ export interface ConchAppRouteHelpers {
   /** False when the person confirmed it's them recently; else it answers 403 and is true. */
   verifyRequired: (request: FastifyRequest, reply: FastifyReply) => boolean;
   emit: (event: ServerEvent) => void;
+  /**
+   * An app's provider and chat app (ADR 0122): the card's live test, and
+   * keeping what was typed into it once the app is in (`extensions/service.ts`).
+   */
+  parts?: {
+    test(
+      ref: { conversationId: string; offerId: string } | { packageId: string; appId: string },
+      body: TestAppPartBody,
+    ): Promise<AppPartTest>;
+    apply(appId: string, values: AppPartValues | undefined): Promise<string | undefined>;
+  };
 }
 
 function parse<T extends z.ZodType>(
@@ -131,9 +145,60 @@ export function registerConchAppRoutes(
     return guarded(reply, async () => {
       const added = await service.install(body);
       changed();
-      return added;
+      // Its provider's key, its chat app's fields: kept by Conch with its own (ADR 0122).
+      const partProblem = await helpers.parts?.apply(added.id, body.parts);
+      return partProblem ? { ...added, partProblem } : added;
     });
   });
+
+  // **Test it** on a preview (ADR 0122): the files shown, sealed, with what was typed for the test.
+  app.post<{ Params: { packageId: string; appId: string } }>(
+    '/api/conch-apps/packages/:packageId/:appId/test',
+    async (request, reply) => {
+      const body = parse(TestAppPartBody, request.body, reply);
+      if (!body) return;
+      if (!helpers.parts || !Id.safeParse(request.params.packageId).success)
+        return reply.code(404).send({ error: 'not-found', message: 'Look at the link again.' });
+      if (!AppId.safeParse(request.params.appId).success)
+        return reply.code(404).send({ error: 'not-found', message: 'Look at the link again.' });
+      // A stranger's code, run with your key: the same trust decision as adding it.
+      if (verifyRequired(request, reply)) return;
+      return guarded(reply, async () =>
+        noStore(reply).send(
+          await helpers.parts?.test(
+            { packageId: request.params.packageId, appId: request.params.appId },
+            body,
+          ),
+        ),
+      );
+    },
+  );
+
+  // **Test it** on a card in a chat (ADR 0122).
+  app.post<{ Params: { offerId: string } }>(
+    '/api/conch-apps/offers/:offerId/test',
+    async (request, reply) => {
+      const body = parse(TestAppPartBody, request.body, reply);
+      if (!body) return;
+      const conversationId = body.conversationId ?? '';
+      if (
+        !helpers.parts ||
+        !Id.safeParse(request.params.offerId).success ||
+        !Id.safeParse(conversationId).success
+      )
+        return reply
+          .code(404)
+          .send({ error: 'not-found', message: 'That wasn’t offered in this chat.' });
+      return guarded(reply, async () => {
+        const offer = await service.offerIn(conversationId, request.params.offerId);
+        const outside = offer.from === 'package' || !madeHere(offer.source);
+        if (outside && verifyRequired(request, reply)) return reply;
+        return noStore(reply).send(
+          await helpers.parts?.test({ conversationId, offerId: request.params.offerId }, body),
+        );
+      });
+    },
+  );
 
   app.post<{ Params: { offerId: string } }>(
     '/api/conch-apps/offers/:offerId/accept',
@@ -155,7 +220,9 @@ export function registerConchAppRoutes(
         if (outside && offer.state === 'ready' && verifyRequired(request, reply)) return reply;
         const added = await service.acceptOffer(request.params.offerId, body);
         changed();
-        return added;
+        // Its provider's key, its chat app's fields: kept by Conch with its own (ADR 0122).
+        const partProblem = await helpers.parts?.apply(added.id, body.parts);
+        return partProblem ? { ...added, partProblem } : added;
       });
     },
   );

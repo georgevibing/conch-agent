@@ -2026,6 +2026,17 @@ const TOOLS: Case[] = [
     { family: 'plan', done: 'Suggested a standing order' },
   ],
   ['use_skill', 'use_skill', { name: 'pdf' }, undefined, { done: 'Used the pdf skill' }],
+  [
+    'a script that calls tools',
+    'mcp__conch__run_script',
+    { title: 'Tag the invoices among my emails', script: 'return 1' },
+    ok('It returned:\n47\n\n312 tool calls: google_mail_search ×1 · 12.0 s of work.'),
+    {
+      family: 'run',
+      done: 'Ran a script to tag the invoices among my emails',
+      outcome: '312 tool calls',
+    },
+  ],
   ['current_time', 'mcp__conch__current_time', {}, undefined, { done: 'Checked the time' }],
   [
     'computer screenshot',

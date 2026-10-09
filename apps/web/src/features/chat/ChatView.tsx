@@ -1103,6 +1103,7 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
         onSend={onSend}
         focusComposer={focusComposer}
         onReply={onReply}
+        onStop={() => conversationId && live.interrupt(conversationId)}
         recover={recover}
         footer={footer}
       />

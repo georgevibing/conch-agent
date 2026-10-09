@@ -48,6 +48,11 @@ export const StoredChannel = z.object({
   cursor: z.string().max(200).optional(),
   /** Voice notes waiting until Conch can hear them (ADR 0077), oldest first. */
   voiceWaiting: z.array(WaitingNote).default([]),
+  /** A chat app a Conch app brings (ADR 0122): which app, and what the chat app is called. */
+  contributed: z
+    .object({ app: z.string().max(24), name: z.string().max(40) })
+    .optional()
+    .catch(undefined),
 });
 export type StoredChannel = z.infer<typeof StoredChannel>;
 

@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { type APIRequestContext, expect, type Page } from '@playwright/test';
 
 /**
  * Open Conch and wait until it's listening. Its shortcuts are attached in the
@@ -35,4 +35,25 @@ export async function say(page: Page, text: string, reply: string | RegExp) {
 export async function toProviders(page: Page) {
   await page.getByRole('button', { name: 'Let’s begin' }).click();
   await expect(page.getByRole('heading', { name: 'Now, a mind to think with.' })).toBeVisible();
+}
+
+/**
+ * Start new chats in Ask first, for journeys about the approval question itself:
+ * since ADR 0119 they start in Auto, which goes ahead with routine steps (running
+ * the tests, an app's change, an email) without asking. The same as the unit
+ * tests' `askFirst` (apps/server/src/test/modes.ts). The gateway is shared by
+ * the journeys after it: `autoAgain` in an `afterEach` puts the default back.
+ */
+export async function askFirst(request: APIRequestContext) {
+  await defaultMode(request, 'default');
+}
+
+/** New chats in Auto again, as a fresh Conch starts them (ADR 0119). */
+export async function autoAgain(request: APIRequestContext) {
+  await defaultMode(request, 'auto');
+}
+
+async function defaultMode(request: APIRequestContext, permissionMode: 'default' | 'auto') {
+  const saved = await request.patch('/api/settings', { data: { preferences: { permissionMode } } });
+  expect(saved.ok()).toBe(true);
 }

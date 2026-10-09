@@ -63,6 +63,8 @@ export const DoctorPlace = z.enum([
   'agents',
   /** Settings → This computer: using its apps and the macOS switches (ADR 0110). */
   'computer',
+  /** Settings → Dashboards: where Conch's numbers go (ADR 0121). */
+  'dashboards',
 ]);
 export type DoctorPlace = z.infer<typeof DoctorPlace>;
 
@@ -91,6 +93,17 @@ export const DoctorAction = z.discriminatedUnion('kind', [
     label: z.string(),
     command: z.string(),
     watch: z.string().optional(),
+  }),
+  /**
+   * Ask Conch to fix it (ADR 0122): a chat that starts with these words, for
+   * something made of a Conch app's code that stopped working (a provider
+   * whose company changed its API). The maker changes the app; the person
+   * presses Update.
+   */
+  z.object({
+    kind: z.literal('ask'),
+    label: z.string(),
+    prompt: z.string().max(600),
   }),
 ]);
 export type DoctorAction = z.infer<typeof DoctorAction>;

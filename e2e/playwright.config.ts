@@ -114,6 +114,8 @@ const scenarios = {
   ready: { port: 4391, env: { CONCH_MOCK_STATE: 'ready' } },
   // Settings → This computer: live readings of the real machine, only while it's open.
   computer: { port: 4337, env: { CONCH_MOCK_STATE: 'ready' } },
+  // Dashboards (ADR 0121): Prometheus with its token after a chat, and a test to a pretend collector.
+  dashboards: { port: 4334, env: { CONCH_MOCK_STATE: 'ready' } },
   models: { port: 4394, env: { CONCH_MOCK_STATE: 'ready' } },
   search: { port: 4396, env: { CONCH_MOCK_STATE: 'ready' } },
   routines: { port: 4395, env: { CONCH_MOCK_STATE: 'ready' } },
@@ -160,10 +162,14 @@ const scenarios = {
   'when-routines': { port: 4341, env: { CONCH_MOCK_STATE: 'ready' } },
   // Teams, Matrix and WeChat, and the public door (ADR 0045), against their pretend apps.
   'channels-work': { port: 4366, env: { CONCH_MOCK_STATE: 'ready' } },
+  // Feishu / Lark, DingTalk and QQ (ADR 0120), against their pretend apps: outward connections only.
+  'channels-china': { port: 4343, env: { CONCH_MOCK_STATE: 'ready' } },
   // Safe hands: checking after reading, the timeline, skills read before they're used.
   safety: { port: 4378, env: { CONCH_MOCK_STATE: 'ready' } },
   // Undo (ADR 0030): the mock really writes note.md in the work folder, then it's put back.
   undo: { port: 4375, env: { CONCH_MOCK_STATE: 'ready' } },
+  // A script that calls tools (ADR 0123): thirty writes and a question as one story, then one Undo.
+  scripts: { port: 4339, env: { CONCH_MOCK_STATE: 'ready' } },
   // Come home (ADR 0035), from a pretend OpenClaw.
   import: { port: 4370, env: { CONCH_MOCK_STATE: 'ready', CONCH_IMPORT_HOME: importHome } },
   // Come home, more of it (ADR 0042): the model, other agents, a Slack bot with one key.
@@ -171,6 +177,8 @@ const scenarios = {
     port: 4363,
     env: { CONCH_MOCK_STATE: 'ready', CONCH_IMPORT_HOME: importMoreHome },
   },
+  // A provider and a chat app made with Conch (ADR 0122), on the mock's pretend Pretend AI and Parley.
+  extensions: { port: 4331, env: { CONCH_MOCK_STATE: 'ready' } },
   // Apps you make, share and add (ADR 0061): made by the mock the real way, used, saved, added back.
   // GitHub's program sees no sign-in here, so nothing can ever be published from a test.
   'conch-apps': {

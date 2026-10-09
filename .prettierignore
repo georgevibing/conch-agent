@@ -17,3 +17,6 @@ apps/desktop/out
 
 # Website publishing artifacts and detached content checkouts
 .site
+
+# Generated from apps/server/src/telemetry/grafana.ts (grafana.test.ts keeps it in step).
+docs/dashboards/*.json

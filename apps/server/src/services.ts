@@ -49,6 +49,7 @@ import { McpClientStore } from './mcp/store';
 import { TaskStore } from './tasks/store';
 import { QuestionDesk } from './questions/desk';
 import { QUESTIONS_PROMPT, questionTools } from './questions/tools';
+import { scriptTools } from './scripts/tool';
 import { AttachmentStore } from './attachments/store';
 import { fileTools } from './files/tools';
 import { placesTools } from './research/places';
@@ -109,13 +110,20 @@ import { MockTeams } from './channels/mock/teams';
 import { MockTelegram } from './channels/mock/telegram';
 import { linkedChannels, type LinkedChannels } from './channels/linked-setup';
 import { ChannelLinking } from './channels/linking';
+import { MockDingTalk } from './channels/mock/dingtalk';
+import { MockFeishu } from './channels/mock/feishu';
+import { FeishuRegistrations } from './channels/feishu-register';
+import { personId } from './channels/types';
+import { FeishuAdapter } from './channels/feishu';
+import { MockQq } from './channels/mock/qq';
 import { MockGoogleChat } from './channels/mock/googlechat';
 import { MockLine } from './channels/mock/line';
 import { MockMattermost } from './channels/mock/mattermost';
 import { MockRocketChat } from './channels/mock/rocketchat';
 import { MockTwilio } from './channels/mock/twilio';
 import { MockWeChat } from './channels/mock/wechat';
-import { CHANNEL_NAMES, ChannelService } from './channels/service';
+import { ChannelService } from './channels/service';
+import { channelName } from './channels/catalog';
 import { channelTools } from './channels/tools';
 import { ChannelStore } from './channels/store';
 import { TerminalService } from './terminal/service';
@@ -128,10 +136,18 @@ import { ConversationStore } from './conversations/store';
 import { ChatFolders } from './conversations/folders';
 import { AgentStore } from './agents/store';
 import { RoundService } from './agents/rounds';
+import { homedir } from 'node:os';
+
 import { OutsideAgents } from './a2a/outside';
+import { TelemetryService } from './telemetry/service';
+import { Redaction } from './trajectory/redact';
+import { diskOf } from './computer/readers';
+import { sampleResources } from './recovery/resources';
 import { outsideCheck } from './a2a/doctor';
 import { registerAgentsDoctor } from './agents/doctor';
-import type { ApiEngine } from './engines/api';
+import { ApiEngine } from './engines/api';
+import { ExtensionService } from './extensions/service';
+import { PretendWorld } from './extensions/pretend';
 import { builtInEngines, serverEngine } from './engines/registry';
 import { appsNeeded } from './providers/apps';
 import { carryTools } from './providers/capabilities';
@@ -338,6 +354,8 @@ export class Services {
   readonly agents: AgentStore;
   /** Agents elsewhere that speak A2A, added by pasting their address (ADR 0112). */
   readonly outside: OutsideAgents;
+  /** Dashboards: Conch's numbers and traces for Prometheus and OpenTelemetry (ADR 0121). */
+  readonly telemetry: TelemetryService;
   /** Agents taking turns in a chat when you mention them (ADR 0112). */
   readonly rounds: RoundService;
   /** Questions the assistant asked, waiting for your answer (ADR 0060 §4). */
@@ -425,6 +443,8 @@ export class Services {
   readonly linked: LinkedChannels;
   /** Linking WhatsApp or Signal by QR code. */
   readonly channelLinking: ChannelLinking;
+  /** Making a Feishu or Lark bot by scanning a code (ADR 0120). */
+  readonly feishuScans: FeishuRegistrations;
   readonly mockMail?: MockMail;
   readonly mockMessages?: MockMessages;
   readonly mockTeams?: MockTeams;
@@ -433,8 +453,15 @@ export class Services {
   readonly mockTwilio?: MockTwilio;
   readonly mockMattermost?: MockMattermost;
   readonly mockLine?: MockLine;
+  readonly mockFeishu?: MockFeishu;
+  readonly mockDingTalk?: MockDingTalk;
+  readonly mockQq?: MockQq;
   readonly mockRocketChat?: MockRocketChat;
   readonly mockGoogleChat?: MockGoogleChat;
+  /** Providers and chat apps that Conch apps bring (ADR 0122). */
+  readonly extensions: ExtensionService;
+  /** The pretend model company and chat app those are tried with, with the mock engine. */
+  readonly pretendWorld?: PretendWorld;
   /** The public door, for the channels that only deliver to a web address (ADR 0045). */
   readonly door: ChannelDoorService;
   /** Your own address, over HTTPS by Conch itself (ADR 0064). Started by main.ts, never by tests. */
@@ -642,6 +669,8 @@ export class Services {
     this.describer = new Describer({ ready: () => this.providers.ready() });
     // With the mock engine, integrations talk to a pretend vendor on this machine too.
     this.mockVendor = config.CONCH_ENGINE === 'mock' ? new MockVendor() : undefined;
+    // With the mock engine, apps that bring a provider or a chat app try them on pretend ones (ADR 0122).
+    this.pretendWorld = config.CONCH_ENGINE === 'mock' ? new PretendWorld() : undefined;
     // Apps you make, share and add (ADR 0061): an app like any other on the Apps page.
     this.conchApps = new ConchAppService({
       home: config.CONCH_HOME,
@@ -655,6 +684,7 @@ export class Services {
           trust: () => this.skillTrust,
           redact: () => this.vault.redactor(),
           pretend: config.CONCH_ENGINE === 'mock',
+          ...(this.pretendWorld && { pretendRoute: this.pretendWorld.route }),
         }),
       emit: (event) => this.broadcast.emit(event),
       heal: (message) => void this.healed.note('integrations', message),
@@ -677,6 +707,8 @@ export class Services {
       },
       updatesChanged: () => this.updates.changed(),
       pick: () => pickPath(PICK_PURPOSES['conch-app']),
+      // `app_try` on a provider or a chat app (ADR 0122); `extensions` is made further down.
+      partTester: (manifest, runtime, body) => this.extensions.testWith(manifest, runtime, body),
       manualChecks: config.CONCH_ENGINE === 'mock',
     });
     this.integrations = new IntegrationService({
@@ -1039,7 +1071,31 @@ export class Services {
       heal: (message) => void this.healed.note('terminal', message),
     });
     this.doctor.register(this.workplaces.doctorCheck());
+    // Dashboards (ADR 0121): it only listens, and reads each gauge when asked.
+    this.telemetry = new TelemetryService({
+      home: config.CONCH_HOME,
+      version: SERVER_VERSION,
+      heal,
+      redact: () => {
+        const known = this.vault.redactor();
+        return (text) => new Redaction({ known, home: homedir() }).text(text);
+      },
+      gauges: {
+        resources: () => sampleResources(),
+        disk: () => diskOf(config.CONCH_HOME),
+        memories: async () => (await this.memory.list()).length,
+        skills: async () => (await this.skills.list()).skills.length,
+        agents: () => this.agents.list(),
+        providers: async () => {
+          const ready = new Set((await this.providers.ready()).map((engine) => engine.id));
+          const connected = await this.providers.connected();
+          return [...new Set([...connected, ...ready])].map((id) => ({ id, ready: ready.has(id) }));
+        },
+      },
+    });
+    this.doctor.register(this.telemetry.doctorCheck());
     this.conversations = new ConversationManager({
+      judged: (verdict, risk) => this.telemetry.auto(verdict, risk),
       // Who each chat is with: its persona and instructions in every turn (ADR 0101).
       agents: this.agents,
       // What each turn costs, what a chat has spent, and its limits (ADR 0079).
@@ -1131,6 +1187,8 @@ export class Services {
                   )?.events.findLast((e) => e.type === 'user.message')?.text,
               }),
               ...questionTools(this.questions, ctx),
+              // One script that calls the tools above, every call through the same gate (ADR 0123).
+              ...scriptTools(ctx),
               // Offer what this request is missing (ADR 0060): never to nobody.
               ...(ctx.unattended ? [] : offerTools(this.offers, ctx)),
               // Skills people share, to offer (ADR 0074): never to nobody.
@@ -1403,6 +1461,7 @@ export class Services {
       heal,
     });
     this.broadcast.on((event) => this.learner.onEvent(event));
+    this.broadcast.on((event) => this.telemetry.observe(event));
     // Every way a skill is used ends in `skill.used`: the tidy shelf counts them all.
     this.conversations.events.on((event) => {
       const used = skillUsedIn(event);
@@ -1613,6 +1672,9 @@ export class Services {
     this.mockLine = config.CONCH_ENGINE === 'mock' ? new MockLine() : undefined;
     this.mockRocketChat = config.CONCH_ENGINE === 'mock' ? new MockRocketChat() : undefined;
     this.mockGoogleChat = config.CONCH_ENGINE === 'mock' ? new MockGoogleChat() : undefined;
+    this.mockFeishu = config.CONCH_ENGINE === 'mock' ? new MockFeishu() : undefined;
+    this.mockDingTalk = config.CONCH_ENGINE === 'mock' ? new MockDingTalk() : undefined;
+    this.mockQq = config.CONCH_ENGINE === 'mock' ? new MockQq() : undefined;
     // In mock mode the "internet" is this computer: what's sent to the public address reaches the door.
     const door: ChannelDoorService = new ChannelDoorService({
       home: config.CONCH_HOME,
@@ -1698,6 +1760,12 @@ export class Services {
         getModel: () => this.voice.getModel(),
       },
       speech: { voiceNote: (markdown, format) => this.speech.voiceNote(markdown, format) },
+      // Chat apps that Conch apps bring (ADR 0122); `extensions` is made just below.
+      apps: {
+        catalog: () => this.extensions.catalog(),
+        name: (app) => this.extensions.name(app),
+        trusted: (app) => this.extensions.trusted(app),
+      },
       imessage: {
         setup: () => imessageSetup(new ChatDb(messages?.db ?? MESSAGES_DB)),
         open: (place) =>
@@ -1707,10 +1775,47 @@ export class Services {
           ),
       },
     });
+    this.feishuScans = new FeishuRegistrations(
+      endpoints,
+      async (made) => {
+        const secrets = {
+          kind: 'feishu' as const,
+          region: made.region,
+          appId: made.appId,
+          appSecret: made.appSecret,
+        };
+        // Who scanned it, by their name in Feishu where the app may read it.
+        const scanner = made.openId
+          ? await new FeishuAdapter(secrets, endpoints)
+              .person(made.openId)
+              .catch(() => ({ id: personId(made.openId ?? ''), name: 'You', anonymous: true }))
+          : undefined;
+        return (await this.channels.createScanned(secrets, scanner)).id;
+      },
+      async () => (await this.settings.get()).persona.name,
+    );
     this.channelLinking = new ChannelLinking({
       linker: (kind) => this.linked.linker(kind),
       finish: (_kind, found, channelId) => this.channels.linked(found, channelId),
       emit: (event) => this.broadcast.emit(event),
+    });
+    // Providers and chat apps that Conch apps bring (ADR 0122): theirs follow the apps you have.
+    this.extensions = new ExtensionService({
+      apps: this.conchApps,
+      providers: this.providers,
+      engine: (variant) => new ApiEngine(variant, this.settings, this.keys),
+      channels: () => this.channels,
+      door,
+      home: config.CONCH_HOME,
+      fetchOptions: {
+        gatewayPort: config.CONCH_PORT,
+        ...(this.pretendWorld && { pretend: this.pretendWorld.route }),
+      },
+      log: (message) => console.error(`[extensions] ${message}`),
+    });
+    endpoints.apps = (secrets) => this.extensions.adapter(secrets);
+    this.broadcast.on((event) => {
+      if (event.type === 'conch-apps.changed') void this.extensions.sync();
     });
     // Conversations and routine runs reach the channels through the same stream as the web app.
     this.broadcast.on((event) => this.channels.onEvent(event));
@@ -1895,6 +2000,23 @@ export class Services {
         await this.mockLine.start(Number(process.env.CONCH_MOCK_LINE_PORT ?? 0));
         endpoints.line = this.mockLine.base;
       }
+      if (this.mockFeishu) {
+        await this.mockFeishu.start(Number(process.env.CONCH_MOCK_FEISHU_PORT ?? 0));
+        endpoints.feishu = this.mockFeishu.base;
+        endpoints.feishuAccounts = { feishu: this.mockFeishu.base, lark: this.mockFeishu.base };
+      }
+      if (this.mockDingTalk) {
+        await this.mockDingTalk.start(Number(process.env.CONCH_MOCK_DINGTALK_PORT ?? 0));
+        endpoints.dingtalk = this.mockDingTalk.base;
+        endpoints.dingtalkOld = this.mockDingTalk.base;
+        endpoints.dingtalkFiles = [this.mockDingTalk.base];
+      }
+      if (this.mockQq) {
+        await this.mockQq.start(Number(process.env.CONCH_MOCK_QQ_PORT ?? 0));
+        endpoints.qq = this.mockQq.base;
+        endpoints.qqFiles = [this.mockQq.base];
+      }
+      if (this.pretendWorld) await this.pretendWorld.start();
     })();
   }
 
@@ -2225,7 +2347,7 @@ export class Services {
       ...new Set(
         (await this.channels.list().catch(() => ({ channels: [] }))).channels
           .filter((c) => c.enabled)
-          .map((c) => CHANNEL_NAMES[c.kind]),
+          .map((c) => channelName(c)),
       ),
     ];
     const parts = [
@@ -2766,8 +2888,11 @@ export class Services {
     this.#stopAsks ??= this.here.watch(() => this.config.CONCH_PORT);
     // The servers you added are providers too: built before the first request needs them.
     await this.providers.loadServers().catch(() => undefined);
+    // So are the ones your Conch apps bring (ADR 0122), before a chat or a channel needs them.
+    await this.extensions.sync().catch(() => undefined);
     await this.providers.load();
     this.network.start();
+    this.telemetry.start();
     // Containers a crash left behind are removed; nothing is started for it (ADR 0106).
     void this.workplaces.start();
     // Chats a restart cut off say so, and carry on by themselves.
@@ -2812,6 +2937,7 @@ export class Services {
 
   async stop() {
     this.recovery.stop();
+    void this.telemetry.stop();
     void this.#printer.close();
     this.computer.stop();
     this.tasks.close();
@@ -2848,6 +2974,10 @@ export class Services {
     void this.mockTwilio?.stop();
     void this.mockMattermost?.stop();
     void this.mockLine?.stop();
+    void this.mockFeishu?.stop();
+    this.feishuScans.stop();
+    void this.mockDingTalk?.stop();
+    void this.mockQq?.stop();
     void this.mockRocketChat?.stop();
     void this.mockGoogleChat?.stop();
     clearInterval(this.#sweeper);

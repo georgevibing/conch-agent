@@ -20,7 +20,18 @@ export const APPS: Record<ChannelKind, { name: string; color: string }> = {
   line: { name: 'LINE', color: '#06C755' },
   rocketchat: { name: 'Rocket.Chat', color: '#F5455C' },
   googlechat: { name: 'Google Chat', color: '#00AC47' },
+  feishu: { name: 'Feishu / Lark', color: '#3370FF' },
+  dingtalk: { name: 'DingTalk', color: '#0089FF' },
+  qq: { name: 'QQ', color: '#12B7F5' },
+  // A chat app a Conch app brings (ADR 0122): its own name is `channelLabel`.
+  app: { name: 'Your chat app', color: '#687076' },
 };
+
+/** What a channel's app is called: a chat app a Conch app brings goes by its own name (ADR 0122). */
+export const channelLabel = (channel: Pick<Channel, 'kind' | 'contributed'>): string =>
+  channel.kind === 'app' && channel.contributed
+    ? channel.contributed.name
+    : APPS[channel.kind].name;
 
 /** More words people would type to find each app (⌘K). */
 export const APP_WORDS: Partial<Record<string, string>> = {
@@ -36,6 +47,9 @@ export const APP_WORDS: Partial<Record<string, string>> = {
   line: 'line official account messaging api japan taiwan thailand',
   rocketchat: 'rocket chat rocketchat self-hosted team chat server bot',
   googlechat: 'google chat hangouts workspace gsuite spaces',
+  feishu: '飞书 feishu lark larksuite bytedance 字节 work bot 机器人',
+  dingtalk: '钉钉 dingtalk dingding alibaba 阿里 work robot 机器人 stream',
+  qq: 'qq tencent 腾讯 qq机器人 bot qq群 group',
 };
 
 export const isKind = (value: string | undefined): value is ChannelKind =>

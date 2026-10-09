@@ -34,6 +34,8 @@ import { existsSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 
+import { isRunScript } from '@conch/protocol';
+
 export type RiskKind =
   /** Running code downloaded from the internet, or decoded from a blob. */
   | 'remote-code'
@@ -1206,6 +1208,9 @@ export function assessRisk(
   input: unknown,
   context: RiskContext,
 ): Risk | undefined {
+  // A script (ADR 0123) is judged by what each of its calls does, at that call, never as a
+  // whole: its words are code, and any of it could be anything.
+  if (isRunScript(toolName)) return undefined;
   const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
   const bare = toolName.replace(/^mcp__conch__/, '');
   const home = context.home ?? homedir();

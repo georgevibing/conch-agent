@@ -105,6 +105,7 @@ import { registerAgentRoutes } from './agents/routes';
 import { AgentError } from './agents/store';
 import { registerMcpEndpoint } from './mcp/endpoint';
 import { registerA2aDoor } from './a2a/door';
+import { registerTelemetryRoutes } from './telemetry/routes';
 import { registerOutsideRoutes } from './a2a/routes';
 import { registerMcpRoutes } from './mcp/routes';
 import { registerQuestionRoutes } from './questions/routes';
@@ -121,6 +122,7 @@ import { registerBackupRoutes } from './backup/routes';
 import { registerBrowserRoutes } from './browser/routes';
 import { registerWorkPlaceRoutes } from './workplaces/routes';
 import { registerChannelLinkRoutes } from './channels/link-routes';
+import { registerFeishuScanRoutes } from './channels/feishu-routes';
 import { registerChannelRoutes } from './channels/routes';
 import { registerTerminalRoutes } from './terminal/routes';
 import { registerLocalRoutes } from './local/routes';
@@ -261,6 +263,8 @@ export async function buildApp(services: Services) {
     chats: services.conversations,
   });
   registerOutsideRoutes(app, { outside: services.outside, rounds: services.rounds });
+  // Dashboards (ADR 0121): Settings → Dashboards, and `/metrics` for Prometheus.
+  registerTelemetryRoutes(app, services.telemetry, gate, stepUpDone);
   registerBrowserRoutes(app, services, gate);
   registerWorkPlaceRoutes(app, services, gate);
   registerTerminalRoutes(app, services, gate);
@@ -399,12 +403,18 @@ export async function buildApp(services: Services) {
         line: services.mockLine?.base,
         rocketchat: services.mockRocketChat?.base,
         googlechat: services.mockGoogleChat?.base,
+        feishu: services.mockFeishu?.base,
+        dingtalk: services.mockDingTalk?.base,
+        qq: services.mockQq?.base,
+        // The pretend model company and chat app for apps that bring one (ADR 0122).
+        pretend: services.pretendWorld?.base,
       })),
     services.door,
     // Gmail's app password, offered for talking by email too (ADR 0052).
     () => services.google.gmailLogin(),
   );
   registerChannelLinkRoutes(app, services.channelLinking, gate);
+  registerFeishuScanRoutes(app, services.feishuScans, gate);
   app.addHook('onClose', () => services.browser.stop());
   app.addHook('onClose', async () => services.stop());
   app.addHook('onClose', async () => services.terminal.stop());
@@ -901,6 +911,11 @@ export async function buildApp(services: Services) {
   registerConchAppRoutes(app, services.conchApps, {
     verifyRequired,
     emit: (event) => services.broadcast.emit(event),
+    // Their providers and chat apps (ADR 0122): the card's live test, and what was typed into it.
+    parts: {
+      test: (ref, body) => services.extensions.test(ref, body),
+      apply: (appId, values) => services.extensions.apply(appId, values),
+    },
   });
   app.get('/api/integrations', () => services.integrations.list());
   app.get<{ Querystring: { refresh?: string } }>('/api/integrations/external', (request) =>

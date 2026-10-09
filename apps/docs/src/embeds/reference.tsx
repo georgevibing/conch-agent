@@ -99,6 +99,35 @@ export function EnvReference() {
 
 const MODE_TONE = { default: 'neutral', caution: 'warning', danger: 'danger' } as const;
 
+/** Every number Conch sends to a dashboard, by group, in both names (ADR 0121). */
+export function MetricsReference() {
+  const groups = [...new Set(reference.metrics.map((m) => m.group))];
+  return (
+    <>
+      {groups.map((group) => (
+        <Definitions key={group} label={group}>
+          {reference.metrics
+            .filter((m) => m.group === group)
+            .map((m) => (
+              <Definitions.Item
+                key={m.name}
+                id={m.name.replaceAll('.', '-')}
+                term={m.name}
+                meta={[
+                  m.prometheus,
+                  m.kind,
+                  ...(m.labels.length ? [`labels: ${m.labels.join(', ')}`] : []),
+                ].join(' · ')}
+              >
+                {m.description}
+              </Definitions.Item>
+            ))}
+        </Definitions>
+      ))}
+    </>
+  );
+}
+
 /** The permission modes, in the app's own words. */
 export function ModeList() {
   return (

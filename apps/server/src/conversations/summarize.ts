@@ -48,6 +48,7 @@ export function summarizeToolUse(toolName: string, input: Record<string, unknown
     file_combine: `Combine files into ${str('name') ?? `one ${String(str('to') ?? 'file').toUpperCase()}`}`,
     file_unzip: `Unpack ${str('source')?.startsWith('att_') ? 'an archive' : (str('source') ?? 'an archive')}`,
     image_generate: str('source') ? 'Edit a picture' : 'Create a picture',
+    run_script: `Run a script: ${(str('title') ?? 'calls your tools').slice(0, 120)}`,
   };
   if (labels[conch]) return labels[conch];
   switch (toolName) {

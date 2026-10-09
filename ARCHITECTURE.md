@@ -136,6 +136,8 @@ src/
   push/                       notifications: RFC 8291/8292 Web Push on node:crypto, subscriptions, presence (ADR 0027)
   voice/                      hearing (whisper.cpp, its model; FFmpeg on pipes only for voice notes), natural voices (Piper, kept running), “Hey Conch” (ADR 0027, ADR 0077, ADR 0078)
   activity/                   everything the assistant did, read from the chats' logs (ADR 0028)
+  telemetry/                  Dashboards: the metric catalog, bounded labels, the meter, Prometheus at /metrics,
+                              OTLP protobuf/JSON with bounded queues and retry, each turn as a trace (ADR 0121)
   trajectory/                 How it did it: a chat's timeline, and saving chats as OpenAI / ShareGPT / ATIF / a page,
                               redacted first, into a folder the person chose, never over a file (ADR 0113)
   undo/                       what each change was before: blobs, change sets, the preview diff, putting back (ADR 0030)

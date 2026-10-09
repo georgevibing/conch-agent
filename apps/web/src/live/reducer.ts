@@ -47,6 +47,9 @@ import type {
   NarrationSource,
   ToolLabel,
   WorkedAt,
+  ScriptAsk,
+  ScriptCall,
+  ScriptRun,
 } from '@conch/protocol';
 
 import { latestReplies, type LatestReplies } from '../features/replies/latest';
@@ -147,6 +150,18 @@ export type TranscriptItem =
       once?: boolean;
       /** The person may change it before allowing it (an email's words): the answer carries it. */
       editable?: boolean;
+      /** Asked from inside a script (ADR 0123): which run, and which of its calls. */
+      script?: ScriptAsk;
+    }
+  | {
+      /**
+       * A script that calls tools (ADR 0123): the run as it stands, and the
+       * calls it made, latest word for each. One story, however many calls.
+       */
+      kind: 'script';
+      id: string;
+      run: ScriptRun;
+      calls: ScriptCall[];
     }
   | {
       /**
@@ -787,9 +802,33 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             ...((event.lasting || event.afterReading) && { lasting: true }),
             ...(event.once && { once: true }),
             ...(event.editable && { editable: true }),
+            ...(event.script && { script: event.script }),
           },
         ],
       };
+    case 'script.run': {
+      const { conversationId: _c, seq: _s, at: _a, type: _t, ...run } = event;
+      const updated = updateItem(items, 'script', event.runId, (item) => ({
+        ...item,
+        // The script itself comes on the first and last word; the rest leave it out.
+        run: { ...run, script: run.script ?? item.run.script },
+      }));
+      return {
+        ...base,
+        items: updated ?? [...items, { kind: 'script', id: event.runId, run, calls: [] }],
+      };
+    }
+    case 'script.call': {
+      const { conversationId: _c, seq: _s, at: _a, type: _t, ...call } = event;
+      const updated = updateItem(items, 'script', event.runId, (item) => {
+        const at = item.calls.findLastIndex((c) => c.callId === call.callId);
+        const calls = item.calls.slice();
+        if (at === -1) calls.push(call);
+        else calls[at] = call;
+        return { ...item, calls };
+      });
+      return updated ? { ...base, items: updated } : base;
+    }
     case 'files.changed':
       return {
         ...base,

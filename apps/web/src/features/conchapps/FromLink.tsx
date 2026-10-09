@@ -1,5 +1,15 @@
 import { APP_LIMITS, type ConchAppPreview } from '@conch/protocol';
-import { AppPreview, Button, Field, Input, Text, type AppPreviewApp } from '@conch/nacre';
+import {
+  AppPreview,
+  Button,
+  Field,
+  Input,
+  Text,
+  toast,
+  type AppPreviewApp,
+  type PartTestView,
+  type PartValues,
+} from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { FileArchive, Link2 } from 'lucide-react';
 import { useEffect, useEffectEvent, useRef, useState, type FormEvent } from 'react';
@@ -13,6 +23,7 @@ import { errorText } from '../integrations/queries';
 import { conchAppsApi, readAsBase64 } from './api';
 import styles from './ConchApps.module.css';
 import { putConchApp, useConchApps } from './queries';
+import { bringsOf, testView } from './parts';
 import { appWords, conchAppPath } from './words';
 
 /** What the person gave: a link they typed or pasted, or a file. */
@@ -155,7 +166,23 @@ export function FromLink({
     }
   };
 
-  const add = async (appId: string, settings: Record<string, string>) => {
+  const test = async (appId: string, values: PartValues): Promise<PartTestView> => {
+    if (looking.state !== 'ready') return { state: 'failed', message: 'Look at the link again.' };
+    let result: PartTestView = { state: 'failed', message: 'The test didn’t run.' };
+    await guard(async () => {
+      result = testView(
+        await conchAppsApi.testPackage(looking.preview.packageId, appId, {
+          ...(values.key && { key: values.key }),
+          fields: values.fields,
+        }),
+      );
+    }).catch((error: unknown) => {
+      result = { state: 'failed', message: errorText(error, 'The test didn’t run.') };
+    });
+    return result;
+  };
+
+  const add = async (appId: string, settings: Record<string, string>, part?: PartValues) => {
     if (looking.state !== 'ready') return;
     const found = looking.preview.apps.find((a) => a.manifest.id === appId);
     if (!found) return;
@@ -167,8 +194,13 @@ export function FromLink({
           appId,
           hash: found.hash,
           settings,
+          ...(part && { parts: { ...(part.key && { key: part.key }), fields: part.fields } }),
         });
         putConchApp(client, app);
+        if (app.partProblem) toast.error(app.partProblem);
+        void client.invalidateQueries({ queryKey: ['providers'] });
+        void client.invalidateQueries({ queryKey: ['capabilities'] });
+        void client.invalidateQueries({ queryKey: ['channels'] });
         setAdded((list) => [...list, appId]);
         // One app: straight to its page. From a collection, stay to add another.
         if (looking.preview.apps.length === 1) {
@@ -202,6 +234,7 @@ export function FromLink({
             ...(found.changes && { changes: found.changes }),
             ...(found.picture && { picture: found.picture }),
             ...(have && !found.changes?.otherMaker && { saved: have.saved }),
+            ...(bringsOf(found.manifest) && { brings: bringsOf(found.manifest) }),
             words: appWords({
               manifest: found.manifest,
               tools: found.tools,
@@ -291,7 +324,8 @@ export function FromLink({
           message={looking.state === 'failed' ? looking.message : undefined}
           busy={busy}
           added={added}
-          onAdd={(appId, settings) => void add(appId, settings)}
+          onAdd={(appId, settings, part) => void add(appId, settings, part)}
+          onTest={test}
           onRetry={looking.state === 'failed' ? looking.again : undefined}
         />
       )}

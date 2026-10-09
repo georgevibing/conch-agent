@@ -11,6 +11,7 @@ import {
 import {
   BatteryMedium,
   Bell,
+  ChartLine,
   Brain,
   ChevronLeft,
   Cpu,
@@ -38,6 +39,7 @@ import { updatesWaiting, useUpdates } from '../updates/queries';
 import { BrowserSettings } from '../browser/BrowserSettings';
 import { HealthTab } from '../health/HealthTab';
 import { ComputerTab } from '../computer/ComputerTab';
+import { DashboardsTab } from '../dashboards/DashboardsTab';
 import { MemoryTab } from '../memory/MemoryTab';
 import { AgentsTab } from '../agents/AgentsTab';
 import { NotificationsTab } from '../notifications/NotificationsTab';
@@ -65,7 +67,7 @@ interface Place {
 }
 
 /**
- * Thirteen places, read as five: the everyday basics, then who your assistant
+ * Fourteen places, read as five: the everyday basics, then who your assistant
  * is, where its intelligence comes from, what it can use, and keeping it safe.
  * The model, thinking and mode new chats start with aren't here: they're the
  * composer's own, with Make this my default.
@@ -108,6 +110,7 @@ const groups: { label: string; hidden?: boolean; places: Place[] }[] = [
       { value: 'access', label: 'Access', icon: <KeyRound /> },
       { value: 'security', label: 'Security', icon: <ShieldCheck /> },
       { value: 'health', label: 'Health', icon: <HeartPulse /> },
+      { value: 'dashboards', label: 'Dashboards', icon: <ChartLine /> },
     ],
   },
 ];
@@ -327,6 +330,8 @@ export function Settings() {
         return <TerminalSettings />;
       case 'computer':
         return <ComputerTab />;
+      case 'dashboards':
+        return <DashboardsTab />;
     }
   };
 

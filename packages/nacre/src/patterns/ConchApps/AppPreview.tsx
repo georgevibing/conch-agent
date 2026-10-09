@@ -11,6 +11,14 @@ import { SkillSignatureBadge } from '../Skills/SkillSignatureBadge';
 import { AppIcon } from './AppIcon';
 import { AppAbilityList, AppChanges, AppSettingsFields, AppTools } from './AppParts';
 import styles from './AppPreview.module.css';
+import {
+  PartReview,
+  partReady,
+  type PartChannelView,
+  type PartProviderView,
+  type PartTestView,
+  type PartValues,
+} from './PartReview';
 import type {
   AppChangesView,
   AppManifestView,
@@ -37,6 +45,8 @@ export interface AppPreviewApp {
   changes?: AppChangesView;
   /** `appAbilities`, `appSourceLine`, and `describeChanges` when it's an update. */
   words: AppWords;
+  /** A provider or a chat app it brings (ADR 0122): reviewed and tested before it's added. */
+  brings?: { provider?: PartProviderView; channel?: PartChannelView };
 }
 
 export interface AppPreviewProps extends Omit<ComponentProps<'section'>, 'children'> {
@@ -51,8 +61,10 @@ export interface AppPreviewProps extends Omit<ComponentProps<'section'>, 'childr
   busy?: string;
   /** Apps added from this preview (their ids). */
   added?: readonly string[];
-  /** **Add to my apps** or **Update**, with what the person typed. */
-  onAdd?: (appId: string, settings: Record<string, string>) => void;
+  /** **Add to my apps** or **Update**, with what the person typed (and its part's key, ADR 0122). */
+  onAdd?: (appId: string, settings: Record<string, string>, part?: PartValues) => void;
+  /** **Test it**, for an app that brings a provider or a chat app (ADR 0122). */
+  onTest?: (appId: string, values: PartValues) => Promise<PartTestView>;
   /** After a failure: read the link again. */
   onRetry?: () => void;
 }
@@ -72,6 +84,7 @@ export function AppPreview({
   busy,
   added = [],
   onAdd,
+  onTest,
   onRetry,
   className,
   ...props
@@ -132,6 +145,7 @@ export function AppPreview({
           busy={busy === app.manifest.id}
           added={added.includes(app.manifest.id)}
           onAdd={onAdd}
+          onTest={onTest}
         />
       </section>
     );
@@ -150,6 +164,7 @@ export function AppPreview({
             busy={busy === app.manifest.id}
             added={added.includes(app.manifest.id)}
             onAdd={onAdd}
+            onTest={onTest}
           />
         ))}
       </ul>
@@ -182,11 +197,13 @@ function CollectionRow({
   busy,
   added,
   onAdd,
+  onTest,
 }: {
   app: AppPreviewApp;
   busy: boolean;
   added: boolean;
   onAdd?: AppPreviewProps['onAdd'];
+  onTest?: AppPreviewProps['onTest'];
 }) {
   const [open, setOpen] = useState(false);
   const detailsId = useId();
@@ -244,6 +261,7 @@ function CollectionRow({
             busy={busy}
             added={added}
             onAdd={onAdd}
+            onTest={onTest}
           />
         </div>
       )}
@@ -259,6 +277,7 @@ function FoundApp({
   busy,
   added,
   onAdd,
+  onTest,
 }: {
   app: AppPreviewApp;
   titleId: string;
@@ -268,9 +287,28 @@ function FoundApp({
   busy: boolean;
   added: boolean;
   onAdd?: AppPreviewProps['onAdd'];
+  onTest?: AppPreviewProps['onTest'];
 }) {
-  const { manifest, words } = app;
+  const { manifest, words, brings } = app;
   const [values, setValues] = useState<Record<string, string>>({});
+  const [partValues, setPartValues] = useState<PartValues>({ key: '', fields: {} });
+  const [test, setTest] = useState<PartTestView>({ state: 'idle' });
+  const partHasValues = Boolean(
+    brings &&
+    (brings.provider?.key
+      ? !brings.provider.key.optional
+      : (brings.channel?.fields.length ?? 0) > 0),
+  );
+  const partBlocks = Boolean(brings && partHasValues && onTest && test.state !== 'passed');
+  const runTest = async () => {
+    if (!onTest) return;
+    setTest({ state: 'testing' });
+    try {
+      setTest(await onTest(manifest.id, partValues));
+    } catch {
+      setTest({ state: 'failed', message: 'The test didn’t run. Try again.' });
+    }
+  };
   const stand = standing(app, added);
   const update = stand === 'update';
   // An earlier version than the one you have: said as it is, never as "new".
@@ -284,7 +322,15 @@ function FoundApp({
       const value = values[s.key]?.trim();
       if (value) typed[s.key] = value;
     }
-    onAdd(manifest.id, typed);
+    if (!brings) return onAdd(manifest.id, typed);
+    onAdd(manifest.id, typed, {
+      key: partValues.key.trim(),
+      fields: Object.fromEntries(
+        Object.entries(partValues.fields)
+          .map(([k, v]) => [k, v.trim()] as const)
+          .filter(([, v]) => v),
+      ),
+    });
   };
 
   let foot: ReactNode;
@@ -330,11 +376,28 @@ function FoundApp({
           disabled={busy}
           label="What it needs from you"
         />
+        {brings && (brings.provider || brings.channel) && (
+          <PartReview
+            {...(brings.provider && { provider: brings.provider })}
+            {...(brings.channel && { channel: brings.channel })}
+            values={partValues}
+            onValuesChange={(next) => {
+              setPartValues(next);
+              if (test.state !== 'idle' && test.state !== 'testing') setTest({ state: 'idle' });
+            }}
+            test={test}
+            {...(onTest && { onTest: () => void runTest() })}
+            disabled={busy}
+          />
+        )}
         <div className={styles.actions}>
           {onAdd && (
             <Button
               onClick={add}
               loading={busy}
+              disabled={
+                partBlocks || Boolean(brings && partHasValues && !partReady(brings, partValues))
+              }
               aria-label={
                 older
                   ? `Use ${manifest.name} ${manifest.version}`

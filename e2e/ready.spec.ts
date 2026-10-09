@@ -3,7 +3,8 @@ import { expect, test } from '@playwright/test';
 /**
  * The whole happy path a new user walks, against the real gateway + mock engine:
  * the welcome (ADR 0068) → a first chat started from it, with memory and a
- * permission prompt → reload (history persists) → Settings shows what Conch remembered.
+ * step that goes ahead in Auto → reload (history persists) → Settings shows what Conch
+ * remembered.
  */
 test('first run to first conversation', async ({ page, request }) => {
   await page.goto('/');
@@ -36,7 +37,7 @@ test('first run to first conversation', async ({ page, request }) => {
   // Empty chat greets by name.
   await expect(page.getByText(/Ada\./).first()).toBeVisible();
 
-  // First message: memory + permission + streamed reply.
+  // First message: memory + a step + streamed reply.
   const composer = page.getByRole('textbox', { name: 'Message Conch' });
   await composer.fill('Please remember that I love espresso and list files');
   await composer.press('Enter');
@@ -44,10 +45,10 @@ test('first run to first conversation', async ({ page, request }) => {
   await expect(page).toHaveURL(/\/c\/c_/);
   // Remembering is a step of the run (ADR 0103), told on its story's row.
   await expect(page.getByRole('button', { name: /[Rr]emember(ed|ing) something/ })).toBeVisible();
-  await page.getByRole('button', { name: 'Allow', exact: true }).click();
-  // The answer folds into the call's story: the card goes.
-  await expect(page.getByRole('group', { name: /asks first/ })).toHaveCount(0);
+  // A new chat is in Auto (ADR 0119): looking through the folder is routine, so nothing asks.
   await expect(page.getByText("Got it — I'll remember that.", { exact: false })).toBeVisible();
+  await expect(page.getByRole('button', { name: /looked through the folder/ })).toBeVisible();
+  await expect(page.getByRole('group', { name: /asks first/ })).toHaveCount(0);
 
   // History survives a reload.
   await page.reload();
