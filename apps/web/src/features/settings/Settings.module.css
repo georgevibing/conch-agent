@@ -139,7 +139,7 @@
 
   /*
    * Above the page, level with the places' way back: where you are, when it's
-   * a page inside a place (Memory › What Conch knows). Empty above a place.
+   * a page inside a place (What Conch knows › All memories). Empty above a place.
    */
   .crumbs {
     display: flex;

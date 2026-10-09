@@ -1,4 +1,3 @@
-import { ImportSourceId } from '@conch/protocol';
 import {
   Button,
   Dialog,
@@ -31,7 +30,7 @@ import {
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router';
 
-import { useAppState, useMemories, useUpdateSettings } from '../../api/queries';
+import { useAppState } from '../../api/queries';
 import { Trail } from '../../app/trail';
 import { useUi } from '../../app/ui';
 import { NARROW } from '../../app/widths';
@@ -40,12 +39,8 @@ import { SecurityTab } from '../auth/SecurityTab';
 import { updatesWaiting, useUpdates } from '../updates/queries';
 import { BrowserSettings } from '../browser/BrowserSettings';
 import { HealthTab } from '../health/HealthTab';
-import { ComeHomeSection } from '../import/ComeHomeSection';
-import { PastChatsSection } from '../import/PastChatsSection';
 import { ComputerTab } from '../computer/ComputerTab';
-import { ComeHomePage } from '../import/ComeHomePage';
-import { MemoryView } from '../memory/MemoryView';
-import { MorningNote } from '../memory/MorningNote';
+import { MemoryTab } from '../memory/MemoryTab';
 import { AgentsTab } from '../agents/AgentsTab';
 import { NotificationsTab } from '../notifications/NotificationsTab';
 import { VoiceTab } from '../voice/VoiceTab';
@@ -66,79 +61,6 @@ import {
 import { GeneralTab } from './GeneralTab';
 import { Section } from './Section';
 import { usePageInside } from './trail';
-
-function MemoryTab({
-  autoMemory,
-  tidyMemory,
-  item,
-}: {
-  autoMemory: boolean;
-  tidyMemory: boolean;
-  /** `everything`: what Conch remembers, a page inside Memory. */
-  item?: string;
-}) {
-  const memories = useMemories();
-  const update = useUpdateSettings();
-  const openSettings = useUi((s) => s.openSettings);
-  // Bringing your things from another assistant: a place inside Memory.
-  const from = item?.startsWith('from-') ? ImportSourceId.safeParse(item.slice(5)) : undefined;
-  if (from?.success) return <ComeHomePage source={from.data} />;
-  // Its way back is the trail above it (Memory › What Conch knows).
-  if (item === MEMORY_ALL) return <MemoryView inSettings />;
-  const all = memories.data ?? [];
-  const waiting = all.filter((m) => m.pending).length;
-  const kept = all.length - waiting;
-  return (
-    <Stack gap={8}>
-      {/* What Conch learned and tidied since you last looked, each with Undo: here and nowhere else (ADR 0107). */}
-      <MorningNote />
-      <Section
-        title="Memory"
-        description="What I remember across conversations. Stored as plain files in ~/.conch/memory — yours to read, edit or delete."
-      >
-        <Stack gap={5}>
-          <Switch
-            checked={autoMemory}
-            onCheckedChange={(checked) =>
-              void update.mutateAsync({ preferences: { autoMemory: checked } })
-            }
-            label="Learn from your chats"
-            description="I’ll quietly keep what lasts — how you like things, what changed. I only ask when something looks unsafe. Off, I remember only what you ask me to."
-          />
-          <Switch
-            checked={tidyMemory}
-            onCheckedChange={(checked) =>
-              void update.mutateAsync({ preferences: { tidyMemory: checked } })
-            }
-            label="Tidy up every night"
-            description="Merge repeats and update what’s changed while you sleep. A short note in the morning says what changed, each with Undo."
-          />
-          <div className={styles.memoryDoor}>
-            <Brain aria-hidden />
-            <Stack gap={0.5} className={styles.memoryDoorText}>
-              <Text size="sm" weight="medium">
-                What Conch knows about you
-              </Text>
-              <Text size="xs" tone="muted">
-                {kept === 0
-                  ? 'Nothing remembered yet.'
-                  : kept === 1
-                    ? '1 memory'
-                    : `${kept} memories`}
-                {waiting > 0 && ` · ${waiting} to look at`}
-              </Text>
-            </Stack>
-            <Button size="sm" variant="surface" onClick={() => openSettings('memory', MEMORY_ALL)}>
-              Open
-            </Button>
-          </div>
-        </Stack>
-      </Section>
-      <ComeHomeSection />
-      <PastChatsSection />
-    </Stack>
-  );
-}
 
 interface Place {
   value: SettingsTab;
@@ -206,8 +128,8 @@ const placeNames = Object.fromEntries(
  * button opens them, and Settings itself (`/settings`) opens with them out.
  *
  * Where you are reads as one trail, never a stack of back buttons: a page
- * inside a place (a provider's, what Conch remembers) says Memory › What
- * Conch knows above it, and the place is a step back to it. On a phone the
+ * inside a place (a provider's, what Conch remembers) says What Conch knows ›
+ * All memories above it, and the place is a step back to it. On a phone the
  * trail is the header, beside the menu.
  *
  * Each place has its address (`/settings/providers`, and a provider's own page

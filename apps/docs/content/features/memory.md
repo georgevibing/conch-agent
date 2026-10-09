@@ -19,7 +19,7 @@ It is told to leave out passwords, keys, and health or money details unless you 
 
 Some things only show once a chat is over: you corrected it ("no, I meant TypeScript"), you said something changed ("I moved to Lisbon"), or a command needed another program on this computer. So once a chat has been quiet for a few minutes, Conch reads your words in it once more and keeps what will still matter.
 
-- **It doesn't interrupt.** Nothing appears in the chat. What it learned is on **What Conch knows about you**, where you can change or forget it.
+- **It doesn't interrupt.** Nothing appears in the chat. What it learned is in **Settings → Memory**, where you can change or forget it.
 - **What changed replaces what was.** "Lives in Lisbon" replaces "Lives in Berlin". The old memory is kept under **What used to be true**, with the date it stopped being true, so your assistant can still answer questions about before.
 - **What you take back stays back.** A memory Conch wrote that you forget isn't learned again. The list is under **Won't learn again**, each with **Remove**. If you say it again yourself, Conch remembers it.
 - **What it learned about this computer saves you time.** "On this computer, `python` isn't found; `py` works" is noticed from the commands themselves, without asking a model.
@@ -38,17 +38,23 @@ To keep one chat out of it, choose **Don't learn from this chat** in its menu, o
 
 ## About you
 
-**About you**, in **Settings → What Conch knows**, is a portrait your assistant reads before every chat. Your name sits at the top, with a line that sums you up. Below are five cards: **Work**, **Home**, **People**, **Interests** and **How you like things**. Each holds short facts. Press **Add** on a card to write one there; press a fact to change it or remove it. A person can carry who they are to you and a date, such as "daughter · born 8 June 2025".
+**Settings → What Conch knows** opens on **About you**: a portrait your assistant reads before every chat. Your name sits at the top, with a line that sums you up and how many things you told it and it learned. Below are the parts of your life, a row each: **How you like answers**, **People**, **Work and projects**, **Places** and **What you're into**. What you told it and what it learned from your chats sit together; a small spark marks what it learned.
 
-**Your photo.** Press your initial, or drop a picture on it, to use a photo instead. It opens in a frame: drag it to move it, zoom until it looks like you, then press **Use this photo**. It shows in About you and at the foot of the sidebar. Press it again to choose a new one or **Remove photo**; **Undo** puts it back. Conch keeps it on your computer, framed and shrunk, and backs it up with your settings. PNG, JPEG and WebP all work.
+- **Press anything to correct it.** A fact opens where it is: change the words and press Enter, or press **Remove**. **Undo** brings it back. A learned fact also says where it came from, such as "Learned from a chat on 3 May", with **Open the chat**.
+- **Tell Conch something.** Type it in the line at the foot, the way you'd say it: "I prefer metric units", "Sam is my brother". As you type, the row it'll go in shows at the end of the line; press it to choose another. Enter adds it.
+- **Add to a row** with its **+**. A person can carry who they are to you and a date, such as "daughter · born 8 June 2025".
+- **Nothing there yet?** Each empty part is a question at the foot, such as **Who's close to you?**. Press it to answer.
 
-**In your own words** holds anything the cards don't, the way you'd say it. Press **Lay it out as cards**, and your assistant reads it into facts for the cards. They arrive outlined: keep the right ones, dismiss the rest, or press **Keep all**. Nothing is saved that you didn't keep.
+**Your photo.** Press your initial, or drop a picture on it, to use a photo instead. It opens in a frame: drag it to move it, zoom until it looks like you, then press **Use this photo**. It shows on the portrait and at the foot of the sidebar. Press it again to choose a new one or **Remove photo**; **Undo** puts it back. Conch keeps it on your computer, framed and shrunk, and backs it up with your settings. PNG, JPEG and WebP all work.
 
-**What every chat starts with** shows, word for word, what your assistant reads about you.
+Under **Advanced** at the foot of the page:
+
+- **In your own words** holds anything the portrait doesn't, the way you'd say it. Press **Lay it out on your portrait**, and your assistant reads it into facts. They arrive outlined: keep the right ones, dismiss the rest, or press **Keep all**. Nothing is saved that you didn't keep.
+- **What every chat starts with** shows, word for word, what your assistant reads about you.
 
 ## See what it knows
 
-Open **What Conch knows about you** with <kbd>mod+k</kbd>, by typing `/memory`, or from **Settings → What Conch knows → Open**. It opens inside Settings, with **What Conch knows › All memories** above it: press **What Conch knows** to go back to the memory settings.
+Open every memory with <kbd>mod+k</kbd> (**What Conch knows about you**), by typing `/memory`, or from **Settings → What Conch knows → Open memories**. It opens inside Settings, with **What Conch knows › All memories** above it: press **What Conch knows** to go back.
 
 The page is short:
 
@@ -128,7 +134,7 @@ Conch looks out for:
 
 Anything you typed yourself is yours: it's never questioned. A password, a key or a code is only asked about when you typed it, because it's safer in [Passwords](./passwords.md). When it didn't come from you, or it has hidden characters, the card says **I didn't remember this**, and only **Remember anyway** keeps it.
 
-A held memory isn't used, isn't found by search and isn't in an export. The same card comes first on **What Conch knows about you**, and your phone gets a notification like any approval. This is the only time memory asks you anything. **Activity** lists every memory that was held, and what you chose.
+A held memory isn't used, isn't found by search and isn't in an export. The same card comes first on **Memories**, and your phone gets a notification like any approval. This is the only time memory asks you anything. **Activity** lists every memory that was held, and what you chose.
 
 Most memories never see the card. Where something from outside was read, Conch may also ask a cheap model for a second opinion; it can only hold a memory, never let one through.
 

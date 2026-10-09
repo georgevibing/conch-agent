@@ -113,6 +113,7 @@ import {
   SIGN_IN_FOCUS,
 } from '../auth/focus';
 import { FALLBACK_FOCUS } from '../settings/FallbackSection';
+import { ADVANCED_FOCUS } from '../settings/useAdvanced';
 import { HEALED_FOCUS } from '../settings/HealedSection';
 import { PLAN_ROOM_FOCUS, ROUTINES_SPEND_FOCUS } from '../routines/SpendingSection';
 import { LEARNING_SPEND_FOCUS } from '../learning/LearningSpendSection';
@@ -123,7 +124,9 @@ import { APP_WORDS, APPS } from '../channels/describe';
 import { useChannels } from '../channels/queries';
 import { isManager } from '../integrations/apps';
 import { useIntegrations } from '../integrations/queries';
+import { TELL_FOCUS } from '../memory/AboutYou';
 import { downloadMemories } from '../memory/api';
+import { OWN_WORDS_FOCUS } from '../memory/MemoryTab';
 import { copySecret } from '../passwords/clipboard';
 import { useVault } from '../passwords/queries';
 import { modelLabel, providerLogo } from '../models/catalog';
@@ -243,6 +246,28 @@ const settingsPlaces: {
   },
   { tab: 'memory', label: 'About you', keywords: 'about you profile me', icon: <User /> },
   { tab: 'memory', label: 'Memory', keywords: 'remember forget', icon: <Brain /> },
+  {
+    tab: 'memory',
+    focus: TELL_FOCUS,
+    label: 'Tell Conch something about you',
+    keywords:
+      'about me profile portrait what conch knows remember my name people family preferences how i like answers where i live work interests',
+    icon: <User />,
+  },
+  {
+    tab: 'memory',
+    focus: OWN_WORDS_FOCUS,
+    label: 'In your own words',
+    keywords: 'about me bio describe myself profile write',
+    icon: <User />,
+  },
+  {
+    tab: 'memory',
+    focus: ADVANCED_FOCUS,
+    label: 'What every chat starts with',
+    keywords: 'system prompt about the user profile what it reads first instructions',
+    icon: <User />,
+  },
   {
     tab: 'providers',
     focus: FALLBACK_FOCUS,

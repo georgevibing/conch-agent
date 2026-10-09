@@ -1,11 +1,26 @@
 @layer nacre.components {
+  /* ── The portrait: one porcelain card, a soft light at its top corner ── */
   .portrait {
+    container-type: inline-size;
     display: flex;
     flex-direction: column;
-    gap: var(--nc-space-6);
+    gap: var(--nc-space-5);
+    padding: var(--nc-space-5) var(--nc-space-5) var(--nc-space-4);
+    border-radius: var(--nc-radius-2xl);
+    background:
+      radial-gradient(
+        120% 70% at 0% 0%,
+        color-mix(in oklab, var(--nc-accent-3) 70%, transparent),
+        transparent 60%
+      ),
+      var(--nc-surface);
+    box-shadow:
+      var(--nc-glaze-edge),
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-1);
   }
 
-  /* ── Who you are: the avatar, your name as a title you type into, one line ── */
+  /* ── Who you are: your face, your name as a title you type into, a line ── */
   .hero {
     display: flex;
     align-items: center;
@@ -15,7 +30,7 @@
   .avatar {
     flex: none;
     box-shadow:
-      0 0 0 3px var(--nc-canvas),
+      0 0 0 3px var(--nc-surface),
       0 0 0 4px var(--nc-border-subtle);
   }
 
@@ -65,6 +80,31 @@
     font-size: var(--nc-text-sm);
     line-height: var(--nc-leading-snug);
     overflow-wrap: anywhere;
+    text-wrap: pretty;
+  }
+
+  .tally {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: var(--nc-space-3);
+    row-gap: var(--nc-space-0-5);
+    margin: 0;
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tallyLearned {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+  }
+
+  .tallyLearned > svg {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    color: var(--nc-accent-11);
   }
 
   /* ── Read from your words: one quiet line with Keep all ─────────────── */
@@ -92,38 +132,31 @@
     flex: 1;
   }
 
-  /* ── The cards ─────────────────────────────────────────────────────── */
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
-    gap: var(--nc-space-3);
-  }
-
-  .card {
+  /* ── The parts of your life: a row each, like lines on an index card ── */
+  .strands {
     display: flex;
     flex-direction: column;
-    gap: var(--nc-space-3);
-    padding: var(--nc-space-3) var(--nc-space-3) var(--nc-space-2) var(--nc-space-4);
-    border-radius: var(--nc-radius-xl);
-    background: var(--nc-surface);
-    box-shadow:
-      var(--nc-glaze-edge),
-      inset 0 0 0 1px var(--nc-border-subtle);
   }
 
-  .card[data-empty] {
-    background: transparent;
-    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  .strand {
+    display: grid;
+    grid-template-columns: 11rem minmax(0, 1fr);
+    align-items: start;
+    gap: var(--nc-space-2) var(--nc-space-4);
+    padding-block: var(--nc-space-3);
+    border-block-start: 1px solid var(--nc-border-subtle);
   }
 
-  .cardHead {
+  .strandHead {
     display: flex;
     align-items: center;
     gap: var(--nc-space-2);
+    min-block-size: var(--nc-control-sm);
   }
 
-  .cardIcon {
+  .strandIcon {
     display: inline-grid;
+    flex: none;
     place-items: center;
     inline-size: 1.75rem;
     block-size: 1.75rem;
@@ -132,34 +165,59 @@
     color: var(--nc-accent-11);
   }
 
-  .cardIcon > svg {
+  .strandIcon > svg {
     inline-size: 0.95rem;
     block-size: 0.95rem;
   }
 
-  .cardTitle {
+  .strandTitle {
     margin: 0;
+    color: var(--nc-text);
     font-size: var(--nc-text-sm);
     font-weight: var(--nc-weight-semibold);
-    color: var(--nc-text);
+    line-height: var(--nc-leading-snug);
+  }
+
+  @container (max-width: 34rem) {
+    .strand {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
 
   .chips {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: var(--nc-space-1-5);
+    min-inline-size: 0;
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
+  .chips > li {
+    display: flex;
+    max-inline-size: 100%;
+    min-inline-size: 0;
+  }
+
+  /* An open chip, or a new one being written, takes the whole row. */
+  .chips > li:has(> .opened),
+  .chips > li.adding {
+    flex-basis: 100%;
+  }
+
+  /* ── A fact: a chip you can press ──────────────────────────────────── */
   .chip {
     --nc-rim-rest: 0;
     --nc-rim-hover: 0.4;
     appearance: none;
+    position: relative;
     display: inline-flex;
     align-items: center;
+    gap: var(--nc-space-1-5);
     max-inline-size: 100%;
+    min-block-size: var(--nc-control-sm);
     margin: 0;
     padding: var(--nc-space-1) var(--nc-space-2-5);
     border: 0;
@@ -174,7 +232,14 @@
     cursor: pointer;
     transition:
       background-color var(--nc-duration-fast) var(--nc-ease-out),
+      box-shadow var(--nc-duration-fast) var(--nc-ease-out),
       transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  /* Learned: no frame of its own, only the spark — quieter than what you said. */
+  .chip[data-learned] {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
   }
 
   @media (hover: hover) {
@@ -184,12 +249,20 @@
   }
 
   .chip:active {
-    transform: scale(0.97);
+    transform: scale(0.975);
+    transition-duration: 0ms;
   }
 
   .chip:focus-visible {
     outline: 2px solid var(--nc-ring);
     outline-offset: 2px;
+  }
+
+  .spark {
+    flex: none;
+    inline-size: 0.8rem;
+    block-size: 0.8rem;
+    color: var(--nc-accent-11);
   }
 
   .chipText {
@@ -201,14 +274,139 @@
     overflow-wrap: anywhere;
   }
 
+  /* A long memory reads in two lines; opened, it's there whole. */
+  .chipWords {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+  }
+
   .chipDetail {
     color: var(--nc-text-muted);
     font-size: var(--nc-text-xs);
   }
 
+  /* Arriving: it surfaces on the bouncy spring, and one band of pearl crosses it. */
+  .chip[data-arriving] {
+    animation: pt-arrive var(--nc-spring-bouncy-duration) var(--nc-spring-bouncy) both;
+  }
+
+  .glint {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  .glint::before {
+    content: '';
+    position: absolute;
+    inset-block: -20%;
+    inline-size: 60%;
+    background: linear-gradient(
+      100deg,
+      transparent,
+      var(--nc-pearl-2) 30%,
+      var(--nc-pearl-3) 45%,
+      var(--nc-pearl-4) 60%,
+      var(--nc-pearl-5) 72%,
+      transparent
+    );
+    opacity: 0;
+    transform: translateX(-120%) skewX(-12deg);
+    animation: pt-glint var(--nc-panel-glint-duration) var(--nc-ease-out) 120ms both;
+  }
+
+  /* Leaving: it sinks and fades, quicker than it came. */
+  .chip[data-leaving] {
+    pointer-events: none;
+    animation: pt-leave var(--nc-panel-out-duration) var(--nc-ease-in) both;
+  }
+
+  @keyframes pt-arrive {
+    from {
+      opacity: 0;
+      transform: translateY(4px) scale(0.92);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes pt-glint {
+    0% {
+      opacity: 0;
+      transform: translateX(-120%) skewX(-12deg);
+    }
+    35% {
+      opacity: calc(0.85 * var(--nc-lustre));
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(240%) skewX(-12deg);
+    }
+  }
+
+  @keyframes pt-leave {
+    to {
+      opacity: 0;
+      transform: scale(0.9);
+    }
+  }
+
+  /* ── A chip opened: its words, where it came from, Remove ─────────── */
+  .opened {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    min-inline-size: 0;
+    padding: var(--nc-space-2);
+    border-radius: var(--nc-radius-lg);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    transform-origin: top left;
+    animation: pt-open var(--nc-spring-snappy-duration) var(--nc-spring-snappy) both;
+  }
+
+  @keyframes pt-open {
+    from {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .source {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    padding-inline: var(--nc-space-1);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+  }
+
+  .sourceAction {
+    margin-inline-start: auto;
+  }
+
+  .source > svg {
+    flex: none;
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    color: var(--nc-accent-11);
+  }
+
   /* Read from your words, not kept yet: outlined, with its two answers. */
   .suggested {
-    display: inline-flex;
     align-items: center;
     gap: var(--nc-space-0-5);
     padding: var(--nc-space-0-5) var(--nc-space-0-5) var(--nc-space-0-5) var(--nc-space-2-5);
@@ -220,30 +418,168 @@
     animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) backwards;
   }
 
-  .cardFoot {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--nc-space-2);
-    margin-inline-start: calc(var(--nc-space-1) * -1);
+  /* ── “N more” and the + at the end of a row ────────────────────────── */
+  .more,
+  .add {
+    appearance: none;
+    display: inline-grid;
+    place-items: center;
     min-block-size: var(--nc-control-sm);
-  }
-
-  .cardFoot > button {
-    margin-inline-start: auto;
-  }
-
-  .example {
-    padding-inline-start: var(--nc-space-1);
-    color: var(--nc-text-subtle);
+    margin: 0;
+    border: 0;
+    border-radius: var(--nc-radius-md);
+    background: transparent;
+    color: var(--nc-text-muted);
+    font: inherit;
     font-size: var(--nc-text-sm);
-    font-style: italic;
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
   }
 
+  .more {
+    padding-inline: var(--nc-space-2);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .add {
+    inline-size: var(--nc-control-sm);
+  }
+
+  .add > svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  @media (hover: hover) {
+    .more:hover,
+    .add:hover {
+      background: var(--nc-wash-1);
+      color: var(--nc-text);
+    }
+  }
+
+  .more:active,
+  .add:active {
+    transform: scale(0.975);
+    transition-duration: 0ms;
+  }
+
+  .more:focus-visible,
+  .add:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  /* ── What isn't there yet: questions, not blanks ───────────────────── */
+  .invites {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2) var(--nc-space-3);
+    padding-block-start: var(--nc-space-3);
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .strands + .invites {
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .invitesLabel {
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+  }
+
+  .inviteList {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .invite {
+    --nc-rim-rest: 0;
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1-5);
+    min-block-size: var(--nc-control-sm);
+    margin: 0;
+    padding: var(--nc-space-1) var(--nc-space-3) var(--nc-space-1) var(--nc-space-1-5);
+    border: 1px dashed var(--nc-border);
+    border-radius: var(--nc-radius-full);
+    background: transparent;
+    color: var(--nc-text-muted);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      border-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .inviteIcon {
+    display: inline-grid;
+    place-items: center;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-3);
+    color: var(--nc-accent-11);
+  }
+
+  .inviteIcon > svg {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+
+  @media (hover: hover) {
+    .invite:hover {
+      border-color: var(--nc-accent-7);
+      background: var(--nc-accent-2);
+      color: var(--nc-text);
+    }
+  }
+
+  .invite:active {
+    transform: scale(0.975);
+    transition-duration: 0ms;
+  }
+
+  .invite:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  /* ── Writing a fact: in place, never a dialog ──────────────────────── */
   .form {
     display: flex;
+    flex: 1;
     flex-direction: column;
     gap: var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .adding > .form {
+    animation: pt-open var(--nc-spring-snappy-duration) var(--nc-spring-snappy) both;
+  }
+
+  .fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-2);
+  }
+
+  .field {
+    flex: 1 1 12rem;
+    min-inline-size: 0;
   }
 
   .formActions {
@@ -256,16 +592,125 @@
     flex: 1;
   }
 
-  .edit {
-    inline-size: min(20rem, calc(100vw - 2 * var(--nc-space-4)));
+  /* ── Tell it something: one line at the foot ───────────────────────── */
+  .tell {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+  }
+
+  .tellFoot {
+    padding-block-start: var(--nc-space-1);
+  }
+
+  .destination {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    max-inline-size: 12rem;
+    block-size: calc(var(--nc-control-md) - var(--nc-space-2));
+    margin: 0;
+    padding: 0 var(--nc-space-1-5) 0 var(--nc-space-2-5);
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-accent-3);
+    color: var(--nc-accent-11);
+    font: inherit;
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    white-space: nowrap;
+    cursor: pointer;
+    animation: nc-fade-in var(--nc-duration-fast) var(--nc-ease-out);
+    transition: background-color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .destinationName {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .destination > svg {
+    flex: none;
+    inline-size: 0.85rem;
+    block-size: 0.85rem;
+  }
+
+  @media (hover: hover) {
+    .destination:hover {
+      background: var(--nc-accent-4);
+    }
+  }
+
+  .destination:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .said {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-1);
+    min-block-size: 1.25rem;
+    margin: 0;
+    padding-inline: var(--nc-space-1);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+  }
+
+  .said > svg {
+    inline-size: 0.8rem;
+    block-size: 0.8rem;
+    color: var(--nc-accent-11);
+    animation: nc-fade-in var(--nc-duration-fast) var(--nc-ease-out);
   }
 
   @media (max-width: 640px) {
+    .portrait {
+      padding: var(--nc-space-4) var(--nc-space-4) var(--nc-space-3);
+    }
     .hero {
       align-items: flex-start;
     }
     .name {
       font-size: var(--nc-text-2xl);
     }
+  }
+
+  /* ── Reduced motion: everything is simply there ───────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    .chip[data-arriving],
+    .chip[data-leaving],
+    .opened,
+    .adding > .form,
+    .suggested,
+    .suggestBar,
+    .destination {
+      animation: none;
+    }
+    .chip[data-leaving] {
+      opacity: 0;
+    }
+    .glint {
+      display: none;
+    }
+  }
+
+  :global([data-nacre-motion='reduced']) .chip[data-arriving],
+  :global([data-nacre-motion='reduced']) .chip[data-leaving],
+  :global([data-nacre-motion='reduced']) .opened,
+  :global([data-nacre-motion='reduced']) .adding > .form,
+  :global([data-nacre-motion='reduced']) .suggested,
+  :global([data-nacre-motion='reduced']) .suggestBar,
+  :global([data-nacre-motion='reduced']) .destination {
+    animation: none;
+  }
+
+  :global([data-nacre-motion='reduced']) .chip[data-leaving] {
+    opacity: 0;
+  }
+
+  :global([data-nacre-motion='reduced']) .glint {
+    display: none;
   }
 }

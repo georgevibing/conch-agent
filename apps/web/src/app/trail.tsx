@@ -14,7 +14,7 @@ export interface Crumb {
 
 /**
  * Where you are, as one trail (NACRE.md § Where you are): Apps › Gmail,
- * Skills › Discover › PDF tools, Settings' Memory › What Conch knows. The
+ * Skills › Discover › PDF tools, Settings' What Conch knows › All memories. The
  * places above are steps back; the page you're on is read as the current
  * page, and can take the focus when you arrive (`tabIndex={-1}`).
  */

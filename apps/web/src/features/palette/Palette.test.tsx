@@ -515,6 +515,34 @@ describe('Palette search', () => {
     act(() => useUi.setState({ settingsFocus: undefined }));
   });
 
+  it('finds About you inside What Conch knows: tell it something, your own words, what every chat starts with', async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/search': () => ({ ...results, groups: [], total: 0 }),
+    });
+    const { where } = renderApp(<Palette />);
+    act(() => useUi.getState().setPalette(true));
+    for (const [words, name, focus] of [
+      ['my name', /Settings: Tell Conch something about you/, 'tell'],
+      ['bio', /Settings: In your own words/, 'own-words'],
+      ['system prompt', /Settings: What every chat starts with/, 'advanced'],
+    ] as const) {
+      act(() => useUi.getState().setPalette(true));
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      await user.click(await screen.findByRole('option', { name }));
+      await waitFor(() =>
+        expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
+          at: '/settings/memory',
+          focus,
+        }),
+      );
+      act(() => useUi.setState({ settingsFocus: undefined }));
+    }
+  });
+
   it('finds passkeys by the names people know, straight into Settings → Access → Passkeys', async () => {
     const user = userEvent.setup();
     mockFetch({

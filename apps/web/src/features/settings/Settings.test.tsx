@@ -188,12 +188,10 @@ describe('Settings', () => {
     });
     const { where } = renderApp(<Settings />, { route: '/settings/memory' });
     const page = await screen.findByRole('dialog', { name: 'Settings' });
-    await userEvent.click(await within(page).findByRole('button', { name: 'Open' }));
+    await userEvent.click(await within(page).findByRole('button', { name: 'Open memories' }));
     expect(where()).toBe('/settings/memory/everything');
     // Still Settings, its places beside it: the memories are a page inside Memory.
-    expect(
-      await within(page).findByRole('heading', { name: 'What Conch knows about you' }),
-    ).toBeVisible();
+    expect(await within(page).findByRole('heading', { name: 'All memories' })).toBeVisible();
     expect(within(page).getByRole('tab', { name: 'What Conch knows' })).toBeInTheDocument();
     expect(await within(page).findByText('Projects live in ~/projects')).toBeVisible();
     // One way back, in the trail: never a stack of back buttons.
@@ -208,7 +206,7 @@ describe('Settings', () => {
     expect(within(page).queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull();
     // Stepping back out reads the place itself.
     await waitFor(() =>
-      expect(within(page).getByRole('heading', { name: 'Memory', level: 3 })).toHaveFocus(),
+      expect(within(page).getByRole('heading', { name: 'About you', level: 3 })).toHaveFocus(),
     );
   });
 
