@@ -154,6 +154,11 @@ The tag job checks each new tag against the list each channel's installs carry
 (the newest release on every channel the new one is offered on), so a key handed over too early stops the release instead of
 shipping one nobody takes.
 
+Keep the old key's line for a while after the switch. An install further behind
+crosses on the release that added the new key, and Conch only looks at the six
+newest releases on its channel (ADR 0051): one more than six releases behind
+that bridge would find none it can check.
+
 If the old key is lost, installs can't take a new one from a release: they'd have
 to install again.
 
