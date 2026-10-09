@@ -31,6 +31,7 @@ const FORGOTTEN_MS = 24 * 60 * 60_000;
 const EXITED_MS = 10 * 60_000;
 /** A ticket to attach is good for this long, once. */
 const TICKET_MS = 60_000;
+/** How many of the latest repairs the service remembers itself (they're all in Health's list). */
 const HEALED_KEPT = 8;
 
 /** Who's asking, as the routes see it. */
@@ -123,8 +124,10 @@ export class TerminalService {
     });
   }
 
+  /** Note a repair. It's listed in Settings → Health → Fixed on its own, and nowhere else. */
   heal(message: string): void {
     this.healed = [{ at: Date.now(), message }, ...this.healed].slice(0, HEALED_KEPT);
+    this.deps.heal?.('terminal', message);
   }
 
   #backendNow(): PtyBackend {
@@ -174,7 +177,6 @@ export class TerminalService {
         .map((s) => s.info())
         .sort((a, b) => a.createdAt - b.createdAt),
       remote: !asker.local,
-      healed: this.healed,
     };
   }
 

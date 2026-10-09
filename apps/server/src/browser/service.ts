@@ -148,6 +148,7 @@ export class BrowserService {
       secrets: this.secrets,
       chromeDirs: deps.chromeDirs,
       fetch: deps.fetch,
+      heal: deps.heal,
     });
     void this.store.settings().then((s) => (this.#settings = s));
     this.#idleTimer = setInterval(() => void this.#sweep(), 60_000);
@@ -174,7 +175,6 @@ export class BrowserService {
             action: 'settings',
           }
         : this.runtime.problem,
-      healed: this.runtime.healed,
       tabs: [...this.#tabs.keys()],
       sites: await this.store.sites(),
       backend: await this.backendStatus(settings.backend),

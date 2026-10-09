@@ -193,9 +193,10 @@ of the native session (the Agent SDK's `forkSession`) is the way to add it later
   **Bring them in**. While they come in the light quickens and a bar fills; when
   they're here the pearl glows and the next thing to try is one press (**Search
   them**). Reduced motion: the count simply is, nothing travels.
-- **Offered in the welcome** (a step after Come home, only when there are some),
-  and in **Settings → Memory → Your past chats**, which ⌘K finds by the apps'
-  names. Nothing at all for someone who never used another app.
+- **Offered on the new chat** (one quiet line under the composer, only when there
+  are some and none have been brought in yet; ADR 0068 amended, it was a step of
+  the welcome), and in **Settings → Memory → Your past chats**, which ⌘K finds
+  by the apps' names. Nothing at all for someone who never used another app.
 - **Bringing them in grants nothing**, so it needs only the page's sign-in.
   **Take them out** removes things, so it asks, then needs a recent password or
   key (sudo mode).

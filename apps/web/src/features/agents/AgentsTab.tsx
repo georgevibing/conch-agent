@@ -1,5 +1,6 @@
 import {
   AGENT_LIMITS,
+  DEFAULT_MODE,
   fuzzyMatch,
   type Agent,
   type AgentDefaults,
@@ -522,7 +523,7 @@ function StartsWith({
   const engine = own?.engine ?? catalog?.default ?? prefs?.engine;
   const provider = catalog?.providers.find((p) => p.engine === engine) ?? catalog?.providers[0];
   const model = findModel(provider, own?.model ?? prefs?.model);
-  const mode = own?.permissionMode ?? prefs?.permissionMode ?? 'default';
+  const mode = own?.permissionMode ?? prefs?.permissionMode ?? DEFAULT_MODE;
   const modes = useMemo(
     () =>
       availableModes(provider?.permissionModes)

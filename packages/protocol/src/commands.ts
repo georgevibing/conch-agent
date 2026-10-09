@@ -116,7 +116,7 @@ export const COMMANDS: readonly CommandDef[] = [
     name: 'plan',
     yields: true,
     section: 'chat',
-    description: 'Plan first: it reads and proposes, you approve, then it acts',
+    description: 'Read only until you approve its plan, then it acts',
     argumentHint: '[on | off | what to plan]',
     values: 'suggest',
     chat: { who: 'owner' },

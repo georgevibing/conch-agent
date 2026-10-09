@@ -11,7 +11,7 @@ Every agent is the same Conch underneath. They all know what Conch remembers abo
 
 ## The one you start with
 
-The welcome makes your first agent. It asks **And who am I?**: type a name under **My name** (it suggests "Conch"), or press **Another name** for an idea, then choose how it sounds and press **Sounds good**. It says hello in that voice as you choose. If you never make another agent, nothing else changes.
+Your first agent is there from the start, called **Conch**, with a warm voice. The welcome doesn't stop to ask about it. To make it yours, open **Settings → Agents** and press it: change its name, pick a face, and choose how it sounds. It says hello in that voice as you choose, and saves as you go. If you never make another agent, nothing else changes.
 
 ## Make another
 

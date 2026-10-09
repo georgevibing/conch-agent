@@ -301,7 +301,7 @@ export class MockEngine implements Engine {
         { name: 'review', description: 'Review the current changes', argumentHint: '' },
         { name: 'init', description: 'Create a CLAUDE.md for this project', argumentHint: '' },
       ],
-      permissionModes: ['default', 'auto', 'acceptEdits', 'plan', 'bypassPermissions'],
+      permissionModes: ['default', 'auto', 'plan', 'bypassPermissions'],
       tools: { host: true, files: true, shell: true, approvals: true },
     };
   }
@@ -1937,7 +1937,7 @@ export class MockEngine implements Engine {
           if (ref) {
             page = yield* use('browser_click', { ref, element: target });
             done.push(
-              /said no|doesn’t want|Plan only/.test(page)
+              /said no|doesn’t want|Read only/.test(page)
                 ? `didn’t click “${target}” (${page.split('\n')[0]})`
                 : `clicked “${target}”`,
             );

@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 
 import { Popover } from '../../components/Popover';
 import { cx } from '../../utils/cx';
+import { PickerDefault } from '../ModelPicker/ModelPicker';
 import picker from '../ModelPicker/ModelPicker.module.css';
 import { PlaceGlyph, type WorkPlaceKind } from './WorkedAt';
 import styles from './WorkPlaces.module.css';
@@ -60,13 +61,137 @@ const STATE_WORDS: Record<WorkPlaceState, string> = {
   unavailable: 'Not answering',
 };
 
+/** A place's state, said in a word or two. */
+export const PLACE_STATE_WORDS = STATE_WORDS;
+
+export interface WorkPlaceListProps {
+  options: WorkPlaceOption[];
+  value: string;
+  onValueChange(value: string): void;
+  /** Said plainly above the list (the provider runs its own commands here). */
+  note?: string;
+  /**
+   * A row that needs setting up was pressed: close what holds the list, then
+   * call `setup.onSetup()`.
+   */
+  onSetup(setup: WorkPlaceSetup): void;
+  /** Prefix of every row's id, so the chosen one can be focused. */
+  listId: string;
+}
+
+/**
+ * The places as a list: each with its mark, what it is, and its state. A row
+ * that needs setting up says what it needs and goes there when pressed. The
+ * body of the place chip's panel, and the Where work runs section of the
+ * composer's one settings panel.
+ */
+export function WorkPlaceList({
+  options,
+  value,
+  onValueChange,
+  note,
+  onSetup,
+  listId,
+}: WorkPlaceListProps) {
+  // Arrow keys move along the list and choose as they go: a row that needs
+  // setting up is passed over, never opened, on the way.
+  const arrowing = useRef(false);
+  return (
+    <>
+      {note && (
+        <p className={styles.note}>
+          <Info aria-hidden className={styles.noteIcon} />
+          {note}
+        </p>
+      )}
+      <RadioPrimitive.Root
+        value={value}
+        onValueChange={(next) => {
+          const setup = options.find((o) => o.value === next)?.setup;
+          if (!setup) return onValueChange(next);
+          if (arrowing.current) return;
+          onSetup(setup);
+        }}
+        onKeyDownCapture={(event) => {
+          arrowing.current = event.key.startsWith('Arrow');
+        }}
+        onKeyUpCapture={() => {
+          arrowing.current = false;
+        }}
+        aria-label="Where work runs"
+        className={picker.list}
+        loop
+      >
+        {options.map((option) => {
+          const state = option.state ?? 'ready';
+          const { setup } = option;
+          return (
+            <div key={option.value} className={styles.option}>
+              <RadioPrimitive.Item
+                id={`${listId}-${option.value}`}
+                value={option.value}
+                data-kind={option.kind}
+                data-place-state={state}
+                data-setup={setup ? '' : undefined}
+                className={cx(picker.row, styles.row)}
+                aria-describedby={`${listId}-${option.value}-about`}
+                {...(setup && {
+                  // A radio doesn't answer Enter; a row that goes somewhere does.
+                  onKeyDown: (event: KeyboardEvent) => {
+                    if (event.key !== 'Enter') return;
+                    event.preventDefault();
+                    onSetup(setup);
+                  },
+                })}
+              >
+                <span className={styles.icon} aria-hidden>
+                  <PlaceGlyph kind={option.kind} />
+                </span>
+                <span className={picker.rowText}>
+                  <span className={picker.rowLabel}>
+                    {option.label}
+                    {state !== 'ready' && (
+                      <span className={styles.state} data-place-state={state}>
+                        {STATE_WORDS[state]}
+                      </span>
+                    )}
+                  </span>
+                  <span id={`${listId}-${option.value}-about`} className={picker.rowDescription}>
+                    {state !== 'ready' && option.message ? option.message : option.description}
+                    {setup && (
+                      <>
+                        {' '}
+                        <span className={styles.setup}>
+                          {setup.label}
+                          <ArrowRight aria-hidden className={styles.setupIcon} />
+                        </span>
+                        <span className="nc-visually-hidden">
+                          , {setup.where ?? 'opens Settings'}
+                        </span>
+                      </>
+                    )}
+                  </span>
+                </span>
+                <RadioPrimitive.Indicator className={picker.check}>
+                  <Check aria-hidden />
+                </RadioPrimitive.Indicator>
+              </RadioPrimitive.Item>
+            </div>
+          );
+        })}
+      </RadioPrimitive.Root>
+    </>
+  );
+}
+
 /**
  * Where the chat's work runs (ADR 0106): this computer, a container, a
- * machine of yours, the cloud. A calm chip beside the mode: its mark is the
- * place, and when the place changes the mark glides in from below with a
- * glint, as if the work had just moved there. A place that isn't ready wears
- * a small dot. A place that needs setting up isn't chosen: its row says what
- * it needs and, quietly, the next step, and pressing it goes there.
+ * machine of yours, the cloud. A calm chip: its mark is the place, and when
+ * the place changes the mark glides in from below with a glint, as if the
+ * work had just moved there. A place that isn't ready wears a small dot. A
+ * place that needs setting up isn't chosen: its row says what it needs and,
+ * quietly, the next step, and pressing it goes there. The composer itself
+ * holds this list in `ComposerSettings`.
  */
 export function WorkPlacePicker({
   options,
@@ -83,13 +208,9 @@ export function WorkPlacePicker({
 }: WorkPlacePickerProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = openProp ?? uncontrolledOpen;
-  const [justSaved, setJustSaved] = useState(false);
   const [moved, setMoved] = useState(false);
   const listId = useId();
   const previous = useRef(value);
-  // Arrow keys move along the list and choose as they go: a row that needs
-  // setting up is passed over, never opened, on the way.
-  const arrowing = useRef(false);
 
   const setOpen = (next: boolean) => {
     if (openProp === undefined) setUncontrolledOpen(next);
@@ -104,12 +225,6 @@ export function WorkPlacePicker({
     const t = setTimeout(() => setMoved(false), 900);
     return () => clearTimeout(t);
   }, [value]);
-
-  useEffect(() => {
-    if (!justSaved) return;
-    const t = setTimeout(() => setJustSaved(false), 1600);
-    return () => clearTimeout(t);
-  }, [justSaved]);
 
   const current = options.find((o) => o.value === value) ?? options[0];
   const waiting = current?.state && current.state !== 'ready';
@@ -147,111 +262,18 @@ export function WorkPlacePicker({
         }}
       >
         <p className={styles.heading}>Where work runs</p>
-        {note && (
-          <p className={styles.note}>
-            <Info aria-hidden className={styles.noteIcon} />
-            {note}
-          </p>
-        )}
-        <RadioPrimitive.Root
+        <WorkPlaceList
+          options={options}
           value={value}
-          onValueChange={(next) => {
-            const setup = options.find((o) => o.value === next)?.setup;
-            if (!setup) return onValueChange(next);
-            if (arrowing.current) return;
+          onValueChange={onValueChange}
+          {...(note !== undefined && { note })}
+          onSetup={(setup) => {
             setOpen(false);
             setup.onSetup();
           }}
-          onKeyDownCapture={(event) => {
-            arrowing.current = event.key.startsWith('Arrow');
-          }}
-          onKeyUpCapture={() => {
-            arrowing.current = false;
-          }}
-          aria-label="Where work runs"
-          className={picker.list}
-          loop
-        >
-          {options.map((option) => {
-            const state = option.state ?? 'ready';
-            const { setup } = option;
-            return (
-              <div key={option.value} className={styles.option}>
-                <RadioPrimitive.Item
-                  id={`${listId}-${option.value}`}
-                  value={option.value}
-                  data-kind={option.kind}
-                  data-place-state={state}
-                  data-setup={setup ? '' : undefined}
-                  className={cx(picker.row, styles.row)}
-                  aria-describedby={`${listId}-${option.value}-about`}
-                  {...(setup && {
-                    // A radio doesn't answer Enter; a row that goes somewhere does.
-                    onKeyDown: (event: KeyboardEvent) => {
-                      if (event.key !== 'Enter') return;
-                      event.preventDefault();
-                      setOpen(false);
-                      setup.onSetup();
-                    },
-                  })}
-                >
-                  <span className={styles.icon} aria-hidden>
-                    <PlaceGlyph kind={option.kind} />
-                  </span>
-                  <span className={picker.rowText}>
-                    <span className={picker.rowLabel}>
-                      {option.label}
-                      {state !== 'ready' && (
-                        <span className={styles.state} data-place-state={state}>
-                          {STATE_WORDS[state]}
-                        </span>
-                      )}
-                    </span>
-                    <span id={`${listId}-${option.value}-about`} className={picker.rowDescription}>
-                      {state !== 'ready' && option.message ? option.message : option.description}
-                      {setup && (
-                        <>
-                          {' '}
-                          <span className={styles.setup}>
-                            {setup.label}
-                            <ArrowRight aria-hidden className={styles.setupIcon} />
-                          </span>
-                          <span className="nc-visually-hidden">
-                            , {setup.where ?? 'opens Settings'}
-                          </span>
-                        </>
-                      )}
-                    </span>
-                  </span>
-                  <RadioPrimitive.Indicator className={picker.check}>
-                    <Check aria-hidden />
-                  </RadioPrimitive.Indicator>
-                </RadioPrimitive.Item>
-              </div>
-            );
-          })}
-        </RadioPrimitive.Root>
-        <div className={picker.footer}>
-          {isDefault ? (
-            <span className={picker.defaultNote} data-saved={justSaved || undefined}>
-              <Check aria-hidden className={picker.defaultCheck} />
-              {justSaved ? 'Saved as your default' : 'Your default'}
-            </span>
-          ) : (
-            onMakeDefault && (
-              <button
-                type="button"
-                className={picker.makeDefault}
-                onClick={() => {
-                  onMakeDefault();
-                  setJustSaved(true);
-                }}
-              >
-                Make this my default
-              </button>
-            )
-          )}
-        </div>
+          listId={listId}
+        />
+        <PickerDefault isDefault={isDefault} {...(onMakeDefault && { onMakeDefault })} />
       </Popover.Content>
     </Popover.Root>
   );

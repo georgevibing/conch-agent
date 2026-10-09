@@ -1,6 +1,6 @@
 # 0068 — A welcome, not a task
 
-- Status: accepted
+- Status: accepted, amended 2026-10-09 (three screens; see [Amendment](#amendment-three-screens))
 - Date: 2026-10-04
 - Supersedes: [ADR 0039](./0039-first-useful-result.md) for onboarding (its verified first job
   stays as an API; onboarding no longer runs it)
@@ -72,3 +72,36 @@ motion or `data-nacre-motion="reduced"`.
 - The journeys (`e2e/ready.spec.ts`, `import.spec.ts`, `signed-out.spec.ts`,
   `not-installed.spec.ts`) walk the new welcome; `e2e/app.ts` `toProviders` skips to the provider
   step for the ones about providers.
+
+## Amendment: three screens
+
+- Date: 2026-10-09
+
+Six to nine screens was still too many before the first chat. Each one was skippable, but every
+skip is a decision, and most of what was asked has a better moment later, in the chat
+(ADR 0060). The welcome is now three screens:
+
+1. **Hello and your name**, together: the pearl, "Hi, I'm Conch.", "What should I call you?" with
+   the name field, **Let's begin** (an empty name is fine), and the line about where things stay.
+2. **A mind to think with**, as before: carries on by itself once a provider works, or
+   **I'll do this later**.
+3. **Ready**, as before, with three things to ask first.
+
+What was dropped, and where it went:
+
+- **What you'd like a hand with** is no longer asked. Nothing new is written into "About you".
+  A sentence an earlier welcome wrote still picks the starters (`interestsIn`); otherwise they are
+  the three for anyone.
+- **Who it is** (name, face, voice) is no longer asked. The first agent keeps its defaults (Conch,
+  warm) and Settings → Agents changes them.
+- **The apps you live in** is no longer a screen. The new chat's "Connect Gmail, Notion, GitHub
+  and more" line and the chat's own offers (ADR 0060) carry it.
+- **Come home** (ADR 0035) and **your past chats** (ADR 0111) are offered on the new chat
+  instead, one quiet line each under the composer (`features/import/BringHints`), only while
+  there's something to bring, each opening its place in Settings → Memory where nothing moves
+  until the person says so.
+
+Progress shows three dots on every screen; Back appears from the second. A step remembered from
+the longer welcome starts again at the hello. `WelcomeChoices`, `WelcomeApps` and the
+assistant step's pieces stay in Nacre (Settings → Agents and the new-agent dialog use the
+voice and face pickers).

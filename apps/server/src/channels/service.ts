@@ -2545,8 +2545,8 @@ export class ChannelService {
         return { ...c, chatOptions };
       });
     return on
-      ? '📋 Plan mode on. I’ll look around and plan first, change nothing, and show you the plan to Start.'
-      : `Plan mode off. Back to ${modeLabel(state.back)}.`;
+      ? '📋 Read only on. I’ll look and plan, change nothing, and show you the plan to Start.'
+      : `Read only off. Back to ${modeLabel(state.back)}.`;
   }
 
   /** `/plan`: on, off, or plan these words (ADR 0098), approved with Start right here. */
@@ -2575,7 +2575,7 @@ export class ChannelService {
     }
     const on = want === 'toggle' ? !state.planning : want === 'on';
     if (on === state.planning) {
-      await say(on ? 'Plan mode is already on.' : 'Plan mode is already off.');
+      await say(on ? 'Read only is already on.' : 'Read only is already off.');
       return;
     }
     const flip = (to: boolean) =>

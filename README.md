@@ -162,9 +162,9 @@ your desktop and the chat apps you already use.
 
 ### Safe by design
 
-- **Five permission modes, the same on every provider.** **Plan only**, **Ask first**,
-  **Edit freely**, **Auto** (gets on with it and stops for anything serious) and
-  **Full trust**. [Permission modes](./apps/docs/content/reference/modes.md)
+- **Four permission modes, the same on every provider.** **Read only**, **Ask first**,
+  **Auto** (where new chats start: it gets on with it and asks only before risky steps)
+  and **Full trust**. [Permission modes](./apps/docs/content/reference/modes.md)
 - **Careful after reading.** Once a chat has read a web page or an email, anything
   risky asks first. Commands run sealed off from your keys.
 - **Choose where work runs.** This computer, a locked-down container (Docker or

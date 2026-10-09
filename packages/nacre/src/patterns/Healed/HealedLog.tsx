@@ -11,6 +11,8 @@ export interface HealedEntry {
   message: string;
   /** A small mark for its kind (the browser, a chat, an app); a sparkle if left out. */
   icon?: ReactNode;
+  /** Which part of Conch it was in ("Terminal"), shown on the mark's hover and read out first. */
+  label?: string;
 }
 
 export interface HealedLogProps extends Omit<ComponentProps<'section'>, 'title'> {
@@ -31,6 +33,7 @@ interface Line {
   at: number;
   count: number;
   icon?: ReactNode;
+  label?: string;
 }
 
 /**
@@ -126,9 +129,10 @@ export function HealedLog({
         <ol id={listId} className={styles.lines}>
           {shown.map((line) => (
             <li key={splitHealed(line.message).head} className={styles.line}>
-              <span className={styles.mark} aria-hidden>
+              <span className={styles.mark} aria-hidden title={line.label}>
                 {line.icon ?? <Sparkles />}
               </span>
+              {line.label && <span className="nc-visually-hidden">{line.label}: </span>}
               <Message text={line.message} />
               <span className={styles.meta}>
                 {line.count > 1 && (

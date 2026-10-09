@@ -1,0 +1,171 @@
+@layer nacre.components {
+  /* ── The chip: "Opus · Auto" ─────────────────────────────────────────── */
+  /* The model's name gives way first (the shared chip truncates its label);
+     the mode is always read in full. */
+  .chip {
+    flex-shrink: 1;
+  }
+
+  .dot {
+    color: var(--nc-text-subtle);
+    font-weight: var(--nc-weight-regular);
+  }
+
+  .mode {
+    white-space: nowrap;
+  }
+
+  .place {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    color: var(--nc-accent-11);
+  }
+
+  .place > svg {
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+    stroke-width: 2;
+  }
+
+  /* Not ready yet: a small dot on the mark, as on the place's own chip. */
+  .place[data-waiting]::after {
+    content: '';
+    position: absolute;
+    inset-block-start: -2px;
+    inset-inline-end: -3px;
+    inline-size: 5px;
+    block-size: 5px;
+    border-radius: var(--nc-radius-full);
+    background: oklch(0.72 0.15 var(--nc-warning-h));
+    box-shadow: 0 0 0 1.5px var(--nc-surface);
+  }
+
+  .place[data-waiting='preparing']::after {
+    background: var(--nc-accent-9);
+  }
+
+  /* A mode that asks less: its word in the caution colour. */
+  .chip[data-tone='caution'] .mode {
+    color: light-dark(oklch(0.52 0.12 var(--nc-warning-h)), oklch(0.82 0.12 var(--nc-warning-h)));
+  }
+
+  /* Armed: the whole chip is a tinted pill with a hairline, never loud. */
+  .chip[data-tone='danger'] {
+    background: light-dark(
+      oklch(0.95 0.035 var(--nc-danger-h)),
+      oklch(0.27 0.06 var(--nc-danger-h))
+    );
+    color: light-dark(oklch(0.5 0.18 var(--nc-danger-h)), oklch(0.82 0.11 var(--nc-danger-h)));
+    box-shadow: inset 0 0 0 1px
+      color-mix(in oklch, oklch(0.6 0.2 var(--nc-danger-h)) 28%, transparent);
+  }
+
+  @media (hover: hover) {
+    .chip[data-tone='danger']:hover:not(:disabled) {
+      background: light-dark(
+        oklch(0.93 0.05 var(--nc-danger-h)),
+        oklch(0.3 0.075 var(--nc-danger-h))
+      );
+      color: light-dark(oklch(0.46 0.18 var(--nc-danger-h)), oklch(0.86 0.1 var(--nc-danger-h)));
+    }
+  }
+
+  /* A narrow composer (a phone): tighter, and the provider's mark steps
+     back so the words keep the room. */
+  @container composer (max-width: 34rem) {
+    .chip {
+      gap: var(--nc-space-1);
+      padding-inline: var(--nc-space-1-5) var(--nc-space-1);
+    }
+  }
+
+  @container composer (max-width: 24rem) {
+    .chip > svg:first-child {
+      display: none;
+    }
+  }
+
+  /* ── The panel ───────────────────────────────────────────────────────── */
+  /* One column that scrolls as a whole when the room above the composer runs
+     short; Make this my default always stays in view at the bottom. */
+  .panel {
+    inline-size: min(24rem, calc(100vw - 24px));
+    max-block-size: min(40rem, var(--radix-popover-content-available-height, 80vh));
+  }
+
+  .scroll,
+  .panel > .scroll,
+  .sheet > .scroll {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-block-size: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .scroll > * {
+    flex: none;
+  }
+
+  /* The model list keeps its own scroll: a long one (OpenRouter's) must not
+     push Thinking and the mode out of reach. */
+  .models [role='radiogroup'] {
+    max-block-size: min(18rem, 40vh);
+  }
+
+  .group {
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .heading {
+    margin: 0;
+    padding: var(--nc-space-3) var(--nc-space-3-5) 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  /* Short lists, read whole: the panel scrolls, not they. */
+  .group [role='radiogroup'] {
+    max-block-size: none;
+  }
+
+  .folder {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .folderText {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-inline-size: 0;
+  }
+
+  .folderIcon {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .folderName {
+    overflow: hidden;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── As a sheet (a phone) ────────────────────────────────────────────── */
+  .sheet {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .sheetHeader {
+    flex: none;
+  }
+}

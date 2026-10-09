@@ -133,7 +133,7 @@ export const CrowdedToolbar: Story = {
             toolbar={
               <>
                 <DemoToolbar
-                  initial={{ model: 'opus', effort: 'xhigh', fast: true, mode: 'acceptEdits' }}
+                  initial={{ model: 'opus', effort: 'xhigh', fast: true, mode: 'auto' }}
                 />
                 <FolderChip path="C:\Users\ada\projects\conch-agent-experiments" />
               </>
@@ -237,7 +237,7 @@ export const PhoneSmall: Story = {
     ...Phone.args,
     toolbar: (
       <>
-        <DemoToolbar initial={{ mode: 'acceptEdits', effort: 'medium' }} />
+        <DemoToolbar initial={{ mode: 'auto', effort: 'medium' }} />
         <ContextMeter used={186_000} window={200_000} />
         <FolderChip path="~/projects/conch" />
       </>

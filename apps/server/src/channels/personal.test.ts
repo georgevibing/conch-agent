@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../config';
 import { Services } from '../services';
+import { askFirst } from '../test/modes';
 import { catalogFor } from './catalog';
 import { MockMail } from './mock/email';
 import { MockMessages } from './mock/imessage';
@@ -26,6 +27,7 @@ async function setup() {
     loadConfig({ CONCH_HOME: home, CONCH_ENGINE: 'mock', CONCH_LOG_LEVEL: 'silent' }),
   );
   delete process.env.CONCH_MOCK_STATE;
+  await askFirst(services);
   await services.start();
   const { mockMail: mail, mockMessages: messages } = services;
   if (!mail || !messages) throw new Error('no pretend mail or Messages');

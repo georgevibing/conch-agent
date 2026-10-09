@@ -240,7 +240,7 @@ describe('a chat’s agent', () => {
     const { services } = await setup();
     const sage = await services.agents.create({
       name: 'Sage',
-      defaults: { engine: 'mock', permissionMode: 'acceptEdits' },
+      defaults: { engine: 'mock', permissionMode: 'default' },
     });
     const chat = await services.conversations.send({
       clientMessageId: 'u-1',
@@ -248,7 +248,7 @@ describe('a chat’s agent', () => {
       agentId: sage.id,
     });
     expect(chat.agentId).toBe(sage.id);
-    expect(chat.options).toMatchObject({ engine: 'mock', permissionMode: 'acceptEdits' });
+    expect(chat.options).toMatchObject({ engine: 'mock', permissionMode: 'default' });
     await until(services, chat.id);
     // What the message chose wins over the agent's.
     const other = await services.conversations.send({

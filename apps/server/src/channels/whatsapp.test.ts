@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../config';
 import { Services } from '../services';
+import { askFirst } from '../test/modes';
 import { MockWhatsApp } from './mock/whatsapp';
 import { CONCH_ID_PREFIX } from './whatsapp';
 
@@ -35,6 +36,7 @@ async function setup() {
     loadConfig({ CONCH_HOME: home, CONCH_ENGINE: 'mock', CONCH_LOG_LEVEL: 'silent' }),
   );
   delete process.env.CONCH_MOCK_STATE;
+  await askFirst(services);
   await services.start();
   await services.settings.update({ profile: { name: 'Ada Lovelace' } });
   const wa = services.linked.mockWhatsApp;

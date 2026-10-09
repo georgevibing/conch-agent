@@ -719,7 +719,8 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
     next one found, then to a download. Processes still holding the profile are
     found by command line and ended. A crash relaunches, and each chat's tab
     reopens at its last address. The browser stops after 10 idle minutes. Each
-    repair is logged in `BrowserStatus.healed`.
+    repair is a `browser` note in `lib/healed.ts`, listed in Settings → Health →
+    Fixed on its own (the browser's settings keep no list of their own).
   - **Tabs.** Each conversation has its own tabs (`tab.ts`, up to eight): links to
     a new tab and popups join and come into view, and closing one returns to its
     opener. The page's viewport takes the watching panel's shape: desktop-wide, as
@@ -760,7 +761,7 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
     engine gets `pretend.ts`.
   - **The tool** (`tools.ts`). One `computer` host tool for every engine with host tools and
     sight, in Anthropic's computer-use vocabulary (actions, pixel coordinates of the last
-    screenshot, about a megapixel). Every action: on? the switches? Plan only? one chat at a
+    screenshot, about a megapixel). Every action: on? the switches? Read only? one chat at a
     time and `MAX_STEPS`; then the app it would touch (`policy.ts` `keptAway`: never password
     managers, System Settings and security prompts, terminals, banking, Conch itself — covered
     over in every picture too), asked once per chat with `explicit`, so Auto asks; Full trust
@@ -1006,11 +1007,13 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   (`state.behind`); `Root` renders the routes at that page, so it stays mounted
   behind, and leaving goes back to it. `useUi.openSettings` keeps its signature for
   every caller and moves the router through `app/navigation.tsx` (`Navigator`, `go`).
-- First run is the welcome (ADR 0068, `features/onboarding`, Nacre `Welcome`): hello →
-  your name → what you'd like a hand with (chips, kept as one sentence in "about you") →
-  a voice, heard → a provider (`ProviderSetup`, carrying on by itself once one works) →
-  apps that connect in a press or two → come home, when there's something to bring →
-  three things to ask first, which open a chat with the words in the composer.
+- First run is the welcome (ADR 0068, `features/onboarding`, Nacre `Welcome`), three
+  screens: hello with your name → a provider (`ProviderSetup`, carrying on by itself
+  once one works, or later) → three things to ask first, which open a chat with the
+  words in the composer. The first agent keeps its defaults (Settings → Agents). What
+  it no longer asks is offered on the new chat, under the composer, while there's
+  something to do: `ConnectAppsHint`, and `features/import/BringHints` (come home,
+  past chats), each opening its place in Settings → Memory.
 - **Conch apps** (ADR 0061). **Add your own** opens on **Describe it** (Nacre `AppMaker`),
   which sends "Make me an app: …" as a new chat; **From a link** previews a package
   (`AppPreview`). The transcript draws `conch-app.offer` as `AppOffer` and
@@ -1076,7 +1079,7 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   "Use with every model" to bring back one you disconnected
   (`POST /api/integrations/adopt`; the address stays on the gateway). A failed
   turn's callout offers the fix for its `problem` and resends by itself after a
-  sign-in; Settings → Security lists what was "Fixed on its own". Broken
+  sign-in; Settings → Health lists what was "Fixed on its own". Broken
   integrations show inline in chats (`integration.issue`) and as a sidebar count.
 - **Talk to me here** (chat apps, ADR 0018, 0052). Your bots are cards on Apps
   (what needs you first, each with its one button: Say hello, Paste the new key,
@@ -1112,8 +1115,8 @@ See [ADR 0003 — Memory](./docs/adr/0003-memory.md) and
   message with find-in-chat (⌘F, ⌘G / ⇧⌘G) already showing every match.
 - The composer toolbar carries a `ModelPicker` (every connected provider's models,
   grouped and searchable — type anywhere in the list — plus thinking effort, fast
-  mode, "make default") and a `ModePicker` (Plan only · Ask first · Edit freely ·
-  Auto · Full trust, one definition in `@conch/protocol` `modes.ts`, ADR 0100; Settings →
+  mode, "make default") and a `ModePicker` (Read only · Ask first · Auto · Full
+  trust, one definition in `@conch/protocol` `modes.ts`, ADR 0100, ADR 0119; Settings →
   Models shows the same as `ModeChoice`). A `UsageMeter` in the header shows what's left of your
   tightest limit, and a `UsageNotice` appears above the composer when it runs low.
   Typing `/` opens a `CommandMenu`; `/model` and `/mode` open the

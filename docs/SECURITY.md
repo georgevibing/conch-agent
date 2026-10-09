@@ -410,7 +410,7 @@ address, so for them Conch can open one ([ADR 0045](./adr/0045-teams-matrix-wech
 
 ## Good habits
 
-- Keep **Ask first** or **Auto** as your default mode. Use **Full trust** only in a
+- Keep **Auto** (where new chats start) or **Ask first** as your default mode. Use **Full trust** only in a
   throwaway folder.
 - Be careful what you ask the agent to read: web pages, emails and files can
   contain instructions meant for it ("prompt injection"). Conch never lets the agent

@@ -26,7 +26,7 @@ import {
 } from './resilience';
 import { ConversationStore } from './store';
 
-const MODES: PermissionMode[] = ['default', 'auto', 'acceptEdits', 'plan', 'bypassPermissions'];
+const MODES: PermissionMode[] = ['default', 'auto', 'plan', 'bypassPermissions'];
 
 /** Every kind of provider Conch drives: its own agents, the vendors' programs, APIs, local. */
 const PROVIDERS: EngineId[] = [

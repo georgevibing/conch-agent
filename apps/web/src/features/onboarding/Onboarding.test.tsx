@@ -8,8 +8,10 @@ import { appState, baseEngine, baseProviders, mockFetch, renderApp } from '../..
 import { Onboarding } from './Onboarding';
 
 /**
- * The welcome (ADR 0068): the basics, one calm thing at a time. What it saves
- * as it goes, what can be skipped, the way back, and where it ends.
+ * The welcome (ADR 0068): three calm screens. Hello and a name, a mind to
+ * think with, somewhere to start. What it saves as it goes, what can wait,
+ * the way back, and where it ends. What it no longer asks is offered on the
+ * new chat (`BringHints.test.tsx`).
  */
 
 vi.setConfig({ testTimeout: 20_000 });
@@ -21,23 +23,6 @@ const noneReady = {
   ...baseProviders,
   providers: baseProviders.providers.map((p) => ({ ...p, active: false })),
 };
-
-const catalog = ['github', 'gmail', 'notion', 'slack', 'linear', 'todoist', 'google-calendar'].map(
-  (id) => ({
-    id,
-    name: id === 'github' ? 'GitHub' : id[0]?.toUpperCase() + id.slice(1),
-    tagline: '',
-    description: '',
-    category: 'productivity',
-    auth: id === 'gmail' || id === 'google-calendar' ? 'google' : 'oauth',
-    local: false,
-    fields: [],
-    steps: [],
-    examples: [],
-    access: [],
-    featured: true,
-  }),
-);
 
 /** The history entry's state when the welcome was marked done. */
 let landedWith: unknown;
@@ -59,24 +44,12 @@ const first = {
 function routes(extra: Record<string, (body: unknown) => unknown> = {}) {
   // What the gateway keeps: each save lands on top of the last, as it would.
   let saved = appState({ onboarded: false, profile: { name: '', about: '', facts: [] } });
-  let agent: typeof first = first;
   return mockFetch({
     'GET /api/state': () => saved,
-    'GET /api/agents': () => ({ agents: [agent], defaultId: agent.id }),
-    'PATCH /api/agents/ag_conch': (body) => {
-      const change = body as { name?: string; avatar?: typeof first.avatar; persona?: object };
-      agent = {
-        ...agent,
-        ...(change.name && { name: change.name }),
-        ...(change.avatar && { avatar: change.avatar }),
-        persona: { ...agent.persona, ...change.persona },
-      };
-      return agent;
-    },
+    'GET /api/agents': () => ({ agents: [first], defaultId: first.id }),
     'GET /api/engine': () => baseEngine,
     'GET /api/providers': () => noneReady,
     'GET /api/import': () => ({ sources: [] }),
-    'GET /api/integrations': () => ({ catalog, integrations: [], providers: [] }),
     'PATCH /api/settings': (body) => {
       // Where the app was when the welcome was marked done: the chat opens from there.
       if ((body as { onboarded?: boolean }).onboarded) landedWith = here()?.state;
@@ -98,57 +71,18 @@ describe('the welcome', () => {
     const user = userEvent.setup();
     const { container } = renderApp(<Onboarding />);
 
-    // Hello: who it is, and where things are kept.
+    // Hello and a name together: who it is, where things are kept, and what to call you.
     expect(await screen.findByRole('heading', { name: 'Hi, I’m Conch.' })).toBeInTheDocument();
     expect(screen.getByText(/Everything stays on this computer/)).toBeInTheDocument();
-    expect(await clean(container)).toEqual([]);
-    await user.click(screen.getByRole('button', { name: 'Let’s begin' }));
-
-    // A name, typed large, and Enter.
-    const name = await screen.findByRole('textbox', { name: 'Your name' });
+    expect(screen.getByRole('list', { name: 'Step 1 of 3' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+    const name = screen.getByRole('textbox', { name: 'Your name' });
     expect(name).toHaveFocus();
-    expect(screen.getByRole('list', { name: 'Step 1 of 5' })).toBeInTheDocument();
+    expect(await clean(container)).toEqual([]);
     await user.type(name, 'Ada{Enter}');
-    expect(patched(calls)).toContainEqual({
-      profile: expect.objectContaining({ name: 'Ada', about: '' }),
-    });
-
-    // What you'd like a hand with: tapped, then written into About you as one sentence.
-    expect(
-      await screen.findByRole('heading', { name: 'Nice to meet you, Ada.' }),
-    ).toBeInTheDocument();
-    const help = screen.getByRole('group', { name: 'What you’d like a hand with' });
-    await user.click(within(help).getByRole('button', { name: 'Coding' }));
-    await user.click(within(help).getByRole('button', { name: 'Email and calendar' }));
-    expect(await clean(container)).toEqual([]);
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
     await waitFor(() =>
       expect(patched(calls)).toContainEqual({
-        profile: expect.objectContaining({
-          name: 'Ada',
-          about: 'I’d mostly like a hand with coding and email and my calendar.',
-        }),
-      }),
-    );
-
-    // Who it is: a name (the dice for one with its face), a face, and how it sounds, heard.
-    expect(await screen.findByRole('heading', { name: 'And who am I?' })).toBeInTheDocument();
-    expect(await screen.findByText(/Hi Ada, I’m Conch!/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Another name' }));
-    expect(screen.getByRole('textbox', { name: 'My name' })).toHaveValue('Atlas');
-    expect(screen.getByRole('radio', { name: 'Compass' })).toBeChecked();
-    await user.click(screen.getByRole('radio', { name: 'Owl' }));
-    await user.click(screen.getByRole('radio', { name: 'Concise' }));
-    expect(
-      await screen.findByText(/Hi Ada\. I’m Atlas\. Ready when you are\./),
-    ).toBeInTheDocument();
-    expect(await clean(container)).toEqual([]);
-    await user.click(screen.getByRole('button', { name: 'Sounds good' }));
-    await waitFor(() =>
-      expect(patched(calls)).toContainEqual({
-        name: 'Atlas',
-        persona: { tone: 'concise' },
-        avatar: { kind: 'preset', id: 'owl' },
+        profile: expect.objectContaining({ name: 'Ada', about: '' }),
       }),
     );
 
@@ -156,45 +90,32 @@ describe('the welcome', () => {
     expect(
       await screen.findByRole('heading', { name: 'Now, a mind to think with.' }),
     ).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Step 2 of 3' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'I’ll do this later' }));
 
-    // Apps: what the picks call for first, and never one that needs a Google Cloud project.
-    const apps = await screen.findByRole('list', { name: 'Apps to connect' });
-    const tiles = within(apps)
-      .getAllByRole('button')
-      .map((b) => b.textContent);
-    expect(tiles.slice(0, 2)).toEqual(['GitHub', 'Gmail']);
-    expect(tiles).not.toContain('Google-calendar');
-    expect(await clean(container)).toEqual([]);
-    await user.click(screen.getByRole('button', { name: 'Skip for now' }));
-
-    // Ready: by name, with three things to ask first made from the picks.
+    // Ready: by name, with three things to ask first. Nothing else was asked on the way.
     expect(
       await screen.findByRole('heading', { name: 'You’re all set, Ada.' }),
     ).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Step 3 of 3' })).toBeInTheDocument();
+    expect(await clean(container)).toEqual([]);
     const starters = screen.getByRole('list', { name: 'Something to ask first' });
     expect(within(starters).getAllByRole('button')).toHaveLength(3);
-    expect(
-      within(starters).getByRole('button', { name: 'What needs my attention in my inbox today?' }),
-    ).toBeInTheDocument();
     expect(patched(calls)).not.toContainEqual({ onboarded: true });
+    // The first agent keeps the name and voice it came with: Settings → Agents changes them.
+    expect(calls.some((c) => c.path.startsWith('/api/agents/'))).toBe(false);
     await user.click(within(starters).getByRole('button', { name: 'Help me plan my week' }));
     await waitFor(() => expect(patched(calls)).toContainEqual({ onboarded: true }));
     // The chat that replaces the welcome finds the words already waiting for its composer.
     expect(landedWith).toEqual({ draft: 'Help me plan my week' });
   });
 
-  it('can skip everything but the hello, and still ends ready', async () => {
+  it('can skip the name and the mind, and still ends ready', async () => {
     const calls = routes();
     const user = userEvent.setup();
     renderApp(<Onboarding />);
     await user.click(await screen.findByRole('button', { name: 'Let’s begin' }));
-    await user.click(await screen.findByRole('button', { name: 'Skip' }));
-    expect(await screen.findByRole('heading', { name: 'Nice to meet you.' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Skip' }));
-    await user.click(await screen.findByRole('button', { name: 'Sounds good' }));
     await user.click(await screen.findByRole('button', { name: 'I’ll do this later' }));
-    await user.click(await screen.findByRole('button', { name: 'Skip for now' }));
     expect(await screen.findByRole('heading', { name: 'You’re all set.' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Open Conch' }));
     await waitFor(() => expect(patched(calls)).toContainEqual({ onboarded: true }));
@@ -204,9 +125,8 @@ describe('the welcome', () => {
     routes();
     const user = userEvent.setup();
     renderApp(<Onboarding />);
-    await user.click(await screen.findByRole('button', { name: 'Let’s begin' }));
     await user.type(await screen.findByRole('textbox', { name: 'Your name' }), 'Ada{Enter}');
-    await screen.findByRole('heading', { name: 'Nice to meet you, Ada.' });
+    await screen.findByRole('heading', { name: 'Now, a mind to think with.' });
     await user.click(screen.getByRole('button', { name: 'Back' }));
     expect(await screen.findByRole('textbox', { name: 'Your name' })).toHaveValue('Ada');
   });
@@ -216,21 +136,38 @@ describe('the welcome', () => {
     const user = userEvent.setup();
     renderApp(<Onboarding />);
     await user.click(await screen.findByRole('button', { name: 'Let’s begin' }));
-    await user.click(await screen.findByRole('button', { name: 'Skip' }));
-    await user.click(await screen.findByRole('button', { name: 'Skip' }));
-    await user.click(await screen.findByRole('button', { name: 'Sounds good' }));
     await screen.findByRole('heading', { name: 'Now, a mind to think with.' });
     expect(screen.queryByRole('button', { name: 'I’ll do this later' })).not.toBeInTheDocument();
     expect(
-      await screen.findByRole(
-        'heading',
-        { name: 'Bring the apps you live in.' },
-        { timeout: 5000 },
-      ),
+      await screen.findByRole('heading', { name: 'You’re all set.' }, { timeout: 5000 }),
     ).toBeInTheDocument();
   });
 
-  it('offers to bring things from another assistant, only when there is one', async () => {
+  it('starts from what an earlier welcome kept in About you', async () => {
+    routes({
+      'GET /api/state': () =>
+        appState({
+          onboarded: false,
+          profile: {
+            name: 'Ada',
+            about: 'I’d mostly like a hand with email and my calendar.',
+            facts: [],
+          },
+        }),
+    });
+    const user = userEvent.setup();
+    renderApp(<Onboarding />);
+    // Replay welcome: the name is already there.
+    expect(await screen.findByRole('textbox', { name: 'Your name' })).toHaveValue('Ada');
+    await user.click(screen.getByRole('button', { name: 'Let’s begin' }));
+    await user.click(await screen.findByRole('button', { name: 'I’ll do this later' }));
+    const starters = await screen.findByRole('list', { name: 'Something to ask first' });
+    expect(
+      within(starters).getByRole('button', { name: 'What needs my attention in my inbox today?' }),
+    ).toBeInTheDocument();
+  });
+
+  it('never stops to offer imports: those wait on the new chat', async () => {
     routes({
       'GET /api/import': () => ({
         sources: [{ id: 'openclaw', label: 'OpenClaw', summary: '3 memories', path: '/x' }],
@@ -238,17 +175,10 @@ describe('the welcome', () => {
     });
     const user = userEvent.setup();
     renderApp(<Onboarding />);
-    await user.click(await screen.findByRole('button', { name: 'Let’s begin' }));
-    expect(await screen.findByRole('list', { name: 'Step 1 of 6' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Skip' }));
-    await user.click(await screen.findByRole('button', { name: 'Skip' }));
-    await user.click(await screen.findByRole('button', { name: 'Sounds good' }));
+    expect(await screen.findByRole('list', { name: 'Step 1 of 3' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Let’s begin' }));
     await user.click(await screen.findByRole('button', { name: 'I’ll do this later' }));
-    await user.click(await screen.findByRole('button', { name: 'Skip for now' }));
-    expect(
-      await screen.findByRole('heading', { name: 'Bring your things from OpenClaw?' }),
-    ).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Not now' }));
     expect(await screen.findByRole('heading', { name: 'You’re all set.' })).toBeInTheDocument();
+    expect(screen.queryByText(/OpenClaw/)).not.toBeInTheDocument();
   });
 });

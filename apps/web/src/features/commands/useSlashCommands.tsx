@@ -232,14 +232,14 @@ export function useSlashCommands(options: {
   const planOn = () => {
     if (!canPlan) return void toast(`${providerLabel} can’t plan first`);
     turn.set({ permissionMode: 'plan' });
-    toast.success('Plan mode on', {
-      description: `${name} reads and plans first, then asks before changing anything.`,
+    toast.success('Read only on', {
+      description: `${name} looks and plans. Nothing changes until you press Start.`,
     });
   };
   const planOff = () => {
     const back = afterPlan();
     turn.set({ permissionMode: back });
-    toast.success('Plan mode off', { description: modeInfo(back).label });
+    toast.success('Read only off', { description: modeInfo(back).label });
   };
 
   const setGoal = async (next: string | null) => {
@@ -379,8 +379,8 @@ export function useSlashCommands(options: {
       case 'plan': {
         const want = parseSwitch(args);
         if (want === 'toggle') return planning ? planOff() : planOn();
-        if (want === 'on') return planning ? toast('Already in plan mode') : planOn();
-        if (want === 'off') return planning ? planOff() : toast('Not in plan mode');
+        if (want === 'on') return planning ? toast('Already in Read only') : planOn();
+        if (want === 'off') return planning ? planOff() : toast('Not in Read only');
         // `/plan <what>`: in plan mode, with this as the message, in one step.
         if (!canPlan) return void toast(`${providerLabel} can’t plan first`);
         return send(args, { options: { permissionMode: 'plan' } });
@@ -698,19 +698,19 @@ export function useSlashCommands(options: {
         break;
       case 'plan':
         heading.description = planning
-          ? `On: ${name} plans first and asks before acting`
-          : 'Plan first, or say what to plan';
+          ? `On: ${name} only looks and plans until you press Start`
+          : 'Plan first in Read only, or say what to plan';
         if (canPlan) {
           add(
             {
               id: 'plan:on',
               name: 'on',
               title: 'Plan first',
-              description: 'It reads and proposes a plan; nothing changes until you press Start',
+              description: 'Read only: it proposes a plan, nothing changes until you press Start',
               icon: <ListTodo />,
               current: planning,
             },
-            () => (planning ? toast('Already in plan mode') : planOn()),
+            () => (planning ? toast('Already in Read only') : planOn()),
           );
           add(
             {
@@ -720,7 +720,7 @@ export function useSlashCommands(options: {
               description: `Back to ${modeInfo(afterPlan()).label}`,
               current: !planning,
             },
-            () => (planning ? planOff() : toast('Not in plan mode')),
+            () => (planning ? planOff() : toast('Not in Read only')),
           );
         }
         empty = canPlan

@@ -52,7 +52,7 @@ test('plan mode asks to start, and Keep planning hands the message box back', as
   await openConch(page);
   await composer(page).fill('/mode plan');
   await composer(page).press('Enter');
-  await expect(page.getByRole('button', { name: /Plan only/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Read only/ })).toBeVisible();
 
   await composer(page).fill('Tidy up this folder');
   await composer(page).press('Enter');
@@ -87,13 +87,14 @@ test('plan mode’s Start runs the plan', async ({ page }) => {
 
 test('/plan plans first, and Start gives the mode back', async ({ page }) => {
   await openConch(page);
-  const mode = page.getByRole('button', { name: /^Mode: / });
+  // The composer's one settings chip says the mode after the model.
+  const mode = page.getByRole('button', { name: /\. Mode: / });
   const before = await mode.getAttribute('aria-label');
 
   // `/plan <what>`: in plan mode, with this as the message, in one step.
   await composer(page).fill('/plan Tidy up this folder');
   await composer(page).press('Enter');
-  await expect(mode).toHaveAttribute('aria-label', 'Mode: Plan only');
+  await expect(mode).toHaveAttribute('aria-label', /\. Mode: Read only$/);
 
   const asking = page.getByRole('region', { name: 'Conch has a plan' });
   await expect(asking).toBeVisible({ timeout: 20_000 });
@@ -101,7 +102,7 @@ test('/plan plans first, and Start gives the mode back', async ({ page }) => {
 
   // Started: the chat is out of plan mode, back in the mode it had before.
   await expect(page.getByRole('button', { name: 'Started on the plan' })).toBeVisible();
-  await expect(mode).toHaveAttribute('aria-label', before ?? 'Mode: Ask first');
+  await expect(mode).toHaveAttribute('aria-label', before ?? /\. Mode: Ask first$/);
   await expect(page.getByText('All tidy.')).toBeVisible({ timeout: 30_000 });
 });
 

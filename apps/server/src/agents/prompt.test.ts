@@ -28,7 +28,7 @@ import { SettingsStore } from '../settings/store';
 import { agentLayers, nested, PRECEDENCE } from './prompt';
 import { AgentStore } from './store';
 
-const MODES: PermissionMode[] = ['default', 'auto', 'acceptEdits', 'plan', 'bypassPermissions'];
+const MODES: PermissionMode[] = ['default', 'auto', 'plan', 'bypassPermissions'];
 
 /** Every kind of provider: Conch's own agents, the vendors' programs, APIs, local, the mock. */
 const PROVIDERS: EngineId[] = [
@@ -82,7 +82,8 @@ async function setup() {
   await settings.update({
     persona: { name: 'Shelly', tone: 'concise', instructions: 'Use British English.' },
     profile: { name: 'Ada' },
-    preferences: { engine: 'openrouter', autoTitle: false },
+    // Ask first, so a persona that says "never ask" would show if it raised the mode.
+    preferences: { engine: 'openrouter', autoTitle: false, permissionMode: 'default' },
   });
   const agents = new AgentStore(home, settings);
   const manager = new ConversationManager({

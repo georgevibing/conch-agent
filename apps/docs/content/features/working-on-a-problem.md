@@ -32,7 +32,7 @@ Some things only you can do. Your assistant stops and asks when the next step ne
 - spending, sending or deleting something;
 - a choice that's yours to make.
 
-If you say no, it doesn't look for another way to do the same thing. In **Plan only**, it looks into the problem just as hard, and changes nothing until you press **Start**.
+If you say no, it doesn't look for another way to do the same thing. In **Read only**, it looks into the problem just as hard, and changes nothing until you press **Start**.
 
 ## When it's stuck
 

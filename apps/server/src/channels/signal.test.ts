@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../config';
 import { Services } from '../services';
+import { askFirst } from '../test/modes';
 import { type MockSignal } from './mock/signal';
 import { CONCH_MARK } from './signal';
 import { explainExit, SignalDaemon, signalCliCommand } from './signal-cli';
@@ -40,6 +41,7 @@ async function setup(prepare?: (signal: MockSignal) => void) {
   const signal = services.linked.mockSignal;
   if (!signal) throw new Error('no mock Signal');
   prepare?.(signal);
+  await askFirst(services);
   await services.start();
   const links: ChannelLink[] = [];
   services.broadcast.on((event) => {

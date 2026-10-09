@@ -831,13 +831,11 @@ export class CodexEngine implements Engine {
         }
         const verdict = await input.guard?.(request);
         if (verdict?.decision === 'deny') return 'decline';
-        const change = request.toolName === 'Edit';
         const mode = input.options.permissionMode;
         if (verdict?.decision !== 'ask') {
           if (mode === 'plan') return 'decline';
           // Full trust and Auto: the guard above already stopped anything serious (ADR 0100).
           if (mode === 'bypassPermissions' || mode === 'auto') return 'accept';
-          if (mode === 'acceptEdits' && change) return 'accept';
         }
         const decision = await input.requestPermission(request, signal);
         return decision === 'deny' ? 'decline' : 'accept';

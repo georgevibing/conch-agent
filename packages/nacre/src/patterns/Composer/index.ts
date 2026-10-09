@@ -7,3 +7,9 @@ export type {
 } from './Composer';
 export { ComposerQueue } from './ComposerQueue';
 export type { ComposerQueueItem, ComposerQueueProps } from './ComposerQueue';
+export { ComposerSettings } from './ComposerSettings';
+export type {
+  ComposerSettingsFolder,
+  ComposerSettingsPlace,
+  ComposerSettingsProps,
+} from './ComposerSettings';

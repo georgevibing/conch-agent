@@ -61,8 +61,9 @@ export type Secrets = z.infer<typeof SecretsFile>;
  *
  * A file that won't read is kept as `<name>.broken-<time>.json` and whatever
  * is still valid carries on (`readStore`). Going back to a default is safe for
- * both: every preference's default is the careful one (ask before acting), and
- * a lost key only means asking for it again, never more access.
+ * both: every preference's default is the careful one (Auto, which asks before
+ * anything risky, ADR 0119), and a lost key only means asking for it again,
+ * never more access.
  */
 export class SettingsStore {
   #mutex = new Mutex();

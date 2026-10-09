@@ -12,7 +12,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Settings → Health → Fixed on its own (AGENTS.md agreement 11). One line says how much Conch fixed this week; below it a short timeline, each repair a few words with a mark for its kind. The same repair again is one line with a count, and the rest wait behind Show all. Reassurance, never a warning.',
+          'Settings → Health → Fixed on its own (AGENTS.md agreement 11). One line says how much Conch fixed this week; below it a short timeline, each repair a few words with a mark for its kind (the terminal, the browser, an app), named for screen readers and on hover. It is the one place repairs are listed: the browser and terminal settings don’t keep lists of their own. The same repair again is one line with a count, and the rest wait behind Show all. Reassurance, never a warning.',
       },
     },
   },
@@ -39,12 +39,32 @@ const min = 60_000;
 export const Playground: Story = {
   args: {
     notes: [
-      { at: now - 2 * min, message: 'Stopped a stuck command', icon: <TerminalSquare /> },
-      { at: now - 40 * min, message: 'Stopped a stuck command', icon: <TerminalSquare /> },
+      {
+        at: now - 2 * min,
+        message: 'Stopped a stuck command',
+        icon: <TerminalSquare />,
+        label: 'Terminal',
+      },
+      {
+        at: now - 40 * min,
+        message: 'Stopped a stuck command',
+        icon: <TerminalSquare />,
+        label: 'Terminal',
+      },
       { at: now - 90 * min, message: 'Picked up a chat after a restart', icon: <MessageSquare /> },
-      { at: now - 3 * 60 * min, message: 'Stopped a stuck command', icon: <TerminalSquare /> },
+      {
+        at: now - 3 * 60 * min,
+        message: 'Stopped a stuck command',
+        icon: <TerminalSquare />,
+        label: 'Terminal',
+      },
       { at: now - 5 * 60 * min, message: 'Notion is working again', icon: <Puzzle /> },
-      { at: now - 26 * 60 * min, message: 'Restarted the browser', icon: <Globe /> },
+      {
+        at: now - 26 * 60 * min,
+        message: 'Restarted the browser',
+        icon: <Globe />,
+        label: 'Browser',
+      },
       { at: now - 50 * 60 * min, message: 'Rebuilt memory search', icon: <Search /> },
       { at: now - 70 * 60 * min, message: 'Started Ollama', icon: <Bot /> },
     ],

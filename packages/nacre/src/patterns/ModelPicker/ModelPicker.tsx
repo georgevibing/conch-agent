@@ -1,6 +1,15 @@
 import { Check, ChevronDown, ChevronRight, MessageSquare, Search, X, Zap } from 'lucide-react';
 import { Popover as PopoverPrimitive, RadioGroup as RadioPrimitive } from 'radix-ui';
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type Dispatch,
+  type KeyboardEvent,
+  type RefObject,
+  type SetStateAction,
+} from 'react';
 
 import { Highlight, type HighlightRange } from '../../components/Highlight';
 import { Popover } from '../../components/Popover';
@@ -113,58 +122,85 @@ export function matchWords(text: string, query: string): ModelMatch {
   return { score, ranges };
 }
 
+/** A model list's search, kept by whatever holds the list (a popover, a sheet). */
+export interface ModelSearch {
+  query: string;
+  setQuery: Dispatch<SetStateAction<string>>;
+  searchRef: RefObject<HTMLInputElement | null>;
+  /** Prefix of every row's id, so the chosen one can be focused. */
+  listId: string;
+}
+
 /**
- * The composer's model chip. One quiet pill shows what's answering; the
- * popover groups every connected provider's models, finds one as you type,
- * and holds the two dials people actually touch — how hard to think, and
- * fast mode.
+ * The search a model list keeps while its panel is open: each visit starts
+ * from the whole list, the first Escape clears it and the next one closes.
  */
-export function ModelPicker({
+export function useModelSearch(open: boolean) {
+  const [query, setQuery] = useState('');
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    // Each visit starts from the whole list.
+    if (!open) setQuery('');
+  }
+  const searchRef = useRef<HTMLInputElement>(null);
+  const listId = useId();
+  const search: ModelSearch = { query, setQuery, searchRef, listId };
+  return {
+    search,
+    /** For the panel's `onEscapeKeyDown`: the first Escape clears the search. */
+    onEscapeKeyDown(event: { preventDefault(): void }) {
+      if (!query) return;
+      event.preventDefault();
+      setQuery('');
+      searchRef.current?.focus();
+    },
+    /** For the panel's `onOpenAutoFocus`: the chosen model's row, else the search. */
+    focusModel(model: string) {
+      const row = document.getElementById(`${listId}-${model}`);
+      if (row) row.focus();
+      else searchRef.current?.focus();
+    },
+  };
+}
+
+export interface ModelListProps {
+  providers: ModelProvider[];
+  model: string;
+  onModelChange(id: string): void;
+  search: ModelSearch;
+  loading?: boolean;
+  searchable?: boolean | 'auto';
+  match?(text: string, query: string): ModelMatch;
+  className?: string;
+}
+
+/**
+ * Every connected provider's models, grouped and searchable, with older ones
+ * under "More models". The body of the model chip's panel, and of the
+ * composer's one settings panel (`ComposerSettings`).
+ */
+export function ModelList({
   providers,
   model,
   onModelChange,
-  effort,
-  efforts,
-  onEffortChange,
-  fastMode,
-  fastModeAvailable,
-  onFastModeChange,
-  isDefault,
-  onMakeDefault,
-  open: openProp,
-  onOpenChange,
+  search,
   loading = false,
-  disabled = false,
-  side = 'top',
-  className,
   searchable = 'auto',
   match = matchWords,
-  modelOnly = false,
-}: ModelPickerProps) {
-  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
-  const open = openProp ?? uncontrolledOpen;
-  const [query, setQuery] = useState('');
-  const setOpen = (next: boolean) => {
-    if (openProp === undefined) setUncontrolledOpen(next);
-    onOpenChange?.(next);
-  };
-
+  className,
+}: ModelListProps) {
+  const { query, setQuery, searchRef, listId } = search;
   const current = findModel(providers, model);
   const total = providers.reduce((n, p) => n + p.models.length, 0);
   const canSearch = searchable === 'auto' ? total > SEARCH_THRESHOLD : searchable;
   const q = canSearch ? query.trim() : '';
 
   // "More models" groups start collapsed — unless the selection lives inside one.
+  // The list mounts with its panel, so each visit starts this way.
   const [expanded, setExpanded] = useState<Set<string>>(
-    () => new Set(open && current?.model.secondary ? [current.provider.id] : []),
+    () => new Set(current?.model.secondary ? [current.provider.id] : []),
   );
-  const [wasOpen, setWasOpen] = useState(open);
-  if (wasOpen !== open) {
-    setWasOpen(open);
-    if (open) setExpanded(new Set(current?.model.secondary ? [current.provider.id] : []));
-    // Each visit starts from the whole list.
-    else setQuery('');
-  }
   const toggleExpanded = (id: string) =>
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -172,19 +208,6 @@ export function ModelPicker({
       else next.add(id);
       return next;
     });
-  const effortLabel =
-    effort !== 'auto' ? efforts.find((e) => e.value === effort)?.label : undefined;
-  const listId = useId();
-  const fastId = useId();
-  const searchRef = useRef<HTMLInputElement>(null);
-
-  // "Make default" → brief confirmation, then settle on the muted "Default".
-  const [justSaved, setJustSaved] = useState(false);
-  useEffect(() => {
-    if (!justSaved) return;
-    const t = setTimeout(() => setJustSaved(false), 1600);
-    return () => clearTimeout(t);
-  }, [justSaved]);
 
   // While searching: each provider's matches, best first, secondary models included.
   const results = q
@@ -300,6 +323,308 @@ export function ModelPicker({
   );
 
   return (
+    <>
+      {canSearch && !loading && (
+        <div className={styles.search}>
+          <Search aria-hidden className={styles.searchIcon} />
+          <input
+            ref={searchRef}
+            type="search"
+            className={styles.searchInput}
+            placeholder={providers.length > 1 ? 'Search every model…' : 'Search models…'}
+            aria-label="Search models"
+            aria-controls={listId}
+            autoComplete="off"
+            spellCheck={false}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={onSearchKeyDown}
+          />
+          {query && (
+            <button
+              type="button"
+              className={styles.searchClear}
+              aria-label="Clear search"
+              onClick={() => {
+                setQuery('');
+                searchRef.current?.focus();
+              }}
+            >
+              <X aria-hidden />
+            </button>
+          )}
+        </div>
+      )}
+      {loading ? (
+        <div className={styles.loading} role="status" aria-label="Loading models">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className={styles.skeletonRow}>
+              <Skeleton width="42%" height={12} />
+              <Skeleton width="72%" height={10} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <RadioPrimitive.Root
+          id={listId}
+          value={model}
+          onValueChange={onModelChange}
+          aria-label="Model"
+          className={cx(styles.list, className)}
+          onKeyDown={onListKeyDown}
+          loop
+        >
+          {results
+            ? results.map(({ provider, hits }) => {
+                const headingId = `${listId}-${provider.id}`;
+                return (
+                  <div
+                    key={provider.id}
+                    role="group"
+                    aria-labelledby={headingId}
+                    className={styles.group}
+                  >
+                    {header(provider, headingId)}
+                    {hits
+                      .slice(0, HITS_PER_PROVIDER)
+                      .map(({ option, hit }) => renderRow(option, hit.ranges))}
+                    {hits.length > HITS_PER_PROVIDER && (
+                      <p className={styles.searchMore}>
+                        {hits.length - HITS_PER_PROVIDER} more — keep typing to narrow it down
+                      </p>
+                    )}
+                  </div>
+                );
+              })
+            : providers.map((provider) => {
+                const headingId = `${listId}-${provider.id}`;
+                return (
+                  <div
+                    key={provider.id}
+                    role="group"
+                    aria-labelledby={headingId}
+                    className={styles.group}
+                  >
+                    {header(provider, headingId)}
+                    {provider.models.length === 0 && provider.message && (
+                      <p className={styles.groupMessage}>{provider.message}</p>
+                    )}
+                    {provider.models.filter((m) => !m.secondary).map((m) => renderRow(m))}
+                    {provider.models.some((m) => m.secondary) && (
+                      <>
+                        <button
+                          type="button"
+                          className={styles.more}
+                          aria-expanded={expanded.has(provider.id)}
+                          aria-controls={`${headingId}-more`}
+                          onClick={() => toggleExpanded(provider.id)}
+                        >
+                          <ChevronRight aria-hidden className={styles.moreChevron} />
+                          More models
+                          <span className={styles.moreCount}>
+                            {provider.models.filter((m) => m.secondary).length}
+                          </span>
+                        </button>
+                        <div id={`${headingId}-more`} className={styles.moreList}>
+                          {expanded.has(provider.id) &&
+                            provider.models.filter((m) => m.secondary).map((m) => renderRow(m))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+          {results?.length === 0 && (
+            <p className={styles.searchEmpty} role="status">
+              No model matches “{q}”.
+            </p>
+          )}
+        </RadioPrimitive.Root>
+      )}
+    </>
+  );
+}
+
+export interface ThinkingSectionProps {
+  /** Empty renders nothing (a model without effort control). */
+  efforts: EffortOption[];
+  effort: string;
+  onEffortChange(value: string): void;
+  className?: string;
+}
+
+/** How hard the model thinks, as one segmented row with what the level means. */
+export function ThinkingSection({
+  efforts,
+  effort,
+  onEffortChange,
+  className,
+}: ThinkingSectionProps) {
+  if (efforts.length === 0) return null;
+  return (
+    <div className={cx(styles.section, className)}>
+      <div className={styles.sectionHead}>
+        <span className={styles.sectionTitle}>Thinking</span>
+        <span className={styles.sectionHint}>
+          {efforts.find((e) => e.value === effort)?.description}
+        </span>
+      </div>
+      <SegmentedControl.Root
+        size="sm"
+        block
+        value={effort}
+        onValueChange={(v) => v && onEffortChange(v)}
+        aria-label="Thinking effort"
+      >
+        {efforts.map((option) => (
+          <SegmentedControl.Item key={option.value} value={option.value}>
+            {option.label}
+          </SegmentedControl.Item>
+        ))}
+      </SegmentedControl.Root>
+    </div>
+  );
+}
+
+export interface FastModeSectionProps {
+  fastMode: boolean;
+  /** Off: the switch waits, greyed, and says why (`modelLabel` names the model). */
+  available: boolean;
+  onFastModeChange(on: boolean): void;
+  modelLabel?: string;
+  className?: string;
+}
+
+/**
+ * Fast mode: its own switch, never a thinking level. The same model answers
+ * sooner and uses more of the plan.
+ */
+export function FastModeSection({
+  fastMode,
+  available,
+  onFastModeChange,
+  modelLabel,
+  className,
+}: FastModeSectionProps) {
+  const fastId = useId();
+  return (
+    <div className={cx(styles.section, styles.fastRow, className)}>
+      <span className={styles.fastText}>
+        <label htmlFor={fastId} className={styles.sectionTitle}>
+          <Zap aria-hidden className={styles.fastIcon} data-on={fastMode || undefined} />
+          Fast mode
+        </label>
+        <span className={styles.sectionHint}>
+          {available ? 'Faster replies · uses more of your plan' : 'Not available for this model'}
+        </span>
+      </span>
+      <Tooltip
+        content={available ? undefined : `${modelLabel ?? 'This model'} doesn't support fast mode`}
+      >
+        <span className={styles.switchWrap}>
+          <Switch
+            id={fastId}
+            size="sm"
+            checked={fastMode && available}
+            disabled={!available}
+            onCheckedChange={onFastModeChange}
+          />
+        </span>
+      </Tooltip>
+    </div>
+  );
+}
+
+export interface PickerDefaultProps {
+  /** The current selection equals the saved default. */
+  isDefault: boolean;
+  onMakeDefault?(): void;
+  className?: string;
+}
+
+/**
+ * A picker's footer: "Make this my default", a brief "Saved as your default",
+ * then the muted "Your default".
+ */
+export function PickerDefault({ isDefault, onMakeDefault, className }: PickerDefaultProps) {
+  const [justSaved, setJustSaved] = useState(false);
+  useEffect(() => {
+    if (!justSaved) return;
+    const t = setTimeout(() => setJustSaved(false), 1600);
+    return () => clearTimeout(t);
+  }, [justSaved]);
+  return (
+    <div className={cx(styles.footer, className)}>
+      {isDefault ? (
+        <span className={styles.defaultNote} data-saved={justSaved || undefined}>
+          <Check aria-hidden className={styles.defaultCheck} />
+          {justSaved ? 'Saved as your default' : 'Your default'}
+        </span>
+      ) : (
+        onMakeDefault && (
+          <button
+            type="button"
+            className={styles.makeDefault}
+            onClick={() => {
+              onMakeDefault();
+              setJustSaved(true);
+            }}
+          >
+            Make this my default
+          </button>
+        )
+      )}
+    </div>
+  );
+}
+
+/** The model a key names, and its provider. */
+export function findModelOption(providers: ModelProvider[], id: string) {
+  return findModel(providers, id);
+}
+
+/**
+ * The model chip. One quiet pill shows what's answering; the popover groups
+ * every connected provider's models, finds one as you type, and holds the two
+ * dials people actually touch — how hard to think, and fast mode. The
+ * composer itself uses `ComposerSettings`, which holds this list with the
+ * mode and the rest; this chip stays for choosing a model on its own.
+ */
+export function ModelPicker({
+  providers,
+  model,
+  onModelChange,
+  effort,
+  efforts,
+  onEffortChange,
+  fastMode,
+  fastModeAvailable,
+  onFastModeChange,
+  isDefault,
+  onMakeDefault,
+  open: openProp,
+  onOpenChange,
+  loading = false,
+  disabled = false,
+  side = 'top',
+  className,
+  searchable = 'auto',
+  match = matchWords,
+  modelOnly = false,
+}: ModelPickerProps) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = openProp ?? uncontrolledOpen;
+  const setOpen = (next: boolean) => {
+    if (openProp === undefined) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
+  const { search, onEscapeKeyDown, focusModel } = useModelSearch(open);
+
+  const current = findModel(providers, model);
+  const effortLabel =
+    effort !== 'auto' ? efforts.find((e) => e.value === effort)?.label : undefined;
+
+  return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild disabled={disabled}>
         <button
@@ -325,215 +650,31 @@ export function ModelPicker({
         padding="none"
         className={styles.panel}
         aria-label="Model and thinking"
-        onEscapeKeyDown={(event) => {
-          // The first Escape clears the search; the next closes the picker.
-          if (!query) return;
-          event.preventDefault();
-          setQuery('');
-          searchRef.current?.focus();
-        }}
+        onEscapeKeyDown={onEscapeKeyDown}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
-          if (current) focusRow(current.model.id);
-          else searchRef.current?.focus();
+          focusModel(current?.model.id ?? '');
         }}
       >
-        {canSearch && !loading && (
-          <div className={styles.search}>
-            <Search aria-hidden className={styles.searchIcon} />
-            <input
-              ref={searchRef}
-              type="search"
-              className={styles.searchInput}
-              placeholder={providers.length > 1 ? 'Search every model…' : 'Search models…'}
-              aria-label="Search models"
-              aria-controls={listId}
-              autoComplete="off"
-              spellCheck={false}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={onSearchKeyDown}
-            />
-            {query && (
-              <button
-                type="button"
-                className={styles.searchClear}
-                aria-label="Clear search"
-                onClick={() => {
-                  setQuery('');
-                  searchRef.current?.focus();
-                }}
-              >
-                <X aria-hidden />
-              </button>
-            )}
-          </div>
-        )}
-        {loading ? (
-          <div className={styles.loading} role="status" aria-label="Loading models">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className={styles.skeletonRow}>
-                <Skeleton width="42%" height={12} />
-                <Skeleton width="72%" height={10} />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <RadioPrimitive.Root
-            id={listId}
-            value={model}
-            onValueChange={onModelChange}
-            aria-label="Model"
-            className={styles.list}
-            onKeyDown={onListKeyDown}
-            loop
-          >
-            {results
-              ? results.map(({ provider, hits }) => {
-                  const headingId = `${listId}-${provider.id}`;
-                  return (
-                    <div
-                      key={provider.id}
-                      role="group"
-                      aria-labelledby={headingId}
-                      className={styles.group}
-                    >
-                      {header(provider, headingId)}
-                      {hits
-                        .slice(0, HITS_PER_PROVIDER)
-                        .map(({ option, hit }) => renderRow(option, hit.ranges))}
-                      {hits.length > HITS_PER_PROVIDER && (
-                        <p className={styles.searchMore}>
-                          {hits.length - HITS_PER_PROVIDER} more — keep typing to narrow it down
-                        </p>
-                      )}
-                    </div>
-                  );
-                })
-              : providers.map((provider) => {
-                  const headingId = `${listId}-${provider.id}`;
-                  return (
-                    <div
-                      key={provider.id}
-                      role="group"
-                      aria-labelledby={headingId}
-                      className={styles.group}
-                    >
-                      {header(provider, headingId)}
-                      {provider.models.length === 0 && provider.message && (
-                        <p className={styles.groupMessage}>{provider.message}</p>
-                      )}
-                      {provider.models.filter((m) => !m.secondary).map((m) => renderRow(m))}
-                      {provider.models.some((m) => m.secondary) && (
-                        <>
-                          <button
-                            type="button"
-                            className={styles.more}
-                            aria-expanded={expanded.has(provider.id)}
-                            aria-controls={`${headingId}-more`}
-                            onClick={() => toggleExpanded(provider.id)}
-                          >
-                            <ChevronRight aria-hidden className={styles.moreChevron} />
-                            More models
-                            <span className={styles.moreCount}>
-                              {provider.models.filter((m) => m.secondary).length}
-                            </span>
-                          </button>
-                          <div id={`${headingId}-more`} className={styles.moreList}>
-                            {expanded.has(provider.id) &&
-                              provider.models.filter((m) => m.secondary).map((m) => renderRow(m))}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-            {results?.length === 0 && (
-              <p className={styles.searchEmpty} role="status">
-                No model matches “{q}”.
-              </p>
-            )}
-          </RadioPrimitive.Root>
-        )}
-
-        {!modelOnly && efforts.length > 0 && (
-          <div className={styles.section}>
-            <div className={styles.sectionHead}>
-              <span className={styles.sectionTitle}>Thinking</span>
-              <span className={styles.sectionHint}>
-                {efforts.find((e) => e.value === effort)?.description}
-              </span>
-            </div>
-            <SegmentedControl.Root
-              size="sm"
-              block
-              value={effort}
-              onValueChange={(v) => v && onEffortChange(v)}
-              aria-label="Thinking effort"
-            >
-              {efforts.map((option) => (
-                <SegmentedControl.Item key={option.value} value={option.value}>
-                  {option.label}
-                </SegmentedControl.Item>
-              ))}
-            </SegmentedControl.Root>
-          </div>
-        )}
-
+        <ModelList
+          providers={providers}
+          model={model}
+          onModelChange={onModelChange}
+          search={search}
+          loading={loading}
+          searchable={searchable}
+          match={match}
+        />
         {!modelOnly && (
           <>
-            <div className={cx(styles.section, styles.fastRow)}>
-              <span className={styles.fastText}>
-                <label htmlFor={fastId} className={styles.sectionTitle}>
-                  <Zap aria-hidden className={styles.fastIcon} data-on={fastMode || undefined} />
-                  Fast mode
-                </label>
-                <span className={styles.sectionHint}>
-                  {fastModeAvailable
-                    ? 'Faster replies · uses more of your plan'
-                    : 'Not available for this model'}
-                </span>
-              </span>
-              <Tooltip
-                content={
-                  fastModeAvailable
-                    ? undefined
-                    : `${current?.model.label ?? 'This model'} doesn't support fast mode`
-                }
-              >
-                <span className={styles.switchWrap}>
-                  <Switch
-                    id={fastId}
-                    size="sm"
-                    checked={fastMode && fastModeAvailable}
-                    disabled={!fastModeAvailable}
-                    onCheckedChange={onFastModeChange}
-                  />
-                </span>
-              </Tooltip>
-            </div>
-
-            <div className={styles.footer}>
-              {isDefault ? (
-                <span className={styles.defaultNote} data-saved={justSaved || undefined}>
-                  <Check aria-hidden className={styles.defaultCheck} />
-                  {justSaved ? 'Saved as your default' : 'Your default'}
-                </span>
-              ) : (
-                onMakeDefault && (
-                  <button
-                    type="button"
-                    className={styles.makeDefault}
-                    onClick={() => {
-                      onMakeDefault();
-                      setJustSaved(true);
-                    }}
-                  >
-                    Make this my default
-                  </button>
-                )
-              )}
-            </div>
+            <ThinkingSection efforts={efforts} effort={effort} onEffortChange={onEffortChange} />
+            <FastModeSection
+              fastMode={fastMode}
+              available={fastModeAvailable}
+              onFastModeChange={onFastModeChange}
+              {...(current && { modelLabel: current.model.label })}
+            />
+            <PickerDefault isDefault={isDefault} {...(onMakeDefault && { onMakeDefault })} />
           </>
         )}
       </Popover.Content>

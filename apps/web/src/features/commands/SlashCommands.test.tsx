@@ -56,7 +56,7 @@ function setup(conversations: unknown[] = [chat]) {
             model('opus', 'Opus 5.5', ['low', 'medium', 'high']),
           ],
           commands: [],
-          permissionModes: ['default', 'acceptEdits', 'plan', 'bypassPermissions'],
+          permissionModes: ['default', 'plan', 'bypassPermissions'],
         },
         {
           engine: 'openrouter',

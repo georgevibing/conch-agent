@@ -3,10 +3,10 @@ import {
   type AgentId,
   type CreateRoutineBody,
   type Routine,
-  type RoutineTrust,
+  RoutineTrust,
   type Schedule,
   type Trigger,
-  type TurnOptions,
+  TurnOptions,
 } from '@conch/protocol';
 import {
   Button,
@@ -51,12 +51,12 @@ const trustOptions: { value: RoutineTrust; label: string; description: string }[
   {
     value: 'ask',
     label: 'Ask me first',
-    description: 'The run pauses and you’ll be asked. Safest — recommended.',
+    description: 'The run pauses and asks before each change.',
   },
   {
-    value: 'edits',
-    label: 'Allow file changes',
-    description: 'It can create and edit files without asking. Commands still wait for you.',
+    value: 'auto',
+    label: 'Auto',
+    description: 'Gets on with it. Pauses to ask only before risky steps.',
   },
   {
     value: 'full',
@@ -212,10 +212,15 @@ export function RoutineEditor({
   );
   const [when, setWhen] = useState<Trigger>((initial.when as Trigger | undefined) ?? defaultWhen);
   const [onlyIf, setOnlyIf] = useState(initial.onlyIf ?? '');
-  const [trust, setTrust] = useState<RoutineTrust>(initial.trust ?? 'ask');
+  // Auto, as chats start (ADR 0119); a draft saved with Edit freely reads as Auto.
+  const [trust, setTrust] = useState<RoutineTrust>(() =>
+    RoutineTrust.parse(initial.trust ?? 'auto'),
+  );
   const [catchUp, setCatchUp] = useState(initial.catchUp ?? true);
   const [runOnFullPlan, setRunOnFullPlan] = useState(routine?.runOnFullPlan ?? false);
-  const [options, setOptions] = useState<TurnOptions>(initial.options ?? {});
+  const [options, setOptions] = useState<TurnOptions>(() =>
+    TurnOptions.parse(initial.options ?? {}),
+  );
   const [agentId, setAgentId] = useState<AgentId | null>(initial.agentId ?? null);
   const [limitText, setLimitText] = useState(
     routine?.runLimitUsd ? String(routine.runLimitUsd) : '',

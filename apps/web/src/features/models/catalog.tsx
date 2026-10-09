@@ -8,7 +8,7 @@ import type {
   ProviderModels,
 } from '@conch/protocol';
 import type { ModelProvider, ProviderId } from '@conch/nacre';
-import { Eye, FilePen, Hand, ShieldCheck, Zap } from 'lucide-react';
+import { Eye, Hand, ShieldCheck, Zap } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { effortLabels, modeWords, type ModeWords } from './words';
@@ -27,7 +27,6 @@ export interface ModeInfo extends ModeWords {
 const modeIcons: Record<PermissionMode, ReactNode> = {
   default: <Hand />,
   auto: <ShieldCheck />,
-  acceptEdits: <FilePen />,
   plan: <Eye />,
   bypassPermissions: <Zap />,
 };

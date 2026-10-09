@@ -5,7 +5,6 @@ import { Button } from '../../components/Button';
 import { Pearl, type PearlState } from '../../components/Pearl';
 import { Progress } from '../../components/Progress';
 import { cx } from '../../utils/cx';
-import { ago, HealedNotes } from '../Healed/HealedNotes';
 import styles from './Browser.module.css';
 
 export type BrowserStatusPhase =
@@ -20,12 +19,8 @@ export interface BrowserStatusCardProps extends ComponentProps<'div'> {
   version?: string;
   install?: { percent: number; label: string };
   problem?: { message: string; command?: string };
-  /** What Conch fixed on its own, newest first. */
-  healed?: { at: number; message: string }[];
   onRepair?: () => void;
   repairing?: boolean;
-  /** Formats "when" for healed notes; defaults to a relative time. */
-  formatTime?: (at: number) => string;
   /** Extra content under the status (e.g. which browser to use). */
   children?: ReactNode;
 }
@@ -40,9 +35,9 @@ const pearl: Record<BrowserStatusPhase, PearlState> = {
 };
 
 /**
- * The browser's health in one glance: what's running, what it's doing, and
- * what Conch already fixed by itself. There's one button, and it tries
- * every fix.
+ * The browser's health in one glance: what's running and what it's doing.
+ * There's one button, and it tries every fix. What Conch already fixed by
+ * itself is listed in Settings → Health, with every other repair.
  */
 export function BrowserStatusCard({
   phase,
@@ -51,10 +46,8 @@ export function BrowserStatusCard({
   version,
   install,
   problem,
-  healed = [],
   onRepair,
   repairing = false,
-  formatTime = (at) => ago(at),
   children,
   className,
   ...props
@@ -118,7 +111,6 @@ export function BrowserStatusCard({
         </div>
       )}
       {children}
-      <HealedNotes notes={healed} formatTime={formatTime} className={styles.healed} />
     </div>
   );
 }

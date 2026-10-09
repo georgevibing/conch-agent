@@ -61,7 +61,7 @@ export const templates: Template[] = [
     prompt:
       'Look at files added to ~/Downloads since the last run. Move them into subfolders by type (Documents, Images, Installers, Archives, Other), creating folders as needed. Never delete anything. List what you moved.',
     schedule: { type: 'weekly', days: ['sun'], time: '18:00' },
-    trust: 'edits',
+    trust: 'auto',
   },
   {
     id: 'stretch',

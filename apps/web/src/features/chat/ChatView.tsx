@@ -49,6 +49,7 @@ import { setChatGoal } from '../commands/context';
 import { useSlashCommands } from '../commands/useSlashCommands';
 import { useMentions } from '../agents/useMentions';
 import { ArchivedBanner } from '../archive/ArchivedBanner';
+import { ComeHomeHint, PastChatsHint } from '../import/BringHints';
 import { ChannelBanner } from '../channels/ChannelBanner';
 import { useChannels } from '../channels/queries';
 import { RunBanner } from '../routines/RunBanner';
@@ -996,8 +997,31 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
         }
         toolbar={
           <>
-            {(engine?.state === 'ready' || chosenReady) && (
-              <ComposerControls turn={turn} name={name} />
+            {/* One chip, "Opus · Auto": the model, thinking, fast mode, the mode,
+                where work runs and the folder, in one panel. */}
+            {engine?.state === 'ready' || chosenReady ? (
+              <ComposerControls
+                turn={turn}
+                name={name}
+                // From any device: the folder browser walks the computer Conch runs on.
+                folder={{
+                  name: workspaceName,
+                  ...(app?.workspace && { path: app.workspace }),
+                  onChoose: chooseFolder,
+                }}
+              />
+            ) : (
+              // No provider to choose yet: the folder can still be.
+              <Tooltip content={app?.workspace ?? ''}>
+                <ComposerChip
+                  icon={<Folder />}
+                  tuck
+                  onClick={chooseFolder}
+                  aria-label={`Working folder: ${workspaceName}. Choose another`}
+                >
+                  {workspaceName}
+                </ComposerChip>
+              </Tooltip>
             )}
             <ChatContext
               view={view}
@@ -1006,17 +1030,6 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
               {...(conversationId && { onCompact: () => slash.compact() })}
             />
             <ChatSpend conversationId={conversationId} />
-            <Tooltip content={app?.workspace ?? ''}>
-              <ComposerChip
-                icon={<Folder />}
-                // From any device: the folder browser walks the computer Conch runs on.
-                tuck
-                onClick={chooseFolder}
-                aria-label={`Working folder: ${workspaceName}. Choose another`}
-              >
-                {workspaceName}
-              </ComposerChip>
-            </Tooltip>
           </>
         }
       />
@@ -1088,6 +1101,9 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
           ))}
         </div>
         <div className={styles.hints}>
+          {/* What the welcome no longer asks: offered here while there's something to bring. */}
+          <ComeHomeHint className={styles.connectHint} />
+          <PastChatsHint className={styles.connectHint} />
           <ConnectAppsHint />
           <ChannelsHint />
         </div>

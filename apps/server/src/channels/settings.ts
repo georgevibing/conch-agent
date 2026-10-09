@@ -23,9 +23,19 @@ const MODES = Object.fromEntries(
 ) as Record<PermissionMode, { label: string; detail: string }>;
 /** A permission mode as the menus name it ("Ask first"). */
 export const modeLabel = (mode: PermissionMode) => MODES[mode].label;
+/**
+ * What choosing a mode says before it's saved. The one-line description is
+ * short since ADR 0119, so Full trust's confirmation still says what could
+ * happen, as the checkup and the app's pickers do.
+ */
+const modeChange = (mode: PermissionMode) =>
+  `${MODES[mode].label}: ${MODES[mode].detail}${mode === 'bypassPermissions' ? ' A page or file it reads could trick it, so only choose it for a folder you can afford to lose.' : ''}`;
 
 /** Choosing one of these for this chat is a raise in what it may do: it asks first. */
-const RAISES: readonly PermissionMode[] = ['auto', 'acceptEdits', 'bypassPermissions'];
+const RAISES: readonly PermissionMode[] = ['auto', 'bypassPermissions'];
+
+/** Names the modes had before ADR 0119, so `/mode plan only` still works. */
+const FORMER_NAMES: Record<string, PermissionMode> = { 'plan only': 'plan', 'edit freely': 'auto' };
 
 const EFFORT = {
   auto: 'Auto',
@@ -196,20 +206,16 @@ export class ChannelSettingsMenu {
     }
     if (command === 'mode') {
       if (!argument) return this.#mode(ctx, 'chat', null);
-      const named = Object.entries(MODES).find(
-        ([, words]) => words.label.toLowerCase() === argument.toLowerCase(),
-      )?.[0];
+      const named =
+        Object.entries(MODES).find(
+          ([, words]) => words.label.toLowerCase() === argument.toLowerCase(),
+        )?.[0] ?? FORMER_NAMES[argument.toLowerCase()];
       const mode = PermissionMode.safeParse(named ?? argument);
       if (!mode.success)
         return ctx.send(
           `Choose a mode from ${slash('mode')}, or write ${slash('mode', 'ask first')}.`,
         );
-      return this.#change(
-        ctx,
-        'chat',
-        { permissionMode: mode.data },
-        `${MODES[mode.data].label}: ${MODES[mode.data].detail}`,
-      );
+      return this.#change(ctx, 'chat', { permissionMode: mode.data }, modeChange(mode.data));
     }
     return this.#home(ctx);
   }
@@ -329,7 +335,7 @@ export class ChannelSettingsMenu {
   }
   async #summary(ctx: SettingsContext, scope: Scope) {
     const { options: o, provider, model } = await this.#selected(ctx, scope);
-    return `**${scope === 'chat' ? 'This chat' : 'Defaults across Conch'}**\nProvider: ${provider?.label ?? o.engine}\nModel: ${model?.label ?? o.model ?? 'Provider default'}\nEffort: ${model?.efforts.length ? EFFORT[o.effort] : 'Not offered by this model'}\nFast mode: ${model?.supportsFastMode ? (o.fastMode ? 'On' : 'Off') : 'Not offered by this model'}\nPermissions: ${MODES[honouredMode(o.permissionMode, provider?.permissionModes)].label}${scope === 'chat' && ctx.planning && o.permissionMode !== 'plan' ? '\nPlan mode: on, from your next message' : ''}${scope === 'chat' && ctx.goal ? `\nGoal: ${ctx.goal}` : ''}${ctx.busy ? '\nAn answer is running. Stop it or wait before changing this chat.' : ''}${!provider ? '\nThis provider is unavailable. Choose another model or open Providers in Conch.' : ''}`;
+    return `**${scope === 'chat' ? 'This chat' : 'Defaults across Conch'}**\nProvider: ${provider?.label ?? o.engine}\nModel: ${model?.label ?? o.model ?? 'Provider default'}\nEffort: ${model?.efforts.length ? EFFORT[o.effort] : 'Not offered by this model'}\nFast mode: ${model?.supportsFastMode ? (o.fastMode ? 'On' : 'Off') : 'Not offered by this model'}\nPermissions: ${MODES[honouredMode(o.permissionMode, provider?.permissionModes)].label}${scope === 'chat' && ctx.planning && o.permissionMode !== 'plan' ? '\nRead only: on, from your next message' : ''}${scope === 'chat' && ctx.goal ? `\nGoal: ${ctx.goal}` : ''}${ctx.busy ? '\nAn answer is running. Stop it or wait before changing this chat.' : ''}${!provider ? '\nThis provider is unavailable. Choose another model or open Providers in Conch.' : ''}`;
   }
   async #chat(ctx: SettingsContext, scope: Scope) {
     await this.#page(ctx, await this.#summary(ctx, scope), [
@@ -626,19 +632,14 @@ export class ChannelSettingsMenu {
     await this.#page(
       ctx,
       'Choose what Conch may do. Safety checks and skill restrictions still apply.',
-      // In the app's order, from Plan only to Full trust.
+      // In the app's order, from Read only to Full trust.
       MODE_WORDS.map((m) => m.value)
         .filter((m) => provider?.permissionModes.includes(m))
         .map((permissionMode) => ({
           label: mark(MODES[permissionMode].label, permissionMode === now),
           ...(permissionMode === 'bypassPermissions' && { style: 'danger' as const }),
           run: (c: SettingsContext) =>
-            this.#change(
-              c,
-              scope,
-              { permissionMode },
-              `${MODES[permissionMode].label}: ${MODES[permissionMode].detail}`,
-            ),
+            this.#change(c, scope, { permissionMode }, modeChange(permissionMode)),
         })),
       0,
       back,

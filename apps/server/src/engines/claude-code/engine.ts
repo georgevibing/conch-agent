@@ -2,7 +2,9 @@ import {
   createSdkMcpServer,
   query,
   tool,
+  type FastModeDisabledReason,
   type McpServerConfig,
+  type Query,
   type SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 import { ALL_MODES } from '@conch/protocol';
@@ -104,6 +106,31 @@ function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
     timer = setTimeout(() => reject(new Error(message)), PROBE_TIMEOUT_MS);
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Why fast mode can't serve this sign-in at all, whatever the model: a free
+ * plan, extra usage turned off, a cloud sign-in (Bedrock, Vertex), or turned
+ * off in the environment. Anything else (the person's own preference, a
+ * network blip, still finding out, one model not allowed) leaves each model's
+ * own `supportsFastMode` to say.
+ */
+const FAST_MODE_NEVER: ReadonlySet<FastModeDisabledReason> = new Set([
+  'free',
+  'extra_usage_disabled',
+  'not_first_party',
+  'disabled_by_env',
+]);
+
+/** Fast mode can't work on this sign-in, read from the idle session's handshake. */
+async function fastModeBlocked(q: Query): Promise<boolean> {
+  try {
+    const reason = (await q.initializationResult()).fast_mode_disabled_reason;
+    return reason !== undefined && FAST_MODE_NEVER.has(reason);
+  } catch {
+    // An older Claude Code without the handshake's answer: trust each model.
+    return false;
+  }
 }
 
 /**
@@ -344,8 +371,8 @@ export class ClaudeCodeEngine implements Engine {
     if (status.state !== 'ready') return empty;
     const q = await this.#idleSession(status);
     try {
-      const [models, commands] = await withTimeout(
-        Promise.all([q.supportedModels(), q.supportedCommands()]),
+      const [models, commands, fastBlocked] = await withTimeout(
+        Promise.all([q.supportedModels(), q.supportedCommands(), fastModeBlocked(q)]),
         'Timed out asking Claude Code for its models.',
       );
       const value: Capabilities = {
@@ -356,7 +383,8 @@ export class ClaudeCodeEngine implements Engine {
           label: m.displayName,
           description: m.description,
           efforts: m.supportsEffort ? (m.supportedEffortLevels ?? []) : [],
-          supportsFastMode: Boolean(m.supportsFastMode),
+          // The model has it, and this sign-in may use it: never a switch that can't work.
+          supportsFastMode: Boolean(m.supportsFastMode) && !fastBlocked,
           supportsAutoMode: Boolean(m.supportsAutoMode),
         })),
         commands: commands.map((c) => ({

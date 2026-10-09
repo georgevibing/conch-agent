@@ -357,11 +357,11 @@ describe.skipIf(!hasBrowser)('clicking by position, for real', () => {
     },
   );
 
-  it('only reads in Plan only mode, by position too', { timeout: 60_000 }, async () => {
+  it('only reads in Read only mode, by position too', { timeout: 60_000 }, async () => {
     const { call, asked } = harness('conv_canvas_plan', [], 'plan');
     await call('browser_open', { url: `${origin}/canvas` });
     expect(await call('browser_click_at', { x: 100, y: 50, element: 'canvas' })).toContain(
-      'Plan only mode',
+      'Read only mode',
     );
     expect(asked).toHaveLength(0);
   });

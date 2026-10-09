@@ -99,7 +99,7 @@ describe('the computer tool', () => {
     expect(computerTools(service, { conversationId: 'c' } as unknown as ToolContext)).toEqual([]);
   });
 
-  it('looks at the screen as a picture about a megapixel big, even in Plan only', async () => {
+  it('looks at the screen as a picture about a megapixel big, even in Read only', async () => {
     const { call } = context({ mode: 'plan' });
     const result = await call({ action: 'screenshot' });
     expect(isError(result)).toBeFalsy();
@@ -305,11 +305,11 @@ describe('the computer tool', () => {
     expect(computer.acted).toMatchObject([{ kind: 'keys', combo: { label: 'cmd+s' } }]);
   });
 
-  it('only looks in Plan only', async () => {
+  it('only looks in Read only', async () => {
     const { call } = context({ mode: 'plan' });
     await call({ action: 'screenshot' });
-    expect(text(await call({ action: 'left_click', coordinate: [1, 1] }))).toMatch(/Plan only/);
-    expect(text(await call({ action: 'type', text: 'hi' }))).toMatch(/Plan only/);
+    expect(text(await call({ action: 'left_click', coordinate: [1, 1] }))).toMatch(/Read only/);
+    expect(text(await call({ action: 'type', text: 'hi' }))).toMatch(/Read only/);
     expect(computer.acted).toEqual([]);
   });
 

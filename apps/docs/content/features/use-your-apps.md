@@ -30,7 +30,7 @@ The glowing edge and <kbd>mod+esc</kbd> come with the Conch app. In a browser, *
 
 - **Each app asks once per chat.** "Use Notes on your computer?" Choose **Always** and it won't ask about that app again, unless the chat has read something from the web or an email. Apps you always allow are listed under **Use your apps**, to take back any time.
 - **It never touches** password managers, System Settings and the Mac's password prompts, terminals, banking and payment apps, or Conch itself. It doesn't see them either: they're covered over in what it looks at. When something needs one of them, it asks you to do that part.
-- **Plan only** lets it look at the screen, but not click or type.
+- **Read only** lets it look at the screen, but not click or type.
 - **It stops to check in** after 60 steps in one go.
 - **One chat at a time** uses the computer.
 - **Nothing it sees is kept.** The last look at your screen stays in memory until the turn ends, then it's gone.

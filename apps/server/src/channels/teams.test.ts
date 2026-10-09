@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../config';
 import { Services } from '../services';
+import { askFirst } from '../test/modes';
 import { MockTeams } from './mock/teams';
 import { connectorAllowed, teamsText } from './teams';
 import { teamsAppPackage } from './teams-app';
@@ -26,6 +27,7 @@ async function setup() {
     loadConfig({ CONCH_HOME: home, CONCH_ENGINE: 'mock', CONCH_LOG_LEVEL: 'silent' }),
   );
   delete process.env.CONCH_MOCK_STATE;
+  await askFirst(services);
   await services.start();
   const teams = services.mockTeams;
   if (!teams) throw new Error('no mock Teams');

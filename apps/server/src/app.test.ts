@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from './app';
 import { hereInit, onThisComputer } from './test/here';
+import { askFirst } from './test/modes';
 import { loadConfig } from './config';
 import { Services } from './services';
 
@@ -598,6 +599,7 @@ describe('gateway usage', () => {
 describe('gateway WebSocket', () => {
   it('runs a full turn with memory, permission and streaming', async () => {
     const { app, services } = await setup();
+    await askFirst(services);
     close = () => app.close();
     await app.listen({ port: 0, host: '127.0.0.1' });
     const port = (app.server.address() as { port: number }).port;

@@ -18,8 +18,7 @@ Conch keeps a **separate encrypted sign-in**, not a copy of your credentials fro
 Codex can use Conch’s memory, browser, skills, routines and connected apps. Conch supplies work-folder file tools and safe commands, validates tool arguments, and applies its approvals, skill limits, read-then-act checks and Undo tracking before changes.
 
 - **Ask first:** reads are available; file changes and commands ask.
-- **Plan only:** file reads only; changes and commands are refused.
-- **Edit freely:** work-folder file edits need no extra question; commands ask.
+- **Read only:** file reads only; changes and commands are refused.
 - **Auto:** everything goes ahead, except [something serious](../reference/modes.md#auto), which asks.
 - **Full trust:** nothing asks but [the few things no mode lifts](../reference/modes.md#full-trust).
 

@@ -886,7 +886,7 @@ describe('Palette search', () => {
 
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'plan first');
-    await user.click(await screen.findByRole('option', { name: /Plan first, then act/ }));
+    await user.click(await screen.findByRole('option', { name: /Plan first in Read only/ }));
     expect(useUi.getState().composerText).toBe('/plan ');
 
     act(() => useUi.setState({ composerText: null }));
@@ -1570,7 +1570,6 @@ describe('Palette search', () => {
       shells: [],
       terminals: [],
       remote: false,
-      healed: [],
     });
     let enabled = true;
     mockFetch({

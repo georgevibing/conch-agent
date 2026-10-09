@@ -78,8 +78,6 @@ export const TerminalStatus = z.object({
   terminals: z.array(TerminalInfo),
   /** The device asking isn't this computer. */
   remote: z.boolean(),
-  /** What Conch fixed on its own lately, newest first. */
-  healed: z.array(z.object({ at: z.number(), message: z.string() })).default([]),
 });
 export type TerminalStatus = z.infer<typeof TerminalStatus>;
 

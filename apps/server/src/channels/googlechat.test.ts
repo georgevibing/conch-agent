@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { classify } from '../backup/manifest';
 import { loadConfig } from '../config';
 import { Services } from '../services';
+import { askFirst } from '../test/modes';
 import { GoogleKeys, fromGoogleChat, serviceAccountOf, toGoogleChat } from './googlechat';
 import { MockGoogleChat } from './mock/googlechat';
 import { personId } from './types';
@@ -26,6 +27,7 @@ async function setup() {
     loadConfig({ CONCH_HOME: home, CONCH_ENGINE: 'mock', CONCH_LOG_LEVEL: 'silent' }),
   );
   delete process.env.CONCH_MOCK_STATE;
+  await askFirst(services);
   await services.start();
   const google = services.mockGoogleChat;
   if (!google) throw new Error('no mock Google Chat');

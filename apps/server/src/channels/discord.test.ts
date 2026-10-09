@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../config';
 import { Services } from '../services';
+import { askFirst } from '../test/modes';
 import { DiscordAdapter } from './discord';
 import { MockDiscord } from './mock/discord';
 
@@ -24,6 +25,7 @@ async function setup() {
     loadConfig({ CONCH_HOME: home, CONCH_ENGINE: 'mock', CONCH_LOG_LEVEL: 'silent' }),
   );
   delete process.env.CONCH_MOCK_STATE;
+  await askFirst(services);
   await services.start();
   const discord = services.mockDiscord;
   if (!discord) throw new Error('no mock Discord');

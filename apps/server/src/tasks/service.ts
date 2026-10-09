@@ -69,7 +69,7 @@ const STEPS_KEPT = 12;
 const RUNNING: readonly TaskStatus[] = ['running', 'needs-you'];
 const GOING: readonly TaskStatus[] = ['queued', ...RUNNING];
 
-/** How much each mode lets happen without asking: a ladder, from Plan only to Full trust (ADR 0100). */
+/** How much each mode lets happen without asking: a ladder, from Read only to Full trust (ADR 0100). */
 const POWER = MODE_POWER;
 
 /**

@@ -482,7 +482,7 @@ describe('BrowserHandoff', () => {
 });
 
 describe('BrowserStatusCard', () => {
-  it('reports health, what healed, and offers one repair', async () => {
+  it('reports health and offers one repair', async () => {
     const user = userEvent.setup();
     const onRepair = vi.fn();
     const { container } = renderNacre(
@@ -490,13 +490,13 @@ describe('BrowserStatusCard', () => {
         phase="running"
         browserName="Microsoft Edge"
         version="154.0.1"
-        healed={[{ at: Date.now(), message: 'A page crashed, so Conch reloaded it.' }]}
         onRepair={onRepair}
       />,
     );
     expect(screen.getByRole('status')).toHaveTextContent('Running');
     expect(screen.getByText(/Microsoft Edge 154, on its own profile/)).toBeInTheDocument();
-    expect(screen.getByText('A page crashed, so Conch reloaded it.')).toBeInTheDocument();
+    // What it fixed on its own is listed in Settings → Health, not on the card.
+    expect(screen.queryByRole('region', { name: 'Fixed on its own' })).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Repair' }));
     expect(onRepair).toHaveBeenCalledOnce();
     await expectAccessible(container);

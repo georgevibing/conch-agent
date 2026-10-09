@@ -202,12 +202,12 @@ When the reply ends, the plan folds to one line, like **Plan · 5 of 5 done**. P
 
 Claude Code and Codex keep a plan of their own, and Conch draws it. Other providers that can use Conch's tools get the same checklist. A model that can only chat doesn't keep one.
 
-### Plan only
+### Read only
 
-In **Plan only** mode, your assistant looks around and plans, but changes nothing. Type `/plan` to turn it on or off, or `/plan` and what you'd like done to plan it straight away. When the plan is ready it's shown to you in full, with two buttons:
+In **Read only** mode, your assistant looks around and plans, but changes nothing. Type `/plan` to turn it on or off, or `/plan` and what you'd like done to plan it straight away. When the plan is ready it's shown to you in full, with two buttons:
 
-- **Start** ends plan mode and begins the work, in the mode the chat had before.
-- **Keep planning** stays in plan mode, and puts you back in the message box to say what to change.
+- **Start** ends Read only and begins the work, in the mode the chat had before.
+- **Keep planning** stays in Read only, and puts you back in the message box to say what to change.
 
 This works with every provider that can use Conch's tools: Claude Code asks with its own plan, and the others ask through Conch, with the same card.
 

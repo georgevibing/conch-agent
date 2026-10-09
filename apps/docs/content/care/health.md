@@ -34,7 +34,7 @@ News, like a new version of Conch, never counts as a problem, and neither does s
 
 ## Fixed on its own
 
-At the foot of the same page, **Fixed on its own** says how many things Conch fixed this week, then lists the latest few in a few words each, like **Restarted the browser**. The same fix again shows once, with how many times. **Show all** opens the rest. It's there to reassure you. Nothing in it needs you.
+At the foot of the same page, **Fixed on its own** says how many things Conch fixed this week, then lists the latest few in a few words each, like **Restarted the browser**, each with a small mark for the part of Conch it was in. Every part's fixes are here, the browser's and the terminal's too, and only here. The same fix again shows once, with how many times. **Show all** opens the rest. It's there to reassure you. Nothing in it needs you.
 
 Without asking, Conch:
 

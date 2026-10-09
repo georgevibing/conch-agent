@@ -246,7 +246,7 @@ export const Preferences = z.object({
   model: z.string().max(200).optional(),
   effort: EffortChoice.default('auto'),
   fastMode: z.boolean().default(false),
-  permissionMode: PermissionMode.default('default'),
+  permissionMode: PermissionMode.default('auto'),
   /** Where new chats' commands run (ADR 0106): this computer's sealed box unless you choose. */
   place: WorkPlaceId.default('computer'),
   /**

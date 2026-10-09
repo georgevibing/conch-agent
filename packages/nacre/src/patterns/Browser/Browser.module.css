@@ -1320,11 +1320,6 @@
     user-select: all;
   }
 
-  .healed {
-    padding-block-start: var(--nc-space-3);
-    border-block-start: 1px solid var(--nc-border-subtle);
-  }
-
   /* ── Motion off ────────────────────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
     .loading[data-on],

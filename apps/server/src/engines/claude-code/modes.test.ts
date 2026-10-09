@@ -112,13 +112,7 @@ describe('Claude Code’s permission modes (ADR 0100)', () => {
     for (const auto of [true, false]) {
       nativeAuto = auto;
       const caps = await engineFor().capabilities({ force: true });
-      expect(caps.permissionModes).toEqual([
-        'default',
-        'plan',
-        'acceptEdits',
-        'auto',
-        'bypassPermissions',
-      ]);
+      expect(caps.permissionModes).toEqual(['default', 'plan', 'auto', 'bypassPermissions']);
     }
     nativeAuto = true;
   });

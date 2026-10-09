@@ -17,7 +17,7 @@
  */
 import { z } from 'zod';
 
-import { EffortChoice, EngineId, PermissionMode } from './common';
+import { EffortChoice, EngineId, PermissionModeId } from './common';
 import { AppColor } from './conch-apps';
 import type { ConversationEvent, ConversationSummary } from './index';
 
@@ -247,7 +247,13 @@ export const AgentDefaults = z
     engine: EngineId.optional(),
     model: z.string().min(1).max(200).optional(),
     effort: EffortChoice.optional(),
-    permissionMode: PermissionMode.exclude(['bypassPermissions']).optional(),
+    permissionMode: z
+      .union([
+        PermissionModeId.exclude(['bypassPermissions']),
+        // Edit freely, before ADR 0119, reads as Auto (as `PermissionMode` does).
+        z.literal('acceptEdits').transform(() => 'auto' as const),
+      ])
+      .optional(),
   })
   .strict()
   .refine((d) => !d.model || d.engine, { message: 'A model needs its provider.' });

@@ -23,7 +23,7 @@ import { SettingsStore } from '../settings/store';
 import { ConversationManager, modeBeforePlan } from './manager';
 import { ConversationStore } from './store';
 
-const MODES: PermissionMode[] = ['default', 'auto', 'acceptEdits', 'plan', 'bypassPermissions'];
+const MODES: PermissionMode[] = ['default', 'auto', 'plan', 'bypassPermissions'];
 
 class Scripted implements Engine {
   readonly integrations = { mode: 'bridge' as const };
@@ -222,15 +222,15 @@ describe('/plan', () => {
   it('gives an engine without its own question exit_plan_mode, and Start ends plan mode', async () => {
     const { manager, api } = await setup();
     const id = await say(manager, 'hi');
-    await manager.configure(id, { permissionMode: 'acceptEdits' });
+    await manager.configure(id, { permissionMode: 'default' });
     await manager.configure(id, { permissionMode: 'plan' });
     api.plan = '1. Read\n2. Fix';
     await say(manager, 'fix the bug', id);
     expect(api.turns.at(-1)?.systemAppend).toContain(PLAN_MODE_PROMPT);
-    expect(api.heard).toMatch(/^The person chose Start\..*\| acceptEdits$/);
+    expect(api.heard).toMatch(/^The person chose Start\..*\| default$/);
     const { conversation, events } = await manager.detail(id);
     // Back to the mode it had before plan mode.
-    expect(conversation.options.permissionMode).toBe('acceptEdits');
+    expect(conversation.options.permissionMode).toBe('default');
     expect(
       events.some((e) => e.type === 'permission.requested' && e.toolName === 'ExitPlanMode'),
     ).toBe(true);
@@ -244,7 +244,8 @@ describe('/plan', () => {
     await say(manager, 'do it', id);
     expect(claude.turns.at(-1)?.tools?.some((t) => t.name === 'exit_plan_mode')).toBe(false);
     expect(claude.turns.at(-1)?.systemAppend).not.toContain('<plan-mode>');
-    expect(claude.heard).toBe('allow | default');
+    // Start returns it to your default: Auto, since ADR 0119.
+    expect(claude.heard).toBe('allow | auto');
     // It had no mode of its own before: it follows your default again.
     expect((await manager.detail(id)).conversation.options.permissionMode).toBeUndefined();
   });

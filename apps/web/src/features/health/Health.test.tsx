@@ -111,6 +111,22 @@ describe('Fixed on its own', () => {
     expect(lines[0]).toHaveTextContent('3 times');
   });
 
+  it('lists the terminal’s and the browser’s repairs too, each with its area', async () => {
+    mockFetch({
+      'GET /api/healed': () => ({
+        notes: [
+          { ...note('t', 'Switched terminals to basic mode', 2), area: 'terminal' },
+          { ...note('b', 'Reloaded a crashed page', 5), area: 'browser' },
+        ],
+      }),
+    });
+    renderApp(<HealedSection />);
+    const region = await screen.findByRole('region', { name: 'Fixed on its own' });
+    const lines = within(region).getAllByRole('listitem');
+    expect(lines[0]).toHaveTextContent('Terminal: Switched terminals to basic mode');
+    expect(lines[1]).toHaveTextContent('Browser: Reloaded a crashed page');
+  });
+
   it('is one friendly line when nothing needed fixing', async () => {
     mockFetch({ 'GET /api/healed': () => ({ notes: [] }) });
     renderApp(<HealedSection />);

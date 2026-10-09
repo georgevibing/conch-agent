@@ -8,44 +8,27 @@ import { expect, test } from '@playwright/test';
 test('first run to first conversation', async ({ page, request }) => {
   await page.goto('/');
 
-  // Hello
+  // Hello and a name, together.
   await expect(page.getByRole('heading', { name: 'Hi, I’m Conch.' })).toBeVisible();
-  await page.getByRole('button', { name: 'Let’s begin' }).click();
-
-  // A name, then what you'd like a hand with, tapped.
   await page.getByRole('textbox', { name: 'Your name' }).fill('Ada');
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('heading', { name: 'Nice to meet you, Ada.' })).toBeVisible();
-  await page.getByRole('button', { name: 'Coding' }).click();
-  await page.getByRole('button', { name: 'Continue' }).click();
-
-  // How it sounds: choosing a voice is hearing it.
-  await page.getByRole('radio', { name: 'Concise' }).click();
-  await expect(page.getByText('Hi Ada. I’m Conch. Ready when you are.')).toBeVisible();
-  await page.getByRole('button', { name: 'Sounds good' }).click();
 
   // A mind to think with: the provider is already connected, so this carries on by itself.
   await expect(page.getByText(/Claude Max/)).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Bring the apps you live in.' })).toBeVisible({
+
+  // Ready, with somewhere to start.
+  await expect(page.getByRole('heading', { name: 'You’re all set, Ada.' })).toBeVisible({
     timeout: 8000,
   });
-  await page.getByRole('button', { name: 'Skip for now' }).click();
-
-  // Ready, with somewhere to start made from what was picked.
-  await expect(page.getByRole('heading', { name: 'You’re all set, Ada.' })).toBeVisible();
   expect((await (await request.get('/api/state')).json()).onboarded).toBe(false);
-  await page.getByRole('button', { name: 'Walk me through a project folder of mine' }).click();
+  await page.getByRole('button', { name: 'Help me plan my week' }).click();
 
   // Settings were saved on the server, and the chat opens with that first question in it.
   await expect
     .poll(async () => (await request.get('/api/state')).json())
-    .toMatchObject({
-      onboarded: true,
-      persona: { tone: 'concise' },
-      profile: { name: 'Ada', about: 'I’d mostly like a hand with coding.' },
-    });
+    .toMatchObject({ onboarded: true, profile: { name: 'Ada' } });
   await expect(page.getByRole('textbox', { name: 'Message Conch' })).toHaveValue(
-    'Walk me through a project folder of mine',
+    'Help me plan my week',
   );
 
   // Start an ordinary chat.
