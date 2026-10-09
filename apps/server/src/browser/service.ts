@@ -725,6 +725,10 @@ export class BrowserService {
         // Touching the page while nobody drives is taking the wheel.
         if (tab.control === 'idle') tab.setControl('user');
         await tab.input(command).catch(() => undefined);
+        if (command.type === 'mouse' && command.action === 'up') {
+          const editable = await tab.typing().catch(() => undefined);
+          if (editable !== undefined) watcher.send({ type: 'typing', editable });
+        }
         return;
     }
   }

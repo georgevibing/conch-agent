@@ -121,6 +121,11 @@ export interface BrowserWindowProps extends Omit<ComponentProps<'section'>, 'onI
   onHandBack?: () => void;
   /** The screen's room changed (CSS px): the page can take its shape. */
   onFit?: (size: { width: number; height: number }) => void;
+  /**
+   * After your last click, from the page: whether its focus takes typing.
+   * Change `key` each time. Not typing after a tap, a phone's keyboard goes.
+   */
+  typing?: { editable: boolean; key: string | number };
   /** Show a tab, close one, open a new one, close the others, or reopen the last closed. */
   onTab?: (action: BrowserTabAction, id?: string) => void;
   onClose?: () => void;
@@ -162,6 +167,7 @@ export function BrowserWindow({
   onTakeOver,
   onHandBack,
   onFit,
+  typing,
   onTab,
   onClose,
   actions,
@@ -186,6 +192,8 @@ export function BrowserWindow({
     setZoom(NO_ZOOM);
   }
   const touches = useRef(new Map<number, Point>());
+  // The last click was a finger's: the keyboard follows what the page says about it.
+  const tapped = useRef(false);
   const gesture = useRef<Gesture | undefined>(undefined);
   // Where your keys land while you drive: a hidden field, as remote-desktop
   // clients do, so input methods and phone keyboards work too.
@@ -246,6 +254,12 @@ export function BrowserWindow({
     el.addEventListener('touchend', quiet, { passive: false });
     return () => el.removeEventListener('touchend', quiet);
   }, []);
+
+  // A tap that didn't land in a field: the keyboard it brought up goes again.
+  useEffect(() => {
+    if (!typing || typing.editable || !tapped.current) return;
+    if (document.activeElement === keys.current) keys.current?.blur();
+  }, [typing]);
 
   const send = (input: BrowserInput) => onInput?.(input);
   /** Where on the page (0–1), through any zoom. */
@@ -351,12 +365,14 @@ export function BrowserWindow({
     const rect = pageRect();
     if (!rect) return;
     const point = pointOn(rect, at.x, at.y);
+    tapped.current = true;
     send({ type: 'mouse', action: 'down', ...point, button: 'left', clickCount: 1 });
     send({ type: 'mouse', action: 'up', ...point, button: 'left', clickCount: 1 });
   }
 
   function pointer(kind: 'down' | 'up' | 'move', event: PointerEvent<HTMLButtonElement>) {
     if (event.pointerType === 'touch') return touch(kind, event);
+    if (kind === 'down') tapped.current = false;
     if (!driving) {
       // Touching the page takes the wheel; that first click only takes it.
       if (kind === 'down' && event.button === 0) {
@@ -769,6 +785,9 @@ export function BrowserWindow({
             ref={keys}
             className={styles.keys}
             aria-label="Type into the page"
+            // The keyboard covers the page instead of the app shrinking above it:
+            // the chat behind stays put and the page keeps its size, so taps land.
+            data-nc-keyboard-over=""
             aria-describedby={hintId}
             tabIndex={driving ? 0 : -1}
             autoComplete="off"

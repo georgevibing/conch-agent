@@ -625,6 +625,15 @@ export class Tab {
   /** When you last touched the page: a handoff waits until you've paused. */
   lastInput = 0;
 
+  /**
+   * Whether the page's focus takes typing now (a field, a text area, something
+   * editable, or a frame, which may hold one): a phone keeps its keyboard up
+   * only then.
+   */
+  async typing(): Promise<boolean> {
+    return (await this.page.evaluate(TAKES_TYPING)) === true;
+  }
+
   /** Mouse and keyboard from the live view. Only while you're driving. */
   async input(command: BrowserLiveCommand): Promise<void> {
     const page = this.page;
@@ -709,3 +718,16 @@ function originOf(url: string): string {
     return '';
   }
 }
+
+/** Run in the page: is its focus (through open shadow roots) somewhere that takes typing? */
+const TAKES_TYPING = `(() => {
+  let el = document.activeElement;
+  while (el && el.shadowRoot && el.shadowRoot.activeElement) el = el.shadowRoot.activeElement;
+  if (!el || el === document.body) return false;
+  if (el.tagName === 'IFRAME' || el.isContentEditable) return true;
+  if (el.tagName === 'TEXTAREA') return !el.readOnly && !el.disabled;
+  if (el.tagName !== 'INPUT') return false;
+  const kind = (el.getAttribute('type') || 'text').toLowerCase();
+  const pressed = ['button', 'submit', 'reset', 'checkbox', 'radio', 'range', 'color', 'file', 'image', 'hidden'];
+  return !el.readOnly && !el.disabled && !pressed.includes(kind);
+})()`;

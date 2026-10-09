@@ -108,7 +108,10 @@ export function BrowserDock({
   if (narrow) {
     return (
       <>
-        {children}
+        {/* Out of reach behind the browser: no tap, no keyboard ▲▼, lands in the chat. */}
+        <div className={styles.behind} inert={open}>
+          {children}
+        </div>
         <Sheet.Root
           open={open}
           onOpenChange={(next) => {

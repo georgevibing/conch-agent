@@ -47,3 +47,8 @@
     white-space: nowrap;
   }
 }
+
+/* Out of the way of the layout: the chat sits as if this weren't here. */
+.behind {
+  display: contents;
+}

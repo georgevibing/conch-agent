@@ -92,6 +92,7 @@ export function BrowserPanel({
       onTakeOver={() => live.control('user')}
       onHandBack={() => live.control('agent')}
       onFit={fit}
+      {...(live.typing && { typing: live.typing })}
       onTab={(action, id) => live.send({ type: 'tab', action, ...(id && { id }) })}
       onClose={onClose}
     />

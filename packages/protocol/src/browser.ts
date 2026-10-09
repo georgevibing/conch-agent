@@ -310,6 +310,11 @@ export const BrowserLiveEvent = z.discriminatedUnion('type', [
     url: z.string().optional(),
   }),
   z.object({ type: z.literal('error'), message: z.string() }),
+  /**
+   * After your click: whether the page's focus is now somewhere that takes
+   * typing, so a phone's keyboard stays up only then.
+   */
+  z.object({ type: z.literal('typing'), editable: z.boolean() }),
 ]);
 export type BrowserLiveEvent = z.infer<typeof BrowserLiveEvent>;
 

@@ -216,6 +216,30 @@ describe('BrowserWindow', () => {
     expect(screen.queryByRole('button', { name: /^Zoomed to/ })).not.toBeInTheDocument();
   });
 
+  it('on a touch screen, the keyboard stays up only when a tap landed somewhere that takes typing', () => {
+    const driving = { ...tab, control: 'user' as const };
+    const { rerender } = renderNacre(<BrowserWindow tab={driving} frame={hotelsPage} />);
+    const page = screen.getByRole('button', { name: /^Page: / });
+    stubRect(page.parentElement as HTMLElement);
+    const keys = screen.getByRole('textbox', { name: 'Type into the page' });
+    const finger = { pointerType: 'touch', pointerId: 1, button: 0, clientX: 420, clientY: 250 };
+    fireEvent.pointerDown(page, finger);
+    fireEvent.pointerUp(page, finger);
+    expect(keys).toHaveFocus();
+    // A field: it stays.
+    rerender(
+      <BrowserWindow tab={driving} frame={hotelsPage} typing={{ editable: true, key: 1 }} />,
+    );
+    expect(keys).toHaveFocus();
+    // A link or a button: the keyboard goes.
+    rerender(
+      <BrowserWindow tab={driving} frame={hotelsPage} typing={{ editable: false, key: 2 }} />,
+    );
+    expect(keys).not.toHaveFocus();
+    // The keyboard goes over the page; the app doesn't shrink for it.
+    expect(keys).toHaveAttribute('data-nc-keyboard-over');
+  });
+
   it('lets you leave the page with Shift+Escape, and hand back', async () => {
     const user = userEvent.setup();
     const onHandBack = vi.fn();

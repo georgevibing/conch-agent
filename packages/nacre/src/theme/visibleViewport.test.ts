@@ -47,6 +47,23 @@ describe('installVisibleViewport', () => {
     uninstall();
   });
 
+  it('holds still while the keyboard goes over something marked for it (the browser’s keys)', async () => {
+    const change = fakeViewport({ height: 844 });
+    const uninstall = installVisibleViewport();
+    const keys = document.createElement('textarea');
+    keys.setAttribute('data-nc-keyboard-over', '');
+    document.body.append(keys);
+    keys.focus();
+    change({ height: 508, offsetTop: 120 });
+    expect(visible()).toEqual({ height: '844px', top: '0px' });
+    // Gone from there, with the keyboard still up: the size follows again.
+    keys.blur();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(visible()).toEqual({ height: '508px', top: '120px' });
+    keys.remove();
+    uninstall();
+  });
+
   it('does nothing where there is no visual viewport', () => {
     vi.stubGlobal('visualViewport', undefined);
     const uninstall = installVisibleViewport();

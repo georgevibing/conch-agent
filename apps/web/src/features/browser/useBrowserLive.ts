@@ -23,6 +23,8 @@ export function useBrowserLive(conversationId: string | undefined, visible: bool
   /** The gateway has said what the tab is (until then, an empty panel isn't news). */
   const [heard, setHeard] = useState(false);
   const [error, setError] = useState<string>();
+  /** After your last click: whether the page's focus takes typing (`key` changes each time). */
+  const [typing, setTyping] = useState<{ editable: boolean; key: number }>();
   /** The panel's last size: said again on every (re)connect, so the page always has its shape. */
   const fitted = useRef<Extract<BrowserLiveCommand, { type: 'fit' }> | undefined>(undefined);
   const socket = useRef<WebSocket | null>(null);
@@ -101,6 +103,9 @@ export function useBrowserLive(conversationId: string | undefined, visible: bool
           setTab(event.data.tab);
           setHeard(true);
           setRestoring(Boolean(event.data.restoring) && !event.data.tab);
+        } else if (event.data.type === 'typing') {
+          const { editable } = event.data;
+          setTyping((t) => ({ editable, key: (t?.key ?? 0) + 1 }));
         } else if (event.data.type === 'action') {
           actions.current += 1;
           setAction({ ...event.data, key: actions.current });
@@ -148,6 +153,7 @@ export function useBrowserLive(conversationId: string | undefined, visible: bool
     restoring,
     heard,
     error,
+    typing,
     send,
     control,
     screenRef,
