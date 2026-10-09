@@ -1,5 +1,5 @@
 /**
- * Conch's numbers, held in memory (ADR 0119): counters and histograms that
+ * Conch's numbers, held in memory (ADR 0121): counters and histograms that
  * only grow (cumulative, as Prometheus reads them; `delta.ts` turns them into
  * differences for the services that want those), and gauges read when asked.
  *

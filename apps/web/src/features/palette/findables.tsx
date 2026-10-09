@@ -286,7 +286,7 @@ const settingsPlaces: {
     icon: <MousePointerClick />,
   },
   {
-    // Dashboards (ADR 0119): Conch's numbers for Grafana, Prometheus and the rest.
+    // Dashboards (ADR 0121): Conch's numbers for Grafana, Prometheus and the rest.
     tab: 'dashboards',
     label: 'Dashboards',
     keywords:

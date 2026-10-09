@@ -1,5 +1,5 @@
 /**
- * Settings → Dashboards (ADR 0119), and the page Prometheus reads.
+ * Settings → Dashboards (ADR 0121), and the page Prometheus reads.
  *
  * `/api/dashboards…` sits behind the gateway's host, origin and sign-in checks
  * like every `/api` route. Changing where Conch's numbers go, or letting the

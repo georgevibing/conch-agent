@@ -23,7 +23,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Settings → Dashboards (ADR 0119): where Conch’s numbers go, for people who’ve never heard of OTLP. Choose a service by its mark, paste what it shows you (Conch reads the key and the endpoint out of it), and press Send a test: a pearl runs from the shell to the service, which takes a ring of light when it received it. What leaves is shown as it leaves, opening with what never does, and the newest turn is drawn as the trace a dashboard will show.',
+          'Settings → Dashboards (ADR 0121): where Conch’s numbers go, for people who’ve never heard of OTLP. Choose a service by its mark, paste what it shows you (Conch reads the key and the endpoint out of it), and press Send a test: a pearl runs from the shell to the service, which takes a ring of light when it received it. What leaves is shown as it leaves, opening with what never does, and the newest turn is drawn as the trace a dashboard will show.',
       },
     },
   },

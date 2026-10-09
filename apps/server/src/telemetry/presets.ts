@@ -1,5 +1,5 @@
 /**
- * Where each destination's endpoints are and how it wants its key (ADR 0119),
+ * Where each destination's endpoints are and how it wants its key (ADR 0121),
  * from each service's own OTLP documentation:
  *
  * - Grafana Cloud: the stack's `…grafana.net/otlp`, `Authorization: Basic`

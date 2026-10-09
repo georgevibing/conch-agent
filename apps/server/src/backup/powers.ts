@@ -250,7 +250,7 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
   if (record(json(read, 'terminal.json')?.settings)?.allowRemote === true)
     powers.push({ kind: 'terminal-remote' });
 
-  // Dashboards (ADR 0119): where Conch's numbers go (with the words of chats, if on),
+  // Dashboards (ADR 0121): where Conch's numbers go (with the words of chats, if on),
   // and Prometheus reading them. An old backup mustn't quietly send them elsewhere.
   const telemetry = record(json(read, 'telemetry.json')?.settings);
   const otlp = record(telemetry?.otlp);

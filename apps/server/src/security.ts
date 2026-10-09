@@ -71,7 +71,7 @@ const OAUTH_CALLBACKS = new Set([
 const MCP_ENDPOINTS = new Set(['/mcp', '/mcp/hello', '/mcp/session']);
 
 /**
- * The page Prometheus reads (ADR 0119): it checks its own scrape token, and
+ * The page Prometheus reads (ADR 0121): it checks its own scrape token, and
  * shares the request budgets. Off, it isn't there at all.
  */
 const SCRAPE_ENDPOINTS = new Set(['/metrics']);

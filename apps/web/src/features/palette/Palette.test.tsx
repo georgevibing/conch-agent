@@ -338,7 +338,7 @@ describe('Palette search', () => {
         await screen.findByRole('option', { name: /Settings: This computer/ }),
       ).toBeInTheDocument();
     }
-    // Dashboards (ADR 0119): by the names of the tools people send numbers to.
+    // Dashboards (ADR 0121): by the names of the tools people send numbers to.
     for (const words of ['grafana', 'prometheus', 'opentelemetry', 'langfuse']) {
       await user.clear(screen.getByRole('combobox'));
       await user.type(screen.getByRole('combobox'), words);

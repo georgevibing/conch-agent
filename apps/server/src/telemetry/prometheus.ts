@@ -1,5 +1,5 @@
 /**
- * The page Prometheus reads (`GET /metrics`, ADR 0119): the text exposition
+ * The page Prometheus reads (`GET /metrics`, ADR 0121): the text exposition
  * format 0.0.4, or OpenMetrics 1.0 when the scraper asks for it.
  *
  * Written from the specs (prometheus.io/docs/instrumenting/exposition_formats,

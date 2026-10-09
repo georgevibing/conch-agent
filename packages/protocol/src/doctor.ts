@@ -62,7 +62,7 @@ export const DoctorPlace = z.enum([
   'agents',
   /** Settings → This computer: using its apps and the macOS switches (ADR 0110). */
   'computer',
-  /** Settings → Dashboards: where Conch's numbers go (ADR 0119). */
+  /** Settings → Dashboards: where Conch's numbers go (ADR 0121). */
   'dashboards',
 ]);
 export type DoctorPlace = z.infer<typeof DoctorPlace>;

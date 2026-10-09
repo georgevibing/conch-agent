@@ -1,5 +1,5 @@
 /**
- * Every number Conch sends to a dashboard (ADR 0119), in one table: what it's
+ * Every number Conch sends to a dashboard (ADR 0121), in one table: what it's
  * called (OpenTelemetry's name, and Prometheus's, worked out the way
  * OpenTelemetry's compatibility spec says), what it counts, and the only
  * labels it may carry. The Prometheus page, the OTLP export, the preview on

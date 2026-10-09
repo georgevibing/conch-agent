@@ -194,7 +194,7 @@ export const BackupPower = z.discriminatedUnion('kind', [
    */
   z.object({ kind: z.literal('own-address'), name: PowerText }),
   /**
-   * Conch's numbers go to this place (ADR 0119), and with `content` the words of
+   * Conch's numbers go to this place (ADR 0121), and with `content` the words of
    * chats too: a backup from somewhere else must not quietly send them elsewhere.
    */
   z.object({
@@ -202,7 +202,7 @@ export const BackupPower = z.discriminatedUnion('kind', [
     name: PowerText,
     content: z.boolean().default(false),
   }),
-  /** Anything with the scrape token can read Conch's numbers at `/metrics` (ADR 0119). */
+  /** Anything with the scrape token can read Conch's numbers at `/metrics` (ADR 0121). */
   z.object({ kind: z.literal('dashboards-scrape') }),
 ]);
 export type BackupPower = z.infer<typeof BackupPower>;

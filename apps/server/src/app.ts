@@ -262,7 +262,7 @@ export async function buildApp(services: Services) {
     chats: services.conversations,
   });
   registerOutsideRoutes(app, { outside: services.outside, rounds: services.rounds });
-  // Dashboards (ADR 0119): Settings → Dashboards, and `/metrics` for Prometheus.
+  // Dashboards (ADR 0121): Settings → Dashboards, and `/metrics` for Prometheus.
   registerTelemetryRoutes(app, services.telemetry, gate, stepUpDone);
   registerBrowserRoutes(app, services, gate);
   registerWorkPlaceRoutes(app, services, gate);

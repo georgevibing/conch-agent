@@ -1,5 +1,5 @@
 /**
- * `conch dashboards …` (ADR 0119): the same Settings → Dashboards, from the
+ * `conch dashboards …` (ADR 0121): the same Settings → Dashboards, from the
  * terminal of the computer Conch runs on — for a server without a browser
  * nearby, or anyone who'd rather type. It writes the same files the page
  * does; the running gateway sees the change within seconds.

@@ -1,5 +1,5 @@
 /**
- * Settings → Dashboards, kept (ADR 0119): `~/.conch/telemetry.json` for the
+ * Settings → Dashboards, kept (ADR 0121): `~/.conch/telemetry.json` for the
  * choices (backed up, protected from the assistant's own file tools), and
  * the sealed `~/.conch/telemetry.secrets.json` for what opens a door — the
  * destination's key, the scrape token's hash, and the key that makes chats'

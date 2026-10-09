@@ -212,7 +212,7 @@ export interface CheckupInput {
    */
   otherApps?: { remote: boolean; apps: { name: string; remote: boolean }[] };
   /**
-   * Dashboards (ADR 0119): where Conch's numbers go, whether chats' words go with
+   * Dashboards (ADR 0121): where Conch's numbers go, whether chats' words go with
    * them, and whether anything on this computer may read `/metrics` without a token.
    */
   dashboards?: { sendsTo?: string; content: boolean; scrapeHere: boolean };

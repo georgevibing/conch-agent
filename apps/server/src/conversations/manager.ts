@@ -908,7 +908,7 @@ export class ConversationManager {
   constructor(
     private readonly deps: {
       store: ConversationStore;
-      /** Counts each step Auto judges, for dashboards (ADR 0119). Numbers only. */
+      /** Counts each step Auto judges, for dashboards (ADR 0121). Numbers only. */
       judged?: (verdict: 'went_ahead' | 'asked', risk?: string) => void;
       /** Resource admission for automatic recovery; manual chats remain available. */
       recovery?: { allowed: () => boolean; workload?: () => WorkloadPace; intervalMs?: number };

@@ -77,6 +77,10 @@ your desktop and the chat apps you already use.
   another way and checks its work before it says done. [How Conch works on a problem](./apps/docs/content/features/working-on-a-problem.md)
 - **Long jobs that finish.** Long chats summarise their start, caching keeps costs
   down, and each reply says what it cost. [What it costs](./apps/docs/content/care/what-it-costs.md)
+- **On your own dashboard.** Turns, tokens, spending, tools and this computer in
+  Grafana, Honeycomb, Datadog, New Relic, Langfuse, Phoenix or Prometheus: paste
+  the key the service shows and press Send a test. Numbers only, never the words of
+  your chats. [Dashboards](./apps/docs/content/care/dashboards.md)
 
 ### Agents
 

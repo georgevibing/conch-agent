@@ -41,7 +41,7 @@ export const SEALED_FILES = new Set([
   'conch-apps.secrets.json',
   // The keys outside agents gave you (ADR 0112).
   'a2a.secrets.json',
-  // Your dashboard's key and the scrape token's hash (ADR 0119).
+  // Your dashboard's key and the scrape token's hash (ADR 0121).
   'telemetry.secrets.json',
 ]);
 

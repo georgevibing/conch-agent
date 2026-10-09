@@ -1,5 +1,5 @@
 /**
- * What a label may say (ADR 0119). Every label Conch puts on a number is in
+ * What a label may say (ADR 0121). Every label Conch puts on a number is in
  * this table, and is one of two things:
  *
  * - **a word** from a fixed list (`origin`, `outcome`, `decision`): anything

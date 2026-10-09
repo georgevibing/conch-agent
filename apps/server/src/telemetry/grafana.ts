@@ -1,5 +1,5 @@
 /**
- * A Grafana dashboard for Conch (ADR 0119), made from the metric catalog, so
+ * A Grafana dashboard for Conch (ADR 0121), made from the metric catalog, so
  * every panel asks for a metric that exists and by the name Prometheus has
  * for it — scraped from `/metrics` or translated from OTLP by Grafana Cloud,
  * Mimir or Prometheus's own OTLP receiver (the names are the same both ways).

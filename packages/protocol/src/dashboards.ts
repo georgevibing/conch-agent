@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * Dashboards (ADR 0119): Conch's numbers, and the shape of its work, for a
+ * Dashboards (ADR 0121): Conch's numbers, and the shape of its work, for a
  * dashboard of your own — Grafana, Honeycomb, Datadog, New Relic, Langfuse,
  * Phoenix, a Grafana on this computer, or any OpenTelemetry collector — sent
  * (OTLP) or read by Prometheus (`GET /metrics`).

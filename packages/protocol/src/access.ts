@@ -422,7 +422,7 @@ export const CheckupPlace = z.enum([
   'address',
   /** Settings › Other apps: the apps paired with Conch, and what each may use (ADR 0073). */
   'other-apps',
-  /** Settings › Dashboards: where Conch's numbers go, and who reads them (ADR 0119). */
+  /** Settings › Dashboards: where Conch's numbers go, and who reads them (ADR 0121). */
   'dashboards',
 ]);
 export type CheckupPlace = z.infer<typeof CheckupPlace>;
@@ -455,7 +455,7 @@ export const CheckupAction = z.enum([
   'sealed-commands',
   /** A memory that looks planted is held and asked about again (ADR 0087). */
   'check-memories',
-  /** Dashboards stop carrying the words of chats (ADR 0119). */
+  /** Dashboards stop carrying the words of chats (ADR 0121). */
   'dashboards-content-off',
 ]);
 export type CheckupAction = z.infer<typeof CheckupAction>;

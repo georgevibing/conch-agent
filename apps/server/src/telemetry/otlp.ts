@@ -1,5 +1,5 @@
 /**
- * OTLP, the OpenTelemetry protocol, as Conch sends it (ADR 0119): metrics,
+ * OTLP, the OpenTelemetry protocol, as Conch sends it (ADR 0121): metrics,
  * traces and logs as `ExportMetricsServiceRequest`, `ExportTraceServiceRequest`
  * and `ExportLogsServiceRequest`, encoded as protobuf (what every service
  * takes, and the only thing Phoenix takes) or as JSON (for a collector that

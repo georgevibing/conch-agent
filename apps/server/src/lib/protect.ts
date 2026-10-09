@@ -38,7 +38,7 @@ export function protectedPaths(home: string): string[] {
     join(home, 'workplaces'),
     // Whether the assistant may use your apps, and the ones it always may (ADR 0110).
     join(home, 'computer-use.json'),
-    // Where Conch's numbers go, and whether chats' words go with them (ADR 0119): pointed
+    // Where Conch's numbers go, and whether chats' words go with them (ADR 0121): pointed
     // elsewhere by the assistant, it would be a way out for what it read.
     join(home, 'telemetry.json'),
     join(home, 'telemetry.secrets.json'),
@@ -138,7 +138,7 @@ export const PROTECTED_MESSAGE =
  *   `passkeys remove` and `devices approve|on|off|reject|remove`: who may sign
  *   in, and from where;
  * - `dashboards send|prometheus|token`: where Conch's numbers go, and who may
- *   read them (ADR 0119). Looking (`dashboards`, `status`, `test`) and `off` are anyone's.
+ *   read them (ADR 0121). Looking (`dashboards`, `status`, `test`) and `off` are anyone's.
  *
  * Whether it's typed `conch …` (the command the installer adds) or
  * `pnpm conch …`, the terminal commands open your keys the way the gateway

@@ -1,5 +1,5 @@
 /**
- * The protobuf wire format, as much of it as OTLP needs (ADR 0119): varints,
+ * The protobuf wire format, as much of it as OTLP needs (ADR 0121): varints,
  * length-delimited fields and messages, 64-bit fixed integers and doubles,
  * packed repeated fields. From protobuf.dev/programming-guides/encoding.
  *

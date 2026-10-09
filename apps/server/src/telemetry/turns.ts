@@ -1,5 +1,5 @@
 /**
- * Turns, as numbers and traces (ADR 0119), read from what Conch already
+ * Turns, as numbers and traces (ADR 0121), read from what Conch already
  * says: the conversation log every engine writes (`ConversationEvent`), and
  * the other events the gateway broadcasts. Nothing in a turn calls this, and
  * nothing here can slow one: it's a listener that adds to counters and builds

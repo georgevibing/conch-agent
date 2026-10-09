@@ -1,5 +1,5 @@
 /**
- * Sending to a dashboard without ever slowing Conch down (ADR 0119).
+ * Sending to a dashboard without ever slowing Conch down (ADR 0121).
  *
  * - **Nothing waits for it.** A span or an event is pushed onto a bounded
  *   queue and the turn carries on; sending happens later, one request at a

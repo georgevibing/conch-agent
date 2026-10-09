@@ -1,5 +1,5 @@
 /**
- * Dashboards (ADR 0119): Conch's numbers and the shape of its work, for a
+ * Dashboards (ADR 0121): Conch's numbers and the shape of its work, for a
  * dashboard of the person's own. One service per gateway:
  *
  * - it listens to what the gateway already broadcasts (`observe`) and keeps

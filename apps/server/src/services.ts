@@ -344,7 +344,7 @@ export class Services {
   readonly agents: AgentStore;
   /** Agents elsewhere that speak A2A, added by pasting their address (ADR 0112). */
   readonly outside: OutsideAgents;
-  /** Dashboards: Conch's numbers and traces for Prometheus and OpenTelemetry (ADR 0119). */
+  /** Dashboards: Conch's numbers and traces for Prometheus and OpenTelemetry (ADR 0121). */
   readonly telemetry: TelemetryService;
   /** Agents taking turns in a chat when you mention them (ADR 0112). */
   readonly rounds: RoundService;
@@ -1047,7 +1047,7 @@ export class Services {
       heal: (message) => void this.healed.note('terminal', message),
     });
     this.doctor.register(this.workplaces.doctorCheck());
-    // Dashboards (ADR 0119): it only listens, and reads each gauge when asked.
+    // Dashboards (ADR 0121): it only listens, and reads each gauge when asked.
     this.telemetry = new TelemetryService({
       home: config.CONCH_HOME,
       version: SERVER_VERSION,

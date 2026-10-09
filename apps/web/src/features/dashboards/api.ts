@@ -10,7 +10,7 @@ import { z } from 'zod';
 
 import { request } from '../../api/client';
 
-/** Settings → Dashboards (ADR 0119): where Conch's numbers go, and who reads them. */
+/** Settings → Dashboards (ADR 0121): where Conch's numbers go, and who reads them. */
 export const dashboardsApi = {
   status: () => request(TelemetryStatus, '/api/dashboards'),
   update: (body: TelemetryUpdate) =>
