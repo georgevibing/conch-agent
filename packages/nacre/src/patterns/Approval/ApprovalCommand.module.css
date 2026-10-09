@@ -1,0 +1,92 @@
+@layer nacre.components {
+  /* Exactly what it would run: code size, a few lines, the rest a press away. */
+  .command {
+    --ac-size: var(--nc-text-code);
+    --ac-pad-block: var(--nc-space-2-5);
+    --ac-pad-inline: var(--nc-space-3);
+
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .viewport {
+    max-block-size: calc(var(--ac-lines) * 1lh + 2 * var(--ac-pad-block));
+    padding: var(--ac-pad-block) var(--ac-pad-inline);
+    overflow: hidden;
+    font-family: var(--nc-font-mono);
+    font-size: var(--ac-size);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+  }
+
+  /* Clipped, the last line fades, so it reads as more to come. */
+  .command[data-clipped] .viewport {
+    mask-image: linear-gradient(to bottom, var(--nc-text) 70%, transparent);
+  }
+
+  /* Opened, a very long one scrolls inside the block: the answers stay in reach. */
+  .command[data-open] .viewport {
+    max-block-size: min(60dvh, 32rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .viewport:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+
+  /* Long lines wrap where they can break: at spaces first, a long path anywhere. */
+  .text {
+    margin: 0;
+    font: inherit;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    tab-size: 2;
+  }
+
+  .more {
+    display: inline-flex;
+    align-self: flex-start;
+    align-items: center;
+    gap: var(--nc-space-1);
+    min-block-size: 2.25rem;
+    margin: 0;
+    padding: 0 var(--ac-pad-inline);
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-accent);
+    cursor: pointer;
+  }
+
+  .more > svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .command[data-open] .more > svg {
+    transform: rotate(180deg);
+  }
+
+  .more:focus-visible {
+    border-radius: var(--nc-radius-sm);
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+
+  @media (hover: hover) {
+    .more:hover {
+      text-decoration: underline;
+      text-underline-offset: 0.2em;
+    }
+  }
+}

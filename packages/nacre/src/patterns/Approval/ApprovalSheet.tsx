@@ -3,6 +3,7 @@ import type { ReactNode, Ref } from 'react';
 
 import { Button } from '../../components/Button';
 import { Sheet } from '../../components/Sheet';
+import { ApprovalCommand } from './ApprovalCommand';
 import styles from './ApprovalSheet.module.css';
 
 /** How an approval sheet's question ended: allowed, denied, or answered somewhere else first. */
@@ -17,7 +18,10 @@ export interface ApprovalSheetProps {
   face?: ReactNode;
   /** The chat it's in, in a few words. */
   where?: ReactNode;
-  /** What will happen, short: "Run npm test". */
+  /**
+   * What will happen, in a few plain words: "Run the tests in conch-agent".
+   * Never the command itself (that's `command`): at most two lines.
+   */
   title: ReactNode;
   /** Where things go, in a few words. */
   detail?: ReactNode;
@@ -25,7 +29,9 @@ export interface ApprovalSheetProps {
   cost?: ReactNode;
   /** Why to look twice, as one quiet line. */
   caution?: ReactNode;
-  /** Exactly what it would do: the command, the file, the address. */
+  /** The command it would run, exactly: at code size, a few lines and then "Show all". */
+  command?: string;
+  /** Exactly what it would do, when it isn't a command: the file, the address, a draft. */
   children?: ReactNode;
   /** When nobody answering becomes a no: "No answer by 14:32 is a no." */
   until?: ReactNode;
@@ -50,7 +56,8 @@ const OUTCOME: Record<ApprovalSheetOutcome, { words: string; more: string }> = {
 
 /**
  * One question, on a phone, within reach of a thumb (ADR 0108): what will
- * happen as its title and exactly what it would do under it, the facts in
+ * happen in a few plain words as its title (never the command: that goes
+ * under it, at code size) and exactly what it would do under it, the facts in
  * a quiet line, and two big answers at the bottom of the screen. A step that
  * matters asks for your passkey first, and says why. Once answered, a pearl
  * seal closes over the answer, and the sheet offers the way back.
@@ -65,6 +72,7 @@ export function ApprovalSheet({
   detail,
   cost,
   caution,
+  command,
   children,
   until,
   confirm,
@@ -124,6 +132,7 @@ export function ApprovalSheet({
                   {detail && <span>{detail}</span>}
                 </p>
               )}
+              {command && <ApprovalCommand>{command}</ApprovalCommand>}
               {children != null && <div className={styles.preview}>{children}</div>}
               {caution && (
                 <p className={styles.line}>

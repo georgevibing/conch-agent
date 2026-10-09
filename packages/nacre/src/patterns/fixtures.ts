@@ -36,3 +36,17 @@ export const sampleCode = `export function parse(raw: RawData): ClientMessage {
 
 export const sampleReply =
   "I've switched the session to a typed message queue. Incoming frames are now parsed and validated with the shared protocol schema before they reach the agent, and the socket's close event stops the iterator cleanly. All 18 server tests pass.";
+
+/** A long command with a heredoc, as an assistant writes one to edit a file. */
+export const sampleLongCommand = [
+  "cd /home/george/pworkspace/conch-agent && git checkout AGENTS.md && python3 - <<'EOF'",
+  "p='AGENTS.md'",
+  's=open(p).read()',
+  'a="""- A step in an app the person made here is their own work: it carries `own`, so what it sends goes only to the sites the person added it with."""',
+  'b="""- A step in an app the person made here is their own work (ADR 0118)."""',
+  "assert a in s, 'not found'",
+  's=s.replace(a, b)',
+  "open(p,'w').write(s)",
+  "print('done')",
+  'EOF',
+].join('\n');
