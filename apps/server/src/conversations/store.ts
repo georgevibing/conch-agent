@@ -31,6 +31,13 @@ export interface ConversationRecord extends ConversationSummary {
   recoveryPending?: boolean;
   /** Recovery announced, still waiting for admission (not a new crash attempt). */
   recoveryQueued?: boolean;
+  /**
+   * Conch paused this turn on purpose, at a safe point, before restarting
+   * (its own update, or a restart someone asked for): not a crash.
+   */
+  pausedFor?: 'update' | 'restart';
+  /** Tool calls held at the pause, before they ran: they never happened. */
+  pausedTools?: string[];
   /** The provider that answered last. */
   engine: EngineId;
   /** Before ADR 0012: the session of `engine`. Read into `sessions` when loaded. */
@@ -63,6 +70,8 @@ const StoredRecord = z.object({
   pendingToolCalls: z.array(z.string()).optional().catch(['unknown']),
   recoveryPending: z.boolean().optional().catch(true),
   recoveryQueued: z.boolean().optional().catch(undefined),
+  pausedFor: z.enum(['update', 'restart']).optional().catch(undefined),
+  pausedTools: z.array(z.string()).max(200).optional().catch(undefined),
   resumeId: z.string().optional().catch(undefined),
   sessions: z
     .partialRecord(EngineId, z.object({ resumeId: z.string(), seq: z.number() }))
@@ -169,6 +178,8 @@ export class ConversationStore {
           status: 'idle' as const,
           titling: undefined,
           recoveryPending: this.interrupted.includes(r.id) || undefined,
+          // A pause only means something for a turn that was still going when Conch stopped.
+          ...(!this.interrupted.includes(r.id) && { pausedFor: undefined, pausedTools: undefined }),
         },
       ]),
     );

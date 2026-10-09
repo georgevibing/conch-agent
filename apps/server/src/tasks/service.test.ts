@@ -462,6 +462,43 @@ describe('a task sent to the background', () => {
     second.tasks.close();
   });
 
+  it('carries on by itself after Conch paused it for an update, from its own chat', async () => {
+    const first = await setup({ background: 1 });
+    const task = await first.tasks.create({ kind: 'background', text: 'slow migration' });
+    await until(
+      () => first.tasks.get(task.id),
+      (t) => t.status === 'running' && Boolean(t.conversationId),
+    );
+    await until(
+      async () => first.engines.get('mock')?.turns.length ?? 0,
+      (n) => n > 0,
+    );
+    await first.conversations.pause('update', { waitMs: 10 });
+    expect(await first.tasks.markPaused('update')).toBe(1);
+    first.tasks.close();
+    await first.conversations.drain();
+
+    const second = await setup({ home: first.home });
+    // No press: it's running again by itself, in the same chat, from its ledger.
+    await until(
+      async () => second.engines.get('mock')?.turns.length ?? 0,
+      (n) => n > 0,
+    );
+    expect(second.engines.get('mock')?.turns[0]?.prompt).toMatch(
+      /Resume the existing goal: slow migration/,
+    );
+    second.engines.get('mock')?.release?.();
+    const [done] = await second.tasks.waitFor([task.id]);
+    expect(done?.status).toBe('done');
+    expect(done?.pausedFor).toBeUndefined();
+    const { events } = await second.conversations.detail(done?.conversationId ?? '');
+    expect(events.find((e) => e.type === 'turn.completed')).toMatchObject({
+      outcome: 'interrupted',
+      restarted: { resumed: true, reason: 'update' },
+    });
+    second.tasks.close();
+  });
+
   it('a pending host approval is asked afresh after restart and an old answer cannot release it', async () => {
     let writes = 0;
     const tools: ToolProvider = () => [

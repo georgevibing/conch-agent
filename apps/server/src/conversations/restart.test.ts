@@ -495,3 +495,155 @@ describe('native commands share resource admission', () => {
     },
   );
 });
+
+describe('Conch pausing a chat for its own update', () => {
+  it('stops it at a safe point, then carries it on after the restart, without spending the crash budget', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-update-pause-'));
+    let manager = await open(home, hangs());
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'Fix the CI' });
+    await until(manager, convo.id, (e) => e.some((x) => x.type === 'assistant.delta'));
+    expect(manager.working()).toEqual([{ id: convo.id, title: expect.any(String) }]);
+    // Three updates in a row: each one pauses and carries on (a crash would stop at two).
+    for (let round = 0; round < 3; round++) {
+      expect(await manager.pause('update', { waitMs: 50 })).toBe(1);
+      await manager.drain();
+      const engine = hangs();
+      manager = await open(home, engine);
+      expect(await manager.recoverInterrupted()).toBe(1);
+      await vi.waitFor(() =>
+        expect(engine.turns[0]?.prompt).toMatch(
+          /paused this work at a safe point to update itself/,
+        ),
+      );
+      await until(
+        manager,
+        convo.id,
+        (e) => e.filter((x) => x.type === 'turn.completed').length === round + 1,
+      );
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    const { events } = await manager.detail(convo.id);
+    expect(
+      events.flatMap((e) => (e.type === 'turn.completed' && e.restarted ? [e.restarted] : [])),
+    ).toEqual([
+      { resumed: true, reason: 'update' },
+      { resumed: true, reason: 'update' },
+      { resumed: true, reason: 'update' },
+    ]);
+    await manager.drain();
+  });
+
+  it('lets a step already running finish first, and holds a new one unrun until after the restart', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-update-safe-point-'));
+    let finishStep = () => {};
+    const stepDone = new Promise<void>((resolve) => (finishStep = resolve));
+    let secondGuarded = false;
+    const before = await open(
+      home,
+      new Scripted(async function* (input) {
+        await input.guard?.({ toolName: 'Bash', toolUseId: 't1', input: { command: 'npm test' } });
+        yield { type: 'tool-start', toolUseId: 't1', name: 'Bash', input: { command: 'npm test' } };
+        await stepDone;
+        yield { type: 'tool-end', toolUseId: 't1', status: 'success', output: 'ok' };
+        // The next step meets the pause: it waits here and never runs.
+        await input.guard?.({ toolName: 'Bash', toolUseId: 't2', input: { command: 'git push' } });
+        secondGuarded = true;
+        yield { type: 'tool-start', toolUseId: 't2', name: 'Bash', input: { command: 'git push' } };
+        yield { type: 'tool-end', toolUseId: 't2', status: 'success', output: 'pushed' };
+      }),
+    );
+    const convo = await before.send({ clientMessageId: 'u1', text: 'Test, then push' });
+    await until(before, convo.id, (e) => e.some((x) => x.type === 'tool.started'));
+    let paused = false;
+    const pausing = before.pause('update', { waitMs: 5_000, pollMs: 5 }).then((n) => {
+      paused = true;
+      return n;
+    });
+    await new Promise((r) => setTimeout(r, 40));
+    // The running step hasn't finished: the pause waits for it.
+    expect(paused).toBe(false);
+    finishStep();
+    expect(await pausing).toBe(1);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(secondGuarded).toBe(false);
+    const stored = await new ConversationStore(join(home, 'conversations')).get(convo.id);
+    expect(stored).toMatchObject({ pausedFor: 'update', pausedTools: ['t2'] });
+    await before.drain();
+
+    const engine = hangs();
+    const after = await open(home, engine);
+    // Nothing is uncertain: t1 finished, t2 never ran. It carries on by itself.
+    expect(await after.recoverInterrupted()).toBe(1);
+    const { events } = await after.detail(convo.id);
+    expect(events.findLast((e) => e.type === 'turn.completed')).toMatchObject({
+      restarted: { resumed: true, reason: 'update' },
+    });
+    expect(events.some((e) => e.type === 'tool.finished' && e.toolUseId === 't2')).toBe(false);
+    await after.drain();
+  });
+
+  it('asks a waiting approval again after the update, instead of leaving it stuck', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-update-approval-'));
+    const before = await open(
+      home,
+      new Scripted(async function* (input) {
+        await input.guard?.({
+          toolName: 'Bash',
+          toolUseId: 'p1',
+          input: { command: 'rm -rf build' },
+        });
+        yield {
+          type: 'tool-start',
+          toolUseId: 'p1',
+          name: 'Bash',
+          input: { command: 'rm -rf build' },
+        };
+        await input.requestPermission(
+          { toolName: 'Bash', toolUseId: 'p1', input: { command: 'rm -rf build' } },
+          input.signal,
+        );
+        await new Promise(() => undefined);
+      }),
+    );
+    const convo = await before.send({ clientMessageId: 'u1', text: 'Clean the build' });
+    await until(before, convo.id, (e) => e.some((x) => x.type === 'permission.requested'));
+    // Waiting for an approval is a safe point: the pause doesn't wait for it.
+    expect(await before.pause('update', { waitMs: 5_000 })).toBe(1);
+    await before.drain();
+
+    const engine = hangs();
+    const after = await open(home, engine);
+    expect(await after.recoverInterrupted()).toBe(1);
+    await vi.waitFor(() =>
+      expect(engine.turns[0]?.prompt).toMatch(/waiting for my approval.*was not run/),
+    );
+    const { events } = await after.detail(convo.id);
+    expect(events.find((e) => e.type === 'tool.finished' && e.toolUseId === 'p1')).toMatchObject({
+      status: 'error',
+      output: expect.stringMatching(/^Not run/),
+    });
+    const stored = await new ConversationStore(join(home, 'conversations')).get(convo.id);
+    expect(stored?.pendingToolCalls ?? []).not.toContain('p1');
+    await after.drain();
+  });
+
+  it('a crash after a pause that never came is still a crash', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-update-unpause-'));
+    const before = await open(home, hangs());
+    const convo = await before.send({ clientMessageId: 'u1', text: 'Work' });
+    await until(before, convo.id, (e) => e.some((x) => x.type === 'assistant.delta'));
+    await before.pause('update', { waitMs: 10 });
+    // The restart didn't happen: everything goes on, unmarked.
+    before.unpause();
+    await before.drain();
+    const after = await open(home, hangs());
+    expect(await after.recoverInterrupted()).toBe(1);
+    expect(
+      (await after.detail(convo.id)).events.findLast((e) => e.type === 'turn.completed'),
+    ).toMatchObject({ restarted: { resumed: true } });
+    expect(
+      (await after.detail(convo.id)).events.findLast((e) => e.type === 'turn.completed'),
+    ).not.toMatchObject({ restarted: { reason: 'update' } });
+    await after.drain();
+  });
+});
