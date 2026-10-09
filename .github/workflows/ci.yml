@@ -129,11 +129,42 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  # Commit subjects become the next version and the release notes, and a
+  # squash merge turns the title into one, so a pull request checks them all
+  # (scripts/commits.mjs). The title is read when the job runs, so after fixing
+  # it, re-running this job is enough.
+  commits:
+    name: Conventional commits
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      # To read the pull request's title as it is now.
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Check the commit subjects and the title
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_REF: ${{ github.base_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          title=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json title --jq .title)
+          node scripts/commits.mjs "origin/$BASE_REF..HEAD" --title "$title"
+
   # Preserve one stable gate for branch rules. Website publication still waits
-  # for the entire CI workflow, so no partial pass can publish the site.
+  # for the entire CI workflow, so no partial pass can publish the site. The
+  # commit check runs for pull requests only, so it may be skipped on a push.
   check:
     if: ${{ always() }}
-    needs: [static, unit, e2e, desktop]
+    needs: [static, unit, e2e, desktop, commits]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     permissions: {}
@@ -141,5 +172,17 @@ jobs:
       - name: Require every suite to pass
         env:
           RESULTS: ${{ toJSON(needs) }}
+          EVENT: ${{ github.event_name }}
         run: |
-          node -e 'const jobs = JSON.parse(process.env.RESULTS); for (const [name, job] of Object.entries(jobs)) { console.log(`${name}: ${job.result}`); } if (Object.values(jobs).some(job => job.result !== "success")) process.exit(1);'
+          node -e '
+            const jobs = JSON.parse(process.env.RESULTS);
+            const optional = process.env.EVENT === "pull_request" ? [] : ["commits"];
+            const passed = (name, job) =>
+              job.result === "success" || (job.result === "skipped" && optional.includes(name));
+            let ok = true;
+            for (const [name, job] of Object.entries(jobs)) {
+              console.log(`${name}: ${job.result}`);
+              if (!passed(name, job)) ok = false;
+            }
+            if (!ok) process.exit(1);
+          '
