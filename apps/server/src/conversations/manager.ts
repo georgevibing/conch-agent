@@ -2901,9 +2901,11 @@ export class ConversationManager {
       tools: () => {
         const found = new Map<string, ScriptTool>();
         const turn = scriptInput;
+        // A scoped run's list holds inside a script too (its guard holds it again at each call).
         if (turn)
           for (const tool of hostComputerTools(turn))
-            found.set(tool.name, { tool: turn.wrapTool?.(tool) ?? tool, display: tool.name });
+            if (!extras?.toolAllowed || extras.toolAllowed(tool.name))
+              found.set(tool.name, { tool: turn.wrapTool?.(tool) ?? tool, display: tool.name });
         for (const tool of tools)
           found.set(tool.name, { tool, display: `mcp__conch__${tool.name}` });
         return found;
