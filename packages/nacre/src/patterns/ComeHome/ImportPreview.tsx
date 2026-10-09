@@ -190,7 +190,8 @@ function Row({
               <Collapsible.Trigger className={styles.show}>
                 {open ? 'Hide what it says' : 'Show what it says'}
               </Collapsible.Trigger>
-              <Collapsible.Content>
+              {/* A sunken quote: the fold's whole width. */}
+              <Collapsible.Content inset={false}>
                 <blockquote className={styles.words}>{item.preview}</blockquote>
               </Collapsible.Content>
             </Collapsible>

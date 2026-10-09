@@ -192,7 +192,7 @@ export function KeyCatcher({
           }
         }}
       >
-        <Collapsible.Trigger className={styles.trigger}>
+        <Collapsible.Trigger>
           <span id={titleId}>Use an API key instead</span>
         </Collapsible.Trigger>
         <Collapsible.Content>

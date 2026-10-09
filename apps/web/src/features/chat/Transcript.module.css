@@ -93,7 +93,6 @@
   .thought {
     display: inline-flex;
     align-items: center;
-    gap: var(--nc-space-1);
     padding: 0;
     border: 0;
     background: none;
@@ -120,7 +119,11 @@
     animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out) 650ms both;
   }
 
+  /* The trigger sits on the text's edge; the thinking opens under its words. */
   .thoughtWrap {
+    --cl-pad: 0px;
+    --cl-gap: var(--nc-space-1);
+
     animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out) both;
   }
 

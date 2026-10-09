@@ -312,7 +312,8 @@ function NaturalVoices({
       {here.length > 0 && others.length > 0 && (
         <Collapsible>
           <Collapsible.Trigger chevron>Other languages</Collapsible.Trigger>
-          <Collapsible.Content>
+          {/* Voices like the ones above: on their column. */}
+          <Collapsible.Content inset={false}>
             {library(others, 'Natural voices in other languages')}
           </Collapsible.Content>
         </Collapsible>

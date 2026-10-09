@@ -68,14 +68,15 @@
   }
 
   /* ── Its tools ────────────────────────────────────────────────────── */
+  /* The chevron lines up with the icons above it, the words with their words. */
   .tools {
+    --cl-bleed: var(--nc-space-1);
+    --cl-gap: var(--nc-space-2-5);
+
     margin-block-start: var(--nc-space-2);
   }
 
-  /* The chevron lines up with the icons above it, the words with their words. */
   .toolsTrigger {
-    gap: var(--nc-space-2-5);
-    margin-inline-start: calc(var(--nc-space-1) * -1);
     font-size: var(--nc-text-xs);
     font-weight: var(--nc-weight-medium);
     color: var(--nc-text-muted);

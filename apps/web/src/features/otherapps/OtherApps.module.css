@@ -55,11 +55,11 @@
   align-content: center;
 }
 
+/* The chevron hangs out past the page's edge, the words on it; what opens lines up with them. */
 .developers {
-  margin-inline-start: calc(-1 * var(--nc-space-1-5));
+  --cl-bleed: var(--nc-space-1-5);
 }
 
 .developersBody {
   padding-block-start: var(--nc-space-3);
-  padding-inline-start: var(--nc-space-1-5);
 }

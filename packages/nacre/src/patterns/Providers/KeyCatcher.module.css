@@ -2,9 +2,12 @@
   /*
    * One quiet line under the ways to sign in, and a field a press away: a key
    * is for the few who have one, so it never dresses as the way in.
-   * `--kc-indent` puts what opens under the words, past the chevron.
+   * The trigger hangs its chevron outside the page's edge (`--cl-bleed`), so
+   * its words sit on it; what opens lines up with the words by itself, and
+   * `--kc-indent` puts what happened, outside the fold, under them too.
    */
   .root {
+    --cl-bleed: var(--nc-space-1-5);
     --kc-indent: calc(0.875rem + var(--nc-space-1-5));
 
     position: relative;
@@ -13,18 +16,12 @@
     min-inline-size: 0;
   }
 
-  /* The disclosure's own words, on the page's edge (its chevron hangs outside). */
-  .trigger {
-    margin-inline-start: calc(-1 * var(--nc-space-1-5));
-  }
-
   .body {
     display: flex;
     flex-direction: column;
     gap: var(--nc-space-2);
     max-inline-size: 34rem;
     padding-block-start: var(--nc-space-2-5);
-    padding-inline-start: var(--kc-indent);
   }
 
   .hint {

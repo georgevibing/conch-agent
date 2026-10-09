@@ -456,7 +456,8 @@ export function LocalSetup({ provider }: { provider: Provider }) {
       {!hasModel && !active && !installing && available.length > 1 && (
         <Collapsible>
           <Collapsible.Trigger chevron>Other models</Collapsible.Trigger>
-          <Collapsible.Content>
+          {/* Cards like the ones above: on their column. */}
+          <Collapsible.Content inset={false}>
             <OfferChoice
               label="Models that fit this computer"
               offers={available}
@@ -502,7 +503,8 @@ export function LocalSetup({ provider }: { provider: Provider }) {
             available.length > 0 && (
               <Collapsible>
                 <Collapsible.Trigger chevron>Get another model</Collapsible.Trigger>
-                <Collapsible.Content>
+                {/* Cards like the ones above: on their column. */}
+                <Collapsible.Content inset={false}>
                   <Stack gap={3}>
                     <OfferChoice
                       label="Models that fit this computer"

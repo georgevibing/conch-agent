@@ -354,7 +354,8 @@ export function SignIn({ status, notice }: { status: AuthStatus; notice?: string
                 ? 'Lost your key?'
                 : 'Forgot your password?'}
           </Collapsible.Trigger>
-          <Collapsible.Content>
+          {/* Centred under the form, as the question is: not nested under it. */}
+          <Collapsible.Content inset={false}>
             {onlyPasskeys ? (
               <Text size="sm" tone="muted" className={styles.helpBody}>
                 On a device that’s already signed in, open Settings → Access → Add a device. Or, on
