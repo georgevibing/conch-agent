@@ -89,7 +89,7 @@ export function partReady(
 }
 
 const per = (n: number) => (n < 1 ? `$${n.toFixed(2)}` : `$${+n.toFixed(2)}`);
-const window = (tokens: number) =>
+const contextWindow = (tokens: number) =>
   tokens >= 1_000_000 ? `${+(tokens / 1_000_000).toFixed(1)}M` : `${Math.round(tokens / 1000)}k`;
 const seconds = (ms: number) => `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)} s`;
 
@@ -208,7 +208,7 @@ export function PartReview({
           {provider.models.map((m) => (
             <li key={m.id} className={styles.model}>
               <span className={styles.modelName}>{m.name ?? m.id}</span>
-              {m.context && <span className={styles.modelFact}>{window(m.context)}</span>}
+              {m.context && <span className={styles.modelFact}>{contextWindow(m.context)}</span>}
               {m.price && (
                 <span className={styles.modelFact}>
                   {per(m.price.input)} in · {per(m.price.output)} out
