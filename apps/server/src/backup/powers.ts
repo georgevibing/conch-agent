@@ -11,7 +11,7 @@
  * even when something else about it is off. The names come from the file,
  * so they're cut to size, and the page shows them as text.
  */
-import { POWER_TEXT_MAX, type BackupPower } from '@conch/protocol';
+import { DASHBOARD_DESTINATIONS, POWER_TEXT_MAX, type BackupPower } from '@conch/protocol';
 
 import { DEFAULT_LEARNING_USD } from '../learning/spend';
 import { DEFAULT_MONTHLY_USD } from '../routines/spend';
@@ -25,6 +25,7 @@ export function previewReads(path: string): boolean {
     path === 'agents/agents.json' ||
     path === 'browser.json' ||
     path === 'terminal.json' ||
+    path === 'telemetry.json' ||
     path === 'computer-use.json' ||
     path === 'channels.json' ||
     path === 'skills.trust.json' ||
@@ -251,6 +252,27 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
 
   if (record(json(read, 'terminal.json')?.settings)?.allowRemote === true)
     powers.push({ kind: 'terminal-remote' });
+
+  // Dashboards (ADR 0121): where Conch's numbers go (with the words of chats, if on),
+  // and Prometheus reading them. An old backup mustn't quietly send them elsewhere.
+  const telemetry = record(json(read, 'telemetry.json')?.settings);
+  const otlp = record(telemetry?.otlp);
+  if (otlp?.on === true) {
+    const destination = typeof otlp.destination === 'string' ? otlp.destination : 'custom';
+    let where = DASHBOARD_DESTINATIONS.find((d) => d.id === destination)?.name ?? 'Another place';
+    if (typeof otlp.endpoint === 'string')
+      try {
+        where = `${where} (${new URL(otlp.endpoint).host})`;
+      } catch {
+        /* Named as the destination. */
+      }
+    powers.push({
+      kind: 'dashboards-send',
+      name: text(where, 'A dashboard'),
+      content: telemetry?.content === true,
+    });
+  }
+  if (record(telemetry?.prometheus)?.on === true) powers.push({ kind: 'dashboards-scrape' });
 
   // Using your apps (ADR 0110): on, and the apps it may always use.
   const computer = json(read, 'computer-use.json');

@@ -193,6 +193,17 @@ export const BackupPower = z.discriminatedUnion('kind', [
    * another computer it opens nothing by itself, but the preview still names it.
    */
   z.object({ kind: z.literal('own-address'), name: PowerText }),
+  /**
+   * Conch's numbers go to this place (ADR 0121), and with `content` the words of
+   * chats too: a backup from somewhere else must not quietly send them elsewhere.
+   */
+  z.object({
+    kind: z.literal('dashboards-send'),
+    name: PowerText,
+    content: z.boolean().default(false),
+  }),
+  /** Anything with the scrape token can read Conch's numbers at `/metrics` (ADR 0121). */
+  z.object({ kind: z.literal('dashboards-scrape') }),
 ]);
 export type BackupPower = z.infer<typeof BackupPower>;
 

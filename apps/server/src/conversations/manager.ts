@@ -917,6 +917,8 @@ export class ConversationManager {
   constructor(
     private readonly deps: {
       store: ConversationStore;
+      /** Counts each step Auto judges, for dashboards (ADR 0121). Numbers only. */
+      judged?: (verdict: 'went_ahead' | 'asked', risk?: string) => void;
       /** Resource admission for automatic recovery; manual chats remain available. */
       recovery?: { allowed: () => boolean; workload?: () => WorkloadPace; intervalMs?: number };
       settings: SettingsStore;
@@ -2799,10 +2801,15 @@ export class ConversationManager {
         if (mode === 'auto') {
           // Auto stops only for something serious, and says what (ADR 0100).
           const risk = assessRisk(request.toolName, request.input, { workspace, ...access });
-          if (riskAsks(risk, false))
+          if (riskAsks(risk, false)) {
+            this.deps.judged?.('asked', risk?.kind);
             return askUser({ ...request, taint: riskWords(risk), remember: false }, abort.signal);
+          }
           // Spending money still asks (a paid picture); the person's own plan never does.
-          if (!request.cost && autoAllows(mode, request.toolName, request.explicit)) return 'allow';
+          if (!request.cost && autoAllows(mode, request.toolName, request.explicit)) {
+            this.deps.judged?.('went_ahead');
+            return 'allow';
+          }
         }
         if (request.once) return askUser({ ...request, remember: false }, abort.signal);
         if (live.alwaysAllow.has(request.toolName)) return 'allow';
@@ -2854,6 +2861,10 @@ export class ConversationManager {
           else if (look) why = look;
         }
         if (judged) {
+          this.deps.judged?.(
+            why ? 'asked' : 'went_ahead',
+            why ? (riskAsks(risk, true) ? risk?.kind : 'second-look') : undefined,
+          );
           if (!why) return 'allow';
           return askUser(
             {

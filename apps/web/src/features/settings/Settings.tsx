@@ -22,6 +22,7 @@ import {
   BatteryMedium,
   Bell,
   Cable,
+  ChartLine,
   Brain,
   Check,
   ChevronLeft,
@@ -60,6 +61,7 @@ import { OtherAppsTab } from '../otherapps/OtherAppsTab';
 import { ComeHomeSection } from '../import/ComeHomeSection';
 import { PastChatsSection } from '../import/PastChatsSection';
 import { ComputerTab } from '../computer/ComputerTab';
+import { DashboardsTab } from '../dashboards/DashboardsTab';
 import { ComeHomePage } from '../import/ComeHomePage';
 import { MemoryView } from '../memory/MemoryView';
 import { MorningNote } from '../memory/MorningNote';
@@ -241,7 +243,7 @@ interface Place {
 }
 
 /**
- * Eighteen places, read as five: the everyday basics, then who your assistant
+ * Nineteen places, read as five: the everyday basics, then who your assistant
  * is, where its intelligence comes from, what it can use, and keeping it safe.
  */
 const groups: { label: string; hidden?: boolean; places: Place[] }[] = [
@@ -287,6 +289,7 @@ const groups: { label: string; hidden?: boolean; places: Place[] }[] = [
       { value: 'devices', label: 'Devices', icon: <MonitorSmartphone /> },
       { value: 'health', label: 'Health', icon: <HeartPulse /> },
       { value: 'computer', label: 'This computer', icon: <Laptop /> },
+      { value: 'dashboards', label: 'Dashboards', icon: <ChartLine /> },
     ],
   },
 ];
@@ -507,6 +510,8 @@ export function Settings() {
         return <AppearanceTab />;
       case 'computer':
         return <ComputerTab />;
+      case 'dashboards':
+        return <DashboardsTab />;
     }
   };
 

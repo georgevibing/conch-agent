@@ -338,6 +338,14 @@ describe('Palette search', () => {
         await screen.findByRole('option', { name: /Settings: This computer/ }),
       ).toBeInTheDocument();
     }
+    // Dashboards (ADR 0121): by the names of the tools people send numbers to.
+    for (const words of ['grafana', 'prometheus', 'opentelemetry', 'langfuse']) {
+      await user.clear(screen.getByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(
+        await screen.findByRole('option', { name: /Settings: Dashboards/ }),
+      ).toBeInTheDocument();
+    }
     // Letting the assistant use the computer's apps (ADR 0110), by the words people use.
     for (const words of ['computer use', 'control my mac', 'screen recording']) {
       await user.clear(screen.getByRole('combobox'));

@@ -70,6 +70,21 @@ export const ADDRESS_SUBCOMMANDS = [
   { usage: 'off', summary: 'Stop answering at it' },
 ] as const satisfies readonly CliSubcommand[];
 
+export const DASHBOARDS_SUBCOMMANDS = [
+  { usage: '(nothing), status', summary: 'Where Conch’s numbers go, and how sending is going' },
+  {
+    usage: 'prometheus [--this-computer]',
+    summary: 'Turn on /metrics, with a new scrape token and the config that uses it',
+  },
+  {
+    usage: 'send <destination> [--endpoint <url>] [--region <id>]',
+    summary: 'Send to Grafana Cloud, Honeycomb, Datadog, New Relic, Langfuse, Phoenix…',
+  },
+  { usage: 'test', summary: 'Send a real span and the numbers now, and say if they arrived' },
+  { usage: 'token', summary: 'A new scrape token (the old one stops working)' },
+  { usage: 'off', summary: 'Stop sending, and close /metrics' },
+] as const satisfies readonly CliSubcommand[];
+
 export const CLI_COMMANDS = [
   {
     name: 'setup',
@@ -255,6 +270,15 @@ export const CLI_COMMANDS = [
     detail:
       'Signs a skill folder with your key, so people who trust you see “Verified”, and manages whose signed skills you trust. Your key is locked with this computer’s own key, so it opens here and nowhere else (a passphrase-locked backup carries it to a new computer).',
     subcommands: SKILLS_SUBCOMMANDS,
+  },
+  {
+    name: 'dashboards',
+    usage: 'dashboards [prometheus | send <destination> | test | off]',
+    summary: 'Conch’s numbers on a dashboard of your own (dashboards help)',
+    group: 'Running Conch',
+    detail:
+      'Turns on the Prometheus page at /metrics (behind a scrape token, or for programs on this computer only) and prints the scrape config, or sends Conch’s numbers and the shape of each turn over OpenTelemetry to Grafana Cloud, Honeycomb, Datadog, New Relic, Langfuse, Phoenix, a Grafana on this computer or any collector. Paste what the service shows you and Conch reads the endpoint and key out of it. Never the words of your chats: those go only if you turn them on in Settings → Dashboards.',
+    subcommands: DASHBOARDS_SUBCOMMANDS,
   },
 ] as const satisfies readonly CliCommand[];
 

@@ -23,6 +23,7 @@ export const SETTINGS_TABS = [
   'devices',
   'health',
   'computer',
+  'dashboards',
 ] as const;
 
 export type SettingsTab = (typeof SETTINGS_TABS)[number];

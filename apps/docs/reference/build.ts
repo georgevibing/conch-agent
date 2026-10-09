@@ -35,6 +35,7 @@ import { ProviderKeys } from '../../server/src/providers/keys';
 import { SettingsStore } from '../../server/src/settings/store';
 import { KNOWN_NEEDS } from '../../server/src/setup/known';
 import type { InstallRecipe, Platform } from '../../server/src/setup/needs';
+import { METRICS, prometheusName } from '../../server/src/telemetry/catalog';
 import { SERVER_VERSION } from '../../server/src/version';
 import { builtins, sectionLabels } from '../../web/src/features/commands/slash';
 import { effortLabels, modeWords } from '../../web/src/features/models/words';
@@ -344,6 +345,15 @@ export function buildReference(): Reference {
       subcommands: 'subcommands' in command ? [...command.subcommands] : [],
     })),
     env: env(),
+    metrics: METRICS.map((m) => ({
+      name: m.name,
+      prometheus: prometheusName(m),
+      kind: m.kind,
+      unit: m.unit,
+      description: m.description,
+      labels: [...m.labels],
+      group: m.group,
+    })),
     modes: modeWords.map(({ value, label, description, tone }) => ({
       value,
       label,

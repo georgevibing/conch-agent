@@ -277,6 +277,12 @@ export const RULES: readonly BackupRule[] = [
   },
   { match: 'terminal.json', class: 'kept', group: 'settings', why: 'The terminal’s settings.' },
   {
+    match: 'telemetry.json',
+    class: 'kept',
+    group: 'settings',
+    why: 'Where your dashboards get Conch’s numbers from: Prometheus, or the place they’re sent (ADR 0121).',
+  },
+  {
     match: 'computer-use.json',
     class: 'kept',
     group: 'settings',
@@ -612,6 +618,12 @@ export const RULES: readonly BackupRule[] = [
     class: 'secret',
     group: 'secrets',
     why: 'Your bots’ keys, and your email’s app password.',
+  },
+  {
+    match: 'telemetry.secrets.json',
+    class: 'secret',
+    group: 'secrets',
+    why: 'Your dashboard’s key, and the hash of the token Prometheus reads Conch’s numbers with (ADR 0121).',
   },
   {
     match: 'a2a.secrets.json',

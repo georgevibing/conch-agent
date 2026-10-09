@@ -135,7 +135,13 @@ import { ConversationStore } from './conversations/store';
 import { ChatFolders } from './conversations/folders';
 import { AgentStore } from './agents/store';
 import { RoundService } from './agents/rounds';
+import { homedir } from 'node:os';
+
 import { OutsideAgents } from './a2a/outside';
+import { TelemetryService } from './telemetry/service';
+import { Redaction } from './trajectory/redact';
+import { diskOf } from './computer/readers';
+import { sampleResources } from './recovery/resources';
 import { outsideCheck } from './a2a/doctor';
 import { registerAgentsDoctor } from './agents/doctor';
 import type { ApiEngine } from './engines/api';
@@ -345,6 +351,8 @@ export class Services {
   readonly agents: AgentStore;
   /** Agents elsewhere that speak A2A, added by pasting their address (ADR 0112). */
   readonly outside: OutsideAgents;
+  /** Dashboards: Conch's numbers and traces for Prometheus and OpenTelemetry (ADR 0121). */
+  readonly telemetry: TelemetryService;
   /** Agents taking turns in a chat when you mention them (ADR 0112). */
   readonly rounds: RoundService;
   /** Questions the assistant asked, waiting for your answer (ADR 0060 §4). */
@@ -1051,7 +1059,31 @@ export class Services {
       heal: (message) => void this.healed.note('terminal', message),
     });
     this.doctor.register(this.workplaces.doctorCheck());
+    // Dashboards (ADR 0121): it only listens, and reads each gauge when asked.
+    this.telemetry = new TelemetryService({
+      home: config.CONCH_HOME,
+      version: SERVER_VERSION,
+      heal,
+      redact: () => {
+        const known = this.vault.redactor();
+        return (text) => new Redaction({ known, home: homedir() }).text(text);
+      },
+      gauges: {
+        resources: () => sampleResources(),
+        disk: () => diskOf(config.CONCH_HOME),
+        memories: async () => (await this.memory.list()).length,
+        skills: async () => (await this.skills.list()).skills.length,
+        agents: () => this.agents.list(),
+        providers: async () => {
+          const ready = new Set((await this.providers.ready()).map((engine) => engine.id));
+          const connected = await this.providers.connected();
+          return [...new Set([...connected, ...ready])].map((id) => ({ id, ready: ready.has(id) }));
+        },
+      },
+    });
+    this.doctor.register(this.telemetry.doctorCheck());
     this.conversations = new ConversationManager({
+      judged: (verdict, risk) => this.telemetry.auto(verdict, risk),
       // Who each chat is with: its persona and instructions in every turn (ADR 0101).
       agents: this.agents,
       // What each turn costs, what a chat has spent, and its limits (ADR 0079).
@@ -1419,6 +1451,7 @@ export class Services {
       heal,
     });
     this.broadcast.on((event) => this.learner.onEvent(event));
+    this.broadcast.on((event) => this.telemetry.observe(event));
     // Every way a skill is used ends in `skill.used`: the tidy shelf counts them all.
     this.conversations.events.on((event) => {
       const used = skillUsedIn(event);
@@ -2822,6 +2855,7 @@ export class Services {
     await this.providers.loadServers().catch(() => undefined);
     await this.providers.load();
     this.network.start();
+    this.telemetry.start();
     // Containers a crash left behind are removed; nothing is started for it (ADR 0106).
     void this.workplaces.start();
     // Chats a restart cut off say so, and carry on by themselves.
@@ -2866,6 +2900,7 @@ export class Services {
 
   async stop() {
     this.recovery.stop();
+    void this.telemetry.stop();
     void this.#printer.close();
     this.computer.stop();
     this.tasks.close();

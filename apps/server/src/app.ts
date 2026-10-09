@@ -105,6 +105,7 @@ import { registerAgentRoutes } from './agents/routes';
 import { AgentError } from './agents/store';
 import { registerMcpEndpoint } from './mcp/endpoint';
 import { registerA2aDoor } from './a2a/door';
+import { registerTelemetryRoutes } from './telemetry/routes';
 import { registerOutsideRoutes } from './a2a/routes';
 import { registerMcpRoutes } from './mcp/routes';
 import { registerQuestionRoutes } from './questions/routes';
@@ -262,6 +263,8 @@ export async function buildApp(services: Services) {
     chats: services.conversations,
   });
   registerOutsideRoutes(app, { outside: services.outside, rounds: services.rounds });
+  // Dashboards (ADR 0121): Settings → Dashboards, and `/metrics` for Prometheus.
+  registerTelemetryRoutes(app, services.telemetry, gate, stepUpDone);
   registerBrowserRoutes(app, services, gate);
   registerWorkPlaceRoutes(app, services, gate);
   registerTerminalRoutes(app, services, gate);

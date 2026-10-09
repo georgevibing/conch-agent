@@ -173,6 +173,17 @@ export interface MessageRef {
   fields: FieldRef[];
 }
 
+/** A number Conch sends to dashboards (ADR 0121), from the metric catalog. */
+export interface MetricRef {
+  name: string;
+  prometheus: string;
+  kind: 'counter' | 'gauge' | 'histogram';
+  unit: string;
+  description: string;
+  labels: string[];
+  group: string;
+}
+
 export interface Reference {
   version: string;
   protocolVersion: number;
@@ -209,4 +220,6 @@ export interface Reference {
   hotkeys: string[];
   /** Password managers Conch reads beside its own vault. */
   passwordManagers: string[];
+  /** Every number Conch sends to a dashboard. */
+  metrics: MetricRef[];
 }
