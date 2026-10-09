@@ -138,6 +138,12 @@ export interface WireRequest {
   /** `auto` means "don't ask for a thinking budget at all". */
   effort: EffortChoice;
   signal: AbortSignal;
+  /**
+   * Which chat (or kind of small job) this request belongs to, as an opaque
+   * key (`cachekey.ts`). Sent only by a wire whose provider routes its prompt
+   * cache by one (`ChatPreset.cacheKey`); every other wire ignores it.
+   */
+  cacheKey?: string;
 }
 
 export interface WireCompletion {
@@ -149,6 +155,12 @@ export interface WireCompletion {
   images?: readonly Picture[];
   maxTokens: number;
   signal: AbortSignal;
+  /**
+   * Which chat (or kind of small job) this request belongs to, as an opaque
+   * key (`cachekey.ts`). Sent only by a wire whose provider routes its prompt
+   * cache by one (`ChatPreset.cacheKey`); every other wire ignores it.
+   */
+  cacheKey?: string;
 }
 
 /** What a key turned out to be, in words a person can read on a card. */

@@ -91,6 +91,7 @@ import {
   searchTools,
   toolTokens,
 } from './lean';
+import { chatCacheKey, jobCacheKey } from './cachekey';
 import { collapseStalePages } from './pages';
 import { sessionsDir, TranscriptStore, type Session } from './session';
 import { ToolPlan, type ToolLessons } from './toolplan';
@@ -806,6 +807,8 @@ export class ApiEngine implements Engine {
         ...(input.images?.length && { images: input.images }),
         maxTokens: input.maxTokens ?? COMPLETION_MAX_TOKENS,
         signal: input.signal,
+        // Jobs with the same instructions share a cache, so they share a key (ADR 0085).
+        cacheKey: await jobCacheKey(this.variant.home, input.system),
       });
     } catch (error) {
       throw new Error(plainMessage(error, this.label, key));
@@ -853,6 +856,8 @@ export class ApiEngine implements Engine {
     try {
       key = await this.#key(input.signal);
       const model = await this.#model(input.options.model);
+      // The same on every request of this chat, whichever transcript it's in (ADR 0085).
+      const cacheKey = await chatCacheKey(this.variant.home, input.conversationId);
       const resuming =
         input.resumeId && TranscriptStore.valid(input.resumeId) ? input.resumeId : undefined;
       const sessionId = resuming ?? TranscriptStore.newId();
@@ -1034,6 +1039,7 @@ export class ApiEngine implements Engine {
           ...(fitting.deferred?.length && { deferred: fitting.deferred }),
           effort: input.options.effort,
           signal: input.signal,
+          cacheKey,
         };
         try {
           for await (const event of plan.read(this.#stream(request))) {

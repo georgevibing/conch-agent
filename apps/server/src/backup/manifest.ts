@@ -529,6 +529,11 @@ export const RULES: readonly BackupRule[] = [
     why: 'Files, pictures and long pastes sent in chats.',
   },
   {
+    match: 'api-sessions/cache-key.salt',
+    class: 'derived',
+    why: 'Makes the keys that tell a provider which chat a request is for, so its prompt cache is reused (ADR 0085); a new one only means a cache that warms again.',
+  },
+  {
     match: 'api-sessions/*.json',
     class: 'kept',
     group: 'chats',
