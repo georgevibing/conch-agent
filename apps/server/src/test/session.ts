@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { ServerEvent } from '@conch/protocol';
+import type { InjectOptions } from 'fastify';
 import { vi } from 'vitest';
 
 import { buildApp } from '../app';
@@ -116,15 +117,33 @@ export async function chat(
 }
 
 /** Use Conch for a while, through its own services. Returns what was made. */
+/**
+ * `app.inject` the way a person's browser goes: told to wait (429, from the
+ * gateway's request budgets, ADR 0008), it waits as long as it's told, then
+ * tries again. Setting up a whole Conch in a moment is more writes than a
+ * burst allows.
+ */
+function patiently(app: Gateway['app']) {
+  return async (options: InjectOptions | string) => {
+    for (;;) {
+      const res = await app.inject(options);
+      if (res.statusCode !== 429) return res;
+      const wait = Number(res.headers['retry-after'] ?? 1) * 1000;
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
+  };
+}
+
 export async function useConch(g: Gateway) {
   const { app, services, home } = g;
+  const inject = patiently(app);
   const ok = async (res: { statusCode: number; body: string }) => {
     if (res.statusCode >= 300) throw new Error(`${res.statusCode}: ${res.body}`);
     return JSON.parse(res.body) as Record<string, unknown>;
   };
 
   await ok(
-    await app.inject({
+    await inject({
       method: 'PATCH',
       url: '/api/settings',
       payload: { onboarded: true, persona: { name: 'Shelly' }, profile: { name: 'Ada' } },
@@ -132,23 +151,23 @@ export async function useConch(g: Gateway) {
   );
   // A second agent, with a picture of its own (ADR 0101).
   const sage = await ok(
-    await app.inject({
+    await inject({
       method: 'POST',
       url: '/api/agents',
       payload: { name: 'Sage', role: 'Plans trips', instructions: 'Give two options.' },
     }),
   );
   await ok(
-    await app.inject({
+    await inject({
       method: 'PUT',
       url: `/api/agents/${String(sage.id)}/avatar`,
       payload: { data: png(64).toString('base64') },
     }),
   );
   // A folder in the chat list (ADR 0089).
-  await ok(await app.inject({ method: 'POST', url: '/api/folders', payload: { name: 'Garden' } }));
+  await ok(await inject({ method: 'POST', url: '/api/folders', payload: { name: 'Garden' } }));
   const memory = await ok(
-    await app.inject({
+    await inject({
       method: 'POST',
       url: '/api/memories',
       payload: { content: 'Ada takes her tea with lemon.' },
@@ -158,14 +177,14 @@ export async function useConch(g: Gateway) {
   await services.onDevice.get(['en-GB']);
   await services.memoryIndex.sync();
   await ok(
-    await app.inject({
+    await inject({
       method: 'PUT',
       url: '/api/commands/standup',
       payload: { description: 'Daily standup', prompt: 'Write my standup from {{input}}' },
     }),
   );
   const routine = await ok(
-    await app.inject({
+    await inject({
       method: 'POST',
       url: '/api/routines',
       payload: {
@@ -185,7 +204,7 @@ export async function useConch(g: Gateway) {
   // Routines that start when something happens (ADR 0056): what starts them, what
   // the pulse has seen, and another app's secret.
   const after = await ok(
-    await app.inject({
+    await inject({
       method: 'POST',
       url: '/api/routines',
       payload: {
@@ -197,7 +216,7 @@ export async function useConch(g: Gateway) {
     }),
   );
   const shop = await ok(
-    await app.inject({
+    await inject({
       method: 'POST',
       url: '/api/routines',
       payload: {
@@ -208,12 +227,12 @@ export async function useConch(g: Gateway) {
       },
     }),
   );
-  await ok(await app.inject({ method: 'POST', url: `/api/routines/${String(shop.id)}/secret` }));
+  await ok(await inject({ method: 'POST', url: `/api/routines/${String(shop.id)}/secret` }));
   await services.routines.lookAgain();
   void after;
   // A task in the background (ADR 0033): its list, and its own chat.
   const task = await ok(
-    await app.inject({ method: 'POST', url: '/api/tasks', payload: { text: 'Tidy the notes.' } }),
+    await inject({ method: 'POST', url: '/api/tasks', payload: { text: 'Tidy the notes.' } }),
   );
   for (let i = 0; i < 200; i++) {
     const now = (await services.tasks.get(String(task.id))).status;
@@ -221,7 +240,7 @@ export async function useConch(g: Gateway) {
     await new Promise((r) => setTimeout(r, 20));
   }
   const skill = await ok(
-    await app.inject({
+    await inject({
       method: 'POST',
       url: '/api/skills',
       payload: { instructions: 'Summarise invoices from my inbox every month.' },
@@ -230,37 +249,37 @@ export async function useConch(g: Gateway) {
   await writeFile(join(home, 'skills', String(skill.id), 'template.md'), '# Invoice summary\n');
   // Turning one of your own skills off is remembered in skills.json.
   const other = await ok(
-    await app.inject({
+    await inject({
       method: 'POST',
       url: '/api/skills',
       payload: { instructions: 'Tidy my downloads folder into dated subfolders.' },
     }),
   );
   await ok(
-    await app.inject({
+    await inject({
       method: 'PATCH',
       url: `/api/skills/${String(other.id)}`,
       payload: { mode: 'off' },
     }),
   );
   // A skill from Discover (ADR 0074): searched (the cache), read (staging), added (its folder and origin).
-  await ok(await app.inject({ method: 'GET', url: '/api/skills/market?q=meeting' }));
+  await ok(await inject({ method: 'GET', url: '/api/skills/market?q=meeting' }));
   const look = await ok(
-    await app.inject({
+    await inject({
       method: 'POST',
       url: '/api/skills/market/preview',
       payload: { id: 'clawhub:pretend/meeting-notes' },
     }),
   );
   await ok(
-    await app.inject({
+    await inject({
       method: 'POST',
       url: '/api/skills/market/install',
       payload: { previewId: look.previewId, mode: 'auto' },
     }),
   );
   await ok(
-    await app.inject({
+    await inject({
       method: 'POST',
       url: '/api/skills/market/preview',
       payload: { id: 'clawhub:pretend/trip-planner' },
@@ -277,14 +296,14 @@ export async function useConch(g: Gateway) {
   )[0];
   if (!card) throw new Error('no app card');
   await ok(
-    await app.inject({
+    await inject({
       method: 'POST',
       url: `/api/conch-apps/offers/${card.offerId}/accept`,
       payload: { conversationId: maker.id },
     }),
   );
   await ok(
-    await app.inject({
+    await inject({
       method: 'POST',
       url: '/api/conch-apps/tally/call',
       payload: { tool: 'count', input: { by: 2 }, confirmed: true },
@@ -309,14 +328,14 @@ export async function useConch(g: Gateway) {
     ),
   );
   const looked = await ok(
-    await app.inject({
+    await inject({
       method: 'POST',
       url: '/api/conch-apps/preview',
       payload: { file: weather.toString('base64'), name: 'weather.conchapp' },
     }),
   );
   await ok(
-    await app.inject({
+    await inject({
       method: 'POST',
       url: '/api/conch-apps/install',
       payload: {
@@ -328,18 +347,18 @@ export async function useConch(g: Gateway) {
     }),
   );
   await ok(
-    await app.inject({
+    await inject({
       method: 'PATCH',
       url: '/api/browser/settings',
       payload: { autoOpen: false },
     }),
   );
   await ok(
-    await app.inject({ method: 'PATCH', url: '/api/terminal/settings', payload: { fontSize: 15 } }),
+    await inject({ method: 'PATCH', url: '/api/terminal/settings', payload: { fontSize: 15 } }),
   );
-  await ok(await app.inject({ method: 'PUT', url: '/api/usage/budget', payload: { budget: 25 } }));
+  await ok(await inject({ method: 'PUT', url: '/api/usage/budget', payload: { budget: 25 } }));
   await ok(
-    await app.inject({ method: 'PUT', url: '/api/routines/spending', payload: { limitUsd: 30 } }),
+    await inject({ method: 'PUT', url: '/api/routines/spending', payload: { limitUsd: 30 } }),
   );
   await services.settings.setProviderSecret('openrouter', {
     source: 'conch',
@@ -348,7 +367,7 @@ export async function useConch(g: Gateway) {
   });
 
   const upload = await ok(
-    await app.inject({
+    await inject({
       method: 'POST',
       url: '/api/attachments',
       headers: { 'content-type': 'application/octet-stream', 'x-conch-name': 'cat.png' },
@@ -359,7 +378,7 @@ export async function useConch(g: Gateway) {
   const convo = await chat(services, 'What’s in this picture?', [attachment.id]);
   // Something written there and not sent yet (ADR 0124).
   await ok(
-    await app.inject({
+    await inject({
       method: 'PUT',
       url: `/api/conversations/${convo.id}/draft`,
       payload: { text: 'And the dog in the corner?' },
@@ -387,7 +406,7 @@ export async function useConch(g: Gateway) {
   if (preference) await services.learning.answer(preference.id, 'undo');
   // …and what learning may spend, a person's choice.
   await ok(
-    await app.inject({
+    await inject({
       method: 'PUT',
       url: '/api/learning/spending',
       payload: { limitUsd: 2 },
@@ -395,20 +414,20 @@ export async function useConch(g: Gateway) {
   );
   // A standing order in your words, the check-in's quiet hours, and one look (ADR 0107).
   await ok(
-    await app.inject({
+    await inject({
       method: 'POST',
       url: '/api/standing-orders',
       payload: { text: 'Always tell me if a flight changes' },
     }),
   );
   await ok(
-    await app.inject({
+    await inject({
       method: 'PUT',
       url: '/api/checkin',
       payload: { quiet: { from: '23:00', to: '06:30' } },
     }),
   );
-  await ok(await app.inject({ method: 'POST', url: '/api/checkin/look' }));
+  await ok(await inject({ method: 'POST', url: '/api/checkin/look' }));
   // A thumbnail of a page the agent looked at, as the browser keeps them.
   await services.browser.saveShot(convo.id, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
   // …and the tabs that chat had open, kept to open again.
@@ -445,7 +464,7 @@ export async function useConch(g: Gateway) {
       '<p id="t"></p><script type="application/conch-data">{"now":{"url":"https://api.weather.example/now"}}</script>',
   });
   await ok(
-    await app.inject({
+    await inject({
       method: 'POST',
       url: `/api/artifacts/${live.id}/live-data`,
       payload: { version: 1, host: 'api.weather.example' },
@@ -455,7 +474,7 @@ export async function useConch(g: Gateway) {
   await recordGateway(home, { pid: process.pid, host: '127.0.0.1', port: 4382, startedAt: 1 });
   // A bot on (pretend) Telegram, with its key.
   await ok(
-    await app.inject({
+    await inject({
       method: 'POST',
       url: '/api/channels',
       payload: { kind: 'telegram', token: MockTelegram.TOKEN },
@@ -464,10 +483,10 @@ export async function useConch(g: Gateway) {
   // WhatsApp and Signal, linked by scanning (pretend) codes: their keys are files too.
   for (const kind of ['whatsapp', 'signal'] as const) {
     const link = await ok(
-      await app.inject({ method: 'POST', url: '/api/channels/link', payload: { kind } }),
+      await inject({ method: 'POST', url: '/api/channels/link', payload: { kind } }),
     );
     const state = async () =>
-      (await ok(await app.inject({ method: 'GET', url: `/api/channels/link/${String(link.id)}` })))
+      (await ok(await inject({ method: 'GET', url: `/api/channels/link/${String(link.id)}` })))
         .state;
     for (let i = 0; (await state()) !== 'showing'; i++) {
       if (i > 400) throw new Error(`no ${kind} code`);
@@ -482,9 +501,9 @@ export async function useConch(g: Gateway) {
   }
   await services.linked.whatsapp.sessions.flush();
   // The public door, open, and a Teams bot that has heard from you (it remembers where your chat is)…
-  await ok(await app.inject({ method: 'POST', url: '/api/channels/door/tailscale', payload: {} }));
+  await ok(await inject({ method: 'POST', url: '/api/channels/door/tailscale', payload: {} }));
   const teams = await ok(
-    await app.inject({
+    await inject({
       method: 'POST',
       url: '/api/channels',
       payload: { kind: 'microsoftteams', appId: MockTeams.APP_ID, appPassword: MockTeams.SECRET },
@@ -508,7 +527,7 @@ export async function useConch(g: Gateway) {
   );
   // …and a Matrix account, with its encryption store.
   await ok(
-    await app.inject({
+    await inject({
       method: 'POST',
       url: '/api/channels',
       payload: {
@@ -527,7 +546,7 @@ export async function useConch(g: Gateway) {
   );
   // Another app paired with Conch, with its key for the launcher (ADR 0073).
   await ok(
-    await app.inject({
+    await inject({
       method: 'POST',
       url: '/api/mcp/clients',
       payload: { app: 'other', name: 'An editor', scopes: ['memory.read'] },
@@ -535,7 +554,7 @@ export async function useConch(g: Gateway) {
   );
   await services.backups.backupNow();
   // Sign-in last: from here on, requests need the cookie.
-  const signedIn = await app.inject({
+  const signedIn = await inject({
     method: 'PUT',
     url: '/api/access/password',
     payload: { username: 'ada', password: PASSWORD },
