@@ -12,10 +12,12 @@ Each says whether it's **required** (something breaks without it) or
    → New branch ruleset. Name it `main`, set **Enforcement status** to Active, and
    under **Target branches** choose Add target → Include default branch. Then tick:
    - **Restrict deletions** and **Block force pushes**.
-   - **Require status checks to pass**, adding the check **`check`** (from GitHub
-     Actions). It's CI's gate: it passes only when every suite does. Leave
-     **Require branches to be up to date** off, and don't require a linear
-     history: Conch merges with merge commits.
+   - **Require status checks to pass**, adding **`check`** and **`desktop`** (from
+     GitHub Actions). `check` is CI's gate: it passes only when every suite does.
+     Leave **Require branches to be up to date** off.
+   - **Require a pull request before merging**, with **squash** as the only merge
+     method, and **Require linear history**. The pull request's title becomes the
+     commit, so CI checks the title is conventional too: it decides the version.
 
    Don't require **zizmor** or the CodeQL jobs as status checks: zizmor runs only
    when a workflow changes, so a required one would wait forever on other pull
@@ -30,7 +32,8 @@ Each says whether it's **required** (something breaks without it) or
    it `releases`, Active, and under **Target tags** Add target → Include by pattern
    → `v*`. Tick **Restrict updates** and **Restrict deletions**, with nobody in the
    bypass list. Installs trust these tags, so once made, no one can move or remove
-   one. The release workflow only ever creates new tags, which these rules allow.
+   one. Leave **Restrict creations** off: the release workflow creates each tag,
+   with GitHub Actions' own token, which can't be on a bypass list.
 
 ## Security
 
