@@ -1,6 +1,7 @@
 import {
   DASHBOARD_DESTINATIONS,
   destinationOf,
+  destinationSubject,
   readDashboardPaste,
   type DashboardDestinationId,
   type TelemetrySignal,
@@ -86,7 +87,7 @@ const tiles = DASHBOARD_DESTINATIONS.map((d) => ({
 }));
 
 /**
- * Settings → Dashboards (ADR 0119): Conch's numbers, and the shape of each
+ * Settings → Dashboards (ADR 0121): Conch's numbers, and the shape of each
  * turn, on a dashboard of your own. Choose the service, paste what it shows
  * you, and send a test; or let Prometheus read `/metrics`. What leaves is on
  * the page, as it leaves.
@@ -240,7 +241,7 @@ function Sending({ status, guard }: { status: TelemetryStatus; guard: Guard }) {
             label={
               destination.fields.length
                 ? `Paste what ${destination.name} shows you`
-                : `Paste ${destination.name}’s address`
+                : 'Paste its address, or leave the usual one'
             }
             hint={
               <>
@@ -307,7 +308,7 @@ function Sending({ status, guard }: { status: TelemetryStatus; guard: Guard }) {
           checked={otlp.on}
           disabled={needsKey && !keySaved && !otlp.on}
           onCheckedChange={(on) => void save({ otlp: { on } })}
-          label={`Send to ${destination.name}`}
+          label={`Send to ${destinationSubject(destination, false)}`}
           description={
             otlp.on
               ? serverProblem
