@@ -8,11 +8,14 @@ order: 5
 | --------------------------------------- | -------------------------------------------------------------- |
 | <kbd>mod+k</kbd>                        | Find anything: chats, messages, models, skills, apps, settings |
 | <kbd>mod+shift+o</kbd>                  | New chat                                                       |
-| <kbd>mod+shift+enter</kbd>              | Send to the background, and keep chatting                      |
+| <kbd>enter</kbd>                        | Send                                                           |
+| <kbd>shift+enter</kbd>                  | A new line in the message                                      |
+| <kbd>mod+enter</kbd>                    | While a reply runs, send now and steer it                      |
+| <kbd>mod+shift+enter</kbd>              | Run as a task, and keep chatting                               |
 | <kbd>↑</kbd> / <kbd>↓</kbd>             | In an empty message box, what you sent before, newest first    |
 | <kbd>esc</kbd>                          | Stop the reply                                                 |
 | <kbd>/</kbd>                            | Open the command menu, at the start of a message               |
-| <kbd>mod+f</kbd>                        | Find in the open chat                                          |
+| <kbd>mod+f</kbd>                        | Find in the open chat (elsewhere, find anything)               |
 | <kbd>mod+g</kbd>                        | Next match                                                     |
 | <kbd>mod+shift+g</kbd>                  | Previous match                                                 |
 | <kbd>mod+b</kbd>                        | Show or hide the sidebar                                       |

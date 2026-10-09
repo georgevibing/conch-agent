@@ -85,7 +85,7 @@ Before you add it, Conch shows what it does, what it can do, who made it, and wh
 
 A repository can hold several apps. Conch lists them all, and you choose.
 
-When an app you added from GitHub has a new version, its card and its page say so, and so does **Settings → Updates** under **Apps you added**. Press **Look first** (or **See what changed**) to read what's different, with any new website first, then **Update**. Nothing updates by itself.
+When an app you added from GitHub has a new version, its card and its page say so, and so does **Settings → Health → Updates** under **Apps you added**. Press **Look first** (or **See what changed**) to read what's different, with any new website first, then **Update**. Nothing updates by itself.
 
 ## A provider or a chat app
 

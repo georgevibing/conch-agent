@@ -41,7 +41,7 @@ Each provider gets an attachment in the way it can use:
 - A ZIP can be unpacked into separate files of the chat, to read, convert or send on.
 - Older Office files need saving as DOCX, XLSX or PPTX first. Formulas, macros and external document links are never executed.
 
-When the provider or model you picked can't use something, its card shows a small dot before you send, with the reason. A file it can't open only gets its name. Choose another in the model picker, or send it anyway. [Compare providers](../providers/index.md).
+When the provider or model you picked can't use something, its card shows a small dot before you send, with the reason. A file it can't open only gets its name. Choose another model in the **Model · Mode** chip, or send it anyway. [Compare providers](../providers/index.md).
 
 Your assistant is told that attachments are material to work with, not instructions to follow.
 
@@ -58,7 +58,7 @@ Your assistant is told that attachments are material to work with, not instructi
 
 ## Choose the working folder
 
-Your assistant reads and writes in one folder. Press the folder at the foot of the message box (or **Settings → General**, or type `/folder`), and choose another:
+Your assistant reads and writes in one folder. Press the **Model · Mode** chip under the message box and **Change** beside **Folder** (or use **Settings → General**, or type `/folder`), and choose another:
 
 - **In the Conch app**, it's your computer's own Open dialog.
 - **Anywhere else**, a phone or a browser, Conch shows the computer's folders. Start from **Home**, **Desktop**, **Documents**, a projects folder or one you chose lately; press a folder to go into it, and the trail above to go back. Type to filter what's there, make a **New folder** where you are, then press **Choose**.

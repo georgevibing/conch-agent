@@ -21,7 +21,7 @@ In your phone's browser, add Conch to the Home Screen (in Safari: **Share → Ad
 
 ## Made for the small screen
 
-On a phone, Conch keeps the chat's name in view and folds the rest away. The header shows your provider's mark and how much of its limit is left as a ring; **⋯** holds **Find in chat**, the browser and the terminal. The message box keeps to one line: the model by name, the mode as its icon (tap it to see which), and **Talk** in Send's place until you type. To choose the working folder, type `/folder` or open **Settings → General**: your phone walks through the computer's folders, the same as at the computer. Filters that don't fit (in **Apps**, **Activity** and elsewhere) slide sideways, and the page itself never does.
+On a phone, Conch keeps the chat's name in view and folds the rest away. The header shows your provider's mark and how much of its limit is left as a ring; **⋯** holds **Find in chat**, the browser and the terminal. The message box keeps to one line: one chip with the model and the mode in words ("Opus · Auto"; tap it for a sheet with both, and the folder), and **Talk** in Send's place until you type. To choose the working folder, press **Change** beside **Folder** in that sheet, type `/folder` or open **Settings → General**: your phone walks through the computer's folders, the same as at the computer. Filters that don't fit (in **Apps**, **Activity** and elsewhere) slide sideways, and the page itself never does.
 
 ## Let it reach you
 
@@ -51,7 +51,7 @@ Dictate into any message, have answers read aloud, or talk hands free. Your voic
 
 ## Or skip the browser
 
-Reach your assistant from Telegram, Discord, Slack, WhatsApp, Signal, iMessage, email, Microsoft Teams, Matrix or WeChat, and approve what it asks from there. It's in **Apps → Talk to me here**. See [Talk to me here](../channels/index.md).
+Reach your assistant from Telegram, Discord, Slack, WhatsApp, Signal, iMessage, email, SMS, Microsoft Teams, Google Chat, Matrix, Mattermost, Rocket.Chat, WeChat, LINE, Feishu / Lark, DingTalk or QQ, and approve what it asks from there. It's in **Apps → Talk to me here**. See [Talk to me here](../channels/index.md).
 
 > [!NOTE]
 > Other ways in, a second lock for new devices, and what to do about a lost phone are in [Signing in and staying safe](../security/signing-in.md).

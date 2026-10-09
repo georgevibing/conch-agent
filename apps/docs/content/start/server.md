@@ -49,5 +49,5 @@ New devices need your approval from the start, so a password someone learns gets
 - **Lost your way in?** On the server, `conch reset` turns sign-in off, then `conch hello` gives you a new link.
 - **Already run a tunnel or a web server?** Choose **Through a tunnel or web server I already run** instead, for a Cloudflare Tunnel, nginx or Caddy. Conch says where to point it, checks the way in through it, and ends with the same link. If something else answers on ports 80 and 443, Conch says which program it is. See [Behind a tunnel or reverse proxy](../security/reverse-proxy.md).
 - **Rather keep it private?** Choose **Only from my own devices** instead. Conch then uses [Tailscale](./phone.md), and nothing is opened to the internet.
-- **Change it later** with `conch setup`, or in **Settings → Security → Your address**.
+- **Change it later** with `conch setup`, or in **Settings → Security → Advanced → Your address**.
 - **Setting up many servers?** Add `--domain conch.yourname.com` to the install line, and Conch skips the first two questions. Behind a tunnel of your own, it's `--proxy conch.yourname.com`.

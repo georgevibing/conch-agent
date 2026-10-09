@@ -8,7 +8,7 @@ provider: lm-studio
 2. If LM Studio isn’t here, press **Install LM Studio**. Conch installs it with winget or Homebrew, or links to it on Linux.
 3. Download a model in LM Studio. It shows up in the picker by itself.
 
-Conch finds LM Studio where it keeps itself, and its server on whatever port it last used. If the server is off, Conch starts it and leaves a note under **Fixed on its own**.
+Conch finds LM Studio where it keeps itself, and its server on whatever port it last used. If the server is off, Conch starts it and leaves a note under **Settings → Health → Fixed on its own**.
 
 ## What you get
 

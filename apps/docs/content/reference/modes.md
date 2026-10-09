@@ -17,8 +17,7 @@ New chats start in **Auto**. Change it from the composer, or with `/mode`; set w
 - delete files outside the work folder, or force-push over a branch others share;
 - run something as administrator, or turn off a safety check of your computer;
 - tear down or change production infrastructure, wipe a database, publish a package;
-- delete something in one of your apps.
-
+- delete something in one of your apps;
 - stop programs your computer runs on, restart it, or change its own system files;
 - delete a repository's history, or the data a container kept.
 
