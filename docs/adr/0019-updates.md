@@ -75,7 +75,7 @@ Conch itself: that restarts, so it always asks.
 1. **Refuse** when it could lose anything, and say why with the exact commands
    to run by hand: local changes to tracked files, no branch, no upstream,
    commits of its own upstream doesn't have (a merge would be needed), no git
-   or no pnpm. It also waits while a chat is working, so nothing is cut short.
+   or no pnpm. While a chat is working it asks first (amended below).
 2. **Remember HEAD**, then fetch.
 3. **Move forward only**, to exactly the upstream commit that was checked:
    `git merge --ff-only --no-overwrite-ignore <sha>`. The check reads
@@ -127,6 +127,42 @@ the calm screen during the restart while it's open (`RestartWatch` stands
 aside). The banner, ⌘K and Settings' **Update Conch** open it too. The build
 step's progress is told from how long the last build took here
 (`buildProgress`, never past 97%), so step 3 no longer sits still.
+
+**Amended (Oct 2026): updating while something works.** Step 1's wait made
+**Update now** refuse with `busy` while a chat, a task or a routine ran; the
+dialog showed the sentence once, and every later press showed the same one,
+so it read as a button that did nothing. Now a press always answers:
+
+- `POST /api/updates/conch` takes `when` (`UpdateConchBody`). `now`, the
+  default, still answers `busy`, and `UpdatesStatus.working` names what's
+  running, so the dialog asks in place (`UpdateDialog` `confirm`, never a
+  second modal): "Fix Conch CI failures is working. Update anyway? It will
+  pause, and carry on after Conch restarts." with **Wait until it's done** and
+  **Update anyway**.
+- `idle` arms the update (`ConchUpdate.armed`, kept in `updates.json`, so a
+  restart keeps waiting): one timer, only while armed, looks whether anything
+  still works and updates once nothing does. The dialog and Health say "Will
+  update when the chat finishes"; **Don't wait** (`cancel`, no password: it
+  takes nothing away) stops it.
+- `anyway` updates while the work goes on, and only just before the restart
+  pauses it: `Services.pauseWork` (also every requested restart, through
+  `main.ts`'s restart handler, and `POST /api/gateway/restart` with
+  `when: 'anyway'`). `ConversationManager.pause` holds every new step at the
+  guard, unrun, gives steps already running up to 15 seconds to finish, and
+  marks each working chat `pausedFor`; tasks and routine runs are marked too.
+  A step waiting for an approval is a safe point: it never ran. If the restart
+  doesn't happen, `unpause` lets everything go on.
+- After the restart, recovery knows it was planned: the steps held at the
+  pause and the approvals never answered are "not run", so they're asked again
+  rather than counted as uncertain; a planned pause never spends the crash
+  budget; the turn carries on with a note that says so, and the chat says
+  "Conch updated and picked up where it left off" (`restarted.reason`). A task
+  carries on from its ledger (`retry`), a routine run in its own chat, each
+  closing the cut-off turn first (`settleInterrupted`). A step that may have
+  finished is still never repeated by itself: the chat says why and offers
+  **Carry on**, as does a provider that couldn't load its session (a notice,
+  and the chat so far handed over, ADR 0069). Queued messages stay with the
+  tab (`sessionStorage`) through the reload.
 
 ### Routes
 

@@ -34,9 +34,20 @@ Conch only installs releases signed by Conch's makers. A release that isn't is r
 1. Press **Update** beside your name (or **Update Conch** in Settings, or <kbd>mod+k</kbd> then **Update Conch**). A small window says what the update brings: a release's notes, or each change in plain words for a copy following its branch.
 2. Press **Update now**. If you [sign in to Conch](../security/signing-in.md), it asks you to confirm it's you.
 3. Conch checks the release is really from Conch's makers, gets it ready while you keep working, and backs up your things. The pearl fills a ring as it goes, and the window says which step it's on. **Keep working** closes the window. The button beside your name keeps showing how far it's come, and opens the window again.
-4. Conch starts again on the new version, in a few seconds. The page comes back by itself, on the same page, and says what arrived.
+4. Conch starts again on the new version, in a few seconds. The page comes back by itself, on the same page, and says what arrived: **Updated to** and the version.
 
-Your chats are safe. If a chat is still working, Conch asks you to update when it's finished, so nothing is cut short.
+Your chats are safe.
+
+## Update while a chat is working
+
+If a chat, a task or a routine is working when you press **Update now**, the window asks first, and names it: **Fix Conch CI failures is working. Update anyway? It will pause, and carry on after Conch restarts.**
+
+- **Wait until it's done.** The window says **Will update when the chat finishes**, and so does **Settings → Health**. Conch updates by itself once nothing is working. **Don't wait** stops waiting.
+- **Update anyway.** Conch gets the update ready while the work goes on. Just before it restarts, it pauses the work at a safe point: a step that's running gets a few seconds to finish, and nothing new starts. After the restart, the work carries on by itself, and the chat says **Conch updated and picked up where it left off**.
+
+What you were writing stays in the box, and messages waiting their turn still go. A step that was waiting for your approval wasn't run, so you're asked again.
+
+Conch never repeats a step by itself that may already have happened. If that's why a chat didn't carry on, it says so, with **Carry on**. If a provider can't pick up its own session again, the chat says so, and Conch gives it the chat so far.
 
 Updating from a version without freeze detection activates that protection as part of the normal restart. There is no separate service command to run. New installations include it from their first start. See [Staying responsive](./health.md#after-repeated-trouble).
 
