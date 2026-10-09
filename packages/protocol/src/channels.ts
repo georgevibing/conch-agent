@@ -42,6 +42,8 @@ export const ChannelKind = z.enum([
   'line',
   'rocketchat',
   'googlechat',
+  // A chat app a Conch app brings (ADR 0119): which one is in its keys (`app`).
+  'app',
 ]);
 export type ChannelKind = z.infer<typeof ChannelKind>;
 
@@ -251,6 +253,8 @@ export const Channel = z.object({
    * on Gmail. Its card is that app's, and the channel is its "Talk to me here".
    */
   app: z.string().max(64).optional(),
+  /** A chat app a Conch app brings (ADR 0119): which app, and what the chat app is called. */
+  contributed: z.object({ app: z.string().max(24), name: z.string().max(40) }).optional(),
   enabled: z.boolean(),
   createdAt: z.number(),
   bot: ChannelBot,
@@ -290,6 +294,30 @@ export const ChannelCatalogEntry = z.object({
   available: z.boolean(),
   /** It can answer in group chats you turn on, when mentioned (ADR 0075). */
   groups: z.boolean().optional(),
+  /**
+   * A chat app a Conch app brings (ADR 0119): the app, and what connecting it
+   * asks for, read from its manifest (`channel`). Its id is `app:<id>`.
+   */
+  contributed: z
+    .object({
+      app: z.string(),
+      fields: z.array(
+        z.object({
+          key: z.string(),
+          label: z.string(),
+          help: z.string().optional(),
+          link: z.string().optional(),
+          placeholder: z.string().optional(),
+          secret: z.boolean(),
+          optional: z.boolean(),
+        }),
+      ),
+      steps: z.array(z.string()),
+      receives: z.enum(['poll', 'webhook']),
+      /** Made in this Conch, or added from a link or a file. */
+      from: z.enum(['made', 'link']),
+    })
+    .optional(),
 });
 export type ChannelCatalogEntry = z.infer<typeof ChannelCatalogEntry>;
 
@@ -453,6 +481,22 @@ const rocketchat = {
  * come in through the public door with a Google-signed token; answers go
  * out as the app, with a service account's key (the whole JSON key file).
  */
+/**
+ * A chat app a Conch app brings (ADR 0119): which app, and what the person
+ * typed into its fields (a bot's token, a server's address), kept here with
+ * every channel's keys and handed to the app's sealed code per call.
+ */
+const appChannel = {
+  kind: z.literal('app'),
+  app: z
+    .string()
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+    .min(2)
+    .max(24),
+  fields: z.record(z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,31}$/), z.string().max(12_000)),
+  hookId: hookId.optional(),
+};
+
 const googlechat = {
   kind: z.literal('googlechat'),
   serviceAccount: z.string().trim().min(1).max(12_000),
@@ -519,6 +563,7 @@ export const ChannelSecrets = z.discriminatedUnion('kind', [
   z.object(line),
   z.object(rocketchat),
   z.object(googlechat),
+  z.object(appChannel),
 ]);
 export type ChannelSecrets = z.infer<typeof ChannelSecrets>;
 
@@ -548,6 +593,7 @@ export const CheckChannelBody = z.discriminatedUnion('kind', [
     userId: short.optional(),
     token: secret.optional(),
   }),
+  z.object(appChannel),
 ]);
 export type CheckChannelBody = z.infer<typeof CheckChannelBody>;
 

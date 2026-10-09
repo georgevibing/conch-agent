@@ -90,6 +90,7 @@ export * from './chat-list';
 export * from './chat-context';
 export * from './commands';
 export * from './conch-apps';
+export * from './app-parts';
 export * from './conch-apps-words';
 export * from './questions';
 export * from './attachments';

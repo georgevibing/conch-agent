@@ -236,6 +236,18 @@ export const Provider = z.object({
   cloud: CloudKind.optional(),
   /** It has worked on this computer and you haven't removed it: it belongs with your providers, even while it needs you. */
   connectedBefore: z.boolean().default(false),
+  /**
+   * A Conch app brings it (ADR 0119): which app, whether it was made here or
+   * added from a link or a file, how it speaks, and what it reaches.
+   */
+  contributed: z
+    .object({
+      app: z.string(),
+      from: z.enum(['made', 'link']),
+      speaks: z.enum(['openai', 'anthropic', 'code']),
+      reaches: z.array(z.string()).default([]),
+    })
+    .optional(),
 });
 export type Provider = z.infer<typeof Provider>;
 
