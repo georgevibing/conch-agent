@@ -38,6 +38,10 @@ export function protectedPaths(home: string): string[] {
     join(home, 'workplaces'),
     // Whether the assistant may use your apps, and the ones it always may (ADR 0110).
     join(home, 'computer-use.json'),
+    // Where Conch's numbers go, and whether chats' words go with them (ADR 0119): pointed
+    // elsewhere by the assistant, it would be a way out for what it read.
+    join(home, 'telemetry.json'),
+    join(home, 'telemetry.secrets.json'),
     join(home, 'channels.secrets.json'),
     // The secrets other apps sign their messages to routines with (ADR 0056).
     join(home, 'routines.secrets.json'),
@@ -132,7 +136,9 @@ export const PROTECTED_MESSAGE =
  * - `setup`, `address`, `phone`: where Conch can be reached from (ADR 0064, 0027);
  * - `password`, `key`, `revoke`, `pair`, `reset`, `sign-out-everywhere`,
  *   `passkeys remove` and `devices approve|on|off|reject|remove`: who may sign
- *   in, and from where.
+ *   in, and from where;
+ * - `dashboards send|prometheus|token`: where Conch's numbers go, and who may
+ *   read them (ADR 0119). Looking (`dashboards`, `status`, `test`) and `off` are anyone's.
  *
  * Whether it's typed `conch …` (the command the installer adds) or
  * `pnpm conch …`, the terminal commands open your keys the way the gateway
@@ -141,7 +147,7 @@ export const PROTECTED_MESSAGE =
  * behind it.
  */
 const CONCH_POWERS =
-  /\b(?:conch(?:\.cmd|\.exe|\.ps1)?|cli\.[cm]?[jt]s)["']?(?:\s+-\S*)*\s+(?:skills\s+(?:sign|trust|forget|key)|devices\s+(?:approve|on|off|reject|remove)|passkeys\s+remove|open|hello|setup|address|phone|password|key|revoke|pair|reset|sign-out-everywhere)\b/i;
+  /\b(?:conch(?:\.cmd|\.exe|\.ps1)?|cli\.[cm]?[jt]s)["']?(?:\s+-\S*)*\s+(?:skills\s+(?:sign|trust|forget|key)|devices\s+(?:approve|on|off|reject|remove)|passkeys\s+remove|dashboards\s+(?:send|prometheus|token)|open|hello|setup|address|phone|password|key|revoke|pair|reset|sign-out-everywhere)\b/i;
 
 export function runsConchPower(toolName: string, input: unknown): boolean {
   if (toolName !== 'Bash') return false;

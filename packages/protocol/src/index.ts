@@ -116,6 +116,7 @@ export * from './mcp';
 export * from './common';
 export * from './modes';
 export * from './desktop';
+export * from './dashboards';
 export * from './doctor';
 export * from './phone';
 export * from './providers';

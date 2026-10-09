@@ -61,6 +61,8 @@ import { SettingsStore } from './settings/store';
 import { skillsCommand } from './skills/cli';
 import { SkillTrust } from './skills/trust';
 import { SkillUsage } from './skills/usage';
+import { dashboardsCommand } from './telemetry/cli';
+import { TelemetryService } from './telemetry/service';
 import { deviceSealer, registerSealer } from './lib/sealed';
 import { deviceKeyFor, keystoreMode } from './vault/keystore';
 
@@ -972,6 +974,26 @@ async function skills() {
   });
 }
 
+async function dashboards() {
+  const telemetry = new TelemetryService({
+    home: config.CONCH_HOME,
+    version: SERVER_VERSION,
+    heal,
+    manual: true,
+  });
+  process.exitCode = await dashboardsCommand(process.argv.slice(3), telemetry, {
+    ui,
+    conch,
+    ask: (question, options) => ask(question, options),
+    gateway: async () => {
+      const port = (await runningGateway(config.CONCH_HOME))?.port;
+      return port && (await probePort(config.CONCH_HOST, port)) === 'conch'
+        ? `http://localhost:${port}`
+        : undefined;
+    },
+  });
+}
+
 // ── Help ─────────────────────────────────────────────────────────────────
 
 const GROUPS: readonly CliGroup[] = [
@@ -1091,6 +1113,7 @@ const commands: Record<CliCommandName | 'help', () => Promise<void> | void> = {
   phone,
   import: importFrom,
   skills,
+  dashboards,
   help,
 };
 

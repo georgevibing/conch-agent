@@ -2,6 +2,7 @@ import {
   AppWindow,
   AppWindowMac,
   BadgeCheck,
+  ChartLine,
   Blocks,
   Earth,
   Globe,
@@ -56,6 +57,8 @@ const ICONS: Record<BackupPowerInfo['kind'], ReactNode> = {
   'page-data-sites': <AppWindow />,
   'provider-servers': <Server />,
   'own-address': <Earth />,
+  'dashboards-send': <ChartLine />,
+  'dashboards-scrape': <ChartLine />,
 };
 
 /**

@@ -232,6 +232,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services, gat
           apps: (await services.mcp.store.list()).map((c) => ({ name: c.name, remote: c.remote })),
         },
         ...(services.config.CONCH_TOKEN && { tokenProfile: await findTokenProfile() }),
+        dashboards: await services.telemetry.checkupCopy(),
       }),
       exposure: exposure(services.config),
       port: services.config.CONCH_PORT,

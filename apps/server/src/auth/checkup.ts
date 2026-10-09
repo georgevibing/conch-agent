@@ -211,6 +211,11 @@ export interface CheckupInput {
    * in through your own address.
    */
   otherApps?: { remote: boolean; apps: { name: string; remote: boolean }[] };
+  /**
+   * Dashboards (ADR 0119): where Conch's numbers go, whether chats' words go with
+   * them, and whether anything on this computer may read `/metrics` without a token.
+   */
+  dashboards?: { sendsTo?: string; content: boolean; scrapeHere: boolean };
 }
 
 /**
@@ -618,6 +623,28 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       detail:
         'You let a page the assistant made read live data from a program on this computer, like a dev server. Whatever that program shows, the page can show too. Conch itself stays out of reach. If you don’t need it any more, take it back.',
       fix: { kind: 'open', label: 'Review', place: 'live-data' },
+    });
+  }
+
+  if (input.dashboards?.sendsTo && input.dashboards.content) {
+    items.push({
+      id: 'dashboards-content',
+      level: 'warn',
+      title: `The words of your chats go to ${input.dashboards.sendsTo}`,
+      detail:
+        'Your dashboard gets what you write, the replies and what tools read, with keys and addresses taken out first. Anyone who can open it can read them. If you only need the numbers, turn it off.',
+      fix: { kind: 'act', label: 'Numbers only', action: 'dashboards-content-off' },
+    });
+  }
+
+  if (input.dashboards?.scrapeHere) {
+    items.push({
+      id: 'dashboards-scrape',
+      level: 'info',
+      title: 'Programs on this computer can read Conch’s numbers',
+      detail:
+        'Prometheus reads them without a token, and so could any other program here, or another account on this computer. They’re counts and times, never what anyone wrote. Use a scrape token instead if this computer is shared.',
+      fix: { kind: 'open', label: 'Dashboards', place: 'dashboards' },
     });
   }
 

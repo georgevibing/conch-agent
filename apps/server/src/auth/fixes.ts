@@ -61,6 +61,10 @@ export async function runFix(
       await services.settings.update({ preferences: { checkMemories: true } });
       return 'A memory that looks planted is held and asked about again.';
 
+    case 'dashboards-content-off':
+      await services.telemetry.update({ content: false });
+      return 'Dashboards carry numbers only again, never the words of chats.';
+
     case 'integrations-ask': {
       const trusted = (await services.integrations.store.all()).filter(
         (i) => i.enabled && i.policy === 'trust',
