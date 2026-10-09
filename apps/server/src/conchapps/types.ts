@@ -56,8 +56,8 @@ export interface AppFetchResponse {
 
 /** Makes `app.fetch` requests, only to `reaches`, through the SSRF guard. */
 export type AppFetcher = (
-  /** `timeoutMs`: longer than usual, for a provider's answer (ADR 0122). */
-  app: { id: string; reaches: readonly string[]; timeoutMs?: number },
+  /** `timeoutMs`: longer than usual, for a provider's answer; `perHour`: more, for a chat app's polls (ADR 0122). */
+  app: { id: string; reaches: readonly string[]; timeoutMs?: number; perHour?: number },
   request: AppFetchRequest,
   signal: AbortSignal,
 ) => Promise<AppFetchResponse>;

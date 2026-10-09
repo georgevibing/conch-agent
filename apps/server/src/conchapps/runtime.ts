@@ -21,6 +21,7 @@ import type { Readable } from 'node:stream';
 import { APP_LIMITS, ConchAppTool } from '@conch/protocol';
 import { z } from 'zod';
 
+import { CHAT_APP_PER_HOUR } from './fetcher';
 import type {
   AppCallOutcome,
   AppFetchResponse,
@@ -271,6 +272,8 @@ interface Pending {
   onEvent?: (event: PartEvent) => void;
   /** A part's call that may take long (a provider's answer): its requests get longer too. */
   long?: boolean;
+  /** A chat app's call (ADR 0122): it polls all day, so its requests may be more an hour. */
+  channel?: boolean;
 }
 
 /** How long a provider's or chat app's function may take (ADR 0122). */
@@ -499,6 +502,7 @@ export class SealedRuntime implements AppRuntime {
         child,
         timer,
         long: part === 'provider.chat',
+        channel: part.startsWith('channel.'),
         ...(call.onEvent && { onEvent: call.onEvent }),
         done: (outcome) => {
           clearTimeout(timer);
@@ -738,6 +742,9 @@ export class SealedRuntime implements AppRuntime {
           reaches: this.options.manifest.reaches,
           // A provider's answer (ADR 0122) may take a while to come back.
           ...([...this.#pending.values()].some((p) => p.long) && { timeoutMs: LONG_FETCH_MS }),
+          ...([...this.#pending.values()].some((p) => p.channel) && {
+            perHour: CHAT_APP_PER_HOUR,
+          }),
         },
         { ...request, ...(request.bodyBase64 !== undefined && { bodyBase64: request.bodyBase64 }) },
         controller.signal,
