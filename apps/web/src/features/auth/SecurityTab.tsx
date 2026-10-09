@@ -68,7 +68,10 @@ import { WhereWorkRuns } from '../workplaces/WhereWorkRuns';
 import { WORKPLACES_FOCUSES } from '../workplaces/words';
 
 /** A part of this tab a checkup fix can bring you to (devices and reaching Conch are Settings → Devices). */
-type Place = Exclude<CheckupPlace, 'models' | 'channels' | 'other-apps' | 'devices' | 'reach'>;
+type Place = Exclude<
+  CheckupPlace,
+  'models' | 'channels' | 'other-apps' | 'devices' | 'reach' | 'dashboards'
+>;
 type Focus = AccessFocus<Place>;
 
 // ── Sign-in method ─────────────────────────────────────────────────────────
@@ -626,6 +629,7 @@ function useCheckupFix(guard: Guard) {
     if (fix.kind === 'open') {
       if (fix.place === 'models') openSettings('models');
       else if (fix.place === 'other-apps') openSettings('other-apps');
+      else if (fix.place === 'dashboards') openSettings('dashboards');
       // Devices, approving them and reaching Conch from a phone have a place of their own.
       else if (fix.place === 'devices') openSettings('devices', DEVICES_FOCUS);
       else if (fix.place === 'reach') openSettings('devices', REACH_FOCUS);

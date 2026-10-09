@@ -62,6 +62,8 @@ export interface DashboardDestination {
   keyUrl?: string;
   /** The mark it wears (Nacre `brandMarks`). */
   brand?: string;
+  /** Its tile's colour. */
+  color: string;
   /** What a sentence calls it, when that isn't its name: “the collector on this computer”. */
   subject?: string;
 }
@@ -100,6 +102,7 @@ export const DASHBOARD_DESTINATIONS: readonly DashboardDestination[] = [
       'In your Grafana Cloud stack, open OpenTelemetry → Configure, make a token, and paste everything it shows.',
     keyUrl: 'https://grafana.com/docs/grafana-cloud/send-data/otlp/send-data-otlp/',
     brand: 'grafana',
+    color: '#F46800',
   },
   {
     id: 'honeycomb',
@@ -113,7 +116,7 @@ export const DASHBOARD_DESTINATIONS: readonly DashboardDestination[] = [
     fields: [{ id: 'key', label: 'Ingest key', secret: true, placeholder: 'hcaik_…' }],
     keyHelp: 'In Honeycomb, open Environment settings → API keys and make an ingest key.',
     keyUrl: 'https://docs.honeycomb.io/configure/environments/manage-api-keys/',
-    brand: 'honeycomb',
+    color: '#E79A12',
   },
   {
     id: 'datadog',
@@ -132,6 +135,7 @@ export const DASHBOARD_DESTINATIONS: readonly DashboardDestination[] = [
     keyHelp: 'In Datadog, open Organization settings → API keys and make a key.',
     keyUrl: 'https://docs.datadoghq.com/opentelemetry/setup/agentless/',
     brand: 'datadog',
+    color: '#632CA6',
   },
   {
     id: 'new-relic',
@@ -146,6 +150,7 @@ export const DASHBOARD_DESTINATIONS: readonly DashboardDestination[] = [
     keyHelp: 'In New Relic, open your profile → API keys and copy an ingest license key.',
     keyUrl: 'https://docs.newrelic.com/docs/opentelemetry/best-practices/opentelemetry-otlp/',
     brand: 'newrelic',
+    color: '#00AC69',
   },
   {
     id: 'langfuse',
@@ -169,7 +174,7 @@ export const DASHBOARD_DESTINATIONS: readonly DashboardDestination[] = [
     ],
     keyHelp: 'In Langfuse, open Project settings → API keys, make a pair, and paste both.',
     keyUrl: 'https://langfuse.com/integrations/native/opentelemetry',
-    brand: 'langfuse',
+    color: '#0A60D0',
   },
   {
     id: 'phoenix',
@@ -193,7 +198,7 @@ export const DASHBOARD_DESTINATIONS: readonly DashboardDestination[] = [
     keyHelp:
       'Phoenix on this computer needs nothing. For Phoenix Cloud, open Settings and copy the hostname and an API key.',
     keyUrl: 'https://arize.com/docs/phoenix/tracing/how-to-tracing/setup-tracing',
-    brand: 'phoenix',
+    color: '#7E3AF2',
   },
   {
     id: 'this-computer',
@@ -206,6 +211,7 @@ export const DASHBOARD_DESTINATIONS: readonly DashboardDestination[] = [
       'Run Grafana’s all-in-one image: docker run -p 3000:3000 -p 4318:4318 grafana/otel-lgtm. Then open localhost:3000.',
     keyUrl: 'https://github.com/grafana/docker-otel-lgtm',
     brand: 'opentelemetry',
+    color: '#425CC7',
     subject: 'the collector on this computer',
   },
   {
@@ -226,6 +232,7 @@ export const DASHBOARD_DESTINATIONS: readonly DashboardDestination[] = [
     keyHelp:
       'The endpoint and headers its documentation gives for OTLP over HTTP. Conch adds /v1/metrics, /v1/traces and /v1/logs.',
     brand: 'opentelemetry',
+    color: '#4F5B66',
     subject: 'your collector',
   },
 ];

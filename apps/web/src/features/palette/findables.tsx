@@ -43,6 +43,7 @@ import {
   Bell,
   Blocks,
   Brain,
+  ChartLine,
   CircleArrowUp,
   Cpu,
   Download,
@@ -283,6 +284,14 @@ const settingsPlaces: {
     keywords:
       'use my apps computer use control my computer mac desktop apps click type keyboard mouse screen screenshot screen recording accessibility automate keynote notes finder glowing edge stop',
     icon: <MousePointerClick />,
+  },
+  {
+    // Dashboards (ADR 0119): Conch's numbers for Grafana, Prometheus and the rest.
+    tab: 'dashboards',
+    label: 'Dashboards',
+    keywords:
+      'dashboards grafana prometheus metrics scrape opentelemetry otel otlp telemetry observability monitoring traces spans honeycomb datadog new relic langfuse phoenix arize collector export send numbers',
+    icon: <ChartLine />,
   },
   {
     tab: 'health',
