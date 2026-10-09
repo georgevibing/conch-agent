@@ -40,7 +40,7 @@ import { detectClaude } from './detect';
 import { PROTECTED_MESSAGE, touchesProtected } from '../../lib/protect';
 import { openRelay } from '../../workplaces/relay';
 import { forbiddenPlaces } from '../host';
-import { childEnv } from './env';
+import { childEnv, settingsEnv } from './env';
 import { startClaudeLogin } from './login';
 import { Translator } from './translate';
 import { limitSignal, usageFromResponse, usageFromStatus } from './usage';
@@ -538,7 +538,9 @@ export class ClaudeCodeEngine implements Engine {
    * Where the sign-in allows it, Claude Code runs `--bare`: no CLAUDE.md,
    * rules, plugins or hooks. That context is thousands of tokens a title
    * doesn't need — about 20× the cost. Bare mode can't read OAuth or keychain
-   * credentials, so subscriptions (and any bare failure) run normally.
+   * credentials, so a subscription reads no settings at all instead (its
+   * sign-in isn't one), only their `env`, so a proxy still applies. Any other
+   * sign-in, and any failure of the lighter way, runs normally.
    */
   async complete(input: CompletionInput): Promise<Completion> {
     const status = await this.detect();
@@ -550,9 +552,10 @@ export class ClaudeCodeEngine implements Engine {
       method === 'bedrock' ||
       method === 'vertex' ||
       method === 'foundry';
-    if (bare) {
+    // The lighter way first, where there is one; the usual way if it fails.
+    if (bare || method === 'subscription') {
       try {
-        return await this.#complete(input, status, anthropicApiKey, true);
+        return await this.#complete(input, status, anthropicApiKey, bare, !bare);
       } catch (error) {
         if (input.signal.aborted) throw error;
       }
@@ -565,6 +568,8 @@ export class ClaudeCodeEngine implements Engine {
     status: EngineStatus,
     anthropicApiKey: string | undefined,
     bare: boolean,
+    /** Without the person's settings (CLAUDE.md, rules, plugins, hooks): their `env` only. */
+    plain = false,
   ): Promise<Completion> {
     const abort = new AbortController();
     const onAbort = () => abort.abort();
@@ -593,14 +598,16 @@ export class ClaudeCodeEngine implements Engine {
         options: {
           cwd: await this.settings.workspace(),
           pathToClaudeCodeExecutable: programFile(status.executablePath),
-          env: this.#env(anthropicApiKey),
+          env: plain
+            ? { ...this.#env(anthropicApiKey), ...(await settingsEnv()) }
+            : this.#env(anthropicApiKey),
           abortController: abort,
           systemPrompt: input.system,
           ...(input.model && input.model !== 'default' && { model: input.model }),
           tools: [],
           mcpServers: {},
           strictMcpConfig: true,
-          settingSources: ['user'],
+          settingSources: plain ? [] : ['user'],
           thinking: { type: 'disabled' },
           maxTurns: 1,
           persistSession: false,

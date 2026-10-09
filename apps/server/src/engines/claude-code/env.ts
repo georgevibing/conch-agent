@@ -6,6 +6,10 @@
  * child believe it's nested. We strip them, keep everything else (provider
  * config such as CLAUDE_CODE_USE_BEDROCK, proxies, PATH) and add our own.
  */
+import { readFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
 const SESSION_VARS = [
   /^CLAUDECODE$/,
   /^CLAUDE_CODE_ENTRYPOINT$/,
@@ -57,4 +61,33 @@ export function childEnv(extra: Record<string, string | undefined> = {}): Record
     if (value !== undefined) env[key] = value;
   }
   return env;
+}
+
+/**
+ * The `env` block of Claude Code's own user settings (`settings.json` in
+ * `CLAUDE_CONFIG_DIR`, else `~/.claude`): where a proxy or a gateway is often
+ * set. A small request that skips the person's settings (CLAUDE.md, rules,
+ * plugins, hooks) still goes the way their Claude Code does. Empty when there
+ * is none, or it can't be read.
+ */
+export async function settingsEnv(
+  base: Record<string, string | undefined> = process.env,
+): Promise<Record<string, string>> {
+  const dir = base.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
+  try {
+    const parsed: unknown = JSON.parse(await readFile(join(dir, 'settings.json'), 'utf8'));
+    const env = isRecord(parsed) ? parsed.env : undefined;
+    if (!isRecord(env)) return {};
+    return Object.fromEntries(
+      Object.entries(env).flatMap(([key, value]) =>
+        typeof value === 'string' && !CONCH_VARS.test(key) ? [[key, value]] : [],
+      ),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

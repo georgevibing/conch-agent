@@ -1,6 +1,10 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { childEnv, QUIET } from './env';
+import { childEnv, QUIET, settingsEnv } from './env';
 
 describe('childEnv', () => {
   const saved = { ...process.env };
@@ -55,5 +59,36 @@ describe('childEnv', () => {
       'CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION',
       'CLAUDE_CODE_GOAL_CHECKIN_MINUTES',
     ]);
+  });
+});
+
+describe('settingsEnv', () => {
+  it('reads only the string values of Claude Code’s own settings env, never Conch’s', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'conch-claude-settings-'));
+    try {
+      await writeFile(
+        join(dir, 'settings.json'),
+        JSON.stringify({
+          env: { HTTPS_PROXY: 'http://proxy:8080', CONCH_TOKEN: 'x', COUNT: 3 },
+          hooks: { SessionStart: [] },
+        }),
+      );
+      expect(await settingsEnv({ CLAUDE_CONFIG_DIR: dir })).toEqual({
+        HTTPS_PROXY: 'http://proxy:8080',
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('is empty when there are no settings, or they are not JSON', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'conch-claude-settings-'));
+    try {
+      expect(await settingsEnv({ CLAUDE_CONFIG_DIR: dir })).toEqual({});
+      await writeFile(join(dir, 'settings.json'), '{ not json');
+      expect(await settingsEnv({ CLAUDE_CONFIG_DIR: dir })).toEqual({});
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
