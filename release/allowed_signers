@@ -4,3 +4,4 @@
 # version already installed, so a release that changes it must be signed by
 # a key already here. `pnpm release key` adds the release key the first time.
 # Format: principal namespaces="git" <key type> <key> (see ssh-keygen(1), ALLOWED SIGNERS).
+conch-release namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOerv6QBIl1LJ2d/boLYNmpAVMaMxKzPusWX60sZFyF3

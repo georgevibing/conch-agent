@@ -104,8 +104,8 @@ jobs:
 
   # The desktop app (ADR 0054), driven for real: it opens Conch, keeps it
   # running with its window closed, restarts a crashed gateway, and quits.
+  # Its id is the required check `desktop` in the main ruleset: no `name`, so it stays that.
   desktop:
-    name: Desktop app
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -170,8 +170,8 @@ jobs:
   # Preserve one stable gate for branch rules. Website publication still waits
   # for the entire CI workflow, so no partial pass can publish the site. The
   # commit check runs for pull requests only, so it may be skipped on a push.
+  # The required check `check` in the main ruleset.
   check:
-    name: check
     if: ${{ always() }}
     needs: [static, unit, e2e, desktop, commits]
     runs-on: ubuntu-24.04
