@@ -109,6 +109,12 @@ import { MockTeams } from './channels/mock/teams';
 import { MockTelegram } from './channels/mock/telegram';
 import { linkedChannels, type LinkedChannels } from './channels/linked-setup';
 import { ChannelLinking } from './channels/linking';
+import { MockDingTalk } from './channels/mock/dingtalk';
+import { MockFeishu } from './channels/mock/feishu';
+import { FeishuRegistrations } from './channels/feishu-register';
+import { personId } from './channels/types';
+import { FeishuAdapter } from './channels/feishu';
+import { MockQq } from './channels/mock/qq';
 import { MockGoogleChat } from './channels/mock/googlechat';
 import { MockLine } from './channels/mock/line';
 import { MockMattermost } from './channels/mock/mattermost';
@@ -425,6 +431,8 @@ export class Services {
   readonly linked: LinkedChannels;
   /** Linking WhatsApp or Signal by QR code. */
   readonly channelLinking: ChannelLinking;
+  /** Making a Feishu or Lark bot by scanning a code (ADR 0120). */
+  readonly feishuScans: FeishuRegistrations;
   readonly mockMail?: MockMail;
   readonly mockMessages?: MockMessages;
   readonly mockTeams?: MockTeams;
@@ -433,6 +441,9 @@ export class Services {
   readonly mockTwilio?: MockTwilio;
   readonly mockMattermost?: MockMattermost;
   readonly mockLine?: MockLine;
+  readonly mockFeishu?: MockFeishu;
+  readonly mockDingTalk?: MockDingTalk;
+  readonly mockQq?: MockQq;
   readonly mockRocketChat?: MockRocketChat;
   readonly mockGoogleChat?: MockGoogleChat;
   /** The public door, for the channels that only deliver to a web address (ADR 0045). */
@@ -1615,6 +1626,9 @@ export class Services {
     this.mockLine = config.CONCH_ENGINE === 'mock' ? new MockLine() : undefined;
     this.mockRocketChat = config.CONCH_ENGINE === 'mock' ? new MockRocketChat() : undefined;
     this.mockGoogleChat = config.CONCH_ENGINE === 'mock' ? new MockGoogleChat() : undefined;
+    this.mockFeishu = config.CONCH_ENGINE === 'mock' ? new MockFeishu() : undefined;
+    this.mockDingTalk = config.CONCH_ENGINE === 'mock' ? new MockDingTalk() : undefined;
+    this.mockQq = config.CONCH_ENGINE === 'mock' ? new MockQq() : undefined;
     // In mock mode the "internet" is this computer: what's sent to the public address reaches the door.
     const door: ChannelDoorService = new ChannelDoorService({
       home: config.CONCH_HOME,
@@ -1709,6 +1723,25 @@ export class Services {
           ),
       },
     });
+    this.feishuScans = new FeishuRegistrations(
+      endpoints,
+      async (made) => {
+        const secrets = {
+          kind: 'feishu' as const,
+          region: made.region,
+          appId: made.appId,
+          appSecret: made.appSecret,
+        };
+        // Who scanned it, by their name in Feishu where the app may read it.
+        const scanner = made.openId
+          ? await new FeishuAdapter(secrets, endpoints)
+              .person(made.openId)
+              .catch(() => ({ id: personId(made.openId ?? ''), name: 'You', anonymous: true }))
+          : undefined;
+        return (await this.channels.createScanned(secrets, scanner)).id;
+      },
+      async () => (await this.settings.get()).persona.name,
+    );
     this.channelLinking = new ChannelLinking({
       linker: (kind) => this.linked.linker(kind),
       finish: (_kind, found, channelId) => this.channels.linked(found, channelId),
@@ -1896,6 +1929,22 @@ export class Services {
       if (this.mockLine) {
         await this.mockLine.start(Number(process.env.CONCH_MOCK_LINE_PORT ?? 0));
         endpoints.line = this.mockLine.base;
+      }
+      if (this.mockFeishu) {
+        await this.mockFeishu.start(Number(process.env.CONCH_MOCK_FEISHU_PORT ?? 0));
+        endpoints.feishu = this.mockFeishu.base;
+        endpoints.feishuAccounts = { feishu: this.mockFeishu.base, lark: this.mockFeishu.base };
+      }
+      if (this.mockDingTalk) {
+        await this.mockDingTalk.start(Number(process.env.CONCH_MOCK_DINGTALK_PORT ?? 0));
+        endpoints.dingtalk = this.mockDingTalk.base;
+        endpoints.dingtalkOld = this.mockDingTalk.base;
+        endpoints.dingtalkFiles = [this.mockDingTalk.base];
+      }
+      if (this.mockQq) {
+        await this.mockQq.start(Number(process.env.CONCH_MOCK_QQ_PORT ?? 0));
+        endpoints.qq = this.mockQq.base;
+        endpoints.qqFiles = [this.mockQq.base];
       }
     })();
   }
@@ -2850,6 +2899,10 @@ export class Services {
     void this.mockTwilio?.stop();
     void this.mockMattermost?.stop();
     void this.mockLine?.stop();
+    void this.mockFeishu?.stop();
+    this.feishuScans.stop();
+    void this.mockDingTalk?.stop();
+    void this.mockQq?.stop();
     void this.mockRocketChat?.stop();
     void this.mockGoogleChat?.stop();
     clearInterval(this.#sweeper);

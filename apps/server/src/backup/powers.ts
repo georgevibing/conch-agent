@@ -56,6 +56,9 @@ const APP_NAMES: Record<string, string> = {
   line: 'LINE',
   rocketchat: 'Rocket.Chat',
   googlechat: 'Google Chat',
+  feishu: 'Feishu / Lark',
+  dingtalk: 'DingTalk',
+  qq: 'QQ',
 };
 
 const text = (value: unknown, fallback: string) => {

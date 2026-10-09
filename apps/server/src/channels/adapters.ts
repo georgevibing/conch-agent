@@ -6,11 +6,14 @@ import type { SignalDaemon } from './signal-cli';
 import { EmailAdapter, type MailEndpoints } from './email';
 import { ImessageAdapter, type ImessageOptions } from './imessage';
 import type { ChannelDoorService } from './door';
+import { DingTalkAdapter } from './dingtalk';
+import { FeishuAdapter } from './feishu';
 import { GoogleChatAdapter } from './googlechat';
 import { LineAdapter } from './line';
 import { MattermostAdapter } from './mattermost';
 import { RocketChatAdapter } from './rocketchat';
 import { MatrixAdapter } from './matrix';
+import { QqAdapter } from './qq';
 import { SLACK_API, SlackAdapter } from './slack';
 import { TwilioSmsAdapter } from './sms';
 import { TeamsAdapter } from './teams';
@@ -53,6 +56,18 @@ export interface ChannelEndpoints {
   googleCerts?: string;
   googleIssuers?: string[];
   googleChatCerts?: string;
+  /** Feishu / Lark's open platform, DingTalk's API and its Stream gateway, and QQ's bot API (the pretend ones in tests). */
+  feishu?: string;
+  /** Feishu's and Lark's accounts service, where a bot is made by scanning a code. */
+  feishuAccounts?: { feishu: string; lark: string };
+  dingtalk?: string;
+  dingtalkOld?: string;
+  /** Where files and reply addresses may be besides DingTalk's own servers (the pretend DingTalk). */
+  dingtalkFiles?: string[];
+  qq?: string;
+  qqToken?: string;
+  /** Where files may be besides QQ's own servers (the pretend QQ). */
+  qqFiles?: string[];
   /** The public door (Teams, Official Accounts), and where channels keep what they remember. */
   door?: ChannelDoorService;
   home?: string;
@@ -102,6 +117,12 @@ export function adapterFor(
       return new RocketChatAdapter(secrets);
     case 'googlechat':
       return new GoogleChatAdapter(secrets, endpoints);
+    case 'feishu':
+      return new FeishuAdapter(secrets, endpoints);
+    case 'dingtalk':
+      return new DingTalkAdapter(secrets, endpoints);
+    case 'qq':
+      return new QqAdapter(secrets, endpoints);
   }
 }
 

@@ -15,7 +15,7 @@ A channel is a bot you make in the chat app, connected to the Conch on your comp
 
 Conch connects **outward** to the app. Nothing on your computer is opened to the internet, and you need no public address and no tunnel.
 
-Some apps only deliver to a web address: **Microsoft Teams**, **Google Chat**, a WeChat **Official Account**, **LINE**, and **SMS** through Twilio. For them, Conch can open one public address with one press (through Tailscale Funnel), or use an address of your own. It leads to a small door of its own, not to Conch: the door lets in only messages the app signed, for the channels you connected. A WeChat **WeCom bot** and **Matrix** connect outward like the others.
+Some apps only deliver to a web address: **Microsoft Teams**, **Google Chat**, a WeChat **Official Account**, **LINE**, and **SMS** through Twilio. For them, Conch can open one public address with one press (through Tailscale Funnel), or use an address of your own. It leads to a small door of its own, not to Conch: the door lets in only messages the app signed, for the channels you connected. A WeChat **WeCom bot**, **Matrix**, **Feishu / Lark**, **DingTalk** and **QQ** connect outward like the others.
 
 Setting one up is a short numbered path in Conch, from **Apps → Talk to me here**, beside a picture of exactly what you'll see in the other app. Keys are checked the moment you paste them, anywhere on the page.
 
@@ -35,7 +35,7 @@ WhatsApp and Signal have no bots to make. Instead Conch joins **your own account
 
 ## In a group
 
-Telegram, Discord, Slack, Google Chat, Mattermost, Rocket.Chat and LINE can answer in a group, a server's channel or a team's channel, once you turn that group on in Conch. Add the bot to the group in the app; the group shows up on the bot's page in Conch under **Groups**, with a switch.
+Telegram, Discord, Slack, Google Chat, Mattermost, Rocket.Chat, LINE, Feishu / Lark, DingTalk and QQ can answer in a group, a server's channel or a team's channel, once you turn that group on in Conch. Add the bot to the group in the app; the group shows up on the bot's page in Conch under **Groups**, with a switch.
 
 - **Only when it's asked.** In a group that's on, your assistant answers only when someone mentions it (`@yourbot`) or replies to one of its messages. Everything else in the group is never read.
 - **You get everything.** When you mention it, it's the same assistant as in your private chat, in a conversation of its own for that group.
@@ -50,9 +50,9 @@ Turn a group off, and your assistant goes quiet there at once. **Forget** takes 
 
 - **Everything your agents can do.** A message becomes a Conch chat with your default agent and provider. It shows in the sidebar, wearing the app's logo.
 - **Any of your agents.** Send `/agent` to choose who answers you here, or `/agent atlas` to choose by name. Or choose in Conch, with **Answered by** on the chat app's page. See [Agents](../features/agents.md#in-chat-apps).
-- **Approvals, as buttons.** When your assistant asks, the question arrives with **Allow**, **Always in this chat** and **Don't allow**. Answer it anywhere, and the message updates to say what was decided. WhatsApp, Signal, iMessage, email and SMS have no buttons, so you reply with the answer's number.
+- **Approvals, as buttons.** When your assistant asks, the question arrives with **Allow**, **Always in this chat** and **Don't allow**. Answer it anywhere, and the message updates to say what was decided. WhatsApp, Signal, iMessage, email, SMS and DingTalk have no buttons, so you reply with the answer's number; QQ shows its buttons only to bots it invited, with the numbers always there. Where an app can't change a message (WeCom, DingTalk, QQ), what was decided comes as a new one.
 - **Photos and files** you send become attachments.
-- **Pictures and files back.** A picture your assistant makes, or a file it finishes, comes back in the chat with its answer: a photo on Telegram, an upload on Slack or Discord. In someone else's chat, only a picture made from words goes; an edit of one of your files, or a file of yours, only ever goes to you. Teams and a WeChat Official Account take pictures only; Google Chat, LINE, SMS and a WeCom bot can't carry files from Conch, so your assistant says so and the file waits in Conch.
+- **Pictures and files back.** A picture your assistant makes, or a file it finishes, comes back in the chat with its answer: a photo on Telegram, an upload on Slack or Discord. In someone else's chat, only a picture made from words goes; an edit of one of your files, or a file of yours, only ever goes to you. Teams and a WeChat Official Account take pictures only; Google Chat, LINE, SMS and a WeCom bot can't carry files from Conch, so your assistant says so and the file waits in Conch. DingTalk takes pictures and PDF, Office, ZIP and RAR files only, and a QQ group pictures only.
 - **Voice notes** are turned into words on your computer and answered like anything you typed. See [Voice](../features/voice.md#voice-notes-from-your-chat-apps).
 - **Routine results**, and a routine's questions, come to you there when the channel has **Routine results** on.
 - **Messages your assistant starts.** Ask in any chat, here or in Conch, "text me on WhatsApp when it's done" or "send the weather to my Telegram", and your assistant writes to you there. A [routine](../features/routines.md) can do the same. It only ever writes to your own private chat with Conch, never to anyone else. Without an app named, it uses the one you wrote from last. It can send pictures and files too ("send the picture to my Telegram"): only ones from that chat in Conch, never a file it names by its place on your computer.

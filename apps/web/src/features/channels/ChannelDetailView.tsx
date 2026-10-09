@@ -612,7 +612,10 @@ function ReplaceKey({ channel }: { channel: Channel }) {
     channel.kind === 'mattermost' ||
     channel.kind === 'line' ||
     channel.kind === 'rocketchat' ||
-    channel.kind === 'googlechat';
+    channel.kind === 'googlechat' ||
+    channel.kind === 'feishu' ||
+    channel.kind === 'dingtalk' ||
+    channel.kind === 'qq';
   const body =
     email || !token.trim()
       ? undefined
@@ -647,6 +650,11 @@ function ReplaceKey({ channel }: { channel: Channel }) {
       'Sign in to Rocket.Chat as the bot, make a new token in Profile → Personal Access Tokens, and copy it.',
     googlechat:
       'In Google Cloud, open IAM & Admin → Service accounts → your account → Keys → Add key → JSON, and paste what’s in the file.',
+    feishu:
+      'In the developer console, open your app → Credentials & Basic Info (凭证与基础信息), press Reset beside App Secret, and copy it.',
+    dingtalk:
+      'In the DingTalk developer console, open your app → Credentials & Basic Info (凭证与基础信息), and copy its Client Secret again.',
+    qq: 'On q.qq.com, open your bot → Development → Settings (开发设置), reset the AppSecret, and copy it.',
   };
 
   const save = async () => {
@@ -658,15 +666,21 @@ function ReplaceKey({ channel }: { channel: Channel }) {
           ? { kind: 'mattermost', token }
           : channel.kind === 'googlechat'
             ? { kind: 'googlechat', serviceAccount: token }
-            : channel.kind === 'rocketchat'
-              ? { kind: 'rocketchat', userId: channel.bot.id, token }
-              : channel.kind === 'line'
-                ? { kind: 'line', accessToken: token }
-                : email
-                  ? { kind: 'email', password: token }
-                  : channel.kind === 'discord'
-                    ? { kind: 'discord', token }
-                    : { kind: 'telegram', token };
+            : channel.kind === 'feishu'
+              ? { kind: 'feishu', appSecret: token }
+              : channel.kind === 'qq'
+                ? { kind: 'qq', appSecret: token }
+                : channel.kind === 'dingtalk'
+                  ? { kind: 'dingtalk', clientSecret: token }
+                  : channel.kind === 'rocketchat'
+                    ? { kind: 'rocketchat', userId: channel.bot.id, token }
+                    : channel.kind === 'line'
+                      ? { kind: 'line', accessToken: token }
+                      : email
+                        ? { kind: 'email', password: token }
+                        : channel.kind === 'discord'
+                          ? { kind: 'discord', token }
+                          : { kind: 'telegram', token };
     setBusy(true);
     setError(undefined);
     try {
