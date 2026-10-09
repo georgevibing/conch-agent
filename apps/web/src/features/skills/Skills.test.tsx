@@ -114,6 +114,41 @@ describe('Skills page', () => {
     expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
+  it('keeps your commands beside your skills, and makes a new one', async () => {
+    const at = { createdAt: 1, updatedAt: 1 };
+    const commands = [
+      { name: 'standup', description: 'Draft my standup', prompt: 'Notes: {{input}}', ...at },
+    ];
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      // Even with no skills yet, your commands are here.
+      'GET /api/skills': () => ({ skills: [], sources: [] }),
+      'GET /api/commands': () => commands,
+      'PUT /api/commands/recap': () => ({
+        name: 'recap',
+        description: '',
+        prompt: 'Recap this',
+        ...at,
+      }),
+    });
+    renderApp(<SkillsView />, { route: '/skills' });
+    const section = await screen.findByRole('region', { name: 'Your commands' });
+    expect(await within(section).findByText('/standup')).toBeInTheDocument();
+    await userEvent.click(within(section).getByRole('button', { name: 'New command' }));
+    await userEvent.type(within(section).getByRole('textbox', { name: 'Name' }), 'recap');
+    await userEvent.type(
+      within(section).getByRole('textbox', { name: 'What it asks' }),
+      'Recap this',
+    );
+    await userEvent.click(within(section).getByRole('button', { name: 'Save command' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({
+        description: '',
+        prompt: 'Recap this',
+      }),
+    );
+  });
+
   it('invites you to teach one when there are none', async () => {
     mockFetch({
       'GET /api/state': () => appState(),

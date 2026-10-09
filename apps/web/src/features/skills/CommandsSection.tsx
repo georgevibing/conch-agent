@@ -1,9 +1,8 @@
 import type { CustomCommand } from '@conch/protocol';
 import {
-  Badge,
   Button,
-  EmptyState,
   Field,
+  Heading,
   IconButton,
   Input,
   Stack,
@@ -12,14 +11,17 @@ import {
   toast,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { Pencil, Plus, SquareSlash, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router';
 
 import { api, ApiError } from '../../api/client';
 import { keys, useAppState, useCapabilities, useCommands } from '../../api/queries';
 import { builtins } from '../commands/slash';
-import { Section } from './Section';
-import styles from './Settings.module.css';
+import styles from './Skills.module.css';
+
+/** `navigate('/skills', { state: { focus: COMMANDS_FOCUS } })`: straight to Your commands. */
+export const COMMANDS_FOCUS = 'commands';
 
 interface Draft {
   name: string;
@@ -157,84 +159,67 @@ function CommandRow({ command, onEdit }: { command: CustomCommand; onEdit: () =>
   );
 }
 
-export function CommandsTab() {
+/**
+ * Skills → Your commands: prompts you use often, each a `/name` in any chat.
+ * Conch's own commands and the provider's are only counted here: typing /
+ * lists them all, where they're used.
+ */
+export function CommandsSection() {
   const { data: commands } = useCommands();
   const { data: app } = useAppState();
   const { data: caps } = useCapabilities(app?.engine.state === 'ready');
   const [editing, setEditing] = useState<Draft | null>(null);
+  const location = useLocation();
+  const ref = useRef<HTMLElement>(null);
+  const wanted = (location.state as { focus?: string } | null)?.focus === COMMANDS_FOCUS;
+  // Opened from ⌘K, /commands or an old Settings → Commands address: straight here.
+  useEffect(() => {
+    if (wanted) ref.current?.scrollIntoView({ block: 'start' });
+  }, [wanted]);
+  const theirs = caps?.commands.length ?? 0;
 
   return (
-    <Stack gap={8}>
-      <Section
-        title="Your commands"
-        description="Prompts you use often. Type / in any chat to run one."
-      >
-        <Stack gap={4}>
-          {editing ? (
-            <CommandEditor draft={editing} onDone={() => setEditing(null)} />
-          ) : (
-            <div>
-              <Button variant="surface" leadingIcon={<Plus />} onClick={() => setEditing(blank)}>
-                New command
-              </Button>
-            </div>
-          )}
-          {commands && commands.length === 0 && !editing && (
-            <EmptyState
-              size="sm"
-              icon={<SquareSlash />}
-              title="No commands yet"
-              description="For example, /standup could turn your notes into a tidy update."
-            />
-          )}
-          {commands && commands.length > 0 && (
-            <ul className={styles.commandList} aria-label="Your commands">
-              {commands.map((c) => (
-                <CommandRow
-                  key={c.name}
-                  command={c}
-                  onEdit={() => setEditing({ ...c, original: c.name })}
-                />
-              ))}
-            </ul>
-          )}
+    <section ref={ref} id="commands" aria-labelledby="skills-commands" className={styles.section}>
+      <div className={styles.commandsHead}>
+        <Stack gap={0.5}>
+          <Heading level={2} id="skills-commands" size="sm" tone="muted">
+            Your commands
+          </Heading>
+          <Text size="xs" tone="subtle">
+            Prompts you use often. Type / in any chat for these
+            {theirs > 0
+              ? `, Conch’s own ${builtins.length} commands and ${theirs} from your provider.`
+              : ` and Conch’s own ${builtins.length} commands.`}
+          </Text>
         </Stack>
-      </Section>
-
-      <Section title="Built in" description="Conch’s own commands. They never go to the model.">
-        <ul className={styles.commandList}>
-          {builtins.map((b) => (
-            <li key={b.name} className={styles.commandRow}>
-              <Stack gap={0.5} className={styles.commandText}>
-                <Text as="span" weight="medium" className={styles.commandName}>
-                  /{b.name}
-                  {b.argumentHint && (
-                    <Text as="span" tone="subtle" weight="regular">
-                      {' '}
-                      {b.argumentHint}
-                    </Text>
-                  )}
-                </Text>
-                <Text as="span" size="sm" tone="muted">
-                  {b.description}
-                </Text>
-              </Stack>
-            </li>
+        {!editing && (
+          <Button
+            variant="surface"
+            size="sm"
+            leadingIcon={<Plus />}
+            onClick={() => setEditing(blank)}
+          >
+            New command
+          </Button>
+        )}
+      </div>
+      {editing && <CommandEditor draft={editing} onDone={() => setEditing(null)} />}
+      {commands && commands.length === 0 && !editing && (
+        <Text size="sm" tone="muted">
+          None yet. For example, /standup could turn your notes into a tidy update.
+        </Text>
+      )}
+      {commands && commands.length > 0 && (
+        <ul className={styles.commandList} aria-label="Your commands">
+          {commands.map((c) => (
+            <CommandRow
+              key={c.name}
+              command={c}
+              onEdit={() => setEditing({ ...c, original: c.name })}
+            />
           ))}
         </ul>
-      </Section>
-
-      {caps && caps.commands.length > 0 && (
-        <Section
-          title="From your provider"
-          description="What your own setup adds, plugins included."
-        >
-          <Text size="sm" tone="muted">
-            <Badge tone="neutral">{caps.commands.length}</Badge> available — type / in a chat to
-            find them.
-          </Text>
-        </Section>
       )}
-    </Stack>
+    </section>
   );
 }

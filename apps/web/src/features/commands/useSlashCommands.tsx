@@ -58,6 +58,7 @@ import {
 } from '../models/catalog';
 import { modelKey, type useTurnOptions } from '../models/useTurnOptions';
 import { undoLast } from '../undo/UndoHost';
+import { COMMANDS_FOCUS } from '../skills/CommandsSection';
 import { usableSkills, useSkills } from '../skills/queries';
 import { clearChat, setChatGoal } from './context';
 import { chatMarkdown, download, exportName, lastReply } from './export';
@@ -465,7 +466,7 @@ export function useSlashCommands(options: {
       case 'skills':
         return void navigate('/skills');
       case 'commands':
-        return ui.openSettings('commands');
+        return void navigate('/skills', { state: { focus: COMMANDS_FOCUS } });
       case 'apps':
         return void navigate('/apps');
       case 'providers':
@@ -510,8 +511,11 @@ export function useSlashCommands(options: {
         return true;
       case 'unknown':
         toast(`There’s no /${resolved.name} command`, {
-          description: 'Type / to see what’s available, or create your own in Settings.',
-          action: { label: 'Create it', onClick: () => ui.openSettings('commands') },
+          description: 'Type / to see what’s available, or make your own in Skills.',
+          action: {
+            label: 'Create it',
+            onClick: () => void navigate('/skills', { state: { focus: COMMANDS_FOCUS } }),
+          },
         });
         return true;
     }

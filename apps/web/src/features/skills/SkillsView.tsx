@@ -18,6 +18,7 @@ import { useMemo, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
 
 import { useAssistantName } from '../integrations/queries';
+import { CommandsSection } from './CommandsSection';
 import { DiscoverPanel } from './Discover';
 import { useSkills } from './queries';
 import { SkillShelfCard } from './SkillShelfCard';
@@ -86,7 +87,15 @@ export function SkillsView() {
             Discover
           </Tabs.Trigger>
         </Tabs.List>
-        <Tabs.Content value="mine">{!discover && <YourSkills />}</Tabs.Content>
+        <Tabs.Content value="mine">
+          {!discover && (
+            <Stack gap={8}>
+              <YourSkills />
+              {/* Prompts you keep as /commands: a skill's small cousin, here beside them. */}
+              <CommandsSection />
+            </Stack>
+          )}
+        </Tabs.Content>
         <Tabs.Content value="discover">{discover && <DiscoverPanel />}</Tabs.Content>
       </Tabs>
     </Page>
