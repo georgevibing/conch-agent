@@ -8,7 +8,7 @@ import type { Provider } from '@conch/protocol';
 
 import { loadConfig } from '../config';
 import { Services } from '../services';
-import { providersCheck } from './checks';
+import { browserCheck, providersCheck } from './checks';
 
 let services: Services | undefined;
 
@@ -289,5 +289,62 @@ describe('Your providers', () => {
     expect(await report([provider('claude-code', { active: true }), provider('codex')])).toEqual({
       'providers:claude-code': 'needs-you',
     });
+  });
+});
+
+describe('The browser, in Repair everything', () => {
+  /** A browser at `phase`, whose repair leaves it at `fixed`. */
+  function browser(
+    phase: string,
+    fixed: string,
+    extra: { enabled?: boolean; command?: string } = {},
+  ) {
+    const problem = { message: 'The browser won’t start.', command: extra.command };
+    const at = (p: string) => ({
+      phase: p,
+      settings: { enabled: extra.enabled ?? true },
+      browser: { name: 'Microsoft Edge', id: 'msedge' },
+      ...(p === 'problem' && { problem }),
+    });
+    const repair = vi.fn(async () => at(fixed));
+    const services = {
+      browser: { status: async () => at(phase), repair, reconnect: async () => undefined },
+    } as unknown as Services;
+    return { services, repair };
+  }
+  const run = (services: Services, repair: boolean) =>
+    browserCheck(services).run({ repair, signal: new AbortController().signal });
+
+  it('looks without touching it, and repairs it when asked: the one place for its fixes', async () => {
+    const { services, repair } = browser('problem', 'running');
+    expect(await run(services, false)).toMatchObject([
+      { id: 'browser', state: 'needs-you', message: 'The browser won’t start.' },
+    ]);
+    expect(repair).not.toHaveBeenCalled();
+    expect(await run(services, true)).toMatchObject([
+      { id: 'browser', state: 'fixed', message: 'It starts cleanly again.' },
+    ]);
+    expect(repair).toHaveBeenCalledOnce();
+  });
+
+  it('leaves a healthy browser alone, even on Repair', async () => {
+    const { services, repair } = browser('running', 'running');
+    expect(await run(services, true)).toMatchObject([
+      { id: 'browser', state: 'ok', message: 'Ready · Microsoft Edge' },
+    ]);
+    expect(repair).not.toHaveBeenCalled();
+  });
+
+  it('hands over the one command only a person can run when repairing can’t fix it', async () => {
+    const command = 'sudo npx playwright install-deps chromium';
+    const { services } = browser('problem', 'problem', { command });
+    expect(await run(services, true)).toMatchObject([
+      { state: 'needs-you', action: { kind: 'command', command } },
+    ]);
+  });
+
+  it('says nothing about a browser that’s turned off', async () => {
+    const { services } = browser('problem', 'problem', { enabled: false });
+    expect(await run(services, true)).toEqual([]);
   });
 });

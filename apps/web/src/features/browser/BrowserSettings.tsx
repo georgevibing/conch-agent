@@ -31,7 +31,12 @@ import {
 } from './queries';
 import { useQueryClient } from '@tanstack/react-query';
 
-/** Settings › Browser: its health, how it behaves, the sites you trust, your sign-ins. */
+/**
+ * Settings › Browser: its health, how it behaves, the sites you trust, your
+ * sign-ins. Repairing it belongs to Settings › Health (Repair everything runs
+ * the browser's fixes with every other part's); the card here offers its one
+ * Repair only while the browser really has a problem.
+ */
 export function BrowserSettings() {
   const name = useAssistantName();
   const { data: status, isPending } = useBrowserStatus();

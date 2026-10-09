@@ -482,23 +482,47 @@ describe('BrowserHandoff', () => {
 });
 
 describe('BrowserStatusCard', () => {
-  it('reports health and offers one repair', async () => {
-    const user = userEvent.setup();
-    const onRepair = vi.fn();
+  it('reports health, and says nothing about repairing while it’s healthy', async () => {
     const { container } = renderNacre(
       <BrowserStatusCard
         phase="running"
         browserName="Microsoft Edge"
         version="154.0.1"
-        onRepair={onRepair}
+        onRepair={() => undefined}
       />,
     );
     expect(screen.getByRole('status')).toHaveTextContent('Running');
     expect(screen.getByText(/Microsoft Edge 154, on its own profile/)).toBeInTheDocument();
+    // Repair everything in Settings → Health looks after it; the card has no button of its own.
+    expect(screen.queryByRole('button', { name: 'Repair' })).toBeNull();
     // What it fixed on its own is listed in Settings → Health, not on the card.
     expect(screen.queryByRole('region', { name: 'Fixed on its own' })).toBeNull();
+    await expectAccessible(container);
+  });
+
+  it('with a real problem, says it in a line and offers one repair', async () => {
+    const user = userEvent.setup();
+    const onRepair = vi.fn();
+    const { container, rerender } = renderNacre(
+      <BrowserStatusCard
+        phase="problem"
+        problem={{ message: 'The browser won’t start.' }}
+        onRepair={onRepair}
+      />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Needs a hand');
+    expect(screen.getByText('The browser won’t start.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Repair' }));
     expect(onRepair).toHaveBeenCalledOnce();
     await expectAccessible(container);
+    // While the repair runs, the button stays where it was, busy.
+    rerender(
+      <BrowserStatusCard
+        phase="repairing"
+        problem={{ message: 'The browser won’t start.' }}
+        onRepair={onRepair}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /Repair/ })).toHaveAttribute('aria-busy', 'true');
   });
 });
