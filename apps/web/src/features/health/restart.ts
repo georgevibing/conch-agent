@@ -1,4 +1,4 @@
-import { Health } from '@conch/protocol';
+import { Health, type RestartBody } from '@conch/protocol';
 import { z } from 'zod';
 
 import { ApiError, request } from '../../api/client';
@@ -22,12 +22,16 @@ export async function bootId(): Promise<string | undefined> {
  * (`verify-required`: run it through `useVerify`'s `guard`), and says `busy`
  * while a chat is working.
  */
-export async function restartConch(title = 'Restarting Conch'): Promise<string | undefined> {
+export async function restartConch(
+  title = 'Restarting Conch',
+  /** `anyway`: what's working pauses at a safe point and carries on after. */
+  when: RestartBody['when'] = 'now',
+): Promise<string | undefined> {
   const from = await bootId();
   try {
     await request(z.object({ ok: z.boolean() }), '/api/gateway/restart', {
       method: 'POST',
-      body: {},
+      body: { when },
     });
   } catch (error) {
     if (error instanceof ApiError && error.code === 'not-restartable') return error.message;

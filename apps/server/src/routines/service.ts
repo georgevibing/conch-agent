@@ -129,11 +129,55 @@ export class RoutineService {
   async start({ watch = true }: { watch?: boolean } = {}) {
     if (!this.#started) {
       this.#started = true;
+      await this.#carryOnPaused();
       await this.#restoreHeld();
       await this.#tick();
     }
     // Repair may enable sources after clocks have already started in recovery mode.
     if (watch && this.#started) await this.deps.when?.start();
+  }
+
+  /**
+   * Conch is about to restart on purpose: each run going now says so, so the
+   * next start carries it on in its own chat (`#carryOnPaused`). `undefined`:
+   * the restart didn't happen after all.
+   */
+  async markPaused(reason: RoutineRun['pausedFor']): Promise<number> {
+    let marked = 0;
+    for (const [routineId, runId] of this.#running) {
+      const run = (await this.deps.store.runs(routineId).catch(() => [])).find(
+        (r) => r.id === runId,
+      );
+      if (!run || (run.status !== 'running' && run.status !== 'needs-you')) continue;
+      await this.deps.store.saveRun({ ...run, pausedFor: reason });
+      marked++;
+    }
+    return marked;
+  }
+
+  /**
+   * On start: a run Conch paused for its own update carries on in its own
+   * chat. One that was cut off any other way says it stopped, rather than
+   * showing as running for ever.
+   */
+  async #carryOnPaused() {
+    for (const routine of await this.deps.store.all().catch(() => [])) {
+      const [last] = await this.deps.store.runs(routine.id).catch(() => []);
+      if (!last || (last.status !== 'running' && last.status !== 'needs-you')) continue;
+      if (!last.pausedFor || !last.conversationId || routine.status !== 'active') {
+        const run: RoutineRun = {
+          ...last,
+          pausedFor: undefined,
+          status: 'stopped',
+          finishedAt: this.#now,
+          outcome: 'Conch stopped before it finished.',
+        };
+        await this.deps.store.saveRun(run).catch(() => undefined);
+        this.deps.emit({ type: 'routine.run', run });
+        continue;
+      }
+      void this.#execute(routine, last.trigger, last.scheduledFor, undefined, last);
+    }
   }
 
   /** Evaluate schedules now (the timer calls this; tests and wake-from-sleep can too). */
@@ -672,7 +716,23 @@ export class RoutineService {
     scheduledFor?: number,
     /** What happened, for a run a When-routine's event started (ADR 0056). */
     event?: FiredBatch,
+    /** A run Conch paused for a restart: it carries on in its own chat. */
+    resume?: RoutineRun,
   ): Promise<RoutineRun | undefined> {
+    /** A paused run that can't carry on says why, instead of a second run. */
+    const cannotCarryOn = async (why: string) => {
+      if (!resume) return false;
+      const run: RoutineRun = {
+        ...resume,
+        pausedFor: undefined,
+        status: 'stopped',
+        finishedAt: this.#now,
+        outcome: `Conch restarted while this ran, and it couldn’t carry on: ${why}`,
+      };
+      await this.deps.store.saveRun(run).catch(() => undefined);
+      this.deps.emit({ type: 'routine.run', run });
+      return true;
+    };
     if (this.#running.has(routine.id)) {
       await this.#record(routine, {
         trigger,
@@ -701,6 +761,7 @@ export class RoutineService {
           : status.state === 'not-installed'
             ? `${engine.label} isn’t installed, so this didn’t run. It runs once it’s there.`
             : `${engine.label} wasn’t available, so this didn’t run. It runs once it’s back.`;
+      if (await cannotCarryOn(`${engine.label} isn’t ready.`)) return undefined;
       const run = await this.#record(routine, {
         trigger,
         status: 'failed',
@@ -724,7 +785,10 @@ export class RoutineService {
     // Spending guards (ADR 0057). “Run now” is a person asking, so it goes.
     const checked = await this.#allow(routine, engine);
     const allowed: Allowed = trigger === 'manual' && !checked.ok ? { ok: true } : checked;
-    if (!allowed.ok) return this.#guarded(routine, trigger, scheduledFor, allowed);
+    if (!allowed.ok) {
+      if (await cannotCarryOn('a spending limit stopped it.')) return undefined;
+      return this.#guarded(routine, trigger, scheduledFor, allowed);
+    }
     // It's going: whatever it waited for is done with (a person may have pressed Run now).
     this.#roomWait.delete(routine.id);
     const spend = this.deps.spend;
@@ -737,15 +801,17 @@ export class RoutineService {
     /** What it had used when last told: a run cut short may not say at the end. */
     let used: Usage | undefined;
 
-    let run: RoutineRun = {
-      id: newId('run'),
-      routineId: routine.id,
-      trigger,
-      status: 'running',
-      scheduledFor,
-      startedAt: this.#now,
-      ...(event && { event: eventOf(event) }),
-    };
+    let run: RoutineRun = resume
+      ? { ...resume, status: 'running', pausedFor: undefined }
+      : {
+          id: newId('run'),
+          routineId: routine.id,
+          trigger,
+          status: 'running',
+          scheduledFor,
+          startedAt: this.#now,
+          ...(event && { event: eventOf(event) }),
+        };
     const file = isWhenSchedule(routine.schedule)
       ? await this.deps.when?.load(routine.id).catch(() => undefined)
       : undefined;
@@ -789,16 +855,26 @@ export class RoutineService {
     };
 
     try {
+      // Carrying on: the turn the restart cut off is closed first, so the chat reads in order.
+      if (resume?.conversationId)
+        await this.deps.conversations
+          .settleInterrupted(resume.conversationId)
+          .catch(() => undefined);
       const started = await this.deps.conversations.start({
+        ...(resume?.conversationId && { conversationId: resume.conversationId }),
         title: routine.title,
         // What happened goes in the message, as data after the instruction (ADR 0056).
-        text: event
-          ? `${routine.prompt}\n\n${eventBlock(event, {
-              why: this.#whenText(file?.when),
-              ...(file?.onlyIf && { onlyIf: file.onlyIf }),
-              tryIt: trigger === 'manual',
-            })}`
-          : routine.prompt,
+        text: resume
+          ? resume.pausedFor === 'update'
+            ? 'Conch paused this routine at a safe point to update itself, and has started again. Carry on with the routine from where you left off: check what is already done so nothing is repeated (nothing sent twice), then finish it and report the outcome.'
+            : 'Conch paused this routine at a safe point to restart, and has started again. Carry on with the routine from where you left off: check what is already done so nothing is repeated (nothing sent twice), then finish it and report the outcome.'
+          : event
+            ? `${routine.prompt}\n\n${eventBlock(event, {
+                why: this.#whenText(file?.when),
+                ...(file?.onlyIf && { onlyIf: file.onlyIf }),
+                tryIt: trigger === 'manual',
+              })}`
+            : routine.prompt,
         options: routine.options,
         origin: { kind: 'routine', routineId: routine.id, runId: run.id },
         // The agent it was given does it (ADR 0101); unset or gone, the default agent.

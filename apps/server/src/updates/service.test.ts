@@ -79,6 +79,12 @@ async function world(
   let busy = false;
   let now = new Date(2026, 8, 30, 14, 0).getTime();
   const restart = vi.fn(() => true);
+  // Pausing for the restart: what was working stops, and is no longer busy.
+  const pause = vi.fn(async () => {
+    busy = false;
+    return 1;
+  });
+  const unpause = vi.fn();
   const announced: string[] = [];
   const service = new UpdatesService({
     home,
@@ -94,6 +100,10 @@ async function world(
     emit: (status) => seen.push(status),
     heal: (message) => healed.push(message),
     busy: () => busy,
+    working: () => (busy ? [{ id: 'chat-1', title: 'Fix Conch CI failures' }] : []),
+    pause,
+    unpause,
+    idleCheckMs: 10,
     landed: async (id) => void landed.push(id),
     restartable: () => true,
     restart,
@@ -109,6 +119,8 @@ async function world(
     healed,
     landed,
     restart,
+    pause,
+    unpause,
     read,
     announced,
     setBusy: (b: boolean) => (busy = b),
@@ -393,10 +405,91 @@ describe('updating Conch itself', () => {
     expect((await service.status()).conch.running).toBeUndefined();
   });
 
-  it('won’t start while a chat is working, and says why', async () => {
-    const { service, setBusy } = await world({ conch: fake({ kind: 'current' }) });
+  it('asks first while a chat is working, naming it', async () => {
+    const { service, setBusy, pause } = await world({ conch: fake({ kind: 'current' }) });
     setBusy(true);
-    await expect(service.updateConch()).rejects.toThrow(/A chat is still working/);
+    await expect(service.updateConch()).rejects.toMatchObject({
+      code: 'busy',
+      message: expect.stringMatching(/^Fix Conch CI failures is working\. Update anyway/),
+    });
+    // The page names it before anyone presses, too.
+    expect((await service.status()).working).toEqual([
+      { id: 'chat-1', title: 'Fix Conch CI failures' },
+    ]);
+    expect((await service.status()).conch.running).toBeUndefined();
+    expect(pause).not.toHaveBeenCalled();
+  });
+
+  it('updates anyway when asked: what’s working pauses at a safe point just before the restart', async () => {
+    const to = 'b'.repeat(40);
+    const { service, seen, restart, pause, setBusy } = await world({
+      conch: fake({ kind: 'updated', from: 'a'.repeat(40), to, improvements: 1, whatsNew: ['X'] }),
+    });
+    service.start();
+    service.stop();
+    await service.check();
+    setBusy(true);
+    await service.updateConch('anyway');
+    await vi.waitFor(() => expect(restart).toHaveBeenCalled());
+    // Paused once, before the restart, and the page said so while it did.
+    expect(pause).toHaveBeenCalledTimes(1);
+    expect(pause.mock.invocationCallOrder[0]).toBeLessThan(
+      restart.mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(seen.map((s) => s.conch.running?.label)).toContain(
+      'Pausing Fix Conch CI failures at a safe point',
+    );
+  });
+
+  it('lets what was paused go on when the restart doesn’t happen', async () => {
+    const to = 'b'.repeat(40);
+    const w = await world({
+      conch: fake({ kind: 'updated', from: 'a'.repeat(40), to, improvements: 1, whatsNew: [] }),
+    });
+    w.restart.mockReturnValue(false);
+    w.service.start();
+    w.service.stop();
+    await w.service.check();
+    w.setBusy(true);
+    await w.service.updateConch('anyway');
+    await vi.waitFor(() => expect(w.unpause).toHaveBeenCalled());
+  });
+
+  it('waits until it’s done when asked, then updates by itself', async () => {
+    const to = 'b'.repeat(40);
+    const { service, setBusy, restart, pause } = await world({
+      conch: fake({ kind: 'updated', from: 'a'.repeat(40), to, improvements: 1, whatsNew: [] }),
+    });
+    await service.check();
+    setBusy(true);
+    await service.updateConch('idle');
+    const armed = await service.status();
+    expect(armed.conch.armed).toEqual({ at: expect.any(Number) });
+    expect(armed.conch.running).toBeUndefined();
+    // Still working: it keeps waiting.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(restart).not.toHaveBeenCalled();
+    // It finished: the update goes, with nothing to pause.
+    setBusy(false);
+    await vi.waitFor(() => expect(restart).toHaveBeenCalled());
+    expect(pause).not.toHaveBeenCalled();
+    expect((await service.status()).conch.armed).toBeUndefined();
+    service.stop();
+  });
+
+  it('stops waiting when asked, and remembers the wait across a restart', async () => {
+    const { service, setBusy, home } = await world({ conch: fake({ kind: 'current' }) });
+    await service.check();
+    setBusy(true);
+    await service.updateConch('idle');
+    // The next Conch reads the same file: still armed.
+    const saved = JSON.parse(await readFile(join(home, 'updates.json'), 'utf8')) as {
+      armed?: unknown;
+    };
+    expect(saved.armed).toEqual({ at: expect.any(Number) });
+    await service.updateConch('cancel');
+    expect((await service.status()).conch.armed).toBeUndefined();
+    service.stop();
   });
 
   it('says so when Conch doesn’t run from a folder it can update', async () => {

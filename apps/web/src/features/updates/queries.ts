@@ -1,4 +1,4 @@
-import type { ReleaseChannel, UpdatesStatus } from '@conch/protocol';
+import type { ReleaseChannel, RestartBody, UpdateConchBody, UpdatesStatus } from '@conch/protocol';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
@@ -9,6 +9,9 @@ import { restartConch } from '../health/restart';
 import { useVerify } from '../auth/useVerify';
 import { errorText } from '../integrations/queries';
 import { updateKeys, updatesApi } from './api';
+
+/** What a restart that met working chats says: the dialog asks first instead. */
+export const BUSY = 'busy';
 
 /** Something is moving: a check, Conch's own update, or a program's. */
 export function updatesBusy(status: UpdatesStatus | undefined): boolean {
@@ -89,25 +92,50 @@ export function useUpdateActions() {
    * Returns a sentence to show instead when it didn't (a chat is working,
    * or Conch can't restart itself here).
    */
-  const restart = async (title: string): Promise<string | undefined> => {
+  const restart = async (
+    title: string,
+    when: RestartBody['when'] = 'now',
+  ): Promise<string | undefined> => {
     let note: string | undefined;
     try {
       await guard(async () => {
-        note = await restartConch(title);
+        note = await restartConch(title, when);
       });
     } catch (e) {
+      // Something is working: the dialog asks first (`BUSY`), and never just sits there.
       note =
         e instanceof ApiError && e.code === 'busy'
-          ? e.message
+          ? BUSY
           : 'Conch couldn’t restart just now. Try again in a moment.';
     }
     return note;
   };
 
+  /**
+   * Update Conch. `now` while something works answers `busy` (the dialog then
+   * asks first, naming it, from the status this brings back); `anyway` pauses
+   * that work and carries it on after; `idle` waits for it; `cancel` stops waiting.
+   */
+  const updateConch = async (
+    when: UpdateConchBody['when'] = 'now',
+  ): Promise<'started' | 'busy' | 'failed'> => {
+    let busy = false;
+    const ok = await run('conch', async () => {
+      try {
+        return await updatesApi.updateConch(when);
+      } catch (e) {
+        if (!(e instanceof ApiError) || e.code !== 'busy') throw e;
+        busy = true;
+        return updatesApi.status();
+      }
+    });
+    return busy ? 'busy' : ok ? 'started' : 'failed';
+  };
+
   return {
     restart,
     check: () => run('check', updatesApi.check),
-    updateConch: () => run('conch', updatesApi.updateConch),
+    updateConch,
     updateAll: () => run('all', updatesApi.updateAll),
     updateProgram: (id: string) => run(`program:${id}`, () => updatesApi.updateProgram(id)),
     setAuto: (auto: boolean) => run('auto', () => updatesApi.setAuto(auto)),

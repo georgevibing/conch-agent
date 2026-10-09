@@ -62,6 +62,17 @@ export interface UpdateDialogProps {
   notice?: { tone: 'warning' | 'danger'; message: ReactNode; command?: string };
   /** Taking longer than it should: what to do, calmly. */
   slow?: ReactNode;
+  /**
+   * An inline confirm step, in the dialog rather than a second one: the
+   * question ("Fix the CI is working. Update anyway?"), said in place of the
+   * footnote. `action` then holds its answers, and the first one gets focus.
+   */
+  confirm?: ReactNode;
+  /**
+   * Waiting to do it by itself ("Will update when the chat finishes"): a
+   * quiet line above the buttons, never an alarm.
+   */
+  waiting?: ReactNode;
 }
 
 const PEARL: Record<UpdateDialogStage, PearlProgressState> = {
@@ -123,7 +134,15 @@ export function UpdateDialog({
   footnote,
   notice,
   slow,
+  confirm,
+  waiting,
 }: UpdateDialogProps) {
+  const actionsRef = useRef<HTMLDivElement>(null);
+  const confirming = Boolean(confirm);
+  // The button pressed is gone: its question's first answer takes the focus.
+  useEffect(() => {
+    if (confirming) actionsRef.current?.querySelector<HTMLElement>('button, a')?.focus();
+  }, [confirming]);
   const moving = stage === 'updating' || stage === 'restarting';
   const label =
     changesLabel ??
@@ -145,7 +164,9 @@ export function UpdateDialog({
             !notice &&
             !slow &&
             !action &&
-            !footnote
+            !footnote &&
+            !confirm &&
+            !waiting
               ? ''
               : undefined
           }
@@ -229,11 +250,27 @@ export function UpdateDialog({
           </div>
         )}
         {slow && <p className={styles.slow}>{slow}</p>}
+        {waiting && !confirm && (
+          <p className={styles.waiting} role="status">
+            <span aria-hidden className={styles.waitingDot} />
+            {waiting}
+          </p>
+        )}
 
-        {(action || footnote) && (
-          <Dialog.Footer className={styles.footer}>
-            {footnote && <p className={styles.footnote}>{footnote}</p>}
-            {action && <div className={styles.actions}>{action}</div>}
+        {(action || footnote || confirm) && (
+          <Dialog.Footer className={styles.footer} data-confirming={confirming || undefined}>
+            {confirm ? (
+              <p className={styles.confirm} role="status" aria-live="polite">
+                {confirm}
+              </p>
+            ) : (
+              footnote && <p className={styles.footnote}>{footnote}</p>
+            )}
+            {action && (
+              <div ref={actionsRef} className={styles.actions}>
+                {action}
+              </div>
+            )}
           </Dialog.Footer>
         )}
       </Dialog.Content>

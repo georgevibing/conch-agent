@@ -173,6 +173,11 @@ export const ConchUpdate = z.object({
   previous: z.string().optional(),
   /** Said once, until it's put away: Conch now follows releases; or it went back by itself. */
   notice: z.object({ id: z.string(), message: z.string() }).optional(),
+  /**
+   * "Wait until it's done": Conch updates by itself as soon as nothing is
+   * working any more (`POST /api/updates/conch` with `when: 'idle'`).
+   */
+  armed: z.object({ at: z.number() }).optional(),
 });
 export type ConchUpdate = z.infer<typeof ConchUpdate>;
 
@@ -242,8 +247,33 @@ export const UpdatesStatus = z.object({
    * time offers to reload onto it.
    */
   webBuilt: z.string().max(64).optional(),
+  /**
+   * What is working right now (a chat, a task's chat, a routine's run): an
+   * update would pause it and carry it on after the restart. Absent: nothing.
+   */
+  working: z
+    .array(z.object({ id: z.string(), title: z.string().max(200) }))
+    .max(20)
+    .optional(),
 });
 export type UpdatesStatus = z.infer<typeof UpdatesStatus>;
+
+/**
+ * Updating Conch itself. `now` (the default) refuses with `busy` while
+ * something is working, so the page can ask first; `anyway` pauses that work
+ * at a safe point and carries it on after the restart; `idle` waits until
+ * nothing is working, then updates by itself; `cancel` stops waiting.
+ */
+export const UpdateConchBody = z
+  .object({ when: z.enum(['now', 'anyway', 'idle', 'cancel']).default('now') })
+  .prefault({});
+export type UpdateConchBody = z.infer<typeof UpdateConchBody>;
+
+/** Starting Conch again (`POST /api/gateway/restart`): `anyway` pauses what's working and carries it on after. */
+export const RestartBody = z
+  .object({ when: z.enum(['now', 'anyway']).default('now') })
+  .prefault({});
+export type RestartBody = z.infer<typeof RestartBody>;
 
 export const UpdatesSettingsBody = z
   .object({

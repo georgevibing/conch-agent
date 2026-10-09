@@ -209,6 +209,8 @@ export const RoutineRun = z.object({
   guard: SpendGuard.optional(),
   /** What happened, for a run a When-routine started (ADR 0056). */
   event: RunEvent.optional(),
+  /** Conch paused it at a safe point to restart (its own update, or a restart asked for): it carries on after. */
+  pausedFor: z.enum(['update', 'restart']).optional(),
 });
 export type RoutineRun = z.infer<typeof RoutineRun>;
 

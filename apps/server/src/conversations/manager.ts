@@ -686,6 +686,22 @@ const RESTART_PROMPT =
   'Conch restarted while you were working on this, so the last stretch of your work was cut short. ' +
   'Carry on with what I asked: first check what is already done (files changed, commands run) so you do not repeat it, then finish the rest.';
 
+/** The note a turn Conch paused on purpose (an update, a restart asked for) carries on with. */
+const PAUSED_PROMPT: Record<'update' | 'restart', string> = {
+  update:
+    'Conch paused this work at a safe point to update itself, and has started again on the new version. ' +
+    'Carry on with what I asked from where you left off: first check what is already done (files changed, commands run) so you do not repeat it, then finish the rest. ' +
+    'A step that was waiting for my approval, or held at the pause, was not run: ask again if you still need it.',
+  restart:
+    'Conch paused this work at a safe point to restart, and has started again. ' +
+    'Carry on with what I asked from where you left off: first check what is already done (files changed, commands run) so you do not repeat it, then finish the rest. ' +
+    'A step that was waiting for my approval, or held at the pause, was not run: ask again if you still need it.',
+};
+const PAUSED_PROMPTS = new Set(Object.values(PAUSED_PROMPT));
+
+/** How long a pause waits for the steps already running to finish before Conch restarts anyway. */
+const PAUSE_WAIT_MS = 15_000;
+
 /** How much of what one place brought in the memory check keeps to compare with (ADR 0087). */
 const READ_KEPT = 200_000;
 
@@ -924,6 +940,16 @@ export class ConversationManager {
   #carrying = new Set<string>();
   #cueDesk?: Pick<OfferDesk, 'cue'>;
   #draining = false;
+  /**
+   * Pausing for a restart (`pause`): new steps wait at the guard, so nothing
+   * starts that the restart could cut in half. Resolved by `unpause`.
+   */
+  #pausing?: {
+    reason: 'update' | 'restart';
+    gate: Promise<void>;
+    open: () => void;
+    done: Promise<number>;
+  };
   #recoveryTimer?: NodeJS.Timeout;
   #recoveryRunning?: Promise<number>;
   #recoveryQueue: string[] = [];
@@ -1083,11 +1109,93 @@ export class ConversationManager {
   }
 
   #admit() {
-    if (this.#draining)
+    if (this.#draining || this.#pausing)
       throw new ConversationError(
         'busy',
         'Conch is saving your progress before restarting. Try again in a moment.',
       );
+  }
+
+  /**
+   * What is working now, by name: the chats an update or a restart would
+   * pause (a task's or a routine's chat included). Busy with no name (a title
+   * being written) reads as nothing to pause.
+   */
+  working(): { id: string; title: string }[] {
+    return [...this.#live.values()]
+      .filter(
+        (live) =>
+          live.abort ||
+          live.permissions.size > 0 ||
+          live.record.status === 'running' ||
+          live.record.status === 'awaiting-permission',
+      )
+      .map((live) => ({ id: live.record.id, title: live.record.title.slice(0, 200) }));
+  }
+
+  /**
+   * Before Conch restarts on purpose (an update, a restart someone asked
+   * for): every turn that's working stops at a safe point and says why, so
+   * the next start carries it on (`recoverInterrupted`). New steps wait at
+   * the guard; steps already running get up to `waitMs` to finish. A step
+   * waiting for an approval is a safe point: it never ran. Resolves with how
+   * many turns were paused. Single-flight; `unpause` lets everything go on
+   * when the restart doesn't happen after all.
+   */
+  pause(
+    reason: 'update' | 'restart',
+    { waitMs = PAUSE_WAIT_MS, pollMs = 200 }: { waitMs?: number; pollMs?: number } = {},
+  ): Promise<number> {
+    if (this.#pausing) return this.#pausing.done;
+    let open = () => {};
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    const pausing = { reason, gate, open, done: Promise.resolve(0) };
+    this.#pausing = pausing;
+    pausing.done = (async () => {
+      const deadline = Date.now() + waitMs;
+      while (Date.now() < deadline && this.#pausing === pausing && this.#inFlight())
+        await new Promise((resolve) => setTimeout(resolve, pollMs));
+      let paused = 0;
+      for (const live of this.#live.values()) {
+        const working =
+          live.abort ||
+          live.record.status === 'running' ||
+          live.record.status === 'awaiting-permission';
+        if (!working) continue;
+        live.record = { ...live.record, pausedFor: reason };
+        await this.#persist(live).catch(() => undefined);
+        paused++;
+      }
+      return paused;
+    })();
+    return pausing.done;
+  }
+
+  /** The restart didn't happen after all: whatever waited at the pause goes on. */
+  unpause(): void {
+    const pausing = this.#pausing;
+    if (!pausing) return;
+    this.#pausing = undefined;
+    pausing.open();
+    for (const live of this.#live.values())
+      if (live.record.pausedFor || live.record.pausedTools)
+        live.record = { ...live.record, pausedFor: undefined, pausedTools: undefined };
+  }
+
+  /** A step that changes something has started and hasn't finished (it isn't waiting for an approval). */
+  #inFlight(): boolean {
+    for (const live of this.#live.values()) {
+      if (!live.abort) continue;
+      const pending = live.record.pendingToolCalls ?? [];
+      if (!pending.length) continue;
+      const finished = new Set(
+        live.events.flatMap((e) => (e.type === 'tool.finished' ? [e.toolUseId] : [])),
+      );
+      const asking = new Set([...live.permissions.values()].map((p) => p.toolUseId));
+      const held = new Set(live.record.pausedTools ?? []);
+      if (pending.some((id) => !finished.has(id) && !asking.has(id) && !held.has(id))) return true;
+    }
+    return false;
   }
 
   /**
@@ -2175,93 +2283,20 @@ export class ConversationManager {
         ) {
           this.#held.set(id, {
             engine: live.record.engine,
-            prompt: RESTART_PROMPT,
+            prompt: last.restarted.reason ? PAUSED_PROMPT[last.restarted.reason] : RESTART_PROMPT,
             attachments: [],
           });
           if (await this.release(id).catch(() => false)) resumed++;
           else this.#recoveryQueue.push(id);
           break;
         }
-        const tries = since.filter((e) => e.type === 'turn.completed' && e.restarted).length;
-        const finished = new Set(
-          live.events.flatMap((e) => (e.type === 'tool.finished' ? [e.toolUseId] : [])),
-        );
-        const unfinished = live.events.filter(
-          (e) => e.type === 'tool.started' && !finished.has(e.toolUseId),
-        );
-        const refused = new Set(
-          since.flatMap((e) => {
-            if (e.type !== 'permission.requested' || !e.toolUseId) return [];
-            return since.some(
-              (answer) =>
-                answer.type === 'permission.resolved' &&
-                answer.permissionId === e.permissionId &&
-                answer.decision === 'deny',
-            )
-              ? [e.toolUseId]
-              : [];
-          }),
-        );
-        const uncertain =
-          Boolean(live.record.pendingToolCalls?.length) ||
-          unfinished.some(
-            (e) =>
-              e.type === 'tool.started' && !refused.has(e.toolUseId) && !restartReadOnly(e.name),
-          );
-        const answered = new Set(
-          since.flatMap((e) => (e.type === 'permission.resolved' ? [e.permissionId] : [])),
-        );
-        const approval = since.some(
-          (e) => e.type === 'permission.requested' && !answered.has(e.permissionId),
-        );
-        const question = since.some(
-          (e) =>
-            e.type === 'question' &&
-            !since.some(
-              (answer) =>
-                answer.type === 'question.answered' &&
-                answer.questionId === e.question.questionId &&
-                answer.answer !== null,
-            ),
-        );
-        const scoped = Boolean(live.record.origin);
-        const again = tries < MAX_AUTO_RESUMES && !uncertain && !approval && !question && !scoped;
-        for (const e of unfinished)
-          if (e.type === 'tool.started')
-            this.#append(live, {
-              type: 'tool.finished',
-              toolUseId: e.toolUseId,
-              status: 'error',
-              output: 'Conch restarted. Check whether this action finished before trying it again.',
-              durationMs: 0,
-            });
-        this.#append(live, {
-          type: 'turn.completed',
-          outcome: 'interrupted',
-          restarted: { resumed: again },
-          ...(!again && {
-            error: uncertain
-              ? 'Conch saved your progress. An action may have finished before the restart. Check its result before continuing so it is not repeated.'
-              : approval || question
-                ? 'Conch restarted while waiting for your approval. Review the action before continuing.'
-                : scoped
-                  ? 'Your progress is saved. Resume this work from its task or routine.'
-                  : 'This work has been interrupted repeatedly. Review it before continuing.',
-          }),
+        const { again, planned, byOwner } = await this.#closeInterrupted(live, since);
+        if (!again || byOwner) continue;
+        this.#held.set(id, {
           engine: live.record.engine,
+          prompt: planned ? PAUSED_PROMPT[planned] : RESTART_PROMPT,
+          attachments: [],
         });
-        live.record = {
-          ...live.record,
-          recoveryPending: again || undefined,
-          recoveryQueued: again || undefined,
-          status: 'idle',
-          updatedAt: Date.now(),
-        };
-        this.#append(live, { type: 'status', status: 'idle' });
-        await this.#persist(live);
-        this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
-        if (!again) continue;
-        this.#held.set(id, { engine: live.record.engine, prompt: RESTART_PROMPT, attachments: [] });
         if (await this.release(id).catch(() => false)) resumed++;
         else {
           this.#recoveryQueue.push(id);
@@ -2280,6 +2315,160 @@ export class ConversationManager {
       this.#recoveryTimer.unref();
     }
     return resumed;
+  }
+
+  /**
+   * The turn a restart cut off says so (and closes the steps it left open),
+   * and whether it carries on by itself: `again`, and `byOwner` when its task
+   * or routine does that instead.
+   */
+  async #closeInterrupted(
+    live: Live,
+    since: ConversationEvent[],
+  ): Promise<{ again: boolean; planned?: 'update' | 'restart'; byOwner: boolean }> {
+    // Paused on purpose, at a safe point (an update, a restart asked for): not a crash.
+    const planned = live.record.pausedFor;
+    // Only crashes spend the budget: an update that pauses work never does.
+    const tries = since.filter(
+      (e) => e.type === 'turn.completed' && e.restarted && !e.restarted.reason,
+    ).length;
+    const finished = new Set(
+      live.events.flatMap((e) => (e.type === 'tool.finished' ? [e.toolUseId] : [])),
+    );
+    const unfinished = live.events.filter(
+      (e) => e.type === 'tool.started' && !finished.has(e.toolUseId),
+    );
+    // A planned pause knows which steps never ran: those it held, and those
+    // still waiting for an approval (the log was saved before it stopped).
+    const notRun = new Set<string>(
+      planned
+        ? [
+            ...(live.record.pausedTools ?? []),
+            ...since.flatMap((e) =>
+              e.type === 'permission.requested' &&
+              e.toolUseId &&
+              !since.some(
+                (answer) =>
+                  answer.type === 'permission.resolved' && answer.permissionId === e.permissionId,
+              )
+                ? [e.toolUseId]
+                : [],
+            ),
+          ]
+        : [],
+    );
+    const refused = new Set(
+      since.flatMap((e) => {
+        if (e.type !== 'permission.requested' || !e.toolUseId) return [];
+        return since.some(
+          (answer) =>
+            answer.type === 'permission.resolved' &&
+            answer.permissionId === e.permissionId &&
+            answer.decision === 'deny',
+        )
+          ? [e.toolUseId]
+          : [];
+      }),
+    );
+    const stillPending = (live.record.pendingToolCalls ?? []).filter((id) => !notRun.has(id));
+    const uncertain =
+      stillPending.length > 0 ||
+      unfinished.some(
+        (e) =>
+          e.type === 'tool.started' &&
+          !refused.has(e.toolUseId) &&
+          !notRun.has(e.toolUseId) &&
+          !restartReadOnly(e.name),
+      );
+    const answered = new Set(
+      since.flatMap((e) => (e.type === 'permission.resolved' ? [e.permissionId] : [])),
+    );
+    const approval = since.some(
+      (e) => e.type === 'permission.requested' && !answered.has(e.permissionId),
+    );
+    const question = since.some(
+      (e) =>
+        e.type === 'question' &&
+        !since.some(
+          (answer) =>
+            answer.type === 'question.answered' &&
+            answer.questionId === e.question.questionId &&
+            answer.answer !== null,
+        ),
+    );
+    // A task's or a routine's own chat: its task or routine carries it on, with
+    // its own ledger (ADR 0038). Paused on purpose, they do that by themselves.
+    const kind = live.record.origin?.kind;
+    const owned = kind === 'task' || kind === 'routine';
+    const scoped = Boolean(live.record.origin) && !(planned && owned);
+    // Waiting on you at a planned pause: the step never ran, so it's asked again.
+    const waiting = (approval || question) && !planned;
+    const again = tries < MAX_AUTO_RESUMES && !uncertain && !waiting && !scoped;
+    for (const e of unfinished)
+      if (e.type === 'tool.started')
+        this.#append(live, {
+          type: 'tool.finished',
+          toolUseId: e.toolUseId,
+          status: 'error',
+          output: notRun.has(e.toolUseId)
+            ? 'Not run: Conch paused here to restart. Ask again if it is still needed.'
+            : 'Conch restarted. Check whether this action finished before trying it again.',
+          durationMs: 0,
+        });
+    this.#append(live, {
+      type: 'turn.completed',
+      outcome: 'interrupted',
+      restarted: { resumed: again, ...(planned && { reason: planned }) },
+      ...(!again && {
+        error: uncertain
+          ? 'Conch saved your progress. An action may have finished before the restart. Check its result before continuing so it is not repeated.'
+          : approval || question
+            ? 'Conch restarted while waiting for your approval. Review the action before continuing.'
+            : scoped
+              ? 'Your progress is saved. Resume this work from its task or routine.'
+              : 'This work has been interrupted repeatedly. Review it before continuing.',
+      }),
+      engine: live.record.engine,
+    });
+    // Its task or routine carries it on: nothing more to send from here.
+    const byOwner = again && Boolean(planned) && owned;
+    live.record = {
+      ...live.record,
+      recoveryPending: (again && !byOwner) || undefined,
+      recoveryQueued: (again && !byOwner) || undefined,
+      pausedFor: undefined,
+      pausedTools: undefined,
+      ...(notRun.size && {
+        pendingToolCalls: stillPending.length ? stillPending : undefined,
+      }),
+      status: 'idle',
+      updatedAt: Date.now(),
+    };
+    this.#append(live, { type: 'status', status: 'idle' });
+    await this.#persist(live);
+    this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
+    return { again, planned, byOwner };
+  }
+
+  /**
+   * A task or a routine about to carry its own chat on after Conch paused it
+   * (an update): the turn the restart cut off is closed first, so the chat
+   * reads in order and recovery never sends it a second time.
+   */
+  async settleInterrupted(id: string): Promise<void> {
+    await this.deps.store.list();
+    this.#recoveryQueue.push(...this.deps.store.interrupted.splice(0));
+    const at = this.#recoveryQueue.indexOf(id);
+    if (at === -1) return;
+    this.#recoveryQueue.splice(at, 1);
+    const live = await this.#get(id);
+    if (live.abort) return;
+    const lastAsked = live.events.findLastIndex((e) => e.type === 'user.message');
+    if (lastAsked === -1) return;
+    const since = live.events.slice(lastAsked + 1);
+    const last = since.findLast((e) => e.type === 'turn.completed');
+    if (last?.type === 'turn.completed') return;
+    await this.#closeInterrupted(live, since);
   }
 
   /** Messages that were waiting for the internet go now, in the order they were sent. */
@@ -3536,6 +3725,19 @@ export class ConversationManager {
     }): Promise<GuardDecision | undefined> => {
       if (this.#draining)
         return { decision: 'deny', message: 'Conch is saving progress before restarting.' };
+      // Pausing for a restart: this step waits here, unrun, and is asked again after it.
+      const pausing = this.#pausing;
+      if (pausing) {
+        if (request.toolUseId)
+          live.record = {
+            ...live.record,
+            pausedTools: [...new Set([...(live.record.pausedTools ?? []), request.toolUseId])],
+          };
+        await this.#persist(live).catch(() => undefined);
+        await pausing.gate;
+        if (this.#draining)
+          return { decision: 'deny', message: 'Conch is saving progress before restarting.' };
+      }
       const refuse = (message: string) =>
         refused(request.toolUseId, { decision: 'deny' as const, message });
       if (guest) return refuse(GUEST_TOOL_MESSAGE);
@@ -3806,8 +4008,16 @@ export class ConversationManager {
               event.restarted === 'lost' ||
                 Boolean(session?.resumeId && session.resumeId !== event.resumeId),
             );
-            if (event.restarted === 'lost')
+            if (event.restarted === 'lost') {
               this.deps.heal?.(`Gave ${engine.label} the chat so far to carry on`);
+              // Carrying on after a pause, honestly: it couldn't pick up where it was.
+              if (PAUSED_PROMPTS.has(said))
+                this.#append(live, {
+                  type: 'notice',
+                  code: 'session-lost',
+                  message: `${engine.label} couldn’t pick its own session back up after the restart, so Conch gave it the chat so far to carry on from.`,
+                });
+            }
             live.record = {
               ...live.record,
               engine: engine.id,

@@ -4,6 +4,7 @@
     --ud-list-max: 15rem;
     --ud-stagger: 70ms;
     --ud-arrive: 520ms;
+    --ud-breathe: 2.4s;
   }
 
   /* ── The pearl, and where things stand ─────────────────────────────── */
@@ -219,6 +220,61 @@
     color: var(--nc-text-subtle);
     text-align: center;
     text-wrap: balance;
+  }
+
+  /* ── Asking first, in place ────────────────────────────────────────── */
+  .confirm {
+    margin: 0;
+    padding: var(--nc-space-3) var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    background: var(--nc-wash-2);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text);
+    text-align: center;
+    text-wrap: balance;
+  }
+
+  /* ── Waiting to do it by itself: a quiet line ──────────────────────── */
+  .waiting {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--nc-space-2);
+    margin: var(--nc-space-3) var(--nc-space-6) 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    text-align: center;
+    text-wrap: balance;
+  }
+
+  .waitingDot {
+    flex: none;
+    inline-size: var(--ud-dot);
+    block-size: var(--ud-dot);
+    border-radius: var(--nc-radius-full);
+    background:
+      radial-gradient(circle at 34% 30%, oklch(1 0 0 / 0.9) 0, transparent 45%),
+      conic-gradient(var(--nc-pearl-spectrum));
+    box-shadow: inset 0 0 0 0.5px var(--nc-border-subtle);
+    animation: ud-breathe var(--ud-breathe) var(--nc-ease-in-out) infinite;
+  }
+
+  @keyframes ud-breathe {
+    50% {
+      opacity: 0.35;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .waitingDot {
+      animation: none;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .waitingDot {
+    animation: none;
   }
 
   .actions {

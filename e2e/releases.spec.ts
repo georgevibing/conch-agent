@@ -156,16 +156,28 @@ test('a new release: noticed once, its notes, a forged one refused, the channel,
   await expect(page.getByRole('textbox', { name: 'Message Conch' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Conch 0.2 is ready' })).toHaveCount(0);
 
+  // A chat is working when the update is asked for: the dialog asks first, naming it.
+  const composer = page.getByRole('textbox', { name: 'Message Conch' });
+  await composer.fill('Think about the weekend, take your time');
+  await composer.press('Enter');
+  await expect(page.getByText(/Let me think this through properly\./)).toBeVisible();
+  const chat = page.url();
+
   // Update: made ready beside the running version, swapped in, a restart, and back.
   const head = git(conch, 'rev-parse', 'HEAD');
   const before = await bootId(request);
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k');
   await page.getByRole('combobox').fill('update conch');
   await page.getByRole('option', { name: /Update Conch to 0\.2/ }).click();
-  await page
-    .getByRole('dialog', { name: 'Conch 0.2 is ready' })
-    .getByRole('button', { name: 'Update now' })
-    .click();
+  const ready = page.getByRole('dialog', { name: 'Conch 0.2 is ready' });
+  await ready.getByRole('button', { name: 'Update now' }).click();
+  // A press always answers: the question in the same dialog, never a press that does nothing.
+  await expect(
+    ready.getByText(
+      /is working\. Update anyway\? It will pause, and carry on after Conch restarts\./,
+    ),
+  ).toBeVisible();
+  await ready.getByRole('button', { name: 'Update anyway' }).click();
   await expect(page.getByRole('heading', { name: 'Updating Conch', exact: true })).toBeVisible({
     timeout: 60_000,
   });
@@ -190,8 +202,14 @@ test('a new release: noticed once, its notes, a forged one refused, the channel,
   // The page came back by itself, with the new release's notes and the real build identity.
   const updated = page.getByRole('dialog', { name: 'You’re on the new Conch' });
   await expect(updated).toBeVisible({ timeout: 60_000 });
-  await expect(updated).toContainText(`Conch ${SERVER_LABEL} · Updated`);
+  await expect(updated).toContainText(`Updated to ${SERVER_LABEL}`);
   await updated.getByRole('button', { name: 'Done', exact: true }).click();
+
+  // The chat that was working paused at a safe point, and carried on by itself after.
+  expect(page.url()).toBe(chat);
+  await expect(page.getByText('Conch updated and picked up where it left off')).toBeVisible({
+    timeout: 30_000,
+  });
   await page.getByRole('button', { name: /^Settings(?:,|$)/ }).click({ timeout: 10_000 });
   await settings.getByRole('tab', { name: 'Health' }).click();
   await expect(page.getByRole('button', { name: 'Go back to 0.1.0' })).toBeVisible();

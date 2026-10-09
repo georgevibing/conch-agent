@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import { loadConfig } from '../config';
 import { Services } from '../services';
+import type { RoutineStore } from './store';
 
 const HOUR = 3_600_000;
 let services: Services | undefined;
@@ -93,6 +94,57 @@ describe('RoutineService', () => {
       Date.now = realNow;
       s.routines.stop();
     }
+  });
+
+  it('carries a run Conch paused for an update on in its own chat, and closes one a crash cut off', async () => {
+    const s = await setup();
+    const store = (s.routines as unknown as { deps: { store: RoutineStore } }).deps.store;
+    const r = await s.routines.create(
+      { ...base, schedule: { type: 'daily', time: '08:00' } },
+      { createdBy: 'user' },
+    );
+    await s.routines.runNow(r.id);
+    const first = await settled(s, r.id);
+    // As the update left it: running, paused at a safe point.
+    await store.saveRun({
+      ...first,
+      status: 'running',
+      finishedAt: undefined,
+      outcome: undefined,
+      pausedFor: 'update',
+    });
+    await s.routines.start({ watch: false });
+    const carried = await settled(s, r.id);
+    // The same run, finished in the same chat (the mock reports what it found).
+    expect(carried).toMatchObject({ id: first.id, conversationId: first.conversationId });
+    expect(['succeeded', 'nothing-to-do']).toContain(carried.status);
+    expect(carried.pausedFor).toBeUndefined();
+    expect((await s.routines.detail(r.id)).runs).toHaveLength(1);
+    const { events } = await s.conversations.detail(first.conversationId ?? '');
+    expect(
+      events.some(
+        (e) =>
+          e.type === 'user.message' && /paused this routine at a safe point to update/.test(e.text),
+      ),
+    ).toBe(true);
+
+    // Cut off any other way: it says it stopped, instead of running for ever.
+    s.routines.stop();
+    await store.saveRun({
+      ...carried,
+      status: 'running',
+      finishedAt: undefined,
+      pausedFor: undefined,
+    });
+    const again = new (s.routines.constructor as new (deps: unknown) => typeof s.routines)(
+      (s.routines as unknown as { deps: unknown }).deps,
+    );
+    await again.start({ watch: false });
+    expect((await again.detail(r.id)).runs[0]).toMatchObject({
+      status: 'stopped',
+      outcome: 'Conch stopped before it finished.',
+    });
+    again.stop();
   });
 
   it('creates routines with consistent text and a next run', async () => {

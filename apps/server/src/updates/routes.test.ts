@@ -76,7 +76,7 @@ describe('restarting Conch over HTTP', () => {
     expect(restarted).not.toHaveBeenCalled();
   });
 
-  it('won’t restart while a chat is working, and says so', async () => {
+  it('asks first while a chat is working, and restarts anyway when told to', async () => {
     const { app, services, cookie } = await setup();
     const restarted = supervised();
     vi.spyOn(services.conversations, 'busy').mockReturnValue(true);
@@ -84,10 +84,60 @@ describe('restarting Conch over HTTP', () => {
     expect(busy.statusCode).toBe(409);
     expect(busy.json()).toMatchObject({
       error: 'busy',
-      message: 'A chat is still working. Wait for it to finish, then restart Conch.',
+      message: expect.stringMatching(/^A chat is still working\. Restart anyway/),
     });
     await new Promise((resolve) => setTimeout(resolve, 400));
     expect(restarted).not.toHaveBeenCalled();
+    // Anyway: it pauses at a safe point (main.ts's handler) and carries on after.
+    const anyway = await app.inject({
+      method: 'POST',
+      url: '/api/gateway/restart',
+      headers: { cookie },
+      payload: { when: 'anyway' },
+    });
+    expect(anyway.statusCode).toBe(202);
+    await vi.waitUntil(() => restarted.mock.calls.length > 0, { timeout: 2000 });
+  });
+
+  it('Update now while a chat works answers busy, so the page can ask; waiting needs no password', async () => {
+    const { app, services, cookie } = await setup();
+    vi.spyOn(services.updates, 'updateConch').mockImplementation(async (when) => {
+      if (when === 'now') {
+        const { UpdatesError } = await import('./service');
+        throw new UpdatesError('busy', 'Fix Conch CI failures is working.');
+      }
+    });
+    const pressed = await app.inject({
+      method: 'POST',
+      url: '/api/updates/conch',
+      headers: { cookie },
+      payload: {},
+    });
+    expect(pressed.statusCode).toBe(409);
+    expect(pressed.json()).toMatchObject({ error: 'busy' });
+    for (const when of ['anyway', 'idle'] as const) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/updates/conch',
+        headers: { cookie },
+        payload: { when },
+      });
+      expect(res.statusCode, when).toBe(200);
+    }
+    expect(vi.mocked(services.updates.updateConch).mock.calls.map(([w]) => w)).toEqual([
+      'now',
+      'anyway',
+      'idle',
+    ]);
+    // Stopping the wait takes nothing away, so it doesn't ask that it's you.
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 11 * 60_000);
+    const cancel = await app.inject({
+      method: 'POST',
+      url: '/api/updates/conch',
+      headers: { cookie },
+      payload: { when: 'cancel' },
+    });
+    expect(cancel.statusCode).toBe(200);
   });
 
   it('restarts right after you’ve confirmed it’s you, when nothing is running', async () => {

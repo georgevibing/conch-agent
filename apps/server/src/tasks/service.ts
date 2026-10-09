@@ -172,8 +172,33 @@ export class TaskService {
    * again). Queued work also waits for a fresh decision; old approvals expire.
    */
   async start(): Promise<void> {
+    const carryOn: string[] = [];
     for (const task of await this.deps.store.list()) {
       if (task.conversationId) this.#byConversation.set(task.conversationId, task.id);
+      // Paused on purpose before a restart (an update): it carries on by itself,
+      // from its ledger, the way Resume does (approvals are asked again).
+      if (task.pausedFor && task.status === 'queued') {
+        await this.#save({ ...task, pausedFor: undefined });
+        continue;
+      }
+      if (task.pausedFor && RUNNING.includes(task.status)) {
+        await this.#save({
+          ...task,
+          pausedFor: undefined,
+          status: 'interrupted',
+          current: undefined,
+          asking: undefined,
+          modelCompleted: false,
+          verification: 'pending',
+          finishedAt: this.#now,
+          error:
+            task.pausedFor === 'update'
+              ? 'Conch paused this to update. It carries on by itself.'
+              : 'Conch paused this to restart. It carries on by itself.',
+        });
+        carryOn.push(task.id);
+        continue;
+      }
       if (RUNNING.includes(task.status) || task.status === 'queued')
         await this.#save({
           ...task,
@@ -186,7 +211,31 @@ export class TaskService {
           error: 'Conch stopped while it was working. Resume it to carry on from where it was.',
         });
     }
+    for (const id of carryOn) {
+      const conversationId = (await this.deps.store.get(id))?.conversationId;
+      // The turn the restart cut off is closed first, so the chat reads in order.
+      if (conversationId)
+        await this.deps.conversations.settleInterrupted(conversationId).catch(() => undefined);
+      await this.retry(id).catch(() => undefined);
+    }
     this.#pump();
+  }
+
+  /**
+   * Conch is about to restart on purpose: what's going says so, so the next
+   * start carries it on by itself (`start`). `undefined`: the restart didn't
+   * happen after all.
+   */
+  async markPaused(reason: Task['pausedFor']): Promise<number> {
+    let marked = 0;
+    for (const task of await this.deps.store.list()) {
+      if (!GOING.includes(task.status) || task.pausedFor === reason) continue;
+      await this.#mutate(task.id, (current) =>
+        GOING.includes(current.status) ? { pausedFor: reason } : undefined,
+      );
+      marked++;
+    }
+    return marked;
   }
 
   async list(): Promise<TaskList> {

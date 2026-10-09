@@ -4,11 +4,16 @@
  *
  * Drafts survive a reload or a restart (on this device, until you sign out
  * here). What you sent lately lasts only as long as the tab: the chats
- * themselves keep the rest.
+ * themselves keep the rest. So do the messages waiting their turn above the
+ * box: Conch restarting for an update reloads the page, and they still go,
+ * one at a time, once the reply it carried on is over.
  */
+
+import type { Attachment } from '@conch/protocol';
 
 const DRAFTS_KEY = 'conch.drafts';
 const SENT_KEY = 'conch.sent';
+const QUEUED_KEY = 'conch.queued';
 /** Drafts kept: the most recently written in. */
 const MAX_DRAFTS = 50;
 /** Messages ↑ reaches beyond the open chat's own. */
@@ -62,6 +67,7 @@ export function forgetDrafts() {
   try {
     localStorage.removeItem(DRAFTS_KEY);
     sessionStorage.removeItem(SENT_KEY);
+    sessionStorage.removeItem(QUEUED_KEY);
   } catch {
     // Nothing was kept.
   }
@@ -91,4 +97,36 @@ export function composerHistory(own: readonly string[]): string[] {
   const here = new Set(mine);
   const elsewhere = sentLately().filter((s) => !here.has(s));
   return [...elsewhere, ...mine].filter((s, i, all) => s !== all[i - 1]);
+}
+
+/** A message waiting its turn above the box. */
+export interface QueuedMessage {
+  id: string;
+  text: string;
+  attachments: Attachment[];
+}
+
+function queues(): Record<string, QueuedMessage[]> {
+  const all = read<unknown>(session, QUEUED_KEY, {});
+  return all && typeof all === 'object' && !Array.isArray(all)
+    ? (all as Record<string, QueuedMessage[]>)
+    : {};
+}
+
+/** What was waiting its turn in this chat, in this tab (a reload, Conch restarting). */
+export function loadQueue(key: string): QueuedMessage[] {
+  const list = queues()[key];
+  return Array.isArray(list)
+    ? list.filter(
+        (q): q is QueuedMessage =>
+          typeof q?.id === 'string' && typeof q.text === 'string' && Array.isArray(q.attachments),
+      )
+    : [];
+}
+
+export function saveQueue(key: string, queued: readonly QueuedMessage[]) {
+  const all = queues();
+  if (!queued.length && !(key in all)) return;
+  const { [key]: _was, ...others } = all;
+  write(session, QUEUED_KEY, queued.length ? { ...others, [key]: queued } : others);
 }

@@ -57,6 +57,8 @@ import {
   UpdateSkillBody,
   UsageBudgetBody,
   RoutineSpendingBody,
+  UpdateConchBody,
+  RestartBody,
   UpdatesSettingsBody,
   type ServerEvent,
   UnderstandProfileBody,
@@ -468,10 +470,13 @@ export async function buildApp(services: Services) {
       return reply
         .code(403)
         .send({ error: 'verify-required', message: 'Confirm it’s you to restart Conch.' });
-    if (services.conversations.busy())
+    // `anyway`: what's working pauses at a safe point and carries on after the restart.
+    const anyway = RestartBody.safeParse(request.body ?? {}).data?.when === 'anyway';
+    if (services.conversations.busy() && !anyway)
       return reply.code(409).send({
         error: 'busy',
-        message: 'A chat is still working. Wait for it to finish, then restart Conch.',
+        message:
+          'A chat is still working. Restart anyway, and it pauses and carries on after Conch restarts, or wait until it’s done.',
       });
     return restart()
       ? reply.code(202).send({ ok: true })
@@ -1008,10 +1013,14 @@ export async function buildApp(services: Services) {
     void services.updates.lookConch({ ifOlderThan: LOOK_AGAIN_MS });
     return services.updates.status();
   });
+  // `when`: what to do about work that's running (ask first, pause it, or wait for it).
   app.post('/api/updates/conch', async (request, reply) => {
-    if (verifyRequired(request, reply)) return;
+    const body = parse(UpdateConchBody, request.body ?? {}, reply);
+    if (!body) return;
+    // Waiting no longer changes nothing: it needs no password.
+    if (body.when !== 'cancel' && verifyRequired(request, reply)) return;
     return guarded(reply, async () => {
-      await services.updates.updateConch();
+      await services.updates.updateConch(body.when);
       return services.updates.status();
     });
   });

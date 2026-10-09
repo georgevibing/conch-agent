@@ -616,6 +616,47 @@ describe('a reply and what belongs to it (ADR 0060)', () => {
     expect(screen.queryByText(/restarted while this was running/)).toBeNull();
   });
 
+  it('says calmly that Conch updated and picked up, and offers Carry on when it couldn’t', async () => {
+    const sent: string[] = [];
+    mockFetch({ 'GET /api/state': () => appState() });
+    renderApp(
+      <Transcript
+        view={{
+          lastSeq: 1,
+          status: 'idle',
+          items: [
+            user,
+            assistant('Working on it.', true),
+            {
+              kind: 'turn-end',
+              id: 'end-1',
+              outcome: 'interrupted',
+              restarted: { resumed: true, reason: 'update' },
+            },
+            user,
+            assistant('Pushing.', true),
+            {
+              kind: 'turn-end',
+              id: 'end-2',
+              outcome: 'interrupted',
+              restarted: { resumed: false, reason: 'update' },
+              error: 'Conch saved your progress. Check its result before continuing.',
+            },
+          ],
+        }}
+        pending={[]}
+        name="Claude"
+        onRespond={() => {}}
+        onRetry={() => {}}
+        onSend={(text) => void sent.push(text)}
+      />,
+    );
+    expect(screen.getByText('Conch updated and picked up where it left off')).toBeVisible();
+    expect(screen.getByText('Paused when Conch updated')).toBeVisible();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Carry on' }));
+    expect(sent).toEqual(['Carry on']);
+  });
+
   it('goes on in the same voice, without a second speaker line, when nothing of yours came between', () => {
     show({
       items: [
