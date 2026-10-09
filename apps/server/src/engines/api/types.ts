@@ -95,8 +95,12 @@ export interface WireToolCall {
   argumentsJson: string;
 }
 
-/** Why the model stopped talking. */
-export type WireStop = 'end' | 'tools' | 'length';
+/**
+ * Why the model stopped talking. `pause`: the provider paused its own work
+ * part-way (Anthropic's `pause_turn`), so the reply goes back as it is and the
+ * model is asked to carry on.
+ */
+export type WireStop = 'end' | 'tools' | 'length' | 'pause';
 
 /**
  * One streamed request, normalised. Exactly one `end` event closes it, and it
@@ -124,6 +128,13 @@ export interface WireRequest {
   system: string;
   messages: WireMessage[];
   tools: ToolSpec[];
+  /**
+   * Of `tools`, the ones that may load only when the model looks for them
+   * (ADR 0072): sent whole every time, but kept out of the model's context
+   * until it searches. Only for a wire whose `defersTools` says it can; the
+   * same names, in the same order, for the whole chat.
+   */
+  deferred?: readonly string[];
   /** `auto` means "don't ask for a thinking budget at all". */
   effort: EffortChoice;
   signal: AbortSignal;

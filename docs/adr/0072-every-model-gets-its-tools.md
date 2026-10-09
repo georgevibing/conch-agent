@@ -144,3 +144,46 @@ toolmodes}.test.ts` (a fake-fetch matrix: a model past the top 60, a failed list
   to end), `browser/ref.test.ts`.
 
 Explicit open object schemas retain their fields during argument normalisation. For example, `app_try.input` carries the arguments of the app tool being tested. Unknown outer arguments and fields of closed nested objects are still dropped, and the original Zod schema still validates catch-all values.
+
+## Amended 2026-10-09: apps' tools load when the model looks for them, on Anthropic
+
+Tool definitions go on every request. Conch's own tools alone are about 20K tokens (79 host
+tools and the 5 for files and commands, estimated with `estimateTokens`); each connected app
+adds its own, up to `MAX_TOOLS` (128) in all — another 3K to 40K, depending on how much its
+server writes per tool. Anthropic's tool search sends them whole but keeps the ones marked
+`defer_loading: true` out of the model's context until it finds them, and its own evaluations
+pick the right tool more often that way.
+
+- **A declared capability.** `Wire.defersTools(model)`: the Anthropic API answers for a model
+  from after tool search (not Claude 4.1 or earlier) that hasn't refused it, and never through
+  a route (Bedrock, Vertex: ADR 0109). OpenRouter doesn't document it, so it doesn't declare it.
+  The engine never asks which provider it is.
+- **Only apps' tools, only when the list is big.** `ToolPlan.deferred` names the bridged tools
+  (`Callable.app`) when every tool together would take more than a tenth of the model's
+  window (`DEFER_SHARE`, Claude Code's own line in its `auto` mode), the tools go natively, and
+  the turn isn't lean (ADR 0086 has its own `find_tools`). Conch's own tools — memory, asking,
+  plans, tasks, the browser, everything in `input.tools` — are never deferred. At least one
+  tool always stays loaded.
+- **The same bytes all chat long.** The decision depends only on the tools and the window, so a
+  chat sends the same tools block and system prompt request after request: the search tool
+  (`tool_search_tool_regex_20251119`) first, the loaded tools with the breakpoint on the last of
+  them, the waiting ones last (they can't carry `cache_control`), and one sentence at the end
+  of the system prompt telling the model to search before it says an app can't do something.
+  Anthropic expands what's found inline in the conversation, so the cached prefix holds.
+- **Replayed verbatim.** The search's `server_tool_use` (with its pattern) and
+  `tool_search_tool_result` blocks stay in the transcript like thinking does. A found tool's
+  call is an ordinary `tool_use`: it goes through `args.ts` and the guard like any other.
+  A request that sends no search tool carries none of its blocks (`withoutSearch`). A tool
+  the chat called where its finding was summarised away stays loaded (`deferrable`), and a
+  finding whose tool is no longer sent is forgotten (`knownReferences`).
+- **Healed before a word is said.** A 400 that names tool search, `defer_loading`, a tool
+  reference or the search's blocks is asked again at once with every tool up front and no
+  search blocks, and that model isn't offered tool search again (in memory, like thinking
+  updates). Anthropic's `pause_turn` is `WireStop` `pause`: the reply stays and the model is
+  asked to carry on, at most eight times a turn.
+- **Counting.** Fitting the window and calibrating the estimate count only the tools in the
+  model's context, so the deferred ones neither shrink the room for the chat nor skew the
+  correction factor.
+- On a 200K window the line is 20K tokens, which Conch's own tools nearly fill, so any
+  connected app tips it; on a 1M window (100K) the 128-tool cap keeps it from ever tipping.
+- Tests: `engines/api/toolsearch.test.ts`.
