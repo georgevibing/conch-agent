@@ -176,8 +176,10 @@ test('a new release: noticed once, its notes, a forged one refused, the channel,
     .poll(async () => (await status(request)).conch.version, { timeout: 30_000 })
     .toBe('0.2.0');
 
-  const after = (await status(request)).conch;
-  expect(after).toMatchObject({ version: '0.2.0', build: SERVER_BUILD, previous: '0.1.0' });
+  // It says which version came before once the new one has proved itself, a moment later.
+  await expect
+    .poll(async () => (await status(request)).conch, { timeout: 30_000 })
+    .toMatchObject({ version: '0.2.0', build: SERVER_BUILD, previous: '0.1.0' });
   // The running copy was never touched; the new one is its own folder, installed there.
   expect(git(conch, 'rev-parse', 'HEAD')).toBe(head);
   const home = readFileSync(join(world, 'pnpm.log'), 'utf8');
