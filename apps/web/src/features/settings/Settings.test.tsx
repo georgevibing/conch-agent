@@ -143,7 +143,7 @@ describe('Settings', () => {
     expect(where()).toBe('/settings/providers');
   });
 
-  it('opens what Conch remembers inside Memory, with Memory › What Conch knows above it', async () => {
+  it('opens what Conch remembers inside Memory, with Memory › Memories above it', async () => {
     narrowScreen(false);
     mockFetch({
       'GET /api/state': () => appState(),
@@ -160,27 +160,27 @@ describe('Settings', () => {
     });
     const { where } = renderApp(<Settings />, { route: '/settings/memory' });
     const page = await screen.findByRole('dialog', { name: 'Settings' });
-    await userEvent.click(await within(page).findByRole('button', { name: 'Open' }));
+    await userEvent.click(await within(page).findByRole('button', { name: 'Open memories' }));
     expect(where()).toBe('/settings/memory/everything');
     // Still Settings, its places beside it: the memories are a page inside Memory.
-    expect(
-      await within(page).findByRole('heading', { name: 'What Conch knows about you' }),
-    ).toBeVisible();
+    expect(await within(page).findByRole('heading', { name: 'Memories' })).toBeVisible();
     expect(within(page).getByRole('tab', { name: 'Memory' })).toBeInTheDocument();
     expect(await within(page).findByText('Projects live in ~/projects')).toBeVisible();
     // One way back, in the trail: never a stack of back buttons.
     const trail = within(page).getByRole('navigation', { name: 'Breadcrumb' });
-    expect(within(trail).getByText('What Conch knows')).toHaveAttribute('aria-current', 'page');
+    expect(within(trail).getByText('Memories')).toHaveAttribute('aria-current', 'page');
     expect(within(page).getAllByRole('button', { name: 'Memory' })).toHaveLength(1);
     // Arriving puts the focus on the page's name, so the way back is a Shift+Tab away.
-    await waitFor(() => expect(within(trail).getByText('What Conch knows')).toHaveFocus());
+    await waitFor(() => expect(within(trail).getByText('Memories')).toHaveFocus());
 
     await userEvent.click(within(trail).getByRole('button', { name: 'Memory' }));
     expect(where()).toBe('/settings/memory');
     expect(within(page).queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull();
     // Stepping back out reads the place itself.
     await waitFor(() =>
-      expect(within(page).getByRole('heading', { name: 'Memory', level: 3 })).toHaveFocus(),
+      expect(
+        within(page).getByRole('heading', { name: 'What Conch knows', level: 3 }),
+      ).toHaveFocus(),
     );
   });
 
@@ -249,7 +249,7 @@ describe('Settings', () => {
     expect(screen.queryByRole('tablist', { name: 'Intelligence' })).toBeNull();
     expect(within(page).getByRole('button', { name: 'Open settings menu' })).toBeInTheDocument();
     const trail = within(page).getByRole('navigation', { name: 'Breadcrumb' });
-    expect(within(trail).getByText('What Conch knows')).toHaveAttribute('aria-current', 'page');
+    expect(within(trail).getByText('Memories')).toHaveAttribute('aria-current', 'page');
     expect(within(page).getAllByRole('button', { name: 'Memory' })).toHaveLength(1);
     await userEvent.click(within(trail).getByRole('button', { name: 'Memory' }));
     expect(where()).toBe('/settings/memory');

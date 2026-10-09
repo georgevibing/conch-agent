@@ -198,7 +198,7 @@ export function MemoryView({ inSettings = false }: { inSettings?: boolean } = {}
     <Shell gap={5}>
       <header className={styles.header}>
         <Heading level={1} display={!inSettings} size={inSettings ? 'xl' : '3xl'}>
-          What Conch knows about you
+          {inSettings ? 'Memories' : 'What Conch knows about you'}
         </Heading>
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
@@ -213,7 +213,7 @@ export function MemoryView({ inSettings = false }: { inSettings?: boolean } = {}
                 Undo the last tidy-up
               </DropdownMenu.Item>
             )}
-            <DropdownMenu.Item onSelect={() => openSettings('about')}>
+            <DropdownMenu.Item onSelect={() => openSettings('memory')}>
               Edit About you
             </DropdownMenu.Item>
             <DropdownMenu.Separator />

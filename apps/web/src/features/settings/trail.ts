@@ -10,7 +10,7 @@ const COME_HOME_NAMES: Record<ImportSourceId, string> = { openclaw: 'OpenClaw', 
 
 /**
  * The name of the page inside a place that an address shows — Settings →
- * Memory → **What Conch knows**, Settings → Providers → **Mistral** — or
+ * Memory → **Memories**, Settings → Providers → **Mistral** — or
  * nothing when it shows the place itself. Some items only bring a section of
  * the place into view (`/settings/health/backup`); they aren't pages, and
  * have no step of their own in the trail.
@@ -28,7 +28,7 @@ export function usePageInside(tab: SettingsTab | null, item: string | undefined)
   if (!item) return undefined;
   if (tab === 'agents') return agents?.agents.find((a) => a.id === item)?.name;
   if (tab === 'memory') {
-    if (item === MEMORY_ALL) return 'What Conch knows';
+    if (item === MEMORY_ALL) return 'Memories';
     if (from?.success) {
       const name =
         imports.data?.sources.find((s) => s.id === from.data)?.label ?? COME_HOME_NAMES[from.data];

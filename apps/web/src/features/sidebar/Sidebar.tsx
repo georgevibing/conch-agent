@@ -95,7 +95,7 @@ export function Sidebar({
       </div>
       <ChatList onNavigate={onNavigate} />
       <div className={styles.footer}>
-        <button type="button" className={styles.me} onClick={() => openSettings('about')}>
+        <button type="button" className={styles.me} onClick={() => openSettings('memory')}>
           <Avatar
             size="sm"
             name={app?.profile.name || 'You'}
