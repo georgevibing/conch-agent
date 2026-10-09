@@ -171,6 +171,8 @@ const scenarios = {
     port: 4363,
     env: { CONCH_MOCK_STATE: 'ready', CONCH_IMPORT_HOME: importMoreHome },
   },
+  // A provider and a chat app made with Conch (ADR 0119), on the mock's pretend Pretend AI and Parley.
+  extensions: { port: 4331, env: { CONCH_MOCK_STATE: 'ready' } },
   // Apps you make, share and add (ADR 0061): made by the mock the real way, used, saved, added back.
   // GitHub's program sees no sign-in here, so nothing can ever be published from a test.
   'conch-apps': {
