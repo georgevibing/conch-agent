@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 /**
- * Providers and chat apps made with Conch (ADR 0119), end to end on the real
+ * Providers and chat apps made with Conch (ADR 0122), end to end on the real
  * parts: the mock engine makes them the maker's real way, on the pretend
  * world it starts (`GET /api/channels/mock` → `pretend`): Pretend AI, a model
  * company that speaks OpenAI's chat, and Parley, a chat app with a bot API.

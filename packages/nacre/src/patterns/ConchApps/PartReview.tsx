@@ -20,9 +20,9 @@ import { isWebLink, type AppSettingView } from './types';
 
 /** How a provider speaks (`ProviderSpeaks`), in a few words. */
 const SPEAKS: Record<PartProviderView['speaks'], string> = {
-  openai: 'speaks OpenAI’s chat',
-  anthropic: 'speaks Anthropic’s Messages',
-  code: 'runs its own sealed code',
+  openai: 'Speaks OpenAI’s chat',
+  anthropic: 'Speaks Anthropic’s Messages',
+  code: 'Runs its own sealed code',
 };
 
 /** A provider an app brings (`AppProviderPart`), as the card shows it. */
