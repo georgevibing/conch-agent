@@ -229,6 +229,22 @@ export const PutAwayLimit = z.object({
 });
 export type PutAwayLimit = z.infer<typeof PutAwayLimit>;
 
+/**
+ * The tips under the box on a new chat (connect apps, bring things in, chat
+ * apps), each put away for good with its ×. One shows at a time, in this order.
+ */
+export const NEW_CHAT_TIPS = ['connect-apps', 'come-home', 'past-chats', 'chat-apps'] as const;
+export const NewChatTip = z.enum(NEW_CHAT_TIPS);
+export type NewChatTip = z.infer<typeof NewChatTip>;
+
+/** Each once; a tip a later Conch no longer has is let go rather than failing the file. */
+const TipsPutAway = z
+  .array(z.string().max(64))
+  .max(20)
+  .transform((ids) => [
+    ...new Set(ids.filter((id): id is NewChatTip => NewChatTip.safeParse(id).success)),
+  ]);
+
 export const Preferences = z.object({
   /** Folder Claude works in. Defaults to the Conch workspace. */
   workspace: z.string().max(4096).optional(),
@@ -259,6 +275,8 @@ export const Preferences = z.object({
   limitsPutAway: z.array(PutAwayLimit).max(50).default([]),
   /** Apps the chat never offers to connect ("Don't suggest Linear"), by catalog id. */
   mutedSuggestions: MutedSuggestions.default([]),
+  /** New-chat tips put away with their × (on every device); Settings → General brings them back. */
+  tipsPutAway: TipsPutAway.default([]),
   /**
    * Once a chat has read something from outside (a web page, an email, someone
    * else's message), anything that could send it out or change this computer
@@ -393,6 +411,7 @@ export const UpdateSettingsBody = z.object({
       /** The whole list, as the page last saw it (a new cycle's entries pruned). */
       limitsPutAway: z.array(PutAwayLimit).max(50),
       mutedSuggestions: MutedSuggestions,
+      tipsPutAway: TipsPutAway,
       /** Turning any of these off needs a recent password or key (ADR 0028, ADR 0087). */
       checkAfterReading: z.boolean(),
       sealedCommands: z.boolean(),

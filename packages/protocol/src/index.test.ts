@@ -50,6 +50,17 @@ describe('protocol', () => {
     );
   });
 
+  it('keeps each new-chat tip put away once, and lets go of tips it no longer has', () => {
+    expect(Preferences.parse({}).tipsPutAway).toEqual([]);
+    expect(
+      Preferences.parse({ tipsPutAway: ['past-chats', 'gone-tip', 'past-chats', 'chat-apps'] })
+        .tipsPutAway,
+    ).toEqual(['past-chats', 'chat-apps']);
+    expect(
+      UpdateSettingsBody.safeParse({ preferences: { tipsPutAway: ['x'.repeat(65)] } }).success,
+    ).toBe(false);
+  });
+
   it('accepts partial settings updates', () => {
     expect(UpdateSettingsBody.parse({ persona: { tone: 'playful' } })).toEqual({
       persona: { tone: 'playful' },
