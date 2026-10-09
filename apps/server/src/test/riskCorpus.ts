@@ -359,6 +359,15 @@ export const ROUTINE: Step[] = [
   ['mcp__conch__file_unzip', { source: 'att_zip1' }],
   ['mcp__conch__process_start', { command: 'pnpm dev' }],
   ['mcp__conch__process_start', { command: 'git pull --ff-only', dangerouslyDisableSandbox: true }],
+  // A script that calls tools (ADR 0119): never judged as a whole; each of its calls is.
+  [
+    'mcp__conch__run_script',
+    {
+      title: 'Tag the invoices among my emails',
+      script:
+        "const mail = await tools.google_mail_search({ query: 'invoice' });\nfor (const m of mail) await tools.google_mail_modify({ id: m.id, add: ['Invoices'] });\nreturn mail.length;",
+    },
+  ],
   // Steps in apps, with ids, dates, foods and notes (ADR 0118): nothing a lookup or a change
   // needs looks like a key or a blob.
   ['mcp__conch__app_yazio__get_product', { id: 'e51efae8-7929-4445-9a03-3f6dadd60a4a' }],

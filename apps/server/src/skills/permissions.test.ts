@@ -65,6 +65,14 @@ describe('holding a skill to it', () => {
   const ws = { workspace: '/work' };
   const gitOnly = readPermissions('allowed-tools: Bash(git:*) Edit');
 
+  it('holds each of a script’s calls to the list, not the script itself (ADR 0119)', () => {
+    expect(needs('mcp__conch__run_script', { title: 'x', script: 'return 1' }, ws)).toBeUndefined();
+    // What it calls is: a script that runs a command needs what a command needs.
+    expect(
+      allows(gitOnly, must(needs('mcp__conch__process_start', { command: 'rm -rf x' }, ws))),
+    ).toBe(false);
+  });
+
   it('allows what it said', () => {
     expect(allows(gitOnly, must(needs('Bash', { command: 'git status' }, ws)))).toBe(true);
     expect(allows(gitOnly, must(needs('Bash', { command: 'git log --oneline' }, ws)))).toBe(true);

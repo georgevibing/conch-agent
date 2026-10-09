@@ -489,6 +489,9 @@ export function hostComputerTools(input: TurnInput): HostTool[] {
   return tools;
 }
 
+/** What `authorizeTool` says when the person said no (rather than a rule). */
+export const DECLINED = 'The user declined this action.';
+
 /** Same policy before every call, including full-trust modes. */
 export async function authorizeTool(
   input: TurnInput,
@@ -522,8 +525,7 @@ export async function authorizeTool(
       // Auto: the guard above already asked for anything serious (ADR 0100).
       input.options.permissionMode !== 'auto' &&
       !(input.options.permissionMode === 'acceptEdits' && ['Write', 'Edit'].includes(name)));
-  if (ask && (await input.requestPermission(request, input.signal)) === 'deny')
-    return 'The user declined this action.';
+  if (ask && (await input.requestPermission(request, input.signal)) === 'deny') return DECLINED;
   input.signal.throwIfAborted();
   return undefined;
 }

@@ -15,7 +15,7 @@
  */
 import { isAbsolute, relative, resolve } from 'node:path';
 
-import type { SkillCapability, SkillPermissions } from '@conch/protocol';
+import { isRunScript, type SkillCapability, type SkillPermissions } from '@conch/protocol';
 
 import { readList } from './frontmatter';
 
@@ -155,6 +155,8 @@ export function needs(
   input: unknown,
   context: { workspace: string; server?: string },
 ): { capability: SkillCapability; detail?: string } | undefined {
+  // A script (ADR 0119) needs nothing itself: each tool it calls is held to the skill's list.
+  if (isRunScript(toolName)) return undefined;
   const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
   if (/^(?:mcp__conch__)?image_generate$/.test(toolName))
     return { capability: 'apps', detail: 'openrouter' };

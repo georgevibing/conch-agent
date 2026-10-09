@@ -14,6 +14,19 @@ const read = 'mcp__conch__read_file';
 const browser = 'mcp__conch__browser_open';
 
 describe('Codex tool ordering', () => {
+  it('orders a script like a write: reads after it wait for it (ADR 0119)', async () => {
+    const queue = new ToolQueue();
+    const script = deferred<undefined>();
+    const first = queue.run('mcp__conch__run_script', () => script.promise);
+    const looked = vi.fn(async () => undefined);
+    const second = queue.run(read, looked);
+    await Promise.resolve(undefined);
+    expect(looked).not.toHaveBeenCalled();
+    script.resolve(undefined);
+    await Promise.all([first, second]);
+    expect(looked).toHaveBeenCalledOnce();
+  });
+
   it('lets independent reads pass a waiting browser, one read at a time', async () => {
     const queue = new ToolQueue();
     const page = deferred<undefined>();

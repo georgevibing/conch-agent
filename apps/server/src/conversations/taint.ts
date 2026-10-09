@@ -18,7 +18,7 @@
  */
 import { isAbsolute, relative, resolve } from 'node:path';
 
-import type { ConversationEvent, TaintSource } from '@conch/protocol';
+import { isRunScript, type ConversationEvent, type TaintSource } from '@conch/protocol';
 
 /** Built-in tools that bring the outside in. */
 const WEB_READERS = new Set([
@@ -76,6 +76,8 @@ const hostOf = (value: unknown): string | undefined => {
  * `app`: an integration's name, for `mcp__<server>__*` calls.
  */
 export function taintFrom(toolName: string, input: unknown, app?: string): TaintSource | undefined {
+  // A script (ADR 0119) brings nothing in itself: each tool it calls marks the chat as it reads.
+  if (isRunScript(toolName)) return undefined;
   const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
   if (
     /^(?:mcp__conch__)?google_(?:mail_(?:search|read)|calendar_briefing|drive_(?:search|read))$/.test(
@@ -260,6 +262,8 @@ export function sinkReason(
   input: unknown,
   context: SinkContext,
 ): string | undefined {
+  // A script (ADR 0119) sends nothing itself: each of its calls meets this check on its own.
+  if (isRunScript(toolName)) return undefined;
   const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
   if (/^(?:mcp__conch__)?google_mail_create_draft$/.test(toolName)) return 'save a Gmail draft';
   if (/^(?:mcp__conch__)?google_mail_send$/.test(toolName)) return 'send an email';
