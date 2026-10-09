@@ -213,6 +213,24 @@ async function commitRelease(
   deps.say(`Committed “${subject}”. Push it (git push): the release pull request follows.`);
 }
 
+/** The newest `Release-As:` footer since the last release, if one waits. */
+async function waitingReleaseAs(
+  git: Git,
+  last: string | undefined,
+): Promise<{ sha: string; version: string } | undefined> {
+  const log = await must(
+    git,
+    ['log', '--format=%H%x1f%B%x1e', last ? `${tagOf(last)}..HEAD` : 'HEAD'],
+    'Reading the commits',
+  );
+  for (const record of log.split('\x1e')) {
+    const [sha = '', body = ''] = record.trim().split('\x1f');
+    const version = /^Release-As:\s*(\S+)\s*$/im.exec(body)?.[1];
+    if (sha && version) return { sha, version };
+  }
+  return undefined;
+}
+
 async function channel(git: Git, deps: CommandDeps, wanted: string | undefined): Promise<void> {
   if (wanted !== 'alpha' && wanted !== 'beta' && wanted !== 'stable')
     throw new Stop('Which channel? pnpm release channel alpha, beta or stable.');
@@ -224,6 +242,14 @@ async function channel(git: Git, deps: CommandDeps, wanted: string | undefined):
       `Releases are ${wanted === 'stable' ? 'stable ones' : `${wanted}s`} already. ${change.next}`,
     );
     return;
+  }
+  if (!change.releaseAs) {
+    // release-please takes the newest footer since the last release: one still waiting decides.
+    const waiting = await waitingReleaseAs(git, await latest(git));
+    if (waiting)
+      throw new Stop(
+        `Commit ${waiting.sha.slice(0, 7)} says Release-As: ${waiting.version}, which isn’t released yet and would still be the next release. Release it first, or take it back (git revert ${waiting.sha.slice(0, 7)}).`,
+      );
   }
   await writeFile(file.path, change.text);
   deps.say(change.next);

@@ -545,6 +545,11 @@ describe('pnpm release ci', () => {
     expect(await main(['channel', 'stable'], deps)).toBe(0);
     expect(said.at(-1)).toMatch(/^Releases are stable ones already\./);
 
+    // The footer waiting would still decide: changing course again is refused until it's gone.
+    expect(await main(['channel', 'beta'], deps)).toBe(1);
+    expect(said.at(-1)).toMatch(/says Release-As: 0\.1\.0, which isn’t released yet/);
+    expect(JSON.parse(git(w.repo, 'show', `HEAD:${CONFIG_FILE}`)).prerelease).toBe(false);
+
     expect(await main(['as', '0.0.9'], deps)).toBe(1);
     expect(await main(['as', 'v1.0.0'], deps)).toBe(0);
     expect(head()).toBe('chore(release): release 1.0.0 next\n\nRelease-As: 1.0.0');
