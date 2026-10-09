@@ -387,7 +387,7 @@ export async function runScript(host: ScriptHost, options: RunOptions): Promise<
         tool: bare,
         input,
         status,
-        ...(output !== undefined && { output: cut(output, SCRIPT_LIMITS.keepChars) }),
+        ...(output !== undefined && { output: cut(output, SCRIPT_LIMITS.keepOutput) }),
         ...(status !== 'running' && { durationMs: Math.max(0, now() - startedCall) }),
       });
     const checked = checkHostArgs(found.tool, raw, bare);

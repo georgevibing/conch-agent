@@ -11,7 +11,8 @@
  *   as it ends (the same `callId`).
  *
  * Both are compact on purpose: inputs and outputs are cut to
- * `SCRIPT_LIMITS.keepChars`, since what the script read stays in the script.
+ * `SCRIPT_LIMITS.keepChars` and outputs to `keepOutput`, since what the script read
+ * stays in the script.
  */
 import { z } from 'zod';
 
@@ -34,8 +35,10 @@ export const SCRIPT_LIMITS = {
   /** What goes back to the model: characters, then lines of what it logged. */
   resultChars: 20_000,
   resultLines: 400,
-  /** One call's input or output, as the chat keeps it. */
+  /** One call's input, as the chat keeps it: enough for who it went to and how many things. */
   keepChars: 2_000,
+  /** One call's output, as the chat keeps it: enough to read what it said. */
+  keepOutput: 800,
   /** One call's input, as the script sends it, in bytes. */
   inputBytes: 512 * 1024,
 } as const;
@@ -114,10 +117,10 @@ export const ScriptCall = z.object({
   /** What it was given, as JSON, cut to `keepChars`. */
   input: z.string().max(SCRIPT_LIMITS.keepChars + 40),
   status: ScriptCallStatus,
-  /** What it answered (or why it failed), cut to `keepChars`. */
+  /** What it answered (or why it failed), cut to `keepOutput`. */
   output: z
     .string()
-    .max(SCRIPT_LIMITS.keepChars + 40)
+    .max(SCRIPT_LIMITS.keepOutput + 40)
     .optional(),
   durationMs: z.number().nonnegative().optional(),
 });
