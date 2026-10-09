@@ -49,6 +49,7 @@ import { McpClientStore } from './mcp/store';
 import { TaskStore } from './tasks/store';
 import { QuestionDesk } from './questions/desk';
 import { QUESTIONS_PROMPT, questionTools } from './questions/tools';
+import { scriptTools } from './scripts/tool';
 import { AttachmentStore } from './attachments/store';
 import { fileTools } from './files/tools';
 import { placesTools } from './research/places';
@@ -1142,6 +1143,8 @@ export class Services {
                   )?.events.findLast((e) => e.type === 'user.message')?.text,
               }),
               ...questionTools(this.questions, ctx),
+              // One script that calls the tools above, every call through the same gate (ADR 0119).
+              ...scriptTools(ctx),
               // Offer what this request is missing (ADR 0060): never to nobody.
               ...(ctx.unattended ? [] : offerTools(this.offers, ctx)),
               // Skills people share, to offer (ADR 0074): never to nobody.

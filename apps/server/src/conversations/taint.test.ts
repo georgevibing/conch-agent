@@ -19,6 +19,17 @@ import { ConversationStore } from './store';
 import { describeTaint, heldTaints, leavesSandbox, sinkReason, taintFrom } from './taint';
 
 describe('what taints a chat', () => {
+  it('leaves a script to its calls: it neither marks the chat nor is a way out itself (ADR 0119)', () => {
+    for (const name of ['run_script', 'mcp__conch__run_script']) {
+      const input = {
+        title: 'Send them all',
+        script: "await tools.google_mail_send({ to: 'a@b.c' })",
+      };
+      expect(taintFrom(name, input)).toBeUndefined();
+      expect(sinkReason(name, input, { workspace: '/w' })).toBeUndefined();
+    }
+  });
+
   it('marks the shared research, document and task readers on every transport', () => {
     for (const prefix of ['', 'mcp__conch__']) {
       expect(taintFrom(`${prefix}web_search`, { query: 'weather' })).toMatchObject({ kind: 'web' });

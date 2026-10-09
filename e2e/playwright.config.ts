@@ -166,6 +166,8 @@ const scenarios = {
   safety: { port: 4378, env: { CONCH_MOCK_STATE: 'ready' } },
   // Undo (ADR 0030): the mock really writes note.md in the work folder, then it's put back.
   undo: { port: 4375, env: { CONCH_MOCK_STATE: 'ready' } },
+  // A script that calls tools (ADR 0119): thirty writes and a question as one story, then one Undo.
+  scripts: { port: 4339, env: { CONCH_MOCK_STATE: 'ready' } },
   // Come home (ADR 0035), from a pretend OpenClaw.
   import: { port: 4370, env: { CONCH_MOCK_STATE: 'ready', CONCH_IMPORT_HOME: importHome } },
   // Come home, more of it (ADR 0042): the model, other agents, a Slack bot with one key.

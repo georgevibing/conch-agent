@@ -43,6 +43,45 @@ describe('what the assistant did', () => {
     expect(didWhat('mcp__linear__create_issue', {})).toBe('Used create_issue in linear');
   });
 
+  it('lists each call a script made, with its own Undo, and the run itself once (ADR 0119)', () => {
+    seq = 0;
+    const call = { runId: 'run_1', tool: 'Write', input: '{"file_path":"notes/a.md"}' };
+    const events = [
+      ev({ type: 'user.message', messageId: 'u', text: 'tidy' }),
+      ev({
+        type: 'tool.started',
+        toolUseId: 't1',
+        name: 'mcp__conch__run_script',
+        input: { title: 'Tidy my notes', script: 'return 1' },
+      }),
+      ev({ type: 'script.call', ...call, callId: 'a', step: 1, status: 'running' }),
+      ev({
+        type: 'files.changed',
+        changeSetId: 'cs1',
+        toolUseId: 'a',
+        label: 'Created notes/a.md',
+        files: [{ path: 'notes/a.md', kind: 'created' }],
+      }),
+      ev({ type: 'script.call', ...call, callId: 'a', step: 1, status: 'success', output: 'ok' }),
+      ev({
+        type: 'script.call',
+        runId: 'run_1',
+        tool: 'google_mail_read',
+        input: '{"id":"m1"}',
+        callId: 'b',
+        step: 2,
+        status: 'success',
+      }),
+      ev({ type: 'tool.finished', toolUseId: 't1', status: 'success' }),
+    ];
+    const entries = entriesOf({ id: 'c1', title: 'Tidy' }, events);
+    expect(entries.map((e) => [e.kind, e.title, e.undo?.changeSetId])).toEqual([
+      ['file', 'Created notes/a.md, in a script', 'cs1'],
+      ['app', 'Used google_mail_read in conch, in a script', undefined],
+      ['app', 'Ran a script: Tidy my notes', undefined],
+    ]);
+  });
+
   it('lists doing, asking and reading; not looking around', () => {
     seq = 0;
     const events = [

@@ -17,6 +17,8 @@ import {
 import { compact } from '../conversations/store';
 
 const PEEK = 1200;
+/** The tools a script reaches by their own names (ADR 0119); the rest are Conch's. */
+const COMPUTER = new Set(['Read', 'LS', 'Write', 'Edit', 'Bash']);
 const DIFF_LINES = 240;
 
 export const clip = (text: string, max: number) =>
@@ -179,6 +181,51 @@ export function timelineOf(
           anchor: e.toolUseId,
           ...(e.output?.trim() && { peek: clip(e.output.trim(), PEEK) }),
           ...(diff && { diff }),
+        });
+        break;
+      }
+      case 'script.call': {
+        // Each call a script made (ADR 0119), told like any step, and said to be the script's.
+        if (turn < 0) openTurn(e.at);
+        const name = COMPUTER.has(e.tool) ? e.tool : `mcp__conch__${e.tool}`;
+        let input: unknown = {};
+        try {
+          input = JSON.parse(e.input);
+        } catch {
+          // Cut to fit the log: the words come from its name.
+        }
+        const settled = e.status !== 'running';
+        const label = describeTool(
+          name,
+          input,
+          settled
+            ? {
+                status: e.status === 'success' ? 'success' : 'error',
+                ...(e.output !== undefined && { output: e.output }),
+                ...(e.status === 'declined' && { approval: 'declined' as const }),
+              }
+            : undefined,
+        );
+        const said = label.outcome ?? label.subject;
+        const first = steps[at.get(`script:${e.callId}`) ?? -1];
+        put({
+          id: `script:${e.callId}`,
+          kind: 'tool',
+          at: first?.at ?? e.at,
+          ...(e.durationMs !== undefined && { durationMs: e.durationMs }),
+          family: label.family,
+          title: line(settled ? label.done : label.doing, 200),
+          detail: line(`Step ${e.step} of a script${said ? ` · ${said}` : ''}`, 400),
+          status:
+            e.status === 'running'
+              ? 'waiting'
+              : e.status === 'declined'
+                ? 'declined'
+                : e.status === 'error'
+                  ? 'failed'
+                  : 'done',
+          anchor: e.callId,
+          ...(e.output?.trim() && { peek: clip(e.output.trim(), PEEK) }),
         });
         break;
       }
