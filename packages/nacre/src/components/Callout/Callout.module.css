@@ -113,4 +113,27 @@
     flex-shrink: 0;
     margin-block: calc(var(--nc-space-1) * -1);
   }
+
+  /* A callout with an action measures itself, not the viewport: callouts live
+     in dialogs, sheets and side panels as often as in a page. Narrow, the
+     action leaves the text its whole width and takes a row of its own,
+     lined up under the text. */
+  .callout[data-action] {
+    container-type: inline-size;
+    flex-wrap: wrap;
+    row-gap: var(--nc-space-2-5);
+  }
+
+  @container (inline-size < 28rem) {
+    .action {
+      flex: 0 1 100%;
+      flex-wrap: wrap;
+      align-self: flex-start;
+      margin-block: 0;
+    }
+
+    .icon ~ .action {
+      margin-inline-start: calc(1rem + var(--nc-space-3));
+    }
+  }
 }

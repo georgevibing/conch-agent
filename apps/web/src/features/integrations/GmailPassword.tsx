@@ -104,7 +104,7 @@ export function GmailPassword({
       {shared && (
         <Callout
           tone="info"
-          title="Use the sign-in Email already has?"
+          title="Use the same app password?"
           action={
             <Button
               size="sm"
@@ -115,8 +115,7 @@ export function GmailPassword({
             </Button>
           }
         >
-          Your email channel signs in to Gmail as {shared}. Gmail the app can use the same app
-          password — only if you say so.
+          Your email channel already signs in as {shared}.
         </Callout>
       )}
       <GuideSteps label="Connect Gmail with an app password">

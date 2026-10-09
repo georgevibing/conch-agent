@@ -184,7 +184,7 @@ test('Calendar says plainly it needs Google sign-in, and offers no app password'
   ).toHaveText('Read');
   await dialog.getByRole('button', { name: 'Next' }).click();
   await expect(dialog.getByRole('radiogroup', { name: 'How to connect' })).toHaveCount(0);
-  await expect(dialog.getByText(/only open to Google’s own sign-in/)).toBeVisible();
+  await expect(dialog.getByText(/need Google’s own sign-in/)).toBeVisible();
   await dialog.getByRole('button', { name: 'Next' }).click();
   await expect(
     dialog.getByRole('button', { name: 'I already have a credential file' }),

@@ -174,7 +174,7 @@ describe('Google apps on the Integrations page', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Next' }));
     await userEvent.click(within(dialog).getByRole('button', { name: 'Next' }));
     expect(
-      await within(dialog).findByText(/signs in to Gmail as ada@gmail.com/),
+      await within(dialog).findByText(/already signs in as ada@gmail.com/),
     ).toBeInTheDocument();
     expect(calls.some((c) => c.path === '/api/google/mail/reuse')).toBe(false);
     await userEvent.click(within(dialog).getByRole('button', { name: 'Use it for Gmail' }));
@@ -192,7 +192,7 @@ describe('Google apps on the Integrations page', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Connect Google Calendar' });
     await userEvent.click(within(dialog).getByRole('button', { name: 'Next' }));
     expect(within(dialog).queryByRole('radiogroup', { name: 'How to connect' })).toBeNull();
-    expect(within(dialog).getByText(/only open to Google’s own sign-in/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/need Google’s own sign-in/)).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Next' }));
     await userEvent.click(
       await within(dialog).findByRole('button', { name: 'I already have a credential file' }),
