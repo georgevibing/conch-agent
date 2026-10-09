@@ -105,6 +105,7 @@ jobs:
   # The desktop app (ADR 0054), driven for real: it opens Conch, keeps it
   # running with its window closed, restarts a crashed gateway, and quits.
   desktop:
+    name: Desktop app
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -139,9 +140,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
-      contents: read
-      # To read the pull request's title as it is now.
-      pull-requests: read
+      contents: read # the commits
+      pull-requests: read # the pull request's title as it is now
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -163,6 +163,7 @@ jobs:
   # for the entire CI workflow, so no partial pass can publish the site. The
   # commit check runs for pull requests only, so it may be skipped on a push.
   check:
+    name: check
     if: ${{ always() }}
     needs: [static, unit, e2e, desktop, commits]
     runs-on: ubuntu-24.04

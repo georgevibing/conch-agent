@@ -38,13 +38,13 @@ concurrency:
 
 jobs:
   full:
+    name: Every task, every model
     if: github.repository == 'georgevibing/conch-agent' && github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 240
     permissions:
-      contents: read
-      # To download the last full run's results, to compare with.
-      actions: read
+      contents: read # the code
+      actions: read # the last full run's results, to compare with
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -96,6 +96,7 @@ jobs:
           if-no-files-found: ignore
 
   smoke:
+    name: Smoke run
     if: >-
       github.repository == 'georgevibing/conch-agent' && github.event_name == 'push' &&
       vars.EVALS_SMOKE == 'true'

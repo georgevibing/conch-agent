@@ -191,7 +191,10 @@ jobs:
       - name: Write the notes, polished by Claude when there's a key
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: pnpm release ci notes --body-file "$RUNNER_TEMP/body.md"
+        run: |
+          pnpm release ci notes --body-file "$RUNNER_TEMP/body.md"
+          # As CI's format check wants them, whatever words the notes have.
+          pnpm exec prettier --write CHANGELOG.md release-please-config.json
       - name: Put them on the pull request
         env:
           GH_TOKEN: ${{ steps.app.outputs.token || github.token }}
