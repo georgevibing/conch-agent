@@ -81,7 +81,7 @@ export function waitHeadline(note: Pick<WaitNote, 'state' | 'title' | 'kind'>): 
     case 'timed-out':
       return `Stopped waiting for ${what}: it took too long`;
     case 'stopped':
-      return `Stopped waiting for ${what}`;
+      return `Stopped waiting ${note.kind === 'time' ? 'until' : 'for'} ${what}`;
     case 'failed':
       return `Couldn’t keep watching ${what}`;
   }

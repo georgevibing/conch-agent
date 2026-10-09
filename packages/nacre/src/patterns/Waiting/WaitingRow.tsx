@@ -69,7 +69,7 @@ export function waitingHeadline(kind: WaitingKind, state: WaitingState, title: s
     return kind === 'time' ? `Waiting until ${title}` : `Waiting for ${title}`;
   if (state === 'done') return kind === 'time' ? `Waited until ${title}` : `Waited for ${title}`;
   if (state === 'timed-out') return `Gave up waiting for ${title}`;
-  if (state === 'stopped') return `Stopped waiting for ${title}`;
+  if (state === 'stopped') return `Stopped waiting ${kind === 'time' ? 'until' : 'for'} ${title}`;
   return `Couldn’t watch ${title}`;
 }
 

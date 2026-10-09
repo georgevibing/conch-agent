@@ -1133,6 +1133,21 @@ export class MockEngine implements Engine {
         yield* speak(found.reply);
         return;
       }
+      // Waiting without polling (ADR 0124): Conch's wait_for, for real; a long one lets go of the turn.
+      const minutes = /\bwait (\d+) minutes\b/i.exec(said)?.[1];
+      if (minutes && input.tools.some((t) => t.name === 'wait_for')) {
+        const out = yield* hostTool('wait_for', { kind: 'time', minutes: Number(minutes) });
+        yield* speak(
+          /End your turn now/.test(out)
+            ? `I’ll pick this up in ${minutes} minutes. Conch is keeping an eye on the time, so carry on meanwhile.`
+            : out,
+        );
+        return;
+      }
+      if (/\[Conch\] A wait you started has ended/.test(said)) {
+        yield* speak('The wait is over, so I’m carrying on from here.');
+        return;
+      }
       if (/\bin parallel\b/i.test(input.prompt) && input.tools.some((t) => t.name === 'delegate')) {
         const out = yield* hostTool('delegate', {
           parts: [
