@@ -109,6 +109,36 @@ describe('Settings', () => {
     await waitFor(() => expect(where()).toBe('/settings/memory'));
   });
 
+  it('opens the pages inside a place at addresses of their own, with the trail above them', async () => {
+    narrowScreen(false);
+    mockFetch({ 'GET /api/state': () => appState() });
+    const { where } = renderApp(<Settings />, { route: '/settings/usage/limits' });
+    const page = await screen.findByRole('dialog', { name: 'Settings' });
+    expect(within(page).getByRole('tab', { name: 'Usage' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    const trail = within(page).getByRole('navigation', { name: 'Breadcrumb' });
+    expect(within(trail).getByText('Limits')).toHaveAttribute('aria-current', 'page');
+    await userEvent.click(within(trail).getByRole('button', { name: 'Usage' }));
+    expect(where()).toBe('/settings/usage');
+    // What lives on a page inside a place opens that page, and comes into view on it.
+    for (const [tab, focus, at] of [
+      ['usage', 'turn-limits', '/settings/usage/limits'],
+      ['health', 'background', '/settings/health/always-on'],
+      ['notifications', 'topics', '/settings/notifications/topics'],
+    ] as const) {
+      act(() => useUi.getState().openSettings(tab, focus));
+      await waitFor(() => expect(where()).toBe(at));
+    }
+    expect(
+      within(within(page).getByRole('navigation', { name: 'Breadcrumb' })).getByText('Topics'),
+    ).toHaveAttribute('aria-current', 'page');
+    // A part of a place that isn't a page of its own stays on the place (not a provider's page).
+    act(() => useUi.getState().openSettings('providers', 'fallback'));
+    await waitFor(() => expect(where()).toBe('/settings/providers'));
+  });
+
   it('opens at the place its address names, and steps aside while Conch restarts', async () => {
     narrowScreen(false);
     mockFetch({ 'GET /api/state': () => appState() });
