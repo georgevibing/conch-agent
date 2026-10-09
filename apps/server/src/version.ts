@@ -1,7 +1,7 @@
 /**
  * Conch's version, reported to the web app and to MCP servers Conch connects
  * to. It's written in one place only, the root `package.json` (ADR 0051):
- * `pnpm release` moves it on, and everything else reads it. The same file
+ * the release pull request moves it on (ADR 0127), and everything else reads it. The same file
  * names Conch's repository, where the desktop app finds its releases
  * (ADR 0054).
  */

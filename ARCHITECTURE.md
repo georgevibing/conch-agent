@@ -126,7 +126,7 @@ src/
   secrets/                    where a key lives: this computer, or 1Password (`op read`)
   setup/                      what features need from this computer; find, install, update, open
   updates/                    daily quiet checks, one-click updates, Conch following signed releases (ADR 0051)
-  release/                    `pnpm release`: version, notes, signing (ADR 0051)
+  release/                    notes, signed tags, channels for the release workflow (ADR 0051, 0127)
   lib/healed.ts               "fixed on its own" notes (~/.conch/healed.json, `healed` event)
   lib/lifecycle.ts            this run's `BOOT_ID`; `restart()` (exit 75, the supervisor starts it again)
   start.ts, supervisor.ts     `pnpm start` runs Conch as a child it restarts (on request, or after a crash),
@@ -314,9 +314,10 @@ src/
   under `/api/updates` (updating and turning automation on need sudo mode);
   `updates.changed` is pushed live. Repair everything's `updates` check lists what
   waits.
-- **Releases** (`release/`, `updates/{releases,layout}.ts`, [ADR 0051](./docs/adr/0051-releases.md)).
-  `pnpm release` makes a signed, annotated `vX.Y.Z` tag with notes written from
-  the commits. An install follows releases in its channel (stable, beta,
+- **Releases** (`release/`, `updates/{releases,layout}.ts`, [ADR 0051](./docs/adr/0051-releases.md), [ADR 0127](./docs/adr/0127-releasing-with-release-please.md)).
+  release-please keeps a release pull request; merging it has
+  `.github/workflows/release.yml` make a signed, annotated `vX.Y.Z` tag with
+  notes written from the commits. An install follows releases in its channel (stable, beta,
   alpha). A developer's copy follows its branch as above. Tags are fetched into
   `refs/conch/tags/*` and checked against `release/allowed_signers` from the
   installed commit. Updating makes `CONCH_HOME/versions/<v>` (a git worktree),

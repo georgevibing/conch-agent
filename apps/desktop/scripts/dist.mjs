@@ -39,7 +39,7 @@ for (const [flag, wanted] of Object.entries(asked))
     console.error(
       `\n  The ${NAMES[wanted]} app is built on ${NAMES[wanted]}: it carries native modules made there.\n` +
         `  Run this on ${NAMES[wanted]}, or let GitHub Actions build every platform:\n` +
-        `  push a release tag, or run the "Desktop app" workflow by hand (docs/RELEASING.md).\n`,
+        `  merge the release pull request, or run the "Desktop app" workflow by hand (docs/RELEASING.md).\n`,
     );
     process.exit(1);
   }

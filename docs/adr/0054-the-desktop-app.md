@@ -123,10 +123,10 @@ the Windows installer is signed; electron-updater then also checks the Windows p
   with hot reload. `pnpm desktop:start` builds everything and runs the app as it ships, without
   packaging. `pnpm desktop:build` makes this computer's installer; `desktop:build:mac`, `:win`
   and `:linux` make one platform's.
-- A release is still `pnpm release` (ADR 0051). Pushing the tag starts `.github/workflows/
-desktop.yml`, which builds each platform on its own kind of computer (native modules are built
-  where they run), checks each app starts, makes the GitHub Release from the tag if `pnpm
-release` couldn't, and attaches the files. The two Mac builds each write a `latest-mac.yml`;
+- A release is merging the release pull request (ADR 0127). The Release workflow then calls
+  `.github/workflows/desktop.yml`, which builds each platform on its own kind of computer
+  (native modules are built where they run), checks each app starts, and attaches the files,
+  with `SHA256SUMS`, an SBOM and build provenance, to the release's draft. The two Mac builds each write a `latest-mac.yml`;
   the workflow joins them into one.
 - `pnpm desktop:e2e` drives the built app with Playwright: it starts, shows Conch, keeps running
   when its window closes, restarts a gateway that crashed, and stops everything on Quit. CI runs

@@ -5,7 +5,7 @@
  * The gateway lists the GitHub Releases of Conch's repository, offers the
  * newest in the person's channel by the same rules a checkout uses
  * (`release/semver.ts`), and reads each release's notes from its body (the
- * notes `pnpm release` wrote). A release is offered only once this computer's
+ * notes the release workflow wrote, ADR 0127). A release is offered only once this computer's
  * files are attached to it. Updating asks the app to download that release
  * (electron-updater checks its SHA-512) and install it, which restarts Conch.
  * An app that can't replace itself — an unsigned Mac app, a `.deb` — offers

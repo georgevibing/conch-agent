@@ -1,70 +1,94 @@
 # Releasing Conch
 
-One command, one question. The details are in [ADR 0051](./adr/0051-releases.md).
+**Merging the release pull request is the release.** Everything else is done by
+[release-please](https://github.com/googleapis/release-please) and
+`.github/workflows/release.yml`. Why it's built this way is in
+[ADR 0127](./adr/0127-releasing-with-release-please.md); how installs check and
+take a release is in [ADR 0051](./adr/0051-releases.md).
 
-## A release
+## How a release happens
 
-```sh
-pnpm release
-```
-
-1. **It checks it can.** You're on `main`, nothing is uncommitted, and you're
-   level with `origin/main`. If not, it says the one command to run.
-2. **It works out the version** from the commits since the last stable tag:
+1. **Commits land on `main`**, as conventional commits (CI checks them on every
+   pull request, `scripts/commits.mjs`).
+2. **release-please keeps one pull request open**, titled
+   `chore(main): release Conch 0.4.0`. On every push to `main` it works out the
+   next version from the commits since the last release:
    - a breaking change is a new major (a new minor before 1.0);
-   - a `feat` is a new minor;
-   - anything else is a patch.
-3. **It shows** the version, the notes (New, Better, Fixed, and Heads up for a
-   breaking change) and the commits they came from.
-4. **It asks:** `Release v0.3.0? (y/N)`. Nothing is written before you say yes.
-5. **Then it does the rest:**
-   - runs `pnpm check`;
-   - sets the version in `package.json` and writes `CHANGELOG.md`;
-   - commits `release: v0.3.0`;
-   - makes a signed tag and checks it as installs will;
-   - pushes the commit and the tag together;
-   - makes the GitHub Release, if `gh` is installed.
+   - a `feat` is a new minor (the next pre-release number on alpha or beta);
+   - a `fix` or `perf` is a patch;
+   - housekeeping alone (`chore`, `docs`, `test`, `ci`, `build`, `refactor`)
+     makes no release, and no pull request.
 
-## Betas and alphas
+   It sets that version in `package.json` and `.release-please-manifest.json`.
 
-- `pnpm release beta` makes `v0.4.0-beta.1`, then `-beta.2`. `pnpm release
-alpha` works the same way. A pre-release's notes say what's new since the
-  last release its channel saw.
-- **To promote a beta**, run plain `pnpm release`. It makes `v0.4.0`, with
-  notes since the last stable release.
+3. **Conch writes the notes into it.** Right after, `pnpm release ci notes`
+   replaces release-please's changelog with Conch's own (New, Better, Fixed, and
+   Heads up for a breaking change), in `CHANGELOG.md` and in the pull request's
+   description. With the `ANTHROPIC_API_KEY` secret, Claude polishes them, held to
+   the commits. If the polished version breaks a rule, the plain notes stand.
+4. **You merge it when you want to ship.** Read the notes there first: they're
+   what people read in the app, on GitHub and on the website.
+5. **The workflow does the rest**, in about 40 minutes:
+   - **Tag.** Makes the SSH-signed tag `v0.4.0` on the merge, with the notes as
+     its message, and checks it against `release/allowed_signers` the way every
+     install will, before pushing it. The key is only in this step.
+   - **Draft.** release-please makes the GitHub Release for that tag, as a draft,
+     and opens the next release pull request.
+   - **Apps.** `desktop.yml` builds the app for every platform onto the draft,
+     with `SHA256SUMS`, an SBOM and build provenance.
+   - **Publish.** Writes the release's page (the notes, how to install, how to
+     check a download) and publishes it: as a pre-release for alpha and beta, as
+     the latest release for stable. Then it updates the website.
 
-## Options
+`pnpm release` on its own shows what the next release says so far, and its pull
+request. Add `--ai` to see the notes polished, as CI does.
 
-- `--dry-run` shows everything and changes nothing.
-- `--version 0.4.0` uses that version instead of the one worked out.
-- `--no-ai` keeps the notes as written from the commits. Without it, Claude
-  Code (or `ANTHROPIC_API_KEY`) polishes them, held to the commits. If the
-  polished version breaks a rule, the plain notes stand.
+## Before the first release
 
-## The first time: a signing key
+Once, in this order:
 
-Every Conch checks that a release is signed by a key in
-`release/allowed_signers`. If git has no SSH signing key, `pnpm release`
-offers one from `~/.ssh` and sets it up for this repository only. To make
-one, run `ssh-keygen -t ed25519`. The first release adds your key to the list.
-If your key has a passphrase, run `ssh-add` first.
+1. **Make the release key.** Run `pnpm release key`. It makes an SSH key
+   (`~/.ssh/conch-release`) and adds its public half to `release/allowed_signers`.
+   With `gh` signed in, it also sets up GitHub's `release` environment (only `main`
+   may use it) and gives it the private half as the `RELEASE_SIGNING_KEY` secret.
+   **Keep a copy of the private key** in a password manager: changing keys later
+   needs it. Commit `release/allowed_signers` and push it.
+2. **Set the repository's settings** in
+   [REPOSITORY-SETTINGS.md](./REPOSITORY-SETTINGS.md). Two matter for releasing:
+   - _Allow GitHub Actions to create and approve pull requests_ (required);
+   - the release app (recommended), so CI runs on the release pull request.
+3. **Optionally, add `ANTHROPIC_API_KEY`** as a repository secret, for polished
+   notes.
+4. **Merge the first release pull request.** It's `0.1.0-alpha.1`
+   (`initial-version` in `release-please-config.json`).
 
-## Changing the key
+Installs from before the first release trust the key the first release names,
+once (ADR 0051 § Trust on first use). Every release after must be signed by a
+key they already trust.
 
-Installs trust the list in the version they already have. So:
+## Alphas, betas and stable releases
 
-1. Add the new key's line to `release/allowed_signers` in a commit.
-2. Release once more, **signed with the old key**.
-3. Switch git to the new key. Remove the old line in a later release if you
-   like.
+`release-please-config.json` says which come next, and `pnpm release channel`
+changes it:
 
-## If a push fails
+| Command                       | The releases after it                                                                               |
+| ----------------------------- | --------------------------------------------------------------------------------------------------- |
+| `pnpm release channel alpha`  | `0.1.0-alpha.1`, `-alpha.2`… A new feature after a stable release starts the next version's alphas. |
+| `pnpm release channel beta`   | From alphas, `0.1.0-beta.1` next (a one-off `release-as`), then `-beta.2`…                          |
+| `pnpm release channel stable` | From alphas or betas, their version: `0.1.0-beta.3` becomes `0.1.0`. Then `0.1.1`, `0.2.0`…         |
+| `pnpm release as 1.0.0`       | Exactly that version, once.                                                                         |
 
-The release commit and the tag stay ready on your computer. Run the command it
-prints, `git push --atomic origin main v0.3.0`. If only the GitHub Release
-failed, run `gh release create v0.3.0 --notes-from-tag`.
+Each edits `release-please-config.json`. Commit it and push it: the release pull
+request follows. A one-off `release-as` is taken out again in the release pull
+request it made, so it's used once. Going from betas back to alphas of the same
+version is refused: installs never go back a version.
 
-## Commits that make good notes
+People choose their channel in Settings → Health → Updates (ADR 0051 §
+Channels). Stable is the default and only takes stable releases.
+
+## The notes
+
+They're written from the commits, so write the commits for them:
 
 - Write `feat` and `fix` subjects in the person's words: `feat(web): edit pages
 by hand, with a live preview`, not what changed in the code.
@@ -72,8 +96,72 @@ by hand, with a live preview`, not what changed in the code.
   The web app's subject is the one people read.
 - For a breaking change, add a `BREAKING CHANGE:` footer that says what the
   person must do: `BREAKING CHANGE: Sign in again after updating.`
-- `chore`, `test`, `docs`, `refactor`, `ci` and `build` never appear in the
-  notes.
+- `chore`, `test`, `docs`, `refactor`, `ci` and `build` never appear in them.
+
+**To edit them by hand**, change the newest section of `CHANGELOG.md` on the
+release pull request's branch just before you merge. The tag and the page are
+made from that section. Every push to `main` rewrites them from the commits
+again.
+
+## If something goes wrong
+
+- **A step failed after the tag was made.** Run **Actions → Release → Run
+  workflow** with the version (`0.4.0`). It checks the tag that's there, and
+  carries on: the draft, the apps, publishing.
+- **A desktop build failed.** Fix it on `main`, then run the same as above. The
+  draft isn't published until every file it promises is there.
+- **The tag wasn't made** ("isn't in release/allowed_signers", "isn't set"). The
+  release key and the list don't agree. Run `pnpm release key`, commit the list,
+  then run **Release** by hand. The merged pull request is still waiting, labelled
+  `autorelease: pending`.
+- **Two merged release pull requests wait.** Label every one but the newest
+  `autorelease: tagged`, then run **Release** by hand.
+
+## Changing the key
+
+Installs trust the list in the version they already have. So:
+
+1. Add the new key's line to `release/allowed_signers` in a commit.
+2. Release once more, still **signed with the old key**.
+3. Then give GitHub the new private key (`gh secret set RELEASE_SIGNING_KEY --env
+release < newkey`). Remove the old line in a later release if you like.
+
+If the old key is lost, installs can't take a new one from a release: they'd have
+to install again.
+
+## Code signing for the apps
+
+Not set up yet. Without it, macOS and Windows ask once before opening the app, and
+a Mac app can't replace itself, so it offers each update as a download. The
+release page says so. The workflow signs as soon as these repository secrets
+exist:
+
+- **macOS:** `MAC_CSC_LINK` and `MAC_CSC_KEY_PASSWORD` (a Developer ID Application
+  certificate, `.p12` as base64). To notarize, also an App Store Connect API key:
+  `APPLE_API_KEY` (the `.p8` file's text), `APPLE_API_KEY_ID` and
+  `APPLE_API_ISSUER`.
+- **Windows:** `WIN_CSC_LINK` and `WIN_CSC_KEY_PASSWORD` (a code-signing
+  certificate).
+
+Provenance, checksums and the signed tag hold either way.
+
+## What a release carries
+
+| What                                          | Built on / by         |
+| --------------------------------------------- | --------------------- |
+| `Conch-0.4.0-mac-arm64.dmg` and `.zip`        | `macos-latest`        |
+| `Conch-0.4.0-mac-x64.dmg` and `.zip`          | `macos-15-intel`      |
+| `Conch-0.4.0-win-x64.exe`                     | `windows-latest`      |
+| `Conch-0.4.0-linux-x64.AppImage` and `.deb`   | `ubuntu-latest`       |
+| `Conch-0.4.0-linux-arm64.AppImage` and `.deb` | `ubuntu-24.04-arm`    |
+| `latest*.yml`, `*.blockmap`                   | the update feeds      |
+| `conch-0.4.0.spdx.json`                       | the SBOM (Syft, SPDX) |
+| `SHA256SUMS`                                  | every file's checksum |
+
+Each app is opened once on its runner to check it starts. Every installer and
+`SHA256SUMS` has a build provenance attestation (`gh attestation verify <file>
+--repo georgevibing/conch-agent`), and the installers an SBOM attestation.
+[SECURITY.md](../SECURITY.md) says how to check each by hand.
 
 ## The website
 
@@ -89,12 +177,12 @@ search indexing. `/releases/` reads published GitHub Release notes at build time
 including alpha and beta releases. Drafts stay private. Without uploaded desktop
 assets, **Install Conch** opens the installation guide instead of a missing download.
 
-The Website workflow runs after successful CI and desktop builds, when a release is
-published, edited or deleted, daily, and from **Actions → Website → Run workflow**.
-The desktop completion and daily run also pick up releases and assets created by
-GitHub's workflow token. A GitHub API failure, inconsistent release metadata or an
-invalid signature stops publication and keeps the existing site. Builds assemble
-both versions into one artifact; a final selection check refuses stale builds.
+The Website workflow runs after successful CI and desktop builds, when the Release
+workflow publishes a release, when a release is edited or deleted, daily, and from
+**Actions → Website → Run workflow**. A GitHub API failure, inconsistent release
+metadata or an invalid signature stops publication and keeps the existing site.
+Builds assemble both versions into one artifact; a final selection check refuses
+stale builds.
 
 For a local production-shaped build, run `pnpm docs:build`; it labels the local
 commit Development without contacting GitHub. For development routing, set
@@ -121,33 +209,9 @@ links, the sitemap, `CNAME` and the install lines all follow it.
 
 ## The desktop apps
 
-Pushing a release tag also builds the app for every platform
-(`.github/workflows/desktop.yml`, [ADR 0054](./adr/0054-the-desktop-app.md)), in
-about half an hour:
-
-| File                                          | Built on           |
-| --------------------------------------------- | ------------------ |
-| `Conch-0.3.0-mac-arm64.dmg` and `.zip`        | `macos-latest`     |
-| `Conch-0.3.0-mac-x64.dmg` and `.zip`          | `macos-15-intel`   |
-| `Conch-0.3.0-win-x64.exe`                     | `windows-latest`   |
-| `Conch-0.3.0-linux-x64.AppImage` and `.deb`   | `ubuntu-latest`    |
-| `Conch-0.3.0-linux-arm64.AppImage` and `.deb` | `ubuntu-24.04-arm` |
-
-Each one is opened once on its runner to check it starts. Then the workflow makes the
-GitHub Release from the tag if `pnpm release` couldn't (no `gh` here), attaches the
-files and the update feeds (`latest.yml`, `latest-mac.yml`, `latest-linux*.yml`), and
-records where each file came from (`gh attestation verify <file> --repo
-georgevibing/conch-agent`).
-
 - **Installed apps update from these releases.** They read the repository's public
-  releases, so the repository must be public for them to find one.
-- **Signing is optional, and needs only secrets.** Without them, macOS and Windows ask
-  once before opening the app, and a Mac app can't replace itself (it offers the
-  download instead). Add these repository secrets to sign:
-  - `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`: a Developer ID Application certificate
-    (`.p12`, base64), and to notarize, an App Store Connect API key: `APPLE_API_KEY`
-    (the `.p8` file's text), `APPLE_API_KEY_ID` and `APPLE_API_ISSUER`.
-  - `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD`: a code-signing certificate.
+  releases (never drafts), and offer one once this computer's file is attached
+  ([ADR 0054](./adr/0054-the-desktop-app.md)).
 - **To build without releasing**, run **Desktop app** from the Actions tab: the files
   stay with the run for two weeks. Give it a tag to attach the apps to a release that
   has none.
@@ -156,8 +220,9 @@ georgevibing/conch-agent`).
 
 ## The version shown in Conch
 
-Development checkouts show **Dev · commit**. The root package version starts at
-`0.1.0`; it is a release-planning number, not evidence that anything was published.
+Development checkouts show **Dev · commit**. The root package version is the last
+release's (release-please sets it in the release pull request); before the first
+release it's `0.1.0`, a planning number, not evidence that anything was published.
 Only a clean detached checkout at its matching release tag, or a desktop payload
 built from that checkout, displays **v0.1.0**, **v0.1.0-alpha.1** or **v0.1.0-beta.2**.
 A branch stays Dev even if it happens to point at a release commit. Without Git or
@@ -172,8 +237,6 @@ Electron can replace them with the first real release, including `0.1.0`.
 Release installers use their full release version. Build metadata does not
 replace release signatures or installer verification.
 
-Before the first stable release, release planning uses that written base: `0.1.0`,
-`0.1.0-alpha.1`, then `0.1.0-beta.1`, and promotion to `0.1.0`. It does not bump an
-unpublished version as though it had already shipped. A Dev build can move to the
-first release in its selected channel even when its package number sorts above
-that prerelease. Actual release installs keep the existing no-downgrade rule.
+A Dev build can move to the first release in its selected channel even when its
+package number sorts above that pre-release. Actual release installs keep the
+existing no-downgrade rule.

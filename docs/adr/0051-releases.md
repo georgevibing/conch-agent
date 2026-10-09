@@ -3,6 +3,7 @@
 - Status: accepted
 - Date: 2026-10-02
 - Amends: [ADR 0019](./0019-updates.md) (§ Updating Conch itself), [ADR 0026](./0026-always-on.md) (the launcher)
+- Amended by: [ADR 0127](./0127-releasing-with-release-please.md) (a release is merging release-please's pull request; CI signs the tag)
 
 ## Context
 
@@ -23,6 +24,11 @@ default, betas if they ask, and an update that can't leave them stranded.
 ## Decision
 
 ### Making a release
+
+> **Amended by [ADR 0127](./0127-releasing-with-release-please.md).** release-please
+> now works out the version in a release pull request, and the Release workflow
+> signs the tag when it's merged. The notes, the tag and its checks below are
+> unchanged.
 
 `pnpm release` is the whole process for the maintainer: one command, one
 question. See [docs/RELEASING.md](../RELEASING.md).

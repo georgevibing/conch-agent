@@ -2,5 +2,5 @@
 #
 # Every Conch checks a release's tag against this list as it is in the
 # version already installed, so a release that changes it must be signed by
-# a key already here. `pnpm release` adds the maintainer's key the first time.
+# a key already here. `pnpm release key` adds the release key the first time.
 # Format: principal namespaces="git" <key type> <key> (see ssh-keygen(1), ALLOWED SIGNERS).

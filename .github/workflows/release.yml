@@ -215,8 +215,9 @@ jobs:
       contents: write # attaches the apps to the draft
       id-token: write # signs the build provenance
       attestations: write # records it
-    # zizmor asks for the newer `$/` form; actionlint (1.7.12) can't read it yet.
-    uses: ./.github/workflows/desktop.yml # zizmor: ignore[self-repository]
+    # `$/` is this repository at the very commit running (unlike `./`), so it
+    # counts as pinned. actionlint (1.7.12) doesn't know it yet.
+    uses: $/.github/workflows/desktop.yml
     with:
       tag: v${{ needs.plan.outputs.version }}
     secrets:
