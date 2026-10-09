@@ -25,6 +25,10 @@ test('the first run doesn’t stop for it: the new chat offers to bring your thi
   request,
 }) => {
   await request.patch('/api/settings', { data: { onboarded: false } });
+  // One tip at a time, and connecting apps comes first: put it away to reach this one.
+  await request.patch('/api/settings', {
+    data: { preferences: { tipsPutAway: ['connect-apps'] } },
+  });
   await page.goto('/');
   await toProviders(page);
   // A provider is ready, so the welcome carries on to the end by itself, asking nothing more.
@@ -39,6 +43,7 @@ test('the first run doesn’t stop for it: the new chat offers to bring your thi
   await expect(
     dialog.getByRole('heading', { name: 'Bring your things from OpenClaw', level: 2 }),
   ).toBeVisible();
+  await request.patch('/api/settings', { data: { preferences: { tipsPutAway: [] } } });
 });
 
 test('previews, brings things over after a backup, says what’s next, and undoes it', async ({

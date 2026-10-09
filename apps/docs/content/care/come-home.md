@@ -9,9 +9,9 @@ If OpenClaw or Hermes is on this computer, Conch finds it and shows exactly what
 
 ## Take a look
 
-When Conch finds one, a new chat offers it in one quiet line under the box: **Bring your things from OpenClaw**. It goes away once they've come over. The offer also lives in **Settings → What Conch knows**, and <kbd>mod+k</kbd> finds it too.
+When Conch finds one, a new chat offers it in one short tip under the box: **Bring your things from OpenClaw**. It shows once you've connected an app or put that [tip](../start/first-chat.md#what-the-new-chat-offers-next) away, and goes away once they've come over, or for good with its **×**. The offer also lives in **Settings → What Conch knows**, and <kbd>mod+k</kbd> finds it too.
 
-1. Open **Settings → What Conch knows**. Under **Bring your things from another assistant**, press **Take a look** on the app's card. It opens as a page inside Settings, with **What Conch knows › From OpenClaw** (or Hermes) above it: press **Memory** to go back.
+1. Open **Settings → What Conch knows**. Under **Bring your things from another assistant**, press **Take a look** on the app's card. It opens as a page inside Settings, with **What Conch knows › From OpenClaw** (or Hermes) above it: press **What Conch knows** to go back.
 2. Look at the tiles: one for each kind of thing (**Agents**, **Memories**, **Skills**…), with how many are ticked. Press a tile to see just that kind, or **Everything** to see it all.
 3. Read the list. Everything has a tick, and **Show what it says** opens its words. A long list has its own search: find what you want, then **Tick these** or **Untick these**.
 4. Press the button at the bottom, which counts your ticks and stays in reach however long the list: **Bring 12 things over**. Conch may ask you to confirm it's you.

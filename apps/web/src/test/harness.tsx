@@ -176,6 +176,7 @@ export function appState(patch: Partial<AppState> = {}): AppState {
       offlineFallback: true,
       limitsPutAway: [],
       mutedSuggestions: [],
+      tipsPutAway: [],
       checkAfterReading: true,
       sealedCommands: true,
       checkMemories: true,

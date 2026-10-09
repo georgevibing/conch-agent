@@ -1,0 +1,31 @@
+@layer nacre.components {
+  /* One tip and its ×, never wider than the screen: centred, and on a phone
+     the words end in “…” before the row could spill past either edge. */
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--nc-space-0-5);
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  .row .tip {
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    color: var(--nc-text-muted);
+  }
+
+  /* The words (not the icons, which are aria-hidden) give way first. */
+  .row .tip > span:not([aria-hidden]) {
+    display: block;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .row .away {
+    flex-shrink: 0;
+    color: var(--nc-text-subtle);
+  }
+}

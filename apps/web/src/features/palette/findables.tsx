@@ -87,6 +87,7 @@ import {
   GlobeLock,
   Compass,
   Sunrise,
+  Lightbulb,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -211,6 +212,12 @@ const settingsPlaces: {
     label: 'Offers in the chat',
     keywords: 'offers suggestions suggest again muted don’t suggest dont apps skills',
     icon: <Blocks />,
+  },
+  {
+    tab: 'general',
+    label: 'Tips on a new chat',
+    keywords: 'tips hints show tips again put away hidden dismissed new chat bring back',
+    icon: <Lightbulb />,
   },
   {
     tab: 'general',

@@ -100,9 +100,9 @@ function Appearance() {
 /**
  * Settings → General: what belongs to Conch as a whole rather than to one
  * provider or feature — how it looks, the folder every provider works in, how
- * new chats are named and what they offer, and starting over. The model,
- * thinking and mode new chats start with are the composer's own (Make this my
- * default), so they're not here.
+ * new chats are named and what they offer, the tips on a new chat, and
+ * starting over. The model, thinking and mode new chats start with are the
+ * composer's own (Make this my default), so they're not here.
  */
 export function GeneralTab({
   workspace,
@@ -121,6 +121,7 @@ export function GeneralTab({
   );
   const assistant = app?.persona.name ?? 'Conch';
   const prefs = app?.preferences;
+  const tipsAway = app?.preferences.tipsPutAway.length ?? 0;
 
   return (
     <Stack gap={8}>
@@ -162,7 +163,26 @@ export function GeneralTab({
           />
         </Stack>
       </Section>
-      {/* One row: what it does, and the button beside it. */}
+      {/* One row each: what it does, and the button beside it. */}
+      <Section
+        title="Tips on a new chat"
+        description={
+          tipsAway
+            ? `${tipsAway === 1 ? 'One tip is' : `${tipsAway} tips are`} put away. The rest show one at a time, under the box.`
+            : 'What Conch can do for you next, one at a time, under the box. Each has a × to put it away.'
+        }
+        status={
+          tipsAway ? (
+            <Button
+              variant="surface"
+              size="sm"
+              onClick={() => void update.mutateAsync({ preferences: { tipsPutAway: [] } })}
+            >
+              Show tips again
+            </Button>
+          ) : undefined
+        }
+      />
       <Section
         title="Start over"
         description="See the welcome again. Your conversations and memories stay."

@@ -17,7 +17,7 @@ test('connect Notion in a popup, use it in a chat, fix it when it breaks', async
   request,
 }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Connect Gmail, Notion, GitHub and more' }).click();
+  await page.getByRole('button', { name: 'Connect Gmail, GitHub and more' }).click();
   await expect(page.getByRole('heading', { name: 'Apps', level: 1 })).toBeVisible();
 
   await page.getByRole('button', { name: 'Notion', exact: true }).click();
