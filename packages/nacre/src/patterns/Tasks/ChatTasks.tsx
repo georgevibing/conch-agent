@@ -56,6 +56,8 @@ export interface ChatTask {
   by?: ReactNode;
   /** Given, a going task can be stopped from the list. */
   onStop?: () => void;
+  /** Worth a look: you've looked, so it can go (offered only then). */
+  onChecked?: () => void;
   /** It finished and you haven't looked yet: it stands out, once, then settles. */
   fresh?: boolean;
 }
@@ -249,7 +251,8 @@ function TaskRow({
           <TaskStatusMark status={task.status} worth={task.worth} className={styles.icon} />
           <span className={styles.text}>
             <span className={styles.title} id={titleId}>
-              {link.props.children}
+              {/* Its own box, so a long title ends in an ellipsis instead of being cut. */}
+              <span className={styles.titleText}>{link.props.children}</span>
               {task.fresh && <span className="nc-visually-hidden"> (new)</span>}
             </span>
             <span className={styles.meta} data-status={task.status} data-look={look}>
@@ -301,6 +304,19 @@ function TaskRow({
             onClick={task.onStop}
           >
             <X />
+          </IconButton>
+        </span>
+      )}
+      {look === 'check' && task.onChecked && (
+        <span className={styles.checked}>
+          <IconButton
+            size="sm"
+            label="Mark checked"
+            tooltip={false}
+            aria-describedby={titleId}
+            onClick={task.onChecked}
+          >
+            <Check />
           </IconButton>
         </span>
       )}

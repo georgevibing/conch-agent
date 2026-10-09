@@ -6,7 +6,7 @@ import { create } from 'zustand';
 
 import { withCode } from './LiveTaskCard';
 import { TASK_PARAM, taskPath, type SheetState } from './open';
-import { going, useStopTask, useTasks } from './queries';
+import { going, useRemoveTask, useStopTask, useTasks } from './queries';
 import { isTaskFresh, useKnownConversations } from './seen';
 
 /** Finished tasks you've seen stay under their chat (folded, "Earlier") this long. */
@@ -113,6 +113,7 @@ export function useChatTaskTree({
   onNavigate?: () => void;
 }): { disclosure?: ReactNode; below?: ReactNode } {
   const stop = useStopTask();
+  const remove = useRemoveTask();
   const listId = useId();
   const location = useLocation();
   const sheet = new URLSearchParams(location.search).get(TASK_PARAM);
@@ -161,6 +162,8 @@ export function useChatTaskTree({
     by: task.by,
     fresh: tasks.fresh.has(task.id),
     onStop: () => stop.mutate(task.id),
+    // Looked at: the row goes, and so does Health's ask to check it.
+    onChecked: () => remove.mutate(task.id),
   });
   const items = quiet ? [] : now.map(row);
   return {

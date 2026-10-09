@@ -33,17 +33,22 @@ export function tasksCheck(
     title: 'Tasks',
     async run({ repair }) {
       const items: DoctorItem[] = [];
-      // Cards whose chat was deleted have nowhere to be seen or removed: not
-      // the person's to check. Repair puts them away (receipts stay).
-      const orphans = (await tasks.orphans?.().catch(() => [])) ?? [];
-      const orphaned = new Set(orphans.map((t) => t.id));
-      if (orphans.length && repair) {
+      /** Removes their cards (receipts stay); how many went. */
+      const putAway = async (list: Task[]) => {
         let cleared = 0;
-        for (const task of orphans)
+        for (const task of list)
           await tasks.remove(task.id).then(
             () => cleared++,
             () => undefined,
           );
+        return cleared;
+      };
+      // Cards whose chat was deleted have nowhere to be seen or removed: not
+      // the person's to check. Repair puts them away.
+      const orphans = (await tasks.orphans?.().catch(() => [])) ?? [];
+      const orphaned = new Set(orphans.map((t) => t.id));
+      if (orphans.length && repair) {
+        const cleared = await putAway(orphans);
         if (cleared)
           items.push({
             id: 'tasks:orphaned',
@@ -92,8 +97,18 @@ export function tasksCheck(
               : `${waiting.length} tasks are waiting for your OK.`,
           action: open(waiting.length === 1 ? 'Open it' : 'Show them', waiting),
         });
-      // Checking one is the person's to do; removing its card once they have clears it here.
-      if (uncertain.length)
+      // Checked on its row or card, or all at once by Repair everything: pressing
+      // it is saying you've looked, so their cards go (receipts stay).
+      const checked = repair && uncertain.length ? await putAway(uncertain) : 0;
+      if (checked)
+        items.push({
+          id: 'tasks:checked',
+          group: GROUP,
+          title: 'Tasks to check',
+          state: 'fixed',
+          message: checked === 1 ? 'Marked 1 task checked.' : `Marked ${checked} tasks checked.`,
+        });
+      if (uncertain.length > checked)
         items.push({
           id: 'tasks:unverified',
           group: GROUP,
@@ -103,6 +118,8 @@ export function tasksCheck(
             uncertain.length === 1
               ? `“${uncertain[0]?.title}” couldn’t confirm what it did. Look, then mark it checked.`
               : `${uncertain.length} tasks couldn’t confirm what they did. Look, then mark each checked.`,
+          // Only on a look: after a repair, what's left is what it couldn't put away.
+          ...(!repair && { repairable: true }),
           action: open(uncertain.length === 1 ? 'Review it' : 'Review tasks', uncertain),
         });
       if (!items.some((item) => item.state !== 'fixed')) {

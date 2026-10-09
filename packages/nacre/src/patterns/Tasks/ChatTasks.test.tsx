@@ -164,6 +164,28 @@ describe('ChatTasks', () => {
     expect(onStop).toHaveBeenCalledTimes(1);
   });
 
+  it('marks a row worth a look checked from the list, and only that one', async () => {
+    const user = userEvent.setup();
+    const onChecked = vi.fn();
+    const items: ChatTask[] = [
+      {
+        id: 'w',
+        link: <a href="#w">Fix stalled tool queues and browser cancellation in every tab</a>,
+        status: 'unverified',
+        worth: 'Couldn’t confirm one of its actions worked.',
+        onChecked,
+      },
+      { id: 'd', link: <a href="#d">Read the README</a>, status: 'done', onChecked: vi.fn() },
+    ];
+    renderNacre(<Controlled items={items} initial />);
+    const checked = screen.getAllByRole('button', { name: 'Mark checked' });
+    expect(checked).toHaveLength(1);
+    // It says which task it's for.
+    expect(checked[0]).toHaveAccessibleDescription(/Fix stalled tool queues/);
+    await user.click(checked[0] as HTMLElement);
+    expect(onChecked).toHaveBeenCalledTimes(1);
+  });
+
   it('works from the keyboard: the chat, then its badge', async () => {
     const user = userEvent.setup();
     renderNacre(<Controlled items={tasks()} />);

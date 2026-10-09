@@ -223,7 +223,8 @@
   }
 
   /* Room for Stop at the end, while it can be stopped. */
-  .row:has(.stop) .link {
+  .row:has(.stop) .link,
+  .row:has(.checked) .link {
     padding-inline-end: calc(var(--nc-control-sm) + var(--nc-space-2));
   }
 
@@ -338,6 +339,12 @@
     white-space: nowrap;
   }
 
+  .titleText {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .meta {
     display: flex;
     min-inline-size: 0;
@@ -382,6 +389,14 @@
 
   .meta[data-status='running'] .doing {
     animation: nc-fade-in var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  /* Checked: always there, the one thing to do about a row worth a look. */
+  .checked {
+    position: absolute;
+    inset-inline-end: var(--nc-space-1);
+    display: inline-flex;
+    color: var(--nc-text-subtle);
   }
 
   /* Stop: under the pointer and on focus; always there on touch. */

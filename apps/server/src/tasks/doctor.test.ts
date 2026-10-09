@@ -41,6 +41,8 @@ describe('tasks in Repair everything', () => {
       state: 'warning',
       message: '“Send report a” couldn’t confirm what it did. Look, then mark it checked.',
       action: { kind: 'open', label: 'Review it', place: 'tasks', focus: 'c_a' },
+      // Repair everything marks it checked.
+      repairable: true,
     });
     const [many] = await check([unsure('a'), unsure('b'), unsure('c'), unsure('d')]);
     expect(many).toMatchObject({
@@ -71,14 +73,23 @@ describe('tasks in Repair everything', () => {
     expect(removed).toEqual([]);
 
     const repaired = await tasksCheck(service).run({ repair: true, signal });
-    expect(removed).toEqual(['b']);
+    // Repair puts away the orphan, and marks what's worth a look checked: pressing it says you've looked.
+    expect(removed).toEqual(['b', 'a']);
     expect(repaired).toEqual([
       expect.objectContaining({
         id: 'tasks:orphaned',
         state: 'fixed',
         message: 'Put away 1 finished task from a chat you deleted.',
       }),
-      expect.objectContaining({ id: 'tasks:unverified', state: 'warning' }),
+      expect.objectContaining({
+        id: 'tasks:checked',
+        state: 'fixed',
+        message: 'Marked 1 task checked.',
+      }),
+      expect.objectContaining({ id: 'tasks', state: 'ok' }),
+    ]);
+    expect(await tasksCheck(service).run({ repair: false, signal })).toEqual([
+      expect.objectContaining({ id: 'tasks', state: 'ok' }),
     ]);
   });
 
