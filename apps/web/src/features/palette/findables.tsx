@@ -1,4 +1,5 @@
 import {
+  foldText,
   fuzzyFilter,
   type FuzzyMatch,
   canUseApps,
@@ -537,10 +538,12 @@ const settingsPlaces: {
 ];
 
 /**
- * Rank by name, forgiving typos; failing that, every word typed must start a
- * word of the keywords (an id, a provider, a description). Loose subsequence
- * matching over long keyword strings finds nonsense ("meet" in "remember
- * forget"), so keywords only count by whole-word prefix.
+ * Rank by name, forgiving typos; then, by whole-word prefix, the keywords (an
+ * id, a provider, a description); then the names that only matched loosely.
+ * A word of the keywords beats a name that merely has its letters in order
+ * ("ssh" is Where work runs, not Shimmer). Loose subsequence matching over long
+ * keyword strings finds nonsense ("meet" in "remember forget"), so keywords
+ * only count by whole-word prefix.
  */
 function find<T>(
   items: readonly T[],
@@ -549,20 +552,24 @@ function find<T>(
   keywords: (item: T) => string,
   limit: number,
 ): { item: T; match: FuzzyMatch }[] {
-  const named = fuzzyFilter(items, query, label, limit);
-  if (named.length >= limit) return named;
-  const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const named = fuzzyFilter(items, query, label, items.length);
+  const tokens = foldText(query).split(/\s+/).filter(Boolean);
+  // A name that has every word typed in it, not just its letters somewhere.
+  const close = named.filter((n) => {
+    const name = foldText(label(n.item));
+    return tokens.every((token) => name.includes(token));
+  });
+  if (close.length >= limit) return close.slice(0, limit);
+  const loose = named.filter((n) => !close.includes(n));
   const others = items
-    .filter((item) => !named.some((n) => n.item === item))
+    .filter((item) => !close.some((n) => n.item === item))
     .filter((item) => {
-      const words = keywords(item)
-        .toLowerCase()
-        .split(/[^\p{L}\p{N}]+/u);
+      const words = foldText(keywords(item)).split(/[^\p{L}\p{N}]+/u);
       return tokens.every((token) => words.some((word) => word.startsWith(token)));
     })
-    .slice(0, limit - named.length)
-    .map((item) => ({ item, match: { score: 0, ranges: [] } }));
-  return [...named, ...others];
+    .map((item) => loose.find((n) => n.item === item) ?? { item, match: { score: 0, ranges: [] } });
+  const rest = loose.filter((n) => !others.includes(n));
+  return [...close, ...others, ...rest].slice(0, limit);
 }
 
 /**
