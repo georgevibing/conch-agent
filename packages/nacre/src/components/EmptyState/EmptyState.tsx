@@ -14,8 +14,8 @@ export interface EmptyStateProps extends Omit<ComponentProps<'div'>, 'title'> {
   /** Primary / secondary actions. */
   actions?: ReactNode;
   size?: 'sm' | 'md' | 'lg';
-  /** Heading level for the title so it fits the page outline. */
-  headingLevel?: 2 | 3 | 4;
+  /** Heading level for the title so it fits the page outline (deeper inside a section). */
+  headingLevel?: 2 | 3 | 4 | 5 | 6;
 }
 
 /** A calm, editorial moment for "nothing here yet" and first-run screens. */

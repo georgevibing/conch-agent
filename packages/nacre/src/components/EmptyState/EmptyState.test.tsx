@@ -21,6 +21,11 @@ describe('EmptyState', () => {
     await expectAccessible(container);
   });
 
+  it('sits deeper in the outline inside a section of a section', () => {
+    renderNacre(<EmptyState headingLevel={5} title="Nothing paired yet" />);
+    expect(screen.getByRole('heading', { level: 5, name: 'Nothing paired yet' })).toBeVisible();
+  });
+
   it('prefers media over icon', () => {
     renderNacre(<EmptyState title="x" icon={<span>icon</span>} media={<span>media</span>} />);
     expect(screen.getByText('media')).toBeInTheDocument();
