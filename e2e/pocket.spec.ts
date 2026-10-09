@@ -160,12 +160,14 @@ test('notifications open as they were saved: on, with nothing moving into place'
   );
   expect(moving).toBe(0);
   await expect(master).not.toHaveAttribute('data-moving');
-  const told = card.getByRole('group', { name: 'Tell me when' });
-  await expect(told).toBeVisible();
-  await expect(told.getByRole('switch', { name: 'It needs you' })).toBeChecked();
-  await expect(told.getByRole('switch', { name: 'An answer is ready' })).not.toBeChecked();
   await expect(card.getByRole('switch', { name: 'Show what it’s about' })).toBeChecked();
   await expect(card.getByRole('button', { name: 'Send a test' })).toBeVisible();
+  // What it's told about is a page of its own, one row away.
+  await card.getByRole('button', { name: /Topics/ }).click();
+  await expect(page).toHaveURL(/\/settings\/notifications\/topics$/);
+  const told = page.getByRole('group', { name: 'Tell me when' });
+  await expect(told.getByRole('switch', { name: 'It needs you' })).toBeChecked();
+  await expect(told.getByRole('switch', { name: 'An answer is ready' })).not.toBeChecked();
 });
 
 test('tapping the message box on a phone doesn’t zoom the page', async ({ browser }, info) => {
