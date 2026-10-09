@@ -48,7 +48,8 @@ procedure.
 
 `.github/workflows/release.yml` runs on every push to `main`. Its jobs:
 
-1. **plan** looks for a merged pull request labelled `autorelease: pending`.
+1. **plan** looks for a merged pull request labelled `autorelease: pending`,
+   through GraphQL as release-please does (search lags a merge).
    release-please labels its pull request so, and swaps the label for
    `autorelease: tagged` once the release is made. It reads the version from
    `.release-please-manifest.json` at the merge, and checks it against the strict
@@ -57,13 +58,17 @@ procedure.
    only `main` may use and which alone holds `RELEASE_SIGNING_KEY`.
    `pnpm release ci tag` (`release/tag.ts`) makes the annotated tag on the merge
    with `git tag -s` and `gpg.format=ssh`. Its message is the notes from that
-   commit's `CHANGELOG.md`. It then checks the tag with `verifyTag`, against the
-   list at that commit, exactly as an install would. A tag that wouldn't pass is
-   deleted before anything is pushed. A tag already there, from a run that
+   commit's `CHANGELOG.md`. It then checks the tag with `verifyTag` twice. First
+   against the list in the newest earlier release, which is what installs
+   already carry. Then against the list at this commit, which the next release
+   is checked against. A tag that wouldn't pass either is deleted before anything
+   is pushed. A tag already there, from a run that
    stopped, is accepted only if it checks out and is on this commit.
 3. **release-please** runs on every push. After a tag, it makes that tag's GitHub
    Release as a **draft** (`draft: true`), flips the label, and opens the next
-   release pull request.
+   release pull request. In any other run it's told `skip-github-release`. Only a
+   run that signed the tag may make a release, so release-please never makes one,
+   on a tag of its own, for a merge `plan` didn't see.
 4. **notes** runs whenever release-please opened or updated its pull request.
    `pnpm release ci notes` (`release/pr.ts`) writes Conch's notes for the
    pull request's version, from the commits since the last release its channel
@@ -71,8 +76,12 @@ procedure.
    (`polish.ts`, unchanged). It writes them into `CHANGELOG.md`, on top of
    `main`'s, in place of release-please's changelog. It also rewrites the
    description in the shape release-please reads back: header, `---`, a
-   `## [version](compare) (date)` section, `---`, footer. It takes out a one-off
-   `release-as` and release-please's `release-notes.md` overflow file.
+   `## [version](compare) (date)` section, `---`, footer. It takes out a
+   `release-as` written in the configuration, and release-please's
+   `release-notes.md` overflow file. While `release/allowed_signers` has no key,
+   the description says **Not ready to merge** above the first `---`, where
+   release-please reads nothing, and the job fails. It does nothing once the pull
+   request is no longer open.
 5. **desktop** calls `desktop.yml`, now a reusable workflow (`$/` reference). It
    builds every platform as before and attaches the installers, the update feeds,
    `SHA256SUMS` and an SPDX SBOM (Syft, from the source and lockfile) to the draft.
@@ -82,13 +91,16 @@ procedure.
    and how to check a download, and, until certificates exist, a line saying the
    apps aren't code-signed. It refuses to publish a draft missing a file the page
    promises. Then it publishes, as a pre-release for alpha and beta, as latest for
-   stable, and dispatches the website workflow, since a release published with
-   GitHub's own token starts no workflow by itself.
+   stable. A last job dispatches the website workflow, since a release published
+   with GitHub's own token starts no workflow by itself.
 
 Drafting first means a published release never lacks its files, and allows release
 immutability (once published, nothing changes). The concurrency group `release`
-runs one at a time and never cancels. A run that stopped is finished by
-`workflow_dispatch` with the version.
+runs one at a time and never cancels a running run. GitHub keeps only the newest
+waiting one, which is harmless for pushes: the next push's `plan` finds the label.
+A run that stopped is finished by `workflow_dispatch` with the version, started
+when nothing else runs. It skips what's done: everything but the website, for a
+release already published.
 
 ### Channels
 
@@ -101,9 +113,13 @@ runs one at a time and never cancels. A run that stopped is finished by
 - `bump-minor-pre-major`: before 1.0, a breaking change is a new minor;
 - `initial-version` is where the first release starts (`0.1.0-alpha.1`).
 
-The only step it can't take is from alphas to betas of the same version. For that
-`pnpm release channel beta` sets a one-off `release-as`, which the release pull
-request takes out (`release/channel.ts`). Betas back to alphas of the same version
+A commit that only changes the configuration is housekeeping, and release-please
+opens no pull request for housekeeping alone. Nor can it count from alphas to
+betas of the same version. So `pnpm release channel` commits the change, with a
+`Release-As: <version>` footer when the change alone is the next release:
+promoting pre-releases, or alphas becoming betas (`release/channel.ts`).
+release-please takes the newest such footer since the last release, so it acts
+once. `pnpm release as` is the footer alone, on an empty commit. Betas back to alphas of the same version
 are refused, because installs never go back a version. Tags stay `v` plus SemVer
 with `-alpha.N` or `-beta.N`, so `release/semver.ts` and every install read them
 as before. release-please computes the next version now, so `nextVersion` is gone.
@@ -148,13 +164,14 @@ maintainer prefers their own name.
 
 What changes from ADR 0051's table is where the key lives.
 
-| Who                                                   | Could try                  | What holds                                                                                                                                                                                         |
-| ----------------------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A pull request's workflow                             | read `RELEASE_SIGNING_KEY` | It's an environment secret, and only `main` may deploy to `release`. Workflows from forks get no secrets.                                                                                          |
-| A commit that lands on `main`                         | sign its own release       | Only by being merged as a release pull request, which a maintainer merges. Branch rules require CI on `main` (docs/REPOSITORY-SETTINGS.md).                                                        |
-| A compromised dependency or action                    | take the key from the job  | Actions are pinned to commits. The key is in one step's environment only, after an install with no scripts and no restored cache. The tag job runs no third-party action after checkout but setup. |
-| GitHub, or someone with the repository's admin rights | sign a release             | They can, as they could reach any CI secret. The key's line in `allowed_signers` says it's CI's. A maintainer's own key can sign instead (ADR 0051), at the cost of the laptop again.              |
-| Moving or deleting a published tag                    | swap what a version is     | The tag ruleset restricts updates and deletions. Installs read the tag object and its name (ADR 0051), and immutable releases keep the files.                                                      |
+| Who                                                   | Could try                      | What holds                                                                                                                                                                                         |
+| ----------------------------------------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A pull request's workflow                             | read `RELEASE_SIGNING_KEY`     | It's an environment secret, and only `main` may deploy to `release`. Workflows from forks get no secrets.                                                                                          |
+| A commit that lands on `main`                         | sign its own release           | Only by being merged as a release pull request, which a maintainer merges. Branch rules require CI on `main` (docs/REPOSITORY-SETTINGS.md).                                                        |
+| A compromised dependency or action                    | take the key from the job      | Actions are pinned to commits. The key is in one step's environment only, after an install with no scripts and no restored cache. The tag job runs no third-party action after checkout but setup. |
+| GitHub, or someone with the repository's admin rights | sign a release                 | They can, as they could reach any CI secret. The key's line in `allowed_signers` says it's CI's. A maintainer's own key can sign instead (ADR 0051), at the cost of the laptop again.              |
+| A key changed too early, or by mistake                | ship a release installs refuse | The tag job checks against the newest earlier release's list too, and stops. `pnpm release key` won't hand GitHub a key until a release trusts it.                                                 |
+| Moving or deleting a published tag                    | swap what a version is         | The tag ruleset restricts updates and deletions. Installs read the tag object and its name (ADR 0051), and immutable releases keep the files.                                                      |
 
 ## Consequences
 

@@ -68,20 +68,23 @@ key they already trust.
 
 ## Alphas, betas and stable releases
 
-`release-please-config.json` says which come next, and `pnpm release channel`
-changes it:
+`release-please-config.json` says which come next. `pnpm release channel`
+changes it, in a commit of its own:
 
 | Command                       | The releases after it                                                                               |
 | ----------------------------- | --------------------------------------------------------------------------------------------------- |
 | `pnpm release channel alpha`  | `0.1.0-alpha.1`, `-alpha.2`… A new feature after a stable release starts the next version's alphas. |
-| `pnpm release channel beta`   | From alphas, `0.1.0-beta.1` next (a one-off `release-as`), then `-beta.2`…                          |
+| `pnpm release channel beta`   | From alphas, `0.1.0-beta.1` next, then `-beta.2`…                                                   |
 | `pnpm release channel stable` | From alphas or betas, their version: `0.1.0-beta.3` becomes `0.1.0`. Then `0.1.1`, `0.2.0`…         |
 | `pnpm release as 1.0.0`       | Exactly that version, once.                                                                         |
 
-Each edits `release-please-config.json`. Commit it and push it: the release pull
-request follows. A one-off `release-as` is taken out again in the release pull
-request it made, so it's used once. Going from betas back to alphas of the same
-version is refused: installs never go back a version.
+Each makes a commit; push it, and the release pull request follows. A commit
+that only changes the configuration is housekeeping, which opens no release pull
+request by itself. So when the change alone is the next release (promoting betas
+to stable, alphas becoming betas, or `as`), the commit says so in a
+`Release-As: 0.1.0` footer. release-please releases exactly that version next,
+and only once: every release after it is past that commit. Going from betas back
+to alphas of the same version is refused: installs never go back a version.
 
 People choose their channel in Settings → Health → Updates (ADR 0051 §
 Channels). Stable is the default and only takes stable releases.
@@ -105,15 +108,30 @@ again.
 
 ## If something goes wrong
 
-- **A step failed after the tag was made.** Run **Actions → Release → Run
-  workflow** with the version (`0.4.0`). It checks the tag that's there, and
-  carries on: the draft, the apps, publishing.
-- **A desktop build failed.** Fix it on `main`, then run the same as above. The
-  draft isn't published until every file it promises is there.
-- **The tag wasn't made** ("isn't in release/allowed_signers", "isn't set"). The
-  release key and the list don't agree. Run `pnpm release key`, commit the list,
-  then run **Release** by hand. The merged pull request is still waiting, labelled
-  `autorelease: pending`.
+Start a run by hand only when no Release run is in progress: a newer push to
+`main` replaces a run that's still waiting its turn.
+
+- **A step failed after the tag was made** (the draft, the apps, publishing, the
+  website). Run **Actions → Release → Run workflow** with the version (`0.4.0`).
+  It checks the tag that's there and carries on from where it stopped. A release
+  already published only gets the website again.
+- **A desktop build failed.** If the workflow was at fault, fix it on `main` and
+  run the same as above: the apps are built from the tag with the workflow from
+  `main`. If the app's code was, that version can't be fixed. Fix it on `main`,
+  and let the next release carry it. Either way, the draft isn't published until
+  every file it promises is there.
+- **The release pull request says it isn't ready to merge.** `release/allowed_signers`
+  has no key. Run `pnpm release key` and push the list; the pull request updates.
+- **The tag wasn't made** ("isn't set", "isn't trusted by…"). The secret
+  `RELEASE_SIGNING_KEY` isn't a key that both the list at that commit and the
+  release before it trust. The merged pull request waits, labelled
+  `autorelease: pending`, and until it's released no new release pull request
+  opens. Either:
+  - give the secret the right key (`gh secret set RELEASE_SIGNING_KEY --env
+release < key`), then run **Release** by hand with no version; or
+  - skip that version: fix the list or the key on `main`, then on the merged pull
+    request swap the `autorelease: pending` label for `autorelease: tagged`.
+    release-please then proposes the version after it.
 - **Two merged release pull requests wait.** Label every one but the newest
   `autorelease: tagged`, then run **Release** by hand.
 
@@ -123,8 +141,13 @@ Installs trust the list in the version they already have. So:
 
 1. Add the new key's line to `release/allowed_signers` in a commit.
 2. Release once more, still **signed with the old key**.
-3. Then give GitHub the new private key (`gh secret set RELEASE_SIGNING_KEY --env
-release < newkey`). Remove the old line in a later release if you like.
+3. Then give GitHub the new private key: `pnpm release key` on the computer that
+   has it. It refuses until a release trusts the key. Remove the old line in a
+   later release if you like.
+
+The tag job checks each new tag against the list in the release before it, as
+installs do, so a key handed over too early stops the release instead of
+shipping one nobody takes.
 
 If the old key is lost, installs can't take a new one from a release: they'd have
 to install again.
