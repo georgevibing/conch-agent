@@ -643,7 +643,7 @@ export function registerSecurity(app: FastifyInstance, gate: Gatekeeper): void {
         message:
           request.approval?.state === 'rejected'
             ? 'Using this key from this device was turned down.'
-            : `This key needs your approval to be used from this device. Approve it in Settings → Devices on a device you’ve let in, or on the computer running Conch: ${cliName()} devices approve ${code}`,
+            : `This key needs your approval to be used from this device. Approve it in Settings → Access on a device you’ve let in, or on the computer running Conch: ${cliName()} devices approve ${code}`,
       });
     }
     request.access = resolved;

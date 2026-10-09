@@ -55,13 +55,13 @@ function gateway() {
 function key() {
   if (!client || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(client))
     throw new Plain(
-      'This app’s settings don’t name which app it is. Connect it again from Conch: Settings → Other apps.',
+      'This app’s settings don’t name which app it is. Connect it again from Conch: Settings → Access → Other apps.',
     );
   try {
     return readFileSync(join(home, 'mcp', 'keys', `${client}.key`), 'utf8').trim();
   } catch {
     throw new Plain(
-      'This app isn’t paired with Conch any more. Connect it again from Conch: Settings → Other apps.',
+      'This app isn’t paired with Conch any more. Connect it again from Conch: Settings → Access → Other apps.',
     );
   }
 }
@@ -152,7 +152,7 @@ async function carry(message) {
       return;
     }
     throw new Plain(
-      'Conch didn’t accept this app. Connect it again from Conch: Settings → Other apps.',
+      'Conch didn’t accept this app. Connect it again from Conch: Settings → Access → Other apps.',
     );
   } catch (error) {
     if (controller.signal.aborted) return;
