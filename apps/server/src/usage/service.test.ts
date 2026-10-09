@@ -57,6 +57,23 @@ describe('UsageService', () => {
 
   const make = (engine: Engine) => new UsageService({ home, engine: () => engine, now: () => now });
 
+  it('says what it knows of a limit without reading the provider (ADR 0126)', async () => {
+    const { engine } = fakeEngine(plan(100));
+    const usage = make(engine);
+    // Asked before every turn: never a read, so a turn's spend isn't frozen in a snapshot first.
+    expect(usage.known('claude-code')).toBeUndefined();
+    expect(engine.usage).not.toHaveBeenCalled();
+    await usage.snapshot();
+    expect(usage.known('claude-code')?.blocked).toEqual({
+      until: NOW + 2 * HOUR,
+      windowId: 'session',
+    });
+    // Past its reset, the block is over even before the next read.
+    now = NOW + 3 * HOUR;
+    expect(usage.known('claude-code')?.blocked).toBeUndefined();
+    expect(engine.usage).toHaveBeenCalledOnce();
+  });
+
   it('reports plan windows and broadcasts every change', async () => {
     const { engine } = fakeEngine(plan(38));
     const service = make(engine);
