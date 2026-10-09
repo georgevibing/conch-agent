@@ -13,6 +13,7 @@ New chats start in **Auto**. Change it from the composer, or with `/mode`; to st
 **Auto** gets on with the work and stops only for something serious. It goes ahead with edits, commands, installs, pushes and your apps. It stops to ask, saying why, before it would:
 
 - run code downloaded from the internet, or install straight from an address;
+- install a package whose name is one letter off a well-known one (`reqeusts` for `requests`), a classic trap;
 - read your keys or saved sign-ins, or send something to an address made for catching data;
 - delete files outside the work folder, or force-push over a branch others share;
 - run something as administrator, or turn off a safety check of your computer;
@@ -21,11 +22,15 @@ New chats start in **Auto**. Change it from the composer, or with `/mode`; to st
 - stop programs your computer runs on, restart it, or change its own system files;
 - delete a repository's history, or the data a container kept.
 
-These questions offer no **Always allow**. Everyday work never asks, outside the sealed box too: checking, pulling and fetching with git, installing what the project lists, building, testing, tidying the work folder. Spending money asks (a paid picture); your own plan, at no extra charge, doesn't.
+These questions offer no **Always allow**. Everyday work never asks, outside the sealed box too: checking, pulling and fetching with git, installing what the project lists or a well-known package (`fonttools`, `requests`, `zod`, `jq`) with pip, uv, npm, pnpm, brew or cargo, into a virtual environment, your user folder or the project, running Python, building, testing, rendering a PDF, tidying the work folder. Spending money asks (a paid picture); your own plan, at no extra charge, doesn't.
 
-Once the chat has [read something from outside](../security/signing-in.md#when-the-assistant-reads-something-untrusted), Auto still gets on with everyday work, and asks only before the ways something could leave: a push you didn't ask for, a new package, sending data or what a command printed, words to other people, giving someone access. An unusual command that could reach the internet or your sign-ins also gets a second look from a small model you already have; so does a change in an app you connected or added from someone else. The look can only add a question. Conch's own lists of models and the pictures it makes don't count as reading something from outside. With Claude Code, Auto is Conch's own: Claude Code asks, and Conch answers each question by the same rules as for every other provider.
+Once the chat has [read something from outside](../security/signing-in.md#when-the-assistant-reads-something-untrusted), Auto still gets on with everyday work. Reading something isn't a reason to ask about everything after it: Auto asks only before a step that is a real harm in itself, or that a page could have steered toward one. That means a push you didn't ask for, a package Conch doesn't know well or one from another registry, sending data or what a command printed, words to other people, and giving someone access. Asked to make a PDF, it installs `fonttools`, bootstraps pip in a virtual environment and runs Python without a word, after reading too.
 
-Reading issues, pull requests or CI logs with `gh` counts as reading something from outside, because anyone can write in them. A command's own output, like a build or a test run, doesn't.
+An unusual command that could reach the internet or your sign-ins also gets a second look from a small model you already have. So does a change in an app you connected or added from someone else. The look is given what you asked this turn. It asks only about a real harm, or a step that does nothing for your request and looks steered by what was read. It can only add a question. Conch's own lists of models and the pictures it makes don't count as reading something from outside. With Claude Code, Auto is Conch's own: Claude Code asks, and Conch answers each question by the same rules as for every other provider.
+
+Reading issues, pull requests or CI logs with `gh` counts as reading something from outside, because anyone can write in them. A command's own output, like a build or a test run, doesn't. Nor does fetching a language's own tools from where they're published, like pip's `get-pip.py` from bootstrap.pypa.io, or Python and Node from python.org and nodejs.org.
+
+**Always allow** on a question Auto asked after reading lifts that kind of step for the rest of the chat. Say it once to an unfamiliar package, and the next one installs without asking. A push, sending data or a look-alike package name still asks on its own terms.
 
 What still goes ahead after reading, in Auto:
 

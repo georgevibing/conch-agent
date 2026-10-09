@@ -85,6 +85,7 @@ import {
   assessRisk,
   breaksCircuit,
   riskAsks,
+  riskClass,
   riskWords,
   sendsMoreThanALookup,
   wantsSecondLook,
@@ -218,6 +219,9 @@ function autoAllows(mode: PermissionMode, toolName: string, explicit = false): b
  */
 const AUTO_AFTER_READING =
   /^(?:mcp__conch__)?(?:process_start|process_write|image_generate|task_control)$/;
+
+/** What Always allow on a second look's card lifts for the chat: second looks, not every command. */
+const LOOK_CLASS = 'risk:second-look';
 
 /** A question a host tool puts to the user, through the same prompt as any permission. */
 export interface AskRequest {
@@ -3067,15 +3071,20 @@ export class ConversationManager {
           said: this.#yourWords(live),
         });
         const command = typeof request.input.command === 'string' ? request.input.command : '';
-        let why = riskAsks(risk, true)
-          ? risk?.reason
-          : command
+        // A class the person already said Always allow to in this chat goes (ADR 0117,
+        // 2026-10-09), as for any command.
+        const flagged = risk && riskAsks(risk, true) && !live.waived.has(riskClass(risk));
+        let lift = flagged ? riskClass(risk) : undefined;
+        let why = flagged
+          ? risk.reason
+          : command && !live.waived.has(LOOK_CLASS)
             ? await secondLook(
                 command,
                 request.input.dangerouslyDisableSandbox === true,
                 this.#tainted(live),
               )
             : undefined;
+        if (why && !flagged && command) lift = LOOK_CLASS;
         // Someone else's app: judged by what this step sends and does (ADR 0118). When nothing
         // could judge it (no small model to look), its own question stands, as before.
         const step = request.appStep;
@@ -3098,14 +3107,16 @@ export class ConversationManager {
         if (judged) {
           this.deps.judged?.(
             why ? 'asked' : 'went_ahead',
-            why ? (riskAsks(risk, true) ? risk?.kind : 'second-look') : undefined,
+            why ? (flagged ? risk?.kind : 'second-look') : undefined,
           );
           if (!why) return 'allow';
           return askUser(
             {
               ...request,
               taint: `${request.taint.replace(/\s*So I’m checking.*$/, '')} So I’m checking before I ${why}.`,
-              remember: false,
+              // Asked about a class of step, Always allow lifts that class for the chat.
+              remember: Boolean(lift),
+              ...(lift && { waive: lift }),
             },
             abort.signal,
           );
@@ -3422,7 +3433,11 @@ export class ConversationManager {
       const key = `${unsealed ? 1 : 0}:${command}`;
       let look = looked.get(key);
       if (!look) {
-        look = lookAtCommand(command, read, this.deps.riskLook, { signal: abort.signal });
+        // Judged against what the person asked this turn, never against what was read.
+        look = lookAtCommand(command, read, this.deps.riskLook, {
+          signal: abort.signal,
+          asked: this.#yourWords(live).slice(-2).join('\n'),
+        });
         looked.set(key, look);
       }
       return look;
@@ -3631,6 +3646,8 @@ export class ConversationManager {
         access: described?.access,
         app: described?.integration,
       });
+      /** What Always allow on this card lifts: a class of step, when Auto asked about one. */
+      let lift: string | undefined;
       // Auto after reading (ADR 0100): the risk policy decides, not every way out. Routine
       // commands stay sealed, files changed anywhere can be put back, a short search is research.
       if (autoHere && !tainted.some((source) => source.kind === 'person')) {
@@ -3652,11 +3669,20 @@ export class ConversationManager {
           (/(?:WebFetch|web_fetch)$/.test(request.toolName) &&
             typeof request.input.url === 'string' &&
             !carriesData(request.input.url));
-        const flagged = riskAsks(risk, true) ? risk?.reason : undefined;
+        // A class the person already said Always allow to in this chat goes (ADR 0117,
+        // 2026-10-09): every unknown install, this kind of push. What asks whatever was read
+        // never reaches here.
+        const asks = risk && riskAsks(risk, true) && !live.waived.has(riskClass(risk));
+        const flagged = asks ? risk.reason : undefined;
+        if (asks) lift = riskClass(risk);
         sink = flagged ?? (routine ? undefined : sink);
         // Nothing the rules know, but unusual and able to reach out: a small model looks too.
-        if (!sink && command && typeof request.input.command === 'string')
-          sink = await secondLook(request.input.command, unsealed, tainted);
+        if (!sink && command && typeof request.input.command === 'string') {
+          sink = live.waived.has(LOOK_CLASS)
+            ? undefined
+            : await secondLook(request.input.command, unsealed, tainted);
+          if (sink) lift = LOOK_CLASS;
+        }
         // A change in one of your connected apps (ADR 0118): judged by what it sends and does,
         // with a second look; the person's Allow for that tool is their answer. When nothing
         // could judge it, it asks as before.
@@ -3683,8 +3709,9 @@ export class ConversationManager {
         ? {
             reason: `${describeTaint(tainted)} So I’m checking before I ${sink}.`,
             sources: tainted,
-            // What it read can be waived; someone else talking to the assistant can't.
-            ...(tainted.every((source) => source.kind !== 'person') && { waive: readKey }),
+            // What it read can be waived; someone else talking to the assistant can't. Asked
+            // about a class of step in Auto, Always allow lifts that class, not every command.
+            ...(tainted.every((source) => source.kind !== 'person') && { waive: lift ?? readKey }),
           }
         : undefined;
     };

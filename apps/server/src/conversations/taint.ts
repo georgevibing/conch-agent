@@ -20,6 +20,7 @@ import { isAbsolute, relative, resolve } from 'node:path';
 
 import { isRunScript, type ConversationEvent, type TaintSource } from '@conch/protocol';
 
+import { fromTooling } from './packages';
 import { commandParts, withoutHeredocs, wordsOf } from './risk';
 
 /** Built-in tools that bring the outside in. */
@@ -74,11 +75,23 @@ const INTEGRATION = /^mcp__([a-z0-9_-]+?)__(.+)$/;
 const GH_READS =
   /^(?:issue\s+(?:view|list|status)|pr\s+(?:view|list|diff|status|checkout)|run\s+(?:view|watch)|api|search|release\s+(?:view|list|download)|gist\s+(?:view|clone)|repo\s+(?:view|clone))\b/;
 
+/**
+ * Every piece of a line that fetches, fetching only from the languages' own tooling hosts
+ * (`fromTooling`): pip's `get-pip.py` from bootstrap.pypa.io is its makers' code, not anyone's
+ * words, so bootstrapping doesn't mark the chat (ADR 0117, 2026-10-09).
+ */
+function onlyTooling(command: string): boolean {
+  const fetching = commandParts(command).filter((part) =>
+    DOWNLOADS.test(part.replace(NOT_DOWNLOADS, '$1 ')),
+  );
+  return fetching.length > 0 && fetching.every(fromTooling);
+}
+
 /** What a command line brings in from outside, by what it runs. */
 function commandTaint(command: string): TaintSource | undefined {
   const { text, runs } = withoutHeredocs(command);
   const line = [text, ...runs].join('\n');
-  if (DOWNLOADS.test(line.replace(NOT_DOWNLOADS, '$1 ')))
+  if (DOWNLOADS.test(line.replace(NOT_DOWNLOADS, '$1 ')) && !onlyTooling(command))
     return { kind: 'download', label: hostOf(line) ?? 'something downloaded' };
   for (const part of commandParts(command)) {
     const words = wordsOf(part);

