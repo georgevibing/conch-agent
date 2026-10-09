@@ -636,10 +636,14 @@ describe('Conch pausing a chat for its own update', () => {
     expect(paused).toBe(false);
     finishStep();
     expect(await pausing).toBe(1);
-    await new Promise((r) => setTimeout(r, 20));
+    // The next step reaches the pause in its own time (a model decides it after
+    // the first ends): wait until it's held there, never for a fixed moment.
+    await expect
+      .poll(async () => new ConversationStore(join(home, 'conversations')).get(convo.id), {
+        timeout: 5_000,
+      })
+      .toMatchObject({ pausedFor: 'update', pausedTools: ['t2'] });
     expect(secondGuarded).toBe(false);
-    const stored = await new ConversationStore(join(home, 'conversations')).get(convo.id);
-    expect(stored).toMatchObject({ pausedFor: 'update', pausedTools: ['t2'] });
     await before.drain();
 
     const engine = hangs();
