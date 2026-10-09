@@ -1,5 +1,5 @@
 import { Check, Plus, Sparkle, Sparkles, X } from 'lucide-react';
-import { useId, useRef, useState, type ReactNode } from 'react';
+import { useId, useRef, useState, type ReactNode, type Ref } from 'react';
 
 import { Avatar } from '../../components/Avatar';
 import { Button } from '../../components/Button';
@@ -69,6 +69,8 @@ export interface PortraitProps {
   guessKind?: (text: string) => string;
   /** Who's listening, by name. */
   assistant?: string;
+  /** The line to tell it something, to bring the focus to it. */
+  tellRef?: Ref<HTMLInputElement>;
   /** How many chips a group shows before “N more”. */
   limit?: number;
   className?: string;
@@ -105,6 +107,7 @@ export function Portrait({
   onTell,
   guessKind,
   assistant = 'Conch',
+  tellRef,
   limit = 8,
   className,
 }: PortraitProps) {
@@ -242,6 +245,7 @@ export function Portrait({
           guess={guessKind}
           onTell={onTell}
           assistant={assistant}
+          ref={tellRef}
           className={styles.tellFoot}
         />
       )}
