@@ -151,7 +151,7 @@ describe('Settings → Notifications', () => {
       'PATCH /api/push/subscriptions/ps_1': () =>
         status({ devices: [device({ prefs: { ...device().prefs, replies: false } })] }),
     });
-    renderApp(<NotificationsTab />);
+    const { where } = renderApp(<NotificationsTab />, { route: '/settings/notifications' });
     await user.click(await screen.findByRole('switch', { name: 'Allow notifications' }));
     await waitFor(() => expect(browser.subscribe).toHaveBeenCalled());
     expect(browser.subscribe.mock.calls[0]?.[0]).toMatchObject({ userVisibleOnly: true });
@@ -164,7 +164,11 @@ describe('Settings → Notifications', () => {
       expect(screen.getByRole('switch', { name: 'Allow notifications' })).toBeChecked(),
     );
 
-    // What it's told about opens beneath it, one switch each.
+    // What it's told about is a page of its own, one row away, one switch each.
+    const row = await screen.findByRole('button', { name: /Topics/ });
+    expect(row).toHaveTextContent('5 of 6');
+    await user.click(row);
+    expect(where()).toBe('/settings/notifications/topics');
     const told = await screen.findByRole('group', { name: 'Tell me when' });
     await user.click(within(told).getByRole('switch', { name: 'An answer is ready' }));
     await waitFor(() =>
@@ -176,19 +180,30 @@ describe('Settings → Notifications', () => {
     pushableBrowser({ permission: 'granted', subscribedWith: KEY });
     const saved = device({ prefs: { ...device().prefs, replies: false, previews: false } });
     mockFetch({ 'GET /api/push': () => status({ devices: [saved] }) });
-    const { container } = renderApp(<NotificationsTab />);
+    const { container } = renderApp(<NotificationsTab />, { route: '/settings/notifications' });
     const seen = watchSwitch(container, 'Allow notifications');
     const master = await screen.findByRole('switch', { name: 'Allow notifications' });
-    await waitFor(() => expect(screen.getByRole('group', { name: 'Tell me when' })).toBeVisible());
+    await waitFor(() => expect(screen.getByRole('button', { name: /Topics/ })).toBeVisible());
     seen.stop();
     // The first switch anyone saw was already on, and nothing moved it there.
     expect(seen.states).toEqual(['true']);
     expect(master).not.toHaveAttribute('data-moving');
-    const told = screen.getByRole('group', { name: 'Tell me when' });
-    expect(within(told).getByRole('switch', { name: 'It needs you' })).toBeChecked();
-    expect(within(told).getByRole('switch', { name: 'An answer is ready' })).not.toBeChecked();
+    expect(screen.getByRole('button', { name: /Topics/ })).toHaveTextContent('4 of 6');
     expect(screen.getByRole('switch', { name: 'Show what it’s about' })).not.toBeChecked();
     for (const sw of screen.getAllByRole('switch')) expect(sw).not.toHaveAttribute('data-moving');
+  });
+
+  it('opened at Topics by its address, the switches are there as they were saved', async () => {
+    pushableBrowser({ permission: 'granted', subscribedWith: KEY });
+    const saved = device({ prefs: { ...device().prefs, replies: false } });
+    mockFetch({ 'GET /api/push': () => status({ devices: [saved] }) });
+    renderApp(<NotificationsTab />, { route: '/settings/notifications/topics' });
+    const told = await screen.findByRole('group', { name: 'Tell me when' });
+    expect(within(told).getAllByRole('switch')).toHaveLength(6);
+    expect(within(told).getByRole('switch', { name: 'It needs you' })).toBeChecked();
+    expect(within(told).getByRole('switch', { name: 'An answer is ready' })).not.toBeChecked();
+    // The page itself; the switch for this device is a step back.
+    expect(screen.queryByRole('switch', { name: 'Allow notifications' })).toBeNull();
   });
 
   it('opens as it was saved: off, with nothing beneath it', async () => {

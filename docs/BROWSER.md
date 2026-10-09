@@ -158,8 +158,9 @@ count toward a page's execution limit.
 If a browser step stays stuck for two minutes of active work, Conch stops the step
 and closes that chat's tabs. An action may already have reached the site, so check
 what happened before repeating it. Conch does not repeat a timed-out action on its
-own. If the tabs cannot be closed, the browser stays blocked until **Repair** in
-Settings → Browser reconnects it. Other chats' tabs stay open.
+own. If the tabs cannot be closed, the browser stays blocked until **Repair**
+reconnects it: on Settings → Browser, or **Repair everything** in Settings → Health.
+Other chats' tabs stay open.
 
 The same caution applies after **Stop**, or if the browser closes after an action
 begins: check the page before repeating it. Conch keeps that result uncertain and
@@ -172,8 +173,10 @@ It restarts a browser that crashed and reopens your page. It clears a browser le
 behind by an earlier session, and declines cookie banners. What it fixed is listed
 with every other repair in Settings → Health, under _Fixed on its own_.
 
-If it ever can't, it says what happened in one sentence, with one button: **Repair**
-tries every fix in turn. On Linux, the browser sometimes needs system libraries that
+If it ever can't, Settings → Browser says what happened in one sentence, with one
+button: **Repair** tries every fix in turn. While the browser is healthy, that page
+says nothing about repairing: **Repair everything** in Settings → Health runs the
+same fixes with every other part's. On Linux, the browser sometimes needs system libraries that
 only an administrator can install; Conch then shows the one command to run.
 
 ## For developers

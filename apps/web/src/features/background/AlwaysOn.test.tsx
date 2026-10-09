@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useUi } from '../../app/ui';
 import { mockFetch, renderApp } from '../../test/harness';
+import { HealthTab } from '../health/HealthTab';
 import { AlwaysOnHint } from './AlwaysOnHint';
 import { AlwaysOnSection, sinceText } from './AlwaysOnSection';
 
@@ -124,6 +125,27 @@ describe('Always on', () => {
     renderApp(<AlwaysOnSection />);
     await waitFor(() => expect(screen.getByRole('switch')).toHaveFocus());
     expect(useUi.getState().settingsFocus).toBeUndefined();
+  });
+
+  it('is a page of its own inside Health, one row away, and ⌘K opens it on its switch', async () => {
+    const user = userEvent.setup();
+    mockFetch({ 'GET /api/background': () => status({ on: true }) });
+    const { where } = renderApp(<HealthTab />, { route: '/settings/health' });
+    const row = await screen.findByRole('button', { name: /Always on/ });
+    await waitFor(() => expect(row).toHaveTextContent('On'));
+    // The menu bar, logging out and quitting are on its page, not here.
+    expect(screen.queryByRole('button', { name: 'Quit Conch' })).toBeNull();
+    await user.click(row);
+    expect(where()).toBe('/settings/health/always-on');
+    expect(await screen.findByRole('button', { name: 'Quit Conch' })).toBeVisible();
+
+    useUi.getState().openSettings('health');
+    await waitFor(() => expect(where()).toBe('/settings/health'));
+    useUi.getState().openSettings('health', 'background');
+    await waitFor(() => expect(where()).toBe('/settings/health/always-on'));
+    await waitFor(() =>
+      expect(screen.getByRole('switch', { name: /Start Conch when I log in/ })).toHaveFocus(),
+    );
   });
 
   it('reads when it started like a clock today, and in days before', () => {

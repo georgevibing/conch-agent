@@ -47,4 +47,4 @@ Background [tasks](tasks.md) work the same way. Nobody is there to ask, so a tas
 - **Apps that drop reconnect.** If an app's connection drops partway, Conch opens it again. A lookup is simply asked again. A change is never repeated by itself, because Conch can't tell whether it already happened.
 - **Small models get the short version.** A model that reads little at once gets the same rules in a few lines, so there's room left for your chat.
 
-How long one message may run before it checks in with you is up to you, in **Settings → Usage**. See [your chats](chats.md).
+How long one message may run before it checks in with you is up to you, in **Settings → Usage → Limits**. See [your chats](chats.md).

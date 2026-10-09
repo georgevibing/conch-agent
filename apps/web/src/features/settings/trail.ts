@@ -5,6 +5,7 @@ import { useImportStatus } from '../import/api';
 import { useProviders } from '../providers/queries';
 import { SERVER_TILE } from '../providers/words';
 import { MEMORY_ALL, type SettingsTab } from './paths';
+import { subpageName } from './subpages';
 
 const COME_HOME_NAMES: Record<ImportSourceId, string> = { openclaw: 'OpenClaw', hermes: 'Hermes' };
 
@@ -26,6 +27,9 @@ export function usePageInside(tab: SettingsTab | null, item: string | undefined)
   const imports = useImportStatus(Boolean(from?.success));
   const { data: agents } = useAgents();
   if (!item) return undefined;
+  // Notifications › Topics, Usage › Limits, Health › Always on.
+  const page = subpageName(tab, item);
+  if (page) return page;
   if (tab === 'agents') return agents?.agents.find((a) => a.id === item)?.name;
   if (tab === 'memory') {
     if (item === MEMORY_ALL) return 'All memories';

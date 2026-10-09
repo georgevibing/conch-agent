@@ -12,6 +12,7 @@ import {
   type MovedTab,
   type SettingsTab,
 } from '../features/settings/paths';
+import { subpageFor } from '../features/settings/subpages';
 
 export type { SettingsTab };
 
@@ -274,17 +275,20 @@ export const useUi = create<UiState>((set) => ({
     const tab = moved?.tab;
     const focus = wanted ?? moved?.focus;
     // A provider's page, an agent's and every memory are places of their own; any other
-    // focus is brought into view.
+    // focus is brought into view — on the page inside its place, when it lives on one
+    // (Usage → Limits holds what routines may spend).
+    const page = subpageFor(tab, focus);
     const item =
-      (tab === 'providers' && focus !== FALLBACK_FOCUS) ||
+      page ??
+      ((tab === 'providers' && focus !== FALLBACK_FOCUS) ||
       (tab === 'agents' && Boolean(focus?.startsWith('ag_'))) ||
       (tab === 'memory' && (focus === MEMORY_ALL || Boolean(focus?.startsWith('from-'))))
         ? focus
-        : undefined;
+        : undefined);
     // Settings has places of its own, floating in on a phone: the chats' sidebar
     // steps out of the way rather than waiting underneath it.
     set({
-      settingsFocus: item ? undefined : focus,
+      settingsFocus: item && focus === item ? undefined : focus,
       paletteOpen: false,
       mobileSidebarOpen: false,
     });

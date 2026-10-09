@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { expectAccessible, renderNacre } from '../../test/render';
 import { AddToHomeScreen } from './AddToHomeScreen';
 import { NotifiedDevices } from './NotifiedDevices';
-import { NotifyThisDevice, type NotifyTopic } from './NotifyThisDevice';
+import { NotifyThisDevice, NotifyTopics, type NotifyTopic } from './NotifyThisDevice';
 
 const topics: NotifyTopic[] = [
   { id: 'approvals', label: 'It needs you', on: true },
@@ -75,6 +75,28 @@ describe('NotifyThisDevice', () => {
     ).not.toBeNull();
   });
 
+  it('with the topics on a page of their own, keeps one Topics row saying how many are on', async () => {
+    const user = userEvent.setup();
+    const onOpenTopics = vi.fn();
+    const { container } = renderNacre(
+      <NotifyThisDevice
+        state="on"
+        topics={topics}
+        previews
+        onChange={() => undefined}
+        onOpenTopics={onOpenTopics}
+      />,
+    );
+    expect(screen.queryByRole('group', { name: 'Tell me when' })).toBeNull();
+    const row = screen.getByRole('button', { name: /Topics/ });
+    expect(row).toHaveTextContent('1 of 2');
+    // The previews stay with the switch, on the place itself.
+    expect(screen.getByRole('switch', { name: 'Show what it’s about' })).toBeInTheDocument();
+    await user.click(row);
+    expect(onOpenTopics).toHaveBeenCalled();
+    await expectAccessible(container);
+  });
+
   it('has no switch when the device needs something first', async () => {
     const { container, rerender } = renderNacre(
       <NotifyThisDevice state="install" onChange={() => undefined}>
@@ -89,6 +111,21 @@ describe('NotifyThisDevice', () => {
     rerender(<NotifyThisDevice state="blocked" onChange={() => undefined} />);
     expect(screen.getByRole('region', { name: 'Notifications are blocked' })).toBeInTheDocument();
     expect(screen.queryByRole('switch')).toBeNull();
+  });
+});
+
+describe('NotifyTopics', () => {
+  it('is the list of what it’s told about, one switch apiece', async () => {
+    const user = userEvent.setup();
+    const onTopicChange = vi.fn();
+    const { container } = renderNacre(
+      <NotifyTopics topics={topics} onTopicChange={onTopicChange} />,
+    );
+    const group = screen.getByRole('group', { name: 'Tell me when' });
+    expect(within(group).getAllByRole('switch')).toHaveLength(2);
+    await user.click(within(group).getByRole('switch', { name: 'An answer is ready' }));
+    expect(onTopicChange).toHaveBeenCalledWith('replies', true);
+    await expectAccessible(container);
   });
 });
 

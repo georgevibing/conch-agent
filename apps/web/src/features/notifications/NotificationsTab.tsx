@@ -4,6 +4,8 @@ import {
   Button,
   Callout,
   NotifyThisDevice,
+  NotifyTopics,
+  SettingsSubpages,
   Skeleton,
   Stack,
   Text,
@@ -17,6 +19,7 @@ import { useMemo, useState } from 'react';
 import { ApiError } from '../../api/client';
 import { useUi } from '../../app/ui';
 import { Section } from '../settings/Section';
+import { useSubpage } from '../settings/subpages';
 import styles from './Notifications.module.css';
 import { pushApi, pushKeys } from './api';
 import {
@@ -63,11 +66,13 @@ function stateOf(status: PushStatus, subscribed: boolean): NotifyState {
 }
 
 /**
- * Settings → Notifications (ADR 0027): this device, one switch and what it's
- * told about. Which other devices get them, and stopping one, is in
- * Settings → Devices, beside each device.
+ * Settings → Notifications (ADR 0027): this device, one switch, whether they
+ * say what they're about, and a row to what it's told about — Topics, a page
+ * of its own (`/settings/notifications/topics`). Which other devices get
+ * them, and stopping one, is in Settings → Devices, beside each device.
  */
 export function NotificationsTab() {
+  const { page, open } = useSubpage('notifications');
   const push = usePush();
   const status = push.data;
   // Asking the browser takes a moment: hold the card until both have answered,
@@ -78,33 +83,103 @@ export function NotificationsTab() {
     enabled: Boolean(status) && asks,
   });
   const known = status && (!asks || here.data !== undefined);
+  const subscribed = here.data ?? false;
+  if (page === 'topics')
+    return (
+      <SettingsSubpages page={page}>
+        <Section title="Topics" description="What this device tells you about.">
+          {known ? (
+            <Topics status={status} subscribed={subscribed} />
+          ) : (
+            <Skeleton shape="block" height="14rem" />
+          )}
+        </Section>
+      </SettingsSubpages>
+    );
   return (
-    <Stack gap={8}>
-      <Section title="Notifications">
-        {known ? (
-          <ThisDevice status={status} subscribed={here.data ?? false} />
-        ) : push.isError ? (
-          <Callout
-            tone="danger"
-            title="Couldn’t load notifications"
-            action={
-              <Button size="sm" variant="surface" onClick={() => void push.refetch()}>
-                Try again
-              </Button>
-            }
-          >
-            {push.error instanceof ApiError ? push.error.message : 'Conch didn’t answer.'}
-          </Callout>
-        ) : (
-          <Skeleton shape="block" height="5rem" />
-        )}
-      </Section>
-      {status && <Elsewhere status={status} />}
-    </Stack>
+    <SettingsSubpages page={page}>
+      <Stack gap={8}>
+        <Section title="Notifications">
+          {known ? (
+            <ThisDevice
+              status={status}
+              subscribed={subscribed}
+              onOpenTopics={() => open('topics')}
+            />
+          ) : push.isError ? (
+            <Callout
+              tone="danger"
+              title="Couldn’t load notifications"
+              action={
+                <Button size="sm" variant="surface" onClick={() => void push.refetch()}>
+                  Try again
+                </Button>
+              }
+            >
+              {push.error instanceof ApiError ? push.error.message : 'Conch didn’t answer.'}
+            </Callout>
+          ) : (
+            <Skeleton shape="block" height="5rem" />
+          )}
+        </Section>
+        {status && <Elsewhere status={status} />}
+      </Stack>
+    </SettingsSubpages>
   );
 }
 
-function ThisDevice({ status, subscribed }: { status: PushStatus; subscribed: boolean }) {
+/** Saving one of this device's choices: on screen at once, put back if it didn't save. */
+function usePrefer(status: PushStatus) {
+  const client = useQueryClient();
+  const put = (next: PushStatus) => client.setQueryData(pushKeys.status, next);
+  const mine = status.devices.find((d) => d.current);
+  return async (key: keyof PushPrefs, value: boolean) => {
+    if (!mine) return;
+    put({
+      ...status,
+      devices: status.devices.map((d) =>
+        d.id === mine.id ? { ...d, prefs: { ...d.prefs, [key]: value } } : d,
+      ),
+    });
+    try {
+      put(await pushApi.update(mine.id, { [key]: value }));
+    } catch {
+      toast.error('That didn’t save. Try again.');
+      void client.invalidateQueries({ queryKey: pushKeys.status });
+    }
+  };
+}
+
+/** What this device is told about, one switch apiece (Notifications → Topics). */
+function Topics({ status, subscribed }: { status: PushStatus; subscribed: boolean }) {
+  const prefer = usePrefer(status);
+  const prefs = status.devices.find((d) => d.current)?.prefs;
+  if (stateOf(status, subscribed) !== 'on' || !prefs)
+    return (
+      <Text size="sm" tone="muted">
+        Turn notifications on for this device first, in Notifications.
+      </Text>
+    );
+  return (
+    <NotifyTopics
+      topics={TOPICS.map((t) => ({ id: t.key, label: t.label, on: prefs[t.key] }))}
+      onTopicChange={(id, on) => {
+        const topic = TOPICS.find((t) => t.key === id);
+        if (topic) void prefer(topic.key, on);
+      }}
+    />
+  );
+}
+
+function ThisDevice({
+  status,
+  subscribed,
+  onOpenTopics,
+}: {
+  status: PushStatus;
+  subscribed: boolean;
+  onOpenTopics: () => void;
+}) {
   const client = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -145,21 +220,7 @@ function ThisDevice({ status, subscribed }: { status: PushStatus; subscribed: bo
     }
   };
 
-  const prefer = async (key: keyof PushPrefs, value: boolean) => {
-    if (!mine) return;
-    put({
-      ...status,
-      devices: status.devices.map((d) =>
-        d.id === mine.id ? { ...d, prefs: { ...d.prefs, [key]: value } } : d,
-      ),
-    });
-    try {
-      put(await pushApi.update(mine.id, { [key]: value }));
-    } catch {
-      toast.error('That didn’t save. Try again.');
-      void client.invalidateQueries({ queryKey: pushKeys.status });
-    }
-  };
+  const prefer = usePrefer(status);
 
   const test = async () => {
     setTesting(true);
@@ -178,10 +239,7 @@ function ThisDevice({ status, subscribed }: { status: PushStatus; subscribed: bo
       busy={busy}
       onChange={(on) => void change(on)}
       topics={state === 'on' ? topics : undefined}
-      onTopicChange={(id, on) => {
-        const topic = TOPICS.find((t) => t.key === id);
-        if (topic) void prefer(topic.key, on);
-      }}
+      onOpenTopics={onOpenTopics}
       previews={prefs?.previews}
       onPreviewsChange={(on) => void prefer('previews', on)}
       onTest={() => void test()}

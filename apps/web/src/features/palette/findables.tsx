@@ -253,6 +253,14 @@ const settingsPlaces: {
   },
   { tab: 'usage', label: 'Usage', keywords: 'limits spend budget plan', icon: <BatteryMedium /> },
   {
+    // Usage → Limits, a page of its own.
+    tab: 'usage',
+    focus: 'limits',
+    label: 'Usage limits',
+    keywords: 'limits limit cap long turns routines learning spend steps tokens minutes',
+    icon: <Gauge />,
+  },
+  {
     tab: 'usage',
     focus: ROUTINES_SPEND_FOCUS,
     label: 'What routines may spend',
@@ -327,6 +335,15 @@ const settingsPlaces: {
     label: 'Notifications',
     keywords:
       'notifications notify allow push alerts phone bell badge lock screen tell me when it needs you approval an answer is ready reply a routine runs a task finishes a device asks to sign in there’s a new version update show what it’s about preview details quiet send a test',
+    icon: <Bell />,
+  },
+  {
+    // Notifications → Topics, a page of its own.
+    tab: 'notifications',
+    focus: 'topics',
+    label: 'What notifications are about',
+    keywords:
+      'notification topics tell me when it needs you approval an answer is ready reply a routine runs a task finishes a device asks to sign in there’s a new version',
     icon: <Bell />,
   },
   {

@@ -19,6 +19,7 @@ export interface BrowserStatusCardProps extends ComponentProps<'div'> {
   version?: string;
   install?: { percent: number; label: string };
   problem?: { message: string; command?: string };
+  /** Shown only while there's a problem (and while its repair runs). */
   onRepair?: () => void;
   repairing?: boolean;
   /** Extra content under the status (e.g. which browser to use). */
@@ -36,8 +37,11 @@ const pearl: Record<BrowserStatusPhase, PearlState> = {
 
 /**
  * The browser's health in one glance: what's running and what it's doing.
- * There's one button, and it tries every fix. What Conch already fixed by
- * itself is listed in Settings → Health, with every other repair.
+ * Healthy, it says nothing about repairing: Repair everything in Settings →
+ * Health looks after the browser with every other part. Only when the
+ * browser really has a problem does the card offer one button, Repair, which
+ * tries every fix in turn, the same ones Repair everything runs. What Conch
+ * already fixed by itself is listed in Settings → Health.
  */
 export function BrowserStatusCard({
   phase,
@@ -85,10 +89,10 @@ export function BrowserStatusCard({
           </p>
           {line && <p className={styles.statusLine}>{line}</p>}
         </div>
-        {onRepair && !disabled && (
+        {onRepair && !disabled && (phase === 'problem' || phase === 'repairing' || repairing) && (
           <Button
             size="sm"
-            variant={phase === 'problem' ? 'solid' : 'surface'}
+            variant="solid"
             leadingIcon={<Wrench />}
             loading={repairing || phase === 'repairing'}
             onClick={onRepair}

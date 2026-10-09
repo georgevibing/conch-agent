@@ -1318,7 +1318,8 @@ describe('Palette search', () => {
     await user.keyboard('{Enter}');
     await waitFor(() =>
       expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
-        at: '/settings/health',
+        // Always on is a page inside Health, and its switch comes into view there.
+        at: '/settings/health/always-on',
         focus: 'background',
       }),
     );
@@ -1558,6 +1559,14 @@ describe('Palette search', () => {
         await screen.findByRole('option', { name: /Settings: Notifications/ }),
       ).toBeInTheDocument();
     }
+    // What they're about is a page of its own, inside Notifications.
+    await user.clear(screen.getByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'notification topics');
+    await user.click(
+      await screen.findByRole('option', { name: /Settings: What notifications are about/ }),
+    );
+    await waitFor(() => expect(where()).toBe('/settings/notifications/topics'));
+    act(() => useUi.getState().setPalette(true));
     // Reaching Conch from a phone has its own row, in Settings → Access too.
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'tailscale');

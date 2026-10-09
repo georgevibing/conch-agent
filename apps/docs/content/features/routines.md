@@ -96,9 +96,9 @@ Three things keep routines from spending your money or your plan while you're aw
 - **A monthly limit.** Routines that cost money may spend $20 a month until you change it. Every run counts, whatever started it, and so do the checks a routine makes before it runs. At the limit they pause until the 1st, and Conch tells you once: on the Routines page, in a notification, and in your chat apps. Choose **Raise the limit** or **Keep paused**. Routines on a plan, or on this computer, carry on.
 - **Room for your own chats.** With a subscription, a routine doesn't start while any of your plan's limits is 80% used. Its run says **Waited so your own chats have room**, and goes by itself once the limit resets. A one-off waits too, and runs then.
 
-You choose when routines on a plan wait: at **70%**, **80%**, **90%** or **95%** used, or **Never wait**. The choice is under **Room for your own chats** at the bottom of the Routines page, once a routine runs on a plan, and in **Settings → Usage → Routines**. Beneath it, Conch says what your choice means for each plan right now. For a routine that must go on time, like a reminder, choose **Always run this one** on its page, or turn on **Run even when the plan is nearly used** in **Edit**. **Run now** always goes.
+You choose when routines on a plan wait: at **70%**, **80%**, **90%** or **95%** used, or **Never wait**. The choice is under **Room for your own chats** at the bottom of the Routines page, once a routine runs on a plan, and in **Settings → Usage → Limits**, under **Routines**. Beneath it, Conch says what your choice means for each plan right now. For a routine that must go on time, like a reminder, choose **Always run this one** on its page, or turn on **Run even when the plan is nearly used** in **Edit**. **Run now** always goes.
 
-The monthly limit is in **Settings → Usage**, under **Routines**, or type "what routines may spend" in <kbd>mod+k</kbd>. Only you can change it, or how much one run may spend. Your assistant can't, whatever it reads.
+The monthly limit is in **Settings → Usage → Limits**, under **Routines**, or type "what routines may spend" in <kbd>mod+k</kbd>. Only you can change it, or how much one run may spend. Your assistant can't, whatever it reads.
 
 ## Good to know
 

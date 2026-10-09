@@ -122,6 +122,16 @@
     padding-block-start: var(--nc-space-5);
   }
 
+  /* After the Topics row, the row's own padding is most of the step. */
+  .previews[data-after='row'] {
+    padding-block-start: var(--nc-space-3);
+  }
+
+  /* The topics as a page of their own: the card, with just the list. */
+  .topics .groupLabel {
+    margin-block-end: var(--nc-space-4);
+  }
+
   .actions {
     display: flex;
     flex-wrap: wrap;

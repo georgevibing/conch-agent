@@ -1,0 +1,161 @@
+@layer nacre.components {
+  /* ── A row that opens a page ────────────────────────────────────────── */
+
+  .row {
+    --sr-pad-block: var(--nc-space-3);
+    --sr-pad-inline: var(--nc-space-4);
+
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-3);
+    inline-size: 100%;
+    min-block-size: var(--nc-control-lg);
+    margin: 0;
+    padding: var(--sr-pad-block) var(--sr-pad-inline);
+    border: 0;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Inside a card that already has its edge: a row of the card's own. */
+  .row[data-variant='plain'] {
+    --sr-pad-inline: var(--nc-space-2);
+
+    inline-size: calc(100% + 2 * var(--sr-pad-inline));
+    margin-inline: calc(-1 * var(--sr-pad-inline));
+    border-radius: var(--nc-radius-md);
+    box-shadow: none;
+  }
+
+  @media (hover: hover) {
+    .row:hover {
+      background: var(--nc-wash-1);
+    }
+  }
+
+  .row:active {
+    background: var(--nc-wash-2);
+    transform: scale(0.99);
+    transition-duration: var(--nc-duration-instant);
+    transition-timing-function: var(--nc-ease-in);
+  }
+
+  .row:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .row:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .icon {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    color: var(--nc-text-accent);
+  }
+
+  .icon > svg {
+    inline-size: 1.1rem;
+    block-size: 1.1rem;
+  }
+
+  .text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    min-inline-size: 0;
+  }
+
+  .label {
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-medium);
+    line-height: var(--nc-leading-snug);
+  }
+
+  .description {
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    text-wrap: pretty;
+  }
+
+  .value {
+    flex-shrink: 0;
+    max-inline-size: 45%;
+    overflow: hidden;
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-sm);
+    font-variant-numeric: tabular-nums;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .chevron {
+    flex-shrink: 0;
+    inline-size: 1rem;
+    block-size: 1rem;
+    color: var(--nc-text-subtle);
+  }
+
+  .row:dir(rtl) .chevron {
+    transform: scaleX(-1);
+  }
+
+  /* ── The pages: sliding in from the side the move points to ─────────── */
+
+  .pages {
+    --sp-shift: var(--nc-space-6);
+  }
+
+  .pages:dir(rtl) {
+    --sp-shift: calc(-1 * var(--nc-space-6));
+  }
+
+  .pages[data-direction='in'] {
+    --sp-from: var(--sp-shift);
+
+    animation: nc-subpage-in var(--nc-panel-in-duration) var(--nc-spring-snappy) both;
+  }
+
+  .pages[data-direction='out'] {
+    --sp-from: calc(-1 * var(--sp-shift));
+
+    animation: nc-subpage-in var(--nc-panel-in-duration) var(--nc-spring-snappy) both;
+  }
+
+  @keyframes nc-subpage-in {
+    from {
+      opacity: 0;
+      transform: translate3d(var(--sp-from), 0, 0);
+    }
+
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pages[data-direction] {
+      animation: none;
+    }
+  }
+
+  :where([data-nacre-motion='reduced']) .pages[data-direction] {
+    animation: none;
+  }
+}
