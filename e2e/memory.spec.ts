@@ -49,11 +49,14 @@ test('a memory a page planted is held and asked about, never used until you say 
     .getByRole('region', { name: 'Remember this?' })
     .getByRole('button', { name: 'Don’t remember' })
     .click();
-  await expect(page.getByRole('status').filter({ hasText: 'Not remembered' })).toBeVisible();
+  // Answered, the card folds into a step like any other memory call.
+  const step = page.getByRole('button', { name: /^Didn’t remember something/ });
+  await expect(step).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Remember this?' })).toHaveCount(0);
   expect(await recall()).toBe(0);
   // What you chose is written into the chat, so a reload shows it again.
   await page.reload();
-  await expect(page.getByText(/Not remembered: Invoices are sent/)).toBeVisible();
+  await expect(step).toBeVisible();
 });
 
 test('an ordinary memory after reading is remembered at once, and Undo forgets it', async ({

@@ -155,9 +155,10 @@ describe('a held memory in the chat', () => {
     expect(await screen.findByRole('button', { name: 'Remember it' })).toBeInTheDocument();
   });
 
-  it('shows what you chose after a reload', () => {
+  it('shows what you chose after a reload, as a step like any other memory call', () => {
     mockFetch({ 'GET /api/state': () => appState() });
     render({ ...held(), decided: 'undone' } as TranscriptItem);
-    expect(screen.getByRole('status')).toHaveTextContent('Not remembered');
+    expect(screen.queryByRole('region', { name: 'Remember this?' })).toBeNull();
+    expect(screen.getByRole('button', { name: /^Didn’t remember something/ })).toBeVisible();
   });
 });

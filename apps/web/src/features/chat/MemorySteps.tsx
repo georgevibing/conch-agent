@@ -11,16 +11,26 @@ import { memoryApi } from '../memory/api';
 type Memory = Extract<TranscriptItem, { kind: 'memory' }>;
 type Tool = Extract<TranscriptItem, { kind: 'tool' }>;
 
+/** One that waited for your OK (the memory check's card, ADR 0087), whatever you answered. */
+const asked = (item: Memory) => item.action === 'saved' && Boolean(item.held || item.pending);
+
 /**
  * A memory it kept or forgot, told as a step like every other (ADR 0103):
- * not one asking (the memory check's card, ADR 0087), which stands alone.
+ * not one still asking, whose card stands alone until you've answered it.
  */
 export const isMemoryStep = (item: TranscriptItem): item is Memory =>
-  item.kind === 'memory' && !(item.action === 'saved' && (item.held || item.pending));
+  item.kind === 'memory' && (!asked(item) || item.decided !== undefined);
 
 /** The step's words: what it did, and what you said since. */
 function labelOf(item: Memory): ToolLabel {
   const forgot = item.action === 'forgotten';
+  // Asked and turned down: it was never remembered, so there's nothing to call undone.
+  if (asked(item) && item.decided === 'undone')
+    return {
+      family: 'remember',
+      doing: 'Remembering something',
+      done: 'Didn’t remember something',
+    };
   const outcome =
     item.decided === 'undone' && !forgot
       ? 'Undone'

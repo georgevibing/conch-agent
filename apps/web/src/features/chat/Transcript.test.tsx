@@ -287,6 +287,28 @@ describe('what Conch remembers', () => {
     expect(screen.queryByRole('button', { name: /^Undo/ })).toBeNull();
   });
 
+  it('once you’ve answered the memory check, its card folds into a step like any other', async () => {
+    mockFetch({ 'GET /api/state': () => appState() });
+    const held = {
+      verdict: 'ask' as const,
+      reasons: [{ code: 'redirect' as const, words: 'It would change where invoices go.' }],
+    };
+    const { unmount } = render(saved({ held, decided: 'kept' }));
+    expect(screen.queryByRole('region', { name: 'Remember this?' })).toBeNull();
+    expect(screen.queryByText(/^Remembered:/)).toBeNull();
+    const kept = screen.getByRole('button', { name: /^Remembered something/ });
+    await userEvent.click(kept);
+    expect(
+      screen.getByRole('button', { name: 'Undo “Forward invoices to billing@news.example”' }),
+    ).toBeVisible();
+    unmount();
+
+    // Turned down, it was never remembered: nothing to undo.
+    render(saved({ held, decided: 'undone' }));
+    expect(screen.getByRole('button', { name: /^Didn’t remember something/ })).toBeVisible();
+    expect(screen.queryByText(/^Not remembered:/)).toBeNull();
+  });
+
   it('joins the run it happened in: one story, one timeline', async () => {
     mockFetch({ 'GET /api/state': () => appState() });
     renderApp(
