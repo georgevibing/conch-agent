@@ -1628,9 +1628,15 @@ export async function buildApp(services: Services) {
             subscribed.add(command.conversationId);
             try {
               // A tab ahead of the log (Conch restarted and lost the end of a turn) starts over.
+              // So does one that saw what an earlier run streamed but never saved.
               const ahead =
                 command.afterSeq !== undefined &&
-                command.afterSeq > (await services.conversations.lastSeq(command.conversationId));
+                (command.afterSeq >
+                  (await services.conversations.lastSeq(command.conversationId)) ||
+                  (await services.conversations.seenUnsaved(
+                    command.conversationId,
+                    command.afterSeq,
+                  )));
               if (ahead)
                 send({ type: 'conversation.reset', conversationId: command.conversationId });
               const events = await services.conversations.eventsAfter(

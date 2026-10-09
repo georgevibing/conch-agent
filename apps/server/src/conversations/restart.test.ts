@@ -110,6 +110,36 @@ describe('Conch restarting under a running chat', () => {
     expect((await after.list()).find((c) => c.id === convo.id)?.status).toBe('idle');
   });
 
+  it('a page that saw more of the lost run than was saved starts over, and misses nothing new', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-restart-'));
+    const before = await open(home, hangs());
+    const convo = await before.send({ clientMessageId: 'u1', text: 'Pull the codebase' });
+    const streamed = await until(before, convo.id, (e) =>
+      e.some((x) => x.type === 'assistant.delta'),
+    );
+    // The page saw further than the log on disk got: deltas a run streams but never saves.
+    const seen = (streamed.at(-1)?.seq ?? 0) + 12;
+
+    const engine = new Scripted(async function* () {
+      yield { type: 'text', messageId: 'm2', delta: 'Done.' };
+      yield { type: 'done', outcome: 'success' };
+    });
+    const after = await open(home, engine);
+    // Recovery writes its mark before the page is back.
+    await after.recoverInterrupted();
+    const events = await until(after, convo.id, (e) =>
+      e.some((x) => x.type === 'turn.completed' && x.outcome === 'success'),
+    );
+    const mark = events.find((e) => e.type === 'turn.completed' && e.restarted);
+    expect(mark).toBeDefined();
+    // Asked to carry on from what it saw, the page is told to start over…
+    expect(await after.seenUnsaved(convo.id, seen)).toBe(true);
+    // …because everything this run wrote is numbered past it, so nothing would be skipped.
+    expect(mark?.seq ?? 0).toBeGreaterThan(seen);
+    // A page that has seen this run's own events just carries on.
+    expect(await after.seenUnsaved(convo.id, events.at(-1)?.seq ?? 0)).toBe(false);
+  });
+
   it('stops carrying on after two restarts in a row, and says why', async () => {
     const home = await mkdtemp(join(tmpdir(), 'conch-restart-'));
     let manager = await open(home, hangs());

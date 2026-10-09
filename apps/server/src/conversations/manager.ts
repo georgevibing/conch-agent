@@ -571,6 +571,11 @@ interface Live {
   extras?: TurnExtras;
   events: ConversationEvent[];
   seq: number;
+  /**
+   * The last event saved on disk when this run read the log, when it read it from disk:
+   * an earlier run may have streamed past it to a page without saving (see `SEQ_AFTER_RESTART`).
+   */
+  loadedSeq?: number;
   abort?: AbortController;
   permissions: Map<string, PendingPermission>;
   /** Tools the user said "always allow" for, in this conversation. */
@@ -694,6 +699,14 @@ const RESTART_PROMPT =
   'Carry on with what I asked: first check what is already done (files changed, commands run) so you do not repeat it, then finish the rest.';
 
 /** The note a turn Conch paused on purpose (an update, a restart asked for) carries on with. */
+/**
+ * How far past the saved log a run starts numbering a chat it read from disk. An
+ * earlier run may have streamed events to a page that it never saved (the deltas of a
+ * reply cut short); without the gap, this run's first events (the "picked up after the
+ * update" mark) would reuse their numbers, and the page would skip them as seen.
+ */
+export const SEQ_AFTER_RESTART = 100_000;
+
 const PAUSED_PROMPT: Record<'update' | 'restart', string> = {
   update:
     'Conch paused this work at a safe point to update itself, and has started again on the new version. ' +
@@ -1384,6 +1397,20 @@ export class ConversationManager {
   /** The newest event's number, for a tab to be told its own is from a log that no longer exists. */
   async lastSeq(id: string): Promise<number> {
     return (await this.#get(id)).events.at(-1)?.seq ?? -1;
+  }
+
+  /**
+   * A page saw events of this chat that an earlier run streamed but never saved: it is
+   * past what was on disk when this run read the log, and before anything this run
+   * numbered. It has to start over, or it would skip this run's first events.
+   */
+  async seenUnsaved(id: string, afterSeq: number): Promise<boolean> {
+    const live = await this.#get(id);
+    return (
+      live.loadedSeq !== undefined &&
+      afterSeq > live.loadedSeq &&
+      afterSeq < live.loadedSeq + SEQ_AFTER_RESTART
+    );
   }
 
   /** Send a user message, creating the conversation if needed. Returns immediately; the turn streams. */
@@ -5025,10 +5052,13 @@ export class ConversationManager {
     const latest = (await this.deps.store.get(id)) ?? stored;
     const raced = this.#live.get(id);
     if (raced) return raced;
+    const saved = events.at(-1)?.seq ?? -1;
     const live: Live = {
-      record: upgrade(latest, events.at(-1)?.seq ?? -1),
+      record: upgrade(latest, saved),
       events,
-      seq: (events.at(-1)?.seq ?? -1) + 1,
+      // A gap after what was saved: see `SEQ_AFTER_RESTART`.
+      seq: saved < 0 ? 0 : saved + 1 + SEQ_AFTER_RESTART,
+      ...(saved >= 0 && { loadedSeq: saved }),
       permissions: new Map(),
       alwaysAllow: new Set(),
       waived: new Set(),
