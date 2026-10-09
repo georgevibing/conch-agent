@@ -210,6 +210,9 @@ test('a new release: noticed once, its notes, a forged one refused, the channel,
   await expect(page.getByText('Conch updated and picked up where it left off')).toBeVisible({
     timeout: 30_000,
   });
+  // It's still thinking: stop it, so the next journey's update finds nothing working.
+  const stop = page.getByRole('button', { name: /^Stop/ });
+  if (await stop.isVisible()) await stop.click();
   await page.getByRole('button', { name: /^Settings(?:,|$)/ }).click({ timeout: 10_000 });
   await settings.getByRole('tab', { name: 'Health' }).click();
   await expect(page.getByRole('button', { name: 'Go back to 0.1.0' })).toBeVisible();

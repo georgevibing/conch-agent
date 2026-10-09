@@ -65,6 +65,8 @@ test('Prometheus reads the turn after a chat, with the token shown once', async 
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/');
+  // ⌘K listens once the app is up: pressed before that, it does nothing.
+  await expect(page.getByRole('textbox', { name: 'Message Conch' })).toBeVisible();
   await page.keyboard.press('ControlOrMeta+k');
   await page.getByRole('combobox').fill('grafana');
   await page.getByRole('option', { name: /Dashboards/ }).click();
@@ -78,6 +80,8 @@ test('Prometheus reads the turn after a chat, with the token shown once', async 
   await page.getByRole('button', { name: 'Make a scrape token' }).click();
   const config = page.getByRole('figure').filter({ hasText: 'prometheus.yml' });
   await expect(config).toContainText('job_name: conch');
+  // The token arrives a moment after the config is drawn: wait for it, not just the config.
+  await expect(config).toContainText(/conch_scrape_[A-Za-z0-9_-]{43}/);
   const text = (await config.textContent()) ?? '';
   const token = /conch_scrape_[A-Za-z0-9_-]{43}/.exec(text)?.[0];
   expect(token).toBeTruthy();

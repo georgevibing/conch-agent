@@ -2135,7 +2135,9 @@ export class MockEngine implements Engine {
       // of Stop never races the end of a short scripted reply on a slow machine.
       if (/\btake your time\b/i.test(said)) {
         yield { type: 'text', messageId, delta: 'Let me think this through properly.' };
-        for (let i = 0; i < 120; i++) {
+        // Long enough to outlast anything a journey does meanwhile (an update's build on
+        // a slow runner): it runs until it's stopped, the way the journeys use it.
+        for (let i = 0; i < 2400; i++) {
           await sleep(500, input.signal);
           yield { type: 'text', messageId, delta: ' Still going…' };
         }

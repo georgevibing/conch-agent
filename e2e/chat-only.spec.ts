@@ -89,6 +89,8 @@ test('“Answer without it” keeps the model, and it isn’t asked again in tha
   await page.getByRole('button', { name: /^Model:/ }).click();
   await page.getByRole('radio', { name: /^Chat Lite/ }).click();
   await page.keyboard.press('Escape');
+  // The choice has landed before the message goes: on a slow runner it can lag the press.
+  await expect(page.getByRole('button', { name: /^Model: Chat Lite/ })).toBeVisible();
 
   await ask(page, 'search Linear for the launch issue');
   const card = page.getByRole('group', { name: 'Chat Lite can’t use Linear' });
