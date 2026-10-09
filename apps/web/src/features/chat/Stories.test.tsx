@@ -348,3 +348,97 @@ describe('the turn’s tally', () => {
     ).toHaveAccessibleName(expect.stringContaining('2 steps') as unknown as string);
   });
 });
+
+describe('a live run, one step after another', () => {
+  // Tool A starts, A ends, a gap, tool B starts, B ends, then the reply.
+  const a: ConversationEventInput = {
+    type: 'tool.started',
+    toolUseId: 't1',
+    name: 'Read',
+    input: { file_path: '/p/diary.ts' },
+  };
+  const aDone: ConversationEventInput = {
+    type: 'tool.finished',
+    toolUseId: 't1',
+    status: 'success',
+    output: 'ok',
+    durationMs: 120,
+  };
+  const b: ConversationEventInput = {
+    type: 'tool.started',
+    toolUseId: 't2',
+    name: 'Read',
+    input: { file_path: '/p/meals.ts' },
+  };
+  const bDone: ConversationEventInput = { ...aDone, toolUseId: 't2' } as ConversationEventInput;
+  const reply: ConversationEventInput = {
+    type: 'assistant.delta',
+    messageId: 'm1',
+    kind: 'text',
+    delta: 'You ate well today.',
+  };
+  const running = (events: ConversationEvent[]): ConversationView => ({
+    ...reduceAll(events),
+    status: 'running',
+  });
+  const row = () => document.querySelector<HTMLElement>('[data-story="t1"]');
+  const line = () => row()?.querySelector<HTMLElement>('.below');
+
+  it('keeps the same row, still working, with its line beneath, from the first step to the reply', () => {
+    const steps = log(asked, a, aDone, b, bDone, reply, done);
+    const upTo = (n: number) => steps.slice(0, n);
+    open(running(upTo(2)));
+    const first = row();
+    expect(first).toHaveAttribute('data-status', 'running');
+    expect(line()).toHaveAttribute('data-shown');
+
+    // A has ended and B hasn't started (and then B, and B ended): the run isn't over, so the row holds.
+    for (const n of [3, 4, 5]) {
+      act(() => show(running(upTo(n))));
+      expect(row()).toBe(first);
+      expect(row()).toHaveAttribute('data-status', 'running');
+      expect(line()).toHaveAttribute('data-shown');
+      // The row says the pause itself: no second wait drawn under it.
+      expect(document.querySelector('.between')).toBeNull();
+    }
+
+    // The reply is here: the run is over and folds to its line.
+    act(() => show(running(upTo(6))));
+    expect(row()).toBe(first);
+    expect(row()).toHaveAttribute('data-status', 'done');
+    expect(line()).not.toHaveAttribute('data-shown');
+    act(() => show(reduceAll(steps)));
+    expect(row()).toBe(first);
+    expect(row()).toHaveAttribute('data-status', 'done');
+  });
+
+  it('says it’s thinking between steps, or the provider’s own note when there is one', async () => {
+    const steps = log(asked, a, aDone);
+    open(running(steps));
+    await waitFor(() => expect(line()).toHaveTextContent('Thinking…'));
+    act(() =>
+      show(
+        running([
+          ...steps,
+          ...log({ type: 'narration', text: 'Checking the meals next', source: 'provider' }),
+        ]),
+      ),
+    );
+    await waitFor(() => expect(line()).toHaveTextContent('Checking the meals next'));
+  });
+
+  it('keeps the provider’s note about the run through the pause, rather than flicking to thinking', () => {
+    open(
+      running(
+        log(
+          asked,
+          { type: 'narration', text: 'Looking through your diary', source: 'provider' },
+          a,
+          aDone,
+        ),
+      ),
+    );
+    expect(line()).toHaveTextContent('Looking through your diary');
+    expect(line()).not.toHaveTextContent('Thinking…');
+  });
+});

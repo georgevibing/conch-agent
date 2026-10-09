@@ -567,6 +567,11 @@ export const Transcript = memo(function Transcript({
       ? view.narration.text
       : undefined;
   const waitTrail = thinking && !lastBlock.thought?.done ? lastBlock.thought?.thinking : note;
+  // A run of steps that's the last thing in a turn still at work isn't over:
+  // between two steps its story holds as it was, its line saying the pause
+  // ("Thinking…", or the provider's note), instead of folding and a second
+  // wait appearing under it, only for both to swap back when the next starts.
+  const holding = busy && !placeholder && lastBlock?.tools !== undefined;
   // The turn's tally, while it runs: quiet, and only once there's something to count.
   const doing = stepsShown(storiesOf(turns.current.tools));
   const lastCost = items.findLast((i) => i.kind === 'turn-end' && i.cost);
@@ -714,6 +719,12 @@ export const Transcript = memo(function Transcript({
           opened={opened}
           onOpen={onOpen}
           {...(block.memories && { memories: block.memories })}
+          {...(holding &&
+            block === lastBlock && {
+              continuing: true,
+              ...(note &&
+                view.narration && { pause: { text: note, source: view.narration.source } }),
+            })}
         />
       )}
       {block.runTaints && (
@@ -976,7 +987,7 @@ export const Transcript = memo(function Transcript({
           {drawn}
           {placeholder && <AssistantPlaceholder speaker={current} wait={wait} continued={spoke} />}
           {!tailAttached && tail.alsoTry && <div className={styles.part}>{tail.alsoTry}</div>}
-          {(between || thinking) && (
+          {(between || thinking) && !holding && (
             <div className={`${styles.part} ${styles.between}`}>
               <Waiting wait={afterTool} trail={waitTrail} compact />
             </div>

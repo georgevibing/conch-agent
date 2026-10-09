@@ -225,7 +225,12 @@ Markdown, never a link, never something to follow.
 part that moves while its work runs: the lens scans, the pen writes, the cursor blinks,
 the globe turns. A headline that changes (`-ing` to past, the rules' words to a model's)
 morphs in place (`MorphText`); the live line coalesces changes faster than the eye
-reads. Reduced motion stills all of it. See [NACRE.md](../design/NACRE.md#stories-what-the-assistant-did-chat).
+reads. Between two steps of a run that goes on (`Story`'s `continuing`: the run is
+the last thing in a turn still at work), the row holds as it was while working: its
+words, its ticking clock and its line beneath, which says the provider's note or
+"Thinking…", so nothing folds and comes back and nothing under it moves. Only when the
+run is over does it land and fold its line away, smoothly. Reduced motion stills all
+of it, and the height holds just the same. See [NACRE.md](../design/NACRE.md#stories-what-the-assistant-did-chat).
 
 ## Consequences
 

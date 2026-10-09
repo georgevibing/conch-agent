@@ -1589,7 +1589,9 @@ export class MockEngine implements Engine {
           ['Grep', { pattern: 'TODO', path: 'src' }, 'src/plan.ts:3: TODO water'],
           ['Bash', { command: 'git status --short' }, ' M src/plan.ts'],
         ];
-        for (const [name, args, output] of steps) {
+        for (const [i, [name, args, output]] of steps.entries()) {
+          // Thinking about what the last step found before the next, as a model does.
+          if (i > 0) await wait(300);
           const toolUseId = newId('tool');
           yield { type: 'tool-start', toolUseId, name, input: args };
           await wait(40);

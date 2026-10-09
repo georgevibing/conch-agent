@@ -83,6 +83,14 @@ export interface RunStoriesProps {
   onOpen: (storyId: string, open: boolean) => void;
   /** What it remembered or forgot, by the step drawn for each (`MemorySteps`). */
   memories?: ReadonlyMap<string, Extract<TranscriptItem, { kind: 'memory' }>>;
+  /**
+   * The run isn't over (the last thing in a turn still at work): between two
+   * steps its latest story holds as it was while working (Nacre `Story`'s
+   * `continuing`), its line saying `pause` (the provider's note since the
+   * last step), or its note that still holds, else that it's thinking.
+   */
+  continuing?: boolean;
+  pause?: { text: string; source: Narration['source'] };
 }
 
 /**
@@ -101,6 +109,8 @@ export function RunStories({
   opened,
   onOpen,
   memories,
+  continuing = false,
+  pause,
 }: RunStoriesProps) {
   const arriving = useArrivedLive();
   const byId = new Map(tools.map((t) => [t.id, t]));
@@ -141,6 +151,15 @@ export function RunStories({
       memories?.has(step.id) ? { ...step, explainable: false } : step,
     );
     const status = storyStatus(story, steps);
+    // The latest story of a run that goes on: between steps it's still at work.
+    // Not one you just said no to: that answer shows at once.
+    const holds =
+      continuing && story === stories.at(-1) && story.status !== 'running' && status !== 'declined';
+    // Between steps: the provider's note since the last one, else its words that still hold
+    // (they're about the whole run); the rules' words for a step that's over give way to "Thinking…".
+    const said = holds
+      ? (pause ?? liveOf({ ...story, status: 'running' }, narration, asked, byId))
+      : live;
     // Not run because you said no: that's what it came to.
     const outcome =
       status !== story.status && !titles?.[story.id]
@@ -164,7 +183,8 @@ export function RunStories({
       ...(story.stuck && { stuck: story.stuck }),
       startedAt: story.startedAt,
       ...(story.durationMs !== undefined && { durationMs: story.durationMs }),
-      ...(live && { live: live.text, liveSource: live.source }),
+      ...(said && { live: said.text, liveSource: said.source }),
+      ...(holds && { continuing: true }),
       open: opened.has(story.id),
       onOpenChange: (open: boolean) => onOpen(story.id, open),
       // Where a jump lands (the away digest, find).
