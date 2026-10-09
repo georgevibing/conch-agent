@@ -60,7 +60,7 @@
  * - `app.now()`: the time now, as an ISO string.
  * - `app.log(...)`: a line in the app's log, for working out what happened.
  *
- * ## A provider and a chat app (ADR 0119)
+ * ## A provider and a chat app (ADR 0122)
  *
  * The same module may also export `provider` (when `conch-app.json` says
  * `"provider": { "speaks": "code" }`) and `channel` (with `"channel"`). Each
@@ -816,7 +816,7 @@ async function appFetch(input, init = {}) {
 // ── Loading the app, and running its tools ────────────────────────────────
 
 let tools = {};
-/** The provider and chat app the module exports (ADR 0119), and the functions Conch calls on each. */
+/** The provider and chat app the module exports (ADR 0122), and the functions Conch calls on each. */
 const parts = {};
 const PART_FUNCTIONS = freeze({
   provider: freeze(['chat', 'models']),
@@ -877,7 +877,7 @@ async function load(message) {
       message: trim(local(error?.message ?? String(error)), 1500),
     });
   }
-  // A provider and a chat app (ADR 0119): their functions, by name.
+  // A provider and a chat app (ADR 0122): their functions, by name.
   const found = [];
   for (const kind of ['provider', 'channel']) {
     const part = module[kind];
@@ -923,7 +923,7 @@ function textOf(value) {
 }
 
 /**
- * One of a provider's or chat app's functions (ADR 0119), with `app.keys`
+ * One of a provider's or chat app's functions (ADR 0122), with `app.keys`
  * (what the person typed for it, this call only) and, for a provider's
  * answer, `app.emit` to stream it.
  */

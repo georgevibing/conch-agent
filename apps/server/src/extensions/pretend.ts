@@ -1,6 +1,6 @@
 /**
  * The mock engine's pretend world for apps that bring a provider or a chat
- * app (ADR 0119), for `pnpm dev:mock`, the e2e journey and tests: a pretend
+ * app (ADR 0122), for `pnpm dev:mock`, the e2e journey and tests: a pretend
  * model company, **Pretend AI** (`api.pretend-ai.example`, OpenAI's chat
  * shape), and a pretend chat app, **Parley** (`chat.parley.example`, a bot
  * API anyone could write an adapter for), both on one server on this
@@ -190,7 +190,7 @@ export class PretendWorld {
   }
 }
 
-/** The pretend world's two apps, as the mock engine makes them (ADR 0119). */
+/** The pretend world's two apps, as the mock engine makes them (ADR 0122). */
 export function pretendProviderFiles(): Record<string, string> {
   return {
     'conch-app.json': `${JSON.stringify(

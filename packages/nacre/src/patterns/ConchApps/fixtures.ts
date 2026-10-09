@@ -197,7 +197,7 @@ export const samplePictures = {
   broken: 'data:image/png;base64,AAAA',
 };
 
-/** A provider made with Conch (ADR 0119): Fireworks, declared, no code. */
+/** A provider made with Conch (ADR 0122): Fireworks, declared, no code. */
 export const fireworks: AppManifestView = {
   id: 'fireworks',
   name: 'Fireworks AI',
@@ -244,7 +244,7 @@ export const fireworksWords: AppWords = {
   ],
 };
 
-/** A chat app made with Conch (ADR 0119): Zulip, its bot polled from this computer. */
+/** A chat app made with Conch (ADR 0122): Zulip, its bot polled from this computer. */
 export const zulip: AppManifestView = {
   id: 'zulip',
   name: 'Zulip',

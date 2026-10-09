@@ -20,11 +20,11 @@ export const APPS: Record<ChannelKind, { name: string; color: string }> = {
   line: { name: 'LINE', color: '#06C755' },
   rocketchat: { name: 'Rocket.Chat', color: '#F5455C' },
   googlechat: { name: 'Google Chat', color: '#00AC47' },
-  // A chat app a Conch app brings (ADR 0119): its own name is `channelLabel`.
+  // A chat app a Conch app brings (ADR 0122): its own name is `channelLabel`.
   app: { name: 'Your chat app', color: '#687076' },
 };
 
-/** What a channel's app is called: a chat app a Conch app brings goes by its own name (ADR 0119). */
+/** What a channel's app is called: a chat app a Conch app brings goes by its own name (ADR 0122). */
 export const channelLabel = (channel: Pick<Channel, 'kind' | 'contributed'>): string =>
   channel.kind === 'app' && channel.contributed
     ? channel.contributed.name

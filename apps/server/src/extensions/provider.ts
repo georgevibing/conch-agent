@@ -1,5 +1,5 @@
 /**
- * A provider a Conch app brings, as one of Conch's own (ADR 0119): the same
+ * A provider a Conch app brings, as one of Conch's own (ADR 0122): the same
  * `ApiEngine` every model API runs on, so the model picker, Settings →
  * Providers, keys, limits, the fallback, long chats, tools on every model and
  * spending all work with it unchanged. What differs is the wire:

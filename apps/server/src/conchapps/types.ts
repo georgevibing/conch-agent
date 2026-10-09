@@ -56,7 +56,7 @@ export interface AppFetchResponse {
 
 /** Makes `app.fetch` requests, only to `reaches`, through the SSRF guard. */
 export type AppFetcher = (
-  /** `timeoutMs`: longer than usual, for a provider's answer (ADR 0119). */
+  /** `timeoutMs`: longer than usual, for a provider's answer (ADR 0122). */
   app: { id: string; reaches: readonly string[]; timeoutMs?: number },
   request: AppFetchRequest,
   signal: AbortSignal,
@@ -98,9 +98,9 @@ export interface AppRuntime {
   /** Whether a process is running now. */
   readonly running: boolean;
   stop(): Promise<void>;
-  /** The provider's and chat app's functions it exports (ADR 0119). */
+  /** The provider's and chat app's functions it exports (ADR 0122). */
   parts?(): Promise<PartName[]>;
-  /** Run one of them, with what the person typed for it (ADR 0119). */
+  /** Run one of them, with what the person typed for it (ADR 0122). */
   callPart?(
     part: PartName,
     input: Record<string, unknown>,

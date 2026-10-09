@@ -237,7 +237,7 @@ export const Provider = z.object({
   /** It has worked on this computer and you haven't removed it: it belongs with your providers, even while it needs you. */
   connectedBefore: z.boolean().default(false),
   /**
-   * A Conch app brings it (ADR 0119): which app, whether it was made here or
+   * A Conch app brings it (ADR 0122): which app, whether it was made here or
    * added from a link or a file, how it speaks, and what it reaches.
    */
   contributed: z

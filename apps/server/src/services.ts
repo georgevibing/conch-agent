@@ -438,7 +438,7 @@ export class Services {
   readonly mockLine?: MockLine;
   readonly mockRocketChat?: MockRocketChat;
   readonly mockGoogleChat?: MockGoogleChat;
-  /** Providers and chat apps that Conch apps bring (ADR 0119). */
+  /** Providers and chat apps that Conch apps bring (ADR 0122). */
   readonly extensions: ExtensionService;
   /** The pretend model company and chat app those are tried with, with the mock engine. */
   readonly pretendWorld?: PretendWorld;
@@ -649,7 +649,7 @@ export class Services {
     this.describer = new Describer({ ready: () => this.providers.ready() });
     // With the mock engine, integrations talk to a pretend vendor on this machine too.
     this.mockVendor = config.CONCH_ENGINE === 'mock' ? new MockVendor() : undefined;
-    // With the mock engine, apps that bring a provider or a chat app try them on pretend ones (ADR 0119).
+    // With the mock engine, apps that bring a provider or a chat app try them on pretend ones (ADR 0122).
     this.pretendWorld = config.CONCH_ENGINE === 'mock' ? new PretendWorld() : undefined;
     // Apps you make, share and add (ADR 0061): an app like any other on the Apps page.
     this.conchApps = new ConchAppService({
@@ -687,7 +687,7 @@ export class Services {
       },
       updatesChanged: () => this.updates.changed(),
       pick: () => pickPath(PICK_PURPOSES['conch-app']),
-      // `app_try` on a provider or a chat app (ADR 0119); `extensions` is made further down.
+      // `app_try` on a provider or a chat app (ADR 0122); `extensions` is made further down.
       partTester: (manifest, runtime, body) => this.extensions.testWith(manifest, runtime, body),
       manualChecks: config.CONCH_ENGINE === 'mock',
     });
@@ -1712,7 +1712,7 @@ export class Services {
         getModel: () => this.voice.getModel(),
       },
       speech: { voiceNote: (markdown, format) => this.speech.voiceNote(markdown, format) },
-      // Chat apps that Conch apps bring (ADR 0119); `extensions` is made just below.
+      // Chat apps that Conch apps bring (ADR 0122); `extensions` is made just below.
       apps: {
         catalog: () => this.extensions.catalog(),
         name: (app) => this.extensions.name(app),
@@ -1732,7 +1732,7 @@ export class Services {
       finish: (_kind, found, channelId) => this.channels.linked(found, channelId),
       emit: (event) => this.broadcast.emit(event),
     });
-    // Providers and chat apps that Conch apps bring (ADR 0119): theirs follow the apps you have.
+    // Providers and chat apps that Conch apps bring (ADR 0122): theirs follow the apps you have.
     this.extensions = new ExtensionService({
       apps: this.conchApps,
       providers: this.providers,
@@ -2805,7 +2805,7 @@ export class Services {
     this.#stopAsks ??= this.here.watch(() => this.config.CONCH_PORT);
     // The servers you added are providers too: built before the first request needs them.
     await this.providers.loadServers().catch(() => undefined);
-    // So are the ones your Conch apps bring (ADR 0119), before a chat or a channel needs them.
+    // So are the ones your Conch apps bring (ADR 0122), before a chat or a channel needs them.
     await this.extensions.sync().catch(() => undefined);
     await this.providers.load();
     this.network.start();

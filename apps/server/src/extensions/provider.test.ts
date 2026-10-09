@@ -1,5 +1,5 @@
 /**
- * A provider a Conch app declares or writes (ADR 0119), as the engine's
+ * A provider a Conch app declares or writes (ADR 0122), as the engine's
  * wire: a declared one streams through the shared chat adapters at its own
  * address, with its key the way it said and its spend at its own price; one
  * in code streams from its sealed `provider.chat`, tool calls and all, in a

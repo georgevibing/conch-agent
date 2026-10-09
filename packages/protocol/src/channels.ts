@@ -42,7 +42,7 @@ export const ChannelKind = z.enum([
   'line',
   'rocketchat',
   'googlechat',
-  // A chat app a Conch app brings (ADR 0119): which one is in its keys (`app`).
+  // A chat app a Conch app brings (ADR 0122): which one is in its keys (`app`).
   'app',
 ]);
 export type ChannelKind = z.infer<typeof ChannelKind>;
@@ -253,7 +253,7 @@ export const Channel = z.object({
    * on Gmail. Its card is that app's, and the channel is its "Talk to me here".
    */
   app: z.string().max(64).optional(),
-  /** A chat app a Conch app brings (ADR 0119): which app, and what the chat app is called. */
+  /** A chat app a Conch app brings (ADR 0122): which app, and what the chat app is called. */
   contributed: z.object({ app: z.string().max(24), name: z.string().max(40) }).optional(),
   enabled: z.boolean(),
   createdAt: z.number(),
@@ -295,7 +295,7 @@ export const ChannelCatalogEntry = z.object({
   /** It can answer in group chats you turn on, when mentioned (ADR 0075). */
   groups: z.boolean().optional(),
   /**
-   * A chat app a Conch app brings (ADR 0119): the app, and what connecting it
+   * A chat app a Conch app brings (ADR 0122): the app, and what connecting it
    * asks for, read from its manifest (`channel`). Its id is `app:<id>`.
    */
   contributed: z
@@ -482,7 +482,7 @@ const rocketchat = {
  * out as the app, with a service account's key (the whole JSON key file).
  */
 /**
- * A chat app a Conch app brings (ADR 0119): which app, and what the person
+ * A chat app a Conch app brings (ADR 0122): which app, and what the person
  * typed into its fields (a bot's token, a server's address), kept here with
  * every channel's keys and handed to the app's sealed code per call.
  */

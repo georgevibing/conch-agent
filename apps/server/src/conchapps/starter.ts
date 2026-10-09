@@ -15,7 +15,7 @@ export interface StarterSeed {
   tagline?: string;
   description?: string;
   /**
-   * What it is (ADR 0119): an app with tools and a page (the default), a
+   * What it is (ADR 0122): an app with tools and a page (the default), a
    * provider (declared: an address, its key and models), or a chat app (its
    * `channel` functions). Each starts from a draft that already reads.
    */
@@ -39,7 +39,7 @@ const escapeHtml = (text: string) =>
   text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 
 /**
- * A provider, declared (ADR 0119): an address that speaks OpenAI's chat, how
+ * A provider, declared (ADR 0122): an address that speaks OpenAI's chat, how
  * its key is sent, and its models read live. The maker changes the address,
  * the host in `reaches`, the key's words and, when the company says, its
  * models and their prices.
@@ -82,7 +82,7 @@ function providerStarter(name: string, id: string, seed: StarterSeed): Map<strin
 }
 
 /**
- * A chat app (ADR 0119): `channel.identify`, `poll` and `send` against its
+ * A chat app (ADR 0122): `channel.identify`, `poll` and `send` against its
  * bot API with `app.fetch`, and the token the person types (`app.keys`). The
  * maker changes the address, the paths and the shapes to the app's own.
  */

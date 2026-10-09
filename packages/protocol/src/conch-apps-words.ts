@@ -28,7 +28,7 @@ export const SPEAKS_WORDS: Record<AppProviderPart['speaks'], string> = {
 };
 
 /**
- * What an app brings besides tools and pages (ADR 0119), one plain line
+ * What an app brings besides tools and pages (ADR 0122), one plain line
  * each: "Answers chats as Fireworks AI (OpenAI’s chat, 4 models)", "Lets
  * you talk to your assistant on Zulip". Empty for an app that brings neither.
  */
@@ -96,7 +96,7 @@ export function appAbilities(
   manifest: ManifestWords,
   tools: readonly ToolWords[],
 ): AppAbilityLine[] {
-  // What it brings first: a provider, a chat app (ADR 0119).
+  // What it brings first: a provider, a chat app (ADR 0122).
   const lines: AppAbilityLine[] = partLines(manifest);
   const reaches = manifest.reaches ?? [];
   const settings = manifest.settings ?? [];

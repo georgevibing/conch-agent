@@ -92,7 +92,7 @@ export const DoctorAction = z.discriminatedUnion('kind', [
     watch: z.string().optional(),
   }),
   /**
-   * Ask Conch to fix it (ADR 0119): a chat that starts with these words, for
+   * Ask Conch to fix it (ADR 0122): a chat that starts with these words, for
    * something made of a Conch app's code that stopped working (a provider
    * whose company changed its API). The maker changes the app; the person
    * presses Update.

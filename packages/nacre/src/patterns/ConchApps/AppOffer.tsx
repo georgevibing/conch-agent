@@ -60,11 +60,11 @@ export interface AppOfferProps extends Omit<ComponentProps<'div'>, 'children'> {
   busy?: boolean;
   /**
    * **Add to my apps** or **Update**, with what the person typed into the
-   * card: its settings, and what its provider or chat app needs (ADR 0119).
+   * card: its settings, and what its provider or chat app needs (ADR 0122).
    */
   onAdd?: (settings: Record<string, string>, part?: PartValues) => void;
   /**
-   * A provider or a chat app it brings (ADR 0119): reviewed on the card, with
+   * A provider or a chat app it brings (ADR 0122): reviewed on the card, with
    * its key typed here and **Test it** before **Add**.
    */
   brings?: { provider?: PartProviderView; channel?: PartChannelView };

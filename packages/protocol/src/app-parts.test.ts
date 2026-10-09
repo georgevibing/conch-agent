@@ -16,7 +16,7 @@ const base = {
   reaches: ['api.fireworks.ai'],
 };
 
-describe('a provider in a manifest (ADR 0119)', () => {
+describe('a provider in a manifest (ADR 0122)', () => {
   it('reads the declarative shape, with no code', () => {
     const manifest = ConchAppManifest.parse({
       ...base,
@@ -86,7 +86,7 @@ describe('a provider in a manifest (ADR 0119)', () => {
   });
 });
 
-describe('a chat app in a manifest (ADR 0119)', () => {
+describe('a chat app in a manifest (ADR 0122)', () => {
   it('reads its fields, secret unless it says otherwise', () => {
     const part = AppChannelPart.parse({
       name: 'Zulip',

@@ -95,7 +95,7 @@ const seconds = (ms: number) => `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)} s`;
 
 /**
  * A provider or a chat app a Conch app brings, reviewed before it's added
- * (ADR 0119): what it is and where its key goes, the key typed right here
+ * (ADR 0122): what it is and where its key goes, the key typed right here
  * (the assistant never sees it), and **Test it** — a real one-line answer
  * that streams in, in the provider's own words, or the bot the chat app
  * says it is. The card's **Add** waits for a test that passed whenever

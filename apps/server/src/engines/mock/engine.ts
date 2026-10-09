@@ -969,7 +969,7 @@ export class MockEngine implements Engine {
       }
       // Conch apps (ADR 0061): the maker's real path, end to end, with no model bill.
       const maker = (name: string) => input.tools.some((t) => t.name === name);
-      // A provider or a chat app made with Conch (ADR 0119), on the pretend world's two.
+      // A provider or a chat app made with Conch (ADR 0122), on the pretend world's two.
       const extension = /\badd pretend ai as a provider\b/i.test(input.prompt)
         ? ('provider' as const)
         : /\bconnect me on parley\b/i.test(input.prompt)

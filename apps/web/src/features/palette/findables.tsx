@@ -1254,7 +1254,7 @@ export function useFindables(query: string, conversationId: string | undefined):
       run: () => void navigate('/apps?add=describe'),
     },
     {
-      // A provider or a chat app made with Conch (ADR 0119): Add your own, where each lives.
+      // A provider or a chat app made with Conch (ADR 0122): Add your own, where each lives.
       id: 'make-provider',
       label: 'Add any provider with Conch',
       keywords:

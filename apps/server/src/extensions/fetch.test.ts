@@ -1,5 +1,5 @@
 /**
- * How a declared provider reaches its company (ADR 0119): only its own
+ * How a declared provider reaches its company (ADR 0122): only its own
  * hosts, over https, never inward, its key the way it declared and nothing
  * of anyone else's, and the answer streamed as it comes. A real https server
  * on this computer stands in for the company; only these tests call this

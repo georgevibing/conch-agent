@@ -30,7 +30,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'A provider or a chat app a Conch app brings, reviewed on its card before it’s added (ADR 0119). What it is and where its key goes; its models with their window and price; the steps in the chat app; the key typed right here, never seen by the assistant; and **Test it**: a real one-line answer that streams in, in the provider’s own words, or who the chat app’s bot is. **Add** waits for a test that passed.',
+          'A provider or a chat app a Conch app brings, reviewed on its card before it’s added (ADR 0122). What it is and where its key goes; its models with their window and price; the steps in the chat app; the key typed right here, never seen by the assistant; and **Test it**: a real one-line answer that streams in, in the provider’s own words, or who the chat app’s bot is. **Add** waits for a test that passed.',
       },
     },
   },

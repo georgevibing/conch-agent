@@ -124,7 +124,7 @@ const FetchRequest = z.object({
   bodyBase64: z.boolean().optional(),
 });
 
-/** A provider's or chat app's function (ADR 0119), as the module exports it. */
+/** A provider's or chat app's function (ADR 0122), as the module exports it. */
 const PartName = z.enum([
   'provider.chat',
   'provider.models',
@@ -267,13 +267,13 @@ interface Pending {
   child: ChildProcess;
   done: (outcome: AppCallOutcome) => void;
   timer: NodeJS.Timeout;
-  /** A provider's answer, streamed (ADR 0119). */
+  /** A provider's answer, streamed (ADR 0122). */
   onEvent?: (event: PartEvent) => void;
   /** A part's call that may take long (a provider's answer): its requests get longer too. */
   long?: boolean;
 }
 
-/** How long a provider's or chat app's function may take (ADR 0119). */
+/** How long a provider's or chat app's function may take (ADR 0122). */
 export const PART_MS: Record<PartName, number> = {
   'provider.chat': 10 * 60_000,
   'provider.models': 30_000,
@@ -308,7 +308,7 @@ export class SealedRuntime implements AppRuntime {
   #child: ChildProcess | undefined;
   #starting: Promise<AppToolDefinition[]> | undefined;
   #tools: AppToolDefinition[] | undefined;
-  /** What the module exports besides tools: `provider.chat`, `channel.poll`… (ADR 0119). */
+  /** What the module exports besides tools: `provider.chat`, `channel.poll`… (ADR 0122). */
   #parts: PartName[] = [];
   #pending = new Map<number, Pending>();
   #fetches = new Map<number, AbortController>();
@@ -442,7 +442,7 @@ export class SealedRuntime implements AppRuntime {
   }
 
   /**
-   * Run one of the module's `provider` or `channel` functions (ADR 0119)
+   * Run one of the module's `provider` or `channel` functions (ADR 0122)
    * with what the person typed for it (`keys`, this call only), streaming a
    * provider's answer to `onEvent`. Its result is the function's JSON.
    */
@@ -736,7 +736,7 @@ export class SealedRuntime implements AppRuntime {
         {
           id: this.options.manifest.id,
           reaches: this.options.manifest.reaches,
-          // A provider's answer (ADR 0119) may take a while to come back.
+          // A provider's answer (ADR 0122) may take a while to come back.
           ...([...this.#pending.values()].some((p) => p.long) && { timeoutMs: LONG_FETCH_MS }),
         },
         { ...request, ...(request.bodyBase64 !== undefined && { bodyBase64: request.bodyBase64 }) },

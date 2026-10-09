@@ -55,7 +55,7 @@ export interface ConchAppRouteHelpers {
   verifyRequired: (request: FastifyRequest, reply: FastifyReply) => boolean;
   emit: (event: ServerEvent) => void;
   /**
-   * An app's provider and chat app (ADR 0119): the card's live test, and
+   * An app's provider and chat app (ADR 0122): the card's live test, and
    * keeping what was typed into it once the app is in (`extensions/service.ts`).
    */
   parts?: {
@@ -145,13 +145,13 @@ export function registerConchAppRoutes(
     return guarded(reply, async () => {
       const added = await service.install(body);
       changed();
-      // Its provider's key, its chat app's fields: kept by Conch with its own (ADR 0119).
+      // Its provider's key, its chat app's fields: kept by Conch with its own (ADR 0122).
       const partProblem = await helpers.parts?.apply(added.id, body.parts);
       return partProblem ? { ...added, partProblem } : added;
     });
   });
 
-  // **Test it** on a preview (ADR 0119): the files shown, sealed, with what was typed for the test.
+  // **Test it** on a preview (ADR 0122): the files shown, sealed, with what was typed for the test.
   app.post<{ Params: { packageId: string; appId: string } }>(
     '/api/conch-apps/packages/:packageId/:appId/test',
     async (request, reply) => {
@@ -174,7 +174,7 @@ export function registerConchAppRoutes(
     },
   );
 
-  // **Test it** on a card in a chat (ADR 0119).
+  // **Test it** on a card in a chat (ADR 0122).
   app.post<{ Params: { offerId: string } }>(
     '/api/conch-apps/offers/:offerId/test',
     async (request, reply) => {
@@ -220,7 +220,7 @@ export function registerConchAppRoutes(
         if (outside && offer.state === 'ready' && verifyRequired(request, reply)) return reply;
         const added = await service.acceptOffer(request.params.offerId, body);
         changed();
-        // Its provider's key, its chat app's fields: kept by Conch with its own (ADR 0119).
+        // Its provider's key, its chat app's fields: kept by Conch with its own (ADR 0122).
         const partProblem = await helpers.parts?.apply(added.id, body.parts);
         return partProblem ? { ...added, partProblem } : added;
       });

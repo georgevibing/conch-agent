@@ -1,5 +1,5 @@
 /**
- * What a Conch app can be besides tools and pages (ADR 0119): a **provider**
+ * What a Conch app can be besides tools and pages (ADR 0122): a **provider**
  * (what answers a chat: a model API, a server, a vendor's plan) and a
  * **chat app** to talk to your assistant on ("Talk to me here"). Both are
  * declared in `conch-app.json` and come with everything a Conch app has —

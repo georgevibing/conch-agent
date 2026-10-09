@@ -1,5 +1,5 @@
 /**
- * A chat app a Conch app brings (ADR 0119), as one of Conch's channels: the
+ * A chat app a Conch app brings (ADR 0122), as one of Conch's channels: the
  * `ChannelAdapter` every built-in implements, answered by the app's own
  * `channel` functions in its sealed runtime. It plugs into `ChannelService`
  * unchanged, so the owner's hello, **Let in** and **Block**, groups off by

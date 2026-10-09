@@ -1,5 +1,5 @@
 /**
- * A provider's and a chat app's code (ADR 0119), run for real in the sealed
+ * A provider's and a chat app's code (ADR 0122), run for real in the sealed
  * runtime's child process: what they're handed is only what's theirs (the
  * keys typed for them, this call only), their answers stream only while a
  * provider answers, they reach only the hosts on their card, and a chat

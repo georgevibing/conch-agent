@@ -262,7 +262,7 @@ export function normalizeSecrets(secrets: ChannelSecrets, kept?: ChannelSecrets)
     };
   if (secrets.kind === 'line')
     return normalizeLine(secrets, kept?.kind === 'line' ? kept : undefined);
-  // A Conch app's chat app (ADR 0119): what was typed, trimmed, and an address of its own.
+  // A Conch app's chat app (ADR 0122): what was typed, trimmed, and an address of its own.
   if (secrets.kind === 'app')
     return {
       kind: 'app',
@@ -387,7 +387,7 @@ export class ChannelService {
       /** Hearing voice notes on this computer (ADR 0077). */
       voice?: VoiceNotes;
       /**
-       * Chat apps Conch apps bring (ADR 0119): their tiles in the catalog,
+       * Chat apps Conch apps bring (ADR 0122): their tiles in the catalog,
        * and what each is called.
        */
       apps?: {
@@ -601,13 +601,13 @@ export class ChannelService {
   #appOf(stored: StoredChannel): string | undefined {
     if (stored.kind === 'slack') return 'slack';
     if (stored.kind === 'email' && this.#mail.get(stored.id) === 'gmail') return 'gmail';
-    // A Conch app's chat app (ADR 0119) is that app's Talk to me here.
+    // A Conch app's chat app (ADR 0122) is that app's Talk to me here.
     if (stored.kind === 'app' && stored.contributed) return `capp_${stored.contributed.app}`;
     return undefined;
   }
 
   /**
-   * Whether a channel's own code may speak for its owner (ADR 0119): every
+   * Whether a channel's own code may speak for its owner (ADR 0122): every
    * built-in's, and a chat app made here. Anyone else's chat app runs code
    * that says who's writing (and could press a button for them), so what
    * grants trust or approves a step never goes through it: questions and
@@ -3316,7 +3316,7 @@ export class ChannelService {
     const live = this.#live.get(channelId);
     const askKey = `${channelId}:${permissionId}`;
     if (!live || this.#asks.has(askKey)) return;
-    // Someone else's chat app (ADR 0119) never carries an approval: it waits for you in Conch.
+    // Someone else's chat app (ADR 0122) never carries an approval: it waits for you in Conch.
     const where = live.kind === 'app' ? await this.deps.store.get(channelId) : undefined;
     if (where && !this.#vouched(where)) {
       this.#asks.set(askKey, {

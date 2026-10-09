@@ -1,6 +1,6 @@
 /**
  * The only way a provider a Conch app declares reaches its company (ADR
- * 0119): a `fetch` the chat adapters (`openai.ts`, `anthropic.ts`) use as
+ * 0122): a `fetch` the chat adapters (`openai.ts`, `anthropic.ts`) use as
  * they use the global one, streaming, on the terms an app's `app.fetch` has:
  *
  * - **Only the hosts on its card.** `https://` to a host in the manifest's

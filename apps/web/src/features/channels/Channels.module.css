@@ -197,7 +197,7 @@
     }
   }
 
-  /* Add your own chat app (ADR 0119), under Talk to me here. */
+  /* Add your own chat app (ADR 0122), under Talk to me here. */
   .ownSection {
     display: flex;
     flex-direction: column;

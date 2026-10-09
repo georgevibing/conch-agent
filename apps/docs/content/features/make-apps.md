@@ -87,6 +87,10 @@ A repository can hold several apps. Conch lists them all, and you choose.
 
 When an app you added from GitHub has a new version, its card and its page say so, and so does **Settings → Updates** under **Apps you added**. Press **Look first** (or **See what changed**) to read what's different, with any new website first, then **Update**. Nothing updates by itself.
 
+## A provider or a chat app
+
+An app can also bring a provider, which answers your chats, or a chat app to talk to your assistant on. Ask for one by name ("add Fireworks as a provider", "connect me on Zulip"), and its card asks for its key and tests it before you add it. See [Add any provider](../providers/any-provider.md) and [Add any chat app](../channels/any-chat-app.md).
+
 ## How it stays safe
 
 An app is something a model wrote, or something a stranger shared. So it runs sealed off, every time:

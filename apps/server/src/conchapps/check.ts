@@ -458,7 +458,7 @@ function toolProblems(
 
 /**
  * The tools module, loaded and listed in the sealed runtime: its definitions
- * and the provider's and chat app's functions it exports (ADR 0119), or why
+ * and the provider's and chat app's functions it exports (ADR 0122), or why
  * it didn't load.
  */
 async function loadTools(
@@ -615,12 +615,12 @@ export const checkApp: CheckApp = async (files, options) => {
   };
 };
 
-/** What `app_try` remembers when a provider or chat app was tried (ADR 0119). */
+/** What `app_try` remembers when a provider or chat app was tried (ADR 0122). */
 export const PROVIDER_TRIED = '@provider';
 export const CHANNEL_TRIED = '@channel';
 
 /**
- * A provider's and a chat app's half of the bar (ADR 0119): it reaches only
+ * A provider's and a chat app's half of the bar (ADR 0122): it reaches only
  * what its card shows, the code it needs is exported, and (for what Conch
  * makes) it was tried with `app_try`.
  */

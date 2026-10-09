@@ -1,5 +1,5 @@
 /**
- * What a Conch app brings besides tools and pages (ADR 0119), as Nacre's
+ * What a Conch app brings besides tools and pages (ADR 0122), as Nacre's
  * review card shows it: its provider or its chat app, from its manifest, and
  * the live test's answer in the card's words.
  */

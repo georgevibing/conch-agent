@@ -9,7 +9,7 @@ import styles from './Channels.module.css';
 const EXAMPLES = ['Zulip', 'Threema', 'Revolt', 'Nextcloud Talk'];
 
 /**
- * **Add your own** under Talk to me here (ADR 0119): any chat app, from its
+ * **Add your own** under Talk to me here (ADR 0122): any chat app, from its
  * name — Conch reads its bot docs, makes it, checks it with your bot's token
  * and shows a card — or **From a link**, one someone shared. No hub.
  */

@@ -85,7 +85,7 @@ function providerItem(provider: Provider, fixed: boolean): DoctorItem {
 }
 
 /**
- * Something a Conch app brings that stopped working (ADR 0119), most often
+ * Something a Conch app brings that stopped working (ADR 0122), most often
  * because the company changed its API: the maker can read its docs again and
  * change the app, and the person presses Update on the card.
  */

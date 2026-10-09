@@ -74,7 +74,7 @@ export function ConnectChannel({ kind }: { kind: string }) {
   useEffect(() => {
     if (!contributed && !isKind(kind)) void navigate('/apps?show=talk', { replace: true });
   }, [contributed, kind, navigate]);
-  // A chat app a Conch app brings (ADR 0119): connected from its manifest's words.
+  // A chat app a Conch app brings (ADR 0122): connected from its manifest's words.
   if (contributed) return <AppChannelSetup app={contributed} />;
   if (!isKind(kind)) return null;
   if (kind === 'telegram') return <TelegramSetup />;

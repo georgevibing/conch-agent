@@ -1,6 +1,6 @@
 @layer nacre.components {
   /*
-   * Make one with Conch (ADR 0119): a raised card with one line and one
+   * Make one with Conch (ADR 0122): a raised card with one line and one
    * button, a pearl sparkle beside its question. Barely-there lustre.
    */
   .maker {

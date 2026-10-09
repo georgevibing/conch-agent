@@ -1,5 +1,5 @@
 /**
- * A chat app a Conch app brings (ADR 0119), as a channel: what its sealed
+ * A chat app a Conch app brings (ADR 0122), as a channel: what its sealed
  * code hands over is checked before the service sees it, Conch owns the loop
  * (it heals by itself, and stops at a refused token), and questions go out
  * as numbered answers the reply presses.

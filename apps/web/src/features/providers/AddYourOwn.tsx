@@ -11,7 +11,7 @@ import styles from './Providers.module.css';
 const EXAMPLES = ['Fireworks AI', 'Baseten', 'Perplexity', 'SambaNova'];
 
 /**
- * **Add your own** (ADR 0119): any provider, three ways. **Make one with
+ * **Add your own** (ADR 0122): any provider, three ways. **Make one with
  * Conch** from its name — Conch reads its docs, makes it, tests it with your
  * key and shows a card. **Any OpenAI-compatible address** for a server you
  * know the address of. **From a link** for one someone shared. No hub.

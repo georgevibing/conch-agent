@@ -84,7 +84,7 @@ export interface ProviderCardProps extends Omit<ComponentProps<'article'>, 'titl
   /** Early support: said out loud rather than discovered. */
   experimental?: boolean;
   /**
-   * A Conch app brings it (ADR 0119): **Made by you**, or **Added from a
+   * A Conch app brings it (ADR 0122): **Made by you**, or **Added from a
    * link**, beside its name, so a provider of your own never passes for one
    * Conch ships.
    */

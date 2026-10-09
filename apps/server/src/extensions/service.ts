@@ -1,5 +1,5 @@
 /**
- * Providers and chat apps that Conch apps bring (ADR 0119): the one place
+ * Providers and chat apps that Conch apps bring (ADR 0122): the one place
  * that joins what the apps you have declare to the rest of Conch.
  *
  * - **Providers.** Every app with `provider` in its manifest is a provider

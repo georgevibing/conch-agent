@@ -22,7 +22,7 @@ export interface MakeWithConchProps extends Omit<ComponentProps<'form'>, 'childr
 }
 
 /**
- * **Make one with Conch** (ADR 0119): a provider or a chat app nobody has
+ * **Make one with Conch** (ADR 0122): a provider or a chat app nobody has
  * added yet, from its name. Conch reads its own documentation, writes it,
  * tests it with your key, and shows a card; nothing is added until the
  * person presses **Add**. One line, a few names to tap, one button.

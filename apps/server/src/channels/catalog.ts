@@ -167,13 +167,13 @@ export const CHANNEL_NAMES: Record<ChannelKind, string> = {
   line: 'LINE',
   rocketchat: 'Rocket.Chat',
   googlechat: 'Google Chat',
-  // A Conch app's chat app (ADR 0119) is called by its own name: `channelName`.
+  // A Conch app's chat app (ADR 0122) is called by its own name: `channelName`.
   app: 'your chat app',
 };
 
 /**
  * What a channel's app is called: its kind's name, or, for a chat app a
- * Conch app brings (ADR 0119), the name its manifest gives it ("Zulip").
+ * Conch app brings (ADR 0122), the name its manifest gives it ("Zulip").
  */
 export function channelName(channel: {
   kind: ChannelKind;

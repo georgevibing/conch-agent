@@ -23,7 +23,7 @@ import { HelloStep } from './HelloStep';
 import { useChannels } from './queries';
 
 /**
- * A chat app a Conch app brings (ADR 0119), connected like any other:
+ * A chat app a Conch app brings (ADR 0122), connected like any other:
  * the steps its maker wrote, what it needs typed (checked with the app's own
  * code before anything is kept), then the hello that recognises you.
  */

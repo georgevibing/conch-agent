@@ -234,7 +234,7 @@ describe('Your providers', () => {
     ).toEqual({ 'providers:claude-code': 'ok', 'providers:codex': 'needs-you' });
   });
 
-  it('offers to ask Conch to fix a provider an app brings that stopped working (ADR 0119)', async () => {
+  it('offers to ask Conch to fix a provider an app brings that stopped working (ADR 0122)', async () => {
     const fireworks = provider('app-fireworks', {
       name: 'Fireworks AI',
       contributed: { app: 'fireworks', from: 'made', speaks: 'openai', reaches: [] },

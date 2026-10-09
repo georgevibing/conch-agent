@@ -113,7 +113,7 @@ export interface ConchAppServiceDeps {
   /** Fingerprints of the person's own signing keys: a file signed with one is theirs. */
   ownKeys?: () => Promise<ReadonlySet<string>>;
   /**
-   * The live test of a provider or chat app (ADR 0119), on a draft's own
+   * The live test of a provider or chat app (ADR 0122), on a draft's own
    * runtime: `ExtensionService.testWith`. Without it, `app_try` only checks
    * what the module exports.
    */
@@ -951,7 +951,7 @@ export class ConchAppService {
   }
 
   /**
-   * `app_try` for a draft's provider or chat app (ADR 0119). What the module
+   * `app_try` for a draft's provider or chat app (ADR 0122). What the module
    * must export is checked; then the live test runs when nothing only the
    * person can type is needed (a provider with no key). When a key is
    * needed, the card asks the person for it and tests it there, so the
@@ -1258,7 +1258,7 @@ export class ConchAppService {
 
   /**
    * What a card or a preview offers, sealed in a runtime of its own for its
-   * live test (ADR 0119): exactly those files, a scratch data folder, none
+   * live test (ADR 0122): exactly those files, a scratch data folder, none
    * of the person's settings, and the real `app.fetch` (only the hosts the
    * card shows). The person's press on **Test it** is what runs it; `dispose`
    * stops it and throws its scratch away.

@@ -32,7 +32,7 @@ import {
 } from './types';
 
 const ABILITY_ICONS: Record<AppAbilityLine['kind'], ReactNode> = {
-  // What it brings (ADR 0119): a provider that answers chats, a chat app to talk on.
+  // What it brings (ADR 0122): a provider that answers chats, a chat app to talk on.
   provider: <BrainCircuit />,
   channel: <MessagesSquare />,
   data: <HardDrive />,

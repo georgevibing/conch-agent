@@ -62,7 +62,7 @@ const DETECT_TIMEOUT_MS = 30_000;
 const MODELS_TIMEOUT_MS = 20_000;
 
 /**
- * A provider a Conch app brings (ADR 0119), as its card shows it: the words
+ * A provider a Conch app brings (ADR 0122), as its card shows it: the words
  * from its manifest, what the person types, and where it came from.
  */
 export interface AppProviderInfo {
@@ -118,7 +118,7 @@ export class ProviderService {
   #loading?: Promise<EngineId>;
   /** The servers you added, in the order you added them, as settings last said. */
   #servers: ServerConfig[] = [];
-  /** The providers Conch apps bring (ADR 0119), as the apps you have say. */
+  /** The providers Conch apps bring (ADR 0122), as the apps you have say. */
   #apps: AppProviderInfo[] = [];
   readonly #found: FoundThings;
 
@@ -137,7 +137,7 @@ export class ProviderService {
   }
 
   /**
-   * The providers Conch apps bring (ADR 0119), as the apps you have now say:
+   * The providers Conch apps bring (ADR 0122), as the apps you have now say:
    * each one's engine joins the others, and one whose app went leaves, with
    * its key. A chat that used one that's gone moves to the default.
    */

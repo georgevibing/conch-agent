@@ -22,7 +22,7 @@ function NeedButton({ action }: { action: Extract<DoctorAction, { kind: 'need' }
 }
 
 /**
- * Ask Conch to fix it (ADR 0119): a chat that starts with the item's own
+ * Ask Conch to fix it (ADR 0122): a chat that starts with the item's own
  * words, for something a Conch app brings that stopped working. The maker
  * changes the app, and the person presses Update on its card.
  */

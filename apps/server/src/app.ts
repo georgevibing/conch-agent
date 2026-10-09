@@ -399,7 +399,7 @@ export async function buildApp(services: Services) {
         line: services.mockLine?.base,
         rocketchat: services.mockRocketChat?.base,
         googlechat: services.mockGoogleChat?.base,
-        // The pretend model company and chat app for apps that bring one (ADR 0119).
+        // The pretend model company and chat app for apps that bring one (ADR 0122).
         pretend: services.pretendWorld?.base,
       })),
     services.door,
@@ -903,7 +903,7 @@ export async function buildApp(services: Services) {
   registerConchAppRoutes(app, services.conchApps, {
     verifyRequired,
     emit: (event) => services.broadcast.emit(event),
-    // Their providers and chat apps (ADR 0119): the card's live test, and what was typed into it.
+    // Their providers and chat apps (ADR 0122): the card's live test, and what was typed into it.
     parts: {
       test: (ref, body) => services.extensions.test(ref, body),
       apply: (appId, values) => services.extensions.apply(appId, values),

@@ -67,7 +67,7 @@ export interface PartsContext {
   /** The mock engine: publishing pretends, and never runs `gh` with this machine's sign-in. */
   pretend?: boolean;
   /**
-   * The mock engine's pretend world (ADR 0119, `extensions/pretend.ts`): the
+   * The mock engine's pretend world (ADR 0122, `extensions/pretend.ts`): the
    * exact pretend hosts it answers for, on this computer. Only with `pretend`.
    */
   pretendRoute?: (url: URL) => string | undefined;

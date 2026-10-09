@@ -18,7 +18,7 @@ const meta = {
     docs: {
       description: {
         component:
-          '**Make one with Conch** (ADR 0119): a provider or a chat app from its name alone. Conch reads its own documentation in a chat, writes it, tests it, and offers it as a card. One line, a few names to tap, one button.',
+          '**Make one with Conch** (ADR 0122): a provider or a chat app from its name alone. Conch reads its own documentation in a chat, writes it, tests it, and offers it as a card. One line, a few names to tap, one button.',
       },
     },
   },

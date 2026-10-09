@@ -55,7 +55,7 @@ export interface ChannelEndpoints {
   googleChatCerts?: string;
   /** The public door (Teams, Official Accounts), and where channels keep what they remember. */
   door?: ChannelDoorService;
-  /** A chat app a Conch app brings (ADR 0119): its sealed adapter (`extensions/channel.ts`). */
+  /** A chat app a Conch app brings (ADR 0122): its sealed adapter (`extensions/channel.ts`). */
   apps?: (secrets: Extract<ChannelSecrets, { kind: 'app' }>) => ChannelAdapter;
   home?: string;
 }
@@ -105,7 +105,7 @@ export function adapterFor(
     case 'googlechat':
       return new GoogleChatAdapter(secrets, endpoints);
     case 'app':
-      // A Conch app's chat app (ADR 0119): its adapter is the app's sealed code.
+      // A Conch app's chat app (ADR 0122): its adapter is the app's sealed code.
       if (!endpoints.apps)
         throw new Error('Chat apps from Conch apps aren’t set up in this Conch.');
       return endpoints.apps(secrets);

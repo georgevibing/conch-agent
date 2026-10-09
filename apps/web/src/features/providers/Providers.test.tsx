@@ -50,7 +50,7 @@ describe('Providers settings', () => {
     expect(screen.getByRole('heading', { name: 'Your providers' })).toBeInTheDocument();
   });
 
-  it('adds any provider your own way: with Conch, by an address, or from a link (ADR 0119)', async () => {
+  it('adds any provider your own way: with Conch, by an address, or from a link (ADR 0122)', async () => {
     mockFetch(
       routes({
         'GET /api/providers': () => ({

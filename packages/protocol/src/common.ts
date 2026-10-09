@@ -54,7 +54,7 @@ export const ServerId = z.templateLiteral(['server-', z.string().regex(/^[a-z0-9
 export type ServerId = z.infer<typeof ServerId>;
 
 /**
- * A provider a Conch app brings (ADR 0119): `app-` and the app's id, so a chat
+ * A provider a Conch app brings (ADR 0122): `app-` and the app's id, so a chat
  * that used it still finds it after an update, and loses it with the app.
  */
 export const AppProviderId = z.templateLiteral([
@@ -76,7 +76,7 @@ export function isServerId(id: string): id is ServerId {
   return ServerId.safeParse(id).success;
 }
 
-/** Whether a provider id names one a Conch app brings (ADR 0119). */
+/** Whether a provider id names one a Conch app brings (ADR 0122). */
 export function isAppProviderId(id: string): id is AppProviderId {
   return AppProviderId.safeParse(id).success;
 }

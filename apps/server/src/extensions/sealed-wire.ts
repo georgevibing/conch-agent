@@ -1,5 +1,5 @@
 /**
- * A provider written in code (ADR 0119, `speaks: 'code'`): the engine's
+ * A provider written in code (ADR 0122, `speaks: 'code'`): the engine's
  * `Wire`, answered by the app's own `provider.chat` in its sealed runtime.
  *
  * The contract is small on purpose, and in the shape most of the world

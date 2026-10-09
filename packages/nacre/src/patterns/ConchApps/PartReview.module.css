@@ -1,6 +1,6 @@
 @layer nacre.components {
   /*
-   * A provider or a chat app, reviewed on its card (ADR 0119): a sunken panel
+   * A provider or a chat app, reviewed on its card (ADR 0122): a sunken panel
    * inside the card, so what it brings reads as one thing — what it is, its
    * key, and the test that proves it.
    */

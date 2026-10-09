@@ -45,7 +45,7 @@ export interface AppPreviewApp {
   changes?: AppChangesView;
   /** `appAbilities`, `appSourceLine`, and `describeChanges` when it's an update. */
   words: AppWords;
-  /** A provider or a chat app it brings (ADR 0119): reviewed and tested before it's added. */
+  /** A provider or a chat app it brings (ADR 0122): reviewed and tested before it's added. */
   brings?: { provider?: PartProviderView; channel?: PartChannelView };
 }
 
@@ -61,9 +61,9 @@ export interface AppPreviewProps extends Omit<ComponentProps<'section'>, 'childr
   busy?: string;
   /** Apps added from this preview (their ids). */
   added?: readonly string[];
-  /** **Add to my apps** or **Update**, with what the person typed (and its part's key, ADR 0119). */
+  /** **Add to my apps** or **Update**, with what the person typed (and its part's key, ADR 0122). */
   onAdd?: (appId: string, settings: Record<string, string>, part?: PartValues) => void;
-  /** **Test it**, for an app that brings a provider or a chat app (ADR 0119). */
+  /** **Test it**, for an app that brings a provider or a chat app (ADR 0122). */
   onTest?: (appId: string, values: PartValues) => Promise<PartTestView>;
   /** After a failure: read the link again. */
   onRetry?: () => void;

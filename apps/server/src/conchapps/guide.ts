@@ -57,7 +57,7 @@ export const APP_API = [
   'app.settings',
   'app.now',
   'app.log',
-  // A provider's and a chat app's functions (ADR 0119).
+  // A provider's and a chat app's functions (ADR 0122).
   'app.keys',
   'app.emit',
 ] as const;
