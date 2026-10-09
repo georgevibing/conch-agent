@@ -58,10 +58,12 @@ procedure.
    only `main` may use and which alone holds `RELEASE_SIGNING_KEY`.
    `pnpm release ci tag` (`release/tag.ts`) makes the annotated tag on the merge
    with `git tag -s` and `gpg.format=ssh`. Its message is the notes from that
-   commit's `CHANGELOG.md`. It then checks the tag with `verifyTag` twice. First
-   against the list in the newest earlier release, which is what installs
-   already carry. Then against the list at this commit, which the next release
-   is checked against. A tag that wouldn't pass either is deleted before anything
+   commit's `CHANGELOG.md`. It then checks the tag with `verifyTag` against
+   several lists. First, for each channel the release is offered on (stable
+   reaches all three), the list in that channel's newest earlier release: what
+   its installs carry, since an install on stable has only ever had stable
+   releases. Then against the list at this commit, which the next release is
+   checked against. A tag that wouldn't pass either is deleted before anything
    is pushed. A tag already there, from a run that
    stopped, is accepted only if it checks out and is on this commit.
 3. **release-please** runs on every push. After a tag, it makes that tag's GitHub
@@ -164,14 +166,14 @@ maintainer prefers their own name.
 
 What changes from ADR 0051's table is where the key lives.
 
-| Who                                                   | Could try                      | What holds                                                                                                                                                                                         |
-| ----------------------------------------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A pull request's workflow                             | read `RELEASE_SIGNING_KEY`     | It's an environment secret, and only `main` may deploy to `release`. Workflows from forks get no secrets.                                                                                          |
-| A commit that lands on `main`                         | sign its own release           | Only by being merged as a release pull request, which a maintainer merges. Branch rules require CI on `main` (docs/REPOSITORY-SETTINGS.md).                                                        |
-| A compromised dependency or action                    | take the key from the job      | Actions are pinned to commits. The key is in one step's environment only, after an install with no scripts and no restored cache. The tag job runs no third-party action after checkout but setup. |
-| GitHub, or someone with the repository's admin rights | sign a release                 | They can, as they could reach any CI secret. The key's line in `allowed_signers` says it's CI's. A maintainer's own key can sign instead (ADR 0051), at the cost of the laptop again.              |
-| A key changed too early, or by mistake                | ship a release installs refuse | The tag job checks against the newest earlier release's list too, and stops. `pnpm release key` won't hand GitHub a key until a release trusts it.                                                 |
-| Moving or deleting a published tag                    | swap what a version is         | The tag ruleset restricts updates and deletions. Installs read the tag object and its name (ADR 0051), and immutable releases keep the files.                                                      |
+| Who                                                   | Could try                      | What holds                                                                                                                                                                                           |
+| ----------------------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A pull request's workflow                             | read `RELEASE_SIGNING_KEY`     | It's an environment secret, and only `main` may deploy to `release`. Workflows from forks get no secrets.                                                                                            |
+| A commit that lands on `main`                         | sign its own release           | Only by being merged as a release pull request, which a maintainer merges. Branch rules require CI on `main` (docs/REPOSITORY-SETTINGS.md).                                                          |
+| A compromised dependency or action                    | take the key from the job      | Actions are pinned to commits. The key is in one step's environment only, after an install with no scripts and no restored cache. The tag job runs no third-party action after checkout but setup.   |
+| GitHub, or someone with the repository's admin rights | sign a release                 | They can, as they could reach any CI secret. The key's line in `allowed_signers` says it's CI's. A maintainer's own key can sign instead (ADR 0051), at the cost of the laptop again.                |
+| A key changed too early, or by mistake                | ship a release installs refuse | The tag job checks against the newest earlier release's list on every channel it reaches, and stops. `pnpm release key` won't hand GitHub a key until the newest release on every channel trusts it. |
+| Moving or deleting a published tag                    | swap what a version is         | The tag ruleset restricts updates and deletions. Installs read the tag object and its name (ADR 0051), and immutable releases keep the files.                                                        |
 
 ## Consequences
 

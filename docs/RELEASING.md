@@ -122,6 +122,8 @@ Start a run by hand only when no Release run is in progress: a newer push to
   every file it promises is there.
 - **The release pull request says it isn't ready to merge.** `release/allowed_signers`
   has no key. Run `pnpm release key` and push the list; the pull request updates.
+  With the release app set up, CI's `check` fails on it too, so branch rules
+  keep it from being merged.
 - **The tag wasn't made** ("isn't set", "isn't trusted by…"). The secret
   `RELEASE_SIGNING_KEY` isn't a key that both the list at that commit and the
   release before it trust. The merged pull request waits, labelled
@@ -129,9 +131,11 @@ Start a run by hand only when no Release run is in progress: a newer push to
   opens. Either:
   - give the secret the right key (`gh secret set RELEASE_SIGNING_KEY --env
 release < key`), then run **Release** by hand with no version; or
-  - skip that version: fix the list or the key on `main`, then on the merged pull
-    request swap the `autorelease: pending` label for `autorelease: tagged`.
-    release-please then proposes the version after it.
+  - skip that version: fix the list or the key on `main`, swap the merged pull
+    request's `autorelease: pending` label for `autorelease: tagged`, then run
+    `pnpm release as <the version after it>` and push. Without a release for the
+    skipped version, release-please would count from scratch; the footer names
+    the next one exactly.
 - **Two merged release pull requests wait.** Label every one but the newest
   `autorelease: tagged`, then run **Release** by hand.
 
@@ -142,11 +146,12 @@ Installs trust the list in the version they already have. So:
 1. Add the new key's line to `release/allowed_signers` in a commit.
 2. Release once more, still **signed with the old key**.
 3. Then give GitHub the new private key: `pnpm release key` on the computer that
-   has it. It refuses until a release trusts the key. Remove the old line in a
+   has it. It refuses until the newest release on every channel trusts the key,
+   so make that release a stable one (it reaches every channel). Remove the old line in a
    later release if you like.
 
-The tag job checks each new tag against the list in the release before it, as
-installs do, so a key handed over too early stops the release instead of
+The tag job checks each new tag against the list each channel's installs carry
+(the newest release on every channel the new one is offered on), so a key handed over too early stops the release instead of
 shipping one nobody takes.
 
 If the old key is lost, installs can't take a new one from a release: they'd have
