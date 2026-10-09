@@ -1000,6 +1000,7 @@ export class CodexEngine implements Engine {
                     output: text,
                     ...(view && { view }),
                   });
+                  const note = signal.aborted ? undefined : input.resourceFeedback?.();
                   if (!signal.aborted)
                     rpc.send({
                       id: message.id,
@@ -1008,6 +1009,7 @@ export class CodexEngine implements Engine {
                         // The app server takes pictures back from a tool as `inputImage`.
                         contentItems: [
                           { type: 'inputText', text },
+                          ...(note ? [{ type: 'inputText', text: note }] : []),
                           ...images.map((image) => ({
                             type: 'inputImage',
                             imageUrl: `data:${image.mimeType};base64,${image.data}`,

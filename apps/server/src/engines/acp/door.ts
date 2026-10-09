@@ -87,6 +87,7 @@ export async function openDoor(
      * them the way they get any server's, not as words in the user's message.
      */
     instructions?: string;
+    resourceFeedback?: () => string | undefined;
   } = {},
 ): Promise<Door> {
   const key = randomBytes(32).toString('base64url');
@@ -138,10 +139,12 @@ export async function openDoor(
         ...(view && !isError && { view }),
       });
       // A tool's pictures (a screenshot) go back as MCP images, after its words.
+      const note = signal.aborted ? undefined : options.resourceFeedback?.();
       return {
         isError,
         content: [
           { type: 'text' as const, text },
+          ...(note ? [{ type: 'text' as const, text: note }] : []),
           ...(images ?? []).map((image) => ({
             type: 'image' as const,
             data: image.data,

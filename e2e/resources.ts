@@ -9,7 +9,7 @@ import { ProcessService } from '../apps/server/src/processes/service';
 import { resourcePolicy } from '../apps/server/src/recovery/resources';
 
 if (process.env.CONCH_ENGINE === 'mock') {
-  ProcessService.prototype.resourceSnapshot = async () =>
+  ProcessService.prototype.readResources = async () =>
     resourcePolicy({
       at: Date.now(),
       totalBytes: 8 * 1024 ** 3,

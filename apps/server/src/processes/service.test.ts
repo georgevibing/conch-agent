@@ -81,14 +81,27 @@ async function until<T>(read: () => Promise<T>, matches: (value: T) => boolean) 
 
 describe('managed commands', () => {
   it('queues under pressure and starts approved work when resources recover', async () => {
+    let now = 1000;
     let snapshot = { ...healthy(), concurrency: 0, level: 'busy' as const } as ResourceSnapshot;
-    const { service, start, read, ctx } = await setup({ resources: async () => snapshot });
+    const { service, start, read, ctx } = await setup({
+      resources: async () => snapshot,
+      now: () => now,
+    });
     const ask = vi.fn(async () => 'allow' as const);
-    const { id } = await start('echo recovered', { ...ctx, permissionMode: 'default', ask });
+    const { id } = await start(
+      'echo recovered',
+      { ...ctx, permissionMode: 'default', ask },
+      60_000,
+    );
     expect((await read(id)).status).toBe('queued');
     expect(ask).toHaveBeenCalledOnce();
     snapshot = healthy();
     await service.resumeAdmission();
+    expect((await read(id)).status).toBe('queued');
+    for (let i = 0; i < 3; i++) {
+      now += 10_000;
+      await service.resumeAdmission();
+    }
     expect(
       (
         await until(
@@ -196,6 +209,97 @@ describe('managed commands', () => {
     expect(service.relievePressure().stopped).toBe(0);
     expect((await read(newer.id)).status).toBe('stopped');
     expect((await read(older.id)).status).toBe('running');
+  });
+
+  it('restores one shared slot at a time across chats and does not replay cancelled work', async () => {
+    let now = 1000;
+    let snapshot: ResourceSnapshot = { ...healthy(), level: 'busy', concurrency: 0 };
+    const { service, start, read, run, ctx } = await setup({
+      now: () => now,
+      resources: async () => snapshot,
+    });
+    const other = { ...ctx, conversationId: 'two' };
+    const command = 'node -e "setInterval(()=>{},1000)"';
+    const one = await start(command, ctx, 120_000);
+    const two = await start(command, other, 120_000);
+    const cancelled = await start('echo must-not-run', other, 120_000);
+    await run('process_stop', { id: cancelled.id }, other);
+    snapshot = healthy();
+    await service.resumeAdmission();
+    for (let i = 0; i < 3; i++) {
+      now += 10_000;
+      await service.resumeAdmission();
+    }
+    expect((await read(one.id)).status).toBe('running');
+    expect((await read(two.id, other)).status).toBe('queued');
+    now += 10_000;
+    await service.resumeAdmission();
+    expect((await read(two.id, other)).status).toBe('running');
+    expect(await read(cancelled.id, other)).toMatchObject({ status: 'stopped', output: '' });
+  });
+
+  it('shares cached readings across tool bursts and refreshes them after a second', async () => {
+    let now = 0;
+    const resources = vi.fn(async () => healthy());
+    const { service } = await setup({ now: () => now, resources });
+    await Promise.all(Array.from({ length: 100 }, () => service.resourceSnapshot()));
+    await service.resourceSnapshot();
+    expect(resources).toHaveBeenCalledOnce();
+    now = 1001;
+    await service.resourceSnapshot();
+    expect(resources).toHaveBeenCalledTimes(2);
+  });
+
+  it('can wait for resource changes without a command, and Stop cancels that wait', async () => {
+    const { run, ctx } = await setup();
+    const abort = new AbortController();
+    const waiting = run('process_read', { wait_ms: 30_000 }, { ...ctx, signal: abort.signal });
+    abort.abort();
+    await expect(waiting).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  it('recovers its shared sampler after a timeout and ignores the late old result', async () => {
+    let late: ((value: ResourceSnapshot) => void) | undefined;
+    const { service } = await setup({
+      resources: vi
+        .fn()
+        .mockImplementationOnce(
+          () =>
+            new Promise<ResourceSnapshot>((resolve) => {
+              late = resolve;
+            }),
+        )
+        .mockResolvedValue(healthy()),
+    });
+    vi.useFakeTimers();
+    try {
+      const failure = expect(service.resourceSnapshot()).rejects.toThrow('timed out');
+      await vi.advanceTimersByTimeAsync(2001);
+      await failure;
+      expect(service.workload).toMatchObject({ phase: 'held', cause: 'unknown' });
+      await vi.advanceTimersByTimeAsync(1001);
+      await service.resourceSnapshot();
+      expect(service.workload).toMatchObject({ phase: 'recovering', concurrency: 0 });
+      late?.({ ...healthy(), level: 'critical', concurrency: 0 });
+      await Promise.resolve();
+      expect((await service.resourceSnapshot()).level).toBe('healthy');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('backs off a failed sampler even when many chats keep checking', async () => {
+    let now = 0;
+    const resources = vi.fn(async () => {
+      throw new Error('not readable');
+    });
+    const { service } = await setup({ now: () => now, resources });
+    await service.resourceSnapshot().catch(() => undefined);
+    for (let i = 0; i < 50; i++) await service.resourceSnapshot().catch(() => undefined);
+    expect(resources).toHaveBeenCalledOnce();
+    now = 1001;
+    await service.resourceSnapshot().catch(() => undefined);
+    expect(resources).toHaveBeenCalledTimes(2);
   });
 
   it('captures exit codes and logs, with no ambient credentials', async () => {

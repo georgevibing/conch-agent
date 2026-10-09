@@ -163,7 +163,8 @@ your desktop and the chat apps you already use.
 - **It fixes itself.** **Repair everything** checks every part of Conch, with daily
   backups and signed updates that roll back on failure. Conch watches for freezes,
   cleans up programs left behind by a crash, and resumes waiting work after a healthy
-  recovery. **Settings → This computer**
+  recovery. It tells active assistants when resources are tight and gradually
+  restores managed work when there is room again. **Settings → This computer**
   shows the machine live, and what each provider uses. [Health](./apps/docs/content/care/health.md)
 - **Sign in with your device.** Touch ID, Windows Hello or Face ID; a new device waits
   for your OK in **Settings → Devices**.

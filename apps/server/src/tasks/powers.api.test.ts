@@ -38,7 +38,7 @@ async function setup() {
   );
   // This fixture tests task tools, not the shared runner's load. Keep admission
   // deterministic, as the mock browser journeys do; recovery has its own tests.
-  vi.spyOn(services.processes, 'resourceSnapshot').mockResolvedValue(
+  vi.spyOn(services.processes, 'readResources').mockResolvedValue(
     resourcePolicy({
       at: Date.now(),
       totalBytes: 8 * 1024 ** 3,

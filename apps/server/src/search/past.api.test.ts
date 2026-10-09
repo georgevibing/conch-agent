@@ -32,7 +32,7 @@ async function setup() {
     }),
   );
   // Background tasks wait for room on this computer: don't depend on the host's load.
-  vi.spyOn(services.processes, 'resourceSnapshot').mockResolvedValue({
+  vi.spyOn(services.processes, 'readResources').mockResolvedValue({
     at: Date.now(),
     totalBytes: 8 * 1024 ** 3,
     availableBytes: 6 * 1024 ** 3,

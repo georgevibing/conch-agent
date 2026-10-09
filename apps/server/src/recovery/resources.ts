@@ -20,12 +20,14 @@ export interface ResourceSnapshot {
 
 const execute = promisify(execFile);
 const MiB = 1024 * 1024;
+export const memoryReserve = (totalBytes: number) =>
+  Math.min(1024 * MiB, Math.max(256 * MiB, totalBytes * 0.1));
 
 /** Pure admission policy: reserve memory and a CPU for the gateway, cap unknown jobs. */
 export function resourcePolicy(
   input: Omit<ResourceSnapshot, 'level' | 'concurrency' | 'reason'>,
 ): ResourceSnapshot {
-  const reserve = Math.min(1024 * MiB, Math.max(256 * MiB, input.totalBytes * 0.1));
+  const reserve = memoryReserve(input.totalBytes);
   const critical = input.availableBytes < reserve / 2 || (input.memoryPressure ?? 0) >= 20;
   const busy =
     critical ||

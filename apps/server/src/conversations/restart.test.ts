@@ -15,6 +15,7 @@ import { MemoryStore } from '../memory/store';
 import { SettingsStore } from '../settings/store';
 import { ConversationManager } from './manager';
 import { ConversationStore } from './store';
+import type { WorkloadPace } from '../recovery/pace';
 
 class Scripted implements Engine {
   readonly id = 'openrouter' as const;
@@ -50,7 +51,7 @@ class Scripted implements Engine {
 async function open(
   home: string,
   engine: Scripted,
-  recovery?: { allowed: () => boolean; intervalMs?: number },
+  recovery?: { allowed: () => boolean; intervalMs?: number; workload?: () => WorkloadPace },
 ) {
   const settings = new SettingsStore(home);
   await settings.update({ preferences: { engine: 'openrouter', autoTitle: false } });
@@ -392,6 +393,59 @@ describe('Conch restarting under a running chat', () => {
 });
 
 describe('native commands share resource admission', () => {
+  it('guides an ongoing chat before pressure becomes critical and refreshes context next turn', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-live-resource-'));
+    let state: WorkloadPace = {
+      phase: 'normal',
+      cause: 'recovery',
+      concurrency: 4,
+      critical: false,
+    };
+    const heard: (string | undefined)[] = [];
+    const engine = new Scripted(async function* (input) {
+      heard.push(input.systemAppend);
+      state = { phase: 'constrained', cause: 'memory', concurrency: 1, critical: false };
+      // The provider's next safe boundary reads a live signal; no new turn is sent.
+      heard.push(input.resourceFeedback?.());
+      expect(
+        await input.guard?.({
+          toolName: 'Bash',
+          toolUseId: 'wait',
+          input: { command: 'echo large-build' },
+        }),
+      ).toMatchObject({ decision: 'deny' });
+      expect(
+        await input.guard?.({ toolName: 'Read', input: { file_path: join(home, 'file') } }),
+      ).toBeUndefined();
+      yield { type: 'done', outcome: 'success' };
+    });
+    const manager = await open(home, engine, {
+      allowed: () => state.phase === 'normal',
+      workload: () => state,
+    });
+    try {
+      const chat = await manager.send({
+        clientMessageId: 'u1',
+        text: 'Continue the original task',
+      });
+      await until(manager, chat.id, (events) => events.some((e) => e.type === 'turn.completed'));
+      expect(heard[0]).toContain('currently has room');
+      expect(heard[1]).toContain('approaching its memory budget');
+      state = { phase: 'normal', cause: 'recovery', concurrency: 4, critical: false };
+      await manager.send({ conversationId: chat.id, clientMessageId: 'u2', text: 'Carry on' });
+      await until(
+        manager,
+        chat.id,
+        (events) => events.filter((e) => e.type === 'turn.completed').length === 2,
+      );
+      expect(heard[2]).toContain('currently has room');
+      expect(engine.turns).toHaveLength(2);
+      const record = await new ConversationStore(join(home, 'conversations')).get(chat.id);
+      expect(record?.pendingToolCalls ?? []).not.toContain('wait');
+    } finally {
+      await manager.drain();
+    }
+  });
   it.each(['Bash', 'PowerShell'])(
     'holds %s under pressure without blocking reads or creating an uncertain action',
     async (toolName) => {

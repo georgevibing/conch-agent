@@ -124,6 +124,65 @@ function rememberTool(saved: string[]): HostTool {
 
 // ── Detection ───────────────────────────────────────────────────────────────
 
+describe('resource feedback reaches the model without changing recorded outcomes', () => {
+  it.each([false, true])(
+    'preserves raw JSON and the original failure flag (denied: %s)',
+    async (denied) => {
+      let calls = 0;
+      let ran = 0;
+      const results: unknown[] = [];
+      const systems: string[] = [];
+      const wire = stubWire({
+        stream: (request) => {
+          systems.push(request.system);
+          return ++calls === 1
+            ? ended('', [{ id: 't1', name: 'mcp__conch__observe', argumentsJson: '{}' }])
+            : ended('Done');
+        },
+        toolResults: (values) => {
+          results.push(...values);
+          return values.map((v) => ({ role: 'tool', content: v.text, tool_call_id: v.id }));
+        },
+      });
+      const { engine } = await engineFor(wire);
+      const events = await collect(
+        engine.runTurn(
+          turn({
+            resourceFeedback: () => '[Conch resource update: reduce parallelism]',
+            guard: async () => (denied ? { decision: 'deny', message: 'Not approved' } : undefined),
+            tools: [
+              {
+                name: 'observe',
+                description: 'Observe',
+                input: {},
+                run: async () => {
+                  ran++;
+                  return '{"status":"exited","exitCode":0}';
+                },
+              },
+            ],
+          }),
+        ),
+      );
+      const raw = denied ? 'Not approved' : '{"status":"exited","exitCode":0}';
+      expect(events).toContainEqual({
+        type: 'tool-end',
+        toolUseId: 't1',
+        status: denied ? 'error' : 'success',
+        output: raw,
+      });
+      expect(results).toContainEqual(
+        expect.objectContaining({
+          isError: denied,
+          text: raw,
+        }),
+      );
+      expect(ran).toBe(denied ? 0 : 1);
+      expect(systems[1]).toContain('[Conch resource update: reduce parallelism]');
+    },
+  );
+});
+
 describe('detecting an API provider', () => {
   it('is signed out, and says how to connect, with no key saved', async () => {
     const { engine } = await engineFor(stubWire(), { key: false });

@@ -110,6 +110,8 @@ import { shownPath } from '../undo/tracker';
 import { TurnReplies } from '../replies/turn';
 import { turnBudget } from '../engines/budget';
 import { guardTurn } from './turn-guard';
+import { resourceFeedback } from './resource-feedback';
+import type { WorkloadPace } from '../recovery/pace';
 import { TurnPlan } from '../plans/turn';
 import { APPROVAL_WAIT_MS } from '../push/approve';
 import { PLAN_APPROVAL, PLAN_MODE_PROMPT, exitPlanModeTool, needsPlanTool } from '../plans/mode';
@@ -907,7 +909,7 @@ export class ConversationManager {
     private readonly deps: {
       store: ConversationStore;
       /** Resource admission for automatic recovery; manual chats remain available. */
-      recovery?: { allowed: () => boolean; intervalMs?: number };
+      recovery?: { allowed: () => boolean; workload?: () => WorkloadPace; intervalMs?: number };
       settings: SettingsStore;
       memory: MemoryStore;
       /**
@@ -2554,6 +2556,10 @@ export class ConversationManager {
     const settings = await this.deps.settings.get();
     // Someone else in a group (ADR 0075): words only, and nothing of yours to tell.
     const guest = isGuest(live.record.origin);
+    const feedback =
+      !guest && engine.hostTools !== false && this.deps.recovery?.workload
+        ? resourceFeedback(this.deps.recovery.workload, abort.signal)
+        : undefined;
     const picked =
       this.deps.memoryIndex && !guest
         ? await this.deps.memoryIndex.forPrompt(said).catch(() => undefined)
@@ -3634,6 +3640,7 @@ export class ConversationManager {
                   ),
                   extras?.systemExtra,
                   live.room,
+                  feedback?.take(true),
                 ]
             )
               .filter(Boolean)
@@ -3642,6 +3649,7 @@ export class ConversationManager {
             tools: pace.tools,
             budget: pace.budget,
             wrapTool: extras?.wrapTool,
+            resourceFeedback: feedback ? () => feedback.take() : undefined,
             options: resolved,
             onModeChange: (listener) => modeListeners.push(listener),
             mcpServers: engine.integrations.mode === 'native' ? loaded?.servers : undefined,

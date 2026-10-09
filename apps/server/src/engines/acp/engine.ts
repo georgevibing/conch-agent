@@ -855,7 +855,10 @@ export class AcpEngine implements Engine {
               }),
           },
           signal,
-          how === 'rules' ? {} : { instructions },
+          {
+            ...(how === 'rules' ? {} : { instructions }),
+            resourceFeedback: input.resourceFeedback,
+          },
         )
       : undefined;
     // At an address where the program takes one; otherwise as a program of its own,

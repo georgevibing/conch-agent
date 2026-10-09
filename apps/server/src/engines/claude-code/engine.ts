@@ -756,6 +756,23 @@ export class ClaudeCodeEngine implements Engine {
           // when a mode allows by itself (Full trust, Accept edits), so what must hold
           // in every mode is decided here (ADR 0028).
           hooks: {
+            PostToolBatch: [
+              {
+                hooks: [
+                  async () => {
+                    const note = input.signal.aborted ? undefined : input.resourceFeedback?.();
+                    return note
+                      ? {
+                          hookSpecificOutput: {
+                            hookEventName: 'PostToolBatch' as const,
+                            additionalContext: note,
+                          },
+                        }
+                      : {};
+                  },
+                ],
+              },
+            ],
             PreToolUse: [
               {
                 hooks: [

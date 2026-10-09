@@ -25,6 +25,8 @@ export interface GatewayRecoveryDeps {
   checkMs?: number;
   autoRepairMs?: number;
   probationMs?: number;
+  /** The shared resource controller may still be gradually restoring capacity. */
+  admit?: () => boolean;
 }
 
 /** A stalled optional reader must not suppress proof that HTTP still answers. */
@@ -73,7 +75,13 @@ export class GatewayRecovery {
 
   /** Unknown resources do not release a backlog before the first sample. */
   get allowsWork(): boolean {
-    return !this.#stopping && !this.#mode && this.#answering && this.#snapshot?.level === 'healthy';
+    return (
+      !this.#stopping &&
+      !this.#mode &&
+      this.#answering &&
+      this.#snapshot?.level === 'healthy' &&
+      (this.deps.admit?.() ?? true)
+    );
   }
 
   async start(probe: () => Promise<boolean>): Promise<void> {

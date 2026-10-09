@@ -315,6 +315,8 @@ export interface TurnInput {
   tools: HostTool[];
   /** Apply the task ledger to engine-supplied host tools, too. */
   wrapTool?: (tool: HostTool) => HostTool;
+  /** Bounded host resource guidance at a safe tool boundary; never a permission decision. */
+  resourceFeedback?: () => string | undefined;
   requestPermission(request: PermissionRequest, signal: AbortSignal): Promise<PermissionDecision>;
   signal: AbortSignal;
   /**

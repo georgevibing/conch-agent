@@ -30,6 +30,22 @@ function setup(recoveryMode = false) {
 afterEach(() => vi.useRealTimers());
 
 describe('gateway recovery', () => {
+  it('keeps native and automatic work paced while HTTP health remains proven', async () => {
+    let admitted = false;
+    const { deps } = setup();
+    const recovery = new GatewayRecovery({ ...deps, admit: () => admitted });
+    try {
+      await recovery.start(async () => true);
+      expect(recovery.allowsWork).toBe(false);
+      expect(deps.send).toHaveBeenLastCalledWith(
+        expect.objectContaining({ type: 'conch.heartbeat', healthy: true }),
+      );
+      admitted = true;
+      expect(recovery.allowsWork).toBe(true);
+    } finally {
+      recovery.stop();
+    }
+  });
   it('does not release work before checking resources and the HTTP listener', async () => {
     const { recovery, deps } = setup();
     expect(recovery.allowsWork).toBe(false);

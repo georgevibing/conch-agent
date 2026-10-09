@@ -124,6 +124,37 @@ describe('how much of the ChatGPT plan is left', () => {
 });
 
 describe('Codex app-server parity', () => {
+  it('keeps JSON tool events intact while resource feedback reaches the model separately', async () => {
+    const { engine, turn, fake } = await setup({
+      signedIn: true,
+      tool: 'conch__observe',
+      args: {},
+    });
+    const raw = '{"status":"exited","exitCode":0}';
+    const run = vi.fn(async () => raw);
+    const events = await collect(
+      engine.runTurn(
+        turn({
+          resourceFeedback: () => '[Conch resource update: wait]',
+          tools: [{ name: 'observe', description: 'Observe', input: {}, run }],
+        }),
+      ),
+    );
+    expect(run).toHaveBeenCalledOnce();
+    expect(events).toContainEqual({
+      type: 'tool-end',
+      toolUseId: 'tool1',
+      status: 'success',
+      output: raw,
+    });
+    expect((await fake.calls()).find((c) => c.id === 'call1')?.result).toMatchObject({
+      success: true,
+      contentItems: [
+        { type: 'inputText', text: raw },
+        { type: 'inputText', text: '[Conch resource update: wait]' },
+      ],
+    });
+  });
   it('does not borrow ambient sign-ins or secret environment variables', async () => {
     vi.stubEnv('CODEX_HOME', '/not-conch');
     vi.stubEnv('OPENAI_API_KEY', 'must-not-leak');

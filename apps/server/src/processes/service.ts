@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
 import { sampleResources, type ResourceSnapshot } from '../recovery/resources';
+import { ResourcePace, paceMessage, type WorkloadPace } from '../recovery/pace';
 
 import type { DoctorCheck } from '../doctor/service';
 import type { ToolContext } from '../conversations/manager';
@@ -46,6 +47,9 @@ export class ProcessService {
   #lastOwner?: string;
   #admissionPaused?: string;
   #sampling?: Promise<ResourceSnapshot>;
+  #sample?: { at: number; value: ResourceSnapshot };
+  #failedAt?: number;
+  readonly #pace: ResourcePace;
   constructor(
     private readonly deps: {
       protectedPaths: string[];
@@ -54,14 +58,24 @@ export class ProcessService {
       resources?: () => Promise<ResourceSnapshot>;
       healed?: (message: string) => void;
     },
-  ) {}
+  ) {
+    this.#pace = new ResourcePace(deps.now);
+  }
+  get workload(): WorkloadPace {
+    if (this.#admissionPaused || this.#closed)
+      return { phase: 'held', cause: 'recovery', concurrency: 0, critical: false };
+    return this.#pace.current;
+  }
   pauseAdmission(reason = 'Waiting while Conch recovers.') {
     this.#admissionPaused = reason;
+    this.#pace.hold('recovery');
     for (const session of this.#sessions.values())
       if (session.status === 'queued') session.reason = reason;
   }
   resumeAdmission() {
     this.#admissionPaused = undefined;
+    this.#sample = undefined;
+    this.#failedAt = undefined;
     return this.#pump();
   }
   close() {
@@ -71,12 +85,41 @@ export class ProcessService {
     clearInterval(this.#monitor);
     this.#monitor = undefined;
   }
+  /** Test fixtures replace the raw reader, never the shared admission policy. */
+  readResources(): Promise<ResourceSnapshot> {
+    return (this.deps.resources ?? sampleResources)();
+  }
   resourceSnapshot(): Promise<ResourceSnapshot> {
-    this.#sampling ??= Promise.resolve()
-      .then(this.deps.resources ?? sampleResources)
-      .finally(() => {
+    // All chats share the gateway's monitor. Tool bursts cannot trigger bursts of OS reads.
+    const now = (this.deps.now ?? (() => performance.now()))();
+    if (this.#failedAt !== undefined && now >= this.#failedAt && now - this.#failedAt < 1000)
+      return Promise.reject(new Error('Resource sampling is waiting before checking again.'));
+    if (this.#sample && now >= this.#sample.at && now - this.#sample.at < 1000)
+      return Promise.resolve(this.#sample.value);
+    this.#sampling ??= (async () => {
+      let timer: NodeJS.Timeout | undefined;
+      try {
+        const sample = await Promise.race([
+          Promise.resolve().then(() => this.readResources()),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error('Resource sampling timed out.')), 2000);
+          }),
+        ]);
+        this.#sample = { at: (this.deps.now ?? (() => performance.now()))(), value: sample };
+        this.#failedAt = undefined;
+        if (this.#admissionPaused) this.#pace.hold('recovery');
+        else this.#pace.observe(sample);
+        return sample;
+      } catch (error) {
+        this.#sample = undefined;
+        this.#failedAt = (this.deps.now ?? (() => performance.now()))();
+        this.#pace.hold();
+        throw error;
+      } finally {
+        clearTimeout(timer);
         this.#sampling = undefined;
-      });
+      }
+    })();
     return this.#sampling;
   }
   /** Shed only a managed job, never arbitrary host processes. Never replay its command. */
@@ -88,6 +131,7 @@ export class ProcessService {
         queued: [...this.#sessions.values()].filter((s) => s.status === 'queued').length,
       };
     this.#pausedUntil = now + 30_000;
+    this.#pace.hold('memory');
     for (const queued of this.#sessions.values())
       if (queued.status === 'queued')
         queued.reason = this.#admissionPaused ?? 'Waiting briefly for this computer to recover.';
@@ -132,16 +176,17 @@ export class ProcessService {
       } else this.#criticalSince = undefined;
       const running = [...this.#sessions.values()].filter((s) => s.status === 'running');
       const queued = [...this.#sessions.values()].filter((s) => s.status === 'queued');
+      const pace = this.workload;
       for (const s of queued)
         s.reason =
           this.#admissionPaused ??
           (now < this.#pausedUntil
             ? 'Waiting briefly for this computer to recover.'
-            : resources.concurrency === 0
-              ? resources.reason
+            : pace.concurrency === 0
+              ? paceMessage(pace)
               : 'Waiting for another managed command to finish.');
       if (this.#admissionPaused || now < this.#pausedUntil) return;
-      while (running.length < resources.concurrency) {
+      while (running.length < pace.concurrency) {
         const eligible = queued.filter(
           (s) => s.status === 'queued' && running.filter((r) => r.owner === s.owner).length < 2,
         );
@@ -173,6 +218,7 @@ export class ProcessService {
         const running = [...this.#sessions.values()].filter((s) => s.status === 'running').length;
         const queued = [...this.#sessions.values()].filter((s) => s.status === 'queued').length;
         const resources = await this.resourceSnapshot();
+        const pace = this.workload;
         return [
           {
             id: 'processes',
@@ -183,7 +229,7 @@ export class ProcessService {
               ? repair
                 ? 'fixed'
                 : 'warning'
-              : resources.level === 'healthy'
+              : resources.level === 'healthy' && pace.phase === 'normal'
                 ? 'ok'
                 : 'info',
             ...(overdue.length && !repair && { repairable: true }),
@@ -191,9 +237,9 @@ export class ProcessService {
               ? repair
                 ? 'Stopped commands that had exceeded their time limit.'
                 : 'Some commands have exceeded their time limit. Repair stops them.'
-              : resources.level !== 'healthy'
-                ? resources.reason
-                : `${running} commands running; ${queued} waiting. Current limit: ${resources.concurrency} at a time.`,
+              : pace.phase !== 'normal'
+                ? `Conch is ${pace.phase === 'constrained' ? 'slowing heavy work before this computer gets overloaded' : pace.phase === 'recovering' ? 'gradually restoring heavy work after resource pressure' : 'holding heavy work until this computer has room'}. ${running} commands running; ${queued} waiting. Current limit: ${pace.concurrency} at a time.`
+                : `${running} commands running; ${queued} waiting. Current limit: ${pace.concurrency} at a time.`,
           },
         ];
       },
@@ -428,13 +474,27 @@ export class ProcessService {
         effect: 'read',
         row: true,
         description:
-          'Read the status and incremental logs of a command started in this chat. Use nextOffset from the previous result. With id and wait_ms (up to 30000), wait for new output or completion. Output older than discardedBefore has been dropped. Without id, list this chat’s managed processes.',
+          'Read the status and incremental logs of a command started in this chat. Use nextOffset from the previous result. With id and wait_ms (up to 30000), wait for new output or completion. Output older than discardedBefore has been dropped. Without id, list this chat’s managed processes; wait_ms waits for resource conditions to change. Prefer waiting to rapid polling while Conch holds heavy work.',
         input: {
           id: z.string().uuid().optional(),
           offset: z.number().int().min(0).optional(),
           wait_ms: z.number().int().min(0).max(30_000).default(0),
         },
         run: async (args) => {
+          if (!args.id && Number(args.wait_ms) > 0) {
+            const until = performance.now() + Math.min(30_000, Number(args.wait_ms));
+            const before = JSON.stringify(this.workload);
+            do {
+              await delay(Math.max(1, Math.min(5000, until - performance.now())), undefined, {
+                signal: ctx.signal,
+              });
+              await this.resourceSnapshot().catch(() => undefined);
+            } while (
+              !this.#closed &&
+              performance.now() < until &&
+              JSON.stringify(this.workload) === before
+            );
+          }
           if (args.id && Number(args.wait_ms) > 0) {
             const session = this.#own(ctx.conversationId, String(args.id));
             const offset = args.offset === undefined ? session.end : Number(args.offset);

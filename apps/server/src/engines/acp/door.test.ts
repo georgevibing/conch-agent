@@ -44,6 +44,39 @@ function knock(url: string, headers: Record<string, string>, body = '{}') {
 const list = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
 
 describe('the door Conch opens for an agent’s turn', () => {
+  it('sends resource guidance beside the result while keeping events and failures unchanged', async () => {
+    const raw = '{"status":"stopped"}';
+    const ended: unknown[] = [];
+    const stop = new AbortController();
+    const item = { ...tool('observe'), run: async () => ({ text: raw, isError: true }) };
+    const door = await openDoor(
+      new Map([['observe', item]]),
+      {
+        start() {},
+        end(event) {
+          ended.push(event);
+        },
+      },
+      stop.signal,
+      { resourceFeedback: () => '[Conch resource update: wait]' },
+    );
+    try {
+      const key = Object.fromEntries(door.headers.map((h) => [h.name, h.value]));
+      expect(await call(door.url, key, 'observe')).toMatchObject({
+        result: {
+          isError: true,
+          content: [
+            { type: 'text', text: raw },
+            { type: 'text', text: '[Conch resource update: wait]' },
+          ],
+        },
+      });
+      expect(ended).toContainEqual(expect.objectContaining({ status: 'error', output: raw }));
+    } finally {
+      stop.abort();
+      await door.close();
+    }
+  });
   it('only opens to this computer, with the turn’s key', async () => {
     const stop = new AbortController();
     const door = await openDoor(new Map([['a', tool('a')]]), { start() {}, end() {} }, stop.signal);

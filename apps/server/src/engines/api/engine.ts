@@ -902,6 +902,7 @@ export class ApiEngine implements Engine {
       if (plan.notice) yield plan.notice;
       /** The agent's instructions were too long for this model to read whole beside the chat. */
       let shortened = false;
+      let resourceContext = '';
       const systemFor = () => {
         // Conch's browser is the one way out to the web; the note mustn't deny it when it's there.
         const note = capabilitiesNote({
@@ -910,7 +911,9 @@ export class ApiEngine implements Engine {
           computer: plan.usable,
           ...(this.variant.where && { where: this.variant.where }),
         });
-        const full = [input.systemAppend.trim(), note].filter(Boolean).join('\n\n');
+        const full = [input.systemAppend.trim(), note, resourceContext]
+          .filter(Boolean)
+          .join('\n\n');
         if (lean) {
           const fitted = leanPrompt(full, { tools: plan.usable, window });
           if (fitted.trimmed) shortened = true;
@@ -1169,6 +1172,13 @@ export class ApiEngine implements Engine {
         const lastResult = results.at(-1);
         if (round.kind === 'nudge' && lastResult && !stopped && !paused)
           lastResult.text = withNote(lastResult.text, round.note);
+        // Host advice stays separate from tool data, events and operation receipts.
+        const resourceNote =
+          !input.signal.aborted && !paused ? input.resourceFeedback?.() : undefined;
+        if (resourceNote) {
+          resourceContext = resourceNote;
+          fitting.system = systemFor();
+        }
         session.messages.push(...plan.results(this.variant.wire, results));
         await save();
         if (stopped) {

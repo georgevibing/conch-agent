@@ -969,6 +969,10 @@ allow-scripts`, no network, `frame-ancestors 'self'`) into Nacre's `SealedFrame`
   ancestor memory budgets. After a healthy minute it resumes safe waiting work;
   ten healthy minutes clear the automatic recovery budget. A restart after a
   crash leaves a note in "Fixed on its own".
+  A shared resource controller (`recovery/pace.ts`) warns active agents at tool
+  boundaries, limits managed work before saturation, and restores one slot at a
+  time after sustained headroom. Its notices never grant permissions or replay
+  uncertain actions; shared sampling and per-turn deduplication keep feedback cheap.
   `/api/health` carries the run's `bootId` and whether it's `restartable`; the web
   app shows a calm "Starting again…" screen and reloads when the `bootId` changes.
 - **Repair everything** (`doctor/`). Each part registers a `DoctorCheck {id,

@@ -334,6 +334,13 @@ Run from the repo root unless noted. Node ≥ 24, pnpm 12 (`corepack enable` or 
       healthy repair releases its latch. Automatic repair requires sustained
       health, keeps the crash budget through probation, and never clears pending
       permissions or uncertain actions. Intentional Quit stays quit.
+    - **Tell active agents before overload.** `recovery/pace.ts` owns the shared
+      managed-work budget; `conversations/resource-feedback.ts` delivers bounded,
+      deduplicated host notices at tool boundaries. Use the existing sampler and
+      queue, not a timer or model call per chat. Reduce immediately, require sustained
+      headroom, then restore one slot at a time. Feedback never changes permissions,
+      replays commands or clears uncertainty. Providers without an injection hook
+      receive updates through Conch tools and current context at the next turn.
     - **Leave useful, bounded evidence.** `recovery/` contains only allowlisted
       timestamps, reasons and numeric resource measurements, never commands, tool
       arguments, transcripts or credentials. It is protected from agent tools and

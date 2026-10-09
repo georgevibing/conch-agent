@@ -323,7 +323,7 @@ export class UpdatesService {
     if (!this.deps.freshWeb || !conch) return undefined;
     return {
       freshness: await conch.webFreshness(),
-      building: conch.webBuilding || conch.updating,
+      building: Boolean(this.#freshening) || conch.webBuilding || conch.updating,
       failed: this.#webFailed,
       command: conch.byHand('pnpm install', 'pnpm --filter @conch/web build'),
     };

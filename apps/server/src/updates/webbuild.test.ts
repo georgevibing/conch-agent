@@ -10,7 +10,7 @@ import { Setup, type LatestLookup } from '../setup/needs';
 import { ConchCheckout, type Stream } from './conch';
 import { updatesCheck } from './doctor';
 import { UpdatesService } from './service';
-import { freshness, parseStamp, readStamp } from './webbuild';
+import { freshness, parseStamp, readStamp, type WebFreshness } from './webbuild';
 
 const A = 'a'.repeat(40);
 const B = 'b'.repeat(40);
@@ -313,6 +313,22 @@ describe('swapping the new web app in', () => {
 describe('Repair everything’s look at the web app', () => {
   const look = { repair: false, signal: new AbortController().signal };
   const repair = { repair: true, signal: new AbortController().signal };
+
+  it('reports an accepted repair while its first freshness read is still pending', async () => {
+    const web = await checkout({ built: B });
+    const { service } = await gateway(web.conch);
+    const before = await web.conch.webFreshness();
+    let release!: (value: WebFreshness) => void;
+    vi.spyOn(web.conch, 'webFreshness').mockImplementationOnce(
+      () => new Promise((resolve) => (release = resolve)),
+    );
+    const refreshing = service.freshenWeb();
+    const pending = await service.web();
+    release(before);
+    expect(await refreshing).toBe('rebuilt');
+    expect(pending?.building).toBe(true);
+    expect((await service.web())?.building).toBe(false);
+  });
 
   it('offers to rebuild one older than its code, and rebuilds it on Repair', async () => {
     const web = await checkout({ built: B });

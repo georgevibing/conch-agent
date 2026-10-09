@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ProviderKeys } from '../../providers/keys';
+import type { Options as SdkOptions } from '@anthropic-ai/claude-agent-sdk';
 import type { SettingsStore } from '../../settings/store';
 import type { PermissionRequest, TurnInput } from '../types';
 
 interface Options {
+  hooks?: SdkOptions['hooks'];
   permissionMode?: string;
   env?: Record<string, string>;
   allowDangerouslySkipPermissions?: boolean;
@@ -80,6 +82,32 @@ async function run(engine: InstanceType<typeof ClaudeCodeEngine>, input: TurnInp
 }
 
 describe('Claude Code’s permission modes (ADR 0100)', () => {
+  it('adds native tool feedback after a batch without changing permissions or restarting the turn', async () => {
+    const feedback = vi.fn(() => 'Conch says reduce parallelism');
+    const input = turn({ resourceFeedback: feedback });
+    const options = await run(engineFor(), input);
+    const hook = options?.hooks?.PostToolBatch?.[0]?.hooks[0];
+    if (!hook) throw new Error('Missing resource feedback hook');
+    expect(
+      await hook(
+        {
+          hook_event_name: 'PostToolBatch',
+          session_id: 's',
+          transcript_path: '/tmp/t',
+          cwd: '/tmp',
+          tool_calls: [],
+        },
+        undefined,
+        { signal: input.signal },
+      ),
+    ).toEqual({
+      hookSpecificOutput: {
+        hookEventName: 'PostToolBatch',
+        additionalContext: 'Conch says reduce parallelism',
+      },
+    });
+    expect(feedback).toHaveBeenCalledOnce();
+  });
   it('offers every mode, with or without its own auto mode', async () => {
     for (const auto of [true, false]) {
       nativeAuto = auto;

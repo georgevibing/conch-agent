@@ -51,7 +51,7 @@ export async function gateway(home?: string) {
   );
   // Fixtures exercise admission and the real health probe without depending on
   // other tests' CPU/memory use on the host running this simulated Conch.
-  vi.spyOn(services.processes, 'resourceSnapshot').mockResolvedValue({
+  vi.spyOn(services.processes, 'readResources').mockResolvedValue({
     at: Date.now(),
     totalBytes: 8 * 1024 ** 3,
     availableBytes: 6 * 1024 ** 3,

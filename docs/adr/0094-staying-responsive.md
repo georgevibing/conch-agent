@@ -77,6 +77,68 @@ share the relief cooldown. Conch never kills unrelated applications or silently
 replays stopped shell commands. Worker stdin loss cleans up descendants even if
 the gateway is killed abruptly.
 
+### Cooperate with active chats before overload
+
+The resource monitor also drives one `ResourcePace` controller in `ProcessService`.
+Do not ask a model to measure pressure or choose the enforced budget. Give the
+model useful feedback so it can choose cheaper steps while deterministic admission
+protects the gateway even if it ignores the advice.
+
+The controller warns before the existing busy threshold: below twice the gateway's
+memory reserve, CPU load per available CPU at least one, or full memory stalls at
+least 2%. Warning limits managed concurrency to one; busy/critical samples hold
+new commands. Existing running work finishes normally unless the existing sustained
+critical-pressure policy must shed a managed job. Unknown or stale readings hold
+admission too. Thirty seconds of continuous headroom starts restoration, with at
+most one extra global slot every ten seconds. Renewed pressure reduces capacity
+immediately; missing samples, suspend and backwards clocks reset the proof. These
+are Conch's conservative defaults, not universal resource-to-job cost estimates.
+Owner rotation and per-chat limits remain the fairness policy. Recovery-mode pause
+cannot silently accumulate a full budget before admission reopens.
+
+Sampling is shared, coalesced, cached for one second, and bounded at two seconds.
+A late timed-out reader cannot overwrite a newer sample. The existing gateway
+poll supplies updates even when no managed command is active. No timer, model call,
+subscription queue or OS read is added per active chat. Agent notices read the
+latest state at safe boundaries; they are coalesced by phase/cause, at most once
+per thirty seconds except for worsening pressure. Each turn starts with current
+conditions so a provider's retained context cannot preserve a stale warning.
+
+Provider adapters carry notices alongside unchanged results, images and failure
+flags, outside recorded tool events and operation receipts. API loops add context
+after a batch, Codex and ACP send a separate text block, and Claude Code's
+`PostToolBatch` hook also covers its native tools. Structured JSON and clock
+observations remain parseable; feedback is consumed only where it reaches a model.
+Native-only stretches of providers without a context hook receive the next update
+when they use a Conch tool or start another turn. No synthetic user message, turn
+interruption or automatic retry is used to force delivery. Tool-free/guest chats
+receive no machine information. `process_read` can long-poll resource changes
+without a command ID (up to thirty seconds), using the existing cancellable tool.
+This lets an active assistant wait cheaply and continue its original task.
+
+Notices consist of fixed host-owned words and state enums. They never include
+commands, outputs, credentials, other chats, or sampler-provided reason strings.
+They cannot grant permission, release an approval, lift a skill restriction,
+change a system limit, or resolve an uncertain action. Stop still wins. There is
+no new tool authority or remotely writable configuration to add to the security
+checkup; the existing Health check reports current pacing and enforced concurrency.
+Health also keeps an accepted web rebuild marked in progress while its source-version
+check is pending, rather than briefly offering the same repair again.
+
+The design follows [Google SRE's overload guidance](https://sre.google/sre-book/handling-overload/)
+on resource-based admission and client feedback, [Envoy's staged overload actions](https://www.envoyproxy.io/docs/envoy/latest/configuration/operations/overload_manager/overload_manager),
+and [AWS's retry guidance](https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/)
+on avoiding synchronized retries and repeating side effects. A single local queue
+paces releases directly; randomized per-chat retry loops would add unnecessary
+timers and contention. [OWASP's agent guidance](https://cheatsheetseries.owasp.org/cheatsheets/AI_Agent_Security_Cheat_Sheet.html)
+keeps authorization outside model advice. Native hook behavior follows the
+[Agent SDK's documented context hooks](https://platform.claude.com/docs/en/agent-sdk/hooks).
+
+Tests exercise threshold oscillation, stale/invalid samples, gradual multi-chat
+recovery, cancellation, sampling failure, feedback storms, native and shared
+adapters, unchanged failures/receipts, and denials that remain denied after a
+resource notice. Faults stay in deterministic fixtures and temporary homes.
+
 ### Watch from outside, recover in stages
 
 The desktop and background supervisors share the watchdog and restart policy.

@@ -529,6 +529,7 @@ export class Services {
     });
     this.recovery = new GatewayRecovery({
       sample: () => this.processes.resourceSnapshot(),
+      admit: () => this.processes.workload.phase === 'normal',
       relieve: () => this.processes.relievePressure(),
       pause: (reason) => this.processes.pauseAdmission(reason),
       resume: () => this.processes.resumeAdmission(),
@@ -1207,7 +1208,10 @@ export class Services {
       offers: this.offers,
       attachments: this.attachments,
       stopProcesses: (id) => this.processes.stopAll(id),
-      recovery: { allowed: () => this.recovery.allowsWork },
+      recovery: {
+        allowed: () => this.recovery.allowsWork,
+        workload: () => this.processes.workload,
+      },
       redact: this.vault.redactor(),
       protectedPaths: protectedPaths(config.CONCH_HOME),
       // The sealed box, only where this computer can do it (ADR 0028).
