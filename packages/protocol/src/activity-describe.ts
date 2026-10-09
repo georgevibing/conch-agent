@@ -1174,6 +1174,28 @@ const CONCH: Record<string, (input: Input) => Draft> = {
   process_read: (input) => processDraft('read', input),
   process_write: (input) => processDraft('write', input),
   process_stop: (input) => processDraft('stop', input),
+  // Waiting until something changes, Conch watching (ADR 0124): its own row shows the rest.
+  wait_for: (input) => {
+    const kind = str(input, 'kind');
+    const what =
+      kind === 'ci'
+        ? 'CI'
+        : kind === 'process'
+          ? 'a command'
+          : kind === 'url'
+            ? 'a page to change'
+            : kind === 'time'
+              ? 'the time'
+              : 'something';
+    return {
+      family: kind === 'ci' ? 'verify' : 'run',
+      words: words(`Waiting for ${what}`, `Waited for ${what}`, `Couldn’t wait for ${what}`),
+      finish: (output) => {
+        const line = output.split('\n')[0]?.trim() ?? '';
+        return { handled: true, ...(line && line.length <= 120 && { outcome: line }) };
+      },
+    };
+  },
   task_status: () => ({ family: 'delegate', words: say('check', 'on a task') }),
   task_control: (input) => {
     const action = str(input, 'action');

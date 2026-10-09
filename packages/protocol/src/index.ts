@@ -27,6 +27,7 @@ import {
 } from './chat-cards';
 import { MailEdit } from './views/mail';
 import { ScriptAsk, ScriptCall, ScriptRun } from './scripts';
+import { WaitNote } from './waits';
 import { BrowserHandoff, BrowserPermission, BrowserStatus, BrowserStep } from './browser';
 import { Channel, ChannelDoor, ChannelOrigin } from './channels';
 import { ChatChange, ChatFolder, FolderId } from './chat-list';
@@ -146,6 +147,7 @@ export * from './trajectory';
 export * from './words';
 export * from './workplaces';
 export * from './scripts';
+export * from './waits';
 
 export const PROTOCOL_VERSION = 7;
 
@@ -858,6 +860,11 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     /** Its batch (`Task.group`): started together, one card. */
     group: z.string().optional(),
   }),
+  /**
+   * Something Conch is waiting for on the assistant's behalf (ADR 0124): CI, a
+   * command, a page, a time. Appended again when it changes; the row shows the latest.
+   */
+  z.object({ ...logged, type: z.literal('wait'), wait: WaitNote }),
   z.object({ ...logged, type: z.literal('status'), status: ConversationStatus }),
   /**
    * What the running turn has used so far, and how full the context is, as it goes: a live

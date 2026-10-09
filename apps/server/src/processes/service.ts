@@ -18,6 +18,18 @@ import type { HostTool } from '../engines/types';
 import { sandboxSupport, secretPlaces } from '../conversations/sandbox';
 import { touchesProtected, PROTECTED_MESSAGE } from '../lib/protect';
 
+/** A managed command as a wait sees it (ADR 0124). */
+export interface ProcessPeek {
+  command: string;
+  status: 'queued' | 'running' | 'exited' | 'stopped' | 'timed-out';
+  exitCode: number | null;
+  /** What's kept of its output, from `start` to `end` in the whole stream. */
+  output: string;
+  start: number;
+  end: number;
+  reason?: string;
+}
+
 interface Session {
   id: string;
   owner: string;
@@ -39,6 +51,8 @@ interface Session {
 
 export class ProcessService {
   readonly #sessions = new Map<string, Session>();
+  /** Who waits on a command (ADR 0124): told when it prints or ends, never polled by a model. */
+  readonly #listeners = new Map<string, Set<() => void>>();
   #monitor?: NodeJS.Timeout;
   #pumping = false;
   #closed = false;
@@ -256,6 +270,7 @@ export class ProcessService {
     session.status = status;
     clearTimeout(session.timer);
     session.cancel();
+    this.#changed(session.id);
     if (!session.child) {
       void this.#pump();
       return;
@@ -289,6 +304,36 @@ export class ProcessService {
       unsealed: session.unsealed,
       ...(session.reason && { reason: session.reason }),
     };
+  }
+  /**
+   * A command of this chat as it stands, for a wait (ADR 0124): its status and
+   * everything kept of its output. Undefined when it isn't this chat's.
+   */
+  peek(owner: string, id: string): ProcessPeek | undefined {
+    const session = this.#sessions.get(id);
+    if (!session || session.owner !== owner) return undefined;
+    return {
+      command: session.command,
+      status: session.status,
+      exitCode: session.exitCode,
+      output: session.output,
+      start: session.start,
+      end: session.end,
+      ...(session.reason && { reason: session.reason }),
+    };
+  }
+  /** Called whenever the command prints or changes state; returns how to stop listening. */
+  onChange(id: string, listener: () => void): () => void {
+    let set = this.#listeners.get(id);
+    if (!set) this.#listeners.set(id, (set = new Set()));
+    set.add(listener);
+    return () => {
+      set.delete(listener);
+      if (!set.size) this.#listeners.delete(id);
+    };
+  }
+  #changed(id: string) {
+    for (const listener of this.#listeners.get(id) ?? []) listener();
   }
   tools(ctx: ToolContext): HostTool[] {
     const commandAccess = async (
@@ -407,6 +452,7 @@ export class ProcessService {
                 session.end += text.length;
                 session.output = (session.output + text).slice(-64_000);
                 session.start = session.end - session.output.length;
+                this.#changed(session.id);
               };
               for (const stream of [child.stdout, child.stderr]) {
                 const decoder = new StringDecoder('utf8');
@@ -420,6 +466,7 @@ export class ProcessService {
                 session.exitCode = 1;
                 clearTimeout(session.timer);
                 session.cancel();
+                this.#changed(session.id);
                 void this.#pump();
               });
               child.once('close', (code) => {
@@ -427,6 +474,7 @@ export class ProcessService {
                 session.exitCode = code ?? session.exitCode;
                 clearTimeout(session.timer);
                 session.cancel();
+                this.#changed(session.id);
                 void this.#pump();
                 if (process.platform !== 'win32' && child.pid) {
                   try {
