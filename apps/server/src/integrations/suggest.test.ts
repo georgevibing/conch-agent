@@ -287,27 +287,27 @@ describe('the conversation', () => {
         resume: { request: 'what’s assigned to me in Linear this week?' },
       },
     ]);
-    expect(engine.turns[0]?.systemAppend).toMatch(/Linear isn’t connected/);
+    expect(engine.turns[0]?.prompt).toMatch(/Linear isn’t connected/);
 
     await say('and what about Linear next week?', id);
     expect(await offers(id)).toHaveLength(1);
     // Not offered again, but still told it can't see Linear.
-    expect(engine.turns[1]?.systemAppend).toMatch(/Linear isn’t connected/);
-    expect(engine.turns[1]?.systemAppend).not.toMatch(/button/);
+    expect(engine.turns[1]?.prompt).toMatch(/Linear isn’t connected/);
+    expect(engine.turns[1]?.prompt).not.toMatch(/button/);
   });
 
   it('says nothing about an app once it’s connected', async () => {
     const { integrations, engine, say, offers } = await chat();
     await connected(integrations, { name: 'Linear', catalogId: 'linear' });
     expect(await offers(await say('what’s assigned to me in Linear?'))).toEqual([]);
-    expect(engine.turns[0]?.systemAppend).not.toMatch(/Not connected yet/);
+    expect(engine.turns[0]?.prompt).not.toMatch(/Not connected yet/);
   });
 
   it('never offers an app that was muted', async () => {
     const { engine, say, offers } = await chat({ muted: ['linear'] });
     expect(await offers(await say('what’s assigned to me in Linear?'))).toEqual([]);
-    expect(engine.turns[0]?.systemAppend).toMatch(/Linear isn’t connected/);
-    expect(engine.turns[0]?.systemAppend).not.toMatch(/button/);
+    expect(engine.turns[0]?.prompt).toMatch(/Linear isn’t connected/);
+    expect(engine.turns[0]?.prompt).not.toMatch(/button/);
   });
 
   it('keeps the offer, and “Not now”, through a reload', async () => {
@@ -343,8 +343,8 @@ describe('the conversation', () => {
     });
     await run.result;
     expect(await offers(run.conversationId)).toEqual([]);
-    expect(engine.turns[0]?.systemAppend).toMatch(/Linear isn’t connected/);
-    expect(engine.turns[0]?.systemAppend).not.toMatch(/button/);
+    expect(engine.turns[0]?.prompt).toMatch(/Linear isn’t connected/);
+    expect(engine.turns[0]?.prompt).not.toMatch(/button/);
   });
 
   it('reads only what the person typed', async () => {

@@ -166,7 +166,8 @@ describe('a guest in a group chat (ADR 0075)', () => {
     });
     await finished(manager, chat.id);
     expect(engine.turns[0]?.wordsOnly).toBeUndefined();
-    expect(engine.turns[0]?.systemAppend).toContain('9876');
+    // The memories a message brings up go with it (ADR 0085).
+    expect(engine.turns[0]?.prompt).toContain('9876');
     expect(engine.verdicts[0]).toBeUndefined();
   });
 });

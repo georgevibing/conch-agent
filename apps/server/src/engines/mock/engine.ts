@@ -10,6 +10,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { newId } from '../../lib/ids';
+import { splitContextNote } from '../../conversations/instructions';
 import { stripNearby } from '../../learning/near';
 import { installHints } from '../claude-code/detect';
 import { friendlyError } from '../claude-code/translate';
@@ -625,7 +626,14 @@ export class MockEngine implements Engine {
       turn.wordsOnly === true ||
       (await this.capabilities()).models.find((m) => m.id === turn.options.model)?.tools === false;
     // The script reads what the person wrote: preferences put near it (ADR 0088) aren't part of it.
-    const words: TurnInput = { ...turn, prompt: stripNearby(turn.prompt) };
+    // What Conch sent with the message (ADR 0085) is read as part of its instructions,
+    // ahead of them: the script reads the first of a section, and the newer one wins.
+    const sent = splitContextNote(turn.prompt);
+    const words: TurnInput = {
+      ...turn,
+      prompt: stripNearby(sent.words),
+      systemAppend: [sent.context, turn.systemAppend].filter(Boolean).join('\n\n'),
+    };
     const input: TurnInput = chatOnly ? { ...words, tools: [], bridgedTools: [] } : words;
     const wait = (ms: number) => sleep(ms * this.#speed, input.signal);
     const messageId = newId('msg');

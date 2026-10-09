@@ -403,7 +403,8 @@ describe('native commands share resource admission', () => {
     };
     const heard: (string | undefined)[] = [];
     const engine = new Scripted(async function* (input) {
-      heard.push(input.systemAppend);
+      // That it has room stays in the system text; how busy it is goes with the message (ADR 0085).
+      heard.push(`${input.systemAppend}\n\n${input.prompt}`);
       state = { phase: 'constrained', cause: 'memory', concurrency: 1, critical: false };
       // The provider's next safe boundary reads a live signal; no new turn is sent.
       heard.push(input.resourceFeedback?.());
