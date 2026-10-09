@@ -26,6 +26,9 @@ const WEB_TOOLS = new Set(['WebFetch', 'WebSearch']);
 /** Looking around isn't doing: reads and searches of your files stay out of the timeline. */
 const QUIET = new Set(['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'Task', 'BashOutput']);
 
+/** The tools a script reaches by their own names (ADR 0119); the rest are Conch's. */
+const COMPUTER = new Set(['Read', 'LS', 'Write', 'Edit', 'Bash']);
+
 function kindOf(name: string): ActivityKind | undefined {
   if (QUIET.has(name)) return undefined;
   if (name === 'Bash') return 'command';
@@ -70,6 +73,8 @@ export function entriesOf(
       e.type === 'files.changed' && e.toolUseId ? [[e.toolUseId, e.changeSetId] as const] : [],
     ),
   );
+  // The calls scripts made (ADR 0119): each is a row of its own, carrying its change.
+  const scripted = new Set(events.flatMap((e) => (e.type === 'script.call' ? [e.callId] : [])));
   // Memories you've since answered (ADR 0087): a hold stops waiting.
   const answeredMemories = new Set(
     events.flatMap((e) => (e.type === 'memory.decided' ? [e.memoryId] : [])),
@@ -103,9 +108,37 @@ export function entriesOf(
         });
         break;
       }
+      case 'script.call': {
+        // Each call a script made, when it's over, like any other step (ADR 0119).
+        if (e.status === 'running') break;
+        const name = COMPUTER.has(e.tool) ? e.tool : `mcp__conch__${e.tool}`;
+        const kind = kindOf(name);
+        if (!kind) break;
+        let input: Record<string, unknown> = {};
+        try {
+          const parsed: unknown = JSON.parse(e.input);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
+            input = parsed as Record<string, unknown>;
+        } catch {
+          // Cut to fit the log: its words come from its name.
+        }
+        out.push({
+          ...base,
+          id: `${chat.id}:${e.seq}`,
+          at: e.at,
+          kind,
+          title: `${didWhat(name, input)}, in a script`,
+          status: e.status === 'success' ? 'done' : 'failed',
+          anchor: e.callId,
+          ...(changes.has(e.callId) && {
+            undo: { changeSetId: changes.get(e.callId) ?? '', state: 'applied' as const },
+          }),
+        });
+        break;
+      }
       case 'files.changed':
         // A tool call's own row carries it; what a turn changed otherwise gets its own.
-        if (e.toolUseId && started.has(e.toolUseId)) break;
+        if (e.toolUseId && (started.has(e.toolUseId) || scripted.has(e.toolUseId))) break;
         out.push({
           ...base,
           id: `${chat.id}:${e.seq}`,
