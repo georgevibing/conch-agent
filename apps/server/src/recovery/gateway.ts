@@ -86,6 +86,22 @@ export class GatewayRecovery {
     );
   }
 
+  /**
+   * Work the person paused on purpose (an update, a restart they asked for) may carry on
+   * while the computer is merely busy: it's theirs, one chat at a time, and it was
+   * running a moment ago. Only memory running out, or Conch itself recovering, holds it.
+   */
+  get allowsPlanned(): boolean {
+    return (
+      !this.#stopping &&
+      !this.#mode &&
+      this.#answering &&
+      this.#snapshot !== undefined &&
+      this.#snapshot.level !== 'critical' &&
+      (this.deps.admit?.() ?? true)
+    );
+  }
+
   async start(probe: () => Promise<boolean>): Promise<void> {
     if (this.#timer || this.#stopping) return;
     this.#probe = probe;

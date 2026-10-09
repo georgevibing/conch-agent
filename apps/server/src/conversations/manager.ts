@@ -980,7 +980,13 @@ export class ConversationManager {
       /** Counts each step Auto judges, for dashboards (ADR 0121). Numbers only. */
       judged?: (verdict: 'went_ahead' | 'asked', risk?: string) => void;
       /** Resource admission for automatic recovery; manual chats remain available. */
-      recovery?: { allowed: () => boolean; workload?: () => WorkloadPace; intervalMs?: number };
+      recovery?: {
+        allowed: () => boolean;
+        /** Whether a chat paused on purpose (an update) may carry on now; `allowed` when absent. */
+        allowedPlanned?: () => boolean;
+        workload?: () => WorkloadPace;
+        intervalMs?: number;
+      };
       settings: SettingsStore;
       memory: MemoryStore;
       /**
@@ -2311,9 +2317,18 @@ export class ConversationManager {
     this.#recoveryQueue.push(...this.deps.store.interrupted.splice(0));
     let resumed = 0;
     while (this.#recoveryQueue.length && !this.#draining) {
-      if (this.deps.recovery && (!this.deps.recovery.allowed() || this.busy())) break;
-      const id = this.#recoveryQueue.shift();
+      const id = this.#recoveryQueue[0];
       if (!id) break;
+      if (this.deps.recovery) {
+        // A chat paused for an update was the person's own work a moment ago: it carries
+        // on while the computer is only busy. A crash's waits for room (ADR 0094).
+        const planned = (await this.#get(id).catch(() => undefined))?.record.pausedFor;
+        const room = planned
+          ? (this.deps.recovery.allowedPlanned ?? this.deps.recovery.allowed)()
+          : this.deps.recovery.allowed() && !this.busy();
+        if (!room) break;
+      }
+      this.#recoveryQueue.shift();
       try {
         const live = await this.#get(id);
         if (live.abort) continue;

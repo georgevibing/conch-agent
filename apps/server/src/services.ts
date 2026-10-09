@@ -1347,6 +1347,7 @@ export class Services {
       stopProcesses: (id) => this.processes.stopAll(id),
       recovery: {
         allowed: () => this.recovery.allowsWork,
+        allowedPlanned: () => this.recovery.allowsPlanned,
         workload: () => this.processes.workload,
       },
       redact: this.vault.redactor(),

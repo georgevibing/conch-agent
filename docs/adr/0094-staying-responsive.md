@@ -260,3 +260,12 @@ history, so recovery retains its in-memory budget and reports that persistence
 failed. Side effects without a reconciliation contract require a check before
 continuing. Hardware failure or an unavailable operating system is outside the
 gateway's ability to repair itself.
+
+## Amendment, 2026-10-10: a pause you chose carries on while the computer is busy
+
+A chat Conch paused for its own update (or a restart the person asked for) carries on as
+soon as Conch is back, while the computer is merely busy: it was the person's work a
+moment ago, it is one chat at a time, and waiting for an idle machine left it stopped for
+as long as a build or a CI runner kept the load up. Only memory running out, or Conch
+recovering itself, holds it (`GatewayRecovery.allowsPlanned`). A chat a crash cut off
+still waits for room, as before.

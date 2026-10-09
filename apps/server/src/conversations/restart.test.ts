@@ -51,7 +51,12 @@ class Scripted implements Engine {
 async function open(
   home: string,
   engine: Scripted,
-  recovery?: { allowed: () => boolean; intervalMs?: number; workload?: () => WorkloadPace },
+  recovery?: {
+    allowed: () => boolean;
+    allowedPlanned?: () => boolean;
+    intervalMs?: number;
+    workload?: () => WorkloadPace;
+  },
 ) {
   const settings = new SettingsStore(home);
   await settings.update({ preferences: { engine: 'openrouter', autoTitle: false } });
@@ -527,6 +532,43 @@ describe('native commands share resource admission', () => {
 });
 
 describe('Conch pausing a chat for its own update', () => {
+  it('carries it on while the computer is only busy; a crash still waits for room', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'conch-update-busy-'));
+    const first = await open(home, hangs());
+    const paused = await first.send({ clientMessageId: 'u1', text: 'Fix the CI' });
+    await until(first, paused.id, (e) => e.some((x) => x.type === 'assistant.delta'));
+    expect(await first.pause('update', { waitMs: 50 })).toBe(1);
+    await first.drain();
+
+    // Busy (a CI runner, a build): no room for a crash's recovery, but an update's pause goes on.
+    const engine = hangs();
+    const after = await open(home, engine, {
+      allowed: () => false,
+      allowedPlanned: () => true,
+      intervalMs: 20,
+    });
+    expect(await after.recoverInterrupted()).toBe(1);
+    await vi.waitFor(() =>
+      expect(engine.turns[0]?.prompt).toMatch(/paused this work at a safe point to update itself/),
+    );
+    await after.drain();
+
+    // A chat a crash cut off waits for room, busy or not.
+    const crashHome = await mkdtemp(join(tmpdir(), 'conch-crash-busy-'));
+    const crashed = await open(crashHome, hangs());
+    const cut = await crashed.send({ clientMessageId: 'u1', text: 'Pull the codebase' });
+    await until(crashed, cut.id, (e) => e.some((x) => x.type === 'assistant.delta'));
+    const waiting = hangs();
+    const back = await open(crashHome, waiting, {
+      allowed: () => false,
+      allowedPlanned: () => true,
+      intervalMs: 20,
+    });
+    expect(await back.recoverInterrupted()).toBe(0);
+    expect(waiting.turns).toHaveLength(0);
+    await back.drain();
+  });
+
   it('stops it at a safe point, then carries it on after the restart, without spending the crash budget', async () => {
     const home = await mkdtemp(join(tmpdir(), 'conch-update-pause-'));
     let manager = await open(home, hangs());
