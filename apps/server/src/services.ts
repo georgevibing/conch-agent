@@ -50,6 +50,7 @@ import { TaskStore } from './tasks/store';
 import { QuestionDesk } from './questions/desk';
 import { QUESTIONS_PROMPT, questionTools } from './questions/tools';
 import { scriptTools } from './scripts/tool';
+import { DraftStore } from './drafts/store';
 import { AttachmentStore } from './attachments/store';
 import { fileTools } from './files/tools';
 import { placesTools } from './research/places';
@@ -350,6 +351,7 @@ export class Services {
   readonly conversations: ConversationManager;
   /** The folders in the chat list (ADR 0089). */
   readonly folders: ChatFolders;
+  readonly drafts: DraftStore;
   /** The agents you talk to: personas of the same Conch (ADR 0101). */
   readonly agents: AgentStore;
   /** Agents elsewhere that speak A2A, added by pasting their address (ADR 0112). */
@@ -548,7 +550,10 @@ export class Services {
       checkOn: async () => (await this.settings.get()).preferences.checkMemories,
     });
     this.commands = new CommandStore(join(config.CONCH_HOME, 'commands'));
-    this.attachments = new AttachmentStore(join(config.CONCH_HOME, 'attachments'));
+    // What a draft holds stays until it's sent or the draft is let go (ADR 0124).
+    this.attachments = new AttachmentStore(join(config.CONCH_HOME, 'attachments'), {
+      drafted: (now) => this.drafts.held(now),
+    });
     this.processes = new ProcessService({
       protectedPaths: protectedPaths(config.CONCH_HOME),
       sealed: async () => (await this.settings.get()).preferences.sealedCommands,
@@ -845,6 +850,12 @@ export class Services {
     const pastChats = new PastChatStore(config.CONCH_HOME, heal);
     this.chatImports = this.#chatImports(config, pastChats, conversationStore);
     this.doctor.register(pastChatsCheck(this.chatImports));
+    // What you were writing and hadn't sent, per chat (ADR 0124).
+    this.drafts = new DraftStore(join(config.CONCH_HOME, 'conversations'), {
+      attachment: async (id) => (await this.attachments.get(id))?.attachment,
+      exists: async (id) => Boolean(await conversationStore.get(id)),
+      heal,
+    });
     this.folders = new ChatFolders(join(config.CONCH_HOME, 'conversations'), heal, (folders) =>
       this.broadcast.emit({ type: 'folders.changed', folders }),
     );
@@ -1476,6 +1487,11 @@ export class Services {
         void this.browser.forget(event.conversationId);
         this.computerUse.forgetChat(event.conversationId);
         void this.tasks.forgetChat(event.conversationId).catch(() => undefined);
+        // Its draft, and the files only that draft held.
+        void this.drafts
+          .remove(event.conversationId)
+          .then((ids) => Promise.all(ids.map((id) => this.attachments.discard(id))))
+          .catch(() => undefined);
       }
     });
     this.memory.changed.on(() => this.broadcast.emit({ type: 'memory.changed' }));

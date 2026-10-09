@@ -517,6 +517,12 @@ export const RULES: readonly BackupRule[] = [
     why: 'The folders you sort your chats into.',
   },
   {
+    match: 'conversations/drafts.json',
+    class: 'kept',
+    group: 'chats',
+    why: 'What you were writing in each chat and hadn’t sent yet, with what was attached (ADR 0124).',
+  },
+  {
     match: 'conversations/*.jsonl',
     class: 'kept',
     group: 'chats',

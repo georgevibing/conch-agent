@@ -357,6 +357,14 @@ export async function useConch(g: Gateway) {
   );
   const attachment = upload.attachment as { id: string };
   const convo = await chat(services, 'What’s in this picture?', [attachment.id]);
+  // Something written there and not sent yet (ADR 0124).
+  await ok(
+    await app.inject({
+      method: 'PUT',
+      url: `/api/conversations/${convo.id}/draft`,
+      payload: { text: 'And the dog in the corner?' },
+    }),
+  );
   await chat(services, 'And another question about the weather');
   // A file the assistant wrote, which Undo keeps a copy of (ADR 0030).
   await chat(services, 'write a note to water the plants');

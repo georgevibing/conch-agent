@@ -55,6 +55,11 @@ export class AttachmentStore {
     private readonly options: {
       /** What turns a HEIC photo into a JPEG (`fit.ts`; tests pretend). */
       converters?: readonly PictureConverter[];
+      /**
+       * Uploads an unsent message still holds (a draft, ADR 0124): never
+       * swept while it does, however old they are.
+       */
+      drafted?: (now: number) => Promise<ReadonlySet<string>>;
     } = {},
   ) {}
 
@@ -302,14 +307,23 @@ export class AttachmentStore {
 
   /**
    * Clean up: uploads never sent and older than a day, and folders left
-   * half-written by a crash (no readable `meta.json`). Returns how many went.
+   * half-written by a crash (no readable `meta.json`). An upload a draft
+   * still holds stays (ADR 0124). Returns how many went.
    */
-  sweep(now = Date.now()): Promise<number> {
+  async sweep(now = Date.now()): Promise<number> {
+    // Asked before the sweep starts. Drafts that can't be read sweep nothing: a
+    // file someone is about to send is worth more than a day's tidiness.
+    let drafted: ReadonlySet<string>;
+    try {
+      drafted = (await this.options.drafted?.(now)) ?? new Set<string>();
+    } catch {
+      return 0;
+    }
     return this.#mutex.run(async () => {
       let removed = 0;
       const entries = await readdir(this.dir).catch(() => [] as string[]);
       for (const name of entries) {
-        if (!Id.safeParse(name).success) continue;
+        if (!Id.safeParse(name).success || drafted.has(name)) continue;
         const found = await this.#read(name);
         const age = found
           ? now - found.createdAt
