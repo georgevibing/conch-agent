@@ -325,7 +325,7 @@ describe('Google consent and credentials', () => {
     ).rejects.toThrow('Use this Conch');
     await expect(
       service.start({ capabilities: ['mail-read'] }, 'https://other.example'),
-    ).rejects.toThrow('registered callback');
+    ).rejects.toThrow('sends sign-ins back to https://conch.example');
     await connect();
     expect(client.generateAuthUrl).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -624,5 +624,92 @@ describe('draft receipts and injection guard', () => {
         detail: 'google',
       });
     }
+  });
+});
+
+describe('Google sending you back to another browser, or not at all', () => {
+  const origin = 'https://conch.example';
+  it('keeps the code for the window that started it; only its cookie, once, spends it', async () => {
+    const flow = await service.start({ capabilities: ['mail-read'] }, origin);
+    // Safari, opened from the phone's Conch app: no cookie, so it can't finish there.
+    expect(service.owns(flow.flowId, '', origin)).toBe(false);
+    expect(service.park(flow.flowId, 'one-time-code')).toBe(true);
+    expect(service.park(flow.flowId, 'a-second-code')).toBe(false);
+    expect(service.flowStatus(flow.flowId)).toMatchObject({ state: 'returned', mode: 'automatic' });
+    expect(client.getToken).not.toHaveBeenCalled();
+    // Someone else's browser can't claim it, and trying doesn't spend it.
+    await expect(service.claim(flow.flowId, 'other-browser', origin)).rejects.toThrow(
+      'another browser',
+    );
+    await expect(service.claim(flow.flowId, flow.nonce, 'https://evil.example')).rejects.toThrow(
+      'another browser',
+    );
+    expect(service.flowStatus(flow.flowId).state).toBe('returned');
+    // Google saying no afterwards can't throw away a code that's waiting.
+    service.refuse(flow.flowId, 'access_denied');
+    await service.claim(flow.flowId, flow.nonce, origin);
+    expect(client.getToken).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'one-time-code', codeVerifier: 'secret-verifier' }),
+    );
+    expect(service.flowStatus(flow.flowId)).toEqual({ state: 'ready', accountId: 'account1' });
+    await expect(service.claim(flow.flowId, flow.nonce, origin)).rejects.toThrow('expired');
+  });
+  it('never parks a pasted-back (Desktop, remote) sign-in or an unknown one', async () => {
+    await service.configure(
+      { clientType: 'desktop', clientId: config.clientId, clientSecret: config.clientSecret },
+      origin,
+    );
+    const flow = await service.start({ capabilities: ['mail-read'] }, origin);
+    expect(flow.mode).toBe('manual');
+    expect(service.park(flow.flowId, 'code')).toBe(false);
+    expect(service.park('unknown', 'code')).toBe(false);
+  });
+  it('stops the waiting window when Google refuses, wherever Google lands, with the fix', async () => {
+    const flow = await service.start({ capabilities: ['mail-read'] }, origin);
+    service.refuse(flow.flowId, 'access_denied');
+    expect(service.flowStatus(flow.flowId)).toMatchObject({
+      state: 'failed',
+      message: expect.stringContaining('Test users'),
+    });
+    await expect(service.finish(flow.flowId, 'code', flow.nonce, origin)).rejects.toThrow(
+      'expired',
+    );
+    const second = await service.start({ capabilities: ['mail-read'] }, origin);
+    service.refuse(second.flowId, 'redirect_uri_mismatch');
+    expect(service.flowStatus(second.flowId)).toMatchObject({
+      message: expect.stringContaining(
+        'add exactly https://conch.example/oauth/google/callback under Authorized redirect URIs',
+      ),
+    });
+  });
+  it('says why when Google never sends you back within ten minutes', async () => {
+    const flow = await service.start({ capabilities: ['mail-read'] }, origin);
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 601_000);
+    try {
+      expect(service.flowStatus(flow.flowId)).toMatchObject({
+        state: 'failed',
+        message: expect.stringContaining('within 10 minutes'),
+      });
+    } finally {
+      clock.mockRestore();
+    }
+  });
+  it('asks for an account choice and a refresh token every time, with a hint only on reconnect', async () => {
+    await connect();
+    const added = client.generateAuthUrl.mock.calls[0]?.[0];
+    expect(added).toMatchObject({ access_type: 'offline', prompt: 'select_account consent' });
+    expect(added).not.toHaveProperty('login_hint');
+    await service.start({ capabilities: ['mail-read'], accountId: 'account1' }, origin);
+    expect(client.generateAuthUrl.mock.calls[1]?.[0]).toMatchObject({
+      login_hint: 'person@example.com',
+    });
+  });
+  it('names both addresses when a Web client was registered for another one', async () => {
+    await expect(
+      service.start({ capabilities: ['mail-read'] }, 'https://phone.tailnet.ts.net'),
+    ).rejects.toThrow(
+      /sends sign-ins back to https:\/\/conch\.example.*\(https:\/\/phone\.tailnet\.ts\.net\)/,
+    );
   });
 });

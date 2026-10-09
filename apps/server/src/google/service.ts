@@ -193,7 +193,17 @@ interface Pending {
   verifier: string;
   expiresAt: number;
   capabilities: GoogleCapability[];
+  /**
+   * Google's one-time code, when Google sent the person back in a browser that didn't
+   * start this sign-in (a phone's Conch app opens Google in Safari). Kept here unspent
+   * until the window that started it says so (`claim`).
+   */
+  returned?: string;
 }
+/** How long a sign-in waits for Google to send the person back. */
+const FLOW_TTL_MS = 600_000;
+const TIMED_OUT =
+  'Google didn’t send you back to Conch within 10 minutes, so this sign-in stopped. If Google showed an error, open “If Google says no” below for what it means, then start again.';
 function capabilities(scopes: readonly string[]): GoogleCapability[] {
   return ALL_CAPABILITIES.filter((c) => satisfies(scopes, c));
 }
@@ -209,25 +219,37 @@ function oauthErrorCode(error: unknown): string {
     .safeParse(error);
   return parsed.success ? parsed.data.response.data.error : '';
 }
-/** Never reflect Google's description, which may contain credentials or user-controlled text. */
-function consentMessage(code: string): string {
+/**
+ * What went wrong, in words, with the fix. Never reflects Google's description, which
+ * may contain credentials or user-controlled text; only Conch's own callback address.
+ */
+export function consentMessage(code: string, callbackUrl?: string): string {
   switch (code) {
     case 'cancelled':
       return 'Google sign-in cancelled. Your existing accounts are unchanged.';
     case 'access_denied':
-      return 'Google access was not approved. Sign in again when ready. If Google blocked the app, add your email under Google Auth Platform → Audience → Test users. Work accounts may need administrator approval.';
+      return 'Google access was not approved. If you pressed Cancel, sign in again when ready. If Google said the app is blocked or you’re not a test user, add the exact address you signed in with under Google Auth Platform → Audience → Test users (each address you connect needs its own line), then start again. Work accounts may need administrator approval.';
     case 'admin_policy_enforced':
     case 'org_internal':
       return 'Your Google Workspace organization restricts this app. Ask its administrator to allow it, or use your personal Google account.';
     case 'invalid_client':
     case 'deleted_client':
+    case 'unauthorized_client':
       return 'Google no longer accepts this app’s credentials. In Google Auth Platform → Clients, download a current OAuth client JSON and import it in Google app setup.';
     case 'redirect_uri_mismatch':
-      return 'Google rejected the callback address. For a Web client, register the exact address shown in Google app setup, or import a Desktop app client.';
+      return callbackUrl && !callbackUrl.startsWith('http://127.0.0.1')
+        ? `Google doesn’t know the address Conch asked it to send you back to. In Google Auth Platform → Clients → your Web client, add exactly ${callbackUrl} under Authorized redirect URIs, save, wait a few minutes, then start again. Or import a Desktop app client instead.`
+        : 'Google rejected the callback address. Import a current Desktop app client in Google app setup, then start again.';
+    case 'invalid_scope':
+      return 'Google refused one of the permissions Conch asked for. Check that the Gmail, Calendar and Drive APIs you need are enabled in your Google project, then start again.';
+    case 'invalid_request':
+      return 'Google couldn’t read this sign-in request. Start again from Conch; if it keeps happening, import a current OAuth client JSON in Google app setup.';
     case 'invalid_grant':
       return 'This Google sign-in code expired or was already used. Start a new sign-in from Conch.';
+    case 'timed_out':
+      return TIMED_OUT;
     default:
-      return 'Google sign-in could not be verified. Start again from Conch. If Google shows an error, open Sign-in help below.';
+      return 'Google sign-in could not be verified. Start again from Conch. If Google shows an error, open “If Google says no” below.';
   }
 }
 
@@ -617,12 +639,14 @@ export class GoogleService {
     )
       throw new GoogleError(
         'invalid',
-        'Open Conch at the registered callback address before connecting Google.',
+        config.redirectUrl
+          ? `Your Google app sends sign-ins back to ${new URL(config.redirectUrl).origin}, not to the address you opened Conch at (${origin}). Open Conch at ${new URL(config.redirectUrl).origin} to add an account, or import a Desktop app client, which works from any address.`
+          : 'Open Conch at the registered callback address before connecting Google.',
       );
     const account = input.accountId ? data.accounts[input.accountId] : undefined;
     if (input.accountId && !account)
       throw new GoogleError('invalid', 'That Google account is no longer connected. Add it again.');
-    for (const [s, p] of this.#pending) if (p.expiresAt < Date.now()) this.#pending.delete(s);
+    this.#expire();
     if (this.#pending.size >= 20)
       throw new GoogleError('invalid', 'Finish an open Google sign-in before starting another.');
     const local = new URL(origin);
@@ -649,7 +673,7 @@ export class GoogleService {
       generation: account?.credential.generation,
       nonce,
       verifier: pkce.codeVerifier,
-      expiresAt: Date.now() + 600_000,
+      expiresAt: Date.now() + FLOW_TTL_MS,
       capabilities: input.capabilities,
     });
     const scopes = [
@@ -669,7 +693,8 @@ export class GoogleService {
       state,
       code_challenge: pkce.codeChallenge,
       code_challenge_method: CodeChallengeMethod.S256,
-      login_hint: account?.profile.email,
+      // Only when signing in again as a known account: otherwise the URL carried an empty one.
+      ...(account ? { login_hint: account.profile.email } : {}),
     });
     return { url, nonce, flowId: state, mode };
   }
@@ -678,14 +703,74 @@ export class GoogleService {
     if (!flow || !safeEqual(flow.nonce, nonce) || flow.origin !== origin) return;
     this.#pending.delete(state);
     this.#processing.delete(state);
-    this.#finished.set(state, { expiresAt: Date.now() + 600_000, message: consentMessage(reason) });
+    this.#finished.set(state, {
+      expiresAt: Date.now() + FLOW_TTL_MS,
+      message: consentMessage(reason, flow.redirectUrl),
+    });
+  }
+  /** Is this the browser that started this sign-in, at the address it started on? */
+  owns(state: string, nonce: string, origin: string): boolean {
+    const flow = this.#pending.get(state);
+    return !!flow && safeEqual(flow.nonce, nonce) && flow.origin === origin;
+  }
+  /**
+   * Google said no and sent the person back with why. Told wherever they land,
+   * even in a browser that didn't start the sign-in (a phone's Conch app opens
+   * Google in Safari), so the window waiting on it stops and says why. Knowing
+   * the 256-bit `state` can only end a sign-in, never finish one.
+   */
+  refuse(state: string, reason: string) {
+    const flow = this.#pending.get(state);
+    if (!flow || flow.returned) return;
+    this.#pending.delete(state);
+    this.#finished.set(state, {
+      expiresAt: Date.now() + FLOW_TTL_MS,
+      message: consentMessage(reason, flow.redirectUrl),
+    });
+  }
+  /**
+   * Google sent the person back to a browser that didn't start this sign-in, so
+   * it holds no proof it may finish it. The code waits here unspent; the window
+   * that started it (signed in, with its cookie) finishes with `claim`. Once only.
+   */
+  park(state: string, code: string): boolean {
+    const flow = this.#pending.get(state);
+    if (!flow || flow.mode !== 'automatic' || flow.expiresAt < Date.now() || flow.returned)
+      return false;
+    flow.returned = code;
+    return true;
+  }
+  /** Finish, from the window that started it, a sign-in Google sent back elsewhere. */
+  async claim(state: string, nonce: string, origin: string): Promise<void> {
+    const code = this.#pending.get(state)?.returned;
+    if (!code || !this.owns(state, nonce, origin))
+      throw new GoogleError(
+        'expired',
+        'This sign-in belongs to another browser or has expired. Start again here.',
+      );
+    await this.finish(state, code, nonce, origin);
+  }
+  /** Sign-ins Google never came back from: stopped, with why. */
+  #expire() {
+    const now = Date.now();
+    for (const [state, flow] of this.#pending)
+      if (flow.expiresAt < now) {
+        this.#pending.delete(state);
+        this.#finished.set(state, { expiresAt: now + FLOW_TTL_MS, message: TIMED_OUT });
+      }
+    for (const [key, value] of this.#finished)
+      if (value.expiresAt < now) this.#finished.delete(key);
   }
   flowStatus(state: string) {
-    for (const [key, value] of this.#finished)
-      if (value.expiresAt < Date.now()) this.#finished.delete(key);
-    const pending = this.#pending.get(state) ?? this.#processing.get(state);
-    if (pending && pending.expiresAt > Date.now())
-      return { state: 'pending' as const, mode: pending.mode, expiresAt: pending.expiresAt };
+    this.#expire();
+    const pending = this.#pending.get(state);
+    const open = pending ?? this.#processing.get(state);
+    if (open && open.expiresAt > Date.now())
+      return {
+        state: pending?.returned ? ('returned' as const) : ('pending' as const),
+        mode: open.mode,
+        expiresAt: open.expiresAt,
+      };
     const finished = this.#finished.get(state);
     return finished?.accountId
       ? { state: 'ready' as const, accountId: finished.accountId }
@@ -725,7 +810,7 @@ export class GoogleService {
     const error = url.searchParams.get('error');
     if (error) {
       this.cancel(state, nonce, origin, error);
-      throw new GoogleError('invalid', consentMessage(error));
+      throw new GoogleError('invalid', consentMessage(error, flow.redirectUrl));
     }
     const code = url.searchParams.get('code');
     if (!code || code.length > 4096)
@@ -870,7 +955,7 @@ export class GoogleService {
       const failure =
         error instanceof GoogleError
           ? error
-          : new GoogleError('expired', consentMessage(oauthErrorCode(error)));
+          : new GoogleError('expired', consentMessage(oauthErrorCode(error), flow.redirectUrl));
       this.#finished.set(state, { message: failure.message, expiresAt: Date.now() + 600_000 });
       throw failure;
     } finally {

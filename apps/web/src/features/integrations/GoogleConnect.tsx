@@ -15,6 +15,9 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+
+/** Google’s sign-in lasts ten minutes; with eight left (two gone), Conch says what usually stops it. */
+const SLOW_WHEN_LEFT_MS = 8 * 60_000;
 import { googleApi } from './googleApi';
 import { GoogleSetup, googleServices } from './GoogleSetup';
 import styles from './Integrations.module.css';
@@ -63,6 +66,9 @@ function GoogleConnection({
   const auth = useAuth();
   const { guard, dialog } = useVerify(auth.data?.method ?? 'none');
   const capabilityKey = [...capabilities].sort().join(',');
+  const touch = useState(
+    () => typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches,
+  )[0];
   const flowKey = 'conch-google-flow:' + (accountId ?? 'new') + ':' + capabilityKey;
   const [flowId, setFlowId] = useState(() => savedFlow(flowKey));
   const [mode, setMode] = useState<'automatic' | 'manual'>('automatic');
@@ -70,6 +76,10 @@ function GoogleConnection({
   const [returnUrl, setReturnUrl] = useState('');
   const [error, setError] = useState('');
   const [offline, setOffline] = useState(false);
+  /** Google sent the person back to another browser: one press here finishes. */
+  const [returned, setReturned] = useState(false);
+  /** Google hasn't sent them back for a while: say what usually stops it. */
+  const [slow, setSlow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [editingSetup, setEditingSetup] = useState(false);
   const popup = useRef<Window | null>(null);
@@ -98,7 +108,11 @@ function GoogleConnection({
         if (cancelled || stopping.current === flowId) return;
         setOffline(false);
         if (flow.mode) setMode(flow.mode);
+        setReturned(flow.state === 'returned');
+        // Waiting more than two of its ten minutes.
+        if (flow.expiresAt) setSlow(flow.expiresAt - Date.now() < SLOW_WHEN_LEFT_MS);
         if (flow.state === 'failed') {
+          setSlow(false);
           setFlowId('');
           setReturnUrl('');
           setSignInUrl('');
@@ -183,10 +197,15 @@ function GoogleConnection({
     setSignInUrl(url.href);
     setFlowId(result.flowId);
     setReturnUrl('');
+    setReturned(false);
+    setSlow(false);
     const opened = popup.current;
     if (opened && !opened.closed) opened.location.href = url.href;
   };
   const openPopup = () => {
+    // On a phone a blank window opened before Google's address is known can stay blank
+    // (an installed Conch hands it to Safari, out of reach): Open Google sign-in instead.
+    if (touch) return;
     popup.current = window.open('about:blank', 'conch-google', 'popup,width=560,height=720');
   };
   const connect = () => {
@@ -206,6 +225,7 @@ function GoogleConnection({
     window.location.protocol === 'http:' &&
     ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
   const remoteDesktop = data?.clientType === 'desktop' && !local;
+  const callbackUrl = data?.clientType === 'web' ? data.callbackUrl : undefined;
   const settingUp = data && (!data.configured || editingSetup) && !waiting;
   return (
     <Stack gap={4}>
@@ -223,15 +243,58 @@ function GoogleConnection({
       {status.isPending && <Text tone="muted">Checking your Google setup…</Text>}
       {waiting && (
         <Stack gap={3}>
-          <Callout tone="info" live="polite" title="Finish in the Google window">
-            {mode === 'manual'
-              ? 'Choose the account and allow access. Then bring the address Google ends on back here.'
-              : 'Choose the account and allow access. This picks up by itself when you’re done.'}
-          </Callout>
-          {signInUrl && (
+          {returned ? (
+            <>
+              <Callout tone="success" live="polite" title="Google sent you back">
+                It opened in another browser, which can’t finish for you. Press Finish connecting to
+                add the account here.
+              </Callout>
+              <Button
+                className={styles.fit}
+                disabled={busy}
+                loading={busy}
+                onClick={() => void act(() => googleApi.claim(flowId))}
+              >
+                Finish connecting
+              </Button>
+            </>
+          ) : (
+            <Callout tone="info" live="polite" title="Finish in the Google window">
+              {mode === 'manual'
+                ? 'Choose the account and allow access. Then bring the address Google ends on back here.'
+                : touch
+                  ? 'Open Google sign-in, choose the account and allow access, then come back to Conch. If Google opens in another browser, Conch asks you to press Finish connecting here.'
+                  : 'Choose the account and allow access. This picks up by itself when you’re done.'}
+            </Callout>
+          )}
+          {slow && !returned && (
+            <Callout tone="warning" live="polite" title="Google hasn’t sent you back yet">
+              <Stack gap={2}>
+                <Text size="sm">
+                  If the Google window is still open, finish there. If it showed an error, here’s
+                  what fixes it, then press Cancel sign-in and start again:
+                </Text>
+                <Text size="sm">
+                  <strong>“Access blocked” or “not a test user”:</strong> while your Google app is
+                  in Testing, only its test users can sign in. Add the exact address you’re adding
+                  under Audience → Test users, one line per address.
+                </Text>
+                <Text size="sm">
+                  <strong>“400”, “malformed” or “redirect_uri_mismatch”:</strong>{' '}
+                  {callbackUrl
+                    ? `your Web client must list exactly ${callbackUrl} under Authorized redirect URIs.`
+                    : 'start again from this page rather than from an old Google tab or a link you saved; each sign-in can be used once.'}
+                </Text>
+                <Text size="sm">
+                  This sign-in stops by itself 10 minutes after it began, and says so here.
+                </Text>
+              </Stack>
+            </Callout>
+          )}
+          {signInUrl && !returned && (
             <Button
               asChild
-              variant="surface"
+              variant={touch && mode === 'automatic' ? 'solid' : 'surface'}
               trailingIcon={<SquareArrowOutUpRight />}
               className={styles.fit}
             >
@@ -243,10 +306,17 @@ function GoogleConnection({
           {mode === 'manual' && (
             <>
               <Text size="sm" tone="muted">
-                After you allow access, the window may say it can’t open 127.0.0.1. That’s expected
-                for a Conch that isn’t on this computer. Copy the whole address from that window’s
-                address bar and paste it here — never into a chat.
+                After you allow access, the window may say it can’t open 127.0.0.1, or keep loading.
+                That’s expected for a Conch that isn’t on this device. Copy the whole address from
+                that window’s address bar (on a phone: tap it, then Select All and Copy) and paste
+                it here — never into a chat.
               </Text>
+              {touch && (
+                <Text size="sm" tone="muted">
+                  Easier on a phone: add the account from Conch on the computer it runs on, where
+                  Google finishes by itself. It shows up here too.
+                </Text>
+              )}
               <Field>
                 <Field.Label>Return address from Google</Field.Label>
                 <PasswordInput

@@ -26,6 +26,12 @@ export const googleApi = {
       method: 'POST',
       body: GoogleComplete.parse({ redirectUrl }),
     }),
+  /** Finish here a sign-in Google sent back to another browser (a phone opens Safari). */
+  claim: (id: string) =>
+    request(GoogleFlowStatus, `/api/google/flows/${encodeURIComponent(id)}/claim`, {
+      method: 'POST',
+      body: {},
+    }),
   cancel: (id: string) =>
     request(z.object({ ok: z.boolean() }), `/api/google/flows/${encodeURIComponent(id)}`, {
       method: 'DELETE',

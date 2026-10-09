@@ -30,6 +30,13 @@ function setup(verified = true) {
     })),
     finish: vi.fn(async () => undefined),
     cancel: vi.fn(),
+    owns: vi.fn(
+      (_state: string, nonce: string) =>
+        nonce === 'browser-proof' || nonce.endsWith('-browser-proof'),
+    ),
+    refuse: vi.fn(),
+    park: vi.fn(() => true),
+    claim: vi.fn(async () => undefined),
     check: vi.fn(),
     disconnect: vi.fn(),
     raises: vi.fn(async (_id: string, body: { level?: string }) => body.level === 'write'),
@@ -220,21 +227,67 @@ describe('Google HTTP boundary', () => {
       'http://localhost:80',
     );
     expect(response.statusCode).toBe(303);
-    expect(response.headers.location).toBe('/apps?google=connected');
+    expect(response.headers.location).toBe('/integrations/done?app=google&result=connected');
     expect(response.headers['referrer-policy']).toBe('no-referrer');
     expect(response.headers['cache-control']).toBe('no-store');
     service.finish.mockClear();
     await app.inject({ url: `/oauth/google/callback?state=${state}&state=${state}&code=code` });
     expect(service.finish).not.toHaveBeenCalled();
   });
-  it('spends denied consent and returns a fixed message with no upstream details', async () => {
+  it('spends denied consent wherever Google lands, with Conch’s words, never Google’s', async () => {
+    const { app, service } = setup();
+    const state = 'a'.repeat(43);
+    service.flowStatus.mockReturnValueOnce({
+      state: 'failed',
+      message: 'Add the exact address under Audience → Test users <b>',
+    } as never);
+    // Another browser (a phone's Conch app opened Google in Safari): no cookie, no session.
+    const elsewhere = await app.inject({
+      url: `/oauth/google/callback?state=${state}&error=access_denied&error_description=%3Cscript%3E`,
+    });
+    expect(service.refuse).toHaveBeenCalledWith(state, 'access_denied');
+    expect(elsewhere.statusCode).toBe(200);
+    expect(elsewhere.headers['content-type']).toContain('text/html');
+    expect(elsewhere.headers['content-security-policy']).toContain("default-src 'none'");
+    expect(elsewhere.body).toContain('Test users &lt;b&gt;');
+    expect(elsewhere.body).not.toContain('<script');
+    // The browser that started it goes to the sign-in window's own page.
+    const here = await app.inject({
+      url: `/oauth/google/callback?state=${state}&error=access_denied`,
+      headers: { cookie: `conch_google_flow_${state}=browser-proof` },
+    });
+    expect(here.headers.location).toBe('/integrations/done?app=google&result=denied');
+  });
+  it('keeps a code Google sent to another browser for the window that started it, and only that window spends it', async () => {
     const { app, service } = setup();
     const state = 'a'.repeat(43);
     const response = await app.inject({
-      url: `/oauth/google/callback?state=${state}&error=access_denied`,
+      url: `/oauth/google/callback?state=${state}&code=private-code`,
     });
-    expect(service.cancel).toHaveBeenCalledWith(state, '', 'http://localhost:80', 'access_denied');
-    expect(response.headers.location).toBe('/apps?google=denied');
+    expect(service.finish).not.toHaveBeenCalled();
+    expect(service.park).toHaveBeenCalledWith(state, 'private-code');
+    expect(response.body).toContain('Finish connecting');
+    expect(response.body).not.toContain('private-code');
+    service.park.mockReturnValueOnce(false);
+    const spent = await app.inject({ url: `/oauth/google/callback?state=${state}&code=again` });
+    expect(spent.statusCode).toBe(400);
+    expect(spent.body).toContain('start again');
+    // Claiming needs a confirmed session, and passes this browser's own cookie.
+    const unverified = await setup(false).app.inject({
+      method: 'POST',
+      url: `/api/google/flows/${state}/claim`,
+      payload: {},
+    });
+    expect(unverified.statusCode).toBe(403);
+    const claimed = await app.inject({
+      method: 'POST',
+      url: `/api/google/flows/${state}/claim`,
+      payload: {},
+      headers: { cookie: `conch_google_flow_${state}=browser-proof` },
+    });
+    expect(claimed.statusCode).toBe(200);
+    expect(service.claim).toHaveBeenCalledWith(state, 'browser-proof', 'http://localhost:80');
+    expect(claimed.headers['set-cookie']).toContain('Max-Age=0');
   });
 });
 
