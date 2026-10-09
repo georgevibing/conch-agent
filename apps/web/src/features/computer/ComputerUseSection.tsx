@@ -1,5 +1,13 @@
 import type { ComputerUseAccessKind, ComputerUseStatus } from '@conch/protocol';
-import { ComputerUseAccess, IconButton, Skeleton, Stack, Switch, Text } from '@conch/nacre';
+import {
+  ComputerUseAccess,
+  IconButton,
+  joinMeta,
+  Skeleton,
+  Stack,
+  Switch,
+  Text,
+} from '@conch/nacre';
 import { AppWindowMac, X } from 'lucide-react';
 import { useState } from 'react';
 
@@ -107,7 +115,7 @@ export function ComputerUseSettings({
         />
       )}
       <Text size="sm" tone="subtle">
-        Each app asks once per chat. Always kept away: {status.keptAway.join(' · ')}.
+        Each app asks once per chat. Always kept away: {joinMeta(status.keptAway)}.
       </Text>
       {status.apps.length > 0 && (
         <ul className={styles.apps} aria-label="Apps you always allow">

@@ -40,7 +40,7 @@ describe('Settings → This computer → Use your apps', () => {
     const toggle = await screen.findByRole('switch', { name: /use your apps/i });
     expect(toggle).not.toBeChecked();
     expect(
-      screen.getByText(/Always kept away: Conch itself · Password managers/),
+      screen.getByText(/Always kept away: Conch itself\s·\sPassword managers/),
     ).toBeInTheDocument();
     await userEvent.click(toggle);
     expect(
