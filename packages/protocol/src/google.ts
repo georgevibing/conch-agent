@@ -183,7 +183,11 @@ export const GoogleConnectResult = z.object({
 });
 export const GoogleComplete = z.object({ redirectUrl: z.url().max(8192) });
 export const GoogleFlowStatus = z.object({
-  state: z.enum(['pending', 'ready', 'failed']),
+  /**
+   * `returned`: Google sent the person back to another browser (a phone's Conch app
+   * opens Google in Safari); the window that started it presses Finish to connect.
+   */
+  state: z.enum(['pending', 'returned', 'ready', 'failed']),
   accountId: z.string().optional(),
   mode: z.enum(['automatic', 'manual']).optional(),
   expiresAt: z.number().optional(),

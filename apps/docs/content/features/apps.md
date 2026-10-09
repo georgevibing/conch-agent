@@ -202,7 +202,7 @@ There is no Conch cloud account, public callback address, or extra service to ru
 
 1. Follow the setup guide to create or choose a Google Cloud project. An optional **Project ID** makes subsequent links open the right project.
 2. Open each API linked for your job and press **Enable**. You do not need to enable unrelated Google apps.
-3. Open **Branding** in Google Auth Platform and complete the app details. In **Audience**, add your email under **Test users** while the app is in Testing. Personal Google accounts use **External**; **Internal** is for eligible Workspace organizations.
+3. Open **Branding** in Google Auth Platform and complete the app details. In **Audience**, add your email under **Test users** while the app is in Testing, and every other address you'll connect, one per line: Google refuses anyone else. Personal Google accounts use **External**; **Internal** is for eligible Workspace organizations.
 4. Open **Clients**, press **Create client**, choose **Desktop app**, and download the JSON. Drop that file onto **Drop the file you downloaded**, press **Choose the file**, or press **Paste what’s in it instead** and paste its contents. Conch checks it here and says what kind of client it is before you save it.
 5. Press **Save and continue with Google**. Choose your account on Google’s own sign-in page and review its permissions.
 
@@ -216,7 +216,9 @@ remote address, it returns to a local address that your browser may refuse to
 open. That is expected. Copy the **complete address from the address bar**, paste
 it into **Return address from Google** in Conch, and press **Finish connecting**.
 Never paste it into chat. You do not need a terminal, port forwarding, or a public
-Google callback. Keep using the same browser and Conch address throughout sign-in.
+Google callback. On a phone that's awkward: it's easier to add the account from Conch
+on the computer it runs on, where Google finishes by itself, and the account shows on
+the phone too.
 
 An existing **Web application** client still works. Under **Advanced: existing Web
 client**, copy the exact callback into that client's **Authorized redirect URIs**.
@@ -224,9 +226,16 @@ You can import its JSON after registering that address, or enter its ID and
 secret there. Remote Web-client callbacks require HTTPS. Desktop clients do not
 need a registered callback.
 
-Your current job stays open. If a popup is blocked, press **Open Google sign-in**.
-Reloading Conch resumes the pending flow in the same tab. A sign-in expires after
-ten minutes; if Conch restarts, start a new sign-in without repeating app setup.
+If Google sends you back to a different browser than the one you started in (Conch
+installed on an iPhone opens Google in Safari), that page says **Almost done**: go
+back to Conch and press **Finish connecting**. Only the Conch you started in can
+finish, so a stray sign-in link can't add someone else's account.
+
+Your current job stays open. If a popup is blocked, or you're on a phone, press **Open Google sign-in**.
+Reloading Conch resumes the pending flow in the same tab. If Google hasn't sent you back
+after two minutes, Conch says what usually stops it. A sign-in expires after ten
+minutes, and Conch says so; if Conch restarts, start a new sign-in without
+repeating app setup.
 Conch checks the account and actual API access before continuing. **Add an
 account** adds work and personal separately. Signing in again for an account
 refuses a different one, so nothing can quietly move to another mailbox.
@@ -236,7 +245,8 @@ refuses a different one, so nothing can quietly move to another mailbox.
 Open **If Google says no** for links to the right project settings:
 
 - **API not enabled:** enable the named API, wait briefly, then press **Check now** on the account. Conch keeps your sign-in and does not ask you to grant access again unnecessarily.
-- **Test user missing or access blocked:** add the exact Google email under **Audience → Test users**. Workspace administrators may need to allow the app.
+- **Test user missing or access blocked:** add the exact Google email under **Audience → Test users**, one line for each address you connect. Workspace administrators may need to allow the app.
+- **“400”, “malformed” or `redirect_uri_mismatch`:** start again from Conch rather than an old Google tab, since each sign-in works once. With a Web client, its **Authorized redirect URIs** must list exactly the address Conch shows, for the address you opened Conch at; a Desktop app client works from any address.
 - **Unverified app:** check that it is your own app in your own project before using Google's available personal-testing option. A policy block may need an administrator, not another sign-in attempt.
 - **Access expires every week:** Google Testing mode can expire refresh tokens after seven days. Review **Audience** before leaving Testing; sensitive access or public distribution may require verification. Conch does not publish your app for you.
 - **Wrong file or callback:** import a current Desktop app OAuth JSON, not a service-account key. Web clients must contain the callback displayed by this Conch installation.

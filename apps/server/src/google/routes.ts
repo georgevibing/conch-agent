@@ -182,25 +182,86 @@ export function googleRoutes(
     });
   });
 
+  // Finishing, from the window that started it, a sign-in Google sent back to another
+  // browser: a phone's Conch app opens Google in Safari, which has neither its cookie nor
+  // its session. Only this window, confirmed and holding the cookie, spends the code.
+  app.post<{ Params: { id: string } }>('/api/google/flows/:id/claim', async (request, reply) => {
+    if (!verified(request, reply)) return;
+    return guarded(reply, async () => {
+      const { id } = FlowParams.parse(request.params);
+      await service.claim(id, nonce(request, id), origin(request));
+      clearCookie(request, reply, id);
+      return service.flowStatus(id);
+    });
+  });
+
   app.get('/oauth/google/callback', async (request, reply) => {
     reply.header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer');
     const query = Params.safeParse(request.query);
-    let result = 'failed';
-    if (query.success) {
-      const { state, code, error } = query.data;
-      clearCookie(request, reply, state);
-      if (error || !code) {
-        service.cancel(state, nonce(request, state), origin(request), error);
-        result = error === 'access_denied' ? 'denied' : 'failed';
-      } else {
-        try {
-          await service.finish(state, code, nonce(request, state), origin(request));
-          result = service.flowStatus(state).state === 'ready' ? 'connected' : 'failed';
-        } catch {
-          result = 'failed';
-        }
+    if (!query.success) return page(reply, 'failed');
+    const { state, code, error } = query.data;
+    // Whether Google sent the person back to the browser that started this sign-in.
+    const here = service.owns(state, nonce(request, state), origin(request));
+    let result: 'connected' | 'denied' | 'failed';
+    if (error || !code) {
+      service.refuse(state, error ?? 'no_code');
+      result = error === 'access_denied' ? 'denied' : 'failed';
+    } else if (!here) {
+      // Another browser: the code waits, unspent, for the window that started it.
+      return page(reply, service.park(state, code) ? 'elsewhere' : 'failed');
+    } else {
+      try {
+        await service.finish(state, code, nonce(request, state), origin(request));
+        result = service.flowStatus(state).state === 'ready' ? 'connected' : 'failed';
+      } catch {
+        result = 'failed';
       }
     }
-    return reply.redirect(`/apps?google=${result}`, 303);
+    const status = service.flowStatus(state);
+    if (!here) return page(reply, result, 'message' in status ? status.message : undefined);
+    clearCookie(request, reply, state);
+    // The sign-in window's own page: it closes itself; the Conch window has updated.
+    return reply.redirect(`/integrations/done?app=google&result=${result}`, 303);
   });
+}
+
+const PAGE_TEXT = {
+  elsewhere: {
+    title: 'Almost done',
+    body: 'Google sent you back here, but Conch is open somewhere else: the Conch app on this phone, or another browser. Go back to Conch and press Finish connecting. You can close this page.',
+  },
+  connected: { title: 'Google is connected', body: 'You can close this page.' },
+  denied: {
+    title: 'Google isn’t connected',
+    body: 'Access wasn’t approved, so nothing was connected. Go back to Conch to try again.',
+  },
+  failed: {
+    title: 'Google isn’t connected',
+    body: 'This sign-in expired or was already used. Go back to Conch and start again.',
+  },
+} as const;
+const escape = (text: string) =>
+  text.replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c,
+  );
+
+/**
+ * Where Google lands in a browser that didn't start the sign-in. It has no Conch
+ * session, so it can't show the app: one plain page, no script, that says what to
+ * do next. Its words are Conch's own, never Google's.
+ */
+function page(reply: FastifyReply, result: keyof typeof PAGE_TEXT, message?: string) {
+  const { title, body } = PAGE_TEXT[result];
+  const text = result === 'denied' || result === 'failed' ? (message ?? body) : body;
+  return reply
+    .code(result === 'failed' ? 400 : 200)
+    .header('Content-Type', 'text/html; charset=utf-8')
+    .header(
+      'Content-Security-Policy',
+      "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    )
+    .send(
+      `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>${escape(title)} · Conch</title><style>body{font:17px/1.5 system-ui,sans-serif;max-width:32rem;margin:15vh auto;padding:0 1.5rem}h1{font-size:1.5rem;margin:0 0 .75rem}</style></head><body><main><h1>${escape(title)}</h1><p>${escape(text)}</p></main></body></html>`,
+    );
 }

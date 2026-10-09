@@ -243,4 +243,76 @@ describe('Google sign-in', () => {
     expect(await screen.findByText(/doesn’t have what was asked for/)).toBeVisible();
     expect(onReady).not.toHaveBeenCalled();
   });
+
+  it('on a phone, opens no blank window and finishes here when Google came back in Safari', async () => {
+    vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) =>
+        ({
+          matches: query === '(pointer: coarse)',
+          media: query,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        }) as unknown as MediaQueryList,
+    );
+    const open = vi.spyOn(window, 'open');
+    let claimed = false;
+    const account = {
+      id: 'second',
+      email: 'second@example.com',
+      name: 'Second',
+      capabilities: ['mail-read'],
+      state: 'ready',
+    };
+    mockFetch({
+      'GET /api/google': () => ({
+        configured: true,
+        clientType: 'web',
+        callbackUrl: 'https://conch.example/oauth/google/callback',
+        accounts: claimed ? [account] : [],
+      }),
+      'POST /api/google/connect': () => ({
+        url: 'https://accounts.google.com/auth',
+        flowId: 'phone-flow',
+        mode: 'automatic',
+      }),
+      'GET /api/google/flows/phone-flow': () =>
+        claimed
+          ? { state: 'ready', accountId: 'second' }
+          : { state: 'returned', mode: 'automatic', expiresAt: Date.now() + 590_000 },
+      'POST /api/google/flows/phone-flow/claim': () => {
+        claimed = true;
+        return { state: 'ready', accountId: 'second' };
+      },
+    });
+    const onReady = vi.fn();
+    renderApp(<GoogleConnect capabilities={['mail-read']} onReady={onReady} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Continue with Google' }));
+    expect(await screen.findByText('Google sent you back')).toBeVisible();
+    expect(open).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Finish connecting' }));
+    await waitFor(() => expect(onReady).toHaveBeenCalledWith('second'));
+  });
+
+  it('says what usually stops Google, with the exact address, when it hasn’t sent you back', async () => {
+    sessionStorage.setItem('conch-google-flow:new:mail-read', 'slow-flow');
+    mockFetch({
+      'GET /api/google': () => ({
+        configured: true,
+        clientType: 'web',
+        callbackUrl: 'https://conch.example/oauth/google/callback',
+        accounts: [],
+      }),
+      'GET /api/google/flows/slow-flow': () => ({
+        state: 'pending',
+        mode: 'automatic',
+        expiresAt: Date.now() + 7 * 60_000,
+      }),
+    });
+    renderApp(<GoogleConnect capabilities={['mail-read']} onReady={() => {}} />);
+    expect(await screen.findByText('Google hasn’t sent you back yet')).toBeVisible();
+    expect(
+      screen.getByText(/must list exactly https:\/\/conch\.example\/oauth\/google\/callback/),
+    ).toBeVisible();
+    expect(screen.getByText(/one line per address/)).toBeVisible();
+  });
 });

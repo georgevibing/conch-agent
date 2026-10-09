@@ -14,6 +14,8 @@ export function OAuthDone() {
   const params = new URLSearchParams(window.location.search);
   const opening = params.has('opening');
   const id = params.get('id') ?? undefined;
+  // Google's own sign-in (not an integration): the Conch window has the details.
+  const google = params.get('app') === 'google';
   const result = params.get('result') ?? 'failed';
   const integration = useQuery({
     queryKey: ['integration-done', id],
@@ -51,7 +53,7 @@ export function OAuthDone() {
     );
   }
 
-  const name = integration.data?.name ?? 'The app';
+  const name = google ? 'Google' : (integration.data?.name ?? 'The app');
   const message =
     result === 'connected'
       ? 'You can close this window.'
@@ -59,7 +61,9 @@ export function OAuthDone() {
         ? 'You didn’t allow access, so nothing was connected.'
         : result === 'expired'
           ? 'This sign-in link expired. Start again from Conch.'
-          : (integration.data?.health.message ?? 'Signing in didn’t work. Try again from Conch.');
+          : google
+            ? 'Go back to Conch: it says what went wrong and how to fix it.'
+            : (integration.data?.health.message ?? 'Signing in didn’t work. Try again from Conch.');
 
   return (
     <div className={styles.done}>
