@@ -172,6 +172,9 @@ describe('BrowserWindow', () => {
     expect(onTakeOver).not.toHaveBeenCalled();
     fireEvent.pointerUp(page, finger(1, 420));
     expect(onTakeOver).toHaveBeenCalledOnce();
+    // Nobody was driving: the tap is also the click it meant to be.
+    expect(onInput.mock.calls.map(([input]) => input.action)).toEqual(['down', 'up']);
+    onInput.mockClear();
 
     rerender(
       <BrowserWindow tab={{ ...tab, control: 'user' }} frame={hotelsPage} onInput={onInput} />,
@@ -183,8 +186,10 @@ describe('BrowserWindow', () => {
     const keys = screen.getByRole('textbox', { name: 'Type into the page' });
     (document.activeElement as HTMLElement | null)?.blur();
 
+    // A finger whose lift never arrived doesn't turn the next tap into half a pinch.
+    fireEvent.pointerDown(page, { ...finger(9, 100), isPrimary: true });
     // A tap: a click where it landed, and the keys take the focus within the tap.
-    fireEvent.pointerDown(page, finger(1, 420));
+    fireEvent.pointerDown(page, { ...finger(1, 420), isPrimary: true });
     expect(onInput).not.toHaveBeenCalled();
     fireEvent.pointerUp(page, finger(1, 420));
     expect(onInput.mock.calls.map(([input]) => input.action)).toEqual(['down', 'up']);
@@ -237,7 +242,10 @@ describe('BrowserWindow', () => {
     );
     expect(keys).not.toHaveFocus();
     // The keyboard goes over the page; the app doesn't shrink for it.
-    expect(keys).toHaveAttribute('data-nc-keyboard-over');
+    expect(keys.closest('[data-nc-keyboard-over]')).not.toBeNull();
+    expect(
+      screen.getByRole('button', { name: /^Address/ }).closest('[data-nc-keyboard-over]'),
+    ).not.toBeNull();
   });
 
   it('lets you leave the page with Shift+Escape, and hand back', async () => {

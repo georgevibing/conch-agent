@@ -301,6 +301,9 @@ export function BrowserWindow({
     if (kind === 'down') {
       event.preventDefault();
       event.currentTarget.setPointerCapture?.(id);
+      // A first finger starts afresh: a lift that never arrived can't leave a
+      // stale finger behind that turns every tap after it into half a pinch.
+      if (event.isPrimary) touches.current.clear();
       touches.current.set(id, at);
       gesture.current =
         touches.current.size === 1 ? { kind: 'tap', start: at, last: at } : pinchFrom();
@@ -358,10 +361,10 @@ export function BrowserWindow({
     gesture.current = undefined;
     if (kind !== 'up' || g?.kind !== 'tap') return;
     keys.current?.focus({ preventScroll: true });
-    if (!driving) {
-      onTakeOver?.();
-      return;
-    }
+    // The assistant's turn: a tap only takes the wheel. Nobody's: it takes it
+    // and is the click it meant to be (the page takes the wheel on input).
+    if (!driving) onTakeOver?.();
+    if (control === 'agent') return;
     const rect = pageRect();
     if (!rect) return;
     const point = pointOn(rect, at.x, at.y);
@@ -523,6 +526,10 @@ export function BrowserWindow({
       className={cx(styles.window, className)}
       data-control={control}
       data-handoff={handoff ? '' : undefined}
+      // Typing anywhere in it (the page, the address): the keyboard covers the
+      // window instead of the app shrinking above it, so the chat behind stays
+      // put and the page keeps its size, and taps land where they're aimed.
+      data-nc-keyboard-over=""
       onKeyDownCapture={onShortcut}
       {...props}
     >
@@ -724,6 +731,9 @@ export function BrowserWindow({
                 onPointerCancel={(event) => {
                   if (event.pointerType === 'touch') touch('cancel', event);
                 }}
+                onLostPointerCapture={(event) => {
+                  if (event.pointerType === 'touch') touch('cancel', event);
+                }}
                 onWheel={onWheel}
                 onContextMenu={(event) => {
                   if (driving) event.preventDefault();
@@ -785,9 +795,6 @@ export function BrowserWindow({
             ref={keys}
             className={styles.keys}
             aria-label="Type into the page"
-            // The keyboard covers the page instead of the app shrinking above it:
-            // the chat behind stays put and the page keeps its size, so taps land.
-            data-nc-keyboard-over=""
             aria-describedby={hintId}
             tabIndex={driving ? 0 : -1}
             autoComplete="off"

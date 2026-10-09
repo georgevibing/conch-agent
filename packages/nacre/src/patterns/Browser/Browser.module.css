@@ -495,7 +495,9 @@
     display: block;
     inline-size: 100%;
     block-size: 100%;
-    object-fit: cover;
+    /* The whole frame, always: a tap's place on the screen is its place on the
+       page, even while a new size is on its way. */
+    object-fit: fill;
     user-select: none;
     -webkit-user-drag: none;
   }
