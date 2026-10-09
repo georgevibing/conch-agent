@@ -1,11 +1,16 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { Plus } from 'lucide-react';
 import { useState } from 'react';
 
+import { Button } from '../../components/Button';
+import { EmptyState } from '../../components/EmptyState';
 import { Stack } from '../../components/Stack';
 import {
   McpScopePicker,
+  OtherAppsArt,
   OtherAppTargets,
   PairedAppList,
+  PairedAppListSkeleton,
   type McpScopeChoice,
   type OtherAppTarget,
   type PairedAppItem,
@@ -123,6 +128,49 @@ export const Paired: Story = {
 
 export const NothingPaired: Story = {
   render: () => <PairedAppList apps={[]} />,
+};
+
+/** While the paired list loads: the same rows at the same height, so nothing moves when it lands. */
+export const Loading: Story = {
+  render: () => (
+    <div aria-busy="true">
+      <PairedAppListSkeleton rows={2} />
+    </div>
+  ),
+};
+
+/** Loading and loaded, side by side: each row lines up with its placeholder. */
+export const LoadingBesideLoaded: Story = {
+  render: () => (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+      <PairedAppListSkeleton rows={2} />
+      <PairedAppList apps={paired} onEdit={() => undefined} onRemove={() => undefined} />
+    </div>
+  ),
+};
+
+/** The picture on its own: any app, or the ones on this computer. */
+export const Art: Story = {
+  render: () => (
+    <Stack gap={6}>
+      <OtherAppsArt />
+      <OtherAppsArt apps={targets.map((t) => ({ name: t.name, brand: t.brand, color: t.color }))} />
+    </Stack>
+  ),
+};
+
+/** Nothing paired yet: a calm splash, one sentence and one button. */
+export const NothingPairedYet: Story = {
+  render: () => (
+    <EmptyState
+      size="sm"
+      headingLevel={4}
+      media={<OtherAppsArt />}
+      title="Nothing paired yet"
+      description="Pair an app, and it can use what you choose. It asks you before it changes anything."
+      actions={<Button leadingIcon={<Plus />}>Pair an app</Button>}
+    />
+  ),
 };
 
 export const TheWholePlace: Story = {

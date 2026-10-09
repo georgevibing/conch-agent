@@ -1,11 +1,16 @@
 export {
   McpScopePicker,
+  OtherAppsArt,
   OtherAppTargets,
   PairedAppList,
+  PairedAppListSkeleton,
   type McpScopeChoice,
   type McpScopePickerProps,
+  type OtherAppsArtApp,
+  type OtherAppsArtProps,
   type OtherAppTarget,
   type OtherAppTargetsProps,
   type PairedAppItem,
   type PairedAppListProps,
+  type PairedAppListSkeletonProps,
 } from './OtherApps';
