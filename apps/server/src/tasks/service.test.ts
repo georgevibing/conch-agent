@@ -251,9 +251,18 @@ describe('a task sent to the background', () => {
       (d) => d.events.some((e) => e.type === 'task' && e.state === 'done'),
     );
     expect(await tasks.orphans()).toEqual([]);
+    // The card may wake the chat for a moment: let it settle before it goes.
+    await until(
+      () => conversations.detail(chat.id),
+      (d) => d.conversation.status === 'idle',
+    );
 
     // Deleted before chats took their tasks along: the card is left with nowhere to be.
     await conversations.remove(chat.id);
+    await until(
+      async () => (await tasks.orphans()).map((t) => t.id),
+      (ids) => ids.includes(task.id),
+    );
     expect((await tasks.orphans()).map((t) => t.id)).toEqual([task.id]);
 
     await tasks.forgetChat(chat.id);
