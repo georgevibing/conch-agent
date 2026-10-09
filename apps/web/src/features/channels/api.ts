@@ -2,6 +2,7 @@ import {
   Channel,
   ChannelCheck,
   ChannelLink,
+  FeishuScan,
   type LinkableKind,
   ChannelDoor,
   ChannelHookSecrets,
@@ -64,6 +65,12 @@ export const channelsApi = {
     }),
   linkStatus: (id: string) => request(ChannelLink, `/api/channels/link/${id}`),
   stopLink: (id: string) => request(z.unknown(), `/api/channels/link/${id}`, { method: 'DELETE' }),
+  /** Make a Feishu or Lark bot by scanning a code (ADR 0120): whoever scans it is the owner. */
+  feishuScan: (region: 'feishu' | 'lark') =>
+    request(FeishuScan, '/api/channels/feishu/scan', { method: 'POST', body: { region } }),
+  feishuScanStatus: (id: string) => request(FeishuScan, `/api/channels/feishu/scan/${id}`),
+  stopFeishuScan: (id: string) =>
+    request(z.unknown(), `/api/channels/feishu/scan/${id}`, { method: 'DELETE' }),
   test: (id: string) => request(Ok, `/api/channels/${id}/test`, { method: 'POST', body: {} }),
   imessage: (signal?: AbortSignal) => request(ImessageSetup, '/api/channels/imessage', { signal }),
   openImessage: (place: OpenImessageBody['place']) =>

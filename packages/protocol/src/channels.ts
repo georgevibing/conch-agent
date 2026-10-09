@@ -42,6 +42,9 @@ export const ChannelKind = z.enum([
   'line',
   'rocketchat',
   'googlechat',
+  'feishu',
+  'dingtalk',
+  'qq',
 ]);
 export type ChannelKind = z.infer<typeof ChannelKind>;
 
@@ -58,6 +61,9 @@ export const VOICE_NOTE_CHANNELS: readonly ChannelKind[] = [
   'matrix',
   'imessage',
   'wechat',
+  'feishu',
+  'dingtalk',
+  'qq',
 ];
 
 /** The apps Conch can answer with a voice note of its own (ADR 0077). */
@@ -131,8 +137,11 @@ export const ChannelBot = z.object({
   phone: z.string().max(32).optional(),
   /** iMessage and email: the address you write to (`you+conch@gmail.com`, your own Apple ID). */
   address: z.string().max(320).optional(),
-  /** WeChat: which kind of account it is (an Official Account, or a WeCom bot). */
-  account: z.enum(['official', 'wecom']).optional(),
+  /**
+   * WeChat: which kind of account it is (an Official Account, or a WeCom bot).
+   * Feishu: which cloud it's on (Feishu in mainland China, or Lark elsewhere).
+   */
+  account: z.enum(['official', 'wecom', 'feishu', 'lark']).optional(),
 });
 export type ChannelBot = z.infer<typeof ChannelBot>;
 
@@ -334,6 +343,9 @@ export const ChannelField = z.enum([
   'channelSecret',
   'userId',
   'serviceAccount',
+  'appSecret',
+  'clientId',
+  'clientSecret',
 ]);
 export type ChannelField = z.infer<typeof ChannelField>;
 
@@ -459,6 +471,67 @@ const googlechat = {
   hookId: hookId.optional(),
 };
 
+// A Feishu / Lark app's ID is `cli_` and 16 hex digits; a QQ bot's AppID is digits.
+export const FEISHU_APP_ID = /\b(cli_[0-9a-z]{16})\b/;
+export const QQ_APP_ID = /\b(\d{6,12})\b/;
+
+/**
+ * Feishu and Lark (ADR 0120): one custom app, on either cloud. Conch opens
+ * the app's long connection (WebSocket) from this computer, so nothing
+ * needs a public address. `region` picks the cloud: `feishu`
+ * (open.feishu.cn, mainland China) or `lark` (open.larksuite.com).
+ */
+const feishu = {
+  kind: z.literal('feishu'),
+  region: z.enum(['feishu', 'lark']),
+  appId: secret,
+  appSecret: secret,
+};
+
+/**
+ * DingTalk (ADR 0120): an internal app with a robot, in Stream mode, so
+ * Conch connects out. `clientId` is its AppKey (Client ID), and the robot's
+ * code, which is the same for an internal app's robot.
+ */
+const dingtalk = {
+  kind: z.literal('dingtalk'),
+  clientId: secret,
+  clientSecret: secret,
+};
+
+/**
+ * QQ (ADR 0120): a bot on the QQ Bot open platform (q.qq.com), with its
+ * AppID and AppSecret.
+ */
+const qq = {
+  kind: z.literal('qq'),
+  appId: secret,
+  appSecret: secret,
+  hookId: hookId.optional(),
+};
+
+/**
+ * `POST /api/channels/feishu/scan`: make a Feishu (or Lark) bot by scanning a
+ * code with the app (ADR 0120). Whoever scans it is the owner.
+ */
+export const StartFeishuScanBody = z.object({ region: z.enum(['feishu', 'lark']) });
+export type StartFeishuScanBody = z.infer<typeof StartFeishuScanBody>;
+
+/**
+ * A scan in progress: `waiting` with the code's address; `done` with the
+ * channel it made (already connected, its owner the scanner); `expired`,
+ * `denied` or `failed` with what to do. The app's keys never come here.
+ */
+export const FeishuScan = z.object({
+  id: z.string().max(64),
+  state: z.enum(['waiting', 'done', 'expired', 'denied', 'failed']),
+  url: z.string().max(8000).optional(),
+  expiresAt: z.number().optional(),
+  channelId: Id.optional(),
+  message: z.string().optional(),
+});
+export type FeishuScan = z.infer<typeof FeishuScan>;
+
 /**
  * Mail services Conch knows the settings of (ADR 0044). `other` takes the
  * server names by hand.
@@ -519,6 +592,9 @@ export const ChannelSecrets = z.discriminatedUnion('kind', [
   z.object(line),
   z.object(rocketchat),
   z.object(googlechat),
+  z.object(feishu),
+  z.object(dingtalk),
+  z.object(qq),
 ]);
 export type ChannelSecrets = z.infer<typeof ChannelSecrets>;
 
@@ -548,6 +624,9 @@ export const CheckChannelBody = z.discriminatedUnion('kind', [
     userId: short.optional(),
     token: secret.optional(),
   }),
+  z.object({ ...feishu, appId: secret.optional(), appSecret: secret.optional() }),
+  z.object({ ...dingtalk, clientId: secret.optional(), clientSecret: secret.optional() }),
+  z.object({ ...qq, appId: secret.optional(), appSecret: secret.optional() }),
 ]);
 export type CheckChannelBody = z.infer<typeof CheckChannelBody>;
 
@@ -601,6 +680,10 @@ export const ReplaceChannelTokenBody = z.union([
   z.object({ kind: z.literal('line'), accessToken: secret }),
   // A new Rocket.Chat token (with its user id): the server stays as it was.
   z.object({ kind: z.literal('rocketchat'), userId: short, token: secret }),
+  // A new App Secret (Feishu, QQ) or Client Secret (DingTalk): the app stays the same one.
+  z.object({ kind: z.literal('feishu'), appSecret: secret }),
+  z.object({ kind: z.literal('dingtalk'), clientSecret: secret }),
+  z.object({ kind: z.literal('qq'), appSecret: secret }),
 ]);
 export type ReplaceChannelTokenBody = z.infer<typeof ReplaceChannelTokenBody>;
 

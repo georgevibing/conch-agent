@@ -637,6 +637,118 @@ const SCENES: Record<string, Record<string, () => ReactNode>> = {
       />
     ),
   },
+  feishu: {
+    key: () => (
+      <PortalSketch
+        label="The Feishu developer console, on Events & Callbacks, with the long connection chosen"
+        address="open.feishu.cn/app"
+        nav={[
+          'Credentials & Basic Info',
+          'Add Features',
+          'Permissions & Scopes',
+          'Events & Callbacks',
+        ]}
+        active="Events & Callbacks"
+        title="Event configuration"
+        color={colorOf('feishu')}
+      >
+        <PortalSketch.Field label="Subscription mode">
+          Receive through persistent connection
+        </PortalSketch.Field>
+        <PortalSketch.Field label="Events">im.message.receive_v1</PortalSketch.Field>
+        <PortalSketch.Row>
+          <PortalSketch.Button>Save</PortalSketch.Button>
+        </PortalSketch.Row>
+      </PortalSketch>
+    ),
+    hello: () => (
+      <Handset
+        label="Your bot in Feishu, once Conch knows it’s you"
+        brand="feishu"
+        color={colorOf('feishu')}
+        title={BOT}
+        subtitle="Bot · 机器人"
+        messages={[
+          { id: '1', from: 'you', text: '你好' },
+          { id: '2', from: 'them', text: WELCOME },
+          {
+            id: '3',
+            from: 'them',
+            text: 'May I run the tests?',
+            buttons: [
+              { label: 'Allow', tone: 'primary' },
+              { label: 'Don’t allow', tone: 'danger' },
+            ],
+          },
+        ]}
+        footer={<Handset.Composer placeholder={`发送给 ${BOT}`} />}
+      />
+    ),
+  },
+  dingtalk: {
+    key: () => (
+      <PortalSketch
+        label="The DingTalk developer console, on your app’s robot, in Stream mode"
+        address="open-dev.dingtalk.com"
+        nav={['Credentials & Basic Info', 'Robot', 'Permissions', 'Version Management & Release']}
+        active="Robot"
+        title="Robot configuration"
+        color={colorOf('dingtalk')}
+      >
+        <PortalSketch.Field label="Robot name">{BOT}</PortalSketch.Field>
+        <PortalSketch.Field label="Message receiving mode">Stream mode</PortalSketch.Field>
+        <PortalSketch.Row>
+          <PortalSketch.Button>Publish</PortalSketch.Button>
+        </PortalSketch.Row>
+      </PortalSketch>
+    ),
+    hello: () => (
+      <Handset
+        label="Your robot in DingTalk, once Conch knows it’s you"
+        brand="dingtalk"
+        color={colorOf('dingtalk')}
+        title={BOT}
+        subtitle="Robot · 机器人"
+        messages={[
+          { id: '1', from: 'you', text: '你好' },
+          { id: '2', from: 'them', text: WELCOME },
+        ]}
+        footer={<Handset.Composer placeholder="发消息" />}
+      />
+    ),
+  },
+  qq: {
+    key: () => (
+      <PortalSketch
+        label="QQ’s bot page, with your new bot’s AppID and AppSecret"
+        address="q.qq.com/qqbot"
+        nav={['My bots', 'Create']}
+        active="My bots"
+        title={BOT}
+        color={colorOf('qq')}
+      >
+        <PortalSketch.Field label="AppID">102345678</PortalSketch.Field>
+        <PortalSketch.Field label="AppSecret">••••••••••••</PortalSketch.Field>
+        <PortalSketch.Row>
+          <PortalSketch.Button>Copy</PortalSketch.Button>
+        </PortalSketch.Row>
+      </PortalSketch>
+    ),
+    hello: () => (
+      <Handset
+        label="Your bot in QQ, once Conch knows it’s you"
+        brand="qq"
+        color={colorOf('qq')}
+        title={BOT}
+        subtitle="QQ机器人"
+        messages={[
+          { id: '1', from: 'you', text: '你好' },
+          { id: '2', from: 'them', text: WELCOME },
+        ]}
+        footer={<Handset.Composer placeholder="发消息" />}
+      />
+    ),
+  },
   googlechat: {
     key: () => (
       <PortalSketch

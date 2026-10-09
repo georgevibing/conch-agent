@@ -1363,3 +1363,164 @@ describe('Connecting Google Chat (ADR 0084)', () => {
     expect(screen.getByRole('button', { name: 'I saved it' })).toBeInTheDocument();
   });
 });
+
+describe('Connecting Feishu / Lark (ADR 0120)', () => {
+  it('one card for both clouds: the region, the App ID pasted anywhere, then the console’s switches', async () => {
+    const made = channel({
+      kind: 'feishu',
+      bot: {
+        id: 'cli_a1b2c3d4e5f60718',
+        name: 'Conch',
+        account: 'lark',
+        chatUrl: 'https://applink.larksuite.com/client/bot/open?appId=cli_a1b2c3d4e5f60718',
+      },
+    });
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [], catalog }),
+      'POST /api/channels/check': () => ({ ok: true, bot: made.bot, checked: [] }),
+      'POST /api/channels': () => made,
+      'GET /api/channels/ch_1': () => made,
+      'GET /api/auth': () => ({ method: 'none' }),
+      'POST /api/channels/feishu/scan': () => ({
+        id: 's1',
+        state: 'waiting',
+        url: 'https://accounts.larksuite.com/oauth/v1/app/registration/page?user_code=ABCD',
+        expiresAt: Date.now() + 600_000,
+      }),
+      'GET /api/channels/feishu/scan/s1': () => ({ id: 's1', state: 'waiting', url: 'https://x' }),
+      'DELETE /api/channels/feishu/scan/s1': () => ({}),
+    });
+    renderApp(<ConnectChannel kind="feishu" />, { route: '/channels/new/feishu' });
+    expect(
+      await screen.findByRole('heading', { name: 'Connect Feishu / Lark' }),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('radio', { name: /^Lark/ }));
+    // Back from the console with the App ID on the clipboard: Ctrl+V anywhere.
+    const paste = new Event('paste') as ClipboardEvent;
+    Object.defineProperty(paste, 'clipboardData', {
+      value: { getData: () => 'App ID cli_a1b2c3d4e5f60718' },
+    });
+    act(() => void window.dispatchEvent(paste));
+    expect(await screen.findByLabelText('App ID')).toHaveValue('cli_a1b2c3d4e5f60718');
+    await userEvent.click(screen.getByLabelText('App Secret'));
+    await userEvent.paste('S'.repeat(32));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'POST' && c.path === '/api/channels')?.body).toEqual({
+        kind: 'feishu',
+        region: 'lark',
+        appId: 'cli_a1b2c3d4e5f60718',
+        appSecret: 'S'.repeat(32),
+      }),
+    );
+    // What the console needs, ready to copy.
+    const scopes = await screen.findByRole('textbox', { name: 'Permissions' });
+    expect((scopes as HTMLInputElement).value).toContain('im:message.group_at_msg:readonly');
+    expect(screen.getByDisplayValue('card.action.trigger')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await userEvent.click(screen.getByRole('button', { name: 'It’s published' }));
+    expect(await screen.findByText(/Scan the code with Lark|Open it in Lark/)).toBeInTheDocument();
+  });
+});
+
+describe('Making a Feishu bot by scanning a code (ADR 0120)', () => {
+  it('shows a code at once; once scanned the bot is made and knows you, and two switches are left', async () => {
+    const made = channel({
+      kind: 'feishu',
+      bot: { id: 'cli_a1b2c3d4e5f60718', name: 'Conch', account: 'feishu' },
+      people: [ada],
+    });
+    let scanned = false;
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: scanned ? [made] : [], catalog }),
+      'GET /api/auth': () => ({ method: 'none' }),
+      'POST /api/channels/feishu/scan': () => ({
+        id: 's1',
+        state: 'waiting',
+        url: 'https://accounts.feishu.cn/oauth/v1/app/registration/page?user_code=ABCD',
+        expiresAt: Date.now() + 600_000,
+      }),
+      'GET /api/channels/feishu/scan/s1': () =>
+        scanned
+          ? { id: 's1', state: 'done', channelId: 'ch_1' }
+          : { id: 's1', state: 'waiting', url: 'https://accounts.feishu.cn/x' },
+    });
+    renderApp(<ConnectChannel kind="feishu" />, { route: '/channels/new/feishu' });
+    await userEvent.click(await screen.findByRole('radio', { name: /Feishu \(飞书\)/ }));
+    expect(await screen.findByRole('img', { name: /Scan with Feishu/ })).toBeInTheDocument();
+    expect(calls.some((c) => c.method === 'POST' && c.path === '/api/channels/feishu/scan')).toBe(
+      true,
+    );
+    scanned = true;
+    expect(
+      await screen.findByText(/Made Conch, and it knows you/, {}, { timeout: 5_000 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Turn on its long connection')).toBeInTheDocument();
+  });
+});
+
+describe('Connecting DingTalk and QQ (ADR 0120)', () => {
+  it('DingTalk: the Client ID and Client Secret checked together, then its permission and publishing', async () => {
+    const made = channel({
+      kind: 'dingtalk',
+      bot: { id: 'dingmockrobot0001xyz', name: 'DingTalk robot' },
+    });
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [], catalog }),
+      'POST /api/channels/check': () => ({ ok: true, bot: made.bot, checked: [] }),
+      'POST /api/channels': () => made,
+      'GET /api/auth': () => ({ method: 'none' }),
+    });
+    renderApp(<ConnectChannel kind="dingtalk" />, { route: '/channels/new/dingtalk' });
+    expect(await screen.findByRole('heading', { name: 'Connect DingTalk' })).toBeInTheDocument();
+    expect(screen.getByText(/Stream mode/, { selector: 'b' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'I made it' }));
+    await userEvent.click(screen.getByLabelText('Client ID'));
+    await userEvent.paste('dingmockrobot0001xyz');
+    await userEvent.click(screen.getByLabelText('Client Secret'));
+    await userEvent.paste('s'.repeat(48));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'POST' && c.path === '/api/channels')?.body).toEqual({
+        kind: 'dingtalk',
+        clientId: 'dingmockrobot0001xyz',
+        clientSecret: 's'.repeat(48),
+      }),
+    );
+    expect(
+      await screen.findByText('企业内机器人发送消息权限', { selector: 'b' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/5,000 robot messages a month/)).toBeInTheDocument();
+  });
+
+  it('QQ: its quick bot page, the AppID and AppSecret, and plainly who can find it', async () => {
+    const made = channel({ kind: 'qq', bot: { id: '102345678', name: 'Conch' } });
+    const calls = mockFetch({
+      ...base,
+      'GET /api/channels': () => ({ channels: [], catalog }),
+      'POST /api/channels/check': () => ({ ok: true, bot: made.bot, checked: [] }),
+      'POST /api/channels': () => made,
+      'GET /api/auth': () => ({ method: 'none' }),
+    });
+    renderApp(<ConnectChannel kind="qq" />, { route: '/channels/new/qq' });
+    expect(await screen.findByRole('heading', { name: 'Connect QQ' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Open QQ’s bot page/ })).toHaveAttribute(
+      'href',
+      'https://q.qq.com/qqbot/openclaw/',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'I made it' }));
+    await userEvent.click(screen.getByLabelText('AppID'));
+    await userEvent.paste('AppID 102345678');
+    await userEvent.click(screen.getByLabelText('AppSecret'));
+    await userEvent.paste('a'.repeat(32));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'POST' && c.path === '/api/channels')?.body).toEqual({
+        kind: 'qq',
+        appId: '102345678',
+        appSecret: 'a'.repeat(32),
+      }),
+    );
+    expect(await screen.findByText('Who can find it')).toBeInTheDocument();
+  });
+});

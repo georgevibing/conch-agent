@@ -121,6 +121,7 @@ import { registerBackupRoutes } from './backup/routes';
 import { registerBrowserRoutes } from './browser/routes';
 import { registerWorkPlaceRoutes } from './workplaces/routes';
 import { registerChannelLinkRoutes } from './channels/link-routes';
+import { registerFeishuScanRoutes } from './channels/feishu-routes';
 import { registerChannelRoutes } from './channels/routes';
 import { registerTerminalRoutes } from './terminal/routes';
 import { registerLocalRoutes } from './local/routes';
@@ -399,12 +400,16 @@ export async function buildApp(services: Services) {
         line: services.mockLine?.base,
         rocketchat: services.mockRocketChat?.base,
         googlechat: services.mockGoogleChat?.base,
+        feishu: services.mockFeishu?.base,
+        dingtalk: services.mockDingTalk?.base,
+        qq: services.mockQq?.base,
       })),
     services.door,
     // Gmail's app password, offered for talking by email too (ADR 0052).
     () => services.google.gmailLogin(),
   );
   registerChannelLinkRoutes(app, services.channelLinking, gate);
+  registerFeishuScanRoutes(app, services.feishuScans, gate);
   app.addHook('onClose', () => services.browser.stop());
   app.addHook('onClose', async () => services.stop());
   app.addHook('onClose', async () => services.terminal.stop());

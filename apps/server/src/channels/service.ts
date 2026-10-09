@@ -79,6 +79,9 @@ import {
 import { normalizeLine } from './line';
 import { normalizeMattermost } from './mattermost';
 import { normalizeRocketChat } from './rocketchat';
+import { normalizeDingTalk } from './dingtalk';
+import { normalizeFeishu } from './feishu';
+import { normalizeQq } from './qq';
 import { normalizeSms } from './sms';
 import {
   BUSY,
@@ -250,6 +253,9 @@ export function normalizeSecrets(secrets: ChannelSecrets, kept?: ChannelSecrets)
   if (secrets.kind === 'sms') return normalizeSms(secrets, kept?.kind === 'sms' ? kept : undefined);
   if (secrets.kind === 'mattermost') return normalizeMattermost(secrets);
   if (secrets.kind === 'rocketchat') return normalizeRocketChat(secrets);
+  if (secrets.kind === 'feishu') return normalizeFeishu(secrets);
+  if (secrets.kind === 'dingtalk') return normalizeDingTalk(secrets);
+  if (secrets.kind === 'qq') return normalizeQq(secrets);
   if (secrets.kind === 'googlechat')
     return {
       kind: 'googlechat',
@@ -737,6 +743,22 @@ export class ChannelService {
     const view = this.#view(stored);
     this.deps.emit({ type: 'channel.changed', channel: view });
     return view;
+  }
+
+  /**
+   * A bot made by scanning a code in the app (Feishu, ADR 0120): scanning the
+   * code Conch showed on its own page is the hello, so whoever scanned it is
+   * the owner, by the name you gave Conch.
+   */
+  async createScanned(input: ChannelSecrets, scanner?: ChannelUser): Promise<Channel> {
+    const made = await this.create(input);
+    const stored = await this.deps.store.get(made.id);
+    if (!scanner || !stored || stored.people.length) return made;
+    const name = (await this.deps.settings.get().catch(() => undefined))?.profile.name?.trim();
+    this.#pairings.delete(made.id);
+    await this.#ownerIn(made.id, { ...scanner, ...(name && { name }) });
+    await this.#emit(made.id);
+    return this.get(made.id);
   }
 
   /**
@@ -2564,13 +2586,14 @@ export class ChannelService {
     await this.#emit(stored.id);
     const key = `${stored.id}:${message.user.id}`;
     if (!this.#mayAnswer(key)) return;
-    const hello = firstName(message.user.name);
+    // An app that doesn't say who someone is: no made-up name in the greeting.
+    const hello = message.user.anonymous ? 'Hi!' : `Hi ${firstName(message.user.name)}!`;
     await live.connection
       .send(
         message.chatId,
         stored.people.length === 0
-          ? `Hi ${hello}! To finish connecting, go back to Conch on your computer and press **That’s me**.`
-          : `Hi ${hello}! I’m a private assistant, so I only talk with people I know. I’ve passed on that you’d like to talk.`,
+          ? `${hello} To finish connecting, go back to Conch on your computer and press **That’s me**.`
+          : `${hello} I’m a private assistant, so I only talk with people I know. I’ve passed on that you’d like to talk.`,
       )
       .catch(() => undefined);
   }
@@ -3681,6 +3704,12 @@ function withTheRest(
       : undefined;
   if (input.kind === 'line' && !('channelSecret' in input))
     return kept?.kind === 'line' ? { ...kept, accessToken: input.accessToken } : undefined;
+  if (input.kind === 'feishu' && !('appId' in input))
+    return kept?.kind === 'feishu' ? { ...kept, appSecret: input.appSecret } : undefined;
+  if (input.kind === 'dingtalk' && !('clientId' in input))
+    return kept?.kind === 'dingtalk' ? { ...kept, clientSecret: input.clientSecret } : undefined;
+  if (input.kind === 'qq' && !('appId' in input))
+    return kept?.kind === 'qq' ? { ...kept, appSecret: input.appSecret } : undefined;
   return input as ChannelSecrets;
 }
 

@@ -57,6 +57,9 @@ import { LinkedSetup } from './LinkedSetup';
 import { APPS_PATH } from '../integrations/paths';
 import { MatrixSetup } from './MatrixSetup';
 import { TeamsSetup } from './TeamsSetup';
+import { DingTalkSetup } from './DingTalkSetup';
+import { FeishuSetup } from './FeishuSetup';
+import { QqSetup } from './QqSetup';
 import { GoogleChatSetup } from './GoogleChatSetup';
 import { LineSetup } from './LineSetup';
 import { MattermostSetup } from './MattermostSetup';
@@ -86,6 +89,9 @@ export function ConnectChannel({ kind }: { kind: string }) {
   if (kind === 'line') return <LineSetup />;
   if (kind === 'rocketchat') return <RocketChatSetup />;
   if (kind === 'googlechat') return <GoogleChatSetup />;
+  if (kind === 'feishu') return <FeishuSetup />;
+  if (kind === 'dingtalk') return <DingTalkSetup />;
+  if (kind === 'qq') return <QqSetup />;
   return <SlackSetup />;
 }
 

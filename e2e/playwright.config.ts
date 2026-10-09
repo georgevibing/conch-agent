@@ -160,6 +160,8 @@ const scenarios = {
   'when-routines': { port: 4341, env: { CONCH_MOCK_STATE: 'ready' } },
   // Teams, Matrix and WeChat, and the public door (ADR 0045), against their pretend apps.
   'channels-work': { port: 4366, env: { CONCH_MOCK_STATE: 'ready' } },
+  // Feishu / Lark, DingTalk and QQ (ADR 0120), against their pretend apps: outward connections only.
+  'channels-china': { port: 4343, env: { CONCH_MOCK_STATE: 'ready' } },
   // Safe hands: checking after reading, the timeline, skills read before they're used.
   safety: { port: 4378, env: { CONCH_MOCK_STATE: 'ready' } },
   // Undo (ADR 0030): the mock really writes note.md in the work folder, then it's put back.
