@@ -87,6 +87,7 @@ import {
   GlobeLock,
   Compass,
   Sunrise,
+  Lightbulb,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -180,6 +181,12 @@ const settingsPlaces: {
     label: 'Start over',
     keywords: 'start over replay welcome onboarding setup again first run',
     icon: <RefreshCw />,
+  },
+  {
+    tab: 'general',
+    label: 'Tips on a new chat',
+    keywords: 'tips hints show tips again put away hidden dismissed new chat bring back',
+    icon: <Lightbulb />,
   },
   {
     tab: 'general',

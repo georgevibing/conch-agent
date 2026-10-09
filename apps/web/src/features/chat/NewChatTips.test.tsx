@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { appState, mockFetch, renderApp } from '../../test/harness';
+import { GeneralTab } from '../settings/GeneralTab';
 import { NewChatTips, pickTip, type Tip, type TipFound } from './NewChatTips';
 
 /**
@@ -171,5 +172,17 @@ describe('the tips on a new chat', () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
     expect(calls.some((c) => c.path.startsWith('/api/import'))).toBe(false);
+  });
+});
+
+describe('showing tips again', () => {
+  it('brings every tip put away back from Settings → General', async () => {
+    const { putAway } = world(['connect-apps', 'past-chats']);
+    const user = userEvent.setup();
+    renderApp(<GeneralTab workspace="/home/ada/.conch/workspace" />);
+    expect(await screen.findByText(/2 tips are put away/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Show tips again' }));
+    await waitFor(() => expect(putAway()).toEqual([]));
+    expect(screen.queryByRole('button', { name: 'Show tips again' })).not.toBeInTheDocument();
   });
 });

@@ -8,7 +8,8 @@ import { useAutosave } from './useAutosave';
 
 /**
  * Settings → General: what belongs to Conch as a whole rather than to one
- * provider or feature — the folder every provider works in, and starting over.
+ * provider or feature — the folder every provider works in, the tips on a new
+ * chat, and starting over.
  */
 export function GeneralTab({
   workspace,
@@ -26,6 +27,7 @@ export function GeneralTab({
     900,
   );
   const assistant = app?.persona.name ?? 'Conch';
+  const tipsAway = app?.preferences.tipsPutAway.length ?? 0;
 
   return (
     <Stack gap={8}>
@@ -51,7 +53,26 @@ export function GeneralTab({
           canType={false}
         />
       </Section>
-      {/* One row: what it does, and the button beside it. */}
+      {/* One row each: what it does, and the button beside it. */}
+      <Section
+        title="Tips on a new chat"
+        description={
+          tipsAway
+            ? `${tipsAway === 1 ? 'One tip is' : `${tipsAway} tips are`} put away. The rest show one at a time, under the box.`
+            : 'What Conch can do for you next, one at a time, under the box. Each has a × to put it away.'
+        }
+        status={
+          tipsAway ? (
+            <Button
+              variant="surface"
+              size="sm"
+              onClick={() => void update.mutateAsync({ preferences: { tipsPutAway: [] } })}
+            >
+              Show tips again
+            </Button>
+          ) : undefined
+        }
+      />
       <Section
         title="Start over"
         description="See the welcome again. Your conversations and memories stay."
