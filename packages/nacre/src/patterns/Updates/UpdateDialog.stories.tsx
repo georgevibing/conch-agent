@@ -98,6 +98,46 @@ export const ReadyRelease: Story = {
   },
 };
 
+/** Update now while a chat works: the dialog asks first, in place, naming it. */
+export const ConfirmWhileWorking: Story = {
+  name: 'Ready: a chat is working',
+  args: {
+    confirm:
+      'Fix Conch CI failures is working. Update anyway? It will pause, and carry on after Conch restarts.',
+    action: [
+      <Button variant="ghost" key="wait">
+        Wait until it’s done
+      </Button>,
+      <Button key="anyway" leadingIcon={<RefreshCw />}>
+        Update anyway
+      </Button>,
+    ],
+  },
+  play: async () => {
+    const page = within(document.body);
+    await expect(await page.findByText(/Update anyway\?/)).toBeVisible();
+    // The answer closest to hand has the focus.
+    await expect(page.getByRole('button', { name: 'Wait until it’s done' })).toHaveFocus();
+  },
+};
+
+/** Waiting until it's done: a quiet line, and it updates by itself. */
+export const WaitingForTheChat: Story = {
+  name: 'Ready: waiting for the chat',
+  args: {
+    waiting: 'Will update when the chat finishes',
+    footnote: undefined,
+    action: [
+      <Button variant="ghost" key="stop">
+        Don’t wait
+      </Button>,
+      <Button key="go" leadingIcon={<RefreshCw />}>
+        Update now
+      </Button>,
+    ],
+  },
+};
+
 export const Updating: Story = {
   args: {
     stage: 'updating',

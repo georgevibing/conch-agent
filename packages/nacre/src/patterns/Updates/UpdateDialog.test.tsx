@@ -36,6 +36,57 @@ describe('UpdateDialog', () => {
     await expectAccessible(dialog);
   });
 
+  it('asks first in place, naming what’s working, and hands its first answer the focus', async () => {
+    const onWait = vi.fn();
+    const user = userEvent.setup();
+    renderNacre(
+      <UpdateDialog
+        open
+        onOpenChange={() => undefined}
+        stage="ready"
+        title="2 improvements are ready"
+        changes={changes}
+        footnote="Keep working while it gets ready."
+        confirm="Fix Conch CI failures is working. Update anyway? It will pause, and carry on after Conch restarts."
+        action={[
+          <Button key="wait" variant="ghost" onClick={onWait}>
+            Wait until it’s done
+          </Button>,
+          <Button key="anyway">Update anyway</Button>,
+        ]}
+      />,
+    );
+    const dialog = screen.getByRole('dialog', { name: '2 improvements are ready' });
+    expect(screen.getByText(/^Fix Conch CI failures is working\. Update anyway\?/)).toHaveAttribute(
+      'role',
+      'status',
+    );
+    // The question takes the footnote's place: one thing to read.
+    expect(screen.queryByText('Keep working while it gets ready.')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Wait until it’s done' })).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(onWait).toHaveBeenCalledOnce();
+    await expectAccessible(dialog);
+  });
+
+  it('waiting to update by itself is a quiet line, not an alarm', async () => {
+    renderNacre(
+      <UpdateDialog
+        open
+        onOpenChange={() => undefined}
+        stage="ready"
+        title="2 improvements are ready"
+        changes={changes}
+        waiting="Will update when the chat finishes"
+        action={<Button>Update now</Button>}
+      />,
+    );
+    const dialog = screen.getByRole('dialog', { name: '2 improvements are ready' });
+    expect(screen.getByText('Will update when the chat finishes')).toBeVisible();
+    expect(screen.queryByRole('alert')).toBeNull();
+    await expectAccessible(dialog);
+  });
+
   it('while updating, says the step it’s on, politely, and how far', async () => {
     renderNacre(
       <UpdateDialog
