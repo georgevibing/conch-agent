@@ -77,5 +77,5 @@ export const useImportProgress = create<{
   current?: string;
 }>(() => ({ done: 0, total: 0 }));
 
-/** Settings → Memory opens Come home with this focus (Repair everything, ⌘K). */
+/** Settings → What Conch knows opens Come home with this focus (Repair everything, ⌘K). */
 export const COME_HOME_FOCUS = 'come-home';

@@ -24,7 +24,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 const FOLDERS: Record<ImportSourceId, string> = { openclaw: '~/.openclaw', hermes: '~/.hermes' };
 
 /**
- * Come home (ADR 0035) as a place inside Settings → Memory
+ * Come home (ADR 0035) as a place inside Settings → What Conch knows
  * (`/settings/memory/from-openclaw`): the journey at the top, everything
  * there is at a glance as tiles, the list one kind at a time (searchable
  * when long), and the one button always in reach at the bottom. Then it

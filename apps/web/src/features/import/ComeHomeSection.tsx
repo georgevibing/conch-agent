@@ -17,7 +17,7 @@ const when = (at: number) =>
   Date.now() - at >= 7 * 86_400_000 ? `on ${relativeTime(at)}` : relativeTime(at);
 
 /**
- * Settings → Memory → “Bring your things from OpenClaw” (ADR 0035): a card
+ * Settings → What Conch knows → “Bring your things from OpenClaw” (ADR 0035): a card
  * for each other agent Conch finds on this computer, and Undo for the last
  * import while it can be. Nothing at all when there's none: no clutter for
  * people who never used one.

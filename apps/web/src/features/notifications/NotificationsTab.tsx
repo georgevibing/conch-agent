@@ -18,6 +18,7 @@ import { useMemo, useState } from 'react';
 
 import { ApiError } from '../../api/client';
 import { useUi } from '../../app/ui';
+import { DEVICES_FOCUS } from '../auth/focus';
 import { Section } from '../settings/Section';
 import { useSubpage } from '../settings/subpages';
 import styles from './Notifications.module.css';
@@ -274,7 +275,7 @@ function Elsewhere({ status }: { status: PushStatus }) {
         size="sm"
         variant="surface"
         leadingIcon={<MonitorSmartphone />}
-        onClick={() => openSettings('devices')}
+        onClick={() => openSettings('access', DEVICES_FOCUS)}
       >
         Your devices
       </Button>

@@ -50,7 +50,7 @@ export const DoctorPlace = z.enum([
   'health',
   'channels',
   'passwords',
-  /** Settings → Memory (Come home lives there, ADR 0035). */
+  /** Settings → What Conch knows (Come home lives there, ADR 0035). */
   'memory',
   'notifications',
   'tasks',

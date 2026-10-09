@@ -411,7 +411,7 @@ export function Shell() {
 }
 
 /**
- * What Conch remembers lives in Settings → Memory now. An old link (or a
+ * What Conch remembers lives in Settings → What Conch knows now. An old link (or a
  * bookmark) to `/memory` goes there, over the chats, so leaving Settings
  * doesn't come straight back.
  */

@@ -1326,7 +1326,7 @@ export function useFindables(query: string, conversationId: string | undefined):
       keywords:
         'morning note digest overnight last night while you slept nightly tidy tidied learned dreaming dreams consolidation undo memory memories',
       icon: <Sunrise />,
-      // Atop Settings → Memory, its only place.
+      // Atop Settings → What Conch knows, its only place.
       run: () => openSettings('memory'),
     },
     {

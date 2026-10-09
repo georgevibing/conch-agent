@@ -55,7 +55,7 @@ export function usePastChat(id: string | undefined) {
   });
 }
 
-/** Settings → Memory opens at the past chats with this focus (⌘K, Repair everything). */
+/** Settings → What Conch knows opens at the past chats with this focus (⌘K, Repair everything). */
 export const PAST_CHATS_FOCUS = 'past-chats';
 
 /** Each app's mark, where Nacre has one. */

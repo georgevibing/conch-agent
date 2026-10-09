@@ -1,10 +1,12 @@
 import { useEffect } from 'react';
 
 import { useUi } from '../../app/ui';
+import { DEVICES_FOCUS } from '../auth/focus';
 
 /** `?open=…` from a notification or the desktop app's menu: the place in Conch it's about. */
 const PLACES = {
-  devices: ['devices', 'devices'],
+  // Devices are part of Settings → Access.
+  devices: ['access', DEVICES_FOCUS],
   notifications: ['notifications', undefined],
   background: ['health', 'background'],
   updates: ['health', 'updates'],

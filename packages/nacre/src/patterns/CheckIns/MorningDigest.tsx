@@ -18,7 +18,7 @@ import { META_SEP } from '../../components/MetaList';
  * The morning's note (ADR 0107): what Conch learned from your chats and how it
  * tidied its memory overnight, in a few lines, each with Undo. It asks for
  * nothing: it's there to read once, then folds away. It lives at the top of
- * Settings → Memory and nowhere else: never in a chat or on the new chat's
+ * Settings → What Conch knows and nowhere else: never in a chat or on the new chat's
  * screen, never a push (ADR 0097, ADR 0107).
  */
 

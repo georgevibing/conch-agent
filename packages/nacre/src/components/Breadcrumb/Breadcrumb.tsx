@@ -110,5 +110,5 @@ function BreadcrumbItem({
   );
 }
 
-/** A trail of places, `Settings › Memory › What Conch knows`. */
+/** A trail of places, `Settings › What Conch knows › All memories`. */
 export const Breadcrumb = Object.assign(BreadcrumbRoot, { Item: BreadcrumbItem });

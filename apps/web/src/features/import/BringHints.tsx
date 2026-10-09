@@ -9,7 +9,7 @@ import { PAST_CHATS_FOCUS, useChatImportStatus } from './pastChats';
  * chat instead, as tips beside "Connect Gmail, GitHub and more": another
  * assistant's things (ADR 0035) and past chats from other apps (ADR 0111).
  * Each is one short line, only while there's something to bring, gone once
- * it's in; it opens the place in Settings → Memory where nothing moves until
+ * it's in; it opens the place in Settings → What Conch knows where nothing moves until
  * the person says so. Where the things come from is said in full in its name
  * and tooltip, so the line itself fits a phone.
  */

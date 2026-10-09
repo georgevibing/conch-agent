@@ -17,7 +17,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Where you are, as a trail — one line, in place of a stack of back buttons. Every place above this one is a quiet step back to it; the last names the page you’re on (`current`, read as the current page). Short of room, the places above give way first, each down to an ellipsis, and the page you’re on last; a pointer resting on one that was cut short reads its whole name. Use it at the top of a page inside a page (Settings → Memory → What Conch knows), never for a single level: a page with nothing above it just has its title.',
+          'Where you are, as a trail — one line, in place of a stack of back buttons. Every place above this one is a quiet step back to it; the last names the page you’re on (`current`, read as the current page). Short of room, the places above give way first, each down to an ellipsis, and the page you’re on last; a pointer resting on one that was cut short reads its whole name. Use it at the top of a page inside a page (Settings → What Conch knows → What Conch knows), never for a single level: a page with nothing above it just has its title.',
       },
     },
   },

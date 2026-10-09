@@ -11,7 +11,7 @@ import { PAST_CHATS_FOCUS } from './pastChats';
 /**
  * What the welcome no longer stops for, offered on the new chat instead: another
  * assistant's things and past chats, each a short line while there's something
- * to bring, opening the place in Settings → Memory where it's looked at first.
+ * to bring, opening the place in Settings → What Conch knows where it's looked at first.
  * Connecting apps comes before them, so it's put away here.
  */
 

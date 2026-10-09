@@ -21,7 +21,7 @@ const listed = (words: string[]) =>
     : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
 
 /**
- * Settings → Memory → “Your past chats” (ADR 0111): the moment when Conch
+ * Settings → What Conch knows → “Your past chats” (ADR 0111): the moment when Conch
  * finds conversations from other apps on this computer, and once they're
  * in, one line saying so, with a way to take them out again. Nothing at all
  * for someone who never used another app.

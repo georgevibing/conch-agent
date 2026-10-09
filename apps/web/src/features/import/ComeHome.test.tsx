@@ -144,7 +144,7 @@ describe('Come home', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 
-  it('takes a look on a page of its own, inside Settings → Memory', async () => {
+  it('takes a look on a page of its own, inside Settings → What Conch knows', async () => {
     const user = userEvent.setup();
     const openSettings = vi.fn();
     const before = useUi.getState().openSettings;

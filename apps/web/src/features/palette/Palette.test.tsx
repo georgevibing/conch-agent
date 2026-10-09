@@ -1061,7 +1061,7 @@ describe('Palette search', () => {
     act(() => useUi.setState({ settingsFocus: undefined }));
   });
 
-  it('finds Come home by the other apps’ names, straight into Settings → Memory', async () => {
+  it('finds Come home by the other apps’ names, straight into Settings → What Conch knows', async () => {
     const user = userEvent.setup();
     mockFetch({
       'GET /api/state': () => appState(),

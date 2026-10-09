@@ -323,7 +323,7 @@ describe('the morning’s note', () => {
       });
       renderApp(<ChatView />);
       expect(await screen.findByRole('heading', { name: /, Ada\.$/ })).toBeInTheDocument();
-      // Memory is Settings → Memory's: nothing about it under the message box.
+      // Memory belongs to Settings → What Conch knows: nothing about it under the message box.
       expect(screen.queryByRole('region', { name: /slept|looked/ })).toBeNull();
       expect(screen.queryByText('Prefers TypeScript')).toBeNull();
       expect(screen.queryByRole('button', { name: /^Undo/ })).toBeNull();

@@ -3,6 +3,7 @@ import { Cable } from 'lucide-react';
 
 import { useConversations } from '../../api/queries';
 import { useUi } from '../../app/ui';
+import { OTHER_APPS_FOCUS } from '../settings/paths';
 import styles from './OtherApps.module.css';
 
 /**
@@ -20,7 +21,7 @@ export function ClientBanner({ conversationId }: { conversationId?: string }) {
       <span>
         What {origin.name} did through Conch, and what it asked you. Questions it asks wait here.
       </span>
-      <Button size="sm" variant="ghost" onClick={() => openSettings('other-apps')}>
+      <Button size="sm" variant="ghost" onClick={() => openSettings('access', OTHER_APPS_FOCUS)}>
         What it may use
       </Button>
     </div>

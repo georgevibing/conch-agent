@@ -25,7 +25,7 @@ export type SettingsTab = (typeof SETTINGS_TABS)[number];
 const isTab = (value: string): value is SettingsTab =>
   (SETTINGS_TABS as readonly string[]).includes(value);
 
-/** Everything Conch remembers: a page inside Settings → Memory (`/settings/memory/everything`). */
+/** Everything Conch remembers: a page inside Settings → What Conch knows (`/settings/memory/everything`). */
 export const MEMORY_ALL = 'everything';
 
 /** `openSettings('providers', FALLBACK_FOCUS)`: Providers → When one can’t answer. */
