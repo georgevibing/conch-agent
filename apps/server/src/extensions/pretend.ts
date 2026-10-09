@@ -13,6 +13,8 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import { splitContextNote } from '../conversations/instructions';
+
 /** The pretend company's key and the pretend bot's token, written in two parts (agreement 6). */
 export const PRETEND_AI_KEY = 'pai-' + 'pretendpretendpretend0001';
 export const PARLEY_TOKEN = 'parley-' + 'bottokenbottoken0001';
@@ -135,7 +137,9 @@ export class PretendWorld {
           tools?: unknown[];
         };
         const asked = [...(request.messages ?? [])].reverse().find((m) => m.role === 'user');
-        const said = typeof asked?.content === 'string' ? asked.content : '';
+        // The person's own words, without the note Conch puts in front of them (ADR 0085).
+        const said =
+          typeof asked?.content === 'string' ? splitContextNote(asked.content).words.trim() : '';
         const words = (
           /five words or fewer/i.test(said)
             ? 'Hello from Pretend AI!'
