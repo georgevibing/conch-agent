@@ -591,21 +591,44 @@ export function TurnEnd({
   if (item.outcome === 'interrupted' && item.restarted) {
     // A few words on the mark; what to do about it on a line of its own, so the
     // mark stays short enough for a phone's column.
-    const { resumed } = item.restarted;
+    const { resumed, reason } = item.restarted;
+    const updated = reason === 'update';
     return (
       <div className={styles.stoppedNote}>
         <div className={styles.stopped}>
           <span className={styles.stoppedMark}>
             <span aria-hidden className={styles.stoppedGlyph} />
             <span className={styles.stoppedText}>
-              {resumed ? 'Picked up after Conch restarted' : 'Stopped when Conch restarted'}
+              {resumed
+                ? updated
+                  ? 'Conch updated and picked up where it left off'
+                  : 'Picked up after Conch restarted'
+                : updated
+                  ? 'Paused when Conch updated'
+                  : 'Stopped when Conch restarted'}
             </span>
           </span>
         </div>
-        {!resumed && (
-          // Why it didn't carry on by itself, when Conch knows (an action to check first).
-          <p className={styles.stoppedWhy}>{item.error ?? 'Say “carry on” to pick it up again.'}</p>
-        )}
+        {!resumed &&
+          // Why it didn't carry on by itself, when Conch knows (an action to check first),
+          // and, while it's the latest thing in the chat, one press to carry on.
+          (onCarryOn ? (
+            <Callout
+              tone="neutral"
+              live="polite"
+              action={
+                <Button size="sm" onClick={onCarryOn}>
+                  Carry on
+                </Button>
+              }
+            >
+              {item.error ?? 'It didn’t carry on by itself.'}
+            </Callout>
+          ) : (
+            <p className={styles.stoppedWhy}>
+              {item.error ?? 'Say “carry on” to pick it up again.'}
+            </p>
+          ))}
       </div>
     );
   }

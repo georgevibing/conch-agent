@@ -479,8 +479,11 @@ export type TranscriptItem =
       problem?: TurnProblem;
       /** It stopped to check in, not because it was done (ADR 0085): Carry on picks it up. */
       paused?: TurnPause;
-      /** Conch restarted mid-turn; `resumed`: it carries on by itself. */
-      restarted?: { resumed: boolean };
+      /**
+       * Conch restarted mid-turn; `resumed`: it carries on by itself. `reason`:
+       * paused on purpose at a safe point (its own `update`, a `restart` asked for).
+       */
+      restarted?: { resumed: boolean; reason?: 'update' | 'restart' };
       usage?: Usage;
       /** What it cost, the way its provider charges (ADR 0079). */
       cost?: TurnCost;

@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { composerHistory, forgetDrafts, loadDraft, rememberSent, saveDraft } from './composer';
+import {
+  composerHistory,
+  forgetDrafts,
+  loadDraft,
+  loadQueue,
+  rememberSent,
+  saveDraft,
+  saveQueue,
+} from './composer';
 
 afterEach(() => {
   localStorage.clear();
@@ -74,5 +82,25 @@ describe('composerHistory', () => {
     expect(history).toHaveLength(50);
     expect(history.at(-1)).toBe('m10');
     expect(history[0]).toBe('m5');
+  });
+});
+
+describe('messages waiting their turn', () => {
+  it('survive the page reloading (Conch restarting for an update), per chat, until signing out', () => {
+    const waiting = [{ id: 'q1', text: 'then deploy it', attachments: [] }];
+    saveQueue('c1', waiting);
+    // The reload: a fresh read finds them where they were.
+    expect(loadQueue('c1')).toEqual(waiting);
+    expect(loadQueue('c2')).toEqual([]);
+    saveQueue('c1', []);
+    expect(loadQueue('c1')).toEqual([]);
+    saveQueue('c1', waiting);
+    forgetDrafts();
+    expect(loadQueue('c1')).toEqual([]);
+  });
+
+  it('skip a damaged entry rather than break the box', () => {
+    sessionStorage.setItem('conch.queued', JSON.stringify({ c1: [{ id: 1 }, 'x'] }));
+    expect(loadQueue('c1')).toEqual([]);
   });
 });

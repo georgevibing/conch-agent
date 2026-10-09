@@ -74,7 +74,15 @@ import styles from './ChatView.module.css';
 import { ChatContext } from './ChatContext';
 import { NewChatTips } from './NewChatTips';
 import { attachmentUrl } from './uploads';
-import { composerHistory, loadDraft, rememberSent, saveDraft } from './composer';
+import {
+  composerHistory,
+  loadDraft,
+  loadQueue,
+  rememberSent,
+  saveDraft,
+  saveQueue,
+  type QueuedMessage,
+} from './composer';
 
 const attachmentSrc = (attachment: Attachment) => attachmentUrl(attachment.id);
 import { AttachmentViewer, type Viewable } from './AttachmentViewer';
@@ -266,11 +274,7 @@ function useTurnRecovery(
 }
 
 /** A message written while the reply runs, waiting its turn. */
-interface Queued {
-  id: string;
-  text: string;
-  attachments: Attachment[];
-}
+type Queued = QueuedMessage;
 
 export function ChatView({ conversationId: routeId }: { conversationId?: string }) {
   const live = useLive();
@@ -510,7 +514,15 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
    * it is (nothing it did is lost) and reads it now. The same with every
    * provider, since it's a stop and a send.
    */
-  const [queue, setQueue] = useState<Queued[]>([]);
+  // Kept for the tab, so a reload (Conch restarting for an update) doesn't lose them.
+  const [queue, setQueue] = useState<Queued[]>(() => loadQueue(key));
+  const queuedKey = useRef(key);
+  useEffect(() => {
+    // A new chat got its id: what waits moves with it.
+    if (queuedKey.current !== key) saveQueue(queuedKey.current, []);
+    queuedKey.current = key;
+    saveQueue(key, queue);
+  }, [key, queue]);
   /** The reply was stopped (not steered): the queue waits instead of sending by itself. */
   const [paused, setPaused] = useState(false);
   /**
@@ -583,8 +595,10 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
   }, [busy]);
   // Leaving the chat before they went: they stay here as what you were writing.
   const leaving = useEffectEvent(() => {
-    if (queue.length)
-      saveDraft(key, [draft, ...queue.map((q) => q.text)].filter((t) => t.trim()).join('\n\n'));
+    if (!queue.length) return;
+    saveDraft(key, [draft, ...queue.map((q) => q.text)].filter((t) => t.trim()).join('\n\n'));
+    // They're in the box now: not waiting a second time when you're back.
+    saveQueue(key, []);
   });
   useEffect(() => () => leaving(), []);
 
