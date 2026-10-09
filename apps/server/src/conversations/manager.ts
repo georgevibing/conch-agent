@@ -363,8 +363,11 @@ export type TurnRoute =
        * its models that can use the apps the chat's could (ADR 0050).
        */
       model?: string;
-      /** Set when it isn't the chat's own provider: why, in one sentence. */
-      routed?: { reason: 'offline' | 'limit'; message: string };
+      /**
+       * Set when it isn't the chat's own provider: why, in one sentence.
+       * `stayed`: at a limit, the chat moves to it for good (ADR 0126).
+       */
+      routed?: { reason: 'offline' | 'limit'; message: string; stayed?: boolean };
     }
   | { kind: 'hold' };
 
@@ -984,6 +987,8 @@ export class ConversationManager {
           model?: string;
           /** The message carries pictures: a model that sees them is better (ADR 0069). */
           pictures?: boolean;
+          /** This chat waits for its own provider at a limit (Switch back, ADR 0126). */
+          wait?: boolean;
         },
       ) => Promise<TurnRoute>;
       /**
@@ -992,6 +997,8 @@ export class ConversationManager {
        * can't and the best one already set up that can. Nothing when the
        * model can use them, or the message needs none.
        */
+      /** When a provider's limit resets, if it's at one (ADR 0126): how long Switch back waits. */
+      limitResets?: (engine: EngineId) => Promise<number | undefined>;
       appsNeeded?: (input: {
         text: string;
         engine: Engine;
@@ -1340,8 +1347,13 @@ export class ConversationManager {
       chosen.id,
     );
     const pictures = await this.#pictures(input.attachments ?? []);
+    const wait = existing ? waitsAtLimit(existing.events, chosen.id) : false;
     const route = (await this.deps
-      .route?.(chosen, { ...(asked && { model: asked }), ...(pictures && { pictures }) })
+      .route?.(chosen, {
+        ...(asked && { model: asked }),
+        ...(pictures && { pictures }),
+        ...(wait && { wait }),
+      })
       .catch(() => undefined)) ?? {
       kind: 'use' as const,
       engine: chosen,
@@ -1500,7 +1512,11 @@ export class ConversationManager {
       return summary(live.record);
     }
     if (route.routed)
-      this.#append(live, { type: 'turn.routed', from: chosen.id, to: engine.id, ...route.routed });
+      this.#routed(live, chosen.id, engine.id, route, {
+        fromModel: asked,
+        // Said once: the next message to the same one, still at the limit, needs no new line.
+        quiet: sameRouteAsLast(live.events, chosen.id, engine.id, route.routed.reason),
+      });
     this.#claim(live, began);
     this.#setStatus(live, 'running');
     await this.#persist(live);
@@ -2318,6 +2334,7 @@ export class ConversationManager {
           .route?.(chosen, {
             ...(asked && { model: asked }),
             ...(held.attachments.some((a) => a.kind === 'image') && { pictures: true }),
+            ...(waitsAtLimit(live.events, chosen.id) && { wait: true }),
           })
           .catch(() => undefined)) ?? {
           kind: 'use' as const,
@@ -2347,17 +2364,21 @@ export class ConversationManager {
     // You chose another model: the chat keeps it, and the picker shows it.
     if (model) this.#applyOptions(live, { engine: chosen.id, model });
     else if (route.engine.id !== from.id)
-      this.#append(live, {
-        type: 'turn.routed',
-        from: from.id,
-        to: route.engine.id,
-        reason: route.routed?.reason ?? 'offline',
-        message:
-          route.routed?.message ??
-          (route.engine.local
-            ? `You were offline, so ${route.engine.label} on this computer answered.`
-            : `${route.engine.label} answered while you were offline.`),
-      });
+      this.#routed(
+        live,
+        from.id,
+        route.engine.id,
+        {
+          ...route,
+          routed: route.routed ?? {
+            reason: 'offline',
+            message: route.engine.local
+              ? `You were offline, so ${route.engine.label} on this computer answered.`
+              : `${route.engine.label} answered while you were offline.`,
+          },
+        },
+        { fromModel: asked },
+      );
     this.#claim(live);
     this.#setStatus(live, 'running');
     await this.#persist(live);
@@ -2551,6 +2572,7 @@ export class ConversationManager {
             failed,
             ...(asked && { model: asked }),
             ...(attachments.some((a) => a.kind === 'image') && { pictures: true }),
+            ...(waitsAtLimit(live.events, engine.id) && { wait: true }),
           })),
       model,
     );
@@ -4052,11 +4074,10 @@ export class ConversationManager {
         this.#append(live, { type: 'turn.held', reason: 'offline' }, tail);
         next = after;
       } else if (after?.kind === 'use' && after.routed && after.engine.id !== engine.id) {
-        this.#append(
-          live,
-          { type: 'turn.routed', from: engine.id, to: after.engine.id, ...after.routed },
+        this.#routed(live, engine.id, after.engine.id, after, {
+          fromModel: resolved.model,
           tail,
-        );
+        });
         next = after;
       }
       // The month nearly at its budget says so, once (ADR 0079).
@@ -4384,6 +4405,70 @@ export class ConversationManager {
   }
 
   /** Append to the log and broadcast — or, if `defer` is given, collect for later broadcast. */
+  /**
+   * Another provider answers this turn, and the chat says so in one line
+   * (ADR 0023) — unless it's `quiet`, said already for the same move. At a
+   * limit with `stayed` (ADR 0126), the chat moves to it for good: its
+   * provider and model are the new one's from here.
+   */
+  #routed(
+    live: Live,
+    from: EngineId,
+    to: EngineId,
+    route: Extract<TurnRoute, { kind: 'use' }>,
+    {
+      fromModel,
+      tail,
+      quiet = false,
+    }: { fromModel?: string | undefined; tail?: ConversationEvent[]; quiet?: boolean } = {},
+  ) {
+    const { routed } = route;
+    if (!routed) return;
+    if (!quiet)
+      this.#append(
+        live,
+        {
+          type: 'turn.routed',
+          from,
+          to,
+          reason: routed.reason,
+          message: routed.message,
+          ...(fromModel && { fromModel }),
+          ...(routed.stayed && { stayed: true }),
+        },
+        tail,
+      );
+    if (routed.reason !== 'limit' || !routed.stayed) return;
+    const options = clean({ ...live.record.options, engine: to, model: route.model });
+    if (JSON.stringify(options) === JSON.stringify(live.record.options)) return;
+    live.record = { ...live.record, options };
+    this.#append(live, { type: 'options', options }, tail);
+    this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
+  }
+
+  /**
+   * Switch back, on the line a limit left (ADR 0126): the chat is with its
+   * own provider again, and waits for it at this limit instead of letting
+   * another carry on. Once the limit has reset, Automatic is back too.
+   */
+  async backFromLimit(id: string, engine: EngineId): Promise<ConversationSummary> {
+    const live = await this.#get(id);
+    const routed = live.events.findLast(
+      (e): e is Extract<ConversationEvent, { type: 'turn.routed' }> =>
+        e.type === 'turn.routed' && e.reason === 'limit' && e.from === engine,
+    );
+    if (!routed) throw new ConversationError('not-found', 'Nothing to switch back from.');
+    if (waitsAtLimit(live.events, engine)) return summary(live.record);
+    const until = await this.deps.limitResets?.(engine).catch(() => undefined);
+    // Its own provider again, with the model the chat had (none: its own default).
+    this.#applyOptions(live, { engine, model: routed.fromModel });
+    this.#append(live, { type: 'limit.back', engine, ...(until !== undefined && { until }) });
+    if (live.abort) await this.deps.store.upsert(live.record);
+    else await this.#persist(live);
+    this.events.emit({ type: 'conversation.updated', conversation: summary(live.record) });
+    return summary(live.record);
+  }
+
   #append(live: Live, input: ConversationEventInput, defer?: ConversationEvent[]) {
     // A saved password that turns up in a tool's output or a reply is never logged or shown.
     const redact = this.deps.redact;
@@ -4736,6 +4821,44 @@ function withoutUndefined(record: ConversationRecord): ConversationRecord {
 }
 
 /** Drop unset keys so "no override" is stored as absence, not `undefined`. */
+/** How long Switch back waits for a limit whose reset time Conch doesn't know. */
+const BACK_WAIT_MS = 5 * 60 * 60_000;
+
+/**
+ * Whether this chat waits for `engine` at its limit (Switch back, ADR 0126):
+ * until the reset it was told of, else five hours. After that, Automatic is back.
+ */
+export function waitsAtLimit(
+  events: readonly ConversationEvent[],
+  engine: EngineId,
+  now = Date.now(),
+): boolean {
+  const back = events.findLast((e) => e.type === 'limit.back');
+  if (back?.type !== 'limit.back' || back.engine !== engine) return false;
+  return (back.until ?? back.at + BACK_WAIT_MS) > now;
+}
+
+/**
+ * Whether the chat already said this move (`from` to `to`, for `reason`) and
+ * `from` hasn't answered since: the next message at the same limit needs no
+ * second line.
+ */
+export function sameRouteAsLast(
+  events: readonly ConversationEvent[],
+  from: EngineId,
+  to: EngineId,
+  reason: 'offline' | 'limit',
+): boolean {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i];
+    if (!e) continue;
+    if (e.type === 'limit.back') return false;
+    if (e.type === 'turn.routed') return e.from === from && e.to === to && e.reason === reason;
+    if (e.type === 'turn.completed' && e.engine === from && e.outcome === 'success') return false;
+  }
+  return false;
+}
+
 function clean(options: TurnOptions): TurnOptions {
   return Object.fromEntries(
     Object.entries(options).filter(([, v]) => v !== undefined),

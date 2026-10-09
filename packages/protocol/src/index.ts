@@ -62,6 +62,7 @@ import { SkillPermissions } from './skills';
 import { Task, TaskKind, TaskStatus } from './tasks';
 import { UpdatesStatus } from './updates';
 import { UsageSnapshot } from './usage';
+import { LimitFallback } from './fallback';
 import { CappedOutcome, ChatSpend, SpendLimitKind, SpendModel, TurnCost } from './spend';
 
 export * from './access';
@@ -138,6 +139,7 @@ export * from './terminal';
 export * from './undo';
 export * from './updates';
 export * from './usage';
+export * from './fallback';
 export * from './spend';
 export * from './vault';
 export * from './passwords';
@@ -271,10 +273,18 @@ export const Preferences = z.object({
    */
   offlineFallback: z.boolean().default(true),
   /**
-   * When a provider reaches its usage limit, carry on with this one until it
-   * resets. Unset: wait (the chat offers another provider, but never switches by itself).
+   * When a provider reaches its usage limit (ADR 0126): `auto` (unset) is the
+   * next plan or key with room, in `limitOrder`; `wait` waits for the reset;
+   * a provider's id always carries on with that one.
    */
-  limitFallback: EngineId.optional(),
+  limitFallback: LimitFallback.optional(),
+  /**
+   * Your order for Automatic, by provider. Providers not in it follow, ranked:
+   * your plans first, then keys by what a reply costs.
+   */
+  limitOrder: z.array(EngineId).max(60).default([]),
+  /** A chat goes back to its own provider once its limit resets. Off: it stays with who carried on. */
+  limitReturn: z.boolean().default(true),
   /** Limits whose line above the composer was put away, until each resets (on every device). */
   limitsPutAway: z.array(PutAwayLimit).max(50).default([]),
   /** Apps the chat never offers to connect ("Don't suggest Linear"), by catalog id. */
@@ -410,8 +420,10 @@ export const UpdateSettingsBody = z.object({
       permissionMode: PermissionMode,
       place: WorkPlaceId,
       offlineFallback: z.boolean(),
-      /** `null` goes back to waiting for the limit to reset. */
-      limitFallback: EngineId.nullable(),
+      /** `null` goes back to Automatic: the next plan or key with room. */
+      limitFallback: LimitFallback.nullable(),
+      limitOrder: z.array(EngineId).max(60),
+      limitReturn: z.boolean(),
       /** The whole list, as the page last saw it (a new cycle's entries pruned). */
       limitsPutAway: z.array(PutAwayLimit).max(50),
       mutedSuggestions: MutedSuggestions,
@@ -1092,8 +1104,22 @@ export const ConversationEvent = z.discriminatedUnion('type', [
     from: EngineId,
     to: EngineId,
     reason: z.enum(['offline', 'limit']),
-    /** One plain sentence: "Claude Code's limit resets at 15:00, so OpenRouter answered." */
+    /** One plain sentence: "Claude Code reached its limit until 6:00 PM. Codex is answering." */
     message: z.string(),
+    /** The model the chat had with `from`, so Switch back can return to it. */
+    fromModel: z.string().max(200).optional(),
+    /** At a limit, the chat moved to `to` for good (`preferences.limitReturn` off). */
+    stayed: z.boolean().optional(),
+  }),
+  /**
+   * Switch back, on the line a limit left: this chat waits for `engine` (its
+   * own provider) until `until` instead of letting another carry on.
+   */
+  z.object({
+    ...logged,
+    type: z.literal('limit.back'),
+    engine: EngineId,
+    until: z.number().optional(),
   }),
   z.object({
     ...logged,

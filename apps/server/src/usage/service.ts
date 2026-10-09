@@ -23,6 +23,8 @@ const MIN_FORCE_MS = 15_000;
 /** Longest delay Node timers accept reliably. */
 const MAX_TIMER_MS = 2 ** 31 - 1;
 const KEEP_DAYS = 400;
+/** How long a provider that refused for a limit, without saying until when, is passed over. */
+const REFUSED_MS = 15 * 60_000;
 
 const LedgerFile = z.object({
   version: z.literal(1).default(1),
@@ -90,6 +92,8 @@ export class UsageService {
   #meters = new Map<string, Meter>();
   #poll?: NodeJS.Timeout;
   #offLimits: (() => void)[] = [];
+  /** Providers that refused a turn for a limit, and until when (ADR 0126). */
+  #refused = new Map<EngineId, number>();
 
   constructor(
     private readonly deps: {
@@ -224,6 +228,26 @@ export class UsageService {
     }
     this.#scheduleRefresh(this.#meter(engine));
     return near;
+  }
+
+  /**
+   * A turn was refused for a limit (a `429`, "quota", a plan out of room)
+   * by a provider whose windows Conch can't read (ADR 0126). Until `until`,
+   * or a quarter of an hour when it didn't say, it counts as at its limit:
+   * Automatic passes it over, and its chats go to the next with room.
+   */
+  refused(engine: EngineId, until?: number): void {
+    const now = this.#now;
+    this.#refused.set(engine, until !== undefined && until > now ? until : now + REFUSED_MS);
+  }
+
+  /** When a provider refused for a limit has room again, while it hasn't. */
+  refusedUntil(engine: EngineId): number | undefined {
+    const until = this.#refused.get(engine);
+    if (until === undefined) return undefined;
+    if (until > this.#now) return until;
+    this.#refused.delete(engine);
+    return undefined;
   }
 
   /** A provider's plan windows as last read; never a new read. */

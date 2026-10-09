@@ -14,7 +14,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Engine, EngineEvent, TurnInput } from '../engines/types';
 import { MemoryStore } from '../memory/store';
 import { SettingsStore } from '../settings/store';
-import { ConversationManager, type TurnRoute, windDown } from './manager';
+import { ConversationManager, type TurnRoute, waitsAtLimit, windDown } from './manager';
 import { ConversationStore } from './store';
 
 /** Answers "<label> heard: <prompt>", or fails with `fails` when set. */
@@ -266,6 +266,202 @@ describe('offline and at a limit (ADR 0023)', () => {
     expect(sent.filter(Boolean)).toHaveLength(1);
     await idle(manager, convo.id);
     expect(claude.turns.map((t) => t.prompt)).toEqual(['only once']);
+  });
+});
+
+/**
+ * A manager whose route acts like Automatic (ADR 0126): a provider in
+ * `blocked` is at its limit (known before a turn, as a plan's windows are),
+ * one that fails with `limit` joins it, and the first other one with room
+ * carries on — unless the chat waits (Switch back) or `stay` moves it for good.
+ */
+async function automatic() {
+  const home = await mkdtemp(join(tmpdir(), 'conch-automatic-'));
+  const claude = new FakeEngine('claude-code', 'Claude Code');
+  const codex = new FakeEngine('codex-cli', 'Codex');
+  const router = new FakeEngine('openrouter', 'OpenRouter');
+  const engines = new Map<EngineId, FakeEngine>([
+    ['claude-code', claude],
+    ['codex-cli', codex],
+    ['openrouter', router],
+  ]);
+  const settings = new SettingsStore(home);
+  await settings.update({ preferences: { engine: 'claude-code', autoTitle: false } });
+  const world = {
+    blocked: new Set<EngineId>(),
+    stay: false,
+    order: ['codex-cli', 'openrouter'] as EngineId[],
+  };
+  const asked: { engine: EngineId; wait?: boolean }[] = [];
+  const route = async (
+    engine: Engine,
+    context: { failed?: TurnProblem; wait?: boolean },
+  ): Promise<TurnRoute> => {
+    asked.push({ engine: engine.id, ...(context.wait && { wait: true }) });
+    if (context.failed === 'limit') world.blocked.add(engine.id);
+    if (!world.blocked.has(engine.id) || context.wait) return { kind: 'use', engine };
+    const next = world.order.find((id) => id !== engine.id && !world.blocked.has(id));
+    const other = next ? engines.get(next) : undefined;
+    if (!other) return { kind: 'use', engine };
+    return {
+      kind: 'use',
+      engine: other,
+      routed: {
+        reason: 'limit',
+        message: `${engine.label} reached its limit until 18:00. ${other.label} is answering.`,
+        ...(world.stay && { stayed: true }),
+      },
+    };
+  };
+  const manager = new ConversationManager({
+    store: new ConversationStore(join(home, 'conversations')),
+    settings,
+    memory: new MemoryStore(join(home, 'memory')),
+    engine: (id) => engines.get(id ?? 'claude-code') ?? claude,
+    route,
+    limitResets: async () => Date.now() + 3 * 3_600_000,
+  });
+  return { manager, claude, codex, router, world, asked };
+}
+
+describe('carrying on at a limit, by itself (ADR 0126)', () => {
+  it('mid-chat, the next with room answers, says so once, and hands the chat back at the reset', async () => {
+    const { manager, claude, codex, router, world } = await automatic();
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'plan the trip' });
+    await idle(manager, convo.id);
+    expect(claude.turns).toHaveLength(1);
+
+    // The limit arrives mid-chat: the same message goes to Codex, with the chat so far.
+    claude.fails = 'limit';
+    await manager.send({ conversationId: convo.id, clientMessageId: 'u2', text: 'and hotels' });
+    await idle(manager, convo.id);
+    expect(codex.turns).toHaveLength(1);
+    expect(codex.turns[0]?.prompt).toContain('plan the trip');
+    expect(codex.turns[0]?.prompt.endsWith('and hotels')).toBe(true);
+    let events = await log(manager, convo.id);
+    expect(events.filter((e) => e.type === 'turn.routed')).toEqual([
+      expect.objectContaining({
+        from: 'claude-code',
+        to: 'codex-cli',
+        reason: 'limit',
+        message: 'Claude Code reached its limit until 18:00. Codex is answering.',
+      }),
+    ]);
+
+    // Still at the limit: Codex answers again, and the chat doesn't say it twice.
+    await manager.send({ conversationId: convo.id, clientMessageId: 'u3', text: 'and trains' });
+    await idle(manager, convo.id);
+    expect(codex.turns).toHaveLength(2);
+    events = await log(manager, convo.id);
+    expect(events.filter((e) => e.type === 'turn.routed')).toHaveLength(1);
+    // The chat itself never left Claude Code: it's only carried for now.
+    expect((await manager.detail(convo.id)).conversation.options.engine).toBeUndefined();
+
+    // The limit resets: Claude Code answers again, told what Codex did meanwhile.
+    claude.fails = undefined;
+    world.blocked.clear();
+    await manager.send({ conversationId: convo.id, clientMessageId: 'u4', text: 'book it' });
+    await idle(manager, convo.id);
+    expect(claude.turns).toHaveLength(3);
+    expect(claude.turns.at(-1)?.prompt).toContain('Codex heard');
+    expect(router.turns).toHaveLength(0);
+
+    // At the limit again later, the chat says so again.
+    world.blocked.add('claude-code');
+    await manager.send({ conversationId: convo.id, clientMessageId: 'u5', text: 'one more' });
+    await idle(manager, convo.id);
+    events = await log(manager, convo.id);
+    expect(events.filter((e) => e.type === 'turn.routed')).toHaveLength(2);
+  });
+
+  it('past the first with no room, the next carries on', async () => {
+    const { manager, codex, router, world } = await automatic();
+    world.blocked = new Set(['claude-code', 'codex-cli']);
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'hello' });
+    await idle(manager, convo.id);
+    expect(codex.turns).toHaveLength(0);
+    expect(router.turns).toHaveLength(1);
+  });
+
+  it('when you’d rather not come back, the chat stays with who carried on', async () => {
+    const { manager, claude, codex, world } = await automatic();
+    world.stay = true;
+    claude.fails = 'limit';
+    const convo = await manager.send({
+      clientMessageId: 'u1',
+      text: 'go',
+      options: { engine: 'claude-code', model: 'opus' },
+    });
+    await idle(manager, convo.id);
+    expect(codex.turns).toHaveLength(1);
+    expect((await manager.detail(convo.id)).conversation.options).toMatchObject({
+      engine: 'codex-cli',
+    });
+    expect((await manager.detail(convo.id)).conversation.options.model).toBeUndefined();
+    const routed = (await log(manager, convo.id)).find((e) => e.type === 'turn.routed');
+    expect(routed).toMatchObject({ stayed: true, fromModel: 'opus' });
+
+    // After the reset it's still Codex's chat.
+    claude.fails = undefined;
+    world.blocked.clear();
+    await manager.send({ conversationId: convo.id, clientMessageId: 'u2', text: 'more' });
+    await idle(manager, convo.id);
+    expect(codex.turns).toHaveLength(2);
+    expect(claude.turns).toHaveLength(1);
+  });
+
+  it('Switch back: the chat is its own provider’s again, and waits for it at this limit', async () => {
+    const { manager, claude, codex, world, asked } = await automatic();
+    world.stay = true;
+    claude.fails = 'limit';
+    const convo = await manager.send({
+      clientMessageId: 'u1',
+      text: 'go',
+      options: { engine: 'claude-code', model: 'opus' },
+    });
+    await idle(manager, convo.id);
+    expect(codex.turns).toHaveLength(1);
+
+    await manager.backFromLimit(convo.id, 'claude-code');
+    const { conversation, events } = await manager.detail(convo.id);
+    expect(conversation.options).toMatchObject({ engine: 'claude-code', model: 'opus' });
+    expect(events.at(-1)).toMatchObject({ type: 'limit.back', engine: 'claude-code' });
+
+    // Still at the limit: it waits for Claude Code, and nobody else answers.
+    await manager.send({ conversationId: convo.id, clientMessageId: 'u2', text: 'wait for it' });
+    await idle(manager, convo.id);
+    expect(codex.turns).toHaveLength(1);
+    expect(asked.at(-1)).toEqual({ engine: 'claude-code', wait: true });
+    const last = (await log(manager, convo.id)).findLast((e) => e.type === 'turn.completed');
+    expect(last).toMatchObject({ engine: 'claude-code', problem: 'limit' });
+
+    // Nothing to switch back from in a chat no limit moved.
+    claude.fails = undefined;
+    world.blocked.clear();
+    const other = await manager.send({ clientMessageId: 'u3', text: 'new chat' });
+    await idle(manager, other.id);
+    await expect(manager.backFromLimit(other.id, 'claude-code')).rejects.toMatchObject({
+      code: 'not-found',
+    });
+  });
+
+  it('Switch back waits only until the limit it was pressed for has reset', () => {
+    const at = Date.UTC(2026, 9, 9, 15);
+    const back = {
+      type: 'limit.back' as const,
+      conversationId: 'c',
+      seq: 3,
+      at,
+      engine: 'claude-code' as const,
+      until: at + 3_600_000,
+    };
+    expect(waitsAtLimit([back], 'claude-code', at + 60_000)).toBe(true);
+    expect(waitsAtLimit([back], 'codex-cli', at + 60_000)).toBe(false);
+    expect(waitsAtLimit([back], 'claude-code', at + 2 * 3_600_000)).toBe(false);
+    // A reset Conch didn't know: five hours, then Automatic again.
+    const { until: _until, ...unknown } = back;
+    expect(waitsAtLimit([unknown], 'claude-code', at + 4 * 3_600_000)).toBe(true);
+    expect(waitsAtLimit([unknown], 'claude-code', at + 6 * 3_600_000)).toBe(false);
   });
 });
 

@@ -92,3 +92,20 @@ export const TYPICAL_RUN: Pick<Usage, 'inputTokens' | 'outputTokens'> = {
   inputTokens: 290_000,
   outputTokens: 3_000,
 };
+
+/**
+ * A typical chat reply, for "about $0.02 a reply" when choosing who carries
+ * on at a limit (ADR 0126): Conch's instructions and tools, a chat of some
+ * length mostly read back from the provider's cache, and a few paragraphs out.
+ */
+export const TYPICAL_REPLY: Pick<Usage, 'inputTokens' | 'outputTokens' | 'cachedInputTokens'> = {
+  inputTokens: 20_000,
+  cachedInputTokens: 14_000,
+  outputTokens: 700,
+};
+
+/** About what a typical reply costs with this model at list price, when Conch knows its price. */
+export function perReply(model: string | undefined): number | undefined {
+  const price = priceOf(model);
+  return price ? costAt(price, TYPICAL_REPLY) : undefined;
+}

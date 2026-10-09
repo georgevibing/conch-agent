@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { ServerEvent, UsageSnapshot } from '@conch/protocol';
+import { FallbackPlan, ServerEvent, UsageSnapshot } from '@conch/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from './app';
@@ -786,52 +786,138 @@ describe('gateway WebSocket', () => {
     });
   });
 
-  it('at a limit, your pick answers — only when you chose one and it’s ready', async () => {
+  it('at a limit: Automatic, your pick, or waiting — and the model here last (ADR 0126)', async () => {
     const { app, services } = await setup();
     close = () => app.close();
     const mock = services.engine();
     const capabilities = vi.fn(() => mock.capabilities());
+    const ready = async () => ({
+      ...(await mock.detect()),
+      state: 'ready' as const,
+      auth: { method: 'api-key' as const, description: 'API key' },
+    });
     const other = {
       ...mock,
       id: 'openrouter' as const,
       label: 'OpenRouter',
       capabilities,
+      usage: undefined,
+      detect: async () => ({ ...(await ready()), engine: 'openrouter' as const }),
+    };
+    const third = {
+      ...other,
+      id: 'anthropic-api' as const,
+      label: 'Anthropic API',
+      capabilities: () => mock.capabilities(),
+      detect: async () => ({ ...(await ready()), engine: 'anthropic-api' as const }),
+    };
+    vi.spyOn(services.providers, 'engineFor').mockImplementation((id) =>
+      id === 'openrouter' ? other : id === 'anthropic-api' ? third : mock,
+    );
+    vi.spyOn(services.providers, 'ready').mockResolvedValue([mock, other, third]);
+
+    // Automatic, by default: the next with room carries on, and the chat says so.
+    expect((await services.settings.get()).preferences.limitFallback).toBeUndefined();
+    expect(await services.route(mock, { failed: 'limit' })).toMatchObject({
+      kind: 'use',
+      engine: { id: 'openrouter' },
+      routed: {
+        reason: 'limit',
+        message: 'Claude Code reached its limit for now. OpenRouter is answering.',
+      },
+    });
+    // Refused once, it's passed over for a while: the next message goes straight there too.
+    expect(await services.route(mock, {})).toMatchObject({ engine: { id: 'openrouter' } });
+    // A chat that chose to wait (Switch back) waits.
+    expect(await services.route(mock, { wait: true })).toEqual({ kind: 'use', engine: mock });
+    // In your order.
+    await services.settings.update({ preferences: { limitOrder: ['anthropic-api'] } });
+    expect(await services.route(mock, { failed: 'limit' })).toMatchObject({
+      engine: { id: 'anthropic-api' },
+    });
+    // One that refused too is passed over in turn.
+    services.usage.refused('anthropic-api');
+    expect(await services.route(mock, { failed: 'limit' })).toMatchObject({
+      engine: { id: 'openrouter' },
+    });
+
+    // Your pick, by name.
+    await services.settings.update({ preferences: { limitFallback: 'openrouter' } });
+    expect(await services.route(mock, { failed: 'limit' })).toMatchObject({
+      engine: { id: 'openrouter' },
+      routed: { message: 'Claude Code reached its limit for now. OpenRouter is answering.' },
+    });
+    // A pick must also keep the chat's tools.
+    capabilities.mockResolvedValue({
+      ...(await mock.capabilities()),
+      tools: { host: false, files: false, shell: false, approvals: true },
+    });
+    vi.spyOn(services, 'localReady').mockResolvedValue(undefined);
+    expect(await services.route(mock, { failed: 'limit' })).toEqual({ kind: 'use', engine: mock });
+    capabilities.mockImplementation(() => mock.capabilities());
+
+    // Staying with who carried on, when you'd rather not come back.
+    await services.settings.update({ preferences: { limitReturn: false } });
+    expect(await services.route(mock, { failed: 'limit' })).toMatchObject({
+      routed: { stayed: true, message: expect.stringContaining('carries on in this chat') },
+    });
+
+    // Wait: the limit stands, whatever else is ready.
+    await services.settings.update({ preferences: { limitFallback: 'wait' } });
+    expect(await services.route(mock, { failed: 'limit' })).toEqual({ kind: 'use', engine: mock });
+
+    // None with room: last, the model on this computer, if you let it.
+    await services.settings.update({ preferences: { limitFallback: null } });
+    expect((await services.settings.get()).preferences.limitFallback).toBeUndefined();
+    services.usage.refused('openrouter');
+    services.usage.refused('anthropic-api');
+    const local = {
+      ...mock,
+      id: 'ollama' as const,
+      label: 'Ollama',
+      local: true,
+      capabilities: () => mock.capabilities(),
+    };
+    vi.spyOn(services, 'localReady').mockResolvedValue(local);
+    expect(await services.route(mock, { failed: 'limit' })).toMatchObject({
+      engine: { id: 'ollama' },
+      routed: {
+        message: 'Claude Code reached its limit for now. Ollama is answering from this computer.',
+      },
+    });
+    await services.settings.update({ preferences: { offlineFallback: false } });
+    expect(await services.route(mock, { failed: 'limit' })).toEqual({ kind: 'use', engine: mock });
+  });
+
+  it('lists who would carry on, in order, with room, cost and model (ADR 0126)', async () => {
+    const { app, services } = await setup();
+    close = () => app.close();
+    const mock = services.engine();
+    const other = {
+      ...mock,
+      id: 'openrouter' as const,
+      label: 'OpenRouter',
+      usage: undefined,
+      capabilities: () => mock.capabilities(),
       detect: async () => ({
         ...(await mock.detect()),
         engine: 'openrouter' as const,
         state: 'ready' as const,
+        auth: { method: 'api-key' as const, description: 'API key' },
       }),
     };
     vi.spyOn(services.providers, 'engineFor').mockImplementation((id) =>
       id === 'openrouter' ? other : mock,
     );
-
-    // No pick: the limit stands.
-    expect(await services.route(mock, { failed: 'limit' })).toEqual({ kind: 'use', engine: mock });
-
-    await services.settings.update({ preferences: { limitFallback: 'openrouter' } });
-    const routed = await services.route(mock, { failed: 'limit' });
-    expect(routed).toMatchObject({
-      kind: 'use',
-      engine: { id: 'openrouter' },
-      routed: {
-        reason: 'limit',
-        message: 'Claude Code reached its limit for now, so OpenRouter answered.',
-      },
-    });
-    // Not at a limit: the chat's own provider answers.
-    expect(await services.route(mock, {})).toEqual({ kind: 'use', engine: mock });
-
-    // A ready fallback must also retain the current provider's tools.
-    capabilities.mockResolvedValueOnce({
-      ...(await mock.capabilities()),
-      tools: { host: false, files: false, shell: false, approvals: true },
-    });
-    expect(await services.route(mock, { failed: 'limit' })).toEqual({ kind: 'use', engine: mock });
-
-    // Cleared (null), it's off again.
-    await services.settings.update({ preferences: { limitFallback: null } });
-    expect((await services.settings.get()).preferences.limitFallback).toBeUndefined();
+    vi.spyOn(services.providers, 'ready').mockResolvedValue([mock, other]);
+    const res = await app.inject('/api/fallback');
+    expect(res.statusCode).toBe(200);
+    const plan = FallbackPlan.parse(res.json());
+    expect(plan).toMatchObject({ from: mock.id, fromName: 'Claude Code' });
+    expect(plan.choices).toEqual([
+      expect.objectContaining({ id: 'openrouter', name: 'OpenRouter', billing: 'metered' }),
+    ]);
+    expect((await app.inject('/api/fallback?engine=nope')).statusCode).toBe(400);
   });
 
   it('never routes a turn that needs tools to a chat-only model (ADR 0050)', async () => {
@@ -890,6 +976,8 @@ describe('gateway WebSocket', () => {
     vi.spyOn(services.providers, 'engineFor').mockImplementation((id) =>
       id === 'openrouter' ? other : mock,
     );
+    vi.spyOn(services.providers, 'ready').mockResolvedValue([mock, other]);
+    vi.spyOn(services, 'localReady').mockResolvedValue(undefined);
     await services.settings.update({ preferences: { limitFallback: 'openrouter' } });
     expect(await services.route(mock, { failed: 'limit', model: 'opus' })).toEqual({
       kind: 'use',

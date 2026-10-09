@@ -56,6 +56,7 @@ import {
   UpdateSettingsBody,
   UpdateSkillBody,
   UsageBudgetBody,
+  LimitBackBody,
   RoutineSpendingBody,
   UpdatesSettingsBody,
   type ServerEvent,
@@ -778,6 +779,13 @@ export async function buildApp(services: Services) {
       return services.usage.snapshot({ force: refresh === '1', ...(id && { engine: id }) });
     },
   );
+  // Who carries on at a usage limit (ADR 0126), for the default provider or `?engine=`.
+  app.get<{ Querystring: { engine?: string } }>('/api/fallback', (request, reply) => {
+    const { engine } = request.query;
+    const id = engine === undefined ? undefined : providerId({ id: engine }, reply);
+    if (engine !== undefined && !id) return;
+    return services.fallbackPlan(id);
+  });
   app.put('/api/usage/budget', async (request, reply) => {
     const body = parse(UsageBudgetBody, request.body, reply);
     if (!body) return;
@@ -1389,6 +1397,19 @@ export async function buildApp(services: Services) {
    * A message at a spending limit goes on as the person chose (ADR 0079): raise
    * the limit, carry on with a model that costs less, or stop. Only from the UI.
    */
+  /** Switch back, on the line a limit left (ADR 0126): this chat waits for its own provider. */
+  app.post<{ Params: { id: string } }>(
+    '/api/conversations/:id/limit-back',
+    async (request, reply) => {
+      const body = parse(LimitBackBody, request.body, reply);
+      if (!body) return;
+      try {
+        return await services.conversations.backFromLimit(request.params.id, body.engine);
+      } catch (error) {
+        return sendError(reply, error);
+      }
+    },
+  );
   app.post<{ Params: { id: string } }>('/api/conversations/:id/capped', async (request, reply) => {
     const body = parse(CappedChoiceBody, request.body, reply);
     if (!body) return;

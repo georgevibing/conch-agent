@@ -356,6 +356,9 @@ export class CodexEngine implements Engine {
   #limits?: { value: EngineUsage; at: number };
   #limitsRead?: Promise<EngineUsage>;
 
+  /** Codex and Codex CLI share one sign-in, so one plan and its limits (ADR 0126). */
+  readonly sharesAccount = 'openai-codex';
+
   constructor(
     private readonly settings: SettingsStore,
     private readonly keys: ProviderKeys,

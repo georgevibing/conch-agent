@@ -561,6 +561,13 @@ export interface Engine {
    * nothing. Offline, Conch answers with it (see ADR 0023).
    */
   readonly local?: boolean;
+  /**
+   * Providers with the same value are two ways into one account, with one
+   * sign-in and one set of limits (Codex and Codex CLI: `openai-codex`). At a
+   * limit they're one choice, never two, and one at its limit means both are
+   * (ADR 0126). Absent: the provider is an account of its own.
+   */
+  readonly sharesAccount?: string;
   /** Probe installation and credentials. Cheap to call; results may be cached briefly. */
   detect(options?: { force?: boolean }): Promise<EngineStatus>;
   /** Start an interactive sign-in. Progress is reported through `onUpdate`. */
