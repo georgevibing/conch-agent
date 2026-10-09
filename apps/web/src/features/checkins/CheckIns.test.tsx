@@ -52,7 +52,7 @@ const status = (over: Partial<CheckInStatus> = {}): CheckInStatus => ({
 describe('the check-in’s words', () => {
   it('says what it watches for, when it looked, and that quiet looks are free', () => {
     expect(checkInLine(status(), 2, NOW)).toBe(
-      'Watching for 2 things · looked 12 minutes ago · free until something’s new',
+      'Watching for 2 things\u00a0· looked 12 minutes ago\u00a0· free until something’s new',
     );
     expect(checkInLine(status({ month: { looks: 1, woke: 1, usd: 0.42 } }), 1, NOW)).toContain(
       '$0.42 this month',
@@ -62,7 +62,7 @@ describe('the check-in’s words', () => {
 
   it('says how often an order brought news', () => {
     expect(orderItem(order({ told: 2, lastToldAt: NOW - 60_000 }), NOW).meta).toBe(
-      'Told you twice · last 1 minute ago',
+      'Told you twice\u00a0· last 1 minute ago',
     );
     expect(orderItem(order()).meta).toBeUndefined();
   });

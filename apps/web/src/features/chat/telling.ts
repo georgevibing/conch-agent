@@ -3,6 +3,7 @@
  * what a turn changed, worked out from the transcript's items. Pure, so the
  * transcript, the away digest and the tests read the same stories.
  */
+import { META_SEP } from '@conch/nacre';
 import {
   groupEffects,
   stepFromTool,
@@ -181,7 +182,7 @@ export function liveOf(
   if (!at) return undefined;
   const tool = tools?.get(at.id);
   const far = tool && progressOf(tool);
-  return { text: far ? `${at.label.doing} · ${far}` : at.label.doing, source: 'rule' };
+  return { text: far ? `${at.label.doing}${META_SEP}${far}` : at.label.doing, source: 'rule' };
 }
 
 /** The words a story's line shows: the small model's headline once it's in, else the rules'. */

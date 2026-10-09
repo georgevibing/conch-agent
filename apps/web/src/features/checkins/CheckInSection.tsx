@@ -18,6 +18,7 @@ import {
   Text,
   TimePicker,
   type StandingOrderItem,
+  META_SEP,
 } from '@conch/nacre';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
@@ -53,7 +54,7 @@ export function checkInLine(status: CheckInStatus, watching: number, now = Date.
       ? `$${status.month.usd.toFixed(2)} this month`
       : 'free until something’s new',
   );
-  return parts.join(' · ');
+  return parts.join(META_SEP);
 }
 
 /** What the list shows of an order: how often it brought you news. */
@@ -61,7 +62,9 @@ export function orderItem(order: StandingOrder, now = Date.now()): StandingOrder
   const meta =
     order.told > 0
       ? `Told you ${order.told === 1 ? 'once' : order.told === 2 ? 'twice' : `${order.told} times`}${
-          order.lastToldAt ? ` · last ${formatWhen(order.lastToldAt, { now }).toLowerCase()}` : ''
+          order.lastToldAt
+            ? `${META_SEP}last ${formatWhen(order.lastToldAt, { now }).toLowerCase()}`
+            : ''
         }`
       : undefined;
   return {

@@ -1,5 +1,5 @@
 import type { Memory, MemoryHold } from '@conch/protocol';
-import { MemoryCell, memorySourceLabels, Textarea, toast } from '@conch/nacre';
+import { MemoryCell, memorySourceLabels, Textarea, toast, META_SEP } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
@@ -45,7 +45,7 @@ function Editor({
 export function metaOf(memory: Memory): string {
   const from =
     memory.about === 'environment' ? 'About this computer' : memorySourceLabels[memory.source];
-  return `${from} · ${relativeTime(memory.updatedAt)}`;
+  return `${from}${META_SEP}${relativeTime(memory.updatedAt)}`;
 }
 
 /**

@@ -20,6 +20,7 @@ import {
   useNow,
   type ProgramUpdateItemProps,
   type SoftwareUpdateProps,
+  META_SEP,
 } from '@conch/nacre';
 import { ArrowUpRight, Download, RefreshCw, RotateCcw, Undo2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -116,7 +117,7 @@ export function conchCard(
     return {
       state: 'available',
       title: 'An update is ready',
-      detail: [changes(conch), checked].filter(Boolean).join(' · '),
+      detail: [changes(conch), checked].filter(Boolean).join(META_SEP),
       whatsNew: listed,
       more: Math.max(0, conch.improvements - listed.length),
       blocked: conch.blocked,
@@ -145,7 +146,7 @@ export function conchCard(
     return {
       state: 'unavailable',
       title: 'Conch can’t check for updates',
-      detail: [installedLabel(conch), checked].filter(Boolean).join(' · '),
+      detail: [installedLabel(conch), checked].filter(Boolean).join(META_SEP),
       blocked: conch.blocked,
     };
   const justUpdated = outcome?.kind === 'updated' && now - outcome.at < DAY;
@@ -155,7 +156,7 @@ export function conchCard(
     title: 'Conch is up to date',
     detail: conch.problem
       ? [conch.problem, checked && `${checked}.`].filter(Boolean).join(' ')
-      : [installedLabel(conch), when ?? 'Not checked yet'].join(' · '),
+      : [installedLabel(conch), when ?? 'Not checked yet'].join(META_SEP),
     whatsNew: justUpdated ? outcome.whatsNew.slice(0, LINES) : undefined,
     whatsNewLabel: 'What’s new in this update',
     notice,
@@ -178,7 +179,7 @@ function releaseCard(
     return {
       state: 'available',
       title: `Conch ${short(conch.latest.version)} is ready`,
-      detail: [`You have ${installedLabel(conch)}`, checked].filter(Boolean).join(' · '),
+      detail: [`You have ${installedLabel(conch)}`, checked].filter(Boolean).join(META_SEP),
       releases: conch.releases,
       footnote: conch.blocked.reason,
       offer: 'download',
@@ -188,7 +189,7 @@ function releaseCard(
     return {
       state: 'available',
       title: `Conch ${short(conch.latest.version)} is ready`,
-      detail: [`You have ${installedLabel(conch)}`, checked].filter(Boolean).join(' · '),
+      detail: [`You have ${installedLabel(conch)}`, checked].filter(Boolean).join(META_SEP),
       releases: conch.releases,
       notice,
       footnote: restartable
@@ -214,7 +215,7 @@ function releaseCard(
     title: 'Conch is up to date',
     detail: conch.problem
       ? [conch.problem, checked && `${checked}.`].filter(Boolean).join(' ')
-      : [installedLabel(conch), when ?? 'Not checked yet'].join(' · '),
+      : [installedLabel(conch), when ?? 'Not checked yet'].join(META_SEP),
     releases: justUpdated ? outcome.releases : undefined,
     whatsNewLabel: 'What’s new in this update',
     notice,

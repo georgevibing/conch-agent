@@ -57,7 +57,7 @@ describe('What Conch knows: About you first', () => {
       { id: '4', kind: 'person', text: 'Jouda' },
       { id: '5', kind: 'person', text: 'Poly' },
     ];
-    expect(summarise(facts)).toBe('SDM at Amazon · Berlin · Lina, Jouda +1');
+    expect(summarise(facts)).toBe('SDM at Amazon\u00a0· Berlin\u00a0· Lina, Jouda +1');
     expect(summarise([])).toBe('');
   });
 

@@ -12,6 +12,7 @@ import {
   SegmentedControl,
   Stack,
   Text,
+  META_SEP,
 } from '@conch/nacre';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -86,7 +87,7 @@ export function EmailSetup() {
           number={1}
           title="Your email address"
           state={stepState(0, at)}
-          summary={valid ? `${address.trim()} · ${service.name}` : undefined}
+          summary={valid ? `${address.trim()}${META_SEP}${service.name}` : undefined}
           onEdit={channel ? undefined : () => setNext(false)}
         >
           <Field>
@@ -267,7 +268,7 @@ function EmailPreview({
       brand="email"
       color={color}
       title={writeTo ?? 'you+conch@gmail.com'}
-      subtitle={service.plus ? 'Email' : 'Email · subject starts with “Conch”'}
+      subtitle={service.plus ? 'Email' : `Email${META_SEP}subject starts with “Conch”`}
       alive={Boolean(channel)}
       messages={[
         {

@@ -1,5 +1,5 @@
 import { ImportSourceId, type Profile } from '@conch/protocol';
-import { Button, SettingsAdvanced, Stack, Switch, Text } from '@conch/nacre';
+import { Button, SettingsAdvanced, Stack, Switch, Text, META_SEP } from '@conch/nacre';
 import { Brain } from 'lucide-react';
 
 import { useAppState, useMemories, useUpdateSettings } from '../../api/queries';
@@ -66,7 +66,7 @@ function Learning({ autoMemory, tidyMemory }: { autoMemory: boolean; tidyMemory:
                 : kept === 1
                   ? '1 memory'
                   : `${kept} memories`}
-              {waiting > 0 && ` · ${waiting} to look at`}
+              {waiting > 0 && `${META_SEP}${waiting} to look at`}
             </Text>
           </Stack>
           <Button size="sm" variant="surface" onClick={() => openSettings('memory', MEMORY_ALL)}>

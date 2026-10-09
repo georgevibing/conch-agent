@@ -17,6 +17,7 @@ import {
   Switch,
   Text,
   toast,
+  META_SEP,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { MessageCircle, RotateCw, Send, Unplug } from 'lucide-react';
@@ -342,8 +343,8 @@ function Detail({ channel }: { channel: Channel }) {
                     </Text>
                     <Text size="sm" tone="muted">
                       {group.on
-                        ? `Answers when mentioned${group.since ? ` · on since ${relativeTime(group.since)}` : ''}`
-                        : `Off · last heard from ${relativeTime(group.seenAt)}`}
+                        ? `Answers when mentioned${group.since ? `${META_SEP}on since ${relativeTime(group.since)}` : ''}`
+                        : `Off${META_SEP}last heard from ${relativeTime(group.seenAt)}`}
                     </Text>
                   </Stack>
                   <Stack direction="row" gap={2} align="center">

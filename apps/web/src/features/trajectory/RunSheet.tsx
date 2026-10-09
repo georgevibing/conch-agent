@@ -7,6 +7,7 @@ import {
   Text,
   useMediaQuery,
   type ReplayStep,
+  META_SEP,
 } from '@conch/nacre';
 import { useQuery } from '@tanstack/react-query';
 import { Download } from 'lucide-react';
@@ -89,7 +90,7 @@ function RunBody({ conversationId }: { conversationId: string }) {
         <Sheet.Title>How {name} did it</Sheet.Title>
         <Sheet.Description>
           {record?.title ?? data?.title ?? 'This chat'}
-          {origin ? ` · ${origin}` : ''}
+          {origin ? `${META_SEP}${origin}` : ''}
         </Sheet.Description>
       </Sheet.Header>
       <Sheet.Body className={styles.body}>

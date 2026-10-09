@@ -34,13 +34,13 @@ describe('managed command snapshots', () => {
           reason: 'Waiting for memory to recover.',
         }),
       ),
-    ).toBe('Waiting to start · Waiting for memory to recover.');
+    ).toBe('Waiting to start\u00a0· Waiting for memory to recover.');
     expect(
       managedProcessSummary(
         'process_read',
         JSON.stringify({ command: 'pnpm test', status: 'running' }),
       ),
-    ).toBe('Running when checked · pnpm test');
+    ).toBe('Running when checked\u00a0· pnpm test');
     expect(
       managedProcessSummary(
         'process_stop',
@@ -50,7 +50,7 @@ describe('managed command snapshots', () => {
           reason: 'Stopped to keep Conch responsive.',
         }),
       ),
-    ).toBe('Stopped · Stopped to keep Conch responsive.');
+    ).toBe('Stopped\u00a0· Stopped to keep Conch responsive.');
   });
   it('keeps unrelated tools, old results and malformed output unchanged', () => {
     for (const output of [

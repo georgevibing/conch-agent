@@ -21,6 +21,7 @@ import {
   VaultSourceBadge,
   toast,
   vaultSourceName,
+  META_SEP,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { History, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react';
@@ -180,10 +181,10 @@ export function ItemDetail({
             <span>
               {item.source === 'conch'
                 ? 'In Conch'
-                : `${vaultSourceName(item.source)}${item.container ? ` · ${item.container}` : ''}`}
-              {` · ${TYPE_NAMES[item.type].one}`}
-              {item.updatedAt ? ` · edited ${ago(item.updatedAt)}` : ''}
-              {` · ${item.usedAt ? `used ${ago(item.usedAt)}` : 'not used yet'}`}
+                : `${vaultSourceName(item.source)}${item.container ? `${META_SEP}${item.container}` : ''}`}
+              {`${META_SEP}${TYPE_NAMES[item.type].one}`}
+              {item.updatedAt ? `${META_SEP}edited ${ago(item.updatedAt)}` : ''}
+              {`${META_SEP}${item.usedAt ? `used ${ago(item.usedAt)}` : 'not used yet'}`}
             </span>
           </Text>
         </div>
@@ -241,7 +242,7 @@ export function ItemDetail({
                         onSelect={() => void actions.copyTo([item], t, p ?? t.places[0])}
                       >
                         Copy to {t.name}
-                        {p && t.places.length > 1 ? ` · ${p.name}` : ''}
+                        {p && t.places.length > 1 ? `${META_SEP}${p.name}` : ''}
                       </DropdownMenu.Item>
                     )),
                   )}
@@ -290,8 +291,8 @@ export function ItemDetail({
       {external && item.source !== 'system' && (
         <Callout tone="info" className={styles.detailNote}>
           From {vaultSourceName(item.source)}
-          {item.container ? ` · ${item.container}` : ''}. Change it there; Conch shows it here and
-          can fill it in for you.
+          {item.container ? `${META_SEP}${item.container}` : ''}. Change it there; Conch shows it
+          here and can fill it in for you.
           {twins.every((t) => t.source !== 'conch') &&
             ' To keep it in Conch too, even when the app isn’t there, copy it into Conch.'}
         </Callout>
@@ -310,7 +311,7 @@ export function ItemDetail({
               onClick={() => onOpenItem(t.id)}
             >
               {t.source === 'conch' ? 'Conch' : vaultSourceName(t.source)}
-              {t.container ? ` · ${t.container}` : ''}
+              {t.container ? `${META_SEP}${t.container}` : ''}
             </Button>
           ))}
         </div>
@@ -489,7 +490,7 @@ export function ItemDetail({
             {ACCESS_WORDS[full.agentAccess]}
             {full.agentAccess !== 'never' &&
               full.domains.length > 0 &&
-              ` · only on ${[...full.domains, ...full.allowedSites].join(', ')}`}
+              `${META_SEP}only on ${[...full.domains, ...full.allowedSites].join(', ')}`}
           </Text>
           <Text size="xs" tone="subtle">
             It never sees the password: Conch types it into the page.

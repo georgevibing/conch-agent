@@ -9,7 +9,15 @@ import {
   type TrajectoryExportResult,
   type TrajectoryFilter,
 } from '@conch/protocol';
-import { Dialog, Field, RunSave, Select, Switch, type RunSaveRemoved } from '@conch/nacre';
+import {
+  Dialog,
+  Field,
+  RunSave,
+  Select,
+  Switch,
+  type RunSaveRemoved,
+  META_SEP,
+} from '@conch/nacre';
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -134,7 +142,7 @@ function SaveFlow({ conversationId }: { conversationId?: string }) {
   const stale = preview.isPlaceholderData || JSON.stringify(settled) !== JSON.stringify(body);
   const counts =
     preview.data && !preview.isError
-      ? `${preview.data.chats === 1 ? '1 chat' : `${preview.data.chats} chats`} · ${preview.data.steps} steps${preview.data.capped ? ' (the newest)' : ''}`
+      ? `${preview.data.chats === 1 ? '1 chat' : `${preview.data.chats} chats`}${META_SEP}${preview.data.steps} steps${preview.data.capped ? ' (the newest)' : ''}`
       : undefined;
 
   return (

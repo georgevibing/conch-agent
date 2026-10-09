@@ -1,3 +1,4 @@
+import { META_SEP } from '@conch/nacre';
 import type { DiffLine } from '@conch/nacre';
 
 type Input = Record<string, unknown>;
@@ -40,7 +41,7 @@ export function toolSummary(name: string, raw: unknown): string | undefined {
     case 'TodoWrite': {
       const todos = Array.isArray(input.todos) ? (input.todos as Input[]) : [];
       const done = todos.filter((t) => t.status === 'completed').length;
-      return todos.length ? `Plan · ${done} of ${todos.length} done` : 'Plan';
+      return todos.length ? `Plan${META_SEP}${done} of ${todos.length} done` : 'Plan';
     }
     case 'TaskCreate':
     case 'TaskUpdate':
@@ -85,13 +86,13 @@ export function managedProcessSummary(name: string, output: unknown): string | u
   const reason = typeof result.reason === 'string' ? result.reason.slice(0, 240) : undefined;
   switch (result.status) {
     case 'queued':
-      return `Waiting to start · ${reason ?? command}`;
+      return `Waiting to start${META_SEP}${reason ?? command}`;
     case 'running':
-      return `Running when checked · ${command}`;
+      return `Running when checked${META_SEP}${command}`;
     case 'stopped':
-      return `Stopped · ${reason ?? command}`;
+      return `Stopped${META_SEP}${reason ?? command}`;
     case 'timed-out':
-      return `Time limit reached · ${command}`;
+      return `Time limit reached${META_SEP}${command}`;
     default:
       return;
   }

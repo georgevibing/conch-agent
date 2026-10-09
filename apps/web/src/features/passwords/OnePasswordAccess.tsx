@@ -11,6 +11,7 @@ import {
   Stack,
   Text,
   toast,
+  META_SEP,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowUpRight } from 'lucide-react';
@@ -35,7 +36,7 @@ export function onePasswordVia(source: VaultSource | undefined): string | undefi
   const shown = source.access.shown?.length ?? source.access.vaults?.length;
   return shown === undefined
     ? 'Service account'
-    : `Service account · ${shown} ${shown === 1 ? 'vault' : 'vaults'}`;
+    : `Service account${META_SEP}${shown} ${shown === 1 ? 'vault' : 'vaults'}`;
 }
 
 /**
@@ -106,7 +107,7 @@ export function OnePasswordAccess({
       if (!done) return;
       setReplacing(false);
       const n = done.vaults.length;
-      toast.success(`Connected · ${n} ${n === 1 ? 'vault' : 'vaults'}`);
+      toast.success(`Connected${META_SEP}${n} ${n === 1 ? 'vault' : 'vaults'}`);
     });
   };
 

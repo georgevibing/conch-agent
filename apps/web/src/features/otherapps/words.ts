@@ -1,3 +1,4 @@
+import { META_SEP } from '@conch/nacre';
 import type { McpChoice, McpClient, McpClientApp, McpScope } from '@conch/protocol';
 import type { McpScopeChoice } from '@conch/nacre';
 
@@ -45,7 +46,7 @@ export function pairedWords(client: McpClient, now = Date.now()): string {
     day: 'numeric',
   });
   const used = client.lastUsedAt ? `Used ${relativeTime(client.lastUsedAt, now)}` : 'Not used yet';
-  return `${used} · paired ${paired}`;
+  return `${used}${META_SEP}paired ${paired}`;
 }
 
 /** The pairing card's choices, in Nacre's shape. */

@@ -20,6 +20,7 @@ import {
   WeatherCard,
   replyRequest,
   type CardPicture,
+  META_SEP,
 } from '@conch/nacre';
 
 import { useUi } from '../../app/ui';
@@ -192,7 +193,7 @@ function QuotesFound({ view }: { view: Extract<ToolView, { kind: 'quotes' }> }) 
   const first = view.items[0];
   const { ref, share } = useCardShare({
     what: 'chart',
-    title: view.items.length === 1 && first ? `${first.symbol} · ${first.name}` : 'Prices',
+    title: view.items.length === 1 && first ? `${first.symbol}${META_SEP}${first.name}` : 'Prices',
   });
   // A coin's range switch names the coin by its CoinGecko id, so another coin with
   // the same symbol can't answer for it, and keeps the currency the card is in.

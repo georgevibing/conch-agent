@@ -16,6 +16,7 @@ import {
   Stack,
   Text,
   type FileDropState,
+  META_SEP,
 } from '@conch/nacre';
 import { useRef, useState } from 'react';
 import { googleApi } from './googleApi';
@@ -81,7 +82,7 @@ export function GoogleSetup({
       const parsed = parseGoogleCredentials(text, callbackUrl);
       setCredentials(text);
       setSummary(
-        `${parsed.clientType === 'desktop' ? 'Desktop app' : 'Web application'}${parsed.projectId ? ` · ${parsed.projectId}` : ''}. Ready to connect.`,
+        `${parsed.clientType === 'desktop' ? 'Desktop app' : 'Web application'}${parsed.projectId ? `${META_SEP}${parsed.projectId}` : ''}. Ready to connect.`,
       );
       if (parsed.projectId) setProjectId(parsed.projectId);
     } catch (e) {

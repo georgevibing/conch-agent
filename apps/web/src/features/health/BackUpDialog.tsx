@@ -1,5 +1,14 @@
 import { checkPassword } from '@conch/protocol';
-import { BackupOptions, Button, Callout, Dialog, formatBytes, Stack, toast } from '@conch/nacre';
+import {
+  BackupOptions,
+  Button,
+  Callout,
+  Dialog,
+  formatBytes,
+  Stack,
+  toast,
+  META_SEP,
+} from '@conch/nacre';
 import { Download } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 
@@ -55,7 +64,7 @@ export function BackUpDialog({
       if (!done || !made) return;
       downloadBackup(made.id);
       toast.success('Backup downloaded', {
-        description: `${made.name} · ${formatBytes(made.size)}. Keep it somewhere private.`,
+        description: `${made.name}${META_SEP}${formatBytes(made.size)}. Keep it somewhere private.`,
       });
       reset();
       onOpenChange(false);
@@ -69,7 +78,7 @@ export function BackUpDialog({
   const chatsDetail = chats
     ? chats.count === 0
       ? 'No chats yet.'
-      : `${new Intl.NumberFormat().format(chats.count)} ${chats.count === 1 ? 'chat' : 'chats'} and the files sent in them · ${formatBytes(chats.bytes)}`
+      : `${new Intl.NumberFormat().format(chats.count)} ${chats.count === 1 ? 'chat' : 'chats'} and the files sent in them${META_SEP}${formatBytes(chats.bytes)}`
     : undefined;
 
   return (

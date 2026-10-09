@@ -12,6 +12,7 @@ import {
   Text,
   useNacreTheme,
   type AppIconLook,
+  META_SEP,
 } from '@conch/nacre';
 import { AppWindow, PencilLine, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -297,8 +298,8 @@ export function AppPagePanel({ conversationId }: { conversationId: string }) {
           title={
             draftId
               ? offer?.action === 'update'
-                ? `${title} ${manifest.version} · not updated yet`
-                : `${title} · not added yet`
+                ? `${title} ${manifest.version}${META_SEP}not updated yet`
+                : `${title}${META_SEP}not added yet`
               : title
           }
         />

@@ -22,6 +22,7 @@ import {
   SkillIcon,
   toast,
   VaultKindGlyph,
+  META_SEP,
 } from '@conch/nacre';
 import {
   Box,
@@ -634,7 +635,7 @@ export function useFindables(query: string, conversationId: string | undefined):
         item.model.description,
       ]
         .filter(Boolean)
-        .join(' · '),
+        .join(META_SEP),
       hint: current ? 'In use' : conversationId ? 'Use in this chat' : 'Use',
       icon: <ProviderLogo provider={providerLogo(item.provider.engine)} size={16} />,
       run: () => {
@@ -659,7 +660,7 @@ export function useFindables(query: string, conversationId: string | undefined):
       label: item.title,
       ranges: match.ranges,
       description: item.description,
-      hint: usable ? `/${item.name}` : 'Off · open',
+      hint: usable ? `/${item.name}` : `Off${META_SEP}open`,
       icon: <SkillIcon name={item.name} title={item.title} size="sm" />,
       run: usable
         ? () => {
@@ -687,7 +688,7 @@ export function useFindables(query: string, conversationId: string | undefined):
     label: item.title,
     ranges: match.ranges,
     description: item.description,
-    hint: `Discover · ${item.sourceLabel}`,
+    hint: `Discover${META_SEP}${item.sourceLabel}`,
     icon: <SkillIcon name={item.name} title={item.title} size="sm" />,
     run: () => void navigate(listingPath(item.id)),
   }));
@@ -918,7 +919,7 @@ export function useFindables(query: string, conversationId: string | undefined):
     id: `artifact:${item.id}`,
     label: item.title,
     ranges: match.ranges,
-    description: `${ARTIFACT_KINDS[item.kind].label}${item.pinned ? ' · pinned' : ''}`,
+    description: `${ARTIFACT_KINDS[item.kind].label}${item.pinned ? `${META_SEP}pinned` : ''}`,
     icon: ARTIFACT_KINDS[item.kind].icon,
     run: () => {
       if (item.pinned || !item.conversationId) return void navigate(`/apps/${item.id}`);
@@ -938,7 +939,7 @@ export function useFindables(query: string, conversationId: string | undefined):
     id: `artifact-edit:${item.id}`,
     label: `Edit “${item.title}”`,
     ranges: match.ranges,
-    description: `${ARTIFACT_KINDS[item.kind].label} · by hand`,
+    description: `${ARTIFACT_KINDS[item.kind].label}${META_SEP}by hand`,
     icon: <Pencil />,
     run: () => {
       useUi.setState({ artifactEditRequest: item.id });

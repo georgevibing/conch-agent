@@ -1,5 +1,14 @@
 import type { Provider } from '@conch/protocol';
-import { AlertDialog, Button, Callout, Heading, ProviderCard, Skeleton, Stack } from '@conch/nacre';
+import {
+  AlertDialog,
+  Button,
+  Callout,
+  Heading,
+  ProviderCard,
+  Skeleton,
+  Stack,
+  META_SEP,
+} from '@conch/nacre';
 import { KeyRound, Trash2, Unplug } from 'lucide-react';
 import { useId, useState } from 'react';
 import { useLocation } from 'react-router';
@@ -30,7 +39,7 @@ function metaOf(provider: Provider): string {
   const parts = [status.auth?.description];
   if (provider.key?.source === '1password') parts.push('key in 1Password');
   if (status.version) parts.push(status.version);
-  return parts.filter(Boolean).join(' · ') || 'Connected';
+  return parts.filter(Boolean).join(META_SEP) || 'Connected';
 }
 
 /**

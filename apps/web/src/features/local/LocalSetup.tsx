@@ -9,6 +9,7 @@ import {
   Stack,
   Text,
   type SetupStepState,
+  META_SEP,
 } from '@conch/nacre';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowUpRight, Download, Pause, Play, X } from 'lucide-react';
@@ -43,7 +44,7 @@ export function useLocalStatus(busy: boolean) {
 function progressLabel(pull: LocalPull): string {
   if (pull.phase !== 'Downloading' || pull.totalBytes === undefined) return `${pull.phase}…`;
   const left = timeLeft(pull.secondsLeft);
-  return `${bytes(pull.completedBytes)} of ${bytes(pull.totalBytes)}${left ? ` · ${left}` : ''}`;
+  return `${bytes(pull.completedBytes)} of ${bytes(pull.totalBytes)}${left ? `${META_SEP}${left}` : ''}`;
 }
 
 function percentOf(pull: LocalPull): number | undefined {
@@ -59,7 +60,7 @@ function modelFacts(model: { sizeBytes: number; tools: boolean; vision?: boolean
     model.vision ? 'sees pictures' : undefined,
   ]
     .filter(Boolean)
-    .join(' · ');
+    .join(META_SEP);
 }
 
 function OfferLabel({ offer }: { offer: LocalOffer }) {

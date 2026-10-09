@@ -146,7 +146,7 @@ describe('the update dialog', () => {
     });
     renderApp(<App />);
     const dialog = await screen.findByRole('dialog', { name: 'You’re on the new Conch' });
-    expect(dialog).toHaveAccessibleDescription('2 improvements · Updated just now');
+    expect(dialog).toHaveAccessibleDescription(/^2 improvements\s· Updated just now$/);
     expect(within(dialog).getByText('What’s new')).toBeVisible();
     expect(sessionStorage.getItem(ARRIVED)).toBeNull();
     await userEvent.setup().click(within(dialog).getByRole('button', { name: 'Done' }));

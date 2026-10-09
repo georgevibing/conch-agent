@@ -9,6 +9,7 @@ import {
   toast,
   useFileDrop,
   VaultItemIcon,
+  META_SEP,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { FileUp } from 'lucide-react';
@@ -179,8 +180,8 @@ export function ImportDialog({
               <Text>
                 <strong>{preview.found}</strong> {preview.found === 1 ? 'item' : 'items'} from{' '}
                 <strong>{preview.formatName}</strong>
-                {preview.duplicates > 0 && <> · {preview.duplicates} already here</>}
-                {preview.skipped > 0 && <> · {preview.skipped} empty rows left out</>}
+                {preview.duplicates > 0 && `${META_SEP}${preview.duplicates} already here`}
+                {preview.skipped > 0 && `${META_SEP}${preview.skipped} empty rows left out`}
               </Text>
               <div className={styles.card}>
                 {preview.sample.map((s, i) => (
@@ -192,8 +193,7 @@ export function ImportDialog({
                       </Text>
                       {s.subtitle && (
                         <Text as="span" size="sm" tone="subtle">
-                          {' '}
-                          · {s.subtitle}
+                          {`${META_SEP}${s.subtitle}`}
                         </Text>
                       )}
                     </span>

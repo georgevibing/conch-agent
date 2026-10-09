@@ -18,6 +18,7 @@ import {
   Stack,
   useNacreTheme,
   type SearchPreviewMessage,
+  META_SEP,
 } from '@conch/nacre';
 import {
   Archive,
@@ -151,7 +152,7 @@ function Preview({ selection, query }: { selection: Selection; query: string }) 
       title={loading ? '…' : data.title}
       meta={
         !loading &&
-        `${dateFormat.format(data.updatedAt)} · ${data.messageCount} ${
+        `${dateFormat.format(data.updatedAt)}${META_SEP}${data.messageCount} ${
           data.messageCount === 1 ? 'message' : 'messages'
         }`
       }
@@ -519,7 +520,9 @@ export function Palette() {
               value={value.chat(c.id)}
               icon={c.archivedAt ? <Archive /> : <MessageSquare />}
               hint={
-                c.archivedAt ? `Archived · ${relativeTime(c.updatedAt)}` : relativeTime(c.updatedAt)
+                c.archivedAt
+                  ? `Archived${META_SEP}${relativeTime(c.updatedAt)}`
+                  : relativeTime(c.updatedAt)
               }
               onSelect={openChat(c.id)}
             >
@@ -558,7 +561,7 @@ export function Palette() {
                   icon={roleIcon(hit.role)}
                   hint={
                     group.matches > 1
-                      ? `${group.matches} matches · ${relativeTime(hit.at)}`
+                      ? `${group.matches} matches${META_SEP}${relativeTime(hit.at)}`
                       : relativeTime(hit.at)
                   }
                   description={<Highlight text={hit.snippet} ranges={hit.ranges} />}

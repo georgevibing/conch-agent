@@ -8,6 +8,7 @@ import {
   Stack,
   Text,
   toast,
+  META_SEP,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -102,11 +103,11 @@ export function ProviderServers() {
                             {server.plugin
                               ? `Plugin: ${server.plugin}`
                               : sourceLabel(server.source, provider)}
-                            {` · only with ${provider.engine}`}
+                            {`${META_SEP}only with ${provider.engine}`}
                             {server.state === 'ok' && server.toolCount
-                              ? ` · ${server.toolCount} tools`
+                              ? `${META_SEP}${server.toolCount} tools`
                               : ''}
-                            {server.message ? ` · ${server.message}` : ''}
+                            {server.message ? `${META_SEP}${server.message}` : ''}
                           </Text>
                         </span>
                         {server.adoptable && (

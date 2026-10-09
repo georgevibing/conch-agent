@@ -1,5 +1,5 @@
 import type { Channel, VaultSource } from '@conch/protocol';
-import { AppAbilities, type AppAbility, Heading, Stack, Text, toast } from '@conch/nacre';
+import { AppAbilities, type AppAbility, Heading, Stack, Text, toast, META_SEP } from '@conch/nacre';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   FilePen,
@@ -260,7 +260,7 @@ export function AppAbilitiesSection({
                     `${from.count} ${from.count === 1 ? 'item' : 'items'}, read where they are.`,
                 ]
                   .filter(Boolean)
-                  .join(' · ')
+                  .join(META_SEP)
               : (from.message ??
                 (from.state === 'locked'
                   ? `Locked. Unlock ${from.name} to use it.`

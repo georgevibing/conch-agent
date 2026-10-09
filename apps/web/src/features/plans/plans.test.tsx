@@ -181,7 +181,7 @@ describe('older chats’ plan rows', () => {
           { content: 'B', status: 'in_progress' },
         ],
       }),
-    ).toBe('Plan · 1 of 2 done');
+    ).toBe('Plan\u00a0· 1 of 2 done');
     expect(toolSummary('TaskCreate', { subject: 'Sort it' })).toBe('Sort it');
   });
 });

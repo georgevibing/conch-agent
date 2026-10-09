@@ -11,6 +11,7 @@ import {
   Text,
   toast,
   VoiceLibrary,
+  META_SEP,
 } from '@conch/nacre';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Volume2 } from 'lucide-react';
@@ -176,7 +177,9 @@ export function VoiceTab() {
                   <Select.Group label="On this computer">
                     {ready.map((v) => (
                       <Select.Item key={v.id} value={v.id}>
-                        {v.name} · {v.language}
+                        {v.name}
+                        {META_SEP}
+                        {v.language}
                       </Select.Item>
                     ))}
                   </Select.Group>

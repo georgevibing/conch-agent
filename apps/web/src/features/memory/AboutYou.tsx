@@ -17,6 +17,7 @@ import {
   toast,
   type PortraitFact,
   type PortraitGroup,
+  META_SEP,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { Briefcase, Heart, House, MessageSquareText, Users, Wand2 } from 'lucide-react';
@@ -94,7 +95,7 @@ export function summarise(facts: readonly ProfileFact[]): string {
     people.length > 2
       ? `${people.slice(0, 2).join(', ')} +${people.length - 2}`
       : people.join(', ');
-  return [first('work'), first('home'), close].filter(Boolean).join(' · ');
+  return [first('work'), first('home'), close].filter(Boolean).join(META_SEP);
 }
 
 /** “3 May”, or “3 May 2024” from another year. */

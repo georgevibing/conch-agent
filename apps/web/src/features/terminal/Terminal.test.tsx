@@ -46,8 +46,8 @@ const status = (over: Partial<TerminalStatus> = {}, enabled = true): TerminalSta
 describe('terminal tabs', () => {
   it('names a tab after what the shell says, unless that is only its program', () => {
     expect(tabTitle(info({ title: 'npm run dev' }))).toBe('npm run dev');
-    expect(tabTitle(info())).toBe('zsh · conch');
-    expect(tabTitle(info({ title: 'zsh' }))).toBe('zsh · conch');
+    expect(tabTitle(info())).toBe('zsh\u00a0· conch');
+    expect(tabTitle(info({ title: 'zsh' }))).toBe('zsh\u00a0· conch');
     expect(
       tabTitle(
         info({
@@ -56,7 +56,7 @@ describe('terminal tabs', () => {
           cwd: 'C:\\Users\\sam\\work',
         }),
       ),
-    ).toBe('PowerShell · work');
+    ).toBe('PowerShell\u00a0· work');
   });
 });
 

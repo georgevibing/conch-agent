@@ -1,5 +1,5 @@
 import { CHAT_SOURCE_LABELS } from '@conch/protocol';
-import { Button, PastChatReader, Sheet, Spinner, Text, toast } from '@conch/nacre';
+import { Button, PastChatReader, Sheet, Spinner, Text, toast, META_SEP } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowRight } from 'lucide-react';
 import { useState } from 'react';
@@ -80,7 +80,7 @@ function PastChatBody({ id, onLeave }: { id: string; onLeave: () => void }) {
         chat.model,
       ]
         .filter(Boolean)
-        .join(' · ')}
+        .join(META_SEP)}
       earlier={
         hidden > 0 && (
           <Button size="sm" variant="ghost" onClick={() => setAll(true)}>

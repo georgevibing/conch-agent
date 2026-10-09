@@ -20,6 +20,7 @@ import {
   Text,
   toast,
   useFileDrop,
+  META_SEP,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { Globe, Plus, Search, ShieldCheck } from 'lucide-react';
@@ -377,7 +378,7 @@ export function AppsView() {
                         conch && !madeHere(conch.source)
                           ? [appSourceLine(conch.source, conch.signature), card.meta]
                               .filter(Boolean)
-                              .join(' · ')
+                              .join(META_SEP)
                           : card.meta
                       }
                       enabled={card.enabled}

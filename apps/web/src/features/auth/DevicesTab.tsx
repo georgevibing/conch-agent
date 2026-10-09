@@ -24,6 +24,7 @@ import {
   Switch,
   Text,
   toast,
+  META_SEP,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { Globe, QrCode, Terminal, Wifi } from 'lucide-react';
@@ -205,8 +206,8 @@ function deviceMeta(d: DeviceInfo, approval: boolean): string {
     d.current
       ? 'Signed in now'
       : d.signedIn
-        ? `${d.script ? 'Used' : 'Signed in'} · active ${relativeTime(d.lastSeenAt)}`
-        : `Signed out · last seen ${relativeTime(d.lastSeenAt)}`,
+        ? `${d.script ? 'Used' : 'Signed in'}${META_SEP}active ${relativeTime(d.lastSeenAt)}`
+        : `Signed out${META_SEP}last seen ${relativeTime(d.lastSeenAt)}`,
     !d.current && d.via && !approval && via[d.via].replace('Signed in with', 'with'),
     approval &&
       d.approvedHow &&
@@ -215,7 +216,7 @@ function deviceMeta(d: DeviceInfo, approval: boolean): string {
         : approvedHow[d.approvedHow]),
     !d.current && d.address && `from ${d.address}`,
   ];
-  return parts.filter(Boolean).join(' · ');
+  return parts.filter(Boolean).join(META_SEP);
 }
 
 function requestMeta(r: DeviceRequest): string {
@@ -226,7 +227,7 @@ function requestMeta(r: DeviceRequest): string {
       : 'with your password';
   return [r.address && `From ${r.address}`, what, relativeTime(r.createdAt)]
     .filter(Boolean)
-    .join(' · ');
+    .join(META_SEP);
 }
 
 /**
@@ -388,7 +389,7 @@ function DevicesSection({
               signedIn: d.signedIn,
               stale: approval && isStaleDevice(d),
               notified: Boolean(told),
-              meta: [deviceMeta(d, approval), told?.problem].filter(Boolean).join(' · '),
+              meta: [deviceMeta(d, approval), told?.problem].filter(Boolean).join(META_SEP),
             };
           })}
           onStopNotifications={(device) => {

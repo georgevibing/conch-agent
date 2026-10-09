@@ -22,6 +22,7 @@ import {
   Switch,
   Text,
   toast,
+  META_SEP,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -242,7 +243,9 @@ function Detail({
           <Stack direction="row" gap={2} align="center" wrap>
             <IntegrationStatusBadge state={enabled ? health.state : 'off'} />
             <Text as="span" size="sm" tone="subtle">
-              {words.from} · {manifest.version}
+              {words.from}
+              {META_SEP}
+              {manifest.version}
             </Text>
           </Stack>
         </Stack>

@@ -790,7 +790,7 @@ describe('Palette search', () => {
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'visitors');
     await user.click(
-      await screen.findByRole('option', { name: /Visitors this week.*Chart · pinned/ }),
+      await screen.findByRole('option', { name: /Visitors this week.*Chart\s· pinned/ }),
     );
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/apps/a_1'));
 
@@ -979,7 +979,7 @@ describe('Palette search', () => {
     );
     act(() => useUi.getState().setPalette(true));
     await user.type(await screen.findByRole('combobox'), 'edit budget');
-    await user.click(await screen.findByRole('option', { name: /Edit “Budget”.*Table · by hand/ }));
+    await user.click(await screen.findByRole('option', { name: /Edit “Budget”.*Table\s· by hand/ }));
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/c/c9'));
     expect(useUi.getState()).toMatchObject({
       artifactOpen: { conversationId: 'c9', artifactId: 'a_3' },

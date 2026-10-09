@@ -1,5 +1,5 @@
 import { taskWorth, type Task } from '@conch/protocol';
-import { Button, elapsed, Sheet, TaskStatusMark, useMediaQuery } from '@conch/nacre';
+import { Button, elapsed, Sheet, TaskStatusMark, useMediaQuery, META_SEP } from '@conch/nacre';
 import { Maximize2, Square } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { useNavigate } from 'react-router';
@@ -138,8 +138,8 @@ function SheetBody({
         <Sheet.Title className={styles.title}>{task.title}</Sheet.Title>
         <p className={styles.meta} data-status={task.status} aria-live="polite">
           <span className={styles.word}>{taskStatusWords(task)}</span>
-          {took && task.status !== 'queued' && <span> · {took}</span>}
-          {task.by && <span> · by {task.by}</span>}
+          {took && task.status !== 'queued' && <span>{`${META_SEP}${took}`}</span>}
+          {task.by && <span>{`${META_SEP}by ${task.by}`}</span>}
         </p>
       </Sheet.Header>
 

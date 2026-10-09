@@ -31,6 +31,7 @@ import {
   vaultSourceName,
   VirtualList,
   type VirtualListHandle,
+  META_SEP,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -1326,7 +1327,7 @@ function SelectionActions({
                     onDone(false);
                   }}
                 >
-                  {p && t.places.length > 1 ? `${t.name} · ${p.name}` : t.name}
+                  {p && t.places.length > 1 ? `${t.name}${META_SEP}${p.name}` : t.name}
                 </DropdownMenu.Item>
               )),
             )}

@@ -21,6 +21,7 @@ import {
   looksLikeKey,
   toast,
   type HandshakePhase,
+  META_SEP,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, Trash2 } from 'lucide-react';
@@ -609,8 +610,8 @@ function Connected({ provider }: { provider: Provider }) {
             <dt>Key</dt>
             <dd>
               {provider.key.source === '1password'
-                ? `1Password · ${provider.key.hint}`
-                : `On this computer · ${provider.key.hint}`}
+                ? `1Password${META_SEP}${provider.key.hint}`
+                : `On this computer${META_SEP}${provider.key.hint}`}
             </dd>
           </>
         )}

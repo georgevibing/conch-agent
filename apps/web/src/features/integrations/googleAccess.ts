@@ -14,7 +14,7 @@ import {
   type GoogleLevel,
   type GoogleProduct,
 } from '@conch/protocol';
-import type { AccessService } from '@conch/nacre';
+import { META_SEP, type AccessService } from '@conch/nacre';
 
 export interface ProductInfo {
   id: GoogleProduct;
@@ -80,11 +80,11 @@ export const needsConsent = (account: GoogleAccount, product: GoogleProduct, lev
  */
 export function methodLine(account: GoogleAccount): string {
   if (account.via === 'app-password')
-    return 'App password · Gmail: read and send. Calendar and Drive need Google sign-in.';
+    return `App password${META_SEP}Gmail: read and send. Calendar and Drive need Google sign-in.`;
   const gmail = grantedOf(account, 'gmail');
   return gmail === 'read'
-    ? 'Google sign-in · Gmail read only: this sign-in can’t send yet. Calendar and Drive too.'
-    : 'Google sign-in · Gmail, Calendar and Drive.';
+    ? `Google sign-in${META_SEP}Gmail read only: this sign-in can’t send yet. Calendar and Drive too.`
+    : `Google sign-in${META_SEP}Gmail, Calendar and Drive.`;
 }
 
 /** An app password reaches Gmail and nothing else. */

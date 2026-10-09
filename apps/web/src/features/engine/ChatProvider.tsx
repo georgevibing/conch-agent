@@ -8,6 +8,7 @@ import {
   Stack,
   Text,
   UsagePanel,
+  META_SEP,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { RotateCw, Settings2 } from 'lucide-react';
@@ -40,7 +41,7 @@ function attentionOf(provider: Provider): string | undefined {
 function accountLine(provider: Provider): string {
   const { auth, state, message } = provider.status;
   if (state !== 'ready') return message ?? 'Not ready yet.';
-  return [auth?.description ?? 'Connected', auth?.email].filter(Boolean).join(' · ');
+  return [auth?.description ?? 'Connected', auth?.email].filter(Boolean).join(META_SEP);
 }
 
 /**

@@ -1,3 +1,4 @@
+import { META_SEP } from '@conch/nacre';
 import { conchBuildLabel } from '@conch/protocol';
 import type { ConchUpdate, ReleaseNotes as Notes, UpdatesStatus } from '@conch/protocol';
 import type {
@@ -167,7 +168,7 @@ export function updateView(
         detail: [
           releases || !count ? `Conch ${installedLabel(conch)}` : plural(count, 'improvement'),
           `Updated ${relativeTime(outcome.at, now)}`,
-        ].join(' · '),
+        ].join(META_SEP),
         changes: outcome.whatsNew,
         releases: outcome.releases,
         offers: ['done'],

@@ -29,6 +29,7 @@ import {
   Text,
   toast,
   type AccessLevel,
+  META_SEP,
 } from '@conch/nacre';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, RotateCw, Trash2, UserRound } from 'lucide-react';
@@ -344,7 +345,7 @@ export function AddGoogleAccount({
   const method = gmailOnly ? (picked ?? recommended) : 'google';
   const summary = products
     .map((p) => `${productInfo(p).name}: ${describeLevel(chosen[p] ?? 'off')}`)
-    .join(' · ');
+    .join(META_SEP);
 
   return (
     <Stack gap={4}>

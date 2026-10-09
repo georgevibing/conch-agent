@@ -17,7 +17,7 @@ import {
   type IntegrationTool,
   type VaultSource,
 } from '@conch/protocol';
-import { vaultSourceColor, type IntegrationStateValue } from '@conch/nacre';
+import { vaultSourceColor, type IntegrationStateValue, META_SEP } from '@conch/nacre';
 
 import {
   APPS as CHANNEL_APPS,
@@ -260,7 +260,7 @@ export function describeApp(item: AppItem, now = Date.now()): AppCard {
   if (talking) facts.push(integration || source ? 'talks to you here' : whoOf(talking));
   if (filling)
     facts.push(source?.state === 'locked' ? 'fills sign-ins once unlocked' : 'fills sign-ins');
-  const meta = facts.join(' · ') || undefined;
+  const meta = facts.join(META_SEP) || undefined;
 
   if (!enabled) return { state: 'off', enabled, ...(meta && { meta }) };
   if (integration && needsAttention(integration)) {

@@ -21,6 +21,7 @@ import {
   Text,
   toast,
   WatchStatus,
+  META_SEP,
 } from '@conch/nacre';
 import { Copy, MessageSquare, MoreHorizontal, Pencil, Play, Trash2 } from 'lucide-react';
 import { useState } from 'react';
@@ -61,7 +62,7 @@ function RoutineAgent({ routine }: { routine: Routine }) {
   if (!choosable || !agent) return null;
   return (
     <>
-      {' · '}
+      {META_SEP}
       <span className={styles.agentLine}>
         <AgentAvatar name={agent.name} avatar={agent.avatar} size="xs" decorative />
         <span className="nc-visually-hidden">{ANSWERED_BY} </span>
@@ -220,8 +221,10 @@ export function RoutineDetailView({ routineId }: { routineId: string }) {
           </Heading>
           {routine.summary && <Text tone="muted">{routine.summary}</Text>}
           <Text size="sm" tone="subtle">
-            {routine.scheduleText} · {statusLine(routine, now)}
-            {spend?.text && ` · ${spend.text}`}
+            {routine.scheduleText}
+            {META_SEP}
+            {statusLine(routine, now)}
+            {spend?.text && `${META_SEP}${spend.text}`}
             <RoutineAgent routine={routine} />
           </Text>
         </Stack>

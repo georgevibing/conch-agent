@@ -13,6 +13,7 @@ import {
   Text,
   toast,
   type BackupOverviewState,
+  META_SEP,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { Download, Upload } from 'lucide-react';
@@ -58,7 +59,7 @@ function overview(status: BackupStatus): {
   const total = automatic.reduce((sum, b) => sum + b.size, 0);
   return {
     state: 'ok',
-    detail: `Last backup ${formatWhenInline(status.lastAutomaticAt)} · ${automatic.length} kept · ${formatBytes(total)}`,
+    detail: `Last backup ${formatWhenInline(status.lastAutomaticAt)}${META_SEP}${automatic.length} kept${META_SEP}${formatBytes(total)}`,
   };
 }
 

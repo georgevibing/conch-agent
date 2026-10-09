@@ -202,7 +202,7 @@ describe('A model on this computer', () => {
     );
     expect(
       await within(page).findByRole('progressbar', {
-        name: '1.0 GB of 2.5 GB · about 2 minutes left',
+        name: '1.0 GB of 2.5 GB\u00a0· about 2 minutes left',
       }),
     ).toBeInTheDocument();
 

@@ -12,6 +12,7 @@ import {
   Text,
   toast,
   VaultSourceRow,
+  META_SEP,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
@@ -327,7 +328,7 @@ export function SourcesDialog({
                           title: d.name,
                           detail: [d.where, d.recent ? 'opened lately in KeePassXC' : undefined]
                             .filter(Boolean)
-                            .join(' · '),
+                            .join(META_SEP),
                         }))}
                         onChoose={() =>
                           chooseOnComputer({

@@ -1,6 +1,13 @@
 import type { PermissionMode, TurnOptions } from '@conch/protocol';
 import type { CommandItem, CommandMenuHeading } from '@conch/nacre';
-import { AgentAvatar, SkillIcon, toast, useCommandMenu, useNacreTheme } from '@conch/nacre';
+import {
+  AgentAvatar,
+  SkillIcon,
+  toast,
+  useCommandMenu,
+  useNacreTheme,
+  META_SEP,
+} from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
@@ -264,7 +271,7 @@ export function useSlashCommands(options: {
     const fill = view?.context;
     if (fill?.window) parts.push(`${Math.round((fill.used / fill.window) * 100)}% of its context`);
     if (goal) parts.push(`Goal: ${goal}`);
-    toast(`${providerLabel} · ${modelName}`, { description: parts.join(' · ') });
+    toast(`${providerLabel}${META_SEP}${modelName}`, { description: parts.join(META_SEP) });
   };
 
   const copy = async () => {

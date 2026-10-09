@@ -1,3 +1,4 @@
+import { META_SEP } from '@conch/nacre';
 import {
   awaitsSignIn,
   type CatalogEntry,
@@ -16,7 +17,7 @@ export function quietMeta(integration: Integration, now = Date.now()): string {
   const used = integration.lastUsedAt
     ? `used ${relativeTime(integration.lastUsedAt, now)}`
     : 'not used yet';
-  return `${tools} · ${used}`;
+  return `${tools}${META_SEP}${used}`;
 }
 
 /** The button that fixes a problem, in plain words. */

@@ -16,6 +16,7 @@ import {
   Skeleton,
   Stack,
   toast,
+  META_SEP,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { Brain, MoreHorizontal, Search } from 'lucide-react';
@@ -57,7 +58,7 @@ function useStatus(learning: boolean): string {
   const today = at.toDateString() === new Date().toDateString();
   const night = at.getHours() < 6;
   const when = today ? (night ? 'last night' : 'today') : relativeTime(tidy.lastAt);
-  return `${head} · tidied ${when}`;
+  return `${head}${META_SEP}tidied ${when}`;
 }
 
 /** Search by meaning, offered in one line until it's there (ADR 0041). */

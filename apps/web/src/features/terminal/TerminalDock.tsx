@@ -15,6 +15,7 @@ import {
   withCtrl,
   type TerminalTab,
   type TerminalViewHandle,
+  META_SEP,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, Search, ShieldOff, Sparkles, SquareTerminal } from 'lucide-react';
@@ -44,7 +45,7 @@ export function tabTitle(info: TerminalInfo): string {
     /\.(exe|com)$/i.test(title) ||
     /^[A-Z]:\\|^\//.test(title)
   ) {
-    return folder ? `${info.shell} · ${folder}` : info.shell;
+    return folder ? `${info.shell}${META_SEP}${folder}` : info.shell;
   }
   return title;
 }

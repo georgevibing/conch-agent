@@ -21,6 +21,7 @@ import {
   StrengthMeter,
   Text,
   toast,
+  META_SEP,
 } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -474,7 +475,7 @@ function passkeyMeta(p: AccessSettings['passkeys'][number]): string {
     p.synced && 'synced to your other devices',
   ]
     .filter(Boolean)
-    .join(' · ');
+    .join(META_SEP);
 }
 
 export function PasskeysSection({
