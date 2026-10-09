@@ -1,0 +1,21 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/v17.6.0/schemas/config.json",
+  "release-type": "node",
+  "include-component-in-tag": false,
+  "include-v-in-tag": true,
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": false,
+  "versioning": "prerelease",
+  "prerelease": true,
+  "prerelease-type": "alpha.1",
+  "initial-version": "0.1.0-alpha.1",
+  "draft": true,
+  "pull-request-title-pattern": "chore${scope}: release Conch ${version}",
+  "pull-request-header": "Merging this pull request releases Conch. CI wrote the notes below from the commits since the last release; they're what people read in the app, on GitHub and on the website.",
+  "pull-request-footer": "Kept up to date by [release-please](https://github.com/googleapis/release-please) and `pnpm release ci notes` ([docs/RELEASING.md](https://github.com/georgevibing/conch-agent/blob/main/docs/RELEASING.md)).",
+  "packages": {
+    ".": {
+      "package-name": "conch"
+    }
+  }
+}

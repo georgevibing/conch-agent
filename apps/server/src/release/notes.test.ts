@@ -15,11 +15,9 @@ import {
   tagMessage,
 } from './notes';
 import {
-  bumpFor,
   channelOf,
   inChannel,
-  nextStable,
-  nextVersion,
+  isBreaking,
   offered,
   parseRelease,
   releaseOfTag,
@@ -98,47 +96,11 @@ describe('release numbers', () => {
     expect(pick('stable', '0.11.0-beta.2')).toEqual([]);
   });
 
-  it('works out the next version from conventional commits', () => {
-    expect(bumpFor([c('fix: a'), c('chore: b')])).toBe('patch');
-    expect(bumpFor([c('fix: a'), c('feat(web): b')])).toBe('minor');
-    expect(bumpFor([c('feat!: a')])).toBe('major');
-    expect(bumpFor([c('fix: a', 'BREAKING CHANGE: sign in again')])).toBe('major');
-    expect(nextStable('0.2.0', 'major')).toBe('0.3.0');
-    expect(nextStable('1.2.3', 'major')).toBe('2.0.0');
-    expect(nextStable('1.2.3', 'minor')).toBe('1.3.0');
-    expect(nextStable('1.2.3', 'patch')).toBe('1.2.4');
-    const feat = [c('feat(web): edit by hand')];
-    expect(nextVersion({ lastStable: '0.2.0', commits: feat, kind: 'stable', existing: [] })).toBe(
-      '0.3.0',
-    );
-    expect(nextVersion({ lastStable: '0.2.0', commits: feat, kind: 'beta', existing: [] })).toBe(
-      '0.3.0-beta.1',
-    );
-    expect(
-      nextVersion({
-        lastStable: '0.2.0',
-        commits: feat,
-        kind: 'beta',
-        existing: ['0.3.0-beta.1', '0.3.0-alpha.4'],
-      }),
-    ).toBe('0.3.0-beta.2');
-    expect(
-      nextVersion({
-        lastStable: '0.2.0',
-        commits: feat,
-        kind: 'alpha',
-        existing: ['0.3.0-beta.1', '0.3.0-alpha.4'],
-      }),
-    ).toBe('0.3.0-alpha.5');
-    // Promoting the beta: the same version, stable.
-    expect(
-      nextVersion({
-        lastStable: '0.2.0',
-        commits: feat,
-        kind: 'stable',
-        existing: ['0.3.0-beta.2'],
-      }),
-    ).toBe('0.3.0');
+  it('knows a breaking change by its ! or its footer', () => {
+    expect(isBreaking(c('fix: a'))).toBe(false);
+    expect(isBreaking(c('feat!: a'))).toBe(true);
+    expect(isBreaking(c('feat(web)!: a'))).toBe(true);
+    expect(isBreaking(c('fix: a', 'BREAKING CHANGE: sign in again'))).toBe(true);
   });
 });
 
@@ -311,32 +273,4 @@ describe('writing the notes down, and reading them back', () => {
     expect(read.new).toHaveLength(2);
     expect(parseNotes(`New\n${'- a\n'.repeat(40)}`).new).toHaveLength(12);
   });
-});
-
-it('starts at the written base version and promotes its alpha and beta without a phantom release', () => {
-  const commits = [{ sha: 'abc1234', subject: 'feat(web): first feature', body: '' }];
-  expect(
-    nextVersion({ lastStable: '0.1.0', first: true, commits, kind: 'stable', existing: [] }),
-  ).toBe('0.1.0');
-  expect(
-    nextVersion({ lastStable: '0.1.0', first: true, commits, kind: 'alpha', existing: [] }),
-  ).toBe('0.1.0-alpha.1');
-  expect(
-    nextVersion({
-      lastStable: '0.1.0-beta.1',
-      first: true,
-      commits,
-      kind: 'beta',
-      existing: ['0.1.0-beta.1'],
-    }),
-  ).toBe('0.1.0-beta.2');
-  expect(
-    nextVersion({
-      lastStable: '0.1.0-beta.2',
-      first: true,
-      commits,
-      kind: 'stable',
-      existing: ['0.1.0-beta.2'],
-    }),
-  ).toBe('0.1.0');
 });

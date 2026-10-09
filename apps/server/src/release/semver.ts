@@ -4,9 +4,8 @@
  * release, however it's spelt: a tag is read strictly, because what it says
  * decides what installs.
  *
- * The next number comes from the conventional commits since the last stable
- * release: a breaking change is a new major version (a new minor before
- * 1.0), a `feat` a new minor, anything else a patch.
+ * Which number comes next is release-please's to work out, from the
+ * conventional commits (ADR 0127); Conch reads the numbers it makes.
  */
 import type { ReleaseChannel } from '@conch/protocol';
 
@@ -87,7 +86,7 @@ export function offered<T extends { release: Release }>(
     .sort((a, b) => compareVersions(b.release.version, a.release.version));
 }
 
-// ── The next number ───────────────────────────────────────────────────────
+// ── Commits ───────────────────────────────────────────────────────────────
 
 export interface Commit {
   sha: string;
@@ -95,68 +94,9 @@ export interface Commit {
   body: string;
 }
 
-export type Bump = 'major' | 'minor' | 'patch';
-
 const TYPE = /^([a-z]+)(?:\([^)]*\))?(!)?:/i;
 
 /** A commit that breaks something: `feat!:`, or a `BREAKING CHANGE:` footer. */
 export function isBreaking(commit: Commit): boolean {
   return Boolean(TYPE.exec(commit.subject)?.[2]) || /^BREAKING[ -]CHANGE:/m.test(commit.body);
-}
-
-/** How big a step these commits are. */
-export function bumpFor(commits: Commit[]): Bump {
-  if (commits.some(isBreaking)) return 'major';
-  if (commits.some((c) => TYPE.exec(c.subject)?.[1]?.toLowerCase() === 'feat')) return 'minor';
-  return 'patch';
-}
-
-/** The stable version after `last`: before 1.0, a breaking change is a new minor. */
-export function nextStable(last: string, bump: Bump): string {
-  const r = parseRelease(last) ?? parseRelease('0.0.0');
-  if (!r) throw new Error(`Not a version: ${last}`);
-  // A pre-release of the next version came first: that version is still next.
-  if (r.pre) return `${r.major}.${r.minor}.${r.patch}`;
-  if (bump === 'major' && r.major > 0) return `${r.major + 1}.0.0`;
-  if (bump === 'major' || bump === 'minor') return `${r.major}.${r.minor + 1}.0`;
-  return `${r.major}.${r.minor}.${r.patch + 1}`;
-}
-
-/**
- * The version to release now.
- *
- * - `stable`: the next stable version from the commits since the last stable
- *   release (which a beta of it doesn't change: promoting `0.4.0-beta.3` is
- *   just `0.4.0`).
- * - `beta`, `alpha`: that same version, with the next number of its kind
- *   (`0.4.0-beta.1`, then `-beta.2`).
- */
-export function nextVersion({
-  lastStable,
-  commits,
-  kind,
-  existing,
-  first = false,
-}: {
-  /** The newest stable release, or the version written down before the first. */
-  lastStable: string;
-  /** Before the first stable release, the written version is the target, not a released baseline. */
-  first?: boolean;
-  commits: Commit[];
-  kind: ReleaseChannel;
-  /** Every release tagged so far, as versions. */
-  existing: string[];
-}): string {
-  const base = first
-    ? lastStable.replace(/-(?:alpha|beta)\.\d+$/, '')
-    : nextStable(lastStable, bumpFor(commits));
-  if (kind === 'stable') return base;
-  const taken = existing
-    .map(parseRelease)
-    .filter(
-      (r): r is Release =>
-        Boolean(r?.pre) && r?.pre?.kind === kind && `${r.major}.${r.minor}.${r.patch}` === base,
-    )
-    .map((r) => r.pre?.n ?? 0);
-  return `${base}-${kind}.${Math.max(0, ...taken) + 1}`;
 }

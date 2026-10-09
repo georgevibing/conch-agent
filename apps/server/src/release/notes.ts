@@ -334,12 +334,17 @@ export function releaseBody(notes: Notes): string {
     .join('\n\n')}\n`;
 }
 
-/** A version's part of CHANGELOG.md. */
-export function changelogSection(version: string, date: string, notes: Notes): string {
-  const body = SECTIONS.filter(([key]) => notes[key].length)
-    .map(([key, title]) => `### ${title}\n\n${bullets(notes[key])}`)
-    .join('\n\n');
-  return `## ${version} — ${date}\n\n${body}\n`;
+/**
+ * A version's part of CHANGELOG.md, headed the way release-please heads its
+ * own (`## [0.3.0](compare link) (2026-10-02)`), so its pull request reads it.
+ */
+export function changelogSection(
+  version: string,
+  date: string,
+  notes: Notes,
+  link?: string,
+): string {
+  return `## ${link ? `[${version}](${link})` : version} (${date})\n\n${releaseBody(notes)}`;
 }
 
 const CHANGELOG_HEAD = `# What’s new in Conch
@@ -390,7 +395,10 @@ export function parseNotes(text: string): Notes {
 /** The part of CHANGELOG.md about `version`. */
 export function changelogFor(changelog: string, version: string): string | undefined {
   const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const start = new RegExp(`^## ${escaped}(?:\\s|$)`, 'm').exec(changelog);
+  // `## 0.3.0 — date`, `## 0.3.0 (date)` or `## [0.3.0](link) (date)`.
+  const start = new RegExp(`^## (?:\\[${escaped}\\]\\([^)\\s]*\\)|${escaped})(?:\\s|$)`, 'm').exec(
+    changelog,
+  );
   if (!start) return undefined;
   const rest = changelog.slice(start.index + start[0].length);
   const end = rest.search(/^## /m);
