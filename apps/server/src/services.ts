@@ -2085,6 +2085,9 @@ export class Services {
       apps: () => this.conchApps.updateNotices(),
       heal: (message) => void this.healed.note('updates', message),
       busy: () => this.conversations.busy(),
+      working: () => this.conversations.working(),
+      pause: () => this.pauseWork('update'),
+      unpause: () => this.unpauseWork(),
       landed: (id) => this.#recheckWaiting(id),
       restartable,
       restart,
@@ -2880,6 +2883,36 @@ export class Services {
   }
 
   /** Read the remembered provider before the first request arrives. */
+  /**
+   * Conch is about to restart on purpose (its own update, a restart someone
+   * asked for): every turn that's working stops at a safe point, and each
+   * chat, task and routine run says so, so the next start carries it on.
+   * Bounded: steps already running get a few seconds to finish. Resolves with
+   * how many chats were paused.
+   */
+  pauseWork(reason: 'update' | 'restart'): Promise<number> {
+    // Once: an update pauses first, and the restart it asks for finds it done.
+    this.#pausing ??= (async () => {
+      const paused = await this.conversations.pause(reason);
+      await Promise.all([
+        this.tasks.markPaused(reason).catch(() => 0),
+        this.routines.markPaused(reason).catch(() => 0),
+      ]);
+      return paused;
+    })();
+    return this.#pausing;
+  }
+
+  #pausing?: Promise<number>;
+
+  /** The restart didn't happen after all: what was paused goes on. */
+  unpauseWork(): void {
+    this.#pausing = undefined;
+    this.conversations.unpause();
+    void this.tasks.markPaused(undefined).catch(() => 0);
+    void this.routines.markPaused(undefined).catch(() => 0);
+  }
+
   async start() {
     // This computer's key, and no launcher file a crash left behind (ADR 0063).
     await this.here.start().catch((error: unknown) => console.error('[here]', error));

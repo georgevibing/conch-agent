@@ -107,7 +107,11 @@ const shutdown = shutdownHandler({
   exit: (code) => process.exit(code),
   warn: (message) => console.warn(`[shutdown] ${message}`),
 });
-setRestartHandler(() => shutdown(RESTART_CODE));
+setRestartHandler(async () => {
+  // What's working stops at a safe point first, and carries on after (an update already did this).
+  await services.pauseWork('restart').catch(() => 0);
+  await shutdown(RESTART_CODE);
+});
 setStopHandler(async (farewell) => {
   if (farewell) console.warn(`\n  ${farewell.replaceAll('\n', '\n  ')}\n`);
   await shutdown(0);

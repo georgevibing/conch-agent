@@ -18,6 +18,7 @@ import {
   ReleaseNotes,
   type ProgramUpdate,
   type UpdateProgress,
+  type UpdateConchBody,
   type UpdatesSettingsBody,
   type UpdatesStatus,
   type AppUpdateNotice,
@@ -126,6 +127,8 @@ const Cache = z.object({
   /** Versions already told to phones, so each is said once. */
   told: z.array(z.string()).default([]),
   app: AppCache.prefault({}),
+  /** "Wait until it's done": update by itself once nothing is working. */
+  armed: z.object({ at: z.number() }).optional().catch(undefined),
 });
 type Cache = z.infer<typeof Cache>;
 
@@ -172,8 +175,19 @@ export interface UpdatesDeps {
   emit: (status: UpdatesStatus) => void;
   /** A "fixed on its own"-style note, for an automatic update. */
   heal: (message: string) => void;
-  /** A chat or routine is working: automatic updates and Conch's own wait. */
+  /** A chat or routine is working: automatic updates wait, and Conch's own asks first. */
   busy: () => boolean;
+  /** What is working, by name (for "Fix the CI is working. Update anyway?"). */
+  working?: () => { id: string; title: string }[];
+  /**
+   * Just before the restart: every turn that's working stops at a safe point
+   * and is marked, so it carries on after (`ConversationManager.pause`).
+   */
+  pause?: () => Promise<number>;
+  /** The restart didn't happen after all: what was paused goes on. */
+  unpause?: () => void;
+  /** How often an armed update looks whether everything has finished. */
+  idleCheckMs?: number;
   /** A program was updated: whatever uses it looks again (a provider, integrations). */
   landed: (id: string) => Promise<void>;
   restartable: () => boolean;
@@ -218,6 +232,8 @@ export class UpdatesService {
   /** The last build of the web app made by itself didn't work. */
   #webFailed = false;
   #freshening?: Promise<WebRefresh>;
+  /** Looking, while an update is armed, for the moment nothing is working. */
+  #idleWatch?: NodeJS.Timeout;
 
   constructor(private readonly deps: UpdatesDeps) {
     this.#readWebBuilt();
@@ -292,6 +308,7 @@ export class UpdatesService {
       ];
     });
     const apps = this.deps.apps?.() ?? [];
+    const working = this.deps.busy() ? (this.deps.working?.() ?? []).slice(0, 20) : [];
     return {
       conch: this.#conch(),
       programs,
@@ -302,6 +319,7 @@ export class UpdatesService {
       bootId: this.deps.bootId,
       restartable: this.deps.restartable(),
       ...(this.#webBuilt && { webBuilt: this.#webBuilt }),
+      ...(working.length && { working }),
     };
   }
 
@@ -447,6 +465,7 @@ export class UpdatesService {
       failed: swap.failed,
       ...(swap.previous && swap.current?.folder === root && { previous: swap.previous.version }),
       ...(notice && { notice }),
+      ...(this.#cache.armed && !job && { armed: this.#cache.armed }),
     };
   }
 
@@ -479,6 +498,7 @@ export class UpdatesService {
       releases: notes,
       announce: Boolean(newest && this.#cache.dismissed !== newest.version && !job),
       failed: known.failed,
+      ...(this.#cache.armed && !job && { armed: this.#cache.armed }),
     };
   }
 
@@ -813,18 +833,15 @@ export class UpdatesService {
    * Update Conch: resolves once started. Progress, and how it ended, arrive
    * with the status; when it worked, Conch starts itself again if it can.
    */
-  async updateConch(): Promise<void> {
+  async updateConch(when: UpdateConchBody['when'] = 'now'): Promise<void> {
     await this.#load();
-    if (this.deps.app) return this.#updateApp(this.deps.app);
+    if (when === 'cancel') return this.#disarm();
+    if (this.deps.app) return this.#updateApp(this.deps.app, when);
     const conch = this.deps.conch;
     if (!conch)
       throw new UpdatesError('unavailable', 'Conch isn’t running from a folder it can update.');
     if (this.#conchJob) return;
-    if (this.deps.busy())
-      throw new UpdatesError(
-        'busy',
-        'A chat is still working. Update Conch when it’s finished, so nothing is cut short.',
-      );
+    if (await this.#waitForWork(when)) return;
     const offer = this.#followsReleases() ? this.#cache.releases.offers[0] : undefined;
     if (this.#followsReleases() && !offer) return;
     this.#conchJob = offer
@@ -840,17 +857,15 @@ export class UpdatesService {
    * restarts Conch on the new version (ADR 0054). An app that can't replace
    * itself offers the release page instead, so there's nothing to do here.
    */
-  async #updateApp(app: AppReleases): Promise<void> {
+  async #updateApp(app: AppReleases, when: UpdateConchBody['when']): Promise<void> {
     if (this.#conchJob) return;
     if (app.updates === 'download')
       throw new UpdatesError('unavailable', downloadReason(app.platform));
     const offer = this.#cache.app.offers[0];
     if (!offer) return;
-    if (this.deps.busy())
-      throw new UpdatesError(
-        'busy',
-        'A chat is still working. Update Conch when it’s finished, so nothing is cut short.',
-      );
+    if (await this.#waitForWork(when)) return;
+    // The app's installer quits Conch: what's working is paused first, as for any restart.
+    if (this.deps.busy()) await this.deps.pause?.().catch(() => 0);
     const label = `Downloading Conch ${offer.version}`;
     this.#conchJob = { phase: 'fetch', label, step: 1, steps: 2, percent: 0 };
     this.#cache.outcome = undefined;
@@ -903,19 +918,116 @@ export class UpdatesService {
     this.#emit();
   }
 
+  /**
+   * Something is working. `now`: say so (the page asks first, and names it);
+   * `idle`: arm, and update by itself once it's all finished; `anyway`: go
+   * on, and pause it at a safe point just before the restart. True when it
+   * waits instead of updating now.
+   */
+  async #waitForWork(when: UpdateConchBody['when']): Promise<boolean> {
+    if (when === 'anyway' || !this.deps.busy()) {
+      if (this.#cache.armed) {
+        this.#cache.armed = undefined;
+        this.#stopIdleWatch();
+        await this.#save();
+      }
+      return false;
+    }
+    if (when === 'idle') {
+      this.#cache.armed = this.#cache.armed ?? { at: this.#now() };
+      await this.#save();
+      this.#watchForIdle();
+      this.#emit();
+      return true;
+    }
+    const working = this.deps.working?.() ?? [];
+    const first = working[0]?.title;
+    const more = working.length > 1;
+    throw new UpdatesError(
+      'busy',
+      first
+        ? `${first}${more ? ` and ${working.length - 1} more` : ''} ${more ? 'are' : 'is'} working. Update anyway, and it pauses and carries on after Conch restarts, or wait until it’s done.`
+        : 'Something is still working. Update anyway, and it pauses and carries on after Conch restarts, or wait until it’s done.',
+    );
+  }
+
+  async #disarm(): Promise<void> {
+    this.#stopIdleWatch();
+    if (!this.#cache.armed) return;
+    this.#cache.armed = undefined;
+    await this.#save();
+    this.#emit();
+  }
+
+  /** An armed update looks every moment whether everything has finished; then it goes. */
+  #watchForIdle(): void {
+    if (this.#idleWatch || this.#stopped) return;
+    this.#idleWatch = setInterval(() => void this.#idleNow(), this.deps.idleCheckMs ?? 2_000);
+    this.#idleWatch.unref?.();
+  }
+
+  #stopIdleWatch(): void {
+    clearInterval(this.#idleWatch);
+    this.#idleWatch = undefined;
+  }
+
+  /** Everything finished while an update waited for it: update now. */
+  async #idleNow(): Promise<void> {
+    if (!this.#cache.armed) return this.#stopIdleWatch();
+    if (this.deps.busy() || this.#conchJob) return;
+    this.#stopIdleWatch();
+    this.#cache.armed = undefined;
+    await this.#save();
+    // Started again in the meantime: arm once more rather than cut it short.
+    await this.updateConch('idle').catch(() => undefined);
+    this.#emit();
+  }
+
+  /**
+   * Just before the restart: what's working stops at a safe point, and is
+   * marked so it carries on after. The page says so meanwhile.
+   */
+  async #pauseWork(job: UpdateProgressReport): Promise<void> {
+    if (!this.deps.pause || !this.deps.busy()) return;
+    const working = this.deps.working?.() ?? [];
+    const first = working[0]?.title;
+    this.#conchJob = {
+      ...job,
+      label:
+        working.length > 1
+          ? `Pausing ${working.length} chats at a safe point`
+          : first
+            ? `Pausing ${first} at a safe point`
+            : 'Pausing what’s working at a safe point',
+    };
+    this.#emit();
+    await this.deps.pause().catch(() => 0);
+    this.#conchJob = job;
+    this.#emit();
+  }
+
+  /** Restart now, pausing what's working first; if the restart can't happen, it goes on. */
+  async #restartNow(job: UpdateProgressReport): Promise<boolean> {
+    await this.#pauseWork(job);
+    if (this.deps.restart()) return true;
+    this.deps.unpause?.();
+    return false;
+  }
+
   /** Restart onto what was just made ready, after a moment for the page to say so. */
   async #restartSoon(): Promise<boolean> {
     if (!this.deps.restartable()) return false;
-    this.#conchJob = {
+    const job: UpdateProgressReport = {
       phase: 'restart',
       label: 'Updating Conch…',
       step: 4,
       steps: 4,
       percent: 100,
     };
+    this.#conchJob = job;
     this.#emit();
     await new Promise((resolve) => setTimeout(resolve, this.deps.restartDelayMs ?? 1500));
-    return this.deps.restart();
+    return this.#restartNow(job);
   }
 
   /** A release: made ready beside this one, swapped in, then a restart (ADR 0051). */
@@ -1067,16 +1179,17 @@ export class UpdatesService {
         if (!restarting) this.#conchJob = undefined;
         await this.#save();
         if (restarting) {
-          this.#conchJob = {
+          const job: UpdateProgressReport = {
             phase: 'restart',
             label: 'Updating Conch…',
             step: 3,
             steps: 3,
             percent: 100,
           };
+          this.#conchJob = job;
           this.#emit();
           await new Promise((resolve) => setTimeout(resolve, this.deps.restartDelayMs ?? 1500));
-          if (this.deps.restart()) return;
+          if (await this.#restartNow(job)) return;
         }
         this.#conchJob = undefined;
         break;
@@ -1121,6 +1234,7 @@ export class UpdatesService {
     this.#stopped = true;
     clearTimeout(this.#timer);
     this.#timer = undefined;
+    this.#stopIdleWatch();
   }
 
   async #boot(): Promise<void> {
@@ -1168,6 +1282,8 @@ export class UpdatesService {
     }
     // Where the folder is now against what the last fetch brought (an update may have just landed).
     await this.#checkConch(false);
+    // Armed before a restart: still waiting for the work to finish.
+    if (this.#cache.armed) this.#watchForIdle();
     await this.#save();
     this.#emit();
   }
