@@ -241,7 +241,8 @@ function useTurnRecovery(
               else turn.set({ engine: other.engine });
               send(text, attached);
               // Once is a choice; the second time it should just happen (ADR 0023).
-              if (last.problem === 'limit' && !app?.preferences.limitFallback)
+              // Only when you'd chosen to wait: Automatic would have carried on already.
+              if (last.problem === 'limit' && app?.preferences.limitFallback === 'wait')
                 toast(`Answering with ${other.label}`, {
                   description: `Next time ${name(failed)} reaches a limit, carry on with ${other.label} by itself?`,
                   action: {

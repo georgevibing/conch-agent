@@ -283,7 +283,7 @@ const settingsPlaces: {
     focus: FALLBACK_FOCUS,
     label: 'When one can’t answer',
     keywords:
-      'when a provider can’t answer cant offline internet wifi usage limit reached at a limit fallback continue switch local model ollama wait answer offline',
+      'when a provider can’t answer cant offline internet wifi usage limit reached at a limit fallback continue switch local model ollama wait answer offline automatic next plan key with room order carry on switch back',
     icon: <WifiOff />,
   },
   { tab: 'usage', label: 'Usage', keywords: 'limits spend budget plan', icon: <BatteryMedium /> },

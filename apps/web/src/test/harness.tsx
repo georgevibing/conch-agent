@@ -174,6 +174,8 @@ export function appState(patch: Partial<AppState> = {}): AppState {
       permissionMode: 'default',
       place: 'computer',
       offlineFallback: true,
+      limitOrder: [],
+      limitReturn: true,
       limitsPutAway: [],
       mutedSuggestions: [],
       tipsPutAway: [],

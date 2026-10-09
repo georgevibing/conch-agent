@@ -1,26 +1,63 @@
-import type { EngineId } from '@conch/protocol';
-import { Field, Select, Stack, Switch } from '@conch/nacre';
+import type { EngineId, FallbackChoice, LimitFallback } from '@conch/protocol';
+import {
+  FALLBACK_AUTO,
+  FALLBACK_WAIT,
+  FallbackPicker,
+  Skeleton,
+  Stack,
+  Text,
+  type FallbackOption,
+} from '@conch/nacre';
 import { useEffect, useRef } from 'react';
 
-import { useAppState, useUpdateSettings } from '../../api/queries';
+import { useAppState, useFallbackPlan, useUpdateSettings } from '../../api/queries';
 import { useUi } from '../../app/ui';
-import { useProviders } from '../providers/queries';
 import { FALLBACK_FOCUS } from './paths';
 import { Section } from './Section';
 
 /** `openSettings('providers', FALLBACK_FOCUS)` brings this section into view. */
 export { FALLBACK_FOCUS };
 
-const WAIT = 'wait';
+/** A choice as the picker draws it. */
+function optionOf(choice: FallbackChoice): FallbackOption {
+  return {
+    id: choice.id,
+    name: choice.name,
+    ...(choice.account && { account: choice.account }),
+    billing: choice.billing,
+    room: choice.room,
+    ...(choice.leftPercent !== undefined && { leftPercent: choice.leftPercent }),
+    ...(choice.resetsAt !== undefined && { resetsAt: choice.resetsAt }),
+    ...(choice.perReplyUsd !== undefined && { perReplyUsd: choice.perReplyUsd }),
+    ...(choice.model && { model: choice.model.label }),
+    ...(choice.skip && { skip: choice.skip }),
+  };
+}
+
+/** The gateway's order, with the order you just chose applied before it has said so again. */
+export function inYourOrder(
+  choices: readonly FallbackChoice[],
+  order: readonly EngineId[],
+): FallbackChoice[] {
+  const at = (c: FallbackChoice) => {
+    const found = c.engines.map((id) => order.indexOf(id)).filter((i) => i >= 0);
+    return found.length ? Math.min(...found) : Number.POSITIVE_INFINITY;
+  };
+  return choices
+    .map((choice, index) => ({ choice, index }))
+    .sort((a, b) => at(a.choice) - at(b.choice) || a.index - b.index)
+    .map((entry) => entry.choice);
+}
 
 /**
- * Settings → Providers → When one can't answer (ADR 0023): at a usage limit,
- * another provider you picked carries on; offline, the model on this computer answers, or
- * messages wait and go by themselves when the internet's back.
+ * Settings → Providers → When one can't answer (ADR 0023, ADR 0126). At a
+ * usage limit, Automatic carries on with the next plan or key with room, in
+ * an order you can change; or you wait, or name one. Last, the model on this
+ * computer — which also answers while you're offline.
  */
 export function FallbackSection() {
   const { data: app } = useAppState();
-  const { data: list } = useProviders();
+  const { data: plan, isPending } = useFallbackPlan();
   const update = useUpdateSettings();
   const ref = useRef<HTMLElement>(null);
 
@@ -32,13 +69,17 @@ export function FallbackSection() {
   }, []);
 
   const prefs = app?.preferences;
-  const providers = list?.providers ?? [];
-  const active = providers.find((p) => p.active);
-  const others = providers.filter((p) => p.ready && !p.active && !p.local);
-  const local = providers.find((p) => p.local && p.ready);
-  const pick = prefs?.limitFallback;
-  const picked = providers.find((p) => p.id === pick);
-  const name = active?.name ?? 'your provider';
+  const choices = inYourOrder(plan?.choices ?? [], prefs?.limitOrder ?? []);
+  const pick = prefs?.limitFallback ?? FALLBACK_AUTO;
+  // A pick that isn't among the choices now (removed, signed out) shows as Automatic's place
+  // would: still saved, but the radio list can only check what it lists.
+  const value =
+    pick === FALLBACK_AUTO || pick === FALLBACK_WAIT
+      ? pick
+      : (choices.find((c) => c.engines.includes(pick))?.id ?? FALLBACK_AUTO);
+  const from = plan?.fromName ?? 'your provider';
+  const save = (preferences: Parameters<typeof update.mutate>[0]['preferences']) =>
+    update.mutate({ preferences });
 
   return (
     <Section
@@ -46,48 +87,38 @@ export function FallbackSection() {
       title="When one can’t answer"
       description="So a limit or a dropped connection never leaves a question hanging."
     >
-      <Stack gap={6}>
-        <Field>
-          <Field.Label id="limit-fallback">At a usage limit</Field.Label>
-          <Select
+      {/* Not a `Field`: its switches are controls of their own, each with its own name. */}
+      <Stack gap={2}>
+        <Text id="limit-fallback" size="sm" weight="medium">
+          At a usage limit
+        </Text>
+        {isPending && !plan ? (
+          <Skeleton shape="block" height="10rem" />
+        ) : (
+          <FallbackPicker
             aria-labelledby="limit-fallback"
-            value={picked && picked.id !== active?.id ? picked.id : WAIT}
-            onValueChange={(value) =>
-              update.mutate({
-                preferences: { limitFallback: value === WAIT ? null : (value as EngineId) },
+            from={from}
+            {...(plan?.fromResetsAt !== undefined && { fromResetsAt: plan.fromResetsAt })}
+            value={value}
+            onValueChange={(next) =>
+              save({
+                // Automatic is the default: choosing it clears the setting.
+                limitFallback: next === FALLBACK_AUTO ? null : (next as LimitFallback),
               })
             }
-          >
-            <Select.Item value={WAIT}>Wait until it resets</Select.Item>
-            {others.map((p) => (
-              <Select.Item key={p.id} value={p.id}>
-                Continue with {p.name}
-              </Select.Item>
-            ))}
-            {/* Chosen before, not ready now: still shown, so the choice isn't silently lost. */}
-            {picked && !picked.ready && !picked.active && (
-              <Select.Item value={picked.id}>Continue with {picked.name}</Select.Item>
-            )}
-          </Select>
-          <Field.Description>
-            {picked && picked.id !== active?.id
-              ? `${picked.name} answers the same message, then back to ${name} once it resets.`
-              : others.length
-                ? `Or let another provider answer while ${name} is at its limit.`
-                : 'Connect another provider to carry on at a limit.'}
-          </Field.Description>
-        </Field>
-
-        <Switch
-          checked={prefs?.offlineFallback ?? true}
-          onCheckedChange={(offlineFallback) => update.mutate({ preferences: { offlineFallback } })}
-          label="Answer offline with the model on this computer"
-          description={
-            local
-              ? `${local.name} answers with no internet.`
-              : 'No model here yet, so messages wait and go by themselves.'
-          }
-        />
+            options={choices.map(optionOf)}
+            onReorder={(ids) => save({ limitOrder: ids as EngineId[] })}
+            local={{
+              ...(plan?.local && { name: plan.local.name }),
+              checked: prefs?.offlineFallback ?? true,
+              onCheckedChange: (offlineFallback) => save({ offlineFallback }),
+            }}
+            back={{
+              checked: prefs?.limitReturn ?? true,
+              onCheckedChange: (limitReturn) => save({ limitReturn }),
+            }}
+          />
+        )}
       </Stack>
     </Section>
   );

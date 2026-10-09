@@ -27,6 +27,7 @@ import {
   type UpdateFolderBody,
   CustomCommand,
   EngineStatus,
+  FallbackPlan,
   HealLog,
   Memory,
   type MemoryKind,
@@ -225,6 +226,9 @@ export const api = {
     }).toString();
     return request(UsageSnapshot, `/api/usage${query ? `?${query}` : ''}`);
   },
+  /** Who carries on at a usage limit (ADR 0126), for the default provider or `engine`. */
+  fallback: (engine?: EngineId) =>
+    request(FallbackPlan, `/api/fallback${engine ? `?engine=${encodeURIComponent(engine)}` : ''}`),
   setBudget: (budget: number | null) =>
     request(UsageSnapshot, '/api/usage/budget', { method: 'PUT', body: { budget } }),
 
@@ -284,6 +288,12 @@ export const api = {
    * given; switched to its `model` (one that can use the apps it needs), if given.
    */
   /** The person's one tap at a spending limit (ADR 0079): raise it, a model that costs less, or stop. */
+  /** Switch back, on the line a limit left (ADR 0126): this chat waits for its own provider. */
+  limitBack: (id: string, engine: EngineId) =>
+    request(ConversationSummary, `/api/conversations/${id}/limit-back`, {
+      method: 'POST',
+      body: { engine },
+    }),
   settleCapped: (id: string, choice: 'raise' | 'switch' | 'stop') =>
     request(Ok, `/api/conversations/${id}/capped`, { method: 'POST', body: { choice } }),
   /** This chat's own spending limit (ADR 0079); `null` takes it off. */
