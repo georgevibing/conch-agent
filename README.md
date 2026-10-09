@@ -73,6 +73,9 @@ your desktop and the chat apps you already use.
   or many as a page to read, or as OpenAI, ShareGPT (Hermes) or ATIF files for
   training, with keys and personal details taken out first. Nothing leaves your
   computer. [How it did it](./apps/docs/content/features/how-it-did-it.md)
+- **Big jobs in one go.** For 300 emails or 40 pages, your assistant writes one short
+  script that uses its tools, sealed off, every step asking what it would ask anyway.
+  The chat shows it as one line with live counts, and one Undo puts it all back. [Big jobs in one go](./apps/docs/content/features/scripts.md)
 - **It doesn't give up at the first error.** Every model reads what went wrong, tries
   another way and checks its work before it says done. [How Conch works on a problem](./apps/docs/content/features/working-on-a-problem.md)
 - **Long jobs that finish.** Long chats summarise their start, caching keeps costs
