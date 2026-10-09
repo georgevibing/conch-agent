@@ -17,9 +17,9 @@ Your first agent starts out as **Conch**, with a warm voice. You can give it ano
 A provider is what answers: an assistant already on your computer, a model you hold a key for, or a model that runs right here. Conch finds what you have and puts it first.
 
 1. Pick a provider. Not sure? [Compare them](../providers/index.md).
-2. Press its one button: **Connect**, **Sign in** or **Install**. Conch shows the exact command it runs, and carries on by itself when it's done.
+2. Press its one button, like **Sign in**, **Add a key**, **Set up** or **Install**. Conch shows the exact command it runs, and carries on by itself when it's done.
 
-Once one works, Conch moves on by itself. **I’ll do this later** skips it for now. You can connect more at any time in **Settings → Providers**, and every connected one is in the model picker at once.
+Once one works, Conch moves on by itself. **Back**, at the top, returns to the screen before. **I’ll do this later** skips it for now. You can connect more at any time in **Settings → Providers**, and every connected one is in the model list at once.
 
 ## Somewhere to start
 
@@ -46,9 +46,7 @@ When it wants to do something that matters, it asks, right in the chat, with one
 
 ## Three controls worth knowing
 
-**The model picker**, in the composer. Every model from every provider you connected, with how hard it should think. A chat can move to another provider mid-way and keep its thread.
-
-**The mode**, beside it. How much your assistant may do without asking, from **Ask first** to **Full trust**. [What each mode means](../reference/modes.md).
+**The Model · Mode chip**, under the message box. It reads like "Opus · Auto". Press it to choose the model from every provider you connected, how hard it should think, and, under **Mode**, how much your assistant may do without asking, from **Read only** to **Full trust**. A chat can move to another provider mid-way and keep its thread. [What each mode means](../reference/modes.md).
 
 **Find anything**, with <kbd>mod+k</kbd>. One box for chats, messages, models, skills, apps and settings. Typos are fine.
 
@@ -67,3 +65,5 @@ by name wherever it lives, and opens its place with **Advanced** already open.
 - Take it with you: [Conch on your phone](./phone.md).
 - Let it use your tools: [connect an app](../features/apps.md).
 - Teach it something once: [skills](../features/skills.md).
+- Have it work while you're away: [routines](../features/routines.md) and [check-ins](../features/check-ins.md).
+- See what it can show you: [cards in the chat](../features/cards.md).

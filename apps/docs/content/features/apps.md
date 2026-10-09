@@ -45,7 +45,7 @@ Press a row to open it in the app, in a new tab. Six rows show at first, and **S
 
 ## Talk to me here
 
-**Talk to me here**, above the gallery, shows the apps you can message your assistant from: Slack, Gmail and email, Telegram, Discord, WhatsApp, Signal, iMessage, Microsoft Teams, Matrix and WeChat. Each has its own steps, beside a picture of what you'll see. See [Talk to me here](../channels/index.md).
+**Talk to me here**, above the gallery, shows the apps you can message your assistant from: Slack, Gmail and email, Telegram, Discord, WhatsApp, Signal, iMessage, SMS, Microsoft Teams, Google Chat, Matrix, Mattermost, Rocket.Chat, WeChat, LINE, Feishu / Lark, DingTalk and QQ. Each has its own steps, beside a picture of what you'll see. See [Talk to me here](../channels/index.md).
 
 ## Connect one
 
@@ -137,7 +137,7 @@ What you add by address or as a program starts at **Ask every time**.
 
 ## Apps a provider set up by itself
 
-A provider can have apps of its own: set up in its settings, brought by a plugin, or connected in its account. When Conch can connect the same app itself, it brings it in on its own, so it works with every model. **Health → Fixed on its own** notes each one.
+A provider can have apps of its own: set up in its settings, brought by a plugin, or connected in its account. When Conch can connect the same app itself, it brings it in on its own, so it works with every model. **Settings → Health → Fixed on its own** notes each one.
 
 One that needs no sign-in goes straight to **Connected**. One you have to sign in to waits in its own section, **Found in** and the provider's name, at the bottom of the page, below the gallery. It says once where the apps came from, and each has one button: **Sign in**. They aren't problems, so the sidebar doesn't count them. Hover one and press **×** to leave it out of Conch.
 
@@ -263,6 +263,27 @@ will happen first:
 - **Google Drive:** make a new Google Doc or text file. Conch can only touch
   files it made itself: your other files can’t be changed or deleted, because
   Google never gives Conch access to them.
+
+**The email, before it goes.** When your assistant wants to send an email, the
+chat shows the email itself: who it's from, who it's to, the subject, every word
+and any files. Press **Send** (or <kbd>mod+enter</kbd>), or **Don’t send**. **Save as
+a draft instead** writes that request in the message box, for you to send.
+
+To change it first, press **Edit**. Change who it goes to, **Add Cc**, change the
+subject and the words, or take a file off (you can't add one). **Done** keeps your
+change, and **Cancel** (or <kbd>esc</kbd>) drops it. The card then says **Edited by
+you**, and **Undo my changes** puts the original back. Conch checks your version
+again before it goes; if it can't be sent, nothing is, and your assistant asks you
+what to change. A reply always goes to the people in its thread, with its subject.
+A draft, an email from a [task](./tasks.md), and an email you set to **Allow** have
+no **Edit**.
+
+**After it goes.** The card says **Sent to …** or **Replied to …**, with **Show the
+email**, **Open in Gmail** and **Follow up**. A draft says **In your Drafts · not
+sent**, with **Open the draft in Gmail** and **Send it now**. If Gmail didn't
+confirm it, the card says **Gmail may have sent this**, with **Look in Sent**. If it
+didn't go, it says so, with **Try again**. **Follow up**, **Send it now** and **Try
+again** only write a request in the message box: nothing is sent until you send it.
 
 If Google doesn’t confirm a change, Conch looks for it rather than doing it
 again: an event Conch adds carries an id of its own, an email it sends carries

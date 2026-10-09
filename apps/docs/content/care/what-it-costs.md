@@ -18,7 +18,7 @@ The provider's own price is used when it gives one. Otherwise Conch works it out
 
 ## What a chat cost
 
-Once a chat has spent money, a small chip beside the model picker shows the total: "$0.31". Tap it to see what was spent, including the tasks started from that chat, and what the cache saved. You can also press <kbd>mod+k</kbd> and type **What this chat spent**.
+Once a chat has spent money, a small chip under the message box, after the **Model · Mode** chip, shows the total: "$0.31". Tap it to see what was spent, including the tasks started from that chat, and what the cache saved. You can also press <kbd>mod+k</kbd> and type **What this chat spent**.
 
 ## A limit for one chat
 

@@ -18,10 +18,11 @@ them somewhere else, for one chat or for every new one:
 
 ## Choose it for a chat
 
-1. Under the message box, beside the mode, press the chip that says where work runs.
-   It appears once somewhere other than this computer is ready.
-2. Choose a place. The chip's mark changes to show it.
-3. To use it for every new chat, press **Make this my default**.
+1. Press the **Model · Mode** chip under the message box. **Where work runs** is in
+   it once somewhere other than this computer is ready.
+2. Choose a place. A small mark for it appears in the chip, before the mode.
+3. To use it for every new chat, press **Make this my default** at the foot. It keeps
+   the model and the mode you chose too.
 
 Each command's row in the chat says where it ran: **container**, the machine's name,
 or **cloud**. Commands that ran on this computer have no tag.
@@ -43,8 +44,8 @@ at the right place, ready to use.
   **Settings → Security → Advanced → Where work runs**. Paste the key and press
   **Use Daytona**. It's kept sealed on this computer and never shown again.
 
-If a place stops answering, the command doesn't run anywhere else. The chip shows
-a dot, the assistant tells you, and **Repair everything** in **Settings → Health**
+If a place stops answering, the command doesn't run anywhere else. The chip's mark
+shows it's waiting, the assistant tells you, and **Repair everything** in **Settings → Health**
 says what to do.
 
 ## What each place keeps from your computer
@@ -66,7 +67,7 @@ them where the work runs.
 
 Claude Code, Codex, Copilot, Gemini CLI, Grok, local models and the pay-as-you-go
 providers all run their commands where you choose. **Codex CLI** runs its own
-commands on this computer, in its own sandbox, wherever you choose; the chip says so
+commands on this computer, in its own sandbox, wherever you choose; the panel says so
 when it's answering. Pick another provider for that chat to run work elsewhere.
 
 Files your assistant reads or edits directly are always edited here, in your work

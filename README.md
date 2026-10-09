@@ -99,7 +99,7 @@ your desktop and the chat apps you already use.
 - **Work in the background.** Hand a job off and keep chatting, or have another
   provider do a part ("have Codex write the tests"). Every provider runs it as a
   Conch task you can see, answer and stop, with its chat's permissions and never
-  more. Tasks check for a saved answer or the tool receipts set before work starts, with recorded results you can inspect. [Hand it off](./apps/docs/content/features/tasks.md)
+  more. A task counts as done only with a saved answer, or the tool receipts set before it started, and you can look at what it recorded. [Hand it off](./apps/docs/content/features/tasks.md)
 - **Memory that looks after itself.** Conch learns what will still matter from a chat
   and tidies its memories overnight, then says what it learned in a short morning note,
   each line with Undo. They're Markdown you can read, edit or forget. A
@@ -107,7 +107,7 @@ your desktop and the chat apps you already use.
 - **Skills.** Agent Skills (`SKILL.md`) for every model, from what worked, from a
   sentence, or from **Discover**. [Skills](./apps/docs/content/features/skills.md)
 - **Bring your things.** Memories, skills, routines and agents from OpenClaw or
-  Hermes, shown first and undoable for a week.
+  Hermes, shown first and undoable for a week. [Come home](./apps/docs/content/care/come-home.md)
 - **Your past chats.** Conversations from Claude Code, Codex, Gemini CLI, OpenCode,
   Copilot, OpenClaw and Hermes, found by themselves and brought in with one press, to
   search and carry on. [Past chats](./apps/docs/content/care/past-chats.md)
@@ -128,13 +128,21 @@ your desktop and the chat apps you already use.
 - **Research, files and pictures.** Sources with references, PDF and Office files
   read and made (PDF, Word, Excel, CSV, PowerPoint, charts) with any chat model and
   sent to your chat apps, pictures from any chat model, and charts and documents
-  that open beside the chat.
+  that open beside the chat. [Research](./apps/docs/content/features/research.md) ·
+  [Files](./apps/docs/content/features/files.md) ·
+  [Pictures](./apps/docs/content/features/pictures.md) ·
+  [Show me](./apps/docs/content/features/show-me.md)
+- **Cards you can press.** Products to compare, songs and videos that play, the
+  weather in °C or °F, recipes with timers, places on a map, share and coin prices,
+  and charts, each a card in the chat. Save one as a picture, copy it, or send it to
+  your chat apps. [Cards](./apps/docs/content/features/cards.md)
 
 ### Apps and integrations
 
 - **One gallery for every model.** Gmail, Google Calendar and Drive, Slack, GitHub,
   Notion, Linear and more. Add as many Google accounts as you like and choose Off,
-  Read or Read & write for each product; every change asks first.
+  Read or Read & write for each product. A change shows you first unless you allowed
+  it, and an email can be edited on its card before it goes.
   [Apps](./apps/docs/content/features/apps.md)
 - **Apps it makes for you.** Ask for an ability it doesn't have and Conch builds a
   Conch app: tools every model can use and pages that look like Conch, sealed off
@@ -155,7 +163,7 @@ your desktop and the chat apps you already use.
 - **Your phone.** An installable app over a private Tailscale address, with
   notifications you can answer with one tap, and voice (“Hey Conch” while it's open). Add it from **Settings → Access**. [On your phone](./apps/docs/content/start/phone.md)
 - **Your chat apps.** Telegram, Discord, Slack, WhatsApp, Signal, iMessage, email,
-  Teams, Google Chat, Matrix and more, with the same commands as the app.
+  Teams, Google Chat, Matrix, WeChat, Feishu / Lark, DingTalk, QQ and more, with the same commands as the app.
   [Chat apps](./apps/docs/content/channels)
 - **A server of your own.** One line installs it at `conch.yourname.com` with its own
   certificate. [On a server](./apps/docs/content/start/server.md)

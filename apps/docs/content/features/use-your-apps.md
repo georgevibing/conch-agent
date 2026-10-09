@@ -11,7 +11,7 @@ It's off until you turn it on, and it works on a Mac for now.
 ## Turn it on
 
 1. Open **Settings → This computer**.
-2. Under **Use your apps**, turn on **Let Conch use your apps**.
+2. Under **Use your apps**, turn on **Let Conch use your apps** (with your agent's name in place of Conch).
 3. macOS asks you to allow two things. Press **Open Screen Recording**, then turn on Conch in the list. Do the same with **Open Accessibility**.
 
 Each row says **On** by itself once macOS allows it. You don't need to come back and press anything.
@@ -30,7 +30,9 @@ The glowing edge and <kbd>mod+esc</kbd> come with the Conch app. In a browser, *
 
 - **Each app asks once per chat.** "Use Notes on your computer?" Choose **Always** and it won't ask about that app again, unless the chat has read something from the web or an email. Apps you always allow are listed under **Use your apps**, to take back any time.
 - **It never touches** password managers, System Settings and the Mac's password prompts, terminals, banking and payment apps, or Conch itself. It doesn't see them either: they're covered over in what it looks at. When something needs one of them, it asks you to do that part.
+- **In Full trust** it doesn't ask about each app, unless the chat has read something from the web or an email.
 - **Read only** lets it look at the screen, but not click or type.
+- **Only while you're there.** Routines, background tasks and chats from your chat apps can't use your apps, because nobody could press Stop.
 - **It stops to check in** after 60 steps in one go.
 - **One chat at a time** uses the computer.
 - **Nothing it sees is kept.** The last look at your screen stays in memory until the turn ends, then it's gone.

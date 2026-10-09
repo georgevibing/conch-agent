@@ -12,7 +12,7 @@ Your chats, memories, skills and settings are plain files in one folder, `~/.con
 
 Two things leave your computer, and only when you ask: what you say to the provider you chose, and what your assistant does in an app you connected. Choose the [model on this computer](../providers/ollama.md), and not even that.
 
-Conch itself only looks things up: every quarter of an hour (every hour for releases) it looks for a new version of itself, once a day for the programs it uses, (`CONCH_UPDATE_CHECKS=off` stops that), and every few minutes it reaches a few well-known addresses to tell whether you're online. Neither carries anything of yours.
+Conch itself only looks things up. It looks for a new version of itself every quarter of an hour (every hour for releases), and for new versions of the programs it uses once a day; `CONCH_UPDATE_CHECKS=off` stops both. Every few minutes it also reaches a few well-known addresses to tell whether you're online. None of this carries anything of yours.
 
 ## The provider answers. Conch does the rest.
 
@@ -20,7 +20,7 @@ A provider brings a model. Conch brings everything around it: [memory](../featur
 
 ## It fixes itself
 
-Conch is for people who don't debug. It sets itself up. When something is missing, stale or broken, it [repairs it](../care/health.md) and carries on, and tells you afterwards, quietly. When it can't, you get one plain sentence and the button that fixes it.
+Conch is for people who don't debug. It sets itself up. When something is missing, stale or broken, it [repairs it](../care/health.md) and carries on, with a quiet note under **Settings → Health → Fixed on its own**. When it can't, you get one plain sentence and the button that fixes it.
 
 It interrupts you for two things only: an approval that matters (spending, sending, deleting, granting trust), and what only a person can do (signing in, typing a password).
 

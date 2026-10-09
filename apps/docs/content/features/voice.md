@@ -55,7 +55,7 @@ While it's on:
 
 ## Voice notes from your chat apps
 
-Send your assistant a voice note on Telegram, WhatsApp, Signal, Discord, Slack, Matrix, iMessage or WeChat, and it answers as if you'd typed it.
+Send your assistant a voice note on Telegram, WhatsApp, Signal, Discord, Slack, Matrix, iMessage, WeChat, Feishu / Lark, DingTalk or QQ, and it answers as if you'd typed it.
 
 - **Heard on your computer.** whisper.cpp turns the voice note into words on the computer Conch runs on, so it never goes to anyone else. It works offline.
 - **You see what it heard.** In Conch, the chat shows the voice note with its words.

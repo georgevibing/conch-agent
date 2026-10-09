@@ -11,7 +11,7 @@ order: 1
 
 There is no "current provider" to switch. Each one you connect adds its models to the same picker, grouped by provider and searchable by name.
 
-- **One is the default.** New chats start there. Change it with **Make default** in **Settings → Providers**, or from the picker.
+- **One is the default.** New chats start there. Change it with **Make default** in **Settings → Providers**, or with **Make this my default** in the **Model · Mode** chip.
 - **A chat can change provider mid-way.** The one that joins is handed what it missed, word for word, and what was done along the way: which tools ran and how each went, the browser’s page, files changed, an open plan. So it carries on rather than starts again.
 - **Each provider carries its own chat on.** Claude Code, Codex, Codex CLI and the programs that can (Copilot, Gemini CLI, Grok) pick a chat up where they left it. If one can’t, it’s given the whole conversation instead.
 - **What you set up belongs to Conch.** Your [apps](../features/apps.md), [skills](../features/skills.md), [memory](../features/memory.md) and [routines](../features/routines.md) work with every provider. What a provider brings by itself is shown apart, and says so.
@@ -33,6 +33,9 @@ Your Claude Pro or Max plan works in Conch through Claude Code, Anthropic's own 
 
 - **On this computer.** A model on this computer, through Ollama or LM Studio, or a [server you run yourself](servers.md).
 - **Pay as you go.** Paste a key and Conch checks it before keeping it. "Saved" means it works.
+- **Your company's cloud.** [Amazon Bedrock](bedrock.md), [Google Vertex AI](vertex.md) and [Azure OpenAI](azure-openai.md) use the AWS, Google Cloud or Azure sign-in already on this computer. Press **Use this** on the account that should pay.
+
+Not on the list? [Add any provider](any-provider.md): by name, by address, or from a link.
 
 Each provider opens on a page of its own, and stays there once it connects so you can see it worked. **Providers**, at the top of that page or in Settings' list, goes back to them all. Every place in Settings has its own address, like `/settings/providers`, so reloading, a bookmark or the browser's back button lands where you were.
 
@@ -44,7 +47,7 @@ A company with regions (Kimi, Z.ai, MiniMax, Qwen) is tried at each of its own a
 
 ## Found on this computer
 
-Conch looks for what's already here: a provider's key in this computer's settings (`OPENAI_API_KEY`), or a model server running on its usual port. Each is offered under **Found on this computer**, ready in one press. Nothing is used until you press it, and a key is never shown.
+Conch looks for what's already here: a provider's key in this computer's settings (`OPENAI_API_KEY`), a model server running on its usual port, or an AWS profile or Google Cloud project you're signed in to. Each is offered under **Found on this computer**, ready in one press. Nothing is used until you press it, and a key is never shown.
 
 ## Where keys live
 

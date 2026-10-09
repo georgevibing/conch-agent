@@ -16,7 +16,7 @@ Then four numbers: the processor, memory, the disk Conch keeps your things on, a
 
 ## The last few minutes
 
-The processor, memory, network and graphics each have a live chart. New readings arrive every two seconds and the line moves along with them, filling out to three minutes of history. Point at a chart, or drag a finger across it, to read a moment. With **Reduce motion** on, the charts redraw in place instead of moving.
+The processor, memory, network and graphics each have a live chart. New readings arrive every two seconds and the line moves along with them, filling out to three minutes of history. Point at a chart, or drag a finger across it, to read a moment. With **Reduce motion** on (in **Settings → Appearance**), the charts redraw in place instead of moving.
 
 Under the processor's chart, a row of bars shows each core.
 

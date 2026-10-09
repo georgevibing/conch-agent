@@ -24,6 +24,8 @@ A routine drafted in a chat runs as that chat's [agent](./agents.md), on its pro
 
 A run can do what a chat can: use your [apps](apps.md), the ones you added yourself too, your Conch apps and the browser. It can also write to you in any [chat app](../channels/index.md) you've connected: "every morning, send the weather to my Telegram" sends the message itself, to your own private chat with Conch.
 
+In a chat you can also ask to see your routines, change one, pause one or delete one. When your assistant changes what a routine does or what starts it, the routine pauses until you turn it on again. Only you turn a routine on.
+
 You can also open **Routines** in the sidebar and start a new one there. Describe what you want and press **Draft it**, pick one of the ideas, or choose **Set it up yourself**. In <kbd>mod+k</kbd>, **New routine that starts when…** opens it with **When…** chosen.
 
 ## Every…

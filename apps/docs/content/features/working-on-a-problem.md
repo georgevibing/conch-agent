@@ -44,7 +44,7 @@ Background [tasks](tasks.md) work the same way. Nobody is there to ask, so a tas
 
 - **Errors it can act on.** When one of Conch's tools fails, your assistant reads what actually happened, like the command's own output, not just "that didn't work".
 - **A word after a run of failures.** After several failed steps in a row, Conch tells your assistant to step back and try a different way.
-- **Apps that drop reconnect.** If an app's connection drops partway, Conch opens it again. A lookup is simply asked again. A change is never repeated by itself, because Conch can't tell whether it already happened.
+- **Apps that drop reconnect.** If an app's connection drops partway, Conch opens it again. A lookup is asked again. A change is never repeated by itself, because Conch can't tell whether it already happened.
 - **Small models get the short version.** A model that reads little at once gets the same rules in a few lines, so there's room left for your chat.
 
 How long one message may run before it checks in with you is up to you, in **Settings → Usage → Limits**. See [your chats](chats.md).

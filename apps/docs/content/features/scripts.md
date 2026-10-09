@@ -35,18 +35,19 @@ The time a question waits for you doesn't count against the script.
 
 ## Put it all back
 
-Changes a script makes to your files can be undone, all at once. Press **Undo all** on the script's line, check what will change, and press **Undo**. You can press **Put all back again** if you change your mind. Each change is also on the **Activity** page, with its own **Undo**.
+Changes a script makes to your files can be undone, all at once. Press **Undo all 12 changes** on the script's line (**Undo its change** when there's one), check what will change, and press **Undo**. You can press **Put all 12 back again** if you change your mind. Each change is also on the **Activity** page, with its own **Undo**.
 
 Sent emails and messages can't be unsent, which is why sending always asks first.
 
 ## What a script can't do
 
-A script runs sealed off from the rest of your computer. It can't reach the internet, your files or anything else by itself. It does everything through the same tools your assistant has, and nothing more.
+A script runs sealed off from the rest of your computer. It can't reach the internet, your files or anything else by itself. It does everything through the same tools your assistant has, and nothing more. A few things it leaves to your assistant, outside the script: asking you a question with choices, offering to turn something on, suggesting replies, updating the plan and handing work to a task.
 
 It also has limits, so a mistake can't run away with your computer:
 
 - 2 minutes of work, unless your assistant gives it more (at most 10)
 - 500 steps, unless your assistant gives it more (at most 2,000)
+- 8 steps at the same time
 - 256 MB of memory
 - a few pages of results back to your assistant
 

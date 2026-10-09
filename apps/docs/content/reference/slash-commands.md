@@ -33,7 +33,7 @@ Conch's commands work the same whichever model answers, because Conch does them 
 - **`/clear`** starts the chat afresh: from that line on, your assistant reads nothing said above it, with every provider, and each provider starts a new session. Every message stays for you. The chat's goal stays, and so does what the chat is held to and what it has read. **Undo**, on the line and in the note, puts it back until you send something. `/new` starts a new chat instead.
 - **`/goal`** says what the chat is for, like `/goal get the release notes for 2.4 written`. Your assistant keeps it in mind in every reply, through `/clear` and whichever model answers. It shows as one quiet line above the message box: press it for **Edit** or **Clear goal**. `/goal` alone shows it, `/goal clear` takes it away. In a new chat, it goes with your first message.
 - **`/agent`** chooses who answers: one of your [agents](../features/agents.md), from your next message on. `/agent` alone lists them, the one answering ticked; `/agent atlas` chooses by name. The new agent reads the whole chat and answers in its own voice.
-- **`/plan`** turns plan mode on or off. Your assistant reads and plans, changes nothing, and shows you its plan with **Start** and **Keep planning**. **Start** ends plan mode and the work begins, in the mode you had before. `/plan tidy up this folder` turns it on and asks in one go. Claude Code asks with its own plan; every other provider that can use Conch's tools asks the same way through Conch.
+- **`/plan`** turns **Read only** on or off. Your assistant reads and plans, changes nothing, and shows you its plan with **Start** and **Keep planning**. **Start** ends Read only and the work begins, in the mode you had before (**Ask first**, if your default is Read only). `/plan tidy up this folder` turns it on and asks in one go. Claude Code asks with its own plan; every other provider that can use Conch's tools asks the same way through Conch.
 
 ## In chat apps
 
@@ -41,10 +41,10 @@ The same commands work when you write to your assistant from [a chat app](../cha
 
 <!-- conch:chat-commands -->
 
-- **Choices are buttons.** `/model` shows the models of the provider you use, the one in use ticked, and **Other providers** a step away; tap one and it's done. `/effort`, `/fast`, `/mode` and `/plan` work the same way. Where an app has no buttons (WhatsApp, Signal, iMessage, email, SMS), the choices are numbered: reply with the number.
+- **Choices are buttons.** `/model` shows the models of the provider you use, the one in use ticked, and **Other providers** a step away; tap one and it's done. `/effort`, `/fast` and `/mode` work the same way. Where an app has no buttons (WhatsApp, Signal, iMessage, email, SMS, DingTalk), the choices are numbered: reply with the number.
 - **Words after the name work too:** `/model opus`, `/effort high`, `/fast off`, `/goal get the 2.4 notes out`, `/plan tidy up this folder`.
 - **`/clear` has an Undo** under it, and `/undo` does the same, until you send something. `/undo` in a chat app takes back a clear; to put back files, open the chat in Conch.
-- **`/plan`** turns plan mode on or off. When the plan is ready, it arrives as a message with **Start** and **Keep planning** (or reply `1` or `2`, `yes` or `no`).
+- **`/plan`** turns **Read only** on at once, or off, with a button to change it back (**Plan first** or **Act as usual**). When the plan is ready, it arrives as a message with **Start** and **Keep planning** (or reply `1` or `2`, `yes` or `no`).
 - **`/agent`** shows your agents, the one answering ticked, and the others as buttons (numbered where there are none). `/agent atlas` chooses by name. The choice stays for that chat app. Only you can change it.
 - **`/goal`** before your first message goes with it, as in Conch.
 - **A mistyped command** hears what you probably meant, with a button for it: `/modle` → **/model**.

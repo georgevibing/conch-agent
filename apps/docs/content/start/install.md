@@ -20,7 +20,7 @@ That is the whole setup. The line does three things:
 2. Builds Conch and keeps it running in the background, so it's there when you log in.
 3. Adds **Conch** to your apps and opens it.
 
-Conch then looks for what you already have, helps you [connect a provider](./first-chat.md), and asks a couple of optional questions so it can be yours.
+Conch then looks for what you already have, helps you [connect a provider](./first-chat.md), asks what to call you, and offers something to ask first.
 
 ## If the installer asks for permission
 

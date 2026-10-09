@@ -23,6 +23,6 @@ Signed in with a Claude plan, it also loads your Claude account's connectors by 
 ## Good to know
 
 - **It asks first.** Every [permission mode](../reference/modes.md) is available, and approvals appear in the chat.
-- **Commands run sealed** on macOS and Linux: they can change your work folder, and can't read your keys or saved passwords. Windows can't seal commands yet, and **Settings → Security → Safety** says so.
-- **It heals itself.** If the installed copy is missing or breaks, Conch uses the copy it ships with, and leaves a note under **Fixed on its own**.
+- **Commands run sealed** on macOS and Linux: they can change your work folder, and can't read your keys or saved passwords. Windows can't seal commands yet, and **Settings → Security → Advanced → Safety** says so.
+- **It heals itself.** If the installed copy is missing or breaks, Conch uses the copy it ships with, and leaves a note under **Settings → Health → Fixed on its own**.
 - **Limits are your plan's.** The meter in the chat header shows what's left. See [Offline and at a limit](../care/offline.md).

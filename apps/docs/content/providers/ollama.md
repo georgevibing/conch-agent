@@ -28,7 +28,7 @@ It is slower and less capable than the big cloud models. Use it for everyday que
 
 ## Good to know
 
-- **Thinking is off by default,** so small models answer straight away. Turn it up in the model picker.
+- **Thinking is off by default,** so small models answer straight away. Turn it up under **Thinking**, in the **Model · Mode** chip.
 - **It reads as much as this computer allows.** Conch works out how much of the chat the model can hold from the model itself and this computer's memory, between 16,000 and 64,000 tokens.
 - **A small model gets a lean setup.** When the model reads little at once, Conch gives it short instructions and hands it tools as it needs them, so the chat itself has room. It's automatic.
-- **Conch keeps Ollama running.** If it has stopped when you need it, Conch starts it quietly and leaves a note under **Fixed on its own**.
+- **Conch keeps Ollama running.** If it has stopped when you need it, Conch starts it quietly and leaves a note under **Settings → Health → Fixed on its own**.

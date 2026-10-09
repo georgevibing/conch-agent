@@ -35,7 +35,7 @@ without asking, even after the chat read something from outside. Before a paid p
 it costs. The prompt and any source picture are sent to that service.
 
 If your ChatGPT plan has made all the pictures it can for now, Conch makes it
-the next way instead, and notes it under Settings → Health → "Fixed on its own".
+the next way instead, and notes it under **Settings → Health → Fixed on its own**.
 
 Ask which image models are available if you want to choose one. Support for
 transparent backgrounds, shape and reference pictures depends on the model.

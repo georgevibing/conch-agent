@@ -55,7 +55,8 @@ const SIGNAL_WORDS: Record<TelemetrySignal, { label: string; description: string
   },
   logs: {
     label: 'Events',
-    description: 'A short line when a turn, a tool call or a routine ends.',
+    description:
+      'A short line when a turn, a tool call, a question, a routine run or a task ends, or Conch fixes something.',
   },
 };
 

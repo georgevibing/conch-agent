@@ -78,7 +78,7 @@ export const ENV_ABOUT: Record<keyof Config, EnvAbout> = {
   },
   CONCH_DOOR_PORT: {
     about:
-      'The port of the public door, the separate listener on this computer that Teams and WeChat deliver messages to (ADR 0045). It serves only those channels’ signed deliveries; the next free one of the ten after it is used when it’s taken.',
+      'The port of the public door, the separate listener on this computer that Microsoft Teams, Google Chat, WeChat, LINE and SMS deliver messages to (ADR 0045). It serves only those channels’ signed deliveries; the next free one of the ten after it is used when it’s taken.',
     unset: '4319',
   },
   CONCH_HTTPS_PORT: {
@@ -142,7 +142,8 @@ export const ENV_ABOUT: Record<keyof Config, EnvAbout> = {
     internal: true,
   },
   CONCH_UPDATE_CHECKS: {
-    about: 'auto looks for updates once a day; off only when you press Check now.',
+    about:
+      'auto looks for a new Conch every quarter of an hour (every hour for releases) and for new programs once a day; off looks only when you press Check now.',
     unset: 'auto (off with the mock engine)',
   },
   CONCH_VAULT_KEYSTORE: {
