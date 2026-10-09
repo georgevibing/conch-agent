@@ -129,6 +129,8 @@ const scenarios = {
   recovery: { port: 4388, env: { CONCH_MOCK_STATE: 'ready' } },
   offline: { port: 4385, env: { CONCH_MOCK_STATE: 'ready' } },
   attachments: { port: 4389, env: { CONCH_MOCK_STATE: 'ready' } },
+  // What you were writing and hadn't sent comes back after a reload (ADR 0124).
+  drafts: { port: 4355, env: { CONCH_MOCK_STATE: 'ready' } },
   passwords: { port: 4386, env: { CONCH_MOCK_STATE: 'ready' } },
   suggest: { port: 4383, env: { CONCH_MOCK_STATE: 'ready' } },
   // Replies to send next (ADR 0060): the assistant's under a table, Conch's own, none after reading.

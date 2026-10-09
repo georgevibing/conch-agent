@@ -4,9 +4,12 @@ import {
   composerHistory,
   forgetDrafts,
   loadDraft,
+  loadLocalDraft,
   loadQueue,
+  localDraftKeys,
   rememberSent,
   saveDraft,
+  saveLocalDraft,
   saveQueue,
 } from './composer';
 
@@ -17,14 +20,53 @@ afterEach(() => {
 });
 
 describe('drafts', () => {
-  it('keeps what was being written in each chat, and lets go of an emptied one', () => {
+  it('keeps what was being written in each chat, and lets go of an emptied one once Conch has it', () => {
     saveDraft('c1', 'half a thought');
     saveDraft('c2', 'another');
     expect(loadDraft('c1')).toBe('half a thought');
     expect(loadDraft('c2')).toBe('another');
+    expect(localDraftKeys().sort()).toEqual(['c1', 'c2']);
+    // Emptied here: kept as empty until Conch has heard, so its old copy can't come back.
     saveDraft('c1', '   ');
-    expect(loadDraft('c1')).toBe('');
+    expect(loadDraft('c1').trim()).toBe('');
+    expect(loadLocalDraft('c1')).toMatchObject({ synced: false });
+    expect(localDraftKeys()).toEqual(['c2']);
+    saveLocalDraft('c1', { text: '', synced: true });
     expect(Object.keys(JSON.parse(localStorage.getItem('conch.drafts') ?? '{}'))).toEqual(['c2']);
+  });
+
+  it('keeps what is attached and a new chat’s choices with the words', () => {
+    const attachment = {
+      id: 'att_1',
+      name: 'cat.png',
+      mimeType: 'image/png',
+      size: 10,
+      kind: 'image' as const,
+      createdAt: 1,
+    };
+    saveLocalDraft('new', {
+      text: 'look',
+      attachments: [attachment],
+      options: { permissionMode: 'plan' },
+      synced: true,
+    });
+    expect(loadLocalDraft('new')).toMatchObject({
+      text: 'look',
+      attachments: [attachment],
+      options: { permissionMode: 'plan' },
+      synced: true,
+    });
+    // Only the words change: what's attached stays, and it has to go to Conch again.
+    saveDraft('new', 'look at this');
+    expect(loadLocalDraft('new')).toMatchObject({ attachments: [attachment], synced: false });
+    // A draft only of files is still a draft.
+    saveLocalDraft('files', { text: '', attachments: [attachment], synced: true });
+    expect(localDraftKeys()).toContain('files');
+  });
+
+  it('reads a draft from before Conch kept them as one still to send', () => {
+    localStorage.setItem('conch.drafts', JSON.stringify({ c1: { text: 'old', at: 1 } }));
+    expect(loadLocalDraft('c1')).toEqual({ text: 'old', at: 1, synced: false });
   });
 
   it('keeps only the most recently written in', () => {

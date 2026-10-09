@@ -170,6 +170,48 @@ export const States: Story = {
         onOpen={fn()}
         onRemove={fn()}
       />
+      <AttachmentCard
+        name="Holiday.jpg"
+        kind="image"
+        status="lost"
+        error="This file is no longer on Conch. Remove it, then attach it again."
+        onRemove={fn()}
+      />
+    </AttachmentList>
+  ),
+};
+
+/**
+ * A message kept from before (a draft) whose file was let go: the card says
+ * so in words, dims what it was, and offers only to take it off. The × shows
+ * without a hover, since it's the one thing to do.
+ */
+export const Lost: Story = {
+  render: () => (
+    <AttachmentList>
+      <AttachmentCard
+        name="Q3 board update.pdf"
+        kind="file"
+        mimeType="application/pdf"
+        size={2_480_000}
+        onOpen={fn()}
+        onRemove={fn()}
+      />
+      <AttachmentCard
+        name="Holiday.jpg"
+        kind="image"
+        status="lost"
+        error="This file is no longer on Conch. Remove it, then attach it again."
+        onRemove={fn()}
+      />
+      <AttachmentCard
+        name="Pasted text"
+        kind="text"
+        pasted
+        status="lost"
+        error="This file is no longer on Conch. Remove it, then attach it again."
+        onRemove={fn()}
+      />
     </AttachmentList>
   ),
 };

@@ -95,6 +95,7 @@ export * from './app-parts';
 export * from './conch-apps-words';
 export * from './questions';
 export * from './attachments';
+export * from './drafts';
 export * from './background';
 export * from './backups';
 export * from './browser';

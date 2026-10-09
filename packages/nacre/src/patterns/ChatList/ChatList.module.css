@@ -507,6 +507,22 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* Written and not sent: quiet, in words beside a pencil, never a colour of its own. */
+  .draft {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--nc-space-1);
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    font-style: italic;
+  }
+
+  .draft > svg {
+    inline-size: 0.85em;
+    block-size: 0.85em;
+  }
+
   /* Something new: the title steps forward, in full colour and a touch heavier. */
   .item[data-status='unread'] .link {
     color: var(--nc-text);

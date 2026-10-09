@@ -1,6 +1,6 @@
 ---
 title: Your chats
-description: Pin, file and tidy your chats, see which need you, choose who answers, queue messages, use / commands, set a goal, and keep a long chat going.
+description: Pin, file and tidy your chats, see which need you, keep drafts, choose who answers, queue messages, use / commands, set a goal, and keep long chats going.
 order: 12
 ---
 
@@ -73,9 +73,20 @@ separately; the search box stays in place. On a narrow screen, only results are 
 <kbd>enter</kbd> sends and <kbd>shift+enter</kbd> starts a new line. You can start typing anywhere in the chat: the words go in the message box.
 
 - <kbd>↑</kbd> in the empty box brings back what you sent, newest first: this chat's messages, then what you sent lately in other chats. <kbd>↓</kbd> walks forward again. Change it and send, or keep going.
-- What you were writing stays in each chat when you go to another, and after a restart. Signing out on this device clears it.
+- What you were writing stays in each chat, with what you attached. See [Drafts](#drafts).
 - Point at a message of yours and press **Copy** to take its words.
 - Type `/` for commands: change the model or how hard it thinks, start afresh, set a goal, plan first, copy the last reply, save the chat as a file and more. The list offers each command's choices, with the one in use ticked. [Every command](../reference/slash-commands.md).
+
+### Drafts
+
+What you write and don't send stays in that chat as a draft: the words, the files and pictures you attached, and long pastes. The new chat page keeps one too, with the model and mode you chose for it.
+
+- Go to another chat, reload, close the tab or restart Conch, and it's there when you come back, with the cursor at the end. Press <kbd>enter</kbd> to send it.
+- Conch keeps it, not only this browser, so it's there on your phone and in another browser too. Open the chat, or come back to the tab, to see what you wrote elsewhere.
+- Chats with a draft show a pencil and **Draft** in your list.
+- Sending clears it. Deleting the chat deletes its draft and its files.
+- A draft you don't touch for 30 days is let go, with its files. If a file is gone, its card says **No longer here**. Remove it, then attach it again.
+- Signing out on this device clears the copy kept here. The draft is still in Conch when you sign in again.
 
 ## Who answers
 

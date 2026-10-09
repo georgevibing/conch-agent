@@ -36,6 +36,7 @@ import { useHotkey } from '../../app/useHotkey';
 import { DeleteChat } from '../archive/DeleteChat';
 import { ARCHIVE_PATH, archivedChats } from '../archive/useArchive';
 import { arrange, staleChats, TIDY_AFTER_DAYS, type ChatFilter } from './arrange';
+import { useDraftKeys } from '../chat/drafts';
 import { ChatRowItem, type Selection } from './ChatRowItem';
 import styles from './ChatList.module.css';
 import { useNewChatFolder, useNewChatIn, type NewChatState } from './newChat';
@@ -111,6 +112,8 @@ export function ChatList({ onNavigate }: { onNavigate?: () => void }) {
   const anchor = useRef<string | undefined>(undefined);
   const scroller = useRef<HTMLDivElement>(null);
   const newChatIn = useNewChatIn();
+  // Something written and not sent, here or on another device (ADR 0124).
+  const drafted = useDraftKeys();
   const startingIn = useNewChatFolder();
   const finger = useMediaQuery('(pointer: coarse)');
 
@@ -250,6 +253,7 @@ export function ChatList({ onNavigate }: { onNavigate?: () => void }) {
       <ChatRowItem
         key={chat.id}
         chat={chat}
+        drafted={drafted.has(chat.id)}
         folders={known}
         selection={selectionFor(chat)}
         onNavigate={onNavigate}

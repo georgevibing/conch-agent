@@ -68,6 +68,7 @@ import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import type { z } from 'zod';
 
 import { registerAttachmentRoutes } from './attachments/routes';
+import { registerDraftRoutes } from './drafts/routes';
 import { carriedIn, registerListenRoutes } from './research/listen';
 import { secretPlaces } from './conversations/sandbox';
 import { protectedPaths } from './lib/protect';
@@ -275,6 +276,7 @@ export async function buildApp(services: Services) {
   registerCloudRoutes(app, services.clouds);
   registerComputerUseRoutes(app, services.computerUse, gate);
   registerAttachmentRoutes(app, services.attachments);
+  registerDraftRoutes(app, services.drafts);
   registerVaultRoutes(app, services.vault, gate);
   registerPickRoutes(app);
   // Choosing a folder from any device: names only, never Conch's own or where keys are kept.

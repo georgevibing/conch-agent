@@ -104,8 +104,11 @@ export function ChatRowItem({
   onNavigate,
   pinNeighbours,
   onDropBefore,
+  drafted = false,
 }: {
   chat: ConversationSummary;
+  /** Something is written in it and not sent yet (ADR 0124). */
+  drafted?: boolean;
   folders: readonly ChatFolder[];
   selection: Selection;
   onNavigate?: () => void;
@@ -199,6 +202,8 @@ export function ChatRowItem({
     <>
       <ChatRow
         status={statusOf(chat, { stopped, open })}
+        // In the open chat, the box itself shows it.
+        draft={drafted && !open}
         dropBefore={dropping}
         disclosure={tree.disclosure}
         below={selection.selecting ? undefined : tree.below}

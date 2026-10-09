@@ -63,7 +63,8 @@ your desktop and the chat apps you already use.
   provider and in every chat app. [Slash commands](./apps/docs/content/reference/slash-commands.md)
 - **A chat list that stays tidy.** Pin, file into folders (hold to drag on a phone),
   start a chat inside a folder, and see which chats need you. Your apps sit on top
-  under **Apps**, with a folder for the rest. [Your chats](./apps/docs/content/features/chats.md)
+  under **Apps**, with a folder for the rest. What you didn't send stays as a **Draft**,
+  files and all, on every device. [Your chats](./apps/docs/content/features/chats.md)
 - **It says what it's doing, in plain words.** Instead of a wall of commands, each run
   of work is one line, like "Ran the tests · 241 passed", that opens into its steps
   and then the exact calls. Ask **Why?** about any step, and see what each reply
