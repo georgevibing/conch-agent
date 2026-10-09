@@ -157,6 +157,31 @@
     overflow-wrap: anywhere;
   }
 
+  /* The whole memory, under its headline: quieter, and only once asked for. */
+  .full > * {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    padding-block-start: var(--nc-space-0-5);
+  }
+
+  .fullText {
+    color: var(--nc-text-muted);
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+  }
+
+  /* “Show all”: a quiet word under the line, not a button that asks for attention. */
+  .words .toggle {
+    margin-inline-start: calc(-1 * var(--nc-space-1-5));
+    padding-block: var(--nc-space-0-5);
+    padding-inline: var(--nc-space-1-5);
+    color: var(--nc-text-subtle);
+    font-size: var(--nc-text-xs);
+  }
+
   .item[data-undone] .text {
     color: var(--nc-text-subtle);
     text-decoration-color: currentcolor;

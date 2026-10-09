@@ -2,6 +2,7 @@ import {
   UnderstoodProfile,
   avatarUrl,
   describeProfile,
+  headlineOf,
   type Memory,
   type MemoryKind,
   type Profile,
@@ -251,7 +252,7 @@ export function AboutYouPortrait({ editor }: { editor: AboutYouEditor }) {
       void api.deleteMemory(memory.id).then(() => {
         refresh();
         toast('Forgotten', {
-          description: memory.content,
+          description: headlineOf(memory),
           action: {
             label: 'Undo',
             onClick: () => void api.addMemory(memory.content, memory.kind).then(refresh, fail),

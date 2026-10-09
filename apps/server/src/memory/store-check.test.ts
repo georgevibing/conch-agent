@@ -79,6 +79,7 @@ const MUTATING: Record<string, (s: MemoryStore, id: string, ready: string) => Pr
   hold: (s, id) =>
     s.hold(id, { verdict: 'ask', reasons: [{ code: 'redirect', words: 'It would.' }] }),
   remove: (s, id) => s.remove(id),
+  setHeadline: (s, id) => s.setHeadline(id, 'Likes tea', 'Tea'),
   unforget: async (s, id) => {
     await s.remove(id);
     return s.unforget(id);

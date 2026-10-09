@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 
 import type { TranscriptItem } from '../../live/reducer';
 import { HeldMemory } from '../memory/HeldMemory';
+import { useMemoryHeadlines } from '../memory/headlines';
 import { memoryCall } from './MemorySteps';
 import { RunStories } from './Stories';
 import { storiesOf } from './telling';
@@ -21,6 +22,7 @@ export function MemoryStep({ item }: { item: Memory }) {
   const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
   // Told once for what it says, however often it's drawn (a fresh item each time is the same step).
   const { id, memoryId, content, action, decided, at, memory, held, pending } = item;
+  const headline = useMemoryHeadlines().get(memoryId);
   const { tools, stories, memories } = useMemo(() => {
     const step: Memory = {
       kind: 'memory',
@@ -34,10 +36,10 @@ export function MemoryStep({ item }: { item: Memory }) {
       ...(held && { held }),
       ...(pending && { pending }),
     };
-    const call = memoryCall(step, at ?? 0);
+    const call = memoryCall(step, at ?? 0, headline);
     const tools = [call];
     return { tools, stories: storiesOf(tools), memories: new Map([[call.id, step]]) };
-  }, [id, memoryId, content, action, decided, at, memory, held, pending]);
+  }, [id, memoryId, content, action, decided, at, memory, held, pending, headline]);
   return (
     <RunStories
       tools={tools}

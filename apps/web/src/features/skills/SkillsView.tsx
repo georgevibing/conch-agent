@@ -1,4 +1,4 @@
-import { fuzzyFilter, type Skill } from '@conch/protocol';
+import { fuzzyFilter, headlineOf, type Skill } from '@conch/protocol';
 import {
   Button,
   EmptyState,
@@ -163,7 +163,11 @@ function YourSkills() {
       <SkillCard
         name={skill.name}
         title={skill.title}
-        description={skill.description}
+        // In a few words (ADR 0003 § Headlines); the whole description is on the skill's page.
+        description={headlineOf({
+          content: skill.description,
+          ...(skill.headline && { headline: skill.headline }),
+        })}
         mode={skill.mode}
         // Conch's own need no label, and a provider that reads it says so already.
         source={

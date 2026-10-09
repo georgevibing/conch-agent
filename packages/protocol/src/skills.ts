@@ -7,6 +7,7 @@
 import { z } from 'zod';
 
 import { Id } from './common';
+import { MEMORY_HEADLINE_MAX } from './memory';
 import { SkillOrigin } from './market-basics';
 
 /**
@@ -197,6 +198,12 @@ export const Skill = z.object({
   signature: SkillSignature.optional(),
   /** Where it came from, when it was added from Discover (ADR 0074). */
   origin: SkillOrigin.optional(),
+  /**
+   * What its description says in a few words, for the list and the cards
+   * (ADR 0003 § Headlines): a small model's, kept beside the skill for exactly
+   * that description, never written into its SKILL.md and never read by a model.
+   */
+  headline: z.string().min(1).max(MEMORY_HEADLINE_MAX).optional().catch(undefined),
 });
 export type Skill = z.infer<typeof Skill>;
 

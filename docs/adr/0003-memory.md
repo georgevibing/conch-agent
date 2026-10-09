@@ -44,3 +44,35 @@ Users can see, understand and control everything Conch remembers. Retrieval qual
 keyword-level; when memory counts grow, add local embeddings behind the same `recall`
 tool without changing storage or UI. (Done in [ADR 0032](./0032-it-learns-you.md):
 hybrid search, a tidy-up with Undo, and memories that wait for an OK.)
+
+## Update (2026-10-09): Headlines
+
+A memory learned from a long chat can run to a paragraph, and the places that sum
+memories up (the morning's note, a memory's step in the chat, Activity, toasts) showed
+all of it. A skill's description from another app can be as long.
+
+- **A headline, for the person only.** `Memory.headline` (protocol, optional, at most
+  80 characters, dropped rather than failing a memory) says a memory in about twelve
+  plain words, in its own language, with no paths or links. It's kept in the memory's
+  file as one line of JSON, inside the seal. It's never in a prompt, `recall` or the
+  check: models read the memory's words, unchanged.
+- **Written once, for exactly those words.** `memory/headline.ts` asks the small model
+  every small job uses (`providers/small.ts`: the default provider's cheapest model,
+  then another with room, then one on this computer), up to eight in one question,
+  only for memories longer than a headline. Its answer is cleaned (one line, no path,
+  link, code or invisible characters) or thrown away. New words drop the headline in
+  `#commit`, and `setHeadline` goes through the same gate without changing anything a
+  model or the check reads. A file changed outside Conch loses its headline.
+- **Never for a memory that waits.** One held by the check or waiting for an OK isn't
+  sent for a headline: the person reads its own words before deciding.
+- **Saved, updated, or shown.** New and changed memories are asked about as they're
+  written; older ones the first time `GET /api/memories` lists them, in the background,
+  in batches. Nobody to ask, and it waits fifteen minutes before trying again.
+- **A fallback that's honest.** Until there's a headline, `clipHeadline` takes the
+  first clause, cut at a word with “…” if it's still too long. Wherever a headline
+  stands in for the words, they're one press away: **Show all** in the note, the step's
+  own row, the memory's page; **Undo** stays.
+- **Cost.** Counted like the other small jobs: the month's spend and learning's cap.
+- **Skills too.** A long skill description gets a headline the same way, kept in
+  `skill-headlines.json` (derived, not backed up) by the description's hash, never in
+  its `SKILL.md`, which is signed and read by every model.

@@ -50,6 +50,7 @@ import { CappedItem, SpendNoteItem } from '../spend/Spend';
 import { QuestionItem } from '../questions/QuestionItem';
 import { PastChatsItem } from './PastChatsItem';
 import { HeldMemoryItem } from './MemoryStep';
+import { useMemoryHeadlines } from '../memory/headlines';
 import { isMemoryStep, memoryCall } from './MemorySteps';
 import { LearnedChatLine } from '../learning/LearnedChatLine';
 import { HeldItem, RoutedItem } from './OfflineBits';
@@ -148,13 +149,16 @@ interface Turn {
 }
 
 /** Each turn's calls and change sets, by the line where it ended; and the one still going. */
-function turnsOf(items: readonly TranscriptItem[]): { ended: Map<string, Turn>; current: Turn } {
+function turnsOf(
+  items: readonly TranscriptItem[],
+  headlines: ReadonlyMap<string, string>,
+): { ended: Map<string, Turn>; current: Turn } {
   const ended = new Map<string, Turn>();
   let turn: Turn = { tools: [], files: [] };
   for (const item of items) {
     if (isTurnStart(item)) turn = { tools: [], files: [] };
     else if (item.kind === 'tool' && !isImageTool(item.name)) turn.tools.push(item);
-    else if (isMemoryStep(item)) turn.tools.push(memoryCall(item, 0));
+    else if (isMemoryStep(item)) turn.tools.push(memoryCall(item, 0, headlines.get(item.memoryId)));
     else if (item.kind === 'files') turn.files.push(item);
     else if (item.kind === 'turn-end') {
       ended.set(item.id, turn);
@@ -189,7 +193,7 @@ const aside = (block: Block) =>
  * Consecutive tool calls are grouped into one run, told as stories (what it
  * read and changed meanwhile goes with it); browser steps into one trail.
  */
-function blocks(items: TranscriptItem[]): Block[] {
+function blocks(items: TranscriptItem[], headlines: ReadonlyMap<string, string>): Block[] {
   const out: Block[] = [];
   let at = 0;
   let turn = '';
@@ -212,7 +216,7 @@ function blocks(items: TranscriptItem[]): Block[] {
     }
     // What it remembered or forgot is a step of the run like any other (ADR 0103).
     if (isMemoryStep(item)) {
-      const call = memoryCall(item, at);
+      const call = memoryCall(item, at, headlines.get(item.memoryId));
       if (run?.tools) run.tools.push(call);
       else out.push((run = { key: `tools-${call.id}`, tools: [call], at }));
       (run.memories ??= new Map()).set(call.id, item);
@@ -514,7 +518,9 @@ export const Transcript = memo(function Transcript({
   const lastErrorId = [...items].reverse().find((i) => i.kind === 'turn-end')?.id;
   // The first time a chat reads something from outside says what changes; the rest are brief.
   const firstTaint = items.find((i) => i.kind === 'taint')?.id;
-  const turns = turnsOf(items);
+  // Each memory's headline, for its step (ADR 0003): asked for only when the chat has one.
+  const headlines = useMemoryHeadlines(items.some((i) => i.kind === 'memory'));
+  const turns = turnsOf(items, headlines);
   const turnStart = items.findLastIndex(isTurnStart);
   const position = new Map(items.map((item, n) => [item, n]));
   const started = items[turnStart];
@@ -607,6 +613,7 @@ export const Transcript = memo(function Transcript({
       shown.filter((i) => !folded.has(i.id) || i.kind !== 'permission'),
       turnRunning,
     ),
+    headlines,
   );
   const rows = replies(all);
   const lastRow = rows.at(-1);

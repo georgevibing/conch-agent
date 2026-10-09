@@ -1,5 +1,5 @@
 import { RememberedNote, toast } from '@conch/nacre';
-import type { ToolLabel } from '@conch/protocol';
+import { headlineOf, type ToolLabel } from '@conch/protocol';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
@@ -24,15 +24,20 @@ export const isMemoryStep = (item: TranscriptItem): item is Memory =>
 /** Asked about and turned down: it was never remembered, a no like any step you declined. */
 export const turnedDown = (item: Memory) => asked(item) && item.decided === 'undone';
 
-/** The step's words: what it did, and what you said since. */
-function labelOf(item: Memory): ToolLabel {
+/**
+ * The step's words: what it did, to which memory in a few words (its
+ * headline, ADR 0003 § Headlines), and what you said since. The whole memory
+ * is under the step, with Undo, once it's opened.
+ */
+function labelOf(item: Memory, headline: string | undefined): ToolLabel {
+  const what = `“${headlineOf({ content: item.content, ...(headline && { headline }) })}”`;
   const forgot = item.action === 'forgotten';
   // Asked and turned down: it was never remembered, so there's nothing to call undone.
   if (turnedDown(item))
     return {
       family: 'remember',
       doing: 'Remembering something',
-      done: 'Didn’t remember something',
+      done: `Didn’t remember ${what}`,
     };
   const outcome =
     item.decided === 'undone' && !forgot
@@ -43,7 +48,7 @@ function labelOf(item: Memory): ToolLabel {
   return {
     family: 'remember',
     doing: forgot ? 'Forgetting something' : 'Remembering something',
-    done: forgot ? 'Forgot something' : 'Remembered something',
+    done: forgot ? `Forgot ${what}` : `Remembered ${what}`,
     ...(outcome && { outcome }),
   };
 }
@@ -53,12 +58,13 @@ function labelOf(item: Memory): ToolLabel {
  * their events do. Each is drawn as the call it was, so it takes its place
  * in the run's stories, glyph, timeline and all. Items are replaced, never
  * changed, so one call per item keeps the stories' words from being worked
- * out again.
+ * out again — unless its headline arrives meanwhile (ADR 0003 § Headlines).
  */
-const calls = new WeakMap<Memory, Tool>();
+const calls = new WeakMap<Memory, { headline: string | undefined; call: Tool }>();
 
-export function memoryCall(item: Memory, at: number): Tool {
-  let call = calls.get(item);
+export function memoryCall(item: Memory, at: number, headline?: string): Tool {
+  const known = calls.get(item);
+  let call = known && known.headline === headline ? known.call : undefined;
   if (!call) {
     call = {
       kind: 'tool',
@@ -67,9 +73,9 @@ export function memoryCall(item: Memory, at: number): Tool {
       input: { content: item.content },
       status: 'success',
       startedAt: item.at ?? at,
-      label: labelOf(item),
+      label: labelOf(item, headline),
     };
-    calls.set(item, call);
+    calls.set(item, { headline, call });
   }
   return call;
 }

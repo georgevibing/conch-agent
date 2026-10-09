@@ -31,6 +31,8 @@ Each skill has one of three settings:
 
 Either way, a line in the chat names the skill that shaped the reply. Skills are in <kbd>mod+k</kbd> too: choosing one puts it in the message box, ready to send.
 
+In the list, a long description is said in a few words, written once by a small model; the skill's page shows all of it, and your assistant always reads all of it.
+
 Change the setting on the skill's page, or flip its switch in the list. **Try it in a chat** starts a new chat with the skill filled in.
 
 ## When a skill that's off would help

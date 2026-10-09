@@ -9,6 +9,7 @@ import {
 } from 'react';
 
 import { Button } from '../../components/Button';
+import { Collapsible } from '../../components/Collapsible';
 import { IconButton } from '../../components/IconButton';
 import { cx } from '../../utils/cx';
 import styles from './MorningDigest.module.css';
@@ -27,10 +28,18 @@ export type DigestKind = 'learned' | 'replaced' | 'merged' | 'tidied';
 export interface DigestLine {
   id: string;
   kind: DigestKind;
-  /** The memory as it is now. */
+  /** The memory as it is now, in full. */
   text: string;
+  /**
+   * The memory in a few words (ADR 0003 § Headlines), shown in its place;
+   * the whole of it is one press away, under “Show all”. Left out (or the
+   * same as `text`), the line is the memory itself.
+   */
+  headline?: string;
   /** What it replaced, for `replaced`. */
   was?: string;
+  /** What it replaced, in a few words. */
+  wasHeadline?: string;
   /** `undone`: you took it back; it stays, struck through, until the card goes. */
   state: 'applied' | 'undone';
 }
@@ -87,6 +96,14 @@ export function MorningDigest({
   ...props
 }: MorningDigestProps) {
   const [leaving, setLeaving] = useState(false);
+  const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
+  const toggle = (id: string, opened: boolean) =>
+    setOpen((was) => {
+      const next = new Set(was);
+      if (opened) next.add(id);
+      else next.delete(id);
+      return next;
+    });
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
   const dismiss = () => {
@@ -127,6 +144,15 @@ export function MorningDigest({
           {shown.map((item, i) => {
             const Icon = ICONS[item.kind];
             const undone = item.state === 'undone';
+            // In a few words, with the whole of it one press away: never cut without saying so.
+            const short = item.headline && item.headline !== item.text ? item.headline : undefined;
+            const wasShort =
+              item.was && item.wasHeadline && item.wasHeadline !== item.was
+                ? item.wasHeadline
+                : undefined;
+            const folds = Boolean(short || wasShort);
+            const opened = folds && open.has(item.id);
+            const said = short ?? item.text;
             return (
               <li
                 key={item.id}
@@ -136,18 +162,38 @@ export function MorningDigest({
                 style={{ '--i': i } as CSSProperties}
               >
                 <Icon aria-hidden className={styles.icon} />
-                <div className={styles.words}>
+                <Collapsible
+                  className={styles.words}
+                  open={opened}
+                  onOpenChange={(next) => toggle(item.id, next)}
+                >
                   <span className={styles.text}>
                     <span className="nc-visually-hidden">{SAID[item.kind]}: </span>
-                    {item.text}
+                    {said}
                     {undone && <span className="nc-visually-hidden"> (undone)</span>}
                   </span>
-                  {item.was && (
+                  {item.was && !opened && (
                     <span className={styles.was}>
-                      Was: <s>{item.was}</s>
+                      Was: <s>{wasShort ?? item.was}</s>
                     </span>
                   )}
-                </div>
+                  {folds && (
+                    <>
+                      <Collapsible.Content className={styles.full}>
+                        {short && <span className={styles.fullText}>{item.text}</span>}
+                        {item.was && (
+                          <span className={styles.was}>
+                            Was: <s>{item.was}</s>
+                          </span>
+                        )}
+                      </Collapsible.Content>
+                      <Collapsible.Trigger chevron={false} className={styles.toggle}>
+                        {opened ? 'Show less' : 'Show all'}{' '}
+                        <span className="nc-visually-hidden">of “{said}”</span>
+                      </Collapsible.Trigger>
+                    </>
+                  )}
+                </Collapsible>
                 {undone ? (
                   <span className={styles.undoneTag}>Undone</span>
                 ) : (
@@ -157,7 +203,7 @@ export function MorningDigest({
                       variant="ghost"
                       tone="neutral"
                       loading={busy === item.id}
-                      aria-label={`Undo “${item.text}”`}
+                      aria-label={`Undo “${said}”`}
                       onClick={() => onUndo(item.id)}
                     >
                       Undo

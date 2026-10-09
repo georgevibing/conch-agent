@@ -78,7 +78,8 @@ export type CommitMethod =
   | 'remove'
   | 'supersede'
   | 'unsupersede'
-  | 'reconsider';
+  | 'reconsider'
+  | 'headline';
 
 const OK: Verdict = { verdict: 'ok', reasons: [] };
 
@@ -243,6 +244,28 @@ export class MemoryStore {
       if (id && !current) return { verdict: OK };
       const next = make(current);
       if (next === undefined) return { ...(current && { memory: current }), verdict: OK };
+      if (method === 'headline') {
+        // Words for the person only (ADR 0003 § Headlines): for a memory in use, for
+        // exactly the words it has, and nothing else about it changes.
+        if (
+          !current ||
+          !next ||
+          next.content !== current.content ||
+          current.pending ||
+          current.held
+        )
+          return { ...(current && { memory: current }), verdict: OK };
+        const { headline: _was, ...same } = current;
+        const record = Memory.parse({ ...same, ...(next.headline && { headline: next.headline }) });
+        const { key } = await this.#sealKey();
+        await writeFileAtomic(
+          safeJoin(this.dir, `${record.id}.md`),
+          sealed(serialise(record), key),
+        );
+        memories.set(record.id, record);
+        this.changed.emit();
+        return { memory: record, verdict: OK };
+      }
       if (next === null) {
         if (!current) return { verdict: OK };
         const { key } = await this.#sealKey();
@@ -289,7 +312,7 @@ export class MemoryStore {
         verdict.yours;
       const held = holdOf(verdict);
       const provenance = cleanProvenance(next.provenance);
-      const { pending: _p, held: _h, untrusted, provenance: _v, ...rest } = next;
+      const { pending: _p, held: _h, untrusted, provenance: _v, headline: _l, ...rest } = next;
       const committed: Memory = {
         ...rest,
         content,
@@ -330,6 +353,9 @@ export class MemoryStore {
           committed.provenance = { ...provenance, yours: true };
         else if (provenance?.yours) committed.provenance = { ...provenance, yours: false };
       }
+      // A headline is for exactly the words it was written for, and only while it's in use.
+      if (current?.headline && current.content === content && !committed.pending)
+        committed.headline = current.headline;
       const record = Memory.parse(committed);
       // Its verdict and its words in one atomic write: never recallable without a verdict.
       const { key } = await this.#sealKey();
@@ -510,6 +536,29 @@ export class MemoryStore {
       'check',
     );
     return restored ?? parsed;
+  }
+
+  /**
+   * A small model's headline for a memory (ADR 0003 § Headlines), kept with it
+   * only while its words are still `words` and it's in use; `undefined` clears
+   * it. Nothing a model or the check reads changes, and it isn't “updated”.
+   */
+  async setHeadline(id: string, words: string, headline: string | undefined): Promise<boolean> {
+    let set = false;
+    const { memory } = await this.#commit(
+      'headline',
+      id,
+      (current) => {
+        if (!current || current.content !== words || current.headline === headline)
+          return undefined;
+        set = true;
+        const { headline: _was, ...rest } = current;
+        return headline ? { ...rest, headline } : rest;
+      },
+      undefined,
+      'stricter',
+    );
+    return set && memory?.headline === headline;
   }
 
   /** Forget a memory. Conch keeps its own sealed copy aside, for Undo. */
@@ -819,7 +868,15 @@ export class MemoryStore {
         on,
       });
       const held = holdOf(verdict);
-      const { held: _claimed, untrusted: _note, provenance, pending, ...rest } = memory;
+      // What it says about itself isn't believed either: its headline is written again.
+      const {
+        held: _claimed,
+        untrusted: _note,
+        provenance,
+        pending,
+        headline: _headline,
+        ...rest
+      } = memory;
       const cleaned = cleanProvenance(provenance);
       const checked = Memory.parse({
         ...rest,
@@ -888,6 +945,8 @@ export function serialise(m: Memory): string {
     // Optional, so the version before reads the memory and leaves them out (ADR 0051, ADR 0088).
     ...(m.about ? [`about: ${m.about}`] : []),
     ...(m.learned ? [`learned: ${m.learned}`] : []),
+    // For the person only, as JSON so it stays one line (ADR 0003 § Headlines).
+    ...(m.headline ? [`headline: ${JSON.stringify(m.headline)}`] : []),
     `createdAt: ${m.createdAt}`,
     `updatedAt: ${m.updatedAt}`,
     ...(m.invalidAt !== undefined ? [`invalidAt: ${m.invalidAt}`] : []),
@@ -908,7 +967,7 @@ export function parse(text: string): Memory | undefined {
     const value = line.slice(i + 1).trim();
     meta[key] = /At$/.test(key) ? Number(value) : value;
   }
-  const { pending, held, provenance, hash: _hash, seal: _seal, ...rest } = meta;
+  const { pending, held, provenance, headline, hash: _hash, seal: _seal, ...rest } = meta;
   const json = (value: unknown) => {
     try {
       return typeof value === 'string' ? (JSON.parse(value) as unknown) : undefined;
@@ -921,6 +980,7 @@ export function parse(text: string): Memory | undefined {
     ...(pending === 'true' && { pending: true }),
     ...(held !== undefined && { held: json(held) }),
     ...(provenance !== undefined && { provenance: json(provenance) }),
+    ...(headline !== undefined && { headline: json(headline) }),
     content: normalise(match[2] ?? ''),
   });
   return result.success ? result.data : undefined;

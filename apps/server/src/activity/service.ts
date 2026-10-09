@@ -6,6 +6,7 @@
  */
 import {
   fuzzyMatch,
+  headlineOf,
   type ActivityEntry,
   type ActivityKind,
   type ActivityPage,
@@ -19,6 +20,8 @@ export interface ActivitySource {
   events(id: string): Promise<ConversationEvent[]>;
   /** Where a change set stands now (ADR 0030): undone since, or expired. */
   undoState?: (changeSetId: string) => Promise<'applied' | 'undone' | 'expired' | undefined>;
+  /** Each memory's headline by id (ADR 0003 § Headlines): its row says it in a few words. */
+  headlines?: () => Promise<ReadonlyMap<string, string>>;
 }
 
 const FILE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
@@ -55,7 +58,13 @@ export function didWhat(name: string, input: Record<string, unknown>): string {
 export function entriesOf(
   chat: { id: string; title: string; origin?: { kind: string } },
   events: ConversationEvent[],
+  headlines: ReadonlyMap<string, string> = new Map(),
 ): ActivityEntry[] {
+  // A memory in a few words (ADR 0003 § Headlines); the whole of it is in the chat, and on `memory`.
+  const said = (content: string, id?: string) => {
+    const headline = id ? headlines.get(id) : undefined;
+    return headlineOf({ content, ...(headline && { headline }) });
+  };
   const out: ActivityEntry[] = [];
   const conversation = {
     id: chat.id,
@@ -247,15 +256,15 @@ export function entriesOf(
           kind: 'memory',
           // Held by the memory check (ADR 0087), with why; or waiting for an OK (ADR 0032).
           title: e.memory.held
-            ? `${e.memory.held.verdict === 'refuse' ? 'Refused to remember' : 'Held to ask you'}: ${e.memory.content.slice(0, 120)}. ${e.memory.held.reasons[0]?.words ?? ''}`.trim()
-            : `${e.memory.pending ? 'Held to ask you' : 'Remembered'}: ${e.memory.content.slice(0, 120)}`,
+            ? `${e.memory.held.verdict === 'refuse' ? 'Refused to remember' : 'Held to ask you'}: ${said(e.memory.content)}. ${e.memory.held.reasons[0]?.words ?? ''}`.trim()
+            : `${e.memory.pending ? 'Held to ask you' : 'Remembered'}: ${said(e.memory.content, e.memory.id)}`,
           status: e.memory.held && !answeredMemories.has(e.memory.id) ? 'waiting' : 'done',
           memory: { id: e.memory.id, content: e.memory.content, action: 'saved' },
         });
         break;
       // What you chose about a memory it learned (ADR 0087): kept, in your words, anyway, or not.
       case 'memory.decided': {
-        const what = e.content ? `: ${e.content.slice(0, 120)}` : '';
+        const what = e.content ? `: ${said(e.content, e.memoryId)}` : '';
         out.push({
           ...base,
           id: `${chat.id}:${e.seq}`,
@@ -295,7 +304,7 @@ export function entriesOf(
           id: `${chat.id}:${e.seq}`,
           at: e.at,
           kind: 'memory',
-          title: `Forgot: ${e.content.slice(0, 120)}`,
+          title: `Forgot: ${e.memory?.headline ?? said(e.content)}`,
           status: 'done',
           memory: { id: e.memoryId, content: e.content, action: 'forgotten' },
         });
@@ -308,7 +317,7 @@ export function entriesOf(
             id: `${chat.id}:${e.seq}:${i}`,
             at: e.at,
             kind: 'memory',
-            title: `${item.state === 'waiting' ? 'Held to ask you' : 'Learned'}: ${item.text.slice(0, 120)}`,
+            title: `${item.state === 'waiting' ? 'Held to ask you' : 'Learned'}: ${said(item.text)}`,
             status: 'done',
           }),
         );
@@ -346,9 +355,14 @@ export class Activity {
     options: { before?: number; kind?: ActivityKind; limit?: number; q?: string } = {},
   ): Promise<ActivityPage> {
     const query = options.q?.trim() ?? '';
+    // A memory is found by all its words, not only the few its row shows.
     const matches = (entry: ActivityEntry) =>
       !query ||
-      fuzzyMatch(`${entry.title.replaceAll('`', '')} ${entry.conversation.title}`, query) !== null;
+      fuzzyMatch(
+        `${entry.title.replaceAll('`', '')} ${entry.memory?.content ?? ''} ${entry.conversation.title}`,
+        query,
+      ) !== null;
+    const headlines = (await this.source.headlines?.().catch(() => undefined)) ?? new Map();
     const limit = Math.min(Math.max(options.limit ?? 60, 1), 200);
     const before = options.before ?? Number.POSITIVE_INFINITY;
     const chats = (await this.source.list()).sort((a, b) => b.updatedAt - a.updatedAt);
@@ -364,7 +378,7 @@ export class Activity {
         stopped = true;
         break;
       }
-      const entries = entriesOf(chat, await this.source.events(chat.id).catch(() => []));
+      const entries = entriesOf(chat, await this.source.events(chat.id).catch(() => []), headlines);
       for (const entry of entries)
         if (entry.at < before && (!options.kind || entry.kind === options.kind) && matches(entry))
           found.push(entry);

@@ -417,6 +417,11 @@ export const RULES: readonly BackupRule[] = [
     why: 'Skills Conch offered from work that went well in your chats, which chats it already looked at, and the offers you turned down.',
   },
   {
+    match: 'skill-headlines.json',
+    class: 'derived',
+    why: 'Each long skill description in a few words, for the skills list. Written again by a small model when needed.',
+  },
+  {
     match: 'skill-usage.json',
     class: 'kept',
     group: 'skills',

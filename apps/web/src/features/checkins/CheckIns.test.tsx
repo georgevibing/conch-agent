@@ -310,6 +310,51 @@ describe('the morning’s note', () => {
     await waitFor(() => expect(screen.queryByRole('region', { name: /slept|looked/ })).toBeNull());
   });
 
+  it('says each long thing in a few words, the whole of it one press away, Undo and all', async () => {
+    const user = userEvent.setup();
+    const full =
+      'George tracks his wife Jouda’s job search (started July 2026) in a JSON database at ~/.conch/workspace/jouda-report/data/jouda_job_search.json. When George asks to update it, search her mailbox from last_synced onward, merge into the JSON, and optionally regenerate the PDF.';
+    const long = { ...memory(full), id: 'm_long' };
+    const other = { ...memory(`${full} Also the cover letters.`), id: 'm_other' };
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/learning': () =>
+        learning([learned({ after: long }), learned({ id: 'le_2', after: other })]),
+      'GET /api/memory/tidy': () => ({ nightly: true, running: false, runs: [] }),
+      // The headline was written after the record was: the memory as it is now has it.
+      'GET /api/memories': () => [
+        { ...long, headline: 'Tracks Jouda’s job search in a JSON file, and how to update it' },
+        other,
+      ],
+      'POST /api/learning/answer': () => learned({ state: 'undone', after: long }),
+    });
+    renderApp(<MorningNote />);
+    const card = await screen.findByRole('region', { name: /slept|looked/ });
+    await waitFor(() =>
+      expect(card).toHaveTextContent(
+        'Tracks Jouda’s job search in a JSON file, and how to update it',
+      ),
+    );
+    // Without a headline yet, its first clause, never the paragraph.
+    expect(card).toHaveTextContent('George tracks his wife Jouda’s job search');
+    expect(card).not.toHaveTextContent('last_synced');
+    await user.click(
+      screen.getByRole('button', { name: /^Show all of “Tracks Jouda’s job search in a JSON/ }),
+    );
+    expect(card).toHaveTextContent('search her mailbox from last_synced onward');
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Undo “Tracks Jouda’s job search in a JSON file, and how to update it”',
+      }),
+    );
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/api/learning/answer')?.body).toEqual({
+        entryId: 'le_1',
+        answer: 'undo',
+      }),
+    );
+  });
+
   it('is never on the new chat’s screen, even in the morning with something learned', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true, now: new Date(2026, 9, 9, 8, 0) });
     try {

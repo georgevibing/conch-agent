@@ -1098,9 +1098,11 @@ export async function buildApp(services: Services) {
   );
 
   // ── Skills ─────────────────────────────────────────────────────────────
-  app.get<{ Querystring: { refresh?: string } }>('/api/skills', (request) =>
-    services.skills.list(request.query.refresh === '1'),
-  );
+  // Each with its headline when there's one; a long description without one gets one, later.
+  app.get<{ Querystring: { refresh?: string } }>('/api/skills', async (request) => {
+    const list = await services.skills.list(request.query.refresh === '1');
+    return { ...list, skills: await services.skillHeadlines.fill(list.skills) };
+  });
   app.post('/api/skills/draft', async (request, reply) => {
     const body = parse(DraftSkillBody, request.body, reply);
     if (!body) return;
@@ -1267,7 +1269,12 @@ export async function buildApp(services: Services) {
   });
 
   // ── Memory ─────────────────────────────────────────────────────────────
-  app.get('/api/memories', () => services.memory.list());
+  app.get('/api/memories', async () => {
+    const memories = await services.memory.list();
+    // Shown now: any long one without a headline gets one in the background (ADR 0003).
+    services.memoryHeadlines.shown(memories);
+    return memories;
+  });
   // Adding and editing a memory by hand are in `memory/routes.ts`: the person's answer (ADR 0087).
   app.delete<{ Params: { id: string } }>('/api/memories/:id', async (request, reply) => {
     const removed = await services.memory.remove(request.params.id);
