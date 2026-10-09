@@ -6,8 +6,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { expectAccessible, renderNacre } from '../../test/render';
 import {
   McpScopePicker,
+  OtherAppsArt,
   OtherAppTargets,
   PairedAppList,
+  PairedAppListSkeleton,
   type McpScopeChoice,
   type OtherAppTarget,
 } from './OtherApps';
@@ -127,5 +129,45 @@ describe('PairedAppList', () => {
   it('says plainly when nothing is paired', () => {
     renderNacre(<PairedAppList apps={[]} />);
     expect(screen.getByText(/No other apps use Conch yet/)).toBeInTheDocument();
+  });
+});
+
+describe('PairedAppListSkeleton', () => {
+  it('holds room for each row, out of the way of assistive tech', async () => {
+    const { container } = renderNacre(
+      <div aria-busy="true">
+        <PairedAppListSkeleton rows={3} />
+      </div>,
+    );
+    const skeleton = container.querySelector('[data-skeleton]');
+    expect(skeleton).toHaveAttribute('aria-hidden', 'true');
+    expect(skeleton?.children).toHaveLength(3);
+    expect(screen.queryByRole('list')).toBeNull();
+    await expectAccessible(container);
+  });
+});
+
+describe('OtherAppsArt', () => {
+  it('is decoration only, with at most three apps', async () => {
+    const { container } = renderNacre(
+      <OtherAppsArt
+        apps={[
+          { name: 'Claude Desktop' },
+          { name: 'Cursor' },
+          { name: 'VS Code' },
+          { name: 'Zed' },
+        ]}
+      />,
+    );
+    const art = container.querySelector('[aria-hidden]');
+    expect(art).toHaveAttribute('aria-hidden', 'true');
+    expect(art).not.toHaveTextContent('Z');
+    expect(screen.queryByRole('img')).toBeNull();
+    await expectAccessible(container);
+  });
+
+  it('draws any app when none are named', () => {
+    const { container } = renderNacre(<OtherAppsArt />);
+    expect(container.querySelectorAll('svg').length).toBeGreaterThanOrEqual(3);
   });
 });

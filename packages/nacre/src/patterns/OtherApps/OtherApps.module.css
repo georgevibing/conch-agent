@@ -68,6 +68,142 @@
     padding-block: var(--nc-space-2);
   }
 
+  /*
+   * On a phone the buttons go under the words, and start where the words do,
+   * so a row reads as one thing rather than a logo over a toolbar.
+   */
+  .list {
+    container-type: inline-size;
+  }
+
+  @container (max-width: 30rem) {
+    .row > .actions {
+      flex-basis: 100%;
+      padding-inline-start: calc(2.5rem + var(--nc-space-3));
+      margin-block-start: calc(-1 * var(--nc-space-1));
+    }
+
+    /* The bin says it on its own (its name stays for assistive tech), so the row keeps to one line of buttons. */
+    .remove > :not([aria-hidden]) {
+      display: none;
+    }
+  }
+
+  /* ── While the list loads ──────────────────────────────────────────── */
+  /* Sized where they're drawn (the skeleton's own block size would win here). */
+  .skeletonLogo {
+    flex-shrink: 0;
+  }
+
+  .skeletonLogo,
+  .skeletonActions {
+    border-radius: var(--nc-radius-md);
+  }
+
+  /* ── The picture for nothing paired yet ────────────────────────────── */
+  .art {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--nc-space-2);
+    padding-block: var(--nc-space-2);
+  }
+
+  .artFan {
+    display: flex;
+    align-items: center;
+  }
+
+  /* Fanned like cards in a hand: each a little behind and turned. */
+  .artTile {
+    /* Set where the picture sits on something other than the page. */
+    --oa-ring: var(--nc-canvas);
+
+    display: inline-grid;
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    box-shadow:
+      0 0 0 3px var(--oa-ring),
+      var(--nc-elevation-2);
+  }
+
+  .artTile + .artTile {
+    margin-inline-start: calc(-1 * var(--nc-space-4));
+  }
+
+  .artTile:nth-child(1) {
+    transform: rotate(-8deg) translateY(4px);
+  }
+
+  .artTile:nth-child(2) {
+    z-index: 1;
+    transform: translateY(-4px);
+  }
+
+  .artTile:nth-child(3) {
+    transform: rotate(8deg) translateY(4px);
+  }
+
+  .artLink {
+    position: relative;
+    inline-size: 4.5rem;
+    block-size: 2px;
+  }
+
+  .artTrack,
+  .artFlow {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--nc-radius-full);
+  }
+
+  .artTrack {
+    background: repeating-linear-gradient(90deg, var(--nc-gray-7) 0 4px, transparent 4px 9px);
+  }
+
+  /* Light drifting from the apps to Conch, slowly: calm, not busy. */
+  .artFlow {
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--nc-accent-9) 45%,
+      var(--nc-pearl-2) 55%,
+      transparent
+    );
+    background-size: 50% 100%;
+    background-repeat: no-repeat;
+    opacity: calc(0.85 * var(--nc-lustre, 1));
+    animation: oa-drift 4.2s var(--nc-ease-in-out) infinite;
+  }
+
+  .artConch {
+    display: grid;
+    place-items: center;
+    inline-size: 3.5rem;
+    block-size: 3.5rem;
+  }
+
+  @keyframes oa-drift {
+    from {
+      background-position: -100% 0;
+    }
+    to {
+      background-position: 200% 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .artFlow {
+      animation: none;
+      opacity: 0;
+    }
+  }
+
+  [data-nacre-motion='reduced'] .artFlow {
+    animation: none;
+    opacity: 0;
+  }
+
   /* ── What an app may use ───────────────────────────────────────────── */
   .picker {
     display: flex;

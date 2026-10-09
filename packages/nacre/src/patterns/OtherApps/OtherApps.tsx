@@ -1,9 +1,19 @@
-import { Globe, MessageSquare, SlidersHorizontal, Trash2 } from 'lucide-react';
+import {
+  AppWindow,
+  Code2,
+  Globe,
+  MessageSquare,
+  SlidersHorizontal,
+  Terminal,
+  Trash2,
+} from 'lucide-react';
 import { useId, type ComponentProps, type ReactNode } from 'react';
 
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { Checkbox } from '../../components/Checkbox';
+import { Pearl } from '../../components/Pearl';
+import { Skeleton } from '../../components/Skeleton';
 import { cx } from '../../utils/cx';
 import { IntegrationLogo } from '../Integrations/IntegrationLogo';
 import styles from './OtherApps.module.css';
@@ -279,6 +289,7 @@ export function PairedAppList({
                   loading={busy === app.id}
                   onClick={() => onRemove(app)}
                   aria-label={`Remove ${app.name}`}
+                  className={styles.remove}
                 >
                   Remove
                 </Button>
@@ -287,6 +298,105 @@ export function PairedAppList({
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+export interface PairedAppListSkeletonProps extends Omit<ComponentProps<'div'>, 'children'> {
+  /** How many rows to hold room for. */
+  rows?: number;
+}
+
+/**
+ * `PairedAppList` while it's on its way: each row's logo, name, what it may
+ * use and when, and room for its buttons, at exactly a real row's height, so
+ * nothing moves when the list lands. Hidden from assistive tech: say
+ * `aria-busy` on what holds it.
+ */
+export function PairedAppListSkeleton({
+  rows = 2,
+  className,
+  ...props
+}: PairedAppListSkeletonProps) {
+  return (
+    <div aria-hidden data-skeleton="" className={cx(styles.list, className)} {...props}>
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className={styles.row}>
+          <Skeleton shape="block" width="2.5rem" height="2.5rem" className={styles.skeletonLogo} />
+          <div className={styles.body}>
+            <p className={styles.name}>
+              <Skeleton width={i % 2 ? '28%' : '36%'} />
+            </p>
+            <p className={styles.uses}>
+              <Skeleton width={i % 2 ? '48%' : '62%'} />
+            </p>
+            <p className={styles.meta}>
+              <Skeleton width="30%" />
+            </p>
+          </div>
+          <div className={styles.actions}>
+            <Skeleton
+              shape="block"
+              width="9rem"
+              height="var(--nc-control-sm)"
+              className={styles.skeletonActions}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── The picture for nothing paired yet ───────────────────────────────────
+
+export interface OtherAppsArtApp {
+  name: string;
+  brand?: string;
+  color?: string;
+}
+
+export interface OtherAppsArtProps extends Omit<ComponentProps<'div'>, 'children'> {
+  /** Up to three apps, fanned at the start. Without them, three quiet app glyphs. */
+  apps?: OtherAppsArtApp[];
+}
+
+/** Any app: a window, an editor, a terminal, each on a hue of its own. */
+const ANY_APP = [
+  { name: 'A window', icon: <AppWindow /> },
+  { name: 'An editor', icon: <Code2 /> },
+  { name: 'A terminal', icon: <Terminal /> },
+];
+
+/**
+ * A small picture for "use Conch from your other apps": a fan of app tiles,
+ * a dotted thread with light drifting slowly along it, and Conch's pearl at
+ * its end. Decorative; the words beside it say what it means. Made for
+ * `EmptyState`'s `media`.
+ */
+export function OtherAppsArt({ apps, className, ...props }: OtherAppsArtProps) {
+  const tiles = apps?.length ? apps.slice(0, 3) : ANY_APP;
+  return (
+    <div aria-hidden className={cx(styles.art, className)} {...props}>
+      <span className={styles.artFan}>
+        {tiles.map((app) => (
+          <span key={app.name} className={styles.artTile}>
+            <IntegrationLogo
+              name={app.name}
+              {...('icon' in app ? { icon: app.icon } : { brand: app.brand, color: app.color })}
+              size="lg"
+              decorative
+            />
+          </span>
+        ))}
+      </span>
+      <span className={styles.artLink}>
+        <span className={styles.artTrack} />
+        <span className={styles.artFlow} />
+      </span>
+      <span className={styles.artConch}>
+        <Pearl size="lg" label={null} />
+      </span>
     </div>
   );
 }
