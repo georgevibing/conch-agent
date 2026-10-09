@@ -250,6 +250,20 @@ export class UsageService {
     return undefined;
   }
 
+  /**
+   * A provider's snapshot as last read, with its block put right for the
+   * clock; never a new read. Routing asks it before every turn (ADR 0126).
+   */
+  known(engine: EngineId): UsageSnapshot | undefined {
+    const meter = this.#meters.get(this.deps.engine(engine).id ?? '');
+    const snapshot = meter?.snapshot;
+    if (!snapshot?.blocked) return snapshot;
+    const until = snapshot.blocked.until;
+    if (until === undefined || until > this.#now) return snapshot;
+    const { blocked: _over, ...rest } = snapshot;
+    return rest;
+  }
+
   /** A provider's plan windows as last read; never a new read. */
   seen(engine: EngineId): EngineUsage | undefined {
     const usage = this.#meters.get(this.deps.engine(engine).id ?? '')?.usage;

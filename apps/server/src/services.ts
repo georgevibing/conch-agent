@@ -1126,7 +1126,7 @@ export class Services {
       engine: (id) => this.providers.engineFor(id),
       route: (engine, context) => this.route(engine, context),
       limitResets: async (id) => {
-        const usage = await this.usage.snapshot({ engine: id }).catch(() => undefined);
+        const usage = this.usage.known(id);
         return usage?.blocked?.until ?? this.usage.refusedUntil(id);
       },
       describe: (engine, model) => this.describer.for(engine, model),
@@ -3056,7 +3056,9 @@ export class Services {
       }
     }
     if (engine.local) return { kind: 'use', engine };
-    const usage = await this.usage.snapshot({ engine: engine.id }).catch(() => undefined);
+    // What's already known, never a new read: this is asked before every turn, and a read
+    // here would open a provider's session and fix the meter's spend before the turn counts.
+    const usage = this.usage.known(engine.id);
     // Refused for a limit Conch couldn't see coming (a key's `429`): passed over for a while.
     if (context.failed === 'limit' && !usage?.blocked) this.usage.refused(engine.id);
     const refused = this.usage.refusedUntil(engine.id);
