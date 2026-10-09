@@ -146,6 +146,59 @@ chat's answers and no more (ADR 0033). It stays the chat's: a lasting yes for ev
 the tool's **Allow** in Apps, where the person sets it. Like a chat's own mode, it isn't a
 backup power: it lives in that chat's transcript.
 
+### A push the person asked for, after reading CI logs (2026-10-09)
+
+**The case.** In Auto, someone asked "fix CI and push to main". The assistant read the CI
+logs (`gh run view` through `process_read`), committed with a message in a here-document, and
+pushed and merged. Conch asked first, with a passkey, saying "This chat read command output
+content". Three things were wrong, and one was right.
+
+- **The parser failed open.** The apostrophe in the commit message ("Nacre's") opened a quote
+  that swallowed the rest of the line, so the risk policy never saw `git push` or
+  `gh pr merge`. Only the second look caught it, because `test(e2e):` looked like an unusual
+  program. Here-documents are now taken out before a line is read (`withoutHeredocs`). A body
+  handed to a shell or an interpreter is read as commands. So are the `$(…)` an unquoted one
+  fills in. One left open reads as commands to the end.
+- **The mark was too broad, and in the wrong place.** `process_read` marked every command's
+  output, so `pnpm test` counted as outside. The same output through Bash marked nothing, and
+  `gh issue view` marked nothing either way. Now a command marks the chat by what it runs,
+  through any tool (`commandTaint`). That covers downloads, as before, and `gh` reading what
+  anyone can write: issues, pull requests and their comments, search, the API, releases, a
+  README, and CI logs. CI logs carry pull-request titles, branch names and test output from
+  forks. The GitHub app's tools already marked the chat; the `gh` program now does the same.
+  This makes Auto stricter after those reads, on purpose. A malicious issue steering an agent
+  is a published exploit (Invariant Labs, 2025). Without the mark, a `curl -d` of the logs
+  after reading them went ahead.
+- **A push the person asked for is the outcome, not a way out.** `RiskContext.said` carries
+  the person's own words. It is empty with someone else's words in the chat, in a routine or
+  with nobody there. When their latest message asks for a push and doesn't hold it back
+  ("don't push yet", "before pushing"), a plain push to the repository's own remote is
+  `asked`. That means no remote named or `origin`, no URL, `--repo`, `-c` override or
+  `--receive-pack`, and no publishing branch (`gh-pages`, `production`, `release/*`) the
+  person didn't name. So is `gh pr merge` of the repository's own pull request when they said
+  to merge or to push to main. `asked` takes away only the point for what the chat read
+  (`riskScore`), so the step goes ahead after reading just as it did before reading. Severe
+  steps still ask: a force-push, deleting a branch others share, a mirror. A new or
+  repointed remote (`git remote add|set-url`) is now a way out of its own. A line that
+  `git add`s a `.env`, a key or a forced ignored file loses `asked`. Anything else on the
+  line that sends (a `curl` of the logs) still asks: of two risks alike, the one nobody asked
+  for decides. This matches Claude Code's auto mode: it allows a push to any branch of the
+  working repository, the default branch included, and blocks force-pushes, new remotes,
+  other repositories and secrets. Codex asks for any command that needs the network and
+  leaves the decision to its reviewer.
+- **The card says why in one sentence:** "This chat read CI logs on GitHub, which others can
+  write to, and this would push code to a remote. Check this is what you asked for."
+  (`cautionFrom(sources, wouldFrom(reason))`). A bare "run a command" adds nothing, so it isn't
+  repeated. Older chats marked "command output" keep the mark, said as "what a command
+  printed".
+
+**What deliberately didn't change.** Approving from another device still needs a passkey or
+password for anything that sends, deletes or followed a read (ADR 0108). A push is lasting,
+and a lock-screen tap is the easiest thing to steer. With the push asked for, there's no card
+to approve. Conch can't see a commit's contents. What a page could steer into it is caught
+where it's written instead: a CI workflow, a hook or an agent's settings written after
+reading asks (`writeRisk`). Ask first and Read only are unchanged.
+
 ## Consequences
 
 - In Auto, a person's own Conch apps read and change things without a word, before and after
@@ -176,3 +229,16 @@ Read 2026-10-08:
 - [Claude Code permission modes](https://code.claude.com/docs/en/permission-modes): what its
   auto mode lets through and stops by default, read again for reading, research and changes
   in the person's own tools.
+
+Read 2026-10-09, for a push the person asked for:
+
+- [Claude Code permission modes](https://code.claude.com/docs/en/permission-modes): "Pushing
+  to any branch of the repository you're working in, including the default branch" is
+  allowed by default. Blocked by default: force-pushes, `git remote add`/`set-url` unless
+  named, pushing to a third-party repository, secrets leaving the repository, and merging a
+  pull request no human approved. Tool results are kept from its classifier.
+- [Codex agent approvals & security](https://developers.openai.com/codex/agent-approvals-security):
+  `workspace-write` has no network by default, so a push asks, and an auto-reviewer judges
+  only actions that already need approval.
+- Invariant Labs, "GitHub MCP exploited" (2025): a malicious public issue steering an agent to
+  leak a private repository. This is why `gh` reading issues and CI logs marks the chat.

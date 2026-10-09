@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { AFTER_READING, ROUTINE, SERIOUS, type Step } from '../test/riskCorpus';
+import { AFTER_READING, ASKED_PUSH, ROUTINE, SERIOUS, type Step } from '../test/riskCorpus';
 import {
   assessRisk,
   breaksCircuit,
@@ -170,6 +170,60 @@ describe('the risk policy behind Auto (ADR 0100)', () => {
     ])
       expect(breaksCircuit('Bash', { command }, ctx), command).toBeUndefined();
     expect(breaksCircuit('Write', { file_path: '/' }, ctx)).toBeUndefined();
+  });
+});
+
+describe('“fix CI and push to main”: the push the person asked for (ADR 0117, 2026-10-09)', () => {
+  const { said, command, goes, asks: adversarial, notAsked } = ASKED_PUSH;
+  const asked = ([tool, input]: Step, words: readonly string[], untrusted = true) =>
+    riskAsks(assessRisk(tool, input, { ...ctx, said: words }), untrusted);
+
+  it('reads a commit message in a here-document as words, and sees the push after it', () => {
+    // An apostrophe in the message ("Nacre's") once swallowed the rest of the line.
+    expect(commandParts(command)).toEqual([
+      'cd /home/yiotis/projects/conch-agent',
+      'git switch -c fix/e2e-after-settings-simplify',
+      'git add e2e',
+      "git commit -q -F - <<'EOF'",
+      'git push -q -u origin fix/e2e-after-settings-simplify 2>&1',
+      'tail -3',
+      'gh pr create --fill --base main',
+      'gh pr merge --squash --delete-branch',
+    ]);
+    expect(assessRisk('Bash', { command }, ctx)?.reason).toBe('push code to a remote');
+    expect(wantsSecondLook(command, true)).toBe(false);
+    // What a shell or an interpreter is handed is read as commands; so is what an unquoted
+    // here-document fills in.
+    expect(asks(bash('bash <<EOF\nrm -rf ~\nEOF'), false)).toBe(true);
+    expect(asks(bash('cat <<EOF > notes.txt\n$(sudo rm -rf /var/db)\nEOF'), false)).toBe(true);
+    expect(asks(bash("cat <<'EOF' > notes.txt\nit's $(sudo rm -rf /var/db)\nEOF"), false)).toBe(
+      false,
+    );
+  });
+
+  it('goes ahead in Auto after reading the CI logs, when the person asked for it this turn', () => {
+    expect(asked(bash(command), said)).toBe(false);
+    expect(goes.filter((step) => asked(step, said)).map(([, i]) => i)).toEqual([]);
+    // The same push still asks once the chat has read something, if the person didn't ask.
+    expect(goes.filter((step) => !asked(step, [])).map(([, i]) => i)).toEqual([]);
+  });
+
+  it('still asks for another remote, the logs carried out, a force-push, or keys going with it', () => {
+    expect(adversarial.filter((step) => !asked(step, said)).map(([, i]) => i)).toEqual([]);
+  });
+
+  it('asks when the person never asked for a push this turn, or said not yet', () => {
+    for (const words of notAsked) expect(asked(bash(command), words), words.join(' / ')).toBe(true);
+  });
+
+  it('never lifts what asks before reading, and a page can’t say it for the person', () => {
+    expect(asked(bash('git push --force origin main'), said, false)).toBe(true);
+    // A chat that read nothing: the push went ahead before, and still does.
+    expect(asked(bash('git push origin main'), [], false)).toBe(false);
+    const push = assessRisk('Bash', { command: 'git push' }, { ...ctx, said });
+    if (!push) throw new Error('A push is still a way out');
+    expect(push).toMatchObject({ harm: 'moderate', lasting: true, asked: true });
+    expect(riskScore(push, true)).toBe(2);
   });
 });
 

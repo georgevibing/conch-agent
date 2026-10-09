@@ -20,6 +20,8 @@ import { isAbsolute, relative, resolve } from 'node:path';
 
 import { isRunScript, type ConversationEvent, type TaintSource } from '@conch/protocol';
 
+import { commandParts, withoutHeredocs, wordsOf } from './risk';
+
 /** Built-in tools that bring the outside in. */
 const WEB_READERS = new Set([
   'WebFetch',
@@ -61,6 +63,35 @@ const DOWNLOADS =
 const NOT_DOWNLOADS =
   /(^|[;&|(\n][ \t]*)(?:git(?:[ \t]+-C[ \t]+[\w./~:@%+,-]+)?|npm|pnpm|yarn)[ \t]+fetch\b/g;
 const INTEGRATION = /^mcp__([a-z0-9_-]+?)__(.+)$/;
+
+/**
+ * `gh` reading what anyone can write on GitHub (2026-10-09, ADR 0117): issues, pull requests
+ * and their comments, search, releases, a repository's README, a gist, the API, and CI logs,
+ * which carry pull-request titles, branch names and test output from forks. The same words
+ * the GitHub app's tools bring in, which already mark the chat. Listing your own runs or
+ * checks, signing in, and making a pull request don't.
+ */
+const GH_READS =
+  /^(?:issue\s+(?:view|list|status)|pr\s+(?:view|list|diff|status|checkout)|run\s+(?:view|watch)|api|search|release\s+(?:view|list|download)|gist\s+(?:view|clone)|repo\s+(?:view|clone))\b/;
+
+/** What a command line brings in from outside, by what it runs. */
+function commandTaint(command: string): TaintSource | undefined {
+  const { text, runs } = withoutHeredocs(command);
+  const line = [text, ...runs].join('\n');
+  if (DOWNLOADS.test(line.replace(NOT_DOWNLOADS, '$1 ')))
+    return { kind: 'download', label: hostOf(line) ?? 'something downloaded' };
+  for (const part of commandParts(command)) {
+    const words = wordsOf(part);
+    if ((words[0] ?? '').replace(/^.*[\\/]/, '') !== 'gh') continue;
+    const sub = words
+      .slice(1)
+      .filter((w, i, all) => !w.startsWith('-') && !/^-(?:R|-repo)$/.test(all[i - 1] ?? ''))
+      .join(' ');
+    if (GH_READS.test(sub))
+      return { kind: 'web', label: /^run\s/.test(sub) ? 'CI logs on GitHub' : 'GitHub' };
+  }
+  return undefined;
+}
 
 const hostOf = (value: unknown): string | undefined => {
   if (typeof value !== 'string') return undefined;
@@ -144,10 +175,9 @@ export function taintFrom(toolName: string, input: unknown, app?: string): Taint
     };
   if (
     (toolName === 'Bash' || /^(?:mcp__conch__)?process_(?:start|read)$/.test(toolName)) &&
-    typeof args.command === 'string' &&
-    DOWNLOADS.test(args.command.replace(NOT_DOWNLOADS, '$1 '))
+    typeof args.command === 'string'
   )
-    return { kind: 'download', label: hostOf(args.command) ?? 'something downloaded' };
+    return commandTaint(args.command);
   const integration = INTEGRATION.exec(toolName);
   if (integration && integration[1] !== 'conch')
     return { kind: 'app', label: app ?? integration[1] ?? 'an app' };

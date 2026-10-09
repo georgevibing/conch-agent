@@ -80,6 +80,26 @@ async function until<T>(read: () => Promise<T>, matches: (value: T) => boolean) 
 }
 
 describe('managed commands', () => {
+  it('marks the chat by what a command reads, not by every output (ADR 0028, ADR 0117)', async () => {
+    const { start, read, ctx } = await setup();
+    const taint = vi.fn();
+    const own = { ...ctx, taint };
+    // A build's or a test's own output is the person's own work.
+    const local = await start('echo all tests passed', own);
+    await until(
+      () => read(local.id, own),
+      (v) => v.status === 'exited',
+    );
+    expect(taint).not.toHaveBeenCalled();
+    // A command that names an address on the internet reads someone else's words.
+    const remote = await start('echo https://news.example/today', own);
+    await until(
+      () => read(remote.id, own),
+      (v) => v.status === 'exited',
+    );
+    expect(taint).toHaveBeenCalledWith({ kind: 'download', label: 'news.example' });
+  });
+
   it('queues under pressure and starts approved work when resources recover', async () => {
     let now = 1000;
     let snapshot = { ...healthy(), concurrency: 0, level: 'busy' as const } as ResourceSnapshot;

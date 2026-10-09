@@ -77,6 +77,12 @@ export interface Risk {
   reason: string;
   /** No mode lifts it, Full trust included: a whole folder or disk gone (`breaksCircuit`). */
   critical?: boolean;
+  /**
+   * The person asked for this very step in their own words this turn (ADR 0117, 2026-10-09):
+   * a plain push to the repository's own remote, or merging its pull request. What the chat
+   * read can't add the point that makes it ask; harm and lasting still count.
+   */
+  asked?: boolean;
 }
 
 export interface RiskContext {
@@ -92,11 +98,21 @@ export interface RiskContext {
   access?: 'read' | 'write';
   /** Home folder (tests). */
   home?: string;
+  /**
+   * The person's own words, latest last, when a person is here and no one else's words are
+   * in the chat (ADR 0117, 2026-10-09). Only they can make a push `asked`; a page can't.
+   */
+  said?: readonly string[];
 }
 
-/** The score: three or more asks (ADR 0100). */
+/**
+ * The score: three or more asks (ADR 0100). A step the person asked for in their own words
+ * doesn't take the point for what the chat read (ADR 0117, 2026-10-09).
+ */
 export function riskScore(risk: Risk, untrusted: boolean): number {
-  return (risk.harm === 'severe' ? 2 : 1) + (risk.lasting ? 1 : 0) + (untrusted ? 1 : 0);
+  return (
+    (risk.harm === 'severe' ? 2 : 1) + (risk.lasting ? 1 : 0) + (untrusted && !risk.asked ? 1 : 0)
+  );
 }
 
 /** What the card says (`GuardNote`): what it would do, and whether that can be put back. */
@@ -116,12 +132,66 @@ export function riskAsks(risk: Risk | undefined, untrusted: boolean): boolean {
 const PREFIX =
   /^(?:(?:sudo|doas|nohup|time|command|exec|builtin|nice|ionice|stdbuf|caffeinate)(?:\s+-[\w-]+)*\s+|env(?:\s+-[\w-]+)*\s+|[A-Za-z_][\w]*=(?:"[^"]*"|'[^']*'|\S*)\s+)+/;
 
+/** Programs that run what a here-document gives them: its body is commands, not words. */
+const RUNS_INPUT =
+  /^(?:(?:ba|z|da|k|fi)?sh|python\d?(?:\.\d+)?|node|deno|bun|perl|ruby|php|pwsh|powershell|osascript|ssh|eval|source|\.|xargs|sudo|doas|su)$/i;
+
+/**
+ * A command line with its here-documents taken out (`git commit -F - <<'EOF'` … `EOF`), and
+ * what in them runs: the whole body handed to a shell or an interpreter (`bash <<EOF`), or only
+ * the `$(…)` and backticks a shell fills in when the end word isn't quoted. A commit message
+ * is words: an apostrophe in it ("Nacre's") mustn't swallow the push on the next line.
+ */
+export function withoutHeredocs(command: string): { text: string; runs: string[] } {
+  if (!command.includes('<<')) return { text: command, runs: [] };
+  const lines = command.split('\n');
+  const kept: string[] = [];
+  const runs: string[] = [];
+  const pending: { end: string; strip: boolean; quoted: boolean; runs: boolean }[] = [];
+  let body: string[] = [];
+  for (const line of lines) {
+    const open = pending[0];
+    if (open) {
+      if ((open.strip ? line.replace(/^\t+/, '') : line) === open.end) {
+        if (open.runs) runs.push(body.join('\n'));
+        else if (!open.quoted)
+          for (const inner of body
+            .join('\n')
+            .matchAll(/\$\(([^()]*(?:\([^()]*\)[^()]*)*)\)|`([^`]*)`/g))
+            runs.push(inner[1] ?? inner[2] ?? '');
+        body = [];
+        pending.shift();
+      } else body.push(line);
+      continue;
+    }
+    kept.push(line);
+    for (const m of line.matchAll(/(?<!<)<<(-?)[ \t]*(['"]?)([A-Za-z_][\w.-]*)\2/g)) {
+      const before =
+        line
+          .slice(0, m.index)
+          .split(/\|\||&&|[;|&(]/)
+          .pop() ?? '';
+      const prog = (wordsOf(before.trim().replace(PREFIX, ''))[0] ?? '').replace(/^.*[\\/]/, '');
+      pending.push({
+        end: m[3] ?? '',
+        strip: m[1] === '-',
+        quoted: Boolean(m[2]),
+        runs: RUNS_INPUT.test(prog),
+      });
+    }
+  }
+  // Never closed: the shell reads to the end, so the rest is the body, read as it would run.
+  if (pending[0]) runs.push(body.join('\n'));
+  return { text: kept.join('\n'), runs };
+}
+
 /** The command line and every script inside it: `bash -c '…'`, `eval '…'`, `$(…)`, backticks. */
 function scriptsOf(command: string): string[] {
   const scripts: string[] = [];
   const queue = [command];
   while (queue.length && scripts.length < 50) {
-    const text = queue.shift() ?? '';
+    const { text, runs } = withoutHeredocs(queue.shift() ?? '');
+    queue.push(...runs);
     scripts.push(text);
     for (const inner of text.matchAll(/\$\(([^()]*(?:\([^()]*\)[^()]*)*)\)|`([^`]*)`/g))
       queue.push(inner[1] ?? inner[2] ?? '');
@@ -282,6 +352,8 @@ interface Places {
   workspace: string;
   home: string;
   scratch: string[];
+  /** The person's own words (`RiskContext.said`). */
+  said?: readonly string[];
 }
 
 const inside = (root: string, path: string) => {
@@ -348,8 +420,33 @@ function rmRisk(words: string[], places: Places): Risk | undefined {
   return undefined;
 }
 
+/** Branches a push publishes or deploys from: pushed as asked only when the person names them. */
+const DEPLOY_BRANCH = /^(?:stable|production|prod|live|release(?:[/-].*)?|gh-pages)$/i;
+
+/** The person's words saying not to, or not yet: "don't push", "wait before pushing". */
+const HOLD_BACK =
+  /\b(?:don['’]?t|do\s+not|never|without|not|no|wait|hold\s+off|until|before|nicht|kein\w*|nie)\b[^.!?\n]{0,40}\b(?:push|merg)/i;
+const PUSH_WORDS = /\bpush(?:es|ed|ing|en|e)?\b/i;
+/** Merging a pull request is asked by "merge it", or by "push to main" when main takes PRs. */
+const MERGE_WORDS = /\bmerg\w*|\bpush\w*\b[^.!?\n]{0,30}\b(?:main|master|trunk)\b/i;
+
+/** The person's latest words ask for this, and don't hold it back. */
+function saysTo(said: readonly string[] | undefined, words: RegExp): boolean {
+  const last = said?.at(-1) ?? '';
+  return words.test(last) && !HOLD_BACK.test(last);
+}
+
+/** The person's latest words name this branch. */
+function names(said: readonly string[] | undefined, branch: string): boolean {
+  const last = (said?.at(-1) ?? '').toLowerCase();
+  const at = last.indexOf(branch.toLowerCase());
+  if (at < 0) return false;
+  const around = `${last[at - 1] ?? ' '}${last[at + branch.length] ?? ' '}`;
+  return !/[\w/-]/.test(around[0] ?? '') && !/[\w/-]/.test(around[1] ?? '');
+}
+
 /** `git …`: force pushes, deleted branches, thrown-away work. */
-function gitRisk(words: string[]): Risk | undefined {
+function gitRisk(words: string[], said?: readonly string[]): Risk | undefined {
   // `git -C dir push …`: the subcommand after git's own options.
   let i = 1;
   while (i < words.length && (words[i] ?? '').startsWith('-'))
@@ -387,8 +484,24 @@ function gitRisk(words: string[]): Risk | undefined {
               : 'force-push, which rewrites history others may share',
           )
         : moderate('history', `force-push over ${named[0] ?? 'a branch'}`);
-    return moderate('egress', 'push code to a remote');
+    // A plain push to the repository's own remote (`origin`, or the one the branch tracks),
+    // asked for in the person's own words this turn (ADR 0117, 2026-10-09): the outcome they
+    // asked for, not a way out. A remote named or written out, a config override, another
+    // program to receive it, or a publishing branch they didn't name is still a way out.
+    const own =
+      !words.slice(1, i).includes('-c') &&
+      !words.slice(1, i).some((w) => w.startsWith('--config-env')) &&
+      !flags.some((f) => /^--(?:repo|receive-pack|exec)(?:=|$)/.test(f)) &&
+      (args[0] === undefined || args[0] === 'origin');
+    const asked =
+      own &&
+      saysTo(said, PUSH_WORDS) &&
+      named.filter((r) => DEPLOY_BRANCH.test(r)).every((r) => names(said, r));
+    return { ...moderate('egress', 'push code to a remote'), ...(asked && { asked: true }) };
   }
+  // Where pushes go: a new or repointed remote is a new way out (Claude Code asks too).
+  if (sub === 'remote' && /^(?:add|set-url|rename)$/.test(args[0] ?? ''))
+    return moderate('egress', 'change where pushes go');
   if (sub === 'reset' && flags.includes('--hard'))
     return severe('history', 'throw away changes that aren’t committed', false);
   if (sub === 'clean' && flags.some((f) => /^-\w*f/.test(f)) && flags.some((f) => /[dxX]/.test(f)))
@@ -405,7 +518,12 @@ function gitRisk(words: string[]): Risk | undefined {
 }
 
 /** Cloud, clusters, infrastructure as code, deploys and databases. */
-function infraRisk(part: string, prog: string, words: string[]): Risk | undefined {
+function infraRisk(
+  part: string,
+  prog: string,
+  words: string[],
+  said?: readonly string[],
+): Risk | undefined {
   const sub = words.slice(1).join(' ');
   const prod = PROD.test(part);
   if (/^(?:terraform|tofu|terragrunt|pulumi|cdk|cdktf|sst|serverless|sls)$/.test(prog)) {
@@ -488,7 +606,12 @@ function infraRisk(part: string, prog: string, words: string[]): Risk | undefine
     )
       return severe('privilege', 'change who can push or what protects a branch');
     if (/\brelease\s+create\b/.test(sub)) return severe('publish', 'publish a release');
-    if (/\bpr\s+merge\b/.test(sub)) return moderate('egress', 'merge a pull request');
+    if (/\bpr\s+merge\b/.test(sub))
+      return {
+        ...moderate('egress', 'merge a pull request'),
+        // This repository's own pull request, merged because the person said so (ADR 0117).
+        ...(!/(?:^|\s)(?:-R|--repo)\b/.test(sub) && saysTo(said, MERGE_WORDS) && { asked: true }),
+      };
   }
   if (
     /^(?:supabase|prisma|rails|rake|alembic|knex|sequelize|flyway|liquibase|dbmate)$/.test(prog)
@@ -818,7 +941,7 @@ function partRisk(part: string, places: Places): Risk | undefined {
     if (prog !== 'net' || /\b(?:user|localgroup)\b/i.test(part))
       return severe('privilege', 'change who can use this computer or what they may do');
   }
-  if (prog === 'git') return gitRisk(words);
+  if (prog === 'git') return gitRisk(words, places.said);
   if (prog === 'csrutil' && /\bdisable\b/.test(part))
     return severe('safety-off', 'turn off your Mac’s system protection');
   if (prog === 'spctl' && /--(?:master|global)-disable|--disable\b/.test(part))
@@ -896,7 +1019,7 @@ function partRisk(part: string, places: Places): Risk | undefined {
     return severe('exfiltration', 'open this computer to the internet', false);
   if (prog === 'ssh' && /\s-\w*R\b/.test(part))
     return severe('exfiltration', 'open this computer to another one', false);
-  const infra = infraRisk(part, prog, words);
+  const infra = infraRisk(part, prog, words, places.said);
   if (infra) return infra;
   const publish = publishRisk(prog, words);
   if (publish) return publish;
@@ -952,9 +1075,10 @@ function partRisk(part: string, places: Places): Risk | undefined {
   return undefined;
 }
 
-const RANK = (risk: Risk) => (risk.harm === 'severe' ? 2 : 1) + (risk.lasting ? 1 : 0);
+const RANK = (risk: Risk) =>
+  2 * ((risk.harm === 'severe' ? 2 : 1) + (risk.lasting ? 1 : 0)) + (risk.asked ? 0 : 1);
 
-/** The most serious of several. */
+/** The most serious of several; of two alike, the one nobody asked for. */
 function worst(risks: (Risk | undefined)[]): Risk | undefined {
   let best: Risk | undefined;
   for (const risk of risks) if (risk && (!best || RANK(risk) > RANK(best))) best = risk;
@@ -967,6 +1091,7 @@ export function commandRisk(command: string, context: RiskContext): Risk | undef
     workspace: resolve(context.workspace),
     home: context.home ?? homedir(),
     scratch: [tmpdir(), '/tmp', '/private/tmp', '/var/folders'].map((p) => resolve(p)),
+    ...(context.said && { said: context.said }),
   };
   const risks: (Risk | undefined)[] = [];
   for (const script of scriptsOf(command)) {
@@ -1053,7 +1178,28 @@ export function commandRisk(command: string, context: RiskContext): Risk | undef
       if (path && !/^\/dev\//.test(path)) risks.push(writeRisk(path));
     }
   }
-  return worst(risks);
+  const risk = worst(risks);
+  // An asked-for push with keys added on the same line is keys leaving: it asks after reading.
+  if (risk?.asked && commandParts(command).some((part) => addsSecrets(part, places)))
+    return { ...risk, asked: false };
+  return risk;
+}
+
+/** `git add` forcing in what's ignored, or naming a `.env`, a key or a saved sign-in. */
+function addsSecrets(part: string, places: Places): boolean {
+  if (program(part) !== 'git') return false;
+  const words = wordsOf(part);
+  const at = words.indexOf('add');
+  if (at < 1) return false;
+  return words.slice(at + 1).some((w) => {
+    if (/^-[A-Za-z]*f[A-Za-z]*$/.test(w) || w === '--force') return true;
+    if (w.startsWith('-')) return false;
+    if (/(?:^|[\\/])\.env(?!\.(?:example|sample|template|dist|defaults?)$)(?:\.[\w-]+)?$/i.test(w))
+      return true;
+    if (/\.(?:pem|key|p12|pfx|keystore|jks)$/i.test(w) || SECRET_FILES.test(` ${w}`)) return true;
+    const path = placeOf(w, places);
+    return path !== undefined && isSecret(path);
+  });
 }
 
 /**
