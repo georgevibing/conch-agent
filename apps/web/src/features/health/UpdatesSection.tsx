@@ -1,9 +1,9 @@
-import { installedLabel } from '../updates/view';
 import type {
   AppUpdateNotice,
   ConchUpdate,
   ProgramUpdate,
   ReleaseNotes as Notes,
+  UpdatesStatus,
 } from '@conch/protocol';
 import {
   Badge,
@@ -36,9 +36,10 @@ import { conchAppPath } from '../conchapps/words';
 import { errorText } from '../integrations/queries';
 import { updateKeys, updatesApi } from '../updates/api';
 import { relativeTime } from '../../lib/time';
-import { noteItems } from '../updates/view';
+import { installedLabel, noteItems, waitingText } from '../updates/view';
 import { Section } from '../settings/Section';
 import {
+  BUSY,
   followRestart,
   updatesBusy,
   updatesWaiting,
@@ -72,6 +73,17 @@ export type ConchCard = Omit<SoftwareUpdateProps, 'action' | 'notes'> & {
 
 /** Where Conch itself stands, as the card says it. */
 export function conchCard(
+  conch: ConchUpdate,
+  options: { restartable: boolean; now?: number; working?: UpdatesStatus['working'] },
+): ConchCard {
+  const card = conchCardNow(conch, options);
+  // Waiting until it's done (the update dialog's choice): said quietly, where the footnote was.
+  return conch.armed && card.state === 'available' && card.offer !== 'download'
+    ? { ...card, footnote: waitingText(options.working) }
+    : card;
+}
+
+function conchCardNow(
   conch: ConchUpdate,
   options: { restartable: boolean; now?: number },
 ): ConchCard {
@@ -325,6 +337,7 @@ export function UpdatesSection() {
   } = conchCard(conch, {
     restartable: status.restartable,
     now,
+    working: status.working,
   });
   const notes = cardNotes?.length ? <ReleaseNotes releases={noteItems(cardNotes)} /> : undefined;
   const releases = conch.source === 'releases';
@@ -344,7 +357,12 @@ export function UpdatesSection() {
     ) : card.offer === 'restart' ? (
       <Button
         leadingIcon={<RotateCcw />}
-        onClick={() => void actions.restart('Updating Conch…').then(setRestartNote)}
+        onClick={() =>
+          void actions.restart('Updating Conch…').then((note) =>
+            // Something is working: the update window asks first, naming it.
+            note === BUSY ? useUi.getState().openUpdate() : setRestartNote(note),
+          )
+        }
       >
         Restart Conch
       </Button>

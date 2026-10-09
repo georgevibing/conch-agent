@@ -3,8 +3,8 @@ import { Download, RefreshCw, RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useUi } from '../../app/ui';
-import { followRestart, useLookWhenBack, useUpdateActions, useUpdates } from './queries';
-import { ARRIVED, noteItems, short, updateView, type UpdateOffer } from './view';
+import { BUSY, followRestart, useLookWhenBack, useUpdateActions, useUpdates } from './queries';
+import { ARRIVED, confirmText, noteItems, short, updateView, type UpdateOffer } from './view';
 
 /**
  * Conch's own update, from anywhere: the dialog the sidebar's chip, the
@@ -19,6 +19,11 @@ export function UpdateDialogHost() {
   const how = useUi((s) => s.updateDialog);
   const slow = useUi((s) => s.restartSlow);
   const [restartNote, setRestartNote] = useState<string>();
+  /**
+   * Update now (or Restart now) met work that's running: the dialog asks
+   * first, in place, naming it. Never a press that does nothing.
+   */
+  const [confirming, setConfirming] = useState<'update' | 'restart'>();
 
   // Back on the new version: say so, once.
   useEffect(() => {
@@ -37,19 +42,46 @@ export function UpdateDialogHost() {
     if (status) followRestart(status);
   }, [status]);
 
-  const start = () => actions.updateConch();
+  /** Update now: straight away when nothing is working; otherwise it asks first. */
+  const start = async () => {
+    setConfirming(undefined);
+    if (status?.working?.length) return setConfirming('update');
+    if ((await actions.updateConch('now')) === 'busy') setConfirming('update');
+  };
+  const anyway = () => {
+    const what = confirming;
+    setConfirming(undefined);
+    if (what === 'restart') return restartNow('anyway');
+    void actions.updateConch('anyway');
+  };
+  const waitForIt = () => {
+    setConfirming(undefined);
+    void actions.updateConch('idle');
+  };
+  const restartNow = (when: 'now' | 'anyway' = 'now') => {
+    setRestartNote(undefined);
+    void actions.restart('Starting the new Conch', when).then((note) => {
+      if (note === BUSY) setConfirming('restart');
+      else setRestartNote(note);
+    });
+  };
 
   // "Update" from the banner or Settings: begin at once, here, once.
   useEffect(() => {
     if (!how?.start || !status) return;
     useUi.setState({ updateDialog: { ...how, start: false } });
-    if (!status.conch.running && status.conch.behind > 0 && !status.conch.blocked) void start();
+    // Out of the effect: it may ask first, which is the dialog's own state.
+    if (!status.conch.running && status.conch.behind > 0 && !status.conch.blocked)
+      queueMicrotask(() => void start());
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per request
   }, [how, status]);
 
   if (!status) return actions.dialog;
   const view = updateView(status, { arrived: Boolean(how?.arrived) });
-  const close = () => useUi.getState().closeUpdate();
+  const close = () => {
+    setConfirming(undefined);
+    useUi.getState().closeUpdate();
+  };
   const notes =
     view.releases.length && (view.stage === 'ready' || view.stage === 'done') ? (
       <ReleaseNotes releases={noteItems(view.releases)} />
@@ -98,19 +130,46 @@ export function UpdateDialogHost() {
         );
       case 'restart':
         return (
+          <Button key={offer} leadingIcon={<RotateCcw />} onClick={() => restartNow()}>
+            Restart now
+          </Button>
+        );
+      case 'stop-waiting':
+        return (
           <Button
             key={offer}
-            leadingIcon={<RotateCcw />}
-            onClick={() => {
-              setRestartNote(undefined);
-              void actions.restart('Starting the new Conch').then(setRestartNote);
-            }}
+            variant="ghost"
+            loading={actions.pending === 'conch'}
+            onClick={() => void actions.updateConch('cancel')}
           >
-            Restart now
+            Don’t wait
           </Button>
         );
     }
   };
+
+  // Asking first: its two answers, the main one last.
+  const answers = confirming
+    ? [
+        <Button
+          key="wait"
+          variant="ghost"
+          onClick={confirming === 'update' ? waitForIt : () => setConfirming(undefined)}
+        >
+          {confirming === 'update' ? 'Wait until it’s done' : 'Not now'}
+        </Button>,
+        <Button
+          key="anyway"
+          leadingIcon={confirming === 'update' ? <RefreshCw /> : <RotateCcw />}
+          loading={actions.pending === 'conch'}
+          onClick={anyway}
+        >
+          {confirming === 'update' ? 'Update anyway' : 'Restart anyway'}
+        </Button>,
+      ]
+    : undefined;
+  // The question only while there's still a choice to make.
+  const asking = confirming && view.stage === 'ready' ? confirming : undefined;
 
   const problem = actions.error ?? restartNote;
   return (
@@ -132,7 +191,13 @@ export function UpdateDialogHost() {
             ? 'This is taking longer than usual. If Conch doesn’t come back, run pnpm start in its folder.'
             : undefined
         }
-        action={view.offers.length ? view.offers.map(button) : undefined}
+        confirm={
+          asking
+            ? confirmText(status.working, asking === 'update' ? 'Update' : 'Restart')
+            : undefined
+        }
+        waiting={view.waiting}
+        action={asking ? answers : view.offers.length ? view.offers.map(button) : undefined}
       />
       {actions.dialog}
     </>

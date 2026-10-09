@@ -8,8 +8,6 @@ import type {
   UpdateDialogStage,
 } from '@conch/nacre';
 
-import { relativeTime } from '../../lib/time';
-
 /** Set just before the page reloads onto a new version; read once when it's back. */
 export const ARRIVED = 'conch.updateArrived';
 
@@ -81,7 +79,41 @@ function whatComes(conch: ConchUpdate): string {
     : plural(conch.behind, 'small change');
 }
 
-export type UpdateOffer = 'update' | 'retry' | 'download' | 'restart' | 'later' | 'done' | 'close';
+export type UpdateOffer =
+  | 'update'
+  | 'retry'
+  | 'download'
+  | 'restart'
+  | 'later'
+  | 'done'
+  | 'close'
+  /** Armed: stop waiting for the work to finish. */
+  | 'stop-waiting';
+
+type Working = UpdatesStatus['working'];
+
+/**
+ * Update now (or Restart now) while something works: the question the
+ * dialog asks in place, naming it. "Fix Conch CI failures is working. Update
+ * anyway? It will pause, and carry on after Conch restarts."
+ */
+export function confirmText(working: Working, verb: 'Update' | 'Restart' = 'Update'): string {
+  const list = working ?? [];
+  const [first] = list;
+  const others = list.length - 1;
+  if (!first)
+    return `Something is still working. ${verb} anyway? It will pause, and carry on after Conch restarts.`;
+  if (others <= 0)
+    return `${first.title} is working. ${verb} anyway? It will pause, and carry on after Conch restarts.`;
+  return `${first.title} and ${plural(others, 'more chat', 'more chats')} are working. ${verb} anyway? They’ll pause, and carry on after Conch restarts.`;
+}
+
+/** Armed: what it waits for, in a few quiet words (the dialog, and Health). */
+export function waitingText(working: Working): string {
+  const count = working?.length ?? 1;
+  if (count === 0) return 'Will update as soon as nothing is working';
+  return count === 1 ? 'Will update when the chat finishes' : 'Will update when the chats finish';
+}
 
 export interface UpdateView {
   stage: UpdateDialogStage;
@@ -94,6 +126,8 @@ export interface UpdateView {
   progress?: UpdateDialogProgress;
   footnote?: string;
   notice?: { tone: 'warning' | 'danger'; message: string; command?: string };
+  /** Armed: it updates by itself once the work that's running has finished. */
+  waiting?: string;
   /** The buttons, the main one last. */
   offers: UpdateOffer[];
   download?: string;
@@ -161,14 +195,15 @@ export function updateView(
       };
     if (arrived && outcome.kind === 'updated') {
       const count = outcome.whatsNew.length;
+      // Where it is now, the way it's known: a release by its number, a branch by its commit.
+      const to = releases ? installedLabel(conch) : (conch.commit ?? installedLabel(conch));
       return {
         ...base,
         stage: 'done',
         title: 'You’re on the new Conch',
-        detail: [
-          releases || !count ? `Conch ${installedLabel(conch)}` : plural(count, 'improvement'),
-          `Updated ${relativeTime(outcome.at, now)}`,
-        ].join(META_SEP),
+        detail: [!releases && count ? plural(count, 'improvement') : undefined, `Updated to ${to}`]
+          .filter(Boolean)
+          .join(META_SEP),
         changes: outcome.whatsNew,
         releases: outcome.releases,
         offers: ['done'],
@@ -211,7 +246,14 @@ export function updateView(
           ? 'Keep working while it gets ready. Conch then restarts by itself in a few seconds, and your chats are safe.'
           : 'Keep working while it gets ready, then restart Conch. Your chats are safe.',
       ...(download && { download }),
-      offers: ['later', download ? 'download' : 'update'],
+      // Waiting for the work to finish: said quietly, with a way to stop waiting.
+      ...(conch.armed && !download
+        ? {
+            waiting: waitingText(status.working),
+            footnote: undefined,
+            offers: ['stop-waiting', 'update'],
+          }
+        : { offers: ['later', download ? 'download' : 'update'] }),
     };
   }
 

@@ -407,7 +407,7 @@ describe('Settings → Health → Updates', () => {
     expect(calls.filter((c) => c.path === '/api/gateway/restart')).toHaveLength(2);
   });
 
-  it('says so, and doesn’t restart, while a chat is working', async () => {
+  it('doesn’t restart while a chat is working: the update window asks first instead', async () => {
     const user = userEvent.setup();
     mockFetch({
       'GET /api/updates': () => status({}, { restartNeeded: true }),
@@ -429,12 +429,9 @@ describe('Settings → Health → Updates', () => {
     renderApp(<UpdatesSection />);
     const card = await screen.findByRole('region', { name: 'Restart Conch to finish' });
     await user.click(within(card).getByRole('button', { name: 'Restart Conch' }));
-    expect(
-      await screen.findByText(
-        'A chat is still working. Wait for it to finish, then restart Conch.',
-      ),
-    ).toBeInTheDocument();
+    await waitFor(() => expect(useUi.getState().updateDialog).toBeDefined());
     expect(useUi.getState().restarting).toBeUndefined();
+    useUi.getState().closeUpdate();
   });
 
   it('offers the update rather than a restart when something newer waits', async () => {

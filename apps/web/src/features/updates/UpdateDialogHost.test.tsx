@@ -8,7 +8,8 @@ import { appState, FakeSocket, mockFetch, renderApp } from '../../test/harness';
 import { RestartWatch } from '../health/RestartWatch';
 import { Sidebar } from '../sidebar/Sidebar';
 import { UpdateDialogHost } from './UpdateDialogHost';
-import { ARRIVED, chipView, updateView } from './view';
+import { conchCard } from '../health/UpdatesSection';
+import { ARRIVED, chipView, confirmText, updateView } from './view';
 
 afterEach(() => {
   useUi.setState({ restarting: undefined, restartSlow: false, updateDialog: undefined });
@@ -146,11 +147,129 @@ describe('the update dialog', () => {
     });
     renderApp(<App />);
     const dialog = await screen.findByRole('dialog', { name: 'You’re on the new Conch' });
-    expect(dialog).toHaveAccessibleDescription(/^2 improvements\s· Updated just now$/);
+    expect(dialog).toHaveAccessibleDescription(/^2 improvements\s· Updated to a1b2c3d$/);
     expect(within(dialog).getByText('What’s new')).toBeVisible();
     expect(sessionStorage.getItem(ARRIVED)).toBeNull();
     await userEvent.setup().click(within(dialog).getByRole('button', { name: 'Done' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+});
+
+describe('updating while a chat is working', () => {
+  const working = [{ id: 'c1', title: 'Fix Conch CI failures' }];
+
+  it('asks first, in place, naming the chat, and updates anyway when you say so', async () => {
+    const user = userEvent.setup();
+    let current = status(ready, { working });
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/updates': () => current,
+      'POST /api/updates/conch': (body) => {
+        if ((body as { when?: string }).when !== 'anyway')
+          return new Response(JSON.stringify({ error: 'busy', message: 'Busy.' }), {
+            status: 409,
+          });
+        current = status({
+          ...ready,
+          running: { phase: 'fetch', label: 'Getting the update', step: 1, steps: 3 },
+        });
+        return current;
+      },
+    });
+    useUi.getState().openUpdate();
+    renderApp(<App />);
+    const dialog = await screen.findByRole('dialog', { name: '16 improvements are ready' });
+    await user.click(within(dialog).getByRole('button', { name: 'Update now' }));
+    // A press always answers: the question, in the same dialog, naming what's working.
+    expect(
+      within(dialog).getByText(
+        'Fix Conch CI failures is working. Update anyway? It will pause, and carry on after Conch restarts.',
+      ),
+    ).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: 'Wait until it’s done' })).toHaveFocus();
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    await user.click(within(dialog).getByRole('button', { name: 'Update anyway' }));
+    expect(calls.filter((c) => c.path === '/api/updates/conch').map((c) => c.body)).toEqual([
+      { when: 'anyway' },
+    ]);
+    expect(await screen.findByRole('dialog', { name: 'Updating Conch' })).toBeVisible();
+  });
+
+  it('asks too when the gateway is the first to know a chat is working', async () => {
+    const user = userEvent.setup();
+    let current = status(ready);
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/updates': () => current,
+      'POST /api/updates/conch': () => {
+        current = status(ready, { working });
+        return new Response(JSON.stringify({ error: 'busy', message: 'Busy.' }), {
+          status: 409,
+        });
+      },
+    });
+    useUi.getState().openUpdate();
+    renderApp(<App />);
+    const dialog = await screen.findByRole('dialog', { name: '16 improvements are ready' });
+    await user.click(within(dialog).getByRole('button', { name: 'Update now' }));
+    expect(await within(dialog).findByText(/^Fix Conch CI failures is working\./)).toBeVisible();
+  });
+
+  it('waits until it’s done: a quiet line here and in Health, and a way to stop waiting', async () => {
+    const user = userEvent.setup();
+    let current = status(ready, { working });
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/updates': () => current,
+      'POST /api/updates/conch': (body) => {
+        const when = (body as { when?: string }).when;
+        current =
+          when === 'idle'
+            ? status({ ...ready, armed: { at: Date.now() } }, { working })
+            : status(ready, { working });
+        return current;
+      },
+    });
+    useUi.getState().openUpdate();
+    renderApp(<App />);
+    const dialog = await screen.findByRole('dialog', { name: '16 improvements are ready' });
+    await user.click(within(dialog).getByRole('button', { name: 'Update now' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Wait until it’s done' }));
+    expect(await within(dialog).findByText('Will update when the chat finishes')).toBeVisible();
+    expect(within(dialog).queryByText(/Update anyway\?/)).toBeNull();
+    expect(updateView(current).offers).toEqual(['stop-waiting', 'update']);
+    expect(conchCard(current.conch, { restartable: true, working }).footnote).toBe(
+      'Will update when the chat finishes',
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Don’t wait' }));
+    expect(calls.filter((c) => c.path === '/api/updates/conch').map((c) => c.body)).toEqual([
+      { when: 'idle' },
+      { when: 'cancel' },
+    ]);
+    await waitFor(() =>
+      expect(within(dialog).queryByText('Will update when the chat finishes')).toBeNull(),
+    );
+  });
+});
+
+describe('confirmText', () => {
+  it('names what’s working, one or several', () => {
+    expect(confirmText(undefined)).toMatch(/^Something is still working\. Update anyway\?/);
+    expect(
+      confirmText([
+        { id: 'a', title: 'Fix Conch CI failures' },
+        { id: 'b', title: 'Weekly note' },
+        { id: 'c', title: 'Inbox' },
+      ]),
+    ).toBe(
+      'Fix Conch CI failures and 2 more chats are working. Update anyway? They’ll pause, and carry on after Conch restarts.',
+    );
+    expect(confirmText([{ id: 'a', title: 'Tidy' }], 'Restart')).toMatch(
+      /^Tidy is working\. Restart anyway\?/,
+    );
   });
 });
 
