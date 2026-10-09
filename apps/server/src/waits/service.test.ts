@@ -300,7 +300,7 @@ describe('wait_for a command', () => {
     expect(t.appended.at(-1)).toMatchObject({
       state: 'watching',
       kind: 'process',
-      title: '`pnpm test`',
+      title: 'pnpm test',
     });
     processes.print('11111111-1111-4111-8111-111111111111', 'ok 1\nFAIL routines.spec.ts\n');
     processes.exit('11111111-1111-4111-8111-111111111111', 1);

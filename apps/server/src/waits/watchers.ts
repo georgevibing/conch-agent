@@ -77,7 +77,8 @@ export function processWatcher(options: {
   const first = options.peek(options.owner, options.id);
   if (!first)
     throw new Error('That command isn’t one this chat started. Start it with process_start first.');
-  const title = `\`${shortCommand(first.command)}\``;
+  const title = shortCommand(first.command);
+  const named = `\`${title}\``;
   const started = now();
   return {
     kind: 'process',
@@ -92,7 +93,7 @@ export function processWatcher(options: {
           settled: true,
           tone: 'neutral',
           status: 'The command is gone',
-          summary: `${title} is no longer there to watch.`,
+          summary: `${named} is no longer there to watch.`,
         };
       if (options.pattern) {
         // Everything it kept, from the start: a server that was ready before the wait began is ready.
@@ -106,7 +107,7 @@ export function processWatcher(options: {
             settled: true,
             tone: 'good',
             status: `Printed “${shown.slice(0, 80)}”`,
-            summary: `${title} printed a line matching /${options.pattern.source}/: “${shown}”. It is ${p.status === 'running' ? 'still running' : p.status}.`,
+            summary: `${named} printed a line matching /${options.pattern.source}/: “${shown}”. It is ${p.status === 'running' ? 'still running' : p.status}.`,
           };
         }
       }
@@ -130,7 +131,7 @@ export function processWatcher(options: {
         settled: true,
         tone: p.status === 'exited' && p.exitCode === 0 ? 'good' : 'bad',
         status: `${how.charAt(0).toUpperCase()}${how.slice(1)} after ${took}`,
-        summary: `${title} ${how} after ${took}.${tail ? `\nLast lines:\n${tail}` : ''}${p.reason ? `\n${p.reason}` : ''}`,
+        summary: `${named} ${how} after ${took}.${tail ? `\nLast lines:\n${tail}` : ''}${p.reason ? `\n${p.reason}` : ''}`,
       };
     },
   };
