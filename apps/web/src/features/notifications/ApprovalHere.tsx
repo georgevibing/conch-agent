@@ -10,6 +10,7 @@ import { useLocation, useNavigate } from 'react-router';
 
 import { ApiError } from '../../api/client';
 import type { ConversationView, TranscriptItem } from '../../live/reducer';
+import { approvalTitle, commandOf } from '../chat/approval';
 import { useAutoFocus } from '../../lib/useAutoFocus';
 import { useAuth } from '../auth/useAuth';
 import { useVerify } from '../auth/useVerify';
@@ -28,7 +29,6 @@ export function exactly(item: Permission): string | undefined {
   return undefined;
 }
 
-const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 const clock = (at: number) =>
   new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 
@@ -92,7 +92,10 @@ export function ApprovalHere({
     }
   };
 
-  const shown = exactly(item);
+  // A command goes under the title at code size, a few lines and then Show all; the
+  // title says what it does in a few words, never the command (ADR 0108).
+  const command = commandOf(item);
+  const shown = command ? undefined : exactly(item);
   const confirm = asked.data?.confirm;
   return (
     <>
@@ -102,7 +105,8 @@ export function ApprovalHere({
         name={name}
         face={<AgentAvatar name={name} avatar={avatar} size="sm" />}
         where={where}
-        title={sentence(item.title ?? item.summary)}
+        title={approvalTitle(item)}
+        command={command}
         detail={item.detail}
         cost={item.cost}
         caution={item.caution ?? item.taint}

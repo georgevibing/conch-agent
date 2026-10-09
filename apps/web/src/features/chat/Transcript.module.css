@@ -124,18 +124,6 @@
     animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out) both;
   }
 
-  .permissionCommand {
-    margin: 0;
-    padding: var(--nc-space-2-5) var(--nc-space-3);
-    overflow-x: auto;
-    border-radius: var(--nc-radius-md);
-    corner-shape: var(--nc-corner-shape);
-    font-family: var(--nc-font-mono);
-    font-size: var(--nc-text-sm);
-    background: var(--nc-surface-sunken);
-    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
-  }
-
   /* Aligned with the assistant's text, like the memory pill. */
   .skillUsed {
     display: flex;
