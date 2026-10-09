@@ -111,6 +111,7 @@ import {
   REACH_FOCUS,
 } from '../auth/focus';
 import { FALLBACK_FOCUS } from '../settings/FallbackSection';
+import { HEALED_FOCUS } from '../settings/HealedSection';
 import { ADVANCED_FOCUS } from '../settings/useAdvanced';
 import { PLAN_ROOM_FOCUS, ROUTINES_SPEND_FOCUS } from '../routines/SpendingSection';
 import { LEARNING_SPEND_FOCUS } from '../learning/LearningSpendSection';
@@ -290,6 +291,15 @@ const settingsPlaces: {
     keywords:
       'repair everything fix doctor checkup broken updates update upgrade backup back up restore fixed healed',
     icon: <HeartPulse />,
+  },
+  {
+    // Every part's repairs (the terminal's and the browser's too) are listed here, and only here.
+    tab: 'health',
+    focus: HEALED_FOCUS,
+    label: 'Fixed on its own',
+    keywords:
+      'fixed on its own healed self repaired repairs what conch fixed reassurance terminal browser restarted reset recovered',
+    icon: <Sparkles />,
   },
   {
     tab: 'health',

@@ -148,8 +148,6 @@ export const BrowserStatus = z.object({
     })
     .optional(),
   problem: BrowserProblem.optional(),
-  /** What Conch fixed on its own lately, newest first (shown as reassurance, not alarm). */
-  healed: z.array(z.object({ at: z.number(), message: z.string() })).default([]),
   /** Conversations with a tab open. */
   tabs: z.array(Id).default([]),
   sites: z.array(BrowserSite).default([]),

@@ -75,8 +75,13 @@ async function newHome() {
   return home;
 }
 
-function runtimeFor(store: BrowserStore, locate: () => typeof found) {
+function runtimeFor(
+  store: BrowserStore,
+  locate: () => typeof found,
+  heal?: (area: string, message: string) => void,
+) {
   return new BrowserRuntime({
+    heal,
     store,
     guard: new BrowserGuard(() => ({ allowLocal: true, gatewayPort: 1 })),
     onChange: () => undefined,
@@ -100,7 +105,12 @@ describe.skipIf(found.length === 0)('the browser heals itself', () => {
       name: 'Broken Chrome',
       path: join(tmpdir(), 'no-such-browser.exe'),
     };
-    const runtime = runtimeFor(store, () => [broken, { ...real, id: 'edge' as const }]);
+    const noted: string[] = [];
+    const runtime = runtimeFor(
+      store,
+      () => [broken, { ...real, id: 'edge' as const }],
+      (area, message) => noted.push(`${area}: ${message}`),
+    );
     stop = () => runtime.stop();
     const context = await runtime.context();
     expect(context.pages().length).toBeGreaterThanOrEqual(0);
@@ -109,6 +119,8 @@ describe.skipIf(found.length === 0)('the browser heals itself', () => {
     expect(runtime.healed[0]?.message).toBe(
       `Switched to ${real.name}. Broken Chrome wouldn’t start.`,
     );
+    // Listed in Settings → Health → Fixed on its own, the one place repairs are shown.
+    expect(noted).toContain(`browser: Switched to ${real.name}. Broken Chrome wouldn’t start.`);
   });
 
   it('clears a profile a leftover browser is still holding', { timeout: 90_000 }, async () => {

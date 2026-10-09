@@ -208,7 +208,7 @@ describe.skipIf(!executable)('your own Chrome, for real', () => {
           chrome: 'closed',
         });
         expect(status.backend?.fellBack).toMatch(/chrome:\/\/inspect\/#remote-debugging/);
-        expect(status.healed[0]?.message).toMatch(/Your Chrome couldn’t be reached/);
+        expect(browser.runtime.healed[0]?.message).toMatch(/Your Chrome couldn’t be reached/);
         expect(await browser.promptSection({ hostTools: true } as unknown as Engine)).toContain(
           'Conch’s own browser',
         );

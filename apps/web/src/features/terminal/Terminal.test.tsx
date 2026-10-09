@@ -40,7 +40,6 @@ const status = (over: Partial<TerminalStatus> = {}, enabled = true): TerminalSta
   shells: [],
   terminals: [],
   remote: false,
-  healed: [],
   ...over,
 });
 

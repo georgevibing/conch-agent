@@ -69,7 +69,6 @@ export function BrowserSettings() {
           version={status.browser?.version}
           install={status.install}
           problem={status.problem}
-          healed={status.healed}
           repairing={repair.isPending}
           onRepair={() => repair.mutate()}
         >

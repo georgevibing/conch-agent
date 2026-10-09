@@ -3,8 +3,6 @@ import { fn } from 'storybook/test';
 
 import { BrowserStatusCard } from './BrowserStatusCard';
 
-const minutes = (n: number) => Date.now() - n * 60_000;
-
 const meta = {
   title: 'Patterns/Browser/BrowserStatusCard',
   component: BrowserStatusCard,
@@ -13,21 +11,13 @@ const meta = {
     browserName: 'Microsoft Edge',
     version: '154.0.4258.37',
     onRepair: fn(),
-    healed: [
-      { at: minutes(3), message: 'A page crashed, so Conch reloaded it.' },
-      {
-        at: minutes(52),
-        message:
-          'A browser left over from an earlier session was holding things up; Conch closed it.',
-      },
-    ],
   },
   parameters: {
     layout: 'padded',
     docs: {
       description: {
         component:
-          'The browser’s health at a glance, for Settings. It says what runs and why, and lists what Conch already fixed on its own, as reassurance rather than alarm. One Repair button tries every fix; only what Conch can’t do itself (a system library on Linux) is handed to you, as a single command.',
+          'The browser’s health at a glance, for Settings. It says what runs and why. What Conch already fixed on its own is listed in Settings → Health, not here. One Repair button tries every fix; only what Conch can’t do itself (a system library on Linux) is handed to you, as a single command.',
       },
     },
   },
@@ -44,12 +34,11 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Running: Story = {};
-export const Ready: Story = { args: { phase: 'off', healed: [] } };
+export const Ready: Story = { args: { phase: 'off' } };
 export const Installing: Story = {
   args: {
     phase: 'installing',
     install: { percent: 64, label: 'Downloading Chromium · 64% of 170.3 MiB' },
-    healed: [],
   },
 };
 export const NeedsAHand: Story = {

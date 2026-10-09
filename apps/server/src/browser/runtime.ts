@@ -11,6 +11,7 @@ import type {
 import { chromium, type BrowserContext, type Page } from 'playwright-core';
 
 import { run } from '../lib/proc';
+import type { Heal } from '../lib/recover';
 import { attach, BACKEND_NAMES, OWNED, type Attached, type Fetcher } from './backends';
 import type { BrowserGuard } from './guard';
 import { InstallError, installChromium, missingLibraries, type InstallProgress } from './install';
@@ -26,7 +27,7 @@ import type { BrowserSecrets, BrowserStore } from './store';
 
 export const VIEWPORT = { width: 1280, height: 800 };
 
-/** How many healed notes Settings shows. */
+/** How many of the latest repairs the runtime remembers itself (they're all in Health's list). */
 const HEALED_KEPT = 8;
 
 const LAUNCH_ARGS = [
@@ -133,6 +134,8 @@ export interface RuntimeDeps {
   /** Where Chrome keeps its profiles (tests hand in their own). */
   chromeDirs?: () => string[];
   fetch?: Fetcher;
+  /** Lists a repair in Settings → Health → Fixed on its own. */
+  heal?: Heal;
 }
 
 /** What runs: Conch's own browser here, or one it attached to (ADR 0080). */
@@ -222,9 +225,10 @@ export class BrowserRuntime {
     return this.#stopping;
   }
 
-  /** Note something Conch fixed on its own. Shown as reassurance in Settings. */
+  /** Note something Conch fixed on its own. Listed in Settings → Health, and nowhere else. */
   heal(message: string): void {
     this.healed = [{ at: Date.now(), message }, ...this.healed].slice(0, HEALED_KEPT);
+    this.deps.heal?.('browser', message);
     this.deps.onChange();
   }
 

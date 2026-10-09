@@ -148,17 +148,6 @@ export function TerminalSettings() {
         </Stack>
       </Section>
 
-      {status.healed.length > 0 && (
-        <Section title="Fixed on its own">
-          <Stack gap={1}>
-            {status.healed.slice(0, 4).map((note) => (
-              <Text key={`${note.at}-${note.message}`} size="sm" tone="muted">
-                {note.message}
-              </Text>
-            ))}
-          </Stack>
-        </Section>
-      )}
       {dialog}
     </Stack>
   );

@@ -26,7 +26,6 @@ const terminal = (available: boolean): TerminalStatus => ({
   shells: [],
   terminals: [],
   remote: false,
-  healed: [],
 });
 
 const sandbox = (state: 'missing' | 'ready'): Readiness => ({
