@@ -8,7 +8,9 @@
  * provider is then the only one, and the UI says so.
  */
 import {
+  isAppProviderId,
   isServerId,
+  type AppProviderId,
   type AddServerBody,
   type EngineId,
   type EngineStatus,
@@ -59,6 +61,24 @@ const DETECT_TIMEOUT_MS = 30_000;
 /** Listing models can mean starting a CLI; one slow provider mustn't hold up the picker. */
 const MODELS_TIMEOUT_MS = 20_000;
 
+/**
+ * A provider a Conch app brings (ADR 0119), as its card shows it: the words
+ * from its manifest, what the person types, and where it came from.
+ */
+export interface AppProviderInfo {
+  id: AppProviderId;
+  appId: string;
+  name: string;
+  tagline: string;
+  description: string;
+  keyForm?: KeyForm;
+  from: 'made' | 'link';
+  speaks: 'openai' | 'anthropic' | 'code';
+  reaches: string[];
+  /** Its engine, built from the app's manifest. */
+  engine: Engine;
+}
+
 export class ProviderError extends Error {
   constructor(
     message: string,
@@ -98,6 +118,8 @@ export class ProviderService {
   #loading?: Promise<EngineId>;
   /** The servers you added, in the order you added them, as settings last said. */
   #servers: ServerConfig[] = [];
+  /** The providers Conch apps bring (ADR 0119), as the apps you have say. */
+  #apps: AppProviderInfo[] = [];
   readonly #found: FoundThings;
 
   constructor(private readonly deps: ProviderServiceDeps) {
@@ -112,6 +134,34 @@ export class ProviderService {
     for (const server of servers)
       if (!this.deps.engines.has(server.id))
         this.deps.engines.set(server.id, this.deps.makeServer(server));
+  }
+
+  /**
+   * The providers Conch apps bring (ADR 0119), as the apps you have now say:
+   * each one's engine joins the others, and one whose app went leaves, with
+   * its key. A chat that used one that's gone moves to the default.
+   */
+  async setAppProviders(list: readonly AppProviderInfo[]): Promise<void> {
+    const next = new Set(list.map((p) => p.id));
+    for (const gone of this.#apps.filter((p) => !next.has(p.id))) {
+      // Its key first: nothing is listed that could still send one.
+      await this.deps.keys.clear(gone.id).catch(() => undefined);
+      await this.deps.settings.setConnected(gone.id, false).catch(() => undefined);
+      this.deps.engines.delete(gone.id);
+      if (this.#active === gone.id) {
+        this.#active = undefined;
+        await this.deps.settings
+          .update({ preferences: { engine: 'claude-code' } })
+          .catch(() => undefined);
+      }
+    }
+    for (const provider of list) this.deps.engines.set(provider.id, provider.engine);
+    this.#apps = [...list];
+  }
+
+  /** A provider a Conch app brings, by its id. */
+  appProvider(id: EngineId): AppProviderInfo | undefined {
+    return isAppProviderId(id) ? this.#apps.find((p) => p.id === id) : undefined;
   }
 
   /**
@@ -171,7 +221,9 @@ export class ProviderService {
    * A pinned provider is the only one, whatever a conversation remembers.
    */
   engineFor(id: EngineId | undefined): Engine {
-    if (this.deps.pinned || !id) return this.engine();
+    if (!id) return this.engine();
+    if (this.deps.pinned && !(this.deps.pinned === 'mock' && isAppProviderId(id)))
+      return this.engine();
     return (
       (this.#listed(this.activeIdNow()).includes(id) && this.deps.engines.get(id)) || this.engine()
     );
@@ -187,6 +239,10 @@ export class ProviderService {
    * double only as the default), then the servers you added.
    */
   #listed(active: EngineId): EngineId[] {
+    const apps = this.#apps.map((p) => p.id).filter((id) => this.deps.engines.has(id));
+    // The test double is pinned for UI work and journeys (`pnpm dev:mock`, e2e): what you add
+    // to Conch from an app joins it, so making one and chatting with it can be tried end to end.
+    if (this.deps.pinned === 'mock') return ['mock', ...apps];
     if (this.deps.pinned) return [this.deps.pinned];
     const known = PROVIDER_ORDER.filter((id) => {
       const copy = PROVIDER_COPY.get(id);
@@ -195,11 +251,11 @@ export class ProviderService {
       return !copy.internal || id === active;
     });
     const servers = this.#servers.map((s) => s.id).filter((id) => this.deps.engines.has(id));
-    return [...known, ...servers];
+    return [...known, ...servers, ...apps];
   }
 
   #copy(id: EngineId): ProviderCopy | undefined {
-    return isServerId(id) ? undefined : PROVIDER_COPY.get(id);
+    return isServerId(id) || isAppProviderId(id) ? undefined : PROVIDER_COPY.get(id);
   }
 
   /**
@@ -492,6 +548,39 @@ export class ProviderService {
     } catch {
       // Describing a key must never fail a page; the status already says enough.
     }
+    const fromApp = this.appProvider(id);
+    if (fromApp)
+      return {
+        id,
+        name: fromApp.name,
+        tagline: fromApp.tagline,
+        description: fromApp.description,
+        connect: 'key',
+        local: false,
+        status,
+        active: id === active,
+        ready: status.state === 'ready',
+        highlights: [],
+        limits:
+          fromApp.from === 'made'
+            ? []
+            : ['It came from someone else: it reaches only the sites its card shows.'],
+        install: [],
+        key,
+        ...(fromApp.keyForm && { keyForm: fromApp.keyForm }),
+        experimental: false,
+        hidden: false,
+        group: 'key',
+        featured: false,
+        brand: 'app',
+        connectedBefore: before || status.state === 'ready',
+        contributed: {
+          app: fromApp.appId,
+          from: fromApp.from,
+          speaks: fromApp.speaks,
+          reaches: fromApp.reaches,
+        },
+      };
     if (server)
       return {
         id,
@@ -602,7 +691,7 @@ export class ProviderService {
   async setKey(id: EngineId, value: string): Promise<ProvidersList> {
     const engine = this.#engineOrThrow(id);
     const copy = this.#copy(id);
-    const form = isServerId(id) ? SERVER_KEY : copy?.keyForm;
+    const form = isServerId(id) ? SERVER_KEY : (this.appProvider(id)?.keyForm ?? copy?.keyForm);
     const name = copy?.name ?? engine.label;
     if (!form) throw new ProviderError(`${name} doesn’t take a key.`);
 

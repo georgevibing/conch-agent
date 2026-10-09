@@ -66,6 +66,60 @@ export interface PartsContext {
   redact: () => (text: string) => string;
   /** The mock engine: publishing pretends, and never runs `gh` with this machine's sign-in. */
   pretend?: boolean;
+  /**
+   * The mock engine's pretend world (ADR 0119, `extensions/pretend.ts`): the
+   * exact pretend hosts it answers for, on this computer. Only with `pretend`.
+   */
+  pretendRoute?: (url: URL) => string | undefined;
+}
+
+/**
+ * `app.fetch` in the mock engine's pretend world: a request to one of its
+ * exact hosts, when the app reaches it, goes to the pretend server on this
+ * computer; everything else goes through the real guard as always.
+ */
+export function pretendFetcher(
+  real: AppFetcher,
+  route: (url: URL) => string | undefined,
+): AppFetcher {
+  return async (app, request, signal) => {
+    let url: URL;
+    try {
+      url = new URL(request.url);
+    } catch {
+      return real(app, request, signal);
+    }
+    const to = app.reaches.includes(url.hostname) ? route(url) : undefined;
+    if (!to) return real(app, request, signal);
+    try {
+      const response = await fetch(to, {
+        method: request.method,
+        headers: request.headers,
+        ...(request.body !== undefined && {
+          body: request.bodyBase64 ? Buffer.from(request.body, 'base64') : request.body,
+        }),
+        signal,
+        redirect: 'manual',
+      });
+      const headers: Record<string, string> = {};
+      response.headers.forEach((value, name) => (headers[name] = value));
+      return {
+        url: request.url,
+        ok: response.ok,
+        status: response.status,
+        headers,
+        body: await response.text(),
+      };
+    } catch {
+      return {
+        ok: false,
+        status: 0,
+        headers: {},
+        body: '',
+        refused: `Couldn’t reach ${url.host}.`,
+      };
+    }
+  };
 }
 
 /**
@@ -98,7 +152,11 @@ export function publishedRepos(home: string): PublishedRepos {
 /** The real parts, joined: each was built and tested alone against `types.ts`. */
 export function conchAppParts(context: PartsContext): ConchAppParts {
   // One fetcher for every app: the hourly limit lives in it.
-  const fetcher = createFetcher({ gatewayPort: context.gatewayPort });
+  const guarded = createFetcher({ gatewayPort: context.gatewayPort });
+  const fetcher =
+    context.pretend && context.pretendRoute
+      ? pretendFetcher(guarded, context.pretendRoute)
+      : guarded;
   return {
     readFiles: async (files) => readFiles(files),
     readFolder,

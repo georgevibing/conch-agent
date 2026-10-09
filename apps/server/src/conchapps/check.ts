@@ -456,15 +456,22 @@ function toolProblems(
   return tools;
 }
 
-/** The tools module, loaded and listed in the sealed runtime: its definitions, or why it didn't. */
+/**
+ * The tools module, loaded and listed in the sealed runtime: its definitions
+ * and the provider's and chat app's functions it exports (ADR 0119), or why
+ * it didn't load.
+ */
 async function loadTools(
   app: AppPackage,
   runtime: (app: AppPackage) => AppRuntime,
-): Promise<AppToolDefinition[] | string> {
+): Promise<{ definitions: AppToolDefinition[]; parts: string[] } | string> {
   const sealed = runtime(app);
   try {
-    if (sealed.definitions) return await sealed.definitions();
-    return (await sealed.list()).map((t) => ({
+    if (sealed.definitions) {
+      const definitions = await sealed.definitions();
+      return { definitions, parts: (await sealed.parts?.().catch(() => [])) ?? [] };
+    }
+    const definitions = (await sealed.list()).map((t) => ({
       name: t.name,
       title: t.title,
       description: t.description,
@@ -472,6 +479,7 @@ async function loadTools(
       changes: t.changes,
       runs: true,
     }));
+    return { definitions, parts: (await sealed.parts?.().catch(() => [])) ?? [] };
   } catch (error) {
     return error instanceof Error ? error.message : String(error);
   } finally {
@@ -526,6 +534,7 @@ export const checkApp: CheckApp = async (files, options) => {
   }
 
   let tools: ConchAppTool[] = [];
+  let exported: string[] = [];
   if (manifest.tools) {
     const loaded = await loadTools(app, options.runtime);
     if (typeof loaded === 'string')
@@ -533,22 +542,36 @@ export const checkApp: CheckApp = async (files, options) => {
         message: `The tools didn’t load in the sealed runtime: ${loaded}`.slice(0, 500),
         file: manifest.tools,
       });
-    else tools = toolProblems(loaded, quality, new Set(tried), manifest.tools, problems, warnings);
+    else {
+      exported = loaded.parts;
+      tools = toolProblems(
+        loaded.definitions,
+        quality,
+        new Set(tried),
+        manifest.tools,
+        problems,
+        warnings,
+      );
+    }
   }
+  partProblems(manifest, exported, quality, new Set(tried), problems);
+  const parts = Boolean(manifest.provider || manifest.channel);
+  // Only a provider or a chat app: the assistant never calls it, so it needs no examples or instructions.
+  const partsOnly = parts && !tools.length && !manifest.pages.length;
 
   if (quality) {
-    if (!manifest.tools && !manifest.pages.length)
+    if (!manifest.tools && !manifest.pages.length && !parts)
       problems.push({
         message:
           'This app has no tools and no pages, so it can’t do anything yet. Add a tools.mjs, a page, or both.',
         file: 'conch-app.json',
       });
-    if (!manifest.examples.length)
+    if (!manifest.examples.length && !partsOnly)
       warnings.push({
         message: 'Add a few examples to conch-app.json: things a person might say to use it.',
         file: 'conch-app.json',
       });
-    if (!manifest.instructions)
+    if (!manifest.instructions && !partsOnly)
       warnings.push({
         message:
           'Add instructions to conch-app.json: when the assistant should use the app, and how.',
@@ -583,6 +606,90 @@ export const checkApp: CheckApp = async (files, options) => {
     problems: cap(problems),
     warnings: cap(warnings),
     tools,
-    tried: tried.filter((t) => tools.some((tool) => tool.name === t)),
+    tried: tried.filter(
+      (t) =>
+        tools.some((tool) => tool.name === t) ||
+        (t === PROVIDER_TRIED && Boolean(manifest.provider)) ||
+        (t === CHANNEL_TRIED && Boolean(manifest.channel)),
+    ),
   };
 };
+
+/** What `app_try` remembers when a provider or chat app was tried (ADR 0119). */
+export const PROVIDER_TRIED = '@provider';
+export const CHANNEL_TRIED = '@channel';
+
+/**
+ * A provider's and a chat app's half of the bar (ADR 0119): it reaches only
+ * what its card shows, the code it needs is exported, and (for what Conch
+ * makes) it was tried with `app_try`.
+ */
+function partProblems(
+  manifest: AppPackage['manifest'],
+  exported: readonly string[],
+  quality: boolean,
+  tried: ReadonlySet<string>,
+  problems: AppCheckItem[],
+) {
+  const file = 'conch-app.json';
+  const provider = manifest.provider;
+  if (provider) {
+    if (provider.address) {
+      const host = new URL(provider.address).hostname.toLowerCase();
+      if (!manifest.reaches.includes(host))
+        problems.push({
+          message: `The provider answers at ${host}, which isn’t in “reaches”. Add it there, so the person sees it on the card.`,
+          file,
+        });
+    }
+    if (provider.speaks === 'code') {
+      if (!manifest.tools)
+        problems.push({
+          message:
+            'A provider in code needs its module: add "tools": "provider.mjs" with export const provider = { async chat(request, app) { … } }.',
+          file,
+        });
+      else if (!exported.includes('provider.chat'))
+        problems.push({
+          message: `${manifest.tools} doesn’t export provider.chat: add export const provider = { async chat(request, app) { … } }.`,
+          file: manifest.tools,
+        });
+    }
+    if (quality && !tried.has(PROVIDER_TRIED))
+      problems.push({
+        message: 'Try the provider with app_try { "part": "provider" } before offering it.',
+        file,
+      });
+  }
+  const channel = manifest.channel;
+  if (channel) {
+    const needs = [
+      'channel.identify',
+      'channel.send',
+      channel.receives === 'webhook' ? 'channel.receive' : 'channel.poll',
+    ];
+    if (!manifest.tools)
+      problems.push({
+        message:
+          'A chat app needs its module: add "tools": "channel.mjs" with export const channel = { identify, poll, send }.',
+        file,
+      });
+    else
+      for (const name of needs.filter((n) => !exported.includes(n)))
+        problems.push({
+          message: `${manifest.tools} doesn’t export ${name}: add it to export const channel = { … } (see app_guide, “A chat app”).`,
+          file: manifest.tools,
+        });
+    if (!channel.fields.length)
+      problems.push({
+        message:
+          'Say what the person types to connect it, in "channel": { "fields": [{ "key": "token", "label": "… bot token" }] }.',
+        file,
+      });
+    if (quality && !tried.has(CHANNEL_TRIED))
+      problems.push({
+        message: 'Try the chat app with app_try { "part": "channel" } before offering it.',
+        file,
+      });
+  }
+}

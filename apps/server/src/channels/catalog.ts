@@ -167,7 +167,22 @@ export const CHANNEL_NAMES: Record<ChannelKind, string> = {
   line: 'LINE',
   rocketchat: 'Rocket.Chat',
   googlechat: 'Google Chat',
+  // A Conch app's chat app (ADR 0119) is called by its own name: `channelName`.
+  app: 'your chat app',
 };
+
+/**
+ * What a channel's app is called: its kind's name, or, for a chat app a
+ * Conch app brings (ADR 0119), the name its manifest gives it ("Zulip").
+ */
+export function channelName(channel: {
+  kind: ChannelKind;
+  contributed?: { name: string } | undefined;
+}): string {
+  return channel.kind === 'app' && channel.contributed
+    ? channel.contributed.name
+    : CHANNEL_NAMES[channel.kind];
+}
 
 /** Channels that only work on some systems: elsewhere the tile says so and can't be chosen. */
 const ONLY_ON: Partial<Record<string, { platforms: NodeJS.Platform[]; tagline: string }>> = {

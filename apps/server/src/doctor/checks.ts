@@ -9,7 +9,7 @@ import { statfs } from 'node:fs/promises';
 import { awaitsSignIn, type DoctorItem, type Provider } from '@conch/protocol';
 
 import { BACKEND_NAMES } from '../browser/backends';
-import { CHANNEL_NAMES } from '../channels/catalog';
+import { channelName } from '../channels/catalog';
 import { sandboxSupport } from '../conversations/sandbox';
 import { secureHome } from '../auth/checkup';
 import { pausedWords } from '../routines/spend';
@@ -78,7 +78,22 @@ function providerItem(provider: Provider, fixed: boolean): DoctorItem {
     ...base,
     state: status.state === 'checking' ? 'checking' : 'needs-you',
     message: status.message ?? 'Not answering.',
-    action: { kind: 'open', label: 'Open', place: 'providers', focus: provider.id },
+    action: provider.contributed
+      ? fixWithConch(provider.name, provider.contributed.app, status.message)
+      : { kind: 'open', label: 'Open', place: 'providers', focus: provider.id },
+  };
+}
+
+/**
+ * Something a Conch app brings that stopped working (ADR 0119), most often
+ * because the company changed its API: the maker can read its docs again and
+ * change the app, and the person presses Update on the card.
+ */
+function fixWithConch(name: string, app: string, said: string | undefined): DoctorItem['action'] {
+  return {
+    kind: 'ask',
+    label: 'Ask Conch to fix it',
+    prompt: `Fix ${name}: it stopped working${said ? ` and says “${said.slice(0, 200)}”` : ''}. Read its own documentation again, change the app ${app} with app_edit so it works, and show me the card.`,
   };
 }
 
@@ -184,7 +199,7 @@ export function channelsCheck(services: Services): DoctorCheck {
         const base = {
           id: `channels:${now.id}`,
           group: CHANNELS,
-          title: `${now.bot.name} on ${CHANNEL_NAMES[now.kind]}`,
+          title: `${now.bot.name} on ${channelName(now)}`,
         };
         const { state, message } = now.health;
         if (state === 'off') results.push({ ...base, state: 'off', message: 'Turned off.' });
@@ -215,23 +230,25 @@ export function channelsCheck(services: Services): DoctorCheck {
                   : 'Not working.'),
             action: now.health.need
               ? { kind: 'need', label: 'Install', need: now.health.need, mode: 'install' }
-              : {
-                  kind: 'open',
-                  label:
-                    now.health.access === 'full-disk-access'
-                      ? 'Turn on Full Disk Access'
-                      : now.health.access === 'automation'
-                        ? 'Let Conch use Messages'
-                        : state === 'needs-token'
-                          ? now.kind === 'whatsapp' || now.kind === 'signal'
-                            ? 'Link again'
-                            : now.kind === 'email'
-                              ? 'Paste a new app password'
-                              : 'Paste a new key'
-                          : 'Open',
-                  place: 'channels',
-                  focus: now.id,
-                },
+              : now.contributed && state === 'error'
+                ? fixWithConch(now.contributed.name, now.contributed.app, message)
+                : {
+                    kind: 'open',
+                    label:
+                      now.health.access === 'full-disk-access'
+                        ? 'Turn on Full Disk Access'
+                        : now.health.access === 'automation'
+                          ? 'Let Conch use Messages'
+                          : state === 'needs-token'
+                            ? now.kind === 'whatsapp' || now.kind === 'signal'
+                              ? 'Link again'
+                              : now.kind === 'email'
+                                ? 'Paste a new app password'
+                                : 'Paste a new key'
+                            : 'Open',
+                    place: 'channels',
+                    focus: now.id,
+                  },
           });
       }
       return results;

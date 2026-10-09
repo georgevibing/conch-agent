@@ -150,10 +150,11 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
     id: z.ZodOptional<z.ZodString>;
     tagline: z.ZodOptional<z.ZodString>;
     description: z.ZodOptional<z.ZodString>;
+    kind: z.ZodOptional<z.ZodEnum<{ app: 'app'; provider: 'provider'; channel: 'channel' }>>;
   }> = {
     name: 'app_new',
     description:
-      'Start making a new Conch app in this chat, when the person wants an ability nothing they have offers. Gives a draft that already works (a manifest, a tools module and a page) to change with app_write.',
+      'Start making a new Conch app in this chat, when the person wants an ability nothing they have offers, a provider Conch doesn’t have (kind: "provider"), or a chat app to talk to them on (kind: "channel"). Gives a draft that already works to change with app_write.',
     input: {
       name: z.string().trim().min(1).max(40).describe('Its name, in sentence case: “Plant diary”'),
       id: z
@@ -163,8 +164,12 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
         .describe('Its id, like plant-diary; made from the name when left out'),
       tagline: z.string().max(80).optional().describe('What it does, in a line'),
       description: z.string().max(600).optional(),
+      kind: z
+        .enum(['app', 'provider', 'channel'])
+        .optional()
+        .describe('An app (tools and pages), a provider (what answers chats), or a chat app'),
     },
-    run: safely(async ({ name, id, tagline, description }) => {
+    run: safely(async ({ name, id, tagline, description, kind }) => {
       if (id && !AppId.safeParse(id).success)
         return 'That id won’t do: use lowercase letters and numbers with single dashes, 2–24 characters, like plant-diary.';
       const made = await service.newDraft(ctx.conversationId, {
@@ -172,6 +177,7 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
         ...(id && { id }),
         ...(tagline && { tagline }),
         ...(description && { description }),
+        ...(kind && { kind }),
       });
       const appId = (JSON.parse(made.files.get('conch-app.json') ?? '{}') as { id?: string }).id;
       const clash = appId ? (await service.list()).find((a) => a.id === appId) : undefined;
@@ -360,16 +366,21 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
 
   const tryTool: HostTool<{
     draft: typeof draftArg;
-    tool: z.ZodString;
+    tool: z.ZodOptional<z.ZodString>;
+    part: z.ZodOptional<z.ZodEnum<{ provider: 'provider'; channel: 'channel' }>>;
     fixture: z.ZodOptional<z.ZodString>;
     input: z.ZodOptional<z.ZodObject<Record<string, never>, z.core.$loose>>;
   }> = {
     name: 'app_try',
     description:
-      'Run one of the app’s tools with realistic input, on the draft’s own scratch data (never the person’s). Every tool must be tried once before app_present.',
+      'Run one of the app’s tools with realistic input, on the draft’s own scratch data (never the person’s). Every tool must be tried once before app_present. For an app that brings a provider or a chat app, also try it with part: "provider" or "channel".',
     input: {
       draft: draftArg,
-      tool: z.string().min(1).max(20).describe('The tool’s own name, like log_watering'),
+      tool: z.string().min(1).max(20).optional().describe('The tool’s own name, like log_watering'),
+      part: z
+        .enum(['provider', 'channel'])
+        .optional()
+        .describe('Try the provider or chat app it brings, instead of a tool'),
       // An open object, not `z.record`: the MCP SDK can't list a record, and one
       // tool that won't list takes every Conch tool away from Claude Code.
       input: z.looseObject({}).optional().describe('Its arguments'),
@@ -381,9 +392,30 @@ export function makerTools(service: ConchAppService, ctx: MakerContext): HostToo
           'Named fixture in fixtures.json; fake settings and exact responses, with no network',
         ),
     },
-    run: safely(async ({ draft, tool, input, fixture }) => {
+    run: safely(async ({ draft, tool, part, input, fixture }) => {
       const info = await draftOf(draft);
       const manifest = (await service.draft(info)).manifest;
+      if (part) {
+        const tainted = ctx.untrusted?.();
+        if (tainted && manifest?.reaches.length) {
+          const answer = await ctx.ask({
+            toolName: 'app_try',
+            input: { part },
+            summary: `try ${manifest.name}’s ${part === 'provider' ? 'provider' : 'chat app'}, which can reach ${manifest.reaches.join(', ')}`,
+            taint: `${tainted} Trying this draft would send to ${manifest.reaches.join(', ')}.`,
+          });
+          if (answer === 'deny')
+            return {
+              text: 'The person said no, so nothing was tried. Ask them before trying it again.',
+              effect: 'not-executed',
+            };
+        }
+        const tried = await service.tryPart(info.id, part);
+        if (manifest?.reaches.length)
+          ctx.taint?.({ kind: 'app', label: `${plainLine(manifest.name, 60)} content` });
+        return tried.ok ? tried.text : `${tried.text} Fix it with app_write and try again.`;
+      }
+      if (!tool) return 'Say which tool to try (tool), or try the provider or chat app (part).';
       // A draft that reaches the web is a way out (ADR 0028): after reading something untrusted, ask
       // first. Full trust doesn't, and "Always allow" lets every try through for the rest of the chat.
       const tainted = ctx.untrusted?.();
