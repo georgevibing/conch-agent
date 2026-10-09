@@ -939,7 +939,9 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         // Putting back one it forgot answers its "Forgot" line; it says nothing to an older one.
         if (item.action === 'forgotten' && !event.kept) return item;
         found = true;
-        return { ...item, decided, pending: false };
+        // Kept in your own words (Edit first): its step says what was kept.
+        const words = event.edited && event.content !== undefined ? event.content : item.content;
+        return { ...item, decided, pending: false, content: words };
       });
       return found ? { ...base, items: updated } : base;
     }
