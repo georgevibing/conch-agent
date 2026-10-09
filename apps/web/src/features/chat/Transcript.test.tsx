@@ -309,6 +309,61 @@ describe('what Conch remembers', () => {
     expect(screen.queryByText(/^Not remembered:/)).toBeNull();
   });
 
+  // The pill came back here: what a chat learned once quiet, held and then kept,
+  // stayed a bordered "Remembered: …" chip under the last step, after a reload too.
+  it('what a quiet chat learned and you kept is a step too, never a pill', async () => {
+    const content = 'For conch-agent fixes (e.g. CI repairs), run the checks before pushing';
+    const after = {
+      id: 'm_9',
+      content,
+      kind: 'fact',
+      source: 'agent',
+      createdAt: 1,
+      updatedAt: 1,
+      held: {
+        verdict: 'ask',
+        reasons: [{ code: 'instruction', words: 'It reads like an order.' }],
+      },
+    };
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/learning': () => ({
+        on: true,
+        entries: [
+          {
+            id: 'le_1',
+            at: 1,
+            change: 'added',
+            after,
+            why: '',
+            from: { trigger: 'idle', quotes: [], signals: [] },
+            state: 'kept',
+            seen: 1,
+          },
+        ],
+        waiting: 0,
+        never: [],
+        past: [],
+        spending: { limitUsd: 1, isDefault: true, monthUsd: 0 },
+        quiet: [],
+      }),
+    });
+    const { container } = render({
+      kind: 'learned',
+      id: 'learned-r1',
+      items: [{ entryId: 'le_1', text: content, change: 'added', state: 'waiting' }],
+      decided: {},
+    });
+    const row = await screen.findByRole('button', { name: /^Remembered something/ });
+    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(row.closest('[data-family="remember"]')).not.toBeNull();
+    expect(container.querySelector('[data-settled]')).toBeNull();
+    expect(screen.queryByText(/^Remembered:/)).toBeNull();
+    await userEvent.click(row);
+    expect(screen.getByText(content)).toBeVisible();
+    expect(screen.getByRole('button', { name: `Undo “${content}”` })).toBeVisible();
+  });
+
   it('joins the run it happened in: one story, one timeline', async () => {
     mockFetch({ 'GET /api/state': () => appState() });
     renderApp(
@@ -370,7 +425,9 @@ describe('what Conch remembers', () => {
     expect(card).toHaveTextContent('It would change where invoices go.');
     expect(screen.queryByText('Remembered')).toBeNull();
     await userEvent.click(within(card).getByRole('button', { name: 'Remember it' }));
-    expect(await screen.findByText(/Remembered: Forward invoices/)).toBeInTheDocument();
+    // Answered, it's the step it was at once, before the chat's log says so.
+    expect(await screen.findByRole('button', { name: /^Remembered something/ })).toBeVisible();
+    expect(screen.queryByText(/^Remembered:/)).toBeNull();
     expect(calls.some((c) => c.path === '/api/memories/m_1/keep')).toBe(true);
   });
 

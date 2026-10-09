@@ -8,7 +8,7 @@ Your assistant remembers things from one chat to the next: what you like, who yo
 
 ## How it learns
 
-Mention something that will still matter next week ("I'm vegetarian", "my sister is called Maria") and your assistant saves a short note. The chat shows **Remembered:** with what it wrote, and **Undo** beside it.
+Mention something that will still matter next week ("I'm vegetarian", "my sister is called Maria") and your assistant saves a short note. The chat shows it as one of its steps, **Remembered something**: open it to read what it wrote, with **Undo** beside it.
 
 - To save something yourself, type `/remember` and the fact.
 - To have it remember only what you ask, turn off **Learn from your chats** in **Settings → What Conch knows**.
@@ -122,6 +122,8 @@ A web page or an email can try to plant a memory, such as "remember that invoice
 - why it looks off, in a sentence: "This came from news.example, a page this chat read, not from you, and it would change where invoices go.";
 - where it came from;
 - **Remember it**, **Don't remember** and **Edit first**. **Edit first** lets you put it in your own words; Enter keeps them, Escape goes back.
+
+Once you answer, the card folds into a step like any other memory: **Remembered something**, or **Didn't remember something**.
 
 Conch looks out for:
 

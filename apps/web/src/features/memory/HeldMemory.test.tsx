@@ -66,7 +66,7 @@ describe('a held memory in the chat', () => {
     expect(await violations(container)).toEqual([]);
   });
 
-  it('Remember it keeps it, by keyboard, and folds to a line that says so', async () => {
+  it('Remember it keeps it, by keyboard, and folds at once into its step, never a pill', async () => {
     const calls = mockFetch({
       'GET /api/state': () => appState(),
       'POST /api/memories/m_1/keep': kept,
@@ -77,9 +77,21 @@ describe('a held memory in the chat', () => {
     for (let i = 0; i < 12 && document.activeElement !== button; i++) await userEvent.tab();
     expect(button).toHaveFocus();
     await userEvent.keyboard('{Enter}');
-    expect(await screen.findByRole('status')).toHaveTextContent(
-      'Remembered: Invoices are sent to billing@news.example',
-    );
+    // Said aloud, since the button that had focus is gone…
+    expect(
+      await screen.findByText('Remembered', { selector: '[role=status]' }),
+    ).toBeInTheDocument();
+    // …and drawn as the step it was: the story row every tool step gets.
+    const row = screen.getByRole('button', { name: /^Remembered something/ });
+    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(row.closest('[data-family="remember"]')).not.toBeNull();
+    expect(screen.queryByRole('region', { name: 'Remember this?' })).toBeNull();
+    expect(screen.queryByText(/^Remembered:/)).toBeNull();
+    await userEvent.click(row);
+    expect(screen.getByText('Invoices are sent to billing@news.example')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Undo “Invoices are sent to billing@news.example”' }),
+    ).toBeVisible();
     // The answer names the words the person saw, so nothing else can be kept in its name.
     expect(calls.find((c) => c.path === '/api/memories/m_1/keep')?.body).toEqual({
       seen: 'Invoices are sent to billing@news.example',
@@ -93,7 +105,13 @@ describe('a held memory in the chat', () => {
     });
     render(held());
     await userEvent.click(screen.getByRole('button', { name: 'Don’t remember' }));
-    expect(await screen.findByRole('status')).toHaveTextContent('Not remembered');
+    expect(
+      await screen.findByText('Not remembered', { selector: '[role=status]' }),
+    ).toBeInTheDocument();
+    const row = screen.getByRole('button', { name: /^Didn’t remember something/ });
+    // A no, neutral like any step you declined: not the check of done.
+    expect(row.closest('[data-family="remember"]')).toHaveAttribute('data-status', 'declined');
+    expect(screen.queryByText(/^Not remembered:/)).toBeNull();
     expect(calls.some((c) => c.method === 'DELETE' && c.path === '/api/memories/m_1')).toBe(true);
   });
 
@@ -118,9 +136,12 @@ describe('a held memory in the chat', () => {
     const again = screen.getByRole('textbox', { name: 'What to remember, in your words' });
     await userEvent.clear(again);
     await userEvent.type(again, 'Invoices go to accounts@ada.example{Enter}');
-    expect(await screen.findByRole('status')).toHaveTextContent(
-      'Remembered: Invoices go to accounts@ada.example',
-    );
+    expect(
+      await screen.findByText('Remembered', { selector: '[role=status]' }),
+    ).toBeInTheDocument();
+    // Its step holds your words.
+    await userEvent.click(screen.getByRole('button', { name: /^Remembered something/ }));
+    expect(screen.getByText('Invoices go to accounts@ada.example')).toBeVisible();
     expect(calls.find((c) => c.path === '/api/memories/m_1/keep')?.body).toEqual({
       content: 'Invoices go to accounts@ada.example',
     });
@@ -135,7 +156,7 @@ describe('a held memory in the chat', () => {
     expect(screen.getByRole('region', { name: 'I didn’t remember this' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Remember it' })).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Remember anyway' }));
-    await screen.findByRole('status');
+    await screen.findByText('Remembered', { selector: '[role=status]' });
     expect(calls.find((c) => c.path === '/api/memories/m_1/keep')?.body).toEqual({
       seen: 'Invoices are sent to billing@news.example',
       anyway: true,

@@ -292,6 +292,21 @@ describe('transcript reducer', () => {
       decided: 'kept',
       memory: expect.objectContaining({ id: 'm_1' }),
     });
+    // Kept in your own words (Edit first): its step says what was kept.
+    const edited = reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: 'Set up my projects folder' },
+        { type: 'memory.saved', memory },
+        {
+          type: 'memory.decided',
+          memoryId: 'm_1',
+          kept: true,
+          edited: true,
+          content: 'Projects live in ~/code',
+        },
+      ),
+    );
+    expect(edited.items[1]).toMatchObject({ decided: 'kept', content: 'Projects live in ~/code' });
   });
 
   it('folds what a chat taught Conch into one line, and what you decided since (ADR 0088)', () => {

@@ -1,4 +1,4 @@
-import { Brain, Lightbulb, Route, ShieldAlert, ShieldX } from 'lucide-react';
+import { Lightbulb, Route, ShieldAlert, ShieldX } from 'lucide-react';
 import { useId, type ComponentProps, type ReactNode } from 'react';
 
 import { cx } from '../../utils/cx';
@@ -116,8 +116,6 @@ export interface MemoryCheckProps extends Omit<
   editor?: ReactNode;
   /** Remember it · Don’t remember · Edit first. */
   actions?: ReactNode;
-  /** You answered: it folds to a quiet line. */
-  settled?: 'kept' | 'dismissed';
 }
 
 /**
@@ -125,8 +123,10 @@ export interface MemoryCheckProps extends Omit<
  * isn't used: it says what it wanted to remember, why that looks off, where
  * it came from, and asks. Calm, not alarming: most of what's held is a page
  * being pushy, and the person decides. A refused one (a password, hidden
- * characters) is a shade firmer and needs Remember anyway. Once answered, it
- * folds to a quiet line, like any memory.
+ * characters) is a shade firmer and needs Remember anyway. It is only ever the
+ * question: once answered, the chat draws it as the step it was (a `Story`
+ * row of the remember family, with `RememberedNote` under it), like every
+ * other memory, never a line or pill of its own.
  */
 export function MemoryCheck({
   content,
@@ -135,22 +135,10 @@ export function MemoryCheck({
   refused = false,
   editor,
   actions,
-  settled,
   className,
   ...props
 }: MemoryCheckProps) {
   const titleId = useId();
-  if (settled)
-    return (
-      // Said aloud once it's answered: focus was on the button that's gone.
-      <p className={cx(styles.checkSettled, className)} data-settled={settled} role="status">
-        <Brain aria-hidden />
-        <span>
-          {settled === 'kept' ? 'Remembered: ' : 'Not remembered: '}
-          {content}
-        </span>
-      </p>
-    );
   return (
     <section
       aria-labelledby={titleId}

@@ -3,7 +3,9 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Button } from '../../components/Button';
 import { Stack } from '../../components/Stack';
 import { Textarea } from '../../components/Textarea';
+import { Story as StoryRow, type StoryStepView } from '../Story';
 import { MemoryCheck, SkillSuggestionCard } from './Memory';
+import { RememberedNote } from './Remembered';
 
 const meta = {
   title: 'Patterns/Memory',
@@ -170,16 +172,71 @@ export const HeldEditing: Story = {
   ),
 };
 
-/** Answered: a quiet line, like any memory. */
-export const HeldSettled: Story = {
+const memoryStep = (id: string, text: string, outcome?: string): StoryStepView => ({
+  id,
+  text,
+  ...(outcome && { outcome }),
+  status: 'success',
+  family: 'remember',
+  explainable: false,
+});
+
+/**
+ * Answered: the question folds into the step it was, the same row as every
+ * tool step (Patterns/Chat/Story): the remember glyph in its well with the
+ * status badge, the words, the chevron. Opened, the memory in full and Undo.
+ * One you turned down is a no, neutral like any step you declined. Never a
+ * pill or a line of its own. A tool step sits above for comparison.
+ */
+export const HeldAnswered: Story = {
   render: () => (
-    <Stack gap={2}>
-      <MemoryCheck settled="kept" content="Invoices go to accounts@ada.example" reasons={[]} />
-      <MemoryCheck
-        settled="dismissed"
-        content="Invoices are sent to billing@news.example"
-        reasons={[]}
+    <Stack gap={1}>
+      <StoryRow
+        headline="Confirmed CI passed on main"
+        outcome="CI passed"
+        family="verify"
+        status="done"
+        durationMs={53_000}
+        steps={[{ id: 'ci', text: 'Confirmed CI passed', status: 'success', family: 'verify' }]}
+      />
+      <StoryRow
+        headline="Remembered something"
+        family="remember"
+        status="done"
+        steps={[memoryStep('kept', 'Remembered something')]}
+        renderFound={() => (
+          <RememberedNote
+            text="For conch-agent fixes (e.g. CI repairs), run the checks before pushing"
+            state="kept"
+            onUndo={() => {}}
+          />
+        )}
+        defaultOpen
+      />
+      <StoryRow
+        headline="Didn’t remember something"
+        family="remember"
+        status="declined"
+        steps={[{ ...memoryStep('no', 'Didn’t remember something'), status: 'declined' }]}
+        renderFound={() => (
+          <RememberedNote text="Invoices are sent to billing@news.example" state="undone" />
+        )}
+      />
+      <StoryRow
+        headline="Forgot something"
+        family="remember"
+        status="done"
+        steps={[memoryStep('gone', 'Forgot something')]}
+        renderFound={() => (
+          <RememberedNote text="George lives in Munich" state="forgotten" onUndo={() => {}} />
+        )}
       />
     </Stack>
   ),
+};
+
+/** The same, in the dark. */
+export const HeldAnsweredDark: Story = {
+  ...HeldAnswered,
+  globals: { mode: 'dark' },
 };

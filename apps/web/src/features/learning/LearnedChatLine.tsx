@@ -1,5 +1,6 @@
 import type { LearnedItem, MemoryHold } from '@conch/protocol';
 
+import { MemoryStep } from '../chat/MemoryStep';
 import { HeldMemory } from '../memory/HeldMemory';
 import { useLearning } from './api';
 
@@ -10,7 +11,8 @@ type Decided = 'undone' | 'kept' | 'dismissed' | 'gone';
  * What this chat taught Conch once it went quiet (ADR 0088, ADR 0097).
  * Routine learning is silent; only a memory the check held for a security
  * reason is said here, as the same card a held memory gets anywhere: what
- * it wanted to remember, why that looks off, and Remember it or Don't. Older
+ * it wanted to remember, why that looks off, and Remember it or Don't;
+ * answered, the step it was, like every other memory (`MemoryStep`). Older
  * chats' logs may list routine things too: those stay quiet now.
  */
 export function LearnedChatLine({
@@ -48,6 +50,19 @@ export function LearnedChatLine({
             content={entry.after.content}
             held={hold}
             {...(settled && { decided: settled })}
+            answered={(answer, words) => (
+              <MemoryStep
+                item={{
+                  kind: 'memory',
+                  id: `learned-${item.entryId}`,
+                  memoryId: entry.after.id,
+                  content: words,
+                  action: 'saved',
+                  held: hold,
+                  decided: answer,
+                }}
+              />
+            )}
           />
         );
       })}

@@ -1,7 +1,7 @@
 import type { MemoryHold } from '@conch/protocol';
 import { Button, MemoryCheck, Textarea, toast } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 
 import { api } from '../../api/client';
 import { keys } from '../../api/queries';
@@ -47,19 +47,27 @@ function Editor({
  * A memory the memory check held, in the chat (ADR 0087): what it wanted to
  * remember, why that looks off, where it came from, and Remember it, Don’t
  * remember or Edit first. A refused one takes Remember anyway. What you
- * choose shows at once, goes back if it didn’t work, and the chat's own log
- * keeps it after a reload.
+ * choose shows at once (`answered`: in the chat, the step it was, like every
+ * other memory), goes back if it didn’t work, and the chat's own log keeps it
+ * after a reload.
  */
 export function HeldMemory({
   memoryId,
   content,
   held,
   decided,
+  answered,
 }: {
   memoryId: string;
   content: string;
   held: MemoryHold;
   decided?: 'kept' | 'undone';
+  /**
+   * What it is once you've answered, in the words you kept: in the chat, the
+   * step it was (`MemoryStep`), never a line of its own. Left out (the Memory
+   * page), it goes, and the list shows it among the rest.
+   */
+  answered?: (answer: 'kept' | 'undone', words: string) => ReactNode;
 }) {
   const client = useQueryClient();
   const [pressed, setPressed] = useState<{ answer: 'kept' | 'undone'; words: string }>();
@@ -101,11 +109,15 @@ export function HeldMemory({
 
   if (answer)
     return (
-      <MemoryCheck
-        settled={answer === 'kept' ? 'kept' : 'dismissed'}
-        content={pressed?.words ?? content}
-        reasons={[]}
-      />
+      <>
+        {/* Said aloud once you've answered: focus was on the button that's gone. */}
+        {pressed && (
+          <p role="status" className="nc-visually-hidden">
+            {pressed.answer === 'kept' ? 'Remembered' : 'Not remembered'}
+          </p>
+        )}
+        {answered?.(answer, pressed?.words ?? content)}
+      </>
     );
   return (
     <MemoryCheck

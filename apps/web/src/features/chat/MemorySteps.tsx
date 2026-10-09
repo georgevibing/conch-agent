@@ -21,11 +21,14 @@ const asked = (item: Memory) => item.action === 'saved' && Boolean(item.held || 
 export const isMemoryStep = (item: TranscriptItem): item is Memory =>
   item.kind === 'memory' && (!asked(item) || item.decided !== undefined);
 
+/** Asked about and turned down: it was never remembered, a no like any step you declined. */
+export const turnedDown = (item: Memory) => asked(item) && item.decided === 'undone';
+
 /** The step's words: what it did, and what you said since. */
 function labelOf(item: Memory): ToolLabel {
   const forgot = item.action === 'forgotten';
   // Asked and turned down: it was never remembered, so there's nothing to call undone.
-  if (asked(item) && item.decided === 'undone')
+  if (turnedDown(item))
     return {
       family: 'remember',
       doing: 'Remembering something',
