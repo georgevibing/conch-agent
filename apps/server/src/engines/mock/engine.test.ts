@@ -1,3 +1,7 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import type { EngineEvent, TurnInput } from '../types';
@@ -136,6 +140,8 @@ describe('the mock engine runs a script that calls tools (ADR 0119)', () => {
     for await (const event of engine.runTurn({
       ...input(new AbortController().signal),
       prompt,
+      // Its own folder: "write a note" really writes one.
+      cwd: mkdtempSync(join(tmpdir(), 'conch-mock-script-')),
       tools: tools as unknown as TurnInput['tools'],
     }))
       events.push(event);
