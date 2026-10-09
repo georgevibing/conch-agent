@@ -36,6 +36,23 @@ type Story = StoryObj<typeof meta>;
 
 export const Header: Story = {};
 
+/**
+ * On a phone the facts wrap between one fact and the next, and the line that
+ * wrapped starts with its fact, never a dot.
+ */
+export const OnAPhone: Story = {
+  args: {
+    os: 'linux',
+    name: 'AMD Ryzen 7 5800U',
+    facts: ['Ubuntu 24.04.4 LTS', '8 cores', '15 GB memory', 'Up 29 days'],
+  },
+  render: (args) => (
+    <div style={{ inlineSize: 342 }}>
+      <ComputerHeader {...args} />
+    </div>
+  ),
+};
+
 export const Busy: Story = {
   args: { status: 'Busy right now', tone: 'busy', os: 'linux', name: 'AMD Ryzen 7 7840U' },
 };

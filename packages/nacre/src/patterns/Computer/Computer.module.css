@@ -63,21 +63,10 @@
     text-wrap: balance;
   }
 
+  /* A MetaList: it wraps between facts and never starts a line with a dot. */
   .facts {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--nc-space-1) 0;
-    margin: 0;
-    padding: 0;
-    list-style: none;
     font-size: var(--nc-text-sm);
     color: var(--nc-text-muted);
-  }
-
-  .facts li + li::before {
-    content: '·';
-    padding-inline: var(--nc-space-2);
-    color: var(--nc-text-subtle);
   }
 
   /* ── Cores ─────────────────────────────────────────────────────────── */

@@ -1,0 +1,39 @@
+@layer nacre.components {
+  /*
+   * Each fact carries its dot in front of it, in a slot of its own width. The
+   * list is pulled back by one slot and clipped there, so whichever fact
+   * starts a line — the first, or one that wrapped — has its dot out of
+   * sight. The clip reaches past the other three edges, so a focus ring or a
+   * descender is never cut.
+   */
+  .list {
+    --ml-dot: calc(var(--nc-space-2) * 2 + 0.3em);
+
+    display: flex;
+    flex-wrap: wrap;
+    row-gap: var(--ml-row-gap, var(--nc-space-0-5));
+    min-inline-size: 0;
+    margin: 0;
+    margin-inline-start: calc(var(--ml-dot) * -1);
+    padding: 0;
+    list-style: none;
+    clip-path: inset(-1em -1em -1em var(--ml-dot));
+  }
+
+  .list:dir(rtl) {
+    clip-path: inset(-1em var(--ml-dot) -1em -1em);
+  }
+
+  .item {
+    min-inline-size: 0;
+  }
+
+  .item::before {
+    content: '·';
+    content: '·' / '';
+    display: inline-block;
+    inline-size: var(--ml-dot);
+    text-align: center;
+    color: var(--nc-text-subtle);
+  }
+}

@@ -90,6 +90,12 @@ size="lg"`) uses `--nc-text-read-lg` (17px). Code beside reading text is
 - **Headings** in prose are em steps over the body (1.6 / 1.3 / 1.1), set
   `--nc-leading-tight`/`snug`. Numbers that change or line up (times, counts,
   durations, costs) use `font-variant-numeric: tabular-nums`.
+- **A line of facts never starts with a dot.** "Ubuntu 24.04 · 8 cores · Up 29
+  days" wraps between facts on a phone, and the next line starts with a fact. A
+  line of nodes is a `MetaList` (the dot in front of a fact that starts a line is
+  tucked away); a line of words is `joinMeta(parts)`, whose dot is bound to the
+  fact before it by a no-break space (`META_SEP`). Never join facts with a bare
+  `' · '`.
 - Tracking tightens as size grows (optical sizing by hand).
 - `text-wrap: pretty` for body and `balance` for headings.
 - Why, and what it was before: [ADR 0116](../adr/0116-type-at-the-size-it-says.md).
