@@ -25,6 +25,25 @@ describe('Auto’s second look (ADR 0100)', () => {
     expect(prompt).toContain(`web:${DATAMARK}evil.example`);
   });
 
+  it('judges against what the person asked, with a rubric of real harms (ADR 0117, 2026-10-09)', async () => {
+    const { complete, look } = model('{"risky": true, "kind": "unasked"}');
+    expect(
+      await lookAtCommand('./upload-all ~/Documents', read, look, {
+        asked: 'Make a PDF of my notes',
+      }),
+    ).toBe('do something you didn’t ask for, that what it read could have suggested');
+    const input = complete.mock.calls[0]?.[0];
+    // The request goes in fenced and datamarked like the rest; the rubric says what's routine.
+    expect(input?.prompt).toContain('the person asked: ');
+    expect(input?.prompt).toContain(`Make${DATAMARK}a${DATAMARK}PDF`);
+    expect(input?.system).toMatch(/installing well-known packages with pip/);
+    expect(input?.system).toMatch(/installing fonttools to subset its fonts serves that/);
+    expect(input?.system).toMatch(/may supply details/);
+    expect(await lookAtCommand('./x', read, model('{"risky": true, "kind": "system"}').look)).toBe(
+      'change how this computer itself is set up',
+    );
+  });
+
   it('only ever adds a question: no model, nothing risky, or an unreadable answer is nothing', async () => {
     expect(await lookAtCommand('./sync', read, undefined)).toBeUndefined();
     expect(await lookAtCommand('./sync', read, async () => undefined)).toBeUndefined();

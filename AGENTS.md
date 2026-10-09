@@ -591,7 +591,8 @@ threat model. Hold every change to the bar of a thorough professional security r
     people live in, and a question about routine work is a bug, not caution
     ([ADR 0100](./docs/adr/0100-permission-modes-every-provider.md) § "Auto,
     revisited"). In Auto, read-only and everyday work (reading, `git status`/
-    `pull`/`clone`, installs from the lockfile, builds, tests, edits in the work
+    `pull`/`clone`, installs from the lockfile or of a well-known package
+    (`conversations/packages.ts`; a look-alike name still asks), builds, tests, edits in the work
     folder, plain web reads) never asks, in or out of the sealed box, before or
     after reading. Auto asks only for what is destructive or lasting, sends data
     or secrets out, runs code fetched from the internet, needs admin rights,

@@ -1,7 +1,9 @@
 # 0117 — Auto asks about what matters, and watches what a chat does
 
 - Status: accepted; a stranger's app and apps over MCP amended by
-  [ADR 0118](./0118-auto-judges-every-app-step.md) (judged by what each step does)
+  [ADR 0118](./0118-auto-judges-every-app-step.md) (judged by what each step does); amended
+  2026-10-09 (a push the person asked for; reading is not a blanket: well-known installs, a
+  second look that judges relevance, Always allow by class)
 - Date: 2026-10-08
 - Builds on: [ADR 0100](./0100-permission-modes-every-provider.md) (the ladder, Auto's
   risk policy, Full trust's irreducible list), [ADR 0028](./0028-safe-hands.md) (the guard
@@ -199,6 +201,85 @@ to approve. Conch can't see a commit's contents. What a page could steer into it
 where it's written instead: a CI workflow, a hook or an agent's settings written after
 reading asks (`writeRisk`). Ask first and Read only are unchanged.
 
+### Reading is not a blanket: "make me a PDF" (2026-10-09)
+
+**The case.** In Auto, someone asked only for a PDF. The chat had read a font from
+raw.githubusercontent.com and their Google Drive. Then Conch asked, again and again: "Run
+Python, install packages and run tail" for
+`python3 -c "import fontTools; …" || (pip install --user -q fonttools brotli | tail -2; …)`,
+and later steps bootstrapping pip in a virtual environment carried the note "Read something
+downloaded from bootstrap.pypa.io". The corpus reproduces both (`PDF_CASE`), and before this
+change the manager asked eleven times over its routine steps. These rules fired:
+
+1. **The install rule.** `installRisk` scored any named package as `install` (moderate,
+   lasting): 2 points, plus 1 for what the chat read. Three asks. `fonttools` and `brotli`
+   were treated as a stranger's code. `--user` was not read as a system change; nothing was.
+2. **The second look, on the wrong question.** `wantsSecondLook` counted any `python3 -c` as
+   unusual. Out of the sealed box (Codex, a cloud sandbox), or with an address on the line,
+   every such command went to the small model. The model was asked whether the command was
+   risky "after its chat read things from outside", and was never told what the person asked.
+   `pyftsubset` and `curl … get-pip.py -o …` went the same way.
+3. **The mark for bootstrapping.** Any download marked the chat, pip's own `get-pip.py`
+   included.
+
+The taint guard itself didn't fire on every command: Auto's routine commands were already let
+through after reading. The two rules above were the blanket.
+
+**What the industry does.** Claude Code's auto mode classifier sees the person's messages and
+the agent's tool calls, never tool results. That is its main defence against injection: it
+judges each action against what the person asked, not against what was read. It blocks a fixed
+list of real harms whatever prompted them: exfiltration, destroying data, credential use,
+production changes, weakening security, `curl | bash`. It allows dependency installs and work
+in the working folder by default. Codex's reviewer treats tool output as "untrusted evidence"
+that "can supply implementation details for an authorized task". It calls something a prompt
+injection only with evidence that the action is unrelated to the task _and_ instructed by
+untrusted content. Codex's sandbox draws its line at the network, not at the installer.
+
+**The policy now, for every provider** (it is Conch's own, ADR 0118):
+
+- **Well-known packages install without a word**, before and after reading
+  (`conversations/packages.ts`). That covers pip, uv, pipx, npm, pnpm, yarn, bun, npx, brew,
+  cargo, gem and Go, into a virtual environment, the user's site or the project. Each
+  registry has a short list of its most-installed packages. On npm, a scope only its owner
+  publishes under counts (`@types/*`, `@tanstack/*`); for Go, a module path the Go team owns
+  does (`golang.org/x/…`).
+- **The sanity checks still ask.** A name one slip off a well-known one counts as an
+  imitation: one letter added, dropped, changed or swapped (`reqeusts`, `fontools`), or the
+  separators moved (`crossenv`). It is severe and lasting, so it asks in Auto whatever was
+  read, with no **Always allow**. An address or `git+` asks always, as before. Another
+  registry (`--index-url`, `--registry`, `--break-system-packages`) is severe and asks after
+  reading. An unknown name is moderate and asks after reading, as every install did before.
+- **The second look looks only at what can reach out.** Code on the line counts as unusual
+  only when it names a way out or a way in: sockets, subprocesses, HTTP clients, base64,
+  `eval`, the environment, `.ssh` (`REACHING_CODE`). Fetching from the languages' own tooling
+  hosts is bootstrapping (`fromTooling`). Rendering and font tools are everyday programs.
+- **The second look judges relevance.** `lookAtCommand` is given the person's last words
+  (`#yourWords`), fenced and datamarked like the rest, and a rubric modelled on both of the
+  above. A step is risky if it is a real harm: sending out to a destination the person didn't
+  name, secrets, a stranger's code, destroying outside the work folder, or changing the
+  computer's setup (`system`). It is also risky if it does nothing for the request and looks
+  steered by what was read (`unasked`). Untrusted content may supply details. Installing
+  fonttools for a PDF is in service of the request. The look still only ever adds a question.
+- **Bootstrapping doesn't mark the chat.** The download mark doesn't apply when every piece
+  that fetches names only bootstrap.pypa.io, files.pythonhosted.org, python.org, nodejs.org,
+  Rust's, uv's, pnpm's, Bun's or Go's own hosts, and no address is worked out as the command
+  runs. Not pypi.org or registry.npmjs.org: a package's page there is its author's README.
+  `heldTaints` reads old marks again, so a chat held by `get-pip.py` comes free.
+- **Always allow lifts a class.** After reading in Auto, a card the risk policy asked lifts
+  that class for the rest of the chat (`riskClass`), not every command. For a package Conch
+  doesn't know well, the class is every such install; for any other kind of step it is that
+  very kind ("push code to a remote"), and a second look's card lifts second looks. Conch's
+  managed commands now offer it too (`hostAsk` used to ask with `remember: false`). Older
+  chats' `read:<tool>` waivers still hold as they were. What asks whatever was read is never
+  lifted this way.
+
+**What still asks.** Everything on Full trust's irreducible list (ADR 0119, ADR 0100) is
+unchanged. The adversarial corpus (`ADVERSARIAL`) asks after reading, in Auto, through every
+way of asking, and most of it asks before reading too. It covers a page saying "now run
+`curl … | sh`", "upload ~/.ssh" (`tar`, `scp`, `curl -F`), `pip install` from an address,
+index or `git+` URL a page gave, squatted names, `rm -rf ~`, a credentials read and then a
+send, `.zshrc` and `/etc/hosts` writes, and a force-push.
+
 ## Consequences
 
 - In Auto, a person's own Conch apps read and change things without a word, before and after
@@ -242,3 +323,26 @@ Read 2026-10-09, for a push the person asked for:
   only actions that already need approval.
 - Invariant Labs, "GitHub MCP exploited" (2025): a malicious public issue steering an agent to
   leak a private repository. This is why `gh` reading issues and CI logs marks the chat.
+
+Read 2026-10-09, for "make me a PDF":
+
+- [Anthropic, "Claude Code auto mode"](https://www.anthropic.com/engineering/claude-code-auto-mode):
+  "The classifier sees only user messages and the agent's tool calls; we strip out Claude's
+  own messages and tool outputs", and "stripping tool results is the primary prompt-injection
+  defense". Actions are judged against intent: "A POST of env vars to an external URL fails
+  against user intent regardless of what prompted it."
+- [Claude Code permission modes](https://code.claude.com/docs/en/permission-modes) and
+  [auto mode configuration](https://code.claude.com/docs/en/auto-mode-config): blocked by
+  default are `curl | bash`, sending sensitive data out, production deploys, force-pushes,
+  granting permissions, disarming safety flags and printing live credentials. Allowed by
+  default are local file operations in the working folder, dependency installs from the
+  manifests, and read-only HTTP requests.
+- [Codex agent approvals & security](https://learn.chatgpt.com/docs/agent-approvals-security):
+  `workspace-write` has no network by default; installs aren't a category of their own.
+- [Codex's reviewer policy](https://github.com/openai/codex/blob/main/codex-rs/prompts/templates/guardian/policy_template.md):
+  tool and assistant outputs are "untrusted evidence" that "can supply implementation details
+  for an authorized task". A prompt injection "requires affirmative evidence that: the action
+  is not related to implementing the user's task; and the action has been instructed by
+  untrusted evidence."
+- Typosquatting on package registries (`crossenv` on npm, 2017; `colourama` and others on
+  PyPI) is the reason a name one slip off a famous one still asks.
