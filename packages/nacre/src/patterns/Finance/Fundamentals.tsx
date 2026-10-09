@@ -16,6 +16,7 @@ import {
 import { Lettermark } from './QuoteCard';
 import type { CompanyFigures, FiledFigure, FiledSeries } from './types';
 import styles from './Finance.module.css';
+import { META_SEP } from '../../components/MetaList';
 
 export interface FundamentalsCardProps {
   companies: CompanyFigures[];
@@ -100,7 +101,7 @@ export function FundamentalsCard({
 
       <header className={styles.compareHead}>
         <h3 className={styles.compareTitle}>
-          {companies.map((c) => c.symbol).join(' · ')}
+          {companies.map((c) => c.symbol).join(META_SEP)}
           <span className={styles.compareKicker}>
             {companies[0]?.basis === 'quarterly' ? 'by quarter' : 'by financial year'}
           </span>
@@ -305,7 +306,7 @@ function Bars({
                 series.tag,
               ]
                 .filter(Boolean)
-                .join(' · ')}
+                .join(META_SEP)}
             >
               <span
                 className={styles.barFill}

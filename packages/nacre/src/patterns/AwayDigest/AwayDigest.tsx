@@ -7,6 +7,7 @@ import { formatWorked } from '../ThinkingIndicator/ThinkingIndicator';
 import { StoryMark, type StoryStatus } from '../Story/Story';
 import type { StoryFamily } from '../Story/types';
 import styles from './AwayDigest.module.css';
+import { META_SEP } from '../../components/MetaList';
 
 export interface AwayDigestItem {
   /** The story's id: what `onJump` is given. */
@@ -48,7 +49,7 @@ function digestLine(items: AwayDigestItem[], durationMs?: number): string {
   if (failed) parts.push(`${failed} didn’t work`);
   const running = items.some((i) => i.status === 'running');
   if (running) parts.push('still going');
-  return parts.join(' · ');
+  return parts.join(META_SEP);
 }
 
 /**

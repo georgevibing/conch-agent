@@ -40,7 +40,7 @@ describe('PastChatsLook', () => {
       'Wedding planning6 days ago',
       'YouWhich venue did we pick?',
       'ShellyThe venue at Quinta da Regaleira.',
-      'Venue shortlistTelegram · Archived · Sep 12',
+      'Venue shortlistTelegram\u00a0· Archived\u00a0· Sep 12',
       'YouThree venue ideas near Sintra',
     ]);
     // The word that matched is marked, not only coloured.

@@ -1,4 +1,5 @@
 import { extensionOf, formatBytes } from '../Attachments/fileType';
+import { META_SEP } from '../../components/MetaList';
 
 /**
  * What a file is, as its card draws it: each type has its own silhouette
@@ -203,7 +204,7 @@ export function fileMeta(info: {
     info.size !== undefined ? formatBytes(info.size) : undefined,
   ]
     .filter(Boolean)
-    .join(' · ');
+    .join(META_SEP);
 }
 
 /**

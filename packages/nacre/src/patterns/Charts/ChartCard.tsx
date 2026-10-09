@@ -51,6 +51,7 @@ import {
   type Slice,
 } from './scale';
 import type { ChartSpec } from './types';
+import { META_SEP } from '../../components/MetaList';
 
 export interface ChartCardProps extends Omit<ComponentProps<'section'>, 'children' | 'title'> {
   chart: ChartSpec;
@@ -671,7 +672,7 @@ export function ChartCard({
             chart.note,
           ]
             .filter(Boolean)
-            .join(' · ')}
+            .join(META_SEP)}
         </p>
       )}
     </section>

@@ -41,6 +41,7 @@ import { Switch } from '../../components/Switch';
 import { cx } from '../../utils/cx';
 import { IntegrationLogo } from '../Integrations/IntegrationLogo';
 import styles from './Passwords.module.css';
+import { META_SEP } from '../../components/MetaList';
 
 // ── Kinds ───────────────────────────────────────────────────────────────────
 
@@ -1307,7 +1308,7 @@ export function VaultPasskeyRow({
       <div className={styles.sourceText}>
         <span className={styles.sourceName}>Passkey for {site}</span>
         <span className={styles.sourceState}>
-          {[userName, when].filter(Boolean).join(' · ') || 'Signs in without a password'}
+          {[userName, when].filter(Boolean).join(META_SEP) || 'Signs in without a password'}
         </span>
       </div>
       {action && <div className={styles.sourceAction}>{action}</div>}
@@ -1368,7 +1369,7 @@ export function VaultTransferProgress({
     failed.length && `${failed.length} couldn’t be read`,
   ]
     .filter(Boolean)
-    .join(' · ');
+    .join(META_SEP);
   return (
     <div className={cx(styles.transfer, className)} data-state={state} {...props}>
       <div className={styles.transferHead}>

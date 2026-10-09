@@ -5,6 +5,7 @@
  * exactly one place.
  */
 import type { FinancePeriod, MarketState } from './types';
+import { META_SEP } from '../../components/MetaList';
 
 /** Formatters are expensive to build and cheap to keep. */
 const cache = new Map<string, Intl.NumberFormat>();
@@ -300,7 +301,7 @@ export function filedWords(
     figure.filed ? `filed ${dateWords(figure.filed, locale)}` : undefined,
     figure.periodEnd ? `period ended ${dateWords(figure.periodEnd, locale)}` : undefined,
   ].filter(Boolean);
-  return parts.join(' · ');
+  return parts.join(META_SEP);
 }
 
 /**

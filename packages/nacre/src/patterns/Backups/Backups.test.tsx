@@ -297,7 +297,7 @@ describe('BackupOptions', () => {
 describe('format', () => {
   it('describes a backup in one short line', () => {
     expect(describeBackup(everything, 48 * 1024 * 1024)).toBe(
-      '12 memories · 3 routines · 2 skills · 5 integrations · 240 chats · 48 MB',
+      '12 memories\u00a0· 3 routines\u00a0· 2 skills\u00a0· 5 integrations\u00a0· 240 chats\u00a0· 48 MB',
     );
     expect(describeBackup({ ...light, memories: 0, routines: 0, skills: 0, integrations: 0 })).toBe(
       'Settings only',

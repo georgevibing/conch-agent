@@ -76,6 +76,6 @@ describe('TaskGroupCard', () => {
   it('counts in words', () => {
     expect(
       batchSummary([{ status: 'needs-you' }, { status: 'needs-you' }, { status: 'queued' }]),
-    ).toBe('2 need you · 1 waiting');
+    ).toBe('2 need you\u00a0· 1 waiting');
   });
 });

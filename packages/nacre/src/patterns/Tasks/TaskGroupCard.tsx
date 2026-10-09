@@ -15,6 +15,7 @@ import {
   type TaskCardStatus,
 } from './TaskCard';
 import styles from './TaskGroupCard.module.css';
+import { META_SEP } from '../../components/MetaList';
 
 /** One task of a batch, as its line on the batch's card. */
 export interface TaskGroupItem {
@@ -61,7 +62,7 @@ export function batchSummary(tasks: Pick<TaskGroupItem, 'status'>[]): string {
   ]
     .filter(([n]) => (n as number) > 0)
     .map(([n, one, many]) => `${n} ${n === 1 ? one : many}`)
-    .join(' · ');
+    .join(META_SEP);
 }
 
 /** The batch's own mark: what needs you first, then what's working, then how it ended. */

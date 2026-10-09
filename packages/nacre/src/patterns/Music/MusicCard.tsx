@@ -28,6 +28,7 @@ import { outside, ShowAll, useShowAll, webLink } from '../ToolViews/shared';
 import styles from './Music.module.css';
 import { useMusicPlayer, useMusicTime, type MusicKind, type MusicTrack } from './player';
 import { clock, length, spoken, useArtworkTint, type Tint } from './tint';
+import { META_SEP } from '../../components/MetaList';
 
 export interface MusicCardProps extends Omit<ComponentProps<'section'>, 'children'> {
   /** What was found, best first. The first is shown large until another is chosen. */
@@ -64,23 +65,23 @@ function when(iso: string | undefined, year = false): string | undefined {
 /** The small words over the title: what it is, and the one fact that matters most. */
 function kicker(t: MusicTrack): string {
   if (t.kind === 'song') return t.src ? 'Song · preview' : 'Song';
-  if (t.kind === 'episode') return ['Episode', when(t.released)].filter(Boolean).join(' · ');
+  if (t.kind === 'episode') return ['Episode', when(t.released)].filter(Boolean).join(META_SEP);
   if (t.kind === 'podcast')
-    return ['Podcast', t.tracks && `${t.tracks} episodes`].filter(Boolean).join(' · ');
+    return ['Podcast', t.tracks && `${t.tracks} episodes`].filter(Boolean).join(META_SEP);
   if (t.kind === 'album')
-    return ['Album', t.tracks && `${t.tracks} songs`].filter(Boolean).join(' · ');
-  return ['Artist', t.genre].filter(Boolean).join(' · ');
+    return ['Album', t.tracks && `${t.tracks} songs`].filter(Boolean).join(META_SEP);
+  return ['Artist', t.genre].filter(Boolean).join(META_SEP);
 }
 
 /** Who and where, under the title. */
 function byline(t: MusicTrack): string | undefined {
   if (t.kind === 'song')
-    return [t.by, t.album, when(t.released, true)].filter(Boolean).join(' · ') || undefined;
+    return [t.by, t.album, when(t.released, true)].filter(Boolean).join(META_SEP) || undefined;
   if (t.kind === 'album')
-    return [t.by, when(t.released, true)].filter(Boolean).join(' · ') || undefined;
+    return [t.by, when(t.released, true)].filter(Boolean).join(META_SEP) || undefined;
   if (t.kind === 'episode')
-    return [t.by, length(t.duration)].filter(Boolean).join(' · ') || undefined;
-  if (t.kind === 'podcast') return [t.by, t.genre].filter(Boolean).join(' · ') || undefined;
+    return [t.by, length(t.duration)].filter(Boolean).join(META_SEP) || undefined;
+  if (t.kind === 'podcast') return [t.by, t.genre].filter(Boolean).join(META_SEP) || undefined;
   return undefined;
 }
 
@@ -102,7 +103,7 @@ function rowLine(t: MusicTrack): string | undefined {
       : t.kind === 'podcast'
         ? `${t.tracks} episodes`
         : undefined);
-  return [byline(t), count].filter(Boolean).join(' · ') || undefined;
+  return [byline(t), count].filter(Boolean).join(META_SEP) || undefined;
 }
 
 const tintStyle = (tint: Tint | undefined): CSSProperties | undefined =>

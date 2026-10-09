@@ -5,6 +5,7 @@ import { Highlight, type HighlightRange } from '../../components/Highlight';
 import { cx } from '../../utils/cx';
 import { ToolCall } from '../ToolCall';
 import styles from './PastChats.module.css';
+import { META_SEP } from '../../components/MetaList';
 
 export interface PastChatLineView {
   /** Where in its chat the line is: what opening it lands on. */
@@ -51,7 +52,7 @@ export function PastChatsList({ chats, onOpen, className, ...props }: PastChatsL
             >
               <MessageSquareText aria-hidden className={styles.icon} />
               <span className={styles.titleText}>{chat.title}</span>
-              {meta.length > 0 && <span className={styles.meta}>{meta.join(' · ')}</span>}
+              {meta.length > 0 && <span className={styles.meta}>{meta.join(META_SEP)}</span>}
             </button>
             {chat.lines.length > 0 && (
               <ul className={styles.lines} aria-label={`In ${chat.title}`}>

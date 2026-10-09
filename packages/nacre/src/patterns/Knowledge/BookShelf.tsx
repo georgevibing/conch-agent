@@ -8,6 +8,7 @@ import styles from './Knowledge.module.css';
 import { Picture } from './Picture';
 import { useScrollEdges } from './useScrollEdges';
 import { outside, secureLink, tintOf, type CardPicture } from './shared';
+import { META_SEP } from '../../components/MetaList';
 
 export interface ShelfBook {
   title: string;
@@ -169,7 +170,7 @@ function BookDetails({
       {book.authors.length > 0 && <p className={styles.bookBy}>{byline(book)}</p>}
       {(facts.length > 0 || book.rating !== undefined) && (
         <p className={styles.bookMeta}>
-          {facts.join(' · ')}
+          {facts.join(META_SEP)}
           {book.rating !== undefined && (
             <span className={styles.rating}>
               {facts.length > 0 && <span aria-hidden> · </span>}

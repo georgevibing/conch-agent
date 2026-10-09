@@ -16,6 +16,7 @@ import { Spinner } from '../../components/Spinner';
 import { cx } from '../../utils/cx';
 import { ago } from '../Healed/HealedNotes';
 import styles from './RepairPanel.module.css';
+import { META_SEP } from '../../components/MetaList';
 
 /**
  * `info` is news, not a problem (a new release), and `off` is a choice: neither
@@ -118,14 +119,14 @@ function summarise(items: RepairItem[]): string {
     needsYou && (needsYou === 1 ? '1 needs you' : `${needsYou} need you`),
     warning && `${warning} to look at`,
   ].filter(Boolean);
-  if (issues.length) return issues.join(' · ');
+  if (issues.length) return issues.join(META_SEP);
   if (checking) return 'Checking…';
   const well = [
     fixed && `${fixed} fixed`,
     working && `${working} working`,
     news && `${news} new`,
   ].filter(Boolean);
-  if (well.length) return well.join(' · ');
+  if (well.length) return well.join(META_SEP);
   return off === 1 ? 'Off' : `${off} off`;
 }
 
