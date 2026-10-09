@@ -32,7 +32,7 @@ vi.mock('./detect', () => ({
   }),
 }));
 
-const { ClaudeCodeEngine, OWN_SUBAGENTS } = await import('./engine');
+const { ClaudeCodeEngine, OWN_SUBAGENTS, OWN_WAITS } = await import('./engine');
 
 function turn(over: Partial<TurnInput> = {}): TurnInput {
   return {
@@ -77,7 +77,29 @@ describe('Claude Code’s own sub-agents', () => {
 
   it('stay off beside the tools you turned off, and leave its to-do list alone', async () => {
     const options = await run(turn({ disallowedTools: ['mcp__github__delete_repo'] }));
-    expect(options?.disallowedTools).toEqual([...OWN_SUBAGENTS, 'mcp__github__delete_repo']);
+    expect(options?.disallowedTools).toEqual([
+      ...OWN_SUBAGENTS,
+      ...OWN_WAITS,
+      'mcp__github__delete_repo',
+    ]);
     expect(options?.disallowedTools).not.toContain('TaskCreate');
+  });
+});
+
+/**
+ * Waiting goes through Conch's `wait_for` (ADR 0124): Claude Code's own
+ * wake-ups would fire inside a session whose turn has already ended.
+ */
+describe('Claude Code’s own wake-ups', () => {
+  it('are off in every mode, and its background commands stay', async () => {
+    for (const permissionMode of ['default', 'bypassPermissions'] as const) {
+      const options = await run(
+        turn({ options: { effort: 'auto', fastMode: false, permissionMode } }),
+      );
+      expect(options?.disallowedTools).toEqual(
+        expect.arrayContaining(['ScheduleWakeup', 'Monitor', 'CronCreate']),
+      );
+      expect(options?.disallowedTools).not.toContain('Bash');
+    }
   });
 });

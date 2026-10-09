@@ -143,6 +143,22 @@ async function fastModeBlocked(q: Query): Promise<boolean> {
  */
 export const OWN_SUBAGENTS = ['Agent', 'Task', 'Workflow'] as const;
 
+/**
+ * Claude Code's own ways of waiting and waking itself later (ADR 0124):
+ * `ScheduleWakeup` (its self-paced `/loop`), `Monitor`, and its session
+ * crons. In Conch a turn ends when its reply does, so a wake-up scheduled
+ * inside the session would never come, or come where nobody sees it.
+ * Conch's `wait_for` does the same, with a row the person sees and can stop,
+ * and wakes the chat by itself; routines do what a cron would.
+ */
+export const OWN_WAITS = [
+  'ScheduleWakeup',
+  'Monitor',
+  'CronCreate',
+  'CronDelete',
+  'CronList',
+] as const;
+
 export class ClaudeCodeEngine implements Engine {
   readonly id = 'claude-code' as const;
   readonly label = 'Claude Code';
@@ -765,6 +781,7 @@ export class ClaudeCodeEngine implements Engine {
           disallowedTools: [
             // Work is handed off as Conch's tasks (ADR 0033): seen, stopped and answered.
             ...OWN_SUBAGENTS,
+            ...OWN_WAITS,
             ...(input.disallowedTools ?? []),
             // Conch's `ask` shows answers to tap (ADR 0060); Claude Code's own would be a bare prompt.
             ...(asksItself ? ['AskUserQuestion'] : []),
