@@ -470,6 +470,10 @@ export type TranscriptItem =
       to: EngineId;
       reason: 'offline' | 'limit';
       message: string;
+      /** At a limit, the chat moved to `to` for good (ADR 0126). */
+      stayed?: boolean;
+      /** Switched back: this chat waits for `from` at this limit, until then (ADR 0126). */
+      back?: { until?: number };
     }
   | {
       /** The assistant's plan for one turn (ADR 0060): kept current in place, folded once it ends. */
@@ -1201,8 +1205,24 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             to: event.to,
             reason: event.reason,
             message: event.message,
+            ...(event.stayed && { stayed: true }),
           },
         ],
+      };
+    }
+    case 'limit.back': {
+      // Switch back folds the line it was pressed on: the chat waits for its own provider now.
+      const at = items.findLastIndex(
+        (i) => i.kind === 'routed' && i.reason === 'limit' && i.from === event.engine,
+      );
+      const line = items[at];
+      if (!line || line.kind !== 'routed') return base;
+      return {
+        ...base,
+        items: items.with(at, {
+          ...line,
+          back: event.until !== undefined ? { until: event.until } : {},
+        }),
       };
     }
     case 'turn.completed': {

@@ -93,3 +93,58 @@ describe('offline (ADR 0023)', () => {
     expect(screen.queryByText('Waiting for the internet')).toBeNull();
   });
 });
+
+describe('at a limit (ADR 0126)', () => {
+  const at = (seq: number, event: Record<string, unknown>) =>
+    FakeSocket.last?.push({
+      type: 'conversation.event',
+      event: { conversationId: 'c-limit', seq, at: 1000 + seq, ...event },
+    } as never);
+
+  it('says who is answering, and Switch back makes the chat wait for its own provider', async () => {
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/conversations': () => [],
+      'GET /api/providers': () => baseProviders,
+      'POST /api/conversations/c-limit/limit-back': () => ({
+        id: 'c-limit',
+        title: 'Trip',
+        preview: '',
+        createdAt: 1,
+        updatedAt: 2,
+        status: 'idle',
+        options: { engine: 'claude-code' },
+      }),
+    });
+    renderApp(<ChatView conversationId="c-limit" />, { route: '/c/c-limit' });
+    await waitFor(() =>
+      expect(FakeSocket.last?.sent).toContainEqual(
+        expect.objectContaining({ type: 'conversation.subscribe', conversationId: 'c-limit' }),
+      ),
+    );
+    // The log so far (none) has been sent: what comes next is live.
+    await act(async () => {});
+    act(() => {
+      at(0, { type: 'user.message', messageId: 'u1', text: 'And hotels' });
+      at(1, {
+        type: 'turn.routed',
+        from: 'claude-code',
+        to: 'codex-cli',
+        reason: 'limit',
+        message: 'Claude Code reached its limit until 18:00. Codex is answering.',
+      });
+    });
+    expect(await screen.findByText(/Codex is answering/)).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: 'Switch back' }));
+    await waitFor(() =>
+      expect(calls).toContainEqual({
+        method: 'POST',
+        path: '/api/conversations/c-limit/limit-back',
+        body: { engine: 'claude-code' },
+      }),
+    );
+    act(() => at(2, { type: 'limit.back', engine: 'claude-code' }));
+    expect(await screen.findByText('Back to Claude Code: this chat waits for it.')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Switch back' })).toBeNull();
+  });
+});

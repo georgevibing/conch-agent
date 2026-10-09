@@ -250,6 +250,8 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
         case 'usage.changed':
           if (event.usage.engine)
             client.setQueryData(keys.usageOf(event.usage.engine), event.usage);
+          // Who would carry on at a limit depends on everyone's room (ADR 0126).
+          void client.invalidateQueries({ queryKey: ['fallback'] });
           break;
         case 'error': {
           const key = event.conversationId ?? NEW;

@@ -486,6 +486,8 @@ export const Transcript = memo(function Transcript({
   const speaker: Speaker = useMemo(() => ({ name, avatar }), [name, avatar]);
   const firstUserId = routineRun ? view.items.find((i) => i.kind === 'user')?.id : undefined;
   const running = view.status === 'running' || view.status === 'awaiting-permission';
+  // Only the latest move at a limit offers Switch back (ADR 0126).
+  const lastLimitLine = view.items.findLast((i) => i.kind === 'routed' && i.reason === 'limit')?.id;
   const items: TranscriptItem[] = [
     ...view.items,
     ...pending.map((p) => ({
@@ -925,7 +927,13 @@ export const Transcript = memo(function Transcript({
       {block.item?.kind === 'held' && (
         <HeldItem item={block.item} conversationId={conversationId} />
       )}
-      {block.item?.kind === 'routed' && <RoutedItem item={block.item} />}
+      {block.item?.kind === 'routed' && (
+        <RoutedItem
+          item={block.item}
+          conversationId={conversationId}
+          latest={block.item.id === lastLimitLine}
+        />
+      )}
       {block.item?.kind === 'cleared' && (
         <ClearedItem
           item={block.item}

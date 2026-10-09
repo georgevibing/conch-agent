@@ -17,6 +17,7 @@ export const keys = {
   usage: ['usage'] as const,
   /** One provider's limits; every key starts with `usage`, so refreshing that refreshes all. */
   usageOf: (engine: string) => ['usage', engine] as const,
+  fallback: (engine: string) => ['fallback', engine] as const,
   auth: ['auth'] as const,
   access: ['access'] as const,
   /** Your own address (ADR 0064); kept fresh by the `address.changed` event. */
@@ -155,6 +156,21 @@ export function useUsage(engine: EngineId | undefined, enabled = true) {
     refetchInterval: 5 * 60_000,
     refetchOnWindowFocus: true,
     enabled: enabled && Boolean(engine),
+  });
+}
+
+/**
+ * Who carries on when `engine` (the default provider, unnamed) reaches its
+ * limit (ADR 0126), in Automatic's order, with each one's room, cost and
+ * model. Read again when a provider's limits change (`usage.changed`).
+ */
+export function useFallbackPlan(engine?: EngineId, enabled = true) {
+  return useQuery({
+    queryKey: keys.fallback(engine ?? ''),
+    queryFn: () => api.fallback(engine),
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+    enabled,
   });
 }
 

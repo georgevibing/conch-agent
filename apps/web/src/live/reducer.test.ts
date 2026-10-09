@@ -477,6 +477,25 @@ describe('offline and at a limit (ADR 0023)', () => {
     );
     expect(released.items.map((i) => i.kind)).toEqual(['user', 'routed']);
   });
+
+  it('Switch back folds the latest line a limit left (ADR 0126)', () => {
+    const view = reduceAll(
+      log(
+        { type: 'user.message', messageId: 'u1', text: 'go on' },
+        {
+          type: 'turn.routed',
+          from: 'claude-code',
+          to: 'codex-cli',
+          reason: 'limit',
+          message: 'Claude Code reached its limit until 18:00. Codex carries on in this chat.',
+          stayed: true,
+        },
+        { type: 'limit.back', engine: 'claude-code', until: 5000 },
+      ),
+    );
+    expect(view.items.map((i) => i.kind)).toEqual(['user', 'routed']);
+    expect(view.items[1]).toMatchObject({ stayed: true, back: { until: 5000 } });
+  });
 });
 
 describe('a long chat (ADR 0055)', () => {

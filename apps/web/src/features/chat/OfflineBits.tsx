@@ -1,4 +1,11 @@
-import { OfflineNotice, RoutedNote, WaitingMessage, toast } from '@conch/nacre';
+import {
+  OfflineNotice,
+  RoutedNote,
+  WaitingMessage,
+  formatResetAt,
+  toast,
+  useNow,
+} from '@conch/nacre';
 import { useMutation } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
@@ -58,19 +65,53 @@ export function HeldItem({
   );
 }
 
-/** Another provider answered for this chat's own — offline, or at a limit — and why. */
-export function RoutedItem({ item }: { item: Extract<TranscriptItem, { kind: 'routed' }> }) {
+/**
+ * Another provider answered for this chat's own — offline, or at a limit —
+ * and why. At a limit, the latest line offers **Switch back** (ADR 0126):
+ * the chat is its own provider's again and waits for it, and the line folds
+ * to say so.
+ */
+export function RoutedItem({
+  item,
+  conversationId,
+  latest = false,
+}: {
+  item: Extract<TranscriptItem, { kind: 'routed' }>;
+  conversationId?: string | undefined;
+  latest?: boolean;
+}) {
   const openSettings = useUi((s) => s.openSettings);
+  const now = useNow();
+  const { data } = useProviders();
+  const name = (id: string) => data?.providers.find((p) => p.id === id)?.name ?? 'your provider';
+  const back = useMutation({
+    mutationFn: () => api.limitBack(conversationId ?? '', item.from),
+    onError: (error: Error) => toast.error(error.message || 'That didn’t work. Try again.'),
+  });
+  if (item.reason === 'limit' && item.back) {
+    const until = item.back.until;
+    return (
+      <div className={styles.aside}>
+        <RoutedNote reason="limit">
+          {`Back to ${name(item.from)}: this chat waits for it${
+            until !== undefined ? ` until ${formatResetAt(until, now)}` : ''
+          }.`}
+        </RoutedNote>
+      </div>
+    );
+  }
+  const actions =
+    item.reason === 'limit'
+      ? [
+          ...(latest && conversationId && !back.isPending && !back.isSuccess
+            ? [{ label: 'Switch back', onClick: () => back.mutate() }]
+            : []),
+          { label: 'Change', onClick: () => openSettings('providers', FALLBACK_FOCUS) },
+        ]
+      : undefined;
   return (
     <div className={styles.aside}>
-      <RoutedNote
-        reason={item.reason}
-        action={
-          item.reason === 'limit'
-            ? { label: 'Change', onClick: () => openSettings('providers', FALLBACK_FOCUS) }
-            : undefined
-        }
-      >
+      <RoutedNote reason={item.reason} {...(actions && { actions })}>
         {item.message}
       </RoutedNote>
     </div>

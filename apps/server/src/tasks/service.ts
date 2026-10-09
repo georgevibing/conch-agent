@@ -138,6 +138,11 @@ export interface TaskDeps {
   /** Over the monthly budget you set (ADR 0005): helpers don't multiply the spend. */
   overBudget?: () => Promise<boolean>;
   /**
+   * Who carries on when `engine` is at its limit (ADR 0126): Automatic's first
+   * with room, or your pick. Absent: only a provider you picked.
+   */
+  limitFallback?: (engine: Engine) => Promise<EngineId | undefined>;
+  /**
    * Every provider that's connected and ready now (`providers.ready()`): the
    * ones a helper or a background task may be handed to, besides the chat's own.
    */
@@ -816,7 +821,12 @@ export class TaskService {
       // A limit another provider can answer (ADR 0023): carry on with it, once.
       if (turn.outcome === 'error' && turn.problem === 'limit' && !fallback && !task.toolScope) {
         const { preferences } = await this.deps.settings.get();
-        const next = preferences.limitFallback;
+        const pick = preferences.limitFallback;
+        const next = this.deps.limitFallback
+          ? await this.deps.limitFallback(engine).catch(() => undefined)
+          : pick && pick !== 'auto' && pick !== 'wait'
+            ? pick
+            : undefined;
         if (next && next !== engine.id) return this.#run(id, { engine: next, from: engine.label });
       }
       const stopped = this.#stopping.delete(id);

@@ -10,6 +10,7 @@ import {
   isPastChatId,
   type ConversationSummary,
   type EngineId,
+  type FallbackPlan,
   type LoginState,
   type ServerEvent,
   type SkillSource,
@@ -251,7 +252,8 @@ import { lookup } from './updates/latest';
 import { mockPrograms } from './updates/mock';
 import { UpdatesService } from './updates/service';
 import { UsageService } from './usage/service';
-import { Billings, recordSmallSpend, turnCost } from './usage/billing';
+import { Billings, recordSmallSpend, tightest, turnCost } from './usage/billing';
+import { fallbackChoices, type FallbackDeps } from './usage/fallback';
 import { ChatSpendDesk } from './usage/desk';
 import { REPOSITORY, SERVER_VERSION, SERVER_BUILD } from './version';
 import { theApp } from './desktop/app';
@@ -378,6 +380,8 @@ export class Services {
   /** Screenshots in words for models that can't see, by one that can (ADR 0070). */
   readonly describer: Describer;
   readonly usage: UsageService;
+  /** How each provider charges (ADR 0079), shared by chats, routines and who carries on at a limit. */
+  readonly #billings: Billings;
   readonly integrations: IntegrationService;
   /** Skills: Conch's own, and those in other agents' folders (ADR 0013). */
   readonly skills: SkillService;
@@ -1044,7 +1048,7 @@ export class Services {
       }),
     });
     // How each provider charges, asked once a minute at most: chats and routines share it.
-    const billings = new Billings();
+    const billings = (this.#billings = new Billings());
     this.images = new ImageService({
       key: (id, signal) => this.keys.value(id, { signal }),
       hasKey: (id) => this.keys.has(id),
@@ -1176,6 +1180,10 @@ export class Services {
       },
       engine: (id) => this.providers.engineFor(id),
       route: (engine, context) => this.route(engine, context),
+      limitResets: async (id) => {
+        const usage = await this.usage.snapshot({ engine: id }).catch(() => undefined);
+        return usage?.blocked?.until ?? this.usage.refusedUntil(id);
+      },
       describe: (engine, model) => this.describer.for(engine, model),
       // An engine that can't run Conch's own tools is never offered them.
       tools: (ctx) =>
@@ -1447,6 +1455,12 @@ export class Services {
       overBudget: async () => {
         const { spend } = await this.usage.snapshot();
         return spend.budget !== undefined && spend.month >= spend.budget;
+      },
+      limitFallback: async (engine) => {
+        const route = await this.route(engine, { failed: 'limit' });
+        return route.kind === 'use' && route.engine.id !== engine.id && !route.engine.local
+          ? route.engine.id
+          : undefined;
       },
       // A helper may be handed to any provider that's ready, not only the chat's own.
       ready: () => this.providers.ready(),
@@ -3106,25 +3120,20 @@ export class Services {
   }
 
   /**
-   * Who answers a turn (ADR 0023). Offline, the model on this computer answers
-   * (if you let it) or the message waits for the internet; at a usage limit,
-   * your pick carries on until it resets. Otherwise, the chat's own provider.
+   * Who answers a turn (ADR 0023, ADR 0126). Offline, the model on this
+   * computer answers (if you let it) or the message waits for the internet.
+   * At a usage limit, the next plan or key with room carries on (Automatic,
+   * in your order), or your one pick does; when none can, the model on this
+   * computer, if you let it. `wait` (yours, or this chat's Switch back) waits
+   * for the reset. Otherwise, the chat's own provider.
    */
   async route(
     engine: Engine,
-    context: { failed?: TurnProblem; model?: string; pictures?: boolean },
+    context: { failed?: TurnProblem; model?: string; pictures?: boolean; wait?: boolean },
   ): Promise<TurnRoute> {
     const { preferences } = await this.settings.get();
-    // The model another provider answers with: your default, if it's your default provider.
-    const modelFor = (other: Engine) =>
-      other.id === this.engine().id ? preferences.model : undefined;
     const carry = (other: Engine, choose: boolean) =>
-      carryTools(engine, other, {
-        ...(context.model && { fromModel: context.model }),
-        ...(modelFor(other) && { toModel: modelFor(other) }),
-        choose,
-        ...(context.pictures && { sight: true }),
-      }).catch(() => false as const);
+      this.#carry(engine, other, { model: context.model, choose, pictures: context.pictures });
     if (!engine.local) {
       // A provider that stopped answering is the moment to look again.
       const online =
@@ -3149,30 +3158,119 @@ export class Services {
           : { kind: 'hold' };
       }
     }
-    const fallback = preferences.limitFallback;
-    if (fallback && fallback !== engine.id) {
-      const usage = await this.usage.snapshot({ engine: engine.id }).catch(() => undefined);
-      if (context.failed === 'limit' || usage?.blocked) {
-        const other = this.providers.engineFor(fallback);
-        const ready = other.id !== engine.id && (await other.detect().catch(() => undefined));
-        // Your pick answers with the model it would anyway: choosing a pricier one
-        // would be a spending choice you didn't make.
-        const carried = ready && ready.state === 'ready' ? await carry(other, false) : false;
-        if (carried) {
-          const until = usage?.blocked?.until;
-          return {
-            kind: 'use',
-            engine: other,
-            ...(carried.model && { model: carried.model }),
-            routed: {
-              reason: 'limit',
-              message: `${engine.label} reached its limit${until ? ` until ${clock(until)}` : ' for now'}, so ${other.label} answered.`,
-            },
-          };
-        }
-      }
+    if (engine.local) return { kind: 'use', engine };
+    const usage = await this.usage.snapshot({ engine: engine.id }).catch(() => undefined);
+    // Refused for a limit Conch couldn't see coming (a key's `429`): passed over for a while.
+    if (context.failed === 'limit' && !usage?.blocked) this.usage.refused(engine.id);
+    const refused = this.usage.refusedUntil(engine.id);
+    // Said only when the provider told: a refusal's quarter of an hour is Conch's guess.
+    const until = usage?.blocked?.until;
+    const atLimit = context.failed === 'limit' || Boolean(usage?.blocked) || refused !== undefined;
+    const mode = preferences.limitFallback ?? 'auto';
+    if (!atLimit || context.wait || mode === 'wait') return { kind: 'use', engine };
+
+    const reached = `${engine.label} reached its limit${until ? ` until ${clock(until)}` : ' for now'}.`;
+    const stay = preferences.limitReturn === false;
+    const choices = await fallbackChoices(
+      engine,
+      this.#fallbackDeps(context),
+      preferences.limitOrder,
+    );
+    // Automatic: the first with room, in your order. Your pick: that one, while it has room.
+    const tried =
+      mode === 'auto'
+        ? choices.filter((c) => !c.choice.skip && c.choice.room !== 'none')
+        : choices
+            .filter((c) => c.choice.engines.includes(mode))
+            .filter((c) => !c.choice.skip && c.choice.room !== 'none')
+            .map((c) => ({ ...c, engine: this.providers.engineFor(mode) }));
+    for (const { engine: other, choice } of tried) {
+      if (other.id === engine.id) continue;
+      // It answers with the model it would anyway: choosing a pricier one
+      // would be a spending choice you didn't make.
+      const carried = await carry(other, false);
+      if (!carried) continue;
+      const name = mode === 'auto' ? choice.name : other.label;
+      return {
+        kind: 'use',
+        engine: other,
+        ...(carried.model && { model: carried.model }),
+        routed: {
+          reason: 'limit',
+          message: stay
+            ? `${reached} ${name} carries on in this chat.`
+            : `${reached} ${name} is answering.`,
+          ...(stay && { stayed: true }),
+        },
+      };
     }
+    // None has room: last, the model on this computer, if you let it (free, and it stays here).
+    const local = preferences.offlineFallback ? await this.localReady() : undefined;
+    const carried = local ? await carry(local, true) : false;
+    if (local && carried)
+      return {
+        kind: 'use',
+        engine: local,
+        ...(carried.model && { model: carried.model }),
+        routed: {
+          reason: 'limit',
+          message: `${reached} ${local.label} is answering from this computer.`,
+        },
+      };
     return { kind: 'use', engine };
+  }
+
+  /** Whether `to` can carry a turn `from` would answer, and with which model (ADR 0050). */
+  async #carry(
+    from: Engine,
+    to: Engine,
+    options: { model?: string | undefined; choose: boolean; pictures?: boolean | undefined },
+  ): Promise<{ model?: string } | false> {
+    const { preferences } = await this.settings.get();
+    // The model another provider answers with: your default, if it's your default provider.
+    const toModel = to.id === this.engine().id ? preferences.model : undefined;
+    return carryTools(from, to, {
+      ...(options.model && { fromModel: options.model }),
+      ...(toModel && { toModel }),
+      choose: options.choose,
+      ...(options.pictures && { sight: true }),
+    }).catch(() => false as const);
+  }
+
+  #fallbackDeps(context: { model?: string; pictures?: boolean } = {}): FallbackDeps {
+    return {
+      ready: () => this.providers.ready(),
+      snapshot: (id) => this.usage.snapshot({ engine: id }),
+      billing: (engine) => this.#billings.quick(engine),
+      month: () => this.usage.month(),
+      refusedUntil: (id) => this.usage.refusedUntil(id),
+      carry: (from, to) =>
+        this.#carry(from, to, { model: context.model, choose: false, pictures: context.pictures }),
+      keyHint: async (id) => (await this.keys.describe(id))?.hint,
+    };
+  }
+
+  /**
+   * Settings → Providers → At a usage limit (ADR 0126): who would carry on
+   * for a provider (the default one unless named), in Automatic's order,
+   * each with its room, its cost and the model it answers with.
+   */
+  async fallbackPlan(id?: EngineId): Promise<FallbackPlan> {
+    const from = this.providers.engineFor(id);
+    const { preferences } = await this.settings.get();
+    const [choices, usage, local] = await Promise.all([
+      fallbackChoices(from, this.#fallbackDeps(), preferences.limitOrder),
+      this.usage.snapshot({ engine: from.id }).catch(() => undefined),
+      this.localReady(),
+    ]);
+    const resets = usage?.blocked?.until ?? tightest(usage?.windows)?.resetsAt;
+    return {
+      from: from.id,
+      fromName: from.label,
+      ...(resets !== undefined && { fromResetsAt: resets }),
+      choices: choices.map((c) => c.choice),
+      ...(local && { local: { id: local.id, name: local.label } }),
+    };
   }
 
   /** Conch's own model for meaning arrived (ADR 0041): index every memory, and look at habits again. */

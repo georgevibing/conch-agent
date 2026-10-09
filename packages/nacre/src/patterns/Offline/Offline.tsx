@@ -101,22 +101,32 @@ export interface RoutedNoteProps extends Omit<ComponentProps<'div'>, 'children'>
   children: ReactNode;
   /** Where to change it (e.g. the setting that chose it). */
   action?: { label: string; onClick: () => void };
+  /** More than one thing to do, in order ("Switch back", "Change"). */
+  actions?: readonly { label: string; onClick: () => void }[];
 }
 
 /** A quiet line where another provider answered for this chat's own, saying why. */
-export function RoutedNote({ reason, children, action, className, ...props }: RoutedNoteProps) {
+export function RoutedNote({
+  reason,
+  children,
+  action,
+  actions,
+  className,
+  ...props
+}: RoutedNoteProps) {
   const Icon = reason === 'offline' ? Laptop : ArrowLeftRight;
+  const all = [...(action ? [action] : []), ...(actions ?? [])];
   return (
     <div role="note" data-reason={reason} className={cx(styles.routed, className)} {...props}>
       <span className={styles.routedIcon} aria-hidden>
         <Icon />
       </span>
       <span>{children}</span>
-      {action && (
-        <button type="button" className={styles.routedLink} onClick={action.onClick}>
-          {action.label}
+      {all.map((a) => (
+        <button key={a.label} type="button" className={styles.routedLink} onClick={a.onClick}>
+          {a.label}
         </button>
-      )}
+      ))}
     </div>
   );
 }

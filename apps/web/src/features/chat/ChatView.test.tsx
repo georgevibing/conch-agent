@@ -327,7 +327,7 @@ describe('ChatView', () => {
     );
   });
 
-  it('at a limit, answering with another provider once offers to do it by itself next time', async () => {
+  it('at a limit you chose to wait at, answering with another once offers to do it by itself', async () => {
     const model = (id: string, label: string) => ({
       id,
       label,
@@ -337,7 +337,9 @@ describe('ChatView', () => {
       supportsAutoMode: false,
     });
     const calls = mockFetch({
-      'GET /api/state': () => appState(),
+      // Waiting was your choice: Automatic would have carried on already.
+      'GET /api/state': () =>
+        appState({ preferences: { ...appState().preferences, limitFallback: 'wait' } }),
       'GET /api/conversations': () => [],
       'GET /api/models': () => ({
         default: 'claude-code',

@@ -514,7 +514,10 @@ Most companies speak OpenAI's chat format; adding one is rows, not code
    `patterns/ModelPicker/ProviderLogo.tsx`.
 4. **Whole Conch.** Its key in Come home (`import/{openclaw,hermes}.ts`) if those
    agents know it. Its `TurnProblem`s come from `mapChatError`, so a limit or an
-   outage routes to the fallback with nothing more to write.
+   outage routes to the fallback with nothing more to write. A program that is
+   another way into an account Conch already drives (Codex and Codex CLI) sets
+   `Engine.sharesAccount`, so at a limit the two are one choice
+   ([ADR 0126](./docs/adr/0126-the-next-one-with-room.md)).
 5. **Docs.** `apps/docs/content/providers/<id>.md` with `provider: <id>`: where to
    get a key, what's free, what to know. `content.test.ts` fails until it exists.
 

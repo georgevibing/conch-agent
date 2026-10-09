@@ -1,0 +1,109 @@
+@layer nacre.components {
+  .picker {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-5);
+  }
+
+  .title {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--nc-space-1) var(--nc-space-2);
+  }
+
+  .title > [data-variant] {
+    align-self: center;
+  }
+
+  .account {
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-regular);
+    color: var(--nc-text-subtle);
+  }
+
+  /* Automatic's order: under the choice it belongs to, indented under a hairline. */
+  .order {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-2);
+    margin-inline-start: var(--nc-space-8);
+    padding-inline-start: var(--nc-space-4);
+    border-inline-start: 1px solid var(--nc-border-subtle);
+  }
+
+  .orderTitle {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-subtle);
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-0-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .step {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2-5);
+    min-block-size: 2.25rem;
+    padding-inline: var(--nc-space-2) var(--nc-space-1);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-wash-1);
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text);
+  }
+
+  .number {
+    display: inline-grid;
+    flex-shrink: 0;
+    place-items: center;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    font-size: var(--nc-text-2xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-muted);
+  }
+
+  .stepName {
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 var(--nc-space-2);
+    min-inline-size: 0;
+  }
+
+  .stepNote {
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+  }
+
+  .step[data-skipped] .stepName {
+    color: var(--nc-text-muted);
+  }
+
+  .moves {
+    display: inline-flex;
+    flex-shrink: 0;
+    gap: var(--nc-space-0-5);
+  }
+
+  .switches {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-4);
+    padding-block-start: var(--nc-space-4);
+    border-block-start: 1px solid var(--nc-border-subtle);
+  }
+}

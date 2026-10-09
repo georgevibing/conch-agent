@@ -1,8 +1,8 @@
-import type { EngineId, PutAwayLimit } from '@conch/protocol';
+import type { EngineId, LimitFallback, PutAwayLimit } from '@conch/protocol';
 import { UsageNotice } from '@conch/nacre';
 import { useEffect, useRef } from 'react';
 
-import { useAppState, useUpdateSettings, useUsage } from '../../api/queries';
+import { useAppState, useFallbackPlan, useUpdateSettings, useUsage } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { useProviders } from '../providers/queries';
 import { isPutAway, limitInView, putAway, rearm } from './putAway';
@@ -37,13 +37,14 @@ export function UsageComposerNotice({ engine }: { engine: EngineId | undefined }
     mutate({ preferences: { limitsPutAway: JSON.parse(tidied) as PutAwayLimit[] } });
   }, [tidied, mutate]);
 
-  if (!forEngine || forEngine.kind === 'unknown') return null;
-  const limit = limitInView(forEngine);
-  if (!limit || isPutAway(marks, limit)) return null;
-  const pick = app?.preferences.limitFallback;
-  const carryOn = providers?.providers.find(
-    (p) => p.id === pick && p.ready && p.id !== engine,
-  )?.name;
+  const limit = forEngine && forEngine.kind !== 'unknown' ? limitInView(forEngine) : undefined;
+  const shown = Boolean(limit && !isPutAway(marks, limit));
+  // Who carries on is said only at the limit itself, so it's asked only then.
+  const atLimit = Boolean(
+    forEngine?.blocked || forEngine?.windows.some((w) => w.usedPercent >= 100),
+  );
+  const carryOn = useCarryOn(engine, shown && atLimit, app?.preferences.limitFallback);
+  if (!forEngine || !limit || !shown) return null;
   return (
     <UsageNotice
       value={forEngine}
@@ -52,4 +53,20 @@ export function UsageComposerNotice({ engine }: { engine: EngineId | undefined }
       onDismiss={() => mutate({ preferences: { limitsPutAway: putAway(marks, limit) } })}
     />
   );
+}
+
+/**
+ * Who would carry on at this provider's limit (ADR 0126): Automatic's first
+ * with room, or your pick while it has room. Asked only while the line shows.
+ */
+function useCarryOn(
+  engine: EngineId | undefined,
+  shown: boolean,
+  pick: LimitFallback | undefined,
+): string | undefined {
+  const { data: plan } = useFallbackPlan(engine, shown && Boolean(engine) && pick !== 'wait');
+  if (!plan || pick === 'wait') return undefined;
+  const room = plan.choices.filter((c) => !c.skip && c.room !== 'none');
+  const choice = pick && pick !== 'auto' ? room.find((c) => c.engines.includes(pick)) : room[0];
+  return choice?.name;
 }
