@@ -1,9 +1,13 @@
+import type { Attachment, TurnOptions } from '@conch/protocol';
+
 /**
  * What the message box remembers between chats: what you were writing in
  * each one, and what you sent lately, for ↑.
  *
- * Drafts survive a reload or a restart (on this device, until you sign out
- * here). What you sent lately lasts only as long as the tab: the chats
+ * Drafts are kept by Conch itself (`drafts.ts`, ADR 0124), so they follow
+ * you to another browser and your phone; the copy here is what the box shows
+ * at once, before Conch has answered, and what's kept while it can't be
+ * reached. What you sent lately lasts only as long as the tab: the chats
  * themselves keep the rest.
  */
 
@@ -14,7 +18,20 @@ const MAX_DRAFTS = 50;
 /** Messages ↑ reaches beyond the open chat's own. */
 const MAX_SENT = 50;
 
-type Drafts = Record<string, { text: string; at: number }>;
+/** A draft as this device keeps it. */
+export interface LocalDraft {
+  text: string;
+  /** What's attached, as Conch described it, so the cards show before it answers. */
+  attachments?: Attachment[];
+  /** A new chat's choices: model, mode… */
+  options?: TurnOptions;
+  /** When it was last written here. */
+  at: number;
+  /** Conch has this exact draft. False while a change is on its way, or couldn't go. */
+  synced?: boolean;
+}
+
+type Drafts = Record<string, LocalDraft>;
 
 function read<T>(storage: () => Storage, key: string, fallback: T): T {
   try {
@@ -41,20 +58,51 @@ function drafts(): Drafts {
   return all && typeof all === 'object' && !Array.isArray(all) ? (all as Drafts) : {};
 }
 
-/** What was being written in this chat (`key` is the conversation, or the new chat's). */
-export function loadDraft(key: string): string {
+const isEmpty = (d: Pick<LocalDraft, 'text' | 'attachments'>) =>
+  !d.text.trim() && !d.attachments?.length;
+
+/** The whole draft this device keeps for a chat (`key` is the conversation, or the new chat's). */
+export function loadLocalDraft(key: string): LocalDraft | undefined {
   const draft = drafts()[key];
-  return typeof draft?.text === 'string' ? draft.text : '';
+  if (!draft || typeof draft.text !== 'string') return undefined;
+  return {
+    text: draft.text,
+    at: typeof draft.at === 'number' ? draft.at : 0,
+    ...(Array.isArray(draft.attachments) && { attachments: draft.attachments }),
+    ...(draft.options && typeof draft.options === 'object' && { options: draft.options }),
+    // Written by an older Conch, before drafts were kept by Conch itself: it still has to go.
+    synced: draft.synced === true,
+  };
 }
 
-export function saveDraft(key: string, text: string) {
+/** What was being written in this chat. */
+export function loadDraft(key: string): string {
+  return loadLocalDraft(key)?.text ?? '';
+}
+
+/** Keep the draft here. An empty one Conch already knows is empty is forgotten. */
+export function saveLocalDraft(key: string, draft: Omit<LocalDraft, 'at'>) {
   const all = drafts();
-  if (!text.trim() && !(key in all)) return;
+  const gone = isEmpty(draft) && draft.synced !== false;
+  if (gone && !(key in all)) return;
   const others = Object.entries(all).filter(([k]) => k !== key);
-  const kept = [...(text.trim() ? [[key, { text, at: Date.now() }] as const] : []), ...others]
+  const kept = [...(gone ? [] : [[key, { ...draft, at: Date.now() }] as const]), ...others]
     .sort(([, a], [, b]) => b.at - a.at)
     .slice(0, MAX_DRAFTS);
   write(local, DRAFTS_KEY, Object.fromEntries(kept));
+}
+
+/** Just the words, keeping what's attached (messages waiting their turn, kept as you leave). */
+export function saveDraft(key: string, text: string) {
+  const { at: _at, ...before } = loadLocalDraft(key) ?? { at: 0 };
+  saveLocalDraft(key, { ...before, text, synced: false });
+}
+
+/** The chats this device has something unsent for. */
+export function localDraftKeys(): string[] {
+  return Object.entries(drafts())
+    .filter(([, d]) => typeof d?.text === 'string' && !isEmpty(d))
+    .map(([k]) => k);
 }
 
 /** Signing out here: nothing anyone was writing stays behind on this device. */

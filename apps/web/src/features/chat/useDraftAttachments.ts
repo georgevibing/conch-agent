@@ -3,7 +3,7 @@ import { toast, type AttachmentStatus } from '@conch/nacre';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ApiError } from '../../api/client';
-import { discardAttachment, fitImage, uploadAttachment } from './uploads';
+import { attachmentText, discardAttachment, fitImage, uploadAttachment } from './uploads';
 
 /** One card on the message being written. */
 export interface Draft {
@@ -30,6 +30,9 @@ export interface Draft {
   /** Name and size as picked, to spot the same file twice. */
   signature?: string;
 }
+
+/** What a card says when its file was let go while the message waited (ADR 0124). */
+export const LOST_WORDS = 'This file is no longer on Conch. Remove it, then attach it again.';
 
 const IMAGE = /^image\/(png|jpeg|gif|webp)$/;
 const TEXT_EXT =
@@ -79,12 +82,13 @@ function draftFrom(attachment: Attachment): Draft {
  * off, and anything the gateway won't take is refused before it's sent, with
  * the reason on the card.
  */
-export function useDraftAttachments() {
-  const [drafts, setDrafts] = useState<Draft[]>([]);
+export function useDraftAttachments(initial: readonly Attachment[] = []) {
+  // A draft kept from before shows its cards from the first frame (ADR 0124).
+  const [drafts, setDrafts] = useState<Draft[]>(() => initial.map(draftFrom));
   const uploads = useRef(new Map<string, AbortController>());
   const sources = useRef(new Map<string, Blob>());
   /** The latest list, readable at once from async work (state lags a render behind). */
-  const current = useRef<Draft[]>([]);
+  const current = useRef<Draft[]>(drafts);
   const commit = useCallback((next: (list: Draft[]) => Draft[]) => {
     current.current = next(current.current);
     setDrafts(current.current);
@@ -314,6 +318,67 @@ export function useDraftAttachments() {
     [commit],
   );
 
+  /** Name attachments that are no longer on Conch: their cards say so and offer to come off. */
+  const markLost = useCallback(
+    (ids: readonly string[]) => {
+      const gone = new Set(ids);
+      commit((list) =>
+        list.map((d) =>
+          d.attachment && gone.has(d.attachment.id)
+            ? { ...d, status: 'lost', error: LOST_WORDS, progress: undefined }
+            : d,
+        ),
+      );
+    },
+    [commit],
+  );
+
+  /**
+   * A draft kept by Conch replaces what's here (written on another device, or
+   * before a reload). Cards for files it no longer has stay, saying so.
+   */
+  const adopt = useCallback(
+    (attachments: readonly Attachment[], missing: readonly string[] = []) => {
+      const gone = new Set(missing);
+      commit((list) => {
+        const kept = attachments.map(
+          (a) =>
+            list.find((d) => d.attachment?.id === a.id && d.status === 'ready') ?? draftFrom(a),
+        );
+        const lost = list
+          .filter((d) => d.attachment && gone.has(d.attachment.id))
+          .map((d): Draft => ({ ...d, status: 'lost', error: LOST_WORDS, progress: undefined }));
+        // Still uploading here: it joins the draft once it's in.
+        const coming = list.filter((d) => d.status === 'uploading' || d.status === 'error');
+        return [...kept, ...lost, ...coming];
+      });
+    },
+    [commit],
+  );
+
+  // A text card kept from before has only its name: its first lines (and a paste's
+  // words, to edit) come from Conch. One that's gone says so.
+  const fetching = useRef(new Set<string>());
+  useEffect(() => {
+    for (const d of drafts) {
+      const id = d.attachment?.id;
+      if (!id || d.kind !== 'text' || d.excerpt !== undefined || d.status !== 'ready') continue;
+      if (fetching.current.has(id)) continue;
+      fetching.current.add(id);
+      attachmentText(id).then(
+        (text) => {
+          fetching.current.delete(id);
+          patch(d.key, { excerpt: text.slice(0, 4096), ...(d.pasted && { text }) });
+        },
+        (error: unknown) => {
+          fetching.current.delete(id);
+          if (error instanceof ApiError && error.status === 404) markLost([id]);
+          else patch(d.key, { excerpt: '' });
+        },
+      );
+    }
+  }, [drafts, patch, markLost]);
+
   useEffect(
     () => () => {
       for (const abort of uploads.current.values()) abort.abort();
@@ -329,6 +394,8 @@ export function useDraftAttachments() {
     ready,
     uploading: drafts.some((d) => d.status === 'uploading'),
     failed: drafts.filter((d) => d.status === 'error').length,
+    /** Cards whose file is no longer on Conch: they have to come off before it's sent. */
+    lost: drafts.filter((d) => d.status === 'lost').length,
     addFiles,
     addPaste,
     editPaste,
@@ -336,5 +403,7 @@ export function useDraftAttachments() {
     retry,
     clear,
     restore,
+    adopt,
+    markLost,
   };
 }

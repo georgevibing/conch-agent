@@ -74,7 +74,8 @@ import styles from './ChatView.module.css';
 import { ChatContext } from './ChatContext';
 import { NewChatTips } from './NewChatTips';
 import { attachmentUrl } from './uploads';
-import { composerHistory, loadDraft, rememberSent, saveDraft } from './composer';
+import { composerHistory, loadLocalDraft, rememberSent, saveDraft } from './composer';
+import { useKeptDraft } from './drafts';
 
 const attachmentSrc = (attachment: Attachment) => attachmentUrl(attachment.id);
 import { AttachmentViewer, type Viewable } from './AttachmentViewer';
@@ -306,11 +307,12 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
   // "Try asking…" from an integration arrives as a ready-to-send draft.
   const location = useLocation();
   const startIn = useNewChatFolder();
-  // Otherwise, what you were writing here before you went elsewhere.
+  // Otherwise, what you were writing here before you went elsewhere (ADR 0124): this
+  // device's copy at once, then Conch's if it has something newer from another one.
+  const [kept] = useState(() => loadLocalDraft(key));
   const [draft, setDraft] = useState(
-    () => (location.state as { draft?: string } | null)?.draft ?? loadDraft(key),
+    () => (location.state as { draft?: string } | null)?.draft ?? kept?.text ?? '',
   );
-  useEffect(() => saveDraft(key, draft), [key, draft]);
   // The words can arrive after the chat is already open (the welcome hands them over as it
   // finishes): take them once per arrival.
   const [arrived, setArrived] = useState(location.key);
@@ -321,8 +323,32 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
   }
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const columnRef = useRef<HTMLDivElement>(null);
-  const attachments = useDraftAttachments();
+  const attachments = useDraftAttachments(kept?.attachments);
   const [previewing, setPreviewing] = useState<number>();
+  // A new chat's choices (model, mode…) are part of its draft; a chat keeps its own.
+  const draftOptions = useUi((s) => s.draftOptions);
+  useEffect(() => {
+    if (key !== NEW || !kept?.options) return;
+    if (Object.keys(useUi.getState().draftOptions).length === 0)
+      useUi.getState().setDraftOptions(kept.options);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, as the page opens
+  }, []);
+  useKeptDraft(
+    key,
+    {
+      text: draft,
+      attachments: attachments.ready,
+      ...(key === NEW && { options: draftOptions }),
+    },
+    {
+      adopt: (theirs, missing) => {
+        setDraft(theirs.text);
+        attachments.adopt(theirs.attachments, missing);
+        if (key === NEW && theirs.options) useUi.getState().setDraftOptions(theirs.options);
+      },
+      lost: (ids) => attachments.markLost(ids),
+    },
+  );
 
   // Words handed over from elsewhere (⌘K's "use this skill") land in the composer.
   useEffect(() => {
@@ -404,7 +430,10 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
     if (conversationId && useUi.getState().find?.conversationId === conversationId) return;
     // Nor from somewhere you're already typing (the terminal opened while the chat loaded).
     if (typingElsewhere(composerRef.current)) return;
-    composerRef.current?.focus();
+    const box = composerRef.current;
+    box?.focus();
+    // Back to a draft: carry on where it ends.
+    box?.setSelectionRange(box.value.length, box.value.length);
   }, [conversationId]);
 
   const turn = useTurnOptions(conversationId);
@@ -905,7 +934,9 @@ export function ChatView({ conversationId: routeId }: { conversationId?: string 
               ? 'Waiting for attachments to upload…'
               : attachments.failed
                 ? 'Remove or retry the attachment that didn’t upload'
-                : undefined
+                : attachments.lost
+                  ? 'Remove the file that’s no longer here, then attach it again'
+                  : undefined
         }
         onTextareaKeyDown={(e) => {
           if (e.key === 'Enter' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
