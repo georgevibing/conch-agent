@@ -70,7 +70,7 @@ test('a new release: noticed once, its notes, a forged one refused, the channel,
   page,
   request,
 }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(270_000);
   await look(request);
   expect((await status(request)).conch).toMatchObject({
     version: '0.1.0',
@@ -207,6 +207,35 @@ test('a new release: noticed once, its notes, a forged one refused, the channel,
 
   // The chat that was working paused at a safe point, and carried on by itself after.
   expect(page.url()).toBe(chat);
+  // Conch carries the chat on once it's back and has looked at the computer: on a
+  // slow runner that takes a few looks. Wait on its own record, and say what it was if not.
+  const chatId = chat.split('/c/')[1] ?? '';
+  const pickedUp = async () => {
+    const detail = (await (await request.get(`/api/conversations/${chatId}`)).json()) as {
+      conversation?: { status?: string };
+      events?: { type: string; restarted?: unknown; outcome?: string }[];
+    };
+    return { detail, marked: (detail.events ?? []).some((e) => e.restarted) };
+  };
+  await expect
+    .poll(async () => (await pickedUp()).marked, { timeout: 90_000, intervals: [1_000] })
+    .toBe(true)
+    .catch(async (error: unknown) => {
+      const { detail } = await pickedUp();
+      const health = await (await request.get('/api/health')).json();
+      console.log(
+        'releases: not picked up',
+        JSON.stringify({
+          status: detail.conversation?.status,
+          tail: (detail.events ?? [])
+            .filter((e) => !e.type.endsWith('delta'))
+            .slice(-8)
+            .map((e) => [e.type, e.outcome, e.restarted]),
+          health,
+        }),
+      );
+      throw error;
+    });
   await expect(page.getByText('Conch updated and picked up where it left off')).toBeVisible({
     timeout: 30_000,
   });
