@@ -196,22 +196,32 @@ export const tools = {
         deleteProperty: () => false,
       });
 
-      let lastProgress = 0;
-      const progress = (done, total, label) => {
-        const now = Date.now();
-        const end = typeof total === 'number' && done >= total;
-        if (!end && now - lastProgress < 100) return;
-        lastProgress = now;
-        void post('/progress', stringify({ done, total, label })).catch(quiet);
+      // At most one word every 100ms, and the latest is never lost: a trailing send says it.
+      const paced = (path) => {
+        let at = 0;
+        let latest;
+        let later;
+        const go = () => {
+          later = undefined;
+          at = Date.now();
+          void post(path, stringify(latest)).catch(quiet);
+        };
+        return (body, now = false) => {
+          latest = body;
+          if (now || Date.now() - at >= 100) {
+            if (later) clearTimeout(later);
+            go();
+          } else later ??= setTimeout(go, 100);
+        };
       };
+      const sayProgress = paced('/progress');
+      const progress = (done, total, label) =>
+        sayProgress({ done, total, label }, typeof total === 'number' && done >= total);
+      const sayNote = paced('/note');
       let lastNote;
-      let noteAt = 0;
       const note = (words) => {
         lastNote = String(words).slice(0, 200);
-        const now = Date.now();
-        if (now - noteAt < 100) return;
-        noteAt = now;
-        void post('/note', stringify({ text: lastNote })).catch(quiet);
+        sayNote({ text: lastNote });
       };
 
       try {

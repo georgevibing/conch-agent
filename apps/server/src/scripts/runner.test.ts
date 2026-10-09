@@ -124,6 +124,20 @@ describe('a script that calls tools', () => {
     expect(calls.filter((c) => c.status === 'success').map((c) => c.step)).toEqual([1, 2, 3, 4]);
   });
 
+  it('paces its notes, but never loses the latest while it works', async () => {
+    const t = turn([tool('slow', () => new Promise((r) => setTimeout(() => r('ok'), 500)))]);
+    await runScript(t.host, {
+      title: 'Count',
+      script: 'for (let i = 1; i <= 50; i++) note("Counted " + i); await tools.slow({}); return 1;',
+    });
+    const said = t.events.flatMap((e) =>
+      e.type === 'script.run' && e.state === 'running' && e.note ? [e.note] : [],
+    );
+    // Not fifty words in a burst; and the last of them said while the slow call ran.
+    expect(said.length).toBeLessThan(5);
+    expect(said.at(-1)).toBe('Counted 50');
+  });
+
   it('runs each call inside its step, so a question it asks can say which', async () => {
     let seen: unknown;
     const t = turn([
