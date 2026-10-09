@@ -1,5 +1,5 @@
 /**
- * Pairing other apps with Conch (ADR 0073), from Settings → Access → Other apps.
+ * Pairing other apps with Conch (ADR 0073), from Settings → Access → Apps that use Conch.
  *
  * Pairing is always a person's press, after they confirmed it's them (the
  * routes check), never a tool: an app can't pair itself, and neither can the

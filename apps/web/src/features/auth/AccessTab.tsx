@@ -84,8 +84,9 @@ export function AccessTab() {
       {/* Loading and a failure to load are said once, here. */}
       <DevicesTab />
       <SettingsAdvanced open={advanced} onOpenChange={setAdvanced}>
+        {/* One of Advanced's sections, so its heading sits level with theirs. */}
         <div ref={others}>
-          <OtherAppsTab />
+          <OtherAppsTab headingLevel={3} />
         </div>
       </SettingsAdvanced>
       {dialog}

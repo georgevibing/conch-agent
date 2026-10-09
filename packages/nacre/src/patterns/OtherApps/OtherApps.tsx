@@ -46,7 +46,7 @@ const STATE_WORDS: Record<OtherAppTarget['state'], string> = {
 };
 
 /**
- * Settings → Other apps: the apps Conch can add itself to in one press
+ * Apps that use Conch (Settings → Access): the apps Conch can add itself to in one press
  * (Claude Desktop, Cursor, VS Code), each saying in words whether it's
  * connected, here to connect, or not on this computer.
  */

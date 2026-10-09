@@ -113,7 +113,7 @@ describe('an app nobody paired', () => {
     expect(none.statusCode).toBe(401);
     expect(none.json()).toMatchObject({
       error: 'not-paired',
-      message: expect.stringMatching(/Other apps/),
+      message: expect.stringMatching(/Apps that use Conch/),
     });
     const guessed = await rpc(app, LIST, bearer(`cmcp.mcpc_${'a'.repeat(12)}.${'b'.repeat(43)}`));
     expect(guessed.statusCode).toBe(401);

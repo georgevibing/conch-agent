@@ -18,7 +18,7 @@
   margin-inline-start: auto;
 }
 
-/* Settings → Other apps, as a section that can sit inside another place. */
+/* Apps that use Conch: a section of Settings → Access, under its Advanced. */
 .place {
   display: flex;
   flex-direction: column;

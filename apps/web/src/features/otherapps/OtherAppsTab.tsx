@@ -66,7 +66,7 @@ export interface OtherAppsTabProps {
 }
 
 /**
- * Settings → Other apps (ADR 0073): Claude Desktop, Cursor, VS Code and any
+ * Apps that use Conch, in Settings → Access under Advanced (ADR 0073): Claude Desktop, Cursor, VS Code and any
  * app that speaks MCP, using Conch's memory, skills, your apps and its
  * browser — each paired by you, each held to what you ticked.
  *

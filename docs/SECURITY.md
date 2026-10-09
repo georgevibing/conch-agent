@@ -273,7 +273,7 @@ copy.
 
 Claude Desktop, Cursor, VS Code and other MCP apps can use Conch (ADR 0073).
 
-- **Only apps you paired.** Pairing is a press in **Settings → Access → Other apps**, after you
+- **Only apps you paired.** Pairing is a press in **Settings → Access → Apps that use Conch**, after you
   confirm it's you, on this computer or a device you let in. An app can't pair itself, a
   script's access key can't, and neither can your assistant.
 - **Only what you ticked.** Each app has its own list (your memory, your skills, the

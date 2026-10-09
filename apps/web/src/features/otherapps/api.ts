@@ -12,7 +12,7 @@ import { request } from '../../api/client';
 
 const Ok = z.object({ ok: z.boolean() });
 
-/** Settings → Other apps (ADR 0073). */
+/** Settings → Access → Apps that use Conch (ADR 0073). */
 export const otherAppsApi = {
   overview: () => request(McpOverview, '/api/mcp'),
   pair: (body: PairMcpClientBody) =>

@@ -1,5 +1,5 @@
 /**
- * Settings → Access → Other apps (ADR 0073): pairing apps with Conch, what each may
+ * Settings → Access → Apps that use Conch (ADR 0073): pairing apps with Conch, what each may
  * use, and letting them in through your own address.
  *
  * Pairing, widening what an app may use, and letting apps in from elsewhere

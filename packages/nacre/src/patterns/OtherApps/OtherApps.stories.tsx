@@ -83,7 +83,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Settings → Other apps (ADR 0073): Claude Desktop, Cursor, VS Code and other MCP apps using Conch. The apps Conch connects in one press, what each may use as boxes to tick (nothing is implied), and the paired apps with what they may use, when they last did, and the three things to do about one. State is always said in words.',
+          'Settings → Access → Apps that use Conch (ADR 0073): Claude Desktop, Cursor, VS Code and other MCP apps using Conch. The apps Conch connects in one press, what each may use as boxes to tick (nothing is implied), and the paired apps with what they may use, when they last did, and the three things to do about one. State is always said in words.',
       },
     },
   },

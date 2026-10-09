@@ -199,7 +199,7 @@ export const RULES: readonly BackupRule[] = [
   {
     match: 'mcp/**',
     class: 'derived',
-    why: 'The apps paired with Conch on this computer (ADR 0073), their keys and the launcher they start: a restore pairs nothing, so another computer’s apps never come with it. Pair them again from Settings → Access → Other apps.',
+    why: 'The apps paired with Conch on this computer (ADR 0073), their keys and the launcher they start: a restore pairs nothing, so another computer’s apps never come with it. Pair them again from Settings → Access → Apps that use Conch.',
   },
   {
     match: 'here/**',

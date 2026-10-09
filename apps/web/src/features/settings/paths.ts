@@ -31,7 +31,7 @@ export const MEMORY_ALL = 'everything';
 /** `openSettings('providers', FALLBACK_FOCUS)`: Providers → When one can’t answer. */
 export const FALLBACK_FOCUS = 'fallback';
 
-/** `openSettings('access', OTHER_APPS_FOCUS)`: Access → Other apps, under its Advanced. */
+/** `openSettings('access', OTHER_APPS_FOCUS)`: Access → Apps that use Conch, under its Advanced. */
 export const OTHER_APPS_FOCUS = 'other-apps';
 
 /**

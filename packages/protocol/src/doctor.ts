@@ -57,7 +57,7 @@ export const DoctorPlace = z.enum([
   'skills',
   /** Routines (and one routine, by `focus`): ADR 0056. */
   'routines',
-  /** Settings → Access → Other apps: apps paired with Conch (ADR 0073). */
+  /** Settings → Access → Apps that use Conch: apps paired with Conch (ADR 0073). */
   'other-apps',
   /** Settings → Agents: their names and pictures (ADR 0101). */
   'agents',
