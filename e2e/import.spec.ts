@@ -13,30 +13,32 @@ const run = promisify(execFile);
 const root = join(import.meta.dirname, '..');
 
 /**
- * Come home, end to end (ADR 0035), from a pretend OpenClaw: the offer when
- * you first open Conch, the preview with what starts unticked and why,
+ * Come home, end to end (ADR 0035), from a pretend OpenClaw: the offer on the
+ * new chat after the welcome, the preview with what starts unticked and why,
  * bringing things over with a backup first, what came and what's next,
  * Undo; and `pnpm conch import --dry-run`, which changes nothing.
  */
 test.describe.configure({ mode: 'serial' });
 
-test('the first run offers to bring your things, and Not now carries on', async ({
+test('the first run doesn’t stop for it: the new chat offers to bring your things', async ({
   page,
   request,
 }) => {
   await request.patch('/api/settings', { data: { onboarded: false } });
   await page.goto('/');
   await toProviders(page);
-  // A provider is ready, so the welcome carries on to the apps by itself.
-  await page.getByRole('button', { name: 'Skip for now' }).click({ timeout: 10_000 });
-  await expect(page.getByRole('heading', { name: 'Bring your things from OpenClaw?' })).toBeVisible(
-    { timeout: 10_000 },
-  );
-  await expect(page.getByRole('region', { name: 'Bring your things from OpenClaw' })).toContainText(
-    '3 memories',
-  );
-  await page.getByRole('button', { name: 'Not now' }).click();
-  await expect(page.getByRole('heading', { name: /You’re all set/ })).toBeVisible();
+  // A provider is ready, so the welcome carries on to the end by itself, asking nothing more.
+  await expect(page.getByRole('heading', { name: /You’re all set/ })).toBeVisible({
+    timeout: 10_000,
+  });
+  await page.getByRole('button', { name: 'Open Conch' }).click();
+
+  // On the new chat, one quiet line, opening the look before anything comes over.
+  await page.getByRole('button', { name: 'Bring your things from OpenClaw' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Settings' }).getByRole('tabpanel');
+  await expect(
+    dialog.getByRole('heading', { name: 'Bring your things from OpenClaw', level: 2 }),
+  ).toBeVisible();
 });
 
 test('previews, brings things over after a backup, says what’s next, and undoes it', async ({

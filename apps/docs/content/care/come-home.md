@@ -9,7 +9,7 @@ If OpenClaw or Hermes is on this computer, Conch finds it and shows exactly what
 
 ## Take a look
 
-When Conch finds one during the welcome, it asks, with **Take a look** and **Not now**. After that, the offer lives in **Settings → Memory**, and <kbd>mod+k</kbd> finds it too.
+When Conch finds one, a new chat offers it in one quiet line under the box: **Bring your things from OpenClaw**. It goes away once they've come over. The offer also lives in **Settings → Memory**, and <kbd>mod+k</kbd> finds it too.
 
 1. Open **Settings → Memory**. Under **Bring your things from another assistant**, press **Take a look** on the app's card. It opens as a page inside Settings, with **Memory › From OpenClaw** (or Hermes) above it: press **Memory** to go back.
 2. Look at the tiles: one for each kind of thing (**Agents**, **Memories**, **Skills**…), with how many are ticked. Press a tile to see just that kind, or **Everything** to see it all.

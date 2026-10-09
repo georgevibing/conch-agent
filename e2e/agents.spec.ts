@@ -1,8 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
 /**
- * Agents, as a person meets them (ADR 0101): the welcome names the first one
- * and gives it a face; then make another in one screen (a name, a face, how it
+ * Agents, as a person meets them (ADR 0101): the first one, named and given a
+ * face in Settings → Agents; then make another in one screen (a name, a face, how it
  * sounds), start a chat with it and see its name over the reply, hand the chat
  * to the first one mid-way, rename it, and delete it with a moment to change
  * your mind. The tests share one gateway and run in order.
@@ -22,33 +22,35 @@ async function waitForReply(page: Page, reply: string | RegExp) {
   });
 }
 
-test('the welcome names the first agent and gives it a face', async ({ page }) => {
+test('the first agent comes as it is, and Settings → Agents gives it a name and a face', async ({
+  page,
+}) => {
+  // The welcome doesn't stop to name it (ADR 0068): it's Conch until you say otherwise.
   await page.goto('/');
-  await page.getByRole('button', { name: 'Let’s begin' }).click();
   await page.getByRole('textbox', { name: 'Your name' }).fill('Ada');
   await page.keyboard.press('Enter');
-  await page.getByRole('button', { name: 'Skip', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'You’re all set, Ada.' })).toBeVisible({
+    timeout: 8000,
+  });
+  await page.getByRole('button', { name: 'Open Conch' }).click();
+  await expect(page.getByRole('textbox', { name: 'Message Conch' })).toBeVisible();
 
-  // Who it is: a name to keep or change, a face, how it sounds — heard as it's chosen.
-  await expect(page.getByRole('heading', { name: 'And who am I?' })).toBeVisible();
-  const name = page.getByRole('textbox', { name: 'My name' });
-  await expect(name).toHaveValue('Conch');
-  await name.fill('Juniper');
+  // Who it is: a name to change, a face, how it sounds — heard as it's chosen.
+  await page.goto('/settings/agents');
+  await page
+    .getByRole('list', { name: 'Your agents' })
+    .getByRole('button', { name: 'Conch, default' })
+    .click();
+  await page.getByRole('textbox', { name: 'Name' }).fill('Juniper');
   await page.getByRole('radio', { name: 'Fox' }).click();
   await page.getByRole('radio', { name: 'Playful' }).click();
   await expect(page.getByText(/Oh, hello, Ada! I’m Juniper\./)).toBeVisible();
-  await page.getByRole('button', { name: 'Sounds good' }).click();
-
-  await expect(page.getByRole('heading', { name: 'Bring the apps you live in.' })).toBeVisible({
-    timeout: 8000,
-  });
   await expect
     .poll(async () => (await agentNames(page)).map((a) => [a.name, a.avatar.id]))
     .toEqual([['Juniper', 'fox']]);
-  await page.getByRole('button', { name: 'Skip for now' }).click();
-  await page.getByRole('button', { name: 'Open Conch' }).click();
 
   // The chat is with it, by its name.
+  await page.goto('/');
   await expect(page.getByRole('textbox', { name: 'Message Juniper' })).toBeVisible();
 });
 

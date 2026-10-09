@@ -29,13 +29,10 @@ export async function say(page: Page, text: string, reply: string | RegExp) {
 }
 
 /**
- * Through the welcome's first questions to "a mind to think with" (ADR 0068),
- * skipping each one, as someone who only wants to connect a provider would.
+ * Past the welcome's hello to "a mind to think with" (ADR 0068), without a
+ * name, as someone who only wants to connect a provider would.
  */
 export async function toProviders(page: Page) {
   await page.getByRole('button', { name: 'Let’s begin' }).click();
-  await page.getByRole('button', { name: 'Skip', exact: true }).click();
-  await page.getByRole('button', { name: 'Skip', exact: true }).click();
-  await page.getByRole('button', { name: 'Sounds good' }).click();
   await expect(page.getByRole('heading', { name: 'Now, a mind to think with.' })).toBeVisible();
 }

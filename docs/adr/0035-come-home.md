@@ -132,10 +132,11 @@ yours.
 
 ### Where it shows
 
-- **Onboarding.** After the first useful result, if the user chooses personalization
-  and another assistant is here, one screen
-  asks "Bring your things from OpenClaw?", with Take a look and Not now. It
-  never appears for people who have nothing to bring.
+- **The new chat.** When another assistant is here and nothing has come over
+  from it yet, one quiet line under the composer says "Bring your things from
+  OpenClaw" and opens its page in Settings → Memory. It never appears for
+  people who have nothing to bring. (It was a screen of the welcome until ADR
+  0068 was amended to keep first run to three screens.)
 - **Settings → Memory → "Bring your things from another assistant"**: an
   `ImportOffer` card for each app found, and Undo for the last import.
 - **⌘K**: "Bring your things from OpenClaw or Hermes" (import, migrate,

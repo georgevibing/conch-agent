@@ -20,7 +20,7 @@ test('signs in to the provider from the browser', async ({ page, request }) => {
   );
   // The dialog says it worked, then gets out of the way and the flow moves on.
   await expect(dialog.getByText(/Claude Max/)).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByRole('heading', { name: 'Bring the apps you live in.' })).toBeVisible({
+  await expect(page.getByRole('heading', { name: /You’re all set/ })).toBeVisible({
     timeout: 10_000,
   });
 

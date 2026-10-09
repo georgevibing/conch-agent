@@ -9,7 +9,7 @@ If you've talked to Claude Code, Codex, Gemini CLI, OpenCode, Copilot in VS Code
 
 ## Bring them in
 
-Conch offers it during the welcome when it finds some: **Found 1,284 conversations**, with how many came from each app and the projects they were about. After that, the offer lives in **Settings → Memory**, under **Your past chats**, and <kbd>mod+k</kbd> finds it too ("past chats", "Claude Code").
+When Conch finds some, a new chat offers them in one quiet line under the box, such as **Bring in 1,284 past chats from Claude Code**. It opens **Settings → Memory → Your past chats**: **Found 1,284 conversations**, with how many came from each app and the projects they were about. The offer lives there afterwards as well, and <kbd>mod+k</kbd> finds it ("past chats", "Claude Code").
 
 1. Press **Bring them in**. There's nothing to choose and no folder to find.
 2. Watch them come in: the bar says how many so far, and which app it's reading. You can keep using Conch meanwhile.
