@@ -26,8 +26,8 @@ const GROUPS: Record<string, string> = {
   memories: 'Memories',
   skills: 'Skills (they come over off)',
   routines: 'Routines (they come over as drafts)',
-  channels: 'Chat bots (only in Conch: Settings → Memory)',
-  keys: 'Keys (only in Conch: Settings → Memory)',
+  channels: 'Chat bots (only in Conch: Settings → What Conch knows)',
+  keys: 'Keys (only in Conch: Settings → What Conch knows)',
 };
 
 export function printPlan(plan: ImportPlan, io: ImportIo): void {
@@ -81,7 +81,7 @@ export async function importCommand(
   if (await io.running()) {
     ui.blank();
     ui.note(
-      'Conch is running, so it should do this itself: Settings → Memory → Bring your things over.',
+      'Conch is running, so it should do this itself: Settings → What Conch knows → Bring your things over.',
     );
     ui.hint(`Or stop it first (${ui.code(conch('quit'))}) and run this again.`);
     return 1;
@@ -110,6 +110,6 @@ export async function importCommand(
   );
   const failed = result.outcomes.filter((o) => !o.ok);
   for (const f of failed) ui.note(`${f.title}: ${f.message}`);
-  ui.hint('Changed your mind? Settings → Memory → Undo, within a week.');
+  ui.hint('Changed your mind? Settings → What Conch knows → Undo, within a week.');
   return failed.length ? 1 : 0;
 }

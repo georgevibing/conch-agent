@@ -735,7 +735,7 @@ export class ChannelSettingsMenu {
         run: (c) =>
           this.#links(c, 'Safety checks need a fresh sign-in before they can be turned off.', [
             ['Safety', '/settings/security'],
-            ['Models and fallbacks', '/settings/models'],
+            ['Providers and fallbacks', '/settings/providers'],
           ]),
       },
     ]);

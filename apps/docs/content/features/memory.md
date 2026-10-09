@@ -19,7 +19,7 @@ It is told to leave out passwords, keys, and health or money details unless you 
 
 Some things only show once a chat is over: you corrected it ("no, I meant TypeScript"), you said something changed ("I moved to Lisbon"), or a command needed another program on this computer. So once a chat has been quiet for a few minutes, Conch reads your words in it once more and keeps what will still matter.
 
-- **It doesn't interrupt.** Nothing appears in the chat. What it learned is in **Settings → Memory**, where you can change or forget it.
+- **It doesn't interrupt.** Nothing appears in the chat. What it learned is in **Settings → What Conch knows**, where you can change or forget it.
 - **What changed replaces what was.** "Lives in Lisbon" replaces "Lives in Berlin". The old memory is kept under **What used to be true**, with the date it stopped being true, so your assistant can still answer questions about before.
 - **What you take back stays back.** A memory Conch wrote that you forget isn't learned again. The list is under **Won't learn again**, each with **Remove**. If you say it again yourself, Conch remembers it.
 - **What it learned about this computer saves you time.** "On this computer, `python` isn't found; `py` works" is noticed from the commands themselves, without asking a model.

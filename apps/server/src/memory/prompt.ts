@@ -184,7 +184,7 @@ function usage(tools: boolean, autoMemory: boolean): string[] {
         ]
       : [
           ``,
-          `This provider can't save or search memories itself. If the user asks you to remember or forget something, tell them they can do it in What Conch knows about you (⌘K, or Settings → Memory).`,
+          `This provider can't save or search memories itself. If the user asks you to remember or forget something, tell them they can do it in What Conch knows about you (⌘K, or Settings → What Conch knows).`,
         ]),
     `Never mention memory ids to the user.`,
   ];

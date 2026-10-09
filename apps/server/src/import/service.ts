@@ -629,7 +629,9 @@ export class ImportService {
     this.#drafts.set(found.source, drafts);
     if (!found.identities.length) return { items: [] };
     if (!t.agents) {
-      problems.push(`${found.label}’s agents come over in Conch itself: Settings → Memory.`);
+      problems.push(
+        `${found.label}’s agents come over in Conch itself: Settings → What Conch knows.`,
+      );
       return { items: [] };
     }
     const list = await t.agents.list();
@@ -804,7 +806,7 @@ export class ImportService {
     if (!model) return '';
     const t = this.deps.targets;
     if (!t.models)
-      return `${found.label}’s model choice comes over in Conch itself: Settings → Memory.`;
+      return `${found.label}’s model choice comes over in Conch itself: Settings → What Conch knows.`;
     const catalog = await t.models.catalog().catch(() => undefined);
     if (!catalog)
       return `Conch couldn’t ask its providers what they offer, so ${found.label}’s model stays behind for now. Look again in a moment.`;
