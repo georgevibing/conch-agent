@@ -334,4 +334,39 @@ describe('caching through OpenRouter, and every provider’s cache count', () =>
       cachedInputTokens: 50,
     });
   });
+
+  it('reads cache writes in each provider’s own words, and only where there were some', () => {
+    // OpenAI from GPT-5.6, and Kimi: reads and writes side by side.
+    expect(
+      usageFrom({
+        prompt_tokens: 2_000,
+        prompt_tokens_details: { cached_tokens: 1_024, cache_write_tokens: 900 },
+      }),
+    ).toEqual({
+      inputTokens: 2_000,
+      outputTokens: 0,
+      cachedInputTokens: 1_024,
+      cacheWriteTokens: 900,
+    });
+    // Qwen's explicit cache.
+    expect(
+      usageFrom({
+        prompt_tokens: 3_000,
+        prompt_tokens_details: { cached_tokens: 0, cache_creation_input_tokens: 2_048 },
+      }),
+    ).toEqual({ inputTokens: 3_000, outputTokens: 0, cacheWriteTokens: 2_048 });
+    // DeepSeek says it twice; it's counted once.
+    expect(
+      usageFrom({
+        prompt_tokens: 100,
+        prompt_cache_hit_tokens: 64,
+        prompt_cache_miss_tokens: 36,
+        prompt_tokens_details: { cached_tokens: 64 },
+      }),
+    ).toEqual({ inputTokens: 100, outputTokens: 0, cachedInputTokens: 64 });
+    // Nothing from the cache is nothing said.
+    expect(
+      usageFrom({ prompt_tokens: 100, completion_tokens: 5, prompt_tokens_details: {} }),
+    ).toEqual({ inputTokens: 100, outputTokens: 5 });
+  });
 });

@@ -59,14 +59,22 @@ export type ChatError = z.infer<typeof ChatError>;
 const Usage = z.object({
   prompt_tokens: z.number().nullish(),
   completion_tokens: z.number().nullish(),
-  /** How much of the prompt came from the provider's cache (and, on OpenRouter, went into it). */
+  /**
+   * How much of the prompt came from the provider's cache, and went into it:
+   * `cache_write_tokens` at OpenAI (GPT-5.6 on), OpenRouter and Kimi,
+   * `cache_creation_input_tokens` at Qwen.
+   */
   prompt_tokens_details: z
-    .object({ cached_tokens: z.number().nullish(), cache_write_tokens: z.number().nullish() })
+    .object({
+      cached_tokens: z.number().nullish(),
+      cache_write_tokens: z.number().nullish(),
+      cache_creation_input_tokens: z.number().nullish(),
+    })
     .nullish(),
   /** DeepSeek says it in its own words. */
   prompt_cache_hit_tokens: z.number().nullish(),
   prompt_cache_miss_tokens: z.number().nullish(),
-  /** And Kimi in its. */
+  /** And at the top level: Kimi's older replies, Qwen's vision models. */
   cached_tokens: z.number().nullish(),
   /** OpenRouter's credits, which are USD — the real charge for the request. */
   cost: z.number().nullish(),
@@ -210,7 +218,10 @@ export function usageFrom(usage: z.infer<typeof Usage>): WireUsage {
     usage.prompt_cache_hit_tokens ??
     usage.cached_tokens ??
     0;
-  const written = usage.prompt_tokens_details?.cache_write_tokens ?? 0;
+  const written =
+    usage.prompt_tokens_details?.cache_write_tokens ??
+    usage.prompt_tokens_details?.cache_creation_input_tokens ??
+    0;
   return {
     inputTokens: Math.max(0, Math.round(usage.prompt_tokens ?? 0)),
     outputTokens: Math.max(0, Math.round(usage.completion_tokens ?? 0)),
