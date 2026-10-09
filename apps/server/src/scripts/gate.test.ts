@@ -31,6 +31,7 @@ import { MemoryStore } from '../memory/store';
 import { SettingsStore } from '../settings/store';
 import { UndoService } from '../undo/service';
 import { UndoStore } from '../undo/store';
+import { TIDY_SCRIPT } from '../engines/mock/engine';
 import { scriptTools } from './tool';
 
 class Scripted implements Engine {
@@ -404,6 +405,23 @@ describe('a script is never a way around a question', () => {
     );
     expect(result.restored).toHaveLength(3);
     for (const name of ['a', 'b', 'c']) expect(existsSync(join(work, `${name}.md`))).toBe(false);
+  });
+
+  it('runs the mock’s own script: thirty writes, and an upload to a drop box that asks', async () => {
+    const { manager, engine, work } = await setup('auto');
+    engine.script.push(runs(TIDY_SCRIPT, 'Tidy my notes, one for each day'));
+    const convo = await manager.send({ clientMessageId: 'u1', text: 'tidy' });
+    const asked: string[] = [];
+    const events = await answering(manager, convo.id, 'deny', (q) => asked.push(q.taint ?? ''));
+    expect(runOf(events)).toMatchObject({
+      state: 'done',
+      calls: 32,
+      note: 'Wrote 30 notes, one for each day',
+    });
+    // Only the upload asked: making the folder and the notes in it is routine work.
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toMatch(/send|out|upload/i);
+    expect(readFileSync(join(work, 'notes', 'day-30.md'), 'utf8')).toContain('# Day 30');
   });
 
   it('settles every call, so a restart doesn’t think one is still uncertain', async () => {

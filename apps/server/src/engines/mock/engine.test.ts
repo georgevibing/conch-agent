@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import type { EngineEvent, TurnInput } from '../types';
-import { MockEngine } from './engine';
+import { prepare } from '../../scripts/wrapper';
+import { MockEngine, TIDY_SCRIPT } from './engine';
 
 function input(signal: AbortSignal): TurnInput {
   return {
@@ -113,5 +114,49 @@ describe('the mock engine makes Conch apps (ADR 0061)', () => {
     expect((await run('is there an app for tracking my plants?')).calls).toEqual([
       { name: 'app_find', args: { query: 'tracking my plants' } },
     ]);
+  });
+});
+
+describe('the mock engine runs a script that calls tools (ADR 0119)', () => {
+  const run = async (prompt: string) => {
+    const calls: Record<string, unknown>[] = [];
+    const tools = [
+      {
+        name: 'run_script',
+        description: 'run_script',
+        input: {},
+        run: async (args: Record<string, unknown>) => {
+          calls.push(args);
+          return 'It returned:\n{ "written": 30, "uploaded": false }';
+        },
+      },
+    ];
+    const engine = new MockEngine({ speed: 0.001 });
+    const events: EngineEvent[] = [];
+    for await (const event of engine.runTurn({
+      ...input(new AbortController().signal),
+      prompt,
+      tools: tools as unknown as TurnInput['tools'],
+    }))
+      events.push(event);
+    const said = events.flatMap((e) => (e.type === 'text' ? [e.delta] : [])).join('');
+    return { calls, said };
+  };
+
+  it('“run a script to tidy my notes” runs one script, which parses, and says what came of it', async () => {
+    const { calls, said } = await run('Run a script to tidy my notes');
+    expect(calls).toEqual([{ title: 'Tidy my notes, one for each day', script: TIDY_SCRIPT }]);
+    expect(() => prepare(TIDY_SCRIPT)).not.toThrow();
+    expect(said).toMatch(/a note for each day of the month/);
+  });
+
+  it('isn’t set off by the journeys that sound like it', async () => {
+    for (const prompt of [
+      'write a note about the dentist',
+      'tidy my notes',
+      'run the tests',
+      'run a script',
+    ])
+      expect((await run(prompt)).calls).toEqual([]);
   });
 });
