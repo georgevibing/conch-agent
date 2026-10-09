@@ -124,8 +124,32 @@ const FetchRequest = z.object({
   bodyBase64: z.boolean().optional(),
 });
 
+/** A provider's or chat app's function (ADR 0119), as the module exports it. */
+const PartName = z.enum([
+  'provider.chat',
+  'provider.models',
+  'channel.identify',
+  'channel.poll',
+  'channel.receive',
+  'channel.send',
+  'channel.directChat',
+]);
+export type PartName = z.infer<typeof PartName>;
+
+/** A piece of a provider's answer, streamed while it's written (`app.emit`). */
+const PartEvent = z.object({
+  type: z.enum(['text', 'thinking']),
+  delta: z.string().max(64 * 1024 + 8),
+});
+export type PartEvent = z.infer<typeof PartEvent>;
+
 const FromHost = z.discriminatedUnion('t', [
-  z.object({ t: z.literal('ready'), tools: z.array(RawTool).max(64) }),
+  z.object({
+    t: z.literal('ready'),
+    tools: z.array(RawTool).max(64),
+    parts: z.array(PartName).max(16).optional(),
+  }),
+  z.object({ t: z.literal('event'), id: z.number().int().positive(), event: PartEvent }),
   z.object({ t: z.literal('broken'), message: z.string().max(2000) }),
   z.object({
     t: z.literal('result'),
@@ -243,6 +267,30 @@ interface Pending {
   child: ChildProcess;
   done: (outcome: AppCallOutcome) => void;
   timer: NodeJS.Timeout;
+  /** A provider's answer, streamed (ADR 0119). */
+  onEvent?: (event: PartEvent) => void;
+  /** A part's call that may take long (a provider's answer): its requests get longer too. */
+  long?: boolean;
+}
+
+/** How long a provider's or chat app's function may take (ADR 0119). */
+export const PART_MS: Record<PartName, number> = {
+  'provider.chat': 10 * 60_000,
+  'provider.models': 30_000,
+  'channel.identify': 30_000,
+  'channel.poll': 75_000,
+  'channel.receive': 15_000,
+  'channel.send': 30_000,
+  'channel.directChat': 30_000,
+};
+/** A request a provider's answer makes may wait this long for its answer. */
+const LONG_FETCH_MS = 180_000;
+
+/** Calling one of an app's parts: what the person typed for it, and where its answer streams. */
+export interface PartCall {
+  keys: Record<string, string>;
+  signal?: AbortSignal;
+  onEvent?: (event: PartEvent) => void;
 }
 
 type Exit = 'stopped' | 'timeout' | 'crashed' | 'too-much';
@@ -260,6 +308,8 @@ export class SealedRuntime implements AppRuntime {
   #child: ChildProcess | undefined;
   #starting: Promise<AppToolDefinition[]> | undefined;
   #tools: AppToolDefinition[] | undefined;
+  /** What the module exports besides tools: `provider.chat`, `channel.poll`… (ADR 0119). */
+  #parts: PartName[] = [];
   #pending = new Map<number, Pending>();
   #fetches = new Map<number, AbortController>();
   #lastId = 0;
@@ -384,6 +434,83 @@ export class SealedRuntime implements AppRuntime {
     });
   }
 
+  /** The provider's and chat app's functions the module exports (starts it if needed). */
+  async parts(): Promise<PartName[]> {
+    if (!this.options.manifest.tools) return [];
+    await this.#ensure();
+    return [...this.#parts];
+  }
+
+  /**
+   * Run one of the module's `provider` or `channel` functions (ADR 0119)
+   * with what the person typed for it (`keys`, this call only), streaming a
+   * provider's answer to `onEvent`. Its result is the function's JSON.
+   */
+  async callPart(
+    part: PartName,
+    input: Record<string, unknown>,
+    call: PartCall,
+  ): Promise<AppCallOutcome> {
+    if (!this.options.manifest.tools)
+      return { ok: false, text: `${this.#name} has no code to run.` };
+    try {
+      await this.#ensure();
+    } catch (error) {
+      return { ok: false, text: error instanceof Error ? error.message : String(error) };
+    }
+    if (!this.#parts.includes(part))
+      return {
+        ok: false,
+        text: `${this.#name}’s ${this.options.manifest.tools} doesn’t export ${part}. Add it to export const ${part.split('.')[0]} = { … }.`,
+      };
+    const { signal } = call;
+    if (signal?.aborted) return { ok: false, text: 'Stopped before it started.' };
+    const child = this.#child;
+    if (!child || !this.running)
+      return { ok: false, text: `${this.#name}’s code stopped just then. Try again.` };
+    const id = ++this.#lastId;
+    const ms = Math.max(this.#callMs, PART_MS[part]);
+    this.#touch();
+    return new Promise<AppCallOutcome>((resolve) => {
+      let settled = false;
+      const done = (outcome: AppCallOutcome) => {
+        if (settled) return;
+        settled = true;
+        signal?.removeEventListener('abort', onAbort);
+        resolve(outcome);
+      };
+      const onAbort = () => {
+        const pending = this.#pending.get(id);
+        if (pending) {
+          clearTimeout(pending.timer);
+          this.#pending.delete(id);
+        }
+        done({ ok: false, text: 'Stopped.' });
+      };
+      signal?.addEventListener('abort', onAbort, { once: true });
+      const timer = setTimeout(() => {
+        this.#kill('timeout');
+        done({
+          ok: false,
+          text: `${part} took longer than ${Math.round(ms / 1000)} seconds, so Conch stopped it.`,
+        });
+      }, ms);
+      this.#pending.set(id, {
+        child,
+        timer,
+        long: part === 'provider.chat',
+        ...(call.onEvent && { onEvent: call.onEvent }),
+        done: (outcome) => {
+          clearTimeout(timer);
+          this.#pending.delete(id);
+          this.#touch();
+          done(outcome);
+        },
+      });
+      this.#send(child, { t: 'call', id, part, input, keys: call.keys });
+    });
+  }
+
   async stop(): Promise<void> {
     clearTimeout(this.#idle);
     const child = this.#child;
@@ -448,6 +575,7 @@ export class SealedRuntime implements AppRuntime {
         if (!message) return;
         if (message.t === 'ready') {
           clearTimeout(timer);
+          this.#parts = message.parts ?? [];
           resolve(message.tools);
         } else if (message.t === 'broken') {
           clearTimeout(timer);
@@ -464,6 +592,8 @@ export class SealedRuntime implements AppRuntime {
                 }
               : { ok: false, text: message.message ?? 'The tool failed without saying why.' },
           );
+        } else if (message.t === 'event') {
+          this.#pending.get(message.id)?.onEvent?.(message.event);
         } else this.#fetch(child, message.id, message.request);
       });
       child.on('error', (error) => {
@@ -603,7 +733,12 @@ export class SealedRuntime implements AppRuntime {
     this.#fetches.set(id, controller);
     this.options
       .fetcher(
-        { id: this.options.manifest.id, reaches: this.options.manifest.reaches },
+        {
+          id: this.options.manifest.id,
+          reaches: this.options.manifest.reaches,
+          // A provider's answer (ADR 0119) may take a while to come back.
+          ...([...this.#pending.values()].some((p) => p.long) && { timeoutMs: LONG_FETCH_MS }),
+        },
         { ...request, ...(request.bodyBase64 !== undefined && { bodyBase64: request.bodyBase64 }) },
         controller.signal,
       )

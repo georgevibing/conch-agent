@@ -3,6 +3,7 @@
  * built and tested alone: the package (what's in a folder or an archive), the
  * sealed runtime, the quality bar, where packages come from, and sharing.
  */
+import type { PartCall, PartName } from './runtime';
 import type {
   AppCheckItem,
   ConchAppCheck,
@@ -55,7 +56,8 @@ export interface AppFetchResponse {
 
 /** Makes `app.fetch` requests, only to `reaches`, through the SSRF guard. */
 export type AppFetcher = (
-  app: { id: string; reaches: readonly string[] },
+  /** `timeoutMs`: longer than usual, for a provider's answer (ADR 0119). */
+  app: { id: string; reaches: readonly string[]; timeoutMs?: number },
   request: AppFetchRequest,
   signal: AbortSignal,
 ) => Promise<AppFetchResponse>;
@@ -96,6 +98,14 @@ export interface AppRuntime {
   /** Whether a process is running now. */
   readonly running: boolean;
   stop(): Promise<void>;
+  /** The provider's and chat app's functions it exports (ADR 0119). */
+  parts?(): Promise<PartName[]>;
+  /** Run one of them, with what the person typed for it (ADR 0119). */
+  callPart?(
+    part: PartName,
+    input: Record<string, unknown>,
+    call: PartCall,
+  ): Promise<AppCallOutcome>;
 }
 
 export interface RuntimeOptions {

@@ -180,7 +180,9 @@ export function createFetcher(deps: FetcherDeps = {}): AppFetcher {
         `This app has made ${APP_LIMITS.fetchPerHour} requests in the last hour, so Conch is holding off for a while.`,
       );
 
-    const timeout = AbortSignal.timeout(deps.timeoutMs ?? APP_LIMITS.fetchMs);
+    const timeout = AbortSignal.timeout(
+      Math.min(app.timeoutMs ?? deps.timeoutMs ?? APP_LIMITS.fetchMs, 300_000),
+    );
     const stop = AbortSignal.any([signal, timeout]);
     let current = { url, method, body, headers };
     for (let hop = 0; hop <= 3; hop++) {
