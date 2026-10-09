@@ -1,4 +1,6 @@
 import {
+  AppPartTest,
+  type TestAppPartBody,
   AppCallResult,
   CommunityResults,
   ConchApp,
@@ -44,6 +46,19 @@ export const conchAppsApi = {
   },
   install: (body: z.input<typeof InstallAppBody>) =>
     request(ConchApp, '/api/conch-apps/install', { method: 'POST', body }),
+  /** **Test it** on a card (ADR 0119): a real line from its provider, or who its bot is. */
+  testOffer: (offerId: string, body: z.input<typeof TestAppPartBody>) =>
+    request(AppPartTest, `/api/conch-apps/offers/${encodeURIComponent(offerId)}/test`, {
+      method: 'POST',
+      body,
+    }),
+  /** **Test it** on a preview from a link or a file (ADR 0119). */
+  testPackage: (packageId: string, appId: string, body: z.input<typeof TestAppPartBody>) =>
+    request(
+      AppPartTest,
+      `/api/conch-apps/packages/${encodeURIComponent(packageId)}/${encodeURIComponent(appId)}/test`,
+      { method: 'POST', body },
+    ),
   acceptOffer: (offerId: string, body: z.input<typeof AcceptAppOfferBody>) =>
     request(ConchApp, `/api/conch-apps/offers/${encodeURIComponent(offerId)}/accept`, {
       method: 'POST',

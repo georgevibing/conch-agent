@@ -198,4 +198,11 @@
   .noMatch {
     padding-block: var(--nc-space-4);
   }
+
+  /* Add your own (ADR 0119): the two other ways in, under Make one with Conch. */
+  .ownWays {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-2);
+  }
 }

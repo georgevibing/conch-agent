@@ -638,6 +638,7 @@ function ReplaceKey({ channel }: { channel: Channel }) {
     imessage: '',
     microsoftteams: '',
     matrix: '',
+    app: 'Make a new token where your chat app keeps its bots, and paste it here.',
     wechat: '',
     sms: 'On the Twilio Console’s first page, under Account Info, copy the Auth Token (it was probably changed).',
     mattermost:

@@ -50,6 +50,46 @@ describe('Providers settings', () => {
     expect(screen.getByRole('heading', { name: 'Your providers' })).toBeInTheDocument();
   });
 
+  it('adds any provider your own way: with Conch, by an address, or from a link (ADR 0119)', async () => {
+    mockFetch(
+      routes({
+        'GET /api/providers': () => ({
+          ...baseProviders,
+          providers: [
+            ...baseProviders.providers,
+            provider({
+              id: 'app-fireworks',
+              name: 'Fireworks AI',
+              tagline: 'Fast open models',
+              ready: true,
+              status: {
+                ...provider().status,
+                engine: 'app-fireworks',
+                state: 'ready',
+              },
+              contributed: { app: 'fireworks', from: 'link', speaks: 'openai', reaches: [] },
+            }),
+          ],
+        }),
+      }),
+    );
+    render();
+    // One made from an app says where it came from.
+    expect(await screen.findByRole('article', { name: 'Fireworks AI' })).toHaveTextContent(
+      'Added from a link',
+    );
+    const own = screen.getByRole('region', { name: 'Add your own' });
+    expect(
+      within(own).getByRole('button', { name: 'Any OpenAI-compatible address' }),
+    ).toBeVisible();
+    expect(within(own).getByRole('button', { name: 'Add from a link' })).toBeVisible();
+    await userEvent.click(within(own).getByRole('button', { name: 'Baseten' }));
+    await userEvent.click(within(own).getByRole('button', { name: 'Make it with Conch' }));
+    expect(
+      FakeSocket.last?.sent.some((m) => JSON.stringify(m).includes('Add Baseten as a provider')),
+    ).toBe(true);
+  });
+
   it('finds a provider by what it’s good at, and offers to add a server when nothing matches', async () => {
     mockFetch(routes());
     render();

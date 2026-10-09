@@ -1254,6 +1254,23 @@ export function useFindables(query: string, conversationId: string | undefined):
       run: () => void navigate('/apps?add=describe'),
     },
     {
+      // A provider or a chat app made with Conch (ADR 0119): Add your own, where each lives.
+      id: 'make-provider',
+      label: 'Add any provider with Conch',
+      keywords:
+        'add make new provider model api company openai compatible anthropic compatible custom endpoint fireworks baseten my own',
+      icon: <WandSparkles />,
+      run: () => openSettings('providers'),
+    },
+    {
+      id: 'make-chat-app',
+      label: 'Add any chat app with Conch',
+      keywords:
+        'add make new chat app channel talk to me here bot messenger zulip threema revolt my own connect',
+      icon: <WandSparkles />,
+      run: () => void navigate('/apps?show=talk'),
+    },
+    {
       id: 'add-app-link',
       label: 'Add an app from a link',
       keywords:
