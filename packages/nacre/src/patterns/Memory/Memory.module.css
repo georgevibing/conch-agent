@@ -106,7 +106,8 @@
 
   /* A memory the check held (ADR 0087): calm but clear. What it wants to
      remember, why it looks off in Conch's words, where it came from, and three
-     answers. A refused one is a shade firmer; a settled one folds to a line. */
+     answers. A refused one is a shade firmer. Answered, the chat draws it as
+     its step (Story), never a line of its own. */
   .check {
     display: flex;
     flex-direction: column;
@@ -190,32 +191,5 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--nc-space-1-5);
-  }
-
-  .checkSettled {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--nc-space-2);
-    align-self: flex-start;
-    max-inline-size: 100%;
-    margin: 0;
-    padding: var(--nc-space-0-5) var(--nc-space-2-5);
-    border-radius: var(--nc-radius-full);
-    font-size: var(--nc-text-xs);
-    color: var(--nc-text-muted);
-    background: var(--nc-wash-1);
-    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
-  }
-
-  .checkSettled > svg {
-    flex-shrink: 0;
-    inline-size: 0.85rem;
-    block-size: 0.85rem;
-  }
-
-  .checkSettled > span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 }

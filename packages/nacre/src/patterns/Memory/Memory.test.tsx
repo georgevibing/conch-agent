@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { expectAccessible, renderNacre } from '../../test/render';
+import { Story } from '../Story';
 import { MemoryCheck, SkillSuggestionCard } from './Memory';
 import { RememberedNote } from './Remembered';
 
@@ -87,17 +88,84 @@ describe('MemoryCheck (ADR 0087)', () => {
     await expectAccessible(container);
   });
 
-  it('says plainly when it refused, and folds to a line once answered', async () => {
-    const { container, rerender } = renderNacre(
+  it('says plainly when it refused', async () => {
+    const { container } = renderNacre(
       <MemoryCheck refused content="Token abcd" reasons={['It looks like a password.']} />,
     );
     expect(screen.getByRole('region', { name: 'I didn’t remember this' })).toHaveAttribute(
       'data-refused',
     );
     await expectAccessible(container);
-    rerender(<MemoryCheck settled="dismissed" content="Token abcd" reasons={[]} />);
-    expect(screen.queryByRole('region')).toBeNull();
-    expect(screen.getByText(/Not remembered: Token abcd/)).toBeInTheDocument();
+  });
+
+  // A regression guard: a memory once drew itself as a bordered pill
+  // ("Remembered: …" beside a brain), out of place among the steps. Every memory
+  // line is a step row, the same anatomy as a tool's (ADR 0103).
+  it('a memory, kept or forgotten, is a step row like a tool’s, never a pill', async () => {
+    const text = 'For conch-agent fixes, run the CI checks before pushing';
+    const { container } = renderNacre(
+      <>
+        <Story
+          headline="Confirmed CI passed on main"
+          outcome="CI passed"
+          family="verify"
+          status="done"
+          durationMs={53_000}
+          steps={[{ id: 'ci', text: 'Confirmed CI passed', status: 'success', family: 'verify' }]}
+        />
+        <Story
+          headline="Remembered something"
+          family="remember"
+          status="done"
+          steps={[
+            {
+              id: 'mem',
+              text: 'Remembered something',
+              status: 'success',
+              family: 'remember',
+              explainable: false,
+            },
+          ]}
+          renderFound={() => <RememberedNote text={text} state="kept" onUndo={() => {}} />}
+        />
+        <Story
+          headline="Forgot something"
+          family="remember"
+          status="done"
+          steps={[
+            {
+              id: 'gone',
+              text: 'Forgot something',
+              status: 'success',
+              family: 'remember',
+              explainable: false,
+            },
+          ]}
+          renderFound={() => <RememberedNote text={text} state="forgotten" onUndo={() => {}} />}
+        />
+      </>,
+    );
+    const tool = screen.getByRole('button', { name: /^Confirmed CI passed on main/ });
+    for (const name of [/^Remembered something/, /^Forgot something/]) {
+      const row = screen.getByRole('button', { name });
+      // The same trigger, the same mark in its well with the status badge, the same chevron.
+      expect(row.tagName).toBe(tool.tagName);
+      expect(row).toHaveAttribute('aria-expanded', 'false');
+      expect(row.className).toBe(tool.className);
+      expect(row.firstElementChild?.className).toBe(tool.firstElementChild?.className);
+      expect(row.querySelector('[data-status="done"]')).not.toBeNull();
+      expect(row.closest('[data-family="remember"]')).not.toBeNull();
+    }
+    // Nothing reads as a pill: no "Remembered:" line, no chip of its own.
+    expect(screen.queryByText(/^Remembered:/)).toBeNull();
+    expect(container.querySelector('[data-settled]')).toBeNull();
+
+    // Opened, the memory in full and Undo, under its step.
+    await userEvent.click(screen.getByRole('button', { name: /^Remembered something/ }));
+    expect(screen.getByText(text)).toBeVisible();
+    expect(screen.getByRole('button', { name: `Undo “${text}”` })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Why?' })).toBeNull();
+    await expectAccessible(container);
   });
 
   it('say what a step remembered in full, with a quiet Undo', async () => {
