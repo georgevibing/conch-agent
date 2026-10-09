@@ -884,7 +884,16 @@ export const ConversationEvent = z.discriminatedUnion('type', [
      * Why it ended when you didn't say so: Conch itself restarted mid-turn (an update, a crash,
      * the machine running out of memory). `resumed`: it picks the work up again by itself.
      */
-    restarted: z.object({ resumed: z.boolean() }).optional(),
+    restarted: z
+      .object({
+        resumed: z.boolean(),
+        /**
+         * Conch paused it on purpose at a safe point, not a crash: for its own
+         * `update`, or a `restart` someone asked for. Unset: it stopped under it.
+         */
+        reason: z.enum(['update', 'restart']).optional(),
+      })
+      .optional(),
     /** Which provider answered, and with which model when it said. */
     engine: EngineId.optional(),
     model: z.string().optional(),

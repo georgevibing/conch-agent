@@ -140,6 +140,8 @@ export const Task = z.object({
   modelCompleted: z.boolean().optional(),
   /** Explicit resumes; original turn permissions apply only to the first attempt. */
   attempt: z.number().int().nonnegative().optional(),
+  /** Conch paused it at a safe point to restart (its own update, or a restart asked for): it carries on after. */
+  pausedFor: z.enum(['update', 'restart']).optional(),
   /** The chat it was sent from, where its result comes back. */
   parentConversationId: z.string().optional(),
   /**
