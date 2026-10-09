@@ -289,6 +289,7 @@ export function PairedAppList({
                   loading={busy === app.id}
                   onClick={() => onRemove(app)}
                   aria-label={`Remove ${app.name}`}
+                  className={styles.remove}
                 >
                   Remove
                 </Button>
@@ -321,7 +322,7 @@ export function PairedAppListSkeleton({
     <div aria-hidden data-skeleton="" className={cx(styles.list, className)} {...props}>
       {Array.from({ length: rows }, (_, i) => (
         <div key={i} className={styles.row}>
-          <Skeleton shape="block" className={styles.skeletonLogo} />
+          <Skeleton shape="block" width="2.5rem" height="2.5rem" className={styles.skeletonLogo} />
           <div className={styles.body}>
             <p className={styles.name}>
               <Skeleton width={i % 2 ? '28%' : '36%'} />
@@ -334,7 +335,12 @@ export function PairedAppListSkeleton({
             </p>
           </div>
           <div className={styles.actions}>
-            <Skeleton shape="block" className={styles.skeletonActions} />
+            <Skeleton
+              shape="block"
+              width="9rem"
+              height="var(--nc-control-sm)"
+              className={styles.skeletonActions}
+            />
           </div>
         </div>
       ))}

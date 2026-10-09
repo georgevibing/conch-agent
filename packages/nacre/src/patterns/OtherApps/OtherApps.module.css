@@ -82,19 +82,21 @@
       padding-inline-start: calc(2.5rem + var(--nc-space-3));
       margin-block-start: calc(-1 * var(--nc-space-1));
     }
+
+    /* The bin says it on its own (its name stays for assistive tech), so the row keeps to one line of buttons. */
+    .remove > :not([aria-hidden]) {
+      display: none;
+    }
   }
 
   /* ── While the list loads ──────────────────────────────────────────── */
+  /* Sized where they're drawn (the skeleton's own block size would win here). */
   .skeletonLogo {
     flex-shrink: 0;
-    inline-size: 2.5rem;
-    block-size: 2.5rem;
-    border-radius: var(--nc-radius-md);
   }
 
+  .skeletonLogo,
   .skeletonActions {
-    inline-size: 9rem;
-    block-size: var(--nc-control-sm);
     border-radius: var(--nc-radius-md);
   }
 
