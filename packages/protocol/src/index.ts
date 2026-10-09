@@ -26,6 +26,7 @@ import {
   ToolView,
 } from './chat-cards';
 import { MailEdit } from './views/mail';
+import { ScriptAsk, ScriptCall, ScriptRun } from './scripts';
 import { BrowserHandoff, BrowserPermission, BrowserStatus, BrowserStep } from './browser';
 import { Channel, ChannelDoor, ChannelOrigin } from './channels';
 import { ChatChange, ChatFolder, FolderId } from './chat-list';
@@ -142,6 +143,7 @@ export * from './pick';
 export * from './trajectory';
 export * from './words';
 export * from './workplaces';
+export * from './scripts';
 
 export const PROTOCOL_VERSION = 7;
 
@@ -634,6 +636,13 @@ export const ConversationEvent = z.discriminatedUnion('type', [
   /** A long tool call's progress (a picture being made): the newest one stands. */
   z.object({ ...logged, type: z.literal('tool.progress'), ...ToolProgress.shape }),
   /**
+   * A script that calls tools (ADR 0119), as it stands: started, how far, how it
+   * ended. A later one with the same `runId` replaces it.
+   */
+  z.object({ ...logged, type: z.literal('script.run'), ...ScriptRun.shape }),
+  /** One tool call a script made: as it starts, and again as it ends (same `callId`). */
+  z.object({ ...logged, type: z.literal('script.call'), ...ScriptCall.shape }),
+  /**
    * The provider said, for the person watching, what it's doing (ADR 0103):
    * a progress note between tool calls, never its reasoning. The chat's live
    * line shows the latest; a new one replaces it.
@@ -696,6 +705,8 @@ export const ConversationEvent = z.discriminatedUnion('type', [
      * it goes to): the answer carries the change (`permission.respond` `edit`).
      */
     editable: z.boolean().optional(),
+    /** Asked from inside a script (ADR 0119): which run, and which of its calls. */
+    script: ScriptAsk.optional(),
   }),
   z.object({
     ...logged,
