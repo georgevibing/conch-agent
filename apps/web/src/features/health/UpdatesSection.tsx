@@ -503,8 +503,8 @@ export function UpdatesSection() {
             checked={conch.everyChange}
             disabled={actions.pending === 'every-change'}
             onCheckedChange={(on) => void actions.setEveryChange(on)}
-            label="Every change on main"
-            description="For people working on Conch: every change as it lands, not only signed releases."
+            label="Get changes before they’re released"
+            description="For people working on Conch: each change as soon as it’s made, not only signed releases."
           />
         )}
       </Stack>

@@ -690,7 +690,9 @@ describe('Settings → Health → Updates, following releases', () => {
     await user.click(within(card).getByRole('button', { name: /^Conch 0\.3/ }));
     expect(within(card).getByText('Connect iMessage and email')).toBeVisible();
     // No developer's switch for someone on releases.
-    expect(screen.queryByRole('switch', { name: /Every change on main/ })).toBeNull();
+    expect(
+      screen.queryByRole('switch', { name: /Get changes before they’re released/ }),
+    ).toBeNull();
     await user.click(within(card).getByRole('button', { name: 'Update Conch' }));
     expect(calls.some((c) => c.method === 'POST' && c.path === '/api/updates/conch')).toBe(true);
     expect(
@@ -809,6 +811,8 @@ describe('Settings → Health → Updates, following releases', () => {
     });
     renderApp(<UpdatesSection />);
     expect(await screen.findByText(/follows that branch/)).toBeVisible();
-    expect(screen.getByRole('switch', { name: /Every change on main/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole('switch', { name: /Get changes before they’re released/ }),
+    ).toBeInTheDocument();
   });
 });
