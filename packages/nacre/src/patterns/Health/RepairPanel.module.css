@@ -276,8 +276,9 @@
       padding-inline: var(--nc-space-1);
     }
 
+    /* Still nested under its group's name on a phone: only the far side tightens. */
     .rows {
-      padding-inline: var(--nc-space-3);
+      padding-inline-end: var(--nc-space-3);
     }
 
     .row {
