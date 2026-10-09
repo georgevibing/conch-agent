@@ -30,6 +30,26 @@ function setup(recoveryMode = false) {
 afterEach(() => vi.useRealTimers());
 
 describe('gateway recovery', () => {
+  it('lets a pause the person chose go on while the processor is busy, never short of memory', async () => {
+    let pacedForMemory = false;
+    const { deps } = setup();
+    const recovery = new GatewayRecovery({
+      ...deps,
+      // The pacer isn't settled (a busy processor): ordinary work waits.
+      admit: () => false,
+      admitPlanned: () => !pacedForMemory,
+    });
+    try {
+      await recovery.start(async () => true);
+      expect(recovery.allowsWork).toBe(false);
+      expect(recovery.allowsPlanned).toBe(true);
+      pacedForMemory = true;
+      expect(recovery.allowsPlanned).toBe(false);
+    } finally {
+      recovery.stop();
+    }
+  });
+
   it('keeps native and automatic work paced while HTTP health remains proven', async () => {
     let admitted = false;
     const { deps } = setup();

@@ -29,6 +29,11 @@ export interface GatewayRecoveryDeps {
   probationMs?: number;
   /** The shared resource controller may still be gradually restoring capacity. */
   admit?: () => boolean;
+  /**
+   * Whether work the person paused on purpose may go on: like `admit`, but a busy
+   * processor doesn't hold it, only memory or Conch's own recovery. `admit` when absent.
+   */
+  admitPlanned?: () => boolean;
 }
 
 /** A stalled optional reader must not suppress proof that HTTP still answers. */
@@ -98,7 +103,7 @@ export class GatewayRecovery {
       this.#answering &&
       this.#snapshot !== undefined &&
       this.#snapshot.level !== 'critical' &&
-      (this.deps.admit?.() ?? true)
+      (this.deps.admitPlanned ?? this.deps.admit ?? (() => true))()
     );
   }
 
@@ -108,7 +113,8 @@ export class GatewayRecovery {
     if (this.#mode) return 'Conch is recovering';
     if (!this.#answering) return 'Conch isn’t answering yet';
     if (!this.#snapshot) return 'this computer hasn’t been looked at yet';
-    if (this.deps.admit && !this.deps.admit()) return 'background work is held';
+    if (this.deps.admit && !this.deps.admit())
+      return 'background work is held (the processor is busy, or memory is short)';
     return `${this.#snapshot.level}: ${this.#snapshot.reason}`;
   }
 
