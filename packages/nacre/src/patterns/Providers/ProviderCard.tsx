@@ -5,6 +5,7 @@ import { Badge, type BadgeTone } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { Spinner } from '../../components/Spinner';
 import { cx } from '../../utils/cx';
+import { AppMadeBadge } from '../ConchApps/AppMadeBadge';
 import { IntegrationLogo } from '../Integrations/IntegrationLogo';
 import styles from './ProviderCard.module.css';
 
@@ -82,6 +83,12 @@ export interface ProviderCardProps extends Omit<ComponentProps<'article'>, 'titl
   highlights?: string[];
   /** Early support: said out loud rather than discovered. */
   experimental?: boolean;
+  /**
+   * A Conch app brings it (ADR 0119): **Made by you**, or **Added from a
+   * link**, beside its name, so a provider of your own never passes for one
+   * Conch ships.
+   */
+  origin?: 'made' | 'link';
   /** The one thing to do: "Connect", "Make default", "Install". */
   action?: ProviderAction;
   /** A quieter second action: "Check again", "Remove key". */
@@ -107,6 +114,7 @@ export function ProviderCard({
   message,
   highlights = [],
   experimental,
+  origin,
   action,
   secondary,
   index = 0,
@@ -157,6 +165,7 @@ export function ProviderCard({
               Early support
             </Badge>
           )}
+          {origin && <AppMadeBadge kind={origin === 'made' ? 'made' : 'link'} />}
         </div>
         <p className={styles.tagline}>{tagline}</p>
 

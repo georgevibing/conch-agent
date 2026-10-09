@@ -13,7 +13,7 @@ import type { AppColor, AppGlyph } from './glyphs';
 
 /** One line of what an app can do (`AppAbilityLine`, from `appAbilities`). */
 export interface AppAbilityLine {
-  kind: 'data' | 'reach' | 'nothing-else' | 'needs' | 'looks' | 'changes';
+  kind: 'data' | 'reach' | 'nothing-else' | 'needs' | 'looks' | 'changes' | 'provider' | 'channel';
   text: string;
 }
 

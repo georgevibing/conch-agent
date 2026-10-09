@@ -1,0 +1,121 @@
+@layer nacre.components {
+  /*
+   * Make one with Conch (ADR 0119): a raised card with one line and one
+   * button, a pearl sparkle beside its question. Barely-there lustre.
+   */
+  .maker {
+    --nc-rim-rest: 0.12;
+    --nc-rim-hover: 0.24;
+    --nc-sheen-hover: 0.08;
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-border-subtle),
+      var(--nc-elevation-1);
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    gap: var(--nc-space-2);
+  }
+
+  .mark {
+    display: grid;
+    place-items: center;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-accent-3);
+    color: var(--nc-text-accent);
+  }
+
+  .mark svg {
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
+  }
+
+  .question {
+    font-size: var(--nc-text-md);
+    font-weight: var(--nc-weight-semibold);
+    color: var(--nc-text);
+  }
+
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-2);
+  }
+
+  .box {
+    flex: 1 1 14rem;
+  }
+
+  .examples {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1-5);
+  }
+
+  .example {
+    appearance: none;
+    min-block-size: var(--nc-control-sm);
+    padding: var(--nc-space-1) var(--nc-space-3);
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    color: var(--nc-text-muted);
+    font: inherit;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    cursor: pointer;
+    transition:
+      background var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out),
+      transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
+  }
+
+  .example[aria-pressed='true'] {
+    background: var(--nc-accent-3);
+    box-shadow: inset 0 0 0 1px var(--nc-accent-6);
+    color: var(--nc-text);
+  }
+
+  .example:active:not(:disabled) {
+    transform: scale(0.975);
+    transition-duration: 0ms;
+  }
+
+  .example:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  .example:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  @media (hover: hover) {
+    .example:hover:not(:disabled) {
+      background: var(--nc-surface-hi);
+      color: var(--nc-text);
+    }
+  }
+
+  .note {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-subtle);
+    text-wrap: pretty;
+  }
+}

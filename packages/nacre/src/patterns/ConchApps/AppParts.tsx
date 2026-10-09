@@ -1,6 +1,8 @@
 import {
   AppWindow,
+  BrainCircuit,
   ExternalLink,
+  MessagesSquare,
   Eye,
   Globe,
   GlobeLock,
@@ -30,6 +32,9 @@ import {
 } from './types';
 
 const ABILITY_ICONS: Record<AppAbilityLine['kind'], ReactNode> = {
+  // What it brings (ADR 0119): a provider that answers chats, a chat app to talk on.
+  provider: <BrainCircuit />,
+  channel: <MessagesSquare />,
   data: <HardDrive />,
   reach: <Globe />,
   'nothing-else': <ShieldCheck />,

@@ -15,6 +15,14 @@ import { ReplyChips } from '../ReplyChips';
 import { SkillSignatureBadge } from '../Skills/SkillSignatureBadge';
 import { AppIcon } from './AppIcon';
 import { AppAbilityList, AppChanges, AppSettingsFields, AppTools } from './AppParts';
+import {
+  PartReview,
+  partReady,
+  type PartChannelView,
+  type PartProviderView,
+  type PartTestView,
+  type PartValues,
+} from './PartReview';
 import styles from './ConchApps.module.css';
 import type {
   AppChangesView,
@@ -50,8 +58,18 @@ export interface AppOfferProps extends Omit<ComponentProps<'div'>, 'children'> {
   saved?: readonly string[];
   /** The press is on its way: the card holds still. */
   busy?: boolean;
-  /** **Add to my apps** or **Update**, with what the person typed into the card. */
-  onAdd?: (settings: Record<string, string>) => void;
+  /**
+   * **Add to my apps** or **Update**, with what the person typed into the
+   * card: its settings, and what its provider or chat app needs (ADR 0119).
+   */
+  onAdd?: (settings: Record<string, string>, part?: PartValues) => void;
+  /**
+   * A provider or a chat app it brings (ADR 0119): reviewed on the card, with
+   * its key typed here and **Test it** before **Add**.
+   */
+  brings?: { provider?: PartProviderView; channel?: PartChannelView };
+  /** **Test it**: how a real one-line answer, or the bot's hello, went. */
+  onTest?: (values: PartValues) => Promise<PartTestView>;
   /** **Open the page**: its first page, before it's added. */
   onOpenPage?: (pageId: string) => void;
   onNotNow?: () => void;
@@ -94,6 +112,8 @@ export function AppOffer({
   onNotNow,
   onTry,
   onOpenApp,
+  brings,
+  onTest,
   offerId: _offerId,
   from: _from,
   draftId: _draftId,
@@ -114,6 +134,25 @@ export function AppOffer({
     [ref],
   );
   const [values, setValues] = useState<Record<string, string>>({});
+  const [partValues, setPartValues] = useState<PartValues>({ key: '', fields: {} });
+  const [test, setTest] = useState<PartTestView>({ state: 'idle' });
+  const runTest = async () => {
+    if (!onTest) return;
+    setTest({ state: 'testing' });
+    try {
+      setTest(await onTest(partValues));
+    } catch {
+      setTest({ state: 'failed', message: 'The test didn’t run. Try again.' });
+    }
+  };
+  // What it brings needs something only the person has (a key, a token): test it before adding.
+  const partHasValues = Boolean(
+    brings &&
+    (brings.provider?.key
+      ? !brings.provider.key.optional
+      : (brings.channel?.fields.length ?? 0) > 0),
+  );
+  const partBlocks = Boolean(brings && partHasValues && onTest && test.state !== 'passed');
   // Added while on screen (not read from history): the welcome plays once.
   const [before, setBefore] = useState(state);
   const [arrived, setArrived] = useState(false);
@@ -144,7 +183,15 @@ export function AppOffer({
       const value = values[s.key]?.trim();
       if (value) typed[s.key] = value;
     }
-    onAdd(typed);
+    if (!brings) return onAdd(typed);
+    onAdd(typed, {
+      key: partValues.key.trim(),
+      fields: Object.fromEntries(
+        Object.entries(partValues.fields)
+          .map(([k, v]) => [k, v.trim()] as const)
+          .filter(([, v]) => v),
+      ),
+    });
   };
 
   if (state === 'stale' || state === 'declined')
@@ -212,12 +259,22 @@ export function AppOffer({
           </span>
           <div className={styles.offerHeadText}>
             <p id={titleId} className={styles.offerTitle} role="status">
-              {state === 'updated' ? `${name} is updated to ${version}` : `${name} is in your apps`}
+              {state === 'updated'
+                ? `${name} is updated to ${version}`
+                : brings?.provider
+                  ? `${brings.provider.name} is one of your providers`
+                  : brings?.channel
+                    ? `${brings.channel.name} is connected`
+                    : `${name} is in your apps`}
             </p>
             <p className={styles.offerTagline}>
-              {examples.length
-                ? 'Ask for it in your own words, or try one of these.'
-                : manifest.tagline}
+              {brings?.provider && state === 'added'
+                ? `Pick ${brings.provider.models[0]?.name ?? brings.provider.name} in the model picker, and it answers.`
+                : brings?.channel && state === 'added'
+                  ? `Say hello from ${brings.channel.name}: Conch lets you in, and nobody else.`
+                  : examples.length
+                    ? 'Ask for it in your own words, or try one of these.'
+                    : manifest.tagline}
             </p>
           </div>
           {onOpenApp && (
@@ -311,6 +368,21 @@ export function AppOffer({
           />
           <AppTools tools={tools} />
         </section>
+        {brings && (brings.provider || brings.channel) && (
+          <PartReview
+            {...(brings.provider && { provider: brings.provider })}
+            {...(brings.channel && { channel: brings.channel })}
+            values={partValues}
+            onValuesChange={(next) => {
+              setPartValues(next);
+              // Something new typed: the old test no longer says anything about it.
+              if (test.state !== 'idle' && test.state !== 'testing') setTest({ state: 'idle' });
+            }}
+            test={test}
+            {...(onTest && { onTest: () => void runTest() })}
+            disabled={busy}
+          />
+        )}
         {source.kind !== 'made' && (
           <SkillSignatureBadge
             state={signature.state}
@@ -336,10 +408,23 @@ export function AppOffer({
                 variant="solid"
                 onClick={add}
                 loading={busy}
-                aria-label={update ? `Update ${name}` : `Add ${name} to my apps`}
+                disabled={partBlocks || (brings && !partReady(brings, partValues) && partHasValues)}
+                aria-label={
+                  update
+                    ? `Update ${name}`
+                    : brings?.provider
+                      ? `Add ${brings.provider.name} to my providers`
+                      : brings?.channel
+                        ? `Add ${brings.channel.name} to Talk to me here`
+                        : `Add ${name} to my apps`
+                }
                 data-primary
               >
-                {update ? 'Update' : 'Add to my apps'}
+                {update
+                  ? 'Update'
+                  : brings?.provider || brings?.channel
+                    ? `Add ${name}`
+                    : 'Add to my apps'}
               </Button>
             )}
             {page && onOpenPage && (
