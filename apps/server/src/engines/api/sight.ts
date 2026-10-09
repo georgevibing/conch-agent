@@ -10,8 +10,85 @@
  */
 import type { Usage } from '@conch/protocol';
 
+import { MODEL_FIT } from '../../attachments/fit';
 import type { DescribeImages, Picture } from '../types';
 import type { Callable } from './engine';
+
+/**
+ * The most of a picture a model reads (ADR 0070). Past it the provider scales
+ * the picture down itself, so the model reads its pixels in a space the tool
+ * never told it about (and a computer-use tool's picture is refused): Conch
+ * sends it at this size instead, and keeps the scale for coordinates.
+ */
+export interface PictureLimit {
+  /** Longest edge, in pixels. */
+  edge: number;
+  /** Most of Claude's visual tokens: ⌈width ÷ 28⌉ × ⌈height ÷ 28⌉. */
+  tokens?: number;
+}
+
+/** Claude before 4.7: 1568 px on the long edge, and 1568 visual tokens. */
+export const STANDARD_SIGHT: PictureLimit = { edge: 1568, tokens: 1568 };
+
+/**
+ * Claude 4.7 and later read up to 2576 px and 4784 tokens; Conch keeps to
+ * 2000 px, past which a request with more than 20 pictures is refused.
+ */
+export const HIGH_SIGHT: PictureLimit = { edge: MODEL_FIT.edge, tokens: 4784 };
+
+/** Every other model: what they read at most (OpenAI 2048 px), the same 2000 px. */
+export const OTHER_SIGHT: PictureLimit = { edge: MODEL_FIT.edge };
+
+/** A Claude model's [major, minor] version from any provider's id for it; undefined for another model. */
+export function claudeVersion(model: string): [number, number] | undefined {
+  const id = model.toLowerCase();
+  // claude-opus-4-7, anthropic/claude-opus-4.7, us.anthropic.claude-sonnet-4-5-20250929-v1:0
+  const named = /claude-[a-z]+-(\d+)(?:[-.](\d{1,2})(?!\d))?/.exec(id);
+  // claude-3-5-sonnet-20241022, claude-3-opus
+  const old = /claude-(\d+)(?:[-.](\d)(?!\d))?-[a-z]/.exec(id);
+  const found = named ?? old;
+  if (!found) return undefined;
+  return [Number(found[1]), Number(found[2] ?? 0)];
+}
+
+/** The most of a picture `model` reads; the newest Claude's when it isn't known which. */
+export function pictureLimit(model: string | undefined): PictureLimit {
+  if (!model) return HIGH_SIGHT;
+  const version = claudeVersion(model);
+  if (version) {
+    const [major, minor] = version;
+    return major < 4 || (major === 4 && minor < 7) ? STANDARD_SIGHT : HIGH_SIGHT;
+  }
+  // An alias (`opus`, `sonnet`, `default`) is a current Claude.
+  return /^(?:opus|sonnet|haiku|fable|default)\b/i.test(model) ? HIGH_SIGHT : OTHER_SIGHT;
+}
+
+/** What a picture of `width`×`height` costs Claude, in visual tokens. */
+export function pictureTokens(width: number, height: number): number {
+  return Math.ceil(width / 28) * Math.ceil(height / 28);
+}
+
+/**
+ * The size a `width`×`height` picture goes to a model at: as it is when it
+ * fits `limit`, else scaled down (never up) until it does, its shape kept.
+ */
+export function fitPictureTo(
+  width: number,
+  height: number,
+  limit: PictureLimit,
+): { width: number; height: number } {
+  const fits = (w: number, h: number) =>
+    Math.max(w, h) <= limit.edge && (!limit.tokens || pictureTokens(w, h) <= limit.tokens);
+  if (fits(width, height)) return { width, height };
+  let scale = limit.edge / Math.max(width, height);
+  if (limit.tokens) scale = Math.min(scale, Math.sqrt((limit.tokens * 28 * 28) / (width * height)));
+  for (;;) {
+    const w = Math.max(1, Math.floor(width * scale));
+    const h = Math.max(1, Math.floor(height * scale));
+    if (fits(w, h) || (w === 1 && h === 1)) return { width: w, height: h };
+    scale *= 0.99;
+  }
+}
 
 /** When no model can look at a screenshot: say so, and what to use instead. */
 export const NO_SIGHT =

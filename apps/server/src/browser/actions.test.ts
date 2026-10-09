@@ -11,8 +11,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AskRequest, ToolContext } from '../conversations/manager';
 import type { Engine, HostTool, PermissionDecision } from '../engines/types';
 import { hostToolText } from '../engines/types';
+import { loadSharp } from '../attachments/fit';
+import { pictureTokens } from '../engines/api/sight';
 import { findBrowsers } from './locate';
 import { BrowserService } from './service';
+import { shootPage } from './shot';
 import { MAX_TABS } from './tab';
 
 /**
@@ -122,6 +125,7 @@ function harness(
   answers: PermissionDecision[] = [],
   mode: PermissionMode = 'default',
   untrusted?: string,
+  model?: string,
 ) {
   const asked: AskRequest[] = [];
   const events: ConversationEventInput[] = [];
@@ -137,6 +141,7 @@ function harness(
     signal: new AbortController().signal,
     workspace: () => Promise.resolve(work),
     ...(untrusted && { untrusted: () => untrusted }),
+    ...(model && { model }),
   };
   const tools = new Map(browser.tools(ctx).map((t) => [t.name, t]));
   const call = async (name: string, args: Record<string, unknown>) =>
@@ -292,6 +297,49 @@ describe.skipIf(!hasBrowser)('a person’s hands, for real', () => {
   });
 });
 
+describe.skipIf(!hasBrowser)('a screenshot at the page’s own size', () => {
+  it(
+    'is one picture pixel per CSS pixel on a screen of twice the density',
+    { timeout: 60_000 },
+    async () => {
+      const sharp = await loadSharp();
+      if (!sharp) return;
+      const found = findBrowsers({ downloaded: () => chromium.executablePath() })[0];
+      const dense = await chromium.launch(found ? { executablePath: found.path } : {});
+      try {
+        const context = await dense.newContext({
+          viewport: { width: 1280, height: 800 },
+          deviceScaleFactor: 2,
+        });
+        const page = await context.newPage();
+        await page.goto(`${origin}/canvas`);
+        const viewport = { width: 1280, height: 800 };
+        const raw = await sharp(await page.screenshot({ type: 'jpeg' })).metadata();
+        expect(raw.width).toBe(2560);
+        const shot = await shootPage(page, { viewport, model: 'claude-opus-4-7' });
+        const meta = await sharp(shot.jpeg).metadata();
+        expect({ width: meta.width, height: meta.height }).toEqual(viewport);
+        expect({ width: shot.width, height: shot.height }).toEqual(viewport);
+        // A quarter of the pixels: 1334 visual tokens, not the 4784 a 2560×1600 picture costs.
+        expect(pictureTokens(shot.width, shot.height)).toBe(1334);
+        // An older model gets the picture it reads, said in the size it is.
+        const older = await shootPage(page, {
+          viewport: { width: 1440, height: 900 },
+          model: 'claude-sonnet-4-5',
+        });
+        const small = await sharp(older.jpeg).metadata();
+        expect({ width: small.width, height: small.height }).toEqual({
+          width: older.width,
+          height: older.height,
+        });
+        expect(pictureTokens(older.width, older.height)).toBeLessThanOrEqual(1568);
+      } finally {
+        await dense.close();
+      }
+    },
+  );
+});
+
 describe.skipIf(!hasBrowser)('clicking by position, for real', () => {
   it(
     'clicks a canvas where the screenshot says, scaled to the page as it is now',
@@ -314,6 +362,40 @@ describe.skipIf(!hasBrowser)('clicking by position, for real', () => {
       expect(await call('browser_click_at', { x: 99_99, y: 5, element: 'far away' })).toMatch(
         /outside the page/,
       );
+    },
+  );
+
+  it(
+    'sends a tall page at the size an older model reads, and a click still lands on the page',
+    { timeout: 60_000 },
+    async () => {
+      const { call, tab } = harness(
+        'conv_canvas_fit',
+        ['allow'],
+        'default',
+        undefined,
+        'claude-sonnet-4-6',
+      );
+      await call('browser_open', { url: `${origin}/canvas` });
+      const t = tab();
+      if (!t) throw new Error('no tab');
+      t.viewport = { width: 1440, height: 2160 };
+      await t.page.setViewportSize(t.viewport);
+      const shot = await call('browser_screenshot', {});
+      const [, w, h] = (/(\d+)×(\d+) pixels/.exec(shot) ?? []).map(Number);
+      if (!w || !h) throw new Error(`no size in ${shot}`);
+      expect(w).toBeLessThan(1440);
+      expect(Math.max(w, h)).toBeLessThanOrEqual(1568);
+      expect(pictureTokens(w, h)).toBeLessThanOrEqual(1568);
+      // The model reads (100, 50) on the canvas off the smaller picture: it lands there.
+      const x = Math.round((100 * w) / 1440);
+      const y = Math.round((50 * h) / 2160);
+      await call('browser_click_at', { x, y, element: 'the canvas' });
+      const [, cx, cy] = (/Canvas (\d+),(\d+)/.exec(await t.page.title()) ?? []).map(Number);
+      expect(Math.abs((cx ?? -9) - 100)).toBeLessThanOrEqual(2);
+      expect(Math.abs((cy ?? -9) - 50)).toBeLessThanOrEqual(2);
+      t.viewport = { width: 1280, height: 800 };
+      await t.page.setViewportSize(t.viewport);
     },
   );
 

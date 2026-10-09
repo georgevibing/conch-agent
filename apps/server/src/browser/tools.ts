@@ -23,6 +23,7 @@ import { markSecrets, readChanges, readPage } from './snapshot';
 import { MAX_TABS, type Tab } from './tab';
 import { resolveUploads, UploadRefused, type UploadFile } from './uploads';
 import { watchHandoff } from './handoff';
+import { shootPage } from './shot';
 import { BrowserStepBudget, BrowserStepStopped } from './step-budget';
 
 /** The page's host, for a fill: https only, or this computer itself. */
@@ -1068,22 +1069,23 @@ export function browserTools(
         async (tab) => {
           await markSecrets(tab.page);
           const mask = tab.page.frames().map((frame) => frame.locator(`[${SECRET_ATTR}]`));
-          const image = await tab.page.screenshot({
-            type: 'jpeg',
-            quality: 70,
+          // One picture pixel is one CSS pixel, whatever the screen's density, and
+          // no more than the model reads (`shot.ts`): browser_click_at's x,y are in
+          // this picture's pixels, whatever the panel does next. (Your own Chrome
+          // isn't emulated, so its size is what was measured, not `viewportSize`.)
+          const viewport = tab.page.viewportSize() ?? tab.viewport;
+          const shot = await shootPage(tab.page, {
+            viewport,
+            model: ctx.model,
             mask,
             maskColor: '#9a8f88',
           });
           const title = await tab.page.title().catch(() => '');
-          // One picture pixel is one CSS pixel (the browser runs at scale 1), so a
-          // position read off the picture is a position on the page. browser_click_at's
-          // x,y are in this picture's pixels, whatever the panel does next. (Your own
-          // Chrome isn't emulated, so its size is what was measured, not `viewportSize`.)
-          const { width, height } = tab.page.viewportSize() ?? tab.viewport;
+          const { width, height } = shot;
           tab.shotViewport = { width, height };
           return {
             text: `Screenshot of “${title}” (${tab.page.url()}): the visible part of the page, ${width}×${height} pixels, x across from the left and y down from the top. Where there’s no ref to use (a canvas, an unlabelled control), browser_click_at acts at x,y in these pixels.`,
-            images: [{ data: image.toString('base64'), mimeType: 'image/jpeg' }],
+            images: [{ data: shot.jpeg.toString('base64'), mimeType: 'image/jpeg' }],
           };
         },
       ),
