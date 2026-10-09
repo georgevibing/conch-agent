@@ -7,6 +7,7 @@ import {
   Clapperboard,
   File,
   FileCode2,
+  FileX2,
   FileSpreadsheet,
   FileText,
   Image as ImageIcon,
@@ -23,7 +24,11 @@ import { cx } from '../../utils/cx';
 import styles from './Attachments.module.css';
 import { type AttachmentInfo, badgeOf, familyOf, type FileFamily, metaOf } from './fileType';
 
-export type AttachmentStatus = 'uploading' | 'ready' | 'error';
+/**
+ * `lost`: it was on a message kept from before (a draft) and is no longer on
+ * this computer. The card says so in words and offers only to take it off.
+ */
+export type AttachmentStatus = 'uploading' | 'ready' | 'error' | 'lost';
 
 export interface AttachmentCardProps
   extends AttachmentInfo, Omit<ComponentProps<'div'>, 'children' | keyof AttachmentInfo> {
@@ -34,7 +39,7 @@ export interface AttachmentCardProps
   status?: AttachmentStatus;
   /** Upload progress, 0–1. Without it an uploading card just spins. */
   progress?: number;
-  /** Why it failed, in a few words. */
+  /** Why it failed, in a few words (for `lost`, what to do instead). */
   error?: string;
   /** A quiet caveat, e.g. that the chosen model can't see images. */
   note?: string;
@@ -113,6 +118,7 @@ export function AttachmentCard({
   const shownName = pasted ? 'Pasted text' : name;
   const photo = kind === 'image' && src;
   const aspect = photo && width && height ? width / height : undefined;
+  const lost = status === 'lost';
 
   const label = [
     shownName,
@@ -120,6 +126,8 @@ export function AttachmentCard({
     meta,
     status === 'uploading' ? 'uploading' : undefined,
     status === 'error' ? (error ?? 'upload failed') : undefined,
+    lost ? 'no longer here' : undefined,
+    lost ? error : undefined,
     note,
   ]
     .filter(Boolean)
@@ -133,7 +141,25 @@ export function AttachmentCard({
   };
 
   let face: ReactNode;
-  if (photo) {
+  if (lost) {
+    // Its picture or its words are gone with it: only what it was is left to show.
+    face = (
+      <>
+        <span className={styles.head}>
+          <span className={styles.glyph} aria-hidden>
+            <Glyph />
+          </span>
+          <span className={styles.name} data-clamp="2">
+            {shownName}
+          </span>
+        </span>
+        <span className={styles.lostLine} aria-hidden>
+          <FileX2 />
+          No longer here
+        </span>
+      </>
+    );
+  } else if (photo) {
     face = <img className={styles.photo} src={src} alt="" draggable={false} decoding="async" />;
   } else if (kind === 'text' && excerpt !== undefined) {
     face = (
@@ -198,7 +224,7 @@ export function AttachmentCard({
           <AlertCircle />
         </span>
       )}
-      {note && status !== 'error' && <span className={styles.noteDot} aria-hidden />}
+      {note && status !== 'error' && !lost && <span className={styles.noteDot} aria-hidden />}
     </button>
   );
 
@@ -209,7 +235,7 @@ export function AttachmentCard({
       data-family={family}
       data-status={status}
       data-density={density}
-      data-photo={photo ? '' : undefined}
+      data-photo={photo && !lost ? '' : undefined}
       data-note={note ? '' : undefined}
       className={cx(styles.card, className)}
       style={
@@ -219,7 +245,7 @@ export function AttachmentCard({
       }
       {...props}
     >
-      <Tooltip content={status === 'error' ? error : note}>{openButton}</Tooltip>
+      <Tooltip content={status === 'error' || lost ? error : note}>{openButton}</Tooltip>
       {status === 'error' && onRetry && (
         <IconButton
           size="sm"

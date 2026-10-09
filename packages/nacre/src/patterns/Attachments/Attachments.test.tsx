@@ -96,6 +96,33 @@ describe('AttachmentCard', () => {
     await user.click(screen.getByRole('button', { name: 'Try uploading a.txt again' }));
     expect(onRetry).toHaveBeenCalled();
   });
+
+  it('says in words when it is no longer here, and offers to take it off', async () => {
+    const user = userEvent.setup();
+    const onRemove = vi.fn();
+    const { container } = renderNacre(
+      <AttachmentList>
+        <AttachmentCard
+          name="cat.png"
+          kind="image"
+          src="blob:gone"
+          status="lost"
+          error="Remove it, then attach it again."
+          onRemove={onRemove}
+        />
+      </AttachmentList>,
+    );
+    expect(screen.getByText('No longer here')).toBeInTheDocument();
+    // Its picture went with it: no broken image.
+    expect(container.querySelector('img')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: /cat\.png.*no longer here.*attach it again/ }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Try uploading/ })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Remove cat.png' }));
+    expect(onRemove).toHaveBeenCalled();
+    await expectAccessible(container);
+  });
 });
 
 describe('AttachmentPreview', () => {

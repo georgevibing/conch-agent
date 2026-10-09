@@ -155,6 +155,23 @@ describe('ChatList', () => {
     expect(screen.getByRole('link', { name: 'Venue prices, Didn’t finish' })).toBeInTheDocument();
   });
 
+  it('marks a chat with an unsent draft in words, beside a pencil', async () => {
+    const { container } = renderNacre(
+      <ChatListSection label="Today">
+        <ChatRow draft status="unread">
+          <a href="#a">Lisbon</a>
+        </ChatRow>
+        <ChatRow>
+          <a href="#b">Groceries</a>
+        </ChatRow>
+      </ChatListSection>,
+    );
+    expect(screen.getByRole('link', { name: 'Lisbon Draft, New' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Groceries' })).toBeInTheDocument();
+    expect(screen.getByText('Draft').querySelector('svg')).toHaveAttribute('aria-hidden');
+    await expectAccessible(container);
+  });
+
   it('keeps the working pearl out of the title’s way, at the mark’s place', () => {
     renderNacre(
       <ChatListSection label="Today">

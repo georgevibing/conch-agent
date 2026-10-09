@@ -134,6 +134,7 @@ interface Chat {
   leading?: ReactNode;
   active?: boolean;
   pinned?: boolean;
+  draft?: boolean;
 }
 
 function Row({ chat }: { chat: Chat }) {
@@ -142,6 +143,7 @@ function Row({ chat }: { chat: Chat }) {
       status={chat.status}
       leading={chat.leading}
       active={chat.active}
+      draft={chat.draft}
       dragIds={[chat.id]}
       menu={<RowMenu title={chat.title} pinned={chat.pinned} />}
       contextMenu={<RowContext pinned={chat.pinned} />}
@@ -204,6 +206,22 @@ export const Statuses: Story = {
       <Row chat={{ id: 'd', title: 'Scrape the venue prices', status: 'error' }} />
       <Row chat={{ id: 'e', title: 'Plan a week in Lisbon', active: true }} />
       <Row chat={{ id: 'f', title: 'Groceries for Sunday', leading: telegram }} />
+    </ChatListSection>
+  ),
+};
+
+/**
+ * Written and not sent: a quiet pencil and the word **Draft** after the
+ * title, as in Slack and Messages, so a half-finished message is found again.
+ * Muted and in words, never a colour of its own; it sits beside any status.
+ */
+export const Drafts: Story = {
+  render: () => (
+    <ChatListSection label="Today">
+      <Row chat={{ id: 'a', title: 'Plan a week in Lisbon', draft: true }} />
+      <Row chat={{ id: 'b', title: 'Reply to the landlord about the boiler', draft: true }} />
+      <Row chat={{ id: 'c', title: 'Weekly reading list', status: 'unread', draft: true }} />
+      <Row chat={{ id: 'd', title: 'Groceries for Sunday' }} />
     </ChatListSection>
   ),
 };

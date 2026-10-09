@@ -1,3 +1,4 @@
+import { PencilLine } from 'lucide-react';
 import { Slot } from 'radix-ui';
 import {
   cloneElement,
@@ -74,6 +75,11 @@ export interface ChatRowProps extends Omit<ComponentProps<'li'>, 'children' | 'c
   leading?: ReactNode;
   /** After the title, inside the link: a count, a small note. */
   trailing?: ReactNode;
+  /**
+   * Something is written here and not sent yet: a quiet pencil and the word
+   * **Draft** after the title, as in Slack and Messages. Never colour alone.
+   */
+  draft?: boolean;
   /** Quieter than a chat: the way into the archive at the end of the list. */
   quiet?: boolean;
   /** The ⋯ menu (a `DropdownMenu`), at the row's end. Shows on hover and focus, always on touch. */
@@ -137,6 +143,7 @@ export function ChatRow({
   status,
   leading,
   trailing,
+  draft,
   quiet,
   menu,
   contextMenu,
@@ -295,6 +302,13 @@ export function ChatRow({
               {children.props.children}
             </span>
             {/* A space, so a screen reader hears “Archived 12 chats”, not “Archived12”. */}
+            {draft && ' '}
+            {draft && (
+              <span className={styles.draft}>
+                <PencilLine aria-hidden />
+                Draft
+              </span>
+            )}
             {trailing && ' '}
             {trailing && <span className={styles.trailing}>{trailing}</span>}
             {status && <span className="nc-visually-hidden">, {CHAT_STATUS_WORDS[status]}</span>}
