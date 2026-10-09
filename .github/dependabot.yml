@@ -1,12 +1,18 @@
-# Keeps the workflows' actions current. npm packages are updated on purpose,
-# not by a bot (AGENTS.md working agreement 3); Dependabot's security updates
-# still open a pull request when a dependency has a known vulnerability.
+# Keeps the workflows' actions current: every action is pinned to a full
+# commit with its version beside it, and Dependabot moves both together. A new
+# release waits a week first, as pnpm's minimum release age does for packages,
+# so a compromised release is usually caught before it reaches us. npm packages
+# are updated on purpose, not by a bot (AGENTS.md working agreement 3);
+# Dependabot's security updates still open a pull request when a dependency has
+# a known vulnerability.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns: ['*']
