@@ -31,7 +31,6 @@ import {
   AssistantWords,
   Arrival,
   AssistantPlaceholder,
-  HeldMemoryItem,
   TaintItems,
   SkillUsedLine,
   PermissionCard,
@@ -50,6 +49,7 @@ import { NeedsAppsItem } from './NeedsApps';
 import { CappedItem, SpendNoteItem } from '../spend/Spend';
 import { QuestionItem } from '../questions/QuestionItem';
 import { PastChatsItem } from './PastChatsItem';
+import { HeldMemoryItem } from './MemoryStep';
 import { isMemoryStep, memoryCall } from './MemorySteps';
 import { LearnedChatLine } from '../learning/LearnedChatLine';
 import { HeldItem, RoutedItem } from './OfflineBits';

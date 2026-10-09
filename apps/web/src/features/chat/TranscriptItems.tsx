@@ -35,7 +35,6 @@ import { drawnAsFile, FileToolItem } from './FileToolItem';
 import { drawnAsPicture, ImageToolItem } from './ImageToolItem';
 import { formatInput, managedProcessSummary, toolDiff, toolSummary } from './tools';
 import { ToolFound } from './ToolFound';
-import { HeldMemory } from '../memory/HeldMemory';
 import styles from './Transcript.module.css';
 import { useToolLabel } from '../integrations/ChatBits';
 import { ReadAloud } from '../voice/ReadAloud';
@@ -480,27 +479,6 @@ export function TaintItems({
       reads={items.map((item) => item.source)}
       first={first}
       {...(carried && { from: taskChat ? 'chat' : 'task' })}
-    />
-  );
-}
-
-/**
- * A memory the check held, asking (ADR 0087, ADR 0097): one card, saying why.
- * Nothing routine waits here; what it remembered or forgot is a step in the
- * run's stories (`MemorySteps`).
- */
-export function HeldMemoryItem({ item }: { item: Of<'memory'> }) {
-  return (
-    <HeldMemory
-      memoryId={item.memoryId}
-      content={item.content}
-      held={
-        item.held ?? {
-          verdict: 'ask',
-          reasons: [{ code: 'outside', words: 'Conch wasn’t sure about this one.' }],
-        }
-      }
-      {...(item.decided && { decided: item.decided })}
     />
   );
 }

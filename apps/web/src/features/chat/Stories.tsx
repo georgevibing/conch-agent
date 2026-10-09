@@ -15,7 +15,7 @@ import { explainStep } from './explain';
 import { headlineOf, liveOf, quietFollowers, standsAlone, stepViews, storyStatus } from './telling';
 import { ToolFound } from './ToolFound';
 import { mailMoment } from './MailItems';
-import { MemoryFound } from './MemorySteps';
+import { MemoryFound, turnedDown } from './MemorySteps';
 import { formatInput, managedProcessSummary, toolDiff, toolSummary } from './tools';
 import styles from './Transcript.module.css';
 import { useArrivedLive } from './TranscriptItems';
@@ -146,10 +146,17 @@ export function RunStories({
   const item = (story: Story): StoryStackItem => {
     const words = headlineOf(story, titles?.[story.id]);
     const live = liveOf(story, narration, asked, byId);
-    const steps = stepViews(story, byId, asked).map((step) =>
+    const steps = stepViews(story, byId, asked).map((step) => {
+      const memory = memories?.get(step.id);
       // Said by its own event: there's no call in the log for Why? to ask about.
-      memories?.has(step.id) ? { ...step, explainable: false } : step,
-    );
+      if (!memory) return step;
+      // One you turned down never happened: over, and neutral, like any step you said no to.
+      return {
+        ...step,
+        explainable: false,
+        ...(turnedDown(memory) && { status: 'declined' as const }),
+      };
+    });
     const status = storyStatus(story, steps);
     // The latest story of a run that goes on: between steps it's still at work.
     // Not one you just said no to: that answer shows at once.
