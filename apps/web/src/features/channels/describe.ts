@@ -23,7 +23,15 @@ export const APPS: Record<ChannelKind, { name: string; color: string }> = {
   feishu: { name: 'Feishu / Lark', color: '#3370FF' },
   dingtalk: { name: 'DingTalk', color: '#0089FF' },
   qq: { name: 'QQ', color: '#12B7F5' },
+  // A chat app a Conch app brings (ADR 0122): its own name is `channelLabel`.
+  app: { name: 'Your chat app', color: '#687076' },
 };
+
+/** What a channel's app is called: a chat app a Conch app brings goes by its own name (ADR 0122). */
+export const channelLabel = (channel: Pick<Channel, 'kind' | 'contributed'>): string =>
+  channel.kind === 'app' && channel.contributed
+    ? channel.contributed.name
+    : APPS[channel.kind].name;
 
 /** More words people would type to find each app (⌘K). */
 export const APP_WORDS: Partial<Record<string, string>> = {

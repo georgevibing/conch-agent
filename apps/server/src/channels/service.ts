@@ -5,6 +5,7 @@ import {
   type UpdateSettingsBody,
   type Channel,
   type ChannelBot,
+  type ChannelCatalogEntry,
   type ChannelCheck,
   type ChannelField,
   type ChannelHealth,
@@ -57,7 +58,7 @@ import { pausedWords } from '../routines/spend';
 import type { AgentStore } from '../agents/store';
 import type { SettingsStore } from '../settings/store';
 import { VoiceError, type Hearing } from '../voice/service';
-import { CHANNEL_CATALOG, CHANNEL_NAMES, catalogFor } from './catalog';
+import { CHANNEL_CATALOG, CHANNEL_NAMES, catalogFor, channelName } from './catalog';
 import { isLinked, ownAccount } from './linked';
 import { normalizeMatrix } from './matrix';
 import type { ChannelStore, StoredChannel } from './store';
@@ -267,6 +268,19 @@ export function normalizeSecrets(secrets: ChannelSecrets, kept?: ChannelSecrets)
     };
   if (secrets.kind === 'line')
     return normalizeLine(secrets, kept?.kind === 'line' ? kept : undefined);
+  // A Conch app's chat app (ADR 0122): what was typed, trimmed, and an address of its own.
+  if (secrets.kind === 'app')
+    return {
+      kind: 'app',
+      app: secrets.app,
+      fields: Object.fromEntries(
+        Object.entries(secrets.fields).map(([key, value]) => [key, value.trim()]),
+      ),
+      hookId:
+        (kept?.kind === 'app' ? kept.hookId : undefined) ??
+        secrets.hookId ??
+        randomBytes(18).toString('base64url'),
+    };
   const pick = (value: string, pattern: RegExp) => pattern.exec(value)?.[1] ?? value.trim();
   if (secrets.kind === 'telegram')
     return { kind: 'telegram', token: pick(secrets.token, TELEGRAM_TOKEN) };
@@ -378,6 +392,20 @@ export class ChannelService {
       platform?: NodeJS.Platform;
       /** Hearing voice notes on this computer (ADR 0077). */
       voice?: VoiceNotes;
+      /**
+       * Chat apps Conch apps bring (ADR 0122): their tiles in the catalog,
+       * and what each is called.
+       */
+      apps?: {
+        catalog(): ChannelCatalogEntry[];
+        name(app: string): string | undefined;
+        /**
+         * Made here, by the person (`ownedHere`): its code is theirs. Anyone
+         * else's chat app could say who's writing and press for them, so its
+         * questions and settings wait for them in Conch.
+         */
+        trusted(app: string): boolean;
+      };
       /** Speaking an answer as a voice note (ADR 0077). */
       speech?: {
         voiceNote(markdown: string, format: NoteFormat): Promise<VoiceNote | undefined>;
@@ -438,7 +466,10 @@ export class ChannelService {
     await this.#learnMail(channels);
     return {
       channels: channels.map((c) => this.#view(c)),
-      catalog: catalogFor(this.deps.platform ?? process.platform),
+      catalog: [
+        ...catalogFor(this.deps.platform ?? process.platform),
+        ...(this.deps.apps?.catalog() ?? []),
+      ],
     };
   }
 
@@ -529,7 +560,7 @@ export class ChannelService {
       : (live?.health ?? {
           state: 'needs-token',
           message: isLinked(stored.kind)
-            ? `Conch lost its ${CHANNEL_NAMES[stored.kind]} link. Link it again to reconnect.`
+            ? `Conch lost its ${channelName(stored)} link. Link it again to reconnect.`
             : 'Conch lost this bot’s key. Paste it again to reconnect.',
         });
     const app = this.#appOf(stored);
@@ -537,6 +568,7 @@ export class ChannelService {
       id: stored.id,
       kind: stored.kind,
       ...(app && { app }),
+      ...(stored.contributed && { contributed: stored.contributed }),
       enabled: stored.enabled,
       createdAt: stored.createdAt,
       bot: stored.bot,
@@ -575,7 +607,21 @@ export class ChannelService {
   #appOf(stored: StoredChannel): string | undefined {
     if (stored.kind === 'slack') return 'slack';
     if (stored.kind === 'email' && this.#mail.get(stored.id) === 'gmail') return 'gmail';
+    // A Conch app's chat app (ADR 0122) is that app's Talk to me here.
+    if (stored.kind === 'app' && stored.contributed) return `capp_${stored.contributed.app}`;
     return undefined;
+  }
+
+  /**
+   * Whether a channel's own code may speak for its owner (ADR 0122): every
+   * built-in's, and a chat app made here. Anyone else's chat app runs code
+   * that says who's writing (and could press a button for them), so what
+   * grants trust or approves a step never goes through it: questions and
+   * settings wait for the owner in Conch.
+   */
+  #vouched(stored: Pick<StoredChannel, 'kind' | 'contributed'>): boolean {
+    if (stored.kind !== 'app') return true;
+    return Boolean(stored.contributed && this.deps.apps?.trusted(stored.contributed.app));
   }
 
   async #require(id: string): Promise<StoredChannel> {
@@ -605,7 +651,7 @@ export class ChannelService {
     return (await this.deps.store.all())
       .filter((c) => c.enabled && c.people.length > 0)
       .map((c) => ({
-        app: CHANNEL_NAMES[c.kind],
+        app: channelName(c),
         bot: c.bot.username ? `@${c.bot.username}` : c.bot.name,
         others: c.people.slice(1).map((p) => p.name),
         ...(c.chatOptions.permissionMode === 'bypassPermissions' && { fullTrust: true }),
@@ -727,6 +773,12 @@ export class ChannelService {
             }),
           },
           chats: {},
+          ...(secrets.kind === 'app' && {
+            contributed: {
+              app: secrets.app,
+              name: (this.deps.apps?.name(secrets.app) ?? secrets.app).slice(0, 40),
+            },
+          }),
         },
         secrets,
       );
@@ -806,7 +858,7 @@ export class ChannelService {
           enabled: true,
         }))) ?? relink;
       this.#connect(stored, secrets);
-      this.deps.onHeal(`${CHANNEL_NAMES[stored.kind]} is linked again`);
+      this.deps.onHeal(`${channelName(stored)} is linked again`);
       await this.#emit(stored.id);
       return this.#view(stored);
     }
@@ -1043,7 +1095,7 @@ export class ChannelService {
     if (isLinked(current.kind) || isLinked(input.kind))
       throw new ChannelServiceError(
         'invalid',
-        `${CHANNEL_NAMES[current.kind]} has no key to paste: link it again with the code on its page.`,
+        `${channelName(current)} has no key to paste: link it again with the code on its page.`,
       );
     // A key on its own (an app password, an Auth Token, a bot's token): the rest stays.
     const kept = await this.deps.store.secrets(id);
@@ -1086,7 +1138,7 @@ export class ChannelService {
     const stored =
       (await this.deps.store.update(id, (c) => ({ ...c, bot, enabled: true }))) ?? current;
     this.#connect(stored, secrets);
-    this.deps.onHeal(`${CHANNEL_NAMES[stored.kind]} is connected again`);
+    this.deps.onHeal(`${channelName(stored)} is connected again`);
     await this.#emit(id);
     return this.#view(stored);
   }
@@ -1453,7 +1505,7 @@ export class ChannelService {
           .then((c) => {
             if (c)
               this.deps.onHeal(
-                `Reconnected ${CHANNEL_NAMES[c.kind]}. It was out of reach for ${minutes <= 1 ? 'a minute' : `${minutes} minutes`}.`,
+                `Reconnected ${channelName(c)}. It was out of reach for ${minutes <= 1 ? 'a minute' : `${minutes} minutes`}.`,
               );
           });
       live.downSince = undefined;
@@ -1645,13 +1697,13 @@ export class ChannelService {
     if (on && isLinked(stored.kind))
       throw new ChannelServiceError(
         'invalid',
-        `${CHANNEL_NAMES[stored.kind]} is your own account, so it never answers in groups.`,
+        `${channelName(stored)} is your own account, so it never answers in groups.`,
       );
     const live = this.#live.get(id);
     if (on && live && !live.adapter.groups)
       throw new ChannelServiceError(
         'invalid',
-        `On ${CHANNEL_NAMES[stored.kind]}, ${(await this.profile()).assistant} only talks in private chats.`,
+        `On ${channelName(stored)}, ${(await this.profile()).assistant} only talks in private chats.`,
       );
     if (on && !stored.people.length)
       throw new ChannelServiceError('invalid', 'Say hello to your bot first, then try again.');
@@ -2169,6 +2221,12 @@ export class ChannelService {
       // Only in Conch itself, unless the provider has its own (`/review`, `/init`): that goes on.
       if (yours?.provider || seat.group || message.outside) return false;
       await say(onlyInConch(kind, command));
+      return true;
+    }
+    if (use.who === 'owner' && !this.#vouched(stored)) {
+      await say(
+        `On ${channelName(stored)}, settings are changed in Conch: its code comes from someone else, so Conch takes them only from you there.`,
+      );
       return true;
     }
     if (
@@ -2818,8 +2876,8 @@ export class ChannelService {
     }
     let conversationId = current.chats[seat.key];
     const where = seat.group
-      ? `in ${seat.group.name} on ${CHANNEL_NAMES[stored.kind]}`
-      : `on ${CHANNEL_NAMES[stored.kind]}`;
+      ? `in ${seat.group.name} on ${channelName(stored)}`
+      : `on ${channelName(stored)}`;
     for (let attempt = 0; attempt < 2; attempt++) {
       const clientMessageId = newId('u');
       if (conversationId) {
@@ -2867,10 +2925,7 @@ export class ChannelService {
             (outside || spoken) && {
               untrusted: {
                 kind: 'person' as const,
-                label: `${outside ?? 'a voice note'} on ${CHANNEL_NAMES[stored.kind]}`.slice(
-                  0,
-                  120,
-                ),
+                label: `${outside ?? 'a voice note'} on ${channelName(stored)}`.slice(0, 120),
               },
             }),
           // A new chat here is with the channel's agent; unset or gone, the default (ADR 0101).
@@ -3009,7 +3064,7 @@ export class ChannelService {
     const fresh = ids.filter((id) => !sent?.has(`${relay.channelId}:${relay.chatId}:${id}`));
     if (!fresh.length) return;
     const files = await filesOf(this.deps.attachments, fresh, conversationId);
-    const app = CHANNEL_NAMES[stored.kind];
+    const app = channelName(stored);
     if (!live.connection.files) {
       if (relay.toldNoFiles) return;
       relay.toldNoFiles = true;
@@ -3284,6 +3339,26 @@ export class ChannelService {
     const live = this.#live.get(channelId);
     const askKey = `${channelId}:${permissionId}`;
     if (!live || this.#asks.has(askKey)) return;
+    // Someone else's chat app (ADR 0122) never carries an approval: it waits for you in Conch.
+    const where = live.kind === 'app' ? await this.deps.store.get(channelId) : undefined;
+    if (where && !this.#vouched(where)) {
+      this.#asks.set(askKey, {
+        channelId,
+        chatId,
+        conversationId,
+        permissionId,
+        summary,
+        refs: [],
+      });
+      const assistant = await this.#assistant({ conversationId });
+      await live.connection
+        .send(
+          chatId,
+          `🔐 ${heading ?? `**${assistant} would like to:**`}\n${summary}\n\nAnswer it in Conch: ${channelName(where)} comes from someone else, so approvals wait for you there.`,
+        )
+        .catch((error: unknown) => this.#log(`question: ${explain(error)}`));
+      return;
+    }
     const key = randomBytes(6).toString('base64url');
     const plan = options.plan !== undefined;
     const ask: Ask = {
@@ -3475,7 +3550,7 @@ export class ChannelService {
       .map((c) => ({
         id: c.id,
         kind: c.kind,
-        name: CHANNEL_NAMES[c.kind],
+        name: channelName(c),
         ...(colours.get(c.kind) && { color: colours.get(c.kind) }),
       }));
   }
@@ -3513,12 +3588,12 @@ export class ChannelService {
       );
     const wanted = options.app?.trim().toLowerCase();
     const matches = wanted
-      ? all.filter((c) => c.kind === wanted || CHANNEL_NAMES[c.kind].toLowerCase() === wanted)
+      ? all.filter((c) => c.kind === wanted || channelName(c).toLowerCase() === wanted)
       : all;
     if (!matches.length)
       throw new ChannelServiceError(
         'unavailable',
-        `${options.app ?? 'That app'} isn’t connected. The user can be reached on ${all.map((c) => CHANNEL_NAMES[c.kind]).join(', ')}.`,
+        `${options.app ?? 'That app'} isn’t connected. The user can be reached on ${all.map((c) => channelName(c)).join(', ')}.`,
       );
     // The one they wrote from last is the one they're likely to see.
     const channel = [...matches].sort((a, b) => (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0))[0];
@@ -3534,7 +3609,7 @@ export class ChannelService {
     const fresh = files.filter((f) => !already?.has(`${channel.id}:${chat}:${f.id}`));
     let delivered: Delivered | undefined;
     if (fresh.length) {
-      delivered = await deliver(live.connection, CHANNEL_NAMES[channel.kind], chat, fresh, text);
+      delivered = await deliver(live.connection, channelName(channel), chat, fresh, text);
       this.#filesSent(options.conversationId, chat, channel.id, delivered.ids);
     } else if (text.trim()) await live.connection.send(chat, text);
     if (files.length && !fresh.length) delivered = { refs: [], sent: [], ids: [], missed: [] };
@@ -3546,7 +3621,7 @@ export class ChannelService {
         this.#messaged.delete(this.#messaged.keys().next().value ?? '');
     }
     return {
-      app: CHANNEL_NAMES[channel.kind],
+      app: channelName(channel),
       ...(delivered && { sent: delivered.sent, missed: delivered.missed }),
     };
   }

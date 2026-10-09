@@ -57,6 +57,9 @@ export const APP_API = [
   'app.settings',
   'app.now',
   'app.log',
+  // A provider's and a chat app's functions (ADR 0122).
+  'app.keys',
+  'app.emit',
 ] as const;
 
 const mb = (bytes: number) => `${bytes / 1024 / 1024} MB`;
@@ -213,6 +216,8 @@ A Conch app gives the assistant a new ability that every model can use, and ofte
 5. **app_check** again after any change, then **app_present** with one sentence on what you made.
 6. Tell the person, in a sentence, what it does and that the card under your reply adds it. Never say it's added until the card says so.
 
+A provider ("add Fireworks as a provider") or a chat app ("connect me on Zulip") is an app too: see **A provider** and **A chat app** below.
+
 Build first. Ask only what you can't sensibly assume (a key only they have, a choice that changes everything), and say what you assumed. To change an app the person has, start with **app_edit**, raise its version, and keep the data it already holds readable. **app_find** looks for an app that already does it, among theirs and the community's; **app_get** shows one from a link as a card; **app_share** shows the buttons to publish one they made. Publishing and adding are always their press.
 
 ## The folder
@@ -338,6 +343,74 @@ app_check refuses until: the manifest reads; the tools module loads sealed off, 
 - **Light and dark** come from the page kit. **Phone width first**: one column, nothing wider than the screen.
 - **Accessible**: a label for every field, buttons that say what they do, \`role="status"\` for messages, headings in order, focus you can see.
 - **Calm.** No animation for its own sake, nothing that moves under the pointer, nothing that asks twice.
+
+## A provider
+
+An app can bring a **provider**: what answers chats, in the model picker and Settings → Providers like Conch's own (start with \`app_new\` and \`kind: "provider"\`). Read the company's own API documentation first (search for it, open it), and take the address, how the key is sent and the models from there, never from memory.
+
+Most companies speak OpenAI's chat or Anthropic's Messages: then it's only words in conch-app.json, no code.
+
+    "reaches": ["api.fireworks.ai"],
+    "provider": {
+      "speaks": "openai",
+      "address": "https://api.fireworks.ai/inference/v1",
+      "auth": "bearer",
+      "key": { "label": "Fireworks API key", "link": "https://fireworks.ai/account/api-keys" },
+      "models": [{ "id": "accounts/fireworks/models/llama4-maverick-instruct-basic", "name": "Llama 4 Maverick", "context": 1000000, "price": { "input": 0.22, "output": 0.88 } }]
+    }
+
+- \`speaks\`: \`openai\` (everything before \`/chat/completions\`), \`anthropic\` (everything before \`/v1/messages\`), or \`code\`.
+- \`address\`: https, and its host in \`reaches\`.
+- \`auth\`: \`bearer\` (Authorization: Bearer), \`header\` with \`"header": "x-api-key"\` (or the company's own), or \`none\`.
+- \`key\`: what the person types: \`label\`, \`help\`, \`link\` (the page that makes one), \`pattern\` (a regular expression a key matches), \`optional\`. Conch keeps it with its other keys; you never see it.
+- \`models\`: leave it empty to read them live from the address's own list, or name them, with \`context\`, \`tools\`, \`images\`, \`thinking\` and \`price\` (US dollars per million tokens, input and output: what Conch counts spending with). \`small\`: a cheap one, for naming chats.
+
+For anything else, \`"speaks": "code"\` and \`export const provider = { async chat(request, app) { … } }\` in the module (\`"tools": "provider.mjs"\`), with its models listed in conch-app.json:
+
+    export const provider = {
+      async chat({ model, system, messages, tools, maxTokens }, app) {
+        const res = await app.fetch('https://api.example.com/generate', {
+          method: 'POST',
+          headers: { authorization: 'Bearer ' + app.keys.key, 'content-type': 'application/json' },
+          body: JSON.stringify({ model, system, messages, max_tokens: maxTokens }),
+        });
+        if (!res.ok) throw new Error('Example AI said ' + res.status + '.');
+        const answer = await res.json();
+        app.emit({ type: 'text', delta: answer.text });
+        return { usage: { input: answer.input_tokens, output: answer.output_tokens } };
+      },
+    };
+
+\`messages\` and \`tools\` come in OpenAI's chat shape; stream the answer with \`app.emit({ type: 'text' | 'thinking', delta })\`; return \`{ toolCalls: [{ id, name, arguments }], stop, usage: { input, output } }\`. Throw an Error that says what the company said (with its status, like 401 or 429), so Conch can tell a refused key from a busy service. \`app.keys.key\` is the person's key, only while it runs. Its answers wait for the company for up to three minutes.
+
+Then **app_try** \`{ "part": "provider" }\`. With no key needed it asks for one real line; otherwise the card asks the person for their key and tests it there (**Test it**), before **Add**.
+
+## A chat app
+
+An app can bring a **chat app** to talk to the assistant on, in Apps → Talk to me here (start with \`app_new\` and \`kind: "channel"\`). Read the chat app's bot API documentation first. Prefer a way Conch asks from this computer (\`"receives": "poll"\`: long polling, an updates list); only when the app delivers to a web address alone, \`"receives": "webhook"\`.
+
+    "tools": "channel.mjs",
+    "reaches": ["chat.example.com"],
+    "channel": {
+      "name": "Example Chat",
+      "receives": "poll",
+      "fields": [{ "key": "token", "label": "Example Chat bot token", "link": "https://chat.example.com/bots" }],
+      "steps": ["In Example Chat, open Settings → Bots and press New bot.", "Copy its token."]
+    }
+
+\`fields\`: what the person types, at most six (\`secret: false\` for one that isn't, like a server's address). \`steps\`: what to press in the chat app, one sentence each. \`buttons: true\` only when \`send\` can show buttons; otherwise questions get numbered answers.
+
+In the module, \`export const channel = { … }\`, each with \`app\` (\`app.keys\` is what the person typed, by \`key\`):
+
+- \`identify(app)\` → \`{ id, name, username?, chatUrl? }\`: who the bot is (Conch checks the token with it).
+- \`poll({ cursor }, app)\` → \`{ messages: [{ chatId, messageId, user: { id, name }, text, direct? }], cursor }\`: what's new since \`cursor\`. Conch calls it again and again and waits longer while it's quiet; a long poll of up to a minute is fine.
+- \`receive({ method, headers, query, body }, app)\` → \`{ messages, reply?: { status, body, type } }\`, for \`webhook\`: check the delivery's signature with its secret first, and refuse what doesn't check out.
+- \`send({ chatId, text, buttons? }, app)\` → \`{ messageId }\`: one message, Markdown (long ones come in parts).
+- \`directChat({ userId }, app)\` → the private chat with someone, when it isn't their id.
+
+A chat app only hands messages to Conch and sends what Conch gives it: it can't read chats, use tools or see other keys. Conch does the rest — the owner's hello, **Let in** and **Block**, approvals, groups off — so write none of it. Throw an Error with the app's status (401 for a refused token) so Conch knows when to ask for a new one.
+
+Then **app_try** \`{ "part": "channel" }\`: it checks the functions are there; the card asks the person for the token, says who the bot is (**Test it**), and after **Add** the person says hello from the chat app.
 
 ## A small, complete app
 

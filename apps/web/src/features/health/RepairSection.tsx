@@ -3,7 +3,10 @@ import { Button, RepairPanel } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { Sparkles } from 'lucide-react';
+
 import { useUi, type SettingsTab } from '../../app/ui';
+import { useStartChat } from '../conchapps/useStartChat';
 import { AdminCommand } from '../setup/AdminCommand';
 import { useNeed } from '../setup/useNeed';
 import { doctorApi, healthKeys } from './api';
@@ -18,11 +21,35 @@ function NeedButton({ action }: { action: Extract<DoctorAction, { kind: 'need' }
   );
 }
 
+/**
+ * Ask Conch to fix it (ADR 0122): a chat that starts with the item's own
+ * words, for something a Conch app brings that stopped working. The maker
+ * changes the app, and the person presses Update on its card.
+ */
+function AskButton({ action }: { action: Extract<DoctorAction, { kind: 'ask' }> }) {
+  const startChat = useStartChat();
+  const closeSettings = useUi((s) => s.closeSettings);
+  return (
+    <Button
+      size="sm"
+      variant="surface"
+      leadingIcon={<Sparkles />}
+      onClick={() => {
+        closeSettings();
+        startChat(action.prompt);
+      }}
+    >
+      {action.label}
+    </Button>
+  );
+}
+
 /** The one button for an item that needs a person. */
 function ActionButton({ action }: { action: DoctorAction }) {
   const openSettings = useUi((s) => s.openSettings);
   const setPulseOpen = useUi((s) => s.setPulseOpen);
   if (action.kind === 'need') return <NeedButton action={action} />;
+  if (action.kind === 'ask') return <AskButton action={action} />;
   if (action.kind === 'command')
     return (
       <AdminCommand compact command={action.command} label={action.label} watch={action.watch} />

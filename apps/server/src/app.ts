@@ -406,6 +406,8 @@ export async function buildApp(services: Services) {
         feishu: services.mockFeishu?.base,
         dingtalk: services.mockDingTalk?.base,
         qq: services.mockQq?.base,
+        // The pretend model company and chat app for apps that bring one (ADR 0122).
+        pretend: services.pretendWorld?.base,
       })),
     services.door,
     // Gmail's app password, offered for talking by email too (ADR 0052).
@@ -909,6 +911,11 @@ export async function buildApp(services: Services) {
   registerConchAppRoutes(app, services.conchApps, {
     verifyRequired,
     emit: (event) => services.broadcast.emit(event),
+    // Their providers and chat apps (ADR 0122): the card's live test, and what was typed into it.
+    parts: {
+      test: (ref, body) => services.extensions.test(ref, body),
+      apply: (appId, values) => services.extensions.apply(appId, values),
+    },
   });
   app.get('/api/integrations', () => services.integrations.list());
   app.get<{ Querystring: { refresh?: string } }>('/api/integrations/external', (request) =>

@@ -1,4 +1,4 @@
-import { canUseApps, isServerId } from '@conch/protocol';
+import { canUseApps, isAppProviderId, isServerId } from '@conch/protocol';
 import type {
   BuiltInEngineId,
   EffortChoice,
@@ -100,7 +100,10 @@ const providerLogos: Record<BuiltInEngineId, ProviderId> = {
 
 /** The mark a provider wears in the picker: a server you added wears a server. */
 export function providerLogo(engine: EngineId): ProviderId {
-  return isServerId(engine) ? 'server' : providerLogos[engine];
+  if (isServerId(engine)) return 'server';
+  // A provider a Conch app brings (ADR 0122) wears the plain mark.
+  if (isAppProviderId(engine)) return 'generic';
+  return providerLogos[engine];
 }
 
 /** A provider with a long list (OpenRouter) opens on its first few; search finds the rest. */

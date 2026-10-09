@@ -3,18 +3,64 @@
  * app's page, the install preview and the assistant's prompt all read these,
  * so a person sees the same sentence wherever they meet an app.
  */
+import type { AppChannelPart, AppProviderPart } from './app-parts';
 import type { ConchAppChanges, ConchAppManifest, ConchAppSource, ConchAppTool } from './conch-apps';
 import type { SkillSignature } from './skills';
 
 /** One line of what an app can do. `kind` picks its icon. */
 export interface AppAbilityLine {
-  kind: 'data' | 'reach' | 'nothing-else' | 'needs' | 'looks' | 'changes';
+  kind: 'data' | 'reach' | 'nothing-else' | 'needs' | 'looks' | 'changes' | 'provider' | 'channel';
   text: string;
 }
 
 /** The parts of a manifest the words read (a draft's may be partly filled). */
 type ManifestWords = Pick<ConchAppManifest, 'tools'> &
-  Partial<Pick<ConchAppManifest, 'reaches' | 'settings' | 'pageState'>>;
+  Partial<Pick<ConchAppManifest, 'reaches' | 'settings' | 'pageState' | 'name'>> & {
+    provider?: Pick<AppProviderPart, 'name' | 'speaks' | 'key' | 'models'>;
+    channel?: Pick<AppChannelPart, 'name' | 'fields'>;
+  };
+
+/** How a provider speaks, in a few words for its card. */
+export const SPEAKS_WORDS: Record<AppProviderPart['speaks'], string> = {
+  openai: 'OpenAI’s chat',
+  anthropic: 'Anthropic’s Messages',
+  code: 'its own code',
+};
+
+/**
+ * What an app brings besides tools and pages (ADR 0122), one plain line
+ * each: "Answers chats as Fireworks AI (OpenAI’s chat, 4 models)", "Lets
+ * you talk to your assistant on Zulip". Empty for an app that brings neither.
+ */
+export function partLines(manifest: ManifestWords): AppAbilityLine[] {
+  const lines: AppAbilityLine[] = [];
+  const provider = manifest.provider;
+  if (provider) {
+    const name = provider.name ?? manifest.name ?? 'a provider';
+    const models = provider.models.length
+      ? `${provider.models.length} ${provider.models.length === 1 ? 'model' : 'models'}`
+      : 'its models read live';
+    lines.push({
+      kind: 'provider',
+      text: `Answers chats as ${name} (${SPEAKS_WORDS[provider.speaks]}, ${models})`,
+    });
+  }
+  const channel = manifest.channel;
+  if (channel)
+    lines.push({
+      kind: 'channel',
+      text: `Lets you talk to your assistant on ${channel.name ?? manifest.name ?? 'another app'}; only delivers messages, can’t read your chats or use your apps`,
+    });
+  return lines;
+}
+
+/** What the person types for an app's parts, by name: its key, a bot's token. Never kept in the app. */
+export function partKeys(manifest: ManifestWords): string[] {
+  const keys: string[] = [];
+  if (manifest.provider?.key) keys.push(manifest.provider.key.label);
+  for (const field of manifest.channel?.fields ?? []) keys.push(field.label);
+  return keys;
+}
 
 type ToolWords = Pick<ConchAppTool, 'name' | 'title' | 'changes' | 'cache'>;
 
@@ -50,7 +96,8 @@ export function appAbilities(
   manifest: ManifestWords,
   tools: readonly ToolWords[],
 ): AppAbilityLine[] {
-  const lines: AppAbilityLine[] = [];
+  // What it brings first: a provider, a chat app (ADR 0122).
+  const lines: AppAbilityLine[] = partLines(manifest);
   const reaches = manifest.reaches ?? [];
   const settings = manifest.settings ?? [];
   // Durable records belong to tools; page preferences and cached reads are separate.
@@ -71,10 +118,14 @@ export function appAbilities(
     kind: 'nothing-else',
     text: 'Can’t read your files, run programs or see your other apps',
   });
-  if (settings.length) {
+  const keys = partKeys(manifest);
+  if (settings.length || keys.length) {
     const needed = settings.filter((s) => !s.optional).map((s) => s.label);
     const optional = settings.filter((s) => s.optional).map((s) => `${s.label} (optional)`);
-    lines.push({ kind: 'needs', text: `Needs from you: ${list([...needed, ...optional])}` });
+    lines.push({
+      kind: 'needs',
+      text: `Needs from you: ${list([...needed, ...keys, ...optional])}${keys.length ? ' (kept by Conch, never in the app)' : ''}`,
+    });
   }
   const looks = tools.filter((t) => !t.changes).map(toolTitle);
   if (looks.length) lines.push({ kind: 'looks', text: `Looks things up: ${list(looks)}` });

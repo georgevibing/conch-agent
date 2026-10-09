@@ -50,6 +50,7 @@ import {
   slackManifest,
   telegramNames,
 } from './guides';
+import { AppChannelSetup } from './AppChannelSetup';
 import { EmailSetup } from './ConnectEmail';
 import { ImessageSetup } from './ConnectImessage';
 import { HelloStep } from './HelloStep';
@@ -72,9 +73,12 @@ import { errorText, putChannel, useChannel } from './queries';
 /** `/channels/new/:kind`: connect one app, step by step, beside a picture of what you'll see. */
 export function ConnectChannel({ kind }: { kind: string }) {
   const navigate = useNavigate();
+  const contributed = kind.startsWith('app:') ? kind.slice(4) : undefined;
   useEffect(() => {
-    if (!isKind(kind)) void navigate('/apps?show=talk', { replace: true });
-  }, [kind, navigate]);
+    if (!contributed && !isKind(kind)) void navigate('/apps?show=talk', { replace: true });
+  }, [contributed, kind, navigate]);
+  // A chat app a Conch app brings (ADR 0122): connected from its manifest's words.
+  if (contributed) return <AppChannelSetup app={contributed} />;
   if (!isKind(kind)) return null;
   if (kind === 'telegram') return <TelegramSetup />;
   if (kind === 'discord') return <DiscordSetup />;

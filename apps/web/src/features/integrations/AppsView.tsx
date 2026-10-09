@@ -32,6 +32,7 @@ import { channelsApi } from '../channels/api';
 import { APPS as CHANNEL_APPS, channelState } from '../channels/describe';
 import { errorText as channelError, putChannel, useChannels } from '../channels/queries';
 import { TalkIntro } from '../channels/TalkIntro';
+import { TalkYourOwn } from '../channels/TalkYourOwn';
 import conchStyles from '../conchapps/ConchApps.module.css';
 import { putConchApp, useCommunityApps, useConchApps } from '../conchapps/queries';
 import { updateApp } from '../conchapps/update';
@@ -430,6 +431,8 @@ export function AppsView() {
       {talking && !loading && !items.some((i) => i.channels.length) && (
         <TalkIntro assistant={assistant} />
       )}
+
+      {talking && !loading && <TalkYourOwn />}
 
       <section aria-labelledby="apps-gallery" className={styles.section}>
         <div className={styles.catalogHeader}>

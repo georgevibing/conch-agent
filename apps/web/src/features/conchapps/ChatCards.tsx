@@ -1,4 +1,4 @@
-import { AppOffer, toast } from '@conch/nacre';
+import { AppOffer, toast, type PartTestView, type PartValues } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -11,6 +11,7 @@ import { errorText } from '../integrations/queries';
 import { conchAppsApi } from './api';
 import { putConchApp, useConchApp } from './queries';
 import { ShareFlow } from './ShareFlow';
+import { bringsOf, testView } from './parts';
 import { appWords, conchAppPath } from './words';
 
 type OfferEntry = Extract<TranscriptItem, { kind: 'conch-app-offer' }>;
@@ -50,13 +51,23 @@ export function AppOfferItem({
     offer.action === 'update' ? offer.manifest.id : undefined,
   );
 
-  const add = async (settings: Record<string, string>) => {
+  const brings = bringsOf(offer.manifest);
+  const add = async (settings: Record<string, string>, part?: PartValues) => {
     if (!conversationId) return;
     setBusy(true);
     try {
       await guard(async () => {
-        const app = await conchAppsApi.acceptOffer(offer.offerId, { conversationId, settings });
+        const app = await conchAppsApi.acceptOffer(offer.offerId, {
+          conversationId,
+          settings,
+          ...(part && { parts: { ...(part.key && { key: part.key }), fields: part.fields } }),
+        });
         putConchApp(client, app);
+        // In, but its provider or chat app didn't take what was typed: said, with where to fix it.
+        if (app.partProblem) toast.error(app.partProblem);
+        void client.invalidateQueries({ queryKey: ['providers'] });
+        void client.invalidateQueries({ queryKey: ['capabilities'] });
+        void client.invalidateQueries({ queryKey: ['channels'] });
         // Added: the card says so now, not when the log's word arrives.
         setSent('added');
       });
@@ -105,7 +116,26 @@ export function AppOfferItem({
         words={appWords(offer)}
         saved={offer.changes?.otherMaker ? [] : (installed?.saved ?? [])}
         busy={busy}
-        onAdd={conversationId ? (settings) => void add(settings) : undefined}
+        onAdd={conversationId ? (settings, part) => void add(settings, part) : undefined}
+        {...(brings && { brings })}
+        {...(brings &&
+          conversationId && {
+            onTest: async (values: PartValues) => {
+              let result: PartTestView = { state: 'failed', message: 'The test didn’t run.' };
+              await guard(async () => {
+                result = testView(
+                  await conchAppsApi.testOffer(offer.offerId, {
+                    conversationId,
+                    ...(values.key && { key: values.key }),
+                    fields: values.fields,
+                  }),
+                );
+              }).catch((error: unknown) => {
+                result = { state: 'failed', message: errorText(error, 'The test didn’t run.') };
+              });
+              return result;
+            },
+          })}
         onNotNow={conversationId ? () => void notNow() : undefined}
         onOpenPage={
           conversationId && draftPage

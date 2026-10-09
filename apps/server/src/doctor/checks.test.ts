@@ -234,6 +234,38 @@ describe('Your providers', () => {
     ).toEqual({ 'providers:claude-code': 'ok', 'providers:codex': 'needs-you' });
   });
 
+  it('offers to ask Conch to fix a provider an app brings that stopped working (ADR 0122)', async () => {
+    const fireworks = provider('app-fireworks', {
+      name: 'Fireworks AI',
+      contributed: { app: 'fireworks', from: 'made', speaks: 'openai', reaches: [] },
+      status: {
+        ...provider('app-fireworks').status,
+        state: 'error',
+        message: 'Fireworks AI couldn’t answer that request.',
+      },
+    });
+    const services = {
+      providers: {
+        list: async () => ({ providers: [fireworks] }),
+        connected: async () => new Set(['app-fireworks']),
+      },
+    } as unknown as Services;
+    const [item] = await providersCheck(services).run({
+      repair: false,
+      signal: new AbortController().signal,
+    });
+    expect(item).toMatchObject({
+      state: 'needs-you',
+      action: {
+        kind: 'ask',
+        label: 'Ask Conch to fix it',
+        prompt: expect.stringMatching(
+          /^Fix Fireworks AI: .*change the app fireworks with app_edit/,
+        ),
+      },
+    });
+  });
+
   it('says whose cloud sign-in ended, with the one press that signs in again', async () => {
     const bedrock = provider('bedrock', {
       cloud: 'aws',

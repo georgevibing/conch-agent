@@ -140,6 +140,11 @@ your desktop and the chat apps you already use.
   Conch app: tools every model can use and pages that look like Conch, sealed off
   from your files. Added when you say so, shared on GitHub in one press.
   [Make apps](./apps/docs/content/features/make-apps.md)
+- **Any provider, any chat app.** Name one Conch doesn't list ("add Fireworks as a
+  provider", "connect me on Zulip") and it reads the docs, makes it, tests it with
+  your key on a card, and adds it when you press Add. Or add one from a link.
+  [Add any provider](./apps/docs/content/providers/any-provider.md),
+  [Add any chat app](./apps/docs/content/channels/any-chat-app.md)
 - **Your other tools.** Claude Desktop, Cursor and VS Code can use your memory,
   skills, apps and browser, each only what you tick. [Other apps](./apps/docs/content/features/other-apps.md)
 

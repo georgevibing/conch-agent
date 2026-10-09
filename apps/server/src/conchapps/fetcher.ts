@@ -106,6 +106,9 @@ function headersFor(given: Record<string, string>, appId: string): Record<string
   return out;
 }
 
+/** The most any app's requests may be in an hour, even a chat app polling (ADR 0122). */
+export const CHAT_APP_PER_HOUR = 7_200;
+
 export function createFetcher(deps: FetcherDeps = {}): AppFetcher {
   const resolve = deps.resolve ?? systemResolve;
   const place = deps.place ?? placeOf;
@@ -126,10 +129,10 @@ export function createFetcher(deps: FetcherDeps = {}): AppFetcher {
     return undefined;
   };
 
-  const budget = (appId: string): boolean => {
+  const budget = (appId: string, perHour: number = APP_LIMITS.fetchPerHour): boolean => {
     const at = now();
     const recent = (made.get(appId) ?? []).filter((t) => at - t < 3_600_000);
-    if (recent.length >= APP_LIMITS.fetchPerHour) {
+    if (recent.length >= Math.min(perHour, CHAT_APP_PER_HOUR)) {
       made.set(appId, recent);
       return false;
     }
@@ -175,12 +178,14 @@ export function createFetcher(deps: FetcherDeps = {}): AppFetcher {
     };
     const first = whyNot(url, 0);
     if (first) return refuse(first);
-    if (!budget(app.id))
+    if (!budget(app.id, app.perHour))
       return refuse(
-        `This app has made ${APP_LIMITS.fetchPerHour} requests in the last hour, so Conch is holding off for a while.`,
+        `This app has made ${app.perHour ?? APP_LIMITS.fetchPerHour} requests in the last hour, so Conch is holding off for a while.`,
       );
 
-    const timeout = AbortSignal.timeout(deps.timeoutMs ?? APP_LIMITS.fetchMs);
+    const timeout = AbortSignal.timeout(
+      Math.min(app.timeoutMs ?? deps.timeoutMs ?? APP_LIMITS.fetchMs, 300_000),
+    );
     const stop = AbortSignal.any([signal, timeout]);
     let current = { url, method, body, headers };
     for (let hop = 0; hop <= 3; hop++) {

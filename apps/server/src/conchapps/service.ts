@@ -21,6 +21,7 @@ import {
   APP_LIMITS,
   AppId,
   type AppCallResult,
+  type AppPartTest,
   type AppCheckItem,
   type AppUpdateNotice,
   type CommunityResults,
@@ -111,6 +112,16 @@ export interface ConchAppServiceDeps {
   pick?: () => Promise<string | undefined>;
   /** Fingerprints of the person's own signing keys: a file signed with one is theirs. */
   ownKeys?: () => Promise<ReadonlySet<string>>;
+  /**
+   * The live test of a provider or chat app (ADR 0122), on a draft's own
+   * runtime: `ExtensionService.testWith`. Without it, `app_try` only checks
+   * what the module exports.
+   */
+  partTester?: (
+    manifest: ConchAppManifest,
+    runtime: AppRuntime,
+    body: { part: 'provider' | 'channel'; key?: string; fields: Record<string, string> },
+  ) => Promise<AppPartTest>;
   /** Tests: no timers. */
   manualChecks?: boolean;
   now?: () => number;
@@ -940,6 +951,81 @@ export class ConchAppService {
   }
 
   /**
+   * `app_try` for a draft's provider or chat app (ADR 0122). What the module
+   * must export is checked; then the live test runs when nothing only the
+   * person can type is needed (a provider with no key). When a key is
+   * needed, the card asks the person for it and tests it there, so the
+   * model never sees it. Either way it counts as tried for these files.
+   */
+  async tryPart(
+    draftId: string,
+    part: 'provider' | 'channel',
+  ): Promise<{ ok: boolean; text: string }> {
+    const files = await this.workshop.files(draftId);
+    const read = await this.deps.parts.readFiles(files);
+    if (!read.ok)
+      throw new ConchAppError(
+        'invalid',
+        `The draft doesn’t read as an app yet: ${problemText(read.problems)} Fix that, then try again.`,
+      );
+    const { manifest } = read.app;
+    if (part === 'provider' && !manifest.provider)
+      return { ok: false, text: 'conch-app.json has no "provider" yet. Add it, then try again.' };
+    if (part === 'channel' && !manifest.channel)
+      return { ok: false, text: 'conch-app.json has no "channel" yet. Add it, then try again.' };
+    await mkdir(this.workshop.dataDir(draftId), { recursive: true, mode: 0o700 });
+    const runtime = this.#draftRuntime(draftId, read.app);
+    const code = part === 'channel' || manifest.provider?.speaks === 'code';
+    if (code) {
+      let exported: string[];
+      try {
+        exported = (await runtime.parts?.()) ?? [];
+      } catch (error) {
+        return {
+          ok: false,
+          text: `The module didn’t start: ${error instanceof Error ? error.message : 'it failed'}. Run app_check to see why.`,
+        };
+      }
+      const needs =
+        part === 'provider'
+          ? ['provider.chat']
+          : [
+              'channel.identify',
+              'channel.send',
+              manifest.channel?.receives === 'webhook' ? 'channel.receive' : 'channel.poll',
+            ];
+      const missing = needs.filter((n) => !exported.includes(n));
+      if (missing.length)
+        return {
+          ok: false,
+          text: `${manifest.tools ?? 'The module'} doesn’t export ${missing.join(', ')} yet. Write it with app_write, then try again.`,
+        };
+    }
+    const provider = manifest.provider;
+    const keyless =
+      part === 'provider' && provider && (provider.auth === 'none' || provider.key?.optional);
+    let said: string;
+    if (keyless && this.deps.partTester) {
+      const test = await this.deps.partTester(manifest, runtime, { part, fields: {} });
+      if (!test.ok) return { ok: false, text: `The live test failed: ${test.message}` };
+      said = `The live test passed: it answered “${test.said}”${test.model ? ` (${test.model})` : ''}.`;
+    } else {
+      const needed =
+        part === 'provider'
+          ? (provider?.key?.label ?? 'its key')
+          : (manifest.channel?.fields.map((f) => f.label).join(', ') ?? 'its keys');
+      said = `It reads, and exports what Conch calls. The live test needs ${needed}, which only the person types: app_present the card, and it asks for ${needed === 'its key' ? 'it' : 'them'} and tests it right there.`;
+    }
+    const key = this.#triedKey(files);
+    await this.workshop.patch(draftId, (draft) => {
+      const tried = new Set(draft.tried[key] ?? []);
+      tried.add(part === 'provider' ? '@provider' : '@channel');
+      draft.tried = { [key]: [...tried] };
+    });
+    return { ok: true, text: `${said} Run app_check, then app_present.` };
+  }
+
+  /**
    * Offer the draft as a card under the reply. Only files that passed the
    * check, with every tool tried, can be offered; earlier cards for the
    * same draft become history.
@@ -1168,6 +1254,86 @@ export class ConchAppService {
       .note(conversationId, { ...offer, state: 'failed', message })
       .catch(() => undefined);
     throw new ConchAppError('changed', message);
+  }
+
+  /**
+   * What a card or a preview offers, sealed in a runtime of its own for its
+   * live test (ADR 0122): exactly those files, a scratch data folder, none
+   * of the person's settings, and the real `app.fetch` (only the hosts the
+   * card shows). The person's press on **Test it** is what runs it; `dispose`
+   * stops it and throws its scratch away.
+   */
+  async trial(
+    ref: { conversationId: string; offerId: string } | { packageId: string; appId: string },
+  ): Promise<{
+    manifest: ConchAppManifest;
+    hash: string;
+    /** Not made in this chat with nothing from outside in it: testing it is a trust decision too. */
+    outside: boolean;
+    runtime: AppRuntime;
+    dispose: () => Promise<void>;
+  }> {
+    let pkg: AppPackage;
+    let outside: boolean;
+    let appDir: string;
+    const dir = await this.store.scratch();
+    try {
+      if ('offerId' in ref) {
+        const offer = await this.offerIn(ref.conversationId, ref.offerId);
+        if (offer.state !== 'ready')
+          throw new ConchAppError('conflict', 'That card was put away. Ask for it again.');
+        outside = offer.from === 'package' || !madeHere(offer.source);
+        if (offer.from === 'draft') {
+          const info = offer.draftId
+            ? await this.workshop.info(offer.draftId).catch(() => undefined)
+            : undefined;
+          if (!info || info.conversationId !== ref.conversationId)
+            throw new ConchAppError('not-found', 'The app being made isn’t there any more.');
+          const read = await this.deps.parts.readFiles(await this.workshop.files(info.id));
+          if (!read.ok || read.app.hash !== offer.hash)
+            throw new ConchAppError('changed', 'It changed since the card was made. Ask again.');
+          pkg = read.app;
+        } else {
+          const found = offer.packageId
+            ? this.#package(offer.packageId)?.apps.get(offer.manifest.id)
+            : undefined;
+          if (!found || found.pkg.hash !== offer.hash)
+            throw new ConchAppError('changed', 'This card is too old to test. Ask for it again.');
+          pkg = found.pkg;
+        }
+      } else {
+        const found = this.#package(ref.packageId)?.apps.get(ref.appId);
+        if (!found)
+          throw new ConchAppError('changed', 'It’s been a while: look at the link again.');
+        if (found.found.problems.length)
+          throw new ConchAppError('invalid', problemText(found.found.problems));
+        pkg = found.pkg;
+        outside = true;
+      }
+      appDir = join(dir, 'files');
+      await writeFiles(appDir, pkg.files);
+      await mkdir(join(dir, 'data'), { recursive: true, mode: 0o700 });
+    } catch (error) {
+      await removeTree(dir).catch(() => undefined);
+      throw error;
+    }
+    const runtime = this.deps.parts.runtime({
+      appDir,
+      dataDir: join(dir, 'data'),
+      manifest: pkg.manifest,
+      settings: async () => ({}),
+      fetcher: this.deps.parts.fetcher,
+    });
+    return {
+      manifest: pkg.manifest,
+      hash: pkg.hash,
+      outside,
+      runtime,
+      dispose: async () => {
+        await runtime.stop().catch(() => undefined);
+        await removeTree(dir).catch(() => undefined);
+      },
+    };
   }
 
   /** **Not now** on a card. */

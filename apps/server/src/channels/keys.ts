@@ -44,6 +44,9 @@ export function channelKeys(secrets: ChannelSecrets): [string, string][] {
       return [['Client Secret', secrets.clientSecret]];
     case 'qq':
       return [['AppSecret', secrets.appSecret]];
+    // A Conch app's chat app (ADR 0122): every field the person typed, by its key.
+    case 'app':
+      return Object.entries(secrets.fields).filter(([, value]) => value) as [string, string][];
     // iMessage has no key; a linked device's keys are listed apart (`Services.#systemKeys`).
     case 'imessage':
     case 'whatsapp':

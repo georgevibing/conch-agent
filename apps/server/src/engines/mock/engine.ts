@@ -19,6 +19,7 @@ import { sniff } from '../../attachments/sniff';
 import { Emitter } from '../../lib/emitter';
 import { hostToolText } from '../types';
 import { TALLY_ID, tallyFiles } from './tally';
+import { parleyFiles, pretendProviderFiles } from '../../extensions/pretend';
 import { pretendFind } from './views';
 import type {
   Completion,
@@ -992,6 +993,41 @@ export class MockEngine implements Engine {
       }
       // Conch apps (ADR 0061): the maker's real path, end to end, with no model bill.
       const maker = (name: string) => input.tools.some((t) => t.name === name);
+      // A provider or a chat app made with Conch (ADR 0122), on the pretend world's two.
+      const extension = /\badd pretend ai as a provider\b/i.test(input.prompt)
+        ? ('provider' as const)
+        : /\bconnect me on parley\b/i.test(input.prompt)
+          ? ('channel' as const)
+          : undefined;
+      if (extension && maker('app_new')) {
+        const provider = extension === 'provider';
+        yield* hostTool('app_guide', {});
+        yield* hostTool('app_new', {
+          name: provider ? 'Pretend AI' : 'Parley',
+          id: provider ? 'pretend-ai' : 'parley',
+          kind: extension,
+        });
+        for (const [path, content] of Object.entries(
+          provider ? pretendProviderFiles() : parleyFiles(),
+        ))
+          yield* hostTool('app_write', { path, content });
+        yield* hostTool('app_check', {});
+        yield* hostTool('app_try', { part: extension });
+        yield* hostTool('app_check', {});
+        const shown = yield* hostTool('app_present', {
+          summary: provider
+            ? 'Pretend AI answers chats with Pretend One, in OpenAI’s chat shape.'
+            : 'Parley lets you talk to your assistant from a Parley bot.',
+        });
+        yield* speak(
+          /^A card/.test(shown)
+            ? provider
+              ? 'I made Pretend AI from its API docs. Paste your Pretend AI key into the card, press Test it, then Add.'
+              : 'I made Parley from its bot API docs. Paste your bot’s token into the card, press Test it, then Add, and say hello from Parley.'
+            : `I couldn’t offer it yet: ${shown}`,
+        );
+        return;
+      }
       const madeApp = /\b(make|change) (?:me )?(?:an |the )?app\b/i.exec(input.prompt);
       if (madeApp && maker('app_new')) {
         const change = madeApp[1]?.toLowerCase() === 'change';

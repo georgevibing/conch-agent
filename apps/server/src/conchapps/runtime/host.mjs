@@ -60,6 +60,35 @@
  * - `app.now()`: the time now, as an ISO string.
  * - `app.log(...)`: a line in the app's log, for working out what happened.
  *
+ * ## A provider and a chat app (ADR 0122)
+ *
+ * The same module may also export `provider` (when `conch-app.json` says
+ * `"provider": { "speaks": "code" }`) and `channel` (with `"channel"`). Each
+ * of their functions gets its input and `app`, with two more things while it
+ * runs: `app.keys`, what the person typed for it in Conch (a provider's key
+ * as `app.keys.key`, a chat app's fields by name; nothing else of theirs),
+ * and, for `provider.chat`, `app.emit({ type: 'text' | 'thinking', delta })`
+ * to stream an answer as it's written.
+ *
+ * - `provider.chat({ model, system, messages, tools, maxTokens })`: one
+ *   turn, `messages` and `tools` in OpenAI's chat shape. Emit the answer's
+ *   text, and return `{ toolCalls?: [{ id, name, arguments }], stop?, usage? }`
+ *   (`stop` is `end`, `tools` or `length`; `usage` is `{ input, output }` tokens).
+ * - `provider.models(app)`: optional, the models it offers now.
+ * - `channel.identify(app)`: who the bot is, `{ id, name, username?, chatUrl? }`.
+ * - `channel.poll({ cursor })`: new messages since `cursor`, as
+ *   `{ messages: [{ chatId, messageId, user: { id, name }, text, direct? }], cursor? }`.
+ *   Conch calls it again and again, waiting longer while it's quiet.
+ * - `channel.receive({ method, headers, query, body })`: a delivery to the
+ *   chat app's public address; check its signature first. Returns
+ *   `{ messages, reply?: { status, body, type } }`.
+ * - `channel.send({ chatId, text, buttons? })`: one message out, Markdown;
+ *   returns `{ messageId }`.
+ * - `channel.directChat({ userId })`: optional, the private chat with someone.
+ *
+ * A chat app only delivers messages into Conch and sends what Conch gives it:
+ * it can't read chats, use tools or see any other key.
+ *
  * A tool can't import anything but the app's own files (`./like-this.mjs`),
  * and can't reach Node's modules, `fetch`, `process` or `eval`. Built-in
  * objects (`Object.prototype`, `Array.prototype` and the like) are frozen.
@@ -72,10 +101,12 @@
  * a line runs past its cap). Node's IPC channel isn't used: it reads a whole
  * message before anyone can measure it.
  *
- * - in: `init` (paths, settings, limits), `call` (id, tool, input), `fetched`
- *   (id, response);
- * - out: `ready` (the tools' definitions) or `broken` (why it didn't load),
- *   `result` (id, text or the error's message), `fetch` (id, request).
+ * - in: `init` (paths, settings, limits), `call` (id, tool, input; or a
+ *   `part` such as `provider.chat`, with its `keys`), `fetched` (id, response);
+ * - out: `ready` (the tools' definitions, and the parts it exports) or
+ *   `broken` (why it didn't load), `result` (id, text or the error's
+ *   message), `fetch` (id, request), `event` (id, a streamed piece of a
+ *   provider's answer).
  *
  * The app never touches either pipe: it sees a stand-in `process` with no
  * `stdin` or `send`, no Node module that could open a file descriptor, and
@@ -785,6 +816,15 @@ async function appFetch(input, init = {}) {
 // ── Loading the app, and running its tools ────────────────────────────────
 
 let tools = {};
+/** The provider and chat app the module exports (ADR 0122), and the functions Conch calls on each. */
+const parts = {};
+const PART_FUNCTIONS = freeze({
+  provider: freeze(['chat', 'models']),
+  channel: freeze(['identify', 'poll', 'receive', 'send', 'directChat']),
+});
+/** Pieces of one answer a provider may stream, and how long each may be. */
+const MAX_EVENTS = 50_000;
+const MAX_DELTA = 64 * 1024;
 
 function definitionOf(name, tool) {
   const text = (value) => (typeof value === 'string' ? value : null);
@@ -837,7 +877,18 @@ async function load(message) {
       message: trim(local(error?.message ?? String(error)), 1500),
     });
   }
-  const exported = module.tools;
+  // A provider and a chat app (ADR 0122): their functions, by name.
+  const found = [];
+  for (const kind of ['provider', 'channel']) {
+    const part = module[kind];
+    if (part === undefined) continue;
+    if (!part || typeof part !== 'object' || isArray(part))
+      return send({ t: 'broken', message: `${kind} must be an object of functions.` });
+    parts[kind] = part;
+    for (const name of PART_FUNCTIONS[kind])
+      if (typeof part[name] === 'function') found.push(`${kind}.${name}`);
+  }
+  const exported = module.tools ?? (found.length ? {} : undefined);
   if (!exported || typeof exported !== 'object' || isArray(exported))
     return send({
       t: 'broken',
@@ -850,7 +901,7 @@ async function load(message) {
       return send({ t: 'broken', message: `The tool “${trim(name, 40)}” isn’t an object.` });
     definitions.push(definitionOf(name, tool));
   }
-  send({ t: 'ready', tools: definitions });
+  send({ t: 'ready', tools: definitions, parts: found });
 }
 
 function textOf(value) {
@@ -871,7 +922,60 @@ function textOf(value) {
   return { text: json, json: jsonParse(json) };
 }
 
+/**
+ * One of a provider's or chat app's functions (ADR 0122), with `app.keys`
+ * (what the person typed for it, this call only) and, for a provider's
+ * answer, `app.emit` to stream it.
+ */
+async function callPart(message) {
+  const [kind, name] = String(message.part).split('.');
+  const part = hasOwn(parts, kind) ? parts[kind] : undefined;
+  let reply;
+  try {
+    if (!part || !PART_FUNCTIONS[kind]?.includes(name) || typeof part[name] !== 'function')
+      throw new Error(`This app has no ${trim(String(message.part), 40)}.`);
+    let events = 0;
+    const emit = (event) => {
+      const type = event?.type;
+      if (type !== 'text' && type !== 'thinking')
+        throw new Error('app.emit takes { type: "text" or "thinking", delta: "…" }.');
+      if (typeof event.delta !== 'string') throw new Error('app.emit needs its delta as text.');
+      if (++events > MAX_EVENTS) throw new Error('That answer came in too many pieces.');
+      if (event.delta)
+        send({ t: 'event', id: message.id, event: { type, delta: trim(event.delta, MAX_DELTA) } });
+    };
+    const keys = {};
+    for (const [key, value] of entries(message.keys ?? {}))
+      if (typeof value === 'string') keys[key] = value;
+    const context = freeze({
+      ...appContext,
+      keys: freeze(keys),
+      ...(kind === 'provider' && name === 'chat' && { emit: freeze(emit) }),
+    });
+    // `identify` and `models` take only `app`; the rest take their input, then `app`.
+    const bare = name === 'identify' || name === 'models';
+    const out = textOf(
+      await callContext.run({ cache: false }, () =>
+        bare ? part[name](context) : part[name](freeze(message.input ?? {}), context),
+      ),
+    );
+    reply = { t: 'result', id: message.id, ok: true, text: trim(out.text, limits.text) };
+    if (out.json !== undefined) reply.json = out.json;
+  } catch (error) {
+    const said =
+      error instanceof Error || typeof error?.message === 'string' ? error.message : String(error);
+    reply = {
+      t: 'result',
+      id: message.id,
+      ok: false,
+      message: trim(local(String(said)).trim() || 'It failed without saying why.', limits.error),
+    };
+  }
+  send(reply);
+}
+
 async function call(message) {
+  if (typeof message.part === 'string') return callPart(message);
   const tool = hasOwn(tools, message.tool) ? tools[message.tool] : undefined;
   let reply;
   try {

@@ -122,7 +122,8 @@ import { MockMattermost } from './channels/mock/mattermost';
 import { MockRocketChat } from './channels/mock/rocketchat';
 import { MockTwilio } from './channels/mock/twilio';
 import { MockWeChat } from './channels/mock/wechat';
-import { CHANNEL_NAMES, ChannelService } from './channels/service';
+import { ChannelService } from './channels/service';
+import { channelName } from './channels/catalog';
 import { channelTools } from './channels/tools';
 import { ChannelStore } from './channels/store';
 import { TerminalService } from './terminal/service';
@@ -144,7 +145,9 @@ import { diskOf } from './computer/readers';
 import { sampleResources } from './recovery/resources';
 import { outsideCheck } from './a2a/doctor';
 import { registerAgentsDoctor } from './agents/doctor';
-import type { ApiEngine } from './engines/api';
+import { ApiEngine } from './engines/api';
+import { ExtensionService } from './extensions/service';
+import { PretendWorld } from './extensions/pretend';
 import { builtInEngines, serverEngine } from './engines/registry';
 import { appsNeeded } from './providers/apps';
 import { carryTools } from './providers/capabilities';
@@ -455,6 +458,10 @@ export class Services {
   readonly mockQq?: MockQq;
   readonly mockRocketChat?: MockRocketChat;
   readonly mockGoogleChat?: MockGoogleChat;
+  /** Providers and chat apps that Conch apps bring (ADR 0122). */
+  readonly extensions: ExtensionService;
+  /** The pretend model company and chat app those are tried with, with the mock engine. */
+  readonly pretendWorld?: PretendWorld;
   /** The public door, for the channels that only deliver to a web address (ADR 0045). */
   readonly door: ChannelDoorService;
   /** Your own address, over HTTPS by Conch itself (ADR 0064). Started by main.ts, never by tests. */
@@ -662,6 +669,8 @@ export class Services {
     this.describer = new Describer({ ready: () => this.providers.ready() });
     // With the mock engine, integrations talk to a pretend vendor on this machine too.
     this.mockVendor = config.CONCH_ENGINE === 'mock' ? new MockVendor() : undefined;
+    // With the mock engine, apps that bring a provider or a chat app try them on pretend ones (ADR 0122).
+    this.pretendWorld = config.CONCH_ENGINE === 'mock' ? new PretendWorld() : undefined;
     // Apps you make, share and add (ADR 0061): an app like any other on the Apps page.
     this.conchApps = new ConchAppService({
       home: config.CONCH_HOME,
@@ -675,6 +684,7 @@ export class Services {
           trust: () => this.skillTrust,
           redact: () => this.vault.redactor(),
           pretend: config.CONCH_ENGINE === 'mock',
+          ...(this.pretendWorld && { pretendRoute: this.pretendWorld.route }),
         }),
       emit: (event) => this.broadcast.emit(event),
       heal: (message) => void this.healed.note('integrations', message),
@@ -697,6 +707,8 @@ export class Services {
       },
       updatesChanged: () => this.updates.changed(),
       pick: () => pickPath(PICK_PURPOSES['conch-app']),
+      // `app_try` on a provider or a chat app (ADR 0122); `extensions` is made further down.
+      partTester: (manifest, runtime, body) => this.extensions.testWith(manifest, runtime, body),
       manualChecks: config.CONCH_ENGINE === 'mock',
     });
     this.integrations = new IntegrationService({
@@ -1750,6 +1762,12 @@ export class Services {
         getModel: () => this.voice.getModel(),
       },
       speech: { voiceNote: (markdown, format) => this.speech.voiceNote(markdown, format) },
+      // Chat apps that Conch apps bring (ADR 0122); `extensions` is made just below.
+      apps: {
+        catalog: () => this.extensions.catalog(),
+        name: (app) => this.extensions.name(app),
+        trusted: (app) => this.extensions.trusted(app),
+      },
       imessage: {
         setup: () => imessageSetup(new ChatDb(messages?.db ?? MESSAGES_DB)),
         open: (place) =>
@@ -1782,6 +1800,24 @@ export class Services {
       linker: (kind) => this.linked.linker(kind),
       finish: (_kind, found, channelId) => this.channels.linked(found, channelId),
       emit: (event) => this.broadcast.emit(event),
+    });
+    // Providers and chat apps that Conch apps bring (ADR 0122): theirs follow the apps you have.
+    this.extensions = new ExtensionService({
+      apps: this.conchApps,
+      providers: this.providers,
+      engine: (variant) => new ApiEngine(variant, this.settings, this.keys),
+      channels: () => this.channels,
+      door,
+      home: config.CONCH_HOME,
+      fetchOptions: {
+        gatewayPort: config.CONCH_PORT,
+        ...(this.pretendWorld && { pretend: this.pretendWorld.route }),
+      },
+      log: (message) => console.error(`[extensions] ${message}`),
+    });
+    endpoints.apps = (secrets) => this.extensions.adapter(secrets);
+    this.broadcast.on((event) => {
+      if (event.type === 'conch-apps.changed') void this.extensions.sync();
     });
     // Conversations and routine runs reach the channels through the same stream as the web app.
     this.broadcast.on((event) => this.channels.onEvent(event));
@@ -1982,6 +2018,7 @@ export class Services {
         endpoints.qq = this.mockQq.base;
         endpoints.qqFiles = [this.mockQq.base];
       }
+      if (this.pretendWorld) await this.pretendWorld.start();
     })();
   }
 
@@ -2312,7 +2349,7 @@ export class Services {
       ...new Set(
         (await this.channels.list().catch(() => ({ channels: [] }))).channels
           .filter((c) => c.enabled)
-          .map((c) => CHANNEL_NAMES[c.kind]),
+          .map((c) => channelName(c)),
       ),
     ];
     const parts = [
@@ -2853,6 +2890,8 @@ export class Services {
     this.#stopAsks ??= this.here.watch(() => this.config.CONCH_PORT);
     // The servers you added are providers too: built before the first request needs them.
     await this.providers.loadServers().catch(() => undefined);
+    // So are the ones your Conch apps bring (ADR 0122), before a chat or a channel needs them.
+    await this.extensions.sync().catch(() => undefined);
     await this.providers.load();
     this.network.start();
     this.telemetry.start();

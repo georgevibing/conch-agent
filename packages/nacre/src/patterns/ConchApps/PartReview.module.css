@@ -1,0 +1,270 @@
+@layer nacre.components {
+  /*
+   * A provider or a chat app, reviewed on its card (ADR 0122): a sunken panel
+   * inside the card, so what it brings reads as one thing — what it is, its
+   * key, and the test that proves it.
+   */
+  .review {
+    --pr-mark: var(--nc-text-accent);
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+    padding: var(--nc-space-3);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .head {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2-5);
+  }
+
+  .mark {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 2rem;
+    block-size: 2rem;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-accent-3);
+    color: var(--pr-mark);
+  }
+
+  .mark svg {
+    inline-size: 1.0625rem;
+    block-size: 1.0625rem;
+    stroke-width: 1.9;
+  }
+
+  .headText {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-inline-size: 0;
+  }
+
+  .title {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    font-weight: var(--nc-weight-semibold);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+  }
+
+  .meta {
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+    overflow-wrap: anywhere;
+  }
+
+  /* ── Its models: chips with the facts that matter ─────────────────── */
+  .models {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .model {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--nc-space-1-5);
+    padding: var(--nc-space-1) var(--nc-space-2);
+    border-radius: var(--nc-radius-full);
+    background: var(--nc-surface);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+    font-size: var(--nc-text-xs);
+  }
+
+  .modelName {
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text);
+  }
+
+  .modelFact {
+    color: var(--nc-text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── What to press in the chat app ───────────────────────────────── */
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1);
+    margin: 0;
+    padding-inline-start: var(--nc-space-5);
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+  }
+
+  .steps li::marker {
+    color: var(--nc-text-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── What the person types ───────────────────────────────────────── */
+  .fields {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-3);
+  }
+
+  .fields:empty {
+    display: none;
+  }
+
+  .field {
+    gap: var(--nc-space-1-5);
+  }
+
+  .fieldHead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--nc-space-2);
+  }
+
+  .getIt {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--nc-space-1);
+    border-radius: var(--nc-radius-xs);
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    color: var(--nc-text-accent);
+    text-decoration: none;
+  }
+
+  .getIt svg {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+
+  .getIt:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 2px;
+  }
+
+  @media (hover: hover) {
+    .getIt:hover {
+      text-decoration: underline;
+      text-underline-offset: 0.2em;
+    }
+  }
+
+  /* ── The test ────────────────────────────────────────────────────── */
+  .testRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-2) var(--nc-space-3);
+  }
+
+  .hint {
+    flex: 1 1 12rem;
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+  }
+
+  .hint:empty {
+    display: none;
+  }
+
+  /*
+   * Passed: the provider's own first words, streamed in Conch's type with the
+   * pearl caret, under a soft rim of the accent — it says hello before you
+   * add it. Reduced motion shows the words at once (StreamingText).
+   */
+  .said {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    padding: var(--nc-space-2-5) var(--nc-space-3) var(--nc-space-2-5) var(--nc-space-8);
+    border-radius: var(--nc-radius-md);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface);
+    box-shadow:
+      inset 0 0 0 1px var(--nc-accent-6),
+      var(--nc-elevation-1);
+    animation: nc-surface-in var(--nc-spring-soft-duration) var(--nc-spring-soft) both;
+  }
+
+  .quote {
+    position: absolute;
+    inset-block-start: var(--nc-space-2-5);
+    inset-inline-start: var(--nc-space-2-5);
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    color: var(--nc-text-accent);
+  }
+
+  .saidText {
+    margin: 0;
+    font-size: var(--nc-text-md);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+    text-wrap: pretty;
+    overflow-wrap: anywhere;
+  }
+
+  .saidBy,
+  .passed,
+  .failed {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-1-5);
+    margin: 0;
+    font-size: var(--nc-text-xs);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+  }
+
+  .passed,
+  .failed {
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-snug);
+    color: var(--nc-text);
+  }
+
+  .saidBy svg,
+  .passed svg,
+  .failed svg {
+    flex: none;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    margin-block-start: 0.125rem;
+    color: light-dark(oklch(0.55 0.12 var(--nc-success-h)), oklch(0.78 0.11 var(--nc-success-h)));
+  }
+
+  .passed svg,
+  .failed svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    margin-block-start: 0.0625rem;
+  }
+
+  .failed svg {
+    color: light-dark(oklch(0.56 0.2 var(--nc-danger-h)), oklch(0.74 0.16 var(--nc-danger-h)));
+  }
+
+  .passed {
+    animation: nc-fade-in var(--nc-duration-slow) var(--nc-ease-out) both;
+  }
+}
