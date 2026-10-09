@@ -115,7 +115,8 @@ test('every mode in the chat and in Settings, and Auto stops only for something 
   // The chat offers the full ladder, Auto included, whichever provider answers.
   // The mode is in the composer's one settings panel, beside the model.
   await page.getByRole('button', { name: /\. Mode: / }).click();
-  const modes = page.getByRole('radiogroup', { name: 'Mode' });
+  // Exactly "Mode": the panel's "Model" group is beside it.
+  const modes = page.getByRole('radiogroup', { name: 'Mode', exact: true });
   await expect(modes.getByRole('radio')).toHaveText([
     /^Read only/,
     /^Ask first/,

@@ -52,15 +52,13 @@ test('make Tally, add it, use it, count on its page, save it, remove it and add 
   // Its page is in the sidebar.
   await expect(page.getByRole('region', { name: 'Pinned apps' })).toContainText('Tally');
 
-  // 3. A message uses its tool: a change, so it asks first.
+  // 3. A message uses its tool: a change in an app made here, which Auto lets go
+  // ahead without a question (ADR 0117, ADR 0119).
   const composer = page.getByRole('textbox', { name: 'Message Conch' });
   await composer.fill('count one more');
   await composer.press('Enter');
-  await page
-    .getByRole('button', { name: /^Allow( once)?$/ })
-    .first()
-    .click({ timeout: 20_000 });
   await expect(page.getByText('Counted. The tally is at 1.')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('group', { name: /asks first/ })).toHaveCount(0);
 
   // 4. The app's page → Open Tally → a press in the page counts, with no question.
   await page.goto('/apps/capp_tally');
