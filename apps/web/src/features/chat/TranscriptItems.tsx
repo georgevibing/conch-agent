@@ -17,19 +17,14 @@ import {
   WorkedFor,
   TurnMeter,
   ToolCall,
-  toast,
   TurnCostTag,
   useSmoothText,
   type Speaker,
 } from '@conch/nacre';
-import { useQueryClient } from '@tanstack/react-query';
 import type { MailEdit } from '@conch/protocol';
-import { Brain, Undo2 } from 'lucide-react';
 import { memo, createContext, useContext, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 
-import { api } from '../../api/client';
-import { keys } from '../../api/queries';
 import type { TranscriptItem } from '../../live/reducer';
 import { useAutoFocus } from '../../lib/useAutoFocus';
 import { SentAttachments } from './AttachmentViewer';
@@ -40,7 +35,6 @@ import { drawnAsFile, FileToolItem } from './FileToolItem';
 import { drawnAsPicture, ImageToolItem } from './ImageToolItem';
 import { formatInput, managedProcessSummary, toolDiff, toolSummary } from './tools';
 import { ToolFound } from './ToolFound';
-import { memoryApi } from '../memory/api';
 import { HeldMemory } from '../memory/HeldMemory';
 import styles from './Transcript.module.css';
 import { useToolLabel } from '../integrations/ChatBits';
@@ -490,88 +484,24 @@ export function TaintItems({
   );
 }
 
-export function MemoryPill({ item }: { item: Of<'memory'> }) {
-  // Anything not remembered yet is the memory check asking (ADR 0087, ADR 0097):
-  // one card, saying why. Nothing routine ever waits here.
-  if (item.action === 'saved' && (item.held || item.pending))
-    return (
-      <HeldMemory
-        memoryId={item.memoryId}
-        content={item.content}
-        held={
-          item.held ?? {
-            verdict: 'ask',
-            reasons: [{ code: 'outside', words: 'Conch wasn’t sure about this one.' }],
-          }
-        }
-        {...(item.decided && { decided: item.decided })}
-      />
-    );
-  return <MemoryLine item={item} />;
-}
-
-function MemoryLine({ item }: { item: Of<'memory'> }) {
-  const client = useQueryClient();
-  const [pressed, setPressed] = useState<'undone' | 'kept'>();
-  // What you pressed shows at once (and goes back if it didn't work); after a
-  // reload, the chat's own log says what you chose.
-  const answer = pressed ?? item.decided;
-  const act = async (keep: boolean) => {
-    const before = pressed;
-    setPressed(keep ? 'kept' : 'undone');
-    try {
-      if (keep && item.action === 'forgotten' && item.memory)
-        await memoryApi.restore(item.memoryId);
-      else if (keep) await memoryApi.keep(item.memoryId, { seen: item.content });
-      else await api.deleteMemory(item.memoryId);
-      void client.invalidateQueries({ queryKey: keys.memories });
-    } catch (e) {
-      setPressed(before);
-      toast.error((e as Error).message);
-    }
-  };
-  // One it forgot, that you put back: remembered again.
-  const putBack = item.action === 'forgotten' && answer === 'kept';
-  const label = putBack
-    ? 'Put back'
-    : answer === 'undone' || item.action === 'forgotten'
-      ? 'Forgot'
-      : 'Remembered';
+/**
+ * A memory the check held, asking (ADR 0087, ADR 0097): one card, saying why.
+ * Nothing routine waits here; what it remembered or forgot is a step in the
+ * run's stories (`MemorySteps`).
+ */
+export function HeldMemoryItem({ item }: { item: Of<'memory'> }) {
   return (
-    <div
-      className={styles.memory}
-      data-action={answer === 'undone' ? 'undone' : putBack ? 'saved' : item.action}
-    >
-      <Brain aria-hidden />
-      <span className={styles.memoryText}>
-        <span className={styles.memoryLabel}>{label}</span> {item.content}
-      </span>
-      {item.action === 'forgotten'
-        ? // It forgot something: Undo puts it back, exactly as it was.
-          item.memory &&
-          !putBack && (
-            <Button
-              variant="ghost"
-              tone="neutral"
-              size="sm"
-              leadingIcon={<Undo2 />}
-              onClick={() => void act(true)}
-            >
-              Undo
-            </Button>
-          )
-        : answer !== 'undone' && (
-            <Button
-              variant="ghost"
-              tone="neutral"
-              size="sm"
-              leadingIcon={<Undo2 />}
-              onClick={() => void act(false)}
-            >
-              Undo
-            </Button>
-          )}
-    </div>
+    <HeldMemory
+      memoryId={item.memoryId}
+      content={item.content}
+      held={
+        item.held ?? {
+          verdict: 'ask',
+          reasons: [{ code: 'outside', words: 'Conch wasn’t sure about this one.' }],
+        }
+      }
+      {...(item.decided && { decided: item.decided })}
+    />
   );
 }
 

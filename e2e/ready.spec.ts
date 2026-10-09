@@ -59,7 +59,8 @@ test('first run to first conversation', async ({ page, request }) => {
   await composer.press('Enter');
 
   await expect(page).toHaveURL(/\/c\/c_/);
-  await expect(page.getByText(/Remembered/)).toBeVisible();
+  // Remembering is a step of the run (ADR 0103), told on its story's row.
+  await expect(page.getByRole('button', { name: /[Rr]emember(ed|ing) something/ })).toBeVisible();
   await page.getByRole('button', { name: 'Allow', exact: true }).click();
   // The answer folds into the call's story: the card goes.
   await expect(page.getByRole('group', { name: /asks first/ })).toHaveCount(0);

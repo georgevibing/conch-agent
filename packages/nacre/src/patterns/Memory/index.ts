@@ -21,3 +21,4 @@ export {
   type MemoryCellProps,
   type MemoryGlanceProps,
 } from './Knows';
+export { RememberedNote, type RememberedNoteProps } from './Remembered';

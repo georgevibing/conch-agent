@@ -18,7 +18,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Check-ins, standing orders and the morning’s note (ADR 0107). **Standing orders** are what the person said once, in their words: “Tell me” ones are what the check-in watches for, “You may” ones what they welcome. Neither is a permission, and a line says so beside any that reaches for one. The **check-in** card is calm: a pearl that glints when it told you something, one line on how it’s doing, and what it told you, each with **Why?**. The **morning’s note** shows what Conch learned and tidied overnight, each line with **Undo**, under a band of first light that rises once.',
+          'Check-ins, standing orders and the morning’s note (ADR 0107). **Standing orders** are what the person said once, in their words: “Tell me” ones are what the check-in watches for, “You may” ones what they welcome. Neither is a permission, and a line says so beside any that reaches for one. The **check-in** card is calm: a pearl that glints when it told you something, one line on how it’s doing, and what it told you, each with **Why?**. The **morning’s note** shows what Conch learned and tidied overnight, each line with **Undo**, under a band of first light that rises once. It sits at the top of Settings → Memory only, never in a chat.',
       },
     },
   },
@@ -281,7 +281,6 @@ export const MorningNote: Story = {
             setItems((all) => all.map((i) => (i.id === id ? { ...i, state: 'undone' } : i)))
           }
           onDismiss={() => setGone(true)}
-          onOpen={() => undefined}
         />
       </div>
     );
@@ -308,7 +307,6 @@ export const MorningNoteLater: Story = {
         items={[...lines, ...lines.map((l) => ({ ...l, id: `${l.id}b` }))]}
         onUndo={() => undefined}
         onDismiss={() => undefined}
-        onOpen={() => undefined}
       />
     </div>
   ),

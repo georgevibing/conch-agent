@@ -1496,7 +1496,7 @@ describe('Palette search', () => {
       ).toBeInTheDocument();
     }
     await user.keyboard('{Enter}');
-    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/memory'));
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/settings/memory'));
   });
 
   it('finds notifications and adding a phone by the words people use', async () => {

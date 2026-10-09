@@ -31,7 +31,7 @@ import {
   AssistantWords,
   Arrival,
   AssistantPlaceholder,
-  MemoryPill,
+  HeldMemoryItem,
   TaintItems,
   SkillUsedLine,
   PermissionCard,
@@ -50,6 +50,7 @@ import { NeedsAppsItem } from './NeedsApps';
 import { CappedItem, SpendNoteItem } from '../spend/Spend';
 import { QuestionItem } from '../questions/QuestionItem';
 import { PastChatsItem } from './PastChatsItem';
+import { isMemoryStep, memoryCall } from './MemorySteps';
 import { LearnedChatLine } from '../learning/LearnedChatLine';
 import { HeldItem, RoutedItem } from './OfflineBits';
 import { ArtifactChatCard } from '../artifacts/ArtifactChatCard';
@@ -131,6 +132,8 @@ interface Block {
   runTaints?: Extract<TranscriptItem, { kind: 'taint' }>[];
   /** The latest thinking between its steps, which the wait after them shows while it streams. */
   thought?: Extract<TranscriptItem, { kind: 'assistant' }>;
+  /** What it remembered or forgot among the steps, by the step drawn for each (`MemorySteps`). */
+  memories?: Map<string, Extract<TranscriptItem, { kind: 'memory' }>>;
   item?: TranscriptItem;
 }
 
@@ -147,6 +150,7 @@ function turnsOf(items: readonly TranscriptItem[]): { ended: Map<string, Turn>; 
   for (const item of items) {
     if (isTurnStart(item)) turn = { tools: [], files: [] };
     else if (item.kind === 'tool' && !isImageTool(item.name)) turn.tools.push(item);
+    else if (isMemoryStep(item)) turn.tools.push(memoryCall(item, 0));
     else if (item.kind === 'files') turn.files.push(item);
     else if (item.kind === 'turn-end') {
       ended.set(item.id, turn);
@@ -200,6 +204,14 @@ function blocks(items: TranscriptItem[]): Block[] {
     if (item.kind === 'tool' && !isImageTool(item.name) && !isFileTool(item.name)) {
       if (run?.tools) run.tools.push(item);
       else out.push((run = { key: `tools-${item.id}`, tools: [item], at }));
+      continue;
+    }
+    // What it remembered or forgot is a step of the run like any other (ADR 0103).
+    if (isMemoryStep(item)) {
+      const call = memoryCall(item, at);
+      if (run?.tools) run.tools.push(call);
+      else out.push((run = { key: `tools-${call.id}`, tools: [call], at }));
+      (run.memories ??= new Map()).set(call.id, item);
       continue;
     }
     if (run && besideRun(item)) {
@@ -379,6 +391,7 @@ function timeOf(item: TranscriptItem): number | undefined {
   if (item.kind === 'user') return item.at;
   if (item.kind === 'assistant' || item.kind === 'tool') return item.startedAt;
   if (item.kind === 'browser' || item.kind === 'artifact' || item.kind === 'looked') return item.at;
+  if (item.kind === 'memory') return item.at;
   return undefined;
 }
 
@@ -700,6 +713,7 @@ export const Transcript = memo(function Transcript({
           conversationId={conversationId}
           opened={opened}
           onOpen={onOpen}
+          {...(block.memories && { memories: block.memories })}
         />
       )}
       {block.runTaints && (
@@ -792,7 +806,7 @@ export const Transcript = memo(function Transcript({
           taskChat={Boolean(taskChat)}
         />
       )}
-      {block.item?.kind === 'memory' && <MemoryPill item={block.item} />}
+      {block.item?.kind === 'memory' && <HeldMemoryItem item={block.item} />}
       {block.item?.kind === 'learned' && (
         <LearnedChatLine items={block.item.items} decided={block.item.decided} />
       )}

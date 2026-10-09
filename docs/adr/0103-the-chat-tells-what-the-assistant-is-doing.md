@@ -169,6 +169,17 @@ chat (which draws them) always cut them the same way.
   worded by the rules from its answer (`ToolResult.approval`): "Didn't run the tests",
   "Didn't send an email", no effects, not a failure.
 - **Effects merged**: a file touched many times counts once ("Edited 3 files").
+- **Memory is a step too** (amended 2026-10-09). Conch's own `remember` and `forget`
+  never reach the chat as calls (`HostToolRows`); their `memory.saved` and
+  `memory.forgotten` events do. The chat draws each as the call it was
+  (`features/chat/MemorySteps.tsx`: "Remembered something", "Forgot something", a
+  `remember`-family step), so it joins the run it happened in, counts in the turn's
+  tally and is cut and headlined like any step ("Looked at a diary in Yazio and
+  remembered something"). Opened, the step shows the memory in full with a quiet
+  **Undo** (Nacre `RememberedNote` through `renderFound`); it has no Why? or raw call,
+  since the log has no call to ask about (`StoryStepView.explainable: false`). The old
+  pill with Undo outside any row is gone. A memory the check held still stands alone as
+  its **Remember this?** card (ADR 0087).
 
 ### What changed, what you missed, why
 

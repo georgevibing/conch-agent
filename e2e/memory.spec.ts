@@ -35,7 +35,7 @@ test('a memory a page planted is held and asked about, never used until you say 
     'This came from news.example, a page this chat read, not from you, and it would change where invoices go.',
   );
   await expect(card).toContainText('From news.example, a page this chat read');
-  await expect(page.getByText('Remembered', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Remembered something/ })).toHaveCount(0);
   // Held, not saved: recall doesn't find it.
   expect(await recall()).toBe(0);
 
@@ -68,15 +68,18 @@ test('an ordinary memory after reading is remembered at once, and Undo forgets i
   await say(page, 'remember that I prefer short summaries', /Got it/);
 
   // Someone is watching this chat, so it's remembered at once, where they can see it and undo it.
-  await expect(page.getByText('Remembered', { exact: true })).toBeVisible({ timeout: 15_000 });
+  // A step like any other (ADR 0103): its row opens to the memory, and Undo is there.
+  const step = page.getByRole('button', { name: /^Remembered something/ });
+  await expect(step).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('region', { name: 'Remember this?' })).toHaveCount(0);
   await expect.poll(recall).toBe(1);
 
-  await page.getByRole('button', { name: 'Undo' }).click();
-  await expect(page.getByText('Forgot', { exact: true })).toBeVisible();
+  await step.click();
+  await page.getByRole('button', { name: 'Undo “I prefer short summaries”' }).click();
+  await expect(page.getByRole('button', { name: /^Remembered something\s+Undone/ })).toBeVisible();
   await expect.poll(recall).toBe(0);
   await page.reload();
-  await expect(page.getByText('Forgot', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Remembered something\s+Undone/ })).toBeVisible();
 });
 
 test('the tidy-up quietly merges repeats and updates what changed, and can be undone', async ({

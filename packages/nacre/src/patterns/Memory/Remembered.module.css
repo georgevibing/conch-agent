@@ -1,0 +1,62 @@
+@layer nacre.components {
+  /* Under its step: the memory in the reply's type, Undo at the end like Why?. */
+  .note {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nc-space-2);
+    padding-inline-start: var(--nc-space-2-5);
+    border-inline-start: 2px solid var(--nc-border-subtle);
+  }
+
+  .text {
+    flex: 1;
+    min-inline-size: 0;
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    overflow-wrap: anywhere;
+  }
+
+  .note:not([data-state='kept']) .text {
+    color: var(--nc-text-subtle);
+  }
+
+  .undo {
+    appearance: none;
+    flex-shrink: 0;
+    margin: 0;
+    margin-inline-end: calc(-1 * var(--nc-space-1-5));
+    padding: 0 var(--nc-space-1-5);
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    corner-shape: var(--nc-corner-shape);
+    background: transparent;
+    color: var(--nc-text-muted);
+    font: inherit;
+    font-size: var(--nc-text-xs);
+    font-weight: var(--nc-weight-medium);
+    line-height: calc(var(--nc-text-sm) * var(--nc-leading-normal));
+    cursor: pointer;
+    transition:
+      background-color var(--nc-duration-fast) var(--nc-ease-out),
+      color var(--nc-duration-fast) var(--nc-ease-out);
+  }
+
+  .undo:disabled {
+    cursor: progress;
+    color: var(--nc-text-subtle);
+  }
+
+  @media (hover: hover) {
+    .undo:not(:disabled):hover {
+      background: var(--nc-wash-2);
+      color: var(--nc-text);
+    }
+  }
+
+  .undo:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: -2px;
+  }
+}

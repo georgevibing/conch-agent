@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { expectAccessible, renderNacre } from '../../test/render';
 import { MemoryCheck, SkillSuggestionCard } from './Memory';
+import { RememberedNote } from './Remembered';
 
 describe('Memory patterns', () => {
   it('offer a skill, never more', async () => {
@@ -97,5 +98,31 @@ describe('MemoryCheck (ADR 0087)', () => {
     rerender(<MemoryCheck settled="dismissed" content="Token abcd" reasons={[]} />);
     expect(screen.queryByRole('region')).toBeNull();
     expect(screen.getByText(/Not remembered: Token abcd/)).toBeInTheDocument();
+  });
+
+  it('say what a step remembered in full, with a quiet Undo', async () => {
+    const onUndo = vi.fn();
+    const text = 'George reported a weight of 82.4 kg';
+    const { container, rerender } = renderNacre(
+      <RememberedNote text={text} state="kept" onUndo={onUndo} />,
+    );
+    expect(screen.getByText(text)).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: `Undo “${text}”` }));
+    expect(onUndo).toHaveBeenCalledOnce();
+    await expectAccessible(container);
+
+    rerender(<RememberedNote text={text} state="kept" onUndo={onUndo} busy />);
+    expect(screen.getByRole('button', { name: `Undo “${text}”` })).toBeDisabled();
+
+    // Taken back: struck through, said, nothing left to undo.
+    rerender(<RememberedNote text={text} state="undone" />);
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(container.querySelector('s')).toHaveTextContent(text);
+    expect(container).toHaveTextContent('(undone)');
+
+    // One it forgot: Undo puts it back.
+    rerender(<RememberedNote text={text} state="forgotten" onUndo={onUndo} />);
+    expect(screen.getByRole('button', { name: `Undo forgetting “${text}”` })).toBeVisible();
+    await expectAccessible(container);
   });
 });

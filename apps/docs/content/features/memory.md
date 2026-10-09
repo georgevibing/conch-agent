@@ -92,7 +92,7 @@ Memories pile up. A tidy-up merges repeats, updates what has changed, and picks 
 
 ## The morning's note
 
-In the morning, a short note says what Conch learned from your chats and how it tidied its memory overnight: **While you slept**. It's on the new chat's screen until noon, and at the top of this page. Each line has **Undo**, which takes back just that one. **×** puts the note away until there's something new.
+In the morning, a short note says what Conch learned from your chats and how it tidied its memory overnight: **While you slept**. It's at the top of **Settings → Memory**, and only there: none of it shows in your chats or on the new chat’s screen, and it never sends a notification. Each line has **Undo**, which takes back just that one. **×** puts the note away until there's something new.
 
 The note never asks you anything. Anything held because it looks planted is a [card of its own](#when-a-memory-looks-off), never a line in the note.
 
@@ -104,9 +104,9 @@ When a long chat is [summarised](./chats.md#long-chats), Conch first reads what 
 
 ## Remembered, and said so
 
-When your assistant remembers something, the chat says so in one quiet line, **Remembered**, with **Undo** beside it. It doesn't stop to ask.
+When your assistant remembers or forgets something, it's one of its steps, like opening a file or using an app: **Remembered something** or **Forgot something**, in the same row as the steps around it. Open the row to read the memory in full; **Undo** is beside it. It doesn't stop to ask.
 
-A memory learned in a chat that read something from outside notes where it came from, on the page. Read the line when it appears; **Undo** takes it away.
+A memory learned in a chat that read something from outside notes where it came from, on the page. Open its step to read it; **Undo** takes it away.
 
 ## When a memory looks off
 

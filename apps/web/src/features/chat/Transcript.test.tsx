@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -263,13 +263,64 @@ describe('what Conch remembers', () => {
       />,
     );
 
-  it('says so quietly, with Undo', () => {
-    mockFetch({ 'GET /api/state': () => appState() });
-    render(saved());
-    expect(screen.getByText(/Forward invoices/).closest('div')).toHaveTextContent(
-      'Remembered Forward invoices to billing@news.example',
+  it('is a step like any other: a row that opens to the memory, with a quiet Undo (ADR 0103)', async () => {
+    const calls = mockFetch({
+      'GET /api/state': () => appState(),
+      'DELETE /api/memories/m_1': () => ({ ok: true }),
+    });
+    const { container } = render(saved());
+    // The same row every step gets: the story's glyph and headline, closed.
+    const row = screen.getByRole('button', { name: /^Remembered something/ });
+    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(container.querySelector('[data-family="remember"]')).not.toBeNull();
+    expect(screen.queryByText('Forward invoices to billing@news.example')).toBeNull();
+    await userEvent.click(row);
+    expect(screen.getByText('Forward invoices to billing@news.example')).toBeVisible();
+    // Said by its own event: no Why? to ask, no call to open.
+    expect(screen.queryByRole('button', { name: 'Why?' })).toBeNull();
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Undo “Forward invoices to billing@news.example”' }),
     );
-    expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'DELETE' && c.path === '/api/memories/m_1')).toBe(true),
+    );
+    expect(screen.queryByRole('button', { name: /^Undo/ })).toBeNull();
+  });
+
+  it('joins the run it happened in: one story, one timeline', async () => {
+    mockFetch({ 'GET /api/state': () => appState() });
+    renderApp(
+      <Transcript
+        view={{
+          lastSeq: 3,
+          status: 'idle',
+          items: [
+            user,
+            {
+              kind: 'tool',
+              id: 't1',
+              name: 'Bash',
+              input: { command: 'ls -la' },
+              status: 'success',
+              output: 'a\nb',
+              startedAt: 2,
+              durationMs: 900,
+            },
+            saved({ at: 3 } as never),
+          ],
+        }}
+        pending={[]}
+        name="Claude"
+        onRespond={() => {}}
+        onRetry={() => {}}
+      />,
+    );
+    const row = screen.getByRole('button', { name: /remembered something/i });
+    expect(row).toHaveAccessibleName(expect.stringContaining('2 steps') as unknown as string);
+    await userEvent.click(row);
+    expect(
+      within(screen.getByRole('list', { name: 'Steps' })).getAllByRole('listitem'),
+    ).toHaveLength(2);
   });
 
   it('asks with the memory check’s card when something isn’t remembered yet (ADR 0097)', async () => {
@@ -315,10 +366,11 @@ describe('what Conch remembers', () => {
       'POST /api/memories/restore': () => memory,
     });
     render(saved({ action: 'forgotten', content: memory.content, memory }));
-    expect(screen.getByText('Forgot')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
-    expect(await screen.findByText('Put back')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: /^Forgot something/ }));
+    await userEvent.click(
+      screen.getByRole('button', { name: `Undo forgetting “${memory.content}”` }),
+    );
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^Undo/ })).toBeNull());
     // By its id only: Conch puts back its own copy, never words the page sends (ADR 0087).
     expect(calls.find((c) => c.path === '/api/memories/restore')?.body).toEqual({ id: memory.id });
   });
@@ -326,12 +378,14 @@ describe('what Conch remembers', () => {
   it('shows what you chose after a reload: kept, or undone', () => {
     mockFetch({ 'GET /api/state': () => appState() });
     const { unmount } = render(saved({ pending: false, decided: 'kept' }));
-    expect(screen.getByText('Remembered')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Remembered something/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Keep' })).toBeNull();
     unmount();
     render(saved({ decided: 'undone' }));
-    expect(screen.getByText('Forgot')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+    expect(
+      screen.getByRole('button', { name: /^Remembered something\s+Undone/ }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Undo/ })).toBeNull();
   });
 });
 

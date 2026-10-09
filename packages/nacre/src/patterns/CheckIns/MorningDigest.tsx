@@ -16,8 +16,9 @@ import styles from './MorningDigest.module.css';
 /*
  * The morning's note (ADR 0107): what Conch learned from your chats and how it
  * tidied its memory overnight, in a few lines, each with Undo. It asks for
- * nothing: it's there to read once, then folds away. Memory stays silent the
- * rest of the day (ADR 0097).
+ * nothing: it's there to read once, then folds away. It lives at the top of
+ * Settings → Memory and nowhere else: never in a chat or on the new chat's
+ * screen, never a push (ADR 0097, ADR 0107).
  */
 
 export type DigestKind = 'learned' | 'replaced' | 'merged' | 'tidied';
@@ -44,8 +45,6 @@ export interface MorningDigestProps extends Omit<ComponentProps<'section'>, 'tit
   busy?: string;
   /** Got it: it folds out of its place, then this is called. */
   onDismiss?: () => void;
-  /** See everything Conch knows. */
-  onOpen?: () => void;
   /** Lines before “and N more”. Default 5. */
   max?: number;
 }
@@ -82,7 +81,6 @@ export function MorningDigest({
   onUndo,
   busy,
   onDismiss,
-  onOpen,
   max = 5,
   className,
   ...props
@@ -169,14 +167,9 @@ export function MorningDigest({
             );
           })}
         </ul>
-        {(more > 0 || onOpen) && (
+        {more > 0 && (
           <footer className={styles.foot}>
-            {more > 0 && <span className={styles.more}>and {more} more</span>}
-            {onOpen && (
-              <Button size="sm" variant="ghost" tone="neutral" onClick={onOpen}>
-                See what Conch knows
-              </Button>
-            )}
+            <span className={styles.more}>and {more} more</span>
           </footer>
         )}
       </div>

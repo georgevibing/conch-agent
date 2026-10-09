@@ -62,6 +62,7 @@ import { PastChatsSection } from '../import/PastChatsSection';
 import { ComputerTab } from '../computer/ComputerTab';
 import { ComeHomePage } from '../import/ComeHomePage';
 import { MemoryView } from '../memory/MemoryView';
+import { MorningNote } from '../memory/MorningNote';
 import { AboutYou } from './AboutYou';
 import { AgentsTab } from '../agents/AgentsTab';
 import { NotificationsTab } from '../notifications/NotificationsTab';
@@ -107,6 +108,8 @@ function MemoryTab({
   const kept = all.length - waiting;
   return (
     <Stack gap={8}>
+      {/* What Conch learned and tidied since you last looked, each with Undo: here and nowhere else (ADR 0107). */}
+      <MorningNote />
       <Section
         title="Memory"
         description="What I remember across conversations. Stored as plain files in ~/.conch/memory — yours to read, edit or delete."

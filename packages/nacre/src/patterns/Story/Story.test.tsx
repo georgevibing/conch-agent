@@ -301,4 +301,34 @@ describe('StoryStack', () => {
     expect(container.querySelector('[data-status="done"]')).toBeNull();
     await expectAccessible(container);
   });
+
+  it('asks no Why? of a step said by its own event, and still draws what it found', async () => {
+    const { container } = renderNacre(
+      <Story
+        headline="Looked at a diary in Yazio and remembered something"
+        family="connect"
+        status="done"
+        steps={[
+          { id: 'call', text: 'Looked at a diary in Yazio', status: 'success', family: 'connect' },
+          {
+            id: 'mem',
+            text: 'Remembered something',
+            status: 'success',
+            family: 'remember',
+            explainable: false,
+          },
+        ]}
+        defaultOpen
+        onExplain={async () => 'To see the diary.'}
+        renderFound={(id) => (id === 'mem' ? <p>George weighed 82.4 kg</p> : undefined)}
+      />,
+    );
+    // One timeline, both steps; Why? only on the call.
+    expect(
+      within(screen.getByRole('list', { name: 'Steps' })).getAllByRole('listitem'),
+    ).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Why?' })).toHaveLength(1);
+    expect(screen.getByText('George weighed 82.4 kg')).toBeVisible();
+    await expectAccessible(container);
+  });
 });

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { expect, userEvent, within } from 'storybook/test';
 
 import { CodeBlock } from '../CodeBlock';
+import { RememberedNote } from '../Memory';
 import { Sources } from '../ToolViews';
 import { favicons, files, readSteps, shipSteps, shirts, shopSteps, testSteps } from './fixtures';
 import { Story, type StoryProps, type StoryStepView } from './Story';
@@ -487,6 +488,89 @@ export const Families: S = {
 export const ReducedMotion: S = {
   globals: { motion: 'reduced' },
   render: () => <LiveRun defaultOpen />,
+};
+
+const WEIGHT = 'George reported a weight of 82.4 kg on 9 October, down from 83.1 kg a week before.';
+
+const memoryStep = (id: string, text: string, outcome?: string): StoryStepView => ({
+  id,
+  text,
+  ...(outcome && { outcome }),
+  status: 'success',
+  family: 'remember',
+  explainable: false,
+});
+
+const appStep: StoryStepView = {
+  id: 'toolu_diary',
+  text: 'Looked at a diary in Yazio',
+  outcome: '3 entries',
+  status: 'success',
+  family: 'connect',
+  subject: 'read_diary',
+  durationMs: 38_000,
+};
+
+/**
+ * What it remembered, told like any other step (ADR 0103): a row with the
+ * family's glyph; opened, the memory in full and a quiet Undo, placed like
+ * Why?. A step said by its own event has no Why?.
+ */
+export const Remembered: S = {
+  args: {
+    headline: 'Remembered something',
+    outcome: undefined,
+    family: 'remember',
+    steps: [memoryStep('mem-1', 'Remembered something')],
+    durationMs: undefined,
+    defaultOpen: true,
+    renderRaw: undefined,
+    onExplain: async () => 'Never asked: a memory step has no Why?.',
+    renderFound: () => <RememberedNote text={WEIGHT} state="kept" onUndo={() => {}} />,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText(WEIGHT)).toBeVisible();
+    await expect(canvas.queryByRole('button', { name: 'Why?' })).toBeNull();
+    await expect(canvas.getByRole('button', { name: `Undo “${WEIGHT}”` })).toBeVisible();
+  },
+};
+
+/** In a run: the app's step and the memory share one story and one timeline. */
+export const RememberedInARun: S = {
+  args: {
+    headline: 'Looked at a diary in Yazio and remembered something',
+    outcome: undefined,
+    family: 'connect',
+    steps: [appStep, memoryStep('mem-1', 'Remembered something')],
+    durationMs: 38_000,
+    defaultOpen: true,
+    onExplain: async () => 'To see what George logged today.',
+    renderFound: (id) =>
+      id === 'mem-1' ? <RememberedNote text={WEIGHT} state="kept" onUndo={() => {}} /> : undefined,
+  },
+};
+
+/** Taken back, and one it forgot: the words stay, quieter; Undo goes once there's nothing to undo. */
+export const RememberedUndone: S = {
+  args: {
+    headline: 'Remembered something and forgot something',
+    outcome: undefined,
+    family: 'remember',
+    steps: [
+      memoryStep('mem-1', 'Remembered something', 'Undone'),
+      memoryStep('mem-2', 'Forgot something'),
+    ],
+    durationMs: undefined,
+    defaultOpen: true,
+    renderRaw: undefined,
+    renderFound: (id) =>
+      id === 'mem-1' ? (
+        <RememberedNote text={WEIGHT} state="undone" />
+      ) : (
+        <RememberedNote text="George lives in Munich" state="forgotten" onUndo={() => {}} />
+      ),
+  },
 };
 
 export const Dark: S = {
