@@ -69,7 +69,8 @@ import { forTurn as attachmentsForTurn } from '../attachments/prompt';
 import type { AttachmentStore } from '../attachments/store';
 import { Emitter } from '../lib/emitter';
 import { newId } from '../lib/ids';
-import { buildSystemAppend, systemParts } from '../memory/prompt';
+import { buildSystemAppend, memoryNote, systemParts } from '../memory/prompt';
+import { CONTEXT_GUIDE, contextNote, instructionsFor, type Given } from './instructions';
 import type { MemoryStore } from '../memory/store';
 import type { LookModel, ReadThing } from '../memory/guard';
 import { memoryTools } from '../memory/tools';
@@ -114,7 +115,7 @@ import { shownPath } from '../undo/tracker';
 import { TurnReplies } from '../replies/turn';
 import { turnBudget } from '../engines/budget';
 import { guardTurn } from './turn-guard';
-import { resourceFeedback } from './resource-feedback';
+import { resourceFeedback, ROOM_NOTE } from './resource-feedback';
 import type { WorkloadPace } from '../recovery/pace';
 import { TurnPlan } from '../plans/turn';
 import { APPROVAL_WAIT_MS } from '../push/approve';
@@ -596,7 +597,20 @@ interface Live {
    * in every turn of the round, and gone when it ends.
    */
   room?: string;
+  /**
+   * What the provider's session was given so far (ADR 0085): its system text
+   * stays as it started, and what changes goes with the next message. A
+   * restart forgets it, and the next turn starts the instructions again.
+   */
+  given?: Given;
 }
+
+/**
+ * Parts of the system text whose change starts a session's instructions again
+ * instead of going with the next message (ADR 0085): who is answering, and a
+ * chat's goal and plan mode, which the person sets and expects to hold.
+ */
+const FIRM_PARTS: ReadonlySet<string> = new Set(['identity', 'goal', 'plan']);
 
 /** How often a running turn's log is saved: a crash loses this much, not the whole turn. */
 const CHECKPOINT_MS = 10_000;
@@ -954,7 +968,11 @@ export class ConversationManager {
        * Extra system-prompt context for every turn (e.g. the user's routines and
        * skills), and for this chat (what the user edited by hand, ADR 0046).
        */
-      context?: (engine: Engine, conversationId: string) => Promise<string>;
+      /** Conch's sections of the system text, each compared on its own turn to turn (ADR 0085). */
+      context?: (
+        engine: Engine,
+        conversationId: string,
+      ) => Promise<string | readonly (string | undefined)[]>;
       /**
        * Who answers: the chat's provider, another, or nobody yet (offline). Asked
        * before a turn, and again after one fails for a limit or an outage.
@@ -3664,16 +3682,64 @@ export class ConversationManager {
         engine.places && !guest
           ? this.deps.places?.(live.record.options?.place ?? settings.preferences.place)
           : undefined;
+      // The session keeps the system text it started with; what changed, and the memories
+      // this message brought up, go in front of the person's words (ADR 0085).
+      const sections = guest ? undefined : await this.deps.context?.(engine, conversationId);
+      const resources = feedback?.take(true);
+      const told = guest
+        ? undefined
+        : instructionsFor({
+            engine: engine.id,
+            resumeId: session?.resumeId,
+            given: live.given,
+            firm: FIRM_PARTS,
+            memories: system.recalled,
+            parts: [
+              // Conch's rules, how it works on a problem, the agent's persona and
+              // instructions, then the person (ADR 0101, ADR 0102).
+              { key: 'identity', text: system.identity },
+              ...(typeof sections === 'string' ? [sections] : (sections ?? [])).map((text, i) => ({
+                key: `context:${i}`,
+                text: text ?? '',
+              })),
+              { key: 'memory', text: system.guide },
+              { key: 'context-note', text: CONTEXT_GUIDE },
+              // What the chat is for (`/goal`), whichever provider answers.
+              { key: 'goal', text: goalPrompt(chatGoal(live.events)) ?? '' },
+              { key: 'plan', text: planning ? PLAN_MODE_PROMPT : '' },
+              { key: 'extra', text: extras?.systemExtra ?? '' },
+              // That this computer has room: the same words while it does.
+              { key: 'resources', text: resources === ROOM_NOTE ? resources : '' },
+            ],
+          });
+      // What is only about this message: which apps it named aren't here, who else is in
+      // the room, how busy this computer is.
+      const now = guest
+        ? []
+        : [
+            notConnectedPrompt(
+              apps.unseen,
+              apps.offers.map((o) => o.name),
+            ),
+            live.room,
+            resources === ROOM_NOTE ? undefined : resources,
+          ];
+      const lead = (update: string | undefined, recalled: readonly Memory[]) =>
+        contextNote([update, memoryNote(recalled), ...now]);
+      const ahead = told ? lead(told.update, told.memories) : '';
+      const aheadFresh = told ? lead(told.fresh, told.freshMemories) : '';
+      let sessionSeen = false;
+      const withLead = ahead ? `${ahead}\n\n${prompt}` : prompt;
       const turnInput: TurnInput = {
         conversationId,
-        prompt: missed ? `${missed}\n\n${prompt}` : prompt,
+        prompt: missed ? `${missed}\n\n${withLead}` : withLead,
         ...(attached?.images.length && { images: attached.images }),
         ...(this.deps.describe && { describe: this.deps.describe(engine, resolved.model) }),
         ...(readableDirs.length && { readableDirs }),
         ...(this.deps.protectedPaths?.length && { protectedPaths: this.deps.protectedPaths }),
         resumeId: session?.resumeId,
         ...(session?.resumeId && {
-          freshPrompt: everything ? `${everything}\n\n${prompt}` : prompt,
+          freshPrompt: [everything, aheadFresh, prompt].filter(Boolean).join('\n\n'),
         }),
         seq: asked,
         systemAppend: (guest
@@ -3692,25 +3758,7 @@ export class ConversationManager {
               // A guest's turn has no tools: its resilience is thinking it through (ADR 0102).
               guestPrompt(live.record.origin),
             ]
-          : // What stays the same turn after turn first, the memories this message
-            // brought up after it, so the provider's prompt cache keeps the prefix (ADR 0085).
-            [
-              // Conch's rules, how it works on a problem, the agent's persona and
-              // instructions, then the person (ADR 0101, ADR 0102).
-              system.identity,
-              await this.deps.context?.(engine, conversationId),
-              system.memory,
-              // What the chat is for (`/goal`), whichever provider answers.
-              goalPrompt(chatGoal(live.events)),
-              planning && PLAN_MODE_PROMPT,
-              notConnectedPrompt(
-                apps.unseen,
-                apps.offers.map((o) => o.name),
-              ),
-              extras?.systemExtra,
-              live.room,
-              feedback?.take(true),
-            ]
+          : [told?.system]
         )
           .filter(Boolean)
           .join('\n\n'),
@@ -3724,8 +3772,9 @@ export class ConversationManager {
         mcpServers: engine.integrations.mode === 'native' ? loaded?.servers : undefined,
         disallowedTools: guest ? GUEST_DISALLOWED : loaded?.disallowedTools,
         ...(guest && { wordsOnly: true }),
-        // A provider's own notes on each round of steps cost a small-model call: only when asked.
-        ...(settings.preferences.autoTitle && { narrate: true }),
+        // A provider's own notes on each round of steps cost a small-model call: only when
+        // asked, and only where someone may be watching (not a routine, a task or a chat app).
+        ...(settings.preferences.autoTitle && !extras && !live.record.origin && { narrate: true }),
         bridgedTools,
         signal: pace.signal,
         requestPermission,
@@ -3744,6 +3793,12 @@ export class ConversationManager {
         switch (event.type) {
           case 'session':
             answeredWith = event.model ?? answeredWith;
+            sessionSeen = true;
+            live.given = told?.given(
+              event.resumeId,
+              event.restarted === 'lost' ||
+                Boolean(session?.resumeId && session.resumeId !== event.resumeId),
+            );
             if (event.restarted === 'lost')
               this.deps.heal?.(`Gave ${engine.label} the chat so far to carry on`);
             live.record = {
@@ -3913,6 +3968,9 @@ export class ConversationManager {
           case 'done':
             outcome = event.outcome;
             if (event.context) context = event.context;
+            // A session that carried on without saying so (a key's provider) was given it all.
+            if (!sessionSeen && session?.resumeId && event.outcome === 'success')
+              live.given = told?.given(session.resumeId, false);
             completed = {
               usage: event.usage,
               error: event.error,

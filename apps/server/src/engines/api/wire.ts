@@ -71,6 +71,12 @@ export interface Wire {
    * means no.
    */
   seesFor?(model: string): boolean | undefined;
+  /**
+   * Whether this model can be sent tools that load only when it searches for
+   * them (`WireRequest.deferred`, ADR 0072): Anthropic's tool search. Unset or
+   * false means every tool is in the model's context from the start.
+   */
+  defersTools?(model: string): boolean;
   /** The schema dialect this model's provider reads (ADR 0072). Unset is `permissive`. */
   schemaFamily?(model: string): SchemaFamily;
 }

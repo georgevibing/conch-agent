@@ -1203,48 +1203,46 @@ export class Services {
                 ctx,
               ),
             ],
-      context: async (engine, conversationId) =>
-        [
-          engine.hostTools === false ? '' : await this.routines.promptSection(),
-          // What the person asked for every chat, in their words; never a permission (ADR 0107).
-          await this.standingOrders
-            .promptSection({ tools: engine.hostTools !== false })
-            .catch(() => ''),
-          await this.skills.promptSection(engine).catch(() => ''),
-          await this.browser.promptSection(engine).catch(() => ''),
-          // Your apps (ADR 0110): only where the tool is, in a chat someone is watching.
-          engine.hostTools === false ||
-          (await this.conversations.detail(conversationId).catch(() => undefined))?.conversation
-            .origin
-            ? ''
-            : computerPrompt(this.computerUse),
-          await this.integrations.promptSection(),
-          // The map, beside the apps: only for providers that can call `offer` (ADR 0060).
-          engine.hostTools === false
-            ? ''
-            : await this.offers.section(engine, conversationId).catch(() => ''),
-          engine.hostTools === false ? '' : await this.slack.promptSection().catch(() => ''),
-          // Making apps (ADR 0061): only where the maker's tools are, and someone can press the card.
-          engine.hostTools === false
-            ? ''
-            : await appsPrompt(this.conchApps, conversationId, {
-                tools: !(await this.conversations.detail(conversationId).catch(() => undefined))
-                  ?.conversation.origin,
-              }).catch(() => ''),
-          engine.hostTools === false ? '' : this.vault.promptSection(),
-          this.artifacts.promptSection(engine.hostTools !== false),
-          await this.artifacts.editedSection(conversationId).catch(() => ''),
-          engine.hostTools === false ? '' : await this.tasks.promptSection(engine).catch(() => ''),
-          // Only where someone is there to answer (not a routine, a task or a chat app).
-          engine.hostTools === false ||
-          (await this.conversations.detail(conversationId).catch(() => undefined))?.conversation
-            .origin
-            ? ''
-            : QUESTIONS_PROMPT,
-          engine.hostTools === false ? '' : await this.#pastChatsPrompt(conversationId),
-        ]
-          .filter(Boolean)
-          .join('\n\n'),
+      // In a fixed order, empty where a section has nothing: each is compared on its own (ADR 0085).
+      context: async (engine, conversationId) => [
+        engine.hostTools === false ? '' : await this.routines.promptSection(),
+        // What the person asked for every chat, in their words; never a permission (ADR 0107).
+        await this.standingOrders
+          .promptSection({ tools: engine.hostTools !== false })
+          .catch(() => ''),
+        await this.skills.promptSection(engine).catch(() => ''),
+        await this.browser.promptSection(engine).catch(() => ''),
+        // Your apps (ADR 0110): only where the tool is, in a chat someone is watching.
+        engine.hostTools === false ||
+        (await this.conversations.detail(conversationId).catch(() => undefined))?.conversation
+          .origin
+          ? ''
+          : computerPrompt(this.computerUse),
+        await this.integrations.promptSection(),
+        // The map, beside the apps: only for providers that can call `offer` (ADR 0060).
+        engine.hostTools === false
+          ? ''
+          : await this.offers.section(engine, conversationId).catch(() => ''),
+        engine.hostTools === false ? '' : await this.slack.promptSection().catch(() => ''),
+        // Making apps (ADR 0061): only where the maker's tools are, and someone can press the card.
+        engine.hostTools === false
+          ? ''
+          : await appsPrompt(this.conchApps, conversationId, {
+              tools: !(await this.conversations.detail(conversationId).catch(() => undefined))
+                ?.conversation.origin,
+            }).catch(() => ''),
+        engine.hostTools === false ? '' : this.vault.promptSection(),
+        this.artifacts.promptSection(engine.hostTools !== false),
+        await this.artifacts.editedSection(conversationId).catch(() => ''),
+        engine.hostTools === false ? '' : await this.tasks.promptSection(engine).catch(() => ''),
+        // Only where someone is there to answer (not a routine, a task or a chat app).
+        engine.hostTools === false ||
+        (await this.conversations.detail(conversationId).catch(() => undefined))?.conversation
+          .origin
+          ? ''
+          : QUESTIONS_PROMPT,
+        engine.hostTools === false ? '' : await this.#pastChatsPrompt(conversationId),
+      ],
       expand: (text) => this.skills.expand(text),
       // A chat-only model and a message that needs an app: offer one that can (ADR 0050).
       appsNeeded: (input) =>

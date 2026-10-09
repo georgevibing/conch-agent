@@ -19,7 +19,13 @@
  *    `thinking-display-updates-2026-08-18`) makes the thinking blocks short
  *    notes for the person watching (ADR 0103): Conch says them as narration,
  *    still replays the blocks verbatim, and a model or account that refuses
- *    the beta is asked again without it, and remembered.
+ *    the beta is asked again without it, and remembered;
+ *  - with many apps connected, their tools go with `defer_loading: true` and
+ *    the tool search tool (ADR 0072): sent whole every time, but read only when
+ *    the model searches. The search's `server_tool_use` and
+ *    `tool_search_tool_result` blocks are replayed verbatim like the rest, and
+ *    a model that refuses tool search is asked again with every tool up front,
+ *    and remembered.
  */
 import { z } from 'zod';
 
@@ -272,6 +278,118 @@ function safeJson(body: string): unknown {
   }
 }
 
+// ── Tool search (ADR 0072) ──────────────────────────────────────────────────
+
+/**
+ * Anthropic's tool search, the regex kind: the model writes a pattern and the
+ * API matches it against every deferred tool's name, description and argument
+ * names, case-insensitively. Generally available, no beta header.
+ */
+export const TOOL_SEARCH = {
+  type: 'tool_search_tool_regex_20251119',
+  name: 'tool_search_tool_regex',
+} as const;
+
+/** Models from before tool search (Claude 4.1 and earlier). Newer ones are tried, and healed. */
+const BEFORE_SEARCH = /^claude-(?:\d|instant|(?:opus|sonnet)-4(?:-[01])?(?:-\d{8})?$)/;
+
+/** What the model is told when some tools wait to be searched for. */
+export const SEARCH_NOTE =
+  'Not every tool is loaded yet: the tools of the apps the user connected load when you search for them with tool_search_tool_regex. Search for the app’s name or for what you need before you say an app can’t do something.';
+
+/**
+ * A 400 that refuses tool search or something it brought: the tool's type,
+ * `defer_loading`, a `tool_reference`, or the search's own blocks replayed.
+ * Conch sends no other server tools, so naming one of these is about this.
+ */
+export function searchRefused(detail: string): boolean {
+  return /tool[_ ]search|defer_loading|tool[_ ]reference|server_tool_use/i.test(
+    detail.slice(0, 2_000),
+  );
+}
+
+/** The tool search's own blocks in a reply, as opposed to calls Conch answers. */
+function isSearchBlock(block: unknown): boolean {
+  return (
+    isRecord(block) &&
+    (block.type === 'tool_search_tool_result' ||
+      (block.type === 'server_tool_use' && String(block.name).startsWith('tool_search_tool')))
+  );
+}
+
+/**
+ * The conversation without the tool search's blocks, for a request that sends
+ * no search tool: the calls to the tools it found stay, and those tools are
+ * sent whole, so every call still makes sense.
+ */
+export function withoutSearch(messages: readonly WireMessage[]): WireMessage[] {
+  return messages.map((message) => {
+    if (message.role !== 'assistant' || !Array.isArray(message.content)) return message;
+    const kept = message.content.filter((block) => !isSearchBlock(block));
+    if (kept.length === message.content.length) return message;
+    return { ...message, content: kept.length ? kept : [{ type: 'text', text: '…' }] };
+  });
+}
+
+/**
+ * The search's findings, without tools this request no longer sends (an app
+ * since disconnected): the API refuses a reference to a tool it wasn't given.
+ * Unchanged messages stay the same objects.
+ */
+export function knownReferences(
+  messages: readonly WireMessage[],
+  names: ReadonlySet<string>,
+): WireMessage[] {
+  const known = (ref: unknown) =>
+    !isRecord(ref) || typeof ref.tool_name !== 'string' || names.has(ref.tool_name);
+  return messages.map((message) => {
+    if (message.role !== 'assistant' || !Array.isArray(message.content)) return message;
+    let changed = false;
+    const content = message.content.map((block) => {
+      const result =
+        isRecord(block) && block.type === 'tool_search_tool_result' ? block.content : undefined;
+      if (!isRecord(result) || !Array.isArray(result.tool_references)) return block;
+      if (result.tool_references.every(known)) return block;
+      changed = true;
+      return {
+        ...block,
+        content: { ...result, tool_references: result.tool_references.filter(known) },
+      };
+    });
+    return changed ? { ...message, content } : message;
+  });
+}
+
+/**
+ * Of the tools asked to wait, the ones that really can: each must be one of
+ * this request's tools, and not one the conversation calls without showing it
+ * found (the search was summarised away with the start of the chat, ADR 0055),
+ * whose call would otherwise name a tool the model never saw. At least one tool
+ * always stays loaded, as the API requires. Empty means none waits.
+ */
+export function deferrable(request: Pick<WireRequest, 'tools' | 'messages' | 'deferred'>) {
+  const deferred = new Set(request.deferred ?? []);
+  if (!deferred.size) return deferred;
+  const names = new Set(request.tools.map((tool) => tool.name));
+  const found = new Set<string>();
+  const called = new Set<string>();
+  for (const message of request.messages) {
+    if (message.role !== 'assistant' || !Array.isArray(message.content)) continue;
+    for (const block of message.content) {
+      if (!isRecord(block)) continue;
+      if (block.type === 'tool_use') called.add(String(block.name));
+      const result = block.type === 'tool_search_tool_result' ? block.content : undefined;
+      if (isRecord(result) && Array.isArray(result.tool_references))
+        for (const ref of result.tool_references)
+          if (isRecord(ref) && typeof ref.tool_name === 'string') found.add(ref.tool_name);
+    }
+  }
+  for (const name of deferred)
+    if (!names.has(name) || name === TOOL_SEARCH.name || (called.has(name) && !found.has(name)))
+      deferred.delete(name);
+  return [...names].every((name) => deferred.has(name)) ? new Set<string>() : deferred;
+}
+
 // ── Prompt caching ──────────────────────────────────────────────────────────
 
 const EPHEMERAL = { type: 'ephemeral' } as const;
@@ -294,7 +412,11 @@ function marked(message: WireMessage): WireMessage {
 /**
  * The prompt with Anthropic's cache breakpoints (four at most), so a turn of
  * many steps pays a tenth for everything it already sent:
- *  - the last tool: the tool list, the same all chat long;
+ *  - the last tool: the tool list, the same all chat long. With tools that
+ *    wait to be searched for (`deferred`), the search tool goes first, the
+ *    loaded tools next with the breakpoint on the last of them, and the
+ *    waiting ones last with `defer_loading` (which can't carry a breakpoint,
+ *    and stays out of the cached prefix anyway);
  *  - the system prompt (tools and system together);
  *  - the last two of the person's side of the conversation: the newest, which
  *    the next step reads, and the one before, which is still there to read
@@ -302,18 +424,36 @@ function marked(message: WireMessage): WireMessage {
  *    the one before within the 20 blocks Anthropic looks back.
  * A prefix too short to cache is simply not cached; nothing fails.
  */
-export function cached(request: Pick<WireRequest, 'system' | 'messages' | 'tools'>) {
-  const tools = request.tools.map((tool, i) => ({
-    name: tool.name,
-    description: tool.description,
-    input_schema: tool.schema,
-    ...(i === request.tools.length - 1 && { cache_control: EPHEMERAL }),
-  }));
+export function cached(
+  request: Pick<WireRequest, 'system' | 'messages' | 'tools'>,
+  deferred: ReadonlySet<string> = new Set(),
+) {
+  const loaded = request.tools.filter((tool) => !deferred.has(tool.name));
+  const waiting = request.tools.filter((tool) => deferred.has(tool.name));
+  const searching = waiting.length > 0 && loaded.length > 0;
+  const tools = [
+    ...(searching ? [TOOL_SEARCH] : []),
+    ...(searching ? loaded : request.tools).map((tool, i, list) => ({
+      name: tool.name,
+      description: tool.description,
+      input_schema: tool.schema,
+      ...(i === list.length - 1 && { cache_control: EPHEMERAL }),
+    })),
+    ...(searching ? waiting : []).map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      input_schema: tool.schema,
+      defer_loading: true,
+    })),
+  ];
+  const system = searching
+    ? [request.system, SEARCH_NOTE].filter(Boolean).join('\n\n')
+    : request.system;
   const people = request.messages.flatMap((m, i) => (m.role === 'user' ? [i] : [])).slice(-2);
   const messages = request.messages.map((m, i) => (people.includes(i) ? marked(m) : m));
   return {
-    ...(request.system && {
-      system: [{ type: 'text', text: request.system, cache_control: EPHEMERAL }],
+    ...(system && {
+      system: [{ type: 'text', text: system, cache_control: EPHEMERAL }],
     }),
     messages,
     ...(tools.length && { tools }),
@@ -366,6 +506,8 @@ export class AnthropicWire implements Wire {
   readonly narrates = true;
   /** Models that refused thinking updates: asked without them from then on. */
   #noUpdates = new Set<string>();
+  /** Models that refused tool search: sent every tool up front from then on (ADR 0072). */
+  #noSearch = new Set<string>();
   #fetch: FetchLike;
   #models = new Map<string, WireModel>();
 
@@ -533,6 +675,15 @@ export class AnthropicWire implements Wire {
     return true;
   }
 
+  /**
+   * Tool search, on Anthropic's own API (ADR 0072), for a model from after it
+   * came and that hasn't refused it. Not through a route to Bedrock or Vertex,
+   * which serve it differently or not at all.
+   */
+  defersTools(model: string): boolean {
+    return !this.#route && !BEFORE_SEARCH.test(model) && !this.#noSearch.has(model);
+  }
+
   /** JSON Schema, with one object at the root (ADR 0072). */
   schemaFamily(): SchemaFamily {
     return 'anthropic';
@@ -574,7 +725,11 @@ export class AnthropicWire implements Wire {
     return this.#wantsEffort(request) && Boolean(this.#models.get(request.model)?.thinking);
   }
 
-  #body(request: WireRequest, updates = false): Record<string, unknown> {
+  #body(
+    request: WireRequest,
+    updates = false,
+    deferred: ReadonlySet<string> = new Set(),
+  ): Record<string, unknown> {
     const model = this.#models.get(request.model);
     const maxTokens = Math.min(model?.maxOutputTokens ?? TURN_MAX_TOKENS, TURN_MAX_TOKENS);
     const effort = request.effort;
@@ -582,7 +737,7 @@ export class AnthropicWire implements Wire {
     return {
       model: request.model,
       max_tokens: maxTokens,
-      ...cached(request),
+      ...cached(request, deferred),
       // Forced tool choice 400s on several current models, so the default
       // (`auto`) is the only one Conch uses.
       ...(this.#thinks(request) && {
@@ -595,12 +750,19 @@ export class AnthropicWire implements Wire {
   async *stream(request: WireRequest): AsyncIterable<WireEvent> {
     // Thinking said as notes for the person watching (ADR 0103), where the model takes it.
     let updates = this.#thinks(request) && !this.#noUpdates.has(request.model);
-    let messages = request.messages;
+    // Apps' tools wait to be searched for, where the model can (ADR 0072). A request
+    // without the search tool carries none of its blocks either: a chat that searched
+    // before, now on a model that can't, has every tool loaded instead.
+    let deferred = this.defersTools(request.model) ? deferrable(request) : new Set<string>();
+    let messages = deferred.size
+      ? knownReferences(request.messages, new Set(request.tools.map((tool) => tool.name)))
+      : withoutSearch(request.messages);
+    let thoughtless = false;
     const post = () =>
       this.#request(
         'messages',
         request.model,
-        { ...this.#body({ ...request, messages }, updates), stream: true },
+        { ...this.#body({ ...request, messages }, updates, deferred), stream: true },
         request.key,
         {
           stream: true,
@@ -609,7 +771,7 @@ export class AnthropicWire implements Wire {
         },
       );
     let response = await post();
-    for (let healed = 0; response.status === 400 && healed < 2; healed++) {
+    for (let healed = 0; response.status === 400 && healed < 3; healed++) {
       const body = await text(response, this.#label).catch(() => '');
       const error = ErrorBody.safeParse(safeJson(body));
       const detail = error.success ? (error.data.error.message ?? '') : '';
@@ -619,10 +781,19 @@ export class AnthropicWire implements Wire {
         updates = false;
         this.#noUpdates.add(request.model);
       }
+      // Tool search refused (a model or an account without it): every tool goes up
+      // front, the search's blocks go, and it isn't offered to that model again.
+      else if (deferred.size && searchRefused(detail)) {
+        deferred = new Set();
+        this.#noSearch.add(request.model);
+        messages = withoutSearch(messages);
+      }
       // Earlier thinking no longer matches what came before it (the start of the chat
       // was summarised, a stale page let go): it goes, and the request goes again.
-      else if (messages === request.messages && thinkingMismatch(detail))
-        messages = withoutThinking(request.messages);
+      else if (!thoughtless && thinkingMismatch(detail)) {
+        thoughtless = true;
+        messages = withoutThinking(messages);
+      }
       // A tool's schema it won't read: the engine simplifies it and asks again (ADR 0072).
       else if (request.tools.length > 0 && toolRefusal(detail) === 'schema')
         throw refusalError('schema', this.#label);
@@ -700,7 +871,11 @@ export class AnthropicWire implements Wire {
           if (typeof said === 'string')
             for (const line of updateLines(said)) yield { type: 'narration', text: line };
         }
-        if (entry && entry.block['type'] === 'tool_use') {
+        // The tool search's own call is replayed with its pattern, like any other.
+        if (
+          entry &&
+          (entry.block['type'] === 'tool_use' || entry.block['type'] === 'server_tool_use')
+        ) {
           // The arguments are replayed as an object. Bad JSON becomes an empty
           // one here and a tool error above — never a thrown turn.
           const parsed = entry.json ? safeJson(entry.json) : {};
@@ -738,7 +913,9 @@ export class AnthropicWire implements Wire {
         ? 'tools'
         : stopReason === 'max_tokens'
           ? 'length'
-          : 'end';
+          : stopReason === 'pause_turn'
+            ? 'pause'
+            : 'end';
     // Every block goes back exactly as it came, `redacted_thinking` included.
     const message: WireMessage = { role: 'assistant', content: ordered.map((e) => e.block) };
     yield { type: 'end', message, toolCalls, stop, usage };

@@ -25,11 +25,17 @@ export function resourceFeedback(
     previous = key;
     severity = level;
     saidAt = now();
-    const message =
-      initial && pace.phase === 'normal'
-        ? 'This computer currently has room for managed work. Use process_start for builds, tests and other heavy commands. Resource updates may ask you to reduce parallelism or wait; follow them without abandoning the task or bypassing permissions.'
-        : paceMessage(pace);
-    return `[Conch resource update: ${message}]`;
+    return initial && pace.phase === 'normal'
+      ? ROOM_NOTE
+      : `[Conch resource update: ${paceMessage(pace)}]`;
   };
   return { take };
 }
+
+/**
+ * What a turn starts with when this computer has room: the same words every
+ * time, so they can stay in a session's system text (ADR 0085). Any other
+ * update is about now, and goes with the message or a step's results.
+ */
+export const ROOM_NOTE =
+  '[Conch resource update: This computer currently has room for managed work. Use process_start for builds, tests and other heavy commands. Resource updates may ask you to reduce parallelism or wait; follow them without abandoning the task or bypassing permissions.]';

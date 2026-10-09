@@ -71,6 +71,7 @@ import {
 } from './context';
 import {
   ageToolPictures,
+  KEEP_TOOL_PICTURES,
   hasPictures,
   picturesOf,
   toolPictureCount,
@@ -90,6 +91,7 @@ import {
   searchTools,
   toolTokens,
 } from './lean';
+import { chatCacheKey, jobCacheKey } from './cachekey';
 import { collapseStalePages } from './pages';
 import { sessionsDir, TranscriptStore, type Session } from './session';
 import { ToolPlan, type ToolLessons } from './toolplan';
@@ -183,6 +185,8 @@ export function capabilitiesNote(options: {
 /** One tool the model can call, however it reached us. */
 export interface Callable {
   spec: ToolSpec;
+  /** An app's tool, bridged from its server: one that may wait to be searched for (ADR 0072). */
+  app?: boolean;
   /** The name Conch shows and records (`mcp__conch__remember`, `mcp__notion__search`). */
   display: string;
   run(
@@ -199,6 +203,8 @@ interface Fitting {
   label: string;
   system: string;
   specs: ToolSpec[];
+  /** Of `specs`, the ones that wait to be searched for, and so take no room until found (ADR 0072). */
+  deferred?: readonly string[];
   signal: AbortSignal;
   /** Only the turn being answered stays: the provider said "too long". */
   force?: boolean;
@@ -212,6 +218,16 @@ interface Fitting {
   /** How much a request may read before older turns are summarised: the meter's full mark. */
   room?: number;
 }
+
+/** The tools a model reads from the start: all but those waiting to be searched for (ADR 0072). */
+function inContext(specs: readonly ToolSpec[], deferred: readonly string[] = []): ToolSpec[] {
+  if (!deferred.length) return [...specs];
+  const waiting = new Set(deferred);
+  return specs.filter((spec) => !waiting.has(spec.name));
+}
+
+/** A provider pausing its own work part-way is asked to carry on, this many times a turn. */
+const MAX_PAUSES = 8;
 
 /** A notice the engine may need to emit from inside a retry loop. */
 interface Notice {
@@ -337,6 +353,7 @@ export function buildTools(
     add(bridged.name, (name) => ({
       spec: { name, description: bridged.description, schema: bridgedSchema(bridged.inputSchema) },
       display: bridged.name,
+      app: true,
       // Already wrapped in the user's permission rules by the caller.
       run: async (raw, toolUseId) => {
         input.signal.throwIfAborted();
@@ -790,6 +807,8 @@ export class ApiEngine implements Engine {
         ...(input.images?.length && { images: input.images }),
         maxTokens: input.maxTokens ?? COMPLETION_MAX_TOKENS,
         signal: input.signal,
+        // Jobs with the same instructions share a cache, so they share a key (ADR 0085).
+        cacheKey: await jobCacheKey(this.variant.home, input.system),
       });
     } catch (error) {
       throw new Error(plainMessage(error, this.label, key));
@@ -837,6 +856,8 @@ export class ApiEngine implements Engine {
     try {
       key = await this.#key(input.signal);
       const model = await this.#model(input.options.model);
+      // The same on every request of this chat, whichever transcript it's in (ADR 0085).
+      const cacheKey = await chatCacheKey(this.variant.home, input.conversationId);
       const resuming =
         input.resumeId && TranscriptStore.valid(input.resumeId) ? input.resumeId : undefined;
       const sessionId = resuming ?? TranscriptStore.newId();
@@ -900,6 +921,8 @@ export class ApiEngine implements Engine {
         lessons: this.#toolLessons,
       });
       if (plan.notice) yield plan.notice;
+      // With many apps connected, their tools wait to be searched for, where the wire can (ADR 0072).
+      const defers = !lean && (this.variant.wire.defersTools?.(model) ?? false);
       /** The agent's instructions were too long for this model to read whole beside the chat. */
       let shortened = false;
       let resourceContext = '';
@@ -947,6 +970,7 @@ export class ApiEngine implements Engine {
         label: listed?.label ?? model,
         system: systemFor(),
         specs: plan.specs(),
+        deferred: plan.deferred(defers),
         signal: input.signal,
         spent,
       };
@@ -962,6 +986,8 @@ export class ApiEngine implements Engine {
       }
       /** Asked again once, by itself, after the provider said "too long" (ADR 0055). */
       let healed = false;
+      /** Times the provider paused its own work this turn and was asked to carry on. */
+      let pauses = 0;
       /** Asked again once without pictures, after the model refused them (ADR 0070). */
       let unseen = false;
       /** How much this turn may do before it checks in (ADR 0085). */
@@ -987,11 +1013,13 @@ export class ApiEngine implements Engine {
         if (lean && plan.refresh()) {
           fitting.system = systemFor();
           fitting.specs = plan.specs();
+          fitting.deferred = plan.deferred(defers);
         }
         const messageId = newId('msg');
         let said = false;
         let end: Extract<WireEvent, { type: 'end' }> | undefined;
         // Only the newest screenshots stay pictures: each is paid for on every request.
+        // They go in batches, so the cached prefix holds between (ADR 0085).
         session.messages = ageToolPictures(session.messages);
         // The chat fits the window before every request: tool results grow it mid-turn too.
         yield* this.#fit(fitting);
@@ -1008,8 +1036,10 @@ export class ApiEngine implements Engine {
           // Tools go on every request in the loop, including the one carrying
           // results — leave them off and the model forgets it has any.
           tools: fitting.specs,
+          ...(fitting.deferred?.length && { deferred: fitting.deferred }),
           effort: input.options.effort,
           signal: input.signal,
+          cacheKey,
         };
         try {
           for await (const event of plan.read(this.#stream(request))) {
@@ -1052,6 +1082,7 @@ export class ApiEngine implements Engine {
             if (mended.notice) yield mended.notice;
             fitting.system = systemFor();
             fitting.specs = plan.specs();
+            fitting.deferred = plan.deferred(defers);
             continue;
           }
           // "Too long" before a word was said: fold harder and ask once more, quietly.
@@ -1076,7 +1107,7 @@ export class ApiEngine implements Engine {
             session.factor,
             end.usage.inputTokens,
             estimateTokens(request.system) +
-              estimateTokens(request.tools) +
+              estimateTokens(inContext(request.tools, request.deferred)) +
               estimateTokens(request.messages),
           );
         total.inputTokens += end.usage?.inputTokens ?? 0;
@@ -1100,6 +1131,12 @@ export class ApiEngine implements Engine {
               ...(fitting.room && { window: fitting.room }),
             }
           : undefined;
+        // The provider paused its own work part-way (a long search): its reply stays, and it carries on.
+        if (!end.toolCalls.length && end.stop === 'pause' && pauses++ < MAX_PAUSES) {
+          await save();
+          yield { type: 'usage', usage: usage(), ...(context && { context }) };
+          continue;
+        }
         if (!end.toolCalls.length) {
           await save();
           yield { type: 'done', outcome: 'success', usage: usage(), ...(context && { context }) };
@@ -1272,20 +1309,19 @@ export class ApiEngine implements Engine {
     const factor = session.factor ?? 1;
     const count = (value: unknown) => Math.ceil(estimateTokens(value) * factor);
     const window = await this.#window(fitting.model);
-    const { budget, low } = budgetFor({
-      window,
-      system: count(fitting.system),
-      tools: count(fitting.specs),
-    });
-    fitting.room = budget + count(fitting.system) + count(fitting.specs);
+    const tools = count(inContext(fitting.specs, fitting.deferred));
+    const { budget, low } = budgetFor({ window, system: count(fitting.system), tools });
+    fitting.room = budget + count(fitting.system) + tools;
     const summaryCost = session.summary
       ? Math.ceil(textTokens(preface(session.summary.text)) * factor)
       : 0;
     const room = { budget: Math.max(1, budget - summaryCost), low };
-    // Stale page views go before any turn is folded (ADR 0085): the page has changed since.
+    // Stale page views and old screenshots go before any turn is folded (ADR 0085):
+    // the page has changed since.
     if (session.messages.reduce((sum, m) => sum + count(m), 0) > room.budget * STALE_PAGES) {
       const pages = collapseStalePages(session.messages);
       if (pages.collapsed) session.messages = pages.messages;
+      session.messages = ageToolPictures(session.messages, KEEP_TOOL_PICTURES, 0);
     }
     const fold = planFold(session.messages, {
       budget: room,

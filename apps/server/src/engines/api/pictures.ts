@@ -35,6 +35,14 @@ export function toolPicturesLead(tools: readonly string[]): string {
 /** How many tool pictures stay in the transcript; older ones become a line of text. */
 export const KEEP_TOOL_PICTURES = 3;
 
+/**
+ * How many more may gather before the older ones go, all at once. Letting one
+ * go changes the transcript there, so the provider's prompt cache (and, on
+ * newer Claude models, the thinking replayed after it) starts again from that
+ * point: once every dozen pictures, not on every step.
+ */
+export const TOOL_PICTURE_BATCH = 12;
+
 /** What an old screenshot becomes. */
 export const OLD_PICTURE =
   '[An earlier picture from a tool, no longer shown. Take a new one if you need to look again.]';
@@ -170,14 +178,18 @@ export function wordsForPictures(
 /**
  * Only the newest few tool pictures stay as pictures: every picture is sent,
  * and paid for, on every request after it. The older ones become a line that
- * says so. The person's own pictures always stay.
+ * says so, in batches: nothing changes until more than `keep + batch` have
+ * gathered, then all but the newest `keep` go. The person's own pictures
+ * always stay.
  */
 export function ageToolPictures(
   messages: readonly WireMessage[],
   keep = KEEP_TOOL_PICTURES,
+  batch = TOOL_PICTURE_BATCH,
 ): WireMessage[] {
-  let seen = 0;
   const out = [...messages];
+  if (out.reduce((n, m) => n + toolPictureCount(m), 0) <= keep + batch) return out;
+  let seen = 0;
   for (let i = out.length - 1; i >= 0; i--) {
     const message = out[i] as WireMessage;
     const count = toolPictureCount(message);

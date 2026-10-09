@@ -129,8 +129,8 @@ describe('a round', () => {
     // The first answers your message; the second is told whose turn it is, by Conch.
     expect(engine.turns[0]?.prompt).toContain('@Researcher find options');
     expect(engine.turns[1]?.prompt).toContain('Researcher handed the conversation to you, Writer');
-    for (const turn of engine.turns)
-      expect(turn.systemAppend).toContain('# Talking with other agents');
+    // Who else is in the room goes with each turn of the round (ADR 0112, ADR 0085).
+    for (const turn of engine.turns) expect(turn.prompt).toContain('# Talking with other agents');
     expect(engine.turns[1]?.systemAppend).toContain('You are Writer');
     // Nothing of yours was added, and the round says how it went.
     expect(events.filter((e) => e.type === 'user.message')).toHaveLength(1);
@@ -142,6 +142,7 @@ describe('a round', () => {
     await chats.send({ conversationId: id, clientMessageId: 'plain', text: 'thanks' });
     for (let i = 0; i < 200 && engine.turns.length === after; i++)
       await new Promise((r) => setTimeout(r, 5));
+    expect(engine.turns.at(-1)?.prompt).not.toContain('# Talking with other agents');
     expect(engine.turns.at(-1)?.systemAppend).not.toContain('# Talking with other agents');
   });
 

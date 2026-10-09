@@ -44,6 +44,12 @@ const FITS: readonly [CatalogueLevel, number][] = [
   ['tiny', 0.4],
 ];
 
+/**
+ * Past this share of the window, the apps' tools wait to be searched for
+ * (ADR 0072): Claude Code's own line for deferring tools in its `auto` mode.
+ */
+export const DEFER_SHARE = 0.1;
+
 export const CHAT_ONLY: Notice = {
   type: 'notice',
   code: 'chat-only',
@@ -123,6 +129,21 @@ export class ToolPlan {
   specs(): ToolSpec[] {
     if (this.mode !== 'native') return [];
     return sanitiseSpecs(this.#specs, this.#strict ? 'strict' : this.options.family);
+  }
+
+  /**
+   * The apps' tools that may wait until the model searches for them, on a wire
+   * that can (`defers`, ADR 0072): only sent natively, only when every tool
+   * together would take more than a tenth of the window, and never Conch's own
+   * (memory, asking, plans, tasks, the browser), which stay loaded. Worked out
+   * from the tools and the window alone, so the same chat gets the same answer
+   * on every request and the cached prefix holds.
+   */
+  deferred(defers: boolean): string[] {
+    if (!defers || this.mode !== 'native') return [];
+    const apps = [...this.options.tools].flatMap(([name, tool]) => (tool.app ? [name] : []));
+    if (!apps.length || apps.length === this.options.tools.size) return [];
+    return estimateTokens(this.specs()) > this.options.window * DEFER_SHARE ? apps : [];
   }
 
   /** The system prompt, with the tools in words when that's how they go. */

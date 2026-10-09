@@ -8,9 +8,11 @@ import {
   ageToolPictures,
   hasPictures,
   isToolPictures,
+  KEEP_TOOL_PICTURES,
   OLD_PICTURE,
   picturesOf,
   refusesImages,
+  TOOL_PICTURE_BATCH,
   TOOL_PICTURES,
   wordsForPictures,
 } from './pictures';
@@ -160,7 +162,7 @@ describe('taking pictures out of a transcript', () => {
       ...chatToolResults([screenshot(`c${n}`, `/9j/${n}${'A'.repeat(40)}`)]),
     ];
     const messages = [person, ...turn(1), ...turn(2), ...turn(3), ...turn(4), ...turn(5)];
-    const aged = ageToolPictures(messages, 3);
+    const aged = ageToolPictures(messages, 3, 0);
     const left = aged.filter(isToolPictures).map((m) => picturesOf(m).length);
     expect(left).toEqual([0, 0, 1, 1, 1]);
     expect(JSON.stringify(aged)).toContain(OLD_PICTURE);
@@ -169,12 +171,43 @@ describe('taking pictures out of a transcript', () => {
     expect(aged.filter(startsTurn)).toHaveLength(1);
   });
 
+  it('lets old pictures go in batches, so the cached start of the chat holds between', () => {
+    const turn = (n: number): WireMessage[] => [
+      { role: 'assistant', content: null, tool_calls: [{ id: `c${n}` }] },
+      ...chatToolResults([screenshot(`c${n}`, `/9j/${n}${'A'.repeat(40)}`)]),
+    ];
+    const pictures = (messages: readonly WireMessage[]) =>
+      messages.reduce((n, m) => n + picturesOf(m).length, 0);
+    let messages: WireMessage[] = [person];
+    const counts: number[] = [];
+    let changes = 0;
+    for (let n = 1; n <= 40; n++) {
+      messages = [...messages, ...turn(n)];
+      const before = JSON.stringify(messages);
+      messages = ageToolPictures(messages, KEEP_TOOL_PICTURES, TOOL_PICTURE_BATCH);
+      if (JSON.stringify(messages) !== before) changes++;
+      counts.push(pictures(messages) - 1);
+    }
+    // Every step until the batch fills is the same transcript plus the new step.
+    expect(counts.slice(0, KEEP_TOOL_PICTURES + TOOL_PICTURE_BATCH)).toEqual(
+      Array.from({ length: KEEP_TOOL_PICTURES + TOOL_PICTURE_BATCH }, (_, i) => i + 1),
+    );
+    expect(Math.max(...counts)).toBe(KEEP_TOOL_PICTURES + TOOL_PICTURE_BATCH);
+    expect(Math.min(...counts.slice(KEEP_TOOL_PICTURES))).toBe(KEEP_TOOL_PICTURES);
+    // 40 screenshots: two letting-gos, where every step after the third was one.
+    expect(changes).toBe(Math.floor((40 - KEEP_TOOL_PICTURES - 1) / (TOOL_PICTURE_BATCH + 1)));
+    // Never more pictures than a request may carry at full size.
+    expect(KEEP_TOOL_PICTURES + TOOL_PICTURE_BATCH).toBeLessThan(20);
+    // The person's own picture stays.
+    expect(messages[0]).toBe(person);
+  });
+
   it('ages nested Anthropic pictures too', () => {
     const wire = new AnthropicWire(globalThis.fetch);
     const messages = [1, 2, 3].flatMap((n) =>
       wire.toolResults([screenshot(`t${n}`, `/9j/${n}AAAA`)]),
     );
-    const aged = ageToolPictures(messages, 1);
+    const aged = ageToolPictures(messages, 1, 0);
     expect(aged.map((m) => picturesOf(m).length)).toEqual([0, 0, 1]);
   });
 

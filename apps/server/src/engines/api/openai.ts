@@ -150,6 +150,13 @@ export interface ChatPreset {
   regionHint?: string;
   /** A prettier name for a model id, when the list gives none. */
   modelLabel?(id: string): string;
+  /**
+   * How the provider is told which chat a request belongs to, so its requests
+   * reach the same prompt cache (ADR 0085): a body field (`prompt_cache_key`:
+   * OpenAI, Mistral, Cerebras) or a header (`x-grok-conv-id`: xAI). Unset where
+   * the provider documents none: it caches by the prefix alone, and nothing is sent.
+   */
+  cacheKey?: { body: 'prompt_cache_key' } | { header: string };
 }
 
 /** How one of a preset's own requests is sent. */
@@ -485,6 +492,8 @@ export class OpenAiWire implements Wire {
   #models = new Map<string, ModelFacts>();
   #noTools = new Set<string>();
   #noEffort = new Set<string>();
+  /** The provider refused its own cache-key field once: it isn't sent again. */
+  #noCacheKey = false;
   #endpoint?: Endpoint;
 
   constructor(
@@ -703,6 +712,31 @@ export class OpenAiWire implements Wire {
     return chatToolResults(results);
   }
 
+  /** The chat's cache key, in the body: only where the provider declares the field. */
+  #cacheBody(key: string | undefined): Record<string, unknown> {
+    const where = this.preset.cacheKey;
+    return key && where && 'body' in where && !this.#noCacheKey ? { [where.body]: key } : {};
+  }
+
+  /**
+   * A refusal whose body names the cache-key field (a server that takes no
+   * field it doesn't know, wherever it says which): healed by asking again
+   * without it, and never sending it again.
+   */
+  #refusedCacheKey(body: string, key: string | undefined): boolean {
+    const where = this.preset.cacheKey;
+    if (!key || !where || !('body' in where) || this.#noCacheKey) return false;
+    if (!body.includes(where.body)) return false;
+    this.#noCacheKey = true;
+    return true;
+  }
+
+  /** Or as a header, where that's how the provider takes it. */
+  #cacheHeaders(key: string | undefined): ListRequest {
+    const where = this.preset.cacheKey;
+    return key && where && 'header' in where ? { headers: { [where.header]: key } } : {};
+  }
+
   #effort(request: Pick<WireRequest, 'model' | 'effort'>): Record<string, unknown> {
     const effort: EffortChoice = request.effort;
     if (effort === 'auto' || this.#noEffort.has(request.model)) return {};
@@ -725,6 +759,7 @@ export class OpenAiWire implements Wire {
       ...(this.preset.usageOption !== false && { stream_options: { include_usage: true } }),
       ...chatTools(request.tools),
       ...this.#effort(request),
+      ...this.#cacheBody(request.cacheKey),
       ...this.preset.extraBody,
     };
   }
@@ -743,6 +778,7 @@ export class OpenAiWire implements Wire {
         request.key || undefined,
         this.#body(request),
         request.signal,
+        this.#cacheHeaders(request.cacheKey),
       );
       if (response.ok) return response;
       if (response.status === 400 || response.status === 404 || response.status === 422) {
@@ -761,6 +797,7 @@ export class OpenAiWire implements Wire {
           this.#noEffort.add(request.model);
           continue;
         }
+        if (this.#refusedCacheKey(body, request.cacheKey)) continue;
         throw mapChatError(response.status, error, undefined, this.preset, request.key);
       }
       throw await this.#fail(response, request.key);
@@ -792,24 +829,35 @@ export class OpenAiWire implements Wire {
    */
   async complete(request: WireCompletion): Promise<Completion> {
     const field = this.preset.maxTokens ?? 'max_tokens';
-    const response = await this.#send(
-      `${this.endpoint.base}/chat/completions`,
-      'POST',
-      request.key || undefined,
-      {
-        model: request.model,
-        messages: [
-          { role: 'system', content: request.system },
-          chatUserMessage(request.prompt, request.images),
-        ],
-        stream: true,
-        ...(this.preset.usageOption !== false && { stream_options: { include_usage: true } }),
-        // A thinking model spends some of these before it says anything.
-        [field]: Math.max(request.maxTokens, 1024),
-        ...this.preset.extraBody,
-      },
-      request.signal,
-    );
+    const ask = () =>
+      this.#send(
+        `${this.endpoint.base}/chat/completions`,
+        'POST',
+        request.key || undefined,
+        {
+          model: request.model,
+          messages: [
+            { role: 'system', content: request.system },
+            chatUserMessage(request.prompt, request.images),
+          ],
+          stream: true,
+          ...(this.preset.usageOption !== false && { stream_options: { include_usage: true } }),
+          // A thinking model spends some of these before it says anything.
+          [field]: Math.max(request.maxTokens, 1024),
+          ...this.#cacheBody(request.cacheKey),
+          ...this.preset.extraBody,
+        },
+        request.signal,
+        this.#cacheHeaders(request.cacheKey),
+      );
+    let response = await ask();
+    if (!response.ok && (response.status === 400 || response.status === 422)) {
+      const body = await text(response, this.preset.label).catch(() => '');
+      const error = errorIn(body);
+      if (!this.#refusedCacheKey(body, request.cacheKey))
+        throw mapChatError(response.status, error, undefined, this.preset, request.key);
+      response = await ask();
+    }
     if (!response.ok) throw await this.#fail(response, request.key);
     if (!response.body) throw new ApiError('network', `${this.preset.label} sent an empty reply.`);
     let said = '';

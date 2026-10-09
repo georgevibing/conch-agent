@@ -51,6 +51,7 @@ what providers' lists say about sight ranges from exact (OpenRouter's `input_mod
 
 Only the newest three tool pictures stay pictures in a transcript; older ones become a line that
 says so (`ageToolPictures`). Every picture is sent, and paid for, on every request after it.
+(Amended below: they go in batches.)
 
 **Whether a model sees is said outright, per model.** Each wire's `seesFor(model)` answers: the
 provider's list when it says (OpenRouter's modalities, Ollama's and LM Studio's capabilities,
@@ -118,3 +119,26 @@ see.
   they always did.
 - Codex's and the ACP programs' turns don't count what describing cost; their usage is the
   program's own total. They rarely need it: every Codex model sees.
+
+## Amended 2026-10-09: a picture goes at the size the model reads
+
+A screenshot of your own Chrome on a Mac was taken at the screen's density, twice the page's
+CSS pixels: four times the pixels, while its words and `browser_click_at` spoke CSS pixels. And
+a picture past what a model reads is scaled down by the provider, in a space the tool never
+named (a computer-use tool's is refused outright).
+
+- **One picture pixel per CSS pixel** (`browser/shot.ts`, Playwright's `scale: 'css'`), on any
+  screen. The computer tool already sends points, not Retina pixels (`policy.ts` `fitPicture`).
+- **No bigger than the model reads**, in one table (`engines/api/sight.ts` `pictureLimit`):
+  Claude before 4.7 reads 1568 px and 1568 visual tokens (⌈w ÷ 28⌉ × ⌈h ÷ 28⌉); Claude 4.7 and
+  later 2576 px and 4784 tokens, kept to 2000 px, past which a request with more than 20 pictures
+  is refused; every other model 2000 px (OpenAI reads 2048). A model not named is the newest
+  Claude. A screenshot past its limit is scaled to fit (`fitPictureTo`), and its words give the
+  size it went at, so `browser_click_at` maps the model's x,y back to the page exactly as before.
+- **Not smaller than that.** Neither the browser nor the computer tool has a zoom yet, so a
+  picture a newer model reads whole is never scaled down to save tokens.
+- **Old pictures go in batches.** Letting one go changes the transcript there, so the prompt
+  cache (and, on newer Claude, the thinking replayed after it) starts again from that point.
+  Nothing changes until fifteen tool pictures have gathered; then all but the newest three go at
+  once (`TOOL_PICTURE_BATCH`), and they go too when the chat needs room, with stale pages
+  (ADR 0085).

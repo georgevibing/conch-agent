@@ -28,6 +28,89 @@ not a size limit and always runs: a model repeating itself is still told, then p
 Routines, tasks and guests keep their own budget (200, 4M, an hour) whatever the
 switch says, because nobody is there to press Carry on and ADR 0057 depends on it.
 
+## Amendment (2026-10-09): every provider that caches is told which chat a request is for
+
+Automatic prefix caching works best when a provider's router sends a chat's requests to
+the machine that already holds its prefix. Some providers take a hint for that, and
+Conch now gives it, the same way for every one of them:
+
+- **The contract.** `WireRequest.cacheKey` and `WireCompletion.cacheKey` carry an opaque
+  key: for a turn, an HMAC-SHA256 of the chat's id; for a small job (a title, a summary),
+  of the job's instructions, so jobs that share a prefix share a key. The HMAC's salt is
+  random, made once per install (`api-sessions/cache-key.salt`, mode 0600, derived in
+  backups), so the key is never personal data, can't be turned back into the id, and is
+  different on every computer (`engines/api/cachekey.ts`). A wire sends it only where its
+  provider declares how (`ChatPreset.cacheKey`, agreement 9): a body field or a header.
+  Everyone else ignores it, and a server that refuses the field is asked again without
+  it, once, and never sent it again.
+- **Who is told** (each from the provider's own documentation, checked 2026-10-09):
+  OpenAI, Mistral and Cerebras by `prompt_cache_key` on Chat Completions; xAI by the
+  `x-grok-conv-id` header. DeepSeek, Kimi, Z.ai, MiniMax, Qwen, Groq and Gemini document
+  no key and cache by the prefix alone, so nothing is sent; nor to a server of your own,
+  which may refuse fields it doesn't know. Codex, Claude Code and the ACP programs run
+  their own requests and keep their own caches.
+- **Retention is left as each provider has it.** OpenAI already keeps cached prefixes for
+  24 hours unless an organisation keeps no data, and from GPT-5.6 its
+  `prompt_cache_options.ttl` only takes `"30m"`, the default; `prompt_cache_retention` is
+  deprecated. Kimi's one-hour cache (`prompt_cache_options.ttl: "1h"`) bills writes at
+  twice the input price, which only pays back if a chat comes back within the hour often
+  enough, so it isn't asked for. No explicit caches (Gemini's `cachedContents`, Qwen's
+  `cache_control`): they cost storage or a write premium on every request.
+- **Counted.** Cache writes are read from `prompt_tokens_details.cache_write_tokens`
+  (OpenAI from GPT-5.6, OpenRouter, Kimi) and `cache_creation_input_tokens` (Qwen),
+  beside the reads already counted.
+
+**The prefix, checked again.** Nothing in the system prompt or the tool list changes by
+the clock, by a random id or by key order: the tools come from the same lists in the same
+order, bodies are built from fixed object literals, and a chat's second turn sends its
+first byte for byte with the new messages after it (`cachekey.test.ts`). What still
+changes is the system prompt's tail, after everything stable: the memories, once there
+are more than fit and the most relevant to each message are chosen; a goal, plan mode,
+the apps not yet connected, a routine's or an artefact's brief, a round's room, and the
+note to slow down when this computer is short of memory. Each sits before the chat's
+messages, so a change there makes that turn's first request read the chat again in full
+(the steps after it still hit). Moving them after the chat would change how the model
+reads them, so they stay where they are.
+
+## Amendment (2026-10-09, later): a session keeps the system text it started with
+
+The amendment above left the moving parts at the system prompt's tail. Measured against
+how providers cache (tools, then system, then messages), that tail was the largest
+waste Conch had: the memories chosen for each message differ almost every turn, and so
+do an app's health, a routine's last run, the map's order and an edited artefact. So
+every new message re-read the whole chat at full price, on Claude Code, on a key's
+provider, and on Codex and the ACP programs, which were also sent the whole system text
+again (`additionalContext`, or a fresh session) each time it differed. Now
+(`conversations/instructions.ts`):
+
+- **The system text is kept for the session.** A provider's session is given the system
+  text it started with for as long as it lasts (the same engine, the same `resumeId`).
+  Conch's own sections are compared one by one (`context` returns them in a fixed
+  order), a list put in another order counts as the same, and what changed goes with the
+  person's next message, once, in an `<instructions-update>` that says it replaces the
+  earlier version. A session that has to start again from the log (`freshPrompt`) is
+  sent everything that changed since the start.
+- **Some changes start the instructions again**: another agent answering, a goal set or
+  cleared, plan mode on or off, or a section that has gone away. That turn reads the chat
+  once at full price, as every turn used to.
+- **Memories go with the message**, in a `<memory>` block, each only once a session (the
+  system text says how memory works and that they come there). A session started again
+  from the log is told all of this message's memories.
+- **What is only about now goes with the message too**: the apps it named that aren't
+  connected, who else is in a round, and how busy this computer is. "This computer has
+  room" is the same words every turn, so it stays in the system text.
+- **One block, marked as Conch's.** All of it goes ahead of the person's words in one
+  `<context-from-conch>` block, and the system text says Conch put it there. It is never
+  in the chat's log, and a guest's turn has none of it.
+- **The cost.** A changed section or a new memory now stays in the chat's history, so a
+  long chat carries a little more; it's read from the cache, at a tenth of the price or
+  less, where it used to make the whole chat be read again. Claude Code's small side
+  requests on a subscription now read none of the person's own Claude Code settings
+  (CLAUDE.md, rules, plugins, hooks: often thousands of tokens), only their `env`, and
+  fall back to reading them if that fails. Routines, tasks and chat apps no longer ask
+  Claude Code for its notes on each round of steps (a small-model call per round), which
+  nobody watches there.
+
 ## Context
 
 On the model APIs, Conch runs the agent loop itself (`engines/api/engine.ts`).
@@ -137,7 +220,9 @@ is said plainly: the action may not have worked.
 **Stale pages go first** (`engines/api/pages.ts`). Once a chat passes three quarters
 of its budget, every page view older than the newest whole one becomes a one-line note
 of where it was, before any turn is folded into the summary (ADR 0055). It happens
-when room is needed, not every step, so the cached prefix holds in between.
+when room is needed, not every step, so the cached prefix holds in between. Old
+screenshots go the same way (ADR 0070, amended 2026-10-09): in batches of a dozen,
+and with the stale pages when room is needed, never one per step.
 
 ### 4. Retries with backoff and jitter, everywhere
 

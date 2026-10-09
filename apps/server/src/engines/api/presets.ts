@@ -141,6 +141,10 @@ export const PRESETS: readonly Preset[] = [
     sees: true,
     efforts: (model) => (/^(o\d|gpt-5|gpt-6)/.test(model.id) ? ['low', 'medium', 'high'] : []),
     maxTokens: 'max_completion_tokens',
+    // Routes a chat's requests to the same cache (before GPT-5.6; after, it keeps the
+    // accounting apart). Retention is left as it is: 24 hours already, unless the
+    // organisation keeps no data, and GPT-5.6's `prompt_cache_options.ttl` only takes "30m".
+    cacheKey: { body: 'prompt_cache_key' },
   },
   {
     id: 'gemini',
@@ -170,6 +174,8 @@ export const PRESETS: readonly Preset[] = [
     rank: [/^grok-\d/],
     sees: /^grok-([4-9]|\d{2})/,
     small: /(fast|mini|non-reasoning)/,
+    // "Routes requests with the same conversation ID to the same server" (Chat Completions).
+    cacheKey: { header: 'x-grok-conv-id' },
   },
   {
     id: 'deepseek',
@@ -194,6 +200,8 @@ export const PRESETS: readonly Preset[] = [
     // Its list says which models see (`capabilities.vision`). A tool's
     // pictures follow its results, and Mistral wants a turn between.
     toolThenUser: 'bridge',
+    // "Increases the chance of a cache hit"; cached input is a tenth of the price.
+    cacheKey: { body: 'prompt_cache_key' },
   },
   {
     id: 'groq',
@@ -216,6 +224,8 @@ export const PRESETS: readonly Preset[] = [
     // The public list reads without a key; the authorised one proves the key.
     checkPath: '/models',
     efforts: (model) => (/(gpt-oss|qwen)/.test(model.id) ? ['low', 'medium', 'high'] : []),
+    // A conversation's id, so its requests meet the same cache (faster; Cerebras bills it the same).
+    cacheKey: { body: 'prompt_cache_key' },
   },
   {
     id: 'zai',
