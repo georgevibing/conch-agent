@@ -3705,8 +3705,11 @@ export class ConversationManager {
             mcpServers: engine.integrations.mode === 'native' ? loaded?.servers : undefined,
             disallowedTools: guest ? GUEST_DISALLOWED : loaded?.disallowedTools,
             ...(guest && { wordsOnly: true }),
-            // A provider's own notes on each round of steps cost a small-model call: only when asked.
-            ...(settings.preferences.autoTitle && { narrate: true }),
+            // A provider's own notes on each round of steps cost a small-model call: only when
+            // asked, and only where someone may be watching (not a routine, a task or a chat app).
+            ...(settings.preferences.autoTitle &&
+              !extras &&
+              !live.record.origin && { narrate: true }),
             bridgedTools,
             signal: pace.signal,
             requestPermission,
