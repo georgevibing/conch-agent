@@ -61,6 +61,7 @@ export * from './Restart';
 export * from './Health';
 export * from './Notifications';
 export * from './Offline';
+export * from './Fallback';
 export * from './SummaryDivider';
 export * from './Undo';
 export * from './Updates';

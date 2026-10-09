@@ -59,8 +59,17 @@ export const Routed: Story = {
       <RoutedNote reason="offline">
         You’re offline, so Ollama answered from this computer.
       </RoutedNote>
-      <RoutedNote reason="limit" action={{ label: 'Change', onClick: () => {} }}>
-        Claude Code reached its limit until 15:00, so OpenRouter answered.
+      <RoutedNote
+        reason="limit"
+        actions={[
+          { label: 'Switch back', onClick: () => {} },
+          { label: 'Change', onClick: () => {} },
+        ]}
+      >
+        Claude Code reached its limit until 6:00 PM. Codex is answering.
+      </RoutedNote>
+      <RoutedNote reason="limit">
+        Back to Claude Code: this chat waits for it until 6:00 PM.
       </RoutedNote>
     </>
   ),
