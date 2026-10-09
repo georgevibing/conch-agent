@@ -114,6 +114,8 @@ const scenarios = {
   ready: { port: 4391, env: { CONCH_MOCK_STATE: 'ready' } },
   // Settings → This computer: live readings of the real machine, only while it's open.
   computer: { port: 4337, env: { CONCH_MOCK_STATE: 'ready' } },
+  // Dashboards (ADR 0121): Prometheus with its token after a chat, and a test to a pretend collector.
+  dashboards: { port: 4334, env: { CONCH_MOCK_STATE: 'ready' } },
   models: { port: 4394, env: { CONCH_MOCK_STATE: 'ready' } },
   search: { port: 4396, env: { CONCH_MOCK_STATE: 'ready' } },
   routines: { port: 4395, env: { CONCH_MOCK_STATE: 'ready' } },
