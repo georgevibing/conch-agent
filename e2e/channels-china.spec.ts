@@ -17,7 +17,12 @@ test.beforeEach(async ({ request }) => {
   DINGTALK = mocks.dingtalk ?? '';
   QQ = mocks.qq ?? '';
   await request.patch('/api/settings', {
-    data: { onboarded: true, profile: { name: 'Ada Lovelace' } },
+    // These approve from the chat app: start chats in Ask first (ADR 0119), so a step asks.
+    data: {
+      onboarded: true,
+      profile: { name: 'Ada Lovelace' },
+      preferences: { permissionMode: 'default' },
+    },
   });
   for (const c of (await (await request.get('/api/channels')).json()).channels)
     await request.delete(`/api/channels/${c.id}`);

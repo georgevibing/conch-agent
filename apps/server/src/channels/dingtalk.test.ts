@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../config';
 import { Services } from '../services';
+import { askFirst } from '../test/modes';
 import { normalizeDingTalk, toDingTalkMarkdown } from './dingtalk';
 import { MockDingTalk } from './mock/dingtalk';
 import { personId } from './types';
@@ -25,6 +26,8 @@ async function setup() {
     loadConfig({ CONCH_HOME: home, CONCH_ENGINE: 'mock', CONCH_LOG_LEVEL: 'silent' }),
   );
   delete process.env.CONCH_MOCK_STATE;
+  // These are about the approval question itself: start chats in Ask first (ADR 0119).
+  await askFirst(services);
   await services.start();
   const dingtalk = services.mockDingTalk;
   if (!dingtalk) throw new Error('no mock DingTalk');

@@ -17,6 +17,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app';
 import { loadConfig } from '../config';
 import { Services } from '../services';
+import { askFirst } from '../test/modes';
 import { onThisComputer } from '../test/here';
 import { chat } from '../test/session';
 import { PARLEY_TOKEN, PRETEND_AI_KEY, PRETEND_MODEL } from './pretend';
@@ -44,6 +45,8 @@ async function setup() {
   delete process.env.CONCH_MOCK_STATE;
   const app = onThisComputer(await buildApp(services), services);
   await app.ready();
+  // These are about the approval question itself: start chats in Ask first (ADR 0119).
+  await askFirst(services);
   await services.start();
   close = async () => {
     services.stop();
