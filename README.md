@@ -79,6 +79,9 @@ your desktop and the chat apps you already use.
   The chat shows it as one line with live counts, and one Undo puts it all back. [Big jobs in one go](./apps/docs/content/features/scripts.md)
 - **It doesn't give up at the first error.** Every model reads what went wrong, tries
   another way and checks its work before it says done. [How Conch works on a problem](./apps/docs/content/features/working-on-a-problem.md)
+- **It waits without nagging.** "Watch CI and fix it if it fails": Conch watches CI, a
+  command, a page or the clock itself, the chat stays yours, and your assistant carries
+  on when something changes. [When it has to wait](./apps/docs/content/features/working-on-a-problem.md#when-it-has-to-wait)
 - **Long jobs that finish.** Long chats summarise their start, caching keeps costs
   down, and each reply says what it cost. [What it costs](./apps/docs/content/care/what-it-costs.md)
 - **On your own dashboard.** Turns, tokens, spending, tools and this computer in

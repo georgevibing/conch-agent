@@ -1,6 +1,7 @@
 import { approvalOf, foldHolds } from '@conch/protocol';
 import type {
   AgentId,
+  WaitNote,
   RoundEnd,
   RoundSpeaker,
   Memory,
@@ -278,6 +279,12 @@ export type TranscriptItem =
       id: string;
       group?: string;
       tasks: TaskNote[];
+    }
+  | {
+      /** Something Conch waits for on the assistant's behalf (ADR 0125): one row, kept current. */
+      kind: 'wait';
+      id: string;
+      wait: WaitNote;
     }
   | {
       kind: 'integration-issue';
@@ -1522,6 +1529,15 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
           ? card.tasks.map((t) => (t.taskId === event.taskId ? note : t))
           : [...card.tasks, note],
       };
+      return { ...base, items: next };
+    }
+    case 'wait': {
+      // One row per wait, where it first appeared, kept current.
+      const id = `wait-${event.wait.waitId}`;
+      const at = items.findIndex((i) => i.kind === 'wait' && i.id === id);
+      if (at < 0) return { ...base, items: [...items, { kind: 'wait', id, wait: event.wait }] };
+      const next = items.slice();
+      next[at] = { kind: 'wait', id, wait: event.wait };
       return { ...base, items: next };
     }
     case 'routine':

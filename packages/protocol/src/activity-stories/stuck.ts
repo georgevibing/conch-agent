@@ -85,7 +85,7 @@ function waitingOnNothing(steps: readonly StoryStep[]): string | undefined {
     const last = polls[polls.length - 1] as StoryStep;
     const span = last.startedAt + (last.durationMs ?? 0) - first.startedAt;
     if (span >= STUCK_POLL_MS) {
-      return `Checked on it ${polls.length} times in ${minutes(span)} and nothing changed`;
+      return `Still running · checked ${polls.length} times in ${minutes(span)}, nothing new yet`;
     }
   }
   return undefined;
@@ -93,5 +93,20 @@ function waitingOnNothing(steps: readonly StoryStep[]): string | undefined {
 
 /** A plain sentence when the steps go round in circles, else nothing. */
 export function stuckOf(steps: readonly StoryStep[]): string | undefined {
-  return failedTooOften(steps) ?? undoneAndRedone(steps) ?? waitingOnNothing(steps);
+  return stuckReading(steps)?.text;
+}
+
+/**
+ * The same, with how it should look. Checking on a running command again and
+ * again is a provider waiting the slow way (ADR 0125: `wait_for` is the quick
+ * one), not something going wrong: it's said calmly. Failing or undoing is a
+ * warning.
+ */
+export function stuckReading(
+  steps: readonly StoryStep[],
+): { text: string; tone: 'warning' | 'calm' } | undefined {
+  const wrong = failedTooOften(steps) ?? undoneAndRedone(steps);
+  if (wrong) return { text: wrong, tone: 'warning' };
+  const waiting = waitingOnNothing(steps);
+  return waiting ? { text: waiting, tone: 'calm' } : undefined;
 }

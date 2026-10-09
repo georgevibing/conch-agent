@@ -2079,7 +2079,8 @@ export class ConversationManager {
     event: Extract<
       ConversationEventInput,
       {
-        type: 'artifact' | 'task' | 'memory.decided' | 'learning.noted' | 'learning.decided';
+        type:
+          'artifact' | 'task' | 'wait' | 'memory.decided' | 'learning.noted' | 'learning.decided';
       }
     >,
   ): Promise<void> {
@@ -4513,6 +4514,38 @@ export class ConversationManager {
         return;
       off();
       void this.#carryNow(live, offerId, turn).catch(() => this.#carrying.delete(offerId));
+    });
+    return 'queued';
+  }
+
+  /**
+   * Something the assistant was waiting for ended (ADR 0125): its next turn
+   * starts by itself with what changed, now if the chat is free, else the
+   * moment the running turn ends. Never a message of yours; the waiting row
+   * says why it carried on.
+   */
+  async wake(id: string, prompt: string): Promise<'started' | 'queued'> {
+    const live = await this.#get(id);
+    const go = async () => {
+      this.#claim(live);
+      this.#setStatus(live, 'running');
+      await this.#persist(live);
+      void this.#answer(live, this.deps.engine(live.record.options.engine), prompt, []);
+    };
+    if (!live.abort) {
+      await go();
+      return 'started';
+    }
+    const off = this.events.on((event) => {
+      if (
+        event.type !== 'conversation.event' ||
+        event.event.conversationId !== id ||
+        event.event.type !== 'status' ||
+        live.abort
+      )
+        return;
+      off();
+      void go().catch(() => undefined);
     });
     return 'queued';
   }

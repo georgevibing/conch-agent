@@ -112,6 +112,7 @@ import { registerTelemetryRoutes } from './telemetry/routes';
 import { registerOutsideRoutes } from './a2a/routes';
 import { registerMcpRoutes } from './mcp/routes';
 import { registerQuestionRoutes } from './questions/routes';
+import { registerWaitRoutes } from './waits/routes';
 import { registerFirstJobRoutes } from './onboarding/first-job';
 import { registerBackgroundRoutes } from './background/routes';
 import { registerImportRoutes } from './import/routes';
@@ -385,6 +386,7 @@ export async function buildApp(services: Services) {
   registerTaskRoutes(app, services.tasks);
   registerAgentRoutes(app, { agents: services.agents, faces: services.images });
   registerQuestionRoutes(app, services.questions);
+  registerWaitRoutes(app, services.waits);
   registerFirstJobRoutes(app, services);
   registerChannelRoutes(
     app,

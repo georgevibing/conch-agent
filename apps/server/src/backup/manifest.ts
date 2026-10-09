@@ -115,6 +115,11 @@ export const RULES: readonly BackupRule[] = [
     why: 'Your own address’s certificate, its key and the ACME account: a new computer gets its own, and keys never leave this one.',
   },
   {
+    match: 'waits.json',
+    class: 'derived',
+    why: 'What chats are waiting for right now (CI, a page, a time: ADR 0125), so a restart carries on watching. About this run, not something to move.',
+  },
+  {
     match: 'healed.json',
     class: 'derived',
     why: 'What Conch fixed on this computer: reassurance about this machine, not something to move.',

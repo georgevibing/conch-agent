@@ -1846,6 +1846,25 @@ const TOOLS: Case[] = [
     },
   ],
   [
+    'wait_for CI that came back red',
+    'mcp__conch__wait_for',
+    { kind: 'ci', ref: '482' },
+    ok('CI finished: 2 failed — e2e, server unit; 5 passed (o/conch #482).\nFailed:\n- e2e'),
+    {
+      family: 'verify',
+      doing: 'Waiting for CI',
+      done: 'Waited for CI',
+      outcome: 'CI finished: 2 failed — e2e, server unit; 5 passed (o/conch #482)',
+    },
+  ],
+  [
+    'wait_for a command',
+    'wait_for',
+    { kind: 'process', process_id: 'x' },
+    ok('`pnpm test` finished after 3 min.'),
+    { family: 'run', done: 'Waited for a command', outcome: '`pnpm test` finished after 3 min' },
+  ],
+  [
     'process_read once the tests are done',
     'mcp__conch__process_read',
     { id: 'x' },

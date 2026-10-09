@@ -13,8 +13,6 @@ import type { Attachment, TurnOptions } from '@conch/protocol';
  * one at a time, once the reply it carried on is over.
  */
 
-import type { Attachment } from '@conch/protocol';
-
 const DRAFTS_KEY = 'conch.drafts';
 const SENT_KEY = 'conch.sent';
 const QUEUED_KEY = 'conch.queued';

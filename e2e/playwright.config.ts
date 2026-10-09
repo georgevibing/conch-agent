@@ -172,6 +172,8 @@ const scenarios = {
   undo: { port: 4375, env: { CONCH_MOCK_STATE: 'ready' } },
   // A script that calls tools (ADR 0123): thirty writes and a question as one story, then one Undo.
   scripts: { port: 4339, env: { CONCH_MOCK_STATE: 'ready' } },
+  // Waiting without polling (ADR 0125): a wait that lets go of the turn, the chat free, Stop waiting.
+  waits: { port: 4333, env: { CONCH_MOCK_STATE: 'ready' } },
   // Come home (ADR 0035), from a pretend OpenClaw.
   import: { port: 4370, env: { CONCH_MOCK_STATE: 'ready', CONCH_IMPORT_HOME: importHome } },
   // Come home, more of it (ADR 0042): the model, other agents, a Slack bot with one key.

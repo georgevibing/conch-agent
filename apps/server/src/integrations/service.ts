@@ -1632,6 +1632,22 @@ export class IntegrationService {
     return lines.join('\n');
   }
 
+  /**
+   * The token of a connected catalog app that signs in with one (GitHub's),
+   * for Conch's own quiet reads on the person's behalf (a wait watching CI,
+   * ADR 0125). Never handed to the model, a tool's result or a log.
+   */
+  async tokenOf(catalogId: string): Promise<string | undefined> {
+    const items = await this.store.all();
+    const item = items.find(
+      (i) => i.catalogId === catalogId && i.auth === 'token' && i.enabled !== false,
+    );
+    if (!item) return undefined;
+    const entry = CATALOG.get(catalogId);
+    const stored = await this.store.secrets(item.id).catch(() => undefined);
+    return stored?.values[entry?.tokenField ?? 'token'] || undefined;
+  }
+
   // ── Internals ───────────────────────────────────────────────────────────
 
   /** The server with its secrets filled in. */

@@ -176,7 +176,9 @@ import { computerUseCheck } from './computer-use/routes';
 import { pretendComputer } from './computer-use/pretend';
 import { ComputerUseService } from './computer-use/service';
 import { computerPrompt, computerTools } from './computer-use/tools';
-import { KNOWN_NEEDS } from './setup/known';
+import { KNOWN_NEEDS, findGh } from './setup/known';
+import { WaitService } from './waits/service';
+import { fetchClient, ghClient, realRun } from './waits/github';
 import { Setup } from './setup/needs';
 import { setToolsHome } from './setup/release';
 import { ProviderKeys } from './providers/keys';
@@ -417,6 +419,8 @@ export class Services {
   readonly wake: WakeWord;
   /** Work that runs in the background, and helpers side by side (ADR 0033). */
   readonly tasks: TaskService;
+  /** Waiting for CI, a command, a page or a time without calling a model (ADR 0125). */
+  readonly waits: WaitService;
   /** Other apps using Conch through its MCP door (ADR 0073). */
   readonly mcp: McpService;
   readonly mcpPairing: McpPairing;
@@ -1105,6 +1109,46 @@ export class Services {
       },
     });
     this.doctor.register(this.telemetry.doctorCheck());
+    // Waiting for something until it changes (ADR 0125): Conch watches; the model sleeps.
+    let ghSignedIn: { at: number; path?: string } | undefined;
+    this.waits = new WaitService({
+      home: config.CONCH_HOME,
+      processes: this.processes,
+      fetcher: fetchPublicWeb,
+      // GitHub's own program when it's signed in, else the GitHub app's token, else nobody's.
+      github: async (owner) => {
+        if (!ghSignedIn || Date.now() - ghSignedIn.at > 5 * 60_000) {
+          const path = await findGh().catch(() => undefined);
+          const ok = path
+            ? await realRun(path, ['auth', 'status'], {}).then(
+                () => true,
+                () => false,
+              )
+            : false;
+          ghSignedIn = { at: Date.now(), ...(ok && path && { path }) };
+        }
+        if (ghSignedIn.path) return ghClient(ghSignedIn.path);
+        const token = await this.integrations.tokenOf('github').catch(() => undefined);
+        return fetchClient(fetchPublicWeb, owner, token);
+      },
+      git: (cwd, args) => realRun('git', ['-C', cwd, ...args], {}),
+      chat: {
+        note: (id, event) => this.conversations.note(id, event),
+        wake: (id, prompt) => this.conversations.wake(id, prompt),
+        taint: (id, sources) => this.conversations.addTaint(id, sources),
+      },
+      tell: async (told) => {
+        await this.push
+          .notify('tasks', {
+            title: told.title,
+            body: told.body,
+            url: `/c/${told.conversationId}`,
+            tag: `wait-${told.waitId}`,
+          })
+          .catch(() => undefined);
+        await this.channels.tellOwner(`**${told.title}**\n${told.body}`).catch(() => undefined);
+      },
+    });
     this.conversations = new ConversationManager({
       judged: (verdict, risk) => this.telemetry.auto(verdict, risk),
       // Who each chat is with: its persona and instructions in every turn (ADR 0101).
@@ -1154,6 +1198,7 @@ export class Services {
               ...knowledgeTools(ctx, { fetcher: fetchPublicWeb, store: this.attachments }),
               ...financeTools(ctx, { source: this.finance }),
               ...this.processes.tools(ctx),
+              ...this.waits.tools(ctx),
               ...this.images.tools(ctx, () => this.#fileAccess(ctx)),
               ...this.routines.tools(ctx),
               // Offering a standing order (ADR 0107): a draft for a card, only where someone can press it.
@@ -1414,6 +1459,11 @@ export class Services {
     });
     this.doctor.register(outsideCheck(this.outside));
     this.doctor.register(this.processes.doctorCheck());
+    this.doctor.register(
+      this.waits.doctorCheck(async (id) =>
+        Boolean(await this.conversations.detail(id).catch(() => undefined)),
+      ),
+    );
     // Your other apps, reaching Conch through its door (ADR 0073).
     this.mcp = new McpService({
       store: new McpClientStore(config.CONCH_HOME),
@@ -1492,6 +1542,7 @@ export class Services {
           .remove(event.conversationId)
           .then((ids) => Promise.all(ids.map((id) => this.attachments.discard(id))))
           .catch(() => undefined);
+        this.waits.forget(event.conversationId);
       }
     });
     this.memory.changed.on(() => this.broadcast.emit({ type: 'memory.changed' }));
@@ -2972,6 +3023,8 @@ export class Services {
     this.conchApps.start();
     this.slack.start();
     void this.tasks.start().catch((error: unknown) => console.error('[tasks]', error));
+    // Waits that let go of their turn carry on after a restart (ADR 0125).
+    void this.waits.start().catch((error: unknown) => console.error('[waits]', error));
     // Apps paired with Conch still find it: its launcher, and their settings (ADR 0073).
     void this.mcpPairing.heal().catch((error: unknown) => console.error('[mcp]', error));
     this.backups.start();
@@ -2996,6 +3049,7 @@ export class Services {
       .drain()
       .catch(() => console.warn('[shutdown] Could not save all chat checkpoints.'));
     this.processes.close();
+    this.waits.close();
     void this.address.stop();
     this.googleApps.stop();
     void this.conchApps.stop();

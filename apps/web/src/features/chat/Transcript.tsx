@@ -66,6 +66,7 @@ import { RunStories } from './Stories';
 import { ScriptItem } from './ScriptItem';
 import { headlineOf, stepViews, stepsShown, storiesOf, storyStatus, turnChanges } from './telling';
 import { TaskChatCard } from '../tasks/TaskChatCard';
+import { WaitItem } from '../waits/WaitItem';
 import { PeerItem, RoundItem } from '../agents/RoundItem';
 import { RoutineInstruction } from '../routines/RunBanner';
 import { NextReplies } from '../replies/NextReplies';
@@ -582,6 +583,7 @@ export const Transcript = memo(function Transcript({
       last?.kind === 'standing-order' ||
       last?.kind === 'artifact' ||
       last?.kind === 'task' ||
+      (last?.kind === 'wait' && last.wait.state !== 'watching') ||
       last?.kind === 'integration-issue' ||
       last?.kind === 'routed' ||
       last?.kind === 'plan' ||
@@ -916,6 +918,9 @@ export const Transcript = memo(function Transcript({
         <ArtifactChatCard conversationId={conversationId} item={block.item} />
       )}
       {block.item?.kind === 'task' && <TaskChatCard tasks={block.item.tasks} />}
+      {block.item?.kind === 'wait' && (
+        <WaitItem wait={block.item.wait} conversationId={conversationId} />
+      )}
       {block.item?.kind === 'integration-issue' && <IntegrationIssue item={block.item} />}
       {block.item?.kind === 'held' && (
         <HeldItem item={block.item} conversationId={conversationId} />
