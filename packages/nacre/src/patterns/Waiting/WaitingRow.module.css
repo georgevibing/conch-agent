@@ -150,11 +150,22 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* One line, even on a phone: the link and both buttons in the same small type. */
   .actions {
     display: inline-flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
-    gap: var(--nc-space-1);
+    gap: var(--nc-space-0-5);
+    white-space: nowrap;
+  }
+
+  .action {
+    padding-inline: var(--nc-space-1-5);
+    font-size: var(--nc-text-xs);
+  }
+
+  .link + .action {
+    margin-inline-start: var(--nc-space-1);
   }
 
   .link {

@@ -558,7 +558,12 @@
   .below {
     display: grid;
     grid-template-rows: 0fr;
-    padding-inline-start: var(--st-indent);
+    /* Bled like the row, so the hover wash can carry on under the line. */
+    margin-inline: calc(-1 * var(--st-bleed));
+    padding-inline: calc(var(--st-indent) + var(--st-bleed)) var(--st-bleed);
+    border-end-start-radius: var(--nc-chat-row-radius);
+    border-end-end-radius: var(--nc-chat-row-radius);
+    corner-shape: var(--nc-corner-shape);
     opacity: 0;
     transition:
       grid-template-rows var(--nc-spring-soft-duration) var(--nc-spring-soft),
@@ -576,6 +581,26 @@
   .belowInner {
     min-block-size: 0;
     overflow: hidden;
+  }
+
+  /*
+   * The line is tucked up into the row's box, so the row's hover wash alone
+   * would cut through its words: the wash carries on under it, from where the
+   * row's ends, as one shape.
+   */
+  @media (hover: hover) {
+    .header:not(:disabled):hover:has(+ .below[data-shown]) {
+      border-end-start-radius: 0;
+      border-end-end-radius: 0;
+    }
+
+    .header:not(:disabled):hover + .below[data-shown] {
+      background: linear-gradient(
+        to bottom,
+        transparent var(--nc-space-1-5),
+        var(--nc-wash-1) var(--nc-space-1-5)
+      );
+    }
   }
 
   .live {

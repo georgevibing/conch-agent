@@ -199,6 +199,7 @@ export function WaitingRow({
                   size="sm"
                   variant="ghost"
                   tone="neutral"
+                  className={styles.action}
                   leadingIcon={<RefreshCw aria-hidden />}
                   onClick={onCheck}
                 >
@@ -210,10 +211,12 @@ export function WaitingRow({
                   size="sm"
                   variant="ghost"
                   tone="neutral"
+                  className={styles.action}
                   leadingIcon={<Square aria-hidden className={styles.stopIcon} />}
+                  aria-label="Stop waiting"
                   onClick={onStop}
                 >
-                  Stop waiting
+                  Stop
                 </Button>
               )}
             </span>
