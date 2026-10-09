@@ -52,6 +52,11 @@ export interface StoryStepView {
   failed?: boolean;
   /** Where the command ran, when it wasn't this computer (ADR 0106): a tag on its row. */
   where?: { kind: 'container' | 'ssh' | 'cloud'; name: string };
+  /**
+   * `false`: no "Why?" on this step. Something said by its own event (a
+   * memory kept or forgotten) has no call in the log for Why? to ask about.
+   */
+  explainable?: boolean;
 }
 
 /**
@@ -326,7 +331,7 @@ function StepRow({
                 {trail}
               </div>
             )}
-            {onExplain && (
+            {onExplain && step.explainable !== false && (
               <button
                 type="button"
                 className={styles.why}

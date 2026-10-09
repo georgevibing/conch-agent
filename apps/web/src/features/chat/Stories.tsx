@@ -15,6 +15,7 @@ import { explainStep } from './explain';
 import { headlineOf, liveOf, quietFollowers, standsAlone, stepViews, storyStatus } from './telling';
 import { ToolFound } from './ToolFound';
 import { mailMoment } from './MailItems';
+import { MemoryFound } from './MemorySteps';
 import { formatInput, managedProcessSummary, toolDiff, toolSummary } from './tools';
 import styles from './Transcript.module.css';
 import { useArrivedLive } from './TranscriptItems';
@@ -80,6 +81,8 @@ export interface RunStoriesProps {
   /** Stories opened (by a jump from the away digest, or a press). */
   opened: ReadonlySet<string>;
   onOpen: (storyId: string, open: boolean) => void;
+  /** What it remembered or forgot, by the step drawn for each (`MemorySteps`). */
+  memories?: ReadonlyMap<string, Extract<TranscriptItem, { kind: 'memory' }>>;
 }
 
 /**
@@ -97,6 +100,7 @@ export function RunStories({
   conversationId,
   opened,
   onOpen,
+  memories,
 }: RunStoriesProps) {
   const arriving = useArrivedLive();
   const byId = new Map(tools.map((t) => [t.id, t]));
@@ -105,6 +109,8 @@ export function RunStories({
     for (const [owner, ids] of quietFollowers(story)) quiet.set(owner, ids);
 
   const renderRaw = (stepId: string) => {
+    // A memory has no call to show: what it kept is drawn by the step.
+    if (memories?.has(stepId)) return undefined;
     const tool = byId.get(stepId);
     if (!tool) return undefined;
     const after = (quiet.get(stepId) ?? []).flatMap((id) => byId.get(id) ?? []);
@@ -118,6 +124,8 @@ export function RunStories({
     );
   };
   const renderFound = (stepId: string) => {
+    const memory = memories?.get(stepId);
+    if (memory) return <MemoryFound item={memory} />;
     const view = byId.get(stepId)?.view;
     return view && !standsAlone(view) ? <ToolFound view={view} /> : undefined;
   };
@@ -128,7 +136,10 @@ export function RunStories({
   const item = (story: Story): StoryStackItem => {
     const words = headlineOf(story, titles?.[story.id]);
     const live = liveOf(story, narration, asked, byId);
-    const steps = stepViews(story, byId, asked);
+    const steps = stepViews(story, byId, asked).map((step) =>
+      // Said by its own event: there's no call in the log for Why? to ask about.
+      memories?.has(step.id) ? { ...step, explainable: false } : step,
+    );
     const status = storyStatus(story, steps);
     // Not run because you said no: that's what it came to.
     const outcome =

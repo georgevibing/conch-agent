@@ -196,6 +196,8 @@ export type TranscriptItem =
       memoryId: string;
       content: string;
       action: 'saved' | 'forgotten';
+      /** When it was said: where its step sits among the run's (ADR 0103). */
+      at?: number;
       /** Waits for an OK: learned where nobody could undo it (ADR 0032). */
       pending?: boolean;
       /** What you said since: kept it (or put back one it forgot), or undid it. */
@@ -862,6 +864,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
         memoryId: event.memory.id,
         content: event.memory.content,
         action: 'saved' as const,
+        at: event.at,
         ...(event.memory.pending && { pending: true }),
         ...(event.memory.held && { held: event.memory.held }),
       };
@@ -931,6 +934,7 @@ export function reduce(view: ConversationView, event: ConversationEvent): Conver
             memoryId: event.memoryId,
             content: event.content,
             action: 'forgotten',
+            at: event.at,
             ...(event.memory && { memory: event.memory }),
           },
         ],

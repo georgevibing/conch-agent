@@ -104,9 +104,9 @@ When a long chat is [summarised](./chats.md#long-chats), Conch first reads what 
 
 ## Remembered, and said so
 
-When your assistant remembers something, the chat says so in one quiet line, **Remembered**, with **Undo** beside it. It doesn't stop to ask.
+When your assistant remembers or forgets something, it's one of its steps, like opening a file or using an app: **Remembered something** or **Forgot something**, in the same row as the steps around it. Open the row to read the memory in full; **Undo** is beside it. It doesn't stop to ask.
 
-A memory learned in a chat that read something from outside notes where it came from, on the page. Read the line when it appears; **Undo** takes it away.
+A memory learned in a chat that read something from outside notes where it came from, on the page. Open its step to read it; **Undo** takes it away.
 
 ## When a memory looks off
 
