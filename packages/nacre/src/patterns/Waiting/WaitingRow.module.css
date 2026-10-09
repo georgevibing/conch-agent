@@ -1,0 +1,198 @@
+@layer nacre.components {
+  /*
+   * A wait (ADR 0124): a story's row (the same well, words and clock), with
+   * what a wait has beneath it: the parts as dots that fill in, how it
+   * stands, when Conch looks next, and Check now / Stop waiting. Calm on
+   * purpose: nothing pulses but the well, nothing is amber while it waits.
+   */
+  .root {
+    --wr-well: 1.375rem;
+    --wr-gap: var(--nc-space-2-5);
+    --wr-indent: calc(var(--wr-well) + var(--wr-gap));
+    --wr-dot: 0.5rem;
+    --wr-good: light-dark(
+      oklch(0.56 0.12 var(--nc-success-h)),
+      oklch(0.76 0.12 var(--nc-success-h))
+    );
+    --wr-bad: light-dark(oklch(0.55 0.16 var(--nc-danger-h)), oklch(0.74 0.13 var(--nc-danger-h)));
+    --wr-bad-text: light-dark(
+      oklch(0.48 0.14 var(--nc-danger-h)),
+      oklch(0.82 0.1 var(--nc-danger-h))
+    );
+    --wr-good-text: light-dark(
+      oklch(0.45 0.1 var(--nc-success-h)),
+      oklch(0.84 0.1 var(--nc-success-h))
+    );
+
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    gap: var(--wr-gap);
+    min-block-size: var(--nc-chat-row-height);
+    font-size: var(--nc-text-sm);
+    color: var(--nc-text);
+  }
+
+  .title {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
+  }
+
+  .headline {
+    display: block;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-weight: var(--nc-weight-medium);
+    letter-spacing: -0.003em;
+  }
+
+  .meta {
+    display: inline-flex;
+    align-items: center;
+    margin-inline-start: auto;
+    flex-shrink: 0;
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--nc-text-subtle);
+  }
+
+  .body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nc-space-1-5);
+    padding-inline-start: var(--wr-indent);
+    padding-block-end: var(--nc-space-1);
+  }
+
+  /* ── The parts: a dot each, filling in as they finish ─────────────── */
+  .parts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nc-space-1);
+    margin: var(--nc-space-0-5) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .part {
+    inline-size: var(--wr-dot);
+    block-size: var(--wr-dot);
+    border-radius: var(--nc-radius-full);
+    box-shadow: inset 0 0 0 1.5px var(--nc-gray-7);
+    transition:
+      background-color var(--nc-duration-base) var(--nc-ease-out),
+      box-shadow var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  .part[data-state='running'] {
+    box-shadow: inset 0 0 0 1.5px var(--nc-text-muted);
+    animation: wr-breathe 1.6s var(--nc-ease-in-out) infinite;
+  }
+
+  .part[data-state='passed'] {
+    background: var(--wr-good);
+    box-shadow: none;
+  }
+
+  .part[data-state='failed'] {
+    background: var(--wr-bad);
+    box-shadow: none;
+  }
+
+  .part[data-state='skipped'] {
+    background: var(--nc-gray-5);
+    box-shadow: none;
+  }
+
+  @keyframes wr-breathe {
+    50% {
+      opacity: 0.45;
+    }
+  }
+
+  /* ── Words ────────────────────────────────────────────────────────── */
+  .status {
+    margin: 0;
+    font-size: var(--nc-text-sm);
+    line-height: var(--nc-leading-normal);
+    color: var(--nc-text-muted);
+    text-wrap: pretty;
+    overflow-wrap: anywhere;
+  }
+
+  .status[data-tone='good'] {
+    color: var(--wr-good-text);
+  }
+
+  .status[data-tone='bad'] {
+    color: var(--wr-bad-text);
+  }
+
+  .foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-1) var(--nc-space-3);
+    min-block-size: var(--nc-space-6);
+  }
+
+  .note {
+    flex: 1 1 auto;
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .actions {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--nc-space-1);
+  }
+
+  .link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nc-space-0-5);
+    padding: 0;
+    border-radius: var(--nc-radius-sm);
+    font-size: var(--nc-text-xs);
+    color: var(--nc-text-muted);
+    text-decoration: none;
+  }
+
+  .link > svg {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+
+  @media (hover: hover) {
+    .link:hover {
+      color: var(--nc-text);
+    }
+  }
+
+  .link:focus-visible {
+    outline: 2px solid var(--nc-ring);
+    outline-offset: 1px;
+  }
+
+  .stopIcon {
+    fill: currentColor;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .part,
+    .part[data-state='running'] {
+      animation: none;
+      transition: none;
+    }
+  }
+}

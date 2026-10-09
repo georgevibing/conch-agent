@@ -248,6 +248,25 @@ export const Stuck: S = {
   },
 };
 
+/**
+ * A provider waiting the slow way, checking on a command again and again
+ * (Conch's `wait_for` is the quick way, ADR 0124): said calmly, in the row's
+ * own ink, never as a warning.
+ */
+export const WaitingTheSlowWay: S = {
+  args: {
+    headline: 'Checking on a command',
+    outcome: undefined,
+    family: 'run',
+    status: 'running',
+    stuck: 'Still running · checked 4 times in 2 minutes, nothing new yet',
+    stuckTone: 'calm',
+    steps: [commit, doing(push, 'Checking on a command')],
+    startedAt: Date.now() - 140_000,
+    durationMs: undefined,
+  },
+};
+
 /** What it looked at: favicons and product photos stacked in the row, pills when open. */
 export const WithChips: S = {
   args: {
