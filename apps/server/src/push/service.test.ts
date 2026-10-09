@@ -100,15 +100,17 @@ describe('notifications', () => {
         type: 'permission.requested',
         permissionId: 'p_1',
         toolName: 'Bash',
-        input: {},
-        summary: 'Run `npm test`',
+        input: { command: 'cd ~/conch && npm test' },
+        summary: 'Run `cd ~/conch && npm test`',
+        title: 'Run the tests in conch',
       }),
     );
     expect(sent).toHaveLength(1);
     expect(sent[0]?.url).toBe(phone.subscription.endpoint);
+    // The command's few plain words, never the command itself (ADR 0108).
     expect(phone.read(sent[0]?.body ?? Buffer.alloc(0))).toMatchObject({
       title: 'Pearl needs your OK',
-      body: 'Run `npm test` · Fix the build',
+      body: 'Run the tests in conch · Fix the build',
       url: '/c/c_chat?approve=p_1',
       tag: 'ok-p_1',
       answer: { conversationId: 'c_chat', permissionId: 'p_1', ticket: expect.any(String) },

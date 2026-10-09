@@ -73,7 +73,7 @@ import { memoryTools } from '../memory/tools';
 import type { SettingsStore } from '../settings/store';
 import { handoff } from './handoff';
 import type { ConversationRecord, ConversationStore } from './store';
-import { summarizeToolUse, titleFrom } from './summarize';
+import { summarizeToolUse, titleFrom, titleOfToolUse } from './summarize';
 import { allows, missing, needs } from '../skills/permissions';
 import { sandboxSupport } from './sandbox';
 import type { WorkPlace } from '../workplaces/types';
@@ -2659,6 +2659,8 @@ export class ConversationManager {
           ? cautionFrom(request.sources)
           : request.taint
         : undefined;
+      // A command's heading says what it does in a few words; the command itself goes under it.
+      const title = request.title ?? titleOfToolUse(request.toolName, request.input, workspace);
       return new Promise<PermissionDecision>((resolve) => {
         live.permissions.set(permissionId, {
           resolve,
@@ -2700,7 +2702,7 @@ export class ConversationManager {
           toolName: request.toolName,
           input: request.input,
           summary: request.summary,
-          ...(request.title && { title: request.title }),
+          ...(title && { title }),
           ...(request.detail && { detail: request.detail }),
           ...(request.cost && { cost: request.cost }),
           browser: request.browser,

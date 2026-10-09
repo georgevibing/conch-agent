@@ -468,9 +468,11 @@ export class PushService {
       // Another app asking through Conch says so: the OK is for it, not your assistant.
       const name = task ? 'A task' : (chat?.app ?? (await this.deps.persona(e.conversationId)));
       const about = task?.title ?? chat?.title;
+      // What it would do in a few words, as the sheet's heading says it: never the command.
+      const said = e.title ?? e.summary;
       await this.notify('approvals', {
         title: `${name} needs your OK`,
-        body: clip(about ? `${e.summary} · ${about}` : e.summary),
+        body: clip(about ? `${said} · ${about}` : said),
         quiet: 'Open Conch to see what it’s asking.',
         // Straight to the approval sheet; a task's opens in the chat it came from.
         url: task ? taskLink(task) : `${url}?approve=${encodeURIComponent(e.permissionId)}`,
