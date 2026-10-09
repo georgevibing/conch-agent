@@ -12,6 +12,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { appState, mockFetch, renderApp } from '../../test/harness';
+import { ChatView } from '../chat/ChatView';
 import { morningDigest } from '../memory/digest';
 import { MorningNote } from '../memory/MorningNote';
 import { CheckInSection, checkInLine, orderItem } from './CheckInSection';
@@ -307,5 +308,28 @@ describe('the morning’s note', () => {
     expect(await screen.findByText('Undone')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Got it' }));
     await waitFor(() => expect(screen.queryByRole('region', { name: /slept|looked/ })).toBeNull());
+  });
+
+  it('is never on the new chat’s screen, even in the morning with something learned', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: new Date(2026, 9, 9, 8, 0) });
+    try {
+      const at = Date.now() - 3_600_000;
+      mockFetch({
+        'GET /api/state': () => appState(),
+        'GET /api/conversations': () => [],
+        'GET /api/learning': () => learning([learned({ at })]),
+        'GET /api/memory/tidy': () => ({ nightly: true, running: false, runs: [] }),
+        'GET /api/memories': () => [],
+      });
+      renderApp(<ChatView />);
+      expect(await screen.findByRole('heading', { name: /, Ada\.$/ })).toBeInTheDocument();
+      // Memory is Settings → Memory's: nothing about it under the message box.
+      expect(screen.queryByRole('region', { name: /slept|looked/ })).toBeNull();
+      expect(screen.queryByText('Prefers TypeScript')).toBeNull();
+      expect(screen.queryByRole('button', { name: /^Undo/ })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'See what Conch knows' })).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

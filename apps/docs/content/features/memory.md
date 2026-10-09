@@ -92,7 +92,7 @@ Memories pile up. A tidy-up merges repeats, updates what has changed, and picks 
 
 ## The morning's note
 
-In the morning, a short note says what Conch learned from your chats and how it tidied its memory overnight: **While you slept**. It's on the new chat's screen until noon, and at the top of this page. Each line has **Undo**, which takes back just that one. **×** puts the note away until there's something new.
+In the morning, a short note says what Conch learned from your chats and how it tidied its memory overnight: **While you slept**. It's at the top of **Settings → Memory**, and only there: none of it shows in your chats or on the new chat’s screen, and it never sends a notification. Each line has **Undo**, which takes back just that one. **×** puts the note away until there's something new.
 
 The note never asks you anything. Anything held because it looks planted is a [card of its own](#when-a-memory-looks-off), never a line in the note.
 

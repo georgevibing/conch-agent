@@ -1233,7 +1233,8 @@ export function useFindables(query: string, conversationId: string | undefined):
       keywords:
         'morning note digest overnight last night while you slept nightly tidy tidied learned dreaming dreams consolidation undo memory memories',
       icon: <Sunrise />,
-      run: () => void navigate('/memory'),
+      // Atop Settings → Memory, its only place.
+      run: () => openSettings('memory'),
     },
     {
       // What used to be the Channels page: a filter of Apps now (ADR 0052).

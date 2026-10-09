@@ -1,7 +1,7 @@
 # 0107 — Check-ins, standing orders and the morning's note
 
 - Status: accepted
-- Date: 2026-10-08
+- Date: 2026-10-08 (amended 2026-10-09: the note lives atop Settings → Memory only)
 - Builds on: [ADR 0006](./0006-routines.md) (routines),
   [ADR 0056](./0056-when-routines-and-the-pulse.md) (the pulse and its sources),
   [ADR 0057](./0057-routines-cant-run-up-a-bill.md) (what unattended work spends),
@@ -149,15 +149,26 @@ applied during the day (ADR 0088). Two changes, nothing duplicated:
   since you last put the note away (a day back at most), each line with Undo,
   answered by the existing routes (`/api/learning/answer`,
   `/api/memory/tidy/answer`). "While you slept" before noon after a nightly run,
-  else "Since you last looked". It's on the new chat's screen until noon (three
-  lines) and atop the Memory page. It's computed from what those pages already
-  load: no new route, no model, no file. A held memory is never a line in it
+  else "Since you last looked". It sits at the top of Settings → Memory and
+  nowhere else: not on the new chat's screen, not in a chat, never a push, a
+  toast or a badge. Someone who wants to know what Conch learned goes there; the
+  chat is for the conversation. It's computed from what that page already
+  loads: no new route, no model, no file. A held memory is never a line in it
   (ADR 0097: only security asks). Unlike OpenClaw's `DREAMS.md`, it is never
   read back into memory.
 
 ADR 0097 made learning silent because people read every line as being asked. The
-note keeps that promise: it asks nothing, appears once a day at most, has no
-push, and one press puts it away.
+note keeps that promise: it asks nothing, has no push, waits where memory is
+managed, and one press puts it away.
+
+At first the note was also on the new chat's screen until noon. People read a
+card about memories under the message box as the chat demanding attention for
+something they hadn't asked about, so it moved out of every chat surface. The
+only memory words a chat still shows are ones the person's own request or
+safety needs: a step that remembered or forgot something when the assistant was
+asked to (a row of the run, ADR 0103, with Undo inside it), `/remember`'s own
+toast, and the memory check's **Remember this?** card and push when something
+looks planted (ADR 0087), which is an approval, not news.
 
 ## Threat model
 
@@ -205,7 +216,8 @@ All read 2026-10-08.
   check-in"), `describeTool` words, ⌘K ("Standing orders and check-ins", "What
   Conch learned overnight").
 - Nacre `CheckIns` (`StandingOrderList`, `StandingOrderOffer`, `CheckInCard`,
-  `MorningDigest`); web `features/checkins/`, `memory/{MorningNote,digest}.ts*`.
+  `MorningDigest`); web `features/checkins/`, `memory/{MorningNote,digest}.ts*`
+  (shown only by `settings/Settings.tsx`'s Memory tab).
 
 ## Consequences
 
