@@ -27,7 +27,7 @@ On a phone, Conch keeps the chat's name in view and folds the rest away. The hea
 
 Turn on **Allow notifications** in **Settings → Notifications**. Conch tells you when it needs your OK or has a question for you, when an answer is ready while you're away, and when a routine has run. It never notifies you while you're looking at it.
 
-While it's on, **Tell me when** lists what this device hears about, one switch each. Turn off **Show what it's about** and a notification only says to open Conch. **Send a test** sends one now, to see it arrive.
+While it's on, **Topics** opens what this device hears about, one switch each. Turn off **Show what it's about** and a notification only says to open Conch. **Send a test** sends one now, to see it arrive.
 
 ### Answer from the notification
 
