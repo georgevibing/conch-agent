@@ -5,7 +5,7 @@ import { promisify } from 'node:util';
 
 import { expect, test } from '@playwright/test';
 
-import { openConch } from './app';
+import { askFirst, autoAgain, openConch } from './app';
 
 /**
  * Skill scope, end to end (ADR 0047): once a skill's instructions are in a
@@ -34,11 +34,16 @@ async function conch(...args: string[]) {
 test.beforeEach(async ({ request }) => {
   await request.patch('/api/settings', { data: { onboarded: true, profile: { name: 'Sam' } } });
 });
+test.afterEach(async ({ request }) => {
+  await autoAgain(request);
+});
 
 test('a chat stays held to a skill’s list until you stop it, and Activity says so', async ({
   page,
   request,
 }) => {
+  // Ask first, for the mode's own question once the hold is gone: Auto wouldn't ask (ADR 0119).
+  await askFirst(request);
   const folder = join(home, 'skills', 'quick-setup');
   await mkdir(folder, { recursive: true });
   await writeFile(

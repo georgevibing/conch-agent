@@ -1,5 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
 
+import { askFirst, autoAgain } from './app';
+
 /**
  * Gmail, Google Calendar and Google Drive as ordinary apps (ADR 0048). Gmail
  * signs in with an app password against the pretend mail service (real IMAP
@@ -15,6 +17,9 @@ test.beforeEach(async ({ request }) => {
   for (const i of (await (await request.get('/api/integrations')).json()).integrations)
     await request.delete(`/api/integrations/${i.id}`);
 });
+test.afterEach(async ({ request }) => {
+  await autoAgain(request);
+});
 
 const composer = (page: Page) => page.getByRole('textbox', { name: 'Message Conch' });
 async function ask(page: Page, text: string) {
@@ -26,6 +31,8 @@ test('connect Gmail with an app password, use it in a chat, turn a tool off, fix
   page,
   request,
 }) => {
+  // The email shown first is Ask first's: Auto sends unless sending is set to Ask (ADR 0104).
+  await askFirst(request);
   await request.post(`${MAIL}/__control/deliver`, {
     data: { from: 'sam@example.org', subject: 'Lunch on Friday', text: 'Pizza at noon?' },
   });

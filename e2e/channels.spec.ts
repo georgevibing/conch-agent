@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
+import { askFirst, autoAgain } from './app';
+
 /**
  * With the mock engine, channels talk to a pretend Telegram, Discord and Slack
  * on this machine; the gateway says where (`GET /api/channels/mock`, mock
@@ -37,11 +39,16 @@ test.beforeEach(async ({ request }) => {
     await request.delete(`/api/channels/${c.id}`);
   }
 });
+test.afterEach(async ({ request }) => {
+  await autoAgain(request);
+});
 
 test('connect Telegram, say hello, chat from the phone and approve with a button', async ({
   page,
   request,
 }) => {
+  // The question from the phone is Ask first's: Auto runs the tests without one (ADR 0119).
+  await askFirst(request);
   await page.goto('/');
   // Chat apps are in Apps, under Talk to me here (ADR 0052).
   await page.getByRole('button', { name: 'Apps', exact: true }).click();

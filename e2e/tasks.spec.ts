@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { say } from './app';
+import { askFirst, autoAgain, say } from './app';
 
 const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
 
@@ -22,6 +22,9 @@ const openChatRow = (page: Page) =>
  */
 test.beforeEach(async ({ request }) => {
   await request.patch('/api/settings', { data: { onboarded: true, profile: { name: 'Ada' } } });
+});
+test.afterEach(async ({ request }) => {
+  await autoAgain(request);
 });
 
 test('run as a task, it works while you chat, and its result comes back', async ({ page }) => {
@@ -146,7 +149,9 @@ test('several tasks work at once on one card, open over the chat, and come back 
   expect(page.url()).toBe(url);
 });
 
-test('a task that needs your OK says so, and waits only for you', async ({ page }) => {
+test('a task that needs your OK says so, and waits only for you', async ({ page, request }) => {
+  // Ask first: in Auto, a task's git push goes ahead (ADR 0100, ADR 0119).
+  await askFirst(request);
   await page.goto('/');
   const composer = page.getByRole('textbox', { name: 'Message Conch' });
   await say(page, 'hi', /Ask me to/);

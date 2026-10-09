@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { askFirst, autoAgain } from './app';
+
 /**
  * With the mock engine, integrations talk to a pretend vendor on this
  * machine: real OAuth (discovery, registration, PKCE), real MCP, a consent
@@ -10,6 +12,9 @@ test.beforeEach(async ({ request }) => {
   for (const i of (await (await request.get('/api/integrations')).json()).integrations) {
     await request.delete(`/api/integrations/${i.id}`);
   }
+});
+test.afterEach(async ({ request }) => {
+  await autoAgain(request);
 });
 
 test('connect Notion in a popup, use it in a chat, fix it when it breaks', async ({
@@ -148,10 +153,12 @@ test('Full trust takes precedence over app questions and leaving it restores the
     });
   }
 
+  // Auto lets an app's change go ahead unless that tool is set to Ask (ADR 0100), so the
+  // question this is about comes in Ask first.
+  await askFirst(request);
   await page.goto('/');
   const composer = page.getByRole('textbox', { name: /Message/ });
-  // New chats start in Auto (ADR 0119); an app set to ask before changes still asks.
-  await expect(page.getByRole('button', { name: /\. Mode: Auto$/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /\. Mode: Ask first$/ })).toBeVisible();
   await composer.fill('create a page in github');
   await composer.press('Enter');
   await expect(
@@ -159,7 +166,7 @@ test('Full trust takes precedence over app questions and leaving it restores the
   ).toBeVisible();
 
   // A deliberate mode change answers the waiting question immediately.
-  await page.getByRole('button', { name: /\. Mode: Auto$/ }).click();
+  await page.getByRole('button', { name: /\. Mode: Ask first$/ }).click();
   await page.getByRole('radio', { name: /Full trust/ }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Turn on' }).click();
   await page.keyboard.press('Escape');

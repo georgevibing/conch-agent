@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { openConch } from './app';
+import { askFirst, autoAgain, openConch } from './app';
 
 const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
 
@@ -13,10 +13,16 @@ const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
 test.beforeEach(async ({ request }) => {
   await request.patch('/api/settings', { data: { onboarded: true, profile: { name: 'Ada' } } });
 });
+test.afterEach(async ({ request }) => {
+  await autoAgain(request);
+});
 
 test('after reading a page, a command asks — saying why — and “Always allow” is offered', async ({
   page,
+  request,
 }) => {
+  // Ask first: in Auto, a routine command after reading goes ahead (ADR 0100, ADR 0117).
+  await askFirst(request);
   await page.goto('/');
   const composer = page.getByRole('textbox', { name: 'Message Conch' });
   await composer.fill('read https://news.example/today and summarise it');
