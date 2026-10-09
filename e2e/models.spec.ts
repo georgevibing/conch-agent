@@ -103,7 +103,7 @@ test('Settings opens on General: the working folder and starting over, not under
   await expect(settings.getByRole('heading', { name: 'Working folder' })).toBeHidden();
 });
 
-test('every mode in the chat and in Settings, and Auto stops only for something serious (ADR 0100)', async ({
+test('every mode in the chat, and Auto stops only for something serious (ADR 0100)', async ({
   page,
   request,
 }, testInfo) => {
@@ -148,27 +148,12 @@ test('every mode in the chat and in Settings, and Auto stops only for something 
       .map((e: { input: { command?: string } }) => e.input.command),
   ).toEqual(['git push --force origin main']);
 
-  // Settings → Models: the same choice, with the same icons and words.
+  // Where new chats start is the composer's own (Make this my default): Settings has no Models.
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const settings = page.getByRole('dialog');
-  await settings.getByRole('tab', { name: 'Models' }).click();
-  const choice = settings.getByRole('radiogroup', { name: 'Default mode' });
-  await expect(choice.getByRole('radio')).toHaveText([
-    /^Read only/,
-    /^Ask first/,
-    /^Auto/,
-    /^Full trust/,
-  ]);
-  await choice.getByRole('radio', { name: /^Auto/ }).click();
-  await expect
-    .poll(async () => (await (await request.get('/api/state')).json()).preferences.permissionMode)
-    .toBe('auto');
-  await choice.getByRole('radio', { name: /^Full trust/ }).click();
-  await expect(settings.getByRole('alertdialog')).toContainText('run anything without asking');
+  await expect(settings.getByRole('tab', { name: 'Models' })).toHaveCount(0);
   for (const colorScheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
     await page.screenshot({ path: testInfo.outputPath(`modes-${colorScheme}.png`) });
   }
-  await settings.getByRole('button', { name: 'Keep asking' }).click();
-  expect((await (await request.get('/api/state')).json()).preferences.permissionMode).toBe('auto');
 });
