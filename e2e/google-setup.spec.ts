@@ -105,7 +105,7 @@ for (const viewport of [
       mimeType: 'application/json',
       buffer: Buffer.from(credentials),
     });
-    await expect(google.getByText(/Desktop app · personal-conch/)).toBeVisible();
+    await expect(google.getByText(/Desktop app\s·\spersonal-conch/)).toBeVisible();
     await google.getByRole('button', { name: 'Save and continue with Google' }).click();
     await expect(google.getByRole('link', { name: 'Open Google sign-in' })).toBeVisible();
     // Reload recovery retains only the flow ID, not the credential file or return URL.

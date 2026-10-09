@@ -180,7 +180,7 @@ test('a chat’s tasks sit under it in the sidebar, and open from there', async 
   const toggle = row.getByRole('button', { name: /tasks from/ });
   // A badge on the chat's own row: how many, and in full to a screen reader.
   await expect(toggle).toHaveText('1');
-  await expect(toggle).toHaveAccessibleName(/1 task · 1 working/);
+  await expect(toggle).toHaveAccessibleName(/1 task\s·\s1 working/);
   const tasks = row.getByRole('list', { name: /^Tasks from/ });
   await expect(tasks).toContainText('Keep checking for a while');
   await expect(tasks).toContainText('Starting the watcher');

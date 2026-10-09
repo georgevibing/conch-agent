@@ -99,8 +99,8 @@ test('the hello link makes Conch yours with a password; a passkey added later si
   const again = await page.request.post('/api/auth/hello', { data: { code } });
   expect(await again.json()).toMatchObject({ ok: false, reason: 'claimed' });
 
-  // Settings → Security → Passkeys: add this device's own.
-  await page.goto('/settings/security');
+  // Settings → Access → Passkeys: add this device's own.
+  await page.goto('/settings/access');
   const add = page.getByRole('button', {
     name: /^Add (Touch ID|Windows Hello|Face ID|your fingerprint|a passkey from your phone)$/,
   });

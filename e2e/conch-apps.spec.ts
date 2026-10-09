@@ -149,7 +149,7 @@ test('make Tally, add it, use it, count on its page, save it, remove it and add 
   await expect(found).toContainText(/Signed by /);
   await found.getByRole('button', { name: 'Add Tally to my apps' }).click();
   await expect(page).toHaveURL(/\/apps\/capp_tally$/);
-  await expect(page.getByText(/Signed by .* · 1\.0\.0/)).toBeVisible();
+  await expect(page.getByText(/Signed by .*\s·\s1\.0\.0/)).toBeVisible();
   // What it counted was kept, and this is your own app (the file carries your signature),
   // so it carries on where it was.
   await page.getByRole('button', { name: 'Open Tally' }).click();

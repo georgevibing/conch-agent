@@ -262,7 +262,7 @@ test('a passkey comes in with a Bitwarden export, shows on its login, and can be
   await page.getByRole('button', { name: /^Codeberg, .*has a passkey/ }).click();
   const passkeys = page.getByRole('region', { name: 'Passkeys' });
   await expect(passkeys.getByText('Passkey for codeberg.org')).toBeVisible();
-  await expect(passkeys.getByText(/ada · Not used yet/)).toBeVisible();
+  await expect(passkeys.getByText(/ada\s·\sNot used yet/)).toBeVisible();
   // The key itself is nowhere on the page.
   expect(await page.content()).not.toContain(key.slice(0, 40));
   await snap(page, 'passkey');

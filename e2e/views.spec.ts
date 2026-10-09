@@ -30,12 +30,23 @@ test('a calendar comes back as days, with today first', async ({ page }) => {
   await expect(page.getByText('Today you have standup at 9:30')).toBeVisible();
   // What the model read is still there, behind the story and its step (ADR 0103).
   await expect(page.getByText('"summary":"Standup"')).toHaveCount(0);
-  await page
+  // Open the step only once the turn has finished: a click while the reply is
+  // still settling can land on a row that is about to be drawn again.
+  await expect(page.getByRole('button', { name: /Stop/ })).toHaveCount(0);
+  const story = page.locator('[data-story]').first();
+  await expect(story).toHaveAttribute('data-status', 'done');
+  await story
     .getByRole('button', { name: /Looked at your calendar/ })
     .first()
     .click();
-  await page.getByRole('list', { name: 'Steps' }).getByRole('button').first().click();
-  await expect(page.getByRole('region', { name: 'Output' })).toContainText('Standup');
+  await story
+    .getByRole('list', { name: 'Steps' })
+    .getByRole('listitem')
+    .first()
+    .getByRole('button')
+    .first()
+    .click();
+  await expect(story.getByRole('region', { name: 'Output' })).toContainText('Standup');
 });
 
 test('emails come back as a list, and Reply only fills the composer', async ({ page }) => {

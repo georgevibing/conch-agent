@@ -36,7 +36,7 @@ test('answered with a tap: the card folds to the answer and the reply carries on
   const folded = page.getByRole('note').filter({ hasText: 'Phone call' });
   await expect(folded).toBeVisible();
   await expect(
-    page.getByText(/Done: your call with Ada is booked for .+ · Phone call\./),
+    page.getByText(/Done: your call with Ada is booked for .+\s·\sPhone call\./),
   ).toBeVisible({ timeout: 20_000 });
   await expect(card(page)).toHaveCount(0);
   await expect(composer(page)).toHaveAttribute('placeholder', /^Message Conch/);
@@ -73,6 +73,6 @@ test('still waiting after a reload, and answered from there', async ({ page }) =
   await card(page).getByRole('radio', { name: 'Video call' }).click();
   await card(page).getByRole('button', { name: 'Send' }).click();
   await expect(
-    page.getByText(/Done: your call with Ada is booked for .+ · Video call\./),
+    page.getByText(/Done: your call with Ada is booked for .+\s·\sVideo call\./),
   ).toBeVisible({ timeout: 20_000 });
 });

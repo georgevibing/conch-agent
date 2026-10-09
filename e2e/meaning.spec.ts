@@ -43,7 +43,7 @@ test('before any download, a few everyday ideas match; the offer asks first, the
   await page.getByRole('combobox').fill('meaning');
   await page.getByRole('option', { name: /Search memories by meaning/ }).click();
   const get = page.getByRole('button', { name: 'Get it' });
-  await expect(page.getByText(/Search by meaning, too · .*stays on this computer/)).toBeVisible();
+  await expect(page.getByText(/Search by meaning, too\s·\s.*stays on this computer/)).toBeVisible();
   // ⌘K brought you to the one button, without pressing it for you.
   await expect(get).toBeFocused();
   expect((await (await request.get('/api/memory/index')).json()).mode).toBe('words');

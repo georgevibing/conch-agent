@@ -217,7 +217,7 @@ test('live data: asked once, read through Conch, updated, failing calmly, taken 
   await question.getByRole('checkbox', { name: /Let it read from this computer/ }).click();
   await allow.click();
   await expect(frame.getByText('berlin: 21°')).toBeVisible();
-  await expect(panel.getByText(/Live · Updated just now · every 1 min/)).toBeVisible();
+  await expect(panel.getByText(/Live\s·\sUpdated just now\s·\severy 1 min/)).toBeVisible();
 
   // Every way a page might abuse the bridge, refused.
   const reads: string[] = [];
@@ -326,7 +326,7 @@ test('live data: asked once, read through Conch, updated, failing calmly, taken 
   await expect(
     page.frameLocator('iframe[title="Weather now"]').getByText('berlin: 23°'),
   ).toBeVisible();
-  await expect(app.getByText(/Live · Updated just now/)).toBeVisible();
+  await expect(app.getByText(/Live\s·\sUpdated just now/)).toBeVisible();
 
   // ⌘K finds where the OKs are kept.
   await openConch(page);
