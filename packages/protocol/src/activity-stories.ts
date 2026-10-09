@@ -32,7 +32,7 @@ import {
   sameKey,
   settleRuns,
 } from './activity-stories/steps';
-import { stuckOf } from './activity-stories/stuck';
+import { stuckReading } from './activity-stories/stuck';
 import type { ToolApproval, ToolStatus } from './index';
 
 export { groupEffects, stepEffects, EFFECT_ORDER } from './activity-stories/effects';
@@ -70,6 +70,8 @@ export interface Story {
   repeats: number;
   /** Said when it's going round in circles: "The same command failed 3 times". */
   stuck?: string;
+  /** `stuck` is only slow waiting (checked again and again, nothing new): said calmly, not as a warning. */
+  stuckCalm?: boolean;
   startedAt: number;
   /** From its first step's start to its last step's end, once done. */
   durationMs?: number;
@@ -295,8 +297,11 @@ function tell(cut: StoryStep[]): Story {
     startedAt: first.startedAt,
   };
   if (outcome) story.outcome = outcome;
-  const stuck = stuckOf(steps);
-  if (stuck) story.stuck = stuck;
+  const stuck = stuckReading(steps);
+  if (stuck) {
+    story.stuck = stuck.text;
+    if (stuck.tone === 'calm') story.stuckCalm = true;
+  }
   if (quiet.length > 0) story.quiet = quiet;
   if (note && status !== 'failed') story.note = note;
   if (status !== 'running') {

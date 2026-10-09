@@ -1129,7 +1129,8 @@ describe('tellStories: stuck', () => {
     for (let i = 0; i < 5; i += 1)
       steps.push(poll('p1', 'Waiting', { startedAt: clock + i * 60_000 }));
     const s = tellStories(steps)[0] as Story;
-    expect(s.stuck).toBe('Checked on it 5 times in 4 minutes and nothing changed');
+    expect(s.stuck).toBe('Still running · checked 5 times in 4 minutes, nothing new yet');
+    expect(s.stuckCalm).toBe(true);
   });
 
   it('says nothing for a few quick polls, or polls that see progress', () => {

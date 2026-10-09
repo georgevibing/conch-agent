@@ -181,6 +181,7 @@ export function RunStories({
       ),
       repeats: story.repeats,
       ...(story.stuck && { stuck: story.stuck }),
+      ...(story.stuckCalm && { stuckTone: 'calm' as const }),
       startedAt: story.startedAt,
       ...(story.durationMs !== undefined && { durationMs: story.durationMs }),
       ...(said && { live: said.text, liveSource: said.source }),

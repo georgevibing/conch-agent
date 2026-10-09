@@ -599,6 +599,11 @@
     text-wrap: pretty;
   }
 
+  /* Only waiting the slow way: said quietly, in the row's own ink. */
+  .stuck[data-tone='calm'] {
+    color: var(--nc-text-muted);
+  }
+
   .stuck > svg {
     flex-shrink: 0;
     inline-size: 0.75rem;

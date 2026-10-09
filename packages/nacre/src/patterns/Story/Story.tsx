@@ -83,6 +83,11 @@ export interface StoryProps extends Omit<ComponentProps<'div'>, 'children'> {
   repeats?: number;
   /** A gentle sentence when it's taking longer than it should: "Still waiting on the build". */
   stuck?: string;
+  /**
+   * How `stuck` looks: `warning` (amber) when something keeps failing, `calm`
+   * when it's only waiting the slow way, checking again and again.
+   */
+  stuckTone?: 'warning' | 'calm';
   /** Epoch ms when it started: the clock ticks from here while it runs. */
   startedAt?: number;
   /** How long it took, once it's over. */
@@ -406,6 +411,7 @@ export function Story({
   chips,
   repeats = 0,
   stuck,
+  stuckTone = 'warning',
   startedAt,
   durationMs,
   headlineSource,
@@ -526,7 +532,7 @@ export function Story({
           <div className={styles.belowInner}>
             {shownLine !== undefined &&
               (lineIsStuck ? (
-                <p className={styles.stuck}>
+                <p className={styles.stuck} data-tone={stuckTone}>
                   <Hourglass aria-hidden />
                   <span>{shownLine}</span>
                 </p>
