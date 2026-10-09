@@ -73,6 +73,11 @@ reached.
 The notification opens `/c/<id>?approve=<permission>`, and the chat shows Nacre `ApprovalSheet`: a
 bottom sheet with who asks and where, what will happen as a big title, exactly what it would do (the
 command, the file, the address), when no answer becomes a no, and two big buttons where a thumb rests.
+The title is a few plain words, two lines at most, and never the command itself: the gateway gives a
+command its own (`commandTitle`: "Run git and Python in conch-agent", "Install packages and run the
+tests"), and the notification says the same words. The command goes under it exactly, in Nacre
+`ApprovalCommand`: code size, long lines wrapped, about seven lines and then **Show all**, which then
+scrolls inside the block. The chat's approval card shows a command the same way (ADR 0028).
 Answering seals it: a ring draws itself round a check (still under reduced motion), and **Back to the
 chat**. Arriving at a question already answered says so.
 

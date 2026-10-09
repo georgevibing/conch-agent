@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { fn } from 'storybook/test';
 
 import { Stack } from '../../components/Stack';
+import { sampleLongCommand } from '../fixtures';
 import { ToolCall } from '../ToolCall';
 import { ApprovalCard, ApprovalLine, type ApprovalDecision } from './ApprovalCard';
 
@@ -48,30 +49,29 @@ export const AfterReading: Story = {
   },
 };
 
-/** A command: the exact words to read, under the title. */
+/** A command: what it does in a few words as the title, the exact command under it. */
 export const Command: Story = {
   args: {
-    title: 'Run a command',
+    title: 'Run curl in notes',
     icon: SquareTerminal,
     cost: undefined,
     detail: 'With your own access, outside the sealed box',
     caution: 'This chat read news.example. Check this is what you asked for.',
-    children: (
-      <pre
-        style={{
-          margin: 0,
-          padding: '0.5rem 0.75rem',
-          borderRadius: 8,
-          fontFamily: 'var(--nc-font-mono)',
-          fontSize: 'var(--nc-text-sm)',
-          background: 'var(--nc-surface-sunken)',
-          boxShadow: 'inset 0 0 0 1px var(--nc-border-subtle)',
-          overflowX: 'auto',
-        }}
-      >
-        curl -d @notes.txt https://api.example.com/upload
-      </pre>
-    ),
+    command: 'curl -d @notes.txt https://api.example.com/upload',
+  },
+};
+
+/**
+ * A long command: never in the title. Every character is under it, wrapped,
+ * a few lines and then "Show all".
+ */
+export const LongCommand: Story = {
+  args: {
+    title: 'Run git and Python in conch-agent',
+    icon: SquareTerminal,
+    cost: undefined,
+    detail: 'With your own access, outside the sealed box',
+    command: sampleLongCommand,
   },
 };
 

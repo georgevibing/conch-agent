@@ -1,3 +1,7 @@
+import { basename } from 'node:path';
+
+import { commandParts, wordsOf } from './risk';
+
 /** One-line, human description of what a tool wants to do, for permission prompts. */
 export function summarizeToolUse(toolName: string, input: Record<string, unknown>): string {
   const str = (key: string) =>
@@ -70,6 +74,117 @@ export function summarizeToolUse(toolName: string, input: Record<string, unknown
       return `Use ${toolName}`;
     }
   }
+}
+
+/** Steps of a command line that only set the scene: where it runs, what it says. */
+const SCENERY = new Set([
+  'cd',
+  'pushd',
+  'popd',
+  'export',
+  'set',
+  'unset',
+  'source',
+  '.',
+  'true',
+  'false',
+  ':',
+  'exit',
+  'echo',
+  'printf',
+  'sleep',
+  'wait',
+  'test',
+  '[',
+  'Set-Location',
+]);
+
+/** Programs said as people say them. */
+const SPOKEN: Record<string, string> = {
+  python: 'Python',
+  python3: 'Python',
+  node: 'Node',
+  deno: 'Deno',
+  ruby: 'Ruby',
+  perl: 'Perl',
+  php: 'PHP',
+  docker: 'Docker',
+  bash: 'a script',
+  sh: 'a script',
+  zsh: 'a script',
+};
+
+const RUNNERS = /^(?:npm|pnpm|yarn|bun|npx|pnpx|bunx)$/;
+const TESTS = /^(?:npm|pnpm|yarn|bun|cargo|go|deno|dotnet|mvn|gradle|make)$/;
+const INSTALLS = /^(?:npm|pnpm|yarn|bun|pip3?|uv|cargo|brew|gem|go)$/;
+const BUILDS = /^(?:npm|pnpm|yarn|bun|cargo|go|docker|make|dotnet)$/;
+
+/** What one step does, in a few words: "Run the tests", "Run git". */
+function stepWords(words: string[]): string | undefined {
+  const name = basename(words[0] ?? '');
+  if (!name || SCENERY.has(name) || !/^[A-Za-z0-9][\w.+-]{0,23}$/.test(name)) return undefined;
+  const verb = (words.slice(1).find((w) => !w.startsWith('-')) ?? '').toLowerCase();
+  const sub = RUNNERS.test(name) && verb === 'run' ? (words[2] ?? '').toLowerCase() : verb;
+  if (/^(?:vitest|jest|pytest|mocha)$/.test(name) || (sub === 'test' && TESTS.test(name)))
+    return 'Run the tests';
+  if (/^(?:install|i|ci|add)$/.test(sub) && INSTALLS.test(name)) return 'Install packages';
+  if (sub === 'build' && BUILDS.test(name)) return 'Build the project';
+  return `Run ${SPOKEN[name] ?? name}`;
+}
+
+/** A heredoc's lines are what a program reads, not steps of their own. */
+function withoutHeredocs(command: string): string {
+  const kept: string[] = [];
+  let until: string | undefined;
+  for (const line of command.split('\n')) {
+    if (until !== undefined) {
+      if (line.trim() === until) until = undefined;
+      continue;
+    }
+    kept.push(line);
+    until = /<<-?\s*(['"]?)([\w.-]+)\1/.exec(line)?.[2];
+  }
+  return kept.join('\n');
+}
+
+const listed = (items: string[]) =>
+  items.length < 2 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
+
+const WHERE_TO = new Set(['cd', 'pushd', 'Set-Location']);
+
+/**
+ * What a command does, in a few plain words, never the command itself (ADR 0028,
+ * ADR 0108): "Run git and Python in conch-agent", "Install packages and run the
+ * tests". The card's heading; the exact command is shown under it. `folder` is
+ * where it runs when the command doesn't say (the chat's work folder).
+ */
+export function commandTitle(command: string, folder?: string): string {
+  const parts = commandParts(withoutHeredocs(command)).map(wordsOf);
+  const into = parts.find((words) => WHERE_TO.has(words[0] ?? ''))?.[1];
+  const place = basename(into && !/^[~.-]+$/.test(into) ? into : (folder ?? ''));
+  const steps = [...new Set(parts.map(stepWords).filter((s): s is string => Boolean(s)))];
+  const runs = steps.filter((s) => s.startsWith('Run ') && s !== 'Run the tests');
+  const said =
+    steps.length === 0
+      ? 'Run a command'
+      : steps.length > 3
+        ? `Run ${steps.length} commands`
+        : runs.length === steps.length
+          ? `Run ${listed(runs.map((s) => s.slice(4)))}`
+          : listed(steps.map((s, i) => (i ? s.charAt(0).toLowerCase() + s.slice(1) : s)));
+  const where = place && place.length <= 40 && !/[\s`$]/.test(place) ? ` in ${place}` : '';
+  return `${said}${where}`;
+}
+
+/** The card's short title for a step whose summary would carry its code: a command line. */
+export function titleOfToolUse(
+  toolName: string,
+  input: Record<string, unknown>,
+  folder?: string,
+): string | undefined {
+  const bare = toolName.replace(/^mcp__conch__/, '');
+  if (!(bare === 'Bash' || bare === 'PowerShell' || bare === 'process_start')) return undefined;
+  return typeof input.command === 'string' ? commandTitle(input.command, folder) : undefined;
 }
 
 /** A short title from the first message: first line, at a word boundary. */

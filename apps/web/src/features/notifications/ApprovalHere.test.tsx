@@ -60,6 +60,26 @@ describe('the approval sheet (ADR 0108)', () => {
     expect(where()).toBe('/c/c1');
   });
 
+  it('never puts the command in the heading, even one asked before commands had their words', async () => {
+    const command = "cd ~/conch-agent && git checkout AGENTS.md && python3 - <<'EOF'\np=1\nEOF";
+    show(
+      reduceAll(
+        log({
+          type: 'permission.requested',
+          permissionId: 'p1',
+          toolName: 'Bash',
+          input: { command },
+          summary: `Run \`${command}\``,
+        }),
+      ),
+    );
+    const sheet = await screen.findByRole('dialog', { name: 'Run a command' });
+    expect(screen.getByRole('group', { name: 'Command' })).toHaveTextContent(
+      'git checkout AGENTS.md',
+    );
+    expect(sheet.querySelector('h2')?.textContent).not.toContain('git');
+  });
+
   it('a step that matters says why it asks you to confirm first', async () => {
     show(undefined, {
       'GET /api/push/approvals/c1/p1': () => ({

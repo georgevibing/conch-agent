@@ -17,6 +17,28 @@ const asked = (
   ...patch,
 });
 
+describe('a command’s card (ADR 0028)', () => {
+  it('says what it does in a few words, and the exact command under it', () => {
+    renderApp(
+      <PermissionCard
+        item={asked({ title: 'Run grep in conch-agent' })}
+        name="Conch"
+        onRespond={() => {}}
+      />,
+    );
+    const card = screen.getByRole('group', { name: 'Conch asks first: Run grep in conch-agent' });
+    expect(screen.getByRole('group', { name: 'Command' })).toHaveTextContent(
+      'grep -rn memory docs',
+    );
+    expect(card.querySelector('code')).toBeNull();
+  });
+
+  it('never puts the command in the heading, even one asked before commands had their words', () => {
+    renderApp(<PermissionCard item={asked({})} name="Conch" onRespond={() => {}} />);
+    expect(screen.getByRole('group', { name: 'Conch asks first: Run a command' })).toBeVisible();
+  });
+});
+
 describe('a question asked because of what the chat read', () => {
   it('says why, and offers “Always allow” like any other', async () => {
     const respond = vi.fn();

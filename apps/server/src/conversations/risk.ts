@@ -198,7 +198,7 @@ export function commandParts(command: string): string[] {
 }
 
 /** Words of one part, as the shell would split them: quotes joined to what's beside them. */
-function wordsOf(part: string): string[] {
+export function wordsOf(part: string): string[] {
   const words: string[] = [];
   let word = '';
   let started = false;

@@ -33,7 +33,7 @@ import { keys } from '../../api/queries';
 import type { TranscriptItem } from '../../live/reducer';
 import { useAutoFocus } from '../../lib/useAutoFocus';
 import { SentAttachments } from './AttachmentViewer';
-import { isMailApproval, rowState, withAnswer } from './approval';
+import { approvalTitle, commandOf, isMailApproval, rowState, withAnswer } from './approval';
 import { MailApproval, mailOf } from './MailItems';
 import { StreamingMarkdown } from './Markdown';
 import { drawnAsFile, FileToolItem } from './FileToolItem';
@@ -409,12 +409,6 @@ function withCode(text: string) {
     );
 }
 
-/** What the card's title says: its own short one, or the summary as a sentence. */
-function approvalTitle(item: Of<'permission'>): string {
-  const text = item.title ?? item.summary;
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
 export function PermissionCard({
   item,
   name,
@@ -456,10 +450,6 @@ function AskCard({
     setSent(decision);
     onRespond(decision);
   };
-  const command =
-    item.toolName === 'Bash' && typeof (item.input as { command?: unknown })?.command === 'string'
-      ? (item.input as { command: string }).command
-      : undefined;
   return (
     <ApprovalCard
       aria-label={`${name} asks first: ${title}`}
@@ -474,9 +464,8 @@ function AskCard({
       sent={sent}
       onDecide={respond}
       allowRef={allowRef}
-    >
-      {command && <pre className={styles.permissionCommand}>{command}</pre>}
-    </ApprovalCard>
+      command={commandOf(item)}
+    />
   );
 }
 

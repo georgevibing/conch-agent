@@ -4,6 +4,7 @@ import { createElement, type ComponentProps, type ReactNode, type Ref } from 're
 import { Button } from '../../components/Button';
 import { cx } from '../../utils/cx';
 import styles from './Approval.module.css';
+import { ApprovalCommand } from './ApprovalCommand';
 
 export type ApprovalDecision = 'allow' | 'allow-always' | 'deny';
 
@@ -19,7 +20,9 @@ export interface ApprovalCardProps extends Omit<ComponentProps<'div'>, 'title'> 
    * what you asked for." Never a box: it's a reason to read, not an alarm.
    */
   caution?: ReactNode;
-  /** What exactly it would do, to read before deciding: a command, a draft. */
+  /** The command it would run, exactly: at code size, a few lines and then "Show all". */
+  command?: string;
+  /** What exactly it would do, when it isn't a command: a draft, an address. */
   children?: ReactNode;
   /** The mark beside the title. */
   icon?: LucideIcon;
@@ -47,6 +50,7 @@ export function ApprovalCard({
   detail,
   cost,
   caution,
+  command,
   children,
   icon = ShieldQuestion,
   allowAlways = true,
@@ -86,6 +90,7 @@ export function ApprovalCard({
             </p>
           )}
         </div>
+        {command && <ApprovalCommand className={styles.command}>{command}</ApprovalCommand>}
         {children != null && <div className={styles.preview}>{children}</div>}
         {caution && (
           <p className={styles.caution}>

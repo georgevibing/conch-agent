@@ -10,7 +10,7 @@ const base = {
   onOpenChange: () => undefined,
   name: 'Pearl',
   where: 'Fix the build',
-  title: 'Run npm test',
+  title: 'Run the tests in conch-agent',
   until: 'No answer by 14:32 is a no.',
 };
 
@@ -22,7 +22,7 @@ describe('ApprovalSheet', () => {
         <pre>npm test</pre>
       </ApprovalSheet>,
     );
-    const dialog = screen.getByRole('dialog', { name: 'Run npm test' });
+    const dialog = screen.getByRole('dialog', { name: 'Run the tests in conch-agent' });
     expect(dialog).toHaveTextContent('Pearl asks first');
     expect(dialog).toHaveTextContent('Fix the build');
     expect(dialog).toHaveTextContent('npm test');

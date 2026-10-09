@@ -87,6 +87,24 @@ export function foldedAnswers(items: readonly TranscriptItem[]): Set<string> {
 export const isMailApproval = (toolName: string) =>
   /^(?:mcp__conch__)?google_mail_(?:send|create_draft)$/.test(toolName);
 
+const SHELL = /^(?:mcp__conch__)?(?:Bash|PowerShell|process_start)$/;
+
+/** The command a question is about, exactly as it would run: shown under the title. */
+export function commandOf(item: Permission): string | undefined {
+  const command = (item.input as { command?: unknown } | undefined)?.command;
+  return SHELL.test(item.toolName) && typeof command === 'string' && command ? command : undefined;
+}
+
+/**
+ * What a question's heading says (ADR 0028, ADR 0108): its own few words, or
+ * the summary as a sentence. Never a command: one asked before the gateway
+ * gave commands their own words says "Run a command", and the command is shown under it.
+ */
+export function approvalTitle(item: Permission): string {
+  const text = item.title ?? (commandOf(item) ? 'Run a command' : item.summary);
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 /** Each call's question, by the call. */
 export function questionsByCall(items: readonly TranscriptItem[]): Map<string, Permission> {
   const out = new Map<string, Permission>();

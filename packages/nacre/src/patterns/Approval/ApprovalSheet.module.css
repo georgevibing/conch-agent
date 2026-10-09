@@ -49,13 +49,19 @@
     box-shadow: var(--nc-chat-card-shadow);
   }
 
+  /* A few plain words, never the command: two lines at most. */
   .title {
+    display: -webkit-box;
     margin: 0;
+    overflow: hidden;
     font-size: var(--nc-text-lg);
     font-weight: var(--nc-weight-semibold);
     line-height: var(--nc-leading-snug);
     text-wrap: balance;
     overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
   }
 
   .facts {

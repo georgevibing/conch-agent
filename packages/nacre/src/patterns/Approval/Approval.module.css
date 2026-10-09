@@ -52,14 +52,26 @@
     padding-block-start: 0.25rem;
   }
 
+  /* A few plain words, never the command: two lines at most. */
   .title {
+    display: -webkit-box;
     margin: 0;
+    overflow: hidden;
     font-size: var(--nc-text-sm);
     font-weight: var(--nc-weight-semibold);
     line-height: var(--nc-leading-snug);
     color: var(--nc-text);
     text-wrap: balance;
     overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  /* The command beside a small title: code a step smaller than in the sheet. */
+  .card .command {
+    --ac-size: var(--nc-text-sm);
+    --ac-pad-block: var(--nc-space-2);
   }
 
   .facts {
