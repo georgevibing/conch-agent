@@ -158,6 +158,14 @@ jobs:
         run: |
           title=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json title --jq .title)
           node scripts/commits.mjs "origin/$BASE_REF..HEAD" --title "$title"
+      # Merged with no key in the list, a release couldn't be signed (docs/RELEASING.md).
+      - name: A release pull request can be released
+        if: startsWith(github.head_ref, 'release-please--')
+        run: |
+          if ! grep -Eq '^[^#[:space:]][^[:space:]]* +namespaces="git" +[a-z0-9@.-]+ +[A-Za-z0-9+/=]+' release/allowed_signers; then
+            echo "::error file=release/allowed_signers::No release key: run pnpm release key and push the list before merging."
+            exit 1
+          fi
 
   # Preserve one stable gate for branch rules. Website publication still waits
   # for the entire CI workflow, so no partial pass can publish the site. The
