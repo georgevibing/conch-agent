@@ -52,6 +52,7 @@ export * from './Skills';
 export * from './Discover';
 export * from './Tasks';
 export * from './OtherApps';
+export * from './Dashboards';
 export * from './Browser';
 export * from './Terminal';
 export * from './Setup';
