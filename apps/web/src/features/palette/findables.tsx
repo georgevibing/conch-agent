@@ -95,7 +95,7 @@ import { useNavigate } from 'react-router';
 import { useConversations, useFolders } from '../../api/queries';
 import { useUi, type SettingsTab } from '../../app/ui';
 import { NARROW } from '../../app/widths';
-import { MEMORY_ALL } from '../settings/paths';
+import { MEMORY_ALL, OTHER_APPS_FOCUS } from '../settings/paths';
 import { ARCHIVE_PATH, isChat, useArchive } from '../archive/useArchive';
 import { useOrganise } from '../chatlist/useOrganise';
 import { COME_HOME_FOCUS } from '../import/api';
@@ -107,12 +107,13 @@ import {
   ADD_DEVICE_FOCUS,
   ADDRESS_FOCUS,
   DEVICES_FOCUS,
+  KEYS_FOCUS,
   PASSKEYS_FOCUS,
   REACH_FOCUS,
+  SIGN_IN_FOCUS,
 } from '../auth/focus';
 import { FALLBACK_FOCUS } from '../settings/FallbackSection';
 import { HEALED_FOCUS } from '../settings/HealedSection';
-import { ADVANCED_FOCUS } from '../settings/useAdvanced';
 import { PLAN_ROOM_FOCUS, ROUTINES_SPEND_FOCUS } from '../routines/SpendingSection';
 import { LEARNING_SPEND_FOCUS } from '../learning/LearningSpendSection';
 import { NEVER_INTENT } from '../learning/LearningSections';
@@ -132,6 +133,7 @@ import { useConchApps } from '../conchapps/queries';
 import { appLook, conchPagePath } from '../conchapps/words';
 import { useRoutines } from '../routines/queries';
 import { going, taskKeys } from '../tasks/queries';
+import { COMMANDS_FOCUS } from '../skills/CommandsSection';
 import { listingPath } from '../skills/Discover';
 import { useMarket } from '../skills/market';
 import { useSkills, useWorkSuggestions } from '../skills/queries';
@@ -182,6 +184,32 @@ const settingsPlaces: {
     icon: <RefreshCw />,
   },
   {
+    // Appearance is part of General now: its old name still finds it.
+    tab: 'general',
+    label: 'Appearance',
+    keywords: 'appearance theme dark light mode colour color accent reduce motion animation',
+    icon: <PaletteIcon />,
+  },
+  {
+    // Lustre was its old name.
+    tab: 'general',
+    label: 'Shimmer',
+    keywords: 'shimmer lustre pearl sheen iridescence shine effects',
+    icon: <Sparkles />,
+  },
+  {
+    tab: 'general',
+    label: 'Name new chats automatically',
+    keywords: 'name new chats automatically title titles auto rename chat names',
+    icon: <Pencil />,
+  },
+  {
+    tab: 'general',
+    label: 'Offers in the chat',
+    keywords: 'offers suggestions suggest again muted don’t suggest dont apps skills',
+    icon: <Blocks />,
+  },
+  {
     tab: 'general',
     label: 'Working folder',
     keywords: 'working folder workspace directory project files where cwd',
@@ -206,37 +234,23 @@ const settingsPlaces: {
     keywords: 'let agent in a2a share my agent pair peer another agent talk to my agent key',
     icon: <UsersRound />,
   },
-  { tab: 'about', label: 'About you', keywords: 'profile me', icon: <User /> },
+  // About you and Memory are one place now, What Conch knows: either name finds it.
+  {
+    tab: 'memory',
+    label: 'What Conch knows',
+    keywords: 'what conch knows memory memories remember forget about you profile me',
+    icon: <Brain />,
+  },
+  { tab: 'memory', label: 'About you', keywords: 'about you profile me', icon: <User /> },
   { tab: 'memory', label: 'Memory', keywords: 'remember forget', icon: <Brain /> },
   {
-    tab: 'models',
-    label: 'Models',
-    keywords: 'default model modes thinking effort permissions trust ask first',
-    icon: <Gauge />,
-  },
-  {
-    tab: 'models',
-    focus: ADVANCED_FOCUS,
-    label: 'Fast mode and chat names',
-    keywords: 'fast mode faster replies name new chats automatically title titles',
-    icon: <Zap />,
-  },
-  {
-    tab: 'models',
-    focus: ADVANCED_FOCUS,
-    label: 'Offers in the chat',
-    keywords: 'offers suggestions suggest again muted don’t suggest apps skills',
-    icon: <Blocks />,
-  },
-  {
-    tab: 'models',
+    tab: 'providers',
     focus: FALLBACK_FOCUS,
-    label: 'When a provider can’t answer',
+    label: 'When one can’t answer',
     keywords:
-      'offline internet wifi limit reached fallback continue switch local model ollama wait',
+      'when a provider can’t answer cant offline internet wifi usage limit reached at a limit fallback continue switch local model ollama wait answer offline',
     icon: <WifiOff />,
   },
-  { tab: 'commands', label: 'Commands', keywords: 'slash prompts', icon: <SquareSlash /> },
   { tab: 'usage', label: 'Usage', keywords: 'limits spend budget plan', icon: <BatteryMedium /> },
   {
     tab: 'usage',
@@ -330,7 +344,7 @@ const settingsPlaces: {
     icon: <Mic />,
   },
   {
-    tab: 'devices',
+    tab: 'access',
     focus: ADD_DEVICE_FOCUS,
     label: 'Add your phone',
     keywords:
@@ -348,8 +362,28 @@ const settingsPlaces: {
   {
     tab: 'security',
     label: 'Security',
-    keywords: 'password keys sign in checkup safe',
+    keywords: 'security checkup safe safety',
     icon: <ShieldCheck />,
+  },
+  {
+    tab: 'access',
+    label: 'Access',
+    keywords: 'access sign in signing in log in login password devices other apps who gets in',
+    icon: <KeyRound />,
+  },
+  {
+    tab: 'access',
+    focus: SIGN_IN_FOCUS,
+    label: 'How you sign in',
+    keywords: 'how you sign in password change password sign-in method no sign-in turn off',
+    icon: <KeyRound />,
+  },
+  {
+    tab: 'access',
+    focus: KEYS_FOCUS,
+    label: 'Access keys',
+    keywords: 'access keys key token new key scripts api',
+    icon: <KeyRound />,
   },
   {
     tab: 'security',
@@ -368,7 +402,7 @@ const settingsPlaces: {
     icon: <Globe />,
   },
   {
-    tab: 'security',
+    tab: 'access',
     focus: PASSKEYS_FOCUS,
     label: 'Passkeys',
     keywords:
@@ -384,7 +418,7 @@ const settingsPlaces: {
     icon: <GlobeLock />,
   },
   {
-    tab: 'devices',
+    tab: 'access',
     focus: DEVICES_FOCUS,
     label: 'Devices',
     keywords:
@@ -392,7 +426,7 @@ const settingsPlaces: {
     icon: <MonitorSmartphone />,
   },
   {
-    tab: 'devices',
+    tab: 'access',
     focus: REACH_FOCUS,
     label: 'Use Conch on your phone',
     keywords:
@@ -402,7 +436,9 @@ const settingsPlaces: {
   {
     tab: 'providers',
     label: 'Providers',
-    keywords: 'claude codex openrouter anthropic api key connect ollama local offline',
+    // Models was a place of its own once: its name still finds where providers are.
+    keywords:
+      'providers models default provider claude codex openrouter anthropic api key connect ollama local offline',
     icon: <Cpu />,
   },
   {
@@ -432,23 +468,12 @@ const settingsPlaces: {
     icon: <SquareTerminal />,
   },
   {
-    tab: 'other-apps',
+    tab: 'access',
+    focus: OTHER_APPS_FOCUS,
     label: 'Other apps',
     keywords:
       'other apps claude desktop cursor vs code vscode visual studio code zed windsurf mcp server connect conch to use from elsewhere editor ide pair paired',
     icon: <Cable />,
-  },
-  {
-    tab: 'appearance',
-    label: 'Appearance',
-    keywords: 'theme dark light colour accent reduce motion',
-    icon: <PaletteIcon />,
-  },
-  {
-    tab: 'appearance',
-    label: 'Lustre',
-    keywords: 'lustre shimmer pearl sheen iridescence shine effects',
-    icon: <Sparkles />,
   },
 ];
 
@@ -1182,6 +1207,14 @@ export function useFindables(query: string, conversationId: string | undefined):
       keywords: 'skill signed signature verified publisher key fingerprint',
       icon: <BadgeCheck />,
       run: () => void navigate('/skills', { state: { focus: 'publishers' } }),
+    },
+    {
+      // Commands left Settings for Skills: Your commands.
+      id: 'commands',
+      label: 'Your commands',
+      keywords: 'commands slash prompts saved shortcuts custom new command',
+      icon: <SquareSlash />,
+      run: () => void navigate('/skills', { state: { focus: COMMANDS_FOCUS } }),
     },
     {
       id: 'new-skill',

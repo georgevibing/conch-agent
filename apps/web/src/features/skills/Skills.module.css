@@ -152,3 +152,52 @@
     }
   }
 }
+
+@layer nacre.components {
+  /* Your commands: a row each, its name in mono beside what it asks. */
+  .commandsHead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--nc-space-3);
+  }
+
+  .commandEditor {
+    padding: var(--nc-space-4);
+    border-radius: var(--nc-radius-lg);
+    corner-shape: var(--nc-corner-shape);
+    background: var(--nc-surface-sunken);
+    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
+  }
+
+  .commandList {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .commandRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--nc-space-3);
+    padding-block: var(--nc-space-2-5);
+    border-block-end: 1px solid var(--nc-border-subtle);
+  }
+
+  .commandRow:last-child {
+    border-block-end: 0;
+  }
+
+  .commandText {
+    min-inline-size: 0;
+  }
+
+  .commandName {
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-text-sm);
+  }
+}

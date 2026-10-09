@@ -67,7 +67,7 @@ export function RoutedItem({ item }: { item: Extract<TranscriptItem, { kind: 'ro
         reason={item.reason}
         action={
           item.reason === 'limit'
-            ? { label: 'Change', onClick: () => openSettings('models', FALLBACK_FOCUS) }
+            ? { label: 'Change', onClick: () => openSettings('providers', FALLBACK_FOCUS) }
             : undefined
         }
       >

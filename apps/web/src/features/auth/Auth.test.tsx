@@ -1,16 +1,20 @@
 import type { AccessSettings, AuthStatus, CheckupItem } from '@conch/protocol';
 import { Toaster } from '@conch/nacre';
-import { cleanup, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { appState, mockFetch, renderApp } from '../../test/harness';
 import { useUi } from '../../app/ui';
+import { AccessTab } from './AccessTab';
 import { DevicesTab } from './DevicesTab';
 import { SecurityTab } from './SecurityTab';
 import { SignIn } from './SignIn';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  useUi.setState({ settingsFocus: undefined });
+});
 
 const status = (patch: Partial<AuthStatus> = {}): AuthStatus => ({
   method: 'password',
@@ -129,7 +133,7 @@ describe('SignIn', () => {
   });
 });
 
-describe('SecurityTab', () => {
+describe('Settings → Access and Security', () => {
   it('sets up a password with a suggested strong one', async () => {
     const user = userEvent.setup();
     const calls = mockFetch({
@@ -137,9 +141,8 @@ describe('SecurityTab', () => {
       'PUT /api/access/password': () => settings({ method: 'password', username: 'ada' }),
       'GET /api/auth': () => status({ signedIn: true }),
     });
-    renderApp(<SecurityTab />);
-    expect(await screen.findByText('No sign-in on this computer')).toBeInTheDocument();
-    const form = screen.getByRole('form', { name: 'Choose a password' });
+    renderApp(<AccessTab />);
+    const form = await screen.findByRole('form', { name: 'Choose a password' });
     expect(within(form).getByLabelText('Username')).toHaveValue('ada');
     const submit = within(form).getByRole('button', { name: 'Turn on password sign-in' });
     expect(submit).toBeDisabled();
@@ -202,7 +205,7 @@ describe('SecurityTab', () => {
       },
       'GET /api/auth': () => status({ method: 'key', signedIn: true }),
     });
-    renderApp(<SecurityTab />);
+    renderApp(<AccessTab />);
     await user.click(await screen.findByRole('radio', { name: /Access key/ }));
     await user.click(screen.getByRole('button', { name: 'Create key & turn on' }));
     expect(await screen.findByText(key)).toBeInTheDocument();
@@ -343,19 +346,29 @@ describe('SecurityTab', () => {
       },
     ];
     mockFetch({ 'GET /api/access': () => settings({ checkup }) });
-    renderApp(<SecurityTab />);
+    const { where } = renderApp(<SecurityTab />, { route: '/settings/security' });
 
+    // The ways in are Settings → Access: a key's fix goes there, to the keys.
     await user.click(await screen.findByRole('button', { name: 'Create a key' }));
+    expect(where()).toBe('/settings/access');
+    expect(useUi.getState().settingsFocus).toBe('keys');
+    cleanup();
+    mockFetch({ 'GET /api/access': () => settings({ checkup }) });
+    renderApp(<AccessTab />);
     await waitFor(() => expect(screen.getByRole('textbox', { name: 'Name' })).toHaveFocus());
     expect(screen.getByRole('radio', { name: /Access key/ })).toBeChecked();
 
-    await user.click(screen.getByRole('button', { name: 'Add a password' }));
+    // A password's, to the password.
+    act(() => useUi.setState({ settingsFocus: 'sign-in' }));
     await waitFor(() =>
       expect(screen.getByLabelText('Password', { selector: 'input' })).toHaveFocus(),
     );
 
-    // Reaching Conch from a phone is Settings → Devices: the fix goes there, to Tailscale.
-    await user.click(screen.getByRole('button', { name: /Show me how/ }));
+    // Reaching Conch from a phone is Settings → Access too: the fix goes there, to Tailscale.
+    cleanup();
+    mockFetch({ 'GET /api/access': () => settings({ checkup }) });
+    renderApp(<SecurityTab />, { route: '/settings/security' });
+    await user.click(await screen.findByRole('button', { name: /Show me how/ }));
     expect(useUi.getState().settingsFocus).toBe('reach');
     cleanup();
     mockFetch({ 'GET /api/access': () => settings({ checkup }) });
@@ -386,15 +399,18 @@ describe('SecurityTab', () => {
           ],
         }),
     });
-    renderApp(<SecurityTab />);
+    renderApp(<SecurityTab />, { route: '/settings/security' });
     await user.click(await screen.findByRole('button', { name: 'Review keys' }));
+    expect(useUi.getState().settingsFocus).toBe('keys');
+    cleanup();
+    renderApp(<AccessTab />);
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Revoke Old laptop' })).toHaveFocus(),
     );
     expect(screen.getByText('Not used in 90 days')).toBeInTheDocument();
   });
 
-  it('opens Models for a choice made there', async () => {
+  it('opens Providers for which provider new chats start with', async () => {
     const user = userEvent.setup();
     mockFetch({
       'GET /api/access': () =>
@@ -412,7 +428,7 @@ describe('SecurityTab', () => {
     });
     const { where } = renderApp(<SecurityTab />, { route: '/settings/security' });
     await user.click(await screen.findByRole('button', { name: /Review/ }));
-    expect(where()).toBe('/settings/models');
+    expect(where()).toBe('/settings/providers');
   });
 
   it('asks for a restart when the gateway is older than the page', async () => {

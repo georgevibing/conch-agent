@@ -402,25 +402,25 @@ export type CheckLevel = z.infer<typeof CheckLevel>;
  * place, the web app knows how to get there, and nothing else is reachable.
  */
 export const CheckupPlace = z.enum([
-  /** Settings › Security › How you sign in. */
+  /** Settings › Access › How you sign in. */
   'sign-in',
-  /** Settings › Security › the access keys (making one, or revoking old ones). */
+  /** Settings › Access › the access keys (making one, or revoking old ones). */
   'keys',
-  /** Settings › Devices › Use Conch on your phone (Tailscale). */
+  /** Settings › Access › Use Conch on your phone (Tailscale). */
   'reach',
-  /** Settings › Models, where new chats' mode is chosen. */
+  /** Settings › Providers: which provider new chats start with (their mode is the composer's). */
   'models',
   /** The Channels page: who may talk to your assistant from each chat app. */
   'channels',
-  /** Settings › Devices: what's signed in, what's waiting, and approving new ones. */
+  /** Settings › Access › Devices: what's signed in, what's waiting, and approving new ones. */
   'devices',
   /** Settings › Security › Live data in pages: the sites pages may read (ADR 0046). */
   'live-data',
-  /** Settings › Security › Passkeys (ADR 0065). */
+  /** Settings › Access › Passkeys (ADR 0065). */
   'passkeys',
   /** Settings › Security › Your address: a domain of your own, over HTTPS (ADR 0064). */
   'address',
-  /** Settings › Other apps: the apps paired with Conch, and what each may use (ADR 0073). */
+  /** Settings › Access › Other apps: the apps paired with Conch, and what each may use (ADR 0073). */
   'other-apps',
 ]);
 export type CheckupPlace = z.infer<typeof CheckupPlace>;

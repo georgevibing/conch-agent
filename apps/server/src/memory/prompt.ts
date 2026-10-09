@@ -96,7 +96,7 @@ export function systemParts(input: SystemInput): {
 
   sections.push(agentLayers({ agent, tools, ...(input.before && { before: input.before }) }));
 
-  // The same words Settings → About you shows as "What every chat starts with".
+  // The same words Settings → What Conch knows shows as "What every chat starts with".
   const about = describeProfile(profile);
   if (about.length) sections.push([`# About the user`, ...about].join('\n'));
 

@@ -81,7 +81,7 @@ async function openDevices(page: Page) {
   if (!(await settings.isVisible()))
     await page.getByRole('button', { name: 'Open conversations' }).click();
   await settings.click();
-  await page.getByRole('tab', { name: 'Devices' }).click();
+  await page.getByRole('tab', { name: 'Access' }).click();
   await page.getByRole('heading', { name: 'Devices' }).scrollIntoViewIfNeeded();
 }
 
@@ -170,8 +170,8 @@ test('a new device waits after the right password until it’s approved', async 
 
   // ── Removing the laptop here sends it back to the start, and it must ask again.
   await page.reload();
-  // Settings has an address, so a reload lands back in Devices.
-  await expect(page.getByRole('tab', { name: 'Devices', selected: true })).toBeVisible();
+  // Settings has an address, so a reload lands back in Access.
+  await expect(page.getByRole('tab', { name: 'Access', selected: true })).toBeVisible();
   await page.getByRole('heading', { name: 'Devices' }).scrollIntoViewIfNeeded();
   await shot(page, 'devices-5-devices.png');
   const laptopRow = page

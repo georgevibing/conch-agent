@@ -9,9 +9,9 @@ If OpenClaw or Hermes is on this computer, Conch finds it and shows exactly what
 
 ## Take a look
 
-When Conch finds one, a new chat offers it in one quiet line under the box: **Bring your things from OpenClaw**. It goes away once they've come over. The offer also lives in **Settings → Memory**, and <kbd>mod+k</kbd> finds it too.
+When Conch finds one, a new chat offers it in one quiet line under the box: **Bring your things from OpenClaw**. It goes away once they've come over. The offer also lives in **Settings → What Conch knows**, and <kbd>mod+k</kbd> finds it too.
 
-1. Open **Settings → Memory**. Under **Bring your things from another assistant**, press **Take a look** on the app's card. It opens as a page inside Settings, with **Memory › From OpenClaw** (or Hermes) above it: press **Memory** to go back.
+1. Open **Settings → What Conch knows**. Under **Bring your things from another assistant**, press **Take a look** on the app's card. It opens as a page inside Settings, with **What Conch knows › From OpenClaw** (or Hermes) above it: press **Memory** to go back.
 2. Look at the tiles: one for each kind of thing (**Agents**, **Memories**, **Skills**…), with how many are ticked. Press a tile to see just that kind, or **Everything** to see it all.
 3. Read the list. Everything has a tick, and **Show what it says** opens its words. A long list has its own search: find what you want, then **Tick these** or **Untick these**.
 4. Press the button at the bottom, which counts your ticks and stays in reach however long the list: **Bring 12 things over**. Conch may ask you to confirm it's you.
@@ -58,7 +58,7 @@ Invisible characters are removed from the agents, About you, memories and routin
 
 Conch [backs itself up](./backups.md) before it brings anything over.
 
-The summary has an **Undo** button. For a week after, **Settings → Memory** has one too: **Undo that import**. Undo removes what came over, a Slack bot you finished later included, and puts back what it replaced: the agents it brought up to date, the agent new chats start with, About you and the model new chats start with. Anything you've already removed yourself is skipped. It may ask you to confirm it's you.
+The summary has an **Undo** button. For a week after, **Settings → What Conch knows** has one too: **Undo that import**. Undo removes what came over, a Slack bot you finished later included, and puts back what it replaced: the agents it brought up to date, the agent new chats start with, About you and the model new chats start with. Anything you've already removed yourself is skipped. It may ask you to confirm it's you.
 
 After a week, what came over is yours.
 
@@ -70,7 +70,7 @@ This lists the same things with their ticks, and changes nothing:
 conch import --from openclaw --dry-run
 ```
 
-Use `--from hermes` for Hermes. Without `--dry-run`, it brings the ticked things over, except chat bots and keys, which only come over in the app. It won't do that while Conch is running: use **Settings → Memory**, or quit Conch first. More in [the command line](../reference/cli.md).
+Use `--from hermes` for Hermes. Without `--dry-run`, it brings the ticked things over, except chat bots and keys, which only come over in the app. It won't do that while Conch is running: use **Settings → What Conch knows**, or quit Conch first. More in [the command line](../reference/cli.md).
 
 ## Good to know
 

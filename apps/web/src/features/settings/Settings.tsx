@@ -2,46 +2,30 @@ import { ImportSourceId } from '@conch/protocol';
 import {
   Button,
   Dialog,
-  Field,
   Heading,
   IconButton,
-  SegmentedControl,
   Sheet,
-  Slider,
   Stack,
   Switch,
   Tabs,
   Text,
-  accents,
   useMediaQuery,
-  useNacreTheme,
-  type AccentName,
-  type ColorMode,
 } from '@conch/nacre';
 import {
   BatteryMedium,
   Bell,
-  Cable,
   Brain,
-  Check,
   ChevronLeft,
   Cpu,
-  Gauge,
+  KeyRound,
   Menu,
   Mic,
-  MonitorSmartphone,
   Globe,
   HeartPulse,
   Laptop,
-  Monitor,
   SquareTerminal,
-  Moon,
-  Palette,
   Settings2,
   ShieldCheck,
-  SquareSlash,
-  Sun,
-  User,
   UsersRound,
 } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
@@ -51,19 +35,17 @@ import { useAppState, useMemories, useUpdateSettings } from '../../api/queries';
 import { Trail } from '../../app/trail';
 import { useUi } from '../../app/ui';
 import { NARROW } from '../../app/widths';
-import { DevicesTab } from '../auth/DevicesTab';
+import { AccessTab } from '../auth/AccessTab';
 import { SecurityTab } from '../auth/SecurityTab';
 import { updatesWaiting, useUpdates } from '../updates/queries';
 import { BrowserSettings } from '../browser/BrowserSettings';
 import { HealthTab } from '../health/HealthTab';
-import { OtherAppsTab } from '../otherapps/OtherAppsTab';
 import { ComeHomeSection } from '../import/ComeHomeSection';
 import { PastChatsSection } from '../import/PastChatsSection';
 import { ComputerTab } from '../computer/ComputerTab';
 import { ComeHomePage } from '../import/ComeHomePage';
 import { MemoryView } from '../memory/MemoryView';
 import { MorningNote } from '../memory/MorningNote';
-import { AboutYou } from './AboutYou';
 import { AgentsTab } from '../agents/AgentsTab';
 import { NotificationsTab } from '../notifications/NotificationsTab';
 import { VoiceTab } from '../voice/VoiceTab';
@@ -71,17 +53,17 @@ import { TerminalSettings } from '../terminal/TerminalSettings';
 import { ProvidersTab } from '../providers/ProvidersTab';
 import { UsageTab } from '../usage/UsageTab';
 import styles from './Settings.module.css';
-import { CommandsTab } from './CommandsTab';
 import {
   MEMORY_ALL,
+  SETTINGS_PATH,
   SETTINGS_TABS,
   behindName,
   behindOf,
+  placeOf,
   settingsAt,
   type SettingsTab,
 } from './paths';
 import { GeneralTab } from './GeneralTab';
-import { ModelsTab } from './ModelsTab';
 import { Section } from './Section';
 import { usePageInside } from './trail';
 
@@ -158,82 +140,6 @@ function MemoryTab({
   );
 }
 
-const accentSwatches = Object.keys(accents) as AccentName[];
-
-function AppearanceTab() {
-  const theme = useNacreTheme();
-  return (
-    <Stack gap={8}>
-      <Section title="Appearance">
-        <Stack gap={6}>
-          <Stack gap={2}>
-            <Text as="span" size="sm" weight="medium" id="mode-label">
-              Mode
-            </Text>
-            <SegmentedControl
-              aria-labelledby="mode-label"
-              value={theme.mode}
-              onValueChange={(mode) => mode && theme.setTheme({ mode: mode as ColorMode })}
-            >
-              <SegmentedControl.Item value="light" icon={<Sun />}>
-                Light
-              </SegmentedControl.Item>
-              <SegmentedControl.Item value="dark" icon={<Moon />}>
-                Dark
-              </SegmentedControl.Item>
-              <SegmentedControl.Item value="system" icon={<Monitor />}>
-                System
-              </SegmentedControl.Item>
-            </SegmentedControl>
-          </Stack>
-          <Stack gap={2}>
-            <Text as="span" size="sm" weight="medium" id="accent-label">
-              Accent
-            </Text>
-            <div className={styles.swatches} role="radiogroup" aria-labelledby="accent-label">
-              {accentSwatches.map((name) => {
-                const selected = theme.accent === name;
-                const { hue, chroma } = accents[name];
-                return (
-                  <button
-                    key={name}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    aria-label={name}
-                    title={name}
-                    className={styles.swatch}
-                    style={{ background: `oklch(0.64 ${chroma} ${hue})` }}
-                    onClick={() => theme.setTheme({ accent: name })}
-                  >
-                    {selected && <Check aria-hidden />}
-                  </button>
-                );
-              })}
-            </div>
-          </Stack>
-          <Field>
-            <Field.Label>Lustre</Field.Label>
-            <Slider
-              min={0}
-              max={1}
-              step={0.05}
-              value={[theme.lustre]}
-              onValueChange={([v]) => theme.setTheme({ lustre: v ?? 1 })}
-            />
-            <Field.Description>The pearl shimmer under your pointer.</Field.Description>
-          </Field>
-          <Switch
-            checked={theme.motion === 'reduced'}
-            onCheckedChange={(on) => theme.setTheme({ motion: on ? 'reduced' : 'system' })}
-            label="Reduce motion"
-          />
-        </Stack>
-      </Section>
-    </Stack>
-  );
-}
-
 interface Place {
   value: SettingsTab;
   label: string;
@@ -241,8 +147,10 @@ interface Place {
 }
 
 /**
- * Eighteen places, read as five: the everyday basics, then who your assistant
+ * Thirteen places, read as five: the everyday basics, then who your assistant
  * is, where its intelligence comes from, what it can use, and keeping it safe.
+ * The model, thinking and mode new chats start with aren't here: they're the
+ * composer's own, with Make this my default.
  */
 const groups: { label: string; hidden?: boolean; places: Place[] }[] = [
   {
@@ -250,7 +158,6 @@ const groups: { label: string; hidden?: boolean; places: Place[] }[] = [
     hidden: true,
     places: [
       { value: 'general', label: 'General', icon: <Settings2 /> },
-      { value: 'appearance', label: 'Appearance', icon: <Palette /> },
       { value: 'notifications', label: 'Notifications', icon: <Bell /> },
     ],
   },
@@ -258,17 +165,14 @@ const groups: { label: string; hidden?: boolean; places: Place[] }[] = [
     label: 'Your assistant',
     places: [
       { value: 'agents', label: 'Agents', icon: <UsersRound /> },
-      { value: 'about', label: 'About you', icon: <User /> },
-      { value: 'memory', label: 'Memory', icon: <Brain /> },
+      { value: 'memory', label: 'What Conch knows', icon: <Brain /> },
       { value: 'voice', label: 'Voice', icon: <Mic /> },
     ],
   },
   {
     label: 'Intelligence',
     places: [
-      { value: 'models', label: 'Models', icon: <Gauge /> },
       { value: 'providers', label: 'Providers', icon: <Cpu /> },
-      { value: 'commands', label: 'Commands', icon: <SquareSlash /> },
       { value: 'usage', label: 'Usage', icon: <BatteryMedium /> },
     ],
   },
@@ -277,16 +181,15 @@ const groups: { label: string; hidden?: boolean; places: Place[] }[] = [
     places: [
       { value: 'browser', label: 'Browser', icon: <Globe /> },
       { value: 'terminal', label: 'Terminal', icon: <SquareTerminal /> },
-      { value: 'other-apps', label: 'Other apps', icon: <Cable /> },
+      { value: 'computer', label: 'This computer', icon: <Laptop /> },
     ],
   },
   {
     label: 'Safe and sound',
     places: [
+      { value: 'access', label: 'Access', icon: <KeyRound /> },
       { value: 'security', label: 'Security', icon: <ShieldCheck /> },
-      { value: 'devices', label: 'Devices', icon: <MonitorSmartphone /> },
       { value: 'health', label: 'Health', icon: <HeartPulse /> },
-      { value: 'computer', label: 'This computer', icon: <Laptop /> },
     ],
   },
 ];
@@ -320,6 +223,15 @@ export function Settings() {
   const open = useUi((s) => s.openSettings);
   const close = useUi((s) => s.closeSettings);
   const { data: app } = useAppState();
+  // An old address (a bookmark, a link to Settings → Models): the address of
+  // where that place is now, at the part that was the page.
+  const named = address ? location.pathname.slice(SETTINGS_PATH.length + 1).split('/')[0] : '';
+  const item = address?.item;
+  useEffect(() => {
+    const moved = named ? placeOf(named) : undefined;
+    if (!moved || moved.tab === named) return;
+    open(moved.tab, item ?? moved.focus, { replace: true });
+  }, [named, item, open]);
   // The same width the window folds its own sidebar away at (app/widths.ts),
   // so the places beside the page and the chats beside it go together.
   const narrow = useMediaQuery(NARROW);
@@ -469,8 +381,6 @@ export function Settings() {
         return <GeneralTab workspace={app.workspace} workspacePref={app.preferences.workspace} />;
       case 'agents':
         return <AgentsTab item={tab === 'agents' ? address?.item : undefined} />;
-      case 'about':
-        return <AboutYou initial={app.profile} />;
       case 'memory':
         return (
           <MemoryTab
@@ -479,18 +389,14 @@ export function Settings() {
             item={tab === 'memory' ? address?.item : undefined}
           />
         );
-      case 'models':
-        return <ModelsTab />;
-      case 'commands':
-        return <CommandsTab />;
       case 'usage':
         return <UsageTab />;
       case 'health':
         return <HealthTab />;
       case 'security':
         return <SecurityTab />;
-      case 'devices':
-        return <DevicesTab />;
+      case 'access':
+        return <AccessTab />;
       case 'notifications':
         return <NotificationsTab />;
       case 'voice':
@@ -501,10 +407,6 @@ export function Settings() {
         return <BrowserSettings />;
       case 'terminal':
         return <TerminalSettings />;
-      case 'other-apps':
-        return <OtherAppsTab />;
-      case 'appearance':
-        return <AppearanceTab />;
       case 'computer':
         return <ComputerTab />;
     }

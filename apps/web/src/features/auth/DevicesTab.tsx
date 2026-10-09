@@ -54,10 +54,10 @@ import { useCountdown } from './useCountdown';
 import { useVerify } from './useVerify';
 
 /**
- * Settings → Devices (ADR 0024, ADR 0027): the phones, tablets and browsers
- * signed in to Conch, which of them get notifications, approving new ones,
- * adding your phone, and the ways a phone can reach this computer. Security
- * keeps how you sign in; this is who's in.
+ * Settings → Access → Devices (ADR 0024, ADR 0027): the phones, tablets and
+ * browsers signed in to Conch, which of them get notifications, approving new
+ * ones, adding your phone, and the ways a phone can reach this computer. The
+ * sections above it on Access keep how you sign in; this is who's in.
  */
 
 type Focus = AccessFocus<'devices' | 'reach'>;
@@ -602,13 +602,11 @@ export function DevicesTab() {
     [asked],
   );
   useEffect(() => {
-    // A phone signs in, so a sign-in comes first: Security asks for one, then sends you back.
-    if (settingsFocus === ADD_DEVICE_FOCUS && method === 'none')
-      openSettings('security', ADD_DEVICE_FOCUS);
+    // A phone signs in, so a sign-in comes first: Access asks for one above (AccessTab).
     // No devices to show yet (no sign-in): nothing to bring into view.
-    else if (settingsFocus === DEVICES_FOCUS && method === 'none')
+    if (settingsFocus === DEVICES_FOCUS && method === 'none')
       useUi.setState({ settingsFocus: undefined });
-  }, [settingsFocus, method, openSettings]);
+  }, [settingsFocus, method]);
 
   const stop = (device: PushDevice) =>
     void pushApi
@@ -650,7 +648,7 @@ export function DevicesTab() {
             <Button
               variant="surface"
               leadingIcon={<QrCode />}
-              onClick={() => openSettings('security', ADD_DEVICE_FOCUS)}
+              onClick={() => openSettings('access', ADD_DEVICE_FOCUS)}
             >
               Add your phone
             </Button>

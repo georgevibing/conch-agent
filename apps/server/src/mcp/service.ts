@@ -289,7 +289,7 @@ export class McpService {
     const tool = (await this.tools(client)).find((t) => t.name === name);
     if (!tool)
       return refusal(
-        `“${name}” isn’t something ${client.name} may use in Conch. The person chooses what it may use in Conch: Settings → Other apps.`,
+        `“${name}” isn’t something ${client.name} may use in Conch. The person chooses what it may use in Conch: Settings → Access → Other apps.`,
       );
     void this.deps.store.touch(client.id).catch(() => undefined);
     switch (tool.run.kind) {

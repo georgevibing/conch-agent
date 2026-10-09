@@ -7,11 +7,11 @@ order: 4.7
 
 Conch can lend what it knows and what it can reach to the other apps you use. Claude Desktop, Cursor, VS Code, or any app that speaks MCP, can then search your memory, use your skills, work in your apps and use Conch's browser. Each app uses only what you tick, and anything that changes something asks you first, in Conch.
 
-It's in **Settings → Other apps**.
+It's in **Settings → Access**, under **Advanced**.
 
 ## Connect an app in one press
 
-1. Open **Settings → Other apps**. Claude Desktop, Cursor and VS Code are listed, and each says whether it's on this computer.
+1. Open **Settings → Access → Advanced**. Claude Desktop, Cursor and VS Code are listed, and each says whether it's on this computer.
 2. Press **Connect** beside the app.
 3. Tick what it may use. It starts with your memory and your skills, which only look.
 4. Press **Connect**, and confirm it's you. Conch adds itself to that app's settings, and keeps the old copy of the file beside it.
@@ -55,7 +55,7 @@ Press **Remove** beside it. Conch takes itself out of the app's settings, and th
 
 An app on another computer can reach Conch only through [your own address](../start/server.md), and only if you allow it:
 
-1. Turn on **Let apps you mark in through your address** in **Settings → Other apps → From your own address**.
+1. Turn on **Let apps you mark in through your address** in **Settings → Access → Advanced → From your own address**.
 2. Pair the app with **It connects over HTTP, with a key**, and turn on **It may come in through your address**.
 
 Whoever has that app's key can then use what you let it use, from anywhere. Keep it like a password, and remove the app when you stop using it. Your security checkup says while this is on.

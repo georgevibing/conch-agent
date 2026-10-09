@@ -116,7 +116,7 @@ including the space above a phone’s keyboard.
 
 ### Where you are
 
-A page inside a page (Settings → Memory → What Conch knows, a provider's own
+A page inside a page (Settings → What Conch knows → All memories, a provider's own
 page) says where it is with one `Breadcrumb` above it: each place above is a
 step back to it, the last is the page you're on. Never a stack of back buttons,
 and never a trail for a page with nothing above it: its heading is enough. Short
@@ -138,6 +138,15 @@ heading.
 Settings is the calmest part of Conch: most people should be able to read a
 place in a glance and never change a thing.
 
+- **Few places, few things in each.** Thirteen places, read as five groups:
+  Conch (General, Notifications), Your assistant (Agents, What Conch knows,
+  Voice), Intelligence (Providers, Usage), Tools (Browser, Terminal, This
+  computer) and Safe and sound (Access, Security, Health). A page shows about
+  eight controls at most; what almost nobody changes goes under its Advanced.
+  A default a chat sets for itself is set where it's used — the model,
+  thinking and mode are the composer's, with **Make this my default** — never
+  repeated here. A place that moves keeps its old address and its old name in
+  ⌘K, both landing where it is now (`MOVED` in `features/settings/paths.ts`).
 - **One place, one page.** A place opens as a heading, a line of plain words
   under it, and a short list of rows — a switch with the few words it needs, a
   `Field`, or one row that leads to a page of its own. Never a paragraph where a
@@ -146,7 +155,7 @@ place in a glance and never change a thing.
 - **Everything in sight, unless the page is dense.** A short page shows all it
   holds, compact: a rare switch is one more row, a rare action one line with its
   button beside it — never a fold that hides one or two things and leaves the
-  page emptier. Only a place with a lot in it (Models, Security) keeps what
+  page emptier. Only a place with a lot in it (Access, Security) keeps what
   almost nobody changes at its foot, under a hairline, behind the word
   **Advanced** (`SettingsAdvanced`). Inside it are the page's own sections,
   spaced as they are above, so opening it only makes the page longer — never a

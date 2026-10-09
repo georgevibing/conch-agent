@@ -134,17 +134,6 @@
   .steps a {
     color: var(--nc-text-accent);
   }
-
-  .footnote {
-    display: flex;
-    align-items: center;
-    gap: var(--nc-space-1-5);
-  }
-
-  .footnote > svg {
-    inline-size: 0.875rem;
-    block-size: 0.875rem;
-  }
 }
 
 @layer nacre.components {

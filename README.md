@@ -141,7 +141,7 @@ your desktop and the chat apps you already use.
 - **Web and desktop.** An app for macOS, Windows and Linux, with the pearl in the
   menu bar, one-press updates and "Hey Conch" if you turn it on.
 - **Your phone.** An installable app over a private Tailscale address, with
-  notifications you can answer with one tap, and voice (“Hey Conch” while it's open). Add it from **Settings → Devices**. [On your phone](./apps/docs/content/start/phone.md)
+  notifications you can answer with one tap, and voice (“Hey Conch” while it's open). Add it from **Settings → Access**. [On your phone](./apps/docs/content/start/phone.md)
 - **Your chat apps.** Telegram, Discord, Slack, WhatsApp, Signal, iMessage, email,
   Teams, Google Chat, Matrix and more, with the same commands as the app.
   [Chat apps](./apps/docs/content/channels)
@@ -167,7 +167,7 @@ your desktop and the chat apps you already use.
   restores managed work when there is room again. **Settings → This computer**
   shows the machine live, and what each provider uses. [Health](./apps/docs/content/care/health.md)
 - **Sign in with your device.** Touch ID, Windows Hello or Face ID; a new device waits
-  for your OK in **Settings → Devices**.
+  for your OK in **Settings → Access**.
 
 ## Good to know
 

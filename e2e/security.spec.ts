@@ -50,6 +50,8 @@ test('password sign-in, pairing a phone, and signing a device out', async ({
   await openSecurity(page);
   await expect(page.getByText('No sign-in on this computer')).toBeVisible();
   await shot(page, 'security-1-setup.png', true);
+  // The ways in are Settings → Access.
+  await page.getByRole('tab', { name: 'Access' }).click();
 
   // Choose a password — let Conch suggest a strong one.
   const form = page.getByRole('form', { name: 'Choose a password' });
@@ -60,8 +62,9 @@ test('password sign-in, pairing a phone, and signing a device out', async ({
   const username = await form.getByLabel('Username').inputValue();
   await shot(page, 'security-2-password.png', true);
   await form.getByRole('button', { name: 'Turn on password sign-in' }).click();
-  await expect(page.getByText('Protected by your password')).toBeVisible();
   await expect(page.getByText(`Signed in as ${username}`)).toBeVisible();
+  await page.getByRole('tab', { name: 'Security' }).click();
+  await expect(page.getByText('Protected by your password')).toBeVisible();
 
   // The API now refuses anyone without a session…
   expect((await request.get('/api/state')).status()).toBe(401);
@@ -82,8 +85,8 @@ test('password sign-in, pairing a phone, and signing a device out', async ({
   await expect(other.getByRole('button', { name: 'Settings' })).toBeVisible();
 
   // ── A phone: signs in by opening a one-time link (the QR code's contents).
-  // Who's in has a place of its own: Settings → Devices.
-  await page.getByRole('tab', { name: 'Devices' }).click();
+  // Who's in is on Access too, beneath how you sign in.
+  await page.getByRole('tab', { name: 'Access' }).click();
   await page.getByRole('button', { name: 'Add a device' }).click();
   const dialog = page.getByRole('dialog', { name: 'Add a device' });
   await expect(dialog.getByRole('img', { name: 'Sign-in code for your phone' })).toBeVisible();
@@ -107,8 +110,8 @@ test('password sign-in, pairing a phone, and signing a device out', async ({
 
   // ── Back on this computer: three devices, sign the laptop out.
   await page.reload();
-  // Settings has an address, so a reload lands back in Devices.
-  await expect(page.getByRole('tab', { name: 'Devices', selected: true })).toBeVisible();
+  // Settings has an address, so a reload lands back in Access.
+  await expect(page.getByRole('tab', { name: 'Access', selected: true })).toBeVisible();
   const devices = page.getByRole('list', { name: 'Devices' });
   await expect(devices.getByRole('listitem')).toHaveCount(3);
   await expect(devices).toContainText('Safari on iPhone');

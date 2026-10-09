@@ -20,7 +20,7 @@ Type `/` at the start of the message box. A list opens above it, grouped by what
 A name can mean four things. Conch tries them in this order:
 
 1. One of Conch's own commands, above.
-2. One of your commands: a prompt you saved in **Settings → Commands**, where `{{input}}` is replaced by what you type after the name.
+2. One of your commands: a prompt you saved in **Skills → Your commands**, where `{{input}}` is replaced by what you type after the name.
 3. One of your [skills](../features/skills.md), by name.
 4. One of the provider's own commands, sent as it is.
 

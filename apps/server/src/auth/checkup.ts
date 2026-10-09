@@ -416,7 +416,7 @@ export function checkup(input: CheckupInput): CheckupItem[] {
       level: 'warn',
       title: 'New chats never ask before acting',
       detail:
-        '“Full trust” lets the assistant run commands, change files and act in enabled apps without asking, even when an app says “Ask before changes”. A web page or file it reads could trick it. Go back to asking first — or choose “Auto” in Settings › Models.',
+        '“Full trust” lets the assistant run commands, change files and act in enabled apps without asking, even when an app says “Ask before changes”. A web page or file it reads could trick it. Go back to asking first — or choose “Auto” from the message box.',
       fix: { kind: 'act', label: 'Ask first', action: 'ask-first' },
     });
   }

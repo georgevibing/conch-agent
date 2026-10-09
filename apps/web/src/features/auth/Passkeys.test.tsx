@@ -16,7 +16,7 @@ import { HelloScreen } from './HelloScreen';
 import type * as PasskeyModule from './passkey';
 import { askPasskey, createPasskey, passkeySupport } from './passkey';
 import { DevicesTab } from './DevicesTab';
-import { SecurityTab } from './SecurityTab';
+import { AccessTab } from './AccessTab';
 import { SignIn } from './SignIn';
 import { useVerify } from './useVerify';
 import { WaitingForApproval } from './WaitingForApproval';
@@ -317,7 +317,7 @@ describe('confirming it’s you', () => {
   });
 });
 
-describe('Settings → Security → Passkeys', () => {
+describe('Settings → Access → Passkeys', () => {
   it('lists passkeys, keeps the only way in, and adds Touch ID', async () => {
     const user = userEvent.setup();
     const calls = mockFetch({
@@ -339,7 +339,7 @@ describe('Settings → Security → Passkeys', () => {
     });
     renderApp(
       <>
-        <SecurityTab />
+        <AccessTab />
         <Toaster />
       </>,
     );
@@ -377,7 +377,7 @@ describe('Settings → Security → Passkeys', () => {
       'GET /api/access': () => two,
       'DELETE /api/access/passkeys/cred-2': () => settings({ method: 'password', username: 'ada' }),
     });
-    renderApp(<SecurityTab />);
+    renderApp(<AccessTab />);
     await user.click(await screen.findByRole('button', { name: 'Remove Bitwarden' }));
     const confirm = await screen.findByRole('alertdialog', { name: 'Remove Bitwarden?' });
     await user.click(within(confirm).getByRole('button', { name: 'Remove' }));

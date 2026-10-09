@@ -11,7 +11,7 @@ Your assistant remembers things from one chat to the next: what you like, who yo
 Mention something that will still matter next week ("I'm vegetarian", "my sister is called Maria") and your assistant saves a short note. The chat shows **Remembered:** with what it wrote, and **Undo** beside it.
 
 - To save something yourself, type `/remember` and the fact.
-- To have it remember only what you ask, turn off **Learn from your chats** in **Settings → Memory**.
+- To have it remember only what you ask, turn off **Learn from your chats** in **Settings → What Conch knows**.
 
 It is told to leave out passwords, keys, and health or money details unless you ask.
 
@@ -38,7 +38,7 @@ To keep one chat out of it, choose **Don't learn from this chat** in its menu, o
 
 ## About you
 
-**Settings → About you** is a portrait your assistant reads before every chat. Your name sits at the top, with a line that sums you up. Below are five cards: **Work**, **Home**, **People**, **Interests** and **How you like things**. Each holds short facts. Press **Add** on a card to write one there; press a fact to change it or remove it. A person can carry who they are to you and a date, such as "daughter · born 8 June 2025".
+**About you**, in **Settings → What Conch knows**, is a portrait your assistant reads before every chat. Your name sits at the top, with a line that sums you up. Below are five cards: **Work**, **Home**, **People**, **Interests** and **How you like things**. Each holds short facts. Press **Add** on a card to write one there; press a fact to change it or remove it. A person can carry who they are to you and a date, such as "daughter · born 8 June 2025".
 
 **Your photo.** Press your initial, or drop a picture on it, to use a photo instead. It opens in a frame: drag it to move it, zoom until it looks like you, then press **Use this photo**. It shows in About you and at the foot of the sidebar. Press it again to choose a new one or **Remove photo**; **Undo** puts it back. Conch keeps it on your computer, framed and shrunk, and backs it up with your settings. PNG, JPEG and WebP all work.
 
@@ -48,7 +48,7 @@ To keep one chat out of it, choose **Don't learn from this chat** in its menu, o
 
 ## See what it knows
 
-Open **What Conch knows about you** with <kbd>mod+k</kbd>, by typing `/memory`, or from **Settings → Memory → Open**. It opens inside Settings, with **Memory › What Conch knows** above it: press **Memory** to go back to the memory settings.
+Open **What Conch knows about you** with <kbd>mod+k</kbd>, by typing `/memory`, or from **Settings → What Conch knows → Open**. It opens inside Settings, with **What Conch knows › All memories** above it: press **What Conch knows** to go back to the memory settings.
 
 The page is short:
 
@@ -88,11 +88,11 @@ Say "like last time", "the Lisbon plan" or "what did we decide about the venue?"
 
 ## Tidy up
 
-Memories pile up. A tidy-up merges repeats, updates what has changed, and picks up lasting things you said in recent chats. It happens once a night, between 2 and 5 in the morning, when nothing else is running. To stop it, turn off **Tidy up every night** in **Settings → Memory**. **Tidy up now** in the **⋯** menu starts one straight away.
+Memories pile up. A tidy-up merges repeats, updates what has changed, and picks up lasting things you said in recent chats. It happens once a night, between 2 and 5 in the morning, when nothing else is running. To stop it, turn off **Tidy up every night** in **Settings → What Conch knows**. **Tidy up now** in the **⋯** menu starts one straight away.
 
 ## The morning's note
 
-In the morning, a short note says what Conch learned from your chats and how it tidied its memory overnight: **While you slept**. It's at the top of **Settings → Memory**, and only there: none of it shows in your chats or on the new chat’s screen, and it never sends a notification. Each line has **Undo**, which takes back just that one. **×** puts the note away until there's something new.
+In the morning, a short note says what Conch learned from your chats and how it tidied its memory overnight: **While you slept**. It's at the top of **Settings → What Conch knows**, and only there: none of it shows in your chats or on the new chat’s screen, and it never sends a notification. Each line has **Undo**, which takes back just that one. **×** puts the note away until there's something new.
 
 The note never asks you anything. Anything held because it looks planted is a [card of its own](#when-a-memory-looks-off), never a line in the note.
 

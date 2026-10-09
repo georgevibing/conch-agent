@@ -580,7 +580,7 @@ export class PushService {
       'devices',
       {
         title: 'A new device wants to sign in',
-        body: `${request.device}, code ${request.code}. Approve it in Settings → Devices, or ignore it.`,
+        body: `${request.device}, code ${request.code}. Approve it in Settings → Access, or ignore it.`,
         quiet: 'Open Conch to see who it is.',
         url: '/?open=devices',
         tag: `device-${request.code}`,

@@ -14,7 +14,7 @@ With no model on this computer, your message waits in the chat under **Waiting f
 
 With [a model on this computer](../providers/ollama.md), that model answers instead, and one quiet line in the chat says so. This is on from the start, and only matters once a model is set up.
 
-To turn it off, open **Settings → Models → Advanced → When a provider can't answer** and switch off **Answer offline with the model on this computer**. Messages then wait, and each waiting one has an **Answer now with** button for the times you'd rather not.
+To turn it off, open **Settings → Providers → When one can't answer** and switch off **Answer offline with the model on this computer**. Messages then wait, and each waiting one has an **Answer now with** button for the times you'd rather not.
 
 ## At a usage limit
 
@@ -24,7 +24,7 @@ Press that button, and Conch asks whether to do the same next time. **Always** m
 
 Or choose it yourself, before you need it:
 
-1. Open **Settings → Models → Advanced → When a provider can't answer**.
+1. Open **Settings → Providers → When one can't answer**.
 2. Under **At a usage limit**, choose **Continue with** and the provider you want.
 
 From then on, that provider answers the same message, with nothing to retype. One line in the chat says who answered and why, with **Change** beside it. Once the limit resets, your usual provider answers again.

@@ -350,7 +350,7 @@ describe('Palette search', () => {
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'offline');
     expect(
-      await screen.findByRole('option', { name: /When a provider can’t answer/ }),
+      await screen.findByRole('option', { name: /When one can’t answer/ }),
     ).toBeInTheDocument();
 
     // What routines may spend (ADR 0057): Settings → Usage, where the limit is.
@@ -382,7 +382,7 @@ describe('Palette search', () => {
       expect(screen.queryByRole('option', { name: /Settings: Memory/ })).toBeNull(),
     );
 
-    // Where apps you muted in a chat can be suggested again (under Models → Advanced).
+    // Where apps you muted in a chat can be suggested again (General, beside chat names).
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'suggestions');
     expect(
@@ -406,15 +406,42 @@ describe('Palette search', () => {
     await waitFor(() => expect(where()).toBe('/settings/general'));
     expect(useUi.getState().settingsFocus).toBeUndefined();
 
-    // One under a dense page's Advanced asks for that place with its Advanced open.
+    // What moved is found by its old name too: Models' leftovers, Appearance, Lustre, About you.
     act(() => useUi.getState().setPalette(true));
-    await user.type(await screen.findByRole('combobox'), 'fast mode');
+    await user.type(await screen.findByRole('combobox'), 'chat names');
     expect(
-      await screen.findByRole('option', { name: 'Settings: Fast mode and chat names' }),
+      await screen.findByRole('option', { name: 'Settings: Name new chats automatically' }),
     ).toBeInTheDocument();
     await user.keyboard('{Enter}');
-    await waitFor(() => expect(where()).toBe('/settings/models'));
-    expect(useUi.getState().settingsFocus).toBe('advanced');
+    await waitFor(() => expect(where()).toBe('/settings/general'));
+    for (const [words, name] of [
+      ['models', /Settings: Providers/],
+      ['appearance', /Settings: Appearance/],
+      ['lustre', /Settings: Shimmer/],
+      ['about you', /Settings: About you/],
+      ['at a limit', /Settings: When one can’t answer/],
+    ] as const) {
+      act(() => useUi.getState().setPalette(true));
+      await user.clear(await screen.findByRole('combobox'));
+      await user.type(screen.getByRole('combobox'), words);
+      expect(await screen.findByRole('option', { name })).toBeInTheDocument();
+    }
+    await user.keyboard('{Enter}');
+    await waitFor(() =>
+      expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
+        at: '/settings/providers',
+        focus: 'fallback',
+      }),
+    );
+    act(() => useUi.setState({ settingsFocus: undefined }));
+
+    // Your commands left Settings for Skills.
+    act(() => useUi.getState().setPalette(true));
+    await user.clear(await screen.findByRole('combobox'));
+    await user.type(screen.getByRole('combobox'), 'slash commands');
+    expect(await screen.findByRole('option', { name: 'Your commands' })).toBeInTheDocument();
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(where()).toBe('/skills'));
   });
 
   it('finds Discover and skills people share by name, and opens one to read (ADR 0074)', async () => {
@@ -461,7 +488,7 @@ describe('Palette search', () => {
     );
   });
 
-  it('finds devices and approving them, straight into Settings → Devices', async () => {
+  it('finds devices and approving them, straight into Settings → Access → Devices', async () => {
     const user = userEvent.setup();
     mockFetch({
       'GET /api/state': () => appState(),
@@ -481,14 +508,14 @@ describe('Palette search', () => {
     await user.keyboard('{Enter}');
     await waitFor(() =>
       expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
-        at: '/settings/devices',
+        at: '/settings/access',
         focus: 'devices',
       }),
     );
     act(() => useUi.setState({ settingsFocus: undefined }));
   });
 
-  it('finds passkeys by the names people know, straight into Settings → Security → Passkeys', async () => {
+  it('finds passkeys by the names people know, straight into Settings → Access → Passkeys', async () => {
     const user = userEvent.setup();
     mockFetch({
       'GET /api/state': () => appState(),
@@ -505,7 +532,7 @@ describe('Palette search', () => {
     await user.keyboard('{Enter}');
     await waitFor(() =>
       expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
-        at: '/settings/security',
+        at: '/settings/access',
         focus: 'passkeys',
       }),
     );
@@ -529,7 +556,14 @@ describe('Palette search', () => {
       ).toBeInTheDocument();
     }
     await user.keyboard('{Enter}');
-    await waitFor(() => expect(where()).toBe('/settings/other-apps'));
+    // A part of Access now, under its Advanced.
+    await waitFor(() =>
+      expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
+        at: '/settings/access',
+        focus: 'other-apps',
+      }),
+    );
+    act(() => useUi.setState({ settingsFocus: undefined }));
   });
 
   it('finds outside agents and letting another agent in, straight into Settings → Agents (ADR 0112)', async () => {
@@ -1524,7 +1558,7 @@ describe('Palette search', () => {
         await screen.findByRole('option', { name: /Settings: Notifications/ }),
       ).toBeInTheDocument();
     }
-    // Reaching Conch from a phone has its own row, in Settings → Devices too.
+    // Reaching Conch from a phone has its own row, in Settings → Access too.
     await user.clear(screen.getByRole('combobox'));
     await user.type(screen.getByRole('combobox'), 'tailscale');
     expect(
@@ -1538,7 +1572,7 @@ describe('Palette search', () => {
     await user.keyboard('{Enter}');
     await waitFor(() =>
       expect({ at: where(), focus: useUi.getState().settingsFocus }).toEqual({
-        at: '/settings/devices',
+        at: '/settings/access',
         focus: 'add-device',
       }),
     );

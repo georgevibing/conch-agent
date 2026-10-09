@@ -6,7 +6,7 @@ import { api } from '../../api/client';
 import { keys } from '../../api/queries';
 import type { useVerify } from './useVerify';
 
-/** What Settings → Security and Settings → Devices share: who's in, and how to change it. */
+/** What Settings → Access and Security share: who's in, and how to change it. */
 
 export type Guard = ReturnType<typeof useVerify>['guard'];
 

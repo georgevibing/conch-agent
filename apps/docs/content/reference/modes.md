@@ -4,7 +4,7 @@ description: How much your assistant may do without asking. Pick one per chat, a
 order: 4
 ---
 
-New chats start in **Auto**. Change it from the composer, or with `/mode`; set where new chats start in **Settings → Models**. Every provider offers every mode, and each one means the same with all of them: where a provider has no way of its own, Conch does it.
+New chats start in **Auto**. Change it from the composer, or with `/mode`; to start every new chat there, press **Make this my default** in the same panel. Every provider offers every mode, and each one means the same with all of them: where a provider has no way of its own, Conch does it.
 
 <!-- conch:modes -->
 

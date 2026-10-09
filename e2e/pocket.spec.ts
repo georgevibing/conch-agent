@@ -71,10 +71,10 @@ test('notifications and voice have their own place in Settings', async ({ page }
   // It opens as it is (off here), with nothing beneath it until it's on.
   await expect(card.getByRole('switch', { name: 'Allow notifications' })).not.toBeChecked();
   await expect(card.getByRole('group', { name: 'Tell me when' })).toHaveCount(0);
-  // Which devices get them is in Settings → Devices, beside each device.
+  // Which devices get them is in Settings → Access, beside each device.
   await expect(settings.getByText('No other device gets them yet.')).toBeVisible();
   await settings.getByRole('button', { name: 'Your devices' }).click();
-  await expect(settings.getByRole('tab', { name: 'Devices', selected: true })).toBeVisible();
+  await expect(settings.getByRole('tab', { name: 'Access', selected: true })).toBeVisible();
   await expect(settings.getByRole('button', { name: 'Add your phone' })).toBeVisible();
 
   await settings.getByRole('tab', { name: 'Voice' }).click();

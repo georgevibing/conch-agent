@@ -56,7 +56,7 @@ its own.
 
 ## Choose how you sign in
 
-Open **Settings → Security** and pick one:
+Open **Settings → Access** and pick one:
 
 - **Passkey.** The easiest of all: your device's own fingerprint, face or PIN.
   Conch names the button after what your device has: **Use Touch ID** on a Mac,
@@ -74,7 +74,7 @@ From then on, every device signs in, including this one. You stay signed in for
 up to 30 days (or a week if you don't use it).
 
 A passkey works at the address it was made at (this computer, your Tailscale
-name, or an address of your own). **Settings → Security → Passkeys** lists them,
+name, or an address of your own). **Settings → Access → Passkeys** lists them,
 and says where each one is for. Browsers only offer passkeys at an `https://`
 address or on this computer.
 
@@ -122,7 +122,7 @@ internet.
 
 1. Install [Tailscale](https://tailscale.com/download) on your computer and phone,
    and sign in to both.
-2. In **Settings → Devices**, press **Add a device**. Conch turns on its secure
+2. In **Settings → Access**, press **Add a device**. Conch turns on its secure
    address for you (one press: **Turn on**), then shows a QR code. Point your
    phone's camera at it. That's it: your phone is signed in.
 
@@ -157,7 +157,7 @@ logged in asks you to confirm it's you.
 ## Approve new devices
 
 A password or key is one thing to keep safe. If someone learns it, they could
-sign in from anywhere. For a second lock, turn on **Settings → Security →
+sign in from anywhere. For a second lock, turn on **Settings → Access →
 Devices → Approve new devices** (or run `conch devices on`). A Conch made yours
 with the hello link has it on from the start.
 
@@ -167,7 +167,7 @@ the right password or key:
 1. On the new device, sign in as usual. It shows a short code, like
    **K7M-Q2X**, and waits.
 2. Approve it from a device you're already signed in on: a notice appears there,
-   and **Settings → Devices** shows who is asking and from where.
+   and **Settings → Access** shows who is asking and from where.
    Check the code matches, then confirm it's you (Touch ID or your password).
    Or, in a terminal on the computer running Conch:
 
@@ -225,9 +225,9 @@ On a server, `conch hello` after a reset gives you a new link that makes it
 yours again. Only someone at that computer's terminal can do this. That's what
 keeps it safe.
 
-Lost a phone? **Settings → Devices → Remove** (or
+Lost a phone? **Settings → Access → Remove** (or
 `conch devices remove`). It's disconnected instantly and, with approval on,
-can't get back in without your OK. Removing a passkey in **Settings → Security
+can't get back in without your OK. Removing a passkey in **Settings → Access
 → Passkeys** signs out every device that signed in with it.
 
 ## What Conch warns you about
@@ -273,7 +273,7 @@ copy.
 
 Claude Desktop, Cursor, VS Code and other MCP apps can use Conch (ADR 0073).
 
-- **Only apps you paired.** Pairing is a press in **Settings → Other apps**, after you
+- **Only apps you paired.** Pairing is a press in **Settings → Access → Other apps**, after you
   confirm it's you, on this computer or a device you let in. An app can't pair itself, a
   script's access key can't, and neither can your assistant.
 - **Only what you ticked.** Each app has its own list (your memory, your skills, the

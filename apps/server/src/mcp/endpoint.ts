@@ -189,7 +189,7 @@ export function registerMcpEndpoint(
       reply,
       403,
       'not-here',
-      'Other apps can use Conch only on the computer running it, unless you let them in through your own address in Conch: Settings → Other apps.',
+      'Other apps can use Conch only on the computer running it, unless you let them in through your own address in Conch: Settings → Access → Other apps.',
     );
     return undefined;
   };
@@ -199,7 +199,7 @@ export function registerMcpEndpoint(
       reply,
       401,
       'not-paired',
-      'This app isn’t paired with Conch. In Conch, open Settings → Other apps and connect it.',
+      'This app isn’t paired with Conch. In Conch, open Settings → Access → Other apps and connect it.',
     );
 
   /** The paired app this request is from, or a refusal already sent. */

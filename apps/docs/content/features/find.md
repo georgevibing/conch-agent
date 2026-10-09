@@ -13,7 +13,7 @@ Results arrive in groups as you type:
 - **Chats**, by title. A few letters will do: "pmw" finds "Plan my week". [Archived](./chats.md#archive) chats are found too, and say so.
 - **Messages**, from any chat: what you wrote, what your assistant answered, and the commands and files it worked with.
 - **Skills**, **Models**, **Apps** (it finds them by "integrations" too), **Talk to me here** (and by "channels"), **Routines**, **Passwords**, **Tasks**, and the things your assistant made for you, each by name.
-- **Go to**: every page, every place in Settings, and things to do, such as **Back up now** or **Repair everything**.
+- **Go to**: every page, every place in Settings (by its old name too, such as **Appearance** or **Devices**), and things to do, such as **Back up now** or **Repair everything**.
 
 Before you type, the box shows your recent chats (not archived ones) and a few common actions.
 

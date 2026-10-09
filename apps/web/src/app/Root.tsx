@@ -7,7 +7,7 @@ import { OAuthDone } from '../features/integrations/OAuthDone';
 import { APPS_PATH, newHome } from '../features/integrations/paths';
 import { ProviderDone } from '../features/providers/ProviderDone';
 import { Onboarding } from '../features/onboarding/Onboarding';
-import { behindOf, settingsAt } from '../features/settings/paths';
+import { SETTINGS_PATH, behindOf, movedOut, settingsAt } from '../features/settings/paths';
 import { NewAgentDialog } from '../features/agents/NewAgentDialog';
 import { Settings } from '../features/settings/Settings';
 import { UpdateDialogHost } from '../features/updates/UpdateDialogHost';
@@ -55,6 +55,12 @@ export function Root() {
   if (window.location.pathname === '/providers/done') return <ProviderDone />;
 
   if (!state.data.onboarded) return <Onboarding />;
+
+  // A place that left Settings for a page of its own (Settings → Commands is on Skills).
+  const left = location.pathname.startsWith(`${SETTINGS_PATH}/`)
+    ? movedOut(location.pathname.slice(SETTINGS_PATH.length + 1).split('/')[0] ?? '')
+    : undefined;
+  if (left) return <Navigate to={left.path} state={{ focus: left.focus }} replace />;
 
   return (
     <>
