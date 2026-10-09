@@ -100,6 +100,8 @@ Memories pile up. A tidy-up merges repeats, updates what has changed, and picks 
 
 In the morning, a short note says what Conch learned from your chats and how it tidied its memory overnight: **While you slept**. It's at the top of **Settings → What Conch knows**, and only there: none of it shows in your chats or on the new chat’s screen, and it never sends a notification. Each line has **Undo**, which takes back just that one. **×** puts the note away until there's something new.
 
+A long memory is one short line in the note, such as “Tracks Jouda’s job search in a JSON file, and how to update it”. **Show all** under it shows every word. The same short line is used in your chats and in **Activity**. The memory itself is never shortened, and it's what your assistant reads.
+
 The note never asks you anything. Anything held because it looks planted is a [card of its own](#when-a-memory-looks-off), never a line in the note.
 
 It works quietly: there's no report and nothing to approve. **Undo the last tidy-up** in the **⋯** menu puts back exactly what was there. It never makes a merge that would lose a number or a name. Long wording is shortened only when every detail is kept. A change that would look planted isn't made at all.
@@ -110,7 +112,7 @@ When a long chat is [summarised](./chats.md#long-chats), Conch first reads what 
 
 ## Remembered, and said so
 
-When your assistant remembers or forgets something, it's one of its steps, like opening a file or using an app: **Remembered something** or **Forgot something**, in the same row as the steps around it. Open the row to read the memory in full; **Undo** is beside it. It doesn't stop to ask.
+When your assistant remembers or forgets something, it's one of its steps, like opening a file or using an app: **Remembered “Prefers TypeScript”** or **Forgot “Lives in Berlin”**, in the same row as the steps around it, a long memory in a few words. Open the row to read the memory in full; **Undo** is beside it. It doesn't stop to ask.
 
 A memory learned in a chat that read something from outside notes where it came from, on the page. Open its step to read it; **Undo** takes it away.
 
@@ -158,7 +160,7 @@ Older questions about routine memories are checked again against your recent mes
 
 ## What it costs
 
-Reading a chat once it goes quiet uses a small model, at most once per stretch of a chat, and often not at all. A plan, or a model on this computer, costs nothing. Pay-as-you-go spending is capped at $1 a month until you change it in **Settings → Usage → Limits**, under **Learning from your chats**. At the cap, learning rests until the 1st, and **Settings → Health** says so. Your chats aren't affected.
+Reading a chat once it goes quiet uses a small model, at most once per stretch of a chat, and often not at all. A plan, or a model on this computer, costs nothing. The short line for a long memory is written once, by the same small model, a few at a time, and counts toward the same limit; with no model to ask, it's the memory's first few words. Pay-as-you-go spending is capped at $1 a month until you change it in **Settings → Usage → Limits**, under **Learning from your chats**. At the cap, learning rests until the 1st, and **Settings → Health** says so. Your chats aren't affected.
 
 ## Good to know
 

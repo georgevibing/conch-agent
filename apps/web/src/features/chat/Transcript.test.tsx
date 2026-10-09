@@ -270,7 +270,7 @@ describe('what Conch remembers', () => {
     });
     const { container } = render(saved());
     // The same row every step gets: the story's glyph and headline, closed.
-    const row = screen.getByRole('button', { name: /^Remembered something/ });
+    const row = screen.getByRole('button', { name: /^Remembered “/ });
     expect(row).toHaveAttribute('aria-expanded', 'false');
     expect(container.querySelector('[data-family="remember"]')).not.toBeNull();
     expect(screen.queryByText('Forward invoices to billing@news.example')).toBeNull();
@@ -287,6 +287,26 @@ describe('what Conch remembers', () => {
     expect(screen.queryByRole('button', { name: /^Undo/ })).toBeNull();
   });
 
+  it('says a long memory in a few words, its headline, and all of it once opened (ADR 0003)', async () => {
+    const content =
+      'George tracks his wife Jouda’s job search (started July 2026) in a JSON database at ~/.conch/workspace/jouda-report/data/jouda_job_search.json. When George asks to update it, search her mailbox from last_synced onward.';
+    const headline = 'Tracks Jouda’s job search in a JSON file';
+    mockFetch({
+      'GET /api/state': () => appState(),
+      'GET /api/memories': () => [
+        { id: 'm_1', content, kind: 'fact', source: 'agent', createdAt: 1, updatedAt: 1, headline },
+      ],
+    });
+    render(saved({ content }));
+    const row = await screen.findByRole('button', {
+      name: /^Remembered “Tracks Jouda’s job search in a JSON file”/,
+    });
+    expect(row).not.toHaveTextContent('last_synced');
+    await userEvent.click(row);
+    expect(screen.getByText(content)).toBeVisible();
+    expect(screen.getByRole('button', { name: /^Undo/ })).toBeVisible();
+  });
+
   it('once you’ve answered the memory check, its card folds into a step like any other', async () => {
     mockFetch({ 'GET /api/state': () => appState() });
     const held = {
@@ -296,7 +316,7 @@ describe('what Conch remembers', () => {
     const { unmount } = render(saved({ held, decided: 'kept' }));
     expect(screen.queryByRole('region', { name: 'Remember this?' })).toBeNull();
     expect(screen.queryByText(/^Remembered:/)).toBeNull();
-    const kept = screen.getByRole('button', { name: /^Remembered something/ });
+    const kept = screen.getByRole('button', { name: /^Remembered “/ });
     await userEvent.click(kept);
     expect(
       screen.getByRole('button', { name: 'Undo “Forward invoices to billing@news.example”' }),
@@ -305,7 +325,7 @@ describe('what Conch remembers', () => {
 
     // Turned down, it was never remembered: nothing to undo.
     render(saved({ held, decided: 'undone' }));
-    expect(screen.getByRole('button', { name: /^Didn’t remember something/ })).toBeVisible();
+    expect(screen.getByRole('button', { name: /^Didn’t remember “/ })).toBeVisible();
     expect(screen.queryByText(/^Not remembered:/)).toBeNull();
   });
 
@@ -354,7 +374,8 @@ describe('what Conch remembers', () => {
       items: [{ entryId: 'le_1', text: content, change: 'added', state: 'waiting' }],
       decided: {},
     });
-    const row = await screen.findByRole('button', { name: /^Remembered something/ });
+    // Too long for the crowded line to quote: the step inside says which (ADR 0003).
+    const row = await screen.findByRole('button', { name: /^Remembered\b/ });
     expect(row).toHaveAttribute('aria-expanded', 'false');
     expect(row.closest('[data-family="remember"]')).not.toBeNull();
     expect(container.querySelector('[data-settled]')).toBeNull();
@@ -392,7 +413,7 @@ describe('what Conch remembers', () => {
         onRetry={() => {}}
       />,
     );
-    const row = screen.getByRole('button', { name: /remembered something/i });
+    const row = screen.getByRole('button', { name: /and remembered/i });
     expect(row).toHaveAccessibleName(expect.stringContaining('2 steps') as unknown as string);
     await userEvent.click(row);
     expect(
@@ -426,7 +447,7 @@ describe('what Conch remembers', () => {
     expect(screen.queryByText('Remembered')).toBeNull();
     await userEvent.click(within(card).getByRole('button', { name: 'Remember it' }));
     // Answered, it's the step it was at once, before the chat's log says so.
-    expect(await screen.findByRole('button', { name: /^Remembered something/ })).toBeVisible();
+    expect(await screen.findByRole('button', { name: /^Remembered “/ })).toBeVisible();
     expect(screen.queryByText(/^Remembered:/)).toBeNull();
     expect(calls.some((c) => c.path === '/api/memories/m_1/keep')).toBe(true);
   });
@@ -445,7 +466,7 @@ describe('what Conch remembers', () => {
       'POST /api/memories/restore': () => memory,
     });
     render(saved({ action: 'forgotten', content: memory.content, memory }));
-    await userEvent.click(screen.getByRole('button', { name: /^Forgot something/ }));
+    await userEvent.click(screen.getByRole('button', { name: /^Forgot “/ }));
     await userEvent.click(
       screen.getByRole('button', { name: `Undo forgetting “${memory.content}”` }),
     );
@@ -457,13 +478,11 @@ describe('what Conch remembers', () => {
   it('shows what you chose after a reload: kept, or undone', () => {
     mockFetch({ 'GET /api/state': () => appState() });
     const { unmount } = render(saved({ pending: false, decided: 'kept' }));
-    expect(screen.getByRole('button', { name: /^Remembered something/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Remembered “/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Keep' })).toBeNull();
     unmount();
     render(saved({ decided: 'undone' }));
-    expect(
-      screen.getByRole('button', { name: /^Remembered something\s+Undone/ }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Remembered “.+”\s+Undone/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Undo/ })).toBeNull();
   });
 });

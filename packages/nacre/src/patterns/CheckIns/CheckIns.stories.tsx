@@ -311,3 +311,42 @@ export const MorningNoteLater: Story = {
     </div>
   ),
 };
+
+/** Two long things learned: each says itself in a few words, the whole of it under Show all. */
+const longLines: DigestLine[] = [
+  {
+    id: 'h1',
+    kind: 'learned',
+    headline: 'Tracks Jouda’s job search in a JSON file, and how to update it',
+    text: 'George tracks his wife Jouda’s job search (started July 2026) in a JSON database at ~/.conch/workspace/jouda-report/data/jouda_job_search.json (README.md alongside explains the fields). When George asks to update it, search her mailbox from last_synced onward, merge into the JSON, and optionally regenerate the PDF.',
+    state: 'applied',
+  },
+  {
+    id: 'h2',
+    kind: 'replaced',
+    headline: 'Push conch-agent fixes straight to main, then watch CI',
+    text: 'When George says a conch-agent fix is ready, commit it on main and push it straight to origin without a pull request, then watch the CI run until it finishes and fix what fails.',
+    wasHeadline: 'Open a pull request for conch-agent fixes',
+    was: 'For conch-agent, open a pull request for every fix and wait for George to merge it.',
+    state: 'applied',
+  },
+];
+
+export const MorningNoteHeadlines: Story = {
+  name: 'Morning note, in a few words',
+  render: () => {
+    const [items, setItems] = useState(longLines);
+    return (
+      <div style={{ maxInlineSize: 560 }}>
+        <MorningDigest
+          title="Since you last looked"
+          items={items}
+          onUndo={(id) =>
+            setItems((all) => all.map((i) => (i.id === id ? { ...i, state: 'undone' } : i)))
+          }
+          onDismiss={() => undefined}
+        />
+      </div>
+    );
+  },
+};

@@ -211,6 +211,8 @@ import { registerLearningDoctor } from './memory/doctor';
 import { registerQuietLearningDoctor } from './learning/doctor';
 import { notYours, QuietLearning } from './learning/service';
 import type { SmallModelDeps } from './conversations/stories/ask';
+import { MemoryHeadlines } from './memory/headline';
+import { SkillHeadlines } from './skills/headlines';
 import { StoryExplainer } from './conversations/stories/explain';
 import { StoryTitler } from './conversations/stories/titler';
 import { LearningSpend } from './learning/spend';
@@ -329,6 +331,9 @@ export class Services {
   readonly learningSpend: LearningSpend;
   /** Story headlines by a small model (ADR 0103). */
   readonly stories: StoryTitler;
+  /** Long memories and skill descriptions in a few words, for the person (ADR 0003 § Headlines). */
+  readonly memoryHeadlines: MemoryHeadlines;
+  readonly skillHeadlines: SkillHeadlines;
   /** "Why?" on a step (ADR 0103). */
   readonly explainer: StoryExplainer;
   /** Site icons for chips, from each site itself (ADR 0103). */
@@ -1676,6 +1681,20 @@ export class Services {
         void this.learningSpend.record(usage, engine, model).catch(() => 0);
       },
     };
+    // Headlines (ADR 0003): not about a chat, so the default provider's small model first,
+    // then another with room, then one on this computer; counted like the rest.
+    const headlines = {
+      pick: () => this.#smallModel(this.providers.engine(), { private: false }),
+      spent: small.spent,
+    };
+    this.memoryHeadlines = new MemoryHeadlines(this.memory, headlines);
+    if (!this.recovery.recoveryMode) this.memoryHeadlines.start();
+    this.skillHeadlines = new SkillHeadlines({
+      home: config.CONCH_HOME,
+      heal,
+      ...headlines,
+      changed: () => this.broadcast.emit({ type: 'skills.changed' }),
+    });
     this.stories = new StoryTitler({
       ...small,
       enabled: async () => (await this.settings.get()).preferences.autoTitle,
@@ -1700,6 +1719,13 @@ export class Services {
         (await this.conversations.detail(id).catch(() => undefined))?.events ??
         conversationStore.events(id),
       undoState: (id) => this.undo.state(id),
+      // Each memory's headline, for its row (ADR 0003 § Headlines).
+      headlines: async () =>
+        new Map(
+          (await this.memory.list()).flatMap((m) =>
+            m.headline ? [[m.id, m.headline] as const] : [],
+          ),
+        ),
     });
     this.search = new SearchService({
       path: join(config.CONCH_HOME, 'search.db'),

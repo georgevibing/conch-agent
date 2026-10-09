@@ -146,6 +146,37 @@ describe('memories', () => {
     ]);
   });
 
+  it('say a long memory in a few words, its headline once it has one (ADR 0003)', async () => {
+    seq = 0;
+    const content =
+      'George tracks his wife Jouda’s job search (started July 2026) in a JSON database at ~/.conch/workspace/jouda-report/data/jouda_job_search.json. When George asks, search her mailbox from last_synced onward.';
+    const memory = { id: 'm1', kind: 'fact', source: 'agent', createdAt: 1, updatedAt: 1, content };
+    const events = [
+      ev({ type: 'memory.saved', memory }),
+      ev({ type: 'memory.saved', memory: { ...memory, id: 'm2' } }),
+    ];
+    const entries = entriesOf(
+      { id: 'c1', title: 'Jouda' },
+      events,
+      new Map([['m1', 'Tracks Jouda’s job search in a JSON file']]),
+    );
+    expect(entries.map((e) => e.title)).toEqual([
+      'Remembered: Tracks Jouda’s job search in a JSON file',
+      'Remembered: George tracks his wife Jouda’s job search',
+    ]);
+    // The whole of it goes with the row, and finds it.
+    expect(entries[0]?.memory?.content).toBe(content);
+    const activity = new Activity({
+      list: async () => [{ id: 'c1', title: 'Jouda', updatedAt: 1 }],
+      events: async () => events,
+      headlines: async () => new Map([['m1', 'Tracks Jouda’s job search in a JSON file']]),
+    });
+    const found = await activity.page({ q: 'last_synced' });
+    expect(found.entries.map((e) => e.title)).toContain(
+      'Remembered: Tracks Jouda’s job search in a JSON file',
+    );
+  });
+
   it('say what a chat taught Conch once it went quiet (ADR 0088)', () => {
     seq = 0;
     const entries = entriesOf({ id: 'c1', title: 'Scripts' }, [

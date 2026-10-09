@@ -217,4 +217,58 @@ describe('MorningDigest', () => {
     expect(onDismiss).toHaveBeenCalled();
     vi.useRealTimers();
   });
+
+  it('shows a long memory in a few words, and all of it one press away', async () => {
+    const full =
+      'George tracks his wife Jouda’s job search (started July 2026) in a JSON database at ~/.conch/workspace/jouda-report/data/jouda_job_search.json. When George asks to update it, search her mailbox from last_synced onward.';
+    const onUndo = vi.fn();
+    const { container } = renderNacre(
+      <MorningDigest
+        title="Since you last looked"
+        items={[
+          {
+            id: 'h1',
+            kind: 'learned',
+            text: full,
+            headline: 'Tracks Jouda’s job search in a JSON file, and how to update it',
+            state: 'applied',
+          },
+          {
+            id: 'h2',
+            kind: 'replaced',
+            text: 'Push fixes to main',
+            was: 'For conch-agent, open a pull request for every fix and wait for George to merge it.',
+            wasHeadline: 'Open a pull request for each fix',
+            state: 'applied',
+          },
+          { id: 'h3', kind: 'learned', text: 'Lives in Lisbon', state: 'applied' },
+        ]}
+        onUndo={onUndo}
+      />,
+    );
+    const card = screen.getByRole('region', { name: 'Since you last looked' });
+    expect(card).toHaveTextContent(
+      'Tracks Jouda’s job search in a JSON file, and how to update it',
+    );
+    expect(card).toHaveTextContent('Was: Open a pull request for each fix');
+    expect(card).not.toHaveTextContent('last_synced');
+    // Short already: nothing to show more of.
+    expect(screen.getAllByRole('button', { name: /^Show all/ })).toHaveLength(2);
+    const more = screen.getByRole('button', { name: /^Show all of “Tracks Jouda’s/ });
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(more);
+    expect(more).toHaveAttribute('aria-expanded', 'true');
+    expect(card).toHaveTextContent('search her mailbox from last_synced onward');
+    expect(more).toHaveTextContent('Show less');
+    // Undo is still there, by the words it shows.
+    await userEvent.click(
+      screen.getByRole('button', {
+        name: 'Undo “Tracks Jouda’s job search in a JSON file, and how to update it”',
+      }),
+    );
+    expect(onUndo).toHaveBeenCalledWith('h1');
+    await userEvent.click(screen.getByRole('button', { name: /^Show all of “Push fixes/ }));
+    expect(card).toHaveTextContent('wait for George to merge it');
+    await expectAccessible(container);
+  });
 });

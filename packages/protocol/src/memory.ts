@@ -1,6 +1,40 @@
 /** Long-term memory (ADR 0003, ADR 0032, ADR 0088). */
 import { z } from 'zod';
 
+/** The longest a headline is: about twelve words, one line on a phone (ADR 0003 § Headlines). */
+export const MEMORY_HEADLINE_MAX = 80;
+
+/** Where a clause ends: a sentence, a semicolon, a colon or dash before more, an aside in brackets. */
+const CLAUSE_END = /[.!?;:](?=\s)|\s[–—-]\s|\s\(/u;
+
+/**
+ * Words in a few, without a model: the first clause, and if that's still too
+ * long, cut at the last whole word with “…”. Words already short enough come
+ * back as they are. Used until a small model's headline is there, and
+ * wherever none may be asked.
+ */
+export function clipHeadline(text: string, max = MEMORY_HEADLINE_MAX): string {
+  const words = text.replace(/\s+/g, ' ').trim();
+  if (words.length <= max) return words;
+  const end = CLAUSE_END.exec(words);
+  const clause = (end ? words.slice(0, end.index) : words).replace(/[\s,.;:–—-]+$/u, '');
+  if (clause.length >= 12 && clause.length <= max) return clause;
+  // A clause too short to say anything (“Rule:”) runs on into the next.
+  const room = (clause.length >= 12 ? clause : words).slice(0, max - 1);
+  const cut = room.lastIndexOf(' ');
+  return `${(cut > max / 2 ? room.slice(0, cut) : room).replace(/[\s,.;:–—-]+$/u, '')}…`;
+}
+
+/** What to show where a memory (or a skill's description) is summed up: its headline, else its words in a few. */
+export function headlineOf(item: { content: string; headline?: string | undefined }): string {
+  return item.headline ?? clipHeadline(item.content);
+}
+
+/** Longer than a headline: a small model is asked for one. */
+export function needsHeadline(text: string): boolean {
+  return text.replace(/\s+/g, ' ').trim().length > MEMORY_HEADLINE_MAX;
+}
+
 /**
  * Never add a kind or a source: the version before reads them as strict enums
  * and drops a memory it can't read (ADR 0051). A new sort of memory is a kind
@@ -119,6 +153,13 @@ export const Memory = z.object({
   held: MemoryHold.optional(),
   /** Where it came from (ADR 0087). Older memories have none. */
   provenance: MemoryProvenance.optional(),
+  /**
+   * What it says in a few words, for the places that sum it up (ADR 0003 §
+   * Headlines): written once by a small model, for exactly these words. Only
+   * the person reads it: never a model, never the check. One that's too long
+   * (from a later version) is left out, never the whole memory.
+   */
+  headline: z.string().min(1).max(MEMORY_HEADLINE_MAX).optional().catch(undefined),
 });
 export type Memory = z.infer<typeof Memory>;
 

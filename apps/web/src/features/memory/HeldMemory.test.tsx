@@ -82,7 +82,7 @@ describe('a held memory in the chat', () => {
       await screen.findByText('Remembered', { selector: '[role=status]' }),
     ).toBeInTheDocument();
     // …and drawn as the step it was: the story row every tool step gets.
-    const row = screen.getByRole('button', { name: /^Remembered something/ });
+    const row = screen.getByRole('button', { name: /^Remembered “/ });
     expect(row).toHaveAttribute('aria-expanded', 'false');
     expect(row.closest('[data-family="remember"]')).not.toBeNull();
     expect(screen.queryByRole('region', { name: 'Remember this?' })).toBeNull();
@@ -108,7 +108,7 @@ describe('a held memory in the chat', () => {
     expect(
       await screen.findByText('Not remembered', { selector: '[role=status]' }),
     ).toBeInTheDocument();
-    const row = screen.getByRole('button', { name: /^Didn’t remember something/ });
+    const row = screen.getByRole('button', { name: /^Didn’t remember “/ });
     // A no, neutral like any step you declined: not the check of done.
     expect(row.closest('[data-family="remember"]')).toHaveAttribute('data-status', 'declined');
     expect(screen.queryByText(/^Not remembered:/)).toBeNull();
@@ -140,7 +140,7 @@ describe('a held memory in the chat', () => {
       await screen.findByText('Remembered', { selector: '[role=status]' }),
     ).toBeInTheDocument();
     // Its step holds your words.
-    await userEvent.click(screen.getByRole('button', { name: /^Remembered something/ }));
+    await userEvent.click(screen.getByRole('button', { name: /^Remembered “/ }));
     expect(screen.getByText('Invoices go to accounts@ada.example')).toBeVisible();
     expect(calls.find((c) => c.path === '/api/memories/m_1/keep')?.body).toEqual({
       content: 'Invoices go to accounts@ada.example',
@@ -180,6 +180,6 @@ describe('a held memory in the chat', () => {
     mockFetch({ 'GET /api/state': () => appState() });
     render({ ...held(), decided: 'undone' } as TranscriptItem);
     expect(screen.queryByRole('region', { name: 'Remember this?' })).toBeNull();
-    expect(screen.getByRole('button', { name: /^Didn’t remember something/ })).toBeVisible();
+    expect(screen.getByRole('button', { name: /^Didn’t remember “/ })).toBeVisible();
   });
 });

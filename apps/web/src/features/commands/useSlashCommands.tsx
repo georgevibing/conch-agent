@@ -47,7 +47,7 @@ import {
 import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 
-import { findAgent, type Agent } from '@conch/protocol';
+import { clipHeadline, findAgent, headlineOf, type Agent } from '@conch/protocol';
 
 import { agentsApi, useAgents } from '../agents/api';
 import { api } from '../../api/client';
@@ -445,13 +445,13 @@ export function useSlashCommands(options: {
       case 'remember':
         if (!args) return setDraft('/remember ');
         // Said at once; the toast with Undo follows once it's kept.
-        toast('Remembering…', { id: 'remember', description: args });
+        toast('Remembering…', { id: 'remember', description: clipHeadline(args) });
         return void api.addMemory(args).then(
           (memory) => {
             void client.invalidateQueries({ queryKey: keys.memories });
             toast.success('Remembered', {
               id: 'remember',
-              description: memory.content,
+              description: headlineOf(memory),
               action: {
                 label: 'Undo',
                 onClick: () =>

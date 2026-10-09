@@ -6,6 +6,7 @@ import { keys } from '../../api/queries';
 import { learningApi, learningKeys, useLearning } from '../learning/api';
 import { memoryApi } from './api';
 import { morningDigest, readSeen, writeSeen, type DigestEntry } from './digest';
+import { useMemoryHeadlines } from './headlines';
 import { memoryKeys, useTidy } from './queries';
 
 /**
@@ -16,6 +17,7 @@ import { memoryKeys, useTidy } from './queries';
 export function MorningNote() {
   const { data: learning } = useLearning();
   const { data: tidy } = useTidy();
+  const headlines = useMemoryHeadlines();
   const client = useQueryClient();
   const [seenAt, setSeenAt] = useState(readSeen);
   const [busy, setBusy] = useState<string>();
@@ -27,6 +29,7 @@ export function MorningNote() {
     seenAt,
     now,
     hour,
+    headlines,
   });
   if (!digest) return null;
 

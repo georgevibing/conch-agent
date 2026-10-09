@@ -1,4 +1,4 @@
-import type { Memory, MemoryHold } from '@conch/protocol';
+import { headlineOf, type Memory, type MemoryHold } from '@conch/protocol';
 import { MemoryCell, memorySourceLabels, Textarea, toast, META_SEP } from '@conch/nacre';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -91,7 +91,8 @@ export function MemoryRow({ memory, index }: { memory: Memory; index?: number })
     void run(async () => {
       await api.deleteMemory(memory.id);
       toast('Forgotten', {
-        description: memory.content,
+        // In a few words: a toast is no place for a whole paragraph (ADR 0003 § Headlines).
+        description: headlineOf(memory),
         action: {
           label: 'Undo',
           onClick: () => void run(() => api.addMemory(memory.content, memory.kind)),

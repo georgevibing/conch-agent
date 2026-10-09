@@ -1,11 +1,13 @@
-import type { LearningStatus, TidyStatus } from '@conch/protocol';
+import { headlineOf, type LearningStatus, type TidyStatus } from '@conch/protocol';
 import type { DigestLine } from '@conch/nacre';
 
 /**
  * The morning's note (ADR 0107): what quiet learning applied and what the
  * nightly tidy-up changed since you last looked (at most a day back), each
  * with what Undo answers. Read from what the Memory page already has, so it
- * costs no request and no model. Only what was applied: anything held for a
+ * costs no request and no model. Each line is the memory in a few words, its
+ * headline (ADR 0003 § Headlines) as the memory has it now, with the whole of
+ * it under Show all. Only what was applied: anything held for a
  * security reason is the memory check's card, never this one (ADR 0097).
  */
 
@@ -34,7 +36,13 @@ export function morningDigest(input: {
   now: number;
   /** The hour on the person's clock, 0–23. */
   hour: number;
+  /** Each memory's headline as it is now, by id: written after the record was. */
+  headlines?: ReadonlyMap<string, string>;
 }): Digest | undefined {
+  const short = (m: { id: string; content: string; headline?: string | undefined }) => {
+    const headline = input.headlines?.get(m.id) ?? m.headline;
+    return headlineOf({ content: m.content, ...(headline && { headline }) });
+  };
   const since = Math.max(input.seenAt, input.now - DAY);
   const items: DigestEntry[] = [];
   for (const e of input.learning?.entries ?? []) {
@@ -46,7 +54,9 @@ export function morningDigest(input: {
       at: e.at,
       kind: e.change === 'superseded' ? 'replaced' : 'learned',
       text: e.after.content,
-      ...(e.change === 'superseded' && e.before && { was: e.before.content }),
+      headline: short(e.after),
+      ...(e.change === 'superseded' &&
+        e.before && { was: e.before.content, wasHeadline: short(e.before) }),
       state,
       undo: { from: 'learning', entryId: e.id },
     });
@@ -63,7 +73,9 @@ export function morningDigest(input: {
         at: run.at,
         kind: c.kind === 'merged' ? 'merged' : c.kind === 'added' ? 'learned' : 'tidied',
         text: c.after.content,
-        ...(c.kind === 'updated' && c.before[0] && { was: c.before[0].content }),
+        headline: short(c.after),
+        ...(c.kind === 'updated' &&
+          c.before[0] && { was: c.before[0].content, wasHeadline: short(c.before[0]) }),
         state,
         undo: { from: 'tidy', runId: run.id, changeId: c.id },
       });
