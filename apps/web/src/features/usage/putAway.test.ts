@@ -1,7 +1,7 @@
 import type { UsageSnapshot } from '@conch/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { isPutAway, limitInView, putAway, rearm } from './putAway';
+import { isPutAway, limitInView, putAway, readBeforeReset, rearm } from './putAway';
 
 const HOUR = 3_600_000;
 const now = Date.UTC(2026, 9, 8, 12);
@@ -107,6 +107,25 @@ describe('putting the line away', () => {
     const old = { engine: 'codex-cli', window: 'session', resetsAt: now - HOUR };
     const marks = putAway([old, weekly], { ...weekly, resetsAt: weeklyResets + 60_000 }, now);
     expect(marks).toEqual([{ ...weekly, resetsAt: weeklyResets + 60_000 }]);
+  });
+
+  it('holds when put away as the reset comes ("resets now"), until fresh numbers arrive', () => {
+    const passed = inView(plan(97, now - 60_000), now);
+    expect(readBeforeReset(passed, now)).toBe(true);
+    const marks = putAway([], passed, now);
+    // Not over the moment it's made: the × always works.
+    expect(isPutAway(marks, passed, now)).toBe(true);
+    expect(rearm(marks, plan(97, now - 60_000), now)).toBe(marks);
+    expect(isPutAway(marks, passed, now + 10 * 60_000)).toBe(true);
+    // The next cycle, read afresh, can speak again.
+    const next = inView(plan(80, now + 5 * HOUR), now + 60_000);
+    expect(readBeforeReset(next, now + 60_000)).toBe(false);
+    expect(isPutAway(marks, next, now + 60_000)).toBe(false);
+  });
+
+  it('holds when put away a moment before the reset', () => {
+    const soon = inView(plan(97, now + 20_000), now);
+    expect(isPutAway(putAway([], soon, now), soon, now + 60_000)).toBe(true);
   });
 
   it('never grows without end', () => {

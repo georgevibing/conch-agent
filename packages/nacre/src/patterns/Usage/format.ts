@@ -32,10 +32,14 @@ export function formatLeft(usedPercent: number): string {
   return `${percentLeft(usedPercent)}% left`;
 }
 
-/** "in 38 min", "in 2 h 14 min", "in 3 days", or "now" once it has passed. */
+/**
+ * "in under a minute", "in 38 min", "in 2 h 14 min", "in 3 days", or "now"
+ * once it has passed (a reading from before the reset, soon read again).
+ */
 export function formatResetIn(resetsAt: number, now: number): string {
   const diff = resetsAt - now;
   if (diff <= 0) return 'now';
+  if (diff < MINUTE) return 'in under a minute';
   if (diff < DAY) {
     const minutes = Math.ceil(diff / MINUTE);
     if (minutes < 60) return `in ${minutes} min`;

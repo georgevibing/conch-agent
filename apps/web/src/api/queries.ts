@@ -1,5 +1,5 @@
 import type { AppState, EngineId, EngineStatus, UpdateSettingsBody } from '@conch/protocol';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from './client';
 
@@ -78,21 +78,81 @@ export function useEngine(
  * the default model's tick, a switch), put back if the gateway says no;
  * whoever changes them says why it failed.
  */
+/** Every settings save shares this key, so each can see the others still on their way. */
+const SAVING_SETTINGS = ['settings', 'save'] as const;
+
+/** Per page (per query client): how many saves were sent, and the newest whose answer was taken. */
+const saveOrder = new WeakMap<QueryClient, { sent: number; taken: number }>();
+
+/**
+ * Saves a change to your settings. Shown at once, and only what it changed
+ * is taken back if it fails. Saves overlap (the mode, then a ×, then the
+ * page tidying a list): an answer is laid under the saves still on their
+ * way, and an answer older than one already taken is let go, so one save
+ * never undoes another (`withSettings`, `revertSettings`).
+ */
 export function useUpdateSettings() {
   const client = useQueryClient();
   return useMutation({
+    mutationKey: SAVING_SETTINGS,
     mutationFn: (body: UpdateSettingsBody) => api.updateSettings(body),
     onMutate: async (body) => {
+      const order = saveOrder.get(client) ?? { sent: 0, taken: 0 };
+      saveOrder.set(client, order);
+      const seq = ++order.sent;
       await client.cancelQueries({ queryKey: keys.state });
       const before = client.getQueryData<AppState>(keys.state);
       if (before) client.setQueryData(keys.state, withSettings(before, body));
-      return { before };
+      return { before, seq };
     },
-    onError: (_error, _body, context) => {
-      if (context?.before) client.setQueryData(keys.state, context.before);
+    onError: (_error, body, context) => {
+      const now = client.getQueryData<AppState>(keys.state);
+      if (context?.before && now)
+        client.setQueryData(keys.state, revertSettings(now, context.before, body));
     },
-    onSuccess: (state) => client.setQueryData(keys.state, state),
+    onSuccess: (state, body, context) => {
+      const order = saveOrder.get(client);
+      if (order && context) {
+        if (context.seq < order.taken) return;
+        order.taken = context.seq;
+      }
+      const pending = client
+        .getMutationCache()
+        .findAll({ mutationKey: SAVING_SETTINGS, status: 'pending' })
+        .filter((m) => m.state.variables !== body)
+        .sort((a, b) => a.mutationId - b.mutationId)
+        .map((m) => m.state.variables as UpdateSettingsBody | undefined);
+      const next = pending.reduce<AppState>(
+        (shown, later) => (later ? withSettings(shown, later) : shown),
+        state,
+      );
+      client.setQueryData(keys.state, next);
+    },
   });
+}
+
+/** `state` with only what `body` changed put back as it was in `before`. */
+export function revertSettings(
+  state: AppState,
+  before: AppState,
+  body: UpdateSettingsBody,
+): AppState {
+  const back = <T extends object>(now: T, was: T, changes: object | undefined): T => {
+    if (!changes) return now;
+    const touched = new Set(Object.keys(changes));
+    return Object.fromEntries([
+      ...Object.entries(now).filter(([key]) => !touched.has(key)),
+      ...Object.entries(was).filter(([key]) => touched.has(key)),
+    ]) as T;
+  };
+  return {
+    ...state,
+    ...(body.onboarded !== undefined && { onboarded: before.onboarded }),
+    persona: back(state.persona, before.persona, body.persona),
+    profile: back(state.profile, before.profile, body.profile),
+    preferences: back(state.preferences, before.preferences, body.preferences),
+    ...(body.preferences?.workspace && { workspace: before.workspace }),
+  };
 }
 
 /** The app's state as it will be once `body` is saved (`null` goes back to the default). */

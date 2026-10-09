@@ -44,7 +44,8 @@ describe('formatLeft', () => {
 describe('formatResetIn', () => {
   it('reads like speech', () => {
     expect(formatResetIn(usageNow + 38 * MIN, usageNow)).toBe('in 38 min');
-    expect(formatResetIn(usageNow + 20_000, usageNow)).toBe('in 1 min');
+    expect(formatResetIn(usageNow + 20_000, usageNow)).toBe('in under a minute');
+    expect(formatResetIn(usageNow + 61_000, usageNow)).toBe('in 2 min');
     expect(formatResetIn(usageNow + 2 * HOUR + 14 * MIN, usageNow)).toBe('in 2 h 14 min');
     expect(formatResetIn(usageNow + 5 * HOUR, usageNow)).toBe('in 5 h');
     expect(formatResetIn(usageNow + 26 * HOUR, usageNow)).toBe('in 1 day');
@@ -56,6 +57,7 @@ describe('formatResetIn', () => {
     expect(formatResetInShort(usageNow + 38 * MIN, usageNow)).toBe('in 38 min');
     expect(formatResetInShort(usageNow + 3 * DAY, usageNow)).toBe('in 3 days');
     expect(formatResetInShort(usageNow - MIN, usageNow)).toBe('now');
+    expect(formatResetInShort(usageNow + 1_000, usageNow)).toBe('in under a minute');
   });
 
   it('says now once the time has passed', () => {
