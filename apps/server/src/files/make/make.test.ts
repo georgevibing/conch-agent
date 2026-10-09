@@ -102,6 +102,34 @@ console.log('hi');
 `;
 
 describe('file_make', () => {
+  it('makes a PDF from HTML without a browser too, keeping its words in any script', async () => {
+    const why: Printer = {
+      ...noBrowser,
+      problem: () => ({ message: 'Chromium wouldn’t start to print' }),
+    };
+    const { tool, store } = await setup(why);
+    const made = out(
+      await tool('file_make')({
+        format: 'pdf',
+        name: 'menu',
+        html: '<html><body><h1>Μενού</h1><p>Καλημέρα · Привет · café</p><script>x()</script></body></html>',
+      }),
+    );
+    expect(made).toMatchObject({ name: 'menu.pdf', mime: 'application/pdf', pages: 1 });
+    const text = (
+      await extractDocument((await bytesOf(store, made.id)).bytes, 'm.pdf', 0, 2, signal())
+    ).sections
+      .map((s) => s.text)
+      .join(' ');
+    expect(text).toContain('café');
+    expect(text).not.toContain('x()');
+    const warnings = (made.warnings as string[]).join(' ');
+    // Why, in words to pass on, and no reason to go and install something else.
+    expect(warnings).toContain('Chromium wouldn’t start to print');
+    expect(warnings).toContain('don’t install anything');
+    expect(warnings).toContain('words are kept');
+  });
+
   it('makes a PDF from Markdown with the built-in writer when there is no browser', async () => {
     const { tool, store, progress } = await setup();
     const result = await tool('file_make')({ format: 'pdf', name: 'Q3 report', markdown: REPORT });

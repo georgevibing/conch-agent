@@ -424,22 +424,26 @@ export class FileMaker {
         };
       }
     }
-    if (!doc)
-      throw new FileError(
-        'Printing HTML needs a browser, and none could start on this computer. Send the content as Markdown instead and Conch will lay it out itself, or open Settings → Browser to set one up.',
-      );
+    // No browser could print it: Conch's own writer makes it, in this computer's fonts.
+    // HTML keeps its words (not its layout); the reason goes to the model in words it can
+    // pass on, and it should not try to make the PDF some other way.
+    const words = doc ?? fromText(htmlText(html));
     progress.by = 'Conch';
     progress.step(1, 3, 'Laying out pages');
-    const lite = await makeLitePdf(doc, { ...options, pictures: options.pictures });
+    const lite = await makeLitePdf(words, { ...options, pictures: options.pictures });
+    const why = this.deps.printer.problem?.()?.message;
     return {
       bytes: lite.pdf,
       pages: lite.pages,
       warnings: [
-        'Made with Conch’s built-in PDF writer (no browser was available), so the typography is plainer.',
+        `Made with Conch’s built-in PDF writer${why ? ` (${why.replace(/\.$/, '')})` : ' (no browser was available)'}, so the typography is plainer${lite.embedded ? '; this computer’s fonts are embedded' : ''}. ${doc ? '' : 'The page’s words are kept, not its layout or styles. '}This is the finished file: don’t install anything to make it again. Repair everything (Settings → Health) sets up a browser for full layout.`,
         ...(lite.lossy
           ? [
-              'Some characters outside Western European scripts were replaced: a browser is needed to draw them.',
+              `No font on this computer has ${lite.missing.map((c) => `“${c}”`).join(' ')}, so ${lite.missing.length === 1 ? 'it was' : 'they were'} replaced with “?”.${process.platform === 'linux' ? ' Installing fonts adds them (on Debian or Ubuntu: sudo apt install fonts-noto-core fonts-noto-cjk).' : ''}`,
             ]
+          : []),
+        ...(lite.rtl
+          ? ['Right-to-left text is drawn left to right here; a browser lays it out properly.']
           : []),
       ],
     };
@@ -715,6 +719,7 @@ export class FileMaker {
           'make create generate pdf word docx excel xlsx spreadsheet csv powerpoint pptx slides deck chart graph svg png html markdown json report document',
         description:
           'Make a finished file for the person, in this chat: PDF, Word (docx), Excel (xlsx), CSV, PowerPoint (pptx), Markdown, plain text, HTML, JSON, or a chart (svg or png). Works with any model; nothing to install. ' +
+          'Where no browser can print, Conch still makes the PDF itself with this computer’s fonts embedded, and its warnings say so: use that file; never install a browser, fonts or a Python library (reportlab, fonttools, weasyprint) to make one. ' +
           'Documents (pdf, docx, html, md, txt): send `markdown` (GitHub style: headings, lists, tables, code, quotes, links, `<!-- pagebreak -->`) plus an optional `title`/`subtitle`; pictures from this chat go in as ![alt](att_…). PDF is laid out with print typography and page numbers; for full control of a PDF or HTML page send `html` instead (it is printed sealed: no scripts, nothing loaded from the web). ' +
           'Spreadsheets (xlsx, csv): send `sheets`: [{name, rows: [[cells…]…], formats?}] with numbers as numbers, dates as "YYYY-MM-DD", formulas as {"formula": "SUM(B2:B9)"}; the first row is a frozen, filterable header. ' +
           'Slides (pptx): send `slides`: [{title, bullets?, body? (Markdown), image? (att_…), layout?: title|section|content}], or `markdown` where each ## starts a slide. ' +
@@ -1089,17 +1094,7 @@ export class FileMaker {
             sealHtml(text()),
             { ...options, pictures: new Map() },
             ctx.signal,
-          ).catch(async (error: unknown) => {
-            // Without a browser, the page's words still make a PDF.
-            if (!(error instanceof FileError)) throw error;
-            return this.#pdf(
-              progress,
-              fromText(htmlText(text())),
-              '',
-              { ...options, pictures: new Map() },
-              ctx.signal,
-            );
-          });
+          );
           return {
             bytes: pdf.bytes,
             name,

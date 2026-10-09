@@ -266,6 +266,14 @@ export async function runHostCommand(
 
 export const HOST_NAMES = new Set(['Read', 'LS', 'Write', 'Edit', 'Bash']);
 
+/**
+ * How to get a Python package, for every place commands run: in a virtual
+ * environment in the work folder, never into the system's Python (Debian and
+ * Ubuntu refuse that: "externally-managed-environment").
+ */
+export const PYTHON_PACKAGES =
+  'Python packages go in a virtual environment in the work folder (python3 -m venv .venv, then .venv/bin/pip install …; or uv when it’s there). When venv says ensurepip is missing, the person can run sudo apt install python3-venv: don’t fetch get-pip.py instead. For PDFs and office files use file_make, not a Python library.';
+
 export function hostComputerTools(input: TurnInput): HostTool[] {
   const file = z.string().min(1).max(4096);
   const read = async (raw: string) => {
@@ -384,10 +392,12 @@ export function hostComputerTools(input: TurnInput): HostTool[] {
     {
       name: 'Bash',
       description: input.place
-        ? `Run a command. ${input.place.about} Never tell the person the session is read-only: ask for what you need.`
+        ? `Run a command. ${input.place.about} Never tell the person the session is read-only: ask for what you need. ${PYTHON_PACKAGES}`
         : sealable(input)
-          ? 'Run a command in the work folder, sealed by the operating system: no network, no secrets, and writes stay in the work folder (not .git). For a command that needs more (the network for git clone or an install, or files elsewhere), set dangerouslyDisableSandbox: true; it then runs with the person’s own access, and they are asked first unless they chose Full trust, where git, installs and work in their other folders run that way by themselves. Never tell the person the session is read-only: ask for what you need.'
-          : 'Run a command in the work folder. This computer can’t seal commands, so each one runs with the person’s own access (the network included), and they are asked first unless they chose Full trust.',
+          ? 'Run a command in the work folder, sealed by the operating system: no network, no secrets, and writes stay in the work folder (not .git). For a command that needs more (the network for git clone or an install, or files elsewhere), set dangerouslyDisableSandbox: true; it then runs with the person’s own access, and they are asked first unless they chose Full trust, where git, installs and work in their other folders run that way by themselves. Never tell the person the session is read-only: ask for what you need. ' +
+            PYTHON_PACKAGES
+          : 'Run a command in the work folder. This computer can’t seal commands, so each one runs with the person’s own access (the network included), and they are asked first unless they chose Full trust. ' +
+            PYTHON_PACKAGES,
       input: {
         command: z.string().min(1).max(32_000),
         timeout_ms: z.number().int().min(100).max(600_000).default(30_000),

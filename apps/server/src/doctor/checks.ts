@@ -4,6 +4,7 @@
  * and on repair try every safe fix first; say where things stand in one plain
  * sentence, and give what only a person can do as one action.
  */
+import { existsSync } from 'node:fs';
 import { statfs } from 'node:fs/promises';
 
 import { awaitsSignIn, type DoctorItem, type Provider } from '@conch/protocol';
@@ -11,6 +12,8 @@ import { awaitsSignIn, type DoctorItem, type Provider } from '@conch/protocol';
 import { BACKEND_NAMES } from '../browser/backends';
 import { channelName } from '../channels/catalog';
 import { sandboxSupport } from '../conversations/sandbox';
+import { systemFonts, type FontFiles } from '../files/make/fonts';
+import type { ChromiumPrinter } from '../files/make/printer';
 import { secureHome } from '../auth/checkup';
 import { pausedWords } from '../routines/spend';
 import type { Services } from '../services';
@@ -292,6 +295,121 @@ export function browserCheck(services: Services): DoctorCheck {
       ];
     },
   };
+}
+
+export interface PdfCheckDeps {
+  printer: Pick<ChromiumPrinter, 'by' | 'problem' | 'repair'>;
+  /** The fonts Conch's own PDF writer would use. */
+  fonts?: () => FontFiles;
+  platform?: NodeJS.Platform;
+  /** apt is here, so the fonts command is one that works. */
+  apt?: () => boolean;
+}
+
+/**
+ * Making PDFs (`file_make`): a browser prints them with full layout, or
+ * Conch's own writer makes them, in this computer's fonts. A look never
+ * starts a browser; Repair starts one, fetching Conch's own Chromium when
+ * none here will. What only a person can add (system libraries, fonts on a
+ * server that has none) comes back as the command to run once.
+ */
+export function pdfCheck(deps: PdfCheckDeps): DoctorCheck {
+  const base = { id: 'pdf', group: COMPUTER, title: 'Making PDFs' };
+  const platform = deps.platform ?? process.platform;
+  const fontsItem = (): DoctorItem[] => {
+    if (platform !== 'linux') return [];
+    const fonts = (deps.fonts ?? systemFonts)();
+    if (fonts.roles.regular || fonts.fallbacks.length) return [];
+    const apt = (deps.apt ?? (() => existsSync('/usr/bin/apt-get')))();
+    return [
+      {
+        id: 'pdf:fonts',
+        group: COMPUTER,
+        title: 'Fonts for PDFs',
+        ...(apt
+          ? {
+              state: 'needs-you' as const,
+              message:
+                'This computer has no fonts, so PDFs made without a browser draw only Western European letters.',
+              action: {
+                kind: 'command' as const,
+                label: 'Run this once',
+                command: 'sudo apt install -y fonts-noto-core fonts-noto-cjk',
+              },
+            }
+          : {
+              state: 'info' as const,
+              message:
+                'This computer has no fonts, so PDFs made without a browser draw only Western European letters. Installing the Noto fonts adds the rest.',
+            }),
+      },
+    ];
+  };
+  const needsYou = (problem: { message: string; command?: string }): DoctorItem => ({
+    ...base,
+    state: 'needs-you',
+    message: `${sentence(problem.message)} PDFs use Conch’s plainer writer meanwhile.`,
+    action: { kind: 'command', label: 'Run this once', command: problem.command ?? '' },
+  });
+  return {
+    ...base,
+    async run({ repair, signal }) {
+      const before = deps.printer.problem?.();
+      if (!repair) {
+        if (before?.command) return [needsYou(before), ...fontsItem()];
+        const by = deps.printer.by();
+        if (before || !by)
+          return [
+            {
+              ...base,
+              state: 'warning',
+              message: before
+                ? `${sentence(before.message)} PDFs use Conch’s plainer writer meanwhile.`
+                : 'No browser to print with, so PDFs use Conch’s plainer writer. Repair gets one.',
+              repairable: true,
+            },
+            ...fontsItem(),
+          ];
+        return [{ ...base, state: 'ok', message: `Ready · ${by}` }, ...fontsItem()];
+      }
+      const after = await deps.printer.repair(signal);
+      if (after.by)
+        return [
+          {
+            ...base,
+            state: before ? 'fixed' : 'ok',
+            message: before ? `Prints with ${after.by} again.` : `Ready · ${after.by}`,
+          },
+          ...fontsItem(),
+        ];
+      if (after.problem?.command) return [needsYou(after.problem), ...fontsItem()];
+      if (after.fetching)
+        return [
+          {
+            ...base,
+            state: 'info',
+            message:
+              'Getting Chromium to print with (a few minutes). PDFs use Conch’s plainer writer until it’s ready.',
+          },
+          ...fontsItem(),
+        ];
+      return [
+        {
+          ...base,
+          state: 'warning',
+          message: `${sentence(after.problem?.message ?? 'No browser would start to print')} PDFs use Conch’s plainer writer meanwhile.`,
+          action: { kind: 'open', label: 'Open', place: 'browser' },
+        },
+        ...fontsItem(),
+      ];
+    },
+  };
+}
+
+/** "there's no browser" → "There's no browser." */
+function sentence(text: string): string {
+  const trimmed = text.trim().replace(/[.\s]+$/, '');
+  return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}.`;
 }
 
 /**
@@ -598,6 +716,7 @@ export function registerCoreChecks(services: Services) {
     providersCheck(services),
     integrationsCheck(services),
     browserCheck(services),
+    pdfCheck({ printer: services.printer }),
     searchCheck(services),
     channelsCheck(services),
     networkCheck(services),
