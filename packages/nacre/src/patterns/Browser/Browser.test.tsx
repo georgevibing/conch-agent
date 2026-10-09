@@ -153,6 +153,69 @@ describe('BrowserWindow', () => {
     );
   });
 
+  it('on a touch screen: a tap clicks and brings the keyboard up, a drag scrolls, two fingers zoom', async () => {
+    const onInput = vi.fn();
+    const onTakeOver = vi.fn();
+    const { rerender } = renderNacre(
+      <BrowserWindow tab={tab} frame={hotelsPage} onInput={onInput} onTakeOver={onTakeOver} />,
+    );
+    const finger = (id: number, x: number, y = 250) => ({
+      pointerType: 'touch',
+      pointerId: id,
+      button: 0,
+      clientX: x,
+      clientY: y,
+    });
+    // Not driving: a tap takes the wheel when it lifts, so a pinch never does.
+    let page = screen.getByRole('button', { name: /^Take over the page/ });
+    fireEvent.pointerDown(page, finger(1, 420));
+    expect(onTakeOver).not.toHaveBeenCalled();
+    fireEvent.pointerUp(page, finger(1, 420));
+    expect(onTakeOver).toHaveBeenCalledOnce();
+
+    rerender(
+      <BrowserWindow tab={{ ...tab, control: 'user' }} frame={hotelsPage} onInput={onInput} />,
+    );
+    page = screen.getByRole('button', { name: /^Page: / });
+    const layer = page.parentElement as HTMLElement;
+    stubRect(layer);
+    stubRect(layer.parentElement?.parentElement as HTMLElement);
+    const keys = screen.getByRole('textbox', { name: 'Type into the page' });
+    (document.activeElement as HTMLElement | null)?.blur();
+
+    // A tap: a click where it landed, and the keys take the focus within the tap.
+    fireEvent.pointerDown(page, finger(1, 420));
+    expect(onInput).not.toHaveBeenCalled();
+    fireEvent.pointerUp(page, finger(1, 420));
+    expect(onInput.mock.calls.map(([input]) => input.action)).toEqual(['down', 'up']);
+    expect(onInput).toHaveBeenLastCalledWith(expect.objectContaining({ x: 0.5, y: 0.5 }));
+    expect(keys).toHaveFocus();
+
+    // A drag scrolls the page, in its own pixels.
+    onInput.mockClear();
+    fireEvent.pointerDown(page, finger(1, 420, 250));
+    fireEvent.pointerMove(page, finger(1, 420, 230));
+    fireEvent.pointerMove(page, finger(1, 420, 180));
+    fireEvent.pointerUp(page, finger(1, 420, 180));
+    expect(onInput).toHaveBeenLastCalledWith(
+      expect.objectContaining({ action: 'wheel', deltaY: 100 }),
+    );
+    expect(onInput.mock.calls.some(([input]) => input.action === 'down')).toBe(false);
+
+    // Two fingers pinch the view, and nothing reaches the page.
+    onInput.mockClear();
+    fireEvent.pointerDown(page, finger(1, 300));
+    fireEvent.pointerDown(page, finger(2, 540));
+    fireEvent.pointerMove(page, finger(2, 780));
+    fireEvent.pointerUp(page, finger(2, 780));
+    fireEvent.pointerUp(page, finger(1, 300));
+    expect(onInput).not.toHaveBeenCalled();
+    const reset = screen.getByRole('button', { name: /^Zoomed to 200%/ });
+    expect(layer.style.transform).toContain('scale(2)');
+    fireEvent.click(reset);
+    expect(screen.queryByRole('button', { name: /^Zoomed to/ })).not.toBeInTheDocument();
+  });
+
   it('lets you leave the page with Shift+Escape, and hand back', async () => {
     const user = userEvent.setup();
     const onHandBack = vi.fn();

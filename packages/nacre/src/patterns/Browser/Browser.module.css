@@ -413,6 +413,35 @@
   }
 
   /* The picture is a button: click it to take over; while you drive, your pointer goes to the page. */
+  /* A pinch zooms into the page in here; the screen's edges stay put. */
+  .zoomClip {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    border-radius: inherit;
+  }
+
+  .zoomLayer {
+    position: absolute;
+    inset: 0;
+    transform-origin: 0 0;
+  }
+
+  .zoomReset {
+    position: absolute;
+    inset-block-start: var(--nc-space-2);
+    inset-inline-end: var(--nc-space-2);
+    padding: var(--nc-space-1) var(--nc-space-2);
+    border: 0;
+    border-radius: var(--nc-radius-full);
+    background: color-mix(in oklch, var(--nc-surface) 88%, transparent);
+    box-shadow: var(--nc-elevation-1);
+    color: var(--nc-text);
+    font-size: var(--nc-text-xs);
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+  }
+
   .surface {
     appearance: none;
     display: block;
@@ -452,6 +481,8 @@
     opacity: 0;
     resize: none;
     pointer-events: none;
+    /* Below 16px a phone zooms the whole app in when the keys take the focus. */
+    font-size: 16px;
   }
 
   .screen:has(.keys:focus-visible) {

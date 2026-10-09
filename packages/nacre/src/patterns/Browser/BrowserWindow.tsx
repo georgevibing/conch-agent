@@ -175,6 +175,18 @@ export function BrowserWindow({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const screen = useRef<HTMLDivElement | null>(null);
+  // What's drawn of the page, zoomed and panned by a pinch on a touch screen.
+  const layer = useRef<HTMLDivElement | null>(null);
+  const surface = useRef<HTMLButtonElement | null>(null);
+  const [zoom, setZoom] = useState<Zoom>(NO_ZOOM);
+  const [zoomedOn, setZoomedOn] = useState(tab?.url);
+  // Another page opens at its own size.
+  if (zoomedOn !== tab?.url) {
+    setZoomedOn(tab?.url);
+    setZoom(NO_ZOOM);
+  }
+  const touches = useRef(new Map<number, Point>());
+  const gesture = useRef<Gesture | undefined>(undefined);
   // Where your keys land while you drive: a hidden field, as remote-desktop
   // clients do, so input methods and phone keyboards work too.
   const keys = useRef<HTMLTextAreaElement | null>(null);
@@ -223,9 +235,128 @@ export function BrowserWindow({
     if (driving) keys.current?.focus({ preventScroll: true });
   }, [driving]);
 
+  // A tap's own click would take the focus off the keys again on a phone, and
+  // its keyboard with it: the tap is handled on its pointer events instead.
+  useEffect(() => {
+    const el = surface.current;
+    if (!el) return;
+    const quiet = (event: TouchEvent) => {
+      if (event.cancelable) event.preventDefault();
+    };
+    el.addEventListener('touchend', quiet, { passive: false });
+    return () => el.removeEventListener('touchend', quiet);
+  }, []);
+
   const send = (input: BrowserInput) => onInput?.(input);
+  /** Where on the page (0–1), through any zoom. */
+  const pageRect = () => (layer.current ?? screen.current)?.getBoundingClientRect();
+
+  /** Kept covering the screen: never smaller than it, never pulled off an edge. */
+  const fitZoom = (next: Zoom): Zoom => {
+    const rect = screen.current?.getBoundingClientRect();
+    const scale = Math.min(MAX_ZOOM, Math.max(1, next.scale));
+    if (!rect || scale === 1) return NO_ZOOM;
+    return {
+      scale,
+      x: Math.min(0, Math.max(rect.width - rect.width * scale, next.x)),
+      y: Math.min(0, Math.max(rect.height - rect.height * scale, next.y)),
+    };
+  };
+
+  /** Two fingers down: where they are and how far apart, from the zoom as it is. */
+  const pinchFrom = (): Gesture | undefined => {
+    const [a, b] = [...touches.current.values()];
+    const rect = screen.current?.getBoundingClientRect();
+    if (!a || !b || !rect) return undefined;
+    return {
+      kind: 'pinch',
+      distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+      mid: { x: (a.x + b.x) / 2 - rect.left, y: (a.y + b.y) / 2 - rect.top },
+      from: zoom,
+    };
+  };
+
+  /**
+   * A finger on the page, as in a phone's own browser: a tap clicks (and brings
+   * the keyboard up, inside the tap, or a phone won't show it), a drag scrolls
+   * the page (or moves around it while zoomed in), and two fingers pinch to zoom.
+   */
+  function touch(kind: 'down' | 'up' | 'move' | 'cancel', event: PointerEvent<HTMLButtonElement>) {
+    const at = { x: event.clientX, y: event.clientY };
+    const id = event.pointerId;
+    if (kind === 'down') {
+      event.preventDefault();
+      event.currentTarget.setPointerCapture?.(id);
+      touches.current.set(id, at);
+      gesture.current =
+        touches.current.size === 1 ? { kind: 'tap', start: at, last: at } : pinchFrom();
+      return;
+    }
+    if (!touches.current.has(id)) return;
+    const g = gesture.current;
+    if (kind === 'move') {
+      touches.current.set(id, at);
+      if (!g) return;
+      if (g.kind === 'pinch') {
+        const [a, b] = [...touches.current.values()];
+        const rect = screen.current?.getBoundingClientRect();
+        if (!a || !b || !rect) return;
+        const scale = g.from.scale * (Math.hypot(a.x - b.x, a.y - b.y) / g.distance);
+        const mid = { x: (a.x + b.x) / 2 - rect.left, y: (a.y + b.y) / 2 - rect.top };
+        // The spot between the fingers stays under them.
+        const spot = {
+          x: (g.mid.x - g.from.x) / g.from.scale,
+          y: (g.mid.y - g.from.y) / g.from.scale,
+        };
+        setZoom(fitZoom({ scale, x: mid.x - spot.x * scale, y: mid.y - spot.y * scale }));
+        return;
+      }
+      if (g.kind === 'tap') {
+        if (Math.hypot(at.x - g.start.x, at.y - g.start.y) < TAP_SLOP) return;
+        g.kind = zoom.scale > 1 ? 'pan' : driving ? 'scroll' : 'still';
+      }
+      const dx = at.x - g.last.x;
+      const dy = at.y - g.last.y;
+      g.last = at;
+      if (g.kind === 'pan') setZoom((z) => fitZoom({ ...z, x: z.x + dx, y: z.y + dy }));
+      else if (g.kind === 'scroll') {
+        const rect = pageRect();
+        if (!rect) return;
+        const ratio = viewport.width / rect.width;
+        send({
+          type: 'mouse',
+          action: 'wheel',
+          ...pointOn(rect, at.x, at.y),
+          deltaX: -dx * ratio,
+          deltaY: -dy * ratio,
+        });
+      }
+      return;
+    }
+    touches.current.delete(id);
+    const [rest, ...more] = [...touches.current.values()];
+    // One finger left after a pinch moves around; it never taps.
+    if (rest && !more.length && g?.kind === 'pinch') {
+      gesture.current = { kind: zoom.scale > 1 ? 'pan' : 'still', start: rest, last: rest };
+      return;
+    }
+    if (rest) return;
+    gesture.current = undefined;
+    if (kind !== 'up' || g?.kind !== 'tap') return;
+    keys.current?.focus({ preventScroll: true });
+    if (!driving) {
+      onTakeOver?.();
+      return;
+    }
+    const rect = pageRect();
+    if (!rect) return;
+    const point = pointOn(rect, at.x, at.y);
+    send({ type: 'mouse', action: 'down', ...point, button: 'left', clickCount: 1 });
+    send({ type: 'mouse', action: 'up', ...point, button: 'left', clickCount: 1 });
+  }
 
   function pointer(kind: 'down' | 'up' | 'move', event: PointerEvent<HTMLButtonElement>) {
+    if (event.pointerType === 'touch') return touch(kind, event);
     if (!driving) {
       // Touching the page takes the wheel; that first click only takes it.
       if (kind === 'down' && event.button === 0) {
@@ -234,7 +365,7 @@ export function BrowserWindow({
       }
       return;
     }
-    const rect = screen.current?.getBoundingClientRect();
+    const rect = pageRect();
     if (!rect) return;
     const point = pointOn(rect, event.clientX, event.clientY);
     if (kind === 'move') {
@@ -261,7 +392,7 @@ export function BrowserWindow({
 
   const onWheel = (event: WheelEvent<HTMLButtonElement>) => {
     if (!driving) return;
-    const rect = screen.current?.getBoundingClientRect();
+    const rect = pageRect();
     if (!rect) return;
     send({
       type: 'mouse',
@@ -546,38 +677,94 @@ export function BrowserWindow({
           }
           data-driving={driving ? '' : undefined}
         >
-          <button
-            type="button"
-            className={styles.surface}
-            aria-label={
-              driving
-                ? `Page${tab?.title ? `: ${tab.title}` : ''}`
-                : `Take over the page${tab?.title ? `: ${tab.title}` : ''}`
-            }
-            aria-describedby={hintId}
-            disabled={!tab?.url}
-            onClick={() => {
-              // Enter or Space on the picture takes the wheel too.
-              if (!driving) onTakeOver?.();
-            }}
-            onPointerDown={(event) => pointer('down', event)}
-            onPointerUp={(event) => pointer('up', event)}
-            onPointerMove={(event) => pointer('move', event)}
-            onWheel={onWheel}
-            onContextMenu={(event) => {
-              if (driving) event.preventDefault();
-            }}
-          >
-            <img
-              ref={screenRef}
-              src={frame}
-              alt=""
-              draggable={false}
-              className={styles.frame}
-              data-empty={empty ? '' : undefined}
-              onLoad={() => setHasFrame(true)}
-            />
-          </button>
+          <div className={styles.zoomClip}>
+            <div
+              ref={layer}
+              className={styles.zoomLayer}
+              style={
+                zoom.scale > 1
+                  ? { transform: `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})` }
+                  : undefined
+              }
+            >
+              <button
+                ref={surface}
+                type="button"
+                className={styles.surface}
+                aria-label={
+                  driving
+                    ? `Page${tab?.title ? `: ${tab.title}` : ''}`
+                    : `Take over the page${tab?.title ? `: ${tab.title}` : ''}`
+                }
+                aria-describedby={hintId}
+                disabled={!tab?.url}
+                onClick={() => {
+                  // Enter or Space on the picture takes the wheel too.
+                  if (!driving) onTakeOver?.();
+                }}
+                onPointerDown={(event) => pointer('down', event)}
+                onPointerUp={(event) => pointer('up', event)}
+                onPointerMove={(event) => pointer('move', event)}
+                onPointerCancel={(event) => {
+                  if (event.pointerType === 'touch') touch('cancel', event);
+                }}
+                onWheel={onWheel}
+                onContextMenu={(event) => {
+                  if (driving) event.preventDefault();
+                }}
+              >
+                <img
+                  ref={screenRef}
+                  src={frame}
+                  alt=""
+                  draggable={false}
+                  className={styles.frame}
+                  data-empty={empty ? '' : undefined}
+                  onLoad={() => setHasFrame(true)}
+                />
+              </button>
+              {box && (
+                <span
+                  key={`box-${caption?.key}`}
+                  className={styles.highlight}
+                  style={{
+                    left: `${box.x * 100}%`,
+                    top: `${box.y * 100}%`,
+                    width: `${box.width * 100}%`,
+                    height: `${box.height * 100}%`,
+                  }}
+                  aria-hidden
+                />
+              )}
+              <span
+                className={styles.cursor}
+                // Shown only while pointing at something on this page; it fades where it was.
+                data-visible={box && !driving ? '' : undefined}
+                data-action={caption?.action}
+                style={
+                  action?.box
+                    ? {
+                        left: `${(action.box.x + action.box.width / 2) * 100}%`,
+                        top: `${(action.box.y + action.box.height / 2) * 100}%`,
+                      }
+                    : undefined
+                }
+                aria-hidden
+              >
+                <span key={`ripple-${caption?.key}`} className={styles.ripple} />
+              </span>
+            </div>
+          </div>
+          {zoom.scale > 1 && (
+            <button
+              type="button"
+              className={styles.zoomReset}
+              aria-label={`Zoomed to ${Math.round(zoom.scale * 100)}%. Back to the whole page`}
+              onClick={() => setZoom(NO_ZOOM)}
+            >
+              {Math.round(zoom.scale * 100)}%
+            </button>
+          )}
           <textarea
             ref={keys}
             className={styles.keys}
@@ -622,36 +809,6 @@ export function BrowserWindow({
               )}
             </div>
           )}
-          {box && (
-            <span
-              key={`box-${caption?.key}`}
-              className={styles.highlight}
-              style={{
-                left: `${box.x * 100}%`,
-                top: `${box.y * 100}%`,
-                width: `${box.width * 100}%`,
-                height: `${box.height * 100}%`,
-              }}
-              aria-hidden
-            />
-          )}
-          <span
-            className={styles.cursor}
-            // Shown only while pointing at something on this page; it fades where it was.
-            data-visible={box && !driving ? '' : undefined}
-            data-action={caption?.action}
-            style={
-              action?.box
-                ? {
-                    left: `${(action.box.x + action.box.width / 2) * 100}%`,
-                    top: `${(action.box.y + action.box.height / 2) * 100}%`,
-                  }
-                : undefined
-            }
-            aria-hidden
-          >
-            <span key={`ripple-${caption?.key}`} className={styles.ripple} />
-          </span>
           {caption && !driving && (
             <span key={`caption-${caption.key}`} className={styles.caption} aria-live="polite">
               <span className={styles.captionDots} aria-hidden>
@@ -677,6 +834,28 @@ export function BrowserWindow({
     </section>
   );
 }
+
+interface Point {
+  x: number;
+  y: number;
+}
+
+/** How far a pinch has zoomed into the page, and where to (CSS px, from the top left). */
+interface Zoom {
+  scale: number;
+  x: number;
+  y: number;
+}
+
+const NO_ZOOM: Zoom = { scale: 1, x: 0, y: 0 };
+const MAX_ZOOM = 4;
+/** A finger that moves less than this is still a tap. */
+const TAP_SLOP = 10;
+
+/** What a finger (or two) on the page is doing. `still`: moving, with nothing to move. */
+type Gesture =
+  | { kind: 'tap' | 'scroll' | 'pan' | 'still'; start: Point; last: Point }
+  | { kind: 'pinch'; distance: number; mid: Point; from: Zoom };
 
 const WHERE: Record<NonNullable<BrowserWindowTab['backend']>, string> = {
   chrome: 'In your Chrome',
