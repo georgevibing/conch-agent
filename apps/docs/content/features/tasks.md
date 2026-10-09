@@ -77,6 +77,7 @@ In a task that's a chat of its own, **Remove** on its card hides the finished ta
 
 When a job splits into parts that don't need each other, your assistant can run them at once, each as a task, and bring the results back together. Tasks started together share one card in the chat, a line each.
 
+- One job splits into at most six parts. Helpers can't ask you a question with choices; anything that needs your OK still asks, as above.
 - They use the provider's faster model, unless a part needs the full one.
 - A task can go to another provider you've connected. Ask for it ("have Codex write the tests while you fix the bug"), or your assistant picks one when it plainly suits a part, like a coding agent for changing code. The card says **by** which provider.
 - A task that changes code can work in its own copy of the folder, on its own branch. If it changed something, its card names the branch. Conch never merges it for you.

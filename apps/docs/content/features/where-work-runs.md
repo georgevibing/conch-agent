@@ -21,7 +21,8 @@ them somewhere else, for one chat or for every new one:
 1. Press the **Model · Mode** chip under the message box. **Where work runs** is in
    it once somewhere other than this computer is ready.
 2. Choose a place. A small mark for it appears in the chip, before the mode.
-3. To use it for every new chat, press **Make this my default** at the foot.
+3. To use it for every new chat, press **Make this my default** at the foot. It keeps
+   the model and the mode you chose too.
 
 Each command's row in the chat says where it ran: **container**, the machine's name,
 or **cloud**. Commands that ran on this computer have no tag.

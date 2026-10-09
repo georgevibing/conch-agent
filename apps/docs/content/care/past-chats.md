@@ -34,7 +34,7 @@ Past chats aren't in the chat list, so it stays yours. They're found everywhere 
 
 ## Carry one on
 
-A past chat opens with **Carry on here**. Press it, and a new chat starts in Conch with that conversation in it. Whoever answers next is given the conversation so far: Claude Code for a chat from Claude Code, Codex for one from Codex, Gemini CLI for one from Gemini CLI, when they're connected, and your usual model otherwise. The chat in the other app stays as it was.
+A past chat opens with **Carry on here**. Press it, and a new chat starts in Conch with that conversation in it. Whoever answers next is given the conversation so far: Claude Code for a chat from Claude Code, Codex for one from Codex, Gemini CLI for one from Gemini CLI and Copilot for one from Copilot, when they're connected, and your usual model otherwise. The chat in the other app stays as it was.
 
 ## Take them out
 

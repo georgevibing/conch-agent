@@ -82,7 +82,7 @@ Your assistant sees the names and sites of your items, never a value. When it re
 - A payment card always asks.
 - For a sign-in you haven't saved, it can ask with a card in the chat. What you type there goes to Passwords, not into the chat.
 - To read something itself, such as a PIN or a note, it asks in the chat: **Don't**, **Always for this item** or **Allow once**.
-- Passkeys are kept with their logins. Your assistant signs in with one in Conch's browser, on that site only, after asking you.
+- Passkeys are kept with their logins. Your assistant signs in with one in Conch's browser, on that site only, after asking you. When a site offers to make a new passkey, your assistant can save it to your Passwords. It never sees the key.
 
 ## Lock it and keep it safe
 

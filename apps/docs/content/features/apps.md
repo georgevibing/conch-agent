@@ -264,6 +264,27 @@ will happen first:
   files it made itself: your other files can’t be changed or deleted, because
   Google never gives Conch access to them.
 
+**The email, before it goes.** When your assistant wants to send an email, the
+chat shows the email itself: who it's from, who it's to, the subject, every word
+and any files. Press **Send** (or <kbd>mod+enter</kbd>), or **Don’t send**. **Save as
+a draft instead** writes that request in the message box, for you to send.
+
+To change it first, press **Edit**. Change who it goes to, **Add Cc**, change the
+subject and the words, or take a file off (you can't add one). **Done** keeps your
+change, and **Cancel** (or <kbd>esc</kbd>) drops it. The card then says **Edited by
+you**, and **Undo my changes** puts the original back. Conch checks your version
+again before it goes; if it can't be sent, nothing is, and your assistant asks you
+what to change. A reply always goes to the people in its thread, with its subject.
+A draft, an email from a [task](./tasks.md), and an email you set to **Allow** have
+no **Edit**.
+
+**After it goes.** The card says **Sent to …** or **Replied to …**, with **Show the
+email**, **Open in Gmail** and **Follow up**. A draft says **In your Drafts · not
+sent**, with **Open the draft in Gmail** and **Send it now**. If Gmail didn't
+confirm it, the card says **Gmail may have sent this**, with **Look in Sent**. If it
+didn't go, it says so, with **Try again**. **Follow up**, **Send it now** and **Try
+again** only write a request in the message box: nothing is sent until you send it.
+
 If Google doesn’t confirm a change, Conch looks for it rather than doing it
 again: an event Conch adds carries an id of its own, an email it sends carries
 its own Message-ID, and a file it makes carries a mark. A result that stays

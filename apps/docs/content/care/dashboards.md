@@ -15,7 +15,9 @@ Press <kbd>mod+k</kbd> and type **grafana**, **prometheus** or **dashboards** to
 3. Turn on **Send to** it.
 4. Press **Send a test**. Conch sends a real span and its numbers there now, and says **Grafana Cloud received it** with how long it took, or exactly what went wrong: a key it didn't take, an address with nothing at it.
 
-Choose what goes: **Numbers**, **Each turn as a trace** and **Events** (a short line when a turn, a tool call or a routine ends). Langfuse and Phoenix take traces only.
+Choose what goes: **Numbers**, **Each turn as a trace** and **Events** (a short line when a turn, a tool call, a question, a routine run or a task ends, or when Conch fixes something on its own). Events are off at first. Langfuse and Phoenix take traces only.
+
+If you sign in to Conch, a change on this page asks you to **Confirm it's you** first, with your password or passkey. It doesn't ask again for ten minutes.
 
 The key is kept with Conch's other keys, locked to this computer. It's only ever sent to the service it was pasted for, and never over plain `http` unless the address is on this computer or your own network.
 
@@ -42,7 +44,7 @@ The page shows when Prometheus last read it. Off, nothing answers at `/metrics`.
 
 By default that's numbers, and the names of providers, models, agents and tools. Never what anyone wrote, a prompt or a reply, what a tool read or wrote, a file's name, an email address, a key, or a chat's id. A label that looks like an address, a path or a key is replaced before it leaves, and each label holds only so many different values, so a dashboard never grows a line per chat.
 
-Under **Advanced**, **Send what's written, too** adds the words of messages, replies and tool calls to traces, for people reading their prompts in their own Langfuse or Phoenix. Keys, passwords, addresses and your home folder are taken out first. The security checkup says it's on.
+Under **Advanced**, **Send what's written, too** adds the words of messages, replies and tool calls to traces, for people reading their prompts in their own Langfuse or Phoenix. Keys, passwords, addresses and your home folder are taken out first. The security checkup says it's on. **Numbers go** sets how often numbers are sent, from every 15 seconds to every 5 minutes, and **Format** chooses **Protobuf** or **JSON**.
 
 ## When it can't send
 

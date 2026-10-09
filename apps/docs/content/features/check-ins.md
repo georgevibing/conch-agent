@@ -18,7 +18,7 @@ As you type, a label says how Conch reads it:
 - **Tell me**: something you want to hear about. The check-in watches for it.
 - **You may**: something you're happy for your assistant to do, like archiving newsletters.
 
-You can also just say it in a chat: "from now on, always tell me if a flight changes". Your assistant offers it as a card, **Keep this as a standing order?**, with your words. Press **Keep it**, or **Not now**. Nothing is kept until you press.
+You can also just say it in a chat: "from now on, always tell me if a flight changes". Your assistant offers it as a card, **Keep this as a standing order?**, with your words. Press **Keep it**, or **Not now**. Nothing is kept until you press. Until then it also waits in the list on the Routines page, marked **Suggested in a chat**, with the same two choices. You can keep up to 20 standing orders.
 
 To change one, press the pencil beside it. To stop one, press **×**. In <kbd>mod+k</kbd>, type "standing orders".
 

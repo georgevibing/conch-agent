@@ -38,7 +38,7 @@ Each provider gets an attachment in the way it can use:
 - Text goes along with your words.
 - Pictures go to models that can see. A model that can't gets a description, written by one of your models that can.
 - PDF, DOCX, XLSX and PPTX text can be read with any provider. A provider that can't open files gets the text with your message; any provider that uses tools can read on through pages, sheets and slides. Scanned pages without text are identified; they need visual or OCR reading.
-- A ZIP can be unpacked into separate files of the chat, to read, convert or send on.
+- A ZIP can be unpacked into separate files of the chat, to read, convert or send on: up to 50 files, 30 MB each.
 - Older Office files need saving as DOCX, XLSX or PPTX first. Formulas, macros and external document links are never executed.
 
 When the provider or model you picked can't use something, its card shows a small dot before you send, with the reason. A file it can't open only gets its name. Choose another model in the **Model · Mode** chip, or send it anyway. [Compare providers](../providers/index.md).
@@ -107,10 +107,12 @@ chat model and nothing to install:
 It can also change a file you already have:
 
 - **Convert** Markdown, text, Word or HTML to PDF or Word, a spreadsheet to CSV
-  or JSON and back, photos to a PDF, and an SVG to a PNG. The text of a PDF or
-  a presentation comes out as text or Markdown.
+  or JSON and back, photos to a PDF, and an SVG to a PNG. A spreadsheet can also
+  become a PDF, a web page or a Markdown table. The text of a PDF comes out as
+  text, Markdown or Word (without its layout or pictures), and a presentation's
+  as text or Markdown.
 - **Combine** several PDFs and photos into one PDF, in the order you say, or
-  any files into a ZIP.
+  any files into a ZIP. Up to 20 files at a time.
 
 A file is made one at a time in each chat, at most 30 MB. A PDF made from a web
 page never loads anything from the internet and runs none of its scripts.

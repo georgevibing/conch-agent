@@ -75,7 +75,7 @@ An outside agent lives somewhere else, on another computer or a service, and spe
 2. Conch reads who it is and shows it: its name, what it says it can do, and where it answers. Press **Add ‹name›**.
 3. Mention it in a chat, like your own agents: "@Travel Agent find flights to Lisbon on 3 May".
 
-It's sent only the message you mention it in, nothing else from the chat. Your own agents can't send it anything: if one tries, the chat says only you can. What it answers appears under **Outside agent**, in a frame of its own. Your agents read it as someone else's words, never as instructions, and Conch is more careful for the rest of the chat, as it is after reading a web page (see [Auto](../reference/modes.md#auto)). An outside agent's row says if it didn't answer last time. **Repair** in Settings → Health tries it again. **Remove** forgets it and its key.
+It's sent only the message you mention it in, nothing else from the chat. Your own agents can't send it anything: if one tries, the chat says only you can. What it answers appears under **Outside agent**, in a frame of its own. Your agents read it as someone else's words, never as instructions, and Conch is more careful for the rest of the chat, as it is after reading a web page (see [Auto](../reference/modes.md#auto)). An outside agent's row says if it didn't answer last time. **Repair everything** in **Settings → Health** tries it again. **Remove** forgets it and its key.
 
 ## Let another agent talk to yours
 
@@ -85,7 +85,7 @@ Nobody else's agent can reach yours until you let it in.
 2. Say **Whose agent is it?**, tick which of your agents it may talk to, and, if it's on another computer, turn on **It's on another computer** (this needs [your own address](../start/server.md)).
 3. Press **Let it in** and confirm it's you. Copy **Its address and key** and give it to the other agent. It's shown once.
 
-It gets your agent's name and voice, in words only. It can't use tools, your apps or anything Conch knows about you, never sees your instructions, and nothing it says can give your agent permission for anything. Each key can send a few messages a minute, and what its answers cost stops at $1 a day. **What it said** shows the conversation. **Remove** shuts it out at once. It also shows in [Other apps](./other-apps.md).
+It gets your agent's name and voice, in words only. It can't use tools, your apps or anything Conch knows about you, never sees your instructions, and nothing it says can give your agent permission for anything. Each key can send a few messages a minute, and what its answers cost stops at $1 a day. **What it did** shows the conversation. **Remove** shuts it out at once. It also shows in [Other apps](./other-apps.md).
 
 ## In chat apps
 

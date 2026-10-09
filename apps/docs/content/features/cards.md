@@ -49,8 +49,9 @@ temperature, the next 24 hours and up to 10 days. Drag along the hours (or use t
 arrow keys) to see any hour; let go and it returns to now. UV, air quality, wind,
 sunrise and sunset are there too, each in words as well as colour.
 
-The switch at the bottom shows it in **°C** or **°F**. Conch starts with the one used
-where you are, and remembers what you choose for every weather card after.
+The switch at the bottom shows it in **°C** (with km/h and mm) or **°F** (with mph and
+inches). Conch starts with the one used in your time zone, and this browser remembers
+what you choose for every weather card after.
 
 ## Recipes
 
@@ -121,12 +122,16 @@ For a chart as a file for a document or a deck, ask for a PNG or SVG file instea
 
 ## Keep and send a card
 
-Charts, prices, filings and the weather have three buttons at the bottom:
+Charts, share and coin prices, company figures, the crypto market and the weather
+have three small buttons at the bottom. Point at one to see its name.
 
 - **Save as image** downloads a picture of the card.
-- **Copy** puts the picture on your clipboard, ready to paste.
-- **Send** sends the picture to you in a chat app you connected (Telegram, WhatsApp,
-  Slack…). Choose the app, then confirm. It only ever goes to your own chat there.
+- **Copy** puts the picture on your clipboard, ready to paste. A browser that can't
+  copy pictures gets the card's words instead, and the button says **Copied as text**.
+- **Send** sends the picture, with the card's title under it, to your own chat in a
+  chat app you connected (Telegram, WhatsApp, Slack…). Choose the app, and Conch asks
+  "Send this chart to Telegram?": press **Send to Telegram**, or **Cancel**. With no
+  chat app connected, there is no **Send**.
 
 The picture is made in your browser, so no extra setup is needed.
 
@@ -139,6 +144,13 @@ The picture is made in your browser, so no extra setup is needed.
 - **Books**: covers on a shelf, from Open Library. Press one for its details.
 - **TV shows**: posters, ratings and when the next episode is, from TVmaze. For films,
   Conch shows a Wikipedia card.
+
+## Your calendar, email, files and messages
+
+What your assistant finds in Google Calendar, Gmail, Google Drive or Slack shows the
+way the app would show it: see [what it found, as it is](./apps.md#what-it-found-as-it-is).
+An email it wants to send shows as the email itself, which you can
+[change before it goes](./apps.md#what-read-and-write-cover).
 
 ## What leaves your computer
 
