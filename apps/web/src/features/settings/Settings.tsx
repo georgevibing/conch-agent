@@ -4,8 +4,6 @@ import {
   Heading,
   IconButton,
   Sheet,
-  Stack,
-  Switch,
   Tabs,
   Text,
   useMediaQuery,
@@ -49,7 +47,6 @@ import { ProvidersTab } from '../providers/ProvidersTab';
 import { UsageTab } from '../usage/UsageTab';
 import styles from './Settings.module.css';
 import {
-  MEMORY_ALL,
   SETTINGS_PATH,
   SETTINGS_TABS,
   behindName,
@@ -59,7 +56,6 @@ import {
   type SettingsTab,
 } from './paths';
 import { GeneralTab } from './GeneralTab';
-import { Section } from './Section';
 import { usePageInside } from './trail';
 
 interface Place {
