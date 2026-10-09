@@ -18,7 +18,11 @@
 
 <p align="center">
   <a href="https://github.com/georgevibing/conch-agent/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/georgevibing/conch-agent/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/georgevibing/conch-agent/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/georgevibing/conch-agent/actions/workflows/codeql.yml/badge.svg"></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/georgevibing/conch-agent"><img alt="OpenSSF Scorecard" src="https://api.scorecard.dev/projects/github.com/georgevibing/conch-agent/badge"></a>
+  <a href="https://github.com/georgevibing/conch-agent/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/georgevibing/conch-agent?include_prereleases&sort=semver&label=release&color=a7c4b5"></a>
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-b9a7c4.svg"></a>
+  <br>
   <img alt="Runs on macOS, Windows and Linux" src="https://img.shields.io/badge/runs_on-macOS_%C2%B7_Windows_%C2%B7_Linux-d9a48f.svg">
   <img alt="No account, no telemetry" src="https://img.shields.io/badge/account-none_needed-8fb8c9.svg">
 </p>
