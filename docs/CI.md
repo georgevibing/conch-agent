@@ -38,6 +38,11 @@ unset. Server unit runners also install full Chromium for their real CDP fixture
   just that gateway; during a full shard the browser runs after its neighbours.
 - **Desktop:** the packaged layout and real Electron, separately. Its existing
   retry remains visible, with retained traces even when the retry succeeds.
+- **Conventional commits (pull requests only):** every commit subject in the pull
+  request, and its title, against Conventional Commits with this repository's
+  types (`node scripts/commits.mjs`, no install needed). They become the version
+  and the release notes. The title is read when the job runs, so after editing it,
+  re-run the job. Locally: `node scripts/commits.mjs origin/main..HEAD`.
 
 Use `CONCH_E2E_SHARD`, not Playwright's native `--shard`, for these journeys.
 Native sharding happens after config evaluation, so it would still start all the
@@ -46,10 +51,18 @@ tests reject invalid names/shards; `--list` across all four shards was also chec
 against the complete test list: all 151 tests appeared exactly once.
 
 Matrix jobs use `fail-fast: false`: one failure does not cancel unrelated results.
-The final gate rejects failed, skipped or cancelled dependencies. New pushes still
+The final gate rejects failed, skipped or cancelled dependencies; the one
+exception is the commit check, skipped on a push to `main`. New pushes still
 cancel obsolete runs on the same branch. Explicit job timeouts bound hangs.
 Ubuntu 24.04 is pinned to avoid silently moving the test environment with the
 `ubuntu-latest` label.
+
+Every action is pinned to a full commit, with its version in a comment beside it;
+Dependabot moves both once a release is a week old. Each job's token can only read
+the repository, unless the job says why it needs more, and checkouts keep no
+credentials. Three more workflows look after security: **CodeQL** (the code and
+the workflows), **Scorecard** (how the project is kept) and **Workflow security**
+(zizmor, when a workflow changes: run `uvx zizmor .github` before pushing one).
 
 Download `e2e-results-N` for its HTML report, failed screenshots and traces.
 Download `desktop-e2e-results` for desktop diagnostics, including failed attempts
