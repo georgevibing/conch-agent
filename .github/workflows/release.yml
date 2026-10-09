@@ -1,0 +1,278 @@
+name: Release
+
+# How Conch is released (ADR 0127, docs/RELEASING.md). On every push to main,
+# release-please keeps one release pull request up to date (the version, from
+# the conventional commits), and Conch writes its notes into it. Merging that
+# pull request is the release: this signs the tag, makes the GitHub Release
+# as a draft, builds the apps onto it, and publishes it.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Finish releasing this version (0.3.0), if a run stopped after its tag was made. Leave empty for the usual run.'
+        required: false
+        default: ''
+
+permissions: {}
+
+# One at a time, never cancelled: a release half made is finished by the next run.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  # Who commits Conch's notes to the release pull request.
+  BOT_NAME: Conch releases
+  BOT_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+
+jobs:
+  plan:
+    name: Is there a release to make?
+    if: github.repository == 'georgevibing/conch-agent'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read # reads the manifest at the merge
+      pull-requests: read # finds the merged release pull request
+    outputs:
+      release: ${{ steps.find.outputs.release }}
+      version: ${{ steps.find.outputs.version }}
+      ref: ${{ steps.find.outputs.ref }}
+    steps:
+      - name: Find a merged release pull request that isn't tagged yet
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RESUME: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -n "${RESUME:-}" ]; then
+            version="${RESUME#v}"
+            ref="v${version}"
+            gh api "repos/${GH_REPO}/git/ref/tags/${ref}" --silent || { echo "::error::${ref} isn't tagged, so there's nothing to finish."; exit 1; }
+          else
+            # release-please labels the release pull request "autorelease: pending"
+            # until its release is made, then "autorelease: tagged".
+            found=$(gh pr list --state merged --base main --label 'autorelease: pending' \
+              --json number,mergeCommit --jq '.[] | "\(.number) \(.mergeCommit.oid)"')
+            count=$(printf '%s' "$found" | grep -c . || true)
+            if [ "$count" = 0 ]; then
+              echo "No release pull request was merged: release-please only updates the next one."
+              echo "release=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if [ "$count" -gt 1 ]; then
+              echo "::error::More than one merged release pull request waits for its release: ${found//$'\n'/, }. Label all but the newest 'autorelease: tagged'."
+              exit 1
+            fi
+            read -r number ref <<< "$found"
+            version=$(gh api "repos/${GH_REPO}/contents/.release-please-manifest.json?ref=${ref}" --jq '.content' \
+              | base64 -d | jq -r '.["."] // empty')
+            echo "Release pull request #${number} was merged as ${ref}."
+          fi
+          # The strict pattern installs read tags with (ADR 0051): anything else isn't a release.
+          if ! [[ "$version" =~ ^(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})(-(alpha|beta)\.[1-9][0-9]{0,4})?$ ]]; then
+            echo "::error::'${version}' isn't a version Conch releases."
+            exit 1
+          fi
+          echo "Releasing Conch ${version}."
+          {
+            echo "release=true"
+            echo "version=${version}"
+            echo "ref=${ref}"
+          } >> "$GITHUB_OUTPUT"
+
+  tag:
+    name: Sign the release tag
+    needs: plan
+    if: needs.plan.outputs.release == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Holds RELEASE_SIGNING_KEY; only main may use it (pnpm release key sets it up).
+    environment: release
+    permissions:
+      contents: write # pushes the signed tag
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          fetch-depth: 0
+          # Pushes the tag with this job's token.
+          persist-credentials: true
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      # No dependency cache in a job that holds the release key.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Install what pnpm release needs, running none of its install scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter @conch/server...
+      - name: Sign the tag, and check it as installs will
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          RELEASE_TAGGER_NAME: ${{ vars.RELEASE_TAGGER_NAME }}
+          RELEASE_TAGGER_EMAIL: ${{ vars.RELEASE_TAGGER_EMAIL }}
+        run: pnpm release ci tag --version "$VERSION" --commit HEAD
+      - name: Push it
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: git push origin "refs/tags/v${VERSION}"
+
+  release-please:
+    name: Release pull request
+    needs: [plan, tag]
+    # Every push to main, and after the tag when there's a release: release-please
+    # then makes that tag's GitHub Release (a draft) instead of an unsigned tag.
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.tag.result != 'failure' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # release-please’s branch and the draft release
+      pull-requests: write # opens and updates the release pull request
+      issues: write # its “autorelease” labels
+    outputs:
+      pr: ${{ steps.release-please.outputs.pr }}
+    steps:
+      # A GitHub App's token, when there is one, so CI runs on the release pull
+      # request (pull requests GitHub's own token opens don't start workflows).
+      - name: Use the release app, if there is one
+        id: app
+        if: vars.RELEASE_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: release-please
+        with:
+          token: ${{ steps.app.outputs.token || github.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  notes:
+    name: Conch's notes on the release pull request
+    needs: release-please
+    if: ${{ !cancelled() && needs.release-please.result == 'success' && needs.release-please.outputs.pr != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write # pushes the notes to the release branch
+      pull-requests: write # rewrites the pull request’s description
+    steps:
+      - name: Use the release app, if there is one
+        id: app
+        if: vars.RELEASE_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ fromJSON(needs.release-please.outputs.pr).headBranchName }}
+          fetch-depth: 0
+          token: ${{ steps.app.outputs.token || github.token }}
+          # Pushes the notes to the release branch.
+          persist-credentials: true
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - run: pnpm install --frozen-lockfile --ignore-scripts --filter @conch/server...
+      - name: Write the notes, polished by Claude when there's a key
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: pnpm release ci notes --body-file "$RUNNER_TEMP/body.md"
+      - name: Put them on the pull request
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token || github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ fromJSON(needs.release-please.outputs.pr).number }}
+        run: |
+          set -euo pipefail
+          git add -- CHANGELOG.md release-please-config.json
+          git rm --quiet --cached --ignore-unmatch -- release-notes.md
+          if ! git diff --cached --quiet; then
+            git -c user.name="$BOT_NAME" -c user.email="$BOT_EMAIL" commit --quiet -m "chore: Conch's notes for this release"
+            git push --quiet origin HEAD
+          fi
+          gh pr edit "$PR" --body-file "$RUNNER_TEMP/body.md"
+
+  desktop:
+    name: The apps
+    needs: [plan, release-please]
+    if: ${{ !cancelled() && needs.plan.outputs.release == 'true' && needs.release-please.result == 'success' }}
+    permissions:
+      contents: write # attaches the apps to the draft
+      id-token: write # signs the build provenance
+      attestations: write # records it
+    # zizmor asks for the newer `$/` form; actionlint (1.7.12) can't read it yet.
+    uses: ./.github/workflows/desktop.yml # zizmor: ignore[self-repository]
+    with:
+      tag: v${{ needs.plan.outputs.version }}
+    secrets:
+      MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+      MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+      WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+      WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+      APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+
+  publish:
+    name: Publish the release
+    needs: [plan, desktop]
+    if: ${{ !cancelled() && needs.plan.outputs.release == 'true' && needs.desktop.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # publishes the draft
+      actions: write # starts the website workflow
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: v${{ needs.plan.outputs.version }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - run: pnpm install --frozen-lockfile --ignore-scripts --filter @conch/server...
+      - name: Write the release's page
+        env:
+          MAC_SIGNED: ${{ secrets.MAC_CSC_LINK != '' }}
+          WINDOWS_SIGNED: ${{ secrets.WIN_CSC_LINK != '' }}
+        run: pnpm release ci page --version "$VERSION" --out "$RUNNER_TEMP/page.md"
+      - name: Publish it, once everything it promises is there
+        run: |
+          set -euo pipefail
+          tag="v${VERSION}"
+          case "$VERSION" in
+            *-*) prerelease=true; latest=false ;;
+            *) prerelease=false; latest=true ;;
+          esac
+          assets=$(gh release view "$tag" --json assets --jq '.assets[].name')
+          for file in SHA256SUMS "conch-${VERSION}.spdx.json" latest.yml latest-mac.yml latest-linux.yml; do
+            grep -qxF "$file" <<< "$assets" || { echo "::error::${tag}'s draft has no ${file}."; exit 1; }
+          done
+          gh release edit "$tag" --title "Conch ${VERSION}" --notes-file "$RUNNER_TEMP/page.md" \
+            --draft=false --prerelease="$prerelease" --latest="$latest"
+          echo "Published Conch ${VERSION}: $(gh release view "$tag" --json url --jq .url)" >> "$GITHUB_STEP_SUMMARY"
+      # A release GitHub's own token publishes starts no workflow by itself.
+      - name: Update the website
+        run: gh workflow run site.yml --ref main
