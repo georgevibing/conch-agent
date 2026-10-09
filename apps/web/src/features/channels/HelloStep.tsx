@@ -117,7 +117,8 @@ export function HelloStep({
 
   const telegram = channel.kind === 'telegram';
   const link = telegram ? channel.pairing?.link : channel.bot.chatUrl;
-  const waiting = Boolean(link) && (!telegram || Boolean(channel.pairing));
+  // Only Telegram's link expires; the others wait for a message, link or not.
+  const waiting = !telegram || (Boolean(link) && Boolean(channel.pairing));
 
   return (
     <Stack gap={4}>
@@ -200,6 +201,25 @@ export function HelloStep({
             <p>
               In Google Chat, press <b>New chat</b>, find your app by its name, and send it
               anything, like “hi”. Then press <b>That’s me</b> here.
+            </p>
+          ) : channel.kind === 'feishu' ? (
+            <p>
+              {fine
+                ? `Scan the code with ${channel.bot.account === 'lark' ? 'Lark' : 'Feishu'} on your phone, or open it here`
+                : `Open it in ${channel.bot.account === 'lark' ? 'Lark' : 'Feishu'}`}
+              : your chat with <b>{channel.bot.name}</b> opens, and it notices you’re there. (Or
+              send it anything, like “你好”.) Then press <b>That’s me</b> here.
+            </p>
+          ) : channel.kind === 'dingtalk' ? (
+            <p>
+              In DingTalk, search for the robot by the name you gave it, open a chat with it and
+              send it anything, like “你好”. Then press <b>That’s me</b> here.
+            </p>
+          ) : channel.kind === 'qq' ? (
+            <p>
+              In QQ, add <b>{channel.bot.name}</b>: on its page at q.qq.com, scan its code with QQ.
+              Adding it is your hello (or send it anything, like “你好”). Then press{' '}
+              <b>That’s me</b> here.
             </p>
           ) : channel.kind === 'rocketchat' ? (
             <p>

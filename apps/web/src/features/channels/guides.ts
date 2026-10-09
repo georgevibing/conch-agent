@@ -238,3 +238,47 @@ export const MAC_SETTINGS = {
   fullDiskAccess: ['Privacy & Security', 'Full Disk Access'],
   automation: ['Privacy & Security', 'Automation'],
 } as const;
+
+/** Feishu and Lark: the developer console where the custom app is made (ADR 0120). */
+export const FEISHU_CONSOLE = {
+  feishu: 'https://open.feishu.cn/app',
+  lark: 'https://open.larksuite.com/app',
+};
+
+/**
+ * What the app may do, as the console's Batch import takes it: read what's
+ * sent to it (privately, and @mentions in groups), send as the bot, fetch and
+ * upload pictures and files, a group's name and who's writing.
+ */
+export const FEISHU_SCOPES = [
+  'im:message',
+  'im:message:send_as_bot',
+  'im:message.p2p_msg:readonly',
+  'im:message.group_at_msg:readonly',
+  'im:resource',
+  'im:chat:readonly',
+  'contact:user.base:readonly',
+] as const;
+
+export const feishuScopesJson = () =>
+  JSON.stringify({ scopes: { tenant: FEISHU_SCOPES, user: [] } });
+
+/** DingTalk: the developer console, and the permission its robot needs (ADR 0120). */
+export const DINGTALK_CONSOLE = 'https://open-dev.dingtalk.com/fe/app';
+export const DINGTALK_PERMISSIONS = [
+  {
+    name: '企业内机器人发送消息权限',
+    why: 'so it can answer you, and fetch the pictures and files you send it',
+  },
+] as const;
+
+/** QQ: the quick page that makes a bot with one scan, and the full bot platform (ADR 0120). */
+export const QQ_QUICK_BOT_URL = 'https://q.qq.com/qqbot/openclaw/';
+export const QQ_BOTS_URL = 'https://q.qq.com/';
+
+/** The events and the callback to add under Events & Callbacks. */
+export const FEISHU_EVENTS = [
+  { id: 'im.message.receive_v1', label: 'Event: receive messages' },
+  { id: 'im.chat.access_event.bot_p2p_chat_entered_v1', label: 'Event: someone opens its chat' },
+  { id: 'card.action.trigger', label: 'Callback: a card’s button is pressed' },
+] as const;
