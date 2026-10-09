@@ -653,10 +653,14 @@ export class MockEngine implements Engine {
     // The script reads what the person wrote: preferences put near it (ADR 0088) aren't part of it.
     // What Conch sent with the message (ADR 0085) is read as part of its instructions,
     // ahead of them: the script reads the first of a section, and the newer one wins.
-    const sent = splitContextNote(turn.prompt);
+    // What another model's turns brought (a handoff) comes first, and that block after it.
+    const missed = /^<earlier-conversation>\n[\s\S]*?\n<\/earlier-conversation>\n*/.exec(
+      turn.prompt,
+    )?.[0];
+    const sent = splitContextNote(missed ? turn.prompt.slice(missed.length) : turn.prompt);
     const words: TurnInput = {
       ...turn,
-      prompt: stripNearby(sent.words),
+      prompt: stripNearby(`${missed ?? ''}${sent.words}`),
       systemAppend: [sent.context, turn.systemAppend].filter(Boolean).join('\n\n'),
     };
     const input: TurnInput = chatOnly ? { ...words, tools: [], bridgedTools: [] } : words;
