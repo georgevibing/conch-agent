@@ -44,8 +44,8 @@ describe('Settings', () => {
     await waitFor(() => expect(within(page).getByRole('tab', { name: 'General' })).toHaveFocus());
     for (const group of ['Your assistant', 'Intelligence', 'Tools', 'Safe and sound'])
       expect(within(page).getByRole('tablist', { name: group })).toBeInTheDocument();
-    // Thirteen places: the defaults for new chats are the composer's own, so no Models.
-    expect(within(page).getAllByRole('tab')).toHaveLength(13);
+    // Fourteen places: the defaults for new chats are the composer's own, so no Models.
+    expect(within(page).getAllByRole('tab')).toHaveLength(14);
     expect(
       within(within(page).getByRole('tablist', { name: 'Intelligence' })).getAllByRole('tab'),
     ).toHaveLength(2);
@@ -54,7 +54,7 @@ describe('Settings', () => {
     expect(within(page).queryByRole('tab', { name: 'About you' })).not.toBeInTheDocument();
     expect(
       within(within(page).getByRole('tablist', { name: 'Safe and sound' })).getAllByRole('tab'),
-    ).toHaveLength(3);
+    ).toHaveLength(4);
     expect(await within(page).findByRole('heading', { name: 'Working folder' })).toBeVisible();
     // How it looks is part of General.
     expect(within(page).getByRole('heading', { name: 'Appearance' })).toBeVisible();

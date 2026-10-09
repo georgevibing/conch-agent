@@ -159,10 +159,10 @@ levels at once.
 Settings is the calmest part of Conch: most people should be able to read a
 place in a glance and never change a thing.
 
-- **Few places, few things in each.** Thirteen places, read as five groups:
+- **Few places, few things in each.** Fourteen places, read as five groups:
   Conch (General, Notifications), Your assistant (Agents, What Conch knows,
   Voice), Intelligence (Providers, Usage), Tools (Browser, Terminal, This
-  computer) and Safe and sound (Access, Security, Health). A page shows about
+  computer) and Safe and sound (Access, Security, Health, Dashboards). A page shows about
   eight controls at most; what almost nobody changes goes under its Advanced.
   A default a chat sets for itself is set where it's used — the model,
   thinking and mode are the composer's, with **Make this my default** — never
