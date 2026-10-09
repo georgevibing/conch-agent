@@ -3,6 +3,18 @@ import type { ComponentProps, CSSProperties } from 'react';
 
 import { cx } from '../../utils/cx';
 import {
+  DrillLevel,
+  DrillSub,
+  DrillTrigger,
+  useDrill,
+  useDrillContent,
+  useMergedRef,
+  useOnShownLevel,
+  useSubId,
+  useSubmenuMode,
+  type SubmenuMode,
+} from '../DropdownMenu/menuDrill';
+import {
   CheckIndicator,
   ItemSlots,
   menuStyles as styles,
@@ -19,23 +31,42 @@ const availableHeight = {
 
 export interface ContextMenuContentProps extends ComponentProps<typeof MenuPrimitive.Content> {
   container?: HTMLElement | null;
+  /** How a submenu opens: beside with a pointer, in place on a phone (`auto`). See DropdownMenu. */
+  submenus?: SubmenuMode;
 }
 
 function ContextMenuContent({
   collisionPadding = 12,
+  submenus = 'auto',
   className,
   style,
   children,
   container,
   onFocus,
   onBlur,
+  onKeyDown,
+  onEscapeKeyDown,
+  ref,
   ...props
 }: ContextMenuContentProps) {
   const glide = useMenuGlide();
+  const mode = useSubmenuMode(submenus);
+  const drill = useDrillContent(MenuPrimitive.Item, mode === 'drill');
+  const merged = useMergedRef(ref, drill.ref);
   return (
     <MenuPrimitive.Portal container={container}>
       <MenuPrimitive.Content
+        ref={merged}
         collisionPadding={collisionPadding}
+        data-submenus={mode}
+        onKeyDown={(e) => {
+          onKeyDown?.(e);
+          if (!e.defaultPrevented) drill.onKeyDown(e);
+        }}
+        onEscapeKeyDown={(e) => {
+          onEscapeKeyDown?.(e);
+          if (!e.defaultPrevented) drill.onEscapeKeyDown(e);
+        }}
         className={cx(styles.content, className)}
         style={{ ...availableHeight, ...style }}
         onFocus={(e) => {
@@ -49,22 +80,39 @@ function ContextMenuContent({
         {...props}
       >
         {glide.glide}
-        {children}
+        {drill.render(children)}
       </MenuPrimitive.Content>
     </MenuPrimitive.Portal>
   );
 }
 
+export interface ContextMenuSubContentProps extends ComponentProps<
+  typeof MenuPrimitive.SubContent
+> {
+  container?: HTMLElement | null;
+  /** What the back row says when the menu drills in. Default: the words of the row that opened it. */
+  backLabel?: string;
+}
+
 function ContextMenuSubContent({
   sideOffset = 6,
   collisionPadding = 12,
+  backLabel,
   className,
   style,
   children,
   container,
   ...props
-}: ContextMenuContentProps & ComponentProps<typeof MenuPrimitive.SubContent>) {
+}: ContextMenuSubContentProps) {
   const glide = useMenuGlide();
+  const drill = useDrill();
+  const subId = useSubId();
+  if (drill && subId)
+    return (
+      <DrillLevel backLabel={backLabel} className={className}>
+        {children}
+      </DrillLevel>
+    );
   return (
     <MenuPrimitive.Portal container={container}>
       <MenuPrimitive.SubContent
@@ -98,6 +146,7 @@ function ContextMenuItem({
   children,
   ...props
 }: ContextMenuItemProps) {
+  if (!useOnShownLevel()) return null;
   return (
     <MenuPrimitive.Item
       data-tone={tone}
@@ -124,6 +173,7 @@ function ContextMenuCheckboxItem({
   children,
   ...props
 }: ContextMenuCheckboxItemProps) {
+  if (!useOnShownLevel()) return null;
   return (
     <MenuPrimitive.CheckboxItem className={cx(styles.item, className)} {...props}>
       <span className={styles.indicator} aria-hidden>
@@ -150,6 +200,7 @@ function ContextMenuRadioItem({
   children,
   ...props
 }: ContextMenuRadioItemProps) {
+  if (!useOnShownLevel()) return null;
   return (
     <MenuPrimitive.RadioItem className={cx(styles.item, className)} {...props}>
       <span className={styles.indicator} aria-hidden>
@@ -176,6 +227,22 @@ function ContextMenuSubTrigger({
   children,
   ...props
 }: ContextMenuSubTriggerProps) {
+  const shown = useOnShownLevel();
+  const drill = useDrill();
+  const subId = useSubId();
+  if (!shown) return null;
+  if (drill && subId)
+    return (
+      <DrillTrigger
+        className={cx(styles.item, className)}
+        inset={inset}
+        disabled={props.disabled}
+        textValue={props.textValue}
+      >
+        <ItemSlots icon={icon}>{children}</ItemSlots>
+        <SubChevron />
+      </DrillTrigger>
+    );
   return (
     <MenuPrimitive.SubTrigger
       data-inset={inset || undefined}
@@ -188,7 +255,13 @@ function ContextMenuSubTrigger({
   );
 }
 
+function ContextMenuSub(props: ComponentProps<typeof MenuPrimitive.Sub>) {
+  if (useDrill()) return <DrillSub>{props.children}</DrillSub>;
+  return <MenuPrimitive.Sub {...props} />;
+}
+
 function ContextMenuLabel({ className, ...props }: ComponentProps<typeof MenuPrimitive.Label>) {
+  if (!useOnShownLevel()) return null;
   return <MenuPrimitive.Label className={cx(styles.menuLabel, className)} {...props} />;
 }
 
@@ -196,6 +269,7 @@ function ContextMenuSeparator({
   className,
   ...props
 }: ComponentProps<typeof MenuPrimitive.Separator>) {
+  if (!useOnShownLevel()) return null;
   return <MenuPrimitive.Separator className={cx(styles.separator, className)} {...props} />;
 }
 
@@ -215,7 +289,7 @@ export const ContextMenu = {
   Group: MenuPrimitive.Group,
   Label: ContextMenuLabel,
   Separator: ContextMenuSeparator,
-  Sub: MenuPrimitive.Sub,
+  Sub: ContextMenuSub,
   SubTrigger: ContextMenuSubTrigger,
   SubContent: ContextMenuSubContent,
 };

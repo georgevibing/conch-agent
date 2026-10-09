@@ -60,6 +60,22 @@
     animation: nc-surface-out var(--nc-duration-fast) var(--nc-ease-in) forwards;
   }
 
+  /* ── Drilling in (a phone) ─────────────────────────────────────────── */
+  /* A level slides in from the side, inside the menu's own edges. */
+  .content[data-submenus='drill'] {
+    overflow-x: hidden;
+  }
+
+  .level[hidden] {
+    display: none;
+  }
+
+  /* The level being left, as a still picture of itself while it slides away. */
+  .ghost {
+    position: absolute;
+    pointer-events: none;
+  }
+
   /* ── Glide ─────────────────────────────────────────────────────────── */
   .glide {
     position: absolute;

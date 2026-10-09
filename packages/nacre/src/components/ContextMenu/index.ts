@@ -4,5 +4,6 @@ export type {
   ContextMenuContentProps,
   ContextMenuItemProps,
   ContextMenuRadioItemProps,
+  ContextMenuSubContentProps,
   ContextMenuSubTriggerProps,
 } from './ContextMenu';

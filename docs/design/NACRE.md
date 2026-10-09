@@ -139,6 +139,21 @@ focus on the page's name in the trail, so the way back is one Shift+Tab away;
 stepping back out — or choosing a place from the menu — puts it on the place's
 heading.
 
+### A menu inside a menu
+
+With a pointer, a submenu opens beside its menu, as people expect on a desktop:
+hovering steers into it, and there's room. On a phone or a touch screen there's
+neither, so `DropdownMenu` and `ContextMenu` drill in instead (`submenus="auto"`,
+the default; `side` or `drill` choose one always): choosing "Answering: Conch ›"
+slides the same menu over to the choices inside it, its height following on the
+snappy spring, with a back row ("‹ Answering", `backLabel`) at its top. Never a
+second popup over the first. Left or Escape steps back a level before Escape closes
+the menu, and the focus lands on the row that opened it; going in by keyboard puts
+it on the first choice. The menu only ever holds the level you're on, so arrows,
+typeahead and a screen reader see that level alone (a `group` named for it); the
+level you left slides away as a still picture of itself. Reduced motion swaps the
+levels at once.
+
 ### Settings
 
 Settings is the calmest part of Conch: most people should be able to read a
