@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { sampleResources, type ResourceSnapshot } from '../recovery/resources';
 import { ResourcePace, paceMessage, type WorkloadPace } from '../recovery/pace';
 
+import { taintFrom } from '../conversations/taint';
 import type { DoctorCheck } from '../doctor/service';
 import type { ToolContext } from '../conversations/manager';
 import { trustsFully } from '../engines/trust';
@@ -506,16 +507,20 @@ export class ProcessService {
             )
               await delay(Math.min(100, until - Date.now()), undefined, { signal: ctx.signal });
           }
-          ctx.taint?.({ kind: 'download', label: 'command output' });
+          // What a command printed marks the chat as that command would in a Bash call: a
+          // download, a page, GitHub's issues or CI logs. A build's or a test's own output is
+          // the person's own work, not someone else's words (ADR 0028; ADR 0117, 2026-10-09).
+          const read = args.id
+            ? [this.#own(ctx.conversationId, String(args.id))]
+            : [...this.#sessions.values()].filter((s) => s.owner === ctx.conversationId);
+          for (const session of read) {
+            const source = taintFrom('process_read', { command: session.command });
+            if (source) ctx.taint?.(source);
+          }
           return JSON.stringify(
             args.id
-              ? this.#view(
-                  this.#own(ctx.conversationId, String(args.id)),
-                  args.offset as number | undefined,
-                )
-              : [...this.#sessions.values()]
-                  .filter((s) => s.owner === ctx.conversationId)
-                  .map((s) => this.#view(s, s.end)),
+              ? this.#view(read[0] as Session, args.offset as number | undefined)
+              : read.map((s) => this.#view(s, s.end)),
           );
         },
       },

