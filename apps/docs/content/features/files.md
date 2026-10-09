@@ -94,7 +94,11 @@ chat model and nothing to install:
 
 - **PDF**, laid out for print with headings, tables, page numbers and your
   chat's pictures. Conch prints it with the browser it already uses, sealed off
-  from the internet. Without a browser it still makes the PDF, plainer.
+  from the internet. Without a browser, or when the browser won't start (on a
+  server, say), Conch still makes the PDF itself. It's plainer, but it uses
+  your computer's own fonts, so Greek, Cyrillic, Chinese and other alphabets
+  come out as real letters. Then Conch gets a browser of its own for the next
+  PDF.
 - **Word (DOCX)**, with real headings, lists, tables and pictures, to edit in
   Word, Pages or Google Docs.
 - **Excel (XLSX)** and **CSV**, with real numbers, dates and formulas, and a
@@ -116,6 +120,11 @@ It can also change a file you already have:
 
 A file is made one at a time in each chat, at most 30 MB. A PDF made from a web
 page never loads anything from the internet and runs none of its scripts.
+
+**Settings → Health** has a line for **Making PDFs**. If no browser can print,
+**Repair everything** gets one. If something is missing that only you can
+add, it shows the one command to run. On a Linux server that might be the
+system libraries the browser needs, or fonts if the server has none.
 
 ## Files in your chat apps
 

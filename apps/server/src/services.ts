@@ -96,6 +96,7 @@ import { WakeWord } from './voice/wake';
 import { AccessStore } from './auth/store';
 import { backupCheck } from './backup/doctor';
 import { BackupService } from './backup/service';
+import { installChromium } from './browser/install';
 import { BrowserService } from './browser/service';
 import { adapterFor, type ChannelEndpoints, slackCheckFor } from './channels/adapters';
 import { ChannelDoorService, doorCheck } from './channels/door';
@@ -343,7 +344,18 @@ export class Services {
   readonly images: ImageService;
   /** Documents, spreadsheets, slides and charts made for any provider; a browser prints them. */
   readonly files: FileMaker;
-  readonly #printer = new ChromiumPrinter();
+  readonly #printer = new ChromiumPrinter({
+    // Conch's own Chromium when no browser here prints; never for the scripted engine or tests.
+    install: (signal) =>
+      this.config.CONCH_ENGINE === 'mock' || process.env.VITEST
+        ? Promise.reject(new Error('Not downloading here.'))
+        : installChromium(() => undefined, signal),
+    heal: (message) => void this.healed.note('browser', message),
+  });
+  /** What prints PDFs, for Repair everything. */
+  get printer(): ChromiumPrinter {
+    return this.#printer;
+  }
   /** Passwords: Conch's own vault and the managers it reads (ADR 0025). */
   readonly vault: VaultService;
   readonly routines: RoutineService;
