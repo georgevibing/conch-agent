@@ -255,3 +255,25 @@ it('rechecks health after a slow repair before reopening admission', async () =>
   expect(deps.send).not.toHaveBeenCalledWith({ type: 'conch.recovered' });
   recovery.stop();
 });
+
+it('one slow answer to itself is asked again before Health says it can’t respond', async () => {
+  const { deps } = setup();
+  const recovery = new GatewayRecovery({ ...deps, recheckMs: 1 });
+  const probe = vi.fn<() => Promise<boolean>>().mockResolvedValue(true);
+  await recovery.start(probe);
+  // The look lands on a busy moment: the first answer is late, the next one isn't.
+  probe.mockResolvedValueOnce(false);
+  const signal = new AbortController().signal;
+  const [item] = await recovery.doctorCheck().run({ repair: false, signal });
+  expect(item).toMatchObject({ state: 'ok', message: expect.stringMatching(/has room to work/) });
+  expect(recovery.allowsWork).toBe(true);
+
+  // Still not answering after asking again: that's what it says.
+  probe.mockResolvedValue(false);
+  const [down] = await recovery.doctorCheck().run({ repair: true, signal });
+  expect(down).toMatchObject({
+    state: 'info',
+    message: 'Conch is checking that it can respond before starting more work.',
+  });
+  recovery.stop();
+});

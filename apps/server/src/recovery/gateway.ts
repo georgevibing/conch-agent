@@ -23,6 +23,8 @@ export interface GatewayRecoveryDeps {
   now?: () => number;
   intervalMs?: number;
   checkMs?: number;
+  /** Between the doctor's second looks when Conch didn't answer itself. */
+  recheckMs?: number;
   autoRepairMs?: number;
   probationMs?: number;
   /** The shared resource controller may still be gradually restoring capacity. */
@@ -248,8 +250,15 @@ export class GatewayRecovery {
       id: 'recovery',
       group: 'This computer',
       title: 'Staying responsive',
-      run: async ({ repair }) => {
+      run: async ({ repair, signal }) => {
         await this.poll();
+        // One slow answer isn't a verdict: this look runs beside every other check,
+        // its busiest moment. Ask again, a moment apart, before saying it can't respond.
+        for (let i = 0; i < 2 && !this.#answering && !this.#mode && !this.#stopping; i++) {
+          await new Promise((resolve) => setTimeout(resolve, this.deps.recheckMs ?? 1_000));
+          if (signal.aborted) break;
+          await this.poll();
+        }
         let fixed = false;
         if (repair && this.#mode) {
           fixed = await this.#attemptRepair();
