@@ -13,7 +13,7 @@ describe('ModePicker', () => {
       <ModePicker options={modes} value="default" onValueChange={onValueChange} isDefault />,
     );
     await userEvent.click(screen.getByRole('button', { name: 'Mode: Ask first' }));
-    await userEvent.click(await screen.findByRole('radio', { name: /Plan only/ }));
+    await userEvent.click(await screen.findByRole('radio', { name: /Read only/ }));
     expect(onValueChange).toHaveBeenCalledWith('plan');
   });
 

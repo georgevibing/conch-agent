@@ -72,8 +72,8 @@ async function setup() {
   const home = await mkdtemp(join(tmpdir(), 'conch-providers-'));
   const claude = new FakeEngine('claude-code', 'Claude Code');
   const router = new FakeEngine('openrouter', 'OpenRouter');
-  // Like Codex: it can't ask first or judge risk, so it offers neither.
-  const codex = new FakeEngine('codex-cli', 'Codex', ['plan', 'acceptEdits', 'bypassPermissions']);
+  // A provider that can't ask first or judge risk offers neither.
+  const codex = new FakeEngine('codex-cli', 'Codex', ['plan', 'bypassPermissions']);
   const engines = new Map<EngineId, FakeEngine>([
     ['claude-code', claude],
     ['openrouter', router],
@@ -189,7 +189,7 @@ describe('every provider at once', () => {
 
   it('gives each provider the mode the chat shows: one it can’t honour becomes its safest', async () => {
     const { manager, codex } = await setup();
-    // "Auto" is a Claude Code mode; the chat shows Codex's first mode, Plan only.
+    // It can't honour Auto; the chat shows its first mode, Read only.
     const convo = await manager.send({
       clientMessageId: 'u1',
       text: 'look around',
@@ -203,10 +203,10 @@ describe('every provider at once', () => {
       conversationId: convo.id,
       clientMessageId: 'u2',
       text: 'now fix it',
-      options: { permissionMode: 'acceptEdits' },
+      options: { permissionMode: 'bypassPermissions' },
     });
     await idle(manager, convo.id);
-    expect(codex.turns[1]?.options.permissionMode).toBe('acceptEdits');
+    expect(codex.turns[1]?.options.permissionMode).toBe('bypassPermissions');
   });
 
   it('starts a new chat with the provider it names', async () => {

@@ -305,14 +305,14 @@ describe.skipIf(!hasBrowser)('the browser, for real', () => {
     expect(text).not.toContain('Accept all');
   });
 
-  it('only reads in Plan only mode', { timeout: 60_000 }, async () => {
+  it('only reads in Read only mode', { timeout: 60_000 }, async () => {
     const { call, asked } = harness(['allow'], 'plan', 'conv_plan');
     const text = await call('browser_open', { url: `${origin}/shop` });
     const result = await call('browser_click', {
       ref: refOf(text, /Add to cart/),
       element: 'Add to cart',
     });
-    expect(result).toContain('Plan only mode');
+    expect(result).toContain('Read only mode');
     expect(asked).toHaveLength(0);
   });
 });

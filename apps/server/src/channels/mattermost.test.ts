@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { loadConfig } from '../config';
 import { Services } from '../services';
+import { askFirst } from '../test/modes';
 import { MattermostAdapter, normalizeMattermost, serverUrl } from './mattermost';
 import { MockMattermost } from './mock/mattermost';
 
@@ -24,6 +25,7 @@ async function setup() {
     loadConfig({ CONCH_HOME: home, CONCH_ENGINE: 'mock', CONCH_LOG_LEVEL: 'silent' }),
   );
   delete process.env.CONCH_MOCK_STATE;
+  await askFirst(services);
   await services.start();
   const mm = services.mockMattermost;
   if (!mm) throw new Error('no mock Mattermost');

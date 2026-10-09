@@ -13,7 +13,7 @@ test('slash commands and pickers configure the next reply', async ({ page, reque
   const composer = page.getByRole('textbox', { name: /Message/ });
   // The composer is ready before the provider's model catalog. Wait for its
   // loaded default before a command that validates the model's capabilities.
-  await expect(page.getByRole('button', { name: 'Model: Default', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Model: Default\. Mode: / })).toBeVisible();
 
   // "/" opens the command menu; Escape closes it.
   await composer.fill('/');
@@ -26,11 +26,11 @@ test('slash commands and pickers configure the next reply', async ({ page, reque
   await composer.fill('/effort high');
   await composer.press('Enter');
   await expect(
-    page.getByRole('button', { name: 'Model: Default, High thinking', exact: true }),
+    page.getByRole('button', { name: /^Model: Default, High thinking\. Mode: / }),
   ).toBeVisible();
   await composer.fill('/mode plan');
   await composer.press('Enter');
-  await expect(page.getByRole('button', { name: /Plan only/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Read only/ })).toBeVisible();
 
   // Pick a model from the picker.
   await page.getByRole('button', { name: /^Model:/ }).click();
@@ -56,7 +56,7 @@ test('slash commands and pickers configure the next reply', async ({ page, reque
   await composer.fill('/new');
   await composer.press('Enter');
   await expect(page.getByRole('button', { name: /^Model: Default/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Ask first/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /\. Mode: Auto$/ })).toBeVisible();
 });
 
 test('make default and custom commands', async ({ page, request }) => {
@@ -113,17 +113,18 @@ test('every mode in the chat and in Settings, and Auto stops only for something 
   await expect(page.getByRole('button', { name: /^Model:/ })).toBeVisible();
 
   // The chat offers the full ladder, Auto included, whichever provider answers.
-  await page.getByRole('button', { name: 'Mode: Ask first', exact: true }).click();
-  await expect(page.getByRole('radio')).toHaveText([
-    /^Plan only/,
+  // The mode is in the composer's one settings panel, beside the model.
+  await page.getByRole('button', { name: /\. Mode: / }).click();
+  const modes = page.getByRole('radiogroup', { name: 'Mode' });
+  await expect(modes.getByRole('radio')).toHaveText([
+    /^Read only/,
     /^Ask first/,
-    /^Edit freely/,
     /^Auto/,
     /^Full trust/,
   ]);
-  await page.getByRole('radio', { name: /^Auto/ }).click();
+  await modes.getByRole('radio', { name: /^Auto/ }).click();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('button', { name: 'Mode: Auto', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /\. Mode: Auto$/ })).toBeVisible();
 
   // Routine work goes ahead without a word.
   await composer.fill('run the tests');
@@ -153,9 +154,8 @@ test('every mode in the chat and in Settings, and Auto stops only for something 
   await settings.getByRole('tab', { name: 'Models' }).click();
   const choice = settings.getByRole('radiogroup', { name: 'Default mode' });
   await expect(choice.getByRole('radio')).toHaveText([
-    /^Plan only/,
+    /^Read only/,
     /^Ask first/,
-    /^Edit freely/,
     /^Auto/,
     /^Full trust/,
   ]);

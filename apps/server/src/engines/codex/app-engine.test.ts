@@ -798,14 +798,6 @@ describe('Codex CLI: Codex with its own tools, asking through Conch (ADR 0066)',
       decision: 'decline',
       asked: false,
     });
-    expect(await decided('acceptEdits', { paths: ['/work/a.ts'] })).toEqual({
-      decision: 'accept',
-      asked: false,
-    });
-    expect(await decided('acceptEdits', { command: 'npm test' })).toEqual({
-      decision: 'decline',
-      asked: true,
-    });
     expect(await decided('default', { paths: ['/work/a.ts'] })).toEqual({
       decision: 'decline',
       asked: true,

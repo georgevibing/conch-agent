@@ -163,7 +163,7 @@ describe('Chat commands in Telegram', () => {
   it('plans first with /plan, and starts on the plan when you press Start', async () => {
     const { s, telegram } = await telegramPaired();
     telegram.say('/plan');
-    const on = await said(telegram, 'Plan mode on');
+    const on = await said(telegram, 'Read only on');
     expect(on.buttons.map((b) => b.text)).toEqual(['Act as usual']);
     telegram.say('please tidy up this folder');
     const plan = await said(telegram, 'The plan');
@@ -190,9 +190,9 @@ describe('Chat commands in Telegram', () => {
     // Start took the chat out of plan mode, back to the mode it had before.
     expect((await channelChat(s))?.options.permissionMode).toBeUndefined();
     telegram.say('/plan on');
-    await said(telegram, 'Plan mode on');
+    await said(telegram, 'Read only on');
     telegram.say('/plan off');
-    await said(telegram, 'Plan mode off. Back to Ask first');
+    await said(telegram, 'Read only off. Back to Auto');
   });
 
   it('sends your last message again with /retry', async () => {

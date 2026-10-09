@@ -326,7 +326,7 @@ export function Palette() {
     // Into the message box, where the menu offers what comes next.
     {
       id: 'plan-mode',
-      label: 'Plan first, then act',
+      label: 'Plan first in Read only',
       icon: <ListTodo />,
       keywords: 'plan mode planning propose approve before acting read only think first',
       run: () => intoComposer('/plan '),

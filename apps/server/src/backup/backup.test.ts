@@ -640,8 +640,8 @@ describe('the preview before a restore', () => {
       ),
     );
     expect(preview.contents).toEqual(daily?.contents);
-    // What `useConch` lets act: its two Conch apps, a routine started from its
-    // own address, a limit on what routines spend, a page that reads a site you
+    // What `useConch` lets act: its two Conch apps, chats that go ahead in
+    // Auto (the default since ADR 0119), a routine started from its own address, a limit on what routines spend, a page that reads a site you
     // allowed, and the linked WhatsApp and Signal answering their owner. A
     // restore names them.
     expect(preview.powers).toEqual([
@@ -653,6 +653,7 @@ describe('the preview before a restore', () => {
         ],
         more: 0,
       },
+      { kind: 'chats-go-ahead' },
       { kind: 'routine-address', name: 'From my shop' },
       { kind: 'routines-spend', limitUsd: 30 },
       { kind: 'learning-spend', limitUsd: 2 },

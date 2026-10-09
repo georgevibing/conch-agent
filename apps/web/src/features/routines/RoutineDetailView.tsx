@@ -41,7 +41,7 @@ import { AlwaysOnHint } from '../background/AlwaysOnHint';
 
 const trustLabels: Record<Routine['trust'], string> = {
   ask: 'Asks you before doing anything that needs permission',
-  edits: 'Can change files without asking; commands wait for you',
+  auto: 'Gets on with it; asks you only before risky steps',
   full: 'Can do anything without asking',
 };
 

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../app';
 import { onThisComputer } from '../test/here';
+import { askFirst } from '../test/modes';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 
@@ -234,6 +235,8 @@ describe('integrations over HTTP', () => {
 
   it('lets a conversation use an integration, and asks before it changes things', async () => {
     const { app, services } = await setup();
+    // A chat in Ask first: its app's "Ask before changes" is what asks here.
+    await askFirst(services);
     await app.inject({
       method: 'POST',
       url: '/api/integrations',

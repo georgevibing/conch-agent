@@ -1123,7 +1123,7 @@ describe('helpers on another provider', () => {
     conversationId,
     append: () => undefined,
     engine,
-    permissionMode: 'acceptEdits' as const,
+    permissionMode: 'auto' as const,
     ask: async () => 'deny' as const,
     signal,
   });
@@ -1166,7 +1166,7 @@ describe('helpers on another provider', () => {
     const other = helpers.find((t) => t.title === 'Write the tests');
     expect(other).toMatchObject({
       by: 'Other',
-      options: { engine: 'openrouter', model: 'small-model', permissionMode: 'acceptEdits' },
+      options: { engine: 'openrouter', model: 'small-model', permissionMode: 'auto' },
     });
     expect(helpers.find((t) => t.title === 'Check it')?.by).toBeUndefined();
     // It ran there, and only there; a mode it can't honour became its safest.
@@ -1475,7 +1475,7 @@ describe('task controls in the originating chat', () => {
 });
 
 describe('a task has exactly its chat’s powers (ADR 0033)', () => {
-  const ALL: PermissionMode[] = ['default', 'auto', 'acceptEdits', 'plan', 'bypassPermissions'];
+  const ALL: PermissionMode[] = ['default', 'auto', 'plan', 'bypassPermissions'];
 
   /** A chat someone is in, in this mode, with its first turn started. */
   const chatIn = (
@@ -1498,13 +1498,12 @@ describe('a task has exactly its chat’s powers (ADR 0033)', () => {
 
   it('never more than its chat: a mode asked for above the chat’s becomes the chat’s', () => {
     expect(noMoreThan('bypassPermissions', 'default')).toBe('default');
-    expect(noMoreThan('acceptEdits', 'plan')).toBe('plan');
-    expect(noMoreThan(undefined, 'acceptEdits')).toBe('acceptEdits');
+    expect(noMoreThan('auto', 'plan')).toBe('plan');
+    expect(noMoreThan(undefined, 'auto')).toBe('auto');
     expect(noMoreThan('plan', 'bypassPermissions')).toBe('plan');
-    expect(noMoreThan('default', 'acceptEdits')).toBe('default');
-    // A ladder (ADR 0100): Auto lets through everything Edit freely does, and more.
-    expect(noMoreThan('auto', 'acceptEdits')).toBe('acceptEdits');
-    expect(noMoreThan('acceptEdits', 'auto')).toBe('acceptEdits');
+    expect(noMoreThan('default', 'auto')).toBe('default');
+    // A ladder (ADR 0100): Auto lets through everything Ask first does, and more.
+    expect(noMoreThan('auto', 'default')).toBe('default');
     expect(noMoreThan('bypassPermissions', 'auto')).toBe('auto');
     expect(noMoreThan('auto', 'bypassPermissions')).toBe('auto');
   });
@@ -1571,14 +1570,14 @@ describe('a task has exactly its chat’s powers (ADR 0033)', () => {
   it('a helper runs in the mode of the turn that started it', async () => {
     const { tasks, conversations, engines } = await setup();
     (engines.get('mock') as Scripted).modes = ALL;
-    const chat = await chatIn(conversations, 'acceptEdits');
+    const chat = await chatIn(conversations, 'auto');
     await idle(conversations, chat.id);
     const delegate = tasks
       .tools({
         conversationId: chat.id,
         append: () => undefined,
         engine: engines.get('mock') as Engine,
-        permissionMode: 'acceptEdits',
+        permissionMode: 'auto',
         ask: async () => 'deny',
         signal: new AbortController().signal,
       })
@@ -1587,8 +1586,8 @@ describe('a task has exactly its chat’s powers (ADR 0033)', () => {
       parts: [{ title: 'Look', instructions: 'look around', model: 'same', worktree: false }],
     } as never);
     const [helper] = (await tasks.list()).tasks;
-    expect(helper?.options.permissionMode).toBe('acceptEdits');
-    expect(engines.get('mock')?.turns.at(-1)?.options.permissionMode).toBe('acceptEdits');
+    expect(helper?.options.permissionMode).toBe('auto');
+    expect(engines.get('mock')?.turns.at(-1)?.options.permissionMode).toBe('auto');
   });
 
   it('“Always allow” said in the chat holds in its task, and nothing more', async () => {

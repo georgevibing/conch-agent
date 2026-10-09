@@ -43,6 +43,6 @@ describe('Full trust runs what a seal would only break', () => {
 
   it('never skips the seal in any other mode', () => {
     expect(runsUnsealedByTrust(as('default'), 'git pull')).toBe(false);
-    expect(runsUnsealedByTrust(as('acceptEdits'), 'cd ~/projects/x && ls')).toBe(false);
+    expect(runsUnsealedByTrust(as('plan'), 'cd ~/projects/x && ls')).toBe(false);
   });
 });

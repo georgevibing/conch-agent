@@ -43,7 +43,7 @@ export async function runFix(
   switch (action) {
     case 'ask-first': {
       const { preferences } = await services.settings.get();
-      // Only Full trust goes back to asking; a safer choice ("Plan", "Auto") stays.
+      // Only Full trust goes back to asking; a safer choice (Read only, Auto) stays.
       if (preferences.permissionMode === 'bypassPermissions')
         await services.settings.update({ preferences: { permissionMode: 'default' } });
       return 'New chats ask before acting.';

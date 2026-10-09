@@ -291,13 +291,7 @@ describe('what an API provider can do', () => {
     expect(capabilities.models.map((m) => m.id)).toEqual(['stub/model']);
     expect(capabilities.commands).toEqual([]);
     // Every mode, the same as every provider: Auto through Conch's risk policy (ADR 0100).
-    expect(capabilities.permissionModes).toEqual([
-      'default',
-      'plan',
-      'acceptEdits',
-      'auto',
-      'bypassPermissions',
-    ]);
+    expect(capabilities.permissionModes).toEqual(['default', 'plan', 'auto', 'bypassPermissions']);
     expect(capabilities.tools).toMatchObject({ host: true, files: true, approvals: true });
   });
 

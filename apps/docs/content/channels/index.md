@@ -74,7 +74,7 @@ throughout Conch. Existing chats without their own choices follow those defaults
 on their next turn. A model, effort or speed you pick for this chat is done at
 once, and the reply says what changed. A change to the defaults, going back to
 them, and a mode that lets your assistant do more without asking (**Auto**,
-**Edit freely**, **Full trust**) say which scope they affect and ask you to save.
+**Full trust**) say which scope they affect and ask you to save.
 Choose a provider and model from the connected providers; only the effort and
 speed controls that model supports are offered. If an answer is running, stop it
 or wait before changing this chat.

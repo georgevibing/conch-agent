@@ -14,6 +14,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../config';
 import { Services } from '../services';
+import { askFirst } from '../test/modes';
 import { MockTelegram } from './mock/telegram';
 
 let services: Services | undefined;
@@ -50,6 +51,7 @@ async function inGroup(options: { on?: boolean } = {}) {
     loadConfig({ CONCH_HOME: home, CONCH_ENGINE: 'mock', CONCH_LOG_LEVEL: 'silent' }),
   );
   delete process.env.CONCH_MOCK_STATE;
+  await askFirst(services);
   await services.start();
   const s = services;
   const telegram = s.mockTelegram;

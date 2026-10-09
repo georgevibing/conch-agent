@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { loadConfig } from '../config';
 import { Services } from '../services';
+import { askFirst } from '../test/modes';
 import { MAX_NOTE_BYTES } from '../voice/audio';
 import { VoiceError, type Hearing } from '../voice/service';
 import { MockMail } from './mock/email';
@@ -24,6 +25,7 @@ async function setup(speed = '0.02') {
     loadConfig({ CONCH_HOME: home, CONCH_ENGINE: 'mock', CONCH_LOG_LEVEL: 'silent' }),
   );
   delete process.env.CONCH_MOCK_STATE;
+  await askFirst(services);
   await services.start();
   const telegram = services.mockTelegram;
   if (!telegram) throw new Error('no mock Telegram');

@@ -19,8 +19,7 @@ This is Codex as you know it from the terminal. It runs its own commands and mak
 Everything it wants to do asks through Conch first, in the chat's mode:
 
 - **Ask first:** each command and each change waits for your OK in the chat.
-- **Plan only:** it plans; commands and changes are turned down.
-- **Edit freely:** changes go ahead; commands ask.
+- **Read only:** it plans; commands and changes are turned down.
 - **Auto:** commands and changes go ahead, except [something serious](../reference/modes.md#auto), which asks. Its sandbox has the network until the chat reads something.
 - **Full trust:** commands and changes go ahead, and its sandbox reaches your folders and the network. Conch's own keys stay out of reach.
 

@@ -111,7 +111,7 @@ Conch keeps the questions few, and makes each one count:
 - **Downloads.** It asks, and saves them in the Downloads folder of your working
   folder.
 
-In **Plan only** mode it reads but never clicks or types. In **Full trust** mode it
+In **Read only** mode it reads but never clicks or types. In **Full trust** mode it
 skips the "new site" question, but never the "anything significant" one, and never
 types your secrets.
 
@@ -169,8 +169,8 @@ begins, Conch can reopen it and try safely.
 Mostly, you won't notice: Conch fixes the browser by itself. It uses the Chrome,
 Edge or Brave you already have, or downloads Chromium the first time if there's none.
 It restarts a browser that crashed and reopens your page. It clears a browser left
-behind by an earlier session, and declines cookie banners. Settings → Browser lists
-what it fixed, under _Fixed on its own_.
+behind by an earlier session, and declines cookie banners. What it fixed is listed
+with every other repair in Settings → Health, under _Fixed on its own_.
 
 If it ever can't, it says what happened in one sentence, with one button: **Repair**
 tries every fix in turn. On Linux, the browser sometimes needs system libraries that

@@ -1,4 +1,4 @@
-import { fuzzyMatch, type EffortChoice, type PermissionMode } from '@conch/protocol';
+import { DEFAULT_MODE, fuzzyMatch, type EffortChoice, type PermissionMode } from '@conch/protocol';
 import {
   Button,
   Field,
@@ -136,7 +136,7 @@ export function ModelsTab() {
             icon: m.icon,
             tone: m.tone,
           }))}
-          value={prefs?.permissionMode ?? 'default'}
+          value={prefs?.permissionMode ?? DEFAULT_MODE}
           onValueChange={(v) => save({ permissionMode: v as PermissionMode })}
           name={assistant}
         />

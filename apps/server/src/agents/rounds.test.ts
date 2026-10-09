@@ -24,7 +24,7 @@ import { SettingsStore } from '../settings/store';
 import { RoundService, type RoundOutside } from './rounds';
 import { AgentStore } from './store';
 
-const MODES: PermissionMode[] = ['default', 'auto', 'acceptEdits', 'plan', 'bypassPermissions'];
+const MODES: PermissionMode[] = ['default', 'auto', 'plan', 'bypassPermissions'];
 
 /** Answers as whoever its prompt says it is, from a script; records every turn. */
 class Cast implements Engine {

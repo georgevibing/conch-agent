@@ -212,14 +212,20 @@ export const RoutineRun = z.object({
 });
 export type RoutineRun = z.infer<typeof RoutineRun>;
 
-/** When a routine needs permission while nobody is watching. */
-export const RoutineTrust = z.enum([
-  /** Pause the run and ask you (you'll be notified). */
-  'ask',
-  /** Let it edit files without asking; commands still wait for you. */
-  'edits',
-  /** Let it do anything without asking. */
-  'full',
+/**
+ * When a routine needs permission while nobody is watching: its chat's mode
+ * (ADR 0100). `edits` (Edit freely, before ADR 0119) reads as `auto`.
+ */
+export const RoutineTrust = z.union([
+  z.enum([
+    /** Pause the run and ask you before each change (you'll be notified). */
+    'ask',
+    /** Get on with it; pause and ask only before something risky (Auto). */
+    'auto',
+    /** Let it do anything without asking. */
+    'full',
+  ]),
+  z.literal('edits').transform(() => 'auto' as const),
 ]);
 export type RoutineTrust = z.infer<typeof RoutineTrust>;
 

@@ -304,7 +304,7 @@ export function browserTools(
     const site = siteOf(url) ?? displayHost(url);
     if (ctx.permissionMode === 'plan') {
       throw new Refusal(
-        'This chat is in Plan only mode, so you can read pages but not click, type or choose. Tell the user what you’d do instead.',
+        'This chat is in Read only mode, so you can read pages but not click, type or choose. Tell the user what you’d do instead.',
       );
     }
     const kind: BrowserPermission['kind'] =

@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildApp } from '../app';
 import { onThisComputer } from '../test/here';
+import { askFirst } from '../test/modes';
 import { loadConfig } from '../config';
 import { Services } from '../services';
 
@@ -89,6 +90,7 @@ describe('archiving a chat', () => {
 
   it('keeps working while archived, and comes back when it needs you', async () => {
     const { services } = await setup();
+    await askFirst(services);
     const convo = await services.conversations.send({ clientMessageId: 'u1', text: 'list files' });
     await services.conversations.archive(convo.id, true);
     expect((await services.conversations.detail(convo.id)).conversation.archivedAt).toEqual(

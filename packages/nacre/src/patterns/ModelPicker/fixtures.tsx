@@ -1,5 +1,5 @@
 /* Story/test fixtures — not exported from the package. */
-import { Eye, FilePen, Hand, ShieldCheck, Zap } from 'lucide-react';
+import { Eye, Hand, ShieldCheck, Zap } from 'lucide-react';
 import { useState } from 'react';
 
 import type { ModeOption } from '../ModePicker/ModePicker';
@@ -145,40 +145,31 @@ export const efforts: EffortOption[] = [
   { value: 'max', label: 'Max', description: 'As much thinking as it takes' },
 ];
 
-/** The app's modes, in its words and icons (`@conch/protocol` `MODE_WORDS`), Plan only to Full trust. */
+/** The app's modes, in its words and icons (`@conch/protocol` `MODE_WORDS`), Read only to Full trust. */
 export const modes: ModeOption[] = [
   {
     value: 'plan',
-    label: 'Plan only',
-    description: 'Looks around and plans. Changes nothing until you say go.',
+    label: 'Read only',
+    description: 'Looks and plans. Changes nothing.',
     icon: <Eye />,
   },
   {
     value: 'default',
     label: 'Ask first',
-    description: 'Asks before it changes a file, runs a command or acts in an app.',
+    description: 'Asks before each change.',
     icon: <Hand />,
-  },
-  {
-    value: 'acceptEdits',
-    label: 'Edit freely',
-    description: 'Changes files in this folder without asking. Anything more needs your OK.',
-    icon: <FilePen />,
-    tone: 'caution',
   },
   {
     value: 'auto',
     label: 'Auto',
-    description:
-      'Gets on with the work. Stops to ask only before something serious, like deleting, publishing or reaching your keys.',
+    description: 'Gets on with it. Asks only before risky steps.',
     icon: <ShieldCheck />,
     tone: 'caution',
   },
   {
     value: 'bypassPermissions',
     label: 'Full trust',
-    description:
-      'Never stops to ask. A page or file it reads could trick it, so only in a folder you can afford to lose.',
+    description: 'Never asks. Runs anything.',
     icon: <Zap />,
     tone: 'danger',
   },

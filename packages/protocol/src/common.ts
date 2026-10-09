@@ -67,18 +67,22 @@ export const EffortChoice = z.enum(['auto', 'low', 'medium', 'high', 'xhigh', 'm
 export type EffortChoice = z.infer<typeof EffortChoice>;
 
 /**
- * How much the agent may do without asking (ADR 0100), named as Claude Code
- * names its modes and meaning the same with every provider: plan only
- * (changes nothing), ask first, edit files freely, auto (stops only for
+ * How much the agent may do without asking (ADR 0100, ADR 0119), named as
+ * Claude Code names its modes and meaning the same with every provider: read
+ * only (`plan`, changes nothing), ask first (`default`), auto (asks only before
  * something serious: Conch's risk policy), or full trust (never asks, but for
  * the few checks no mode lifts). The words are in `modes.ts`.
  */
-export const PermissionMode = z.enum([
-  'default',
-  'auto',
-  'acceptEdits',
-  'plan',
-  'bypassPermissions',
+export const PermissionModeId = z.enum(['default', 'auto', 'plan', 'bypassPermissions']);
+
+/**
+ * A mode as it's read from anywhere: Edit freely (`acceptEdits`), a mode
+ * before ADR 0119, reads as Auto, which does all it did, so a chat, a default,
+ * an agent, a routine or a channel saved with it carries on as Auto.
+ */
+export const PermissionMode = z.union([
+  PermissionModeId,
+  z.literal('acceptEdits').transform(() => 'auto' as const),
 ]);
 export type PermissionMode = z.infer<typeof PermissionMode>;
 

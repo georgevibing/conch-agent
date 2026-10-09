@@ -46,7 +46,7 @@ const MAX_CONCURRENT = 2;
 
 const trustModes: Record<RoutineTrust, PermissionMode> = {
   ask: 'default',
-  edits: 'acceptEdits',
+  auto: 'auto',
   full: 'bypassPermissions',
 };
 

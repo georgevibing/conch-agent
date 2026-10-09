@@ -7,7 +7,7 @@ import type {
   TurnOptions,
   WorkPlaceId,
 } from '@conch/protocol';
-import { EngineId as EngineIdSchema, honouredMode } from '@conch/protocol';
+import { DEFAULT_MODE, EngineId as EngineIdSchema, honouredMode } from '@conch/protocol';
 import { toast } from '@conch/nacre';
 
 import { useAppState, useConversations, useModels, useUpdateSettings } from '../../api/queries';
@@ -83,7 +83,7 @@ export function useTurnOptions(conversationId?: string) {
     model: prefs?.model ?? DEFAULT_MODEL,
     effort: prefs?.effort ?? 'auto',
     fastMode: prefs?.fastMode ?? false,
-    permissionMode: prefs?.permissionMode ?? 'default',
+    permissionMode: prefs?.permissionMode ?? DEFAULT_MODE,
     place: prefs?.place ?? 'computer',
   };
 

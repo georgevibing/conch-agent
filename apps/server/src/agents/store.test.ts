@@ -118,10 +118,10 @@ describe('agents you make', () => {
 
     const changed = await agents.update(sage.id, {
       persona: { personality: 'Warm humour' },
-      defaults: { engine: 'mock', permissionMode: 'acceptEdits' },
+      defaults: { engine: 'mock', permissionMode: 'plan' },
     });
     expect(changed.persona).toEqual({ tone: 'calm', personality: 'Warm humour' });
-    expect(changed.defaults).toEqual({ engine: 'mock', permissionMode: 'acceptEdits' });
+    expect(changed.defaults).toEqual({ engine: 'mock', permissionMode: 'plan' });
     expect((await agents.update(sage.id, { defaults: null })).defaults).toBeUndefined();
 
     const order = await agents.reorder([sage.id, FIRST_AGENT_ID]);

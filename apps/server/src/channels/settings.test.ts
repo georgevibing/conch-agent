@@ -210,14 +210,16 @@ describe('Settings in every chat app', () => {
 
   it('asks before letting it do more, but not before asking first or planning', async () => {
     const { menu, ctx, choose, last } = setup();
+    // New chats start in Auto (ADR 0119); this one chose Ask first.
+    ctx.options = { ...ctx.options, permissionMode: 'default' };
     await menu.command(ctx, 'mode');
     expect(last().buttons.map((b) => b.label)).toEqual([
-      'Plan only',
+      'Read only',
       '✓ Ask first',
       'Auto',
       'Full trust',
     ]);
-    await choose('Plan only');
+    await choose('Read only');
     expect(ctx.saveOptions).toHaveBeenLastCalledWith({ permissionMode: 'plan' });
     await menu.command(ctx, 'mode');
     await choose('Auto');
@@ -301,7 +303,7 @@ describe('Settings in every chat app', () => {
     ctx.planning = true;
     await menu.command(ctx, 'status');
     expect(last().text).toContain('Goal: Ship 2.4');
-    expect(last().text).toContain('Plan mode: on, from your next message');
+    expect(last().text).toContain('Read only: on, from your next message');
   });
 
   it('configures channel notifications and voice separately from global preferences', async () => {

@@ -21,7 +21,7 @@ describe('ModeChoice', () => {
       'danger',
     );
     expect(screen.getByRole('radio', { name: /Auto/ })).toHaveAccessibleDescription(
-      /Stops to ask only before something serious/,
+      /Asks only before risky steps/,
     );
   });
 
@@ -40,7 +40,7 @@ describe('ModeChoice', () => {
     expect(screen.getByRole('radio', { name: /Ask first/ })).toHaveFocus();
     // jsdom moves focus with the arrows; Space chooses (selection follows focus in a browser).
     await user.keyboard('{ArrowUp}');
-    expect(screen.getByRole('radio', { name: /Plan only/ })).toHaveFocus();
+    expect(screen.getByRole('radio', { name: /Read only/ })).toHaveFocus();
     await user.keyboard(' ');
     expect(onValueChange).toHaveBeenLastCalledWith('plan');
     await user.click(screen.getByRole('radio', { name: /Auto/ }));

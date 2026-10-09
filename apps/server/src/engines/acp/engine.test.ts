@@ -102,13 +102,7 @@ describe('an ACP agent’s state', () => {
       ['claude-sonnet-5', 'Claude Sonnet 5', ['low', 'medium', 'high']],
     ]);
     // Every mode, Auto included: the door's tools run under Conch's risk policy (ADR 0100).
-    expect(caps.permissionModes).toEqual([
-      'default',
-      'plan',
-      'acceptEdits',
-      'auto',
-      'bypassPermissions',
-    ]);
+    expect(caps.permissionModes).toEqual(['default', 'plan', 'auto', 'bypassPermissions']);
   });
 
   it('is signed out when the agent wants a sign-in', async () => {

@@ -58,7 +58,7 @@ After you connect Gmail or Google Calendar in **Apps**, Conch offers the routine
 Nobody is watching when a routine runs, so each one says how far it may go without you:
 
 - **Ask me first.** The run pauses and waits for your answer. Every routine drafted in a chat starts here.
-- **Allow file changes.** It can create and edit files without asking. Commands still wait for you.
+- **Auto.** It gets on with it, and pauses to ask only before risky steps. New routines you make start here.
 - **Allow everything.** It runs commands and changes anything, unasked. Only for tasks you fully trust.
 
 What starts a **When…** routine was written by someone else, so its run is wary from the start: anything that could send things out or change your computer asks you first, whatever you chose.

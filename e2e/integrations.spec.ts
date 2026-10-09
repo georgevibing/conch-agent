@@ -150,7 +150,8 @@ test('Full trust takes precedence over app questions and leaving it restores the
 
   await page.goto('/');
   const composer = page.getByRole('textbox', { name: /Message/ });
-  await expect(page.getByRole('button', { name: 'Mode: Ask first', exact: true })).toBeVisible();
+  // New chats start in Auto (ADR 0119); an app set to ask before changes still asks.
+  await expect(page.getByRole('button', { name: /\. Mode: Auto$/ })).toBeVisible();
   await composer.fill('create a page in github');
   await composer.press('Enter');
   await expect(
@@ -158,7 +159,7 @@ test('Full trust takes precedence over app questions and leaving it restores the
   ).toBeVisible();
 
   // A deliberate mode change answers the waiting question immediately.
-  await page.getByRole('button', { name: 'Mode: Ask first', exact: true }).click();
+  await page.getByRole('button', { name: /\. Mode: Auto$/ }).click();
   await page.getByRole('radio', { name: /Full trust/ }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Turn on' }).click();
   await page.keyboard.press('Escape');
@@ -167,7 +168,7 @@ test('Full trust takes precedence over app questions and leaving it restores the
   // The mode didn't persistently grant Allow to the app or any tool.
   const apps = (await (await request.get('/api/integrations')).json()).integrations;
   expect(apps.find((app: { id: string }) => app.id === integration.id).policy).toBe('ask-writes');
-  await page.getByRole('button', { name: 'Mode: Full trust', exact: true }).click();
+  await page.getByRole('button', { name: /\. Mode: Full trust$/ }).click();
   await page.getByRole('radio', { name: /Ask first/ }).click();
   await page.keyboard.press('Escape');
   await composer.fill('create another page in github');

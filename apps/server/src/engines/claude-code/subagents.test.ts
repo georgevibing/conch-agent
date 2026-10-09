@@ -64,7 +64,7 @@ async function run(input: TurnInput) {
  */
 describe('Claude Code’s own sub-agents', () => {
   it('are off in every mode, Full trust included', async () => {
-    for (const permissionMode of ['default', 'acceptEdits', 'plan', 'bypassPermissions'] as const) {
+    for (const permissionMode of ['default', 'plan', 'bypassPermissions'] as const) {
       const options = await run(
         turn({ options: { effort: 'auto', fastMode: false, permissionMode } }),
       );

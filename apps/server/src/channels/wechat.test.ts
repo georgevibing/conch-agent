@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../config';
 import { Services } from '../services';
+import { askFirst } from '../test/modes';
 import { MockWeChat } from './mock/wechat';
 import { personId } from './types';
 import { normalizeWeChat } from './wechat';
@@ -36,6 +37,7 @@ async function setup() {
     loadConfig({ CONCH_HOME: home, CONCH_ENGINE: 'mock', CONCH_LOG_LEVEL: 'silent' }),
   );
   delete process.env.CONCH_MOCK_STATE;
+  await askFirst(services);
   await services.start();
   const wechat = services.mockWeChat;
   if (!wechat) throw new Error('no mock WeChat');

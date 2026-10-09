@@ -199,9 +199,9 @@ describe('Full trust (ADR 0100)', () => {
   });
 });
 
-describe('Ask first and Edit freely', () => {
-  it('ask for every step, and say why for a serious one', async () => {
-    for (const mode of ['default', 'acceptEdits'] as const) {
+describe('Ask first', () => {
+  it('asks for every step, and says why for a serious one', async () => {
+    for (const mode of ['default'] as const) {
       const { asked } = await run(mode, [bash('npm test'), ...SERIOUS]);
       expect(asked).toHaveLength(3);
       expect(asked[0]?.taint).toBeUndefined();

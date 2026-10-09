@@ -5,7 +5,7 @@
  * so a model that knows that tool knows this one.
  *
  * Every action goes through one door, in this order: on? the macOS switches?
- * Plan only? one chat at a time, and at most `MAX_STEPS` steps a turn; then
+ * Read only? one chat at a time, and at most `MAX_STEPS` steps a turn; then
  * which app it would touch — never one that's kept away, and asked about the
  * first time in each chat — and only then the driver. Each action comes back
  * with a fresh look at the screen, the kept-away apps covered over.
@@ -53,7 +53,7 @@ const ACTIONS = [
 ] as const;
 type Action = (typeof ACTIONS)[number];
 
-/** What never touches an app: these work in Plan only too. */
+/** What never touches an app: these work in Read only too. */
 const LOOKS: ReadonlySet<Action> = new Set(['screenshot', 'wait', 'list_apps']);
 
 /** `[x, y]`, `"x,y"`, `{x, y}`: a point, the way a model wrote it (ADR 0072). */
@@ -294,7 +294,7 @@ export function computerTools(
           };
         if (acting && ctx.permissionMode === 'plan')
           throw new Refusal(
-            'This chat is in Plan only mode, so you can look at the screen but not click or type. Tell the person what you’d do instead.',
+            'This chat is in Read only mode, so you can look at the screen but not click or type. Tell the person what you’d do instead.',
           );
         const session = service.begin(conversationId, ctx.signal);
         if (session.steps >= MAX_STEPS)

@@ -154,7 +154,8 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
   const settings = json(read, 'settings.json');
   const mode = record(settings?.preferences)?.permissionMode;
   if (mode === 'bypassPermissions') powers.push({ kind: 'chats-never-ask' });
-  if (mode === 'auto') powers.push({ kind: 'chats-go-ahead' });
+  // Edit freely, before ADR 0119, comes back as Auto.
+  if (mode === 'auto' || mode === 'acceptEdits') powers.push({ kind: 'chats-go-ahead' });
   // Work running elsewhere sends the work folder there (ADR 0106): a machine of the backup's, or its cloud.
   const place = record(settings?.preferences)?.place;
   if (typeof place === 'string' && (place.startsWith('ssh:') || place === 'cloud'))
@@ -166,7 +167,10 @@ export function powersOf(files: readonly string[], read: Read): BackupPower[] {
   const agents = record(json(read, 'agents/agents.json'))?.agents;
   if (
     Array.isArray(agents) &&
-    agents.some((agent) => record(record(agent)?.defaults)?.permissionMode === 'auto') &&
+    agents.some((agent) => {
+      const mode = record(record(agent)?.defaults)?.permissionMode;
+      return mode === 'auto' || mode === 'acceptEdits';
+    }) &&
     !powers.some((p) => p.kind === 'chats-go-ahead')
   )
     powers.push({ kind: 'chats-go-ahead' });

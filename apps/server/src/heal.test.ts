@@ -68,7 +68,8 @@ describe('settings.json', () => {
     const { told, heal } = notes();
     const settings = await new SettingsStore(dir, heal).get();
     expect(settings.persona.name).toBe('Conch');
-    expect(settings.preferences.permissionMode).toBe('default');
+    // The default a new install has (ADR 0119): Auto, which still asks before anything risky.
+    expect(settings.preferences.permissionMode).toBe('auto');
     expect(await copies(dir, 'settings')).toEqual([GARBAGE]);
     expect(told).toEqual([{ area: 'settings', message: expect.stringContaining('defaults') }]);
     // Started again: nothing more to repair.
@@ -186,6 +187,25 @@ describe('terminal.json', () => {
     expect(await terminal.settings()).toMatchObject({ allowRemote: false });
     expect(await copies(dir, 'terminal')).toEqual([GARBAGE]);
     expect(told).toEqual([{ area: 'terminal', message: expect.any(String) }]);
+  });
+
+  it('lists the terminal’s own repairs under Health → Fixed on its own', async () => {
+    const dir = await home();
+    const { told, heal } = notes();
+    const terminal = new TerminalService({
+      home: dir,
+      workspace: async () => dir,
+      emit: () => undefined,
+      heal,
+    });
+    terminal.heal('Switched terminals to basic mode. Commands work; full-screen programs don’t.');
+    expect(told).toEqual([
+      {
+        area: 'terminal',
+        message: 'Switched terminals to basic mode. Commands work; full-screen programs don’t.',
+      },
+    ]);
+    terminal.stop();
   });
 });
 

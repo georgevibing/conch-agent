@@ -25,7 +25,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The default permission mode on a settings page. The same options as the chat’s `ModePicker` — one definition, the same icons, names and lines — as calm cards from Plan only to Full trust. Each icon wears the tone the chat’s chip does, so a trusting mode looks armed in both places; choosing Full trust asks once, right under the list, before it’s saved.',
+          'The default permission mode on a settings page. The same options as the chat’s `ModePicker` — one definition, the same icons, names and lines — as calm cards from Read only to Full trust. Each icon wears the tone the chat’s chip does, so a trusting mode looks armed in both places; choosing Full trust asks once, right under the list, before it’s saved.',
       },
     },
   },
