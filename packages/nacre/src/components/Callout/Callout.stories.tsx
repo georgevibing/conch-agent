@@ -68,6 +68,53 @@ export const WithAction: Story = {
   },
 };
 
+/**
+ * Narrow (a phone, a dialog, a side panel), the action takes a row of its own
+ * under the text, so the text keeps the callout's width. It's the callout's
+ * own width that decides, not the screen's: a container query.
+ */
+export const NarrowWithAction: Story = {
+  decorators: [(Story) => <div style={{ maxInlineSize: 340 }}>{Story()}</div>],
+  render: () => (
+    <Stack gap={3}>
+      <Callout
+        tone="info"
+        title="Use the same app password?"
+        action={<Button size="sm">Use it for Gmail</Button>}
+      >
+        Your email channel already signs in as kaltsikis.software@gmail.com.
+      </Callout>
+      <Callout
+        tone="warning"
+        title="Claude wants to run `pnpm install`"
+        action={
+          <>
+            <Button size="sm" variant="ghost">
+              Deny
+            </Button>
+            <Button size="sm" variant="surface">
+              Allow once
+            </Button>
+          </>
+        }
+      >
+        This command modifies node_modules and the lockfile.
+      </Callout>
+      <Callout
+        tone="neutral"
+        icon={false}
+        action={
+          <Button size="sm" variant="surface">
+            Turn on
+          </Button>
+        }
+      >
+        Keep Conch running when you close the window.
+      </Callout>
+    </Stack>
+  ),
+};
+
 export const Live: Story = {
   args: {
     tone: 'danger',

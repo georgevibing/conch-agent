@@ -20,7 +20,10 @@ export interface CalloutProps extends Omit<ComponentProps<'div'>, 'title'> {
   title?: ReactNode;
   /** Custom icon, or `false` to hide it. Defaults to a tone-appropriate icon. */
   icon?: ReactNode | false;
-  /** Trailing action(s), e.g. a small Button. */
+  /**
+   * Trailing action(s), e.g. a small Button. Beside the text when there's
+   * room; on its own row under the text when the callout is narrow.
+   */
   action?: ReactNode;
   /**
    * `polite` announces the callout when it appears (role="status"),
@@ -41,10 +44,12 @@ export function Callout({
   ...props
 }: CalloutProps) {
   const resolvedIcon = icon === false ? null : (icon ?? defaultIcons[tone]);
+  const hasAction = action != null && action !== false;
   return (
     <div
       role={live === 'assertive' ? 'alert' : live === 'polite' ? 'status' : undefined}
       data-tone={tone}
+      data-action={hasAction ? '' : undefined}
       className={cx(styles.callout, className)}
       {...props}
     >
@@ -57,7 +62,7 @@ export function Callout({
         {title != null && <p className={styles.title}>{title}</p>}
         {children != null && <div className={styles.description}>{children}</div>}
       </div>
-      {action != null && <div className={styles.action}>{action}</div>}
+      {hasAction && <div className={styles.action}>{action}</div>}
     </div>
   );
 }

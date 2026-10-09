@@ -29,4 +29,20 @@ describe('Callout', () => {
     const { container } = renderNacre(<Callout icon={false}>No icon</Callout>);
     expect(container.querySelector('svg')).toBeNull();
   });
+
+  it('marks a callout with an action, so a narrow one can put it under the text', async () => {
+    const { container } = renderNacre(
+      <>
+        <Callout title="Use the same app password?" action={<button type="button">Use it</button>}>
+          Body
+        </Callout>
+        <Callout action={false}>No action</Callout>
+      </>,
+    );
+    const [withAction, without] = container.querySelectorAll('[data-tone]');
+    expect(withAction).toHaveAttribute('data-action');
+    expect(without).not.toHaveAttribute('data-action');
+    expect(screen.getByRole('button', { name: 'Use it' })).toBeInTheDocument();
+    await expectAccessible(container);
+  });
 });

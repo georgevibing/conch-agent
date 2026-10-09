@@ -444,7 +444,7 @@ export function AddGoogleAccount({
               <Callout tone="info" title="Google sign-in">
                 {configured
                   ? 'Your Google app is already set up, so this is one press.'
-                  : 'Calendar and Drive only open to Google’s own sign-in. It takes a free Google Cloud app of your own, once — about ten minutes, with every step shown.'}
+                  : 'Calendar and Drive need Google’s own sign-in: a free Google Cloud app of your own, set up once. About ten minutes, every step shown.'}
               </Callout>
             )}
             <Button className={styles.fit} onClick={() => setAt(2)}>
