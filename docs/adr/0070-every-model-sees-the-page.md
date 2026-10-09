@@ -51,6 +51,7 @@ what providers' lists say about sight ranges from exact (OpenRouter's `input_mod
 
 Only the newest three tool pictures stay pictures in a transcript; older ones become a line that
 says so (`ageToolPictures`). Every picture is sent, and paid for, on every request after it.
+(Amended below: they go in batches.)
 
 **Whether a model sees is said outright, per model.** Each wire's `seesFor(model)` answers: the
 provider's list when it says (OpenRouter's modalities, Ollama's and LM Studio's capabilities,
@@ -136,3 +137,8 @@ named (a computer-use tool's is refused outright).
   size it went at, so `browser_click_at` maps the model's x,y back to the page exactly as before.
 - **Not smaller than that.** Neither the browser nor the computer tool has a zoom yet, so a
   picture a newer model reads whole is never scaled down to save tokens.
+- **Old pictures go in batches.** Letting one go changes the transcript there, so the prompt
+  cache (and, on newer Claude, the thinking replayed after it) starts again from that point.
+  Nothing changes until fifteen tool pictures have gathered; then all but the newest three go at
+  once (`TOOL_PICTURE_BATCH`), and they go too when the chat needs room, with stale pages
+  (ADR 0085).

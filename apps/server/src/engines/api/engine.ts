@@ -71,6 +71,7 @@ import {
 } from './context';
 import {
   ageToolPictures,
+  KEEP_TOOL_PICTURES,
   hasPictures,
   picturesOf,
   toolPictureCount,
@@ -1013,6 +1014,7 @@ export class ApiEngine implements Engine {
         let said = false;
         let end: Extract<WireEvent, { type: 'end' }> | undefined;
         // Only the newest screenshots stay pictures: each is paid for on every request.
+        // They go in batches, so the cached prefix holds between (ADR 0085).
         session.messages = ageToolPictures(session.messages);
         // The chat fits the window before every request: tool results grow it mid-turn too.
         yield* this.#fit(fitting);
@@ -1308,10 +1310,12 @@ export class ApiEngine implements Engine {
       ? Math.ceil(textTokens(preface(session.summary.text)) * factor)
       : 0;
     const room = { budget: Math.max(1, budget - summaryCost), low };
-    // Stale page views go before any turn is folded (ADR 0085): the page has changed since.
+    // Stale page views and old screenshots go before any turn is folded (ADR 0085):
+    // the page has changed since.
     if (session.messages.reduce((sum, m) => sum + count(m), 0) > room.budget * STALE_PAGES) {
       const pages = collapseStalePages(session.messages);
       if (pages.collapsed) session.messages = pages.messages;
+      session.messages = ageToolPictures(session.messages, KEEP_TOOL_PICTURES, 0);
     }
     const fold = planFold(session.messages, {
       budget: room,

@@ -137,7 +137,9 @@ is said plainly: the action may not have worked.
 **Stale pages go first** (`engines/api/pages.ts`). Once a chat passes three quarters
 of its budget, every page view older than the newest whole one becomes a one-line note
 of where it was, before any turn is folded into the summary (ADR 0055). It happens
-when room is needed, not every step, so the cached prefix holds in between.
+when room is needed, not every step, so the cached prefix holds in between. Old
+screenshots go the same way (ADR 0070, amended 2026-10-09): in batches of a dozen,
+and with the stale pages when room is needed, never one per step.
 
 ### 4. Retries with backoff and jitter, everywhere
 
