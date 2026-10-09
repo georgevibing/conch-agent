@@ -6,32 +6,66 @@ export const SETTINGS_PATH = '/settings';
 /** Every place in Settings, as its address names it: `/settings/<place>`. */
 export const SETTINGS_TABS = [
   'general',
-  'appearance',
   'notifications',
   'agents',
-  'about',
   'memory',
   'voice',
-  'models',
   'providers',
-  'commands',
   'usage',
   'browser',
   'terminal',
-  'other-apps',
-  'security',
-  'devices',
-  'health',
   'computer',
+  'access',
+  'security',
+  'health',
 ] as const;
 
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
+const isTab = (value: string): value is SettingsTab =>
+  (SETTINGS_TABS as readonly string[]).includes(value);
+
 /** Everything Conch remembers: a page inside Settings → Memory (`/settings/memory/everything`). */
 export const MEMORY_ALL = 'everything';
 
-/** Places that moved: an old address (a bookmark, a link) lands where they are now. */
-const MOVED: Record<string, SettingsTab> = { personality: 'agents' };
+/** `openSettings('providers', FALLBACK_FOCUS)`: Providers → When one can’t answer. */
+export const FALLBACK_FOCUS = 'fallback';
+
+/** `openSettings('access', OTHER_APPS_FOCUS)`: Access → Other apps, under its Advanced. */
+export const OTHER_APPS_FOCUS = 'other-apps';
+
+/**
+ * Places that moved: an old address (a bookmark, a link, a fix from an older
+ * gateway) lands where they are now, at the part that was the page.
+ */
+const MOVED = {
+  personality: { tab: 'agents' },
+  appearance: { tab: 'general' },
+  about: { tab: 'memory' },
+  // The defaults are the composer's own (Make this my default); what was left is on Providers.
+  models: { tab: 'providers' },
+  devices: { tab: 'access' },
+  'other-apps': { tab: 'access', focus: OTHER_APPS_FOCUS },
+} as const satisfies Record<string, { tab: SettingsTab; focus?: string }>;
+
+/** An old name of a place in Settings, still understood. */
+export type MovedTab = keyof typeof MOVED;
+
+/** Where an old name of a place lands now (a current name is itself). */
+export function placeOf(named: string): { tab: SettingsTab; focus?: string } | undefined {
+  if (isTab(named)) return { tab: named };
+  return Object.hasOwn(MOVED, named) ? MOVED[named as MovedTab] : undefined;
+}
+
+/** Places that left Settings for a page of their own: Commands is on Skills now. */
+const MOVED_OUT: Record<string, { path: string; focus: string }> = {
+  commands: { path: '/skills', focus: 'commands' },
+};
+
+/** The page an old Settings address (`/settings/commands`) now is, or undefined. */
+export function movedOut(named: string): { path: string; focus: string } | undefined {
+  return Object.hasOwn(MOVED_OUT, named) ? MOVED_OUT[named] : undefined;
+}
 
 /** Bringing your things from another assistant: `/settings/memory/from-openclaw`. */
 export const comeHomeItem = (source: string) => `from-${source}`;
@@ -51,9 +85,6 @@ export interface SettingsState {
   behind?: string;
 }
 
-const isTab = (value: string): value is SettingsTab =>
-  (SETTINGS_TABS as readonly string[]).includes(value);
-
 export function settingsPath(tab?: SettingsTab, item?: string): string {
   if (!tab) return SETTINGS_PATH;
   return item ? `${SETTINGS_PATH}/${tab}/${encodeURIComponent(item)}` : `${SETTINGS_PATH}/${tab}`;
@@ -63,9 +94,9 @@ export function settingsPath(tab?: SettingsTab, item?: string): string {
 export function settingsAt(pathname: string): SettingsAddress | null {
   if (pathname !== SETTINGS_PATH && !pathname.startsWith(`${SETTINGS_PATH}/`)) return null;
   const [named, item] = pathname.slice(SETTINGS_PATH.length + 1).split('/');
-  const tab = named && (MOVED[named] ?? named);
   // An address from a newer or older Conch that names no place here: Settings itself.
-  if (!tab || !isTab(tab)) return {};
+  const tab = named ? placeOf(named)?.tab : undefined;
+  if (!tab) return {};
   if (!item) return { tab };
   try {
     return { tab, item: decodeURIComponent(item) };

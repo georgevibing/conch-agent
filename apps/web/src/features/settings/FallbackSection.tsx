@@ -5,16 +5,17 @@ import { useEffect, useRef } from 'react';
 import { useAppState, useUpdateSettings } from '../../api/queries';
 import { useUi } from '../../app/ui';
 import { useProviders } from '../providers/queries';
+import { FALLBACK_FOCUS } from './paths';
 import { Section } from './Section';
 
-/** `openSettings('models', FALLBACK_FOCUS)` brings this section into view. */
-export const FALLBACK_FOCUS = 'fallback';
+/** `openSettings('providers', FALLBACK_FOCUS)` brings this section into view. */
+export { FALLBACK_FOCUS };
 
 const WAIT = 'wait';
 
 /**
- * When the chat's provider can't answer (ADR 0023): at a usage limit, another
- * one you picked carries on; offline, the model on this computer answers, or
+ * Settings → Providers → When one can't answer (ADR 0023): at a usage limit,
+ * another provider you picked carries on; offline, the model on this computer answers, or
  * messages wait and go by themselves when the internet's back.
  */
 export function FallbackSection() {
@@ -42,7 +43,7 @@ export function FallbackSection() {
   return (
     <Section
       ref={ref}
-      title="When a provider can’t answer"
+      title="When one can’t answer"
       description="So a limit or a dropped connection never leaves a question hanging."
     >
       <Stack gap={6}>

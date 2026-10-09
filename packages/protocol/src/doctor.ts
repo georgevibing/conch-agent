@@ -40,10 +40,11 @@ export const DoctorPlace = z.enum([
   'providers',
   'integrations',
   'security',
-  /** Settings → Devices: what's signed in, approving new ones, adding your phone. */
+  /** Settings → Access → Devices: what's signed in, approving new ones, adding your phone. */
   'devices',
   'browser',
   'terminal',
+  /** Settings → Providers now (Models was folded into it and the composer). */
   'models',
   'usage',
   'health',
@@ -56,7 +57,7 @@ export const DoctorPlace = z.enum([
   'skills',
   /** Routines (and one routine, by `focus`): ADR 0056. */
   'routines',
-  /** Settings → Other apps: apps paired with Conch (ADR 0073). */
+  /** Settings → Access → Other apps: apps paired with Conch (ADR 0073). */
   'other-apps',
   /** Settings → Agents: their names and pictures (ADR 0101). */
   'agents',

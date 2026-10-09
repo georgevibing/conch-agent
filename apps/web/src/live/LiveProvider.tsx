@@ -308,7 +308,7 @@ export function LiveProvider({ children, url }: { children: ReactNode; url?: str
               duration: 20_000,
               action: {
                 label: 'Review',
-                onClick: () => useUi.getState().openSettings('devices', DEVICES_FOCUS),
+                onClick: () => useUi.getState().openSettings('access', DEVICES_FOCUS),
               },
             });
           waitingDevices.current = event.waiting;

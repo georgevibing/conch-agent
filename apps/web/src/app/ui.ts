@@ -3,7 +3,15 @@ import { create } from 'zustand';
 
 import type { PageOwner } from '../features/conchapps/api';
 import { leaveSettings, showSettings, type SettingsMove } from '../features/settings/navigate';
-import { MEMORY_ALL, type SettingsTab } from '../features/settings/paths';
+import { go } from './navigation';
+import {
+  FALLBACK_FOCUS,
+  MEMORY_ALL,
+  movedOut,
+  placeOf,
+  type MovedTab,
+  type SettingsTab,
+} from '../features/settings/paths';
 
 export type { SettingsTab };
 
@@ -70,7 +78,7 @@ interface UiState {
   updateDialog?: { start?: boolean; arrived?: boolean };
   openUpdate(how?: { start?: boolean; arrived?: boolean }): void;
   closeUpdate(): void;
-  /** Something in a settings place to bring into view, once (Settings → Devices, what's waiting). */
+  /** Something in a settings place to bring into view, once (Settings → Access, what's waiting). */
   settingsFocus?: string;
   paletteOpen: boolean;
   /** Undo's preview is open for these change sets (ADR 0030). */
@@ -122,9 +130,10 @@ interface UiState {
   /**
    * Settings is a page with an address (`/settings/<place>`): this goes there.
    * `focus`: a provider's own page under Providers (to sign in), or anything
-   * else to bring into view once.
+   * else to bring into view once. An old name of a place (`models`,
+   * `devices`…) lands where it is now.
    */
-  openSettings(tab?: SettingsTab, focus?: string, move?: SettingsMove): void;
+  openSettings(tab?: SettingsTab | MovedTab, focus?: string, move?: SettingsMove): void;
   setRestarting(restarting: UiState['restarting']): void;
   /** Back to the page Settings opened over. Going anywhere else leaves it too. */
   closeSettings(): void;
@@ -252,11 +261,22 @@ export const useUi = create<UiState>((set) => ({
   closeFolderDialog: () => set({ folderDialog: undefined }),
   openNewAgent: (how) => set({ newAgent: { ...how } }),
   closeNewAgent: () => set({ newAgent: undefined }),
-  openSettings: (tab, focus, move) => {
+  openSettings: (named, wanted, move) => {
+    // A place that left Settings (a fix or a link from an older Conch): its page now.
+    const out = named ? movedOut(named) : undefined;
+    if (out) {
+      set({ paletteOpen: false, mobileSidebarOpen: false });
+      go(out.path, { state: { focus: out.focus } });
+      return;
+    }
+    // A place that moved within it: where it is now, at the part that was the page.
+    const moved = named ? placeOf(named) : undefined;
+    const tab = moved?.tab;
+    const focus = wanted ?? moved?.focus;
     // A provider's page, an agent's and every memory are places of their own; any other
     // focus is brought into view.
     const item =
-      tab === 'providers' ||
+      (tab === 'providers' && focus !== FALLBACK_FOCUS) ||
       (tab === 'agents' && Boolean(focus?.startsWith('ag_'))) ||
       (tab === 'memory' && (focus === MEMORY_ALL || Boolean(focus?.startsWith('from-'))))
         ? focus

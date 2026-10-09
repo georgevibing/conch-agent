@@ -16,7 +16,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 const router = provider({ id: 'openrouter', name: 'OpenRouter', active: false, ready: true });
 
-describe('When a provider can’t answer', () => {
+describe('Providers → When one can’t answer', () => {
   it('offers the connected providers for a limit, and saves the choice', async () => {
     const calls = mockFetch({
       'GET /api/state': () => appState(),

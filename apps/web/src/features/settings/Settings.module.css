@@ -323,14 +323,6 @@
 }
 
 @layer nacre.components {
-  .commandEditor {
-    padding: var(--nc-space-4);
-    border-radius: var(--nc-radius-lg);
-    corner-shape: var(--nc-corner-shape);
-    background: var(--nc-surface-sunken);
-    box-shadow: inset 0 0 0 1px var(--nc-border-subtle);
-  }
-
   .commandList {
     display: flex;
     flex-direction: column;
@@ -354,10 +346,5 @@
 
   .commandText {
     min-inline-size: 0;
-  }
-
-  .commandName {
-    font-family: var(--nc-font-mono);
-    font-size: var(--nc-text-sm);
   }
 }

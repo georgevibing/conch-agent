@@ -44,17 +44,24 @@ describe('Settings', () => {
     await waitFor(() => expect(within(page).getByRole('tab', { name: 'General' })).toHaveFocus());
     for (const group of ['Your assistant', 'Intelligence', 'Tools', 'Safe and sound'])
       expect(within(page).getByRole('tablist', { name: group })).toBeInTheDocument();
+    // Thirteen places: the defaults for new chats are the composer's own, so no Models.
+    expect(within(page).getAllByRole('tab')).toHaveLength(13);
     expect(
       within(within(page).getByRole('tablist', { name: 'Intelligence' })).getAllByRole('tab'),
-    ).toHaveLength(4);
-    expect(within(page).getByRole('tab', { name: 'Models' })).toBeInTheDocument();
-    expect(within(page).queryByRole('tab', { name: /Models & modes/ })).not.toBeInTheDocument();
+    ).toHaveLength(2);
+    expect(within(page).queryByRole('tab', { name: 'Models' })).not.toBeInTheDocument();
+    expect(within(page).queryByRole('tab', { name: 'Commands' })).not.toBeInTheDocument();
+    expect(within(page).queryByRole('tab', { name: 'About you' })).not.toBeInTheDocument();
+    expect(
+      within(within(page).getByRole('tablist', { name: 'Safe and sound' })).getAllByRole('tab'),
+    ).toHaveLength(3);
     expect(await within(page).findByRole('heading', { name: 'Working folder' })).toBeVisible();
+    // How it looks is part of General.
+    expect(within(page).getByRole('heading', { name: 'Appearance' })).toBeVisible();
 
     // Every place has its own address.
-    await userEvent.click(within(page).getByRole('tab', { name: 'Appearance' }));
-    expect(within(page).getByRole('heading', { name: 'Appearance' })).toBeVisible();
-    expect(where()).toBe('/settings/appearance');
+    await userEvent.click(within(page).getByRole('tab', { name: 'Access' }));
+    expect(where()).toBe('/settings/access');
 
     // A place has no trail of its own: its name is its heading.
     expect(within(page).queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull();
@@ -75,19 +82,40 @@ describe('Settings', () => {
     expect(within(page).getByRole('button', { name: 'Replay welcome' })).toBeVisible();
     expect(within(page).queryByRole('button', { name: 'Advanced' })).toBeNull();
 
-    // Appearance holds its Lustre beside the rest.
-    act(() => useUi.getState().openSettings('appearance'));
-    expect(await within(page).findByRole('slider', { name: 'Lustre' })).toBeVisible();
-    expect(within(page).queryByRole('button', { name: 'Advanced' })).toBeNull();
+    // How it looks, and how new chats are named, are beside the rest.
+    expect(within(page).getByRole('slider', { name: 'Shimmer' })).toBeVisible();
+    expect(
+      within(page).getByRole('switch', { name: /Name new chats automatically/ }),
+    ).toBeVisible();
+  });
+
+  it('lands an old address where that place is now', async () => {
+    narrowScreen(false);
+    mockFetch({ 'GET /api/state': () => appState() });
+    const { where } = renderApp(<Settings />, { route: '/settings/appearance' });
+    const page = await screen.findByRole('dialog', { name: 'Settings' });
+    await waitFor(() => expect(where()).toBe('/settings/general'));
+    expect(within(page).getByRole('tab', { name: 'General' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    // Models is gone: what was left of it is on Providers.
+    act(() => useUi.getState().openSettings('models'));
+    await waitFor(() => expect(where()).toBe('/settings/providers'));
+    // Devices and Other apps are parts of Access.
+    act(() => useUi.getState().openSettings('devices'));
+    await waitFor(() => expect(where()).toBe('/settings/access'));
+    act(() => useUi.getState().openSettings('about'));
+    await waitFor(() => expect(where()).toBe('/settings/memory'));
   });
 
   it('opens at the place its address names, and steps aside while Conch restarts', async () => {
     narrowScreen(false);
     mockFetch({ 'GET /api/state': () => appState() });
-    renderApp(<Settings />, { route: '/settings/appearance' });
+    renderApp(<Settings />, { route: '/settings/voice' });
 
     const page = await screen.findByRole('dialog', { name: 'Settings' });
-    expect(within(page).getByRole('tab', { name: 'Appearance' })).toHaveAttribute(
+    expect(within(page).getByRole('tab', { name: 'Voice' })).toHaveAttribute(
       'aria-selected',
       'true',
     );
@@ -143,7 +171,7 @@ describe('Settings', () => {
     expect(where()).toBe('/settings/providers');
   });
 
-  it('opens what Conch remembers inside Memory, with Memory › What Conch knows above it', async () => {
+  it('opens every memory inside What Conch knows, with the trail above it', async () => {
     narrowScreen(false);
     mockFetch({
       'GET /api/state': () => appState(),
@@ -166,16 +194,16 @@ describe('Settings', () => {
     expect(
       await within(page).findByRole('heading', { name: 'What Conch knows about you' }),
     ).toBeVisible();
-    expect(within(page).getByRole('tab', { name: 'Memory' })).toBeInTheDocument();
+    expect(within(page).getByRole('tab', { name: 'What Conch knows' })).toBeInTheDocument();
     expect(await within(page).findByText('Projects live in ~/projects')).toBeVisible();
     // One way back, in the trail: never a stack of back buttons.
     const trail = within(page).getByRole('navigation', { name: 'Breadcrumb' });
-    expect(within(trail).getByText('What Conch knows')).toHaveAttribute('aria-current', 'page');
-    expect(within(page).getAllByRole('button', { name: 'Memory' })).toHaveLength(1);
+    expect(within(trail).getByText('All memories')).toHaveAttribute('aria-current', 'page');
+    expect(within(page).getAllByRole('button', { name: 'What Conch knows' })).toHaveLength(1);
     // Arriving puts the focus on the page's name, so the way back is a Shift+Tab away.
-    await waitFor(() => expect(within(trail).getByText('What Conch knows')).toHaveFocus());
+    await waitFor(() => expect(within(trail).getByText('All memories')).toHaveFocus());
 
-    await userEvent.click(within(trail).getByRole('button', { name: 'Memory' }));
+    await userEvent.click(within(trail).getByRole('button', { name: 'What Conch knows' }));
     expect(where()).toBe('/settings/memory');
     expect(within(page).queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull();
     // Stepping back out reads the place itself.
@@ -249,12 +277,12 @@ describe('Settings', () => {
     expect(screen.queryByRole('tablist', { name: 'Intelligence' })).toBeNull();
     expect(within(page).getByRole('button', { name: 'Open settings menu' })).toBeInTheDocument();
     const trail = within(page).getByRole('navigation', { name: 'Breadcrumb' });
-    expect(within(trail).getByText('What Conch knows')).toHaveAttribute('aria-current', 'page');
-    expect(within(page).getAllByRole('button', { name: 'Memory' })).toHaveLength(1);
-    await userEvent.click(within(trail).getByRole('button', { name: 'Memory' }));
+    expect(within(trail).getByText('All memories')).toHaveAttribute('aria-current', 'page');
+    expect(within(page).getAllByRole('button', { name: 'What Conch knows' })).toHaveLength(1);
+    await userEvent.click(within(trail).getByRole('button', { name: 'What Conch knows' }));
     expect(where()).toBe('/settings/memory');
     expect(within(page).getByRole('navigation', { name: 'Breadcrumb' })).toHaveTextContent(
-      /^Memory$/,
+      /^What Conch knows$/,
     );
   });
 });

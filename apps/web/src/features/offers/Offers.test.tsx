@@ -14,7 +14,7 @@ import { reduceAll } from '../../live/reducer';
 import { useLiveStore } from '../../live/store';
 import { appState, baseProviders, FakeSocket, mockFetch, renderApp } from '../../test/harness';
 import { ChatView } from '../chat/ChatView';
-import { ModelsTab } from '../settings/ModelsTab';
+import { GeneralTab } from '../settings/GeneralTab';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -638,7 +638,7 @@ describe('offers in the chat (ADR 0060)', () => {
   });
 });
 
-describe('Settings → Models', () => {
+describe('Settings → General', () => {
   it('lists the apps and skills you muted, each with a way back', async () => {
     let muted = ['linear', 'google-calendar', 'skill:weekly-review'];
     const calls = mockFetch({
@@ -664,9 +664,9 @@ describe('Settings → Models', () => {
         return appState({ preferences: { ...appState().preferences, mutedSuggestions: muted } });
       },
     });
-    renderApp(<ModelsTab />);
-    // What you muted waits under Advanced, with the rest nobody needs to touch.
-    await userEvent.click(await screen.findByRole('button', { name: 'Advanced' }));
+    renderApp(<GeneralTab workspace="/home/me/conch" />);
+    // What you muted is beside how new chats are named, in sight.
+    expect(screen.queryByRole('button', { name: 'Advanced' })).toBeNull();
     const list = await screen.findByRole('list', { name: 'Not suggested' });
     expect(within(list).getByText('Linear')).toBeInTheDocument();
     // An app only a provider's account reaches may not be in this catalog: still named.

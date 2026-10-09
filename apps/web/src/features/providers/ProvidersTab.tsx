@@ -1,20 +1,12 @@
 import type { Provider } from '@conch/protocol';
-import {
-  AlertDialog,
-  Button,
-  Callout,
-  Heading,
-  ProviderCard,
-  Skeleton,
-  Stack,
-  Text,
-} from '@conch/nacre';
+import { AlertDialog, Button, Callout, Heading, ProviderCard, Skeleton, Stack } from '@conch/nacre';
 import { KeyRound, Trash2, Unplug } from 'lucide-react';
 import { useId, useState } from 'react';
 import { useLocation } from 'react-router';
 
 import { useAppState } from '../../api/queries';
 import { ProviderServers } from '../integrations/ProviderServers';
+import { FallbackSection } from '../settings/FallbackSection';
 import { settingsAt } from '../settings/paths';
 import { Section } from '../settings/Section';
 import { useUi } from '../../app/ui';
@@ -217,14 +209,13 @@ export function ProvidersTab() {
 
           {/* Last: a key is for the few who have one, a quiet line under the ways in. */}
           {!pinned && !isPending && <KeyPaste providers={providers} />}
-
-          <Text size="xs" tone="subtle">
-            Keys stay on this computer, or in 1Password, and are never shown again.
-          </Text>
         </Stack>
       </Section>
 
       <ProviderServers />
+
+      {/* At a limit or offline, who answers instead: chosen here, beforehand (ADR 0023). */}
+      <FallbackSection />
 
       <AlertDialog.Root
         open={Boolean(removing)}

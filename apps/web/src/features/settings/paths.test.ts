@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { behindName, behindOf, behindPath, settingsAt, settingsPath } from './paths';
+import {
+  behindName,
+  behindOf,
+  behindPath,
+  movedOut,
+  placeOf,
+  settingsAt,
+  settingsPath,
+} from './paths';
 
 describe('Settings addresses', () => {
   it('names every place, and a page inside one', () => {
@@ -27,6 +35,20 @@ describe('Settings addresses', () => {
   it('opens Settings itself for a place it doesn’t have', () => {
     expect(settingsAt('/settings/nonsense')).toEqual({});
     expect(settingsAt('/settings/providers/%E0%A4%A')).toEqual({ tab: 'providers' });
+  });
+
+  it('lands an old address where that place is now', () => {
+    expect(settingsAt('/settings/appearance')).toEqual({ tab: 'general' });
+    expect(settingsAt('/settings/about')).toEqual({ tab: 'memory' });
+    expect(settingsAt('/settings/models')).toEqual({ tab: 'providers' });
+    expect(settingsAt('/settings/devices')).toEqual({ tab: 'access' });
+    expect(placeOf('other-apps')).toEqual({ tab: 'access', focus: 'other-apps' });
+    expect(placeOf('security')).toEqual({ tab: 'security' });
+    expect(placeOf('constructor')).toBeUndefined();
+    // Commands left Settings: its old address is a page of its own.
+    expect(settingsAt('/settings/commands')).toEqual({});
+    expect(movedOut('commands')).toEqual({ path: '/skills', focus: 'commands' });
+    expect(movedOut('general')).toBeUndefined();
   });
 
   it('only ever goes back to a page of this app', () => {
