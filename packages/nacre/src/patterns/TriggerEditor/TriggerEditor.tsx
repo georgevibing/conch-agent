@@ -185,7 +185,8 @@ export function TriggerEditor({
         ))}
         <Collapsible open={advanced} onOpenChange={setAdvanced} className={styles.advanced}>
           <Collapsible.Trigger className={styles.advancedTrigger}>Advanced</Collapsible.Trigger>
-          <Collapsible.Content>
+          {/* More of the same choices: on their column, not nested under the word. */}
+          <Collapsible.Content inset={false}>
             <RadioGroup.Item
               value="hook"
               label="Another app sends a message"

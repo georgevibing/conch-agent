@@ -200,6 +200,12 @@ place in a glance and never change a thing.
   it, indented under a hairline, and opens with it (`Collapsible`) — folded
   away while it's off, never shown greyed out. Each is a short label, at most a
   few words of hint.
+- **What opens, under the words.** A `Collapsible` trigger's content lines up
+  with its words, past the chevron: a list's bullets sit at the words' start,
+  never out under the chevron. A pattern that moves the trigger says so on the
+  root (`--cl-bleed`, its chevron hanging past the edge; `--cl-gap`), never
+  with margins of its own, so content follows. Panels and cards (sunken code,
+  tiles, more of the same choices) take `inset={false}` and keep their column.
 - **The other way in, quietly.** A page whose main way is a press (Providers:
   sign in) keeps the way for the few — an API key — as one muted line at its
   foot, **Use an API key instead**, that opens to a single field in place.

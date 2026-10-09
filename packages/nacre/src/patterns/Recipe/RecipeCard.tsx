@@ -259,7 +259,8 @@ export function RecipeCard({
                 <span className={styles.factQuiet}> · {recipe.nutrition[0].value}</span>
               )}
             </Collapsible.Trigger>
-            <Collapsible.Content>
+            {/* Tiles across the card: its whole width, not nested under the words. */}
+            <Collapsible.Content inset={false}>
               <dl className={styles.nutrients}>
                 {recipe.nutrition.map((n) => (
                   <div key={n.label} className={styles.nutrient}>

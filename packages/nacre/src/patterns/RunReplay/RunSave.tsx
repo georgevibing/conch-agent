@@ -117,7 +117,8 @@ export function RunSave({
                   <EyeOff aria-hidden />
                   <span>Taking out {removed.map((r) => r.label).join(', ')}</span>
                 </Collapsible.Trigger>
-                <Collapsible.Content>
+                {/* Sunken chips of code: the fold's whole width, for long lines on a phone. */}
+                <Collapsible.Content inset={false}>
                   <ul className={styles.examples}>
                     {removed.flatMap((r) =>
                       r.examples.map((example) => (

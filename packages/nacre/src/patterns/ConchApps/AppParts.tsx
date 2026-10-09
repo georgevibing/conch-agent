@@ -120,7 +120,8 @@ export function AppTools({ tools, defaultOpen, className, ...props }: AppToolsPr
       <Collapsible.Trigger className={styles.toolsTrigger}>
         {tools.length === 1 ? 'Its tool' : `Its ${tools.length} tools`}
       </Collapsible.Trigger>
-      <Collapsible.Content>
+      {/* A sunken panel of its tools: the fold's whole width. */}
+      <Collapsible.Content inset={false}>
         <ul className={styles.toolList}>
           {sorted.map((tool) => (
             <li key={tool.name} className={styles.tool}>

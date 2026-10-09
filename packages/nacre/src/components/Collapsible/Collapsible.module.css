@@ -1,5 +1,16 @@
 @layer nacre.components {
+  /*
+   * The trigger's geometry, in one place, so what opens can line up with its
+   * words. Knobs a pattern may set on the root (never Collapsible itself, so
+   * they win whatever order the sheets load in):
+   *   --cl-bleed  how far the trigger hangs out past the edge (its hover wash
+   *               and chevron reach into the margin, the words stay put)
+   *   --cl-gap    chevron to words
+   *   --cl-pad    the trigger's own room before its chevron
+   */
   .root {
+    --cl-chevron: 0.875rem;
+
     display: flex;
     flex-direction: column;
   }
@@ -8,10 +19,12 @@
     appearance: none;
     display: inline-flex;
     align-items: center;
-    gap: var(--nc-space-1-5);
+    gap: var(--cl-gap, var(--nc-space-1-5));
     align-self: flex-start;
     margin: 0;
-    padding: var(--nc-space-1) var(--nc-space-2) var(--nc-space-1) var(--nc-space-1-5);
+    margin-inline-start: calc(-1 * var(--cl-bleed, 0px));
+    padding: var(--nc-space-1) var(--nc-space-2) var(--nc-space-1)
+      var(--cl-pad, var(--nc-space-1-5));
     border: 0;
     border-radius: var(--nc-radius-sm);
     corner-shape: var(--nc-corner-shape);
@@ -43,8 +56,9 @@
   }
 
   .chevron {
-    inline-size: 0.875rem;
-    block-size: 0.875rem;
+    flex-shrink: 0;
+    inline-size: var(--cl-chevron);
+    block-size: var(--cl-chevron);
     stroke-width: 2.2;
     color: var(--nc-text-subtle);
     transition: transform var(--nc-spring-snappy-duration) var(--nc-spring-snappy);
@@ -71,6 +85,17 @@
       opacity var(--nc-duration-base) var(--nc-ease-out),
       translate var(--nc-duration-slow) var(--nc-ease-out),
       filter var(--nc-duration-base) var(--nc-ease-out);
+  }
+
+  /*
+   * What opens starts where the trigger's words start, so a list's bullets
+   * nest under them, never out under the chevron.
+   */
+  .root:has(> .trigger[data-chevron]) > .content[data-inset] > .inner {
+    padding-inline-start: calc(
+      var(--cl-pad, var(--nc-space-1-5)) + var(--cl-chevron) + var(--cl-gap, var(--nc-space-1-5)) -
+        var(--cl-bleed, 0px)
+    );
   }
 
   /* Open from the start: simply there (Radix holds the height still too). */

@@ -42,7 +42,8 @@ export function SettingsAdvanced({
       className={cx(styles.advanced, className)}
     >
       <Collapsible.Trigger className={styles.trigger}>{label}</Collapsible.Trigger>
-      <Collapsible.Content>
+      {/* The page's own sections, on the page's own edge: not nested under the word. */}
+      <Collapsible.Content inset={false}>
         <div className={styles.body}>{children}</div>
       </Collapsible.Content>
     </Collapsible>
