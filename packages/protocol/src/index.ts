@@ -288,6 +288,11 @@ export const Preferences = z.object({
   limitOrder: z.array(EngineId).max(60).default([]),
   /** A chat goes back to its own provider once its limit resets. Off: it stays with who carried on. */
   limitReturn: z.boolean().default(true),
+  /**
+   * Automatic may use pay-per-use keys too, not only plans you already pay for. Off by
+   * default: nobody starts paying per reply at a limit without saying so (ADR 0126).
+   */
+  limitPaid: z.boolean().default(false),
   /** Limits whose line above the composer was put away, until each resets (on every device). */
   limitsPutAway: z.array(PutAwayLimit).max(50).default([]),
   /** Apps the chat never offers to connect ("Don't suggest Linear"), by catalog id. */
@@ -427,6 +432,7 @@ export const UpdateSettingsBody = z.object({
       limitFallback: LimitFallback.nullable(),
       limitOrder: z.array(EngineId).max(60),
       limitReturn: z.boolean(),
+      limitPaid: z.boolean(),
       /** The whole list, as the page last saw it (a new cycle's entries pruned). */
       limitsPutAway: z.array(PutAwayLimit).max(50),
       mutedSuggestions: MutedSuggestions,

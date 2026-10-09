@@ -102,6 +102,13 @@ its facts ("72% left · resets 6:00 PM · Included in your plan · Answers with 
 Under it, while Automatic is chosen, **In this order** with arrows to move each. Then two
 switches: the model on this computer, last, and **Back to Claude Code once it resets**.
 
+### Pay-per-use keys only when you say so
+
+Automatic carries on with the person's own plans by default. A key that charges per reply is
+used only once **Pay-per-use keys too** is on (`preferences.limitPaid`, off by default): a limit
+must never be the moment someone starts paying without having chosen to. Settings shows such a
+key as passed over, with why. Choosing one key by name is a choice to pay, and needs no switch.
+
 ## Consequences
 
 - Someone who never chose anything now has a key carry on at a plan's limit. That's money

@@ -816,8 +816,16 @@ describe('gateway WebSocket', () => {
     );
     vi.spyOn(services.providers, 'ready').mockResolvedValue([mock, other, third]);
 
-    // Automatic, by default: the next with room carries on, and the chat says so.
+    // Automatic, by default, uses only plans already paid for: keys that charge per reply wait.
     expect((await services.settings.get()).preferences.limitFallback).toBeUndefined();
+    expect(await services.route(mock, { failed: 'limit' })).not.toMatchObject({
+      engine: { id: 'openrouter' },
+    });
+    expect(await services.route(mock, { failed: 'limit' })).not.toMatchObject({
+      engine: { id: 'anthropic-api' },
+    });
+    // With pay-per-use keys allowed, the next with room carries on, and the chat says so.
+    await services.settings.update({ preferences: { limitPaid: true } });
     expect(await services.route(mock, { failed: 'limit' })).toMatchObject({
       kind: 'use',
       engine: { id: 'openrouter' },

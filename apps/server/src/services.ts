@@ -3179,7 +3179,13 @@ export class Services {
     // Automatic: the first with room, in your order. Your pick: that one, while it has room.
     const tried =
       mode === 'auto'
-        ? choices.filter((c) => !c.choice.skip && c.choice.room !== 'none')
+        ? choices.filter(
+            (c) =>
+              !c.choice.skip &&
+              c.choice.room !== 'none' &&
+              // A key that charges per reply only when the person said so.
+              (preferences.limitPaid || c.choice.billing === 'plan'),
+          )
         : choices
             .filter((c) => c.choice.engines.includes(mode))
             .filter((c) => !c.choice.skip && c.choice.room !== 'none')
@@ -3259,7 +3265,16 @@ export class Services {
     const from = this.providers.engineFor(id);
     const { preferences } = await this.settings.get();
     const [choices, usage, local] = await Promise.all([
-      fallbackChoices(from, this.#fallbackDeps(), preferences.limitOrder),
+      fallbackChoices(from, this.#fallbackDeps(), preferences.limitOrder).then((all) =>
+        // Shown as Automatic would use them: a pay-per-use key waits for the switch.
+        preferences.limitPaid || (preferences.limitFallback ?? 'auto') !== 'auto'
+          ? all
+          : all.map((c) =>
+              c.choice.billing === 'metered' && !c.choice.skip
+                ? { ...c, choice: { ...c.choice, skip: 'Pay per use: turn it on below' } }
+                : c,
+            ),
+      ),
       this.usage.snapshot({ engine: from.id }).catch(() => undefined),
       this.localReady(),
     ]);

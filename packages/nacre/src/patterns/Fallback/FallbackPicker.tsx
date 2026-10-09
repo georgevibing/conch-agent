@@ -89,6 +89,8 @@ export interface FallbackPickerProps {
   local?: { name?: string; checked: boolean; onCheckedChange: (checked: boolean) => void };
   /** Whether a chat goes back to `from` once its limit resets. */
   back?: { checked: boolean; onCheckedChange: (checked: boolean) => void };
+  /** Whether Automatic may use pay-per-use keys, not only plans already paid for. */
+  paid?: { checked: boolean; onCheckedChange: (checked: boolean) => void };
   /** Names the group, e.g. the id of a heading "At a usage limit". */
   'aria-labelledby'?: string;
   /** For stories and tests. */
@@ -113,6 +115,7 @@ export function FallbackPicker({
   onReorder,
   local,
   back,
+  paid,
   now: fixed,
   className,
   ...props
@@ -225,8 +228,21 @@ export function FallbackPicker({
         </div>
       )}
 
-      {(local || (back && !waiting)) && (
+      {(local || (back && !waiting) || (paid && auto)) && (
         <div className={styles.switches}>
+          {paid && auto && (
+            <Switch
+              labelPosition="start"
+              checked={paid.checked}
+              onCheckedChange={paid.onCheckedChange}
+              label="Pay-per-use keys too"
+              description={
+                paid.checked
+                  ? 'After your plans, the cheapest key with room answers, within your monthly limit.'
+                  : 'Only plans you already pay for carry on. Keys that charge per reply wait.'
+              }
+            />
+          )}
           {local && (
             <Switch
               labelPosition="start"

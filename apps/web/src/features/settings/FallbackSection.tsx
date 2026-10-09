@@ -117,6 +117,10 @@ export function FallbackSection() {
               checked: prefs?.limitReturn ?? true,
               onCheckedChange: (limitReturn) => save({ limitReturn }),
             }}
+            paid={{
+              checked: prefs?.limitPaid ?? false,
+              onCheckedChange: (limitPaid) => save({ limitPaid }),
+            }}
           />
         )}
       </Stack>

@@ -176,6 +176,7 @@ export function appState(patch: Partial<AppState> = {}): AppState {
       offlineFallback: true,
       limitOrder: [],
       limitReturn: true,
+      limitPaid: false,
       limitsPutAway: [],
       mutedSuggestions: [],
       tipsPutAway: [],

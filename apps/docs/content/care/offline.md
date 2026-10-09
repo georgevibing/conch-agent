@@ -26,7 +26,7 @@ This is **Automatic**, and it's on from the start. You'll find it, and what it w
 - what it costs: **Included in your plan**, or **Pay per use** with about what a reply costs,
 - the model it answers with ("Answers with GPT-5.5").
 
-Automatic goes through them in order. Your own plans come first, since they cost nothing more. Then the keys you pay as you go, the cheapest reply first. It passes over one that's at its own limit, a key past its own spending limit, and every key once [this month's budget](./what-it-costs.md) is used up. It passes over one that can't do what the chat does, too: a chat that uses apps or runs commands only moves to one that can. To change the order, use the arrows under **In this order**.
+Automatic goes through them in order. Your own plans come first, since they cost nothing more. Keys you pay as you go are used only once you turn on **Pay-per-use keys too**, so nobody starts paying per reply without choosing to; then the cheapest reply goes first. It passes over one that's at its own limit, a key past its own spending limit, and every key once [this month's budget](./what-it-costs.md) is used up. It passes over one that can't do what the chat does, too: a chat that uses apps or runs commands only moves to one that can. To change the order, use the arrows under **In this order**.
 
 Codex and Codex CLI use the same ChatGPT sign-in, so they're one choice. If you're signed in to two accounts of the same kind, each says whose it is: "Codex · ada@work.example".
 
