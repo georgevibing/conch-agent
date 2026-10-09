@@ -9,6 +9,8 @@ order: 1
 
 In Conch, these are in **Apps**, under **Talk to me here**. An app you also let your assistant use, like Slack or Gmail, is one card with a switch for each: **Talk to me here** is one of them. See [Apps](../features/apps.md#one-app-one-card).
 
+Not on the list? [Add any chat app](any-chat-app.md): name it, and Conch makes it.
+
 ## A bot of your own
 
 A channel is a bot you make in the chat app, connected to the Conch on your computer. There is no shared Conch bot, and no Conch server in between.

@@ -62,3 +62,5 @@ by name wherever it lives, and opens its place with **Advanced** already open.
 - Take it with you: [Conch on your phone](./phone.md).
 - Let it use your tools: [connect an app](../features/apps.md).
 - Teach it something once: [skills](../features/skills.md).
+- Have it work while you're away: [routines](../features/routines.md) and [check-ins](../features/check-ins.md).
+- See what it can show you: [cards in the chat](../features/cards.md).
